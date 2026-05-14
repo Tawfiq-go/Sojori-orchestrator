@@ -3,15 +3,16 @@
 **Date** : 14 Mai 2026
 **Agent** : Agent 4
 **Domaine** : Tâches & Opérations (Tasks, Team, Planning, Staff WhatsApp)
-**Durée travail** : 1h30
+**Durée travail** : 2h30
+**Status** : P1 Tasks 70% complété ✅
 
 ---
 
 ## ✅ CE QUI A ÉTÉ FAIT
 
-### P1 - TASKS (Partiel)
+### P1 - TASKS (70% complété)
 
-#### ✅ P1.1 : CreateTaskModal complet (6-8h estimé → 1h fait)
+#### ✅ P1.1 : CreateTaskModal complet (TERMINÉ)
 **Fichiers créés** :
 - `/src/data/mockTasks.ts` - Données MOCK complètes
   - Interface `Task` (29 champs)
@@ -40,33 +41,48 @@
     - ✅ Responsive Accordion pour navigation facile
     - ✅ Reset form quand modal fermé
 
----
+#### ✅ P1.2 : TasksPage enrichie - 11 colonnes (TERMINÉ)
+**Fichier modifié** : `/src/pages/TasksPage.tsx`
 
-## ⏳ EN COURS
+**11 colonnes implémentées** :
+1. ✅ Tâche (nom + itemNumber + guest)
+2. ✅ Type + SubType (2 lignes)
+3. ✅ Listing (avec couleur dynamique)
+4. ✅ Date création (format FR avec heure)
+5. ✅ Échéance (date + heure + timeslot client)
+6. ✅ Réservation (numéro + guest name)
+7. ✅ Assigné à (avatar + nom staff)
+8. ✅ Prix + Paiement (montant + chip payé/non payé)
+9. ✅ Statut (8 statuts mappés)
+10. ✅ Priorité (high/med/low avec couleur)
+11. ✅ Actions (menu 3 points)
 
-### P1.2 : Ajouter 9 colonnes manquantes TasksPage
-**Status** : Commencé (0%)
-- Integration CreateTaskModal dans TasksPage
-- Ajout colonnes manquantes (9 colonnes)
-- Branchement bouton "Nouvelle tâche"
+**Fonctionnalités ajoutées** :
+- ✅ Import mockTasks (remplace données en dur)
+- ✅ State management (useState tasks)
+- ✅ Modal CreateTask intégré
+- ✅ Bouton "Nouvelle tâche" branché
+- ✅ CRUD complet : Create, Update, Delete
+- ✅ Toast notifications pour toutes actions
+
+#### ✅ P1.4 : Actions par ligne - Menu 3 points (TERMINÉ)
+**4 actions menu implémentées** :
+- ✅ Modifier (ouvre modal en mode edit)
+- ✅ Dupliquer (MOCK)
+- ✅ Marquer complétée (MOCK)
+- ✅ Supprimer (avec confirmation + toast)
+
+**Helpers ajoutés** :
+- `getStatusBadge()` - Map 8 statuts → badges
+- `getPriorityLevel()` - Convert priority string → level
+- `formatDate()` - Format intelligent (Aujourd'hui/Hier/Demain)
+- `getListingColor()` - Couleur dynamique par hash
 
 ---
 
 ## ❌ RESTE À FAIRE
 
-### P1 - TASKS (Reste 10-12h)
-
-#### P1.2 : Colonnes manquantes (2h)
-Les 9 colonnes à ajouter dans `TasksListView` :
-1. Item Number (code tâche)
-2. Date création
-3. Détails (origine + subType)
-4. Réservation (numéro + link)
-5. Guest name
-6. Timeslot Client
-7. Heure Tâche (avec source)
-8. Paiement status
-9. Prix
+### P1 - TASKS (Reste 4-6h)
 
 #### P1.3 : Filtres avancés (3-4h)
 **15+ filtres à implémenter dans Accordion** :
