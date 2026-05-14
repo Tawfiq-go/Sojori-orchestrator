@@ -1,13 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CommunicationsSectionToggle } from '../components/CommunicationsSectionToggle';
 import {
   PageHeader,
   btnPrimarySx,
-  ChatLayout,
-  ConversationList,
-  ChatThread,
-  ChatAside,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import {
@@ -19,9 +15,7 @@ import {
   Typography,
   Avatar,
   Chip,
-  IconButton,
   TextField,
-  InputAdornment,
   Tabs,
   Tab,
   Badge,
@@ -150,6 +144,10 @@ export function StaffWhatsAppPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(STAFF_LIST[0].id);
   const [conversationType, setConversationType] = useState<'individual' | 'group'>('individual');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchPhone, setSearchPhone] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'staff' | 'manager'>('all');
+  const [unrepliedOnly, setUnrepliedOnly] = useState(false);
+  const [recentOnly, setRecentOnly] = useState(false);
   const [messageInput, setMessageInput] = useState('');
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [broadcastRecipients, setBroadcastRecipients] = useState<string[]>([]);
@@ -164,17 +162,24 @@ export function StaffWhatsAppPage() {
         const messages = messagesByConversation[staff.id] || [];
         const lastMessage = messages[messages.length - 1];
         const unreadCount = messages.filter(m => !m.read && m.sender !== 'me').length;
+        const lastIncoming = [...messages].reverse().find((message) => message.sender !== 'me');
+        const lastOutgoing = [...messages].reverse().find((message) => message.sender === 'me');
+        const requiresReply = Boolean(lastIncoming && (!lastOutgoing || new Date(lastIncoming.timestamp) > new Date(lastOutgoing.timestamp)));
+        const roleKey = staff.role === 'Maintenance' ? 'manager' : staff.role === 'Chauffeur' ? 'admin' : 'staff';
 
         return {
           id: staff.id,
           type: 'individual' as const,
           name: staff.name,
           subtitle: staff.role,
+          phone: staff.phone,
+          roleKey,
           avatar: staff.avatar,
           lastMessage: lastMessage?.text || '',
           lastMessageTime: lastMessage?.timestamp || new Date().toISOString(),
           unreadCount,
           online: staff.online,
+          requiresReply,
         };
       }).sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
     } else {
@@ -199,12 +204,29 @@ export function StaffWhatsAppPage() {
 
   // Filter conversations
   const filteredConversations = useMemo(() => {
-    if (!searchQuery) return conversations;
-    return conversations.filter(c =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.subtitle.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [conversations, searchQuery]);
+    return conversations.filter((conversation) => {
+      const textMatch =
+        !searchQuery ||
+        conversation.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        conversation.subtitle.toLowerCase().includes(searchQuery.toLowerCase());
+      const phoneMatch =
+        conversationType !== 'individual' ||
+        !searchPhone ||
+        ('phone' in conversation && conversation.phone.toLowerCase().includes(searchPhone.toLowerCase()));
+      const roleMatch =
+        conversationType !== 'individual' ||
+        roleFilter === 'all' ||
+        ('roleKey' in conversation && conversation.roleKey === roleFilter);
+      const unrepliedMatch =
+        !unrepliedOnly ||
+        (conversationType === 'individual' && 'requiresReply' in conversation && conversation.requiresReply);
+      const recentMatch =
+        !recentOnly ||
+        new Date(conversation.lastMessageTime) >= new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      return textMatch && phoneMatch && roleMatch && unrepliedMatch && recentMatch;
+    });
+  }, [conversationType, conversations, recentOnly, roleFilter, searchPhone, searchQuery, unrepliedOnly]);
 
   // Get current conversation messages
   const currentMessages = useMemo(() => {
@@ -346,10 +368,50 @@ export function StaffWhatsAppPage() {
                 placeholder="Rechercher..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">🔍</InputAdornment>,
-                }}
               />
+
+              <Stack direction="row" spacing={0.75} sx={{ mt: 1, flexWrap: 'wrap', rowGap: 0.75 }}>
+                {[
+                  { label: 'Tous', value: 'all' },
+                  { label: 'Admin', value: 'admin' },
+                  { label: 'Staff', value: 'staff' },
+                  { label: 'Manager', value: 'manager' },
+                ].map((option) => (
+                  <Chip
+                    key={option.value}
+                    size="small"
+                    label={option.label}
+                    color={roleFilter === option.value ? 'primary' : 'default'}
+                    variant={roleFilter === option.value ? 'filled' : 'outlined'}
+                    onClick={() => setRoleFilter(option.value as 'all' | 'admin' | 'staff' | 'manager')}
+                  />
+                ))}
+                <Chip
+                  size="small"
+                  label="Unreplied"
+                  color={unrepliedOnly ? 'warning' : 'default'}
+                  variant={unrepliedOnly ? 'filled' : 'outlined'}
+                  onClick={() => setUnrepliedOnly((prev) => !prev)}
+                />
+                <Chip
+                  size="small"
+                  label="Recent 24h"
+                  color={recentOnly ? 'success' : 'default'}
+                  variant={recentOnly ? 'filled' : 'outlined'}
+                  onClick={() => setRecentOnly((prev) => !prev)}
+                />
+              </Stack>
+
+              {conversationType === 'individual' ? (
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Filtrer par téléphone..."
+                  value={searchPhone}
+                  onChange={(e) => setSearchPhone(e.target.value)}
+                  sx={{ mt: 1 }}
+                />
+              ) : null}
             </Box>
 
             {/* List */}
@@ -368,7 +430,7 @@ export function StaffWhatsAppPage() {
                     '&:hover': { bgcolor: t.bg2 },
                   }}
                 >
-                  <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
                     <Badge
                       variant="dot"
                       color="success"
@@ -393,14 +455,14 @@ export function StaffWhatsAppPage() {
                       )}
                     </Badge>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                         <Typography sx={{ fontSize: '14px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {conv.name}
                         </Typography>
                         <Typography sx={{ fontSize: '11px', color: t.text3 }}>{formatTime(conv.lastMessageTime)}</Typography>
                       </Stack>
                       <Typography sx={{ fontSize: '12px', color: t.text3 }}>{conv.subtitle}</Typography>
-                      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mt: 0.5 }}>
+                      <Stack direction="row" spacing={1} sx={{ mt: 0.5, alignItems: 'center', justifyContent: 'space-between' }}>
                         <Typography sx={{
                           fontSize: '12px',
                           color: t.text3,
@@ -432,7 +494,7 @@ export function StaffWhatsAppPage() {
               <>
                 {/* Header */}
                 <Box sx={{ p: 2, borderBottom: `1px solid ${t.border}`, bgcolor: t.bg2 }}>
-                  <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                     {conversationType === 'group' ? (
                       <Box sx={{
                         width: 40,
@@ -473,7 +535,7 @@ export function StaffWhatsAppPage() {
                           justifyContent: msg.sender === 'me' ? 'flex-end' : 'flex-start',
                         }}
                       >
-                        <Stack direction={msg.sender === 'me' ? 'row-reverse' : 'row'} spacing={1} alignItems="flex-end" sx={{ maxWidth: '70%' }}>
+                        <Stack direction={msg.sender === 'me' ? 'row-reverse' : 'row'} spacing={1} sx={{ maxWidth: '70%', alignItems: 'flex-end' }}>
                           {msg.sender !== 'me' && conversationType === 'group' && (
                             <Avatar src={msg.senderAvatar || ''} sx={{ width: 28, height: 28 }} />
                           )}
@@ -493,7 +555,7 @@ export function StaffWhatsAppPage() {
                               }}
                             >
                               <Typography sx={{ fontSize: '13px' }}>{msg.text}</Typography>
-                              <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="flex-end" sx={{ mt: 0.5 }}>
+                              <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, alignItems: 'center', justifyContent: 'flex-end' }}>
                                 <Typography sx={{
                                   fontSize: '10px',
                                   color: msg.sender === 'me' ? 'rgba(255,255,255,0.7)' : t.text3,
@@ -574,7 +636,7 @@ export function StaffWhatsAppPage() {
                     <Typography sx={{ fontSize: '13px', fontWeight: 600, mb: 1 }}>Membres du groupe</Typography>
                     <Stack spacing={1}>
                       {(currentConversationInfo as any).membersList.map((member: any) => (
-                        <Stack key={member.id} direction="row" spacing={1} alignItems="center">
+                        <Stack key={member.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                           <Avatar src={member.avatar} sx={{ width: 32, height: 32 }} />
                           <Box sx={{ flex: 1 }}>
                             <Typography sx={{ fontSize: '12px', fontWeight: 600 }}>{member.name}</Typography>
@@ -640,13 +702,13 @@ export function StaffWhatsAppPage() {
         </DialogActions>
       </Dialog>
 
-      <Snackbar open={Boolean(toast)} autoHideDuration={2500} onClose={() => setToast(null)}>
-        {toast ? (
+      {toast ? (
+        <Snackbar open autoHideDuration={2500} onClose={() => setToast(null)}>
           <Alert severity={toast.severity} variant="filled" onClose={() => setToast(null)}>
             {toast.message}
           </Alert>
-        ) : null}
-      </Snackbar>
+        </Snackbar>
+      ) : null}
     </DashboardWrapper>
   );
 }

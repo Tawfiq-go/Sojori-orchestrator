@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { Box, Stack, Button } from '@mui/material';
+import { Box, Stack, Button, Chip, Typography, IconButton, Menu, MenuItem } from '@mui/material';
+import { MoreVert as MoreVertIcon } from '@mui/icons-material';
+import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader, FilterBar, FilterChip, StatsRow, StatCard, DataTable, ListingCell, Badge, Panel,
   btnPrimarySx, btnGhostSx, btnAiSx, btnSmSx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
+import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
+import { mockTasks, Task } from '../data/mockTasks';
 
 // ─── Tab Component ─────────────────────────────────────
 function Tabs({ tabs, activeTab, onChange }: { tabs: { key: string; label: string }[]; activeTab: string; onChange: (key: string) => void }) {
@@ -76,36 +80,234 @@ function Priority({ level }: { level: 'high' | 'med' | 'low' }) {
   );
 }
 
-const TASKS = [
-  { id: 't1', title: 'Ménage pré-arrivée', sub: 'Sarah J. · check-in 16h', type: '🧹 Ménage', listing: 'Villa Belvédère', lt: 'gold', due: '🔴 Auj. 14:00', dueColor: t.error, who: 'YK', whoName: 'Yasmine K.', status: { v: 'warning', label: 'En cours' }, prio: 'high' as const },
-  { id: 't2', title: 'Réparation fuite SDB', sub: 'Signalé par staff il y a 2h', type: '🔧 Maintenance', listing: 'Studio Calvi', lt: 'blue', due: '🔴 Urgent', dueColor: t.error, who: null, whoName: 'Non assigné', status: { v: 'error', label: 'Bloqué' }, prio: 'high' as const },
-  { id: 't3', title: 'Accueil Marco Rossi', sub: 'Famille 4 pers · VIP', type: '🛬 Check-in', listing: 'Dar Sojori', lt: 'blue', due: 'Auj. 16:30', dueColor: t.text2, who: 'HM', whoName: 'Hassan M.', status: { v: 'info', label: 'Planifié' }, prio: 'med' as const },
-  { id: 't4', title: 'Validation photos ménage', sub: '12 photos · AI score 8.4', type: '📸 Photos', listing: 'Médina House', lt: 'pink', due: 'Auj. 18:00', dueColor: t.text2, who: 'AI', whoName: 'Sojori AI', status: { v: 'ai', label: 'Review' }, prio: 'med' as const },
-  { id: 't5', title: 'Mid-stay clean Villa Atlas', sub: 'Long séjour · J+5', type: '🧹 Ménage', listing: 'Villa Atlas', lt: 'purple', due: 'Demain 10:00', dueColor: t.text2, who: 'FM', whoName: 'Fatima M.', status: { v: 'info', label: 'Planifié' }, prio: 'low' as const },
-  { id: 't6', title: 'Renouveler kit accueil', sub: '3 villas · stock bas', type: '📦 Inventaire', listing: '3 listings', lt: 'gold', due: 'Cette semaine', dueColor: t.text2, who: 'HM', whoName: 'Hassan M.', status: { v: 'info', label: 'Planifié' }, prio: 'med' as const },
-  { id: 't7', title: 'Inspection post-checkout', sub: 'James P. · dégâts mineurs ?', type: '🔍 Inspection', listing: 'Villa Belvédère', lt: 'gold', due: 'Hier 14:00', dueColor: t.text2, who: 'YK', whoName: 'Yasmine K.', status: { v: 'success', label: 'Complétée' }, prio: 'low' as const },
-];
-
 // ─── Liste View ─────────────────────────────────────────
-function TasksListView() {
+function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onEditTask: (task: Task) => void; onDeleteTask: (taskId: string) => void }) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedTaskForMenu, setSelectedTaskForMenu] = useState<Task | null>(null);
+
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, task: Task) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedTaskForMenu(task);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedTaskForMenu(null);
+  };
+
+  const handleEditClick = () => {
+    if (selectedTaskForMenu) {
+      onEditTask(selectedTaskForMenu);
+    }
+    handleMenuClose();
+  };
+
+  const handleDeleteClick = () => {
+    if (selectedTaskForMenu && window.confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) {
+      onDeleteTask(selectedTaskForMenu.id);
+      toast.success('Tâche supprimée avec succès');
+    }
+    handleMenuClose();
+  };
+
+  const handleDuplicateClick = () => {
+    if (selectedTaskForMenu) {
+      const duplicate = { ...selectedTaskForMenu, id: `task-${Date.now()}`, itemNumber: `TASK-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}` };
+      toast.success('Tâche dupliquée avec succès (MOCK)');
+    }
+    handleMenuClose();
+  };
+
+  const handleMarkCompleted = () => {
+    if (selectedTaskForMenu) {
+      toast.success('Tâche marquée comme complétée (MOCK)');
+    }
+    handleMenuClose();
+  };
+
+  const getStatusBadge = (status: Task['status']) => {
+    const map: Record<Task['status'], { v: string; label: string }> = {
+      'CREATED': { v: 'info', label: 'Créée' },
+      'ASSIGNED': { v: 'info', label: 'Assignée' },
+      'ACCEPTED': { v: 'info', label: 'Acceptée' },
+      'IN_PROGRESS': { v: 'warning', label: 'En cours' },
+      'COMPLETED': { v: 'success', label: 'Complétée' },
+      'CANCELLED_ADMIN': { v: 'error', label: 'Annulée' },
+      'CANCELLED_CUSTOMER': { v: 'error', label: 'Annulée client' },
+      'ARCHIVED': { v: 'default', label: 'Archivée' },
+    };
+    return map[status] || { v: 'default', label: status };
+  };
+
+  const getPriorityLevel = (priority: Task['priority']): 'high' | 'med' | 'low' => {
+    if (priority === 'Critical' || priority === 'Urgent') return 'high';
+    if (priority === 'Normal') return 'low';
+    return 'med';
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (date.toDateString() === today.toDateString()) return "Aujourd'hui";
+    if (date.toDateString() === yesterday.toDateString()) return 'Hier';
+    if (date.toDateString() === tomorrow.toDateString()) return 'Demain';
+
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+  };
+
+  const getListingColor = (name: string): 'gold' | 'blue' | 'purple' | 'pink' | 'green' => {
+    const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const colors: Array<'gold' | 'blue' | 'purple' | 'pink' | 'green'> = ['gold', 'blue', 'purple', 'pink', 'green'];
+    return colors[hash % colors.length];
+  };
   const cols = [
-    { key: 'title', label: 'Tâche', render: (r: typeof TASKS[0]) =>
-      <Box><strong>{r.title}</strong><Box sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'Geist Mono', mt: 0.25 }}>{r.sub}</Box></Box> },
-    { key: 'type', label: 'Type', render: (r: typeof TASKS[0]) =>
-      <Box sx={{ fontSize: 11.5, color: t.text2, fontWeight: 500, fontFamily: 'Geist Mono' }}>{r.type}</Box> },
-    { key: 'listing', label: 'Listing', render: (r: typeof TASKS[0]) =>
-      <ListingCell name={r.listing} color={r.lt as 'gold'} /> },
-    { key: 'due', label: 'Échéance', render: (r: typeof TASKS[0]) =>
-      <Box sx={{ color: r.dueColor, fontWeight: r.dueColor === t.error ? 600 : 400, fontFamily: 'Geist Mono', fontSize: 12 }}>{r.due}</Box> },
-    { key: 'who', label: 'Assigné à', render: (r: typeof TASKS[0]) =>
-      <Stack direction="row" alignItems="center" spacing={0.75}>
-        {r.who ? <Ava initials={r.who} /> : <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: t.bg3, color: t.text3, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>?</Box>}
-        <span style={{ color: r.who ? t.text : t.text3 }}>{r.whoName}</span>
-      </Stack> },
-    { key: 'status', label: 'Statut', render: (r: typeof TASKS[0]) =>
-      <Badge variant={r.status.v as any} dot>{r.status.label}</Badge> },
-    { key: 'prio', label: 'Priorité', render: (r: typeof TASKS[0]) => <Priority level={r.prio} /> },
+    // Column 1: Tâche (title + itemNumber)
+    {
+      key: 'title',
+      label: 'Tâche',
+      render: (r: Task) => (
+        <Box>
+          <strong>{r.name}</strong>
+          <Box sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'Geist Mono', mt: 0.25 }}>
+            {r.itemNumber} {r.guestName && `· ${r.guestName}`}
+          </Box>
+        </Box>
+      )
+    },
+    // Column 2: Type + SubType
+    {
+      key: 'type',
+      label: 'Type',
+      render: (r: Task) => (
+        <Box>
+          <Box sx={{ fontSize: 11.5, color: t.text2, fontWeight: 500 }}>{r.type}</Box>
+          <Box sx={{ fontSize: 10, color: t.text3, mt: 0.25 }}>{r.subType}</Box>
+        </Box>
+      )
+    },
+    // Column 3: Listing
+    {
+      key: 'listing',
+      label: 'Listing',
+      render: (r: Task) => <ListingCell name={r.listingName} color={getListingColor(r.listingName)} />
+    },
+    // Column 4: Date création
+    {
+      key: 'createdAt',
+      label: 'Créée le',
+      render: (r: Task) => (
+        <Box sx={{ fontFamily: 'Geist Mono', fontSize: 11.5, color: t.text2 }}>
+          {new Date(r.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+        </Box>
+      )
+    },
+    // Column 5: Échéance (startDate + startHour)
+    {
+      key: 'due',
+      label: 'Échéance',
+      render: (r: Task) => {
+        const isUrgent = r.priority === 'Urgent' || r.priority === 'Critical';
+        return (
+          <Box>
+            <Box sx={{ color: isUrgent ? t.error : t.text2, fontWeight: isUrgent ? 600 : 400, fontFamily: 'Geist Mono', fontSize: 12 }}>
+              {formatDate(r.startDate)} {r.startHour}
+            </Box>
+            {r.clientTimeslot && (
+              <Box sx={{ fontSize: 10, color: t.ai, mt: 0.25 }}>Client: {r.clientTimeslot}</Box>
+            )}
+          </Box>
+        );
+      }
+    },
+    // Column 6: Réservation
+    {
+      key: 'reservation',
+      label: 'Réservation',
+      render: (r: Task) => (
+        r.reservationNumber ? (
+          <Box>
+            <Box sx={{ fontSize: 11.5, color: t.primary, fontWeight: 600 }}>{r.reservationNumber}</Box>
+            {r.guestName && <Box sx={{ fontSize: 10, color: t.text3, mt: 0.25 }}>{r.guestName}</Box>}
+          </Box>
+        ) : (
+          <Box sx={{ fontSize: 11, color: t.text4, fontStyle: 'italic' }}>-</Box>
+        )
+      )
+    },
+    // Column 7: Assigné à (staff + avatar)
+    {
+      key: 'who',
+      label: 'Assigné à',
+      render: (r: Task) => {
+        const initials = r.staffName ? r.staffName.split(' ').map(n => n[0]).join('').toUpperCase() : null;
+        return (
+          <Stack direction="row" alignItems="center" spacing={0.75}>
+            {initials ? (
+              <Ava initials={initials} />
+            ) : (
+              <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: t.bg3, color: t.text3, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                ?
+              </Box>
+            )}
+            <span style={{ color: r.staffName ? t.text : t.text3 }}>{r.staffName || 'Non assigné'}</span>
+          </Stack>
+        );
+      }
+    },
+    // Column 8: Prix + Paiement
+    {
+      key: 'pricing',
+      label: 'Tarif',
+      render: (r: Task) => (
+        <Box>
+          <Box sx={{ fontSize: 12, fontWeight: 600, color: t.text }}>
+            {r.price} {r.currency}
+          </Box>
+          <Chip
+            label={r.paid ? 'Payé' : 'Non payé'}
+            size="small"
+            sx={{
+              height: 18,
+              fontSize: 10,
+              bgcolor: r.paid ? t.successTint : t.warningTint,
+              color: r.paid ? t.success : t.warning,
+              mt: 0.5
+            }}
+          />
+        </Box>
+      )
+    },
+    // Column 9: Statut
+    {
+      key: 'status',
+      label: 'Statut',
+      render: (r: Task) => {
+        const statusBadge = getStatusBadge(r.status);
+        return <Badge variant={statusBadge.v as any} dot>{statusBadge.label}</Badge>;
+      }
+    },
+    // Column 10: Priorité
+    {
+      key: 'prio',
+      label: 'Priorité',
+      render: (r: Task) => <Priority level={getPriorityLevel(r.priority)} />
+    },
+    // Column 11: Actions (menu 3 points)
+    {
+      key: 'actions',
+      label: '',
+      render: (r: Task) => (
+        <IconButton size="small" onClick={(e) => handleMenuOpen(e, r)}>
+          <MoreVertIcon fontSize="small" />
+        </IconButton>
+      ),
+    },
   ];
 
   return (
@@ -133,21 +335,35 @@ function TasksListView() {
 
       <DataTable
         columns={cols}
-        rows={TASKS}
+        rows={tasks}
         selectable
         selectedIds={selected}
         onSelectionChange={setSelected}
         footer={<>
-          <Box>{selected.length} sélectionnée · {TASKS.length} de 156</Box>
+          <Box>{selected.length} sélectionnée{selected.length > 1 ? 's' : ''} · {tasks.length} tâche{tasks.length > 1 ? 's' : ''}</Box>
           <Box sx={{ display: 'flex', gap: 0.25 }}>
             <button style={{ padding: '4px 8px', color: t.text2 }}>‹</button>
             <button style={{ padding: '4px 8px', background: t.text, color: '#fff', borderRadius: '5px' }}>1</button>
             <button style={{ padding: '4px 8px', color: t.text2 }}>2</button>
             <button style={{ padding: '4px 8px', color: t.text2 }}>›</button>
           </Box>
-          <Box>Affichage 1-7 sur 156</Box>
+          <Box>Affichage 1-{tasks.length} sur {tasks.length}</Box>
         </>}
       />
+
+      {/* Actions Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <MenuItem onClick={handleEditClick}>✏️ Modifier</MenuItem>
+        <MenuItem onClick={handleDuplicateClick}>📋 Dupliquer</MenuItem>
+        <MenuItem onClick={handleMarkCompleted}>✓ Marquer complétée</MenuItem>
+        <MenuItem onClick={handleDeleteClick} sx={{ color: t.error }}>🗑️ Supprimer</MenuItem>
+      </Menu>
     </>
   );
 }
@@ -720,6 +936,9 @@ function TasksTeamView() {
 // ─── Main Tasks Page ─────────────────────────────────────
 export function TasksPage() {
   const [activeTab, setActiveTab] = useState('liste');
+  const [tasks, setTasks] = useState<Task[]>(mockTasks);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const tabs = [
     { key: 'liste', label: 'Liste' },
@@ -728,20 +947,58 @@ export function TasksPage() {
     { key: 'equipe', label: 'Équipe' },
   ];
 
+  const handleOpenModal = (task?: Task) => {
+    setSelectedTask(task || null);
+    setModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setSelectedTask(null);
+  };
+
+  const handleSaveTask = (task: Task) => {
+    if (selectedTask) {
+      // Update existing task
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)));
+    } else {
+      // Add new task
+      setTasks((prev) => [...prev, task]);
+    }
+    handleCloseModal();
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+  };
+
+  const handleEditTask = (task: Task) => {
+    handleOpenModal(task);
+  };
+
   return (
     <DashboardWrapper breadcrumb={['Activité', 'Tâches']}>
-      <PageHeader title="Tâches & opérations" count="156">
+      <PageHeader title="Tâches & opérations" count={`${tasks.length}`}>
         <Button sx={btnGhostSx}>📤 Exporter</Button>
         <Button sx={btnAiSx}>✨ Auto-assigner</Button>
-        <Button sx={btnPrimarySx}>+ Nouvelle tâche</Button>
+        <Button sx={btnPrimarySx} onClick={() => handleOpenModal()}>
+          + Nouvelle tâche
+        </Button>
       </PageHeader>
 
       <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
-      {activeTab === 'liste' && <TasksListView />}
+      {activeTab === 'liste' && <TasksListView tasks={tasks} onEditTask={handleEditTask} onDeleteTask={handleDeleteTask} />}
       {activeTab === 'calendrier' && <TasksCalendarView />}
       {activeTab === 'sejours' && <TasksSejoursView />}
       {activeTab === 'equipe' && <TasksTeamView />}
+
+      <CreateTaskModal
+        open={modalOpen}
+        onClose={handleCloseModal}
+        onSave={handleSaveTask}
+        existingTask={selectedTask}
+      />
     </DashboardWrapper>
   );
 }

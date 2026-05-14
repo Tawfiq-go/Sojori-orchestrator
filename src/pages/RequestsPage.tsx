@@ -346,7 +346,7 @@ export function RequestsPage() {
       render: (row: GuestRequest) => {
         const config = REQUEST_TYPE_CONFIG[row.type];
         return (
-          <Stack direction="row" spacing={0.5} alignItems="center">
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <Typography sx={{ fontSize: 16 }}>{config.icon}</Typography>
             <Typography sx={{ fontSize: 13, fontWeight: 500, color: config.color }}>
               {config.label}
@@ -371,7 +371,7 @@ export function RequestsPage() {
       key: 'listing',
       label: 'Listing',
       render: (row: GuestRequest) => (
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Typography sx={{ fontSize: 18 }}>{row.listingPhoto}</Typography>
           <Typography sx={{ fontSize: 13 }}>{row.listingName}</Typography>
         </Stack>
@@ -432,7 +432,7 @@ export function RequestsPage() {
       label: 'Assigné à',
       render: (row: GuestRequest) => (
         row.assignedTo ? (
-          <Stack direction="row" spacing={0.5} alignItems="center">
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <Avatar sx={{ width: 20, height: 20, fontSize: 10, bgcolor: t.primary }}>
               {row.assignedTo[0]}
             </Avatar>
@@ -480,7 +480,7 @@ export function RequestsPage() {
           '&:hover': { borderColor: t.borderStrong, boxShadow: '0 4px 10px rgba(26,20,8,0.08)' },
         }}
       >
-        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.75 }}>
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mb: 0.75 }}>
           <Typography sx={{ fontSize: 15 }}>{typeConfig.icon}</Typography>
           <Typography sx={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{request.guestName}</Typography>
           {request.priority === 'urgent' ? <Badge color="error" size="sm">Urgent</Badge> : null}
@@ -489,7 +489,7 @@ export function RequestsPage() {
         <Typography sx={{ fontSize: 12.5, color: t.text2, mb: 1.25, lineHeight: 1.5 }}>
           {request.description}
         </Typography>
-        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
           <Chip size="small" label={typeConfig.label} />
           <Chip size="small" label={request.assignedTo || 'Non assigné'} />
           {request.additionalPrice ? <Chip size="small" label={`+${request.additionalPrice}€`} /> : null}
@@ -507,7 +507,7 @@ export function RequestsPage() {
             { value: 'kanban', label: '📊 Kanban' },
           ]}
           value={viewMode}
-          onChange={(v) => setViewMode(v as 'table' | 'kanban')}
+          onChange={(v: string) => setViewMode(v as 'table' | 'kanban')}
         />
         <Button sx={btnGhostSx}>📊 Stats</Button>
         <Button sx={btnPrimarySx}>+ Nouvelle demande</Button>
@@ -629,21 +629,17 @@ export function RequestsPage() {
 
         <TextField
           size="small"
-          label="Du"
           type="date"
           value={dateRange.start}
           onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))}
-          InputLabelProps={{ shrink: true }}
           sx={{ minWidth: 150 }}
         />
 
         <TextField
           size="small"
-          label="Au"
           type="date"
           value={dateRange.end}
           onChange={(e) => setDateRange((prev) => ({ ...prev, end: e.target.value }))}
-          InputLabelProps={{ shrink: true }}
           sx={{ minWidth: 150 }}
         />
       </Stack>
@@ -682,7 +678,7 @@ export function RequestsPage() {
           <Stack spacing={1}>
             <Typography variant="h6">Détail de la demande</Typography>
             {selectedRequest && (
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Typography sx={{ fontSize: 18 }}>
                   {REQUEST_TYPE_CONFIG[selectedRequest.type].icon}
                 </Typography>
@@ -757,7 +753,7 @@ export function RequestsPage() {
                   <Typography sx={{ fontSize: 12, fontWeight: 600, color: t.text3, mb: 0.5 }}>
                     ASSIGNÉ À
                   </Typography>
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Avatar sx={{ width: 28, height: 28, bgcolor: t.primary }}>
                       {selectedRequest.assignedTo[0]}
                     </Avatar>
@@ -823,13 +819,13 @@ export function RequestsPage() {
         </DialogActions>
       </Dialog>
 
-      <Snackbar open={Boolean(toast)} autoHideDuration={2500} onClose={() => setToast(null)}>
-        {toast ? (
+      {toast ? (
+        <Snackbar open autoHideDuration={2500} onClose={() => setToast(null)}>
           <Alert severity={toast.severity} variant="filled" onClose={() => setToast(null)}>
             {toast.message}
           </Alert>
-        ) : null}
-      </Snackbar>
+        </Snackbar>
+      ) : null}
     </DashboardWrapper>
   );
 }

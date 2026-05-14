@@ -1,179 +1,516 @@
-import { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Box, Stack, TextField, Button, MenuItem, Typography } from '@mui/material';
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  Avatar,
+  Box,
+  Button,
+  Chip,
+  Divider,
+  FormControlLabel,
+  MenuItem,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
-import { PageHeader, Panel, btnPrimarySx, btnGhostSx, tokens as t } from '../components/dashboard/DashboardV2.components';
+import { ActionToast, useActionToast } from '../components/ActionToast';
+import {
+  LISTING_TAB_META,
+  createEmptyListing,
+  getStoredListings,
+  saveStoredListings,
+  type ListingFormData,
+  type ListingRecord,
+} from '../data/catalogueMock';
+import {
+  Panel,
+  btnGhostSx,
+  btnPrimarySx,
+  tokens as t,
+} from '../components/dashboard/DashboardV2.components';
 
-// ─── Mock Data ─────────────────────────────────────────
-const LISTING_DATA: Record<string, any> = {
-  'villa-belvedere': {
-    id: 'villa-belvedere',
-    name: 'Villa Belvédère · Nice — Vue mer',
-    type: 'Villa',
-    status: 'active',
-    completion: 72,
-    bedrooms: 4,
-    bathrooms: 3,
-    guests: 8,
-    surface: 240,
-    beds: 5,
-    shortDescription: 'Villa vue mer avec piscine privée',
-    longDescription: `Magnifique villa avec vue panoramique sur la mer Méditerranée.
+type ListingTabKey = keyof ListingFormData;
+type FieldType =
+  | 'text'
+  | 'textarea'
+  | 'number'
+  | 'select'
+  | 'switch'
+  | 'tags'
+  | 'date'
+  | 'time'
+  | 'email'
+  | 'tel'
+  | 'url';
 
-Située dans un quartier résidentiel calme de Nice, cette propriété offre un cadre exceptionnel pour vos vacances. La villa dispose d'une piscine privée, d'une terrasse avec vue mer, et d'un jardin paysager.
-
-Idéal pour les familles ou groupes d'amis recherchant le luxe et la tranquillité.`,
-    amenities: ['Piscine privée', 'Climatisation', 'WiFi fibre', 'Parking', 'Vue mer', 'Jardin', 'BBQ', 'Terrasse'],
-    images: 14,
-    channels: [
-      { name: 'Airbnb', status: 'synced', lastSync: '2h ago' },
-      { name: 'Booking.com', status: 'synced', lastSync: '1h ago' },
-      { name: 'Vrbo', status: 'pending', lastSync: '2d ago' },
-    ],
-    pricing: {
-      base: 280,
-      cleaning: 150,
-      weekend: 364,
-      minStay: 3,
-    },
-  },
-  'dar-sojori': {
-    id: 'dar-sojori',
-    name: 'Dar Sojori · Marrakech — Médina',
-    type: 'Riad',
-    status: 'active',
-    completion: 85,
-    bedrooms: 5,
-    bathrooms: 4,
-    guests: 10,
-    surface: 320,
-    beds: 6,
-    shortDescription: 'Riad traditionnel au cœur de la Médina',
-    longDescription: `Riad authentique situé dans le quartier historique de la Médina de Marrakech.
-
-Cette demeure traditionnelle a été entièrement restaurée avec des matériaux nobles et offre un havre de paix avec son patio central et sa terrasse sur le toit avec vue sur les montagnes de l'Atlas.
-
-Architecture traditionnelle marocaine avec tout le confort moderne.`,
-    amenities: ['Piscine', 'Climatisation', 'WiFi', 'Hammam', 'Terrasse', 'Vue Atlas', 'Staff', 'Parking'],
-    images: 24,
-    channels: [
-      { name: 'Airbnb', status: 'synced', lastSync: '30min ago' },
-      { name: 'Booking.com', status: 'synced', lastSync: '1h ago' },
-    ],
-    pricing: {
-      base: 350,
-      cleaning: 200,
-      weekend: 455,
-      minStay: 2,
-    },
-  },
-  'villa-atlas': {
-    id: 'villa-atlas',
-    name: 'Villa Atlas · Marrakech — Palmeraie',
-    type: 'Villa',
-    status: 'active',
-    completion: 68,
-    bedrooms: 6,
-    bathrooms: 5,
-    guests: 12,
-    surface: 450,
-    beds: 8,
-    shortDescription: 'Villa de luxe dans la Palmeraie',
-    longDescription: `Villa d'exception située dans la prestigieuse Palmeraie de Marrakech.
-
-Cette propriété moderne offre des prestations haut de gamme avec piscine chauffée, spa, salle de sport et terrain de tennis. Le design contemporain se marie parfaitement avec l'environnement naturel.
-
-Parfait pour événements privés et séjours de luxe.`,
-    amenities: ['Piscine chauffée', 'Climatisation', 'WiFi fibre', 'Spa', 'Salle sport', 'Tennis', 'Chef', 'Chauffeur'],
-    images: 32,
-    channels: [
-      { name: 'Airbnb', status: 'synced', lastSync: '1h ago' },
-      { name: 'Booking.com', status: 'disconnected', lastSync: '5d ago' },
-      { name: 'Vrbo', status: 'synced', lastSync: '2h ago' },
-    ],
-    pricing: {
-      base: 580,
-      cleaning: 300,
-      weekend: 754,
-      minStay: 5,
-    },
-  },
-};
-
-// ─── Tabs Rail Component ─────────────────────────────────
-interface Tab {
-  key: string;
-  icon: string;
+interface FieldSchema {
   label: string;
-  completion: number;
-  group: string;
+  path: string;
+  type: FieldType;
+  required?: boolean;
+  helperText?: string;
+  options?: Array<{ value: string; label: string }>;
+  min?: number;
 }
 
-const TABS: Tab[] = [
-  { key: 'basic', icon: '🏠', label: 'Informations de base', completion: 100, group: 'PROPRIÉTÉ' },
-  { key: 'address', icon: '📍', label: 'Adresse', completion: 100, group: 'PROPRIÉTÉ' },
-  { key: 'media', icon: '📸', label: 'Médias', completion: 88, group: 'PROPRIÉTÉ' },
-  { key: 'equipment', icon: '✨', label: 'Équipements', completion: 62, group: 'PROPRIÉTÉ' },
-  { key: 'pricing', icon: '💰', label: 'Tarification', completion: 45, group: 'PROPRIÉTÉ' },
-  { key: 'extras', icon: 'ℹ️', label: 'Infos supplémentaires', completion: 100, group: 'PROPRIÉTÉ' },
-  { key: 'channels', icon: '🔗', label: 'Channel Manager', completion: 100, group: 'DISTRIBUTION' },
-  { key: 'licenses', icon: '📄', label: 'Licences', completion: 0, group: 'DISTRIBUTION' },
-  { key: 'automsg', icon: '💬', label: 'Messages auto', completion: 100, group: 'GUEST EXPERIENCE' },
-  { key: 'whatsapp', icon: '📱', label: 'Menu WhatsApp', completion: 75, group: 'GUEST EXPERIENCE' },
-  { key: 'concierge', icon: '🛎️', label: 'Conciergerie', completion: 100, group: 'GUEST EXPERIENCE' },
-  { key: 'services', icon: '🎯', label: 'Services', completion: 0, group: 'GUEST EXPERIENCE' },
-  { key: 'support', icon: '🆘', label: 'Support', completion: 0, group: 'GUEST EXPERIENCE' },
-  { key: 'cleaning', icon: '🧹', label: 'Ménage', completion: 100, group: 'OPÉRATIONS' },
-  { key: 'autotasks', icon: '✅', label: 'Tâches auto', completion: 100, group: 'OPÉRATIONS' },
-  { key: 'roomtypes', icon: '🛏️', label: 'Types de chambres', completion: 0, group: 'OPÉRATIONS' },
-  { key: 'deposit', icon: '💵', label: 'Caution', completion: 0, group: 'OPÉRATIONS' },
-  { key: 'rules', icon: '📜', label: 'Règles & sécurité', completion: 100, group: 'RÈGLES & SÉCURITÉ' },
-  { key: 'houserules', icon: '🎛️', label: 'Règles & informations', completion: 100, group: 'RÈGLES & SÉCURITÉ' },
-  { key: 'access', icon: '🔐', label: 'Configuration accès', completion: 100, group: 'ACCÈS & IOT' },
-  { key: 'wifi', icon: '🌐', label: 'WiFi', completion: 100, group: 'ACCÈS & IOT' },
-  { key: 'iot', icon: '🔌', label: 'Appareils IoT', completion: 0, group: 'ACCÈS & IOT' },
-];
+interface SectionSchema {
+  title: string;
+  description?: string;
+  fields: FieldSchema[];
+}
 
-function TabsRail({ activeTab, onChange, completion }: { activeTab: string; onChange: (key: string) => void; completion: number }) {
+const FIELD_OPTIONS = {
+  listingType: [
+    { value: 'Villa', label: 'Villa' },
+    { value: 'Riad', label: 'Riad' },
+    { value: 'Apartment', label: 'Appartement' },
+    { value: 'Loft', label: 'Loft' },
+    { value: 'House', label: 'Maison' },
+    { value: 'Studio', label: 'Studio' },
+  ],
+  listingStatus: [
+    { value: 'active', label: 'Active' },
+    { value: 'inactive', label: 'Inactive' },
+    { value: 'draft', label: 'Brouillon' },
+  ],
+  currency: [
+    { value: 'EUR', label: 'EUR' },
+    { value: 'MAD', label: 'MAD' },
+    { value: 'USD', label: 'USD' },
+  ],
+  channel: [
+    { value: 'airbnb', label: 'Airbnb' },
+    { value: 'booking', label: 'Booking.com' },
+    { value: 'direct', label: 'Direct' },
+    { value: 'vrbo', label: 'Vrbo' },
+  ],
+  syncMode: [
+    { value: '1-way', label: 'Sync 1-way' },
+    { value: '2-way', label: 'Sync 2-way' },
+    { value: 'manual', label: 'Manuel' },
+  ],
+  depositMethod: [
+    { value: 'Card pre-authorization', label: 'Pré-autorisation CB' },
+    { value: 'Cash', label: 'Espèces' },
+    { value: 'Bank transfer', label: 'Virement' },
+  ],
+  accessType: [
+    { value: 'Smart lock', label: 'Serrure connectée' },
+    { value: 'Lockbox', label: 'Boîte à clés' },
+    { value: 'Meet and greet', label: 'Accueil physique' },
+  ],
+  defaultRoomType: [
+    { value: 'Entire home', label: 'Logement entier' },
+    { value: 'Private room', label: 'Chambre privée' },
+    { value: 'Suite', label: 'Suite' },
+  ],
+} as const;
+
+const TAB_SCHEMAS: Record<ListingTabKey, SectionSchema[]> = {
+  basic: [
+    {
+      title: 'Identification',
+      description: 'Les informations fondamentales de l’annonce.',
+      fields: [
+        { label: 'Nom de la propriété', path: 'basic.name', type: 'text', required: true },
+        { label: 'Type de propriété', path: 'basic.type', type: 'select', options: [...FIELD_OPTIONS.listingType], required: true },
+        { label: 'Propriétaire', path: 'basic.ownerName', type: 'text', required: true },
+        { label: 'Statut', path: 'basic.status', type: 'select', options: [...FIELD_OPTIONS.listingStatus], required: true },
+        { label: 'Chambres', path: 'basic.bedrooms', type: 'number', required: true, min: 0 },
+        { label: 'Salles de bain', path: 'basic.bathrooms', type: 'number', required: true, min: 0 },
+        { label: 'Capacité', path: 'basic.guests', type: 'number', required: true, min: 1 },
+        { label: 'Surface (m²)', path: 'basic.surface', type: 'number', required: true, min: 1 },
+        { label: 'Lits', path: 'basic.beds', type: 'number', required: true, min: 1 },
+      ],
+    },
+    {
+      title: 'Description',
+      fields: [
+        { label: 'Description courte', path: 'basic.shortDescription', type: 'textarea', required: true },
+        { label: 'Description longue', path: 'basic.longDescription', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  address: [
+    {
+      title: 'Adresse complète',
+      fields: [
+        { label: 'Rue', path: 'address.street', type: 'text', required: true },
+        { label: 'Code postal', path: 'address.postalCode', type: 'text', required: true },
+        { label: 'Ville', path: 'address.city', type: 'text', required: true },
+        { label: 'Région', path: 'address.region', type: 'text', required: true },
+        { label: 'Pays', path: 'address.country', type: 'text', required: true },
+        { label: 'Code pays', path: 'address.countryCode', type: 'text', required: true },
+        { label: 'Latitude', path: 'address.latitude', type: 'text', required: true },
+        { label: 'Longitude', path: 'address.longitude', type: 'text', required: true },
+        { label: 'Repère / landmark', path: 'address.accessLandmark', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  media: [
+    {
+      title: 'Bibliothèque média',
+      fields: [
+        { label: 'Photo cover', path: 'media.coverPhoto', type: 'url', required: true },
+        { label: 'Nombre de photos', path: 'media.galleryCount', type: 'number', required: true, min: 1 },
+        { label: 'Notes photo', path: 'media.photoNotes', type: 'textarea', required: true },
+        { label: 'URL video tour', path: 'media.videoTourUrl', type: 'url' },
+      ],
+    },
+  ],
+  equipment: [
+    {
+      title: 'Équipements clés',
+      fields: [
+        { label: 'Highlights (séparés par virgule)', path: 'equipment.highlights', type: 'tags', required: true },
+        { label: 'Cuisine équipée', path: 'equipment.kitchen', type: 'switch' },
+        { label: 'Piscine', path: 'equipment.pool', type: 'switch' },
+        { label: 'Parking', path: 'equipment.parking', type: 'switch' },
+        { label: 'WiFi', path: 'equipment.wifi', type: 'switch' },
+        { label: 'Climatisation', path: 'equipment.airConditioning', type: 'switch' },
+        { label: 'Notes sécurité', path: 'equipment.safetyNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  pricing: [
+    {
+      title: 'Tarification de base',
+      fields: [
+        { label: 'Prix de base', path: 'pricing.basePrice', type: 'number', required: true, min: 0 },
+        { label: 'Frais de ménage', path: 'pricing.cleaningFee', type: 'number', required: true, min: 0 },
+        { label: 'Multiplicateur week-end', path: 'pricing.weekendMultiplier', type: 'number', required: true, min: 1 },
+        { label: 'Séjour minimum', path: 'pricing.minStay', type: 'number', required: true, min: 1 },
+        { label: 'Devise', path: 'pricing.currency', type: 'select', options: [...FIELD_OPTIONS.currency], required: true },
+        { label: 'Taxe de séjour', path: 'pricing.cityTax', type: 'number', required: true, min: 0 },
+        { label: 'Frais animaux', path: 'pricing.petFee', type: 'number', min: 0 },
+      ],
+    },
+  ],
+  extras: [
+    {
+      title: 'Frais supplémentaires',
+      fields: [
+        { label: 'Early check-in', path: 'extras.earlyCheckInFee', type: 'number', required: true, min: 0 },
+        { label: 'Late check-out', path: 'extras.lateCheckOutFee', type: 'number', required: true, min: 0 },
+        { label: 'Transfert aéroport', path: 'extras.airportTransferFee', type: 'number', min: 0 },
+        { label: 'Baby kit', path: 'extras.babyKitFee', type: 'number', min: 0 },
+        { label: 'Extra guest fee', path: 'extras.extraGuestFee', type: 'number', min: 0 },
+        { label: 'Notes extras', path: 'extras.notes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  channels: [
+    {
+      title: 'Configuration OTA',
+      fields: [
+        { label: 'Canal préféré', path: 'channels.preferredChannel', type: 'select', options: [...FIELD_OPTIONS.channel], required: true },
+        { label: 'Mode de sync', path: 'channels.syncMode', type: 'select', options: [...FIELD_OPTIONS.syncMode], required: true },
+        { label: 'Instant book autorisé', path: 'channels.allowInstantBook', type: 'switch' },
+        { label: 'Notes canaux', path: 'channels.channelNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  licenses: [
+    {
+      title: 'Conformité & licences',
+      fields: [
+        { label: 'Licence tourisme', path: 'licenses.tourismLicense', type: 'text', required: true },
+        { label: 'Numéro TVA', path: 'licenses.vatNumber', type: 'text', required: true },
+        { label: 'Police assurance', path: 'licenses.insurancePolicy', type: 'text', required: true },
+        { label: 'Expiration', path: 'licenses.expiresAt', type: 'date', required: true },
+        { label: 'Notes licences', path: 'licenses.licensingNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  automsg: [
+    {
+      title: 'Messages automatiques',
+      fields: [
+        { label: 'Messages actifs', path: 'automsg.enabled', type: 'switch' },
+        { label: 'Confirmation réservation', path: 'automsg.bookingConfirmation', type: 'textarea', required: true },
+        { label: 'Rappel avant arrivée', path: 'automsg.preArrivalReminder', type: 'textarea', required: true },
+        { label: 'Check-in séjour', path: 'automsg.stayCheckIn', type: 'textarea', required: true },
+        { label: 'Avant départ', path: 'automsg.preDeparture', type: 'textarea', required: true },
+        { label: 'Merci / review', path: 'automsg.thankYou', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  whatsapp: [
+    {
+      title: 'Menu WhatsApp',
+      fields: [
+        { label: 'Titre menu', path: 'whatsapp.menuTitle', type: 'text', required: true },
+        { label: 'Template accueil', path: 'whatsapp.welcomeTemplate', type: 'text', required: true },
+        { label: 'Quick replies', path: 'whatsapp.quickReplies', type: 'tags', required: true },
+        { label: 'Auto-reply actif', path: 'whatsapp.autoReplyEnabled', type: 'switch' },
+        { label: 'Numéro escalation', path: 'whatsapp.escalationNumber', type: 'tel', required: true },
+      ],
+    },
+  ],
+  concierge: [
+    {
+      title: 'Services concierge',
+      fields: [
+        { label: 'Concierge active', path: 'concierge.enabled', type: 'switch' },
+        { label: 'Transfert aéroport', path: 'concierge.airportTransfer', type: 'switch' },
+        { label: 'Livraison courses', path: 'concierge.groceryDelivery', type: 'switch' },
+        { label: 'Chef privé', path: 'concierge.chefService', type: 'switch' },
+        { label: 'Guide local', path: 'concierge.localGuide', type: 'switch' },
+        { label: 'Notes concierge', path: 'concierge.conciergeNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  services: [
+    {
+      title: 'Services additionnels',
+      fields: [
+        { label: 'Petit déjeuner', path: 'services.breakfast', type: 'switch' },
+        { label: 'Spa', path: 'services.spa', type: 'switch' },
+        { label: 'Housekeeping', path: 'services.housekeeping', type: 'switch' },
+        { label: 'Babysitting', path: 'services.babysitting', type: 'switch' },
+        { label: 'Location véhicule', path: 'services.carRental', type: 'switch' },
+        { label: 'Notes services', path: 'services.serviceNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  support: [
+    {
+      title: 'Support client',
+      fields: [
+        { label: 'Téléphone support', path: 'support.phone', type: 'tel', required: true },
+        { label: 'Email support', path: 'support.email', type: 'email', required: true },
+        { label: 'Horaires support', path: 'support.hours', type: 'time', required: true, helperText: 'Format libre accepté' },
+        { label: 'Protocole urgence', path: 'support.emergencyProtocol', type: 'textarea', required: true },
+        { label: 'Notes support', path: 'support.supportNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  cleaning: [
+    {
+      title: 'Instructions ménage',
+      fields: [
+        { label: 'Checklist standard', path: 'cleaning.standardChecklist', type: 'textarea', required: true },
+        { label: 'Rotation linge', path: 'cleaning.linenChange', type: 'text', required: true },
+        { label: 'Stockage consommables', path: 'cleaning.suppliesStorage', type: 'text', required: true },
+        { label: 'Contrôle qualité', path: 'cleaning.qualityControl', type: 'text', required: true },
+        { label: 'Notes ménage', path: 'cleaning.cleaningNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  autotasks: [
+    {
+      title: 'Tâches automatiques',
+      fields: [
+        { label: 'Créer tâche ménage', path: 'autotasks.createCleaningTask', type: 'switch' },
+        { label: 'Créer tâche maintenance', path: 'autotasks.createMaintenanceTask', type: 'switch' },
+        { label: 'Créer tâche welcome pack', path: 'autotasks.createWelcomePackTask', type: 'switch' },
+        { label: 'Assigner équipe par défaut', path: 'autotasks.assignDefaultTeam', type: 'switch' },
+        { label: 'Notes tâches auto', path: 'autotasks.taskNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  roomtypes: [
+    {
+      title: 'Gestion des types de chambres',
+      fields: [
+        { label: 'Mode multi-room', path: 'roomtypes.multiRoomEnabled', type: 'switch' },
+        { label: 'Room type par défaut', path: 'roomtypes.defaultRoomType', type: 'select', options: [...FIELD_OPTIONS.defaultRoomType], required: true },
+        { label: 'Inventaire chambres', path: 'roomtypes.roomInventory', type: 'textarea', required: true },
+        { label: 'Matrice occupation', path: 'roomtypes.occupancyMatrix', type: 'text', required: true },
+        { label: 'Notes room types', path: 'roomtypes.roomtypeNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  deposit: [
+    {
+      title: 'Caution',
+      fields: [
+        { label: 'Caution activée', path: 'deposit.enabled', type: 'switch' },
+        { label: 'Montant caution', path: 'deposit.amount', type: 'number', required: true, min: 0 },
+        { label: 'Méthode', path: 'deposit.method', type: 'select', options: [...FIELD_OPTIONS.depositMethod], required: true },
+        { label: 'Délai remboursement (jours)', path: 'deposit.refundDelayDays', type: 'number', required: true, min: 0 },
+        { label: 'Notes caution', path: 'deposit.depositNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  rules: [
+    {
+      title: 'Sécurité & conformité',
+      fields: [
+        { label: 'Fumeur autorisé', path: 'rules.smokingAllowed', type: 'switch' },
+        { label: 'Évènements autorisés', path: 'rules.eventsAllowed', type: 'switch' },
+        { label: 'Enfants autorisés', path: 'rules.childrenAllowed', type: 'switch' },
+        { label: 'Animaux autorisés', path: 'rules.petAllowed', type: 'switch' },
+        { label: 'Notes sécurité', path: 'rules.securityNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  houserules: [
+    {
+      title: 'Règlement intérieur',
+      fields: [
+        { label: 'Fenêtre check-in', path: 'houserules.checkInWindow', type: 'text', required: true },
+        { label: 'Fenêtre check-out', path: 'houserules.checkOutWindow', type: 'text', required: true },
+        { label: 'Heures calmes', path: 'houserules.quietHours', type: 'text', required: true },
+        { label: 'Instructions poubelles', path: 'houserules.trashInstructions', type: 'textarea', required: true },
+        { label: 'Texte house rules', path: 'houserules.houseRulesText', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  access: [
+    {
+      title: 'Instructions accès',
+      fields: [
+        { label: 'Type d’accès', path: 'access.accessType', type: 'select', options: [...FIELD_OPTIONS.accessType], required: true },
+        { label: 'Code keypad', path: 'access.keypadCode', type: 'text', required: true },
+        { label: 'Code lockbox', path: 'access.lockboxCode', type: 'text' },
+        { label: 'Instructions parking', path: 'access.parkingInstructions', type: 'textarea', required: true },
+        { label: 'Notes accès', path: 'access.accessNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  wifi: [
+    {
+      title: 'Configuration WiFi',
+      fields: [
+        { label: 'SSID', path: 'wifi.ssid', type: 'text', required: true },
+        { label: 'Mot de passe', path: 'wifi.password', type: 'text', required: true },
+        { label: 'Débit / speed', path: 'wifi.speed', type: 'text', required: true },
+        { label: 'Backup network', path: 'wifi.backupNetwork', type: 'text' },
+        { label: 'Notes WiFi', path: 'wifi.wifiNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  iot: [
+    {
+      title: 'Appareils connectés',
+      fields: [
+        { label: 'Smart lock', path: 'iot.smartLock', type: 'switch' },
+        { label: 'Thermostat connecté', path: 'iot.thermostat', type: 'switch' },
+        { label: 'Noise sensor', path: 'iot.noiseSensor', type: 'switch' },
+        { label: 'Caméra extérieure', path: 'iot.cameraOutdoor', type: 'switch' },
+        { label: 'Notes devices', path: 'iot.deviceNotes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+};
+
+const REQUIRED_FIELDS: Record<ListingTabKey, string[]> = Object.fromEntries(
+  Object.entries(TAB_SCHEMAS).map(([key, sections]) => [
+    key,
+    sections.flatMap((section) =>
+      section.fields.filter((field) => field.required).map((field) => field.path),
+    ),
+  ]),
+) as Record<ListingTabKey, string[]>;
+
+const fieldPathGet = (source: Record<string, any>, path: string) => {
+  return path.split('.').reduce<any>((acc, key) => (acc == null ? undefined : acc[key]), source);
+};
+
+const fieldPathSet = (source: Record<string, any>, path: string, value: unknown) => {
+  const keys = path.split('.');
+  const clone = structuredClone(source);
+  let cursor: Record<string, any> = clone;
+
+  keys.slice(0, -1).forEach((key) => {
+    if (!cursor[key]) {
+      cursor[key] = {};
+    }
+    cursor = cursor[key];
+  });
+
+  cursor[keys[keys.length - 1]] = value;
+  return clone;
+};
+
+const isFilled = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  if (typeof value === 'boolean') {
+    return true;
+  }
+  if (typeof value === 'number') {
+    return value >= 0;
+  }
+  return String(value ?? '').trim().length > 0;
+};
+
+const computeTabCompletion = (listing: ListingRecord, tabKey: ListingTabKey) => {
+  const required = REQUIRED_FIELDS[tabKey];
+  if (required.length === 0) {
+    return 100;
+  }
+
+  const filled = required.filter((path) => isFilled(fieldPathGet(listing.form, path))).length;
+  return Math.round((filled / required.length) * 100);
+};
+
+const syncListingMeta = (listing: ListingRecord): ListingRecord => {
+  const next = structuredClone(listing);
+  next.name = next.form.basic.name;
+  next.city = next.form.address.city;
+  next.country = next.form.address.country;
+  next.countryCode = next.form.address.countryCode;
+  next.ownerName = next.form.basic.ownerName;
+  next.type = next.form.basic.type;
+  next.status = next.form.basic.status;
+  next.adr = next.form.pricing.basePrice;
+  next.sizeLabel = `${next.form.address.city.toUpperCase()} · ${next.form.basic.bedrooms}ch · ${next.form.basic.surface}m²`;
+  next.updatedAt = new Date().toISOString();
+  return next;
+};
+
+function TabsRail({
+  activeTab,
+  onChange,
+  completions,
+}: {
+  activeTab: ListingTabKey;
+  onChange: (key: ListingTabKey) => void;
+  completions: Record<ListingTabKey, number>;
+}) {
   let currentGroup = '';
 
   return (
-    <Box sx={{
-      width: 264,
-      bgcolor: t.bg1,
-      borderRight: `1px solid ${t.border}`,
-      overflow: 'auto',
-      p: 2,
-    }}>
-      {/* Search */}
-      <TextField
-        placeholder="Rechercher un onglet..."
-        size="small"
-        fullWidth
-        sx={{ mb: 2 }}
-      />
+    <Box
+      sx={{
+        width: 270,
+        bgcolor: t.bg1,
+        borderRight: `1px solid ${t.border}`,
+        overflow: 'auto',
+        p: 2,
+      }}
+    >
+      <TextField placeholder="Rechercher un onglet..." size="small" fullWidth sx={{ mb: 2 }} />
 
-      {/* Tabs grouped */}
-      {TABS.map((tab) => {
+      {LISTING_TAB_META.map((tab) => {
         const showGroupHeader = tab.group !== currentGroup;
         currentGroup = tab.group;
+        const completion = completions[tab.key];
+        const isComplete = completion === 100;
 
         return (
           <Box key={tab.key}>
             {showGroupHeader && (
-              <Typography sx={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: t.text3,
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                mt: 2,
-                mb: 1,
-                px: 1.5,
-              }}>
+              <Typography
+                sx={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: t.text3,
+                  letterSpacing: 1,
+                  textTransform: 'uppercase',
+                  mt: 2,
+                  mb: 1,
+                  px: 1.5,
+                }}
+              >
                 {tab.group}
               </Typography>
             )}
+
             <Box
               onClick={() => onChange(tab.key)}
               sx={{
@@ -184,7 +521,8 @@ function TabsRail({ activeTab, onChange, completion }: { activeTab: string; onCh
                 borderRadius: '8px',
                 cursor: 'pointer',
                 bgcolor: activeTab === tab.key ? t.primaryTint : 'transparent',
-                borderLeft: activeTab === tab.key ? `3px solid ${t.primary}` : '3px solid transparent',
+                borderLeft:
+                  activeTab === tab.key ? `3px solid ${t.primary}` : '3px solid transparent',
                 transition: 'all 0.15s',
                 '&:hover': {
                   bgcolor: activeTab === tab.key ? t.primaryTint : t.bg2,
@@ -193,16 +531,38 @@ function TabsRail({ activeTab, onChange, completion }: { activeTab: string; onCh
             >
               <Box sx={{ fontSize: 16 }}>{tab.icon}</Box>
               <Box sx={{ flex: 1 }}>
-                <Box sx={{ fontSize: 13, fontWeight: activeTab === tab.key ? 600 : 400 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: activeTab === tab.key ? 700 : 500 }}>
                   {tab.label}
-                </Box>
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: t.text3 }}>{completion}%</Typography>
               </Box>
-              <Box sx={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                bgcolor: tab.completion === 100 ? t.success : tab.completion > 0 ? t.warning : t.text4,
-              }} />
+              {isComplete ? (
+                <Box
+                  sx={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: '50%',
+                    bgcolor: t.successTint,
+                    color: t.success,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}
+                >
+                  ✓
+                </Box>
+              ) : (
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    bgcolor: completion > 0 ? t.warning : t.text4,
+                  }}
+                />
+              )}
             </Box>
           </Box>
         );
@@ -211,695 +571,496 @@ function TabsRail({ activeTab, onChange, completion }: { activeTab: string; onCh
   );
 }
 
-// ─── Aside Component ─────────────────────────────────────
-function ListingAside({ completion }: { completion: number }) {
+function ListingAside({
+  listing,
+  completions,
+  globalCompletion,
+}: {
+  listing: ListingRecord;
+  completions: Record<ListingTabKey, number>;
+  globalCompletion: number;
+}) {
+  const incomplete = LISTING_TAB_META.filter((item) => completions[item.key] < 100).slice(0, 6);
+
   return (
-    <Box sx={{
-      width: 320,
-      bgcolor: t.bg1,
-      borderLeft: `1px solid ${t.border}`,
-      p: 2,
-      overflow: 'auto',
-    }}>
-      {/* AI Assistant */}
-      <Panel sx={{ mb: 2, p: 2 }}>
+    <Box
+      sx={{
+        width: 320,
+        bgcolor: t.bg1,
+        borderLeft: `1px solid ${t.border}`,
+        p: 2,
+        overflow: 'auto',
+      }}
+    >
+      <Panel sx={{ p: 2, mb: 2 }}>
         <Stack spacing={1.5}>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <Box sx={{ fontSize: 20 }}>✨</Box>
-            <Typography sx={{ fontSize: 14, fontWeight: 700 }}>Sojori AI</Typography>
-            <Box sx={{ fontSize: 10, color: t.ai, fontFamily: 'Geist Mono', bgcolor: t.aiTint, px: 1, py: 0.25, borderRadius: '4px' }}>
-              GPT-4
+          <Typography sx={{ fontSize: 14, fontWeight: 700 }}>Vue d’ensemble</Typography>
+          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+            <Avatar sx={{ bgcolor: t.primaryTint, color: t.primary }}>{listing.name.charAt(0)}</Avatar>
+            <Box>
+              <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{listing.name}</Typography>
+              <Typography sx={{ fontSize: 11.5, color: t.text3 }}>
+                {listing.city}, {listing.country} · {listing.ownerName}
+              </Typography>
             </Box>
           </Stack>
-          <Typography sx={{ fontSize: 12, color: t.text3 }}>
-            Je viens de scanner votre listing Airbnb et 14 photos. <strong>8 champs ont été pré-remplis</strong>. Les champs en violet attendent votre validation.
-          </Typography>
-          <Button sx={{ ...btnGhostSx, fontSize: 12, justifyContent: 'flex-start' }}>
-            Oui, et en italien aussi.
-          </Button>
-          <Typography sx={{ fontSize: 11, color: t.text3, fontStyle: 'italic' }}>
-            Parfait, je m'en occupe. <strong>-25s</strong>. Je vous notifierai dans l'onglet Description.
-          </Typography>
-          <TextField
-            placeholder="Demandez à l'IA..."
-            size="small"
-            fullWidth
-            multiline
-            rows={2}
-          />
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+            <Chip size="small" label={listing.type} />
+            <Chip size="small" label={listing.status} />
+            <Chip size="small" label={`ADR €${listing.adr}`} />
+          </Stack>
         </Stack>
       </Panel>
 
-      {/* Completion breakdown */}
-      <Panel sx={{ p: 2 }}>
-        <Stack spacing={1.5}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between">
-            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>Complétion par onglet</Typography>
-            <Typography sx={{ fontSize: 13, fontWeight: 700, color: t.primary }}>{completion}%</Typography>
+      <Panel sx={{ p: 2, mb: 2 }}>
+        <Stack spacing={1.25}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>Complétion globale</Typography>
+            <Typography sx={{ fontSize: 14, fontWeight: 800, color: t.primary }}>
+              {globalCompletion}%
+            </Typography>
           </Stack>
-          {TABS.slice(0, 6).map(tab => (
-            <Stack key={tab.key} direction="row" alignItems="center" spacing={1}>
-              <Box sx={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                bgcolor: tab.completion === 100 ? t.success : tab.completion > 0 ? t.warning : t.text4,
-              }} />
-              <Typography sx={{ fontSize: 11, flex: 1, color: t.text2 }}>{tab.label}</Typography>
-              <Typography sx={{ fontSize: 11, fontFamily: 'Geist Mono', color: t.text3 }}>
-                {tab.completion}%
+          {LISTING_TAB_META.slice(0, 8).map((tab) => (
+            <Stack
+              key={tab.key}
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ fontSize: 12 }}
+            >
+              <Typography sx={{ fontSize: 12, color: t.text2 }}>{tab.label}</Typography>
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text3 }}>
+                {completions[tab.key]}%
               </Typography>
             </Stack>
           ))}
         </Stack>
       </Panel>
 
-      {/* VUE DÉMO */}
-      <Box sx={{ mt: 2, p: 1.5, bgcolor: t.bg2, borderRadius: '8px' }}>
-        <Typography sx={{ fontSize: 10, fontWeight: 700, color: t.text3, mb: 1 }}>VUE DÉMO</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button sx={{ ...btnGhostSx, fontSize: 11, py: 0.5, bgcolor: t.primary, color: '#fff' }}>Basic</Button>
-          <Button sx={{ ...btnGhostSx, fontSize: 11, py: 0.5 }}>Media</Button>
-          <Button sx={{ ...btnGhostSx, fontSize: 11, py: 0.5 }}>Channels</Button>
-        </Stack>
-      </Box>
-    </Box>
-  );
-}
-
-// ─── Media Tab Content ─────────────────────────────────────
-function MediaTab({ listing }: { listing: any }) {
-  return (
-    <Box>
-      <Panel sx={{ mb: 2, bgcolor: t.aiTint, borderLeft: `3px solid ${t.ai}`, p: 2 }}>
-        <Stack direction="row" alignItems="center" spacing={2}>
-          <Box sx={{ fontSize: 24 }}>✨</Box>
-          <Box sx={{ flex: 1 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.ai }}>
-              {listing.images} photos importées depuis Airbnb
+      <Panel sx={{ p: 2, mb: 2 }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>
+          Canaux connectés
+        </Typography>
+        <Stack spacing={1}>
+          {listing.channels.length === 0 ? (
+            <Typography sx={{ fontSize: 12, color: t.text3 }}>
+              Aucun canal connecté pour le moment.
             </Typography>
-            <Typography sx={{ fontSize: 12, color: t.text2 }}>
-              L'IA a trié par pièce et généré des légendes. Vous pouvez réordonner par drag & drop.
-            </Typography>
-          </Box>
-          <Button sx={{ ...btnGhostSx, fontSize: 12 }}>+ Ajouter photos</Button>
-        </Stack>
-      </Panel>
-
-      <Panel sx={{ p: 3 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 2 }}>
-          Photos principales · {listing.images} photos
-        </Typography>
-
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2 }}>
-          {Array.from({ length: Math.min(listing.images, 12) }).map((_, i) => (
-            <Box key={i} sx={{
-              aspectRatio: '4/3',
-              bgcolor: i === 0 ? t.primaryTint : t.bg2,
-              borderRadius: '8px',
-              border: `2px solid ${i === 0 ? t.primary : t.border}`,
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-              '&:hover': {
-                borderColor: t.primary,
-                transform: 'scale(1.02)',
-              },
-            }}>
-              {i === 0 && (
-                <Box sx={{
-                  position: 'absolute',
-                  top: 8,
-                  left: 8,
-                  bgcolor: t.primary,
-                  color: '#fff',
-                  px: 1,
-                  py: 0.5,
-                  borderRadius: '4px',
-                  fontSize: 10,
-                  fontWeight: 700,
-                }}>
-                  COVER
-                </Box>
-              )}
-              <Typography sx={{ fontSize: 32, opacity: 0.3 }}>📷</Typography>
-              <Typography sx={{
-                position: 'absolute',
-                bottom: 8,
-                left: 8,
-                right: 8,
-                fontSize: 11,
-                color: t.text3,
-                bgcolor: 'rgba(255,255,255,0.9)',
-                p: 0.5,
-                borderRadius: '4px',
-              }}>
-                Photo #{i + 1}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-      </Panel>
-    </Box>
-  );
-}
-
-// ─── Equipment Tab Content ─────────────────────────────────────
-function EquipmentTab({ listing }: { listing: any }) {
-  return (
-    <Box>
-      <Panel sx={{ p: 3 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 2 }}>
-          Équipements & Services
-        </Typography>
-
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
-          {listing.amenities.map((amenity: string, i: number) => (
-            <Box key={i} sx={{
-              p: 2,
-              bgcolor: t.bg2,
-              borderRadius: '8px',
-              border: `1px solid ${t.border}`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.5,
-            }}>
-              <Box sx={{
-                width: 40,
-                height: 40,
-                bgcolor: t.successTint,
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 20,
-              }}>
-                ✓
-              </Box>
-              <Typography sx={{ fontSize: 13, fontWeight: 500 }}>{amenity}</Typography>
-            </Box>
-          ))}
-        </Box>
-
-        <Button sx={{ ...btnGhostSx, mt: 3 }}>+ Ajouter équipement</Button>
-      </Panel>
-    </Box>
-  );
-}
-
-// ─── Pricing Tab Content ─────────────────────────────────────
-function PricingTab({ listing }: { listing: any }) {
-  return (
-    <Box>
-      <Panel sx={{ mb: 2, p: 3 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 2 }}>
-          Tarification de base
-        </Typography>
-
-        <Stack spacing={2.5}>
-          <Stack direction="row" spacing={2}>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-                Prix de base (nuit) <span style={{ color: t.error }}>*</span>
-              </Typography>
-              <TextField
-                fullWidth
-                defaultValue={listing.pricing.base}
-                size="small"
-                type="number"
-                InputProps={{ startAdornment: '€' }}
-              />
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-                Frais de ménage
-              </Typography>
-              <TextField
-                fullWidth
-                defaultValue={listing.pricing.cleaning}
-                size="small"
-                type="number"
-                InputProps={{ startAdornment: '€' }}
-              />
-            </Box>
-          </Stack>
-
-          <Stack direction="row" spacing={2}>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-                Multiplicateur week-end
-              </Typography>
-              <TextField
-                fullWidth
-                defaultValue={listing.pricing.weekend / listing.pricing.base}
-                size="small"
-                type="number"
-                InputProps={{ endAdornment: 'x' }}
-              />
-              <Typography sx={{ fontSize: 11, color: t.text3, mt: 0.5 }}>
-                Prix WE: €{listing.pricing.weekend}/nuit
-              </Typography>
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-                Séjour minimum
-              </Typography>
-              <TextField
-                fullWidth
-                defaultValue={listing.pricing.minStay}
-                size="small"
-                type="number"
-                InputProps={{ endAdornment: 'nuits' }}
-              />
-            </Box>
-          </Stack>
-        </Stack>
-      </Panel>
-
-      <Panel sx={{ p: 3 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 2 }}>
-          Tarification saisonnière
-        </Typography>
-        <Typography sx={{ fontSize: 12, color: t.text3 }}>
-          Aucune règle de tarification saisonnière définie
-        </Typography>
-        <Button sx={{ ...btnPrimarySx, mt: 2 }}>+ Ajouter saison</Button>
-      </Panel>
-    </Box>
-  );
-}
-
-// ─── Channels Tab Content ─────────────────────────────────────
-function ChannelsTab({ listing }: { listing: any }) {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'synced': return t.success;
-      case 'pending': return t.warning;
-      case 'disconnected': return t.error;
-      default: return t.text3;
-    }
-  };
-
-  const getStatusBg = (status: string) => {
-    switch (status) {
-      case 'synced': return t.successTint;
-      case 'pending': return t.warningTint;
-      case 'disconnected': return t.errorTint;
-      default: return t.bg2;
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'synced': return 'Synchronisé';
-      case 'pending': return 'En attente';
-      case 'disconnected': return 'Déconnecté';
-      default: return 'Inconnu';
-    }
-  };
-
-  return (
-    <Box>
-      <Panel sx={{ p: 3 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 2 }}>
-          Canaux de distribution (OTAs)
-        </Typography>
-
-        <Stack spacing={2}>
-          {listing.channels.map((channel: any, i: number) => (
-            <Box key={i} sx={{
-              p: 2,
-              bgcolor: t.bg2,
-              borderRadius: '8px',
-              border: `1px solid ${t.border}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}>
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Box sx={{
-                  width: 48,
-                  height: 48,
-                  bgcolor: t.bg1,
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 24,
-                  border: `1px solid ${t.border}`,
-                }}>
-                  🏨
-                </Box>
-                <Box>
-                  <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{channel.name}</Typography>
-                  <Typography sx={{ fontSize: 11, color: t.text3 }}>
-                    Dernière sync: {channel.lastSync}
-                  </Typography>
-                </Box>
-              </Stack>
-
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Box sx={{
-                  px: 2,
-                  py: 0.75,
-                  borderRadius: '6px',
-                  bgcolor: getStatusBg(channel.status),
-                  color: getStatusColor(channel.status),
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}>
-                  {getStatusLabel(channel.status)}
-                </Box>
-                <Button sx={btnGhostSx}>⚙️ Config</Button>
-              </Stack>
-            </Box>
-          ))}
-        </Stack>
-
-        <Button sx={{ ...btnPrimarySx, mt: 3 }}>+ Connecter canal</Button>
-      </Panel>
-    </Box>
-  );
-}
-
-// ─── Basic Info Tab Content ─────────────────────────────────
-function BasicInfoTab({ listing }: { listing: any }) {
-  return (
-    <Box>
-      {/* AI Banner */}
-      <Panel sx={{ mb: 2, bgcolor: t.aiTint, borderLeft: `3px solid ${t.ai}`, p: 2 }}>
-        <Stack direction="row" alignItems="center" spacing={2}>
-          <Box sx={{ fontSize: 24 }}>✨</Box>
-          <Box sx={{ flex: 1 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.ai }}>
-              Importation depuis Airbnb détectée.
-            </Typography>
-            <Typography sx={{ fontSize: 12, color: t.text2 }}>
-              L'agent IA a peuplé 8 champs sur 12. Les champs en violet attendent votre validation.
-            </Typography>
-          </Box>
-          <Button sx={{ ...btnGhostSx, fontSize: 12 }}>Re-scanner</Button>
-          <Button sx={{ ...btnPrimarySx, fontSize: 12 }}>Valider tout</Button>
-        </Stack>
-      </Panel>
-
-      {/* Identification Section */}
-      <Panel sx={{ mb: 2, p: 3 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 2 }}>
-          Identification <span style={{ color: t.error }}>REQUIRED</span>
-        </Typography>
-
-        <Stack spacing={2.5}>
-          <Stack direction="row" spacing={2}>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-                Nom de la propriété <span style={{ color: t.error }}>*</span>
-              </Typography>
-              <TextField
-                fullWidth
-                defaultValue={listing.name}
-                size="small"
-                helperText="3-50 caractères. Inclure ville et caractéristique distinctive."
-              />
-            </Box>
-            <Box sx={{ width: 200 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-                Type de propriété <span style={{ color: t.error }}>*</span>
-                <Box component="span" sx={{ ml: 1, fontSize: 16 }}>✨</Box>
-              </Typography>
-              <TextField
-                select
-                fullWidth
-                defaultValue={listing.type}
-                size="small"
-                helperText="Détecté depuis les photos et l'adresse."
+          ) : (
+            listing.channels.map((channel) => (
+              <Stack
+                key={channel.id}
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{ fontSize: 12 }}
               >
-                <MenuItem value="Villa">Villa</MenuItem>
-                <MenuItem value="Riad">Riad</MenuItem>
-                <MenuItem value="Apartment">Appartement</MenuItem>
-              </TextField>
-            </Box>
-          </Stack>
-
-          <Stack direction="row" spacing={2}>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-                Chambres <span style={{ color: t.error }}>*</span>
-              </Typography>
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Button sx={{ minWidth: 36, p: '6px' }}>−</Button>
-                <TextField
-                  value={listing.bedrooms}
-                  size="small"
-                  sx={{ width: 80, textAlign: 'center' }}
-                />
-                <Button sx={{ minWidth: 36, p: '6px' }}>+</Button>
+                <Typography sx={{ fontSize: 12 }}>{channel.name}</Typography>
+                <Chip size="small" label={channel.status} />
               </Stack>
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-                Salles de bain <span style={{ color: t.error }}>*</span>
-              </Typography>
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Button sx={{ minWidth: 36, p: '6px' }}>−</Button>
-                <TextField
-                  value={listing.bathrooms}
-                  size="small"
-                  sx={{ width: 80, textAlign: 'center' }}
-                />
-                <Button sx={{ minWidth: 36, p: '6px' }}>+</Button>
-              </Stack>
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-                Capacité (guests) <span style={{ color: t.error }}>*</span>
-              </Typography>
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Button sx={{ minWidth: 36, p: '6px' }}>−</Button>
-                <TextField
-                  value={listing.guests}
-                  size="small"
-                  sx={{ width: 80, textAlign: 'center' }}
-                />
-                <Button sx={{ minWidth: 36, p: '6px' }}>+</Button>
-              </Stack>
-            </Box>
-          </Stack>
-
-          <Stack direction="row" spacing={2}>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-                Surface (m²)
-                <Box component="span" sx={{ ml: 1, fontSize: 16 }}>✨</Box>
-              </Typography>
-              <TextField
-                fullWidth
-                defaultValue={listing.surface}
-                size="small"
-                type="number"
-                InputProps={{ endAdornment: 'm²' }}
-              />
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>Lits</Typography>
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Button sx={{ minWidth: 36, p: '6px' }}>−</Button>
-                <TextField
-                  value={listing.beds}
-                  size="small"
-                  sx={{ width: 80, textAlign: 'center' }}
-                />
-                <Button sx={{ minWidth: 36, p: '6px' }}>+</Button>
-              </Stack>
-            </Box>
-          </Stack>
+            ))
+          )}
         </Stack>
       </Panel>
 
-      {/* Description Section */}
-      <Panel sx={{ mb: 2, p: 3 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 2 }}>
-          Description multilingue <span style={{ color: t.error }}>REQUIRED</span>
+      <Panel sx={{ p: 2 }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.25 }}>
+          Points encore à valider
         </Typography>
-
-        <Typography sx={{ fontSize: 11, color: t.text3, mb: 1.5 }}>
-          Auto-traduit en EN/ES/IT après publication.
-        </Typography>
-
-        <Stack spacing={2.5}>
-          <Box>
-            <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-              Description courte (140 c. max)
+        <Stack spacing={1}>
+          {incomplete.length === 0 ? (
+            <Typography sx={{ fontSize: 12, color: t.success }}>
+              Tous les onglets sont complets. Prêt à publier.
             </Typography>
-            <TextField
-              fullWidth
-              defaultValue={listing.shortDescription}
-              size="small"
-              multiline
-              rows={2}
-            />
-          </Box>
-
-          <Box>
-            <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.75 }}>
-              Description longue
-              <Box component="span" sx={{ ml: 1, fontSize: 16 }}>✨</Box>
-            </Typography>
-            <TextField
-              fullWidth
-              defaultValue={listing.longDescription}
-              multiline
-              rows={6}
-              size="small"
-            />
-          </Box>
+          ) : (
+            incomplete.map((item) => (
+              <Typography key={item.key} sx={{ fontSize: 12, color: t.text3 }}>
+                • {item.label}
+              </Typography>
+            ))
+          )}
         </Stack>
       </Panel>
-
-      {/* Save Bar */}
-      <Box sx={{
-        position: 'sticky',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        bgcolor: t.bg1,
-        borderTop: `1px solid ${t.border}`,
-        p: 2,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 2,
-      }}>
-        <Stack direction="row" alignItems="center" spacing={1.5}>
-          <Box sx={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            bgcolor: t.success,
-          }} />
-          <Typography sx={{ fontSize: 12, fontFamily: 'Geist Mono', color: t.text3 }}>
-            Auto-saved · 2s ago
-          </Typography>
-        </Stack>
-
-        <Stack direction="row" spacing={1.5}>
-          <Button sx={btnGhostSx}>Annuler</Button>
-          <Button sx={{ ...btnPrimarySx }}>Sauvegarder & continuer →</Button>
-        </Stack>
-      </Box>
     </Box>
   );
 }
 
-// ─── Main Component ─────────────────────────────────────
-export function NewListingFormPage() {
-  const { id } = useParams<{ id: string }>();
-  const listing = id ? LISTING_DATA[id] : null;
-  const [activeTab, setActiveTab] = useState('basic');
+function FormField({
+  field,
+  value,
+  onChange,
+}: {
+  field: FieldSchema;
+  value: any;
+  onChange: (value: any) => void;
+}) {
+  const commonProps = {
+    fullWidth: true,
+    size: 'small' as const,
+    helperText: field.helperText,
+  };
 
-  if (!listing) {
+  if (field.type === 'switch') {
     return (
-      <DashboardWrapper breadcrumb={['Catalogue', 'Annonces']}>
-        <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="h5">Listing non trouvé</Typography>
-        </Box>
-      </DashboardWrapper>
+      <FormControlLabel
+        control={<Switch checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} />}
+        label={field.label}
+      />
+    );
+  }
+
+  if (field.type === 'tags') {
+    return (
+      <TextField
+        {...commonProps}
+        label={field.label}
+        value={Array.isArray(value) ? value.join(', ') : ''}
+        onChange={(event) =>
+          onChange(
+            event.target.value
+              .split(',')
+              .map((item) => item.trim())
+              .filter(Boolean),
+          )
+        }
+      />
+    );
+  }
+
+  if (field.type === 'select') {
+    return (
+      <TextField
+        {...commonProps}
+        select
+        label={field.label}
+        value={value ?? ''}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {(field.options || []).map((option) => (
+          <MenuItem key={option.value} value={option.value}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </TextField>
     );
   }
 
   return (
-    <DashboardWrapper breadcrumb={['Catalogue', 'Annonces', listing.name]}>
-      <Box sx={{ display: 'flex', height: 'calc(100vh - 56px)', overflow: 'hidden', ml: -3, mr: -3, mt: -3 }}>
-        {/* Tabs Rail */}
-        <TabsRail activeTab={activeTab} onChange={setActiveTab} completion={listing.completion} />
+    <TextField
+      {...commonProps}
+      type={
+        field.type === 'textarea'
+          ? 'text'
+          : field.type === 'number'
+            ? 'number'
+            : field.type
+      }
+      label={field.label}
+      value={value ?? ''}
+      onChange={(event) =>
+        onChange(
+          field.type === 'number'
+            ? Number(event.target.value || 0)
+            : event.target.value,
+        )
+      }
+      multiline={field.type === 'textarea'}
+      rows={field.type === 'textarea' ? 4 : undefined}
+      inputProps={field.type === 'number' ? { min: field.min ?? 0 } : undefined}
+    />
+  );
+}
 
-      {/* Main Content */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* Header */}
-        <Box sx={{
-          p: 2,
-          bgcolor: t.bg1,
-          borderBottom: `1px solid ${t.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <Stack direction="row" alignItems="center" spacing={2}>
-            <Typography sx={{ fontSize: 11, color: t.text3 }}>
-              Listings
+function TabContent({
+  listing,
+  tabKey,
+  onChange,
+}: {
+  listing: ListingRecord;
+  tabKey: ListingTabKey;
+  onChange: (path: string, value: unknown) => void;
+}) {
+  const sections = TAB_SCHEMAS[tabKey];
+
+  return (
+    <Stack spacing={2.5}>
+      {tabKey === 'media' && (
+        <Panel sx={{ p: 2.5 }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>
+            Aperçu galerie mock
+          </Typography>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 1.25,
+            }}
+          >
+            {Array.from({ length: Math.max(4, Number(listing.form.media.galleryCount || 0)) }).map(
+              (_, index) => (
+                <Box
+                  key={`media-${index}`}
+                  sx={{
+                    height: 90,
+                    borderRadius: '10px',
+                    border: `1px dashed ${t.borderStrong}`,
+                    bgcolor: t.bg2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: t.text3,
+                    fontSize: 12,
+                  }}
+                >
+                  Photo {index + 1}
+                </Box>
+              ),
+            )}
+          </Box>
+        </Panel>
+      )}
+
+      {tabKey === 'channels' && (
+        <Panel sx={{ p: 2.5 }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>
+            État de synchronisation OTA
+          </Typography>
+          <Stack spacing={1.25}>
+            {listing.channels.length === 0 ? (
+              <Typography sx={{ fontSize: 12, color: t.text3 }}>
+                Aucun canal connecté. Utilisez le bouton "Connecter canal" après sauvegarde.
+              </Typography>
+            ) : (
+              listing.channels.map((channel) => (
+                <Stack
+                  key={channel.id}
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{
+                    p: 1.5,
+                    borderRadius: '8px',
+                    bgcolor: t.bg2,
+                    border: `1px solid ${t.border}`,
+                  }}
+                >
+                  <Box>
+                    <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{channel.name}</Typography>
+                    <Typography sx={{ fontSize: 11, color: t.text3 }}>
+                      Dernière sync: {channel.lastSync}
+                    </Typography>
+                  </Box>
+                  <Chip size="small" label={channel.status} />
+                </Stack>
+              ))
+            )}
+          </Stack>
+        </Panel>
+      )}
+
+      {sections.map((section) => (
+        <Panel key={section.title} sx={{ p: 2.5 }}>
+          <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 0.5 }}>{section.title}</Typography>
+          {section.description && (
+            <Typography sx={{ fontSize: 12, color: t.text3, mb: 2 }}>
+              {section.description}
             </Typography>
-            <Typography sx={{ fontSize: 11, color: t.text3 }}>›</Typography>
-            <Box sx={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              bgcolor: t.primaryTint,
+          )}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+              gap: 2,
+            }}
+          >
+            {section.fields.map((field) => (
+              <Box
+                key={field.path}
+                sx={{
+                  gridColumn: field.type === 'textarea' || field.type === 'tags' ? '1 / -1' : 'auto',
+                }}
+              >
+                <FormField
+                  field={field}
+                  value={fieldPathGet(listing.form, field.path)}
+                  onChange={(value) => onChange(field.path, value)}
+                />
+              </Box>
+            ))}
+          </Box>
+        </Panel>
+      ))}
+    </Stack>
+  );
+}
+
+export function NewListingFormPage() {
+  const { id = '' } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { toast, showToast, hideToast } = useActionToast();
+  const storedListings = getStoredListings();
+  const existingListing = storedListings.find((item) => item.id === id);
+  const isCreateMode = !id || id === 'new';
+  const [listing, setListing] = useState<ListingRecord>(existingListing || createEmptyListing());
+  const [activeTab, setActiveTab] = useState<ListingTabKey>('basic');
+
+  const tabCompletions = useMemo(() => {
+    return Object.fromEntries(
+      LISTING_TAB_META.map((tab) => [tab.key, computeTabCompletion(listing, tab.key)]),
+    ) as Record<ListingTabKey, number>;
+  }, [listing]);
+
+  const globalCompletion = useMemo(() => {
+    const values = Object.values(tabCompletions);
+    return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+  }, [tabCompletions]);
+
+  const activeTabMeta = LISTING_TAB_META.find((item) => item.key === activeTab);
+  const currentIndex = LISTING_TAB_META.findIndex((item) => item.key === activeTab);
+
+  const persistListing = (nextListing: ListingRecord, message: string) => {
+    const synced = syncListingMeta(nextListing);
+    const nextListings = existingListing || storedListings.some((item) => item.id === synced.id)
+      ? storedListings.map((item) => (item.id === synced.id ? synced : item))
+      : [synced, ...storedListings];
+
+    saveStoredListings(nextListings);
+    setListing(synced);
+    showToast(message);
+
+    if (isCreateMode && id !== synced.id) {
+      navigate(`/listings/${synced.id}`, { replace: true });
+    }
+  };
+
+  const updateField = (path: string, value: unknown) => {
+    setListing((prev) => fieldPathSet(prev, `form.${path}`, value));
+  };
+
+  const saveCurrentTab = () => {
+    persistListing(listing, `Onglet "${activeTabMeta?.label}" sauvegardé`);
+  };
+
+  const goToSiblingTab = (delta: number) => {
+    const nextIndex = currentIndex + delta;
+    if (nextIndex < 0 || nextIndex >= LISTING_TAB_META.length) {
+      return;
+    }
+    persistListing(listing, `Progression sauvegardée sur "${activeTabMeta?.label}"`);
+    setActiveTab(LISTING_TAB_META[nextIndex].key);
+  };
+
+  return (
+    <DashboardWrapper breadcrumb={['Catalogue', 'Annonces', listing.name]}>
+      <Box
+        sx={{
+          display: 'flex',
+          height: 'calc(100vh - 56px)',
+          overflow: 'hidden',
+          ml: -3,
+          mr: -3,
+          mt: -3,
+        }}
+      >
+        <TabsRail activeTab={activeTab} onChange={setActiveTab} completions={tabCompletions} />
+
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Box
+            sx={{
+              p: 2,
+              bgcolor: t.bg1,
+              borderBottom: `1px solid ${t.border}`,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 700,
-              color: t.primary,
-            }}>
-              V
-            </Box>
-            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{listing.name}</Typography>
-            <Typography sx={{ fontSize: 11, color: t.text3 }}>›</Typography>
-            <Typography sx={{ fontSize: 13 }}>Informations de base</Typography>
-          </Stack>
-
-          <Stack direction="row" alignItems="center" spacing={2}>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Box sx={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                border: `3px solid ${t.primary}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 11,
-                fontWeight: 700,
-                color: t.primary,
-              }}>
-                {listing.completion}%
-              </Box>
-              <Typography sx={{ fontSize: 11, color: t.text3 }}>COMPLÉTION</Typography>
+              justifyContent: 'space-between',
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={2}>
+              <Typography sx={{ fontSize: 11, color: t.text3 }}>Listings</Typography>
+              <Typography sx={{ fontSize: 11, color: t.text3 }}>›</Typography>
+              <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{listing.name}</Typography>
+              <Typography sx={{ fontSize: 11, color: t.text3 }}>›</Typography>
+              <Typography sx={{ fontSize: 13 }}>{activeTabMeta?.label}</Typography>
             </Stack>
 
-            <Button sx={btnGhostSx}>Preview</Button>
-            <Button sx={{ ...btnGhostSx, color: t.ai }}>+ AI assist</Button>
-            <Button sx={btnPrimarySx}>Publish →</Button>
-          </Stack>
+            <Stack direction="row" alignItems="center" spacing={1.5}>
+              <Chip
+                size="small"
+                label={`${globalCompletion}% complet`}
+                sx={{ fontWeight: 700, bgcolor: t.primaryTint, color: t.primary }}
+              />
+              <Button sx={btnGhostSx} onClick={() => showToast('Preview mock ouvert', 'info')}>
+                Preview
+              </Button>
+              <Button sx={btnGhostSx} onClick={() => showToast('Suggestions IA mock générées', 'info')}>
+                + AI assist
+              </Button>
+              <Button
+                sx={btnPrimarySx}
+                onClick={() => {
+                  persistListing(listing, 'Annonce sauvegardée avant publication');
+                  showToast('Annonce prête à être publiée', 'success');
+                }}
+              >
+                Publish →
+              </Button>
+            </Stack>
+          </Box>
+
+          <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+            <TabContent listing={listing} tabKey={activeTab} onChange={updateField} />
+          </Box>
+
+          <Box
+            sx={{
+              bgcolor: t.bg1,
+              borderTop: `1px solid ${t.border}`,
+              p: 2,
+            }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Divider orientation="vertical" flexItem />
+                <Typography sx={{ fontSize: 12, color: t.text3 }}>
+                  Dernière mise à jour : {new Date(listing.updatedAt).toLocaleString('fr-FR')}
+                </Typography>
+              </Stack>
+
+              <Stack direction="row" spacing={1.5}>
+                <Button sx={btnGhostSx} onClick={() => navigate('/listings')}>
+                  Retour liste
+                </Button>
+                <Button sx={btnGhostSx} disabled={currentIndex === 0} onClick={() => goToSiblingTab(-1)}>
+                  ← Précédent
+                </Button>
+                <Button sx={btnGhostSx} onClick={saveCurrentTab}>
+                  Sauvegarder
+                </Button>
+                <Button
+                  sx={btnPrimarySx}
+                  disabled={currentIndex === LISTING_TAB_META.length - 1}
+                  onClick={() => goToSiblingTab(1)}
+                >
+                  Sauvegarder & continuer →
+                </Button>
+              </Stack>
+            </Stack>
+          </Box>
         </Box>
 
-        {/* Content area */}
-        <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
-          {activeTab === 'basic' && <BasicInfoTab listing={listing} />}
-          {activeTab === 'media' && <MediaTab listing={listing} />}
-          {activeTab === 'equipment' && <EquipmentTab listing={listing} />}
-          {activeTab === 'pricing' && <PricingTab listing={listing} />}
-          {activeTab === 'channels' && <ChannelsTab listing={listing} />}
-
-          {/* Placeholder for other tabs */}
-          {!['basic', 'media', 'equipment', 'pricing', 'channels'].includes(activeTab) && (
-            <Panel sx={{ p: 4, textAlign: 'center' }}>
-              <Typography sx={{ fontSize: 16, fontWeight: 600, mb: 1 }}>
-                Onglet "{TABS.find(t => t.key === activeTab)?.label}"
-              </Typography>
-              <Typography sx={{ fontSize: 13, color: t.text3 }}>
-                Contenu de cet onglet à implémenter
-              </Typography>
-            </Panel>
-          )}
-        </Box>
+        <ListingAside
+          listing={listing}
+          completions={tabCompletions}
+          globalCompletion={globalCompletion}
+        />
       </Box>
 
-      {/* Aside */}
-      <ListingAside completion={listing.completion} />
-    </Box>
+      <ActionToast
+        open={toast.open}
+        message={toast.message}
+        severity={toast.severity}
+        onClose={hideToast}
+      />
     </DashboardWrapper>
   );
 }

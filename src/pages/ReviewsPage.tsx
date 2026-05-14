@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader, DataTable, StatCard, StatsRow, Badge, SourcePill, AIChip,
-  btnPrimarySx, btnGhostSx, btnSmSx, btnAiSx,
+  btnPrimarySx, btnGhostSx, btnSmSx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import {
@@ -187,7 +187,7 @@ export function ReviewsPage() {
       key: 'listing',
       label: 'Listing',
       render: (row: ReviewRow) => (
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Typography sx={{ fontSize: 18 }}>{row.listingPhoto}</Typography>
           <Typography sx={{ fontSize: 13, fontWeight: 500 }}>{row.listingName}</Typography>
         </Stack>
@@ -209,7 +209,7 @@ export function ReviewsPage() {
       key: 'rating',
       label: 'Note',
       render: (row: ReviewRow) => (
-        <Stack direction="row" spacing={0.5} alignItems="center">
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           <Rating value={row.rating} readOnly size="small" />
           <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
             {row.rating}/5
@@ -428,7 +428,7 @@ export function ReviewsPage() {
             <Typography variant="h6">Répondre à l'avis</Typography>
             {selectedReview && (
               <Stack spacing={0.5}>
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Typography sx={{ fontSize: 14, color: t.text2 }}>
                     {selectedReview.guestName} • {selectedReview.listingName}
                   </Typography>
@@ -456,7 +456,7 @@ export function ReviewsPage() {
               <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 1, color: t.text2 }}>
                 ✨ Suggestions AI
               </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
                 {AI_RESPONSE_TEMPLATES.map((template, idx) => (
                   <AIChip
                     key={idx}
@@ -494,13 +494,13 @@ export function ReviewsPage() {
         </DialogActions>
       </Dialog>
 
-      <Snackbar open={Boolean(toast)} autoHideDuration={2500} onClose={() => setToast(null)}>
-        {toast ? (
+      {toast ? (
+        <Snackbar open autoHideDuration={2500} onClose={() => setToast(null)}>
           <Alert severity={toast.severity} variant="filled" onClose={() => setToast(null)}>
             {toast.message}
           </Alert>
-        ) : null}
-      </Snackbar>
+        </Snackbar>
+      ) : null}
     </DashboardWrapper>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CommunicationsSectionToggle } from '../components/CommunicationsSectionToggle';
 import {
@@ -6,7 +6,7 @@ import {
   Badge, SourcePill, btnPrimarySx, btnGhostSx, btnSmSx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
-import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, MenuItem, Snackbar, Stack, TextField, Typography } from '@mui/material';
 
 // ═══════════════════════════════════════════════════════════════
 // MOCK DATA - Realistic OTA Conversations & Messages
@@ -24,6 +24,7 @@ interface OTAConversation {
   ota: 'Airbnb' | 'Booking.com' | 'Vrbo';
   unreadCount?: number;
   unread?: boolean;
+  updatedAt: string;
   checkIn: string;
   checkOut: string;
   revenue: string;
@@ -31,7 +32,7 @@ interface OTAConversation {
 }
 
 interface OTAMessage {
-  type: 'day' | 'msg';
+  type?: 'day' | 'msg';
   from?: 'them' | 'you';
   text: string;
   when?: string;
@@ -50,6 +51,7 @@ const MOCK_CONVERSATIONS: OTAConversation[] = [
     ota: 'Airbnb',
     unreadCount: 2,
     unread: true,
+    updatedAt: '2026-05-13T10:24:00',
     checkIn: '2026-05-15',
     checkOut: '2026-05-22',
     revenue: '€1,840',
@@ -67,6 +69,7 @@ const MOCK_CONVERSATIONS: OTAConversation[] = [
     ota: 'Booking.com',
     unreadCount: 1,
     unread: true,
+    updatedAt: '2026-05-13T09:55:00',
     checkIn: '2026-05-16',
     checkOut: '2026-05-23',
     revenue: '€1,260',
@@ -82,6 +85,7 @@ const MOCK_CONVERSATIONS: OTAConversation[] = [
     listingName: 'Villa Atlas',
     reservationNumber: 'RES-2026-003',
     ota: 'Airbnb',
+    updatedAt: '2026-05-12T15:45:00',
     checkIn: '2026-05-10',
     checkOut: '2026-05-17',
     revenue: '€2,100',
@@ -97,6 +101,7 @@ const MOCK_CONVERSATIONS: OTAConversation[] = [
     listingName: 'Riad Jasmine',
     reservationNumber: 'RES-2026-004',
     ota: 'Vrbo',
+    updatedAt: '2026-05-12T14:20:00',
     checkIn: '2026-05-18',
     checkOut: '2026-05-21',
     revenue: '€980',
@@ -112,6 +117,7 @@ const MOCK_CONVERSATIONS: OTAConversation[] = [
     listingName: 'Villa Belvédère',
     reservationNumber: 'RES-2026-005',
     ota: 'Booking.com',
+    updatedAt: '2026-05-11T11:05:00',
     checkIn: '2026-05-08',
     checkOut: '2026-05-11',
     revenue: '€1,450',
@@ -127,6 +133,7 @@ const MOCK_CONVERSATIONS: OTAConversation[] = [
     listingName: 'Dar Sojori',
     reservationNumber: 'RES-2026-006',
     ota: 'Airbnb',
+    updatedAt: '2026-05-10T16:45:00',
     checkIn: '2026-05-14',
     checkOut: '2026-05-20',
     revenue: '€1,680',
@@ -193,11 +200,41 @@ function RowKV({ k, v, mono, divider }: { k: string; v: any; mono?: boolean; div
 export function OTAMessagesPage() {
   const [activeConv, setActiveConv] = useState('sarah-airbnb');
   const [toast, setToast] = useState('');
+  const [filters, setFilters] = useState({
+    searchTerm: '',
+    ota: 'all',
+    listing: 'all',
+    status: 'all',
+    dateRange: 'all',
+  });
   const [conversations, setConversations] = useState(MOCK_CONVERSATIONS);
   const [messagesByConversation, setMessagesByConversation] = useState(MOCK_MESSAGES);
 
   const conv = conversations.find(c => c.id === activeConv) || conversations[0];
   const messages = messagesByConversation[activeConv] || [];
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((conversation) => {
+      const searchMatch =
+        !filters.searchTerm ||
+        conversation.guestName.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        conversation.preview.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        conversation.reservationNumber.toLowerCase().includes(filters.searchTerm.toLowerCase());
+      const otaMatch = filters.ota === 'all' || conversation.ota === filters.ota;
+      const listingMatch = filters.listing === 'all' || conversation.listingName === filters.listing;
+      const statusMatch =
+        filters.status === 'all' ||
+        (filters.status === 'unread' && (conversation.unreadCount ?? 0) > 0) ||
+        (filters.status === 'read' && !(conversation.unreadCount ?? 0)) ||
+        (filters.status === conversation.status);
+      const updatedAt = new Date(conversation.updatedAt);
+      const dateMatch =
+        filters.dateRange === 'all' ||
+        (filters.dateRange === 'today' && updatedAt.toDateString() === new Date().toDateString()) ||
+        (filters.dateRange === '7d' && updatedAt >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+
+      return searchMatch && otaMatch && listingMatch && statusMatch && dateMatch;
+    });
+  }, [conversations, filters]);
 
   // Calculate conversation meta info
   const getConvMeta = () => {
@@ -248,6 +285,7 @@ export function OTAMessagesPage() {
               when: formatMessageTime(sentAt),
               unread: false,
               unreadCount: 0,
+              updatedAt: sentAt.toISOString(),
             }
           : item,
       ),
@@ -268,6 +306,78 @@ export function OTAMessagesPage() {
         <Button sx={btnPrimarySx}>📨 Inbox OTA ({totalConversations})</Button>
       </PageHeader>
 
+      <Stack
+        direction="row"
+        spacing={1.5}
+        sx={{
+          px: { xs: 2, md: 3 },
+          pb: 2,
+          flexWrap: 'wrap',
+          rowGap: 1.5,
+        }}
+      >
+        <TextField
+          size="small"
+          label="Recherche"
+          value={filters.searchTerm}
+          onChange={(e) => setFilters((prev) => ({ ...prev, searchTerm: e.target.value }))}
+          sx={{ minWidth: 220 }}
+        />
+        <TextField
+          select
+          size="small"
+          label="OTA"
+          value={filters.ota}
+          onChange={(e) => setFilters((prev) => ({ ...prev, ota: e.target.value }))}
+          sx={{ minWidth: 160 }}
+        >
+          <MenuItem value="all">Toutes</MenuItem>
+          <MenuItem value="Airbnb">Airbnb</MenuItem>
+          <MenuItem value="Booking.com">Booking.com</MenuItem>
+          <MenuItem value="Vrbo">Vrbo</MenuItem>
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Listing"
+          value={filters.listing}
+          onChange={(e) => setFilters((prev) => ({ ...prev, listing: e.target.value }))}
+          sx={{ minWidth: 180 }}
+        >
+          <MenuItem value="all">Tous</MenuItem>
+          {Array.from(new Set(conversations.map((conversation) => conversation.listingName))).map((listing) => (
+            <MenuItem key={listing} value={listing}>{listing}</MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Statut"
+          value={filters.status}
+          onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+          sx={{ minWidth: 150 }}
+        >
+          <MenuItem value="all">Tous</MenuItem>
+          <MenuItem value="unread">Non lus</MenuItem>
+          <MenuItem value="read">Lus</MenuItem>
+          <MenuItem value="confirmed">Confirmé</MenuItem>
+          <MenuItem value="pending">En attente</MenuItem>
+          <MenuItem value="completed">Terminé</MenuItem>
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Période"
+          value={filters.dateRange}
+          onChange={(e) => setFilters((prev) => ({ ...prev, dateRange: e.target.value }))}
+          sx={{ minWidth: 130 }}
+        >
+          <MenuItem value="all">Toutes</MenuItem>
+          <MenuItem value="today">Aujourd'hui</MenuItem>
+          <MenuItem value="7d">7 jours</MenuItem>
+        </TextField>
+      </Stack>
+
       {/* Info Banner */}
       <Box sx={{
         mx: { xs: 2, md: 3 },
@@ -277,7 +387,7 @@ export function OTAMessagesPage() {
         border: `1px solid ${t.primary}`,
         borderRadius: '12px',
       }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Typography sx={{ fontSize: 20 }}>📨</Typography>
           <Box>
             <Typography sx={{ fontSize: 14, fontWeight: 600, color: t.text }}>
@@ -294,7 +404,7 @@ export function OTAMessagesPage() {
       <ChatLayout>
         {/* Conversation List */}
         <ConversationList
-          conversations={MOCK_CONVERSATIONS.map(c => ({
+          conversations={filteredConversations.map(c => ({
             ...c,
             // Add OTA badge to preview
             preview: `[${c.ota}] ${c.preview}`,
