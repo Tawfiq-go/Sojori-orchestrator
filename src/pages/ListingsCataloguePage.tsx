@@ -8,8 +8,10 @@ import {
   DialogContent,
   DialogTitle,
   Drawer,
+  FormControlLabel,
   MenuItem,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -41,6 +43,14 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 
 type ViewMode = 'grid' | 'table' | 'map';
+type ListingConfigSection =
+  | 'orchestration'
+  | 'access'
+  | 'whatsapp'
+  | 'concierge'
+  | 'support'
+  | 'rules'
+  | 'cleaning';
 
 interface ImportState {
   ownerId: string;
@@ -80,6 +90,9 @@ export function ListingsCataloguePage() {
   const [quickEditOpen, setQuickEditOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [distributionOpen, setDistributionOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [configSection, setConfigSection] = useState<ListingConfigSection>('orchestration');
   const [visibleColumns, setVisibleColumns] = useState(LISTING_COLUMN_ORDER);
   const [columnOrder, setColumnOrder] = useState(LISTING_COLUMN_ORDER);
   const [importState, setImportState] = useState<ImportState>({
@@ -150,6 +163,51 @@ export function ListingsCataloguePage() {
       'Annonce mise à jour via quick edit',
     );
     setQuickEditOpen(false);
+  };
+
+  const updateListingSection = (section: keyof ListingRecord['form'], field: string, value: string | number | boolean) => {
+    setSelectedListing((prev) =>
+      prev
+        ? ({
+            ...prev,
+            form: {
+              ...prev.form,
+              [section]: {
+                ...(prev.form as any)[section],
+                [field]: value,
+              },
+            },
+          } as ListingRecord)
+        : prev,
+    );
+  };
+
+  const saveListingConfig = () => {
+    if (!selectedListing) return;
+
+    persistListings(
+      listings.map((listing) =>
+        listing.id === selectedListing.id
+          ? {
+              ...selectedListing,
+              updatedAt: new Date().toISOString(),
+            }
+          : listing,
+      ),
+      'Configuration listing mise à jour',
+    );
+    setConfigOpen(false);
+  };
+
+  const openDistribution = (listing: ListingRecord) => {
+    setSelectedListing(listing);
+    setDistributionOpen(true);
+  };
+
+  const openConfig = (listing: ListingRecord, section: ListingConfigSection = 'orchestration') => {
+    setSelectedListing(structuredClone(listing));
+    setConfigSection(section);
+    setConfigOpen(true);
   };
 
   const handleImportRu = () => {
@@ -326,6 +384,8 @@ export function ListingsCataloguePage() {
                 <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => navigate(`/tasks?listing=${listing.id}`)}>Tâches</Button>
                 <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => navigate(`/calendar?listing=${listing.id}`)}>Calendrier</Button>
                 <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => { setSelectedListing(listing); setQuickEditOpen(true); }}>Quick edit</Button>
+                <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => openDistribution(listing)}>Canaux</Button>
+                <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => openConfig(listing)}>Config</Button>
                 <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => showToast(`Sync OTA lancée pour ${listing.name}`)}>Sync OTA</Button>
               </Stack>
             </Box>
@@ -390,6 +450,16 @@ export function ListingsCataloguePage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDetailOpen(false)}>Fermer</Button>
+          {selectedListing && (
+            <Button sx={btnGhostSx} onClick={() => openDistribution(selectedListing)}>
+              Distribution OTA
+            </Button>
+          )}
+          {selectedListing && (
+            <Button sx={btnGhostSx} onClick={() => openConfig(selectedListing)}>
+              Configurer
+            </Button>
+          )}
           {selectedListing && <Button onClick={() => navigate(`/listings/${selectedListing.id}`)} sx={btnPrimarySx}>Ouvrir la fiche</Button>}
         </DialogActions>
       </Dialog>
@@ -432,6 +502,186 @@ export function ListingsCataloguePage() {
         <DialogActions>
           <Button onClick={() => setImportOpen(false)}>Annuler</Button>
           <Button sx={btnPrimarySx} onClick={handleImportRu}>Importer</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={distributionOpen} onClose={() => setDistributionOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Distribution OTA</DialogTitle>
+        <DialogContent dividers>
+          {selectedListing && (
+            <Stack spacing={2}>
+              <Panel sx={{ p: 2 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{selectedListing.name}</Typography>
+                <Typography sx={{ fontSize: 12, color: t.text3 }}>
+                  Owner {selectedListing.ownerName} · {selectedListing.city}, {selectedListing.country}
+                </Typography>
+              </Panel>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                {selectedListing.channels.length > 0 ? (
+                  selectedListing.channels.map((channel) => (
+                    <Panel key={channel.id} sx={{ p: 2 }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{channel.name}</Typography>
+                      <Typography sx={{ fontSize: 12, color: t.text3, mt: 0.5 }}>
+                        Statut: {channel.status} · Dernière sync: {channel.lastSync}
+                      </Typography>
+                      <Typography sx={{ fontSize: 12, color: t.text3 }}>
+                        Commission: {channel.commissionPct ?? 0}% · Listings: {channel.listingCount ?? 1}
+                      </Typography>
+                      <Typography sx={{ fontSize: 12, color: t.text3, mt: 1 }}>
+                        IDs externes: {channel.id.toUpperCase()}-{selectedListing.id.slice(-4)}
+                      </Typography>
+                      <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+                        <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => showToast(`Vérification ${channel.name} lancée`, 'info')}>
+                          Verify
+                        </Button>
+                        <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => showToast(`Onglet mapping ${channel.name} ouvert (mock)`, 'info')}>
+                          Open Mapping
+                        </Button>
+                      </Stack>
+                    </Panel>
+                  ))
+                ) : (
+                  <Panel sx={{ p: 2 }}>
+                    <Typography sx={{ fontSize: 12, color: t.text3 }}>
+                      Aucun canal connecté pour cette annonce.
+                    </Typography>
+                  </Panel>
+                )}
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDistributionOpen(false)}>Fermer</Button>
+          <Button sx={btnPrimarySx} onClick={() => showToast('Vérification distribution OTA lancée', 'info')}>
+            Vérifier distribution
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={configOpen} onClose={() => setConfigOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Configuration listing</DialogTitle>
+        <DialogContent dividers>
+          {selectedListing && (
+            <Stack spacing={2}>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                {[
+                  ['orchestration', 'Orchestration'],
+                  ['access', 'Accès'],
+                  ['whatsapp', 'WhatsApp'],
+                  ['concierge', 'Conciergerie'],
+                  ['support', 'Support'],
+                  ['rules', 'Règles'],
+                  ['cleaning', 'Ménage & services'],
+                ].map(([key, label]) => (
+                  <Button
+                    key={key}
+                    sx={{ ...btnGhostSx, ...(configSection === key ? { bgcolor: t.primaryTint, borderColor: t.primary } : {}) }}
+                    onClick={() => setConfigSection(key as ListingConfigSection)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </Stack>
+
+              {configSection === 'orchestration' && (
+                <Panel sx={{ p: 2 }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Tâches automatiques</Typography>
+                  <Stack spacing={1}>
+                    <FormControlLabel control={<Switch checked={selectedListing.form.autotasks.createCleaningTask} onChange={(event) => updateListingSection('autotasks', 'createCleaningTask', event.target.checked)} />} label="Créer tâche ménage" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.autotasks.createMaintenanceTask} onChange={(event) => updateListingSection('autotasks', 'createMaintenanceTask', event.target.checked)} />} label="Créer tâche maintenance" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.autotasks.createWelcomePackTask} onChange={(event) => updateListingSection('autotasks', 'createWelcomePackTask', event.target.checked)} />} label="Créer tâche welcome pack" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.autotasks.assignDefaultTeam} onChange={(event) => updateListingSection('autotasks', 'assignDefaultTeam', event.target.checked)} />} label="Assigner équipe par défaut" />
+                    <TextField label="Notes orchestration" multiline rows={3} value={selectedListing.form.autotasks.taskNotes} onChange={(event) => updateListingSection('autotasks', 'taskNotes', event.target.value)} />
+                  </Stack>
+                </Panel>
+              )}
+
+              {configSection === 'access' && (
+                <Panel sx={{ p: 2 }}>
+                  <Stack spacing={2}>
+                    <TextField label="Type d'accès" value={selectedListing.form.access.accessType} onChange={(event) => updateListingSection('access', 'accessType', event.target.value)} />
+                    <TextField label="Code clavier" value={selectedListing.form.access.keypadCode} onChange={(event) => updateListingSection('access', 'keypadCode', event.target.value)} />
+                    <TextField label="Code lockbox" value={selectedListing.form.access.lockboxCode} onChange={(event) => updateListingSection('access', 'lockboxCode', event.target.value)} />
+                    <TextField label="Parking" value={selectedListing.form.access.parkingInstructions} onChange={(event) => updateListingSection('access', 'parkingInstructions', event.target.value)} />
+                    <TextField label="Notes accès" multiline rows={3} value={selectedListing.form.access.accessNotes} onChange={(event) => updateListingSection('access', 'accessNotes', event.target.value)} />
+                  </Stack>
+                </Panel>
+              )}
+
+              {configSection === 'whatsapp' && (
+                <Panel sx={{ p: 2 }}>
+                  <Stack spacing={2}>
+                    <TextField label="Menu title" value={selectedListing.form.whatsapp.menuTitle} onChange={(event) => updateListingSection('whatsapp', 'menuTitle', event.target.value)} />
+                    <TextField label="Welcome template" value={selectedListing.form.whatsapp.welcomeTemplate} onChange={(event) => updateListingSection('whatsapp', 'welcomeTemplate', event.target.value)} />
+                    <TextField label="Numéro escalade" value={selectedListing.form.whatsapp.escalationNumber} onChange={(event) => updateListingSection('whatsapp', 'escalationNumber', event.target.value)} />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.whatsapp.autoReplyEnabled} onChange={(event) => updateListingSection('whatsapp', 'autoReplyEnabled', event.target.checked)} />} label="Auto-reply activé" />
+                  </Stack>
+                </Panel>
+              )}
+
+              {configSection === 'concierge' && (
+                <Panel sx={{ p: 2 }}>
+                  <Stack spacing={1}>
+                    <FormControlLabel control={<Switch checked={selectedListing.form.concierge.enabled} onChange={(event) => updateListingSection('concierge', 'enabled', event.target.checked)} />} label="Conciergerie activée" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.concierge.airportTransfer} onChange={(event) => updateListingSection('concierge', 'airportTransfer', event.target.checked)} />} label="Transfert aéroport" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.concierge.groceryDelivery} onChange={(event) => updateListingSection('concierge', 'groceryDelivery', event.target.checked)} />} label="Grocery delivery" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.concierge.chefService} onChange={(event) => updateListingSection('concierge', 'chefService', event.target.checked)} />} label="Chef service" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.concierge.localGuide} onChange={(event) => updateListingSection('concierge', 'localGuide', event.target.checked)} />} label="Guide local" />
+                    <TextField label="Notes conciergerie" multiline rows={3} value={selectedListing.form.concierge.conciergeNotes} onChange={(event) => updateListingSection('concierge', 'conciergeNotes', event.target.value)} />
+                  </Stack>
+                </Panel>
+              )}
+
+              {configSection === 'support' && (
+                <Panel sx={{ p: 2 }}>
+                  <Stack spacing={2}>
+                    <TextField label="Téléphone support" value={selectedListing.form.support.phone} onChange={(event) => updateListingSection('support', 'phone', event.target.value)} />
+                    <TextField label="Email support" value={selectedListing.form.support.email} onChange={(event) => updateListingSection('support', 'email', event.target.value)} />
+                    <TextField label="Horaires" value={selectedListing.form.support.hours} onChange={(event) => updateListingSection('support', 'hours', event.target.value)} />
+                    <TextField label="Protocole urgence" multiline rows={2} value={selectedListing.form.support.emergencyProtocol} onChange={(event) => updateListingSection('support', 'emergencyProtocol', event.target.value)} />
+                    <TextField label="Notes support" multiline rows={3} value={selectedListing.form.support.supportNotes} onChange={(event) => updateListingSection('support', 'supportNotes', event.target.value)} />
+                  </Stack>
+                </Panel>
+              )}
+
+              {configSection === 'rules' && (
+                <Panel sx={{ p: 2 }}>
+                  <Stack spacing={1}>
+                    <FormControlLabel control={<Switch checked={selectedListing.form.rules.smokingAllowed} onChange={(event) => updateListingSection('rules', 'smokingAllowed', event.target.checked)} />} label="Smoking allowed" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.rules.eventsAllowed} onChange={(event) => updateListingSection('rules', 'eventsAllowed', event.target.checked)} />} label="Events allowed" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.rules.childrenAllowed} onChange={(event) => updateListingSection('rules', 'childrenAllowed', event.target.checked)} />} label="Children allowed" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.rules.petAllowed} onChange={(event) => updateListingSection('rules', 'petAllowed', event.target.checked)} />} label="Pets allowed" />
+                    <TextField label="Notes sécurité" multiline rows={2} value={selectedListing.form.rules.securityNotes} onChange={(event) => updateListingSection('rules', 'securityNotes', event.target.value)} />
+                    <TextField label="Check-in window" value={selectedListing.form.houserules.checkInWindow} onChange={(event) => updateListingSection('houserules', 'checkInWindow', event.target.value)} />
+                    <TextField label="Check-out window" value={selectedListing.form.houserules.checkOutWindow} onChange={(event) => updateListingSection('houserules', 'checkOutWindow', event.target.value)} />
+                    <TextField label="Quiet hours" value={selectedListing.form.houserules.quietHours} onChange={(event) => updateListingSection('houserules', 'quietHours', event.target.value)} />
+                    <TextField label="House rules" multiline rows={3} value={selectedListing.form.houserules.houseRulesText} onChange={(event) => updateListingSection('houserules', 'houseRulesText', event.target.value)} />
+                  </Stack>
+                </Panel>
+              )}
+
+              {configSection === 'cleaning' && (
+                <Panel sx={{ p: 2 }}>
+                  <Stack spacing={2}>
+                    <TextField label="Checklist ménage" multiline rows={2} value={selectedListing.form.cleaning.standardChecklist} onChange={(event) => updateListingSection('cleaning', 'standardChecklist', event.target.value)} />
+                    <TextField label="Linen change" value={selectedListing.form.cleaning.linenChange} onChange={(event) => updateListingSection('cleaning', 'linenChange', event.target.value)} />
+                    <TextField label="Quality control" multiline rows={2} value={selectedListing.form.cleaning.qualityControl} onChange={(event) => updateListingSection('cleaning', 'qualityControl', event.target.value)} />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.services.breakfast} onChange={(event) => updateListingSection('services', 'breakfast', event.target.checked)} />} label="Breakfast" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.services.housekeeping} onChange={(event) => updateListingSection('services', 'housekeeping', event.target.checked)} />} label="Housekeeping" />
+                    <FormControlLabel control={<Switch checked={selectedListing.form.services.spa} onChange={(event) => updateListingSection('services', 'spa', event.target.checked)} />} label="Spa" />
+                    <TextField label="Notes services" multiline rows={2} value={selectedListing.form.services.serviceNotes} onChange={(event) => updateListingSection('services', 'serviceNotes', event.target.value)} />
+                  </Stack>
+                </Panel>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfigOpen(false)}>Annuler</Button>
+          <Button sx={btnPrimarySx} onClick={saveListingConfig}>
+            Sauvegarder
+          </Button>
         </DialogActions>
       </Dialog>
 

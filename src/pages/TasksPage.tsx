@@ -9,8 +9,12 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
-import { TaskFilters, applyTaskFilters, defaultTaskFilters, TaskFilterState } from '../components/tasks/TaskFilters';
-import { mockTasks, Task } from '../data/mockTasks';
+import { AssignTaskModal } from '../components/tasks/AssignTaskModal';
+import { TaskDetailsModal } from '../components/tasks/TaskDetailsModal';
+import { TaskFilters, applyTaskFilters, defaultTaskFilters } from '../components/tasks/TaskFilters';
+import type { TaskFilterState } from '../components/tasks/TaskFilters';
+import { mockTasks, type Task } from '../data/mockTasks';
+import { mockTeamMembers } from '../data/mockTeam';
 
 // ─── Tab Component ─────────────────────────────────────
 function Tabs({ tabs, activeTab, onChange }: { tabs: { key: string; label: string }[]; activeTab: string; onChange: (key: string) => void }) {
@@ -72,7 +76,8 @@ function Priority({ level }: { level: 'high' | 'med' | 'low' }) {
   const c = level === 'high' ? t.error : level === 'med' ? t.warning : t.info;
   const l = level === 'high' ? 'Haute' : level === 'med' ? 'Moyenne' : 'Basse';
   return (
-    <Stack direction="row" alignItems="center" spacing={0.5} sx={{
+    <Stack direction="row" spacing={0.5} sx={{
+      alignItems: 'center',
       fontFamily: 'Geist Mono', fontSize: 10.5, fontWeight: 700, color: c, letterSpacing: 0.3,
     }}>
       <Box sx={{ width: 7, height: 7, borderRadius: '2px', bgcolor: c }} />
@@ -85,7 +90,7 @@ function Priority({ level }: { level: 'high' | 'med' | 'low' }) {
 type SortField = 'name' | 'type' | 'listing' | 'createdAt' | 'startDate' | 'priority' | 'status';
 type SortDirection = 'asc' | 'desc';
 
-function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onEditTask: (task: Task) => void; onDeleteTask: (taskId: string) => void }) {
+function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDetails }: { tasks: Task[]; onEditTask: (task: Task) => void; onDeleteTask: (taskId: string) => void; onAssignTask: (task: Task) => void; onViewDetails: (task: Task) => void }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedTaskForMenu, setSelectedTaskForMenu] = useState<Task | null>(null);
@@ -111,6 +116,20 @@ function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onE
   const handleEditClick = () => {
     if (selectedTaskForMenu) {
       onEditTask(selectedTaskForMenu);
+    }
+    handleMenuClose();
+  };
+
+  const handleViewDetailsClick = () => {
+    if (selectedTaskForMenu) {
+      onViewDetails(selectedTaskForMenu);
+    }
+    handleMenuClose();
+  };
+
+  const handleAssignClick = () => {
+    if (selectedTaskForMenu) {
+      onAssignTask(selectedTaskForMenu);
     }
     handleMenuClose();
   };
@@ -360,7 +379,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onE
       render: (r: Task) => {
         const initials = r.staffName ? r.staffName.split(' ').map(n => n[0]).join('').toUpperCase() : null;
         return (
-          <Stack direction="row" alignItems="center" spacing={0.75}>
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
             {initials ? (
               <Ava initials={initials} />
             ) : (
@@ -559,7 +578,9 @@ function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onE
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
+        <MenuItem onClick={handleViewDetailsClick}>👁️ Voir détails</MenuItem>
         <MenuItem onClick={handleEditClick}>✏️ Modifier</MenuItem>
+        <MenuItem onClick={handleAssignClick}>👤 Assigner</MenuItem>
         <MenuItem onClick={handleDuplicateClick}>📋 Dupliquer</MenuItem>
         <MenuItem onClick={handleMarkCompleted}>✓ Marquer complétée</MenuItem>
         <MenuItem onClick={handleDeleteClick} sx={{ color: t.error }}>🗑️ Supprimer</MenuItem>
@@ -615,7 +636,7 @@ function TasksCalendarView() {
           ] as const).map(([type, label]) => {
             const s = EVENT_STYLES[type];
             return (
-              <Stack key={type} direction="row" alignItems="center" spacing={0.5}>
+              <Stack key={type} direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                 <Box sx={{ width: 10, height: 10, borderRadius: 0.5, bgcolor: s.bg, borderLeft: `2px solid ${s.border}` }} />
                 <span>{label}</span>
               </Stack>
@@ -660,7 +681,7 @@ function TasksCalendarView() {
               }}>
                 {inMonth && (
                   <>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.25 }}>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
                       <Box sx={{
                         fontSize: 12, fontWeight: isToday ? 800 : 600,
                         fontFamily: 'Geist Mono',
@@ -810,15 +831,15 @@ function TasksSejoursView() {
         <FilterChip label="Départs · 2" />
         <FilterChip label="Tâches urgentes · 7" />
         <Stack direction="row" spacing={1.5} sx={{ ml: 'auto', fontSize: 11.5, color: t.text3 }}>
-          <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: t.error }} />
             <span>Urgent</span>
           </Stack>
-          <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: t.info }} />
             <span>À faire</span>
           </Stack>
-          <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: t.success }} />
             <span>Complété</span>
           </Stack>
@@ -1022,7 +1043,7 @@ function MemberCard({ m }: { m: Member }) {
       transition: 'all 0.15s',
       '&:hover': { boxShadow: '0 8px 20px rgba(26,20,8,0.08)', borderColor: t.borderStrong, transform: 'translateY(-2px)' },
     }}>
-      <Stack direction="row" alignItems="center" spacing={1.375} sx={{ mb: 1.75 }}>
+      <Stack direction="row" spacing={1.375} sx={{ alignItems: 'center', mb: 1.75 }}>
         <Box sx={{ position: 'relative' }}>
           <Box sx={{
             width: 48, height: 48, borderRadius: '50%',
@@ -1067,7 +1088,8 @@ function MemberCard({ m }: { m: Member }) {
           width: `${m.load}%`, transition: 'width 0.6s ease',
         }} />
       </Box>
-      <Stack direction="row" justifyContent="space-between" sx={{
+      <Stack direction="row" sx={{
+        justifyContent: 'space-between',
         fontSize: 10.5, fontFamily: 'Geist Mono', color: t.text3, letterSpacing: 0.3,
       }}>
         <span>{m.isAI ? 'Disponibilité' : 'Charge cette semaine'}</span>
@@ -1085,7 +1107,7 @@ function MemberCard({ m }: { m: Member }) {
           <Box sx={{ color: t.text4, fontStyle: 'italic', fontSize: 11.5 }}>{m.emptyHint}</Box>
         )}
         {m.tasks.map((tk, i) => (
-          <Stack key={i} direction="row" alignItems="center" spacing={1} sx={{ py: 0.625, fontSize: 11.5 }}>
+          <Stack key={i} direction="row" spacing={1} sx={{ alignItems: 'center', py: 0.625, fontSize: 11.5 }}>
             <Box sx={{
               width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
               bgcolor: tk.prio === 'high' ? t.error : tk.prio === 'med' ? t.warning : t.info,
@@ -1138,7 +1160,11 @@ export function TasksPage() {
   const [activeTab, setActiveTab] = useState('liste');
   const [tasks, setTasks] = useState<Task[]>(mockTasks);
   const [modalOpen, setModalOpen] = useState(false);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [taskToAssign, setTaskToAssign] = useState<Task | null>(null);
+  const [taskToView, setTaskToView] = useState<Task | null>(null);
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
 
   // Apply filters to tasks
@@ -1180,6 +1206,38 @@ export function TasksPage() {
     handleOpenModal(task);
   };
 
+  const handleAssignTask = (task: Task) => {
+    setTaskToAssign(task);
+    setAssignModalOpen(true);
+  };
+
+  const handleCloseAssignModal = () => {
+    setAssignModalOpen(false);
+    setTaskToAssign(null);
+  };
+
+  const handleTaskAssigned = (updatedTask: Task) => {
+    setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+  };
+
+  const handleViewDetails = (task: Task) => {
+    setTaskToView(task);
+    setDetailsModalOpen(true);
+  };
+
+  const handleCloseDetailsModal = () => {
+    setDetailsModalOpen(false);
+    setTaskToView(null);
+  };
+
+  const handleEditFromDetails = (task: Task) => {
+    handleOpenModal(task);
+  };
+
+  const handleAssignFromDetails = (task: Task) => {
+    handleAssignTask(task);
+  };
+
   const handleResetFilters = () => {
     setFilters(defaultTaskFilters);
     toast.info('Filtres réinitialisés');
@@ -1206,7 +1264,7 @@ export function TasksPage() {
             taskCount={tasks.length}
             filteredCount={filteredTasks.length}
           />
-          <TasksListView tasks={filteredTasks} onEditTask={handleEditTask} onDeleteTask={handleDeleteTask} />
+          <TasksListView tasks={filteredTasks} onEditTask={handleEditTask} onDeleteTask={handleDeleteTask} onAssignTask={handleAssignTask} onViewDetails={handleViewDetails} />
         </>
       )}
       {activeTab === 'calendrier' && <TasksCalendarView />}
@@ -1218,6 +1276,22 @@ export function TasksPage() {
         onClose={handleCloseModal}
         onSave={handleSaveTask}
         existingTask={selectedTask}
+      />
+
+      <AssignTaskModal
+        open={assignModalOpen}
+        onClose={handleCloseAssignModal}
+        task={taskToAssign}
+        staff={mockTeamMembers}
+        onTaskUpdated={handleTaskAssigned}
+      />
+
+      <TaskDetailsModal
+        open={detailsModalOpen}
+        onClose={handleCloseDetailsModal}
+        task={taskToView}
+        onEdit={handleEditFromDetails}
+        onAssign={handleAssignFromDetails}
       />
     </DashboardWrapper>
   );

@@ -51,15 +51,6 @@ export interface TeamMember {
   documents: { name: string; url: string; uploadedAt: string }[];
   photo: string;
   status: 'active' | 'inactive' | 'on_leave';
-  // NEW FIELDS from ancien dashboard
-  ownerId?: string;
-  ownerName?: string;
-  staffType?: 'salaried' | 'freelance' | 'contractor';
-  listingIds?: string[];
-  taskTypes?: string[];
-  cities?: string[];
-  countries?: string[];
-  pricingPerTaskType?: Record<string, number>;
 }
 
 const ROLES = ['Femme de menage', 'Maintenance', 'Chauffeur', 'Conciergerie', 'Manager', 'Admin'];

@@ -8,7 +8,6 @@ import {
   Legend,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -21,6 +20,7 @@ import {
   FilterChip,
   PageHeader,
   Panel,
+  StableChart,
   StatCard,
   StatsRow,
   btnGhostSx,
@@ -205,9 +205,9 @@ export function AnalyticsPage() {
         }}
       >
         <Panel title="Evolution revenus" desc="Periode comparee">
-          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <LineChart data={mockRevenueEvolution}>
+          <StableChart height={320}>
+            {({ width, height }) => (
+              <LineChart width={width} height={height} data={mockRevenueEvolution}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="label" />
                 <YAxis />
@@ -216,14 +216,14 @@ export function AnalyticsPage() {
                 <Line type="monotone" dataKey="current" stroke="#e6b022" strokeWidth={3} />
                 <Line type="monotone" dataKey="previous" stroke="#8b5cf6" strokeWidth={2} />
               </LineChart>
-            </ResponsiveContainer>
-          </Box>
+            )}
+          </StableChart>
         </Panel>
 
         <Panel title="Analyse sources reservations" desc={source === 'Tous' ? 'Toutes OTA' : source}>
-          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={filteredSources}>
+          <StableChart height={320}>
+            {({ width, height }) => (
+              <BarChart width={width} height={height} data={filteredSources}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="source" />
                 <YAxis />
@@ -232,8 +232,8 @@ export function AnalyticsPage() {
                 <Bar dataKey="bookings" fill="#10b981" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="revenue" fill="#e6b022" radius={[8, 8, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
-          </Box>
+            )}
+          </StableChart>
         </Panel>
       </Box>
 
@@ -247,9 +247,9 @@ export function AnalyticsPage() {
         }}
       >
         <Panel title="Saisonnalite" desc="Heatmap-like monthly bars">
-          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={mockSeasonality}>
+          <StableChart height={320}>
+            {({ width, height }) => (
+              <BarChart width={width} height={height} data={mockSeasonality}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="month" />
                 <YAxis />
@@ -263,8 +263,8 @@ export function AnalyticsPage() {
                   ))}
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
-          </Box>
+            )}
+          </StableChart>
         </Panel>
 
         <Panel title="Guest demographics" desc="Top pays d’origine">

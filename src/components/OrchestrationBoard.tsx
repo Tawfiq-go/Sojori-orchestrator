@@ -50,6 +50,12 @@ interface Lane {
   days?: LaneDay[];
 }
 
+interface OrchestrationBoardProps {
+  lanes?: Lane[];
+  onReservationOpen?: () => void;
+  onStepClick?: (payload: { lane: Lane; step: Step; day?: LaneDay | null }) => void;
+}
+
 // ─── Example data (replace with real props from API) ────────────
 const DEFAULT_LANES: Lane[] = [
   { day: 'J-7', icon: '📨', iconBg: t.infoTint, iconColor: '#0e7490', title: 'Message bienvenue',
@@ -95,7 +101,11 @@ const CHANNEL_LABEL: Record<Channel, string> = { wa: 'WhatsApp', email: 'Email',
 const CHANNEL_ICON: Record<Channel, string> = { wa: '📱', email: '📧', staff: '👤', api: '⚡', notif: '🔔', auto: '✨' };
 
 // ─── Component ──────────────────────────────────────────────────
-export function OrchestrationBoard({ lanes = DEFAULT_LANES }: { lanes?: Lane[] }) {
+export function OrchestrationBoard({
+  lanes = DEFAULT_LANES,
+  onReservationOpen,
+  onStepClick,
+}: OrchestrationBoardProps) {
   const [state, setState] = useState(lanes);
 
   const switchDay = (laneIdx: number, dayIdx: number) => {
@@ -112,13 +122,34 @@ export function OrchestrationBoard({ lanes = DEFAULT_LANES }: { lanes?: Lane[] }
         gridAutoColumns: '248px', gap: 1.5,
         minWidth: 'max-content',
       }}>
-        {state.map((lane, i) => <LaneCard key={i} lane={lane} laneIdx={i} onSwitchDay={switchDay} />)}
+        {state.map((lane, i) => (
+          <LaneCard
+            key={i}
+            lane={lane}
+            laneIdx={i}
+            onSwitchDay={switchDay}
+            onReservationOpen={onReservationOpen}
+            onStepClick={onStepClick}
+          />
+        ))}
       </Box>
     </Box>
   );
 }
 
-function LaneCard({ lane, laneIdx, onSwitchDay }: { lane: Lane; laneIdx: number; onSwitchDay: (l: number, d: number) => void }) {
+function LaneCard({
+  lane,
+  laneIdx,
+  onSwitchDay,
+  onReservationOpen,
+  onStepClick,
+}: {
+  lane: Lane;
+  laneIdx: number;
+  onSwitchDay: (l: number, d: number) => void;
+  onReservationOpen?: () => void;
+  onStepClick?: (payload: { lane: Lane; step: Step; day?: LaneDay | null }) => void;
+}) {
   const isGrouped = !!lane.days;
   const activeDay = isGrouped ? (lane.days!.find(d => d.active) ?? lane.days![0]) : null;
   const steps = isGrouped ? activeDay!.steps : lane.steps!;
@@ -137,7 +168,16 @@ function LaneCard({ lane, laneIdx, onSwitchDay }: { lane: Lane; laneIdx: number;
       borderRadius: '12px', p: 1.5,
       opacity: lane.future ? 0.55 : 1, transition: 'all 0.2s',
     }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.25 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          mb: 1.25,
+          cursor: onReservationOpen ? 'pointer' : 'default',
+        }}
+        onClick={onReservationOpen}
+      >
         <Box sx={{
           width: 24, height: 24, borderRadius: '6px',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -211,71 +251,116 @@ function LaneCard({ lane, laneIdx, onSwitchDay }: { lane: Lane; laneIdx: number;
       </Box>
 
       <Stack spacing={1}>
-        {steps.map((s, i) => <StepCard key={i} step={s} idx={i} />)}
+        {steps.map((s, i) => (
+          <StepCard
+            key={i}
+            step={s}
+            idx={i}
+            onClick={
+              onStepClick
+                ? () => onStepClick({ lane, step: s, day: activeDay })
+                : undefined
+            }
+          />
+        ))}
       </Stack>
     </Box>
   );
 }
 
-function StepCard({ step, idx }: { step: Step; idx: number }) {
+function StepCard({ step, idx, onClick }: { step: Step; idx: number; onClick?: () => void }) {
   const sty = STEP_STYLES[step.kind];
+  const interactive = typeof onClick === 'function';
+
   return (
-    <Box sx={{
-      bgcolor: t.bg1, background: sty.bg, border: '1px solid', borderColor: sty.border,
-      borderRadius: '10px', p: '10px 11px', position: 'relative',
-      animation: step.kind === 'late'
-        ? `step-in 0.45s ${idx * 0.04}s cubic-bezier(.34,1.4,.5,1) both, late-pulse 2.4s ease-in-out infinite`
-        : `step-in 0.45s ${idx * 0.04}s cubic-bezier(.34,1.4,.5,1) both`,
-      '@keyframes step-in': {
-        from: { opacity: 0, transform: 'translateY(6px) scale(0.98)' },
-        to:   { opacity: 1, transform: 'translateY(0) scale(1)' },
-      },
-      '@keyframes late-pulse': {
-        '0%, 100%': { boxShadow: '0 0 0 0 rgba(239,68,68,0)' },
-        '50%': { boxShadow: '0 0 0 4px rgba(239,68,68,0.10)' },
-      },
-      ...(step.kind === 'done' && {
-        '&::before': {
-          content: '"✓"', position: 'absolute', top: 8, right: 8,
-          width: 18, height: 18, borderRadius: '50%',
-          bgcolor: t.success, color: '#fff', fontSize: 10, fontWeight: 800,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 0 0 3px rgba(16,185,129,0.18)',
-          animation: 'check-pop 0.6s cubic-bezier(.34,1.6,.4,1) both',
+    <Box
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (!interactive) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      sx={{
+        bgcolor: t.bg1,
+        background: sty.bg,
+        border: '1px solid',
+        borderColor: sty.border,
+        borderRadius: '10px',
+        p: '10px 11px',
+        position: 'relative',
+        cursor: interactive ? 'pointer' : 'default',
+        animation: step.kind === 'late'
+          ? `step-in 0.45s ${idx * 0.04}s cubic-bezier(.34,1.4,.5,1) both, late-pulse 2.4s ease-in-out infinite`
+          : `step-in 0.45s ${idx * 0.04}s cubic-bezier(.34,1.4,.5,1) both`,
+        transition: 'transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease',
+        '&:hover': interactive
+          ? {
+              transform: 'translateY(-1px)',
+              boxShadow: '0 8px 16px rgba(26,20,8,0.10)',
+              borderColor: t.borderStrong,
+            }
+          : undefined,
+        '&:focus-visible': interactive
+          ? {
+              outline: `2px solid ${t.primary}`,
+              outlineOffset: 2,
+            }
+          : undefined,
+        '@keyframes step-in': {
+          from: { opacity: 0, transform: 'translateY(6px) scale(0.98)' },
+          to:   { opacity: 1, transform: 'translateY(0) scale(1)' },
         },
-        '@keyframes check-pop': {
-          '0%': { transform: 'scale(0) rotate(-180deg)', opacity: 0 },
-          '60%': { transform: 'scale(1.2)', opacity: 1 },
-          '100%': { transform: 'scale(1) rotate(0)' },
+        '@keyframes late-pulse': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(239,68,68,0)' },
+          '50%': { boxShadow: '0 0 0 4px rgba(239,68,68,0.10)' },
         },
-      }),
-      ...(step.kind === 'late' && {
-        '&::after': {
-          content: '""', position: 'absolute', top: 9, right: 9,
-          width: 7, height: 7, borderRadius: '50%',
-          bgcolor: t.error,
-          animation: 'dot-pulse 1.4s ease-in-out infinite',
-        },
-        '@keyframes dot-pulse': {
-          '0%, 100%': { transform: 'scale(1)' },
-          '50%': { transform: 'scale(1.6)', boxShadow: '0 0 0 4px rgba(239,68,68,0.20)' },
-        },
-      }),
-      ...(step.kind === 'pending' && {
-        '&::after': {
-          content: '""', position: 'absolute', top: 9, right: 9,
-          width: 7, height: 7, borderRadius: '50%',
-          bgcolor: t.warning,
-          animation: 'dot-glow 2s ease-in-out infinite',
-        },
-        '@keyframes dot-glow': {
-          '0%, 100%': { boxShadow: '0 0 0 0 currentColor', opacity: 1 },
-          '50%': { boxShadow: '0 0 0 4px rgba(0,0,0,0)', opacity: 0.6 },
-        },
-      }),
-      ...(step.kind === 'future' && { borderStyle: 'dashed' }),
-    }}>
-      <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 0.75 }}>
+        ...(step.kind === 'done' && {
+          '&::before': {
+            content: '"✓"', position: 'absolute', top: 8, right: 8,
+            width: 18, height: 18, borderRadius: '50%',
+            bgcolor: t.success, color: '#fff', fontSize: 10, fontWeight: 800,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 0 3px rgba(16,185,129,0.18)',
+            animation: 'check-pop 0.6s cubic-bezier(.34,1.6,.4,1) both',
+          },
+          '@keyframes check-pop': {
+            '0%': { transform: 'scale(0) rotate(-180deg)', opacity: 0 },
+            '60%': { transform: 'scale(1.2)', opacity: 1 },
+            '100%': { transform: 'scale(1) rotate(0)' },
+          },
+        }),
+        ...(step.kind === 'late' && {
+          '&::after': {
+            content: '""', position: 'absolute', top: 9, right: 9,
+            width: 7, height: 7, borderRadius: '50%',
+            bgcolor: t.error,
+            animation: 'dot-pulse 1.4s ease-in-out infinite',
+          },
+          '@keyframes dot-pulse': {
+            '0%, 100%': { transform: 'scale(1)' },
+            '50%': { transform: 'scale(1.6)', boxShadow: '0 0 0 4px rgba(239,68,68,0.20)' },
+          },
+        }),
+        ...(step.kind === 'pending' && {
+          '&::after': {
+            content: '""', position: 'absolute', top: 9, right: 9,
+            width: 7, height: 7, borderRadius: '50%',
+            bgcolor: t.warning,
+            animation: 'dot-glow 2s ease-in-out infinite',
+          },
+          '@keyframes dot-glow': {
+            '0%, 100%': { boxShadow: '0 0 0 0 currentColor', opacity: 1 },
+            '50%': { boxShadow: '0 0 0 4px rgba(0,0,0,0)', opacity: 0.6 },
+          },
+        }),
+        ...(step.kind === 'future' && { borderStyle: 'dashed' }),
+      }}
+    >
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mb: 0.75 }}>
         <Box sx={{
           fontFamily: 'Geist Mono', fontSize: 9, fontWeight: 700,
           p: '1px 6px', borderRadius: '4px',
@@ -298,7 +383,7 @@ function StepCard({ step, idx }: { step: Step; idx: number }) {
           }}>{CHANNEL_ICON[step.channel]} {CHANNEL_LABEL[step.channel]}</Box>
         )}
       </Stack>
-      <Stack direction="row" alignItems="center" spacing={0.875} sx={{ fontSize: 12, fontWeight: 600, mb: 0.5 }}>
+      <Stack direction="row" spacing={0.875} sx={{ alignItems: 'center', fontSize: 12, fontWeight: 600, mb: 0.5 }}>
         <Box sx={{ fontSize: 14 }}>{step.icon}</Box>{step.title}
       </Stack>
       <Typography sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'Geist Mono', letterSpacing: 0.2 }}>{step.meta}</Typography>

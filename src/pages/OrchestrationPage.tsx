@@ -1,10 +1,22 @@
 import React, { useState } from 'react';
-import { Box, Button, Stack, Typography, Drawer, IconButton, Divider } from '@mui/material';
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Drawer,
+  IconButton,
+  Stack,
+  Typography,
+} from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader, Panel, OrchestrationTimeline, TLEvent, TLDayLabel,
   AICard, Badge, Revenue, ViewToggle,
-  btnGhostSx, btnAiSx, btnSmSx, btnPrimarySx,
+  btnGhostSx, btnAiSx, btnSmSx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { OrchestrationBoard } from '../components/OrchestrationBoard';
@@ -51,24 +63,124 @@ function retryChip(text: string) {
   return `<span style="${WINDOW_CHIP_STYLE} background:rgba(139,92,246,0.10);color:${t.ai}">${text}</span>`;
 }
 
+type DrawerContent =
+  | {
+      type: 'reservation';
+    }
+  | {
+      type: 'event';
+      detail: {
+        title: string;
+        status: string;
+        when: string;
+        summary: string;
+        note?: string;
+        channel?: string;
+      };
+    };
+
+type MessagePreview = {
+  title: string;
+  channel: string;
+  template: string;
+  recipient: string;
+  schedule: string;
+  body: string;
+};
+
 // ════════════════════════════════════════════════════════════════════
 // Page
 // ════════════════════════════════════════════════════════════════════
 export function OrchestrationPage() {
   const [view, setView] = useState('chronologie');
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [drawerContent, setDrawerContent] = useState<DrawerContent | null>(null);
+  const [messagePreview, setMessagePreview] = useState<MessagePreview | null>(null);
 
-  const handleEventClick = (eventData: any) => {
-    setSelectedEvent(eventData);
+  const reservation = {
+    code: 'RÉSA #1234',
+    guest: 'Sarah Johnson',
+    property: 'Villa Belvédère · Nice',
+    stay: '12 → 22 mai · 10 nuits',
+    amount: '€1,840',
+    source: 'Airbnb',
+    netRevenue: '€1,656',
+    phase: 'Check-in · Jour 3/10',
+    phone: '+1 415 555 0123',
+    email: 'sarah.j@example.com',
+    confirmationCode: 'HMXY42TZ8K',
+  };
+
+  const openReservationDrawer = () => {
+    setDrawerContent({ type: 'reservation' });
   };
 
   const closeDrawer = () => {
-    setSelectedEvent(null);
+    setDrawerContent(null);
+  };
+
+  const openEventDrawer = (detail: DrawerContent extends { type: 'event'; detail: infer T } ? T : never) => {
+    setDrawerContent({ type: 'event', detail });
+  };
+
+  const openMessagePreview = (preview: MessagePreview) => {
+    setMessagePreview(preview);
+  };
+
+  const closeMessagePreview = () => {
+    setMessagePreview(null);
+  };
+
+  const handleBoardStepClick = ({
+    lane,
+    step,
+    day,
+  }: {
+    lane: { title: string; day?: string };
+    step: { title: string; meta: string; kind: string; channel?: string };
+    day?: { day: string; label: string } | null;
+  }) => {
+    const schedule = day ? `${day.day} · ${day.label}` : lane.day || 'Planifié';
+
+    if (step.channel === 'wa' || step.channel === 'email') {
+      openMessagePreview({
+        title: step.title,
+        channel: step.channel === 'wa' ? 'WhatsApp' : 'Email',
+        template: lane.title,
+        recipient: reservation.guest,
+        schedule,
+        body: `${reservation.guest},\n\n${step.title} — ${step.meta}.\n\nRéservation ${reservation.code} · ${reservation.property}.`,
+      });
+      return;
+    }
+
+    openEventDrawer({
+      title: step.title,
+      status: step.kind,
+      when: schedule,
+      summary: step.meta,
+      channel: step.channel ? step.channel.toUpperCase() : undefined,
+      note: `Étape du plan d'orchestration · ${lane.title}`,
+    });
   };
 
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Orchestration', view === 'chronologie' ? 'Chronologie' : 'Plan d\'orchestration']}>
-      <PageHeader title={`✨ Orchestration · ${view === 'chronologie' ? 'Chronologie' : 'Plan d\'orchestration'}`} count="RÉSA #1234">
+      <PageHeader
+        title={`✨ Orchestration · ${view === 'chronologie' ? 'Chronologie' : 'Plan d\'orchestration'}`}
+        count={
+          <Box
+            component="button"
+            onClick={openReservationDrawer}
+            sx={{
+              all: 'unset',
+              cursor: 'pointer',
+              fontFamily: 'Geist Mono',
+            }}
+          >
+            {reservation.code}
+          </Box>
+        }
+      >
         <ViewToggle
           options={[
             { value: 'chronologie', label: 'Chronologie' },
@@ -77,29 +189,47 @@ export function OrchestrationPage() {
           value={view}
           onChange={setView}
         />
-        <Button sx={btnGhostSx}>📋 Voir réservation</Button>
+        <Button sx={btnGhostSx} onClick={openReservationDrawer}>📋 Voir réservation</Button>
         <Button sx={btnAiSx}>✨ Demander à l'AI</Button>
       </PageHeader>
 
       {view === 'board' ? (
-        <OrchestrationBoard />
+        <OrchestrationBoard
+          onReservationOpen={openReservationDrawer}
+          onStepClick={handleBoardStepClick}
+        />
       ) : (
         <>
           {/* Header context — réservation */}
-          <Stack direction="row" alignItems="center" spacing={1.75} sx={{
-            mb: 2.5, p: '14px 18px',
-            bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '11px',
-          }}>
+          <Stack
+            direction="row"
+            spacing={1.75}
+            onClick={openReservationDrawer}
+            sx={{
+              alignItems: 'center',
+              mb: 2.5,
+              p: '14px 18px',
+              bgcolor: t.bg1,
+              border: `1px solid ${t.border}`,
+              borderRadius: '11px',
+              cursor: 'pointer',
+              transition: 'box-shadow 0.12s ease, transform 0.12s ease',
+              '&:hover': {
+                boxShadow: '0 8px 18px rgba(26,20,8,0.08)',
+                transform: 'translateY(-1px)',
+              },
+            }}
+          >
         <Box sx={{
           width: 48, height: 48, borderRadius: '9px',
           background: 'linear-gradient(135deg,#fde68a,#d97706)', flexShrink: 0,
         }} />
         <Box sx={{ flex: 1 }}>
-          <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Villa Belvédère · Nice</Typography>
+          <Typography sx={{ fontSize: 15, fontWeight: 700 }}>{reservation.property}</Typography>
           <Typography sx={{
             fontSize: 12, color: t.text3, mt: 0.25,
             fontFamily: 'Geist Mono', letterSpacing: 0.3,
-          }}>SARAH JOHNSON · 12 → 22 MAI · 10 NUITS · €1,840</Typography>
+          }}>{reservation.guest.toUpperCase()} · {reservation.stay.toUpperCase()} · {reservation.amount}</Typography>
         </Box>
         <Badge variant="success" dot>Active · Jour 3/10</Badge>
       </Stack>
@@ -122,16 +252,9 @@ export function OrchestrationPage() {
               title="Réservation confirmée"
               badge={<Badge variant="success">Auto</Badge>}
               meta="Source : <strong>Airbnb</strong> · ID résa <strong>HMXY42TZ8K</strong> · Montant <strong>€1,840</strong>"
-              onClick={() => handleEventClick({
-                title: 'Réservation confirmée',
-                time: '10:14 · il y a 3 jours',
-                status: 'completed',
-                source: 'Airbnb',
-                resaId: 'HMXY42TZ8K',
-                amount: '€1,840',
-                type: 'reservation',
-                details: 'Cette réservation a été confirmée automatiquement via Airbnb. Le paiement a été reçu et la disponibilité a été mise à jour sur tous les canaux.'
-              })}
+              onClick={() =>
+                openReservationDrawer()
+              }
             />
             <TLEvent
               time={<><strong>10:14</strong> · +18s</>}
@@ -139,6 +262,15 @@ export function OrchestrationPage() {
               title="Workflow orchestrateur déclenché"
               badge={<Badge variant="ai">AI</Badge>}
               meta="<strong>23 tâches</strong> générées · Workflow <strong>Villa Belvédère · Long séjour</strong>"
+              onClick={() =>
+                openEventDrawer({
+                  title: 'Workflow orchestrateur déclenché',
+                  status: 'AI',
+                  when: '12 mai · 10:14',
+                  summary: '23 tâches générées pour cette réservation.',
+                  note: 'Le plan complet a été initialisé automatiquement après confirmation.',
+                })
+              }
             />
             <TLEvent
               time={<><strong>10:18</strong> · +4 min</>}
@@ -147,6 +279,17 @@ export function OrchestrationPage() {
               badge={<Badge variant="info">WhatsApp</Badge>}
               meta="Template <strong>welcome-villa</strong> · 🇬🇧 EN · Lu <strong>il y a 2 min</strong>"
               quote="« Hi Sarah! 👋 Welcome to Villa Belvédère. We're delighted to host you from May 12–22… »"
+              onClick={() =>
+                openMessagePreview({
+                  title: 'Message bienvenue envoyé',
+                  channel: 'WhatsApp',
+                  template: 'welcome-villa',
+                  recipient: reservation.guest,
+                  schedule: '12 mai · 10:18',
+                  body:
+                    "Hi Sarah! 👋 Welcome to Villa Belvédère. We're delighted to host you from May 12–22. Your team is already preparing access and arrival steps.",
+                })
+              }
             />
           </OrchestrationTimeline>
 
@@ -159,6 +302,17 @@ export function OrchestrationPage() {
               title="Enregistrement voyageur envoyé"
               badge={<Badge variant="info">WhatsApp</Badge>}
               meta={`Template <strong>registration-form-link</strong> · ${windowChip('available')} · Expiration <strong>14 mai 23:59</strong>`}
+              onClick={() =>
+                openMessagePreview({
+                  title: 'Enregistrement voyageur envoyé',
+                  channel: 'WhatsApp',
+                  template: 'registration-form-link',
+                  recipient: reservation.guest,
+                  schedule: '13 mai · 14:30',
+                  body:
+                    'Bonjour Sarah, voici votre formulaire d’enregistrement sécurisé. Merci de compléter vos informations voyageurs avant votre arrivée.',
+                })
+              }
             />
             <TLEvent
               time={<><strong>19:45</strong> · il y a 2 jours · +5h15</>}
@@ -166,6 +320,15 @@ export function OrchestrationPage() {
               title="Sarah a complété l'enregistrement"
               badge={<Badge variant="success">Form</Badge>}
               meta="Passeport scanné · Données vérifiées <strong>✓</strong> · KYC <strong>OK</strong>"
+              onClick={() =>
+                openEventDrawer({
+                  title: "Sarah a complété l'enregistrement",
+                  status: 'Complété',
+                  when: '13 mai · 19:45',
+                  summary: 'Passeport scanné, données vérifiées, KYC OK.',
+                  note: 'Le dossier voyageur est complet pour le séjour.',
+                })
+              }
             />
           </OrchestrationTimeline>
 
@@ -178,6 +341,15 @@ export function OrchestrationPage() {
               title="Code d'accès généré"
               badge={<Badge variant="success">Auto</Badge>}
               meta="Code <strong style='font-family:Geist Mono'>4829*</strong> · Igloohome · Villa Belvédère · Envoi prévu <strong>15 mai 14:00</strong>"
+              onClick={() =>
+                openEventDrawer({
+                  title: "Code d'accès généré",
+                  status: 'Complété',
+                  when: '14 mai · 09:00',
+                  summary: "Code Igloohome 4829* généré pour l'arrivée.",
+                  note: 'Le code sera communiqué automatiquement au bon moment.',
+                })
+              }
             />
             <TLEvent
               time={<><strong>10:00</strong> · hier</>}
@@ -185,6 +357,15 @@ export function OrchestrationPage() {
               title="Déclaration police programmée"
               badge={<Badge variant="warning">En attente</Badge>}
               meta="Deadline <strong>15 mai 18:00</strong> · Statut <strong>En attente données check-in</strong>"
+              onClick={() =>
+                openEventDrawer({
+                  title: 'Déclaration police programmée',
+                  status: 'En attente',
+                  when: '14 mai · 10:00',
+                  summary: "La déclaration sera transmise après confirmation du check-in.",
+                  note: 'Dépendance: validation des données d’arrivée.',
+                })
+              }
             />
             <TLEvent
               time={<><strong>15:30</strong> · hier</>}
@@ -192,6 +373,15 @@ export function OrchestrationPage() {
               title="Ménage pré-arrivée complété"
               badge={<Badge variant="success">Staff</Badge>}
               meta="Yasmine K. · Durée <strong>2h35</strong> · Photos validées <strong>✓</strong> · Note <strong>9.6/10</strong>"
+              onClick={() =>
+                openEventDrawer({
+                  title: 'Ménage pré-arrivée complété',
+                  status: 'Complété',
+                  when: '14 mai · 15:30',
+                  summary: 'Ménage terminé par Yasmine K. avec validation photo.',
+                  note: 'Note qualité 9.6/10.',
+                })
+              }
             />
           </OrchestrationTimeline>
 
@@ -204,6 +394,17 @@ export function OrchestrationPage() {
               title="Code d'accès envoyé"
               badge={<Badge variant="info">WhatsApp</Badge>}
               meta="Template <strong>access-code</strong> · Code <strong style='font-family:Geist Mono'>4829*</strong> · Lu <strong>il y a 30 min</strong>"
+              onClick={() =>
+                openMessagePreview({
+                  title: "Code d'accès envoyé",
+                  channel: 'WhatsApp',
+                  template: 'access-code',
+                  recipient: reservation.guest,
+                  schedule: "15 mai · 14:00",
+                  body:
+                    "Hi Sarah, your access is ready. Code: 4829*. The property will be available from 16:00. Reply here if you need help on arrival.",
+                })
+              }
             />
             <TLEvent
               critical
@@ -212,6 +413,15 @@ export function OrchestrationPage() {
               title="Sarah a effectué son check-in"
               badge={<Badge variant="success">Auto · QR + GPS</Badge>}
               meta="Vérifié sur place · ID + photo profil <strong>✓</strong> · Vidéo welcome <strong>vue 2 fois</strong>"
+              onClick={() =>
+                openEventDrawer({
+                  title: 'Sarah a effectué son check-in',
+                  status: 'Critique',
+                  when: "15 mai · 16:14",
+                  summary: 'Check-in confirmé automatiquement via QR + GPS.',
+                  note: 'ID et photo profil validés, vidéo welcome consultée deux fois.',
+                })
+              }
             />
             <TLEvent
               time={<><strong>18:00</strong> · aujourd'hui · prévu +1h46</>}
@@ -219,6 +429,15 @@ export function OrchestrationPage() {
               title="Déclaration police envoyée"
               badge={<Badge variant="success">API</Badge>}
               meta="Préfecture · Statut <strong style='color:#047857'>Accepté ✓</strong> · Référence <strong>POL-2026-9821</strong>"
+              onClick={() =>
+                openEventDrawer({
+                  title: 'Déclaration police envoyée',
+                  status: 'Complété',
+                  when: "15 mai · 18:00",
+                  summary: 'Transmission API acceptée par la préfecture.',
+                  note: 'Référence de suivi: POL-2026-9821.',
+                })
+              }
             />
             <TLEvent
               time={<><strong>19:00</strong> · aujourd'hui</>}
@@ -226,6 +445,15 @@ export function OrchestrationPage() {
               title="Ménage de fin programmé"
               badge={<Badge variant="warning">Planifié</Badge>}
               meta="Assigné <strong>Marie Dupont</strong> · Check-out prévu <strong>22 mai 11:00</strong> · Durée estimée 3h"
+              onClick={() =>
+                openEventDrawer({
+                  title: 'Ménage de fin programmé',
+                  status: 'Planifié',
+                  when: "15 mai · 19:00",
+                  summary: 'Mission assignée à Marie Dupont pour le check-out du 22 mai.',
+                  note: 'Durée estimée 3h avec inventaire et photos.',
+                })
+              }
             />
           </OrchestrationTimeline>
 
@@ -239,6 +467,17 @@ export function OrchestrationPage() {
               title="Message feedback demandé"
               badge={<Badge variant="info">Programmé</Badge>}
               meta={`Template <strong>midstay-feedback</strong> · Envoi prévu <strong>demain 10:00</strong> · ${windowChip('too-early')}`}
+              onClick={() =>
+                openMessagePreview({
+                  title: 'Message feedback demandé',
+                  channel: 'WhatsApp',
+                  template: 'midstay-feedback',
+                  recipient: reservation.guest,
+                  schedule: '16 mai · 10:00',
+                  body:
+                    'Bonjour Sarah, comment se passe votre séjour jusqu’ici ? Nous pouvons vous aider pour toute demande locale ou un besoin sur place.',
+                })
+              }
             />
           </OrchestrationTimeline>
 
@@ -252,6 +491,17 @@ export function OrchestrationPage() {
               title="Message mid-stay programmé"
               badge={<Badge variant="ai">AI personnalisé</Badge>}
               meta={`Template <strong>midstay-villa</strong> · Personnalisation IA selon historique · ${windowChip('too-early')}`}
+              onClick={() =>
+                openMessagePreview({
+                  title: 'Message mid-stay programmé',
+                  channel: 'WhatsApp',
+                  template: 'midstay-villa',
+                  recipient: reservation.guest,
+                  schedule: '17 mai · 10:00',
+                  body:
+                    'Hi Sarah, if you’d like a personalized local recommendation, we can suggest a sunset trip to Eze or a Mont Boron walk based on your stay profile.',
+                })
+              }
             />
           </OrchestrationTimeline>
 
@@ -265,6 +515,17 @@ export function OrchestrationPage() {
               title="Rappel check-out programmé"
               badge={<Badge variant="info">WhatsApp</Badge>}
               meta="Template <strong>checkout-reminder</strong> · Envoi <strong>22 mai 08:00</strong> · Inclut code & instructions"
+              onClick={() =>
+                openMessagePreview({
+                  title: 'Rappel check-out programmé',
+                  channel: 'WhatsApp',
+                  template: 'checkout-reminder',
+                  recipient: reservation.guest,
+                  schedule: '22 mai · 08:00',
+                  body:
+                    'Hello Sarah, a quick reminder that check-out is scheduled for 11:00 on 22 May. We will send final instructions and the exit flow shortly.',
+                })
+              }
             />
             <TLEvent
               future
@@ -273,6 +534,15 @@ export function OrchestrationPage() {
               title="Check-out prévu"
               badge={<Badge variant="warning">Deadline</Badge>}
               meta="QR code de sortie · Vidéo checkout à filmer · Désactivation code d'accès auto"
+              onClick={() =>
+                openEventDrawer({
+                  title: 'Check-out prévu',
+                  status: 'Futur',
+                  when: '22 mai · 11:00',
+                  summary: 'Le flow de sortie prévoit QR code, vidéo et désactivation automatique du code.',
+                  note: 'Étape clef de clôture du séjour.',
+                })
+              }
             />
             <TLEvent
               future
@@ -281,6 +551,15 @@ export function OrchestrationPage() {
               title="Ménage complet programmé"
               badge={<Badge variant="info">Staff</Badge>}
               meta="Assigné <strong>Marie Dupont</strong> · Durée estimée <strong>3h</strong> · Inclut inventaire & photos"
+              onClick={() =>
+                openEventDrawer({
+                  title: 'Ménage complet programmé',
+                  status: 'Futur',
+                  when: '22 mai · 12:00',
+                  summary: 'Intervention ménage avec inventaire et photos à la sortie.',
+                  note: 'Assigné à Marie Dupont.',
+                })
+              }
             />
             <TLEvent
               future
@@ -289,6 +568,17 @@ export function OrchestrationPage() {
               title="Message merci programmé"
               badge={<Badge variant="info">WhatsApp</Badge>}
               meta="Template <strong>thank-you-villa</strong> · Délai <strong>+3h après checkout</strong>"
+              onClick={() =>
+                openMessagePreview({
+                  title: 'Message merci programmé',
+                  channel: 'WhatsApp',
+                  template: 'thank-you-villa',
+                  recipient: reservation.guest,
+                  schedule: '22 mai · 14:00',
+                  body:
+                    'Thank you Sarah for staying at Villa Belvédère. We hope you had a wonderful time and would love to welcome you again.',
+                })
+              }
             />
           </OrchestrationTimeline>
 
@@ -302,6 +592,17 @@ export function OrchestrationPage() {
               title="Demande d'avis Airbnb programmée"
               badge={<Badge variant="ai">AI optimisé</Badge>}
               meta={`Template <strong>request-review-airbnb</strong> · ${windowChip('too-early')} · Délai optimal calculé par AI`}
+              onClick={() =>
+                openMessagePreview({
+                  title: "Demande d'avis Airbnb programmée",
+                  channel: 'WhatsApp',
+                  template: 'request-review-airbnb',
+                  recipient: reservation.guest,
+                  schedule: '23 mai · 10:00',
+                  body:
+                    'Hi Sarah, if you enjoyed your stay, your Airbnb review would mean a lot to the team. Thank you again for choosing Sojori.',
+                })
+              }
             />
             <TLEvent
               future
@@ -310,6 +611,15 @@ export function OrchestrationPage() {
               title="Plan de relances avis"
               badge={<Badge variant="warning">3 essais max</Badge>}
               meta={`${retryChip('Essai 1/3')} 23 mai · ${retryChip('Essai 2/3')} 26 mai · ${retryChip('Essai 3/3')} 30 mai`}
+              onClick={() =>
+                openEventDrawer({
+                  title: 'Plan de relances avis',
+                  status: 'Futur',
+                  when: '23 mai → 30 mai',
+                  summary: 'Trois relances maximum sont prévues si aucun avis n’est reçu.',
+                  note: 'Cadence: 23 mai, 26 mai, 30 mai.',
+                })
+              }
             />
           </OrchestrationTimeline>
 
@@ -363,151 +673,137 @@ export function OrchestrationPage() {
         </>
       )}
 
-      {/* ═══════════════ Event Details Drawer ═══════════════ */}
       <Drawer
         anchor="right"
-        open={!!selectedEvent}
+        open={Boolean(drawerContent)}
         onClose={closeDrawer}
-        sx={{
-          '& .MuiDrawer-paper': {
-            width: { xs: '100%', sm: 420 },
-            bgcolor: t.bg0,
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', sm: 440 },
+            p: 0,
+            bgcolor: '#fbfaf6',
           },
         }}
       >
-        {selectedEvent && (
-          <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* Header */}
-            <Stack direction="row" sx={{
-              alignItems: 'center', justifyContent: 'space-between',
-              p: '16px 20px',
-              bgcolor: t.bg1,
-              borderBottom: `1px solid ${t.border}`,
-            }}>
-              <Typography sx={{ fontSize: 16, fontWeight: 700 }}>Détails de l'événement</Typography>
-              <IconButton onClick={closeDrawer} sx={{
-                width: 32, height: 32, borderRadius: '8px',
-                color: t.text2,
-                '&:hover': { bgcolor: t.bg2 },
-              }}>✕</IconButton>
-            </Stack>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', p: 2.5, pb: 2 }}>
+          <Box>
+            <Typography sx={{ fontSize: 16, fontWeight: 700 }}>
+              {drawerContent?.type === 'reservation'
+                ? `Détail ${reservation.code}`
+                : drawerContent?.detail.title}
+            </Typography>
+            <Typography sx={{ fontSize: 12, color: t.text3, mt: 0.5 }}>
+              {drawerContent?.type === 'reservation'
+                ? `${reservation.guest} · ${reservation.property}`
+                : drawerContent?.detail.when}
+            </Typography>
+          </Box>
+          <IconButton onClick={closeDrawer}>✕</IconButton>
+        </Stack>
+        <Divider />
 
-            {/* Content */}
-            <Box sx={{ flex: 1, overflowY: 'auto', p: '20px 20px' }}>
-              {/* Title & Status */}
-              <Stack spacing={1.5} sx={{ mb: 3 }}>
-                <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.3px' }}>
-                  {selectedEvent.title}
-                </Typography>
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <Badge variant={
-                    selectedEvent.status === 'completed' ? 'success' :
-                    selectedEvent.status === 'pending' ? 'warning' :
-                    selectedEvent.status === 'error' ? 'error' : 'info'
-                  } dot>
-                    {selectedEvent.status === 'completed' ? 'Complété' :
-                     selectedEvent.status === 'pending' ? 'En attente' :
-                     selectedEvent.status === 'error' ? 'Erreur' : 'Info'}
-                  </Badge>
-                  <Typography sx={{
-                    fontSize: 12, color: t.text3,
-                    fontFamily: 'Geist Mono', letterSpacing: 0.3,
-                  }}>{selectedEvent.time}</Typography>
+        <Box sx={{ p: 2.5 }}>
+          {drawerContent?.type === 'reservation' ? (
+            <Stack spacing={2}>
+              <Panel sx={{ p: 2 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Séjour</Typography>
+                <Stack spacing={1.1}>
+                  <KV k="Guest" v={reservation.guest} />
+                  <KV k="Property" v={reservation.property} />
+                  <KV k="Dates" v={reservation.stay} mono />
+                  <KV k="Source" v={reservation.source} />
+                  <KV k="Code confirmation" v={reservation.confirmationCode} mono />
+                  <KV k="Revenu net" v={<Revenue amount={reservation.netRevenue} />} divider />
                 </Stack>
-              </Stack>
+              </Panel>
 
-              <Divider sx={{ mb: 3, borderColor: t.border }} />
+              <Panel sx={{ p: 2 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Contact</Typography>
+                <Stack spacing={1.1}>
+                  <KV k="Email" v={reservation.email} />
+                  <KV k="Téléphone" v={reservation.phone} mono />
+                  <KV k="Phase actuelle" v={reservation.phase} mono divider />
+                </Stack>
+              </Panel>
 
-              {/* Details Grid */}
-              <Stack spacing={2.5}>
-                {selectedEvent.source && (
-                  <DetailRow label="Source" value={selectedEvent.source} />
-                )}
-                {selectedEvent.resaId && (
-                  <DetailRow label="ID Réservation" value={selectedEvent.resaId} mono />
-                )}
-                {selectedEvent.amount && (
-                  <DetailRow label="Montant" value={selectedEvent.amount} mono />
-                )}
-                {selectedEvent.type && (
-                  <DetailRow label="Type" value={selectedEvent.type} />
-                )}
-              </Stack>
-
-              <Divider sx={{ my: 3, borderColor: t.border }} />
-
-              {/* Description */}
-              {selectedEvent.details && (
-                <Box>
-                  <Typography sx={{
-                    fontSize: 11, fontWeight: 700, color: t.text3,
-                    letterSpacing: 0.8, textTransform: 'uppercase',
-                    fontFamily: 'Geist Mono', mb: 1.5,
-                  }}>Description</Typography>
-                  <Typography sx={{
-                    fontSize: 13, lineHeight: 1.6, color: t.text2,
-                    bgcolor: t.bg1, p: '12px 14px',
-                    border: `1px solid ${t.border}`, borderRadius: '9px',
-                  }}>{selectedEvent.details}</Typography>
-                </Box>
-              )}
-
-              {/* Actions Section */}
-              <Box sx={{ mt: 3 }}>
-                <Typography sx={{
-                  fontSize: 11, fontWeight: 700, color: t.text3,
-                  letterSpacing: 0.8, textTransform: 'uppercase',
-                  fontFamily: 'Geist Mono', mb: 1.5,
-                }}>Actions rapides</Typography>
+              <Panel sx={{ p: 2 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Actions rapides</Typography>
                 <Stack spacing={1}>
                   <Button sx={{ ...btnGhostSx, width: '100%', justifyContent: 'flex-start' }}>
-                    📋 Voir la réservation complète
+                    💬 Ouvrir WhatsApp guest
                   </Button>
                   <Button sx={{ ...btnGhostSx, width: '100%', justifyContent: 'flex-start' }}>
-                    💬 Contacter le voyageur
+                    📋 Voir la page séjour complète
                   </Button>
                   <Button sx={{ ...btnGhostSx, width: '100%', justifyContent: 'flex-start' }}>
-                    📊 Voir les logs système
+                    📊 Revenir au workflow
                   </Button>
                 </Stack>
-              </Box>
-            </Box>
+              </Panel>
+            </Stack>
+          ) : drawerContent?.type === 'event' ? (
+            <Stack spacing={2}>
+              <Panel sx={{ p: 2 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Résumé événement</Typography>
+                <Stack spacing={1.1}>
+                  <KV k="Statut" v={drawerContent.detail.status} />
+                  <KV k="Quand" v={drawerContent.detail.when} mono />
+                  {drawerContent.detail.channel && <KV k="Canal" v={drawerContent.detail.channel} />}
+                </Stack>
+                <Typography sx={{ fontSize: 12.5, color: t.text2, mt: 2, lineHeight: 1.6 }}>
+                  {drawerContent.detail.summary}
+                </Typography>
+                {drawerContent.detail.note && (
+                  <Typography sx={{ fontSize: 11.5, color: t.text3, mt: 1.5, lineHeight: 1.6 }}>
+                    {drawerContent.detail.note}
+                  </Typography>
+                )}
+              </Panel>
 
-            {/* Footer */}
-            <Box sx={{
-              p: '16px 20px',
-              bgcolor: t.bg1,
-              borderTop: `1px solid ${t.border}`,
-            }}>
-              <Button
-                onClick={closeDrawer}
-                sx={{ ...btnPrimarySx, width: '100%', justifyContent: 'center' }}
-              >
-                Fermer
-              </Button>
-            </Box>
-          </Box>
-        )}
+              <Panel sx={{ p: 2 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Contexte réservation</Typography>
+                <Stack spacing={1.1}>
+                  <KV k="Réservation" v={reservation.code} mono />
+                  <KV k="Guest" v={reservation.guest} />
+                  <KV k="Séjour" v={reservation.stay} mono divider />
+                </Stack>
+              </Panel>
+            </Stack>
+          ) : null}
+        </Box>
       </Drawer>
+
+      <Dialog open={Boolean(messagePreview)} onClose={closeMessagePreview} fullWidth maxWidth="sm">
+        <DialogTitle>{messagePreview?.title}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.25}>
+            <Typography sx={{ fontSize: 12, color: t.text3 }}>
+              {messagePreview?.channel} · {messagePreview?.template} · {messagePreview?.schedule}
+            </Typography>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>
+              Destinataire: {messagePreview?.recipient}
+            </Typography>
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: t.bg2,
+                borderRadius: 2,
+                border: `1px solid ${t.border}`,
+                whiteSpace: 'pre-wrap',
+                fontSize: 13,
+                lineHeight: 1.7,
+                color: t.text2,
+              }}
+            >
+              {messagePreview?.body}
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeMessagePreview} sx={btnGhostSx}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
     </DashboardWrapper>
-  );
-}
-
-// ─── Drawer Detail Row helper ──────────────────────────────────
-type DetailRowProps = { label: string; value: string; mono?: boolean };
-
-function DetailRow({ label, value, mono }: DetailRowProps) {
-  return (
-    <Box>
-      <Typography sx={{
-        fontSize: 11, color: t.text3, mb: 0.5,
-        fontFamily: 'Geist Mono', letterSpacing: 0.4,
-      }}>{label}</Typography>
-      <Typography sx={{
-        fontSize: 13, fontWeight: 600,
-        fontFamily: mono ? 'Geist Mono' : 'inherit',
-      }}>{value}</Typography>
-    </Box>
   );
 }
 
@@ -516,7 +812,9 @@ type KVProps = { k: string; v: React.ReactNode; mono?: boolean; divider?: boolea
 
 function KV({ k, v, mono, divider }: KVProps) {
   return (
-    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{
+    <Stack direction="row" sx={{
+      justifyContent: 'space-between',
+      alignItems: 'center',
       pt: divider ? 1.125 : 0,
       borderTop: divider ? `1px dashed ${t.border}` : 'none',
     }}>
@@ -534,7 +832,7 @@ type DistRowProps = { color: string; label: string; count: string; pct: number }
 function DistRow({ color, label, count, pct }: DistRowProps) {
   return (
     <Box>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
         <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color }} />
         <Typography sx={{ flex: 1, fontSize: 11.5, color: t.text2 }}>{label}</Typography>
         <Typography sx={{ fontFamily: 'Geist Mono', fontSize: 11, color: t.text3 }}>{count}</Typography>

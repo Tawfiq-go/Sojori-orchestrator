@@ -5,8 +5,8 @@
 import React, { useState, useMemo } from 'react';
 import {
   Box, Stack, Accordion, AccordionSummary, AccordionDetails, Typography, Button,
-  TextField, Select, MenuItem, Chip, FormControl, FormLabel, RadioGroup,
-  FormControlLabel, Radio, Badge, IconButton,
+  TextField, Select, MenuItem, Chip, FormControl, RadioGroup,
+  FormControlLabel, Radio,
 } from '@mui/material';
 
 const T = {
@@ -84,7 +84,7 @@ export default function AdvancedTaskFilters({ filters: initial = {}, onChange }:
     <Accordion expanded={open} onChange={() => setOpen(!open)} disableGutters elevation={0}
       sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2, '&:before': { display: 'none' } }}>
       <AccordionSummary expandIcon={<Box>▾</Box>} sx={{ minHeight: 52, px: 2 }}>
-        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flex: 1 }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flex: 1 }}>
           <Typography sx={{ fontSize: 14, fontWeight: 700 }}>🔍 Filtres avancés</Typography>
           {activeCount > 0 && (
             <Chip size="small" label={`${activeCount} actif${activeCount > 1 ? 's' : ''}`}
@@ -109,7 +109,7 @@ export default function AdvancedTaskFilters({ filters: initial = {}, onChange }:
           {/* Period chips */}
           <Box sx={{ gridColumn: { md: 'span 3' } }}>
             <FilterLabel>Période</FilterLabel>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
               {[
                 { v: 'today', l: 'Aujourd\'hui' },
                 { v: 'tomorrow', l: 'Demain' },
@@ -171,18 +171,18 @@ export default function AdvancedTaskFilters({ filters: initial = {}, onChange }:
 
           {/* Date range */}
           <FilterBox label="De">
-            <TextField size="small" type="date" InputLabelProps={{ shrink: true }}
+            <TextField size="small" type="date" slotProps={{ inputLabel: { shrink: true } }}
               value={filters.dateFrom || ''} onChange={(e) => update('dateFrom', e.target.value)} />
           </FilterBox>
           <FilterBox label="À">
-            <TextField size="small" type="date" InputLabelProps={{ shrink: true }}
+            <TextField size="small" type="date" slotProps={{ inputLabel: { shrink: true } }}
               value={filters.dateTo || ''} onChange={(e) => update('dateTo', e.target.value)} />
           </FilterBox>
 
           {/* Sub-types (multi-chip) */}
           <Box sx={{ gridColumn: { md: 'span 3' } }}>
             <FilterLabel>Sous-types ({filters.subtypes?.length || 0})</FilterLabel>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
               {SUBTYPES.map(s => (
                 <Chip key={s} label={s} clickable size="small"
                   color={filters.subtypes?.includes(s) ? 'primary' : 'default'}
@@ -195,7 +195,7 @@ export default function AdvancedTaskFilters({ filters: initial = {}, onChange }:
           {/* Statuses */}
           <Box sx={{ gridColumn: { md: 'span 3' } }}>
             <FilterLabel>Statuts ({filters.statuses?.length || 0})</FilterLabel>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
               {STATUSES.map(s => {
                 const on = filters.statuses?.includes(s.id);
                 return (
@@ -216,7 +216,7 @@ export default function AdvancedTaskFilters({ filters: initial = {}, onChange }:
           {/* Listings */}
           <Box sx={{ gridColumn: { md: 'span 3' } }}>
             <FilterLabel>Listings ({filters.listingIds?.length || 0})</FilterLabel>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
               {LISTINGS.map(l => (
                 <Chip key={l} label={l} clickable size="small"
                   color={filters.listingIds?.includes(l) ? 'primary' : 'default'}
@@ -229,7 +229,7 @@ export default function AdvancedTaskFilters({ filters: initial = {}, onChange }:
           {/* Staff */}
           <Box sx={{ gridColumn: { md: 'span 3' } }}>
             <FilterLabel>Staff ({filters.staffCodes?.length || 0})</FilterLabel>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
               {STAFF.map(s => (
                 <Chip key={s} label={s} clickable size="small"
                   color={filters.staffCodes?.includes(s) ? 'primary' : 'default'}
@@ -243,7 +243,7 @@ export default function AdvancedTaskFilters({ filters: initial = {}, onChange }:
           <Box sx={{ gridColumn: { md: 'span 3' }, display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
             <Box>
               <FilterLabel>Zones ({filters.zones?.length || 0})</FilterLabel>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
                 {ZONES.map(z => (
                   <Chip key={z} label={z} clickable size="small"
                     color={filters.zones?.includes(z) ? 'primary' : 'default'}
@@ -254,7 +254,7 @@ export default function AdvancedTaskFilters({ filters: initial = {}, onChange }:
             </Box>
             <Box>
               <FilterLabel>État logement ({filters.statusCards?.length || 0})</FilterLabel>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
                 {STATUS_CARDS.map(s => (
                   <Chip key={s} label={s} clickable size="small"
                     color={filters.statusCards?.includes(s) ? 'primary' : 'default'}

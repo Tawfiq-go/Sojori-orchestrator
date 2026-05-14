@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CommunicationsSectionToggle } from '../components/CommunicationsSectionToggle';
+import { MessageComposeModal, type MessageComposeTemplate } from '../components/modals/MessageComposeModal';
+import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
+import type { Task } from '../data/mockTasks';
 import {
   PageHeader, ChatLayout, ConversationList, ChatThread, ChatAside, AsideSection, Revenue,
   btnGhostSx, btnSmSx, btnAiSx,
@@ -25,6 +28,14 @@ function RowKV({ k, v, mono, divider }: { k: string; v: any; mono?: boolean; div
 export function CommsPage() {
   const [activeConv, setActiveConv] = useState('sarah');
   const [toast, setToast] = useState('');
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [composeModal, setComposeModal] = useState<{
+    title: string;
+    subtitle: string;
+    initialMessage: string;
+    sendLabel: string;
+    templates: MessageComposeTemplate[];
+  } | null>(null);
   const [filters, setFilters] = useState({
     reservation: '',
     client: '',
@@ -65,6 +76,40 @@ export function CommsPage() {
 
   const conv = conversations.find(c => c.id === activeConv) || conversations[0];
   const messages = messagesByConversation[activeConv] || [];
+  const guestTemplates = useMemo<MessageComposeTemplate[]>(
+    () => [
+      {
+        label: 'Welcome',
+        body: `Bonjour ${conv?.name.split(' ')[0] || 'guest'},\n\nBienvenue chez Sojori. Je reste disponible si vous avez besoin de quoi que ce soit pendant votre séjour.`,
+      },
+      {
+        label: 'Code accès',
+        body: `Bonjour ${conv?.name.split(' ')[0] || 'guest'},\n\nVoici le rappel de vos codes d'accès:\n- Porte principale: 4821\n- Coffre à clés: 9907\n\nDites-moi si vous avez besoin d'aide à l'arrivée.`,
+      },
+      {
+        label: 'Créer tâche',
+        body: `Bonjour équipe,\n\nMerci de préparer une intervention pour la réservation ${conv?.reservationNumber || 'RES-XXXX'}.\n\nPriorité: standard.`,
+      },
+    ],
+    [conv],
+  );
+  const aiTemplates = useMemo<MessageComposeTemplate[]>(
+    () => [
+      {
+        label: 'Pickup',
+        body: `Bonjour ${conv?.name.split(' ')[0] || 'guest'},\n\nNous pouvons organiser votre transfert aéroport. Merci de me confirmer le nombre de passagers et les bagages.`,
+      },
+      {
+        label: 'Early check-in',
+        body: `Bonjour ${conv?.name.split(' ')[0] || 'guest'},\n\nJe vérifie la disponibilité de l'appartement pour un early check-in et je vous confirme cela très vite.`,
+      },
+      {
+        label: 'Upsell',
+        body: `Bonjour ${conv?.name.split(' ')[0] || 'guest'},\n\nJe peux aussi vous proposer un transport privé ou un panier d'accueil premium si vous le souhaitez.`,
+      },
+    ],
+    [conv],
+  );
   const filteredConversations = useMemo(() => {
     return conversations.filter((conversation) => {
       const reservationMatch =
@@ -128,12 +173,51 @@ export function CommsPage() {
     setToast('Message envoyé');
   };
 
+  const openComposeModal = (mode: 'templates' | 'ai' | 'welcome' | 'access') => {
+    if (!conv) return;
+
+    if (mode === 'ai') {
+      setComposeModal({
+        title: 'Réponse AI',
+        subtitle: `${conv.name} · ${conv.reservationNumber}`,
+        initialMessage: aiTemplates[0]?.body || '',
+        sendLabel: 'Envoyer la réponse',
+        templates: aiTemplates,
+      });
+      return;
+    }
+
+    if (mode === 'access') {
+      setComposeModal({
+        title: 'Renvoyer code d\'accès',
+        subtitle: `${conv.name} · ${conv.listing}`,
+        initialMessage: guestTemplates[1]?.body || '',
+        sendLabel: 'Renvoyer',
+        templates: guestTemplates,
+      });
+      return;
+    }
+
+    setComposeModal({
+      title: mode === 'welcome' ? 'Envoyer template welcome' : 'Templates WhatsApp',
+      subtitle: `${conv.name} · ${conv.listing}`,
+      initialMessage: guestTemplates[0]?.body || '',
+      sendLabel: 'Envoyer',
+      templates: guestTemplates,
+    });
+  };
+
+  const handleSaveTask = (task: Task) => {
+    setTaskModalOpen(false);
+    setToast(`Tâche ${task.itemNumber} créée`);
+  };
+
   return (
     <DashboardWrapper breadcrumb={['Communications', 'WhatsApp Guests']}>
       <PageHeader title="WhatsApp Guests">
         <CommunicationsSectionToggle />
-        <Button sx={{ ...btnGhostSx, ...btnSmSx }}>📋 Templates</Button>
-        <Button sx={btnAiSx}>✨ Réponse AI</Button>
+        <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => openComposeModal('templates')}>📋 Templates</Button>
+        <Button sx={btnAiSx} onClick={() => openComposeModal('ai')}>✨ Réponse AI</Button>
       </PageHeader>
 
       <Stack
@@ -234,16 +318,53 @@ export function CommsPage() {
           </AsideSection>
           <AsideSection title="Actions rapides">
             <Stack spacing={0.75}>
-              {['📧 Envoyer template welcome', '🔑 Renvoyer code accès', '📋 Créer tâche', '👤 Voir profil voyageur'].map(a => (
-                <Button key={a} sx={{
-                  ...btnGhostSx, ...btnSmSx,
-                  justifyContent: 'flex-start', fontWeight: 500, color: t.text2,
-                }}>{a}</Button>
-              ))}
+              <Button
+                sx={{ ...btnGhostSx, ...btnSmSx, justifyContent: 'flex-start', fontWeight: 500, color: t.text2 }}
+                onClick={() => openComposeModal('welcome')}
+              >
+                📧 Envoyer template welcome
+              </Button>
+              <Button
+                sx={{ ...btnGhostSx, ...btnSmSx, justifyContent: 'flex-start', fontWeight: 500, color: t.text2 }}
+                onClick={() => openComposeModal('access')}
+              >
+                🔑 Renvoyer code accès
+              </Button>
+              <Button
+                sx={{ ...btnGhostSx, ...btnSmSx, justifyContent: 'flex-start', fontWeight: 500, color: t.text2 }}
+                onClick={() => setTaskModalOpen(true)}
+              >
+                📋 Créer tâche
+              </Button>
+              <Button sx={{
+                ...btnGhostSx, ...btnSmSx,
+                justifyContent: 'flex-start', fontWeight: 500, color: t.text2,
+              }} onClick={() => setToast('Profil voyageur à brancher')}>
+                👤 Voir profil voyageur
+              </Button>
             </Stack>
           </AsideSection>
         </ChatAside>
       </ChatLayout>
+
+      {composeModal ? (
+        <MessageComposeModal
+          open
+          onClose={() => setComposeModal(null)}
+          onSend={handleSendMessage}
+          title={composeModal.title}
+          subtitle={composeModal.subtitle}
+          initialMessage={composeModal.initialMessage}
+          sendLabel={composeModal.sendLabel}
+          templates={composeModal.templates}
+        />
+      ) : null}
+
+      <CreateTaskModal
+        open={taskModalOpen}
+        onClose={() => setTaskModalOpen(false)}
+        onSave={handleSaveTask}
+      />
 
       <Snackbar open={Boolean(toast)} autoHideDuration={2500} onClose={() => setToast('')}>
         <Alert severity="success" variant="filled" onClose={() => setToast('')}>

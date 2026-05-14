@@ -77,6 +77,7 @@ export function ClientsPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [reservationOpen, setReservationOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const countries = useMemo(
     () => Array.from(new Set(clients.map((client) => client.country))).sort(),
@@ -200,7 +201,14 @@ export function ClientsPage() {
             <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => toggleVip(row.id)}>
               {row.vipStatus ? 'UnVIP' : 'VIP'}
             </Button>
-            <Button sx={{ ...btnGhostSx, ...btnSmSx }} color="error" onClick={() => removeClient(row.id)}>
+            <Button
+              sx={{ ...btnGhostSx, ...btnSmSx }}
+              color="error"
+              onClick={() => {
+                setSelectedClient(row);
+                setDeleteOpen(true);
+              }}
+            >
               Supprimer
             </Button>
           </Stack>
@@ -460,6 +468,31 @@ export function ClientsPage() {
             }}
           >
             Créer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Supprimer client</DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ fontSize: 12.5 }}>
+            {selectedClient
+              ? `Confirmer la suppression de ${selectedClient.name} ? Le client sera marqué comme deleted.`
+              : 'Confirmer la suppression du client ?'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteOpen(false)}>Annuler</Button>
+          <Button
+            color="error"
+            onClick={() => {
+              if (selectedClient) {
+                removeClient(selectedClient.id);
+              }
+              setDeleteOpen(false);
+            }}
+          >
+            Supprimer
           </Button>
         </DialogActions>
       </Dialog>

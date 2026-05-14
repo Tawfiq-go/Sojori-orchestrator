@@ -88,7 +88,7 @@ Verification effectuee sur le repo `Sojori-orchestrator`:
 Mise a jour finale effectuee en restant strictement dans le scope Agent 3 du prompt composants:
 
 - `src/pages/PricingPage.tsx` branche maintenant le composant Claude Design `src/components/pricing/PricingRulesEditor.tsx`
-- `src/pages/ChannelsPage.tsx` utilise maintenant `src/components/channels/ChannelsDashboard.tsx` comme composant principal de page
+- `src/pages/ChannelsPage.tsx` utilise maintenant le dashboard riche `src/components/catalogue/ChannelsDashboard.tsx` sur la route live pour exposer les dialogs utiles
 - `src/pages/ListingsCataloguePage.tsx` integre `src/components/filters/ColumnSelector.tsx`
 - `src/pages/ClientsPage.tsx` integre `src/components/filters/ColumnSelector.tsx`
 
@@ -115,6 +115,39 @@ Adjustements faits uniquement pour rendre cette integration exploitable:
 - composants Agent 3 integres
 - typecheck OK
 - lints sur fichiers modifies OK
+
+## 9. Auto-audit modals Agent 3
+
+Auto-audit realise sur l'ancien `sojori-dashboard` puis reproduction ciblee dans `Sojori-orchestrator` sur les interactions les plus utiles du perimetre Catalogue.
+
+### Modals / drawers ajoutes ou reactivees
+
+- `src/pages/ChannelsPage.tsx`
+  - rebranchement du dashboard channels riche avec:
+    - dialog CRUD mapping RU
+    - wizard d'import RU multi-etapes
+- `src/pages/ListingsCataloguePage.tsx`
+  - dialog `Distribution OTA`
+  - dialog `Configuration listing`
+    - sections: orchestration, acces, WhatsApp, conciergerie, support, regles, menage & services
+- `src/components/pricing/PricingRulesEditor.tsx`
+  - dialog de confirmation avant suppression d'une regle
+- `src/pages/ClientsPage.tsx`
+  - dialog de confirmation avant suppression client
+- `src/pages/WhatsAppContactsPage.tsx`
+  - dialog `Filtres avances WhatsApp`
+  - dialog `Detail reservation`
+  - drawer `Modifier contact WhatsApp`
+- `src/pages/CRMPage.tsx`
+  - dialog `Detail opportunite`
+  - dialog de confirmation suppression lead
+- `src/pages/OnboardingPage.tsx`
+  - dialog `Detail onboarding`
+
+### Verification de cette passe
+
+- `pnpm exec tsc --noEmit` OK apres ajout des modals
+- diagnostics IDE OK sur les fichiers Agent 3 modifies
 
 ## Notes
 

@@ -201,8 +201,13 @@ export function CalendarInventoryPage() {
           startDate={new Date(year, month, 1)}
           days={30}
           onCellClick={(propertyId, dayIdx) => {
-            // TODO: Open drawer for specific property + day
-            console.log('Clicked:', propertyId, dayIdx);
+            // Calculer la date pour le jour cliqué
+            const clickedDate = new Date(year, month, 1);
+            clickedDate.setDate(clickedDate.getDate() + dayIdx);
+            const dateString = `${year}-${String(month+1).padStart(2,'0')}-${String(clickedDate.getDate()).padStart(2,'0')}`;
+
+            // Ouvrir le drawer
+            setSelectedDate(dateString);
           }}
         />
       ) : (

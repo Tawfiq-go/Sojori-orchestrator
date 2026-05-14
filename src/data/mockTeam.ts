@@ -1,4 +1,4 @@
-import { TeamMember } from '../components/team/AddTeamMemberModal';
+import type { TeamMember } from '../components/team/AddTeamMemberModal';
 
 // MOCK TEAM DATA - 15 membres with full TeamMember interface
 export const mockTeamMembers: TeamMember[] = [
@@ -241,3 +241,45 @@ export const mockStaffStats: Record<string, TeamMemberStats> = {
   STAFF005: { tasksCompleted: 104, tasksTotal: 110, qualityRating: 4.95, avgDelay: 0.2 },
   STAFF006: { tasksCompleted: 25, tasksTotal: 30, qualityRating: 4.4, avgDelay: 1.5 },
 };
+
+// MOCK DATA for new fields (from ancien dashboard)
+export const mockOwners = [
+  { id: 'owner-1', name: 'Sojori Company', email: 'contact@sojori.com' },
+  { id: 'owner-2', name: 'Atlas Rentals', email: 'info@atlasrentals.com' },
+  { id: 'owner-3', name: 'Medina Properties', email: 'contact@medinaproperties.com' },
+];
+
+export const mockListingsForStaff = [
+  { id: 'listing-1', name: 'Villa Atlas Loft' },
+  { id: 'listing-2', name: 'Riad Médina' },
+  { id: 'listing-3', name: 'Appartement Gueliz' },
+  { id: 'listing-4', name: 'Villa Palmeraie' },
+  { id: 'listing-5', name: 'Studio Hivernage' },
+];
+
+export const mockTaskTypesForStaff = [
+  { id: 'CLEAN', label: 'Ménage' },
+  { id: 'MAINTENANCE', label: 'Maintenance' },
+  { id: 'CHECKIN', label: 'Check-in' },
+  { id: 'CHECKOUT', label: 'Check-out' },
+  { id: 'DRIVER', label: 'Transport' },
+  { id: 'CONCIERGE', label: 'Conciergerie' },
+  { id: 'PHOTOS', label: 'Photos' },
+];
+
+export const mockCities = [
+  'Marrakech',
+  'Casablanca',
+  'Rabat',
+  'Fès',
+  'Tanger',
+  'Agadir',
+  'Essaouira',
+];
+
+export const mockCountries = [
+  'Maroc',
+  'France',
+  'Espagne',
+  'Italie',
+];

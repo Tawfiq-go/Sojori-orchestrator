@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CommunicationsSectionToggle } from '../components/CommunicationsSectionToggle';
+import { MessageComposeModal, type MessageComposeTemplate } from '../components/modals/MessageComposeModal';
+import { CreateReservationModal } from '../components/modals/CreateReservationModal';
+import type { Reservation } from '../data/mockReservations';
 import {
   PageHeader, ChatLayout, ConversationList, ChatThread, ChatAside, AsideSection, Revenue,
   Badge, SourcePill, btnPrimarySx, btnGhostSx, btnSmSx,
@@ -200,6 +203,14 @@ function RowKV({ k, v, mono, divider }: { k: string; v: any; mono?: boolean; div
 export function OTAMessagesPage() {
   const [activeConv, setActiveConv] = useState('sarah-airbnb');
   const [toast, setToast] = useState('');
+  const [reservationModalOpen, setReservationModalOpen] = useState(false);
+  const [composeModal, setComposeModal] = useState<{
+    title: string;
+    subtitle: string;
+    initialMessage: string;
+    sendLabel: string;
+    templates: MessageComposeTemplate[];
+  } | null>(null);
   const [filters, setFilters] = useState({
     searchTerm: '',
     ota: 'all',
@@ -212,6 +223,27 @@ export function OTAMessagesPage() {
 
   const conv = conversations.find(c => c.id === activeConv) || conversations[0];
   const messages = messagesByConversation[activeConv] || [];
+  const messageTemplates = useMemo<MessageComposeTemplate[]>(
+    () => [
+      {
+        label: 'Bienvenue',
+        body: `Bonjour ${conv?.guestName.split(' ')[0] || 'guest'},\n\nMerci pour votre message sur ${conv?.ota || 'OTA'}. Nous serons ravis de vous accueillir à ${conv?.listingName || 'votre logement'}.`,
+      },
+      {
+        label: 'Code accès',
+        body: `Bonjour ${conv?.guestName.split(' ')[0] || 'guest'},\n\nVoici vos informations d'accès pour ${conv?.listingName || 'le logement'}:\n- Porte principale: 4821\n- Coffre à clés: 9907`,
+      },
+      {
+        label: 'Guide local',
+        body: `Bonjour ${conv?.guestName.split(' ')[0] || 'guest'},\n\nJe vous envoie notre guide local avec restaurants, transferts et activités recommandées autour de ${conv?.listingName || 'votre séjour'}.`,
+      },
+      {
+        label: 'Transport',
+        body: `Bonjour ${conv?.guestName.split(' ')[0] || 'guest'},\n\nNous pouvons organiser un transfert privé depuis l'aéroport. Merci de me confirmer l'heure d'arrivée et le nombre de passagers.`,
+      },
+    ],
+    [conv],
+  );
   const filteredConversations = useMemo(() => {
     return conversations.filter((conversation) => {
       const searchMatch =
@@ -291,6 +323,23 @@ export function OTAMessagesPage() {
       ),
     );
     setToast(`Message envoyé via ${conv.ota}`);
+  };
+
+  const openComposeModal = (templateIndex = 0) => {
+    if (!conv) return;
+
+    setComposeModal({
+      title: 'Composer une réponse OTA',
+      subtitle: `${conv.guestName} · ${conv.ota} · ${conv.reservationNumber}`,
+      initialMessage: messageTemplates[templateIndex]?.body || '',
+      sendLabel: `Envoyer via ${conv.ota}`,
+      templates: messageTemplates,
+    });
+  };
+
+  const handleCreateReservation = (reservation: Partial<Reservation>) => {
+    setReservationModalOpen(false);
+    setToast(`Réservation ${reservation.reservationNumber || 'créée'}`);
   };
 
   return (
@@ -391,7 +440,7 @@ export function OTAMessagesPage() {
           <Typography sx={{ fontSize: 20 }}>📨</Typography>
           <Box>
             <Typography sx={{ fontSize: 14, fontWeight: 600, color: t.text }}>
-              Unified Inbox OTA - Messages Airbnb + Booking.com
+              Unified Inbox OTA - Messages Airbnb, Booking.com et Vrbo
             </Typography>
             <Typography sx={{ fontSize: 13, color: t.text2 }}>
               Toutes les conversations avec vos guests depuis les plateformes OTA centralisées ici.
@@ -467,19 +516,42 @@ export function OTAMessagesPage() {
           {/* Quick Actions */}
           <AsideSection title="Actions rapides">
             <Stack spacing={0.75}>
-              {[
-                '📧 Template bienvenue',
-                '🔑 Code accès',
-                '🗺️ Guide local',
-                '🚕 Réserver transport',
-                '👤 Profil guest',
-                '⭐ Voir reviews',
-              ].map(a => (
-                <Button key={a} sx={{
-                  ...btnGhostSx, ...btnSmSx,
-                  justifyContent: 'flex-start', fontWeight: 500, color: t.text2,
-                }}>{a}</Button>
-              ))}
+              <Button
+                sx={{ ...btnGhostSx, ...btnSmSx, justifyContent: 'flex-start', fontWeight: 500, color: t.text2 }}
+                onClick={() => openComposeModal(0)}
+              >
+                📧 Template bienvenue
+              </Button>
+              <Button
+                sx={{ ...btnGhostSx, ...btnSmSx, justifyContent: 'flex-start', fontWeight: 500, color: t.text2 }}
+                onClick={() => openComposeModal(1)}
+              >
+                🔑 Code accès
+              </Button>
+              <Button
+                sx={{ ...btnGhostSx, ...btnSmSx, justifyContent: 'flex-start', fontWeight: 500, color: t.text2 }}
+                onClick={() => openComposeModal(2)}
+              >
+                🗺️ Guide local
+              </Button>
+              <Button
+                sx={{ ...btnGhostSx, ...btnSmSx, justifyContent: 'flex-start', fontWeight: 500, color: t.text2 }}
+                onClick={() => openComposeModal(3)}
+              >
+                🚕 Réserver transport
+              </Button>
+              <Button
+                sx={{ ...btnGhostSx, ...btnSmSx, justifyContent: 'flex-start', fontWeight: 500, color: t.text2 }}
+                onClick={() => setReservationModalOpen(true)}
+              >
+                ➕ Créer réservation
+              </Button>
+              <Button sx={{
+                ...btnGhostSx, ...btnSmSx,
+                justifyContent: 'flex-start', fontWeight: 500, color: t.text2,
+              }} onClick={() => setToast('Vue reviews à brancher')}>
+                ⭐ Voir reviews
+              </Button>
             </Stack>
           </AsideSection>
 
@@ -503,6 +575,25 @@ export function OTAMessagesPage() {
           </Box>
         </ChatAside>
       </ChatLayout>
+
+      {composeModal ? (
+        <MessageComposeModal
+          open
+          onClose={() => setComposeModal(null)}
+          onSend={handleSendMessage}
+          title={composeModal.title}
+          subtitle={composeModal.subtitle}
+          initialMessage={composeModal.initialMessage}
+          sendLabel={composeModal.sendLabel}
+          templates={composeModal.templates}
+        />
+      ) : null}
+
+      <CreateReservationModal
+        open={reservationModalOpen}
+        onClose={() => setReservationModalOpen(false)}
+        onSave={handleCreateReservation}
+      />
 
       <Snackbar open={Boolean(toast)} autoHideDuration={2500} onClose={() => setToast('')}>
         <Alert severity="success" variant="filled" onClose={() => setToast('')}>

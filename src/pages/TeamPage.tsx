@@ -28,8 +28,10 @@ import {
 } from '@mui/material';
 import { MoreVert as MoreVertIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
-import { AddTeamMemberModal, TeamMember } from '../components/team/AddTeamMemberModal';
-import { TeamFilters, applyTeamFilters, defaultTeamFilters, TeamFilterState } from '../components/team/TeamFilters';
+import { AddTeamMemberModal } from '../components/team/AddTeamMemberModal';
+import type { TeamMember } from '../components/team/AddTeamMemberModal';
+import { TeamFilters, applyTeamFilters, defaultTeamFilters } from '../components/team/TeamFilters';
+import type { TeamFilterState } from '../components/team/TeamFilters';
 import { mockTeamMembers, mockStaffStats } from '../data/mockTeam';
 
 export function TeamPage() {
@@ -241,7 +243,7 @@ export function TeamPage() {
       key: 'subTypes',
       label: 'Sous-types',
       render: (row: TeamMember) => (
-        <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ maxWidth: 200 }}>
+        <Stack direction="row" spacing={0.5} sx={{ maxWidth: 200, flexWrap: 'wrap' }}>
           {row.subTypes.slice(0, 2).map((sub, idx) => (
             <Chip
               key={idx}
@@ -275,7 +277,7 @@ export function TeamPage() {
       key: 'languages',
       label: 'Langues',
       render: (row: TeamMember) => (
-        <Stack direction="row" spacing={0.5} flexWrap="wrap">
+        <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
           {row.languages.slice(0, 2).map((lang, idx) => (
             <Chip
               key={idx}
@@ -299,7 +301,7 @@ export function TeamPage() {
       key: 'skills',
       label: 'Compétences',
       render: (row: TeamMember) => (
-        <Stack direction="row" spacing={0.5} flexWrap="wrap">
+        <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
           {row.skills.slice(0, 2).map((skill, idx) => (
             <Chip
               key={idx}
@@ -469,7 +471,7 @@ export function TeamPage() {
       <Box sx={{ px: { xs: 2, md: 3 }, pb: 4 }}>
         <Stack spacing={3}>
           {/* Stats */}
-          <Stack direction="row" spacing={2} flexWrap="wrap">
+          <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }}>
             <StatCard title="Total Staff" value={`${stats.total}`} icon="👥" color={t.primary} />
             <StatCard title="Actifs" value={`${stats.active}`} icon="✅" color={t.success} />
             <StatCard title="Taux completion" value={`${stats.completionRate}%`} icon="📊" color={t.ai} />
@@ -486,7 +488,7 @@ export function TeamPage() {
           />
 
           {/* Table */}
-          <DataTable columns={columns} data={filteredStaff} emptyMessage="Aucun membre trouvé" />
+          <DataTable columns={columns} rows={filteredStaff} />
         </Stack>
       </Box>
 

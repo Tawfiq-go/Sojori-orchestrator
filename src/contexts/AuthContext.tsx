@@ -96,7 +96,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       const response = await authService.validateToken();
-      const refreshToken = state.refreshToken || getRefreshToken() || '';
+      const refreshToken = getRefreshToken() || '';
 
       if (response.newToken && refreshToken) {
         setTokens(response.newToken, refreshToken);
@@ -119,7 +119,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setState((prev) => ({ ...prev, loading: false }));
       }
     }
-  }, [logout, state.refreshToken]);
+  }, [logout]);
 
   const login = async (credentials: LoginCredentials): Promise<void> => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
@@ -224,13 +224,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
-    if (state.user || state.token) {
+    const hasPersistedSession = !!getToken() || !!getPersistedUser();
+
+    if (hasPersistedSession) {
       void checkAuth();
       return;
     }
 
     setState((prev) => ({ ...prev, loading: false }));
-  }, [checkAuth, state.token, state.user]);
+  }, [checkAuth]);
 
   const contextValue = useMemo<AuthContextType>(
     () => ({

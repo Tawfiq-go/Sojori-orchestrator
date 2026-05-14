@@ -27,7 +27,8 @@ import {
 } from '@mui/material';
 import { MoreVert as MoreVertIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
-import { AddTeamMemberModal, TeamMember } from '../components/team/AddTeamMemberModal';
+import { AddTeamMemberModal } from '../components/team/AddTeamMemberModal';
+import type { TeamMember } from '../components/team/AddTeamMemberModal';
 
 // MOCK DATA - 15 staff membres
 const MOCK_STAFF = [

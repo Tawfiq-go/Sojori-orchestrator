@@ -1,3 +1,6 @@
+// ════════════════════════════════════════════════════════════════════
+// Sojori — TaskFilters · Filtres avancés tâches (v20260514-2010)
+// ════════════════════════════════════════════════════════════════════
 import { useState } from 'react';
 import {
   Box,
@@ -22,8 +25,9 @@ import {
   FilterList as FilterListIcon,
 } from '@mui/icons-material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
-import { Task, taskTypes, taskSubTypes, mockListings, mockStaff } from '../../data/mockTasks';
+import { taskTypes, taskSubTypes, mockListings, mockStaff, type Task } from '../../data/mockTasks';
 
+// Exported interface for task filter state
 export interface TaskFilterState {
   searchText: string;
   origin: 'all' | 'task' | 'client';

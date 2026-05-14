@@ -10,7 +10,6 @@ import {
   LineChart,
   Pie,
   PieChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -22,6 +21,7 @@ import {
   FilterChip,
   PageHeader,
   Panel,
+  StableChart,
   StatCard,
   StatsRow,
   btnGhostSx,
@@ -192,9 +192,9 @@ export function DashboardPage() {
         }}
       >
         <Panel title="Revenus par jour / semaine / mois" desc="Revenue trend + bookings">
-          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <LineChart data={mockRevenueChart}>
+          <StableChart height={320}>
+            {({ width, height }) => (
+              <LineChart width={width} height={height} data={mockRevenueChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="date" />
                 <YAxis yAxisId="revenue" />
@@ -204,20 +204,24 @@ export function DashboardPage() {
                 <Line yAxisId="revenue" type="monotone" dataKey="revenue" stroke="#e6b022" strokeWidth={3} />
                 <Line yAxisId="bookings" type="monotone" dataKey="bookings" stroke="#8b5cf6" strokeWidth={2} />
               </LineChart>
-            </ResponsiveContainer>
-          </Box>
+            )}
+          </StableChart>
         </Panel>
 
         <Panel title="Reservations par source" desc="Airbnb, Booking, Direct, Vrbo">
-          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <PieChart>
+          <StableChart height={320}>
+            {({ width, height }) => {
+              const outerRadius = Math.max(70, Math.min(110, Math.floor(Math.min(width, height) * 0.34)));
+              const innerRadius = Math.max(40, outerRadius - 40);
+
+              return (
+                <PieChart width={width} height={height}>
                 <Pie
                   data={mockSourceDistribution}
                   dataKey="value"
                   nameKey="source"
-                  innerRadius={70}
-                  outerRadius={110}
+                  innerRadius={innerRadius}
+                  outerRadius={outerRadius}
                   paddingAngle={3}
                 >
                   {mockSourceDistribution.map((entry, index) => (
@@ -226,9 +230,10 @@ export function DashboardPage() {
                 </Pie>
                 <Tooltip />
                 <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </Box>
+                </PieChart>
+              );
+            }}
+          </StableChart>
         </Panel>
       </Box>
 
@@ -242,17 +247,17 @@ export function DashboardPage() {
         }}
       >
         <Panel title="Taux d’occupation par property" desc="Bar chart par actif">
-          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={mockOccupancyByProperty}>
+          <StableChart height={320}>
+            {({ width, height }) => (
+              <BarChart width={width} height={height} data={mockOccupancyByProperty}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="property" hide />
                 <YAxis />
                 <Tooltip />
                 <Bar dataKey="occupancy" radius={[8, 8, 0, 0]} fill="#10b981" />
               </BarChart>
-            </ResponsiveContainer>
-          </Box>
+            )}
+          </StableChart>
           <Stack spacing={1}>
             {mockOccupancyByProperty.map((property) => (
               <Stack
@@ -270,9 +275,9 @@ export function DashboardPage() {
         </Panel>
 
         <Panel title="Check-ins / Check-outs" desc="Vue jour par jour">
-          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={mockCheckFlow}>
+          <StableChart height={320}>
+            {({ width, height }) => (
+              <BarChart width={width} height={height} data={mockCheckFlow}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="label" />
                 <YAxis />
@@ -281,8 +286,8 @@ export function DashboardPage() {
                 <Bar dataKey="checkIns" fill="#e6b022" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="checkOuts" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
-          </Box>
+            )}
+          </StableChart>
         </Panel>
       </Box>
 

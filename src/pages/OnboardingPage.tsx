@@ -18,6 +18,7 @@ export function OnboardingPage() {
   const { toast, showToast, hideToast } = useActionToast();
   const [items, setItems] = useState<OnboardingRecord[]>(() => getStoredOnboarding());
   const [draft, setDraft] = useState<OnboardingRecord | null>(null);
+  const [detail, setDetail] = useState<OnboardingRecord | null>(null);
 
   const stats = useMemo(() => {
     return {
@@ -84,6 +85,9 @@ export function OnboardingPage() {
                 </Typography>
               )}
               <Stack direction="row" spacing={1}>
+                <Button sx={btnGhostSx} onClick={() => setDetail(item)}>
+                  Voir détail
+                </Button>
                 <Button sx={btnGhostSx} onClick={() => setDraft(item)}>
                   Modifier
                 </Button>
@@ -163,6 +167,40 @@ export function OnboardingPage() {
           >
             Sauvegarder
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!detail} onClose={() => setDetail(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Détail onboarding</DialogTitle>
+        <DialogContent dividers>
+          {detail && (
+            <Stack spacing={1.5}>
+              <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{detail.ownerName}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Company: {detail.company}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Étape: {detail.step}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Progression: {detail.progress}%</Typography>
+              <Typography sx={{ fontSize: 12 }}>Status: {detail.status}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Listings: {detail.listings}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Dernière mise à jour: {detail.updatedAt}</Typography>
+              <Typography sx={{ fontSize: 12 }}>
+                Blockers: {detail.blockers.length > 0 ? detail.blockers.join(', ') : 'Aucun'}
+              </Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetail(null)}>Fermer</Button>
+          {detail && (
+            <Button
+              sx={btnPrimarySx}
+              onClick={() => {
+                setDetail(null);
+                setDraft(detail);
+              }}
+            >
+              Modifier
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

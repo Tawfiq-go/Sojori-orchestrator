@@ -23,6 +23,9 @@ export function CRMPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [qualificationFilter, setQualificationFilter] = useState('all');
   const [draft, setDraft] = useState<CrmLeadRecord | null>(null);
+  const [selectedLead, setSelectedLead] = useState<CrmLeadRecord | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -112,6 +115,15 @@ export function CRMPage() {
             label: 'Actions',
             render: (row: any) => (
               <Stack direction="row" spacing={0.75}>
+                <Button
+                  sx={{ ...btnGhostSx, ...btnSmSx }}
+                  onClick={() => {
+                    setSelectedLead(row);
+                    setDetailOpen(true);
+                  }}
+                >
+                  Voir
+                </Button>
                 <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => setDraft(row)}>
                   Modifier
                 </Button>
@@ -131,12 +143,10 @@ export function CRMPage() {
                 <Button
                   sx={{ ...btnGhostSx, ...btnSmSx }}
                   color="error"
-                  onClick={() =>
-                    persist(
-                      leads.filter((lead) => lead.id !== row.id),
-                      'Lead supprimé',
-                    )
-                  }
+                  onClick={() => {
+                    setSelectedLead(row);
+                    setDeleteOpen(true);
+                  }}
                 >
                   Supprimer
                 </Button>
@@ -184,6 +194,72 @@ export function CRMPage() {
             }}
           >
             Sauvegarder
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Détail opportunité</DialogTitle>
+        <DialogContent dividers>
+          {selectedLead && (
+            <Stack spacing={1.5}>
+              <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{selectedLead.contactName}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Company: {selectedLead.company}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Email: {selectedLead.email}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Téléphone: {selectedLead.phone}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Source: {selectedLead.source}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Type: {selectedLead.type}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Properties: {selectedLead.properties}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Qualification: {selectedLead.qualification}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Status: {selectedLead.status}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Créé le: {selectedLead.createdAt}</Typography>
+              <Typography sx={{ fontSize: 12 }}>PMS: {selectedLead.pms ? 'Oui' : 'Non'}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Channel Manager: {selectedLead.channelManager ? 'Oui' : 'Non'}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Dynamic pricing: {selectedLead.dynamicPricing ? 'Oui' : 'Non'}</Typography>
+              <Typography sx={{ fontSize: 12 }}>Notes: {selectedLead.notes || 'Aucune note'}</Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailOpen(false)}>Fermer</Button>
+          {selectedLead && (
+            <Button
+              sx={btnPrimarySx}
+              onClick={() => {
+                setDetailOpen(false);
+                setDraft(selectedLead);
+              }}
+            >
+              Modifier
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Supprimer opportunité</DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ fontSize: 12.5 }}>
+            {selectedLead
+              ? `Confirmer la suppression de ${selectedLead.contactName} ?`
+              : 'Confirmer la suppression de cette opportunité ?'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteOpen(false)}>Annuler</Button>
+          <Button
+            color="error"
+            onClick={() => {
+              if (selectedLead) {
+                persist(
+                  leads.filter((lead) => lead.id !== selectedLead.id),
+                  'Lead supprimé',
+                );
+              }
+              setDeleteOpen(false);
+            }}
+          >
+            Supprimer
           </Button>
         </DialogActions>
       </Dialog>

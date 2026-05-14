@@ -1,21 +1,6 @@
-import {
-  setTokens,
-  clearTokens,
-} from '../utils/authUtils';
-import {
-  buildMockUserFromEmail,
-  clearPersistedUser,
-  clearResetEmail,
-  createMockTokens,
-  findUserByEmail,
-  getPersistedUser,
-  getResetEmail,
-  getStoredUsers,
-  persistResetEmail,
-  persistUser,
-  saveStoredUsers,
-} from '../data/mockAuth';
-import type { MockUser, RegisterPayload } from '../data/mockAuth';
+import apiClient from './apiClient';
+import { setTokens, clearTokens } from '../utils/authUtils';
+import { AUTH_CONFIG } from '../config/authConfig';
 
 // Types
 export interface LoginCredentials {
@@ -29,194 +14,258 @@ export interface ResetPasswordPayload {
   password: string;
 }
 
+export interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  phone?: string;
+  company?: string;
+  avatar?: string;
+}
+
 export interface AuthResponse {
   token: string;
   refreshToken: string;
-  user: MockUser;
+  user: User;
 }
 
 export interface ValidateTokenResponse {
   success: boolean;
   newToken?: string;
-  user?: MockUser;
+  user?: User;
+}
+
+export interface RegisterPayload {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  company: string;
+  termsAccepted: boolean;
+  newsletter: boolean;
 }
 
 /**
- * Service d'authentification
- * Version mock persistante pour Agent 1.
+ * Service d'authentification RÉEL
+ * Se connecte au backend production (dev.sojori.com)
  */
 const authService = {
   /**
-   * Connexion mock.
-   * Toute combinaison email/password est acceptée pour accélérer les démos.
+   * Connexion réelle à l'API
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const email = credentials.email.trim().toLowerCase();
-    const password = credentials.password.trim();
+    const { email, password, rememberMe } = credentials;
 
     if (!email || !password) {
       throw new Error('Veuillez renseigner un email et un mot de passe.');
     }
 
-    const existingUser = findUserByEmail(email);
-    const user = existingUser || buildMockUserFromEmail(email, password);
+    try {
+      const response = await apiClient.post(AUTH_CONFIG.API_URL + '/login', {
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
+        rememberMe: rememberMe || false,
+      });
 
-    if (!existingUser) {
-      const nextUsers = [user, ...getStoredUsers()];
-      saveStoredUsers(nextUsers);
+      const { token, refreshToken, user } = response.data;
+
+      if (!token || !user) {
+        throw new Error('Réponse invalide du serveur');
+      }
+
+      // Stocker les tokens
+      setTokens(token, refreshToken);
+
+      return {
+        token,
+        refreshToken,
+        user,
+      };
+    } catch (error: any) {
+      console.error('Login error:', error);
+
+      // Gérer les erreurs spécifiques
+      if (error.response?.status === 401) {
+        throw new Error('Email ou mot de passe incorrect');
+      }
+
+      if (error.response?.status === 403) {
+        throw new Error('Compte désactivé ou accès refusé');
+      }
+
+      throw new Error(
+        error.response?.data?.message ||
+        error.message ||
+        'Erreur de connexion'
+      );
     }
-
-    const tokens = createMockTokens(user);
-    persistUser(user);
-    setTokens(tokens.token, tokens.refreshToken);
-
-    return { ...tokens, user };
   },
 
   /**
-   * Activation mock d'un compte worker.
+   * Activation d'un compte worker
    */
-  async activateWorkerAccount(data: { email: string; password: string; token?: string }): Promise<AuthResponse> {
-    return this.login({
-      email: data.email,
-      password: data.password,
-    });
+  async activateWorkerAccount(data: {
+    email: string;
+    password: string;
+    token?: string
+  }): Promise<AuthResponse> {
+    try {
+      const response = await apiClient.post(AUTH_CONFIG.API_URL + '/activate-worker', {
+        email: data.email.trim().toLowerCase(),
+        password: data.password.trim(),
+        activationToken: data.token,
+      });
+
+      const { token, refreshToken, user } = response.data;
+      setTokens(token, refreshToken);
+
+      return { token, refreshToken, user };
+    } catch (error: any) {
+      throw new Error(
+        error.response?.data?.message ||
+        'Erreur lors de l\'activation du compte'
+      );
+    }
   },
 
   /**
-   * Inscription mock.
+   * Inscription
    */
   async register(payload: RegisterPayload): Promise<AuthResponse> {
-    const email = payload.email.trim().toLowerCase();
+    try {
+      const response = await apiClient.post(AUTH_CONFIG.API_URL + '/register', {
+        email: payload.email.trim().toLowerCase(),
+        password: payload.password,
+        firstName: payload.firstName.trim(),
+        lastName: payload.lastName.trim(),
+        phone: payload.phone.trim(),
+        company: payload.company.trim(),
+        termsAccepted: payload.termsAccepted,
+        newsletter: payload.newsletter,
+      });
 
-    if (findUserByEmail(email)) {
-      throw new Error('Un compte existe deja avec cet email.');
+      const { token, refreshToken, user } = response.data;
+      setTokens(token, refreshToken);
+
+      return { token, refreshToken, user };
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        throw new Error('Un compte existe déjà avec cet email');
+      }
+
+      throw new Error(
+        error.response?.data?.message ||
+        'Erreur lors de l\'inscription'
+      );
     }
-
-    const user: MockUser = {
-      id: `mock-user-${Date.now()}`,
-      email,
-      password: payload.password,
-      firstName: payload.firstName.trim(),
-      lastName: payload.lastName.trim(),
-      role: 'owner',
-      phone: payload.phone.trim(),
-      company: payload.company.trim(),
-      avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(email)}`,
-      termsAccepted: payload.termsAccepted,
-      newsletter: payload.newsletter,
-    };
-
-    saveStoredUsers([user, ...getStoredUsers()]);
-    persistUser(user);
-
-    const tokens = createMockTokens(user);
-    setTokens(tokens.token, tokens.refreshToken);
-
-    return { ...tokens, user };
   },
 
   /**
-   * Demande de reset mock.
+   * Demande de réinitialisation de mot de passe
    */
   async resetPassword(email: string): Promise<{ success: boolean; message: string }> {
-    const normalizedEmail = email.trim().toLowerCase();
-    persistResetEmail(normalizedEmail);
+    try {
+      const response = await apiClient.post(AUTH_CONFIG.API_URL + '/reset-password', {
+        email: email.trim().toLowerCase(),
+      });
 
-    return {
-      success: true,
-      message: `Lien de reinitialisation mock envoye a ${normalizedEmail}.`,
-    };
+      return {
+        success: true,
+        message: response.data?.message || 'Email de réinitialisation envoyé',
+      };
+    } catch (error: any) {
+      throw new Error(
+        error.response?.data?.message ||
+        'Erreur lors de la demande de réinitialisation'
+      );
+    }
   },
 
   /**
-   * Finalise un reset mock.
+   * Finalise la réinitialisation du mot de passe
    */
   async completePasswordReset({
     email,
-    password,
+    password
   }: ResetPasswordPayload): Promise<{ success: boolean; message: string }> {
-    const targetEmail = (email || getResetEmail()).trim().toLowerCase();
-    const users = getStoredUsers();
-    const existingUser = users.find((user) => user.email === targetEmail);
+    try {
+      const response = await apiClient.post(AUTH_CONFIG.API_URL + '/complete-reset', {
+        email: email?.trim().toLowerCase(),
+        password: password.trim(),
+      });
 
-    if (!existingUser) {
-      throw new Error('Aucun compte mock ne correspond a cet email.');
+      return {
+        success: true,
+        message: response.data?.message || 'Mot de passe mis à jour avec succès',
+      };
+    } catch (error: any) {
+      throw new Error(
+        error.response?.data?.message ||
+        'Erreur lors de la réinitialisation'
+      );
     }
-
-    const updatedUsers = users.map((user) =>
-      user.email === targetEmail ? { ...user, password } : user
-    );
-    const updatedUser = updatedUsers.find((user) => user.email === targetEmail)!;
-
-    saveStoredUsers(updatedUsers);
-    persistUser(updatedUser);
-    clearResetEmail();
-
-    return {
-      success: true,
-      message: 'Mot de passe mock mis a jour avec succes.',
-    };
   },
 
   /**
-   * Mise a jour mock du profil.
+   * Mise à jour du profil
    */
-  async updateProfile(updates: Partial<RegisterPayload>): Promise<MockUser> {
-    const currentUser = getPersistedUser();
+  async updateProfile(updates: Partial<RegisterPayload>): Promise<User> {
+    try {
+      const response = await apiClient.patch(AUTH_CONFIG.API_URL + '/profile', {
+        firstName: updates.firstName?.trim(),
+        lastName: updates.lastName?.trim(),
+        phone: updates.phone?.trim(),
+        company: updates.company?.trim(),
+        newsletter: updates.newsletter,
+      });
 
-    if (!currentUser) {
-      throw new Error('Aucune session mock active.');
+      return response.data.user;
+    } catch (error: any) {
+      throw new Error(
+        error.response?.data?.message ||
+        'Erreur lors de la mise à jour du profil'
+      );
     }
-
-    const updatedUser: MockUser = {
-      ...currentUser,
-      firstName: updates.firstName?.trim() || currentUser.firstName,
-      lastName: updates.lastName?.trim() || currentUser.lastName,
-      phone: updates.phone?.trim() || currentUser.phone,
-      company: updates.company?.trim() || currentUser.company,
-      newsletter: updates.newsletter ?? currentUser.newsletter,
-    };
-
-    const updatedUsers = getStoredUsers().map((user) =>
-      user.id === currentUser.id ? updatedUser : user
-    );
-
-    saveStoredUsers(updatedUsers);
-    persistUser(updatedUser);
-
-    return updatedUser;
   },
 
   /**
-   * Validation de session mock.
+   * Validation du token de session
    */
   async validateToken(): Promise<ValidateTokenResponse> {
-    const user = getPersistedUser();
+    try {
+      const response = await apiClient.get(AUTH_CONFIG.API_URL + '/me');
 
-    if (!user) {
+      return {
+        success: true,
+        newToken: response.data.newToken,
+        user: response.data.user,
+      };
+    } catch (error: any) {
+      // Token invalide ou expiré
       throw {
         success: false,
-        error: 'No mock session found',
+        error: error.response?.data?.message || 'Session expirée',
         forceLogout: true,
       };
     }
-
-    return {
-      success: true,
-      newToken: createMockTokens(user).token,
-      user,
-    };
   },
 
   /**
-   * Déconnexion de l'utilisateur
+   * Déconnexion
    */
   logout(): void {
+    // Nettoyer les tokens
     clearTokens();
-    clearPersistedUser();
-    clearResetEmail();
-  }
+
+    // Optionnel : appeler l'API pour invalider le token côté serveur
+    // (si le backend supporte cette fonctionnalité)
+    apiClient.post(AUTH_CONFIG.API_URL + '/logout').catch(() => {
+      // Ignorer les erreurs de logout
+    });
+  },
 };
 
 export default authService;

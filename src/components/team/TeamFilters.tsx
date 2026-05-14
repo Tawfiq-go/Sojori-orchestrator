@@ -1,3 +1,6 @@
+// ════════════════════════════════════════════════════════════════════
+// Sojori — TeamFilters · Filtres équipe (v20260514-2010)
+// ════════════════════════════════════════════════════════════════════
 import { useState } from 'react';
 import {
   Box,
@@ -18,7 +21,7 @@ import {
 } from '@mui/material';
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import { tokens as t, btnGhostSx } from '../dashboard/DashboardV2.components';
-import { TeamMember } from './AddTeamMemberModal';
+import type { TeamMember } from './AddTeamMemberModal';
 
 // P2.3: 5 filtres à implémenter
 export interface TeamFilterState {

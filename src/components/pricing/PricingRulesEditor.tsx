@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import {
   Box, Stack, Typography, Tabs, Tab, Slider, Switch, Button, TextField,
-  IconButton, Chip, Card, Divider,
+  IconButton, Card, Dialog, DialogActions, DialogContent, DialogTitle,
 } from '@mui/material';
 
 const T = {
@@ -60,6 +60,11 @@ export default function PricingRulesEditor({
 }) {
   const [rules, setRules] = useState<PricingRules>(initial);
   const [tab, setTab] = useState(initialTab);
+  const [pendingDelete, setPendingDelete] = useState<null | {
+    family: 'events' | 'occupancy' | 'longStay' | 'lastMinute';
+    index: number;
+    label: string;
+  }>(null);
 
   useEffect(() => {
     setRules(initial);
@@ -70,6 +75,24 @@ export default function PricingRulesEditor({
   }, [initialTab]);
 
   const update = (next: PricingRules) => { setRules(next); onChange?.(next); };
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+
+    if (pendingDelete.family === 'events') {
+      update({ ...rules, events: rules.events.filter((_, index) => index !== pendingDelete.index) });
+    }
+    if (pendingDelete.family === 'occupancy') {
+      update({ ...rules, occupancy: rules.occupancy.filter((_, index) => index !== pendingDelete.index) });
+    }
+    if (pendingDelete.family === 'longStay') {
+      update({ ...rules, longStay: rules.longStay.filter((_, index) => index !== pendingDelete.index) });
+    }
+    if (pendingDelete.family === 'lastMinute') {
+      update({ ...rules, lastMinute: rules.lastMinute.filter((_, index) => index !== pendingDelete.index) });
+    }
+
+    setPendingDelete(null);
+  };
 
   return (
     <Box sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2, overflow: 'hidden' }}>
@@ -140,7 +163,7 @@ export default function PricingRulesEditor({
                     onChange={(ev) => update({ ...rules, events: rules.events.map((x, j) => j === i ? { ...x, minStay: Number(ev.target.value) } : x) })} />
                   <Switch size="small" checked={e.active}
                     onChange={(_, c) => update({ ...rules, events: rules.events.map((x, j) => j === i ? { ...x, active: c } : x) })} />
-                  <IconButton size="small" color="error" onClick={() => update({ ...rules, events: rules.events.filter((_, j) => j !== i) })}>🗑️</IconButton>
+                  <IconButton size="small" color="error" onClick={() => setPendingDelete({ family: 'events', index: i, label: e.name || 'cet événement' })}>🗑️</IconButton>
                 </Stack>
               </Card>
             ))}
@@ -164,7 +187,7 @@ export default function PricingRulesEditor({
                   <TextField size="small" label="Ajustement %" value={o.adjustment} sx={{ width: 130 }} type="number"
                     onChange={(e) => update({ ...rules, occupancy: rules.occupancy.map((x, j) => j === i ? { ...x, adjustment: Number(e.target.value) } : x) })} />
                   <Switch size="small" checked={o.active} />
-                  <IconButton size="small" color="error" onClick={() => update({ ...rules, occupancy: rules.occupancy.filter((_, j) => j !== i) })}>🗑️</IconButton>
+                  <IconButton size="small" color="error" onClick={() => setPendingDelete({ family: 'occupancy', index: i, label: `la règle ${o.minPct}-${o.maxPct}%` })}>🗑️</IconButton>
                 </Stack>
               </Card>
             ))}
@@ -186,7 +209,7 @@ export default function PricingRulesEditor({
                     onChange={(e) => update({ ...rules, longStay: rules.longStay.map((x, j) => j === i ? { ...x, discount: Number(e.target.value) } : x) })} />
                   <Box sx={{ flex: 1 }} />
                   <Switch size="small" checked={l.active} />
-                  <IconButton size="small" color="error" onClick={() => update({ ...rules, longStay: rules.longStay.filter((_, j) => j !== i) })}>🗑️</IconButton>
+                  <IconButton size="small" color="error" onClick={() => setPendingDelete({ family: 'longStay', index: i, label: `la règle ${l.minNights}+ nuits` })}>🗑️</IconButton>
                 </Stack>
               </Card>
             ))}
@@ -208,7 +231,7 @@ export default function PricingRulesEditor({
                     onChange={(e) => update({ ...rules, lastMinute: rules.lastMinute.map((x, j) => j === i ? { ...x, discount: Number(e.target.value) } : x) })} />
                   <Box sx={{ flex: 1 }} />
                   <Switch size="small" checked={m.active} />
-                  <IconButton size="small" color="error" onClick={() => update({ ...rules, lastMinute: rules.lastMinute.filter((_, j) => j !== i) })}>🗑️</IconButton>
+                  <IconButton size="small" color="error" onClick={() => setPendingDelete({ family: 'lastMinute', index: i, label: `la règle J-${m.daysBefore}` })}>🗑️</IconButton>
                 </Stack>
               </Card>
             ))}
@@ -219,6 +242,23 @@ export default function PricingRulesEditor({
           </Stack>
         )}
       </Box>
+
+      <Dialog open={Boolean(pendingDelete)} onClose={() => setPendingDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Supprimer une règle</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: 12.5, color: T.text2 }}>
+            Confirmer la suppression de {pendingDelete?.label} ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDelete(null)} sx={{ textTransform: 'none' }}>
+            Annuler
+          </Button>
+          <Button color="error" onClick={confirmDelete} sx={{ textTransform: 'none' }}>
+            Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

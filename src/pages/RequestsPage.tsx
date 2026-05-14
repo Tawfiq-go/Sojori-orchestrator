@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import ColumnSelector, { type ColumnDef } from '../components/filters/ColumnSelector';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
+import type { Task } from '../data/mockTasks';
 import {
   PageHeader, DataTable, StatCard, StatsRow, Badge, ViewToggle, KanbanBoard, KanbanColumn,
   btnPrimarySx, btnGhostSx, btnSmSx,
@@ -200,11 +201,12 @@ const STATUS_CONFIG: Record<RequestStatus, { label: string; color: 'default' | '
 };
 
 export function RequestsPage() {
-  const navigate = useNavigate();
   const [requests, setRequests] = useState(MOCK_REQUESTS);
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const [selectedRequest, setSelectedRequest] = useState<GuestRequest | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskSourceRequestId, setTaskSourceRequestId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'info' } | null>(null);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [filters, setFilters] = useState({ type: 'all', status: 'all', priority: 'all', listing: 'all' });
@@ -317,8 +319,8 @@ export function RequestsPage() {
   };
 
   const handleCreateTask = (requestId: string) => {
-    navigate(`/tasks?request=${requestId}`);
-    setToast({ message: 'Ouverture du board tâches', severity: 'info' });
+    setTaskSourceRequestId(requestId);
+    setTaskModalOpen(true);
   };
 
   const handleAddPricing = (requestId: string, amount: number) => {
@@ -339,6 +341,15 @@ export function RequestsPage() {
         : prev,
     );
     setToast({ message: `Supplément ajouté: ${amount}€`, severity: 'success' });
+  };
+
+  const handleSaveTask = (task: Task) => {
+    setTaskModalOpen(false);
+    setToast({
+      message: `Tâche ${task.itemNumber} créée${taskSourceRequestId ? ` pour ${taskSourceRequestId}` : ''}`,
+      severity: 'success',
+    });
+    setTaskSourceRequestId(null);
   };
 
   // DataTable columns
@@ -852,6 +863,15 @@ export function RequestsPage() {
           ) : null}
         </DialogActions>
       </Dialog>
+
+      <CreateTaskModal
+        open={taskModalOpen}
+        onClose={() => {
+          setTaskModalOpen(false);
+          setTaskSourceRequestId(null);
+        }}
+        onSave={handleSaveTask}
+      />
 
       {toast ? (
         <Snackbar open autoHideDuration={2500} onClose={() => setToast(null)}>
