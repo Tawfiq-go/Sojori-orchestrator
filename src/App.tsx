@@ -21,8 +21,8 @@ const ReservationSejourPage = lazy(() =>
 const CalendarInventoryPage = lazy(() =>
   import('./pages/CalendarInventoryPage').then((module) => ({ default: module.CalendarInventoryPage }))
 );
-const TasksPage = lazy(() =>
-  import('./pages/TasksPage').then((module) => ({ default: module.TasksPage }))
+const TasksListPage = lazy(() =>
+  import('./pages/TasksListPage').then((module) => ({ default: module.TasksListPage }))
 );
 const OrchestrationPage = lazy(() =>
   import('./pages/OrchestrationPage').then((module) => ({ default: module.OrchestrationPage }))
@@ -33,11 +33,17 @@ const OrchestrationEventsPage = lazy(() =>
 const OrchestrationConfigPage = lazy(() =>
   import('./pages/OrchestrationConfigPage').then((module) => ({ default: module.OrchestrationConfigPage }))
 );
+const OrchestrationPlansPage = lazy(() =>
+  import("./pages/OrchestrationPlansPage").then((module) => ({ default: module.default }))
+);
 const CommsPage = lazy(() =>
   import('./pages/CommsPage').then((module) => ({ default: module.CommsPage }))
 );
 const ListingsPage = lazy(() =>
-  import('./pages/ListingsCataloguePage').then((module) => ({ default: module.ListingsCataloguePage }))
+  import('./pages/ListingsOverviewPage').then((module) => ({ default: module.ListingsOverviewPage }))
+);
+const ListingDetailPage = lazy(() =>
+  import('./pages/ListingDetailPage').then((module) => ({ default: module.ListingDetailPage }))
 );
 const NewListingFormPage = lazy(() =>
   import('./pages/NewListingFormPage').then((module) => ({ default: module.NewListingFormPage }))
@@ -48,11 +54,11 @@ const RequestsPage = lazy(() =>
 const ReviewsPage = lazy(() =>
   import('./pages/ReviewsPage').then((module) => ({ default: module.ReviewsPage }))
 );
-const TeamPage = lazy(() =>
-  import('./pages/TeamPage').then((module) => ({ default: module.TeamPage }))
+const TasksTeamPage = lazy(() =>
+  import('./pages/TasksTeamPage').then((module) => ({ default: module.TasksTeamPage }))
 );
-const PlanningPage = lazy(() =>
-  import('./pages/PlanningPage').then((module) => ({ default: module.PlanningPage }))
+const TasksPlanningPage = lazy(() =>
+  import('./pages/TasksPlanningPage').then((module) => ({ default: module.TasksPlanningPage }))
 );
 const StaffWhatsAppPage = lazy(() =>
   import('./pages/StaffWhatsAppPage').then((module) => ({ default: module.StaffWhatsAppPage }))
@@ -61,7 +67,7 @@ const OTAMessagesPage = lazy(() =>
   import('./pages/OTAMessagesPage').then((module) => ({ default: module.OTAMessagesPage }))
 );
 const PricingPage = lazy(() =>
-  import('./pages/PricingPage').then((module) => ({ default: module.PricingPage }))
+  import('./pages/PricingSnapshotPage').then((module) => ({ default: module.PricingSnapshotPage }))
 );
 const ChannelsPage = lazy(() =>
   import('./pages/ChannelsPage').then((module) => ({ default: module.ChannelsPage }))
@@ -77,6 +83,9 @@ const CRMPage = lazy(() =>
 );
 const OnboardingPage = lazy(() =>
   import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage }))
+);
+const ReservationsListPage = lazy(() =>
+  import('./pages/ReservationsListPage').then((module) => ({ default: module.default }))
 );
 
 function RouteLoader() {
@@ -122,6 +131,7 @@ function App() {
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/orchestration" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
+              <Route path="/orchestration/plans" element={<LazyRoute><OrchestrationPlansPage /></LazyRoute>} />
               <Route path="/orchestration/timeline/:id" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
               <Route path="/orchestration/events" element={<LazyRoute><OrchestrationEventsPage /></LazyRoute>} />
               <Route path="/orchestration/config" element={<LazyRoute><OrchestrationConfigPage /></LazyRoute>} />
@@ -129,11 +139,13 @@ function App() {
               <Route path="/calendar" element={<LazyRoute><CalendarInventoryPage /></LazyRoute>} />
 
               <Route path="/reservations" element={<LazyRoute><ReservationsPage /></LazyRoute>} />
+              <Route path="/reservations/list" element={<LazyRoute><ReservationsListPage /></LazyRoute>} />
               <Route path="/reservations/:id" element={<LazyRoute><ReservationSejourPage /></LazyRoute>} />
 
-              <Route path="/tasks" element={<LazyRoute><TasksPage /></LazyRoute>} />
-              <Route path="/tasks/team" element={<LazyRoute><TeamPage /></LazyRoute>} />
-              <Route path="/tasks/planning" element={<LazyRoute><PlanningPage /></LazyRoute>} />
+              <Route path="/tasks" element={<LazyRoute><TasksListPage /></LazyRoute>} />
+              <Route path="/tasks/list" element={<LazyRoute><TasksListPage /></LazyRoute>} />
+              <Route path="/tasks/team" element={<LazyRoute><TasksTeamPage /></LazyRoute>} />
+              <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPage /></LazyRoute>} />
               <Route path="/tasks/staff-whatsapp" element={<LazyRoute><StaffWhatsAppPage /></LazyRoute>} />
 
               <Route path="/communications/whatsapp" element={<LazyRoute><CommsPage /></LazyRoute>} />
@@ -147,6 +159,10 @@ function App() {
               <Route path="/listings/:id" element={<LazyRoute><NewListingFormPage /></LazyRoute>} />
               <Route path="/pricing" element={<LazyRoute><PricingPage /></LazyRoute>} />
               <Route path="/channels" element={<LazyRoute><ChannelsPage /></LazyRoute>} />
+              <Route path="/catalogue/listings" element={<LazyRoute><ListingsPage /></LazyRoute>} />
+              <Route path="/catalogue/listings/:id" element={<LazyRoute><ListingDetailPage /></LazyRoute>} />
+              <Route path="/catalogue/channels" element={<LazyRoute><ChannelsPage /></LazyRoute>} />
+              <Route path="/catalogue/pricing" element={<LazyRoute><PricingPage /></LazyRoute>} />
               <Route path="/clients" element={<LazyRoute><ClientsPage /></LazyRoute>} />
               <Route path="/clients/contacts" element={<LazyRoute><WhatsAppContactsPage /></LazyRoute>} />
               <Route path="/crm" element={<LazyRoute><CRMPage /></LazyRoute>} />
