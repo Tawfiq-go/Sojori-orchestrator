@@ -6,7 +6,7 @@ import {
   btnGhostSx, btnSmSx, btnAiSx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 
 function RowKV({ k, v, mono, divider }: { k: string; v: any; mono?: boolean; divider?: boolean }) {
   return (
@@ -24,8 +24,8 @@ function RowKV({ k, v, mono, divider }: { k: string; v: any; mono?: boolean; div
 
 export function CommsPage() {
   const [activeConv, setActiveConv] = useState('sarah');
-
-  const conversations = [
+  const [toast, setToast] = useState('');
+  const [conversations, setConversations] = useState([
     { id: 'sarah', name: 'Sarah Johnson', initials: 'SJ', color: 'gold',
       preview: 'Could you arrange airport pickup?', when: '10:24',
       listing: 'Villa Belvédère', unreadCount: 2, unread: true },
@@ -35,18 +35,58 @@ export function CommsPage() {
     { id: 'aisha', name: 'Aisha Khalil', initials: 'AK', color: 'pink',
       preview: 'Merci Sofia, le séjour s\'annonce parfait ✨', when: 'Hier',
       listing: 'Villa Atlas' },
-  ];
+  ]);
+  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, Array<{ type?: string; from?: string; text: string; when?: string }>>>({
+    sarah: [
+      { type: 'day', text: 'Hier · 15 mai' },
+      { from: 'them', text: "Hi! Just arrived, it's stunning 😍 thank you for the welcome basket!", when: '16:42' },
+      { from: 'you', text: 'So happy to hear that, Sarah! 💛 Enjoy your stay. The pool is heated to 28°C.', when: '16:48 ✓✓' },
+      { type: 'day', text: "Aujourd'hui · 16 mai" },
+      { from: 'them', text: 'Good morning! Could you arrange airport pickup for our friends arriving Saturday?', when: '10:20' },
+      { from: 'them', text: 'Their flight lands at NCE at 14:30.', when: '10:24' },
+    ],
+    marco: [
+      { type: 'day', text: "Aujourd'hui · 16 mai" },
+      { from: 'them', text: "Buongiorno, è possibile arrivare prima?", when: '09:55' },
+    ],
+    aisha: [
+      { type: 'day', text: 'Hier · 15 mai' },
+      { from: 'them', text: "Merci Sofia, le séjour s'annonce parfait ✨", when: '18:22' },
+    ],
+  });
 
   const conv = conversations.find(c => c.id === activeConv) || conversations[0];
+  const messages = messagesByConversation[activeConv] || [];
 
-  const messages = [
-    { type: 'day', text: 'Hier · 15 mai' },
-    { from: 'them', text: "Hi! Just arrived, it's stunning 😍 thank you for the welcome basket!", when: '16:42' },
-    { from: 'you',  text: "So happy to hear that, Sarah! 💛 Enjoy your stay. The pool is heated to 28°C.", when: '16:48 ✓✓' },
-    { type: 'day', text: "Aujourd'hui · 16 mai" },
-    { from: 'them', text: 'Good morning! Could you arrange airport pickup for our friends arriving Saturday?', when: '10:20' },
-    { from: 'them', text: 'Their flight lands at NCE at 14:30.', when: '10:24' },
-  ];
+  const formatMessageTime = (date: Date) =>
+    date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+  const handleSendMessage = (message: string) => {
+    const trimmed = message.trim();
+    if (!trimmed || !conv) return;
+
+    const sentAt = new Date();
+    const nextMessage = { from: 'you', text: trimmed, when: `${formatMessageTime(sentAt)} ✓` };
+
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conv.id]: [...(prev[conv.id] || []), nextMessage],
+    }));
+    setConversations((prev) =>
+      prev.map((item) =>
+        item.id === conv.id
+          ? {
+              ...item,
+              preview: trimmed,
+              when: formatMessageTime(sentAt),
+              unread: false,
+              unreadCount: 0,
+            }
+          : item,
+      ),
+    );
+    setToast('Message envoyé');
+  };
 
   return (
     <DashboardWrapper breadcrumb={['Communications', 'WhatsApp Guests']}>
@@ -61,6 +101,7 @@ export function CommsPage() {
         <ChatThread
           conv={{ ...conv, meta: '🇺🇸 EN · Villa Belvédère · Jour 3/7' }}
           messages={messages}
+          onSend={handleSendMessage}
           aiSuggestions={[
             '✨ Confirmer pickup €45 NCE→Villa',
             '✨ Demander nb passagers & bagages',
@@ -88,6 +129,12 @@ export function CommsPage() {
           </AsideSection>
         </ChatAside>
       </ChatLayout>
+
+      <Snackbar open={Boolean(toast)} autoHideDuration={2500} onClose={() => setToast('')}>
+        <Alert severity="success" variant="filled" onClose={() => setToast('')}>
+          {toast}
+        </Alert>
+      </Snackbar>
     </DashboardWrapper>
   );
 }

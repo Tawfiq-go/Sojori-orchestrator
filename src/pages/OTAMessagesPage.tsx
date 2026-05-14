@@ -6,7 +6,7 @@ import {
   Badge, SourcePill, btnPrimarySx, btnGhostSx, btnSmSx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 
 // ═══════════════════════════════════════════════════════════════
 // MOCK DATA - Realistic OTA Conversations & Messages
@@ -192,9 +192,12 @@ function RowKV({ k, v, mono, divider }: { k: string; v: any; mono?: boolean; div
 
 export function OTAMessagesPage() {
   const [activeConv, setActiveConv] = useState('sarah-airbnb');
+  const [toast, setToast] = useState('');
+  const [conversations, setConversations] = useState(MOCK_CONVERSATIONS);
+  const [messagesByConversation, setMessagesByConversation] = useState(MOCK_MESSAGES);
 
-  const conv = MOCK_CONVERSATIONS.find(c => c.id === activeConv) || MOCK_CONVERSATIONS[0];
-  const messages = MOCK_MESSAGES[activeConv] || [];
+  const conv = conversations.find(c => c.id === activeConv) || conversations[0];
+  const messages = messagesByConversation[activeConv] || [];
 
   // Calculate conversation meta info
   const getConvMeta = () => {
@@ -212,10 +215,45 @@ export function OTAMessagesPage() {
   };
 
   // Stats
-  const totalConversations = MOCK_CONVERSATIONS.length;
-  const unreadCount = MOCK_CONVERSATIONS.filter(c => c.unread).length;
-  const airbnbCount = MOCK_CONVERSATIONS.filter(c => c.ota === 'Airbnb').length;
-  const bookingCount = MOCK_CONVERSATIONS.filter(c => c.ota === 'Booking.com').length;
+  const totalConversations = conversations.length;
+  const unreadCount = conversations.filter(c => c.unread).length;
+  const airbnbCount = conversations.filter(c => c.ota === 'Airbnb').length;
+  const bookingCount = conversations.filter(c => c.ota === 'Booking.com').length;
+
+  const formatMessageTime = (date: Date) =>
+    date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+  const handleSendMessage = (message: string) => {
+    const trimmed = message.trim();
+    if (!trimmed || !conv) return;
+
+    const sentAt = new Date();
+    const nextMessage: OTAMessage = {
+      from: 'you',
+      text: trimmed,
+      type: 'msg',
+      when: `${formatMessageTime(sentAt)} ✓`,
+    };
+
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conv.id]: [...(prev[conv.id] || []), nextMessage],
+    }));
+    setConversations((prev) =>
+      prev.map((item) =>
+        item.id === conv.id
+          ? {
+              ...item,
+              preview: trimmed,
+              when: formatMessageTime(sentAt),
+              unread: false,
+              unreadCount: 0,
+            }
+          : item,
+      ),
+    );
+    setToast(`Message envoyé via ${conv.ota}`);
+  };
 
   return (
     <DashboardWrapper breadcrumb={['Communications', 'Messages OTA']}>
@@ -273,6 +311,7 @@ export function OTAMessagesPage() {
             meta: getConvMeta(),
           }}
           messages={messages}
+          onSend={handleSendMessage}
           aiSuggestions={[
             '✨ Confirmer pickup €45 NCE→Villa',
             '✨ Proposer early check-in €35',
@@ -354,6 +393,12 @@ export function OTAMessagesPage() {
           </Box>
         </ChatAside>
       </ChatLayout>
+
+      <Snackbar open={Boolean(toast)} autoHideDuration={2500} onClose={() => setToast('')}>
+        <Alert severity="success" variant="filled" onClose={() => setToast('')}>
+          {toast}
+        </Alert>
+      </Snackbar>
     </DashboardWrapper>
   );
 }

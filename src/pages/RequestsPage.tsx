@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
-  PageHeader, DataTable, StatCard, StatsRow, Badge, ViewToggle, KanbanBoard,
+  PageHeader, DataTable, StatCard, StatsRow, Badge, ViewToggle, KanbanBoard, KanbanColumn,
   btnPrimarySx, btnGhostSx, btnSmSx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import {
-  Box, Button, Stack, Typography, Dialog, DialogTitle, DialogContent, DialogActions,
+  Alert, Box, Button, Snackbar, Stack, Typography, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, MenuItem, Avatar, Chip,
 } from '@mui/material';
 
@@ -31,6 +32,7 @@ interface GuestRequest {
   status: RequestStatus;
   assignedTo?: string;
   priority: RequestPriority;
+  additionalPrice?: number;
   history: { date: string; action: string; by: string }[];
 }
 
@@ -197,10 +199,13 @@ const STATUS_CONFIG: Record<RequestStatus, { label: string; color: 'default' | '
 };
 
 export function RequestsPage() {
-  const [requests] = useState(MOCK_REQUESTS);
+  const navigate = useNavigate();
+  const [requests, setRequests] = useState(MOCK_REQUESTS);
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const [selectedRequest, setSelectedRequest] = useState<GuestRequest | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'info' } | null>(null);
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [filters, setFilters] = useState({ type: 'all', status: 'all', priority: 'all', listing: 'all' });
 
   // Calculate stats
@@ -222,9 +227,11 @@ export function RequestsPage() {
       if (filters.status !== 'all' && r.status !== filters.status) return false;
       if (filters.priority !== 'all' && r.priority !== filters.priority) return false;
       if (filters.listing !== 'all' && r.listingName !== filters.listing) return false;
+      if (dateRange.start && new Date(r.dateRequested) < new Date(dateRange.start)) return false;
+      if (dateRange.end && new Date(r.dateRequested) > new Date(`${dateRange.end}T23:59:59`)) return false;
       return true;
     });
-  }, [requests, filters]);
+  }, [dateRange.end, dateRange.start, requests, filters]);
 
   // Group for Kanban
   const kanbanColumns = useMemo(() => {
@@ -247,10 +254,94 @@ export function RequestsPage() {
     setDetailModalOpen(true);
   };
 
+  const pushHistory = (request: GuestRequest, action: string, by: string) => [
+    ...request.history,
+    { date: new Date().toISOString(), action, by },
+  ];
+
+  const handleApprove = (requestId: string) => {
+    setRequests((prev) =>
+      prev.map((request) =>
+        request.id === requestId
+          ? { ...request, status: 'resolu', history: pushHistory(request, 'Demande approuvée', 'Sojori Ops') }
+          : request,
+      ),
+    );
+    setSelectedRequest((prev) =>
+      prev ? { ...prev, status: 'resolu', history: pushHistory(prev, 'Demande approuvée', 'Sojori Ops') } : prev,
+    );
+    setToast({ message: 'Demande approuvée', severity: 'success' });
+  };
+
+  const handleReject = (requestId: string) => {
+    setRequests((prev) =>
+      prev.map((request) =>
+        request.id === requestId
+          ? { ...request, status: 'refuse', history: pushHistory(request, 'Demande rejetée', 'Sojori Ops') }
+          : request,
+      ),
+    );
+    setSelectedRequest((prev) =>
+      prev ? { ...prev, status: 'refuse', history: pushHistory(prev, 'Demande rejetée', 'Sojori Ops') } : prev,
+    );
+    setToast({ message: 'Demande rejetée', severity: 'warning' });
+  };
+
+  const handleAssignStaff = (requestId: string, staffName: string) => {
+    setRequests((prev) =>
+      prev.map((request) =>
+        request.id === requestId
+          ? {
+              ...request,
+              assignedTo: staffName,
+              status: request.status === 'nouveau' ? 'en-cours' : request.status,
+              history: pushHistory(request, `Assigné à ${staffName}`, 'Dispatcher'),
+            }
+          : request,
+      ),
+    );
+    setSelectedRequest((prev) =>
+      prev
+        ? {
+            ...prev,
+            assignedTo: staffName,
+            status: prev.status === 'nouveau' ? 'en-cours' : prev.status,
+            history: pushHistory(prev, `Assigné à ${staffName}`, 'Dispatcher'),
+          }
+        : prev,
+    );
+    setToast({ message: `Assigné à ${staffName}`, severity: 'success' });
+  };
+
+  const handleCreateTask = (requestId: string) => {
+    navigate(`/tasks?request=${requestId}`);
+    setToast({ message: 'Ouverture du board tâches', severity: 'info' });
+  };
+
+  const handleAddPricing = (requestId: string, amount: number) => {
+    setRequests((prev) =>
+      prev.map((request) =>
+        request.id === requestId
+          ? {
+              ...request,
+              additionalPrice: amount,
+              history: pushHistory(request, `Supplément ajouté (${amount}€)`, 'Revenue Ops'),
+            }
+          : request,
+      ),
+    );
+    setSelectedRequest((prev) =>
+      prev
+        ? { ...prev, additionalPrice: amount, history: pushHistory(prev, `Supplément ajouté (${amount}€)`, 'Revenue Ops') }
+        : prev,
+    );
+    setToast({ message: `Supplément ajouté: ${amount}€`, severity: 'success' });
+  };
+
   // DataTable columns
   const columns = [
     {
-      id: 'type',
+      key: 'type',
       label: 'Type',
       render: (row: GuestRequest) => {
         const config = REQUEST_TYPE_CONFIG[row.type];
@@ -265,7 +356,7 @@ export function RequestsPage() {
       },
     },
     {
-      id: 'guest',
+      key: 'guest',
       label: 'Guest & Réservation',
       render: (row: GuestRequest) => (
         <Stack spacing={0.25}>
@@ -277,7 +368,7 @@ export function RequestsPage() {
       ),
     },
     {
-      id: 'listing',
+      key: 'listing',
       label: 'Listing',
       render: (row: GuestRequest) => (
         <Stack direction="row" spacing={1} alignItems="center">
@@ -287,7 +378,7 @@ export function RequestsPage() {
       ),
     },
     {
-      id: 'description',
+      key: 'description',
       label: 'Description',
       render: (row: GuestRequest) => (
         <Typography sx={{
@@ -303,7 +394,7 @@ export function RequestsPage() {
       ),
     },
     {
-      id: 'dates',
+      key: 'dates',
       label: 'Dates',
       render: (row: GuestRequest) => (
         <Stack spacing={0.25}>
@@ -319,7 +410,7 @@ export function RequestsPage() {
       ),
     },
     {
-      id: 'status',
+      key: 'status',
       label: 'Statut',
       render: (row: GuestRequest) => (
         <Badge color={STATUS_CONFIG[row.status].color} size="sm">
@@ -328,7 +419,7 @@ export function RequestsPage() {
       ),
     },
     {
-      id: 'priority',
+      key: 'priority',
       label: 'Priorité',
       render: (row: GuestRequest) => (
         <Badge color={row.priority === 'urgent' ? 'error' : 'default'} size="sm">
@@ -337,7 +428,7 @@ export function RequestsPage() {
       ),
     },
     {
-      id: 'assigned',
+      key: 'assigned',
       label: 'Assigné à',
       render: (row: GuestRequest) => (
         row.assignedTo ? (
@@ -353,7 +444,7 @@ export function RequestsPage() {
       ),
     },
     {
-      id: 'actions',
+      key: 'actions',
       label: 'Actions',
       render: (row: GuestRequest) => (
         <Stack direction="row" spacing={0.5}>
@@ -363,10 +454,49 @@ export function RequestsPage() {
           >
             👁️ Détail
           </Button>
+          {row.status !== 'resolu' && (
+            <Button sx={{ ...btnSmSx, ...btnGhostSx }} onClick={() => handleApprove(row.id)}>
+              ✅
+            </Button>
+          )}
         </Stack>
       ),
     },
   ];
+
+  const RequestKanbanCard = ({ request }: { request: GuestRequest }) => {
+    const typeConfig = REQUEST_TYPE_CONFIG[request.type];
+
+    return (
+      <Box
+        onClick={() => handleViewDetail(request)}
+        sx={{
+          bgcolor: t.bg1,
+          border: `1px solid ${t.border}`,
+          borderRadius: '10px',
+          p: 1.5,
+          cursor: 'pointer',
+          transition: 'all 0.15s',
+          '&:hover': { borderColor: t.borderStrong, boxShadow: '0 4px 10px rgba(26,20,8,0.08)' },
+        }}
+      >
+        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.75 }}>
+          <Typography sx={{ fontSize: 15 }}>{typeConfig.icon}</Typography>
+          <Typography sx={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{request.guestName}</Typography>
+          {request.priority === 'urgent' ? <Badge color="error" size="sm">Urgent</Badge> : null}
+        </Stack>
+        <Typography sx={{ fontSize: 11, color: t.text3, mb: 0.75 }}>{request.listingName}</Typography>
+        <Typography sx={{ fontSize: 12.5, color: t.text2, mb: 1.25, lineHeight: 1.5 }}>
+          {request.description}
+        </Typography>
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+          <Chip size="small" label={typeConfig.label} />
+          <Chip size="small" label={request.assignedTo || 'Non assigné'} />
+          {request.additionalPrice ? <Chip size="small" label={`+${request.additionalPrice}€`} /> : null}
+        </Stack>
+      </Box>
+    );
+  };
 
   return (
     <DashboardWrapper breadcrumb={['Service Client', 'Demandes']}>
@@ -496,39 +626,49 @@ export function RequestsPage() {
             <MenuItem key={listing} value={listing}>{listing}</MenuItem>
           ))}
         </TextField>
+
+        <TextField
+          size="small"
+          label="Du"
+          type="date"
+          value={dateRange.start}
+          onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 150 }}
+        />
+
+        <TextField
+          size="small"
+          label="Au"
+          type="date"
+          value={dateRange.end}
+          onChange={(e) => setDateRange((prev) => ({ ...prev, end: e.target.value }))}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 150 }}
+        />
       </Stack>
 
       {/* Content: Table or Kanban */}
       {viewMode === 'table' ? (
         <DataTable
           columns={columns}
-          data={filteredRequests}
-          keyExtractor={(row) => row.id}
-          emptyMessage="Aucune demande trouvée"
+          rows={filteredRequests}
         />
       ) : (
-        <KanbanBoard
-          columns={kanbanColumns.map(col => ({
-            id: col.id,
-            title: col.title,
-            color: col.color,
-            cards: col.requests.map(req => {
-              const typeConfig = REQUEST_TYPE_CONFIG[req.type];
-              return {
-                id: req.id,
-                title: req.guestName,
-                subtitle: req.listingName,
-                meta: `${typeConfig.icon} ${typeConfig.label}`,
-                tags: [
-                  req.priority === 'urgent' ? '🔥 Urgent' : '',
-                  req.assignedTo || 'Non assigné',
-                ].filter(Boolean),
-                content: req.description,
-                onClick: () => handleViewDetail(req),
-              };
-            }),
-          }))}
-        />
+        <KanbanBoard>
+          {kanbanColumns.map((column) => (
+            <KanbanColumn
+              key={column.id}
+              status={column.id === 'en-cours' ? 'doing' : column.id === 'resolu' ? 'done' : column.id === 'refuse' ? 'review' : 'todo'}
+              label={column.title}
+              count={column.requests.length}
+            >
+              {column.requests.map((request) => (
+                <RequestKanbanCard key={request.id} request={request} />
+              ))}
+            </KanbanColumn>
+          ))}
+        </KanbanBoard>
       )}
 
       {/* Detail Modal */}
@@ -626,6 +766,17 @@ export function RequestsPage() {
                 </Box>
               )}
 
+              {selectedRequest.additionalPrice ? (
+                <Box>
+                  <Typography sx={{ fontSize: 12, fontWeight: 600, color: t.text3, mb: 0.5 }}>
+                    PRIX ADDITIONNEL
+                  </Typography>
+                  <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+                    +{selectedRequest.additionalPrice}€
+                  </Typography>
+                </Box>
+              ) : null}
+
               {/* History */}
               <Box>
                 <Typography sx={{ fontSize: 12, fontWeight: 600, color: t.text3, mb: 1 }}>
@@ -660,10 +811,25 @@ export function RequestsPage() {
           <Button onClick={() => setDetailModalOpen(false)} sx={btnGhostSx}>
             Fermer
           </Button>
-          <Button sx={btnPrimarySx}>✏️ Modifier statut</Button>
-          <Button sx={btnPrimarySx}>📧 Message guest</Button>
+          {selectedRequest ? (
+            <>
+              <Button sx={btnPrimarySx} onClick={() => handleApprove(selectedRequest.id)}>✅ Approuver</Button>
+              <Button sx={btnGhostSx} onClick={() => handleReject(selectedRequest.id)}>⛔ Rejeter</Button>
+              <Button sx={btnGhostSx} onClick={() => handleAssignStaff(selectedRequest.id, 'Sofia')}>👤 Assigner</Button>
+              <Button sx={btnGhostSx} onClick={() => handleCreateTask(selectedRequest.id)}>🧩 Créer tâche</Button>
+              <Button sx={btnGhostSx} onClick={() => handleAddPricing(selectedRequest.id, 35)}>💶 +35€</Button>
+            </>
+          ) : null}
         </DialogActions>
       </Dialog>
+
+      <Snackbar open={Boolean(toast)} autoHideDuration={2500} onClose={() => setToast(null)}>
+        {toast ? (
+          <Alert severity={toast.severity} variant="filled" onClose={() => setToast(null)}>
+            {toast.message}
+          </Alert>
+        ) : null}
+      </Snackbar>
     </DashboardWrapper>
   );
 }

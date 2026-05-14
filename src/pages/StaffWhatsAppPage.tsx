@@ -12,8 +12,10 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 import {
   Box,
+  Alert,
   Button,
   Stack,
+  Snackbar,
   Typography,
   Avatar,
   Chip,
@@ -136,6 +138,14 @@ GROUPS.forEach((group, gIdx) => {
   }
 });
 
+const INITIAL_MESSAGES_BY_CONVERSATION = MOCK_MESSAGES.reduce<Record<string, any[]>>((acc, message) => {
+  if (!acc[message.conversationId]) {
+    acc[message.conversationId] = [];
+  }
+  acc[message.conversationId].push(message);
+  return acc;
+}, {});
+
 export function StaffWhatsAppPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(STAFF_LIST[0].id);
   const [conversationType, setConversationType] = useState<'individual' | 'group'>('individual');
@@ -144,12 +154,14 @@ export function StaffWhatsAppPage() {
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [broadcastRecipients, setBroadcastRecipients] = useState<string[]>([]);
   const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, any[]>>(INITIAL_MESSAGES_BY_CONVERSATION);
+  const [toast, setToast] = useState<{ message: string; severity: 'success' | 'info' } | null>(null);
 
   // Get conversations list
   const conversations = useMemo(() => {
     if (conversationType === 'individual') {
       return STAFF_LIST.map(staff => {
-        const messages = MOCK_MESSAGES.filter(m => m.conversationId === staff.id);
+        const messages = messagesByConversation[staff.id] || [];
         const lastMessage = messages[messages.length - 1];
         const unreadCount = messages.filter(m => !m.read && m.sender !== 'me').length;
 
@@ -167,7 +179,7 @@ export function StaffWhatsAppPage() {
       }).sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
     } else {
       return GROUPS.map(group => {
-        const messages = MOCK_MESSAGES.filter(m => m.conversationId === group.id);
+        const messages = messagesByConversation[group.id] || [];
         const lastMessage = messages[messages.length - 1];
         const unreadCount = messages.filter(m => !m.read && m.sender !== 'me').length;
 
@@ -183,7 +195,7 @@ export function StaffWhatsAppPage() {
         };
       }).sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
     }
-  }, [conversationType]);
+  }, [conversationType, messagesByConversation]);
 
   // Filter conversations
   const filteredConversations = useMemo(() => {
@@ -197,10 +209,9 @@ export function StaffWhatsAppPage() {
   // Get current conversation messages
   const currentMessages = useMemo(() => {
     if (!selectedConversation) return [];
-    return MOCK_MESSAGES
-      .filter(m => m.conversationId === selectedConversation)
+    return (messagesByConversation[selectedConversation] || [])
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  }, [selectedConversation]);
+  }, [messagesByConversation, selectedConversation]);
 
   // Get conversation info
   const currentConversationInfo = useMemo(() => {
@@ -220,17 +231,63 @@ export function StaffWhatsAppPage() {
   const handleSendMessage = () => {
     if (!messageInput.trim() || !selectedConversation) return;
 
-    console.log('Sending message:', messageInput);
+    const trimmed = messageInput.trim();
+    const nextMessage = {
+      id: `MSG_${selectedConversation}_${Date.now()}`,
+      conversationId: selectedConversation,
+      conversationType,
+      sender: 'me',
+      senderName: 'Vous',
+      senderAvatar: null,
+      text: trimmed,
+      timestamp: new Date().toISOString(),
+      status: 'sent',
+      read: true,
+    };
+
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [selectedConversation]: [...(prev[selectedConversation] || []), nextMessage],
+    }));
     setMessageInput('');
+    setToast({ message: 'Message envoyé', severity: 'success' });
   };
 
   const handleBroadcast = () => {
     if (!broadcastMessage.trim() || broadcastRecipients.length === 0) return;
 
-    console.log('Broadcasting to:', broadcastRecipients, 'Message:', broadcastMessage);
+    const trimmed = broadcastMessage.trim();
+    const sentAt = new Date().toISOString();
+
+    setMessagesByConversation((prev) => {
+      const next = { ...prev };
+
+      broadcastRecipients.forEach((staffId) => {
+        const nextMessage = {
+          id: `MSG_BROADCAST_${staffId}_${Date.now()}`,
+          conversationId: staffId,
+          conversationType: 'individual',
+          sender: 'me',
+          senderName: 'Vous',
+          senderAvatar: null,
+          text: trimmed,
+          timestamp: sentAt,
+          status: 'sent',
+          read: true,
+        };
+
+        next[staffId] = [...(next[staffId] || []), nextMessage];
+      });
+
+      return next;
+    });
     setShowBroadcastModal(false);
     setBroadcastRecipients([]);
     setBroadcastMessage('');
+    setToast({
+      message: `Message diffusé à ${broadcastRecipients.length} personne${broadcastRecipients.length > 1 ? 's' : ''}`,
+      severity: 'info',
+    });
   };
 
   const formatTime = (timestamp: string) => {
@@ -582,6 +639,14 @@ export function StaffWhatsAppPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar open={Boolean(toast)} autoHideDuration={2500} onClose={() => setToast(null)}>
+        {toast ? (
+          <Alert severity={toast.severity} variant="filled" onClose={() => setToast(null)}>
+            {toast.message}
+          </Alert>
+        ) : null}
+      </Snackbar>
     </DashboardWrapper>
   );
 }

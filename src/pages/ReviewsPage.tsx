@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader, DataTable, StatCard, StatsRow, Badge, SourcePill, AIChip,
@@ -6,25 +7,41 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import {
-  Box, Button, Stack, Typography, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, MenuItem, LinearProgress, Rating, Chip,
+  Alert, Box, Button, Snackbar, Stack, Typography, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, MenuItem, Rating,
 } from '@mui/material';
 
 // ═══════════════════════════════════════════════════════════════
 // MOCK DATA - Realistic Reviews
 // ═══════════════════════════════════════════════════════════════
 
-const MOCK_REVIEWS = [
-  { id: 'rv1', date: '2026-05-13', listingName: 'Villa Belvédère', listingPhoto: '🏡', guestName: 'Sarah Johnson', ota: 'Airbnb', rating: 5, comment: 'Absolutely stunning property! The views are breathtaking and the villa exceeded all expectations. Perfect for a family vacation.', replied: false, urgent: true, response: '' },
-  { id: 'rv2', date: '2026-05-12', listingName: 'Dar Sojori', listingPhoto: '🏘️', guestName: 'Marco Rossi', ota: 'Booking.com', rating: 4, comment: 'Great location and beautiful riad. Only minor issue was the wifi speed, but overall wonderful experience.', replied: true, urgent: false, response: 'Thank you Marco! We appreciate your feedback. We have upgraded our wifi since your stay. Hope to welcome you again soon!' },
-  { id: 'rv3', date: '2026-05-11', listingName: 'Villa Atlas', listingPhoto: '⛰️', guestName: 'Aisha Khalil', ota: 'Airbnb', rating: 5, comment: 'Perfect mountain retreat. Clean, well-equipped, and the host was incredibly responsive. Highly recommend!', replied: true, urgent: false, response: 'Thank you Aisha! It was our pleasure to host you. Welcome back anytime!' },
-  { id: 'rv4', date: '2026-05-10', listingName: 'Riad Jasmine', listingPhoto: '🌸', guestName: 'Pierre Dubois', ota: 'Vrbo', rating: 3, comment: 'Decent property but had some maintenance issues. Hot water was inconsistent and some lights were not working.', replied: false, urgent: true, response: '' },
-  { id: 'rv5', date: '2026-05-09', listingName: 'Villa Belvédère', listingPhoto: '🏡', guestName: 'Emma Watson', ota: 'Airbnb', rating: 5, comment: 'Magical experience! The infinity pool at sunset is pure bliss. Communication was excellent throughout.', replied: true, urgent: false, response: 'Thank you Emma! Your kind words mean the world to us. We hope to host you again!' },
-  { id: 'rv6', date: '2026-05-08', listingName: 'Dar Sojori', listingPhoto: '🏘️', guestName: 'Ahmed Hassan', ota: 'Booking.com', rating: 4, comment: 'Beautiful traditional riad in the medina. Some noise from the street but overall great stay.', replied: false, urgent: false, response: '' },
-  { id: 'rv7', date: '2026-05-07', listingName: 'Villa Atlas', listingPhoto: '⛰️', guestName: 'Sophie Martin', ota: 'Airbnb', rating: 5, comment: 'Breathtaking views and pristine property. The concierge service was exceptional. Will definitely return!', replied: true, urgent: false, response: 'Merci Sophie! We loved hosting you and your family. À bientôt!' },
-  { id: 'rv8', date: '2026-05-06', listingName: 'Riad Jasmine', listingPhoto: '🌸', guestName: 'Carlos Mendez', ota: 'Booking.com', rating: 2, comment: 'Property did not match photos. Several amenities were not available and cleanliness was subpar.', replied: false, urgent: true, response: '' },
-  { id: 'rv9', date: '2026-05-05', listingName: 'Villa Belvédère', listingPhoto: '🏡', guestName: 'Lisa Anderson', ota: 'Vrbo', rating: 5, comment: 'Paradise! Everything was perfect from check-in to check-out. The staff went above and beyond.', replied: true, urgent: false, response: 'Thank you Lisa! Your satisfaction is our priority. Hope to welcome you back soon!' },
-  { id: 'rv10', date: '2026-05-04', listingName: 'Dar Sojori', listingPhoto: '🏘️', guestName: 'Mohammed Aziz', ota: 'Airbnb', rating: 4, comment: 'Authentic Moroccan experience. Loved the rooftop terrace. Some minor wear and tear but overall great.', replied: false, urgent: false, response: '' },
+type ReviewRow = {
+  id: string;
+  date: string;
+  listingName: string;
+  listingPhoto: string;
+  guestName: string;
+  ota: 'Airbnb' | 'Booking.com' | 'Vrbo';
+  rating: number;
+  comment: string;
+  replied: boolean;
+  urgent: boolean;
+  response: string;
+  flagged: boolean;
+  reservationNumber: string;
+};
+
+const MOCK_REVIEWS: ReviewRow[] = [
+  { id: 'rv1', date: '2026-05-13', listingName: 'Villa Belvédère', listingPhoto: '🏡', guestName: 'Sarah Johnson', ota: 'Airbnb', rating: 5, comment: 'Absolutely stunning property! The views are breathtaking and the villa exceeded all expectations. Perfect for a family vacation.', replied: false, urgent: true, response: '', flagged: false, reservationNumber: 'RES-2026-001' },
+  { id: 'rv2', date: '2026-05-12', listingName: 'Dar Sojori', listingPhoto: '🏘️', guestName: 'Marco Rossi', ota: 'Booking.com', rating: 4, comment: 'Great location and beautiful riad. Only minor issue was the wifi speed, but overall wonderful experience.', replied: true, urgent: false, response: 'Thank you Marco! We appreciate your feedback. We have upgraded our wifi since your stay. Hope to welcome you again soon!', flagged: false, reservationNumber: 'RES-2026-002' },
+  { id: 'rv3', date: '2026-05-11', listingName: 'Villa Atlas', listingPhoto: '⛰️', guestName: 'Aisha Khalil', ota: 'Airbnb', rating: 5, comment: 'Perfect mountain retreat. Clean, well-equipped, and the host was incredibly responsive. Highly recommend!', replied: true, urgent: false, response: 'Thank you Aisha! It was our pleasure to host you. Welcome back anytime!', flagged: false, reservationNumber: 'RES-2026-003' },
+  { id: 'rv4', date: '2026-05-10', listingName: 'Riad Jasmine', listingPhoto: '🌸', guestName: 'Pierre Dubois', ota: 'Vrbo', rating: 3, comment: 'Decent property but had some maintenance issues. Hot water was inconsistent and some lights were not working.', replied: false, urgent: true, response: '', flagged: false, reservationNumber: 'RES-2026-004' },
+  { id: 'rv5', date: '2026-05-09', listingName: 'Villa Belvédère', listingPhoto: '🏡', guestName: 'Emma Watson', ota: 'Airbnb', rating: 5, comment: 'Magical experience! The infinity pool at sunset is pure bliss. Communication was excellent throughout.', replied: true, urgent: false, response: 'Thank you Emma! Your kind words mean the world to us. We hope to host you again!', flagged: false, reservationNumber: 'RES-2026-005' },
+  { id: 'rv6', date: '2026-05-08', listingName: 'Dar Sojori', listingPhoto: '🏘️', guestName: 'Ahmed Hassan', ota: 'Booking.com', rating: 4, comment: 'Beautiful traditional riad in the medina. Some noise from the street but overall great stay.', replied: false, urgent: false, response: '', flagged: false, reservationNumber: 'RES-2026-006' },
+  { id: 'rv7', date: '2026-05-07', listingName: 'Villa Atlas', listingPhoto: '⛰️', guestName: 'Sophie Martin', ota: 'Airbnb', rating: 5, comment: 'Breathtaking views and pristine property. The concierge service was exceptional. Will definitely return!', replied: true, urgent: false, response: 'Merci Sophie! We loved hosting you and your family. À bientôt!', flagged: false, reservationNumber: 'RES-2026-007' },
+  { id: 'rv8', date: '2026-05-06', listingName: 'Riad Jasmine', listingPhoto: '🌸', guestName: 'Carlos Mendez', ota: 'Booking.com', rating: 2, comment: 'Property did not match photos. Several amenities were not available and cleanliness was subpar.', replied: false, urgent: true, response: '', flagged: false, reservationNumber: 'RES-2026-008' },
+  { id: 'rv9', date: '2026-05-05', listingName: 'Villa Belvédère', listingPhoto: '🏡', guestName: 'Lisa Anderson', ota: 'Vrbo', rating: 5, comment: 'Paradise! Everything was perfect from check-in to check-out. The staff went above and beyond.', replied: true, urgent: false, response: 'Thank you Lisa! Your satisfaction is our priority. Hope to welcome you back soon!', flagged: false, reservationNumber: 'RES-2026-009' },
+  { id: 'rv10', date: '2026-05-04', listingName: 'Dar Sojori', listingPhoto: '🏘️', guestName: 'Mohammed Aziz', ota: 'Airbnb', rating: 4, comment: 'Authentic Moroccan experience. Loved the rooftop terrace. Some minor wear and tear but overall great.', replied: false, urgent: false, response: '', flagged: false, reservationNumber: 'RES-2026-010' },
 ];
 
 // Calculate stats from reviews
@@ -64,10 +81,13 @@ const AI_RESPONSE_TEMPLATES = [
 ];
 
 export function ReviewsPage() {
-  const [reviews] = useState(MOCK_REVIEWS);
-  const [selectedReview, setSelectedReview] = useState<typeof MOCK_REVIEWS[0] | null>(null);
+  const navigate = useNavigate();
+  const [reviews, setReviews] = useState<ReviewRow[]>(MOCK_REVIEWS);
+  const [selectedReview, setSelectedReview] = useState<ReviewRow | null>(null);
   const [replyModalOpen, setReplyModalOpen] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'info' } | null>(null);
   const [filters, setFilters] = useState({ ota: 'all', rating: 'all', listing: 'all', status: 'all' });
 
   const stats = useMemo(() => calculateStats(reviews), [reviews]);
@@ -75,48 +95,98 @@ export function ReviewsPage() {
   // Filter reviews
   const filteredReviews = useMemo(() => {
     return reviews.filter(r => {
+      const matchesSearch =
+        !searchTerm ||
+        r.guestName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.comment.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.listingName.toLowerCase().includes(searchTerm.toLowerCase());
+
+      if (!matchesSearch) return false;
       if (filters.ota !== 'all' && r.ota !== filters.ota) return false;
       if (filters.rating !== 'all' && r.rating !== Number(filters.rating)) return false;
       if (filters.listing !== 'all' && r.listingName !== filters.listing) return false;
       if (filters.status === 'replied' && !r.replied) return false;
       if (filters.status === 'pending' && r.replied) return false;
       if (filters.status === 'urgent' && (!r.urgent || r.replied)) return false;
+      if (filters.status === 'flagged' && !r.flagged) return false;
       return true;
     });
-  }, [reviews, filters]);
+  }, [reviews, filters, searchTerm]);
 
-  const handleReply = (review: typeof MOCK_REVIEWS[0]) => {
+  const handleReply = (review: ReviewRow) => {
     setSelectedReview(review);
-    setReplyText('');
+    setReplyText(review.response || '');
     setReplyModalOpen(true);
   };
 
   const handleSubmitReply = () => {
-    console.log('Reply submitted:', { reviewId: selectedReview?.id, reply: replyText });
+    if (!selectedReview) return;
+
+    setReviews((prev) =>
+      prev.map((review) =>
+        review.id === selectedReview.id
+          ? { ...review, replied: true, response: replyText.trim(), urgent: false }
+          : review,
+      ),
+    );
     setReplyModalOpen(false);
     setSelectedReview(null);
     setReplyText('');
+    setToast({ message: 'Réponse publiée', severity: 'success' });
   };
 
   const handleAISuggestion = (template: string) => {
     setReplyText(template);
   };
 
+  const handleExport = () => {
+    const header = 'date,listing,guest,ota,rating,status\n';
+    const body = filteredReviews
+      .map((review) =>
+        [
+          review.date,
+          review.listingName,
+          review.guestName,
+          review.ota,
+          review.rating,
+          review.replied ? 'replied' : review.flagged ? 'flagged' : review.urgent ? 'urgent' : 'pending',
+        ].join(','),
+      )
+      .join('\n');
+    const blob = new Blob([header + body], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'reviews-export.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+    setToast({ message: 'Export téléchargé', severity: 'info' });
+  };
+
+  const handleFlag = (reviewId: string) => {
+    setReviews((prev) => prev.map((review) => (review.id === reviewId ? { ...review, flagged: true } : review)));
+    setToast({ message: 'Avis signalé', severity: 'warning' });
+  };
+
+  const handleNavigateCrossChannel = (review: ReviewRow) => {
+    navigate(`/communications/whatsapp?reservation=${review.reservationNumber}`);
+  };
+
   // DataTable columns
   const columns = [
     {
-      id: 'date',
+      key: 'date',
       label: 'Date',
-      render: (row: typeof MOCK_REVIEWS[0]) => (
+      render: (row: ReviewRow) => (
         <Typography sx={{ fontSize: 13, fontFamily: 'Geist Mono' }}>
           {new Date(row.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
         </Typography>
       ),
     },
     {
-      id: 'listing',
+      key: 'listing',
       label: 'Listing',
-      render: (row: typeof MOCK_REVIEWS[0]) => (
+      render: (row: ReviewRow) => (
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography sx={{ fontSize: 18 }}>{row.listingPhoto}</Typography>
           <Typography sx={{ fontSize: 13, fontWeight: 500 }}>{row.listingName}</Typography>
@@ -124,21 +194,21 @@ export function ReviewsPage() {
       ),
     },
     {
-      id: 'guest',
+      key: 'guest',
       label: 'Guest',
-      render: (row: typeof MOCK_REVIEWS[0]) => (
+      render: (row: ReviewRow) => (
         <Typography sx={{ fontSize: 13 }}>{row.guestName}</Typography>
       ),
     },
     {
-      id: 'ota',
+      key: 'ota',
       label: 'OTA',
-      render: (row: typeof MOCK_REVIEWS[0]) => <SourcePill source={row.ota} />,
+      render: (row: ReviewRow) => <SourcePill source={row.ota} />,
     },
     {
-      id: 'rating',
+      key: 'rating',
       label: 'Note',
-      render: (row: typeof MOCK_REVIEWS[0]) => (
+      render: (row: ReviewRow) => (
         <Stack direction="row" spacing={0.5} alignItems="center">
           <Rating value={row.rating} readOnly size="small" />
           <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
@@ -148,9 +218,9 @@ export function ReviewsPage() {
       ),
     },
     {
-      id: 'comment',
+      key: 'comment',
       label: 'Commentaire',
-      render: (row: typeof MOCK_REVIEWS[0]) => (
+      render: (row: ReviewRow) => (
         <Typography sx={{
           fontSize: 13,
           color: t.text2,
@@ -164,10 +234,13 @@ export function ReviewsPage() {
       ),
     },
     {
-      id: 'status',
+      key: 'status',
       label: 'Statut',
-      render: (row: typeof MOCK_REVIEWS[0]) => (
+      render: (row: ReviewRow) => (
         <Stack spacing={0.5}>
+          {row.flagged ? (
+            <Badge color="error" size="sm">⚑ Signalé</Badge>
+          ) : null}
           {row.replied ? (
             <Badge color="success" size="sm">✓ Répondu</Badge>
           ) : (
@@ -179,9 +252,9 @@ export function ReviewsPage() {
       ),
     },
     {
-      id: 'actions',
+      key: 'actions',
       label: 'Actions',
-      render: (row: typeof MOCK_REVIEWS[0]) => (
+      render: (row: ReviewRow) => (
         <Stack direction="row" spacing={0.5}>
           {!row.replied && (
             <Button
@@ -191,7 +264,14 @@ export function ReviewsPage() {
               💬 Répondre
             </Button>
           )}
-          <Button sx={{ ...btnSmSx, ...btnGhostSx }}>👁️ Détail</Button>
+          {!row.flagged && (
+            <Button sx={{ ...btnSmSx, ...btnGhostSx }} onClick={() => handleFlag(row.id)}>
+              ⚑ Signaler
+            </Button>
+          )}
+          <Button sx={{ ...btnSmSx, ...btnGhostSx }} onClick={() => handleNavigateCrossChannel(row)}>
+            🔗 Canal
+          </Button>
         </Stack>
       ),
     },
@@ -200,8 +280,16 @@ export function ReviewsPage() {
   return (
     <DashboardWrapper breadcrumb={['Service Client', 'Avis & Reviews']}>
       <PageHeader title="Avis & Reviews" count={`${filteredReviews.length}`}>
-        <Button sx={btnGhostSx}>📊 Rapport</Button>
-        <Button sx={btnPrimarySx}>⭐ Tous les avis</Button>
+        <Button sx={btnGhostSx} onClick={handleExport}>📊 Export CSV</Button>
+        <Button
+          sx={btnPrimarySx}
+          onClick={() => {
+            setFilters({ ota: 'all', rating: 'all', listing: 'all', status: 'all' });
+            setSearchTerm('');
+          }}
+        >
+          ⭐ Tous les avis
+        </Button>
       </PageHeader>
 
       {/* Stats Row */}
@@ -253,6 +341,15 @@ export function ReviewsPage() {
           mb: 2,
         }}
       >
+        <TextField
+          size="small"
+          label="Recherche"
+          placeholder="Guest, commentaire, listing..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          sx={{ minWidth: 240 }}
+        />
+
         <TextField
           select
           size="small"
@@ -309,15 +406,14 @@ export function ReviewsPage() {
           <MenuItem value="pending">En attente</MenuItem>
           <MenuItem value="replied">Répondus</MenuItem>
           <MenuItem value="urgent">Urgent</MenuItem>
+          <MenuItem value="flagged">Signalés</MenuItem>
         </TextField>
       </Stack>
 
       {/* DataTable */}
       <DataTable
         columns={columns}
-        data={filteredReviews}
-        keyExtractor={(row) => row.id}
-        emptyMessage="Aucun avis trouvé"
+        rows={filteredReviews}
       />
 
       {/* Reply Modal */}
@@ -397,6 +493,14 @@ export function ReviewsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar open={Boolean(toast)} autoHideDuration={2500} onClose={() => setToast(null)}>
+        {toast ? (
+          <Alert severity={toast.severity} variant="filled" onClose={() => setToast(null)}>
+            {toast.message}
+          </Alert>
+        ) : null}
+      </Snackbar>
     </DashboardWrapper>
   );
 }
