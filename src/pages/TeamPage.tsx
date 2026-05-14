@@ -29,37 +29,23 @@ import {
 import { MoreVert as MoreVertIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { AddTeamMemberModal, TeamMember } from '../components/team/AddTeamMemberModal';
+import { TeamFilters, applyTeamFilters, defaultTeamFilters, TeamFilterState } from '../components/team/TeamFilters';
 import { mockTeamMembers, mockStaffStats } from '../data/mockTeam';
-
-const ROLES = ['Tous', 'Femme de menage', 'Maintenance', 'Conciergerie', 'Chauffeur', 'Manager', 'Admin'];
 
 export function TeamPage() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(mockTeamMembers);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRole, setSelectedRole] = useState('Tous');
-  const [selectedStatus, setSelectedStatus] = useState('Tous');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+  const [filters, setFilters] = useState<TeamFilterState>(defaultTeamFilters);
 
   // Menu state
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedMemberForMenu, setSelectedMemberForMenu] = useState<TeamMember | null>(null);
 
+  // Apply advanced filters
   const filteredStaff = useMemo(() => {
-    return teamMembers.filter(staff => {
-      const fullName = `${staff.firstName} ${staff.lastName}`.toLowerCase();
-      const matchesSearch =
-        fullName.includes(searchQuery.toLowerCase()) ||
-        staff.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        staff.staffCode.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesRole = selectedRole === 'Tous' || staff.role === selectedRole;
-      let matchesStatus = true;
-      if (selectedStatus === 'Actif') matchesStatus = staff.status === 'active';
-      else if (selectedStatus === 'Inactif') matchesStatus = staff.status === 'inactive';
-      else if (selectedStatus === 'En conge') matchesStatus = staff.status === 'on_leave';
-      return matchesSearch && matchesRole && matchesStatus;
-    });
-  }, [teamMembers, searchQuery, selectedRole, selectedStatus]);
+    return applyTeamFilters(teamMembers, filters);
+  }, [teamMembers, filters]);
 
   const stats = useMemo(() => {
     const active = teamMembers.filter(s => s.status === 'active');
@@ -155,6 +141,58 @@ export function TeamPage() {
       window.open(`https://wa.me/${phone}`, '_blank');
     }
     handleMenuClose();
+  };
+
+  // P2.4: 8 actions supplémentaires
+  const handleExportClick = () => {
+    const csvContent = teamMembers
+      .map((m) => `${m.staffCode},${m.firstName},${m.lastName},${m.role},${m.email},${m.phone},${m.status}`)
+      .join('\n');
+    const header = 'Code,Prénom,Nom,Rôle,Email,Téléphone,Statut\n';
+    const blob = new Blob([header + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `team_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    toast.success('Export CSV réussi');
+  };
+
+  const handleImportClick = () => {
+    toast.info('Import CSV (MOCK) - Fonctionnalité à implémenter');
+  };
+
+  const handleBulkMessageClick = () => {
+    const activeMembers = filteredStaff.filter((m) => m.status === 'active');
+    toast.info(`Message groupé à ${activeMembers.length} membre(s) actif(s) (MOCK)`);
+  };
+
+  const handleViewProfileClick = () => {
+    if (selectedMemberForMenu) {
+      toast.info(`Profil complet de ${selectedMemberForMenu.firstName} ${selectedMemberForMenu.lastName} (MOCK)`);
+    }
+    handleMenuClose();
+  };
+
+  const handleAssignTaskClick = () => {
+    if (selectedMemberForMenu) {
+      toast.info(`Assigner tâche à ${selectedMemberForMenu.firstName} ${selectedMemberForMenu.lastName} (MOCK)`);
+    }
+    handleMenuClose();
+  };
+
+  const handleDeactivateClick = () => {
+    if (selectedMemberForMenu && window.confirm(`Désactiver ${selectedMemberForMenu.firstName} ${selectedMemberForMenu.lastName} ?`)) {
+      setTeamMembers((prev) =>
+        prev.map((m) => (m.id === selectedMemberForMenu.id ? { ...m, status: 'inactive' as const } : m))
+      );
+      toast.success('Membre désactivé avec succès');
+    }
+    handleMenuClose();
+  };
+
+  const handleResetFilters = () => {
+    setFilters(defaultTeamFilters);
+    toast.info('Filtres réinitialisés');
   };
 
   // Helper: Calculate schedule summary (X/7 jours)
@@ -414,6 +452,15 @@ export function TeamPage() {
   return (
     <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Équipe']}>
       <PageHeader title="Équipe" count={`${filteredStaff.length}`}>
+        <Button sx={btnGhostSx} onClick={handleImportClick}>
+          📥 Import
+        </Button>
+        <Button sx={btnGhostSx} onClick={handleExportClick}>
+          📤 Export
+        </Button>
+        <Button sx={btnGhostSx} onClick={handleBulkMessageClick}>
+          💬 Message groupé
+        </Button>
         <Button sx={btnPrimarySx} onClick={() => handleOpenModal()}>
           + Ajouter membre
         </Button>
@@ -429,40 +476,14 @@ export function TeamPage() {
             <StatCard title="Qualité moyenne" value={stats.avgQuality} icon="⭐" color={t.warning} />
           </Stack>
 
-          {/* Filters */}
-          <Box sx={{ bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '12px', p: 2 }}>
-            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-              <TextField
-                size="small"
-                placeholder="Rechercher par nom, email ou code..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">🔍</InputAdornment>,
-                }}
-                sx={{ flex: 1, minWidth: 250 }}
-              />
-              <FormControl size="small" sx={{ minWidth: 180 }}>
-                <InputLabel>Rôle</InputLabel>
-                <Select value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)} label="Rôle">
-                  {ROLES.map((r) => (
-                    <MenuItem key={r} value={r}>
-                      {r}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 140 }}>
-                <InputLabel>Statut</InputLabel>
-                <Select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} label="Statut">
-                  <MenuItem value="Tous">Tous</MenuItem>
-                  <MenuItem value="Actif">Actif</MenuItem>
-                  <MenuItem value="Inactif">Inactif</MenuItem>
-                  <MenuItem value="En conge">En congé</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
-          </Box>
+          {/* Advanced Filters (P2.3) */}
+          <TeamFilters
+            filters={filters}
+            onChange={setFilters}
+            onReset={handleResetFilters}
+            teamCount={teamMembers.length}
+            filteredCount={filteredStaff.length}
+          />
 
           {/* Table */}
           <DataTable columns={columns} data={filteredStaff} emptyMessage="Aucun membre trouvé" />
@@ -477,7 +498,7 @@ export function TeamPage() {
         existingMember={selectedMember}
       />
 
-      {/* Actions Menu */}
+      {/* Actions Menu (P2.4: 8 actions) */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
@@ -486,8 +507,13 @@ export function TeamPage() {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         <MenuItem onClick={handleEditClick}>✏️ Modifier</MenuItem>
+        <MenuItem onClick={handleViewProfileClick}>👤 Profil complet</MenuItem>
         <MenuItem onClick={handleViewPlanningClick}>📆 Voir planning</MenuItem>
-        <MenuItem onClick={handleWhatsAppClick}>📱 WhatsApp</MenuItem>
+        <MenuItem onClick={handleWhatsAppClick}>📱 Message WhatsApp</MenuItem>
+        <MenuItem onClick={handleAssignTaskClick}>📋 Assigner tâche</MenuItem>
+        <MenuItem onClick={handleDeactivateClick} sx={{ color: t.warning }}>
+          🚫 Désactiver
+        </MenuItem>
         <MenuItem onClick={handleDeleteClick} sx={{ color: t.error }}>
           🗑️ Supprimer
         </MenuItem>

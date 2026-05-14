@@ -83,6 +83,39 @@ Verification effectuee sur le repo `Sojori-orchestrator`:
 - `pnpm exec tsc --noEmit` OK
 - diagnostics linter IDE OK sur les fichiers modifies
 
+## 6. Integration composants Claude Design
+
+Mise a jour finale effectuee en restant strictement dans le scope Agent 3 du prompt composants:
+
+- `src/pages/PricingPage.tsx` branche maintenant le composant Claude Design `src/components/pricing/PricingRulesEditor.tsx`
+- `src/pages/ChannelsPage.tsx` utilise maintenant `src/components/channels/ChannelsDashboard.tsx` comme composant principal de page
+- `src/pages/ListingsCataloguePage.tsx` integre `src/components/filters/ColumnSelector.tsx`
+- `src/pages/ClientsPage.tsx` integre `src/components/filters/ColumnSelector.tsx`
+
+Adjustements faits uniquement pour rendre cette integration exploitable:
+
+- `src/components/pricing/PricingRulesEditor.tsx`
+  - ajout du support `initialTab`
+  - synchro de l'etat interne avec les props recues
+- `src/components/channels/ChannelsDashboard.tsx`
+  - ajout du sous-onglet `Listings` dans la tab `Business`
+
+## 7. Fichiers Agent 3 touches pour la passe finale
+
+- `src/components/pricing/PricingRulesEditor.tsx`
+- `src/components/channels/ChannelsDashboard.tsx`
+- `src/pages/PricingPage.tsx`
+- `src/pages/ChannelsPage.tsx`
+- `src/pages/ListingsCataloguePage.tsx`
+- `src/pages/ClientsPage.tsx`
+
+## 8. Statut final
+
+- scope Agent 3 traite uniquement
+- composants Agent 3 integres
+- typecheck OK
+- lints sur fichiers modifies OK
+
 ## Notes
 
 - livraison volontairement en mode mock, sans branchement API

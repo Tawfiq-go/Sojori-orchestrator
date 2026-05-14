@@ -201,11 +201,12 @@ export function AnalyticsPage() {
           gridTemplateColumns: { xs: '1fr', xl: '1fr 1fr' },
           gap: 2,
           mb: 2,
+          '& > *': { minWidth: 0 },
         }}
       >
         <Panel title="Evolution revenus" desc="Periode comparee">
-          <Box sx={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
+          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <LineChart data={mockRevenueEvolution}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="label" />
@@ -220,8 +221,8 @@ export function AnalyticsPage() {
         </Panel>
 
         <Panel title="Analyse sources reservations" desc={source === 'Tous' ? 'Toutes OTA' : source}>
-          <Box sx={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
+          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={filteredSources}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="source" />
@@ -242,11 +243,12 @@ export function AnalyticsPage() {
           gridTemplateColumns: { xs: '1fr', xl: '1fr 1fr' },
           gap: 2,
           mb: 2,
+          '& > *': { minWidth: 0 },
         }}
       >
         <Panel title="Saisonnalite" desc="Heatmap-like monthly bars">
-          <Box sx={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
+          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={mockSeasonality}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="month" />

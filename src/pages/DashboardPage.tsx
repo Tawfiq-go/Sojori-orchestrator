@@ -188,11 +188,12 @@ export function DashboardPage() {
           gridTemplateColumns: { xs: '1fr', xl: '1.2fr 0.8fr' },
           gap: 2,
           mb: 2,
+          '& > *': { minWidth: 0 },
         }}
       >
         <Panel title="Revenus par jour / semaine / mois" desc="Revenue trend + bookings">
-          <Box sx={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
+          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <LineChart data={mockRevenueChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="date" />
@@ -208,8 +209,8 @@ export function DashboardPage() {
         </Panel>
 
         <Panel title="Reservations par source" desc="Airbnb, Booking, Direct, Vrbo">
-          <Box sx={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
+          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie
                   data={mockSourceDistribution}
@@ -237,11 +238,12 @@ export function DashboardPage() {
           gridTemplateColumns: { xs: '1fr', xl: '1fr 1fr' },
           gap: 2,
           mb: 2,
+          '& > *': { minWidth: 0 },
         }}
       >
         <Panel title="Taux d’occupation par property" desc="Bar chart par actif">
-          <Box sx={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
+          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={mockOccupancyByProperty}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="property" hide />
@@ -268,8 +270,8 @@ export function DashboardPage() {
         </Panel>
 
         <Panel title="Check-ins / Check-outs" desc="Vue jour par jour">
-          <Box sx={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
+          <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={mockCheckFlow}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="label" />

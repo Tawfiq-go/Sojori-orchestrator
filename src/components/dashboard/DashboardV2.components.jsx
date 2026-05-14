@@ -1378,7 +1378,9 @@ export function Panel({ title, desc, headRight, children, sx }) {
     <Box sx={{
       bgcolor: t.bg1, border: `1px solid ${t.border}`,
       borderRadius: '12px', p: 2.5,
-      boxShadow: '0 1px 2px rgba(26,20,8,0.03)', ...sx,
+      boxShadow: '0 1px 2px rgba(26,20,8,0.03)',
+      minWidth: 0,
+      ...sx,
     }}>
       {title && (
         <Stack direction="row" spacing={1.25} sx={{
