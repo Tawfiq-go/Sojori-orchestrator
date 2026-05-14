@@ -52,9 +52,9 @@ export function ReservationSejourPage() {
   };
 
   // Calendar data - show this specific reservation
-  // Check-in: 12 mai 2026 = jour 3 (si on commence le 1er mai = jour 0)
-  // Check-out: 22 mai 2026 = jour 13
-  // Donc bookedRanges: [[3, 12]] (10 nuits)
+  // Check-in: 12 mai 2026 = jour 11 (1er mai = jour 0, 12 mai = jour 11)
+  // Check-out: 22 mai 2026 = jour 21
+  // Donc la réservation s'étend du jour 11 au jour 20 (10 nuits)
   const propertyRow: PropertyRow = {
     id: 'p1',
     name: reservationData.property.name,
@@ -62,8 +62,19 @@ export function ReservationSejourPage() {
     photoColor: 'gold',
     occupancyPct: 87,
     monthRevenue: reservationData.pricing.total,
-    bookedRanges: [[3, 12]], // 12 mai (jour 3) au 22 mai (jour 13) = 10 nuits
+    bookedRanges: [[11, 20]], // 12 mai (jour 11) au 22 mai (jour 21) = 10 nuits
     closedDays: [],
+    reservations: [
+      {
+        id: reservationData.id,
+        guestName: reservationData.guest.name,
+        guestFlag: reservationData.guest.country,
+        amount: reservationData.pricing.total,
+        startDay: 11, // 12 mai
+        endDay: 20,   // 21 mai (check-out 22 mai)
+        status: 'confirmed',
+      }
+    ],
   };
 
   // Icon presets (same as OrchestrationPage)

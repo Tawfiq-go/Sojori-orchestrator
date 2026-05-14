@@ -21,6 +21,17 @@ export type PropertyRow = {
   monthRevenue: string;
   bookedRanges: [number, number][]; // [startDayIdx, endDayIdx] inclusive
   closedDays?: number[];
+  reservations?: ReservationBlock[]; // Detailed reservation blocks
+};
+
+export type ReservationBlock = {
+  id: string;
+  guestName: string;
+  guestFlag?: string; // emoji flag
+  amount: string;
+  startDay: number; // day index
+  endDay: number; // day index (inclusive)
+  status: 'confirmed' | 'pending';
 };
 
 interface DayHeader {
@@ -71,11 +82,12 @@ export function MultiPropertyInventory({
 
   return (
     <Panel sx={{ p: 0, overflow: 'hidden' }}>
-      <Box sx={{ overflowX: 'auto' }}>
+      <Box sx={{ overflowX: 'auto', position: 'relative' }}>
         <Box sx={{
           display: 'grid',
           gridTemplateColumns: `230px repeat(${days}, minmax(64px, 1fr))`,
           minWidth: 'max-content',
+          position: 'relative',
         }}>
           {/* Header */}
           <Box sx={{
@@ -103,13 +115,14 @@ export function MultiPropertyInventory({
           ))}
 
           {/* Rows */}
-          {properties.map(p => (
+          {properties.map((p, idx) => (
             <PropertyRowView
               key={p.id}
               property={p}
               days={days}
               headers={headers}
               onCellClick={onCellClick}
+              rowIndex={idx}
             />
           ))}
         </Box>
@@ -119,13 +132,18 @@ export function MultiPropertyInventory({
 }
 
 function PropertyRowView({
-  property, days, headers, onCellClick,
+  property, days, headers, onCellClick, rowIndex,
 }: {
   property: PropertyRow;
   days: number;
   headers: DayHeader[];
   onCellClick?: (propertyId: string, dayIdx: number) => void;
+  rowIndex: number;
 }) {
+  const cellWidth = 64; // matches minmax(64px, 1fr)
+  const headerHeight = 52; // height of header row
+  const rowHeight = 64; // height of each property row
+
   return (
     <>
       <Box sx={{
@@ -205,6 +223,51 @@ function PropertyRowView({
                 <Box sx={{ fontSize: 9, color: '#b91c1c', textAlign: 'center', fontWeight: 600, mt: 0.125 }}>{guestInitials}</Box>
               </>
             )}
+          </Box>
+        );
+      })}
+
+      {/* Reservation blocks overlay - positioned absolutely over the grid */}
+      {property.reservations?.map((reservation) => {
+        const blockWidth = (reservation.endDay - reservation.startDay + 1) * cellWidth - 8;
+        const blockLeft = 230 + reservation.startDay * cellWidth + 4;
+        const blockTop = headerHeight + rowIndex * rowHeight + 10;
+        const bgColor = reservation.status === 'confirmed' ? '#10b981' : '#f59e0b';
+
+        return (
+          <Box
+            key={reservation.id}
+            sx={{
+              position: 'absolute',
+              left: `${blockLeft}px`,
+              top: `${blockTop}px`,
+              width: `${blockWidth}px`,
+              height: 44,
+              bgcolor: bgColor,
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              px: 1.5,
+              gap: 0.75,
+              color: '#fff',
+              fontWeight: 600,
+              fontSize: 13,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              zIndex: 20,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+              },
+            }}
+          >
+            <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {reservation.guestName} {reservation.guestFlag}
+            </Typography>
+            <Box sx={{ ml: 'auto', fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+              {reservation.amount}
+            </Box>
           </Box>
         );
       })}
