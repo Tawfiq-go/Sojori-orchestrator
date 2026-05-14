@@ -80,11 +80,16 @@ export function DashboardWrapper({ children, breadcrumb = [] }: DashboardWrapper
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <DashboardLayout
       activePath={getActivePathFromUrl()}
       onNavigate={handleNavigate}
-      onLogout={logout}
+      onLogout={handleLogout}
       breadcrumb={breadcrumb}
       user={user ? {
         name: `${user.firstName} ${user.lastName}`.trim(),

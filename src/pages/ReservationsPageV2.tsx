@@ -10,6 +10,7 @@ import {
 import { Box, Button, TextField, Select, MenuItem, FormControl, InputLabel, Stack, Typography, IconButton, Menu, Chip, Tooltip } from '@mui/material';
 import { CreateReservationModal } from '../components/modals/CreateReservationModal';
 import { mockReservations, type Reservation } from '../data/mockReservations';
+import ColumnSelector, { type ColumnDef } from '../components/filters/ColumnSelector';
 
 export function ReservationsPageV2() {
   const navigate = useNavigate();
@@ -31,6 +32,27 @@ export function ReservationsPageV2() {
   // Actions menu
   const [actionsMenuAnchor, setActionsMenuAnchor] = useState<null | HTMLElement>(null);
   const [actionRowId, setActionRowId] = useState<string | null>(null);
+
+  // Column selector state
+  const allColumnDefs: ColumnDef[] = [
+    { id: 'reservationNumber', label: 'N° Résa', required: true },
+    { id: 'guest', label: 'Voyageur', required: true },
+    { id: 'listing', label: 'Listing' },
+    { id: 'dates', label: 'Dates' },
+    { id: 'travelers', label: 'Voyageurs' },
+    { id: 'revenue', label: 'Revenu' },
+    { id: 'status', label: 'Statut' },
+    { id: 'source', label: 'Source' },
+    { id: 'payment', label: 'Paiement' },
+    { id: 'createdAt', label: 'Créé le' },
+    { id: 'actions', label: 'Actions', required: true },
+  ];
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([
+    'reservationNumber', 'guest', 'listing', 'dates', 'travelers', 'revenue', 'status', 'source', 'payment', 'actions'
+  ]);
+  const [columnOrder, setColumnOrder] = useState<string[]>([
+    'reservationNumber', 'guest', 'listing', 'dates', 'travelers', 'revenue', 'status', 'source', 'payment', 'createdAt', 'actions'
+  ]);
 
   // Handle create reservation
   const handleCreateReservation = (newReservation: Partial<Reservation>) => {
@@ -87,8 +109,8 @@ export function ReservationsPageV2() {
     return true;
   });
 
-  // Updated columns with 15 additional fields
-  const columns = [
+  // All columns definitions
+  const allColumns = [
     {
       key: 'reservationNumber',
       label: 'N° Résa',
@@ -313,6 +335,12 @@ export function ReservationsPageV2() {
     },
   ];
 
+  // Filter and order columns based on user selection
+  const columns = columnOrder
+    .filter(colId => visibleColumns.includes(colId))
+    .map(colId => allColumns.find(col => col.key === colId))
+    .filter(col => col !== undefined);
+
   return (
     <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
       <StatsRow>
@@ -331,6 +359,15 @@ export function ReservationsPageV2() {
       </StatsRow>
 
       <PageHeader title="Réservations" count={filteredReservations.length.toString()}>
+        <ColumnSelector
+          columns={allColumnDefs}
+          visible={visibleColumns}
+          order={columnOrder}
+          onChange={(newVisible, newOrder) => {
+            setVisibleColumns(newVisible);
+            setColumnOrder(newOrder);
+          }}
+        />
         <Button sx={btnGhostSx} onClick={() => alert('Export CSV - MOCK')}>
           📥 Exporter CSV
         </Button>

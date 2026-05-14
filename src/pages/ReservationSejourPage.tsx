@@ -7,6 +7,8 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 import { Box, Button, Stack, Typography, Avatar } from '@mui/material';
 import { useParams } from 'react-router-dom';
+import TravelersSection from '../components/sections/TravelersSection';
+import FinancialSection from '../components/sections/FinancialSection';
 
 export function ReservationSejourPage() {
   const { id } = useParams();
@@ -301,6 +303,32 @@ export function ReservationSejourPage() {
               </Button>
             </Stack>
           </Panel>
+
+          {/* Voyageurs - TravelersSection from Claude Design */}
+          <Box sx={{ mt: 2.5 }}>
+            <TravelersSection
+              reservationId={reservationData.id}
+              onAdd={(group) => alert(`Ajouter voyageur (${group}) - MOCK`)}
+              onEdit={(traveler) => alert(`Éditer voyageur ${traveler.firstName} - MOCK`)}
+              onDelete={(id) => {
+                if (confirm('Supprimer ce voyageur ?')) {
+                  alert(`Supprimé ${id} - MOCK`);
+                }
+              }}
+            />
+          </Box>
+
+          {/* Finances - FinancialSection from Claude Design */}
+          <Box sx={{ mt: 2.5 }}>
+            <FinancialSection
+              totalGuest={1848}
+              commission={277}
+              netOwner={1571}
+              currency="€"
+              onAddPayment={() => alert('Ajouter paiement - MOCK')}
+              onAddCharge={() => alert('Ajouter frais - MOCK')}
+            />
+          </Box>
         </Stack>
       </Box>
     </DashboardWrapper>
