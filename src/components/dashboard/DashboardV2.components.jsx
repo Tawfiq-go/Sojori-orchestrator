@@ -157,6 +157,25 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
     'Catalogue': true,
   });
 
+  // Auto-ouvrir le groupe qui contient l'item actif
+  React.useEffect(() => {
+    // Trouver quel groupe contient l'activePath
+    const activeGroup = NAV.find(group =>
+      group.items.some(item => {
+        // Check exact match ou parent path
+        if (item.id === activePath) return true;
+        // Check si activePath commence par item.id (ex: 'tasks/list' contient 'tasks')
+        if (activePath.startsWith(item.id.split('/')[0])) return true;
+        return false;
+      })
+    );
+
+    if (activeGroup) {
+      // Ouvrir ce groupe automatiquement
+      setCollapsed(prev => ({ ...prev, [activeGroup.group]: false }));
+    }
+  }, [activePath]);
+
   const toggleGroup = (groupName) => {
     setCollapsed(prev => ({ ...prev, [groupName]: !prev[groupName] }));
   };
