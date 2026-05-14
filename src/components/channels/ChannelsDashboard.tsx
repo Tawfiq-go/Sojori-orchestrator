@@ -2,7 +2,7 @@
 // Sojori — ChannelsDashboard
 // 5 tabs: Summary / Business / Debug / Cron / Mapping
 // ════════════════════════════════════════════════════════════════════
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Box, Stack, Typography, Tabs, Tab, Card, Chip, Button, IconButton,
   Table, TableBody, TableCell, TableHead, TableRow,
@@ -105,10 +105,17 @@ function BusinessTab() {
         <Tab label="💬 Messages" />
         <Tab label="🎫 Réservations" />
         <Tab label="📅 Calendrier" />
+        <Tab label="🏠 Listings" />
       </Tabs>
       <Card variant="outlined" sx={{ p: 2 }}>
         <Typography sx={{ fontWeight: 700, mb: 1.5 }}>
-          {sub === 0 ? 'Messages entrants & sortants par canal' : sub === 1 ? 'Volume réservations par canal' : 'Sync calendrier (push/pull)'}
+          {sub === 0
+            ? 'Messages entrants & sortants par canal'
+            : sub === 1
+              ? 'Volume réservations par canal'
+              : sub === 2
+                ? 'Sync calendrier (push/pull)'
+                : 'Performance listings et mapping par canal'}
         </Typography>
         <Table size="small">
           <TableHead>

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ColumnSelector, { type ColumnDef } from '../components/filters/ColumnSelector';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader, DataTable, StatCard, StatsRow, Badge, ViewToggle, KanbanBoard, KanbanColumn,
@@ -207,6 +208,8 @@ export function RequestsPage() {
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'info' } | null>(null);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [filters, setFilters] = useState({ type: 'all', status: 'all', priority: 'all', listing: 'all' });
+  const [visibleColumns, setVisibleColumns] = useState(['type', 'guest', 'listing', 'description', 'dates', 'status', 'priority', 'assigned', 'actions']);
+  const [columnOrder, setColumnOrder] = useState(['type', 'guest', 'listing', 'description', 'dates', 'status', 'priority', 'assigned', 'actions']);
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -463,6 +466,28 @@ export function RequestsPage() {
       ),
     },
   ];
+  const columnDefs = useMemo<ColumnDef[]>(
+    () => [
+      { id: 'type', label: 'Type' },
+      { id: 'guest', label: 'Guest & Réservation', required: true },
+      { id: 'listing', label: 'Listing' },
+      { id: 'description', label: 'Description' },
+      { id: 'dates', label: 'Dates' },
+      { id: 'status', label: 'Statut' },
+      { id: 'priority', label: 'Priorité' },
+      { id: 'assigned', label: 'Assigné à' },
+      { id: 'actions', label: 'Actions', required: true },
+    ],
+    [],
+  );
+  const visibleOrderedColumns = useMemo(
+    () =>
+      columnOrder
+        .filter((columnId) => visibleColumns.includes(columnId))
+        .map((columnId) => columns.find((column) => column.key === columnId))
+        .filter(Boolean),
+    [columnOrder, columns, visibleColumns],
+  );
 
   const RequestKanbanCard = ({ request }: { request: GuestRequest }) => {
     const typeConfig = REQUEST_TYPE_CONFIG[request.type];
@@ -501,6 +526,15 @@ export function RequestsPage() {
   return (
     <DashboardWrapper breadcrumb={['Service Client', 'Demandes']}>
       <PageHeader title="Demandes Guests" count={`${filteredRequests.length}`}>
+        <ColumnSelector
+          columns={columnDefs}
+          visible={visibleColumns}
+          order={columnOrder}
+          onChange={(nextVisible, nextOrder) => {
+            setVisibleColumns(nextVisible);
+            setColumnOrder(nextOrder);
+          }}
+        />
         <ViewToggle
           options={[
             { value: 'table', label: '📋 Table' },
@@ -647,7 +681,7 @@ export function RequestsPage() {
       {/* Content: Table or Kanban */}
       {viewMode === 'table' ? (
         <DataTable
-          columns={columns}
+          columns={visibleOrderedColumns}
           rows={filteredRequests}
         />
       ) : (

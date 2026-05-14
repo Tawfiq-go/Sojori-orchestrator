@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CommunicationsSectionToggle } from '../components/CommunicationsSectionToggle';
+import BroadcastModal, { type StaffMember } from '../components/modals/BroadcastModal';
 import {
   PageHeader,
   btnPrimarySx,
@@ -19,12 +20,6 @@ import {
   Tabs,
   Tab,
   Badge,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Checkbox,
-  FormControlLabel,
 } from '@mui/material';
 
 // MOCK DATA - Staff conversations
@@ -150,10 +145,24 @@ export function StaffWhatsAppPage() {
   const [recentOnly, setRecentOnly] = useState(false);
   const [messageInput, setMessageInput] = useState('');
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
-  const [broadcastRecipients, setBroadcastRecipients] = useState<string[]>([]);
-  const [broadcastMessage, setBroadcastMessage] = useState('');
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, any[]>>(INITIAL_MESSAGES_BY_CONVERSATION);
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'info' } | null>(null);
+  const broadcastStaffList = useMemo<StaffMember[]>(
+    () =>
+      STAFF_LIST.map((staff) => ({
+        id: staff.id,
+        name: staff.name,
+        initials: staff.name
+          .split(' ')
+          .map((part) => part[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase(),
+        role: staff.role,
+        online: staff.online,
+      })),
+    [],
+  );
 
   // Get conversations list
   const conversations = useMemo(() => {
@@ -275,16 +284,16 @@ export function StaffWhatsAppPage() {
     setToast({ message: 'Message envoyé', severity: 'success' });
   };
 
-  const handleBroadcast = () => {
-    if (!broadcastMessage.trim() || broadcastRecipients.length === 0) return;
+  const handleBroadcast = (recipients: string[], message: string) => {
+    if (!message.trim() || recipients.length === 0) return;
 
-    const trimmed = broadcastMessage.trim();
+    const trimmed = message.trim();
     const sentAt = new Date().toISOString();
 
     setMessagesByConversation((prev) => {
       const next = { ...prev };
 
-      broadcastRecipients.forEach((staffId) => {
+      recipients.forEach((staffId) => {
         const nextMessage = {
           id: `MSG_BROADCAST_${staffId}_${Date.now()}`,
           conversationId: staffId,
@@ -304,10 +313,8 @@ export function StaffWhatsAppPage() {
       return next;
     });
     setShowBroadcastModal(false);
-    setBroadcastRecipients([]);
-    setBroadcastMessage('');
     setToast({
-      message: `Message diffusé à ${broadcastRecipients.length} personne${broadcastRecipients.length > 1 ? 's' : ''}`,
+      message: `Message diffusé à ${recipients.length} personne${recipients.length > 1 ? 's' : ''}`,
       severity: 'info',
     });
   };
@@ -653,54 +660,12 @@ export function StaffWhatsAppPage() {
         </Box>
       </Box>
 
-      {/* Broadcast Modal */}
-      <Dialog open={showBroadcastModal} onClose={() => setShowBroadcastModal(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Message Broadcast</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Typography sx={{ fontSize: '13px', fontWeight: 600 }}>Destinataires:</Typography>
-            <Box sx={{ maxHeight: 200, overflowY: 'auto' }}>
-              {STAFF_LIST.map(staff => (
-                <FormControlLabel
-                  key={staff.id}
-                  control={
-                    <Checkbox
-                      checked={broadcastRecipients.includes(staff.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setBroadcastRecipients([...broadcastRecipients, staff.id]);
-                        } else {
-                          setBroadcastRecipients(broadcastRecipients.filter(id => id !== staff.id));
-                        }
-                      }}
-                    />
-                  }
-                  label={`${staff.name} (${staff.role})`}
-                />
-              ))}
-            </Box>
-            <TextField
-              fullWidth
-              multiline
-              rows={4}
-              placeholder="Votre message..."
-              value={broadcastMessage}
-              onChange={(e) => setBroadcastMessage(e.target.value)}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowBroadcastModal(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            sx={btnPrimarySx}
-            onClick={handleBroadcast}
-            disabled={broadcastRecipients.length === 0 || !broadcastMessage.trim()}
-          >
-            Envoyer ({broadcastRecipients.length})
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <BroadcastModal
+        open={showBroadcastModal}
+        onClose={() => setShowBroadcastModal(false)}
+        staff={broadcastStaffList}
+        onSend={handleBroadcast}
+      />
 
       {toast ? (
         <Snackbar open autoHideDuration={2500} onClose={() => setToast(null)}>

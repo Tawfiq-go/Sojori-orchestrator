@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { ActionToast, useActionToast } from '../components/ActionToast';
+import ColumnSelector, { type ColumnDef } from '../components/filters/ColumnSelector';
 import { useAuth } from '../hooks/useAuth';
 import {
   getStoredClients,
@@ -43,6 +44,17 @@ import {
 const formatCurrency = (amount: number) => `${amount.toLocaleString('fr-FR')}€`;
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+const CLIENT_COLUMN_ORDER = [
+  'name',
+  'country',
+  'role',
+  'owners',
+  'totalBookings',
+  'totalRevenue',
+  'lastVisit',
+  'status',
+  'actions',
+];
 
 export function ClientsPage() {
   const navigate = useNavigate();
@@ -58,6 +70,8 @@ export function ClientsPage() {
   const [selectedOwners, setSelectedOwners] = useState<string[]>([]);
   const [showDeleted, setShowDeleted] = useState(false);
   const [showBanned, setShowBanned] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState(CLIENT_COLUMN_ORDER);
+  const [columnOrder, setColumnOrder] = useState(CLIENT_COLUMN_ORDER);
   const [page, setPage] = useState(1);
   const [selectedClient, setSelectedClient] = useState<ClientRecord | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -127,6 +141,96 @@ export function ClientsPage() {
     saveStoredClients(nextClients);
     showToast(message, severity);
   };
+  const tableColumns = useMemo(
+    () => [
+      {
+        key: 'name',
+        label: 'Client',
+        render: (row: any) => (
+          <Stack>
+            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{row.name}</Typography>
+            <Typography sx={{ fontSize: 11.5, color: t.text3 }}>{row.email}</Typography>
+          </Stack>
+        ),
+      },
+      {
+        key: 'country',
+        label: 'Pays',
+        render: (row: any) => `${row.countryFlag} ${row.country}`,
+      },
+      {
+        key: 'role',
+        label: 'Role',
+        render: (row: any) => <Badge variant={row.role === 'vip' ? 'gold' : row.role === 'corporate' ? 'info' : 'neutral'}>{row.role}</Badge>,
+      },
+      {
+        key: 'owners',
+        label: 'Owners associés',
+        render: (row: any) => (
+          <Typography sx={{ fontSize: 12, color: t.text3 }}>
+            {row.ownerNames.join(', ')}
+          </Typography>
+        ),
+      },
+      { key: 'totalBookings', label: 'Séjours', align: 'right' },
+      { key: 'totalRevenue', label: 'Revenu', align: 'right', render: (row: any) => formatCurrency(row.totalRevenue) },
+      { key: 'lastVisit', label: 'Dernière visite', render: (row: any) => formatDate(row.lastVisit) },
+      {
+        key: 'status',
+        label: 'Status',
+        render: (row: any) => <Badge variant={row.status === 'active' ? 'success' : row.status === 'banned' ? 'error' : 'neutral'}>{row.status}</Badge>,
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        render: (row: any) => (
+          <Stack direction="row" spacing={0.75}>
+            <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => { setSelectedClient(row); setDetailsOpen(true); }}>
+              Voir
+            </Button>
+            <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => { setSelectedClient(row); setEditOpen(true); }}>
+              Modifier
+            </Button>
+            <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => navigate(`/clients/contacts?client=${row.id}`)}>
+              Message
+            </Button>
+            <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => { setSelectedClient(row); setReservationOpen(true); }}>
+              Réservation
+            </Button>
+            <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => toggleVip(row.id)}>
+              {row.vipStatus ? 'UnVIP' : 'VIP'}
+            </Button>
+            <Button sx={{ ...btnGhostSx, ...btnSmSx }} color="error" onClick={() => removeClient(row.id)}>
+              Supprimer
+            </Button>
+          </Stack>
+        ),
+      },
+    ],
+    [navigate],
+  );
+  const columnDefs = useMemo<ColumnDef[]>(
+    () => [
+      { id: 'name', label: 'Client', required: true },
+      { id: 'country', label: 'Pays' },
+      { id: 'role', label: 'Role' },
+      { id: 'owners', label: 'Owners associés' },
+      { id: 'totalBookings', label: 'Séjours' },
+      { id: 'totalRevenue', label: 'Revenu' },
+      { id: 'lastVisit', label: 'Dernière visite' },
+      { id: 'status', label: 'Status' },
+      { id: 'actions', label: 'Actions', required: true },
+    ],
+    [],
+  );
+  const visibleOrderedColumns = useMemo(
+    () =>
+      columnOrder
+        .filter((columnId) => visibleColumns.includes(columnId))
+        .map((columnId) => tableColumns.find((column) => column.key === columnId))
+        .filter(Boolean),
+    [columnOrder, tableColumns, visibleColumns],
+  );
 
   const toggleVip = (clientId: string) => {
     persistClients(
@@ -158,6 +262,15 @@ export function ClientsPage() {
   return (
     <DashboardWrapper breadcrumb={['Catalogue', 'Clients']}>
       <PageHeader title="Base clients CRM" count={`${filteredClients.length} clients`}>
+        <ColumnSelector
+          columns={columnDefs}
+          visible={visibleColumns}
+          order={columnOrder}
+          onChange={(nextVisible, nextOrder) => {
+            setVisibleColumns(nextVisible);
+            setColumnOrder(nextOrder);
+          }}
+        />
         <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => showToast('Export CSV mock généré', 'info')}>
           📊 Export CSV
         </Button>
@@ -242,71 +355,7 @@ export function ClientsPage() {
       </Stack>
 
       <DataTable
-        columns={[
-          {
-            key: 'name',
-            label: 'Client',
-            render: (row: any) => (
-              <Stack>
-                <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{row.name}</Typography>
-                <Typography sx={{ fontSize: 11.5, color: t.text3 }}>{row.email}</Typography>
-              </Stack>
-            ),
-          },
-          {
-            key: 'country',
-            label: 'Pays',
-            render: (row: any) => `${row.countryFlag} ${row.country}`,
-          },
-          {
-            key: 'role',
-            label: 'Role',
-            render: (row: any) => <Badge variant={row.role === 'vip' ? 'gold' : row.role === 'corporate' ? 'info' : 'neutral'}>{row.role}</Badge>,
-          },
-          {
-            key: 'owners',
-            label: 'Owners associés',
-            render: (row: any) => (
-              <Typography sx={{ fontSize: 12, color: t.text3 }}>
-                {row.ownerNames.join(', ')}
-              </Typography>
-            ),
-          },
-          { key: 'totalBookings', label: 'Séjours', align: 'right' },
-          { key: 'totalRevenue', label: 'Revenu', align: 'right', render: (row: any) => formatCurrency(row.totalRevenue) },
-          { key: 'lastVisit', label: 'Dernière visite', render: (row: any) => formatDate(row.lastVisit) },
-          {
-            key: 'status',
-            label: 'Status',
-            render: (row: any) => <Badge variant={row.status === 'active' ? 'success' : row.status === 'banned' ? 'error' : 'neutral'}>{row.status}</Badge>,
-          },
-          {
-            key: 'actions',
-            label: 'Actions',
-            render: (row: any) => (
-              <Stack direction="row" spacing={0.75}>
-                <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => { setSelectedClient(row); setDetailsOpen(true); }}>
-                  Voir
-                </Button>
-                <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => { setSelectedClient(row); setEditOpen(true); }}>
-                  Modifier
-                </Button>
-                <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => navigate(`/clients/contacts?client=${row.id}`)}>
-                  Message
-                </Button>
-                <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => { setSelectedClient(row); setReservationOpen(true); }}>
-                  Réservation
-                </Button>
-                <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => toggleVip(row.id)}>
-                  {row.vipStatus ? 'UnVIP' : 'VIP'}
-                </Button>
-                <Button sx={{ ...btnGhostSx, ...btnSmSx }} color="error" onClick={() => removeClient(row.id)}>
-                  Supprimer
-                </Button>
-              </Stack>
-            ),
-          },
-        ]}
+        columns={visibleOrderedColumns}
         rows={paginatedClients}
         footer={
           <>

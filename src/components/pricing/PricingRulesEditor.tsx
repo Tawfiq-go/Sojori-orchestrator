@@ -2,7 +2,7 @@
 // Sojori — PricingRulesEditor
 // 6 tabs: Month / Weekday / Events / Occupancy / Long Stay / Last Minute
 // ════════════════════════════════════════════════════════════════════
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Box, Stack, Typography, Tabs, Tab, Slider, Switch, Button, TextField,
   IconButton, Chip, Card, Divider,
@@ -49,9 +49,25 @@ const DEFAULT: PricingRules = {
   ],
 };
 
-export default function PricingRulesEditor({ rules: initial = DEFAULT, onChange }: { rules?: PricingRules; onChange?: (r: PricingRules) => void }) {
+export default function PricingRulesEditor({
+  rules: initial = DEFAULT,
+  initialTab = 0,
+  onChange,
+}: {
+  rules?: PricingRules;
+  initialTab?: number;
+  onChange?: (r: PricingRules) => void;
+}) {
   const [rules, setRules] = useState<PricingRules>(initial);
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(initialTab);
+
+  useEffect(() => {
+    setRules(initial);
+  }, [initial]);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
 
   const update = (next: PricingRules) => { setRules(next); onChange?.(next); };
 

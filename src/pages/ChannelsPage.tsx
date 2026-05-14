@@ -1,25 +1,13 @@
-import { useState } from 'react';
 import { Box, Button } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { ActionToast, useActionToast } from '../components/ActionToast';
-import { ChannelsDashboard } from '../components/catalogue/ChannelsDashboard';
-import {
-  getStoredChannelsData,
-  getStoredOwners,
-  saveStoredChannelsData,
-  type ChannelsData,
-} from '../data/catalogueMock';
+import ChannelsDashboard from '../components/channels/ChannelsDashboard';
+import { getStoredChannelsData } from '../data/catalogueMock';
 import { PageHeader, btnGhostSx, btnPrimarySx, btnSmSx } from '../components/dashboard/DashboardV2.components';
 
 export function ChannelsPage() {
   const { toast, showToast, hideToast } = useActionToast();
-  const [data, setData] = useState<ChannelsData>(() => getStoredChannelsData());
-  const owners = getStoredOwners();
-
-  const updateData = (nextData: ChannelsData) => {
-    setData(nextData);
-    saveStoredChannelsData(nextData);
-  };
+  const data = getStoredChannelsData();
 
   return (
     <DashboardWrapper breadcrumb={['Catalogue', 'Canaux']}>
@@ -33,12 +21,7 @@ export function ChannelsPage() {
           </Button>
         </PageHeader>
 
-        <ChannelsDashboard
-          data={data}
-          owners={owners}
-          onChange={updateData}
-          onToast={showToast}
-        />
+        <ChannelsDashboard />
 
         <ActionToast
           open={toast.open}

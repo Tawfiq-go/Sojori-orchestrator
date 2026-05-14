@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { ActionToast, useActionToast } from '../components/ActionToast';
+import ColumnSelector, { type ColumnDef } from '../components/filters/ColumnSelector';
 import { useAuth } from '../hooks/useAuth';
 import {
   createEmptyListing,
@@ -48,6 +49,19 @@ interface ImportState {
   prefix: string;
 }
 
+const LISTING_COLUMN_ORDER = [
+  'name',
+  'owner',
+  'city',
+  'country',
+  'type',
+  'status',
+  'occupancy',
+  'adr',
+  'revenue',
+  'actions',
+];
+
 export function ListingsCataloguePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -66,6 +80,8 @@ export function ListingsCataloguePage() {
   const [quickEditOpen, setQuickEditOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState(LISTING_COLUMN_ORDER);
+  const [columnOrder, setColumnOrder] = useState(LISTING_COLUMN_ORDER);
   const [importState, setImportState] = useState<ImportState>({
     ownerId: getStoredOwners()[0]?.id || '',
     city: 'Marrakech',
@@ -167,10 +183,66 @@ export function ListingsCataloguePage() {
     owner: listing.ownerName,
     revenue: `${Math.round(listing.monthlyRevenue / 1000)}k€`,
   }));
+  const tableColumns = useMemo(
+    () => [
+      { key: 'name', label: 'Annonce', render: (row: any) => <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{row.name}</Typography> },
+      { key: 'owner', label: 'Owner', render: (row: any) => <Typography sx={{ fontSize: 12 }}>{row.owner}</Typography> },
+      { key: 'city', label: 'Ville' },
+      { key: 'country', label: 'Pays' },
+      { key: 'type', label: 'Type' },
+      { key: 'status', label: 'Statut' },
+      { key: 'occupancy', label: 'OCC', align: 'right', render: (row: any) => `${row.occupancy}%` },
+      { key: 'adr', label: 'ADR', align: 'right', render: (row: any) => `€${row.adr}` },
+      { key: 'revenue', label: 'RV/MO', align: 'right' },
+      {
+        key: 'actions',
+        label: 'Actions',
+        render: (row: any) => (
+          <Stack direction="row" spacing={0.75}>
+            <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => navigate(`/listings/${row.id}`)}>Éditer</Button>
+            <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => { setSelectedListing(row as ListingRecord); setQuickEditOpen(true); }}>Quick edit</Button>
+          </Stack>
+        ),
+      },
+    ],
+    [navigate],
+  );
+  const columnDefs = useMemo<ColumnDef[]>(
+    () => [
+      { id: 'name', label: 'Annonce', required: true },
+      { id: 'owner', label: 'Owner' },
+      { id: 'city', label: 'Ville' },
+      { id: 'country', label: 'Pays' },
+      { id: 'type', label: 'Type' },
+      { id: 'status', label: 'Statut' },
+      { id: 'occupancy', label: 'OCC' },
+      { id: 'adr', label: 'ADR' },
+      { id: 'revenue', label: 'RV/MO' },
+      { id: 'actions', label: 'Actions', required: true },
+    ],
+    [],
+  );
+  const visibleOrderedColumns = useMemo(
+    () =>
+      columnOrder
+        .filter((columnId) => visibleColumns.includes(columnId))
+        .map((columnId) => tableColumns.find((column) => column.key === columnId))
+        .filter(Boolean),
+    [columnOrder, tableColumns, visibleColumns],
+  );
 
   return (
     <DashboardWrapper breadcrumb={['Catalogue', 'Annonces']}>
       <PageHeader title="Annonces" count={`${filteredListings.filter((item) => item.status === 'active').length} actives`}>
+        <ColumnSelector
+          columns={columnDefs}
+          visible={visibleColumns}
+          order={columnOrder}
+          onChange={(nextVisible, nextOrder) => {
+            setVisibleColumns(nextVisible);
+            setColumnOrder(nextOrder);
+          }}
+        />
         <ViewToggle
           options={[
             { value: 'grid', label: 'Grid' },
@@ -263,27 +335,7 @@ export function ListingsCataloguePage() {
 
       {view === 'table' && (
         <DataTable
-          columns={[
-            { key: 'name', label: 'Annonce', render: (row: any) => <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{row.name}</Typography> },
-            { key: 'owner', label: 'Owner', render: (row: any) => <Typography sx={{ fontSize: 12 }}>{row.owner}</Typography> },
-            { key: 'city', label: 'Ville' },
-            { key: 'country', label: 'Pays' },
-            { key: 'type', label: 'Type' },
-            { key: 'status', label: 'Statut' },
-            { key: 'occupancy', label: 'OCC', align: 'right', render: (row: any) => `${row.occupancy}%` },
-            { key: 'adr', label: 'ADR', align: 'right', render: (row: any) => `€${row.adr}` },
-            { key: 'revenue', label: 'RV/MO', align: 'right' },
-            {
-              key: 'actions',
-              label: 'Actions',
-              render: (row: any) => (
-                <Stack direction="row" spacing={0.75}>
-                  <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => navigate(`/listings/${row.id}`)}>Éditer</Button>
-                  <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => { setSelectedListing(row as ListingRecord); setQuickEditOpen(true); }}>Quick edit</Button>
-                </Stack>
-              ),
-            },
-          ]}
+          columns={visibleOrderedColumns}
           rows={listingRows}
         />
       )}

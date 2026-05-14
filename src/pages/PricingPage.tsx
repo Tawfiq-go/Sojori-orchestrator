@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { ActionToast, useActionToast } from '../components/ActionToast';
-import { PricingRulesEditor } from '../components/catalogue/PricingRulesEditor';
+import PricingRulesEditor, { type PricingRules } from '../components/pricing/PricingRulesEditor';
 import {
   getStoredListings,
   getStoredPricingProfiles,
@@ -70,6 +70,102 @@ const monthLabels = [
 const weekdayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 const formatMoney = (value: number) => `€${Math.round(value).toLocaleString('fr-FR')}`;
+const toSignedModifier = (mode: 'increase' | 'decrease', value: number) =>
+  mode === 'increase' ? value : -value;
+const toDiscountModifier = (mode: 'increase' | 'decrease', value: number) =>
+  mode === 'decrease' ? value : -value;
+const fromSignedModifier = (value: number) => ({
+  mode: value >= 0 ? ('increase' as const) : ('decrease' as const),
+  modifierPct: Math.abs(value),
+});
+const fromDiscountModifier = (value: number) => ({
+  mode: value >= 0 ? ('decrease' as const) : ('increase' as const),
+  modifierPct: Math.abs(value),
+});
+
+const profileToEditorRules = (profile: PricingProfile): PricingRules => ({
+  monthly: profile.monthRules.map((rule, month) => ({
+    month,
+    pct: rule.value,
+    active: rule.enabled,
+  })),
+  weekday: profile.weekdayRules.map((rule, day) => ({
+    day,
+    pct: rule.value,
+    active: rule.enabled,
+  })),
+  events: profile.events.map((rule) => ({
+    id: rule.id,
+    name: rule.name,
+    from: rule.startDate,
+    to: rule.endDate,
+    pct: toSignedModifier(rule.mode, rule.modifierPct),
+    minStay: rule.minStay,
+    active: rule.enabled,
+  })),
+  occupancy: profile.occupancyRules.map((rule) => ({
+    minPct: rule.minOccupancy,
+    maxPct: rule.maxOccupancy,
+    adjustment: toSignedModifier(rule.mode, rule.modifierPct),
+    active: rule.enabled,
+  })),
+  longStay: profile.longStayRules.map((rule) => ({
+    minNights: rule.minNights,
+    discount: toDiscountModifier(rule.mode, rule.modifierPct),
+    active: rule.enabled,
+  })),
+  lastMinute: profile.lastMinuteRules.map((rule) => ({
+    daysBefore: rule.minDaysBefore,
+    discount: toDiscountModifier(rule.mode, rule.modifierPct),
+    active: rule.enabled,
+  })),
+});
+
+const mergeEditorRulesIntoProfile = (profile: PricingProfile, rules: PricingRules): PricingProfile => ({
+  ...profile,
+  monthRules: rules.monthly.map((rule, index) => ({
+    key: profile.monthRules[index]?.key || `month-${index}`,
+    label: profile.monthRules[index]?.label || monthLabels[index],
+    value: rule.pct,
+    enabled: rule.active,
+  })),
+  weekdayRules: rules.weekday.map((rule, index) => ({
+    key: profile.weekdayRules[index]?.key || `weekday-${index}`,
+    label: profile.weekdayRules[index]?.label || weekdayLabels[index],
+    value: rule.pct,
+    enabled: rule.active,
+  })),
+  events: rules.events.map((rule, index) => ({
+    id: profile.events[index]?.id || rule.id || `event-${index}`,
+    name: rule.name,
+    startDate: rule.from,
+    endDate: rule.to,
+    minStay: rule.minStay,
+    enabled: rule.active,
+    ...fromSignedModifier(rule.pct),
+  })),
+  occupancyRules: rules.occupancy.map((rule, index) => ({
+    id: profile.occupancyRules[index]?.id || `occupancy-${index}`,
+    minOccupancy: rule.minPct,
+    maxOccupancy: rule.maxPct,
+    enabled: rule.active,
+    ...fromSignedModifier(rule.adjustment),
+  })),
+  longStayRules: rules.longStay.map((rule, index) => ({
+    id: profile.longStayRules[index]?.id || `long-stay-${index}`,
+    minNights: rule.minNights,
+    maxNights: profile.longStayRules[index]?.maxNights || Math.max(rule.minNights, rule.minNights + 30),
+    enabled: rule.active,
+    ...fromDiscountModifier(rule.discount),
+  })),
+  lastMinuteRules: rules.lastMinute.map((rule, index) => ({
+    id: profile.lastMinuteRules[index]?.id || `last-minute-${index}`,
+    minDaysBefore: rule.daysBefore,
+    maxDaysBefore: profile.lastMinuteRules[index]?.maxDaysBefore || rule.daysBefore,
+    enabled: rule.active,
+    ...fromDiscountModifier(rule.discount),
+  })),
+});
 
 const matchesEventRule = (date: Date, rule: PricingEventRule) => {
   const current = date.toISOString().slice(0, 10);
@@ -284,11 +380,12 @@ export function PricingPage() {
   const [selectedDay, setSelectedDay] = useState<PricingDay | null>(null);
   const [showCompetitors, setShowCompetitors] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editorTab, setEditorTab] = useState<'month' | 'events'>('month');
+  const [editorInitialTab, setEditorInitialTab] = useState(0);
   const [acceptedOverrides, setAcceptedOverrides] = useState<Record<string, number>>({});
 
   const listing = listings.find((item) => item.id === listingId) || listings[0];
   const profile = profiles.find((item) => item.listingId === listing.id) as PricingProfile;
+  const editorRules = useMemo(() => profileToEditorRules(profile), [profile]);
   const days = useMemo(
     () => generatePricingCalendar(year, month, listing.adr, profile, acceptedOverrides),
     [acceptedOverrides, listing.adr, month, profile, year],
@@ -326,6 +423,10 @@ export function PricingPage() {
     setProfiles((prev) =>
       prev.map((item) => (item.listingId === nextProfile.listingId ? nextProfile : item)),
     );
+  };
+
+  const handleEditorChange = (nextRules: PricingRules) => {
+    updateProfile(mergeEditorRulesIntoProfile(profile, nextRules));
   };
 
   const persistProfiles = (message: string) => {
@@ -395,7 +496,7 @@ export function PricingPage() {
           <Button
             sx={btnGhostSx}
             onClick={() => {
-              setEditorTab('month');
+              setEditorInitialTab(0);
               setEditorOpen(true);
             }}
           >
@@ -404,7 +505,7 @@ export function PricingPage() {
           <Button
             sx={btnGhostSx}
             onClick={() => {
-              setEditorTab('events');
+              setEditorInitialTab(2);
               setEditorOpen(true);
             }}
           >
@@ -459,7 +560,7 @@ export function PricingPage() {
             label={`⚙️ ${allActiveRules} règles actives`}
             active={false}
             onClick={() => {
-              setEditorTab('month');
+              setEditorInitialTab(0);
               setEditorOpen(true);
             }}
           />
@@ -587,17 +688,28 @@ export function PricingPage() {
         </Dialog>
 
         <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} maxWidth="lg" fullWidth>
-          <PricingRulesEditor
-            profile={profile}
-            initialTab={editorTab}
-            onChange={updateProfile}
-            onSave={() => {
-              saveStoredPricingProfiles(profiles);
-              showToast('Pricing rules sauvegardées');
-              setEditorOpen(false);
-            }}
-            onClose={() => setEditorOpen(false)}
-          />
+          <DialogTitle>Pricing Rules Editor</DialogTitle>
+          <DialogContent>
+            <PricingRulesEditor
+              rules={editorRules}
+              initialTab={editorInitialTab}
+              onChange={handleEditorChange}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button sx={btnGhostSx} onClick={() => setEditorOpen(false)}>
+              Fermer
+            </Button>
+            <Button
+              sx={btnPrimarySx}
+              onClick={() => {
+                persistProfiles('Pricing rules sauvegardées');
+                setEditorOpen(false);
+              }}
+            >
+              Sauvegarder
+            </Button>
+          </DialogActions>
         </Dialog>
 
         <ActionToast

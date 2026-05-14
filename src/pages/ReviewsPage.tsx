@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ColumnSelector, { type ColumnDef } from '../components/filters/ColumnSelector';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader, DataTable, StatCard, StatsRow, Badge, SourcePill, AIChip,
@@ -89,6 +90,8 @@ export function ReviewsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'info' } | null>(null);
   const [filters, setFilters] = useState({ ota: 'all', rating: 'all', listing: 'all', status: 'all' });
+  const [visibleColumns, setVisibleColumns] = useState(['date', 'listing', 'guest', 'ota', 'rating', 'comment', 'status', 'actions']);
+  const [columnOrder, setColumnOrder] = useState(['date', 'listing', 'guest', 'ota', 'rating', 'comment', 'status', 'actions']);
 
   const stats = useMemo(() => calculateStats(reviews), [reviews]);
 
@@ -276,10 +279,40 @@ export function ReviewsPage() {
       ),
     },
   ];
+  const columnDefs = useMemo<ColumnDef[]>(
+    () => [
+      { id: 'date', label: 'Date' },
+      { id: 'listing', label: 'Listing' },
+      { id: 'guest', label: 'Guest', required: true },
+      { id: 'ota', label: 'OTA' },
+      { id: 'rating', label: 'Note' },
+      { id: 'comment', label: 'Commentaire' },
+      { id: 'status', label: 'Statut' },
+      { id: 'actions', label: 'Actions', required: true },
+    ],
+    [],
+  );
+  const visibleOrderedColumns = useMemo(
+    () =>
+      columnOrder
+        .filter((columnId) => visibleColumns.includes(columnId))
+        .map((columnId) => columns.find((column) => column.key === columnId))
+        .filter(Boolean),
+    [columnOrder, columns, visibleColumns],
+  );
 
   return (
     <DashboardWrapper breadcrumb={['Service Client', 'Avis & Reviews']}>
       <PageHeader title="Avis & Reviews" count={`${filteredReviews.length}`}>
+        <ColumnSelector
+          columns={columnDefs}
+          visible={visibleColumns}
+          order={columnOrder}
+          onChange={(nextVisible, nextOrder) => {
+            setVisibleColumns(nextVisible);
+            setColumnOrder(nextOrder);
+          }}
+        />
         <Button sx={btnGhostSx} onClick={handleExport}>📊 Export CSV</Button>
         <Button
           sx={btnPrimarySx}
@@ -412,7 +445,7 @@ export function ReviewsPage() {
 
       {/* DataTable */}
       <DataTable
-        columns={columns}
+        columns={visibleOrderedColumns}
         rows={filteredReviews}
       />
 
