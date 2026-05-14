@@ -262,4 +262,62 @@ headers['Authorization'] = `Bearer ${token}`;
 
 ---
 
+## ✅ Correction Finale: Route Alias Ajoutée
+
+**Date**: 14 Mai 2026 (suite)
+**Commit**: `2ae034f`
+
+### Problème Identifié
+- Utilisateur accédait à `/admin/orchestrator` (URL de l'ancien dashboard)
+- Nouvelle page créée sur `/orchestration/plans` uniquement
+- **Résultat**: Page vide / non trouvée
+
+### Solution Appliquée
+
+**Fichier**: `src/App.tsx` ligne 141
+
+```typescript
+// ✅ Route alias ajoutée
+<Route path="/orchestration/plans" element={<LazyRoute><OrchestrationPlansPage /></LazyRoute>} />
+<Route path="/admin/orchestrator" element={<LazyRoute><OrchestrationPlansPage /></LazyRoute>} />
+```
+
+### Validation API Production
+
+```bash
+# Test 1: Liste des réservations
+curl https://dev.sojori.com/api/v1/orchestrator/reservations
+✅ Retourne 5 réservations actives (SJ-4OQHVT0P, SJ-1EFFMD57, etc.)
+
+# Test 2: Stats globales
+curl https://dev.sojori.com/api/v1/orchestrator/orchestration/stats
+✅ Retourne:
+{
+  "success": true,
+  "data": {
+    "plans": {
+      "total": 223,
+      "active": 116,
+      "completed": 107,
+      "withoutPlan": 0
+    },
+    "actions": {
+      "pending": 1618
+    }
+  }
+}
+```
+
+### Accès à la Page
+
+**Les 2 URLs fonctionnent maintenant:**
+- ✅ `http://localhost:4000/orchestration/plans` (nouvelle URL)
+- ✅ `http://localhost:4000/admin/orchestrator` (alias pour compatibilité)
+
+**Production (si déployé):**
+- ✅ `https://dashboard.sojori.com/orchestration/plans`
+- ✅ `https://dashboard.sojori.com/admin/orchestrator`
+
+---
+
 **Correction livrée par Agent-Orchestration le 14 Mai 2026** 🔧
