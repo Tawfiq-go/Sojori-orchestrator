@@ -192,7 +192,34 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
         </Box>
       </Stack>
 
-      <Stack spacing={0.25} sx={{ p: 1.25, overflowY: 'auto', flex: 1, minHeight: 0 }}>
+      <Stack spacing={0.25} sx={{
+        p: 1.25,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        flex: 1,
+        minHeight: 0,
+        // Smooth scrolling avec momentum (comme Claude Desktop)
+        WebkitOverflowScrolling: 'touch',
+        scrollBehavior: 'smooth',
+        // Performance GPU
+        willChange: 'transform',
+        transform: 'translateZ(0)',
+        backfaceVisibility: 'hidden',
+        // Scrollbar discrète
+        '&::-webkit-scrollbar': {
+          width: 6,
+        },
+        '&::-webkit-scrollbar-track': {
+          background: 'transparent',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: 'rgba(0,0,0,0.1)',
+          borderRadius: 10,
+          '&:hover': {
+            background: 'rgba(0,0,0,0.2)',
+          },
+        },
+      }}>
         {NAV.map(group => {
           const isCollapsed = collapsed[group.group];
           return (
