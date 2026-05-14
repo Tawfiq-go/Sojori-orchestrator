@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
-  PageHeader, CalendarGantt, ViewToggle, Panel, OrchestrationTimeline, TLEvent, TLDayLabel,
+  PageHeader, Panel, OrchestrationTimeline, TLEvent, TLDayLabel,
   Badge, Revenue, AICard,
   btnGhostSx, btnSmSx, btnAiSx, btnPrimarySx,
   tokens as t,
@@ -10,7 +10,7 @@ import { Box, Button, Stack, Typography, Avatar, Tabs, Tab } from '@mui/material
 import { useParams } from 'react-router-dom';
 import TravelersSection from '../components/sections/TravelersSection';
 import FinancialSection from '../components/sections/FinancialSection';
-import ReservationsGanttView, { type Listing, type ReservationBlock } from '../components/views/ReservationsGanttView';
+import { MultiPropertyInventory, type PropertyRow } from '../components/MultiPropertyInventory';
 
 export function ReservationSejourPage() {
   const { id } = useParams();
@@ -52,22 +52,18 @@ export function ReservationSejourPage() {
   };
 
   // Calendar data - show this specific reservation
-  const listing: Listing = {
-    id: 'l1',
+  // Check-in: 12 mai 2026 = jour 3 (si on commence le 1er mai = jour 0)
+  // Check-out: 22 mai 2026 = jour 13
+  // Donc bookedRanges: [[3, 12]] (10 nuits)
+  const propertyRow: PropertyRow = {
+    id: 'p1',
     name: reservationData.property.name,
     city: reservationData.property.city,
-  };
-
-  const reservationBlock: ReservationBlock = {
-    id: `r-${reservationData.id}`,
-    listingId: 'l1',
-    start: 3, // Check-in on day 3 (12 mai)
-    length: reservationData.dates.nights,
-    guestName: reservationData.guest.name,
-    guestInitials: reservationData.guest.initials,
-    status: 'confirmed',
-    source: reservationData.source as 'airbnb' | 'booking' | 'vrbo' | 'direct',
-    amount: reservationData.pricing.total,
+    photoColor: 'gold',
+    occupancyPct: 87,
+    monthRevenue: reservationData.pricing.total,
+    bookedRanges: [[3, 12]], // 12 mai (jour 3) au 22 mai (jour 13) = 10 nuits
+    closedDays: [],
   };
 
   // Icon presets (same as OrchestrationPage)
@@ -164,14 +160,15 @@ export function ReservationSejourPage() {
 
         {/* LEFT - Calendar or Timeline */}
         {currentTab === 0 ? (
-          // Calendar View
+          // Calendar View - Use MultiPropertyInventory
           <Box>
-            <ReservationsGanttView
+            <MultiPropertyInventory
               startDate={new Date(2026, 4, 1)} // 1er mai 2026
               days={31}
-              listings={[listing]}
-              bookings={[reservationBlock]}
-              onBlockClick={(block) => alert(`Réservation ${block.guestName} - ${block.amount}`)}
+              properties={[propertyRow]}
+              onCellClick={(propertyId, dayIdx) => {
+                alert(`Clic sur jour ${dayIdx + 1} mai`);
+              }}
             />
           </Box>
         ) : (
