@@ -1,14 +1,5 @@
 import { useMemo, useState } from 'react';
-import {
-  Box,
-  Button,
-  Checkbox,
-  FormControlLabel,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   Badge,
@@ -29,7 +20,7 @@ import { dashboardProperties } from '../data/mockDashboard';
 
 export function ReportsPage() {
   const [reportType, setReportType] = useState(mockReportTemplates[0].id);
-  const [period, setPeriod] = useState('May 2026');
+  const [period, setPeriod] = useState('Mai 2026');
   const [format, setFormat] = useState('PDF');
   const [sendByEmail, setSendByEmail] = useState(true);
   const [schedule, setSchedule] = useState('monthly');
@@ -38,7 +29,9 @@ export function ReportsPage() {
   );
 
   const selectedTemplate = useMemo(
-    () => mockReportTemplates.find((template) => template.id === reportType) || mockReportTemplates[0],
+    () =>
+      mockReportTemplates.find((template) => template.id === reportType) ||
+      mockReportTemplates[0],
     [reportType]
   );
 
@@ -61,6 +54,12 @@ export function ReportsPage() {
   ];
 
   const previewKey = selectedTemplate.id === 'report-occupancy' ? 'occupancy' : 'financial';
+  const scheduleLabel =
+    schedule === 'once'
+      ? 'Ponctuel'
+      : schedule === 'weekly'
+        ? 'Hebdomadaire'
+        : 'Mensuel';
 
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Reports']}>
@@ -83,6 +82,36 @@ export function ReportsPage() {
         ))}
       </FilterBar>
 
+      <FilterBar>
+        <FilterChip
+          label={`Periode: ${period}`}
+          active
+          onClick={() => setPeriod(period === 'Mai 2026' ? 'Q2 2026' : 'Mai 2026')}
+        />
+        {selectedTemplate.formats.map((item) => (
+          <FilterChip
+            key={item}
+            label={item}
+            active={format === item}
+            onClick={() => setFormat(item)}
+          />
+        ))}
+        <FilterChip
+          label={`Email: ${sendByEmail ? 'Oui' : 'Non'}`}
+          active={sendByEmail}
+          onClick={() => setSendByEmail((prev) => !prev)}
+        />
+        <FilterChip
+          label={`Planning: ${scheduleLabel}`}
+          active
+          onClick={() =>
+            setSchedule((prev) =>
+              prev === 'once' ? 'weekly' : prev === 'weekly' ? 'monthly' : 'once'
+            )
+          }
+        />
+      </FilterBar>
+
       <Box
         sx={{
           display: 'grid',
@@ -93,62 +122,33 @@ export function ReportsPage() {
       >
         <Panel title="Generation" desc="Selection type, periode, properties, format">
           <Stack spacing={2}>
-            <TextField
-              select
-              label="Type de rapport"
-              value={reportType}
-              onChange={(event) => setReportType(event.target.value)}
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: 2,
+                bgcolor: 'rgba(230,176,34,0.08)',
+                border: '1px dashed rgba(230,176,34,0.35)',
+              }}
             >
-              {mockReportTemplates.map((template) => (
-                <MenuItem key={template.id} value={template.id}>
-                  {template.name}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              label="Periode"
-              value={period}
-              onChange={(event) => setPeriod(event.target.value)}
-              helperText="Ex: May 2026, Q2 2026, 01/05 - 31/05"
-            />
-
-            <TextField
-              select
-              label="Format"
-              value={format}
-              onChange={(event) => setFormat(event.target.value)}
-            >
-              {selectedTemplate.formats.map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              label="Planification"
-              value={schedule}
-              onChange={(event) => setSchedule(event.target.value)}
-            >
-              <MenuItem value="once">Ponctuel</MenuItem>
-              <MenuItem value="weekly">Hebdomadaire</MenuItem>
-              <MenuItem value="monthly">Mensuel</MenuItem>
-            </TextField>
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={sendByEmail}
-                  onChange={(event) => setSendByEmail(event.target.checked)}
-                />
-              }
-              label="Envoyer le rapport par email apres generation"
-            />
+              <Typography sx={{ fontWeight: 700, mb: 0.5 }}>
+                {selectedTemplate.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {selectedTemplate.description}
+              </Typography>
+            </Box>
 
             <Typography variant="body2" color="text.secondary">
-              {selectedTemplate.description}
+              Periode active: <strong>{period}</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Format choisi: <strong>{format}</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Envoi email: <strong>{sendByEmail ? 'Oui' : 'Non'}</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Planification: <strong>{scheduleLabel}</strong>
             </Typography>
 
             <Box>
@@ -181,6 +181,10 @@ export function ReportsPage() {
                 Mock send email
               </Button>
             </Stack>
+
+            <Typography variant="body2" color="text.secondary">
+              {selectedTemplate.description}
+            </Typography>
           </Stack>
         </Panel>
 

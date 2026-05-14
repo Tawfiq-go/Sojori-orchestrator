@@ -36,7 +36,7 @@ const CommsPage = lazy(() =>
   import('./pages/CommsPage').then((module) => ({ default: module.CommsPage }))
 );
 const ListingsPage = lazy(() =>
-  import('./pages/ListingsPage').then((module) => ({ default: module.ListingsPage }))
+  import('./pages/ListingsCataloguePage').then((module) => ({ default: module.ListingsCataloguePage }))
 );
 const NewListingFormPage = lazy(() =>
   import('./pages/NewListingFormPage').then((module) => ({ default: module.NewListingFormPage }))

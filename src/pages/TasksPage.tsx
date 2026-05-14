@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Box, Stack, Button, Chip, Typography, IconButton, Menu, MenuItem } from '@mui/material';
-import { MoreVert as MoreVertIcon } from '@mui/icons-material';
+import { Box, Stack, Button, Chip, Typography, IconButton, Menu, MenuItem, Select, FormControl } from '@mui/material';
+import { MoreVert as MoreVertIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
@@ -82,10 +82,21 @@ function Priority({ level }: { level: 'high' | 'med' | 'low' }) {
 }
 
 // ─── Liste View ─────────────────────────────────────────
+type SortField = 'name' | 'type' | 'listing' | 'createdAt' | 'startDate' | 'priority' | 'status';
+type SortDirection = 'asc' | 'desc';
+
 function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onEditTask: (task: Task) => void; onDeleteTask: (taskId: string) => void }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedTaskForMenu, setSelectedTaskForMenu] = useState<Task | null>(null);
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>('createdAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, task: Task) => {
     setAnchorEl(event.currentTarget);
@@ -125,6 +136,82 @@ function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onE
       toast.success('Tâche marquée comme complétée (MOCK)');
     }
     handleMenuClose();
+  };
+
+  // Sorting logic
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Toggle direction if same field
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New field, default to asc
+      setSortField(field);
+      setSortDirection('asc');
+    }
+    setPage(1); // Reset to page 1 when sorting
+  };
+
+  const sortTasks = (tasksToSort: Task[]): Task[] => {
+    return [...tasksToSort].sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortField) {
+        case 'name':
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+          break;
+        case 'type':
+          aVal = `${a.type}-${a.subType}`.toLowerCase();
+          bVal = `${b.type}-${b.subType}`.toLowerCase();
+          break;
+        case 'listing':
+          aVal = a.listingName.toLowerCase();
+          bVal = b.listingName.toLowerCase();
+          break;
+        case 'createdAt':
+          aVal = new Date(a.createdAt).getTime();
+          bVal = new Date(b.createdAt).getTime();
+          break;
+        case 'startDate':
+          aVal = new Date(a.startDate).getTime();
+          bVal = new Date(b.startDate).getTime();
+          break;
+        case 'priority':
+          const priorityOrder = { 'Critical': 3, 'Urgent': 2, 'Normal': 1 };
+          aVal = priorityOrder[a.priority as keyof typeof priorityOrder] || 0;
+          bVal = priorityOrder[b.priority as keyof typeof priorityOrder] || 0;
+          break;
+        case 'status':
+          aVal = a.status;
+          bVal = b.status;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  // Pagination logic
+  const sortedTasks = sortTasks(tasks);
+  const totalPages = Math.ceil(sortedTasks.length / limit);
+  const startIndex = (page - 1) * limit;
+  const endIndex = startIndex + limit;
+  const paginatedTasks = sortedTasks.slice(startIndex, endIndex);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
+    }
+  };
+
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit);
+    setPage(1); // Reset to page 1 when changing limit
   };
 
   const getStatusBadge = (status: Task['status']) => {
@@ -167,11 +254,36 @@ function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onE
     const colors: Array<'gold' | 'blue' | 'purple' | 'pink' | 'green'> = ['gold', 'blue', 'purple', 'pink', 'green'];
     return colors[hash % colors.length];
   };
+  // Helper to render sortable column header
+  const SortableHeader = ({ field, label }: { field: SortField; label: string }) => (
+    <Box
+      onClick={() => handleSort(field)}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.5,
+        cursor: 'pointer',
+        userSelect: 'none',
+        '&:hover': { color: t.primary },
+        transition: 'color 0.15s',
+      }}
+    >
+      <span>{label}</span>
+      {sortField === field && (
+        sortDirection === 'asc' ? (
+          <ArrowUpIcon sx={{ fontSize: 14, color: t.primary }} />
+        ) : (
+          <ArrowDownIcon sx={{ fontSize: 14, color: t.primary }} />
+        )
+      )}
+    </Box>
+  );
+
   const cols = [
-    // Column 1: Tâche (title + itemNumber)
+    // Column 1: Tâche (title + itemNumber) - sortable by name
     {
       key: 'title',
-      label: 'Tâche',
+      label: <SortableHeader field="name" label="Tâche" />,
       render: (r: Task) => (
         <Box>
           <strong>{r.name}</strong>
@@ -181,10 +293,10 @@ function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onE
         </Box>
       )
     },
-    // Column 2: Type + SubType
+    // Column 2: Type + SubType - sortable
     {
       key: 'type',
-      label: 'Type',
+      label: <SortableHeader field="type" label="Type" />,
       render: (r: Task) => (
         <Box>
           <Box sx={{ fontSize: 11.5, color: t.text2, fontWeight: 500 }}>{r.type}</Box>
@@ -192,26 +304,26 @@ function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onE
         </Box>
       )
     },
-    // Column 3: Listing
+    // Column 3: Listing - sortable
     {
       key: 'listing',
-      label: 'Listing',
+      label: <SortableHeader field="listing" label="Listing" />,
       render: (r: Task) => <ListingCell name={r.listingName} color={getListingColor(r.listingName)} />
     },
-    // Column 4: Date création
+    // Column 4: Date création - sortable
     {
       key: 'createdAt',
-      label: 'Créée le',
+      label: <SortableHeader field="createdAt" label="Créée le" />,
       render: (r: Task) => (
         <Box sx={{ fontFamily: 'Geist Mono', fontSize: 11.5, color: t.text2 }}>
           {new Date(r.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
         </Box>
       )
     },
-    // Column 5: Échéance (startDate + startHour)
+    // Column 5: Échéance (startDate + startHour) - sortable by startDate
     {
       key: 'due',
-      label: 'Échéance',
+      label: <SortableHeader field="startDate" label="Échéance" />,
       render: (r: Task) => {
         const isUrgent = r.priority === 'Urgent' || r.priority === 'Critical';
         return (
@@ -284,19 +396,19 @@ function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onE
         </Box>
       )
     },
-    // Column 9: Statut
+    // Column 9: Statut - sortable
     {
       key: 'status',
-      label: 'Statut',
+      label: <SortableHeader field="status" label="Statut" />,
       render: (r: Task) => {
         const statusBadge = getStatusBadge(r.status);
         return <Badge variant={statusBadge.v as any} dot>{statusBadge.label}</Badge>;
       }
     },
-    // Column 10: Priorité
+    // Column 10: Priorité - sortable
     {
       key: 'prio',
-      label: 'Priorité',
+      label: <SortableHeader field="priority" label="Priorité" />,
       render: (r: Task) => <Priority level={getPriorityLevel(r.priority)} />
     },
     // Column 11: Actions (menu 3 points)
@@ -336,19 +448,106 @@ function TasksListView({ tasks, onEditTask, onDeleteTask }: { tasks: Task[]; onE
 
       <DataTable
         columns={cols}
-        rows={tasks}
+        rows={paginatedTasks}
         selectable
         selectedIds={selected}
         onSelectionChange={setSelected}
         footer={<>
-          <Box>{selected.length} sélectionnée{selected.length > 1 ? 's' : ''} · {tasks.length} tâche{tasks.length > 1 ? 's' : ''}</Box>
-          <Box sx={{ display: 'flex', gap: 0.25 }}>
-            <button style={{ padding: '4px 8px', color: t.text2 }}>‹</button>
-            <button style={{ padding: '4px 8px', background: t.text, color: '#fff', borderRadius: '5px' }}>1</button>
-            <button style={{ padding: '4px 8px', color: t.text2 }}>2</button>
-            <button style={{ padding: '4px 8px', color: t.text2 }}>›</button>
+          {/* Left: Selection + Limit selector */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ fontSize: 12, color: t.text2 }}>
+              {selected.length > 0 && `${selected.length} sélectionnée${selected.length > 1 ? 's' : ''} · `}
+              {sortedTasks.length} tâche{sortedTasks.length > 1 ? 's' : ''}
+            </Box>
+            <Box sx={{ fontSize: 11, color: t.text3, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              Afficher
+              <FormControl size="small" sx={{ minWidth: 60 }}>
+                <Select
+                  value={limit}
+                  onChange={(e) => handleLimitChange(Number(e.target.value))}
+                  sx={{
+                    fontSize: 11,
+                    height: 24,
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: t.border },
+                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: t.primary },
+                  }}
+                >
+                  <MenuItem value={10}>10</MenuItem>
+                  <MenuItem value={25}>25</MenuItem>
+                  <MenuItem value={50}>50</MenuItem>
+                  <MenuItem value={100}>100</MenuItem>
+                </Select>
+              </FormControl>
+              par page
+            </Box>
           </Box>
-          <Box>Affichage 1-{tasks.length} sur {tasks.length}</Box>
+
+          {/* Center: Page buttons */}
+          <Box sx={{ display: 'flex', gap: 0.25 }}>
+            <button
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page === 1}
+              style={{
+                padding: '4px 8px',
+                color: page === 1 ? t.text4 : t.text2,
+                cursor: page === 1 ? 'not-allowed' : 'pointer',
+                background: 'transparent',
+                border: 'none',
+                fontSize: 14,
+              }}
+            >
+              ‹
+            </button>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum: number;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (page <= 3) {
+                pageNum = i + 1;
+              } else if (page >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = page - 2 + i;
+              }
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => handlePageChange(pageNum)}
+                  style={{
+                    padding: '4px 10px',
+                    background: page === pageNum ? t.text : 'transparent',
+                    color: page === pageNum ? '#fff' : t.text2,
+                    borderRadius: '5px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: page === pageNum ? 600 : 400,
+                  }}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page === totalPages}
+              style={{
+                padding: '4px 8px',
+                color: page === totalPages ? t.text4 : t.text2,
+                cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                background: 'transparent',
+                border: 'none',
+                fontSize: 14,
+              }}
+            >
+              ›
+            </button>
+          </Box>
+
+          {/* Right: Range display */}
+          <Box sx={{ fontSize: 12, color: t.text3 }}>
+            Affichage {startIndex + 1}-{Math.min(endIndex, sortedTasks.length)} sur {sortedTasks.length}
+          </Box>
         </>}
       />
 
