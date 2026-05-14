@@ -32,15 +32,127 @@ Tu as accès à **deux sites web** en développement :
 - **Status** : Phase 2 MOCK - Livré par Agents 1-5 + Claude Design
 
 ### Site 2 : Sojori-dashboard (ANCIEN - Production)
-- **URL** : Vérifier avec l'utilisateur
+- **URL** : http://localhost:4000 (ancien port)
 - **Projet** : `/Users/gouacht/sojori-dashboard`
-- **Status** : En production
+- **Status** : En production - **RÉFÉRENCE POUR LES MODALS**
+
+---
+
+## ⚠️ REMARQUES CRITIQUES DU PATRON
+
+### 🚨 PROBLÈMES IDENTIFIÉS
+
+**1. Vue Séjour - Réservations par listing MANQUANTE**
+- ❌ **RÉGRESSION** : L'ancienne version affichait les réservations par listing (multi-listings)
+- ❌ La page existait déjà, elle a disparu ou a été modifiée
+- ✅ **ACTION** : Vérifier dans l'ancien dashboard `/sejour` ou équivalent
+- ✅ **À RESTAURER** : Vue réservations groupées par listing
+
+**2. Boutons Plan Orchestration NON FONCTIONNELS**
+- ❌ Tous les boutons de la page Plan d'orchestration ne fonctionnent pas
+- ❌ Exemple : Clic sur "RÉSA #1234" n'ouvre PAS le détail réservation
+- ❌ Exemple : Clic sur "Message bienvenue" ne fait rien
+- ❌ Exemple : Boutons timeline ne sont pas branchés
+
+**Référence ancien dashboard** :
+```
+Orchestration · Plan d'orchestration
+RÉSA #1234
+📨 J-7
+Message bienvenue
+1/1 Complété
+📧 Email
+📧 Notification envoyée
+Email · 07/05 17:00
+```
+- ✅ **Dans l'ancien** : Clic sur réservation → ouvre modal détail
+- ❌ **Dans le nouveau** : Rien ne se passe
+
+**3. Erreur React dans Console**
+```
+client:510 An error occurred in one of your React components.
+Consider adding an error boundary to your tree to customize error handling behavior.
+```
+- ❌ Erreur React non gérée
+- ✅ **ACTION** : Identifier le composant qui crash
+
+---
+
+## 🎯 TA MISSION PRIORITAIRE
+
+**AVANT de tester le nouveau dashboard, tu DOIS** :
+
+1. **Auditer TOUS les modals de l'ancien dashboard** (`/Users/gouacht/sojori-dashboard`)
+2. **Lister TOUS les modals manquants** dans le nouveau
+3. **Comparer les fonctionnalités** page par page
+4. **Identifier les régressions** (fonctionnalités qui existaient et ont disparu)
+
+---
+
+## 📋 CHECKLIST MODALS À VÉRIFIER
+
+### Dans l'ancien dashboard (`sojori-dashboard`)
+
+**Navigation complète** :
+- [ ] Aller sur chaque page
+- [ ] Cliquer sur TOUS les boutons
+- [ ] Noter TOUS les modals qui s'ouvrent
+- [ ] Prendre des screenshots si nécessaire
+
+**Modals à identifier** :
+- [ ] Modal détail réservation (clic sur RÉSA #1234)
+- [ ] Modal détail listing
+- [ ] Modal détail tâche
+- [ ] Modal détail membre team
+- [ ] Modal timeline orchestration
+- [ ] Modal messages
+- [ ] Modal vue séjour (réservations par listing)
+- [ ] **Tous les autres modals présents**
+
+**Pour chaque modal trouvé, noter** :
+- Nom du modal
+- Page où il apparaît
+- Bouton/action qui le déclenche
+- Contenu du modal (champs, sections, boutons)
+- Screenshot si possible
+
+---
+
+## 🔍 COMPARAISON DÉTAILLÉE PAR PAGE
+
+### Vue Séjour / Réservations par listing
+
+**Ancien dashboard** :
+- [ ] Aller sur la page séjour/réservations
+- [ ] Vérifier si affichage par listing
+- [ ] Noter la structure
+- [ ] Prendre screenshot
+
+**Nouveau dashboard** :
+- [ ] Chercher l'équivalent
+- [ ] Si manquant → BUG BLOQUANT
+- [ ] Si présent mais différent → Noter différences
+
+### Plan d'Orchestration
+
+**Ancien dashboard** :
+- [ ] Aller sur `/orchestration` ou équivalent
+- [ ] Cliquer sur une réservation dans la timeline
+- [ ] Vérifier que le modal s'ouvre
+- [ ] Noter tous les boutons fonctionnels
+
+**Nouveau dashboard** :
+- [ ] Aller sur `/orchestration`
+- [ ] Tester TOUS les boutons
+- [ ] Noter ceux qui ne fonctionnent pas
+- [ ] Comparer avec l'ancien
 
 **TA MISSION** : Comparer les deux sites et identifier :
-- Incohérences de design
-- Fonctionnalités manquantes dans le nouveau
-- Régressions potentielles
-- Points d'amélioration
+- ❌ **Régressions** : Fonctionnalités qui ont disparu
+- ❌ **Modals manquants** : Modals présents dans l'ancien mais absents du nouveau
+- ❌ **Boutons non fonctionnels** : Boutons qui ne font rien
+- ❌ **Erreurs React** : Composants qui crashent
+- ✅ **Points d'amélioration**
 
 ---
 
@@ -672,11 +784,26 @@ Créer `docs/RAPPORT_AUDIT_PHASE2.md` avec cette structure :
 **Ce qui est bien** :
 - [Points positifs]
 
+**🚨 BUGS CRITIQUES IDENTIFIÉS** :
+- ❌ **RÉGRESSION** : Boutons Plan Orchestration non fonctionnels
+  - Clic sur "RÉSA #1234" n'ouvre pas le modal détail réservation
+  - Clic sur timeline events ne fait rien
+  - **ACTION** : Brancher TOUS les boutons de la timeline
+  - **RÉFÉRENCE** : Auditer `/orchestration` dans l'ancien dashboard (`sojori-dashboard`)
+  - **SOLUTION** : S'inspirer de l'existant pour intégrer les modals
+  - Si besoin de design → demander à Claude Design
+
 **Ce qui doit être corrigé** :
-- [Bugs spécifiques Agent 1]
+- [ ] Brancher boutons timeline orchestration
+- [ ] Ouvrir modal détail réservation au clic sur RÉSA
+- [ ] Ouvrir modal message au clic sur événement message
+- [ ] Gérer erreur React (error boundary)
+- [Autres bugs spécifiques Agent 1]
 
 **Suggestions d'amélioration** :
-- [Recommandations]
+- Comparer avec l'ancien dashboard pour ne rien oublier
+- Ajouter error boundaries pour capturer les erreurs React
+- [Autres recommandations]
 
 ---
 
@@ -685,11 +812,24 @@ Créer `docs/RAPPORT_AUDIT_PHASE2.md` avec cette structure :
 **Ce qui est bien** :
 - [Points positifs]
 
+**🚨 BUGS CRITIQUES IDENTIFIÉS** :
+- ❌ **RÉGRESSION** : Vue Séjour / Réservations par listing MANQUANTE
+  - **CONTEXTE** : L'ancien dashboard affichait les réservations groupées par listing (multi-listings)
+  - **PROBLÈME** : Cette page existait déjà, elle a disparu ou n'a pas été migrée
+  - **ACTION** : Auditer la page "Séjour" ou "Réservations par listing" dans l'ancien dashboard
+  - **SOLUTION** : Recréer cette vue en s'inspirant de l'existant
+  - Si besoin de design → demander à Claude Design
+
 **Ce qui doit être corrigé** :
-- [Bugs spécifiques Agent 2]
+- [ ] **URGENT** : Restaurer la vue "Séjour" (réservations par listing)
+- [ ] Vérifier que toutes les vues réservations de l'ancien sont présentes
+- [ ] Modal détail réservation doit s'ouvrir depuis la timeline orchestration
+- [Autres bugs spécifiques Agent 2]
 
 **Suggestions d'amélioration** :
-- [Recommandations]
+- Comparer toutes les vues réservations avec l'ancien dashboard
+- S'assurer qu'aucune fonctionnalité n'a été oubliée
+- [Autres recommandations]
 
 ---
 
@@ -846,39 +986,194 @@ Avant de livrer :
 
 ### 🆚 Nouveau vs Ancien
 
-**Fonctionnalités présentes dans l'ancien mais manquantes dans le nouveau** :
-- [Liste]
+**RÉGRESSIONS IDENTIFIÉES** (Fonctionnalités présentes dans l'ancien mais manquantes dans le nouveau) :
+- ❌ **Vue Séjour** : Réservations groupées par listing (Agent 2)
+- ❌ **Boutons Orchestration** : Timeline non interactive (Agent 1)
+- ❌ **Modals manquants** : [À compléter après audit complet]
+- [Autres à identifier]
+
+**BUGS CRITIQUES** :
+- ❌ Erreur React non gérée (error boundary manquant)
+- ❌ Boutons non fonctionnels sur plusieurs pages
+- [Autres à identifier]
 
 **Améliorations du nouveau par rapport à l'ancien** :
-- [Liste]
+- ✅ Design Aurora Soft Light (si cohérent)
+- ✅ TypeScript strict
+- ✅ Composants Claude Design intégrés
+- [Autres à identifier]
 
 **Incohérences de design** :
-- [Liste]
+- [À identifier après comparaison visuelle]
+
+**MODALS À VÉRIFIER/MIGRER** :
+Pour chaque modal de l'ancien, vérifier s'il existe dans le nouveau :
+- [ ] Modal détail réservation (timeline orchestration)
+- [ ] Modal vue séjour/listing
+- [ ] Modal détail message
+- [ ] Modal détail tâche
+- [ ] [Tous les autres à identifier]
 
 **Recommandations de migration** :
-- [Liste]
+1. **URGENT** : Auditer TOUS les modals de l'ancien dashboard
+2. **URGENT** : Créer une liste exhaustive des modals manquants
+3. Assigner chaque modal manquant à l'agent concerné
+4. Si besoin de design → demander à Claude Design
+5. S'inspirer du code existant dans `sojori-dashboard` pour les fonctionnalités
+
+---
+
+---
+
+## 📋 AUDIT COMPLET DES MODALS (PRIORITÉ ABSOLUE)
+
+**AVANT TOUT, tu dois créer une liste exhaustive des modals** :
+
+### Étape 1 : Auditer l'ancien dashboard
+
+```bash
+# Lancer l'ancien dashboard
+cd /Users/gouacht/sojori-dashboard
+# (vérifier comment le lancer - probablement PORT=3000 npm start)
+```
+
+**Mission** : Parcourir TOUTES les pages et cliquer sur TOUS les boutons pour identifier TOUS les modals.
+
+**Créer un fichier** : `docs/AUDIT_MODALS_ANCIEN_DASHBOARD.md`
+
+**Structure** :
+```markdown
+# Audit Modals - Ancien Dashboard
+
+## Page : Orchestration
+
+### Modal : Détail Réservation
+- **Déclencheur** : Clic sur "RÉSA #1234" dans timeline
+- **Contenu** :
+  - Section 1 : [Description]
+  - Section 2 : [Description]
+  - Champs : [Liste]
+  - Boutons : [Liste]
+- **Screenshot** : [Si possible]
+- **Fichier source** : [Si trouvé dans le code]
+- **Agent concerné** : Agent 2
+
+### Modal : [Autre modal]
+...
+
+## Page : Réservations
+
+### Modal : Vue Séjour (Réservations par listing)
+...
+
+## Page : Tasks
+...
+
+## Page : Communications
+...
+
+[Etc. pour TOUTES les pages]
+```
+
+### Étape 2 : Comparer avec le nouveau dashboard
+
+Pour chaque modal identifié dans l'ancien :
+- [ ] Existe-t-il dans le nouveau ? OUI/NON
+- [ ] Si OUI : Fonctionne-t-il correctement ?
+- [ ] Si NON : **BUG BLOQUANT** → À créer
+
+**Créer un fichier** : `docs/MODALS_MANQUANTS.md`
+
+**Structure** :
+```markdown
+# Modals Manquants - Nouveau Dashboard
+
+## ❌ MODALS À CRÉER (Absents du nouveau)
+
+### Agent 1 - Orchestration
+1. **Modal Détail Réservation (depuis timeline)**
+   - Référence : `sojori-dashboard/src/...`
+   - Priorité : BLOQUANT
+   - Design : À demander à Claude Design si besoin
+
+2. [Autres modals Agent 1]
+
+### Agent 2 - Réservations
+1. **Vue Séjour / Réservations par listing**
+   - Référence : `sojori-dashboard/src/...`
+   - Priorité : BLOQUANT
+   - Design : À demander à Claude Design si besoin
+
+2. [Autres modals Agent 2]
+
+### Agent 3 - Catalogue
+[Liste]
+
+### Agent 4 - Opérations
+[Liste]
+
+### Agent 5 - Communications
+[Liste]
+```
 
 ---
 
 ## 🚀 ACTION IMMÉDIATE
 
-**GO ! Commence par** :
+**ORDRE PRIORITAIRE** :
+
+### 1️⃣ AUDIT MODALS ANCIEN DASHBOARD (1-2h)
+
+```bash
+cd /Users/gouacht/sojori-dashboard
+# Lancer le dashboard
+```
+
+- Parcourir TOUTES les pages
+- Cliquer sur TOUS les boutons
+- Noter TOUS les modals qui s'ouvrent
+- Créer `docs/AUDIT_MODALS_ANCIEN_DASHBOARD.md`
+
+### 2️⃣ COMPARAISON NOUVEAU DASHBOARD (30min)
+
+```bash
+cd /Users/gouacht/Sojori-orchestrator
+pnpm dev --port 4000
+```
+
+- Comparer page par page
+- Identifier les modals manquants
+- Créer `docs/MODALS_MANQUANTS.md`
+
+### 3️⃣ TYPE-CHECK & BUILD (15min)
 
 ```bash
 cd /Users/gouacht/Sojori-orchestrator
 pnpm type-check
+pnpm build
 ```
 
-**Ensuite** :
-1. Lance `pnpm dev --port 4000`
-2. Ouvre http://localhost:4000
-3. Teste TOUTES les pages (voir checklist ci-dessus)
-4. Note TOUS les bugs par agent
-5. Compare avec l'ancien dashboard si disponible
-6. Crée le rapport complet `docs/RAPPORT_AUDIT_PHASE2.md`
-7. **Adresse des remarques spécifiques à chaque agent**
-8. Commit et push
+### 4️⃣ TEST FONCTIONNEL COMPLET (1-2h)
 
-**Durée estimée** : 2-4 heures
+- Teste TOUTES les pages (voir checklist ci-dessus)
+- Note TOUS les bugs par agent
+
+### 5️⃣ RAPPORT FINAL (30min)
+
+- Crée le rapport complet `docs/RAPPORT_AUDIT_PHASE2.md`
+- **Adresse des remarques spécifiques à chaque agent**
+- Commit et push
+
+**Durée estimée totale** : 3-5 heures
+
+---
+
+## 📝 LIVRABLES ATTENDUS
+
+1. ✅ `docs/AUDIT_MODALS_ANCIEN_DASHBOARD.md` - Liste exhaustive des modals de l'ancien
+2. ✅ `docs/MODALS_MANQUANTS.md` - Modals à créer par agent
+3. ✅ `docs/RAPPORT_AUDIT_PHASE2.md` - Rapport complet avec bugs et remarques
+
+---
 
 Bonne chance ! 🚀
