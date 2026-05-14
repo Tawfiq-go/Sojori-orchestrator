@@ -230,31 +230,6 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
         })}
       </Stack>
 
-      {/* AI shortcut */}
-      <Box sx={{
-        m: '12px 10px 14px', p: 1.5,
-        background: `linear-gradient(135deg, ${t.aiTint}, rgba(244,207,94,0.04))`,
-        border: `1px solid rgba(139,92,246,0.20)`, borderRadius: '10px',
-      }}>
-        <Typography sx={{
-          fontSize: 11, fontWeight: 700, color: t.ai,
-          letterSpacing: 0.5, textTransform: 'uppercase', fontFamily: 'Geist Mono', mb: 0.75,
-        }}>✨ Sojori AI</Typography>
-        <Stack direction="row" spacing={0.75} sx={{
-          alignItems: 'center',
-          bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '8px',
-          py: 0.875, px: 1.25, fontSize: 11.5, color: t.text3,
-        }}>
-          <Box sx={{ color: t.ai }}>💬</Box>
-          <Box>Demander à l'IA…</Box>
-          <Box sx={{
-            ml: 'auto', fontFamily: 'Geist Mono', fontSize: 10,
-            bgcolor: t.bg2, p: '1px 5px', borderRadius: 0.5,
-            border: `1px solid ${t.border}`,
-          }}>⌘K</Box>
-        </Stack>
-      </Box>
-
       {user && (
         <Box sx={{ p: '12px 16px', borderTop: `1px solid ${t.border}` }}>
           <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
@@ -784,7 +759,22 @@ export function TLDayLabel({ children }) {
   );
 }
 
-export function TLEvent({ time, future, critical, icon, iconBg, iconColor, title, badge, meta, quote, children }) {
+export function TLEvent({
+  time,
+  future,
+  critical,
+  icon,
+  iconBg,
+  iconColor,
+  title,
+  badge,
+  meta,
+  quote,
+  children,
+  onClick,
+}) {
+  const interactive = typeof onClick === 'function';
+
   return (
     <Box sx={{
       position: 'relative', mb: 2.5, pl: 0.5,
@@ -802,11 +792,41 @@ export function TLEvent({ time, future, critical, icon, iconBg, iconColor, title
         fontFamily: 'Geist Mono', fontSize: 11, color: t.text3,
         letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: 600, mb: 0.5,
       }}>{time}</Typography>
-      <Box sx={{
-        bgcolor: t.bg1, border: '1px solid', borderColor: t.border,
-        borderStyle: future ? 'dashed' : 'solid',
-        borderRadius: '9px', p: '12px 14px',
-      }}>
+      <Box
+        onClick={onClick}
+        onKeyDown={(event) => {
+          if (!interactive) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onClick();
+          }
+        }}
+        role={interactive ? 'button' : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        sx={{
+          bgcolor: t.bg1,
+          border: '1px solid',
+          borderColor: t.border,
+          borderStyle: future ? 'dashed' : 'solid',
+          borderRadius: '9px',
+          p: '12px 14px',
+          cursor: interactive ? 'pointer' : 'default',
+          transition: 'transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease',
+          '&:hover': interactive
+            ? {
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 16px rgba(26,20,8,0.08)',
+                borderColor: t.borderStrong,
+              }
+            : undefined,
+          '&:focus-visible': interactive
+            ? {
+                outline: `2px solid ${t.primary}`,
+                outlineOffset: 2,
+              }
+            : undefined,
+        }}
+      >
         <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 0.5 }}>
           <Box sx={{
             width: 22, height: 22, borderRadius: '6px',
@@ -1393,6 +1413,64 @@ export function Panel({ title, desc, headRight, children, sx }) {
         </Stack>
       )}
       {children}
+    </Box>
+  );
+}
+
+export function StableChart({ height = 320, sx, children }) {
+  const containerRef = React.useRef(null);
+  const [size, setSize] = React.useState({ width: 0, height: 0 });
+
+  React.useLayoutEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    const updateSize = () => {
+      const rect = node.getBoundingClientRect();
+      const nextWidth = Math.max(0, Math.floor(rect.width));
+      const nextHeight = Math.max(0, Math.floor(rect.height));
+      setSize((prev) =>
+        prev.width === nextWidth && prev.height === nextHeight
+          ? prev
+          : { width: nextWidth, height: nextHeight }
+      );
+    };
+
+    updateSize();
+
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => updateSize())
+      : null;
+
+    observer?.observe(node);
+    window.addEventListener('resize', updateSize);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, []);
+
+  return (
+    <Box
+      ref={containerRef}
+      sx={{
+        width: '100%',
+        height,
+        minWidth: 0,
+        minHeight: height,
+        display: 'block',
+        ...sx,
+      }}
+    >
+      {size.width > 0 && size.height > 0
+        ? typeof children === 'function'
+          ? children({
+              width: Math.max(10, size.width),
+              height: Math.max(10, size.height),
+            })
+          : children
+        : null}
     </Box>
   );
 }
