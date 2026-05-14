@@ -2,8 +2,54 @@
 
 **Date** : 14 Mai 2026
 **Mission** : Auditer TOUT le travail livré par les Agents 1-5 + Claude Design
-**Durée estimée** : 2-4h
+**Durée estimée** : 3-5h
 **Périmètre** : Phase 2 - MOCK complet
+
+---
+
+## 📊 SCHÉMA : ANCIEN vs NOUVEAU (À COMPRENDRE ABSOLUMENT)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  ANCIEN PROJET (RÉFÉRENCE)        NOUVEAU PROJET (À AUDITER)   │
+│  ==========================        ===========================   │
+│                                                                 │
+│  📁 sojori-dashboard              📁 Sojori-orchestrator        │
+│  └─ /Users/gouacht/               └─ /Users/gouacht/           │
+│     sojori-dashboard                  Sojori-orchestrator      │
+│                                                                 │
+│  🌐 PORT 3000                     🌐 PORT 4000                  │
+│  🚀 EN PRODUCTION                 🚧 EN DÉVELOPPEMENT           │
+│  ✅ COMPLET                       ⚠️  INCOMPLET                 │
+│  📦 React (ancien)                📦 Vite + React 18 + TS       │
+│                                                                 │
+│  ┌─────────────────┐              ┌─────────────────┐          │
+│  │  CE QUI EXISTE  │              │ CE QUI MANQUE ? │          │
+│  │                 │              │                 │          │
+│  │ • Tous modals   │ ────────────▶│ • Modals ???    │          │
+│  │ • Vue Séjour    │   COMPARER   │ • Vue Séjour ❌ │          │
+│  │ • Orchestration │              │ • Boutons ❌    │          │
+│  │ • Réservations  │              │ • Erreurs ❌    │          │
+│  │ • Tasks         │              │                 │          │
+│  │ • Communications│              │                 │          │
+│  │ • etc.          │              │                 │          │
+│  └─────────────────┘              └─────────────────┘          │
+│         ▲                                  │                    │
+│         │                                  │                    │
+│         │    TON RÔLE :                    │                    │
+│         │    1. Auditer l'ancien           │                    │
+│         │    2. Comparer avec le nouveau   │                    │
+│         └──────3. Lister ce qui manque─────┘                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**RÉSUMÉ ULTRA-SIMPLE** :
+
+1. **ANCIEN** (`sojori-dashboard` port 3000) = Ce qui **DOIT** exister
+2. **NOUVEAU** (`Sojori-orchestrator` port 4000) = Ce qu'on **A FAIT**
+3. **TON JOB** = Trouver ce qui manque entre les deux
 
 ---
 
@@ -20,21 +66,75 @@ Tu es **Agent Audit**. Tu dois vérifier que TOUT ce qui a été livré par les 
 
 ---
 
-## 🌐 SITES WEB À AUDITER
+## 🌐 COMPRENDRE : ANCIEN vs NOUVEAU PROJET
 
-Tu as accès à **deux sites web** en développement :
+**IL EXISTE 2 PROJETS DISTINCTS** :
 
-### Site 1 : Sojori-orchestrator (NOUVEAU - Phase 2)
-- **URL** : http://localhost:4000
-- **Projet** : `/Users/gouacht/Sojori-orchestrator`
-- **Stack** : Vite 8 + React 18 + TypeScript + Material-UI v9
-- **Design** : Aurora Soft Light (#e6b022, #8b5cf6)
-- **Status** : Phase 2 MOCK - Livré par Agents 1-5 + Claude Design
+---
 
-### Site 2 : Sojori-dashboard (ANCIEN - Production)
-- **URL** : http://localhost:4000 (ancien port)
-- **Projet** : `/Users/gouacht/sojori-dashboard`
-- **Status** : En production - **RÉFÉRENCE POUR LES MODALS**
+### 📁 PROJET 1 : **sojori-dashboard** (L'ANCIEN)
+
+**Emplacement** : `/Users/gouacht/sojori-dashboard`
+
+**C'est quoi ?**
+- L'ancien dashboard Sojori **déjà en production**
+- Application React existante, fonctionnelle, complète
+- **RÉFÉRENCE** pour toutes les fonctionnalités
+
+**Pourquoi c'est important ?**
+- ✅ Contient TOUTES les fonctionnalités attendues
+- ✅ Contient TOUS les modals nécessaires
+- ✅ C'est la **SOURCE DE VÉRITÉ** pour savoir ce qui doit exister
+- ✅ Code source disponible pour s'inspirer
+
+**Comment le lancer ?**
+```bash
+cd /Users/gouacht/sojori-dashboard
+PORT=3000 npm start
+# Ou HOST=localhost PORT=3000 npm start
+```
+
+**URL** : Probablement http://localhost:3000
+
+**Ton rôle** : **AUDITER ce projet pour identifier TOUT ce qui existe**
+
+---
+
+### 📁 PROJET 2 : **Sojori-orchestrator** (LE NOUVEAU)
+
+**Emplacement** : `/Users/gouacht/Sojori-orchestrator`
+
+**C'est quoi ?**
+- Le **NOUVEAU** dashboard Sojori (refonte complète)
+- Phase 2 vient d'être livrée par Agents 1-5 + Claude Design
+- **EN DÉVELOPPEMENT** - Pas encore en production
+- Stack moderne : Vite 8 + React 18 + TypeScript + Material-UI v9
+- Design : Aurora Soft Light (#e6b022, #8b5cf6)
+
+**Pourquoi c'est important ?**
+- ⚠️ C'est le projet que tu dois **AUDITER et CORRIGER**
+- ⚠️ Probablement des fonctionnalités **MANQUANTES** par rapport à l'ancien
+- ⚠️ Probablement des modals **NON MIGRÉS** depuis l'ancien
+
+**Comment le lancer ?**
+```bash
+cd /Users/gouacht/Sojori-orchestrator
+pnpm dev --port 4000
+```
+
+**URL** : http://localhost:4000
+
+**Ton rôle** : **COMPARER avec l'ancien et IDENTIFIER ce qui manque**
+
+---
+
+## 🎯 TA MISSION EN 3 MOTS
+
+**COMPARER • IDENTIFIER • DOCUMENTER**
+
+1. **COMPARER** : L'ancien (sojori-dashboard) vs le nouveau (Sojori-orchestrator)
+2. **IDENTIFIER** : Tout ce qui manque dans le nouveau
+3. **DOCUMENTER** : Créer les 3 livrables avec la liste complète
 
 ---
 
