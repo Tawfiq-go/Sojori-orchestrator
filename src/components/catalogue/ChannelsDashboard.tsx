@@ -208,8 +208,8 @@ export function ChannelsDashboard({
           <Panel title="Overview canaux" desc="Webhooks, API calls et mapping" sx={{ mt: 2 }}>
             <DataTable
               columns={[
-                { key: 'name', label: 'Canal', render: (row) => <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{row.logo} {row.name}</Typography> },
-                { key: 'status', label: 'Statut', render: (row) => <Badge variant={row.status === 'connected' ? 'success' : row.status === 'error' ? 'error' : 'neutral'}>{row.status}</Badge> },
+                { key: 'name', label: 'Canal', render: (row: any) => <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{row.logo} {row.name}</Typography> },
+                { key: 'status', label: 'Statut', render: (row: any) => <Badge variant={row.status === 'connected' ? 'success' : row.status === 'error' ? 'error' : 'neutral'}>{row.status}</Badge> },
                 { key: 'lastSync', label: 'Dernière sync' },
                 { key: 'today', label: 'Calls today', align: 'right' },
                 { key: 'err', label: 'Errors', align: 'right' },
@@ -217,7 +217,7 @@ export function ChannelsDashboard({
                 {
                   key: 'actions',
                   label: 'Actions',
-                  render: (row) => (
+                  render: (row: any) => (
                     <Stack direction="row" spacing={0.75}>
                       <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => toggleChannel(row.id)}>
                         {row.status === 'connected' ? 'Désactiver' : 'Activer'}
@@ -281,7 +281,7 @@ export function ChannelsDashboard({
                 { key: 'client', label: 'Client' },
                 { key: 'checkIn', label: 'Check-in' },
                 { key: 'checkOut', label: 'Check-out' },
-                { key: 'amount', label: 'Montant', align: 'right', render: (row) => `€${row.amount}` },
+                { key: 'amount', label: 'Montant', align: 'right', render: (row: any) => `€${row.amount}` },
                 { key: 'ota', label: 'OTA' },
                 { key: 'mapped', label: 'Mapped' },
               ]}
@@ -331,7 +331,7 @@ export function ChannelsDashboard({
             columns={[
               { key: 'timestamp', label: 'Timestamp' },
               { key: 'service', label: 'Service' },
-              { key: 'level', label: 'Niveau', render: (row) => <Badge variant={row.level === 'error' ? 'error' : row.level === 'warning' ? 'warning' : 'info'}>{row.level}</Badge> },
+              { key: 'level', label: 'Niveau', render: (row: any) => <Badge variant={row.level === 'error' ? 'error' : row.level === 'warning' ? 'warning' : 'info'}>{row.level}</Badge> },
               { key: 'endpoint', label: 'Endpoint' },
               { key: 'statusCode', label: 'HTTP', align: 'right' },
               { key: 'durationMs', label: 'ms', align: 'right' },
@@ -354,12 +354,12 @@ export function ChannelsDashboard({
             {
               key: 'enabled',
               label: 'Actif',
-              render: (row) => <Switch size="small" checked={row.enabled} onChange={() => toggleCron(row.id)} />,
+              render: (row: any) => <Switch size="small" checked={row.enabled} onChange={() => toggleCron(row.id)} />,
             },
             {
               key: 'actions',
               label: 'Actions',
-              render: (row) => (
+              render: (row: any) => (
                 <Stack direction="row" spacing={0.75}>
                   <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => onToast(`Retry job ${row.name}`, 'info')}>
                     Retry
@@ -392,12 +392,12 @@ export function ChannelsDashboard({
               { key: 'sojoriName', label: 'Sojori field' },
               { key: 'category', label: 'Catégorie' },
               { key: 'priority', label: 'Priorité', align: 'right' },
-              { key: 'active', label: 'Actif', render: (row) => <Switch size="small" checked={row.active} onChange={() => openMappingEditor({ ...row, active: !row.active })} /> },
-              { key: 'outboundPush', label: 'Push', render: (row) => <Badge variant={row.outboundPush ? 'success' : 'neutral'}>{row.outboundPush ? 'Oui' : 'Non'}</Badge> },
+              { key: 'active', label: 'Actif', render: (row: any) => <Switch size="small" checked={row.active} onChange={() => openMappingEditor({ ...row, active: !row.active })} /> },
+              { key: 'outboundPush', label: 'Push', render: (row: any) => <Badge variant={row.outboundPush ? 'success' : 'neutral'}>{row.outboundPush ? 'Oui' : 'Non'}</Badge> },
               {
                 key: 'actions',
                 label: 'Actions',
-                render: (row) => (
+                render: (row: any) => (
                   <Stack direction="row" spacing={0.75}>
                     <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => openMappingEditor(row)}>
                       Éditer

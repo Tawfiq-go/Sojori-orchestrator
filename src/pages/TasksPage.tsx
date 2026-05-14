@@ -9,6 +9,7 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
+import { TaskFilters, applyTaskFilters, defaultTaskFilters, TaskFilterState } from '../components/tasks/TaskFilters';
 import { mockTasks, Task } from '../data/mockTasks';
 
 // ─── Tab Component ─────────────────────────────────────
@@ -939,6 +940,10 @@ export function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>(mockTasks);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
+
+  // Apply filters to tasks
+  const filteredTasks = applyTaskFilters(tasks, filters);
 
   const tabs = [
     { key: 'liste', label: 'Liste' },
@@ -976,9 +981,14 @@ export function TasksPage() {
     handleOpenModal(task);
   };
 
+  const handleResetFilters = () => {
+    setFilters(defaultTaskFilters);
+    toast.info('Filtres réinitialisés');
+  };
+
   return (
     <DashboardWrapper breadcrumb={['Activité', 'Tâches']}>
-      <PageHeader title="Tâches & opérations" count={`${tasks.length}`}>
+      <PageHeader title="Tâches & opérations" count={`${filteredTasks.length}`}>
         <Button sx={btnGhostSx}>📤 Exporter</Button>
         <Button sx={btnAiSx}>✨ Auto-assigner</Button>
         <Button sx={btnPrimarySx} onClick={() => handleOpenModal()}>
@@ -988,7 +998,18 @@ export function TasksPage() {
 
       <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
-      {activeTab === 'liste' && <TasksListView tasks={tasks} onEditTask={handleEditTask} onDeleteTask={handleDeleteTask} />}
+      {activeTab === 'liste' && (
+        <>
+          <TaskFilters
+            filters={filters}
+            onChange={setFilters}
+            onReset={handleResetFilters}
+            taskCount={tasks.length}
+            filteredCount={filteredTasks.length}
+          />
+          <TasksListView tasks={filteredTasks} onEditTask={handleEditTask} onDeleteTask={handleDeleteTask} />
+        </>
+      )}
       {activeTab === 'calendrier' && <TasksCalendarView />}
       {activeTab === 'sejours' && <TasksSejoursView />}
       {activeTab === 'equipe' && <TasksTeamView />}

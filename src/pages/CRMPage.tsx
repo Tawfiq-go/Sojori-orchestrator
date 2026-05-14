@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { ActionToast, useActionToast } from '../components/ActionToast';
 import { getStoredCrmLeads, saveStoredCrmLeads, type CrmLeadRecord } from '../data/catalogueMock';
@@ -101,16 +101,16 @@ export function CRMPage() {
 
       <DataTable
         columns={[
-          { key: 'contactName', label: 'Contact', render: (row) => <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{row.contactName}</Typography> },
+          { key: 'contactName', label: 'Contact', render: (row: any) => <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{row.contactName}</Typography> },
           { key: 'company', label: 'Company' },
           { key: 'source', label: 'Source' },
           { key: 'properties', label: 'Properties', align: 'right' },
-          { key: 'qualification', label: 'Qualification', render: (row) => <Badge variant={row.qualification === 'hot' ? 'error' : row.qualification === 'warm' ? 'warning' : 'neutral'}>{row.qualification}</Badge> },
-          { key: 'status', label: 'Status', render: (row) => <Badge variant={row.status === 'won' ? 'success' : row.status === 'lost' ? 'error' : 'info'}>{row.status}</Badge> },
+          { key: 'qualification', label: 'Qualification', render: (row: any) => <Badge variant={row.qualification === 'hot' ? 'error' : row.qualification === 'warm' ? 'warning' : 'neutral'}>{row.qualification}</Badge> },
+          { key: 'status', label: 'Status', render: (row: any) => <Badge variant={row.status === 'won' ? 'success' : row.status === 'lost' ? 'error' : 'info'}>{row.status}</Badge> },
           {
             key: 'actions',
             label: 'Actions',
-            render: (row) => (
+            render: (row: any) => (
               <Stack direction="row" spacing={0.75}>
                 <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => setDraft(row)}>
                   Modifier

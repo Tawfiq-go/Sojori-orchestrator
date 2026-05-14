@@ -614,7 +614,7 @@ function ListingAside({
 
       <Panel sx={{ p: 2, mb: 2 }}>
         <Stack spacing={1.25}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography sx={{ fontSize: 13, fontWeight: 700 }}>Complétion globale</Typography>
             <Typography sx={{ fontSize: 14, fontWeight: 800, color: t.primary }}>
               {globalCompletion}%
@@ -624,9 +624,7 @@ function ListingAside({
             <Stack
               key={tab.key}
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ fontSize: 12 }}
+              sx={{ fontSize: 12, justifyContent: 'space-between', alignItems: 'center' }}
             >
               <Typography sx={{ fontSize: 12, color: t.text2 }}>{tab.label}</Typography>
               <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text3 }}>
@@ -651,9 +649,7 @@ function ListingAside({
               <Stack
                 key={channel.id}
                 direction="row"
-                justifyContent="space-between"
-                alignItems="center"
-                sx={{ fontSize: 12 }}
+                sx={{ fontSize: 12, justifyContent: 'space-between', alignItems: 'center' }}
               >
                 <Typography sx={{ fontSize: 12 }}>{channel.name}</Typography>
                 <Chip size="small" label={channel.status} />
@@ -766,7 +762,6 @@ function FormField({
       }
       multiline={field.type === 'textarea'}
       rows={field.type === 'textarea' ? 4 : undefined}
-      inputProps={field.type === 'number' ? { min: field.min ?? 0 } : undefined}
     />
   );
 }
@@ -832,18 +827,18 @@ function TabContent({
               </Typography>
             ) : (
               listing.channels.map((channel) => (
-                <Stack
-                  key={channel.id}
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{
-                    p: 1.5,
-                    borderRadius: '8px',
-                    bgcolor: t.bg2,
-                    border: `1px solid ${t.border}`,
-                  }}
-                >
+              <Stack
+                key={channel.id}
+                direction="row"
+                sx={{
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  p: 1.5,
+                  borderRadius: '8px',
+                  bgcolor: t.bg2,
+                  border: `1px solid ${t.border}`,
+                }}
+              >
                   <Box>
                     <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{channel.name}</Typography>
                     <Typography sx={{ fontSize: 11, color: t.text3 }}>
@@ -920,9 +915,10 @@ export function NewListingFormPage() {
 
   const persistListing = (nextListing: ListingRecord, message: string) => {
     const synced = syncListingMeta(nextListing);
-    const nextListings = existingListing || storedListings.some((item) => item.id === synced.id)
-      ? storedListings.map((item) => (item.id === synced.id ? synced : item))
-      : [synced, ...storedListings];
+    const currentListings = getStoredListings();
+    const nextListings = currentListings.some((item) => item.id === synced.id)
+      ? currentListings.map((item) => (item.id === synced.id ? synced : item))
+      : [synced, ...currentListings];
 
     saveStoredListings(nextListings);
     setListing(synced);
@@ -934,7 +930,7 @@ export function NewListingFormPage() {
   };
 
   const updateField = (path: string, value: unknown) => {
-    setListing((prev) => fieldPathSet(prev, `form.${path}`, value));
+    setListing((prev) => fieldPathSet(prev, `form.${path}`, value) as ListingRecord);
   };
 
   const saveCurrentTab = () => {
@@ -975,7 +971,7 @@ export function NewListingFormPage() {
               justifyContent: 'space-between',
             }}
           >
-            <Stack direction="row" alignItems="center" spacing={2}>
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <Typography sx={{ fontSize: 11, color: t.text3 }}>Listings</Typography>
               <Typography sx={{ fontSize: 11, color: t.text3 }}>›</Typography>
               <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{listing.name}</Typography>
@@ -983,7 +979,7 @@ export function NewListingFormPage() {
               <Typography sx={{ fontSize: 13 }}>{activeTabMeta?.label}</Typography>
             </Stack>
 
-            <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
               <Chip
                 size="small"
                 label={`${globalCompletion}% complet`}
@@ -1018,8 +1014,8 @@ export function NewListingFormPage() {
               p: 2,
             }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
-              <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                 <Divider orientation="vertical" flexItem />
                 <Typography sx={{ fontSize: 12, color: t.text3 }}>
                   Dernière mise à jour : {new Date(listing.updatedAt).toLocaleString('fr-FR')}

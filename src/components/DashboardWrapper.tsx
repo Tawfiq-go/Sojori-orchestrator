@@ -55,6 +55,15 @@ export function DashboardWrapper({ children, breadcrumb = [] }: DashboardWrapper
   // Trouver l'activePath à partir de l'URL actuelle
   const getActivePathFromUrl = () => {
     const path = location.pathname;
+
+    if (
+      path.startsWith('/clients/contacts') ||
+      path.startsWith('/crm') ||
+      path.startsWith('/onboarding')
+    ) {
+      return 'clients';
+    }
+
     const entries = Object.entries(navToRoute).sort((a, b) => b[1].length - a[1].length);
 
     for (const [key, route] of entries) {

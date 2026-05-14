@@ -68,6 +68,15 @@ const ChannelsPage = lazy(() =>
 const ClientsPage = lazy(() =>
   import('./pages/ClientsPage').then((module) => ({ default: module.ClientsPage }))
 );
+const WhatsAppContactsPage = lazy(() =>
+  import('./pages/WhatsAppContactsPage').then((module) => ({ default: module.WhatsAppContactsPage }))
+);
+const CRMPage = lazy(() =>
+  import('./pages/CRMPage').then((module) => ({ default: module.CRMPage }))
+);
+const OnboardingPage = lazy(() =>
+  import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage }))
+);
 
 function RouteLoader() {
   return (
@@ -132,6 +141,9 @@ function App() {
             <Route path="/pricing" element={<LazyRoute><PricingPage /></LazyRoute>} />
             <Route path="/channels" element={<LazyRoute><ChannelsPage /></LazyRoute>} />
             <Route path="/clients" element={<LazyRoute><ClientsPage /></LazyRoute>} />
+            <Route path="/clients/contacts" element={<LazyRoute><WhatsAppContactsPage /></LazyRoute>} />
+            <Route path="/crm" element={<LazyRoute><CRMPage /></LazyRoute>} />
+            <Route path="/onboarding" element={<LazyRoute><OnboardingPage /></LazyRoute>} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>

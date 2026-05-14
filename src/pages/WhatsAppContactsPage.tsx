@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Button, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   getStoredContacts,
@@ -104,7 +104,7 @@ export function WhatsAppContactsPage() {
               })),
             ]}
             aiSuggestions={['Envoyer check-in', 'Partager WiFi', 'Proposer transfert']}
-            onSend={(text) =>
+            onSend={(text: string) =>
               setThreads((prev) =>
                 prev.map((thread) =>
                   thread.id === activeThread.id

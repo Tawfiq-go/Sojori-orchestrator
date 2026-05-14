@@ -182,7 +182,7 @@ function PricingDayCell({
         '&:hover': day.inMonth ? { boxShadow: '0 6px 16px rgba(26,20,8,0.08)' } : {},
       }}
     >
-      <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+      <Stack direction="row" sx={{ mb: 0.5, justifyContent: 'space-between' }}>
         <Typography sx={{ fontSize: 12, fontWeight: 700 }}>{day.day}</Typography>
         {day.isEvent && <Typography sx={{ fontSize: 11 }}>🎉</Typography>}
       </Stack>
@@ -195,7 +195,7 @@ function PricingDayCell({
           <Typography sx={{ fontSize: 9, color: t.ai, fontFamily: 'Geist Mono', mt: 0.5 }}>
             SUGGÉRÉ
           </Typography>
-          <Stack direction="row" spacing={0.75} alignItems="center">
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
             <Typography sx={{ fontSize: 13, fontWeight: 800, color: delta >= 0 ? t.success : t.error }}>
               €{day.suggestedPrice}
             </Typography>
@@ -381,7 +381,7 @@ export function PricingPage() {
               </MenuItem>
             ))}
           </Select>
-          <Stack direction="row" spacing={0.5} alignItems="center">
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <IconButton size="small" onClick={() => navMonth(-1)}>
               ‹
             </IconButton>
@@ -432,7 +432,7 @@ export function PricingPage() {
               border: '1px solid rgba(139,92,246,0.24)',
             }}
           >
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <Typography sx={{ fontSize: 28 }}>✨</Typography>
               <Box sx={{ flex: 1 }}>
                 <Typography sx={{ fontSize: 14, fontWeight: 700, color: t.ai }}>
@@ -463,7 +463,7 @@ export function PricingPage() {
               setEditorOpen(true);
             }}
           />
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 'auto' }}>
+          <Stack direction="row" spacing={1} sx={{ ml: 'auto', alignItems: 'center' }}>
             <Typography sx={{ fontSize: 12, color: t.text3 }}>Dynamic pricing</Typography>
             <Switch
               size="small"
@@ -482,7 +482,7 @@ export function PricingPage() {
         </FilterBar>
 
         <Panel>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+          <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography sx={{ fontSize: 16, fontWeight: 700 }}>
               {listing.name} · {listing.city} · Prix base {formatMoney(listing.adr)}
             </Typography>
@@ -527,11 +527,11 @@ export function PricingPage() {
               {
                 key: 'type',
                 label: 'Type',
-                render: (row) => <Badge variant="info">{row.type}</Badge>,
+                render: (row: any) => <Badge variant="info">{row.type}</Badge>,
               },
-              { key: 'modifier', label: 'Modifier', render: (row) => `${row.modifier}` },
+              { key: 'modifier', label: 'Modifier', render: (row: any) => `${row.modifier}` },
               { key: 'conditions', label: 'Conditions' },
-              { key: 'status', label: 'Statut', render: (row) => <Switch size="small" checked={row.status === 'Actif'} /> },
+              { key: 'status', label: 'Statut', render: (row: any) => <Switch size="small" checked={row.status === 'Actif'} /> },
             ]}
             rows={[
               ...profile.monthRules.filter((rule) => rule.enabled).slice(0, 3).map((rule) => ({

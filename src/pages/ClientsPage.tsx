@@ -10,7 +10,6 @@ import {
   DialogTitle,
   Drawer,
   FormControlLabel,
-  InputAdornment,
   MenuItem,
   Stack,
   TextField,
@@ -186,13 +185,6 @@ export function ClientsPage() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           fullWidth
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Box sx={{ fontSize: 16 }}>🔍</Box>
-              </InputAdornment>
-            ),
-          }}
           sx={{ maxWidth: 420 }}
         />
       </Box>
@@ -200,7 +192,7 @@ export function ClientsPage() {
       <FilterBar>
         <FilterChip label={countryFilter === 'all' ? 'Tous pays' : countryFilter} active={countryFilter !== 'all'} onClick={() => setCountryFilter('all')} dropdown />
         <FilterChip label={vipFilter === 'all' ? 'Tous statuts' : vipFilter === 'vip' ? 'VIP' : 'Standard'} active={vipFilter !== 'all'} onClick={() => setVipFilter('all')} dropdown />
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 'auto' }}>
+        <Stack direction="row" spacing={1} sx={{ ml: 'auto', alignItems: 'center' }}>
           <FormControlLabel control={<Checkbox checked={showDeleted} onChange={(event) => setShowDeleted(event.target.checked)} />} label="Show Deleted" />
           <FormControlLabel control={<Checkbox checked={showBanned} onChange={(event) => setShowBanned(event.target.checked)} />} label="Show Banned" />
         </Stack>
@@ -254,7 +246,7 @@ export function ClientsPage() {
           {
             key: 'name',
             label: 'Client',
-            render: (row) => (
+            render: (row: any) => (
               <Stack>
                 <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{row.name}</Typography>
                 <Typography sx={{ fontSize: 11.5, color: t.text3 }}>{row.email}</Typography>
@@ -264,34 +256,34 @@ export function ClientsPage() {
           {
             key: 'country',
             label: 'Pays',
-            render: (row) => `${row.countryFlag} ${row.country}`,
+            render: (row: any) => `${row.countryFlag} ${row.country}`,
           },
           {
             key: 'role',
             label: 'Role',
-            render: (row) => <Badge variant={row.role === 'vip' ? 'gold' : row.role === 'corporate' ? 'info' : 'neutral'}>{row.role}</Badge>,
+            render: (row: any) => <Badge variant={row.role === 'vip' ? 'gold' : row.role === 'corporate' ? 'info' : 'neutral'}>{row.role}</Badge>,
           },
           {
             key: 'owners',
             label: 'Owners associés',
-            render: (row) => (
+            render: (row: any) => (
               <Typography sx={{ fontSize: 12, color: t.text3 }}>
                 {row.ownerNames.join(', ')}
               </Typography>
             ),
           },
           { key: 'totalBookings', label: 'Séjours', align: 'right' },
-          { key: 'totalRevenue', label: 'Revenu', align: 'right', render: (row) => formatCurrency(row.totalRevenue) },
-          { key: 'lastVisit', label: 'Dernière visite', render: (row) => formatDate(row.lastVisit) },
+          { key: 'totalRevenue', label: 'Revenu', align: 'right', render: (row: any) => formatCurrency(row.totalRevenue) },
+          { key: 'lastVisit', label: 'Dernière visite', render: (row: any) => formatDate(row.lastVisit) },
           {
             key: 'status',
             label: 'Status',
-            render: (row) => <Badge variant={row.status === 'active' ? 'success' : row.status === 'banned' ? 'error' : 'neutral'}>{row.status}</Badge>,
+            render: (row: any) => <Badge variant={row.status === 'active' ? 'success' : row.status === 'banned' ? 'error' : 'neutral'}>{row.status}</Badge>,
           },
           {
             key: 'actions',
             label: 'Actions',
-            render: (row) => (
+            render: (row: any) => (
               <Stack direction="row" spacing={0.75}>
                 <Button sx={{ ...btnGhostSx, ...btnSmSx }} onClick={() => { setSelectedClient(row); setDetailsOpen(true); }}>
                   Voir

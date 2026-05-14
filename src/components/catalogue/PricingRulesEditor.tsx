@@ -81,7 +81,7 @@ function MonthRulesPanel({
       {items.map((item, index) => (
         <Box key={item.key} sx={cardSx}>
           <Stack spacing={1.25}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{item.label}</Typography>
               <Switch
                 size="small"
@@ -123,7 +123,7 @@ function WeekdayRulesPanel({
       {items.map((item, index) => (
         <Box key={item.key} sx={cardSx}>
           <Stack spacing={1.25}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{item.label}</Typography>
               <Switch
                 size="small"
@@ -222,7 +222,7 @@ function EventRulesPanel({
                 )
               }
             />
-            <Stack justifyContent="space-between" alignItems="center">
+            <Stack sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Switch
                 size="small"
                 checked={item.enabled}
