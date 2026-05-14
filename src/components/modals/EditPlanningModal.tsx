@@ -3,7 +3,7 @@
 // Édition planning horaires d'UN jour précis (multi-timings + copie vers autres jours)
 // Material-UI v9 · TypeScript · Aurora Soft Light · MOCK data
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Button,
   Box, Stack, TextField, Chip, FormControlLabel, Switch, Checkbox,
@@ -78,10 +78,10 @@ export default function EditPlanningModal({ open, onClose, initialDay = DEFAULT_
 
   return (
     <Dialog open={open} onClose={onClose} fullScreen={fullScreen} maxWidth="sm" fullWidth
-      PaperProps={{ sx: { borderRadius: fullScreen ? 0 : 2.5 } }}
+      slotProps={{ paper: { sx: { borderRadius: fullScreen ? 0 : 2.5 } } }}
     >
       <DialogTitle sx={{ p: 0, borderBottom: `1px solid ${T.border}` }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 3, py: 2 }}>
+        <Stack direction="row" sx={{ px: 3, py: 2, alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 700 }}>Modifier le planning</Typography>
             <Typography variant="body2" sx={{ color: T.text3, mt: 0.5 }}>{day.day}</Typography>
@@ -110,22 +110,22 @@ export default function EditPlanningModal({ open, onClose, initialDay = DEFAULT_
           {/* Timings */}
           {day.present && (
             <Box sx={{ p: 2.5, bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2 }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+              <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography sx={{ fontWeight: 700 }}>Créneaux horaires</Typography>
                 <Chip size="small" label={`${totalHours.toFixed(1)}h total`} color="default" />
               </Stack>
               <Stack spacing={1.5}>
                 {day.timings.map((t, idx) => (
-                  <Stack key={t.id} direction="row" spacing={1.5} alignItems="center">
+                  <Stack key={t.id} direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                     <Box sx={{
                       width: 28, height: 28, borderRadius: '50%', bgcolor: T.bg2,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 12, fontWeight: 700, color: T.text2,
                     }}>{idx + 1}</Box>
-                    <TextField size="small" type="time" label="Début" InputLabelProps={{ shrink: true }}
+                    <TextField size="small" type="time" label="Début" slotProps={{ inputLabel: { shrink: true } }}
                       value={t.start} onChange={(e) => updateTiming(t.id, { start: e.target.value })} />
                     <Typography sx={{ color: T.text3 }}>→</Typography>
-                    <TextField size="small" type="time" label="Fin" InputLabelProps={{ shrink: true }}
+                    <TextField size="small" type="time" label="Fin" slotProps={{ inputLabel: { shrink: true } }}
                       value={t.end} onChange={(e) => updateTiming(t.id, { end: e.target.value })} />
                     <IconButton size="small" onClick={() => removeTiming(t.id)}
                       disabled={day.timings.length === 1} sx={{ color: T.error }}>🗑️</IconButton>
@@ -137,7 +137,7 @@ export default function EditPlanningModal({ open, onClose, initialDay = DEFAULT_
               </Button>
               {errors.length > 0 && (
                 <Alert severity="error" sx={{ mt: 2 }}>
-                  {errors.map((e, i) => <Typography key={i} variant="caption" display="block">{e}</Typography>)}
+                  {errors.map((e, i) => <Typography key={i} variant="caption" sx={{ display: 'block' }}>{e}</Typography>)}
                 </Alert>
               )}
             </Box>
@@ -146,7 +146,7 @@ export default function EditPlanningModal({ open, onClose, initialDay = DEFAULT_
           {/* Copier vers autres jours */}
           <Box sx={{ p: 2.5, bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2 }}>
             <Typography sx={{ fontWeight: 700, mb: 1.5 }}>Copier ce planning vers d'autres jours</Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
               {DAYS.filter(d => d !== day.day).map(d => (
                 <Chip key={d} label={d} clickable
                   onClick={() => setCopyTo(copyTo.includes(d) ? copyTo.filter(x => x !== d) : [...copyTo, d])}

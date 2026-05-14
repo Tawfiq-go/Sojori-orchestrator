@@ -11,8 +11,34 @@ import type {
   CancelPlanParams,
 } from '../types/orchestration.types';
 
-const API_BASE = import.meta.env.VITE_SRV_ORCHESTRATOR_URL || 'http://localhost:4008';
+// ✅ CORRECTION: srv-orchestrator est sur port 4010 (pas 4008)
+// Production: https://dev.sojori.com/api/v1/orchestrator (via ingress)
+// Local: http://localhost:4010/api/v1/orchestrator
+const API_BASE = import.meta.env.VITE_SRV_ORCHESTRATOR_URL || 'https://dev.sojori.com';
 const API_PREFIX = '/api/v1/orchestrator';
+
+/**
+ * Get auth token from localStorage
+ */
+function getAuthToken(): string | null {
+  return localStorage.getItem('token') || null;
+}
+
+/**
+ * Create headers with auth token
+ */
+function getHeaders(): HeadersInit {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
+}
 
 /**
  * Fetch all orchestration plans with filters
@@ -40,7 +66,9 @@ export async function getOrchestrationPlans(
     queryParams.append('listingId', listingId);
   }
 
-  const response = await fetch(`${API_BASE}${API_PREFIX}/reservations?${queryParams}`);
+  const response = await fetch(`${API_BASE}${API_PREFIX}/reservations?${queryParams}`, {
+    headers: getHeaders(),
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Network error' }));
@@ -59,7 +87,10 @@ export async function getOrchestrationPlanDetail(
   reservationNumber: string
 ): Promise<OrchestrationPlanDetail> {
   const response = await fetch(
-    `${API_BASE}${API_PREFIX}/reservations/${reservationNumber}`
+    `${API_BASE}${API_PREFIX}/reservations/${reservationNumber}`,
+    {
+      headers: getHeaders(),
+    }
   );
 
   if (!response.ok) {
@@ -88,7 +119,7 @@ export async function cancelOrchestrationPlan(
     `${API_BASE}${API_PREFIX}/reservations/${reservationNumber}/cancel`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify({ reason }),
     }
   );
@@ -107,7 +138,9 @@ export async function cancelOrchestrationPlan(
  * GET /api/v1/orchestrator/orchestration/stats
  */
 export async function getOrchestrationStats(): Promise<OrchestrationStats> {
-  const response = await fetch(`${API_BASE}${API_PREFIX}/orchestration/stats`);
+  const response = await fetch(`${API_BASE}${API_PREFIX}/orchestration/stats`, {
+    headers: getHeaders(),
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Network error' }));
@@ -130,7 +163,10 @@ export async function getOrchestrationPlansList(
   limit: number = 50
 ): Promise<{ plans: OrchestrationPlan[] }> {
   const response = await fetch(
-    `${API_BASE}${API_PREFIX}/orchestration/plans?limit=${limit}`
+    `${API_BASE}${API_PREFIX}/orchestration/plans?limit=${limit}`,
+    {
+      headers: getHeaders(),
+    }
   );
 
   if (!response.ok) {
@@ -154,7 +190,10 @@ export async function getOrchestrationPlanByCode(
   reservationCode: string
 ): Promise<OrchestrationPlanDetail> {
   const response = await fetch(
-    `${API_BASE}${API_PREFIX}/orchestration/plans/${reservationCode}`
+    `${API_BASE}${API_PREFIX}/orchestration/plans/${reservationCode}`,
+    {
+      headers: getHeaders(),
+    }
   );
 
   if (!response.ok) {

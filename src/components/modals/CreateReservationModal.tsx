@@ -180,11 +180,13 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
       onClose={onClose}
       maxWidth="lg"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '16px',
-          maxHeight: '90vh',
-        }
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '16px',
+            maxHeight: '90vh',
+          },
+        },
       }}
     >
       <DialogTitle sx={{
@@ -250,7 +252,7 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
                     label="Check-in"
                     value={checkInDate}
                     onChange={(e) => setCheckInDate(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
+                    slotProps={{ inputLabel: { shrink: true } }}
                   />
                   <TextField
                     fullWidth
@@ -258,7 +260,7 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
                     label="Heure"
                     value={checkInTime}
                     onChange={(e) => setCheckInTime(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
+                    slotProps={{ inputLabel: { shrink: true } }}
                   />
                 </Stack>
 
@@ -270,7 +272,7 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
                     label="Check-out"
                     value={checkOutDate}
                     onChange={(e) => setCheckOutDate(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
+                    slotProps={{ inputLabel: { shrink: true } }}
                   />
                   <TextField
                     fullWidth
@@ -278,7 +280,7 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
                     label="Heure"
                     value={checkOutTime}
                     onChange={(e) => setCheckOutTime(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
+                    slotProps={{ inputLabel: { shrink: true } }}
                   />
                 </Stack>
 
@@ -311,7 +313,7 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
                   label="Adultes"
                   value={adults}
                   onChange={(e) => setAdults(Number(e.target.value))}
-                  inputProps={{ min: 1 }}
+                  slotProps={{ htmlInput: { min: 1 } }}
                 />
                 <TextField
                   fullWidth
@@ -319,7 +321,7 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
                   label="Enfants"
                   value={children}
                   onChange={(e) => setChildren(Number(e.target.value))}
-                  inputProps={{ min: 0 }}
+                  slotProps={{ htmlInput: { min: 0 } }}
                 />
                 <TextField
                   fullWidth
@@ -327,7 +329,7 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
                   label="Bébés"
                   value={infants}
                   onChange={(e) => setInfants(Number(e.target.value))}
-                  inputProps={{ min: 0 }}
+                  slotProps={{ htmlInput: { min: 0 } }}
                 />
               </Stack>
             </Box>
@@ -351,8 +353,10 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
                       setPricePerNight(ppn);
                       if (nights > 0) setTotalPrice(nights * ppn);
                     }}
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start">€</InputAdornment>,
+                    slotProps={{
+                      input: {
+                        startAdornment: <InputAdornment position="start">€</InputAdornment>,
+                      },
                     }}
                   />
                   <TextField
@@ -361,8 +365,10 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
                     label="Prix total"
                     value={totalPrice}
                     onChange={(e) => setTotalPrice(Number(e.target.value))}
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start">€</InputAdornment>,
+                    slotProps={{
+                      input: {
+                        startAdornment: <InputAdornment position="start">€</InputAdornment>,
+                      },
                     }}
                   />
                 </Stack>
@@ -421,8 +427,10 @@ export function CreateReservationModal({ open, onClose, onSave }: CreateReservat
                   label="Commission (%)"
                   value={commissionPercent}
                   onChange={(e) => setCommissionPercent(Number(e.target.value))}
-                  InputProps={{
-                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                  slotProps={{
+                    input: {
+                      endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    },
                   }}
                 />
               </Stack>

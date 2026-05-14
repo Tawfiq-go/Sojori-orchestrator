@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Box, Button, Divider, Stack, Typography } from '@mui/material';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Box, Button, CircularProgress, Divider, Stack, Typography } from '@mui/material';
 import {
   Bar,
   BarChart,
@@ -30,20 +30,25 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 import {
   dashboardPeriods,
-  dashboardProperties,
-  mockAlerts,
   mockCheckFlow,
   mockDashboardKPIs,
   mockOccupancyByProperty,
+  mockAlerts,
   mockRecentReviews,
   mockRevenueChart,
   mockSourceDistribution,
-  mockTopProperties,
   mockUnreadMessages,
   mockUpcomingCheckIns,
   mockUpcomingCheckOuts,
   mockUrgentTasks,
 } from '../data/mockDashboard';
+import { dashboardService } from '../services/dashboardService';
+import type {
+  DashboardAlertItem,
+  DashboardPeriod,
+  DashboardPropertyOption,
+  DashboardSnapshot,
+} from '../types/dashboard.types';
 
 const chartColors = ['#e6b022', '#8b5cf6', '#10b981', '#06b6d4'];
 
@@ -53,42 +58,124 @@ const currency = new Intl.NumberFormat('fr-FR', {
   maximumFractionDigits: 0,
 });
 
+const fallbackAlerts: DashboardAlertItem[] = mockAlerts.map((alert) => ({
+  id: alert.id,
+  severity: alert.severity as DashboardAlertItem['severity'],
+  title: alert.title,
+  detail: alert.detail,
+}));
+
+const fallbackSnapshot: DashboardSnapshot = {
+  properties: [],
+  kpis: {
+    totalReservations: mockDashboardKPIs.totalReservations,
+    monthlyRevenue: mockDashboardKPIs.monthlyRevenue,
+    occupancyRate: mockDashboardKPIs.occupancyRate,
+    adr: mockDashboardKPIs.adr,
+    revpar: mockDashboardKPIs.revpar,
+    guestsThisMonth: mockDashboardKPIs.guestsThisMonth,
+    activeProperties: mockDashboardKPIs.activeProperties,
+    averageRating: mockDashboardKPIs.averageRating,
+  },
+  revenueChart: mockRevenueChart,
+  sourceDistribution: mockSourceDistribution,
+  occupancyByProperty: mockOccupancyByProperty,
+  alerts: fallbackAlerts,
+  checkFlow: mockCheckFlow,
+  upcomingCheckIns: mockUpcomingCheckIns,
+  upcomingCheckOuts: mockUpcomingCheckOuts,
+  recentBookings: [
+    ...mockUpcomingCheckIns.slice(0, 3).map((item) => ({ ...item, type: 'Check-in' })),
+    ...mockUpcomingCheckOuts.slice(0, 3).map((item) => ({ ...item, type: 'Check-out' })),
+  ],
+  urgentTasks: mockUrgentTasks,
+  unreadMessages: mockUnreadMessages,
+  recentReviews: mockRecentReviews,
+};
+
 export function DashboardPage() {
-  const [period, setPeriod] = useState<(typeof dashboardPeriods)[number]>('Mois');
-  const [selectedProperties, setSelectedProperties] = useState<string[]>(
-    dashboardProperties.slice(0, 3)
-  );
+  const [period, setPeriod] = useState<DashboardPeriod>('Mois');
+  const [properties, setProperties] = useState<DashboardPropertyOption[]>([]);
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot>(fallbackSnapshot);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const visibleCheckIns = useMemo(
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      setLoading(true);
+      try {
+        const nextSnapshot = await dashboardService.getSnapshot({
+          period,
+          listingIds: selectedPropertyIds,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        setSnapshot(nextSnapshot);
+        setProperties(nextSnapshot.properties);
+        setError(null);
+
+        if (selectedPropertyIds.length === 0 && properties.length === 0 && nextSnapshot.properties.length > 0) {
+          setSelectedPropertyIds(nextSnapshot.properties.slice(0, 3).map((property) => property.id));
+        }
+      } catch (fetchError) {
+        if (cancelled) {
+          return;
+        }
+        console.error('Error loading dashboard page:', fetchError);
+        setError('Impossible de charger les KPIs live pour le dashboard.');
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [period, refreshKey, selectedPropertyIds]);
+
+  const topLiveProperties = useMemo(
     () =>
-      mockUpcomingCheckIns.filter((item) =>
-        selectedProperties.some((property) => item.property.includes(property.split(' - ')[0]))
-      ),
-    [selectedProperties]
+      [...snapshot.occupancyByProperty]
+        .sort((a, b) => (b.adr ?? 0) - (a.adr ?? 0) || b.occupancy - a.occupancy)
+        .slice(0, 4),
+    [snapshot.occupancyByProperty]
   );
 
-  const visibleCheckOuts = useMemo(
-    () =>
-      mockUpcomingCheckOuts.filter((item) =>
-        selectedProperties.some((property) => item.property.includes(property.split(' - ')[0]))
-      ),
-    [selectedProperties]
-  );
-
-  const toggleProperty = (property: string) => {
-    setSelectedProperties((prev) =>
-      prev.includes(property)
-        ? prev.filter((value) => value !== property)
-        : [...prev, property]
+  const toggleProperty = (propertyId: string) => {
+    setSelectedPropertyIds((prev) =>
+      prev.includes(propertyId)
+        ? prev.filter((value) => value !== propertyId)
+        : [...prev, propertyId]
     );
   };
 
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Dashboard']}>
-      <PageHeader title="Dashboard principal" count={period}>
-        <Button sx={btnGhostSx}>Exporter CSV</Button>
-        <Button sx={btnPrimarySx}>Generer report</Button>
+      <PageHeader title="Dashboard principal" count={loading ? 'Live data' : period}>
+        <Button sx={btnGhostSx} onClick={() => setRefreshKey((value) => value + 1)}>
+          Actualiser
+        </Button>
+        <Button sx={btnPrimarySx} onClick={() => setRefreshKey((value) => value + 1)}>
+          Generer report
+        </Button>
       </PageHeader>
+
+      {error ? (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {error} Affichage des donnees disponibles / fallback pour garder le dashboard exploitable.
+        </Alert>
+      ) : null}
 
       <FilterBar>
         {dashboardPeriods.map((item) => (
@@ -102,48 +189,61 @@ export function DashboardPage() {
       </FilterBar>
 
       <FilterBar>
-        {dashboardProperties.map((property) => (
+        {properties.map((property) => (
           <FilterChip
-            key={property}
-            label={property}
-            active={selectedProperties.includes(property)}
-            onClick={() => toggleProperty(property)}
+            key={property.id}
+            label={property.label}
+            active={selectedPropertyIds.includes(property.id)}
+            onClick={() => toggleProperty(property.id)}
           />
         ))}
       </FilterBar>
+
+      {loading && properties.length === 0 ? (
+        <Box
+          sx={{
+            minHeight: 280,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      ) : null}
 
       <StatsRow>
         <StatCard
           icon="🎫"
           iconBg="rgba(230,176,34,0.12)"
           iconColor={t.primaryDeep}
-          value={mockDashboardKPIs.totalReservations.value.toString()}
+          value={snapshot.kpis.totalReservations.value.toString()}
           label={`Reservations ${period.toLowerCase()}`}
-          trend={mockDashboardKPIs.totalReservations.trend}
+          trend={snapshot.kpis.totalReservations.trend}
         />
         <StatCard
           icon="💶"
           iconBg="rgba(16,185,129,0.12)"
           iconColor={t.success}
-          value={currency.format(mockDashboardKPIs.monthlyRevenue.value)}
+          value={currency.format(snapshot.kpis.monthlyRevenue.value)}
           label="Revenus du mois"
-          trend={mockDashboardKPIs.monthlyRevenue.trend}
+          trend={snapshot.kpis.monthlyRevenue.trend}
         />
         <StatCard
           icon="📈"
           iconBg="rgba(6,182,212,0.12)"
           iconColor={t.info}
-          value={`${mockDashboardKPIs.occupancyRate.value}%`}
+          value={`${snapshot.kpis.occupancyRate.value}%`}
           label="Taux d’occupation"
-          trend={mockDashboardKPIs.occupancyRate.trend}
+          trend={snapshot.kpis.occupancyRate.trend}
         />
         <StatCard
           icon="🛏️"
           iconBg="rgba(139,92,246,0.12)"
           iconColor={t.ai}
-          value={`${mockDashboardKPIs.adr.value} EUR`}
+          value={`${snapshot.kpis.adr.value} EUR`}
           label="ADR"
-          trend={mockDashboardKPIs.adr.trend}
+          trend={snapshot.kpis.adr.trend}
         />
       </StatsRow>
 
@@ -152,33 +252,33 @@ export function DashboardPage() {
           icon="🏡"
           iconBg="rgba(245,158,11,0.12)"
           iconColor={t.warning}
-          value={mockDashboardKPIs.activeProperties.value.toString()}
+          value={snapshot.kpis.activeProperties.value.toString()}
           label="Properties actives"
-          trend={mockDashboardKPIs.activeProperties.trend}
+          trend={snapshot.kpis.activeProperties.trend}
         />
         <StatCard
           icon="⭐"
           iconBg="rgba(230,176,34,0.12)"
           iconColor={t.primaryDeep}
-          value={mockDashboardKPIs.averageRating.value.toString()}
+          value={snapshot.kpis.averageRating.value.toString()}
           label="Rating moyen"
-          trend={mockDashboardKPIs.averageRating.trend}
+          trend={snapshot.kpis.averageRating.trend}
         />
         <StatCard
           icon="👥"
           iconBg="rgba(16,185,129,0.12)"
           iconColor={t.success}
-          value={mockDashboardKPIs.guestsThisMonth.value.toString()}
+          value={snapshot.kpis.guestsThisMonth.value.toString()}
           label="Guests ce mois"
-          trend={mockDashboardKPIs.guestsThisMonth.trend}
+          trend={snapshot.kpis.guestsThisMonth.trend}
         />
         <StatCard
           icon="📊"
           iconBg="rgba(239,68,68,0.12)"
           iconColor={t.error}
-          value={`${mockDashboardKPIs.revpar.value} EUR`}
+          value={`${snapshot.kpis.revpar.value} EUR`}
           label="RevPAR"
-          trend={mockDashboardKPIs.revpar.trend}
+          trend={snapshot.kpis.revpar.trend}
         />
       </StatsRow>
 
@@ -191,10 +291,10 @@ export function DashboardPage() {
           '& > *': { minWidth: 0 },
         }}
       >
-        <Panel title="Revenus par jour / semaine / mois" desc="Revenue trend + bookings">
+        <Panel title="Revenus par jour / semaine / mois" desc="Logique API re-utilisee depuis sojori-dashboard">
           <StableChart height={320}>
-            {({ width, height }) => (
-              <LineChart width={width} height={height} data={mockRevenueChart}>
+            {({ width, height }: { width: number; height: number }) => (
+              <LineChart width={width} height={height} data={snapshot.revenueChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="date" />
                 <YAxis yAxisId="revenue" />
@@ -210,21 +310,21 @@ export function DashboardPage() {
 
         <Panel title="Reservations par source" desc="Airbnb, Booking, Direct, Vrbo">
           <StableChart height={320}>
-            {({ width, height }) => {
+            {({ width, height }: { width: number; height: number }) => {
               const outerRadius = Math.max(70, Math.min(110, Math.floor(Math.min(width, height) * 0.34)));
               const innerRadius = Math.max(40, outerRadius - 40);
 
               return (
                 <PieChart width={width} height={height}>
                 <Pie
-                  data={mockSourceDistribution}
+                  data={snapshot.sourceDistribution}
                   dataKey="value"
                   nameKey="source"
                   innerRadius={innerRadius}
                   outerRadius={outerRadius}
                   paddingAngle={3}
                 >
-                  {mockSourceDistribution.map((entry, index) => (
+                  {snapshot.sourceDistribution.map((entry, index) => (
                     <Cell key={entry.source} fill={chartColors[index % chartColors.length]} />
                   ))}
                 </Pie>
@@ -248,8 +348,8 @@ export function DashboardPage() {
       >
         <Panel title="Taux d’occupation par property" desc="Bar chart par actif">
           <StableChart height={320}>
-            {({ width, height }) => (
-              <BarChart width={width} height={height} data={mockOccupancyByProperty}>
+            {({ width, height }: { width: number; height: number }) => (
+              <BarChart width={width} height={height} data={snapshot.occupancyByProperty}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="property" hide />
                 <YAxis />
@@ -259,7 +359,7 @@ export function DashboardPage() {
             )}
           </StableChart>
           <Stack spacing={1}>
-            {mockOccupancyByProperty.map((property) => (
+            {snapshot.occupancyByProperty.map((property) => (
               <Stack
                 key={property.property}
                 direction="row"
@@ -267,7 +367,7 @@ export function DashboardPage() {
               >
                 <Typography variant="body2">{property.property}</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {property.occupancy}% · ADR {property.adr} EUR
+                  {property.occupancy}%{property.adr ? ` · ADR ${property.adr} EUR` : ''}
                 </Typography>
               </Stack>
             ))}
@@ -276,8 +376,8 @@ export function DashboardPage() {
 
         <Panel title="Check-ins / Check-outs" desc="Vue jour par jour">
           <StableChart height={320}>
-            {({ width, height }) => (
-              <BarChart width={width} height={height} data={mockCheckFlow}>
+            {({ width, height }: { width: number; height: number }) => (
+              <BarChart width={width} height={height} data={snapshot.checkFlow}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="label" />
                 <YAxis />
@@ -301,7 +401,7 @@ export function DashboardPage() {
       >
         <Panel title="Prochains check-ins" desc="5 prochains">
           <Stack spacing={1.25}>
-            {visibleCheckIns.map((item) => (
+            {snapshot.upcomingCheckIns.map((item) => (
               <MiniRow
                 key={item.id}
                 title={item.guest}
@@ -314,7 +414,7 @@ export function DashboardPage() {
 
         <Panel title="Prochains check-outs" desc="5 prochains">
           <Stack spacing={1.25}>
-            {visibleCheckOuts.map((item) => (
+            {snapshot.upcomingCheckOuts.map((item) => (
               <MiniRow
                 key={item.id}
                 title={item.guest}
@@ -325,13 +425,13 @@ export function DashboardPage() {
           </Stack>
         </Panel>
 
-        <Panel title="Top properties par revenus" desc="Ranking mensuel">
+        <Panel title="Reservations recentes" desc="Derniers mouvements">
           <Stack spacing={1.25}>
-            {mockTopProperties.map((item, index) => (
+            {snapshot.recentBookings.map((item) => (
               <MiniRow
-                key={item.property}
-                title={`${index + 1}. ${item.property}`}
-                subtitle={`${currency.format(item.revenue)} · OCC ${item.occupancy}%`}
+                key={`${item.type || 'booking'}-${item.id}`}
+                title={`${item.type || 'Réservation'} · ${item.guest}`}
+                subtitle={`${item.property} · ${item.when}`}
                 badge={item.source}
               />
             ))}
@@ -342,13 +442,31 @@ export function DashboardPage() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', xl: 'repeat(3, 1fr)' },
+          gridTemplateColumns: { xs: '1fr', xl: 'repeat(4, 1fr)' },
           gap: 2,
         }}
       >
+        <Panel title="Quick actions" desc="Raccourcis de pilotage">
+          <Stack spacing={0.75}>
+            {['📤 Exporter les KPIs', '📅 Voir reservations', '🧩 Ouvrir les taches', '💬 Aller aux messages'].map((action) => (
+              <Button
+                key={action}
+                sx={{
+                  ...btnGhostSx,
+                  justifyContent: 'flex-start',
+                  color: t.text2,
+                  fontWeight: 600,
+                }}
+              >
+                {action}
+              </Button>
+            ))}
+          </Stack>
+        </Panel>
+
         <Panel title="Taches urgentes" desc="5 prioritaires">
           <Stack spacing={1.25}>
-            {mockUrgentTasks.map((task) => (
+            {snapshot.urgentTasks.map((task) => (
               <MiniRow
                 key={task.id}
                 title={task.label}
@@ -361,7 +479,7 @@ export function DashboardPage() {
 
         <Panel title="Messages non lus" desc="Guests + OTA + staff">
           <Stack spacing={1.25}>
-            {mockUnreadMessages.map((message) => (
+            {snapshot.unreadMessages.map((message) => (
               <MiniRow
                 key={message.id}
                 title={message.from}
@@ -374,7 +492,7 @@ export function DashboardPage() {
 
         <Panel title="Avis recents & alertes" desc="Reviews + notifications">
           <Stack spacing={1.5}>
-            {mockRecentReviews.map((review) => (
+            {snapshot.recentReviews.map((review) => (
               <Box key={review.id}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
                   <Typography sx={{ fontWeight: 700 }}>{review.guest}</Typography>
@@ -386,7 +504,7 @@ export function DashboardPage() {
               </Box>
             ))}
             <Divider />
-            {mockAlerts.map((alert) => (
+            {snapshot.alerts.map((alert) => (
               <Box key={alert.id}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
                   <Typography sx={{ fontWeight: 700 }}>{alert.title}</Typography>
@@ -402,6 +520,23 @@ export function DashboardPage() {
           </Stack>
         </Panel>
       </Box>
+
+      {topLiveProperties.length > 0 ? (
+        <Box sx={{ mt: 2 }}>
+          <Panel title="Top properties live" desc="Selectionnee depuis les donnees live">
+            <Stack spacing={1.25}>
+              {topLiveProperties.map((item, index) => (
+                <MiniRow
+                  key={item.property}
+                  title={`${index + 1}. ${item.property}`}
+                  subtitle={`OCC ${item.occupancy}%${item.adr ? ` · ADR ${item.adr} EUR` : ''}`}
+                  badge="Live"
+                />
+              ))}
+            </Stack>
+          </Panel>
+        </Box>
+      ) : null}
     </DashboardWrapper>
   );
 }

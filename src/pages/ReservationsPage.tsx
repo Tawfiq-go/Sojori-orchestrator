@@ -1,96 +1,492 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { DashboardWrapper } from '../components/DashboardWrapper';
-import {
-  StatsRow, StatCard, PageHeader, FilterBar, FilterChip, ViewToggle,
-  DataTable, GuestCell, ListingCell, Badge, SourcePill, Revenue, Pagination,
-  btnGhostSx, btnAiSx, btnPrimarySx,
-  tokens as t,
-} from '../components/dashboard/DashboardV2.components';
-import { Box, Button } from '@mui/material';
+// ════════════════════════════════════════════════════════════════════
+// Sojori — Reservations Page (Main Route: /reservations)
+// Vue liste des réservations avec intégration API srv-reservations
+// ════════════════════════════════════════════════════════════════════
 
+import { useEffect, useState } from 'react';
+import {
+  Box,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  CircularProgress,
+  Alert,
+  Stack,
+  IconButton,
+  Tooltip,
+  Button,
+  ButtonGroup,
+} from '@mui/material';
+import {
+  Visibility as VisibilityIcon,
+  Phone as PhoneIcon,
+  Email as EmailIcon,
+  Home as HomeIcon,
+  CalendarToday as CalendarIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
+  Pending as PendingIcon,
+} from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import reservationsService from '../services/reservationsService';
+import type {
+  ReservationListItem,
+  ReservationFilter,
+  ReservationCounts,
+} from '../types/reservations.types';
+import { DashboardWrapper } from '../components/DashboardWrapper';
+import { PageHeader } from '../components/dashboard/DashboardV2.components';
+
+// ═══════════════════ AURORA SOFT LIGHT TOKENS ═══════════════════
+const t = {
+  primary: '#e6b022',
+  primaryLight: '#f4d483',
+  primaryDark: '#c79815',
+  bg1: '#ffffff',
+  bg2: '#fafbfc',
+  bg3: '#f5f5f5',
+  text1: '#1a1a1a',
+  text2: '#4a4a4a',
+  text3: '#7a7a7a',
+  border: '#e0e0e0',
+  purple: '#8b5cf6',
+  purpleLight: '#c4b5fd',
+  success: '#10b981',
+  error: '#ef4444',
+  warning: '#f59e0b',
+  info: '#3b82f6',
+};
+
+// ═══════════════════ FILTER CONFIGS ═══════════════════
+const FILTER_CONFIGS: {
+  key: ReservationFilter;
+  label: string;
+  color: 'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'error';
+}[] = [
+  { key: 'CHECKIN_TODAY', label: "Check-in aujourd'hui", color: 'success' },
+  { key: 'CHECKIN_TOMORROW', label: 'Check-in demain', color: 'info' },
+  { key: 'CHECKIN_7DAYS', label: 'Check-in 7 jours', color: 'primary' },
+  { key: 'CHECKOUT_TODAY', label: "Check-out aujourd'hui", color: 'warning' },
+  { key: 'CHECKOUT_TOMORROW', label: 'Check-out demain', color: 'secondary' },
+  { key: 'CHECKOUT_7DAYS', label: 'Check-out 7 jours', color: 'primary' },
+];
+
+// ═══════════════════ STATUS COLORS ═══════════════════
+function getStatusColor(status: string) {
+  const normalized = status.toLowerCase();
+  if (normalized === 'confirmed') {
+    return { bg: t.success + '22', color: t.success, label: 'Confirmé' };
+  }
+  if (normalized === 'pending') {
+    return { bg: t.warning + '22', color: t.warning, label: 'En attente' };
+  }
+  if (
+    normalized.includes('cancelled') ||
+    normalized.includes('canceled')
+  ) {
+    return { bg: t.error + '22', color: t.error, label: 'Annulé' };
+  }
+  if (normalized === 'completed') {
+    return { bg: t.info + '22', color: t.info, label: 'Terminé' };
+  }
+  return { bg: t.text3 + '22', color: t.text3, label: status };
+}
+
+// ═══════════════════ COMPONENT ═══════════════════
 export function ReservationsPage() {
   const navigate = useNavigate();
-  const [selected, setSelected] = useState(['r2']);
 
-  const rows = [
-    { id: 'r1', guestName: 'Sarah Johnson', guestInitials: 'SJ', guestMeta: '🇺🇸 · 1er séjour', guestColor: 'gold',
-      checkIn: '15 mai', checkOut: '22 mai', nights: 7, daysToGo: 'J+2',
-      listing: 'Villa Belvédère · Nice', listingColor: 'gold',
-      status: 'success', statusLabel: 'Confirmée', source: 'airbnb', revenue: '€1,840' },
-    { id: 'r2', guestName: 'Marco Rossi', guestInitials: 'MR', guestMeta: '🇮🇹 · 3 séjours · ⭐ VIP', guestColor: 'cyan',
-      checkIn: '16 mai', checkOut: '19 mai', nights: 3, daysToGo: 'J+3',
-      listing: 'Dar Sojori · Marrakech', listingColor: 'blue',
-      status: 'success', statusLabel: 'Confirmée', source: 'booking', revenue: '€720' },
-    { id: 'r3', guestName: 'Aisha Khalil', guestInitials: 'AK', guestMeta: '🇫🇷 · 6 invités', guestColor: 'pink',
-      checkIn: '18 mai', checkOut: '25 mai', nights: 7, daysToGo: 'J+5',
-      listing: 'Villa Atlas · Marrakech', listingColor: 'purple',
-      status: 'warning', statusLabel: 'En attente paiement', source: 'direct', revenue: '€2,850' },
-  ];
+  // ─────────────── STATE ───────────────
+  const [selectedFilter, setSelectedFilter] = useState<ReservationFilter>('CHECKIN_TODAY');
+  const [reservations, setReservations] = useState<ReservationListItem[]>([]);
+  const [counts, setCounts] = useState<ReservationCounts | null>(null);
+  const [isLoadingList, setIsLoadingList] = useState(false);
+  const [isLoadingCounts, setIsLoadingCounts] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const columns = [
-    { key: 'guest', label: 'Voyageur', sortable: true, render: (row: any) =>
-      <GuestCell name={row.guestName} initials={row.guestInitials} meta={row.guestMeta} color={row.guestColor} /> },
-    { key: 'dates', label: 'Check-in', sortable: true, render: (row: any) =>
-      <Box>
-        <Box sx={{ fontSize: 13, fontWeight: 600 }}>{row.checkIn} → {row.checkOut}</Box>
-        <Box sx={{ fontSize: 11.5, color: t.text3 }}>{row.nights} nuits · {row.daysToGo}</Box>
-      </Box> },
-    { key: 'listing', label: 'Listing', sortable: true,
-      render: (row: any) => <ListingCell name={row.listing} color={row.listingColor} /> },
-    { key: 'status', label: 'Statut', sortable: true,
-      render: (row: any) => <Badge variant={row.status} dot>{row.statusLabel}</Badge> },
-    { key: 'source', label: 'Source', sortable: true,
-      render: (row: any) => <SourcePill source={row.source} /> },
-    { key: 'revenue', label: 'Revenue', sortable: true, align: 'right',
-      render: (row: any) => <Revenue amount={row.revenue} /> },
-  ];
+  // ─────────────── FETCH COUNTS ───────────────
+  const fetchCounts = async () => {
+    setIsLoadingCounts(true);
+    setError(null);
 
+    try {
+      const countsData = await reservationsService.getCounts();
+      setCounts(countsData);
+    } catch (err: any) {
+      console.error('Error fetching counts:', err);
+      setError(err.message || 'Erreur lors du chargement des counts');
+      toast.error('Erreur lors du chargement des counts');
+    } finally {
+      setIsLoadingCounts(false);
+    }
+  };
+
+  // ─────────────── FETCH LIST ───────────────
+  const fetchReservations = async (filter: ReservationFilter) => {
+    setIsLoadingList(true);
+    setError(null);
+
+    try {
+      const response = await reservationsService.getList({ filter, limit: 1000 });
+
+      // Convertir les données du backend en format ReservationListItem
+      const formattedReservations: ReservationListItem[] = response.data.map((r: any) => ({
+        id: r._id || r.id,
+        title: `${r.listing?.name || 'Listing'} • ${r.channelName || 'Direct'}`,
+        description: '', // On n'utilise pas ce champ
+        guest_name: r.guestName || `${r.guestFirstName || ''} ${r.guestLastName || ''}`.trim() || 'Guest',
+        listing_name: r.listing?.name || 'Listing',
+        arrival_date: r.arrivalDate,
+        departure_date: r.departureDate,
+        actual_arrival_time: r.actualArrivalTime || null,
+        actual_departure_time: r.actualDepartureTime || null,
+        status: r.status,
+      }));
+
+      setReservations(formattedReservations);
+      toast.success(`${response.count} réservation(s) chargée(s)`);
+    } catch (err: any) {
+      console.error('Error fetching reservations:', err);
+      setError(err.message || 'Erreur lors du chargement des réservations');
+      toast.error('Erreur lors du chargement des réservations');
+    } finally {
+      setIsLoadingList(false);
+    }
+  };
+
+  // ─────────────── EFFECTS ───────────────
+  useEffect(() => {
+    fetchCounts();
+  }, []);
+
+  useEffect(() => {
+    fetchReservations(selectedFilter);
+  }, [selectedFilter]);
+
+  // ─────────────── HANDLERS ───────────────
+  const handleFilterChange = (filter: ReservationFilter) => {
+    setSelectedFilter(filter);
+  };
+
+  const handleViewDetails = (reservation: ReservationListItem) => {
+    navigate(`/reservations/${reservation.id}`);
+  };
+
+  const handleCallGuest = (reservation: ReservationListItem) => {
+    // TODO: Intégrer appel téléphonique
+    console.log('Call guest:', reservation);
+    toast.info('Fonction appel en cours de développement');
+  };
+
+  const handleEmailGuest = (reservation: ReservationListItem) => {
+    // TODO: Ouvrir modal email
+    console.log('Email guest:', reservation);
+    toast.info('Fonction email en cours de développement');
+  };
+
+  // ─────────────── FORMAT HELPERS ───────────────
+  const formatDate = (dateStr: Date | string): string => {
+    const date = new Date(dateStr);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${day}/${month} ${hours}:${minutes}`;
+  };
+
+  // ─────────────── RENDER ───────────────
   return (
     <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
-      <StatsRow>
-        <StatCard icon="🎫" iconBg="rgba(16,185,129,0.10)" iconColor={t.success}
-          value="23" label="Réservations actives" trend="12%" trendUp />
-        <StatCard icon="€" iconBg="rgba(230,176,34,0.10)" iconColor={t.primaryDeep}
-          value="€18,420" label="Revenu ce mois" trend="8%" trendUp />
-        <StatCard icon="📊" iconBg="rgba(6,182,212,0.10)" iconColor="#0e7490"
-          value="87%" label="Taux d'occupation" trend="3%" trendUp />
-        <StatCard icon="⭐" iconBg="rgba(139,92,246,0.10)" iconColor={t.ai}
-          value="4.92" label="Note moyenne · 47 avis" trend="0.1" trendUp />
-      </StatsRow>
+      <Box sx={{ p: 3 }}>
+        {/* HEADER */}
+        <PageHeader
+          title="Réservations"
+          subtitle="Gestion des check-in et check-out"
+          icon={<CalendarIcon sx={{ fontSize: 40, color: t.primary }} />}
+        />
 
-      <PageHeader title="Réservations" count="145">
-        <Button sx={btnGhostSx}>📥 Exporter CSV</Button>
-        <Button sx={btnAiSx}>✨ Suggestion AI</Button>
-        <Button sx={btnPrimarySx}>+ Nouvelle résa</Button>
-      </PageHeader>
+        {/* FILTERS BUTTONS */}
+        <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: 'wrap', gap: 1 }}>
+          {FILTER_CONFIGS.map((filter) => {
+            const count = counts?.[filter.key] || 0;
+            const isActive = selectedFilter === filter.key;
 
-      <FilterBar>
-        <FilterChip label="Statut" dropdown />
-        <FilterChip label="Confirmées" active dropdown />
-        <FilterChip label="Source" dropdown />
-        <FilterChip label="📅 12 → 25 Mai" dropdown />
-        <Box sx={{ ml: 'auto' }}>
-          <ViewToggle
-            options={[{value:'table', label:'Table'}, {value:'cards', label:'Cards'}, {value:'timeline', label:'Timeline'}]}
-            value="table"
-          />
-        </Box>
-      </FilterBar>
+            return (
+              <Button
+                key={filter.key}
+                variant={isActive ? 'contained' : 'outlined'}
+                color={filter.color}
+                onClick={() => handleFilterChange(filter.key)}
+                startIcon={
+                  isActive ? (
+                    <CheckCircleIcon />
+                  ) : filter.key.startsWith('CHECKIN') ? (
+                    <HomeIcon />
+                  ) : (
+                    <CancelIcon />
+                  )
+                }
+                sx={{
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontWeight: isActive ? 700 : 500,
+                  px: 2,
+                  py: 1,
+                  position: 'relative',
+                }}
+              >
+                {filter.label}
+                <Chip
+                  label={count}
+                  size="small"
+                  sx={{
+                    ml: 1,
+                    height: 20,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    bgcolor: isActive ? 'rgba(255,255,255,0.3)' : t.bg3,
+                    color: isActive ? t.bg1 : t.text2,
+                  }}
+                />
+              </Button>
+            );
+          })}
+        </Stack>
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        selectable
-        selectedIds={selected}
-        onSelectionChange={setSelected}
-        onRowClick={(row) => navigate(`/reservations/${row.id}`)}
-        footer={<>
-          <Box>{selected.length} sélectionnée(s) sur 145</Box>
-          <Pagination page={1} totalPages={21} />
-          <Box>Affichage 1–{rows.length} sur 145</Box>
-        </>}
-      />
+        {/* LOADING COUNTS */}
+        {isLoadingCounts && (
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <CircularProgress size={20} sx={{ mr: 1 }} />
+            <Typography sx={{ color: t.text3, fontSize: 14 }}>
+              Chargement des statistiques...
+            </Typography>
+          </Box>
+        )}
+
+        {/* ERROR ALERT */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+
+        {/* LOADING LIST */}
+        {isLoadingList && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <CircularProgress size={60} sx={{ color: t.primary }} />
+          </Box>
+        )}
+
+        {/* TABLE */}
+        {!isLoadingList && reservations.length > 0 && (
+          <TableContainer
+            component={Paper}
+            sx={{
+              borderRadius: 2,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              border: `1px solid ${t.border}`,
+            }}
+          >
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: t.bg2 }}>
+                  <TableCell sx={{ fontWeight: 700, color: t.text2 }}>
+                    Propriété & OTA
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: t.text2 }}>
+                    Guest
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: t.text2 }}>
+                    Check-in
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: t.text2 }}>
+                    Check-out
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: t.text2 }}>
+                    Status
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700, color: t.text2 }}>
+                    Actions
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {reservations.map((reservation) => {
+                  const statusStyle = getStatusColor(reservation.status);
+
+                  return (
+                    <TableRow
+                      key={reservation.id}
+                      hover
+                      sx={{
+                        '&:hover': {
+                          bgcolor: t.bg2,
+                          cursor: 'pointer',
+                        },
+                      }}
+                      onClick={() => handleViewDetails(reservation)}
+                    >
+                      {/* Propriété & OTA */}
+                      <TableCell>
+                        <Typography
+                          sx={{ fontSize: 14, fontWeight: 600, color: t.text1 }}
+                        >
+                          {reservation.listing_name}
+                        </Typography>
+                        <Typography sx={{ fontSize: 12, color: t.text3 }}>
+                          {reservation.title.split('•')[1]?.trim() || 'N/A'}
+                        </Typography>
+                      </TableCell>
+
+                      {/* Guest */}
+                      <TableCell>
+                        <Typography
+                          sx={{ fontSize: 14, fontWeight: 500, color: t.text1 }}
+                        >
+                          {reservation.guest_name}
+                        </Typography>
+                      </TableCell>
+
+                      {/* Check-in */}
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <CalendarIcon
+                            sx={{ fontSize: 16, color: t.success }}
+                          />
+                          <Typography sx={{ fontSize: 14, color: t.text2 }}>
+                            {formatDate(reservation.arrival_date)}
+                          </Typography>
+                        </Box>
+                        {reservation.actual_arrival_time && (
+                          <Chip
+                            label="Déclaré"
+                            size="small"
+                            sx={{
+                              mt: 0.5,
+                              height: 18,
+                              fontSize: 11,
+                              bgcolor: t.success + '22',
+                              color: t.success,
+                            }}
+                          />
+                        )}
+                      </TableCell>
+
+                      {/* Check-out */}
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <CalendarIcon
+                            sx={{ fontSize: 16, color: t.warning }}
+                          />
+                          <Typography sx={{ fontSize: 14, color: t.text2 }}>
+                            {formatDate(reservation.departure_date)}
+                          </Typography>
+                        </Box>
+                        {reservation.actual_departure_time && (
+                          <Chip
+                            label="Déclaré"
+                            size="small"
+                            sx={{
+                              mt: 0.5,
+                              height: 18,
+                              fontSize: 11,
+                              bgcolor: t.warning + '22',
+                              color: t.warning,
+                            }}
+                          />
+                        )}
+                      </TableCell>
+
+                      {/* Status */}
+                      <TableCell>
+                        <Chip
+                          label={statusStyle.label}
+                          size="small"
+                          sx={{
+                            bgcolor: statusStyle.bg,
+                            color: statusStyle.color,
+                            fontWeight: 600,
+                          }}
+                        />
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                        <ButtonGroup size="small" variant="outlined">
+                          <Tooltip title="Voir détails">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleViewDetails(reservation)}
+                              sx={{
+                                color: t.primary,
+                                '&:hover': { bgcolor: t.primaryLight + '22' },
+                              }}
+                            >
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Appeler">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleCallGuest(reservation)}
+                              sx={{
+                                color: t.success,
+                                '&:hover': { bgcolor: t.success + '22' },
+                              }}
+                            >
+                              <PhoneIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Envoyer email">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleEmailGuest(reservation)}
+                              sx={{
+                                color: t.info,
+                                '&:hover': { bgcolor: t.info + '22' },
+                              }}
+                            >
+                              <EmailIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </ButtonGroup>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {/* EMPTY STATE */}
+        {!isLoadingList && reservations.length === 0 && (
+          <Box
+            sx={{
+              textAlign: 'center',
+              py: 8,
+              bgcolor: t.bg2,
+              borderRadius: 2,
+              border: `1px solid ${t.border}`,
+            }}
+          >
+            <PendingIcon sx={{ fontSize: 80, color: t.text3, mb: 2 }} />
+            <Typography sx={{ fontSize: 18, fontWeight: 600, color: t.text2 }}>
+              Aucune réservation trouvée
+            </Typography>
+            <Typography sx={{ fontSize: 14, color: t.text3, mt: 1 }}>
+              Essayez de sélectionner un autre filtre
+            </Typography>
+          </Box>
+        )}
+      </Box>
     </DashboardWrapper>
   );
 }

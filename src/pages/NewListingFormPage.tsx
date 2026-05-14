@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Avatar,
   Box,
   Button,
   Chip,
@@ -571,116 +570,6 @@ function TabsRail({
   );
 }
 
-function ListingAside({
-  listing,
-  completions,
-  globalCompletion,
-}: {
-  listing: ListingRecord;
-  completions: Record<ListingTabKey, number>;
-  globalCompletion: number;
-}) {
-  const incomplete = LISTING_TAB_META.filter((item) => completions[item.key] < 100).slice(0, 6);
-
-  return (
-    <Box
-      sx={{
-        width: 320,
-        bgcolor: t.bg1,
-        borderLeft: `1px solid ${t.border}`,
-        p: 2,
-        overflow: 'auto',
-      }}
-    >
-      <Panel sx={{ p: 2, mb: 2 }}>
-        <Stack spacing={1.5}>
-          <Typography sx={{ fontSize: 14, fontWeight: 700 }}>Vue d’ensemble</Typography>
-          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-            <Avatar sx={{ bgcolor: t.primaryTint, color: t.primary }}>{listing.name.charAt(0)}</Avatar>
-            <Box>
-              <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{listing.name}</Typography>
-              <Typography sx={{ fontSize: 11.5, color: t.text3 }}>
-                {listing.city}, {listing.country} · {listing.ownerName}
-              </Typography>
-            </Box>
-          </Stack>
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-            <Chip size="small" label={listing.type} />
-            <Chip size="small" label={listing.status} />
-            <Chip size="small" label={`ADR €${listing.adr}`} />
-          </Stack>
-        </Stack>
-      </Panel>
-
-      <Panel sx={{ p: 2, mb: 2 }}>
-        <Stack spacing={1.25}>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>Complétion globale</Typography>
-            <Typography sx={{ fontSize: 14, fontWeight: 800, color: t.primary }}>
-              {globalCompletion}%
-            </Typography>
-          </Stack>
-          {LISTING_TAB_META.slice(0, 8).map((tab) => (
-            <Stack
-              key={tab.key}
-              direction="row"
-              sx={{ fontSize: 12, justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <Typography sx={{ fontSize: 12, color: t.text2 }}>{tab.label}</Typography>
-              <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text3 }}>
-                {completions[tab.key]}%
-              </Typography>
-            </Stack>
-          ))}
-        </Stack>
-      </Panel>
-
-      <Panel sx={{ p: 2, mb: 2 }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>
-          Canaux connectés
-        </Typography>
-        <Stack spacing={1}>
-          {listing.channels.length === 0 ? (
-            <Typography sx={{ fontSize: 12, color: t.text3 }}>
-              Aucun canal connecté pour le moment.
-            </Typography>
-          ) : (
-            listing.channels.map((channel) => (
-              <Stack
-                key={channel.id}
-                direction="row"
-                sx={{ fontSize: 12, justifyContent: 'space-between', alignItems: 'center' }}
-              >
-                <Typography sx={{ fontSize: 12 }}>{channel.name}</Typography>
-                <Chip size="small" label={channel.status} />
-              </Stack>
-            ))
-          )}
-        </Stack>
-      </Panel>
-
-      <Panel sx={{ p: 2 }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.25 }}>
-          Points encore à valider
-        </Typography>
-        <Stack spacing={1}>
-          {incomplete.length === 0 ? (
-            <Typography sx={{ fontSize: 12, color: t.success }}>
-              Tous les onglets sont complets. Prêt à publier.
-            </Typography>
-          ) : (
-            incomplete.map((item) => (
-              <Typography key={item.key} sx={{ fontSize: 12, color: t.text3 }}>
-                • {item.label}
-              </Typography>
-            ))
-          )}
-        </Stack>
-      </Panel>
-    </Box>
-  );
-}
-
 function FormField({
   field,
   value,
@@ -1044,11 +933,6 @@ export function NewListingFormPage() {
           </Box>
         </Box>
 
-        <ListingAside
-          listing={listing}
-          completions={tabCompletions}
-          globalCompletion={globalCompletion}
-        />
       </Box>
 
       <ActionToast

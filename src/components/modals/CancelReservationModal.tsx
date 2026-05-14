@@ -7,7 +7,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Box, Stack, Typography, TextField, Button, IconButton,
   FormControl, InputLabel, Select, MenuItem, Alert, Switch,
-  FormControlLabel, Divider, ToggleButton, ToggleButtonGroup, Chip,
+  FormControlLabel, Divider, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 
 const T = {
@@ -103,9 +103,9 @@ export const CancelReservationModal: React.FC<CancelReservationModalProps> = ({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth
-      PaperProps={{ sx: { borderRadius: 2, bgcolor: T.bg1 } }}>
+      slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: T.bg1 } } }}>
       <DialogTitle sx={{ pb: 1.5, borderBottom: `1px solid ${T.border}` }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Stack>
             <Typography sx={{ fontWeight: 800, fontSize: 18, color: T.error }}>
               ⚠️ Annuler la réservation
@@ -147,7 +147,7 @@ export const CancelReservationModal: React.FC<CancelReservationModalProps> = ({
               {refundType === 'partial' && (
                 <TextField label="Montant remboursé (€)" type="number" size="small" sx={{ mt: 2, width: 220 }}
                   value={refundAmount} onChange={e => setRefundAmount(Number(e.target.value))}
-                  inputProps={{ min: 0, max: totalAmount, step: 10 }} />
+                  slotProps={{ htmlInput: { min: 0, max: totalAmount, step: 10 } }} />
               )}
             </Box>
 
@@ -164,7 +164,7 @@ export const CancelReservationModal: React.FC<CancelReservationModalProps> = ({
               {createCredit && (
                 <TextField label="Montant crédit (€)" type="number" size="small" sx={{ mt: 1.5, width: 220 }}
                   value={creditAmount} onChange={e => setCreditAmount(Number(e.target.value))}
-                  inputProps={{ min: 0, step: 10 }} />
+                  slotProps={{ htmlInput: { min: 0, step: 10 } }} />
               )}
             </Box>
 
@@ -219,7 +219,7 @@ export const CancelReservationModal: React.FC<CancelReservationModalProps> = ({
 };
 
 const Row: React.FC<{ label: string; value: string; emphasize?: boolean }> = ({ label, value, emphasize }) => (
-  <Stack direction="row" justifyContent="space-between" alignItems="center">
+  <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
     <Typography sx={{ fontSize: 12, color: T.text3, fontWeight: 600 }}>{label}</Typography>
     <Typography sx={{ fontSize: 13, color: emphasize ? T.error : T.text, fontWeight: emphasize ? 800 : 600, fontFamily: emphasize ? 'Geist Mono' : 'inherit' }}>{value}</Typography>
   </Stack>

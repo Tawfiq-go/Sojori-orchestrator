@@ -53,3 +53,4 @@ export const AICard: any;
 export const AIBanner: any;
 
 export const Panel: any;
+export const StableChart: any;

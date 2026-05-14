@@ -31,9 +31,10 @@ export const AUTH_CONFIG = {
   LOGOUT_REDIRECT: '/login',
   COOKIE_OPTIONS: {
     path: '/',
-    secure: import.meta.env.PROD,
-    sameSite: 'Lax' as const,
-    expires: 365 * 10
+    secure: import.meta.env.PROD,  // HTTPS only in production
+    httpOnly: false,  // False car on doit lire les tokens côté client pour les envoyer dans headers
+    sameSite: 'Strict' as const,  // Strict pour meilleure protection CSRF
+    maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 jours en millisecondes
   }
 };
 

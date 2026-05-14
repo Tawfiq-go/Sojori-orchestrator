@@ -78,12 +78,12 @@ export const ImageGalleryModal: React.FC<ImageGalleryModalProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth
-      PaperProps={{ sx: { borderRadius: 2, bgcolor: T.bg1, minHeight: 600 } }}>
+      slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: T.bg1, minHeight: 600 } } }}>
       <Box sx={{ position: 'relative' }}>
         {/* Top bar */}
-        <Stack direction="row" alignItems="center" justifyContent="space-between"
-          sx={{ p: 2, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
-          <Stack direction="row" alignItems="center" spacing={1.5}>
+        <Stack direction="row"
+          sx={{ p: 2, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2, alignItems: 'center', justifyContent: 'space-between' }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
             <Typography sx={{ fontWeight: 800, fontSize: 16, color: T.text }}>
               📸 Galerie photos
             </Typography>

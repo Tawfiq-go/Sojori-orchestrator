@@ -1,6 +1,5 @@
 // BasicInfoTab.tsx - Full form with identification, description multilingual, status toggles
-import React from 'react';
-import { Box, Stack, Typography, TextField, Select, MenuItem, Chip, Button } from '@mui/material';
+import { Box, Stack, Typography, TextField, Select, MenuItem, Chip } from '@mui/material';
 import { tokens } from '../ListingFormV2';
 import { SectionCard, AIField, AIBanner, SaveBar, FormPager } from '../ListingFormHelpers';
 
@@ -91,8 +90,10 @@ export function BasicInfoTab({ data, onChange }: BasicInfoTabProps) {
                 fullWidth
                 value={data?.surface || '240'}
                 onChange={(e) => onChange('surface', e.target.value)}
-                InputProps={{
-                  endAdornment: <Box sx={{ px: 1.5, bgcolor: tokens.bg2, borderLeft: `1px solid ${tokens.border}`, fontSize: 12, fontWeight: 600, color: tokens.text3 }}>m²</Box>
+                slotProps={{
+                  input: {
+                    endAdornment: <Box sx={{ px: 1.5, bgcolor: tokens.bg2, borderLeft: `1px solid ${tokens.border}`, fontSize: 12, fontWeight: 600, color: tokens.text3 }}>m²</Box>,
+                  },
                 }}
               />
             </AIField>

@@ -101,9 +101,9 @@ export const CheckInOutStatusModal: React.FC<CheckInOutStatusModalProps> = ({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth
-      PaperProps={{ sx: { borderRadius: 2, bgcolor: T.bg1 } }}>
+      slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: T.bg1 } } }}>
       <DialogTitle sx={{ pb: 1.5, borderBottom: `1px solid ${T.border}` }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Stack>
             <Typography sx={{ fontWeight: 800, fontSize: 18, color: T.text }}>
               {mode === 'checkin' ? '🛬 Déclarer l\'arrivée' : '🛫 Déclarer le départ'}
@@ -135,7 +135,7 @@ export const CheckInOutStatusModal: React.FC<CheckInOutStatusModalProps> = ({
           </Box>
 
           <TextField label={`Date / heure ${mode === 'checkin' ? "d'arrivée" : "de départ"}`}
-            type="datetime-local" size="small" fullWidth InputLabelProps={{ shrink: true }}
+            type="datetime-local" size="small" fullWidth slotProps={{ inputLabel: { shrink: true } }}
             value={effectiveAt} onChange={e => setEffectiveAt(e.target.value)} />
 
           <TextField label="Notes (optionnel)" multiline minRows={3} fullWidth size="small"

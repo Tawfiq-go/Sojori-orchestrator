@@ -3,8 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import {
-  Box, Stack, Popover, Button, Typography, Checkbox, IconButton,
-  Divider, Tooltip,
+  Box, Stack, Popover, Button, Typography, Checkbox, Tooltip,
 } from '@mui/material';
 
 const T = {
@@ -70,10 +69,10 @@ export default function ColumnSelector({ columns, visible, order: orderProp, onC
         onClose={() => setAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        PaperProps={{ sx: { width: 280, mt: 0.5, border: `1px solid ${T.border}`, borderRadius: 2 } }}
+        slotProps={{ paper: { sx: { width: 280, mt: 0.5, border: `1px solid ${T.border}`, borderRadius: 2 } } }}
       >
         <Box sx={{ p: 1.5, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
             <Typography sx={{ fontWeight: 700, fontSize: 13 }}>Colonnes affichées</Typography>
             <Typography sx={{ fontSize: 11, color: T.text3, fontFamily: 'Geist Mono' }}>{visible.length}/{columns.length}</Typography>
           </Stack>
@@ -89,7 +88,7 @@ export default function ColumnSelector({ columns, visible, order: orderProp, onC
             const isOn = visible.includes(id);
             return (
               <Stack
-                key={id} direction="row" alignItems="center" spacing={1}
+                key={id} direction="row" spacing={1}
                 draggable
                 onDragStart={() => onDragStart(id)}
                 onDragOver={(e) => onDragOver(e, id)}
@@ -100,6 +99,7 @@ export default function ColumnSelector({ columns, visible, order: orderProp, onC
                   borderBottom: `1px solid ${T.border}`,
                   '&:last-child': { borderBottom: 0 },
                   opacity: dragId === id ? 0.4 : 1,
+                  alignItems: 'center',
                 }}
               >
                 <Box sx={{ color: T.text4, fontSize: 12, cursor: 'grab' }}>⋮⋮</Box>

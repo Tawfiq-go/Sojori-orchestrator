@@ -153,9 +153,9 @@ export const AdminActionModal: React.FC<AdminActionModalProps> = ({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth
-      PaperProps={{ sx: { borderRadius: 2, bgcolor: T.bg1 } }}>
+      slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: T.bg1 } } }}>
       <DialogTitle sx={{ pb: 1.5, borderBottom: `1px solid ${T.border}` }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Stack>
             <Typography sx={{ fontWeight: 800, fontSize: 18, color: T.text }}>
               Action admin · {activeTypeMeta.label}
@@ -194,7 +194,7 @@ export const AdminActionModal: React.FC<AdminActionModalProps> = ({
             >
               {ACTION_TYPES.map(t => (
                 <ToggleButton key={t.value} value={t.value}>
-                  <Stack alignItems="center" spacing={0.5}>
+                  <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
                     <Box sx={{ fontSize: 18 }}>{t.icon}</Box>
                     <Box sx={{ fontSize: 11 }}>{t.label}</Box>
                   </Stack>
@@ -239,7 +239,7 @@ export const AdminActionModal: React.FC<AdminActionModalProps> = ({
                   </Select>
                 </FormControl>
                 <TextField label="Échéance" type="datetime-local" size="small" fullWidth
-                  InputLabelProps={{ shrink: true }}
+                  slotProps={{ inputLabel: { shrink: true } }}
                   value={taskDueAt} onChange={e => setTaskDueAt(e.target.value)} />
               </Stack>
               <FormControl size="small" sx={{ width: 200 }}>
@@ -289,7 +289,7 @@ export const AdminActionModal: React.FC<AdminActionModalProps> = ({
           {type === 'call' && (
             <Stack spacing={2}>
               <TextField label="Date et heure" type="datetime-local" size="small" fullWidth
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
                 value={callAt} onChange={e => setCallAt(e.target.value)} />
               <TextField label="Notes d'appel (optionnel)" multiline minRows={3} fullWidth size="small"
                 value={callNotes} onChange={e => setCallNotes(e.target.value)} />

@@ -112,10 +112,12 @@ export function UpdateInventoryModal({
       onClose={handleClose}
       maxWidth="sm"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '16px',
-          boxShadow: '0 8px 32px rgba(26,20,8,0.12)',
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '16px',
+            boxShadow: '0 8px 32px rgba(26,20,8,0.12)',
+          },
         },
       }}
     >
@@ -146,7 +148,7 @@ export function UpdateInventoryModal({
             </Typography>
           )}
           {dateRange && (
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Typography sx={{ fontSize: 13, color: T.text3 }}>
                 📅 {dateRange.start} → {dateRange.end}
               </Typography>
@@ -213,8 +215,8 @@ export function UpdateInventoryModal({
               value={minStay}
               onChange={(e) => setMinStay(e.target.value === '' ? '' : Number(e.target.value))}
               fullWidth
-              InputProps={{
-                inputProps: { min: 1, max: 30 },
+              slotProps={{
+                htmlInput: { min: 1, max: 30 },
               }}
               helperText="Minimum de nuits requises"
             />
@@ -224,8 +226,8 @@ export function UpdateInventoryModal({
               value={maxStay}
               onChange={(e) => setMaxStay(e.target.value === '' ? '' : Number(e.target.value))}
               fullWidth
-              InputProps={{
-                inputProps: { min: 1, max: 365 },
+              slotProps={{
+                htmlInput: { min: 1, max: 365 },
               }}
               helperText="Maximum de nuits autorisées"
             />
@@ -238,9 +240,11 @@ export function UpdateInventoryModal({
             value={price}
             onChange={(e) => setPrice(e.target.value === '' ? '' : Number(e.target.value))}
             fullWidth
-            InputProps={{
-              inputProps: { min: 0, step: 10 },
-              startAdornment: <Typography sx={{ mr: 1, color: T.text3 }}>€</Typography>,
+            slotProps={{
+              htmlInput: { min: 0, step: 10 },
+              input: {
+                startAdornment: <Typography sx={{ mr: 1, color: T.text3 }}>€</Typography>,
+              },
             }}
             helperText="Laisser vide pour utiliser le prix dynamique"
           />

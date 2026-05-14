@@ -28,8 +28,14 @@ if (isLocalhost && import.meta.env.VITE_DEV_TOKEN) {
 // Intercepteur de requête
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
-    // Ne pas ajouter de token pour les requêtes de login ou de validation
-    if (config.url?.includes('/login') || config.url?.includes('/valid-token-check')) {
+    // Ne pas ajouter de token pour les requêtes de login, register ou validation
+    if (
+      config.url?.includes('/login') ||
+      config.url?.includes('/register') ||
+      config.url?.includes('/reset-password') ||
+      config.url?.includes('/complete-reset') ||
+      config.url?.includes('/valid-token-check')
+    ) {
       return config;
     }
 
@@ -101,7 +107,14 @@ apiClient.interceptors.response.use(
     }
 
     // Gestion du 401 (non autorisé) - tentative de refresh du token
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Mais pas pour les routes d'authentification (login, register, etc.)
+    const isAuthRoute =
+      originalRequest.url?.includes('/login') ||
+      originalRequest.url?.includes('/register') ||
+      originalRequest.url?.includes('/reset-password') ||
+      originalRequest.url?.includes('/complete-reset');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRoute) {
       originalRequest._retry = true;
 
       try {

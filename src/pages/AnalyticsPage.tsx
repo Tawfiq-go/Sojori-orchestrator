@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material';
 import {
   Bar,
   BarChart,
@@ -27,19 +27,14 @@ import {
   btnPrimarySx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
-import {
-  analyticsPeriods,
-  analyticsSources,
-  mockAnalyticsKPIs,
-  mockGuestDemographics,
-  mockLeadTimeDistribution,
-  mockLengthOfStay,
-  mockPropertyPerformance,
-  mockRevenueEvolution,
-  mockSeasonality,
-  mockSourceBreakdown,
-} from '../data/mockAnalytics';
-import { dashboardProperties } from '../data/mockDashboard';
+import { analyticsService } from '../services/analyticsService';
+import { analyticsPeriodOptions } from '../types/analytics.types';
+import type {
+  AnalyticsDistributionItem,
+  AnalyticsPropertyPerformanceRow,
+  AnalyticsQuery,
+  AnalyticsSnapshot,
+} from '../types/analytics.types';
 
 const currency = new Intl.NumberFormat('fr-FR', {
   style: 'currency',
@@ -47,20 +42,79 @@ const currency = new Intl.NumberFormat('fr-FR', {
   maximumFractionDigits: 0,
 });
 
-export function AnalyticsPage() {
-  const [period, setPeriod] = useState<(typeof analyticsPeriods)[number]['value']>('this-month');
-  const [comparison, setComparison] = useState<'vs-last-month' | 'vs-last-year'>('vs-last-month');
-  const [source, setSource] = useState<(typeof analyticsSources)[number]>('Tous');
-  const [selectedProperties, setSelectedProperties] = useState<string[]>(
-    dashboardProperties.slice(0, 2)
-  );
+const sourceOptions = ['Tous', 'Airbnb', 'Booking.com', 'Sojori', 'Vrbo'] as const;
 
-  const filteredSources = useMemo(
-    () =>
-      source === 'Tous'
-        ? mockSourceBreakdown
-        : mockSourceBreakdown.filter((item) => item.source === source),
-    [source]
+export function AnalyticsPage() {
+  const [period, setPeriod] = useState<(typeof analyticsPeriodOptions)[number]['value']>('30d');
+  const [comparison, setComparison] = useState<'vs-last-period' | 'vs-last-year'>('vs-last-period');
+  const [source, setSource] = useState<(typeof sourceOptions)[number]>('Tous');
+  const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAnalytics() {
+      try {
+        setLoading(true);
+        const nextSnapshot = await analyticsService.getSnapshot({
+          period,
+          comparison,
+          source,
+          listingIds: selectedProperties,
+          customStartDate,
+          customEndDate,
+        });
+
+        if (!cancelled) {
+          setSnapshot(nextSnapshot);
+          setError(null);
+        }
+      } catch (err) {
+        console.error('Failed to load analytics page:', err);
+        if (!cancelled) {
+          setError('Impossible de charger les analytics en temps reel.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    if (period === 'custom' && (!customStartDate || !customEndDate)) {
+      setLoading(false);
+      return;
+    }
+
+    void loadAnalytics();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [comparison, customEndDate, customStartDate, period, selectedProperties, source]);
+
+  const filteredSources = useMemo(() => {
+    if (!snapshot) return [];
+    return source === 'Tous'
+      ? snapshot.channelShare
+      : snapshot.channelShare.filter((item) => item.source === source);
+  }, [snapshot, source]);
+
+  const currentQuery = useMemo<AnalyticsQuery>(
+    () => ({
+      period,
+      comparison,
+      source,
+      listingIds: selectedProperties,
+      customStartDate,
+      customEndDate,
+    }),
+    [comparison, customEndDate, customStartDate, period, selectedProperties, source]
   );
 
   const performanceColumns = [
@@ -69,31 +123,31 @@ export function AnalyticsPage() {
       key: 'revenue',
       label: 'Revenue',
       sortable: true,
-      render: (row: (typeof mockPropertyPerformance)[number]) => currency.format(row.revenue),
+      render: (row: AnalyticsPropertyPerformanceRow) => currency.format(row.revenue),
     },
     {
       key: 'occupancy',
       label: 'Occupancy',
       sortable: true,
-      render: (row: (typeof mockPropertyPerformance)[number]) => `${row.occupancy}%`,
+      render: (row: AnalyticsPropertyPerformanceRow) => `${row.occupancy.toFixed(1)}%`,
     },
     {
       key: 'adr',
       label: 'ADR',
       sortable: true,
-      render: (row: (typeof mockPropertyPerformance)[number]) => `${row.adr} EUR`,
+      render: (row: AnalyticsPropertyPerformanceRow) => currency.format(row.adr),
     },
     {
       key: 'leadTime',
       label: 'Lead time',
       sortable: true,
-      render: (row: (typeof mockPropertyPerformance)[number]) => `${row.leadTime} jours`,
+      render: (row: AnalyticsPropertyPerformanceRow) => `${row.leadTime} jours`,
     },
     {
       key: 'cancellations',
       label: 'Cancellations',
       sortable: true,
-      render: (row: (typeof mockPropertyPerformance)[number]) => (
+      render: (row: AnalyticsPropertyPerformanceRow) => (
         <Badge variant={row.cancellations > 2 ? 'warning' : 'success'}>
           {row.cancellations}
         </Badge>
@@ -102,17 +156,40 @@ export function AnalyticsPage() {
   ];
 
   const sourceColors = ['#e6b022', '#8b5cf6', '#10b981', '#06b6d4'];
+  const selectedCount =
+    selectedProperties.length > 0 ? selectedProperties.length : snapshot?.propertyPerformance.length ?? 0;
 
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Analytics']}>
-      <PageHeader title="Analytics" count={comparison === 'vs-last-month' ? 'vs mois precedent' : 'vs annee precedente'}>
-        <Button sx={btnGhostSx}>Export PDF</Button>
-        <Button sx={btnGhostSx}>Export Excel</Button>
-        <Button sx={btnPrimarySx}>Export CSV</Button>
+      <PageHeader
+        title="Analytics"
+        count={`${snapshot?.periodLabel ?? 'Chargement'} · ${
+          comparison === 'vs-last-period' ? 'vs periode precedente' : 'vs annee precedente'
+        }`}
+      >
+        <Button sx={btnGhostSx} onClick={() => window.print()}>
+          Export PDF
+        </Button>
+        <Button
+          sx={btnGhostSx}
+          onClick={() => {
+            void analyticsService.downloadPerformanceCsv(currentQuery);
+          }}
+        >
+          Export Excel
+        </Button>
+        <Button
+          sx={btnPrimarySx}
+          onClick={() => {
+            void analyticsService.downloadPerformanceCsv(currentQuery);
+          }}
+        >
+          Export CSV
+        </Button>
       </PageHeader>
 
       <FilterBar>
-        {analyticsPeriods.map((item) => (
+        {analyticsPeriodOptions.map((item) => (
           <FilterChip
             key={item.value}
             label={item.label}
@@ -121,18 +198,35 @@ export function AnalyticsPage() {
           />
         ))}
         <FilterChip
-          label={comparison === 'vs-last-month' ? 'Vs mois precedent' : 'Vs annee precedente'}
+          label={comparison === 'vs-last-period' ? 'Vs periode precedente' : 'Vs annee precedente'}
           active
           onClick={() =>
             setComparison((prev) =>
-              prev === 'vs-last-month' ? 'vs-last-year' : 'vs-last-month'
+              prev === 'vs-last-period' ? 'vs-last-year' : 'vs-last-period'
             )
           }
         />
       </FilterBar>
 
+      {period === 'custom' && (
+        <FilterBar>
+          <TextField
+            size="small"
+            type="date"
+            value={customStartDate}
+            onChange={(event) => setCustomStartDate(event.target.value)}
+          />
+          <TextField
+            size="small"
+            type="date"
+            value={customEndDate}
+            onChange={(event) => setCustomEndDate(event.target.value)}
+          />
+        </FilterBar>
+      )}
+
       <FilterBar>
-        {analyticsSources.map((item) => (
+        {sourceOptions.map((item) => (
           <FilterChip
             key={item}
             label={item}
@@ -143,55 +237,72 @@ export function AnalyticsPage() {
       </FilterBar>
 
       <FilterBar>
-        {dashboardProperties.map((property) => (
+        {(snapshot?.properties ?? []).map((property) => (
           <FilterChip
-            key={property}
-            label={property}
-            active={selectedProperties.includes(property)}
+            key={property.id}
+            label={property.label}
+            active={selectedProperties.includes(property.id)}
             onClick={() =>
               setSelectedProperties((prev) =>
-                prev.includes(property)
-                  ? prev.filter((value) => value !== property)
-                  : [...prev, property]
+                prev.includes(property.id)
+                  ? prev.filter((value) => value !== property.id)
+                  : [...prev, property.id]
               )
             }
           />
         ))}
       </FilterBar>
 
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      {loading && !snapshot ? (
+        <Panel title="Chargement analytics" desc="Récupération des données backend">
+          <Stack sx={{ alignItems: 'center', py: 6 }}>
+            <CircularProgress />
+          </Stack>
+        </Panel>
+      ) : snapshot ? (
+        <>
       <StatsRow>
         <StatCard
           icon="🏆"
           iconBg="rgba(230,176,34,0.12)"
           iconColor={t.primaryDeep}
-          value={mockAnalyticsKPIs.performanceScore.toString()}
+          value={snapshot.kpis.performanceScore.toString()}
           label="Performance score"
-          trend="+4 pts"
+          trend={`${Math.abs(snapshot.kpis.performanceScoreTrend).toFixed(1)} pts`}
+          trendUp={snapshot.kpis.performanceScoreTrend >= 0}
         />
         <StatCard
           icon="🗓️"
           iconBg="rgba(6,182,212,0.12)"
           iconColor={t.info}
-          value={`${mockAnalyticsKPIs.averageStay} nuits`}
+          value={`${snapshot.kpis.averageStay.toFixed(1)} nuits`}
           label="Duree moyenne sejour"
-          trend="+0.3"
+          trend={`${Math.abs(snapshot.kpis.averageStayTrend).toFixed(1)}`}
+          trendUp={snapshot.kpis.averageStayTrend >= 0}
         />
         <StatCard
           icon="⏱️"
           iconBg="rgba(139,92,246,0.12)"
           iconColor={t.ai}
-          value={`${mockAnalyticsKPIs.leadTime} jours`}
+          value={`${snapshot.kpis.leadTime} jours`}
           label="Lead time moyen"
-          trend="+2"
+          trend={`${Math.abs(snapshot.kpis.leadTimeTrend).toFixed(0)}`}
+          trendUp={snapshot.kpis.leadTimeTrend >= 0}
         />
         <StatCard
           icon="❌"
           iconBg="rgba(239,68,68,0.12)"
           iconColor={t.error}
-          value={`${mockAnalyticsKPIs.cancellationRate}%`}
+          value={`${snapshot.kpis.cancellationRate.toFixed(1)}%`}
           label="Taux d’annulation"
-          trend="-1.1%"
-          trendUp={false}
+          trend={`${Math.abs(snapshot.kpis.cancellationRateTrend).toFixed(1)}%`}
+          trendUp={snapshot.kpis.cancellationRateTrend <= 0}
         />
       </StatsRow>
 
@@ -204,10 +315,10 @@ export function AnalyticsPage() {
           '& > *': { minWidth: 0 },
         }}
       >
-        <Panel title="Evolution revenus" desc="Periode comparee">
+        <Panel title="Evolution revenus" desc={snapshot.periodLabel}>
           <StableChart height={320}>
             {({ width, height }) => (
-              <LineChart width={width} height={height} data={mockRevenueEvolution}>
+              <LineChart width={width} height={height} data={snapshot.revenueEvolution}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="label" />
                 <YAxis />
@@ -220,7 +331,7 @@ export function AnalyticsPage() {
           </StableChart>
         </Panel>
 
-        <Panel title="Analyse sources reservations" desc={source === 'Tous' ? 'Toutes OTA' : source}>
+        <Panel title="Analyse sources reservations" desc={source === 'Tous' ? 'Toutes sources' : source}>
           <StableChart height={320}>
             {({ width, height }) => (
               <BarChart width={width} height={height} data={filteredSources}>
@@ -249,13 +360,13 @@ export function AnalyticsPage() {
         <Panel title="Saisonnalite" desc="Heatmap-like monthly bars">
           <StableChart height={320}>
             {({ width, height }) => (
-              <BarChart width={width} height={height} data={mockSeasonality}>
+              <BarChart width={width} height={height} data={snapshot.seasonality}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="month" />
                 <YAxis />
                 <Tooltip />
                 <Bar dataKey="occupancy" radius={[8, 8, 0, 0]}>
-                  {mockSeasonality.map((item, index) => (
+                  {snapshot.seasonality.map((item, index) => (
                     <Cell
                       key={item.month}
                       fill={sourceColors[index % sourceColors.length]}
@@ -269,7 +380,7 @@ export function AnalyticsPage() {
 
         <Panel title="Guest demographics" desc="Top pays d’origine">
           <Stack spacing={1.25}>
-            {mockGuestDemographics.map((item) => (
+            {snapshot.guestDemographics.map((item) => (
               <Box key={item.country}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.4 }}>
                   <Typography variant="body2">{item.country}</Typography>
@@ -281,7 +392,7 @@ export function AnalyticsPage() {
                   <Box
                     sx={{
                       height: '100%',
-                      width: `${(item.guests / mockGuestDemographics[0].guests) * 100}%`,
+                      width: `${(item.guests / Math.max(1, snapshot.guestDemographics[0]?.guests ?? 1)) * 100}%`,
                       bgcolor: '#8b5cf6',
                       borderRadius: 99,
                     }}
@@ -303,32 +414,36 @@ export function AnalyticsPage() {
       >
         <Panel title="Duree moyenne sejour" desc="Buckets">
           <MiniDistribution
-            rows={mockLengthOfStay.map((item) => ({
-              label: item.bucket,
-              value: `${item.count} bookings`,
-              ratio: item.count / mockLengthOfStay[1].count,
-            }))}
+            rows={toDistributionRows(snapshot.lengthOfStay)}
             color="#10b981"
           />
         </Panel>
 
         <Panel title="Lead time moyen" desc="Avant check-in">
           <MiniDistribution
-            rows={mockLeadTimeDistribution.map((item) => ({
-              label: item.bucket,
-              value: `${item.count} bookings`,
-              ratio: item.count / mockLeadTimeDistribution[3].count,
-            }))}
+            rows={toDistributionRows(snapshot.leadTimeDistribution)}
             color="#e6b022"
           />
         </Panel>
       </Box>
 
-      <Panel title="Performance par property" desc={`${selectedProperties.length} selection(s)`}>
-        <DataTable columns={performanceColumns} rows={mockPropertyPerformance} />
+      <Panel title="Performance par property" desc={`${selectedCount} selection(s)`}>
+        <DataTable columns={performanceColumns} rows={snapshot.propertyPerformance} />
       </Panel>
+        </>
+      ) : null}
     </DashboardWrapper>
   );
+}
+
+function toDistributionRows(items: AnalyticsDistributionItem[]) {
+  const maxCount = Math.max(1, ...items.map((item) => item.count));
+
+  return items.map((item) => ({
+    label: item.bucket,
+    value: `${item.count} bookings`,
+    ratio: item.count / maxCount,
+  }));
 }
 
 function MiniDistribution({

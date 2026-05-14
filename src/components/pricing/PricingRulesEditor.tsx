@@ -111,11 +111,11 @@ export default function PricingRulesEditor({
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
             {rules.monthly.map((m, i) => (
               <Box key={i} sx={{ p: 2, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: m.active ? T.bg1 : T.bg2 }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                <Stack direction="row" sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }}>
                   <Typography sx={{ fontWeight: 700 }}>{MONTHS[m.month]}</Typography>
                   <Switch size="small" checked={m.active} onChange={(_, c) => update({ ...rules, monthly: rules.monthly.map((x, j) => j === i ? { ...x, active: c } : x) })} />
                 </Stack>
-                <Stack direction="row" alignItems="center" spacing={1.5}>
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                   <Slider size="small" value={m.pct} min={-50} max={100} step={5} disabled={!m.active}
                     sx={{ color: m.pct >= 0 ? T.success : T.error }}
                     onChange={(_, v) => update({ ...rules, monthly: rules.monthly.map((x, j) => j === i ? { ...x, pct: v as number } : x) })} />
@@ -131,7 +131,7 @@ export default function PricingRulesEditor({
         {tab === 1 && (
           <Stack spacing={1.5}>
             {rules.weekday.map((w, i) => (
-              <Stack key={i} direction="row" alignItems="center" spacing={2} sx={{ p: 2, border: `1px solid ${T.border}`, borderRadius: 1.5 }}>
+              <Stack key={i} direction="row" spacing={2} sx={{ p: 2, border: `1px solid ${T.border}`, borderRadius: 1.5, alignItems: 'center' }}>
                 <Typography sx={{ fontWeight: 700, minWidth: 80 }}>{WEEKDAYS[w.day]}</Typography>
                 <Slider size="small" value={w.pct} min={-30} max={50} step={5} disabled={!w.active}
                   sx={{ flex: 1, color: w.pct >= 0 ? T.success : T.error }}
@@ -150,14 +150,14 @@ export default function PricingRulesEditor({
           <Stack spacing={1.5}>
             {rules.events.map((e, i) => (
               <Card key={e.id} variant="outlined" sx={{ p: 2, borderColor: T.border }}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { md: 'center' } }}>
                   <TextField size="small" label="Nom" value={e.name} sx={{ flex: 1 }}
                     onChange={(ev) => update({ ...rules, events: rules.events.map((x, j) => j === i ? { ...x, name: ev.target.value } : x) })} />
-                  <TextField size="small" type="date" label="Du" InputLabelProps={{ shrink: true }} value={e.from}
+                  <TextField size="small" type="date" label="Du" slotProps={{ inputLabel: { shrink: true } }} value={e.from}
                     onChange={(ev) => update({ ...rules, events: rules.events.map((x, j) => j === i ? { ...x, from: ev.target.value } : x) })} />
-                  <TextField size="small" type="date" label="Au" InputLabelProps={{ shrink: true }} value={e.to}
+                  <TextField size="small" type="date" label="Au" slotProps={{ inputLabel: { shrink: true } }} value={e.to}
                     onChange={(ev) => update({ ...rules, events: rules.events.map((x, j) => j === i ? { ...x, to: ev.target.value } : x) })} />
-                  <TextField size="small" type="number" label="%" value={e.pct} sx={{ width: 90 }} InputProps={{ endAdornment: '%' }}
+                  <TextField size="small" type="number" label="%" value={e.pct} sx={{ width: 90 }} slotProps={{ input: { endAdornment: '%' } }}
                     onChange={(ev) => update({ ...rules, events: rules.events.map((x, j) => j === i ? { ...x, pct: Number(ev.target.value) } : x) })} />
                   <TextField size="small" type="number" label="Min stay" value={e.minStay} sx={{ width: 100 }}
                     onChange={(ev) => update({ ...rules, events: rules.events.map((x, j) => j === i ? { ...x, minStay: Number(ev.target.value) } : x) })} />
@@ -178,7 +178,7 @@ export default function PricingRulesEditor({
           <Stack spacing={1.5}>
             {rules.occupancy.map((o, i) => (
               <Card key={i} variant="outlined" sx={{ p: 2, borderColor: T.border }}>
-                <Stack direction="row" spacing={2} alignItems="center">
+                <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                   <Box sx={{ flex: 1 }}>
                     <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 0.5 }}>Occupation : {o.minPct}% — {o.maxPct}%</Typography>
                     <Slider size="small" value={[o.minPct, o.maxPct]} min={0} max={100}
@@ -202,7 +202,7 @@ export default function PricingRulesEditor({
           <Stack spacing={1.5}>
             {rules.longStay.map((l, i) => (
               <Card key={i} variant="outlined" sx={{ p: 2 }}>
-                <Stack direction="row" spacing={2} alignItems="center">
+                <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                   <TextField size="small" type="number" label="Min nuits" value={l.minNights} sx={{ width: 130 }}
                     onChange={(e) => update({ ...rules, longStay: rules.longStay.map((x, j) => j === i ? { ...x, minNights: Number(e.target.value) } : x) })} />
                   <TextField size="small" type="number" label="Remise %" value={l.discount} sx={{ width: 130 }}
@@ -224,7 +224,7 @@ export default function PricingRulesEditor({
           <Stack spacing={1.5}>
             {rules.lastMinute.map((m, i) => (
               <Card key={i} variant="outlined" sx={{ p: 2 }}>
-                <Stack direction="row" spacing={2} alignItems="center">
+                <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                   <TextField size="small" type="number" label="J- avant" value={m.daysBefore} sx={{ width: 130 }}
                     onChange={(e) => update({ ...rules, lastMinute: rules.lastMinute.map((x, j) => j === i ? { ...x, daysBefore: Number(e.target.value) } : x) })} />
                   <TextField size="small" type="number" label="Remise %" value={m.discount} sx={{ width: 130 }}

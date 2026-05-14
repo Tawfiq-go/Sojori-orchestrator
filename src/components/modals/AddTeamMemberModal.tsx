@@ -8,7 +8,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Button,
   Tabs, Tab, Box, Stack, Avatar, TextField, Select, MenuItem, Chip,
   Radio, RadioGroup, FormControlLabel, FormLabel, FormControl, Switch,
-  Typography, Divider, useTheme, useMediaQuery,
+  Typography, useTheme, useMediaQuery,
 } from '@mui/material';
 
 const T = {
@@ -73,10 +73,10 @@ export default function AddTeamMemberModal({ open, onClose, member, onSave }: Pr
 
   return (
     <Dialog open={open} onClose={onClose} fullScreen={fullScreen} maxWidth="md" fullWidth
-      PaperProps={{ sx: { borderRadius: fullScreen ? 0 : 2.5, bgcolor: T.bg1 } }}
+      slotProps={{ paper: { sx: { borderRadius: fullScreen ? 0 : 2.5, bgcolor: T.bg1 } } }}
     >
       <DialogTitle sx={{ p: 0, borderBottom: `1px solid ${T.border}` }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 3, py: 2 }}>
+        <Stack direction="row" sx={{ px: 3, py: 2, alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '-0.3px' }}>
               {member ? 'Modifier membre' : 'Ajouter membre'}
@@ -127,7 +127,7 @@ function ProfilTab({ form, update, toggleChip, skillInput, setSkillInput }: any)
   return (
     <Stack spacing={3}>
       {/* Header : photo + identité */}
-      <Stack direction="row" spacing={2} alignItems="center">
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
         <Avatar src={form.photo} sx={{ width: 72, height: 72, bgcolor: T.bg2, color: T.text3, fontSize: 28, fontWeight: 700 }}>
           {form.username?.[0]?.toUpperCase() || '?'}
         </Avatar>
@@ -171,7 +171,7 @@ function ProfilTab({ form, update, toggleChip, skillInput, setSkillInput }: any)
 
         <Box>
           <ChipLabel>Sous-types (multi)</ChipLabel>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
             {SUBTYPES.map(s => (
               <Chip key={s} label={s} clickable
                 onClick={() => toggleChip('subtypes', s)}
@@ -184,7 +184,7 @@ function ProfilTab({ form, update, toggleChip, skillInput, setSkillInput }: any)
 
         <Box>
           <ChipLabel>Langues</ChipLabel>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
             {LANGS.map(l => (
               <Chip key={l} label={l} clickable
                 onClick={() => toggleChip('languages', l)}
@@ -197,7 +197,7 @@ function ProfilTab({ form, update, toggleChip, skillInput, setSkillInput }: any)
 
         <Box>
           <ChipLabel>Compétences</ChipLabel>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 1, flexWrap: 'wrap' }}>
             {(form.skills || []).map((s: string) => (
               <Chip key={s} label={s} onDelete={() => update('skills', form.skills.filter((x: string) => x !== s))} />
             ))}
@@ -222,7 +222,7 @@ function ProfilTab({ form, update, toggleChip, skillInput, setSkillInput }: any)
           </RadioGroup>
         </FormControl>
         <Grid2>
-          <TextField fullWidth size="small" type="date" label="Date embauche" InputLabelProps={{ shrink: true }}
+          <TextField fullWidth size="small" type="date" label="Date embauche" slotProps={{ inputLabel: { shrink: true } }}
             value={form.hiringDate || ''} onChange={(e) => update('hiringDate', e.target.value)} />
           <FormControl fullWidth size="small">
             <Select displayEmpty value={form.contract || ''} onChange={(e) => update('contract', e.target.value)}>
@@ -233,7 +233,7 @@ function ProfilTab({ form, update, toggleChip, skillInput, setSkillInput }: any)
         </Grid2>
         <Grid2>
           <TextField fullWidth size="small" type="number" label="Salaire / Tarif (€)" value={form.rate || ''}
-            onChange={(e) => update('rate', Number(e.target.value))} InputProps={{ endAdornment: '€' }} />
+            onChange={(e) => update('rate', Number(e.target.value))} slotProps={{ input: { endAdornment: '€' } }} />
           <Box />
         </Grid2>
       </Section>
@@ -262,18 +262,18 @@ function PlanningTab({ form, update }: any) {
       </Typography>
       <Stack spacing={1}>
         {(form.planning || []).map((d: any, idx: number) => (
-          <Stack key={d.day} direction="row" alignItems="center" spacing={2}
-            sx={{ p: 2, bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5 }}>
+          <Stack key={d.day} direction="row" spacing={2}
+            sx={{ p: 2, bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5, alignItems: 'center' }}>
             <Typography sx={{ fontWeight: 600, width: 100 }}>{d.day}</Typography>
             <FormControlLabel
               control={<Switch checked={d.present} onChange={(_, c) => updateDay(idx, { present: c })} />}
               label={<Typography variant="body2">{d.present ? 'Présent' : 'Absent'}</Typography>}
               sx={{ minWidth: 110 }}
             />
-            <TextField size="small" type="time" label="Début" InputLabelProps={{ shrink: true }}
+            <TextField size="small" type="time" label="Début" slotProps={{ inputLabel: { shrink: true } }}
               value={d.start} disabled={!d.present}
               onChange={(e) => updateDay(idx, { start: e.target.value })} />
-            <TextField size="small" type="time" label="Fin" InputLabelProps={{ shrink: true }}
+            <TextField size="small" type="time" label="Fin" slotProps={{ inputLabel: { shrink: true } }}
               value={d.end} disabled={!d.present}
               onChange={(e) => updateDay(idx, { end: e.target.value })} />
           </Stack>
@@ -303,8 +303,8 @@ function DocumentsTab({ form, update }: any) {
       </Box>
       <Stack spacing={1}>
         {(form.documents || []).map((d: any, i: number) => (
-          <Stack key={i} direction="row" alignItems="center" spacing={1.5}
-            sx={{ p: 1.5, bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5 }}>
+          <Stack key={i} direction="row" spacing={1.5}
+            sx={{ p: 1.5, bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5, alignItems: 'center' }}>
             <Typography sx={{ fontSize: 20 }}>📄</Typography>
             <Typography sx={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{d.name}</Typography>
             <IconButton size="small" onClick={() => update('documents', form.documents.filter((_: any, j: number) => j !== i))}>✕</IconButton>

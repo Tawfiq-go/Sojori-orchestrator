@@ -78,6 +78,15 @@ const ClientsPage = lazy(() =>
 const WhatsAppContactsPage = lazy(() =>
   import('./pages/WhatsAppContactsPage').then((module) => ({ default: module.WhatsAppContactsPage }))
 );
+const WhatsAppGuestsPage = lazy(() =>
+  import('./pages/WhatsAppGuestsPage').then((module) => ({ default: module.default }))
+);
+const WhatsAppStaffPage = lazy(() =>
+  import('./pages/WhatsAppStaffPage').then((module) => ({ default: module.default }))
+);
+const MessagesOTAPage = lazy(() =>
+  import('./pages/MessagesOTAPage').then((module) => ({ default: module.default }))
+);
 const CRMPage = lazy(() =>
   import('./pages/CRMPage').then((module) => ({ default: module.CRMPage }))
 );
@@ -139,7 +148,6 @@ function App() {
               <Route path="/calendar" element={<LazyRoute><CalendarInventoryPage /></LazyRoute>} />
 
               <Route path="/reservations" element={<LazyRoute><ReservationsPage /></LazyRoute>} />
-              <Route path="/reservations/list" element={<LazyRoute><ReservationsListPage /></LazyRoute>} />
               <Route path="/reservations/:id" element={<LazyRoute><ReservationSejourPage /></LazyRoute>} />
 
               <Route path="/tasks" element={<LazyRoute><TasksListPage /></LazyRoute>} />
@@ -149,6 +157,9 @@ function App() {
               <Route path="/tasks/staff-whatsapp" element={<LazyRoute><StaffWhatsAppPage /></LazyRoute>} />
 
               <Route path="/communications/whatsapp" element={<LazyRoute><CommsPage /></LazyRoute>} />
+              <Route path="/communications/whatsapp-guests" element={<LazyRoute><WhatsAppGuestsPage /></LazyRoute>} />
+              <Route path="/communications/whatsapp-staff" element={<LazyRoute><WhatsAppStaffPage /></LazyRoute>} />
+              <Route path="/communications/messages-ota" element={<LazyRoute><MessagesOTAPage /></LazyRoute>} />
               <Route path="/communications/staff" element={<LazyRoute><StaffWhatsAppPage /></LazyRoute>} />
               <Route path="/communications/ota" element={<LazyRoute><OTAMessagesPage /></LazyRoute>} />
 

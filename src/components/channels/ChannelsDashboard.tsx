@@ -131,7 +131,7 @@ function BusinessTab() {
             {CHANNELS.map(c => (
               <TableRow key={c.id}>
                 <TableCell>
-                  <Stack direction="row" alignItems="center" spacing={1}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Box sx={{ width: 22, height: 22, borderRadius: 0.75, bgcolor: c.color, color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{c.logo}</Box>
                     <Typography sx={{ fontWeight: 600 }}>{c.name}</Typography>
                   </Stack>
@@ -154,7 +154,7 @@ function BusinessTab() {
 function DebugTab() {
   return (
     <Card variant="outlined" sx={{ p: 0 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 2, bgcolor: T.bg2, borderBottom: `1px solid ${T.border}` }}>
+      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', p: 2, bgcolor: T.bg2, borderBottom: `1px solid ${T.border}` }}>
         <Typography sx={{ fontWeight: 700 }}>Logs récents</Typography>
         <Stack direction="row" spacing={1}>
           <Button size="small" variant="outlined" sx={{ textTransform: 'none' }}>🔄 Refresh</Button>
@@ -221,7 +221,7 @@ function CronTab() {
 function MappingTab() {
   return (
     <Stack spacing={2}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
+      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography sx={{ fontWeight: 700 }}>Mapping Rate Units (Booking ↔ Sojori)</Typography>
         <Button variant="contained" size="small" sx={{ textTransform: 'none', bgcolor: T.primary, color: T.text, '&:hover': { bgcolor: T.primary } }}>
           + Ajouter mapping

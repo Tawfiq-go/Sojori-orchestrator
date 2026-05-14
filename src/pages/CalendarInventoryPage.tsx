@@ -1,7 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box, Stack, Typography, Button, Select, MenuItem, Drawer, IconButton, TextField, Switch,
+  CircularProgress,
 } from '@mui/material';
+import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader, Panel, Badge, ViewToggle,
@@ -9,6 +11,11 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { MultiPropertyInventory, type PropertyRow } from '../components/MultiPropertyInventory';
+import calendarService from '../services/calendarService';
+import type { CalendarDay } from '../types/calendar.types';
+import { BulkPriceUpdateModal } from '../components/calendar/BulkPriceUpdateModal';
+import { BulkAvailabilityModal } from '../components/calendar/BulkAvailabilityModal';
+import { BulkRestrictionsModal } from '../components/calendar/BulkRestrictionsModal';
 
 // ════════════════════════════════════════════════════════════════════
 // Sojori — Calendrier · Inventaire & Prix
@@ -45,8 +52,12 @@ const PROPERTIES = [
 const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const WEEKDAYS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 
-// Generate mock days for a given month
-function generateDays(year: number, month: number): DayCell[] {
+// Transform API data to DayCell format
+function transformCalendarDaysToCells(
+  apiDays: CalendarDay[],
+  year: number,
+  month: number
+): DayCell[] {
   const first = new Date(year, month, 1);
   const last = new Date(year, month + 1, 0);
   const startOffset = (first.getDay() + 6) % 7; // Monday=0
@@ -55,35 +66,56 @@ function generateDays(year: number, month: number): DayCell[] {
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
 
+  // Create map of API days by date
+  const dayMap = new Map<string, CalendarDay>();
+  apiDays.forEach(d => {
+    const dateStr = new Date(d.date).toISOString().split('T')[0];
+    dayMap.set(dateStr, d);
+  });
+
   for (let i = 0; i < totalCells; i++) {
     const dayNum = i - startOffset + 1;
     const inMonth = dayNum >= 1 && dayNum <= last.getDate();
     const d = new Date(year, month, dayNum);
+    const dateStr = d.toISOString().split('T')[0];
     const wd = (d.getDay() + 6) % 7;
-    const weekend = wd >= 5;
-    const basePrice = weekend ? 210 : 180;
-    const variance = Math.sin(dayNum * 0.7) * 15;
-    const price = Math.round(basePrice + variance);
-    const suggested = wd >= 4 ? price + Math.round(5 + Math.random() * 15) : undefined;
-    // Mock bookings
+
+    const apiDay = dayMap.get(dateStr);
+
+    // Determine status
     let status: DayStatus = 'available';
-    let bookedBy;
-    if (inMonth && (dayNum === 4 || dayNum === 5 || dayNum === 11 || dayNum === 12 || dayNum === 18 || dayNum === 19 || dayNum === 25)) {
-      status = 'booked';
-      bookedBy = { initials: ['SJ','MR','AK','JP','LN'][dayNum % 5], name: 'Sarah Johnson', source: 'airbnb' as const };
+    let bookedBy = undefined;
+
+    if (apiDay) {
+      if (!apiDay.isAvailable) {
+        status = 'closed';
+      } else if (apiDay.reservations && apiDay.reservations.length > 0) {
+        status = 'booked';
+        const res = apiDay.reservations[0];
+        bookedBy = {
+          initials: (res.guestFirstName?.[0] || '') + (res.guestLastName?.[0] || ''),
+          name: res.guestName || 'Guest',
+          source: 'airbnb' as const,
+        };
+      }
     }
-    if (inMonth && (dayNum === 22 || dayNum === 23)) status = 'closed';
 
     cells.push({
-      date: `${year}-${String(month+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`,
-      day: dayNum, weekday: wd, inMonth, status, price,
-      suggestedPrice: suggested, minNights: weekend ? 2 : 1,
-      checkInAllowed: true, checkOutAllowed: true,
+      date: dateStr,
+      day: dayNum,
+      weekday: wd,
+      inMonth,
+      status,
+      price: apiDay?.price || 0,
+      minNights: apiDay?.minimumStay || 1,
+      checkInAllowed: !apiDay?.closedOnArrival,
+      checkOutAllowed: !apiDay?.closedOnDeparture,
       bookedBy,
-      channels: { airbnb: 'ok', booking: dayNum % 7 === 0 ? 'pending' : 'ok', direct: 'ok' },
       isToday: isCurrentMonth && today.getDate() === dayNum && inMonth,
+      channels: { airbnb: 'ok', booking: 'ok', direct: 'ok' },
     });
   }
+
   return cells;
 }
 
@@ -113,9 +145,46 @@ export function CalendarInventoryPage() {
     { id: 'p5', name: 'Médina House', city: 'Marrakech', photoColor: 'pink', occupancyPct: 90, monthRevenue: '€7,150', bookedRanges: [[1,6],[13,19],[22,27]] },
   ];
 
+  const [days, setDays] = useState<DayCell[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showBulkPriceModal, setShowBulkPriceModal] = useState(false);
+  const [showBulkCloseModal, setShowBulkCloseModal] = useState(false);
+  const [showBulkRestrictionsModal, setShowBulkRestrictionsModal] = useState(false);
+
   const property = PROPERTIES.find(p => p.id === propertyId)!;
-  const days = useMemo(() => generateDays(year, month), [year, month]);
   const selectedCell = selectedDate ? days.find(d => d.date === selectedDate) : null;
+
+  // Fetch calendar data from API
+  useEffect(() => {
+    const fetchCalendar = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const startDate = new Date(year, month, 1);
+        const endDate = new Date(year, month + 1, 0);
+
+        const data = await calendarService.getMonthCalendar({
+          listingId: propertyId,
+          startDate: startDate.toISOString().split('T')[0],
+          endDate: endDate.toISOString().split('T')[0],
+        });
+
+        const cells = transformCalendarDaysToCells(data, year, month);
+        setDays(cells);
+      } catch (err) {
+        setError('Erreur lors du chargement du calendrier');
+        console.error(err);
+        // Fallback to empty calendar grid
+        setDays(transformCalendarDaysToCells([], year, month));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCalendar();
+  }, [year, month, propertyId]);
 
   // Inventory stats
   const stats = useMemo(() => {
@@ -194,8 +263,21 @@ export function CalendarInventoryPage() {
         <StatPill color={t.ai}      label="✨ Manque-à-gagner AI" value={`+€${stats.aiOpportunity}`} highlight />
       </Stack>
 
+      {/* Loading/Error states */}
+      {loading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+          <CircularProgress size={32} sx={{ color: t.primary }} />
+        </Box>
+      )}
+      {error && !loading && (
+        <Panel sx={{ p: 3, textAlign: 'center' }}>
+          <Typography sx={{ color: t.error, mb: 1 }}>❌ {error}</Typography>
+          <Button onClick={() => window.location.reload()} sx={btnGhostSx}>Réessayer</Button>
+        </Panel>
+      )}
+
       {/* Calendar */}
-      {view === 'multi' ? (
+      {!loading && !error && view === 'multi' ? (
         <MultiPropertyInventory
           properties={multiProperties}
           startDate={new Date(year, month, 1)}
@@ -257,9 +339,9 @@ export function CalendarInventoryPage() {
           boxShadow: '0 16px 40px rgba(0,0,0,0.30)',
         }}>
           <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{selection.length} jours sélectionnés</Typography>
-          <Button size="small" sx={{ color: '#fff', textTransform: 'none', fontSize: 11.5 }}>💰 Modifier prix</Button>
-          <Button size="small" sx={{ color: '#fff', textTransform: 'none', fontSize: 11.5 }}>🔒 Fermer dates</Button>
-          <Button size="small" sx={{ color: '#fff', textTransform: 'none', fontSize: 11.5 }}>⏱ Restrictions</Button>
+          <Button size="small" onClick={() => setShowBulkPriceModal(true)} sx={{ color: '#fff', textTransform: 'none', fontSize: 11.5 }}>💰 Modifier prix</Button>
+          <Button size="small" onClick={() => setShowBulkCloseModal(true)} sx={{ color: '#fff', textTransform: 'none', fontSize: 11.5 }}>🔒 Fermer dates</Button>
+          <Button size="small" onClick={() => setShowBulkRestrictionsModal(true)} sx={{ color: '#fff', textTransform: 'none', fontSize: 11.5 }}>⏱ Restrictions</Button>
           <IconButton size="small" onClick={() => setSelection([])} sx={{ color: '#fff' }}>✕</IconButton>
         </Box>
       )}
@@ -269,6 +351,92 @@ export function CalendarInventoryPage() {
         PaperProps={{ sx: { width: { xs: '100%', sm: 380 }, p: 2.5 } }}>
         {selectedCell && <DayDetailPanel cell={selectedCell} onClose={() => setSelectedDate(null)} />}
       </Drawer>
+
+      {/* Bulk modals */}
+      <BulkPriceUpdateModal
+        open={showBulkPriceModal}
+        onClose={() => setShowBulkPriceModal(false)}
+        selectedDates={selection}
+        listingId={propertyId}
+        onSuccess={() => {
+          // Reload calendar
+          const fetchCalendar = async () => {
+            setLoading(true);
+            try {
+              const startDate = new Date(year, month, 1);
+              const endDate = new Date(year, month + 1, 0);
+              const data = await calendarService.getMonthCalendar({
+                listingId: propertyId,
+                startDate: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0],
+              });
+              setDays(transformCalendarDaysToCells(data, year, month));
+            } catch (err) {
+              console.error(err);
+            } finally {
+              setLoading(false);
+            }
+          };
+          fetchCalendar();
+          setSelection([]);
+        }}
+      />
+
+      <BulkAvailabilityModal
+        open={showBulkCloseModal}
+        onClose={() => setShowBulkCloseModal(false)}
+        selectedDates={selection}
+        listingId={propertyId}
+        onSuccess={() => {
+          const fetchCalendar = async () => {
+            setLoading(true);
+            try {
+              const startDate = new Date(year, month, 1);
+              const endDate = new Date(year, month + 1, 0);
+              const data = await calendarService.getMonthCalendar({
+                listingId: propertyId,
+                startDate: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0],
+              });
+              setDays(transformCalendarDaysToCells(data, year, month));
+            } catch (err) {
+              console.error(err);
+            } finally {
+              setLoading(false);
+            }
+          };
+          fetchCalendar();
+          setSelection([]);
+        }}
+      />
+
+      <BulkRestrictionsModal
+        open={showBulkRestrictionsModal}
+        onClose={() => setShowBulkRestrictionsModal(false)}
+        selectedDates={selection}
+        listingId={propertyId}
+        onSuccess={() => {
+          const fetchCalendar = async () => {
+            setLoading(true);
+            try {
+              const startDate = new Date(year, month, 1);
+              const endDate = new Date(year, month + 1, 0);
+              const data = await calendarService.getMonthCalendar({
+                listingId: propertyId,
+                startDate: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0],
+              });
+              setDays(transformCalendarDaysToCells(data, year, month));
+            } catch (err) {
+              console.error(err);
+            } finally {
+              setLoading(false);
+            }
+          };
+          fetchCalendar();
+          setSelection([]);
+        }}
+      />
       </Box>
     </DashboardWrapper>
   );

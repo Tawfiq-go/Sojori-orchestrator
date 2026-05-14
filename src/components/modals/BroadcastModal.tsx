@@ -3,11 +3,11 @@
 // 2 colonnes : sélection staff (gauche) + composition message (droite)
 // Material-UI v9 · TypeScript · Aurora Soft Light · MOCK data
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Button,
-  Box, Stack, TextField, Checkbox, Avatar, Chip, Typography, Divider,
-  useTheme, useMediaQuery, Tooltip,
+  Box, Stack, TextField, Checkbox, Avatar, Chip, Typography,
+  useTheme, useMediaQuery,
 } from '@mui/material';
 
 const T = {
@@ -92,12 +92,12 @@ export default function BroadcastModal({ open, onClose, staff = MOCK_STAFF, onSe
 
   return (
     <Dialog open={open} onClose={onClose} fullScreen={fullScreen} maxWidth="md" fullWidth
-      PaperProps={{ sx: { borderRadius: fullScreen ? 0 : 2.5, minHeight: 560 } }}
+      slotProps={{ paper: { sx: { borderRadius: fullScreen ? 0 : 2.5, minHeight: 560 } } }}
     >
       <DialogTitle sx={{ p: 0, borderBottom: `1px solid ${T.border}` }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 3, py: 2 }}>
+        <Stack direction="row" sx={{ px: 3, py: 2, alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
-            <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
               <Box sx={{
                 width: 36, height: 36, borderRadius: 1.5,
                 bgcolor: T.whatsapp, color: '#fff',
@@ -122,7 +122,7 @@ export default function BroadcastModal({ open, onClose, staff = MOCK_STAFF, onSe
           <Box sx={{ p: 2, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
             <TextField fullWidth size="small" placeholder="🔍 Rechercher staff…"
               value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 1.5 }}>
+            <Stack direction="row" sx={{ mt: 1.5, alignItems: 'center', justifyContent: 'space-between' }}>
               <Button size="small" onClick={toggleAll} sx={{ textTransform: 'none', fontWeight: 600 }}>
                 {selected.length === staff.length ? 'Tout désélectionner' : 'Sélectionner tout'}
               </Button>
@@ -136,13 +136,14 @@ export default function BroadcastModal({ open, onClose, staff = MOCK_STAFF, onSe
             {filtered.map(s => {
               const isOn = selected.includes(s.id);
               return (
-                <Stack key={s.id} direction="row" alignItems="center" spacing={1.5}
+                <Stack key={s.id} direction="row" spacing={1.5}
                   onClick={() => toggleOne(s.id)}
                   sx={{
                     px: 2, py: 1.5, cursor: 'pointer',
                     borderBottom: `1px solid ${T.border}`,
                     bgcolor: isOn ? 'rgba(230,176,34,0.06)' : 'transparent',
                     '&:hover': { bgcolor: isOn ? 'rgba(230,176,34,0.10)' : T.bg2 },
+                    alignItems: 'center',
                   }}>
                   <Checkbox size="small" checked={isOn} sx={{ p: 0 }} />
                   <Box sx={{ position: 'relative' }}>
@@ -172,7 +173,7 @@ export default function BroadcastModal({ open, onClose, staff = MOCK_STAFF, onSe
             <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, letterSpacing: 1, textTransform: 'uppercase', mb: 1 }}>
               Templates rapides
             </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
               {TEMPLATES.map(t => (
                 <Chip key={t.key} label={t.label} size="small" clickable onClick={() => setMessage(t.body)} />
               ))}

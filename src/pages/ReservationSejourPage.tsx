@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader, Panel, OrchestrationTimeline, TLEvent, TLDayLabel,
@@ -6,204 +6,157 @@ import {
   btnGhostSx, btnSmSx, btnAiSx, btnPrimarySx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
-import { Box, Button, Stack, Typography, Avatar, Tabs, Tab } from '@mui/material';
+import { Box, Button, Stack, Typography, Avatar, Tabs, Tab, CircularProgress, Alert } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import TravelersSection from '../components/sections/TravelersSection';
 import FinancialSection from '../components/sections/FinancialSection';
 import { MultiPropertyInventory, type PropertyRow } from '../components/MultiPropertyInventory';
+import { toast } from 'react-toastify';
+import reservationsService from '../services/reservationsService';
+import type { ReservationDetail } from '../types/reservations.types';
 
 export function ReservationSejourPage() {
   const { id } = useParams();
   const [currentTab, setCurrentTab] = useState(0);
+  const [reservationData, setReservationData] = useState<ReservationDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data basée sur l'ID
-  const reservationData = {
-    id: id || '1234',
-    guest: {
-      name: 'Sarah Johnson',
-      initials: 'SJ',
-      country: '🇺🇸',
-      email: 'sarah.j@example.com',
-      phone: '+1 415 555 0123',
-      vip: false,
-    },
-    property: {
-      name: 'Villa Belvédère',
-      city: 'Nice',
-      address: '15 Avenue des Fleurs, 06000 Nice',
-      color: 'gold',
-    },
-    dates: {
-      checkIn: '12 mai 2026',
-      checkOut: '22 mai 2026',
-      nights: 10,
-      currentDay: 3,
-    },
-    pricing: {
-      total: '€1,840',
-      perNight: '€184',
-      cleaning: '€120',
-      commission: '€276',
-      net: '€1,564',
-    },
-    status: 'active',
-    source: 'airbnb',
-    confirmationCode: 'HMXY42TZ8K',
+  // ─────────────── FETCH RESERVATION DETAILS ───────────────
+  useEffect(() => {
+    if (!id) {
+      setError('ID de réservation manquant');
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchReservationDetail = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await reservationsService.getDetail(id);
+        setReservationData(response.reservation);
+        toast.success('Réservation chargée avec succès');
+      } catch (err: any) {
+        console.error('Error fetching reservation:', err);
+        setError(err.message || 'Erreur lors du chargement de la réservation');
+        toast.error('Erreur lors du chargement de la réservation');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReservationDetail();
+  }, [id]);
+
+  // ─────────────── LOADING STATE ───────────────
+  if (isLoading) {
+    return (
+      <DashboardWrapper breadcrumb={['Réservations', 'Détails', `#${id || '...'}`]}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+          <Stack spacing={2} alignItems="center">
+            <CircularProgress size={60} sx={{ color: t.primary }} />
+            <Typography sx={{ fontSize: 16, color: t.text3 }}>
+              Chargement de la réservation...
+            </Typography>
+          </Stack>
+        </Box>
+      </DashboardWrapper>
+    );
+  }
+
+  // ─────────────── ERROR STATE ───────────────
+  if (error || !reservationData) {
+    return (
+      <DashboardWrapper breadcrumb={['Réservations', 'Détails', `#${id || '...'}`]}>
+        <Box sx={{ p: 3 }}>
+          <Alert severity="error">
+            {error || 'Réservation introuvable'}
+          </Alert>
+          <Button
+            onClick={() => window.history.back()}
+            sx={{ ...btnGhostSx, mt: 2 }}
+          >
+            ← Retour
+          </Button>
+        </Box>
+      </DashboardWrapper>
+    );
+  }
+
+  // ─────────────── EXTRACT DATA ───────────────
+  const guest = {
+    name: reservationData.guest_name,
+    initials: reservationData.guest_name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2),
+    country: reservationData.guest_country ? `🌐 ${reservationData.guest_country}` : '',
+    email: reservationData.guest_email,
+    phone: reservationData.guest_phone,
+    vip: false, // TODO: Ajouter champ VIP au backend
   };
 
-  // Calendar data - Afficher toutes les propriétés avec leurs réservations (comme l'image)
+  const property = {
+    name: reservationData.listing_name,
+    city: '', // TODO: Extraire depuis listing
+    address: '', // TODO: Extraire depuis listing
+    color: 'gold',
+  };
+
+  // Calculer nombre de nuits et jour actuel
+  const arrivalDate = new Date(reservationData.arrival_date_raw);
+  const departureDate = new Date(reservationData.departure_date_raw);
+  const today = new Date();
+  const nights = reservationData.nights || Math.ceil((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24));
+  const currentDay = today >= arrivalDate && today <= departureDate
+    ? Math.ceil((today.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    : 0;
+
+  const dates = {
+    checkIn: reservationData.arrival_date,
+    checkOut: reservationData.departure_date,
+    nights,
+    currentDay,
+  };
+
+  const pricing = {
+    total: reservationData.total_price,
+    perNight: reservationData.total_price ? `${(parseFloat(reservationData.total_price.replace(/[^\d.]/g, '')) / nights).toFixed(0)}€` : 'N/A',
+    cleaning: 'N/A', // TODO: Extraire depuis services
+    commission: 'N/A', // TODO: Calculer commission
+    net: 'N/A', // TODO: Calculer net
+  };
+
+  const status = reservationData.status === 'confirmed' ? 'active' : reservationData.status;
+  const source = reservationData.channel_name || 'direct';
+  const confirmationCode = reservationData.reservation_number;
+
+  // Mock calendar data (TODO: Fetcher depuis API pour période autour de cette réservation)
   const allProperties: PropertyRow[] = [
     {
       id: 'p1',
-      name: 'Villa Belvédère',
-      city: 'Nice',
+      name: reservationData.listing_name,
+      city: 'Marrakech',
       photoColor: 'gold',
       occupancyPct: 87,
       monthRevenue: '€8,420',
-      bookedRanges: [[14, 21], [24, 29]],
+      bookedRanges: [[arrivalDate.getDate(), departureDate.getDate()]],
       closedDays: [],
       reservations: [
         {
-          id: 'r1',
-          guestName: 'Sarah Johnson',
-          guestFlag: '🇺🇸',
-          amount: '€1,840',
-          startDay: 14,
-          endDay: 21,
-          status: 'confirmed',
+          id: reservationData.id,
+          guestName: reservationData.guest_name,
+          guestFlag: reservationData.guest_country || '',
+          amount: reservationData.total_price,
+          startDay: arrivalDate.getDate(),
+          endDay: departureDate.getDate(),
+          status: reservationData.status,
         },
-        {
-          id: 'r2',
-          guestName: 'James Park',
-          guestFlag: '🇰🇷',
-          amount: '€820',
-          startDay: 24,
-          endDay: 29,
-          status: 'pending',
-        }
       ],
-    },
-    {
-      id: 'p2',
-      name: 'Dar Sojori',
-      city: 'Marrakech',
-      photoColor: 'blue',
-      occupancyPct: 92,
-      monthRevenue: '€6,200',
-      bookedRanges: [[15, 18], [19, 23]],
-      closedDays: [],
-      reservations: [
-        {
-          id: 'r3',
-          guestName: 'Marco Rossi',
-          guestFlag: '🇮🇹',
-          amount: '€720',
-          startDay: 15,
-          endDay: 18,
-          status: 'confirmed',
-        },
-        {
-          id: 'r4',
-          guestName: 'Wei L.',
-          guestFlag: '🇨🇳',
-          amount: '€1,200',
-          startDay: 19,
-          endDay: 23,
-          status: 'confirmed',
-        }
-      ],
-    },
-    {
-      id: 'p3',
-      name: 'Villa Atlas',
-      city: 'Marrakech',
-      photoColor: 'purple',
-      occupancyPct: 78,
-      monthRevenue: '€5,890',
-      bookedRanges: [[17, 26]],
-      closedDays: [],
-      reservations: [
-        {
-          id: 'r5',
-          guestName: 'Aisha Khalil',
-          guestFlag: '🇮🇳',
-          amount: '€2,850',
-          startDay: 17,
-          endDay: 26,
-          status: 'pending',
-        }
-      ],
-    },
-    {
-      id: 'p4',
-      name: 'Atlas Loft',
-      city: 'Marrakech',
-      photoColor: 'green',
-      occupancyPct: 85,
-      monthRevenue: '€4,320',
-      bookedRanges: [[11, 17], [18, 25]],
-      closedDays: [],
-      reservations: [
-        {
-          id: 'r6',
-          guestName: 'Tom W.',
-          guestFlag: '',
-          amount: '€440',
-          startDay: 11,
-          endDay: 17,
-          status: 'confirmed',
-        },
-        {
-          id: 'r7',
-          guestName: 'Linh Nguyen · long séjour',
-          guestFlag: '',
-          amount: '',
-          startDay: 18,
-          endDay: 25,
-          status: 'confirmed',
-        }
-      ],
-    },
-    {
-      id: 'p5',
-      name: 'Médina House',
-      city: 'Marrakech',
-      photoColor: 'pink',
-      occupancyPct: 90,
-      monthRevenue: '€7,150',
-      bookedRanges: [[11, 17], [25, 30]],
-      closedDays: [],
-      reservations: [
-        {
-          id: 'r8',
-          guestName: 'Yumi K.',
-          guestFlag: '🇯🇵',
-          amount: '€1,250',
-          startDay: 11,
-          endDay: 17,
-          status: 'confirmed',
-        },
-        {
-          id: 'r9',
-          guestName: 'Carlos W.',
-          guestFlag: '🇲🇽',
-          amount: '€1,180',
-          startDay: 25,
-          endDay: 30,
-          status: 'pending',
-        }
-      ],
-    },
-    {
-      id: 'p6',
-      name: 'Studio Côte Bleue',
-      city: 'Calvi',
-      photoColor: 'blue',
-      occupancyPct: 0,
-      monthRevenue: '€0',
-      bookedRanges: [],
-      closedDays: [11, 12, 13], // Maintenance
-      reservations: [],
     },
   ];
 
@@ -217,10 +170,15 @@ export function ReservationSejourPage() {
     error:     { iconBg: t.errorTint,    iconColor: t.error   },
   };
 
+  // Status badge
+  const statusBadge = status === 'active' || status === 'confirmed'
+    ? <Badge variant="success" dot>Active{currentDay > 0 ? ` · Jour ${currentDay}/${nights}` : ''}</Badge>
+    : <Badge variant="warning">Terminée</Badge>;
+
   return (
-    <DashboardWrapper breadcrumb={['Réservations', 'Liste', `#${reservationData.id}`]}>
+    <DashboardWrapper breadcrumb={['Réservations', 'Liste', `#${id}`]}>
       {/* Page Header */}
-      <PageHeader title={`Réservation #${reservationData.id}`} count={reservationData.status === 'active' ? 'ACTIVE' : 'TERMINÉE'}>
+      <PageHeader title={`Réservation #${confirmationCode}`} count={status === 'active' ? 'ACTIVE' : 'TERMINÉE'}>
         <Button sx={btnGhostSx}>📧 Envoyer message</Button>
         <Button sx={btnGhostSx}>📋 Modifier</Button>
         <Button sx={{ ...btnGhostSx, color: t.error, borderColor: t.errorTint }}>❌ Annuler</Button>
@@ -246,30 +204,28 @@ export function ReservationSejourPage() {
             <Avatar sx={{
               width: 36, height: 36, fontSize: 13, fontWeight: 700,
               background: 'linear-gradient(135deg,#c4b5fd,#8b5cf6)',
-            }}>{reservationData.guest.initials}</Avatar>
+            }}>{guest.initials}</Avatar>
             <Typography sx={{ fontSize: 17, fontWeight: 700 }}>
-              {reservationData.guest.name} {reservationData.guest.country}
+              {guest.name} {guest.country}
             </Typography>
-            {reservationData.guest.vip && <Badge variant="gold">VIP</Badge>}
+            {guest.vip && <Badge variant="gold">VIP</Badge>}
           </Stack>
           <Typography sx={{
             fontSize: 12.5, color: t.text3, fontFamily: 'Geist Mono',
             letterSpacing: 0.3,
           }}>
-            {reservationData.property.name} · {reservationData.property.city}
+            {property.name} · {reservationData.ota}
           </Typography>
           <Typography sx={{
             fontSize: 12.5, color: t.text2, mt: 0.5,
             fontFamily: 'Geist Mono', letterSpacing: 0.3,
           }}>
-            {reservationData.dates.checkIn} → {reservationData.dates.checkOut} · {reservationData.dates.nights} nuits · {reservationData.pricing.total}
+            {dates.checkIn} → {dates.checkOut} · {dates.nights} nuits · {pricing.total}
           </Typography>
         </Box>
 
         {/* Status Badge */}
-        <Badge variant="success" dot>
-          Active · Jour {reservationData.dates.currentDay}/{reservationData.dates.nights}
-        </Badge>
+        {statusBadge}
       </Stack>
 
       {/* Tabs - Vue Calendrier / Vue Timeline */}
@@ -304,122 +260,89 @@ export function ReservationSejourPage() {
           // Calendar View - Use MultiPropertyInventory
           <Box>
             <MultiPropertyInventory
-              startDate={new Date(2026, 4, 11)} // 12 mai 2026 (commencer au jour 12)
-              days={21}
+              startDate={new Date(arrivalDate.getFullYear(), arrivalDate.getMonth(), 1)}
+              days={31}
               properties={allProperties}
-              showPrices={false} // Pas de prix, juste les réservations
+              showPrices={false}
               onCellClick={(propertyId, dayIdx) => {
-                alert(`Clic sur ${propertyId} jour ${dayIdx + 12} mai`);
+                alert(`Clic sur ${propertyId} jour ${dayIdx + 1}`);
               }}
             />
+            <Alert severity="info" sx={{ mt: 2 }}>
+              🚧 Calendrier en cours d'intégration avec l'API. Pour l'instant, affichage de cette réservation uniquement.
+            </Alert>
           </Box>
         ) : (
           // Timeline View
           <Panel title="Chronologie du séjour">
-          {/* ──── 12 mai · Réservation ──── */}
-          <TLDayLabel>12 mai · Réservation confirmée</TLDayLabel>
+          {/* ──── Réservation confirmée ──── */}
+          <TLDayLabel>{dates.checkIn} · Réservation confirmée</TLDayLabel>
           <OrchestrationTimeline>
             <TLEvent
-              time={<><strong>10:14</strong> · il y a 3 jours</>}
+              time={<><strong>10:14</strong> · {dates.checkIn}</>}
               icon="✓" {...ICO.completed}
               title="Réservation confirmée"
               badge={<Badge variant="success">Auto</Badge>}
-              meta={`Source : <strong>${reservationData.source.charAt(0).toUpperCase() + reservationData.source.slice(1)}</strong> · ID <strong>${reservationData.confirmationCode}</strong> · Montant <strong>${reservationData.pricing.total}</strong>`}
+              meta={`Source : <strong>${source.charAt(0).toUpperCase() + source.slice(1)}</strong> · ID <strong>${confirmationCode}</strong> · Montant <strong>${pricing.total}</strong>`}
             />
             <TLEvent
               time={<><strong>10:14</strong> · +18s</>}
               icon="✨" {...ICO.ai}
               title="Workflow orchestrateur déclenché"
               badge={<Badge variant="ai">AI</Badge>}
-              meta="<strong>23 tâches</strong> générées · Workflow <strong>Villa séjour standard</strong>"
-            />
-            <TLEvent
-              time={<><strong>10:18</strong> · +4 min</>}
-              icon="📧" {...ICO.info}
-              title="Message bienvenue envoyé"
-              badge={<Badge variant="info">WhatsApp</Badge>}
-              meta="Template <strong>welcome-villa</strong> · 🇬🇧 EN · Lu <strong>il y a 2 min</strong>"
+              meta="<strong>Workflow standard</strong> · Tâches générées automatiquement"
             />
           </OrchestrationTimeline>
 
-          {/* ──── 13 mai · Enregistrement ──── */}
-          <TLDayLabel>13 mai · Enregistrement voyageur</TLDayLabel>
-          <OrchestrationTimeline>
-            <TLEvent
-              time={<><strong>14:30</strong> · il y a 2 jours</>}
-              icon="📱" {...ICO.info}
-              title="Formulaire enregistrement envoyé"
-              badge={<Badge variant="info">WhatsApp</Badge>}
-              meta="Template <strong>registration-form</strong> · Expiration <strong>14 mai 23:59</strong>"
-            />
-            <TLEvent
-              time={<><strong>19:45</strong> · il y a 2 jours</>}
-              icon="✓" {...ICO.completed}
-              title="Sarah a complété l'enregistrement"
-              badge={<Badge variant="success">Form</Badge>}
-              meta="Passeport scanné · Données vérifiées <strong>✓</strong> · KYC <strong>OK</strong>"
-            />
-          </OrchestrationTimeline>
+          {/* ──── Check-in ──── */}
+          {reservationData.arrival_declared !== 'Pas déclaré' && (
+            <>
+              <TLDayLabel>{dates.checkIn} · Check-in</TLDayLabel>
+              <OrchestrationTimeline>
+                <TLEvent
+                  time={<><strong>{reservationData.arrival_declared}</strong></>}
+                  icon="🛬" {...ICO.completed}
+                  title={`${guest.name} a effectué son check-in`}
+                  badge={<Badge variant="success">Confirmé</Badge>}
+                  meta={`Heure déclarée : <strong>${reservationData.arrival_declared}</strong>`}
+                />
+              </OrchestrationTimeline>
+            </>
+          )}
 
-          {/* ──── 14 mai · Préparatifs ──── */}
-          <TLDayLabel>14 mai · Préparatifs check-in</TLDayLabel>
-          <OrchestrationTimeline>
-            <TLEvent
-              time={<><strong>09:00</strong> · hier</>}
-              icon="🔐" {...ICO.completed}
-              title="Code d'accès généré"
-              badge={<Badge variant="success">Auto</Badge>}
-              meta="Code <strong>4829*</strong> · Igloohome · Envoi prévu <strong>15 mai 14:00</strong>"
-            />
-            <TLEvent
-              time={<><strong>15:30</strong> · hier</>}
-              icon="🧹" {...ICO.completed}
-              title="Ménage pré-arrivée complété"
-              badge={<Badge variant="success">Staff</Badge>}
-              meta="Yasmine K. · Durée <strong>2h35</strong> · Photos validées <strong>✓</strong>"
-            />
-          </OrchestrationTimeline>
+          {/* ──── Check-out ──── */}
+          {reservationData.departure_declared !== 'Pas déclaré' ? (
+            <>
+              <TLDayLabel>{dates.checkOut} · Check-out</TLDayLabel>
+              <OrchestrationTimeline>
+                <TLEvent
+                  time={<><strong>{reservationData.departure_declared}</strong></>}
+                  icon="🛫" {...ICO.completed}
+                  title="Check-out effectué"
+                  badge={<Badge variant="success">Confirmé</Badge>}
+                  meta={`Heure déclarée : <strong>${reservationData.departure_declared}</strong>`}
+                />
+              </OrchestrationTimeline>
+            </>
+          ) : (
+            <>
+              <TLDayLabel>{dates.checkOut} · Check-out prévu</TLDayLabel>
+              <OrchestrationTimeline>
+                <TLEvent
+                  future
+                  time={<><strong>{reservationData.check_out_time_chosen || '11:00'}</strong></>}
+                  icon="🛫" {...ICO.future}
+                  title="Check-out prévu"
+                  badge={<Badge variant="warning">À venir</Badge>}
+                  meta={`Heure prévue : <strong>${reservationData.check_out_time_chosen || '11:00'}</strong>`}
+                />
+              </OrchestrationTimeline>
+            </>
+          )}
 
-          {/* ──── 15 mai · Check-in · AUJOURD'HUI ──── */}
-          <TLDayLabel>15 mai · Check-in · AUJOURD'HUI</TLDayLabel>
-          <OrchestrationTimeline>
-            <TLEvent
-              time={<><strong>14:00</strong> · aujourd'hui</>}
-              icon="🔐" {...ICO.completed}
-              title="Code d'accès envoyé"
-              badge={<Badge variant="info">WhatsApp</Badge>}
-              meta="Template <strong>access-code</strong> · Code <strong>4829*</strong> · Lu <strong>✓</strong>"
-            />
-            <TLEvent
-              critical
-              time={<><strong>16:14</strong> · aujourd'hui</>}
-              icon="🛬" {...ICO.completed}
-              title="Sarah a effectué son check-in"
-              badge={<Badge variant="success">Auto · QR + GPS</Badge>}
-              meta="Vérifié sur place · ID + photo profil <strong>✓</strong> · Vidéo welcome <strong>vue 2 fois</strong>"
-            />
-          </OrchestrationTimeline>
-
-          {/* ──── 22 mai · Check-out futur ──── */}
-          <TLDayLabel>22 mai · Check-out prévu</TLDayLabel>
-          <OrchestrationTimeline>
-            <TLEvent
-              future
-              time={<><strong>08:00</strong> · dans 7 jours</>}
-              icon="📧" {...ICO.future}
-              title="Rappel check-out programmé"
-              badge={<Badge variant="info">WhatsApp</Badge>}
-              meta="Template <strong>checkout-reminder</strong> · Inclut code & instructions"
-            />
-            <TLEvent
-              future
-              time={<><strong>11:00</strong> · dans 7 jours</>}
-              icon="🛫" {...ICO.future}
-              title="Check-out prévu"
-              badge={<Badge variant="warning">Deadline</Badge>}
-              meta="QR code de sortie · Vidéo checkout · Désactivation code auto"
-            />
-          </OrchestrationTimeline>
+          <Alert severity="info" sx={{ mt: 2 }}>
+            🚧 Timeline enrichie en cours d'intégration. Affichage basique des événements principaux.
+          </Alert>
           </Panel>
         )}
 
@@ -430,13 +353,16 @@ export function ReservationSejourPage() {
           <Panel sx={{ p: 2 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Résumé réservation</Typography>
             <Stack spacing={1.125} sx={{ fontSize: 12 }}>
-              <KV k="Statut" v={<Badge variant="success" dot>Active</Badge>} />
-              <KV k="Phase" v={`Jour ${reservationData.dates.currentDay}/${reservationData.dates.nights}`} mono />
-              <KV k="Check-in" v={reservationData.dates.checkIn} mono />
-              <KV k="Check-out" v={reservationData.dates.checkOut} mono />
-              <KV k="Nuits" v={`${reservationData.dates.nights}`} />
-              <KV k="Source" v={reservationData.source.charAt(0).toUpperCase() + reservationData.source.slice(1)} />
-              <KV k="Code" v={reservationData.confirmationCode} mono divider />
+              <KV k="Statut" v={statusBadge} />
+              {currentDay > 0 && <KV k="Phase" v={`Jour ${currentDay}/${nights}`} mono />}
+              <KV k="Check-in" v={dates.checkIn} mono />
+              <KV k="Check-out" v={dates.checkOut} mono />
+              <KV k="Nuits" v={`${nights}`} />
+              <KV k="Source" v={reservationData.ota} />
+              <KV k="Code" v={confirmationCode} mono />
+              {reservationData.door_code && reservationData.door_code !== 'Non défini' && (
+                <KV k="Code porte" v={reservationData.door_code} mono divider />
+              )}
             </Stack>
           </Panel>
 
@@ -444,11 +370,10 @@ export function ReservationSejourPage() {
           <Panel sx={{ p: 2 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Tarification</Typography>
             <Stack spacing={1.125} sx={{ fontSize: 12 }}>
-              <KV k="Total voyageur" v={<Revenue amount={reservationData.pricing.total} />} />
-              <KV k="Par nuit" v={<Revenue amount={reservationData.pricing.perNight} />} />
-              <KV k="Frais ménage" v={<Revenue amount={reservationData.pricing.cleaning} />} />
-              <KV k="Commission OTA" v={<Revenue amount={reservationData.pricing.commission} />} />
-              <KV k="Revenu net" v={<Revenue amount={reservationData.pricing.net} />} divider />
+              <KV k="Total voyageur" v={<Revenue amount={pricing.total} />} />
+              <KV k="Par nuit" v={<Revenue amount={pricing.perNight} />} />
+              <KV k="Déjà payé" v={<Revenue amount={`${reservationData.already_paid || 0}€`} />} />
+              <KV k="Statut paiement" v={reservationData.payment_status} divider />
             </Stack>
           </Panel>
 
@@ -456,10 +381,32 @@ export function ReservationSejourPage() {
           <Panel sx={{ p: 2 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Contact</Typography>
             <Stack spacing={1.125} sx={{ fontSize: 12 }}>
-              <KV k="Email" v={reservationData.guest.email} />
-              <KV k="Téléphone" v={reservationData.guest.phone} mono />
+              <KV k="Email" v={guest.email} />
+              <KV k="Téléphone" v={guest.phone} mono />
+              {reservationData.guest_phone_whatsapp && (
+                <KV k="WhatsApp" v={reservationData.guest_phone_whatsapp} mono />
+              )}
+              {reservationData.guest_language && (
+                <KV k="Langue" v={reservationData.guest_language.toUpperCase()} />
+              )}
             </Stack>
           </Panel>
+
+          {/* Voyageurs */}
+          {(reservationData.adults || reservationData.children || reservationData.infants) && (
+            <Panel sx={{ p: 2 }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Voyageurs</Typography>
+              <Stack spacing={1.125} sx={{ fontSize: 12 }}>
+                <KV k="Total" v={reservationData.guests} />
+                {reservationData.adults && <KV k="Adultes" v={`${reservationData.adults}`} />}
+                {reservationData.children && reservationData.children > 0 && <KV k="Enfants" v={`${reservationData.children}`} />}
+                {reservationData.infants && reservationData.infants > 0 && <KV k="Bébés" v={`${reservationData.infants}`} />}
+                {reservationData.police_members > 0 && (
+                  <KV k="Enregistrés police" v={`${reservationData.police_members}`} divider />
+                )}
+              </Stack>
+            </Panel>
+          )}
 
           {/* AI Card */}
           <AICard
@@ -467,7 +414,7 @@ export function ReservationSejourPage() {
             footer={
               <Stack spacing={0.75}>
                 <Button sx={{ ...btnAiSx, ...btnSmSx, width: '100%', justifyContent: 'center' }}>
-                  ✨ Générer message mid-stay
+                  ✨ Générer message
                 </Button>
                 <Button sx={{ ...btnGhostSx, ...btnSmSx, width: '100%', justifyContent: 'center' }}>
                   Voir recommandations
@@ -476,7 +423,9 @@ export function ReservationSejourPage() {
             }
           >
             <Typography sx={{ fontSize: 12, color: t.text2, lineHeight: 1.55 }}>
-              Sarah est en <strong>J+3</strong>. Recommandation : proposer excursion Èze ou location vélo électrique (+47% conversion mid-stay).
+              {currentDay > 0 && currentDay < nights
+                ? `Le voyageur est en <strong>J+${currentDay}</strong>. Vous pouvez lui proposer des services supplémentaires.`
+                : `Séjour ${status === 'active' ? 'en cours' : 'terminé'}.`}
             </Typography>
           </AICard>
 
@@ -502,12 +451,12 @@ export function ReservationSejourPage() {
           {/* Voyageurs - TravelersSection from Claude Design */}
           <Box sx={{ mt: 2.5 }}>
             <TravelersSection
-              reservationId={reservationData.id}
+              reservationId={id || ''}
               onAdd={(group) => alert(`Ajouter voyageur (${group}) - MOCK`)}
               onEdit={(traveler) => alert(`Éditer voyageur ${traveler.firstName} - MOCK`)}
-              onDelete={(id) => {
+              onDelete={(deleteId) => {
                 if (confirm('Supprimer ce voyageur ?')) {
-                  alert(`Supprimé ${id} - MOCK`);
+                  alert(`Supprimé ${deleteId} - MOCK`);
                 }
               }}
             />
@@ -516,9 +465,9 @@ export function ReservationSejourPage() {
           {/* Finances - FinancialSection from Claude Design */}
           <Box sx={{ mt: 2.5 }}>
             <FinancialSection
-              totalGuest={1848}
-              commission={277}
-              netOwner={1571}
+              totalGuest={parseFloat(pricing.total.replace(/[^\d.]/g, '')) || 0}
+              commission={0} // TODO: Calculer commission
+              netOwner={parseFloat(pricing.total.replace(/[^\d.]/g, '')) || 0}
               currency="€"
               onAddPayment={() => alert('Ajouter paiement - MOCK')}
               onAddCharge={() => alert('Ajouter frais - MOCK')}

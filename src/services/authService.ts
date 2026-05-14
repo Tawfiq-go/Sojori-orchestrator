@@ -50,11 +50,26 @@ export interface RegisterPayload {
 
 /**
  * Service d'authentification RÉEL
- * Se connecte au backend production (dev.sojori.com)
+ *
+ * Authentification RÉELLE depuis localhost ou production
+ * Le dev token sert uniquement à bypasser CORS, pas à faire du mock
  */
 const authService = {
   /**
-   * Connexion réelle à l'API
+   * Détecte si on est en mode localhost avec dev token (pour logs uniquement)
+   */
+  isDevMode(): boolean {
+    const isLocalhost = typeof window !== 'undefined' && (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '0.0.0.0'
+    );
+    const hasDevToken = !!import.meta.env.VITE_DEV_TOKEN;
+    return isLocalhost && hasDevToken;
+  },
+
+  /**
+   * Connexion RÉELLE (toujours, même depuis localhost)
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const { email, password, rememberMe } = credentials;
@@ -64,7 +79,16 @@ const authService = {
     }
 
     try {
-      const response = await apiClient.post(AUTH_CONFIG.API_URL + '/login', {
+      const loginUrl = AUTH_CONFIG.API_URL + '/login';
+
+      if (this.isDevMode()) {
+        console.log('🔐 LOCALHOST MODE: Real login to', loginUrl);
+        console.log('🔑 Dev token will bypass CORS');
+      } else {
+        console.log('🔐 PROD MODE: Real login to', loginUrl);
+      }
+
+      const response = await apiClient.post(loginUrl, {
         email: email.trim().toLowerCase(),
         password: password.trim(),
         rememberMe: rememberMe || false,
@@ -76,8 +100,9 @@ const authService = {
         throw new Error('Réponse invalide du serveur');
       }
 
-      // Stocker les tokens
       setTokens(token, refreshToken);
+
+      console.log('✅ Connexion réussie:', user.email, '- Role:', user.role);
 
       return {
         token,
@@ -87,7 +112,6 @@ const authService = {
     } catch (error: any) {
       console.error('Login error:', error);
 
-      // Gérer les erreurs spécifiques
       if (error.response?.status === 401) {
         throw new Error('Email ou mot de passe incorrect');
       }
@@ -105,7 +129,7 @@ const authService = {
   },
 
   /**
-   * Activation d'un compte worker
+   * Activation worker - toujours en mode réel
    */
   async activateWorkerAccount(data: {
     email: string;
@@ -132,7 +156,7 @@ const authService = {
   },
 
   /**
-   * Inscription
+   * Inscription RÉELLE
    */
   async register(payload: RegisterPayload): Promise<AuthResponse> {
     try {
@@ -164,7 +188,7 @@ const authService = {
   },
 
   /**
-   * Demande de réinitialisation de mot de passe
+   * Reset password RÉEL
    */
   async resetPassword(email: string): Promise<{ success: boolean; message: string }> {
     try {
@@ -185,7 +209,7 @@ const authService = {
   },
 
   /**
-   * Finalise la réinitialisation du mot de passe
+   * Complete password reset RÉEL
    */
   async completePasswordReset({
     email,
@@ -210,7 +234,7 @@ const authService = {
   },
 
   /**
-   * Mise à jour du profil
+   * Update profile RÉEL
    */
   async updateProfile(updates: Partial<RegisterPayload>): Promise<User> {
     try {
@@ -232,7 +256,7 @@ const authService = {
   },
 
   /**
-   * Validation du token de session
+   * Validate token RÉEL
    */
   async validateToken(): Promise<ValidateTokenResponse> {
     try {
@@ -244,7 +268,6 @@ const authService = {
         user: response.data.user,
       };
     } catch (error: any) {
-      // Token invalide ou expiré
       throw {
         success: false,
         error: error.response?.data?.message || 'Session expirée',
@@ -254,14 +277,12 @@ const authService = {
   },
 
   /**
-   * Déconnexion
+   * Logout RÉEL
    */
   logout(): void {
-    // Nettoyer les tokens
     clearTokens();
 
-    // Optionnel : appeler l'API pour invalider le token côté serveur
-    // (si le backend supporte cette fonctionnalité)
+    // Appeler l'API pour invalider le token côté serveur
     apiClient.post(AUTH_CONFIG.API_URL + '/logout').catch(() => {
       // Ignorer les erreurs de logout
     });
