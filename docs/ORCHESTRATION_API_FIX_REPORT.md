@@ -145,13 +145,15 @@ Authorization: Bearer <token>
 
 ## 📊 Résultat Attendu
 
-Après ces corrections, la page `/orchestration/plans` doit maintenant:
+Après ces corrections, la page `/orchestration/plans` ET `/admin/orchestrator` doit maintenant:
 
 1. ✅ Charger la liste des plans de production depuis `https://dev.sojori.com`
 2. ✅ Afficher les stats cards (Total/Actifs/Terminés/Actions en attente)
 3. ✅ Permettre de cliquer sur un plan pour voir le détail
 4. ✅ Afficher les workflows avec leurs actions (demande créneau, assignation staff, etc.)
 5. ✅ Permettre d'annuler un plan (avec confirmation)
+
+**Route Alias Ajoutée**: `/admin/orchestrator` pointe maintenant vers la même page que `/orchestration/plans` pour compatibilité avec l'ancien dashboard
 
 ### Captures d'écran attendues
 

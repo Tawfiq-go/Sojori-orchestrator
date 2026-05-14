@@ -93,9 +93,6 @@ const CRMPage = lazy(() =>
 const OnboardingPage = lazy(() =>
   import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage }))
 );
-const ReservationsListPage = lazy(() =>
-  import('./pages/ReservationsListPage').then((module) => ({ default: module.default }))
-);
 
 function RouteLoader() {
   return (
@@ -141,6 +138,7 @@ function App() {
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/orchestration" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
               <Route path="/orchestration/plans" element={<LazyRoute><OrchestrationPlansPage /></LazyRoute>} />
+              <Route path="/admin/orchestrator" element={<LazyRoute><OrchestrationPlansPage /></LazyRoute>} />
               <Route path="/orchestration/timeline/:id" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
               <Route path="/orchestration/events" element={<LazyRoute><OrchestrationEventsPage /></LazyRoute>} />
               <Route path="/orchestration/config" element={<LazyRoute><OrchestrationConfigPage /></LazyRoute>} />
