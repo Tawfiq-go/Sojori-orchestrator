@@ -51,31 +51,161 @@ export function ReservationSejourPage() {
     confirmationCode: 'HMXY42TZ8K',
   };
 
-  // Calendar data - show this specific reservation
-  // Check-in: 12 mai 2026 = jour 11 (1er mai = jour 0, 12 mai = jour 11)
-  // Check-out: 22 mai 2026 = jour 21
-  // Donc la réservation s'étend du jour 11 au jour 20 (10 nuits)
-  const propertyRow: PropertyRow = {
-    id: 'p1',
-    name: reservationData.property.name,
-    city: reservationData.property.city,
-    photoColor: 'gold',
-    occupancyPct: 87,
-    monthRevenue: reservationData.pricing.total,
-    bookedRanges: [[11, 20]], // 12 mai (jour 11) au 22 mai (jour 21) = 10 nuits
-    closedDays: [],
-    reservations: [
-      {
-        id: reservationData.id,
-        guestName: reservationData.guest.name,
-        guestFlag: reservationData.guest.country,
-        amount: reservationData.pricing.total,
-        startDay: 11, // 12 mai
-        endDay: 20,   // 21 mai (check-out 22 mai)
-        status: 'confirmed',
-      }
-    ],
-  };
+  // Calendar data - Afficher toutes les propriétés avec leurs réservations (comme l'image)
+  const allProperties: PropertyRow[] = [
+    {
+      id: 'p1',
+      name: 'Villa Belvédère',
+      city: 'Nice',
+      photoColor: 'gold',
+      occupancyPct: 87,
+      monthRevenue: '€8,420',
+      bookedRanges: [[14, 21], [24, 29]],
+      closedDays: [],
+      reservations: [
+        {
+          id: 'r1',
+          guestName: 'Sarah Johnson',
+          guestFlag: '🇺🇸',
+          amount: '€1,840',
+          startDay: 14,
+          endDay: 21,
+          status: 'confirmed',
+        },
+        {
+          id: 'r2',
+          guestName: 'James Park',
+          guestFlag: '🇰🇷',
+          amount: '€820',
+          startDay: 24,
+          endDay: 29,
+          status: 'pending',
+        }
+      ],
+    },
+    {
+      id: 'p2',
+      name: 'Dar Sojori',
+      city: 'Marrakech',
+      photoColor: 'blue',
+      occupancyPct: 92,
+      monthRevenue: '€6,200',
+      bookedRanges: [[15, 18], [19, 23]],
+      closedDays: [],
+      reservations: [
+        {
+          id: 'r3',
+          guestName: 'Marco Rossi',
+          guestFlag: '🇮🇹',
+          amount: '€720',
+          startDay: 15,
+          endDay: 18,
+          status: 'confirmed',
+        },
+        {
+          id: 'r4',
+          guestName: 'Wei L.',
+          guestFlag: '🇨🇳',
+          amount: '€1,200',
+          startDay: 19,
+          endDay: 23,
+          status: 'confirmed',
+        }
+      ],
+    },
+    {
+      id: 'p3',
+      name: 'Villa Atlas',
+      city: 'Marrakech',
+      photoColor: 'purple',
+      occupancyPct: 78,
+      monthRevenue: '€5,890',
+      bookedRanges: [[17, 26]],
+      closedDays: [],
+      reservations: [
+        {
+          id: 'r5',
+          guestName: 'Aisha Khalil',
+          guestFlag: '🇮🇳',
+          amount: '€2,850',
+          startDay: 17,
+          endDay: 26,
+          status: 'pending',
+        }
+      ],
+    },
+    {
+      id: 'p4',
+      name: 'Atlas Loft',
+      city: 'Marrakech',
+      photoColor: 'green',
+      occupancyPct: 85,
+      monthRevenue: '€4,320',
+      bookedRanges: [[11, 17], [18, 25]],
+      closedDays: [],
+      reservations: [
+        {
+          id: 'r6',
+          guestName: 'Tom W.',
+          guestFlag: '',
+          amount: '€440',
+          startDay: 11,
+          endDay: 17,
+          status: 'confirmed',
+        },
+        {
+          id: 'r7',
+          guestName: 'Linh Nguyen · long séjour',
+          guestFlag: '',
+          amount: '',
+          startDay: 18,
+          endDay: 25,
+          status: 'confirmed',
+        }
+      ],
+    },
+    {
+      id: 'p5',
+      name: 'Médina House',
+      city: 'Marrakech',
+      photoColor: 'pink',
+      occupancyPct: 90,
+      monthRevenue: '€7,150',
+      bookedRanges: [[11, 17], [25, 30]],
+      closedDays: [],
+      reservations: [
+        {
+          id: 'r8',
+          guestName: 'Yumi K.',
+          guestFlag: '🇯🇵',
+          amount: '€1,250',
+          startDay: 11,
+          endDay: 17,
+          status: 'confirmed',
+        },
+        {
+          id: 'r9',
+          guestName: 'Carlos W.',
+          guestFlag: '🇲🇽',
+          amount: '€1,180',
+          startDay: 25,
+          endDay: 30,
+          status: 'pending',
+        }
+      ],
+    },
+    {
+      id: 'p6',
+      name: 'Studio Côte Bleue',
+      city: 'Calvi',
+      photoColor: 'blue',
+      occupancyPct: 0,
+      monthRevenue: '€0',
+      bookedRanges: [],
+      closedDays: [11, 12, 13], // Maintenance
+      reservations: [],
+    },
+  ];
 
   // Icon presets (same as OrchestrationPage)
   const ICO = {
@@ -174,11 +304,12 @@ export function ReservationSejourPage() {
           // Calendar View - Use MultiPropertyInventory
           <Box>
             <MultiPropertyInventory
-              startDate={new Date(2026, 4, 1)} // 1er mai 2026
-              days={31}
-              properties={[propertyRow]}
+              startDate={new Date(2026, 4, 11)} // 12 mai 2026 (commencer au jour 12)
+              days={21}
+              properties={allProperties}
+              showPrices={false} // Pas de prix, juste les réservations
               onCellClick={(propertyId, dayIdx) => {
-                alert(`Clic sur jour ${dayIdx + 1} mai`);
+                alert(`Clic sur ${propertyId} jour ${dayIdx + 12} mai`);
               }}
             />
           </Box>

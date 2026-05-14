@@ -54,11 +54,13 @@ export function MultiPropertyInventory({
   days = 30,
   properties,
   onCellClick,
+  showPrices = true,
 }: {
   startDate?: Date;
   days?: number;
   properties: PropertyRow[];
   onCellClick?: (propertyId: string, dayIdx: number) => void;
+  showPrices?: boolean; // false pour Vue Séjour (reservations only), true pour Inventaire
 }) {
   const headers: DayHeader[] = useMemo(() => {
     const out: DayHeader[] = [];
@@ -123,6 +125,7 @@ export function MultiPropertyInventory({
               headers={headers}
               onCellClick={onCellClick}
               rowIndex={idx}
+              showPrices={showPrices}
             />
           ))}
         </Box>
@@ -132,13 +135,14 @@ export function MultiPropertyInventory({
 }
 
 function PropertyRowView({
-  property, days, headers, onCellClick, rowIndex,
+  property, days, headers, onCellClick, rowIndex, showPrices = true,
 }: {
   property: PropertyRow;
   days: number;
   headers: DayHeader[];
   onCellClick?: (propertyId: string, dayIdx: number) => void;
   rowIndex: number;
+  showPrices?: boolean;
 }) {
   const cellWidth = 64; // matches minmax(64px, 1fr)
   const headerHeight = 52; // height of header row
@@ -204,23 +208,27 @@ function PropertyRowView({
               ...(isEnd && { boxShadow: `inset -3px 0 0 ${t.error}` }),
             }}
           >
-            {aiDiff > 0 && status === 'available' && (
-              <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 2, bgcolor: t.primary }} />
-            )}
-            {status === 'available' && (
+            {showPrices && (
               <>
-                <Box sx={{ fontSize: 11, fontWeight: 700, color: t.text2, textAlign: 'center' }}>€{price}</Box>
-                {aiDiff > 0 && (
-                  <Box sx={{ fontSize: 9, fontWeight: 700, color: '#047857', textAlign: 'center', mt: 0.125 }}>
-                    ⬆+€{aiDiff}
-                  </Box>
+                {aiDiff > 0 && status === 'available' && (
+                  <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 2, bgcolor: t.primary }} />
                 )}
-              </>
-            )}
-            {status === 'booked' && (
-              <>
-                <Box sx={{ fontSize: 10, fontWeight: 700, color: '#b91c1c', textAlign: 'center' }}>€{price}</Box>
-                <Box sx={{ fontSize: 9, color: '#b91c1c', textAlign: 'center', fontWeight: 600, mt: 0.125 }}>{guestInitials}</Box>
+                {status === 'available' && (
+                  <>
+                    <Box sx={{ fontSize: 11, fontWeight: 700, color: t.text2, textAlign: 'center' }}>€{price}</Box>
+                    {aiDiff > 0 && (
+                      <Box sx={{ fontSize: 9, fontWeight: 700, color: '#047857', textAlign: 'center', mt: 0.125 }}>
+                        ⬆+€{aiDiff}
+                      </Box>
+                    )}
+                  </>
+                )}
+                {status === 'booked' && (
+                  <>
+                    <Box sx={{ fontSize: 10, fontWeight: 700, color: '#b91c1c', textAlign: 'center' }}>€{price}</Box>
+                    <Box sx={{ fontSize: 9, color: '#b91c1c', textAlign: 'center', fontWeight: 600, mt: 0.125 }}>{guestInitials}</Box>
+                  </>
+                )}
               </>
             )}
           </Box>
