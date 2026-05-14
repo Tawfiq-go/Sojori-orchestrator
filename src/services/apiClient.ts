@@ -14,6 +14,17 @@ const apiClient: AxiosInstance = axios.create({
   }
 });
 
+// 🔒 CORS Security: Add dev token for localhost → production
+const isLocalhost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname === '0.0.0.0'
+);
+if (isLocalhost && import.meta.env.VITE_DEV_TOKEN) {
+  apiClient.defaults.headers.common['X-Dev-Token'] = import.meta.env.VITE_DEV_TOKEN;
+  console.log('🔑 Dev token added for localhost → production (port: ' + window.location.port + ')');
+}
+
 // Intercepteur de requête
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
