@@ -132,6 +132,7 @@ curl -X POST "https://dev.sojori.com/api/v1/orchestrator/reservations/SJ-4OQHVT0
 |---|----------|------------------|-------------------|--------|----------|
 | **1. GESTION RÉSERVATIONS** |
 | 1.1 | `GET /reservations` | ✅ OrchestrationView.jsx | ✅ OrchestrationPlansPage.tsx | ✅ DONE | P0 |
+| 1.1b | `GET /reservations/:id` | ✅ NewWorkflowTimeline.jsx | ✅ OrchestrationTimelinePage.tsx | ✅ DONE | P0 |
 | 1.2 | `POST /reservations/:id/plan-cron/run-once` | ✅ OrchestrationView.jsx | ❌ Non implémenté | 🔴 TODO | P1 |
 | 1.3 | `POST /reservations/:id/recalculate` | ✅ OrchestrationView.jsx | ❌ Non implémenté | 🔴 TODO | P1 |
 | 1.4 | `POST /reservations/:id/cancel` | ✅ OrchestrationView.jsx | ✅ OrchestrationPlansPage.tsx | ✅ DONE | P0 |
@@ -184,11 +185,13 @@ curl -X POST "https://dev.sojori.com/api/v1/orchestrator/reservations/SJ-4OQHVT0
 - **P2**: Utile - Fonctionnalités avancées
 - **P3**: Optionnel - Peut être ignoré
 
-**Stats**:
-- ✅ **Implémentés**: 5 endpoints (10%)
-- 🔴 **À implémenter**: 41 endpoints (82%)
+**Stats** (mise à jour 15 Mai 2026):
+- ✅ **Implémentés**: 6 endpoints (12%) - +1 avec timeline
+- 🔴 **À implémenter**: 40 endpoints (80%)
 - ⚠️ **À ignorer**: 1 endpoint (2%)
 - 📊 **Total**: 50 endpoints identifiés
+
+**Dernière addition**: `GET /reservations/:id` pour OrchestrationTimelinePage (commit `8511c7a`)
 
 ---
 
