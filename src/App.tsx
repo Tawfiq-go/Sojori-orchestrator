@@ -36,6 +36,9 @@ const OrchestrationConfigPage = lazy(() =>
 const OrchestrationPlansPage = lazy(() =>
   import("./pages/OrchestrationPlansPage").then((module) => ({ default: module.default }))
 );
+const OrchestrationTimelinePage = lazy(() =>
+  import("./pages/OrchestrationTimelinePage").then((module) => ({ default: module.OrchestrationTimelinePage }))
+);
 const CommsPage = lazy(() =>
   import('./pages/CommsPage').then((module) => ({ default: module.CommsPage }))
 );
@@ -139,7 +142,7 @@ function App() {
               <Route path="/orchestration" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
               <Route path="/orchestration/plans" element={<LazyRoute><OrchestrationPlansPage /></LazyRoute>} />
               <Route path="/admin/orchestrator" element={<LazyRoute><OrchestrationPlansPage /></LazyRoute>} />
-              <Route path="/orchestration/timeline/:id" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
+              <Route path="/orchestration/timeline/:id" element={<LazyRoute><OrchestrationTimelinePage /></LazyRoute>} />
               <Route path="/orchestration/events" element={<LazyRoute><OrchestrationEventsPage /></LazyRoute>} />
               <Route path="/orchestration/config" element={<LazyRoute><OrchestrationConfigPage /></LazyRoute>} />
 

@@ -3,16 +3,15 @@
 // Liste + détail des plans d'orchestration (srv-orchestrator API)
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Stack, Typography, Button, Alert, CircularProgress,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
   Select, MenuItem, FormControl, InputLabel, Tabs, Tab, Tooltip,
 } from '@mui/material';
-import Panel from '../components/DashboardV2/Panel';
-import PageHeader from '../components/DashboardV2/PageHeader';
-import Badge from '../components/DashboardV2/Badge';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import { Panel, PageHeader, Badge } from '../components/dashboard/DashboardV2.components';
 import {
   getOrchestrationPlans,
   getOrchestrationPlanDetail,
@@ -94,8 +93,8 @@ const WorkflowDetail: React.FC<WorkflowDetailProps> = ({ workflow }) => {
 
   return (
     <Box sx={{ p: 2, bgcolor: t.bg2, borderRadius: 1, border: `1px solid ${t.border}`, mb: 2 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between',  mb: 1.5 }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Typography sx={{ fontSize: 14, fontWeight: 700, color: t.text }}>
             {workflow.categoryDisplayLabel || workflow.category}
           </Typography>
@@ -186,7 +185,7 @@ const WorkflowDetail: React.FC<WorkflowDetailProps> = ({ workflow }) => {
               <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.purple, mb: 0.5 }}>
                 👤 Assignation Staff
               </Typography>
-              <Stack direction="row" spacing={1.5} alignItems="center">
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                 <Typography sx={{ fontSize: 10, color: t.text3 }}>
                   Stratégie: {workflow.actions.assignStaff.config.strategy}
                 </Typography>
@@ -229,7 +228,7 @@ const WorkflowDetail: React.FC<WorkflowDetailProps> = ({ workflow }) => {
         </Box>
       )}
 
-      <Stack direction="row" justifyContent="space-between" sx={{ mt: 1.5, pt: 1, borderTop: `1px solid ${t.border}` }}>
+      <Stack direction="row" sx={{ justifyContent: 'space-between',  mt: 1.5, pt: 1, borderTop: `1px solid ${t.border}` }}>
         <Typography sx={{ fontSize: 10, color: t.text3 }}>
           Créé: {formatDateTime(workflow.createdAt)}
         </Typography>
@@ -283,10 +282,15 @@ const PlanDetailModal: React.FC<PlanDetailModalProps> = ({ open, onClose, reserv
   const failedWorkflows = plan?.workflows.filter(w => w.status === 'FAILED') || [];
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth
-      PaperProps={{ sx: { borderRadius: 2, bgcolor: t.bg1, maxHeight: '90vh' } }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: t.bg1, maxHeight: '90vh' } } }}
+    >
       <DialogTitle sx={{ pb: 1.5, borderBottom: `1px solid ${t.border}` }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Stack>
             <Typography sx={{ fontWeight: 800, fontSize: 18, color: t.text }}>
               🟣 Plan d'Orchestration
@@ -301,7 +305,7 @@ const PlanDetailModal: React.FC<PlanDetailModalProps> = ({ open, onClose, reserv
 
       <DialogContent sx={{ pt: 3 }}>
         {loading && (
-          <Stack alignItems="center" spacing={2} sx={{ py: 4 }}>
+          <Stack spacing={2} sx={{ alignItems: 'center',  py: 4 }}>
             <CircularProgress size={40} sx={{ color: t.purple }} />
             <Typography sx={{ fontSize: 13, color: t.text3 }}>Chargement du plan...</Typography>
           </Stack>
@@ -371,6 +375,7 @@ const OrchestrationPlansPage: React.FC = () => {
   const [plans, setPlans] = useState<OrchestrationPlan[]>([]);
   const [stats, setStats] = useState<OrchestrationStats | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'ALL'>('ACTIVE');
@@ -422,32 +427,32 @@ const OrchestrationPlansPage: React.FC = () => {
         {stats && (
           <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
             <Panel sx={{ flex: 1 }}>
-              <Stack alignItems="center">
+              <Stack sx={{ alignItems: 'center' }}>
                 <Typography sx={{ fontSize: 28, fontWeight: 800, color: t.purple }}>{stats.plans.total}</Typography>
                 <Typography sx={{ fontSize: 12, color: t.text3, fontWeight: 600 }}>Total Plans</Typography>
               </Stack>
             </Panel>
             <Panel sx={{ flex: 1 }}>
-              <Stack alignItems="center">
+              <Stack sx={{ alignItems: 'center' }}>
                 <Typography sx={{ fontSize: 28, fontWeight: 800, color: t.info }}>{stats.plans.active}</Typography>
                 <Typography sx={{ fontSize: 12, color: t.text3, fontWeight: 600 }}>Plans Actifs</Typography>
               </Stack>
             </Panel>
             <Panel sx={{ flex: 1 }}>
-              <Stack alignItems="center">
+              <Stack sx={{ alignItems: 'center' }}>
                 <Typography sx={{ fontSize: 28, fontWeight: 800, color: t.success }}>{stats.plans.completed}</Typography>
                 <Typography sx={{ fontSize: 12, color: t.text3, fontWeight: 600 }}>Terminés</Typography>
               </Stack>
             </Panel>
             <Panel sx={{ flex: 1 }}>
-              <Stack alignItems="center">
+              <Stack sx={{ alignItems: 'center' }}>
                 <Typography sx={{ fontSize: 28, fontWeight: 800, color: t.warning }}>{stats.actions.pending}</Typography>
                 <Typography sx={{ fontSize: 12, color: t.text3, fontWeight: 600 }}>Actions En Attente</Typography>
               </Stack>
             </Panel>
             {stats.plans.withoutPlan > 0 && (
               <Panel sx={{ flex: 1 }}>
-                <Stack alignItems="center">
+                <Stack sx={{ alignItems: 'center' }}>
                   <Typography sx={{ fontSize: 28, fontWeight: 800, color: t.error }}>{stats.plans.withoutPlan}</Typography>
                   <Typography sx={{ fontSize: 12, color: t.text3, fontWeight: 600 }}>Sans Plan</Typography>
                 </Stack>
@@ -458,7 +463,7 @@ const OrchestrationPlansPage: React.FC = () => {
 
         {/* Filters */}
         <Panel sx={{ mb: 2.5 }}>
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
             <FormControl size="small" sx={{ width: 200 }}>
               <InputLabel>Statut</InputLabel>
               <Select value={statusFilter} label="Statut" onChange={(e) => setStatusFilter(e.target.value as any)}>
@@ -489,7 +494,7 @@ const OrchestrationPlansPage: React.FC = () => {
         {/* Table */}
         <Panel>
           {loading && (
-            <Stack alignItems="center" spacing={2} sx={{ py: 4 }}>
+            <Stack spacing={2} sx={{ alignItems: 'center',  py: 4 }}>
               <CircularProgress size={40} sx={{ color: t.purple }} />
               <Typography sx={{ fontSize: 13, color: t.text3 }}>Chargement des plans...</Typography>
             </Stack>
@@ -560,9 +565,14 @@ const OrchestrationPlansPage: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Stack direction="row" spacing={0.5}>
-                            <Tooltip title="Voir détails">
+                            <Tooltip title="Voir détails (modal)">
                               <IconButton size="small" onClick={(e) => { e.stopPropagation(); setSelectedPlan(plan.reservationNumber); }}>
                                 👁️
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Voir timeline complète">
+                              <IconButton size="small" onClick={(e) => { e.stopPropagation(); navigate(`/orchestration/timeline/${plan.reservationNumber}`); }}>
+                                📊
                               </IconButton>
                             </Tooltip>
                             {plan.orchestrationStatus !== 'completed' && !plan.planNotCreated && (
@@ -606,7 +616,7 @@ interface InfoRowProps {
 }
 
 const InfoRow: React.FC<InfoRowProps> = ({ label, value }) => (
-  <Stack direction="row" justifyContent="space-between">
+  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
     <Typography sx={{ fontSize: 12, color: t.text3, fontWeight: 600 }}>{label}</Typography>
     <Typography sx={{ fontSize: 12, color: t.text, fontWeight: 600 }}>{value || '-'}</Typography>
   </Stack>
