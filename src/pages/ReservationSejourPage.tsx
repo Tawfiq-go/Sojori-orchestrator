@@ -1,28 +1,53 @@
+// ════════════════════════════════════════════════════════════════════
+// Sojori — Reservation Sejour Page · édition « Atelier 2026 »
+// Wrapper de page avec header sticky, infobar, 4 onglets.
+// Tous les onglets injectés via slots — pas de logique métier ici.
+// ════════════════════════════════════════════════════════════════════
+
 import { useState, useEffect } from 'react';
-import { DashboardWrapper } from '../components/DashboardWrapper';
-import {
-  PageHeader, Panel, OrchestrationTimeline, TLEvent, TLDayLabel,
-  Badge, Revenue, AICard,
-  btnGhostSx, btnSmSx, btnAiSx, btnPrimarySx,
-  tokens as t,
-} from '../components/dashboard/DashboardV2.components';
-import { Box, Button, Stack, Typography, Avatar, Tabs, Tab, CircularProgress, Alert } from '@mui/material';
-import { useParams } from 'react-router-dom';
-import TravelersSection from '../components/sections/TravelersSection';
-import FinancialSection from '../components/sections/FinancialSection';
-import { MultiPropertyInventory, type PropertyRow } from '../components/MultiPropertyInventory';
+import { Box, Stack, Typography, Tabs, Tab, IconButton, Button, Chip, Tooltip, useTheme, useMediaQuery, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
+import { ArrowBack, Edit, CalendarToday, Person, Email, Save, Close, Warning } from '@mui/icons-material';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import reservationsService from '../services/reservationsService';
-import type { ReservationDetail } from '../types/reservations.types';
+import { DashboardWrapper } from '../components/DashboardWrapper';
+import { GuestInfoTab } from '../components/reservation/GuestInfoTab';
+import { FinancierTab } from '../components/reservation/FinancierTab';
+import { SejourTab } from '../components/reservation/SejourTab';
+
+const T = {
+  primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a',
+  primaryTint: 'rgba(184,133,26,0.10)',
+  bg0: '#f6f5f1', bg1: '#ffffff', bg2: '#fafaf7', bg3: '#f0eee8',
+  text: '#14110a', text2: '#55504a', text3: '#7a756c', text4: '#a8a299',
+  border: 'rgba(20,17,10,0.07)',
+  success: '#0a8f5e', warning: '#c46506', error: '#c81e1e', info: '#0673b3',
+};
+
+const TAB_NAMES = ['guest-info', 'sejour', 'messages', 'financier'];
 
 export function ReservationSejourPage() {
+  const navigate = useNavigate();
   const { id } = useParams();
-  const [currentTab, setCurrentTab] = useState(0);
-  const [reservationData, setReservationData] = useState<ReservationDetail | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // Initialize tab from URL query param
+  const initialTab = TAB_NAMES.indexOf(searchParams.get('tab') || 'guest-info');
+  const [tab, setTab] = useState(initialTab >= 0 ? initialTab : 0);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [reservationDetails, setReservationDetails] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ─────────────── FETCH RESERVATION DETAILS ───────────────
+  // Modal confirmation annulation
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  // Edited data for save
+  const [editedData, setEditedData] = useState<any>({});
+
   useEffect(() => {
     if (!id) {
       setError('ID de réservation manquant');
@@ -35,9 +60,8 @@ export function ReservationSejourPage() {
       setError(null);
 
       try {
-        const response = await reservationsService.getDetail(id);
-        setReservationData(response.reservation);
-        toast.success('Réservation chargée avec succès');
+        const response = await reservationsService.getById(id);
+        setReservationDetails(response);
       } catch (err: any) {
         console.error('Error fetching reservation:', err);
         setError(err.message || 'Erreur lors du chargement de la réservation');
@@ -50,449 +74,314 @@ export function ReservationSejourPage() {
     fetchReservationDetail();
   }, [id]);
 
-  // ─────────────── LOADING STATE ───────────────
+  // Handler: Annuler la réservation
+  const handleCancelReservation = async () => {
+    if (!id) return;
+
+    setIsCancelling(true);
+    try {
+      const result = await reservationsService.cancel(id);
+
+      if (result.success) {
+        toast.success('Réservation annulée avec succès');
+        setShowCancelModal(false);
+        // Recharger les données
+        const response = await reservationsService.getById(id);
+        setReservationDetails(response);
+      } else {
+        toast.error(result.message || 'Erreur lors de l\'annulation');
+      }
+    } catch (err: any) {
+      console.error('Error cancelling reservation:', err);
+      toast.error(err.message || 'Erreur lors de l\'annulation');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // Handler: Sauvegarder les modifications
+  const handleSaveReservation = async () => {
+    if (!id || Object.keys(editedData).length === 0) {
+      toast.info('Aucune modification à sauvegarder');
+      return;
+    }
+
+    try {
+      const result = await reservationsService.update(id, editedData);
+
+      if (result.success) {
+        toast.success('Réservation mise à jour avec succès');
+        setIsEditMode(false);
+        setEditedData({});
+        // Recharger les données
+        const response = await reservationsService.getById(id);
+        setReservationDetails(response);
+      } else {
+        toast.error(result.message || 'Erreur lors de la mise à jour');
+      }
+    } catch (err: any) {
+      console.error('Error updating reservation:', err);
+      toast.error(err.message || 'Erreur lors de la mise à jour');
+    }
+  };
+
+  const statusBadge = reservationDetails?.status === 'Confirmed' ? {
+    bg: 'rgba(10,143,94,0.12)', color: T.success, label: 'Confirmé',
+  } : { bg: 'rgba(196,101,6,0.12)', color: T.warning, label: reservationDetails?.status || 'En attente' };
+
+  // Loading state
   if (isLoading) {
     return (
-      <DashboardWrapper breadcrumb={['Réservations', 'Détails', `#${id || '...'}`]}>
+      <DashboardWrapper breadcrumb={['Activité', 'Réservations', '...']}>
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-          <Stack spacing={2} alignItems="center">
-            <CircularProgress size={60} sx={{ color: t.primary }} />
-            <Typography sx={{ fontSize: 16, color: t.text3 }}>
-              Chargement de la réservation...
-            </Typography>
-          </Stack>
+          <CircularProgress size={60} sx={{ color: T.primary }} />
         </Box>
       </DashboardWrapper>
     );
   }
 
-  // ─────────────── ERROR STATE ───────────────
-  if (error || !reservationData) {
+  // Error state
+  if (error || !reservationDetails) {
     return (
-      <DashboardWrapper breadcrumb={['Réservations', 'Détails', `#${id || '...'}`]}>
-        <Box sx={{ p: 3 }}>
-          <Alert severity="error">
-            {error || 'Réservation introuvable'}
-          </Alert>
-          <Button
-            onClick={() => window.history.back()}
-            sx={{ ...btnGhostSx, mt: 2 }}
-          >
-            ← Retour
-          </Button>
-        </Box>
+      <DashboardWrapper breadcrumb={['Activité', 'Réservations', id || '']}>
+        <Alert severity="error" sx={{ m: 3 }}>
+          {error || 'Réservation non trouvée'}
+        </Alert>
       </DashboardWrapper>
     );
   }
-
-  // ─────────────── EXTRACT DATA ───────────────
-  const guest = {
-    name: reservationData.guest_name,
-    initials: reservationData.guest_name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2),
-    country: reservationData.guest_country ? `🌐 ${reservationData.guest_country}` : '',
-    email: reservationData.guest_email,
-    phone: reservationData.guest_phone,
-    vip: false, // TODO: Ajouter champ VIP au backend
-  };
-
-  const property = {
-    name: reservationData.listing_name,
-    city: '', // TODO: Extraire depuis listing
-    address: '', // TODO: Extraire depuis listing
-    color: 'gold',
-  };
-
-  // Calculer nombre de nuits et jour actuel
-  const arrivalDate = new Date(reservationData.arrival_date_raw);
-  const departureDate = new Date(reservationData.departure_date_raw);
-  const today = new Date();
-  const nights = reservationData.nights || Math.ceil((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24));
-  const currentDay = today >= arrivalDate && today <= departureDate
-    ? Math.ceil((today.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
-    : 0;
-
-  const dates = {
-    checkIn: reservationData.arrival_date,
-    checkOut: reservationData.departure_date,
-    nights,
-    currentDay,
-  };
-
-  const pricing = {
-    total: reservationData.total_price,
-    perNight: reservationData.total_price ? `${(parseFloat(reservationData.total_price.replace(/[^\d.]/g, '')) / nights).toFixed(0)}€` : 'N/A',
-    cleaning: 'N/A', // TODO: Extraire depuis services
-    commission: 'N/A', // TODO: Calculer commission
-    net: 'N/A', // TODO: Calculer net
-  };
-
-  const status = reservationData.status === 'confirmed' ? 'active' : reservationData.status;
-  const source = reservationData.channel_name || 'direct';
-  const confirmationCode = reservationData.reservation_number;
-
-  // Mock calendar data (TODO: Fetcher depuis API pour période autour de cette réservation)
-  const allProperties: PropertyRow[] = [
-    {
-      id: 'p1',
-      name: reservationData.listing_name,
-      city: 'Marrakech',
-      photoColor: 'gold',
-      occupancyPct: 87,
-      monthRevenue: '€8,420',
-      bookedRanges: [[arrivalDate.getDate(), departureDate.getDate()]],
-      closedDays: [],
-      reservations: [
-        {
-          id: reservationData.id,
-          guestName: reservationData.guest_name,
-          guestFlag: reservationData.guest_country || '',
-          amount: reservationData.total_price,
-          startDay: arrivalDate.getDate(),
-          endDay: departureDate.getDate(),
-          status: reservationData.status,
-        },
-      ],
-    },
-  ];
-
-  // Icon presets (same as OrchestrationPage)
-  const ICO = {
-    completed: { iconBg: t.successTint,  iconColor: t.success },
-    pending:   { iconBg: t.warningTint,  iconColor: t.warning },
-    info:      { iconBg: t.infoTint,     iconColor: t.info    },
-    ai:        { iconBg: t.aiTint,       iconColor: t.ai      },
-    future:    { iconBg: t.bg2,          iconColor: t.text4   },
-    error:     { iconBg: t.errorTint,    iconColor: t.error   },
-  };
-
-  // Status badge
-  const statusBadge = status === 'active' || status === 'confirmed'
-    ? <Badge variant="success" dot>Active{currentDay > 0 ? ` · Jour ${currentDay}/${nights}` : ''}</Badge>
-    : <Badge variant="warning">Terminée</Badge>;
 
   return (
-    <DashboardWrapper breadcrumb={['Réservations', 'Liste', `#${id}`]}>
-      {/* Page Header */}
-      <PageHeader title={`Réservation #${confirmationCode}`} count={status === 'active' ? 'ACTIVE' : 'TERMINÉE'}>
-        <Button sx={btnGhostSx}>📧 Envoyer message</Button>
-        <Button sx={btnGhostSx}>📋 Modifier</Button>
-        <Button sx={{ ...btnGhostSx, color: t.error, borderColor: t.errorTint }}>❌ Annuler</Button>
-      </PageHeader>
-
-      {/* Hero Card - Guest & Property Info */}
-      <Stack direction="row" alignItems="center" spacing={2.5} sx={{
-        mb: 2.5, p: '18px 20px',
-        bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '12px',
-        boxShadow: '0 2px 6px rgba(26,20,8,0.04)',
+    <DashboardWrapper breadcrumb={['Activité', 'Réservations', reservationDetails.reservationNumber || id || '']}>
+      {/* ─── Header sticky ────────────────────────────────────── */}
+      <Box sx={{
+        position: 'sticky', top: 0, zIndex: 10,
+        bgcolor: T.bg1, borderBottom: `1px solid ${T.border}`,
+        px: { xs: 2, md: 3 }, py: 1.5,
       }}>
-        {/* Property Photo */}
-        <Box sx={{
-          width: 72, height: 72, borderRadius: '11px',
-          background: 'linear-gradient(135deg,#fde68a,#d97706)',
-          flexShrink: 0,
-          boxShadow: '0 4px 12px rgba(217,119,6,0.25)',
-        }} />
-
-        {/* Guest Info */}
-        <Box sx={{ flex: 1 }}>
-          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 0.5 }}>
-            <Avatar sx={{
-              width: 36, height: 36, fontSize: 13, fontWeight: 700,
-              background: 'linear-gradient(135deg,#c4b5fd,#8b5cf6)',
-            }}>{guest.initials}</Avatar>
-            <Typography sx={{ fontSize: 17, fontWeight: 700 }}>
-              {guest.name} {guest.country}
-            </Typography>
-            {guest.vip && <Badge variant="gold">VIP</Badge>}
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+            <IconButton size="small" onClick={() => navigate('/reservations')} sx={{ color: T.text2 }}>
+              <ArrowBack sx={{ fontSize: 20 }} />
+            </IconButton>
+            <Box>
+              <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: T.text3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                Détail réservation
+              </Typography>
+              <Typography sx={{ fontSize: 16, fontWeight: 700, color: T.text, fontFamily: '"Geist Mono", monospace' }}>
+                {reservationDetails.reservationNumber || '—'}
+              </Typography>
+            </Box>
           </Stack>
-          <Typography sx={{
-            fontSize: 12.5, color: t.text3, fontFamily: 'Geist Mono',
-            letterSpacing: 0.3,
-          }}>
-            {property.name} · {reservationData.ota}
-          </Typography>
-          <Typography sx={{
-            fontSize: 12.5, color: t.text2, mt: 0.5,
-            fontFamily: 'Geist Mono', letterSpacing: 0.3,
-          }}>
-            {dates.checkIn} → {dates.checkOut} · {dates.nights} nuits · {pricing.total}
-          </Typography>
-        </Box>
 
-        {/* Status Badge */}
-        {statusBadge}
-      </Stack>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
+            {/* Icon actions */}
+            <Stack direction="row" sx={{ gap: 0, mr: 1, borderRight: `1px solid ${T.border}`, pr: 1 }}>
+              <Tooltip title="Modifier">
+                <IconButton size="small" onClick={() => setIsEditMode(true)} sx={{ color: T.text2 }}>
+                  <Edit sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Calendrier">
+                <IconButton size="small" sx={{ color: T.text2 }}>
+                  <CalendarToday sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Profil voyageur">
+                <IconButton size="small" sx={{ color: T.text2 }}>
+                  <Person sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Email voyageur">
+                <IconButton size="small" sx={{ color: T.text2 }}>
+                  <Email sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+            </Stack>
 
-      {/* Tabs - Vue Calendrier / Vue Timeline */}
-      <Box sx={{ mb: 2 }}>
+            {/* Action buttons */}
+            {isEditMode ? (
+              <Stack direction="row" sx={{ gap: 1 }}>
+                <Button
+                  size="small"
+                  startIcon={<Close sx={{ fontSize: 16 }} />}
+                  onClick={() => {
+                    setIsEditMode(false);
+                    setEditedData({});
+                  }}
+                  sx={{
+                    textTransform: 'none', fontWeight: 600, color: T.text2,
+                    border: `1px solid ${T.border}`,
+                  }}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<Save sx={{ fontSize: 16 }} />}
+                  variant="contained"
+                  onClick={handleSaveReservation}
+                  sx={{
+                    textTransform: 'none', fontWeight: 600,
+                    background: `linear-gradient(180deg, #cb9b2c 0%, ${T.primary} 100%)`,
+                    color: T.text, boxShadow: '0 1px 2px rgba(135,97,25,0.30)',
+                    '&:hover': { background: `linear-gradient(180deg, #d4a432 0%, ${T.primary} 100%)` },
+                  }}
+                >
+                  Sauvegarder
+                </Button>
+              </Stack>
+            ) : (
+              <Stack direction="row" sx={{ gap: 0.75 }}>
+                <Button
+                  size="small"
+                  onClick={() => setShowCancelModal(true)}
+                  sx={{ textTransform: 'none', fontWeight: 600, color: T.error, '&:hover': { bgcolor: 'rgba(200,30,30,0.06)' } }}
+                >
+                  Annuler
+                </Button>
+                <Button size="small" variant="outlined" sx={{ textTransform: 'none', fontWeight: 600, borderColor: T.border, color: T.text2 }}>Rejeter</Button>
+                <Button size="small" variant="contained" sx={{
+                  textTransform: 'none', fontWeight: 600,
+                  background: `linear-gradient(180deg, #cb9b2c 0%, ${T.primary} 100%)`,
+                  color: T.text, boxShadow: '0 1px 2px rgba(135,97,25,0.30)',
+                  '&:hover': { background: `linear-gradient(180deg, #d4a432 0%, ${T.primary} 100%)` },
+                }}>Accepter</Button>
+              </Stack>
+            )}
+          </Stack>
+        </Stack>
+      </Box>
+
+      {/* ─── Info bar ─────────────────────────────────────────── */}
+      <Box sx={{
+        bgcolor: T.bg2, borderBottom: `1px solid ${T.border}`,
+        px: { xs: 2, md: 3 }, py: 1.5,
+      }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1 }}>
+          <Box>
+            <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              Reservation Details
+            </Typography>
+            <Typography sx={{ fontSize: 15, fontWeight: 600, color: T.text, mt: 0.25 }}>
+              {reservationDetails?.guestName || 'Voyageur'} · {reservationDetails?.arrivalDate ? new Date(reservationDetails.arrivalDate).toLocaleDateString('fr-FR') : '—'}
+            </Typography>
+          </Box>
+          <Chip label={statusBadge.label} sx={{ bgcolor: statusBadge.bg, color: statusBadge.color, fontWeight: 700, fontSize: 12 }} />
+        </Stack>
+      </Box>
+
+      {/* ─── Tabs ─────────────────────────────────────────────── */}
+      <Box sx={{ bgcolor: T.bg1, borderBottom: `1px solid ${T.border}`, px: { xs: 1, md: 2 } }}>
         <Tabs
-          value={currentTab}
-          onChange={(_, newValue) => setCurrentTab(newValue)}
+          value={tab}
+          onChange={(_, v) => {
+            setTab(v);
+            setSearchParams({ tab: TAB_NAMES[v] });
+          }}
+          variant={isMobile ? 'scrollable' : 'standard'}
+          scrollButtons="auto"
           sx={{
-            borderBottom: 1,
-            borderColor: t.border,
+            minHeight: 42,
             '& .MuiTab-root': {
-              textTransform: 'none',
-              fontWeight: 600,
-              fontSize: 14,
+              textTransform: 'none', fontWeight: 600, fontSize: 13,
+              minHeight: 42, letterSpacing: '0.005em',
+              color: T.text2,
+              '&.Mui-selected': { color: T.text },
             },
+            '& .MuiTabs-indicator': { backgroundColor: T.primary, height: 2.5, borderRadius: 1 },
           }}
         >
-          <Tab label="📅 Vue Calendrier" />
-          <Tab label="⏱️ Vue Timeline" />
+          <Tab label="Guest Info" />
+          <Tab label="Séjour" />
+          <Tab label="Messages" />
+          <Tab label="Financier" />
         </Tabs>
       </Box>
 
-      {/* Main Grid - Left: Calendar or Timeline / Right: Details */}
-      <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr', lg: '1fr 340px' },
-        gap: 2.25,
-      }}>
-
-        {/* LEFT - Calendar or Timeline */}
-        {currentTab === 0 ? (
-          // Calendar View - Use MultiPropertyInventory
-          <Box>
-            <MultiPropertyInventory
-              startDate={new Date(arrivalDate.getFullYear(), arrivalDate.getMonth(), 1)}
-              days={31}
-              properties={allProperties}
-              showPrices={false}
-              onCellClick={(propertyId, dayIdx) => {
-                alert(`Clic sur ${propertyId} jour ${dayIdx + 1}`);
-              }}
-            />
-            <Alert severity="info" sx={{ mt: 2 }}>
-              🚧 Calendrier en cours d'intégration avec l'API. Pour l'instant, affichage de cette réservation uniquement.
-            </Alert>
+      {/* ─── Content ──────────────────────────────────────────── */}
+      <Box sx={{ bgcolor: T.bg0 }}>
+        {tab === 0 && <GuestInfoTab reservationDetails={reservationDetails} isEditMode={isEditMode} />}
+        {tab === 1 && <SejourTab reservationDetails={reservationDetails} />}
+        {tab === 2 && (
+          <Box sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box sx={{ p: 6, textAlign: 'center', bgcolor: T.bg1, border: `1px dashed ${T.borderStrong || 'rgba(20,17,10,0.14)'}`, borderRadius: 1.5 }}>
+              <Typography sx={{ fontSize: 32, mb: 1 }}>💬</Typography>
+              <Typography sx={{ fontSize: 15, fontWeight: 700, color: T.text2 }}>Messages · WhatsApp / Chat / Reviews / Templates</Typography>
+              <Typography sx={{ fontSize: 12.5, color: T.text3, mt: 0.5 }}>À brancher : composant MessagesTab</Typography>
+            </Box>
           </Box>
-        ) : (
-          // Timeline View
-          <Panel title="Chronologie du séjour">
-          {/* ──── Réservation confirmée ──── */}
-          <TLDayLabel>{dates.checkIn} · Réservation confirmée</TLDayLabel>
-          <OrchestrationTimeline>
-            <TLEvent
-              time={<><strong>10:14</strong> · {dates.checkIn}</>}
-              icon="✓" {...ICO.completed}
-              title="Réservation confirmée"
-              badge={<Badge variant="success">Auto</Badge>}
-              meta={`Source : <strong>${source.charAt(0).toUpperCase() + source.slice(1)}</strong> · ID <strong>${confirmationCode}</strong> · Montant <strong>${pricing.total}</strong>`}
-            />
-            <TLEvent
-              time={<><strong>10:14</strong> · +18s</>}
-              icon="✨" {...ICO.ai}
-              title="Workflow orchestrateur déclenché"
-              badge={<Badge variant="ai">AI</Badge>}
-              meta="<strong>Workflow standard</strong> · Tâches générées automatiquement"
-            />
-          </OrchestrationTimeline>
-
-          {/* ──── Check-in ──── */}
-          {reservationData.arrival_declared !== 'Pas déclaré' && (
-            <>
-              <TLDayLabel>{dates.checkIn} · Check-in</TLDayLabel>
-              <OrchestrationTimeline>
-                <TLEvent
-                  time={<><strong>{reservationData.arrival_declared}</strong></>}
-                  icon="🛬" {...ICO.completed}
-                  title={`${guest.name} a effectué son check-in`}
-                  badge={<Badge variant="success">Confirmé</Badge>}
-                  meta={`Heure déclarée : <strong>${reservationData.arrival_declared}</strong>`}
-                />
-              </OrchestrationTimeline>
-            </>
-          )}
-
-          {/* ──── Check-out ──── */}
-          {reservationData.departure_declared !== 'Pas déclaré' ? (
-            <>
-              <TLDayLabel>{dates.checkOut} · Check-out</TLDayLabel>
-              <OrchestrationTimeline>
-                <TLEvent
-                  time={<><strong>{reservationData.departure_declared}</strong></>}
-                  icon="🛫" {...ICO.completed}
-                  title="Check-out effectué"
-                  badge={<Badge variant="success">Confirmé</Badge>}
-                  meta={`Heure déclarée : <strong>${reservationData.departure_declared}</strong>`}
-                />
-              </OrchestrationTimeline>
-            </>
-          ) : (
-            <>
-              <TLDayLabel>{dates.checkOut} · Check-out prévu</TLDayLabel>
-              <OrchestrationTimeline>
-                <TLEvent
-                  future
-                  time={<><strong>{reservationData.check_out_time_chosen || '11:00'}</strong></>}
-                  icon="🛫" {...ICO.future}
-                  title="Check-out prévu"
-                  badge={<Badge variant="warning">À venir</Badge>}
-                  meta={`Heure prévue : <strong>${reservationData.check_out_time_chosen || '11:00'}</strong>`}
-                />
-              </OrchestrationTimeline>
-            </>
-          )}
-
-          <Alert severity="info" sx={{ mt: 2 }}>
-            🚧 Timeline enrichie en cours d'intégration. Affichage basique des événements principaux.
-          </Alert>
-          </Panel>
         )}
-
-        {/* RIGHT - Infos & Actions */}
-        <Stack spacing={1.75}>
-
-          {/* Résumé réservation */}
-          <Panel sx={{ p: 2 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Résumé réservation</Typography>
-            <Stack spacing={1.125} sx={{ fontSize: 12 }}>
-              <KV k="Statut" v={statusBadge} />
-              {currentDay > 0 && <KV k="Phase" v={`Jour ${currentDay}/${nights}`} mono />}
-              <KV k="Check-in" v={dates.checkIn} mono />
-              <KV k="Check-out" v={dates.checkOut} mono />
-              <KV k="Nuits" v={`${nights}`} />
-              <KV k="Source" v={reservationData.ota} />
-              <KV k="Code" v={confirmationCode} mono />
-              {reservationData.door_code && reservationData.door_code !== 'Non défini' && (
-                <KV k="Code porte" v={reservationData.door_code} mono divider />
-              )}
-            </Stack>
-          </Panel>
-
-          {/* Tarification */}
-          <Panel sx={{ p: 2 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Tarification</Typography>
-            <Stack spacing={1.125} sx={{ fontSize: 12 }}>
-              <KV k="Total voyageur" v={<Revenue amount={pricing.total} />} />
-              <KV k="Par nuit" v={<Revenue amount={pricing.perNight} />} />
-              <KV k="Déjà payé" v={<Revenue amount={`${reservationData.already_paid || 0}€`} />} />
-              <KV k="Statut paiement" v={reservationData.payment_status} divider />
-            </Stack>
-          </Panel>
-
-          {/* Contact guest */}
-          <Panel sx={{ p: 2 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Contact</Typography>
-            <Stack spacing={1.125} sx={{ fontSize: 12 }}>
-              <KV k="Email" v={guest.email} />
-              <KV k="Téléphone" v={guest.phone} mono />
-              {reservationData.guest_phone_whatsapp && (
-                <KV k="WhatsApp" v={reservationData.guest_phone_whatsapp} mono />
-              )}
-              {reservationData.guest_language && (
-                <KV k="Langue" v={reservationData.guest_language.toUpperCase()} />
-              )}
-            </Stack>
-          </Panel>
-
-          {/* Voyageurs */}
-          {(reservationData.adults || reservationData.children || reservationData.infants) && (
-            <Panel sx={{ p: 2 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Voyageurs</Typography>
-              <Stack spacing={1.125} sx={{ fontSize: 12 }}>
-                <KV k="Total" v={reservationData.guests} />
-                {reservationData.adults && <KV k="Adultes" v={`${reservationData.adults}`} />}
-                {reservationData.children && reservationData.children > 0 && <KV k="Enfants" v={`${reservationData.children}`} />}
-                {reservationData.infants && reservationData.infants > 0 && <KV k="Bébés" v={`${reservationData.infants}`} />}
-                {reservationData.police_members > 0 && (
-                  <KV k="Enregistrés police" v={`${reservationData.police_members}`} divider />
-                )}
-              </Stack>
-            </Panel>
-          )}
-
-          {/* AI Card */}
-          <AICard
-            title="Sojori AI"
-            footer={
-              <Stack spacing={0.75}>
-                <Button sx={{ ...btnAiSx, ...btnSmSx, width: '100%', justifyContent: 'center' }}>
-                  ✨ Générer message
-                </Button>
-                <Button sx={{ ...btnGhostSx, ...btnSmSx, width: '100%', justifyContent: 'center' }}>
-                  Voir recommandations
-                </Button>
-              </Stack>
-            }
-          >
-            <Typography sx={{ fontSize: 12, color: t.text2, lineHeight: 1.55 }}>
-              {currentDay > 0 && currentDay < nights
-                ? `Le voyageur est en <strong>J+${currentDay}</strong>. Vous pouvez lui proposer des services supplémentaires.`
-                : `Séjour ${status === 'active' ? 'en cours' : 'terminé'}.`}
-            </Typography>
-          </AICard>
-
-          {/* Actions rapides */}
-          <Panel sx={{ p: 2 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>Actions rapides</Typography>
-            <Stack spacing={0.875}>
-              <Button sx={{ ...btnGhostSx, ...btnSmSx, width: '100%', justifyContent: 'flex-start' }}>
-                💬 Ouvrir WhatsApp
-              </Button>
-              <Button sx={{ ...btnGhostSx, ...btnSmSx, width: '100%', justifyContent: 'flex-start' }}>
-                📋 Modifier réservation
-              </Button>
-              <Button sx={{ ...btnGhostSx, ...btnSmSx, width: '100%', justifyContent: 'flex-start' }}>
-                📊 Voir orchestration
-              </Button>
-              <Button sx={{ ...btnGhostSx, ...btnSmSx, width: '100%', justifyContent: 'flex-start', color: t.error }}>
-                ❌ Annuler séjour
-              </Button>
-            </Stack>
-          </Panel>
-
-          {/* Voyageurs - TravelersSection from Claude Design */}
-          <Box sx={{ mt: 2.5 }}>
-            <TravelersSection
-              reservationId={id || ''}
-              onAdd={(group) => alert(`Ajouter voyageur (${group}) - MOCK`)}
-              onEdit={(traveler) => alert(`Éditer voyageur ${traveler.firstName} - MOCK`)}
-              onDelete={(deleteId) => {
-                if (confirm('Supprimer ce voyageur ?')) {
-                  alert(`Supprimé ${deleteId} - MOCK`);
-                }
-              }}
-            />
-          </Box>
-
-          {/* Finances - FinancialSection from Claude Design */}
-          <Box sx={{ mt: 2.5 }}>
-            <FinancialSection
-              totalGuest={parseFloat(pricing.total.replace(/[^\d.]/g, '')) || 0}
-              commission={0} // TODO: Calculer commission
-              netOwner={parseFloat(pricing.total.replace(/[^\d.]/g, '')) || 0}
-              currency="€"
-              onAddPayment={() => alert('Ajouter paiement - MOCK')}
-              onAddCharge={() => alert('Ajouter frais - MOCK')}
-            />
-          </Box>
-        </Stack>
+        {tab === 3 && <FinancierTab reservationDetails={reservationDetails} isEditMode={isEditMode} />}
       </Box>
+
+      {/* Modal de confirmation d'annulation */}
+      <Dialog
+        open={showCancelModal}
+        onClose={() => !isCancelling && setShowCancelModal(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '16px',
+            boxShadow: '0 24px 48px rgba(20,17,10,0.12)',
+          },
+        }}
+      >
+        <DialogTitle sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          fontSize: 18,
+          fontWeight: 700,
+          color: T.text,
+          pb: 1,
+        }}>
+          <Warning sx={{ color: T.warning, fontSize: 28 }} />
+          Confirmer l'annulation
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: T.text2, fontSize: 14, lineHeight: 1.6 }}>
+            Êtes-vous sûr de vouloir annuler cette réservation ?
+            <br />
+            <strong>Réservation : {reservationDetails?.reservationNumber || id}</strong>
+            <br />
+            <br />
+            Cette action changera le statut de la réservation à <strong>"Annulée par Admin"</strong>.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5, pt: 1 }}>
+          <Button
+            onClick={() => setShowCancelModal(false)}
+            disabled={isCancelling}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              color: T.text2,
+              '&:hover': { bgcolor: 'rgba(20,17,10,0.05)' },
+            }}
+          >
+            Non, garder
+          </Button>
+          <Button
+            onClick={handleCancelReservation}
+            disabled={isCancelling}
+            variant="contained"
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              bgcolor: T.error,
+              color: '#fff',
+              '&:hover': { bgcolor: '#a81717' },
+              '&:disabled': { bgcolor: 'rgba(200,30,30,0.4)' },
+            }}
+          >
+            {isCancelling ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Oui, annuler'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </DashboardWrapper>
   );
 }
 
-// ─── Helper component ───────────────────────────────────────────
-type KVProps = { k: string; v: React.ReactNode; mono?: boolean; divider?: boolean };
-
-function KV({ k, v, mono, divider }: KVProps) {
-  return (
-    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{
-      pt: divider ? 1.125 : 0,
-      borderTop: divider ? `1px dashed ${t.border}` : 'none',
-    }}>
-      <Typography sx={{ color: t.text3, fontSize: 12 }}>{k}</Typography>
-      <Box sx={{
-        fontWeight: 600, fontSize: 12,
-        fontFamily: mono ? 'Geist Mono' : 'inherit',
-      }}>{v}</Box>
-    </Stack>
-  );
-}
+export default ReservationSejourPage;
