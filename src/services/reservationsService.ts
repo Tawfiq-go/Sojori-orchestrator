@@ -241,15 +241,22 @@ class ReservationsService {
    * Récupère le détail complet d'une réservation
    */
   async getById(reservationId: string): Promise<Reservation> {
+    const startTime = performance.now();
+    console.log(`[ReservationsService] Fetching reservation ${reservationId}...`);
+
     try {
       const url = `${BASE_URL}/api/v1/reservations/by-id/${reservationId}`;
 
       const response = await apiClient.get(url);
 
+      const duration = performance.now() - startTime;
+      console.log(`[ReservationsService] ✅ Fetched reservation in ${duration.toFixed(0)}ms`);
+
       // ⚠️ FIX: Backend retourne { success, message, reservation }
       return response.data.reservation;
     } catch (error) {
-      console.error('Error fetching reservation by ID:', error);
+      const duration = performance.now() - startTime;
+      console.error(`[ReservationsService] ❌ Error after ${duration.toFixed(0)}ms:`, error);
       throw error;
     }
   }

@@ -56,14 +56,21 @@ export function ReservationSejourPage() {
     }
 
     const fetchReservationDetail = async () => {
+      const startTime = performance.now();
+      console.log(`[ReservationSejourPage] Starting fetch for reservation ${id}`);
+
       setIsLoading(true);
       setError(null);
 
       try {
         const response = await reservationsService.getById(id);
         setReservationDetails(response);
+
+        const duration = performance.now() - startTime;
+        console.log(`[ReservationSejourPage] ✅ Page loaded in ${duration.toFixed(0)}ms`);
       } catch (err: any) {
-        console.error('Error fetching reservation:', err);
+        const duration = performance.now() - startTime;
+        console.error(`[ReservationSejourPage] ❌ Error after ${duration.toFixed(0)}ms:`, err);
         setError(err.message || 'Erreur lors du chargement de la réservation');
         toast.error('Erreur lors du chargement de la réservation');
       } finally {
@@ -85,9 +92,8 @@ export function ReservationSejourPage() {
       if (result.success) {
         toast.success('Réservation annulée avec succès');
         setShowCancelModal(false);
-        // Recharger les données
-        const response = await reservationsService.getById(id);
-        setReservationDetails(response);
+        // Rediriger vers la liste des réservations
+        navigate('/reservations');
       } else {
         toast.error(result.message || 'Erreur lors de l\'annulation');
       }
