@@ -332,10 +332,9 @@ class ReservationsService {
    */
   async update(reservationId: string, data: any): Promise<{ success: boolean; data?: any; message?: string }> {
     try {
-      const response = await apiClient.put(
-        `/api/v1/reservations/update/${reservationId}`,
-        data
-      );
+      const url = `${BASE_URL}/api/v1/reservations/update/${reservationId}`;
+
+      const response = await apiClient.put(url, data);
 
       if (response.data.success) {
         return { success: true, data: response.data.data || response.data };
@@ -362,10 +361,9 @@ class ReservationsService {
         ...data,
       };
 
-      const response = await apiClient.put(
-        `/api/v1/reservations/cancel/${reservationId}`,
-        payload
-      );
+      const url = `${BASE_URL}/api/v1/reservations/cancel/${reservationId}`;
+
+      const response = await apiClient.put(url, payload);
 
       if (response.data.success) {
         return { success: true, data: response.data.data || response.data };
