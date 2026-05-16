@@ -14,7 +14,6 @@ import { MultiPropertyInventory, type PropertyRow, type ReservationBlock } from 
 import { useAuth } from '../hooks/useAuth';
 import reservationsService from '../services/reservationsService';
 import type { Reservation } from '../types/reservations.types';
-import { filterPlanningReservations } from '../utils/filterReservations';
 
 export function ReservationsPlanningPage() {
   const { user } = useAuth();
@@ -39,12 +38,14 @@ export function ReservationsPlanningPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await reservationsService.getList({ limit: 1000 });
 
-      // Filtrer pour le planning: seulement Confirmed et Pending
-      const planningReservations = filterPlanningReservations(response.data as any[]);
+      // ✅ Filtrage backend: demander seulement Confirmed et Pending
+      const response = await reservationsService.getList({
+        limit: 1000,
+        status: 'Confirmed,Pending'
+      });
 
-      setReservations(planningReservations);
+      setReservations(response.data as any[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur chargement réservations');
       setReservations([]);
@@ -71,49 +72,52 @@ export function ReservationsPlanningPage() {
     });
 
     // Convert to PropertyRow format
-    return Array.from(byListing.entries()).map(([listingId, resas]) => {
-      const firstRes = resas[0];
-      const listingName = firstRes.listing?.name || 'Propriété Inconnue';
+    return Array.from(byListing.entries())
+      .map(([listingId, resas]) => {
+        const firstRes = resas[0];
+        const listingName = firstRes.listing?.name || 'Propriété Inconnue';
 
-      // Calculate reservation blocks
-      const blocks: ReservationBlock[] = resas
-        .filter((r) => r.arrivalDate && r.departureDate)
-        .map((r) => {
-          const arrival = parseISO(r.arrivalDate);
-          const departure = parseISO(r.departureDate);
-          const windowStart = parseISO(startDate);
+        // Calculate reservation blocks
+        const blocks: ReservationBlock[] = resas
+          .filter((r) => r.arrivalDate && r.departureDate)
+          .map((r) => {
+            const arrival = parseISO(r.arrivalDate);
+            const departure = parseISO(r.departureDate);
+            const windowStart = parseISO(startDate);
 
-          // Calculate day indices relative to window start
-          const startDay = Math.max(0, differenceInCalendarDays(arrival, windowStart));
-          const endDay = differenceInCalendarDays(departure, windowStart);
+            // Calculate day indices relative to window start
+            const startDay = Math.max(0, differenceInCalendarDays(arrival, windowStart));
+            const endDay = differenceInCalendarDays(departure, windowStart);
 
-          return {
-            id: r.reservationNumber || r._id,
-            guestName: r.guestName || 'Guest',
-            guestFlag: '🌍', // TODO: Use real country flag
-            amount: '', // Pas de prix dans la vue planning
-            startDay,
-            endDay,
-            status: r.status?.toLowerCase() === 'confirmed' ? 'confirmed' : 'pending',
-          } as ReservationBlock;
-        })
-        .filter((block) => block.endDay >= 0 && block.startDay < planningWindowDays);
+            return {
+              id: r.reservationNumber || r._id,
+              guestName: r.guestName || 'Guest',
+              guestFlag: '🌍', // TODO: Use real country flag
+              amount: '', // Pas de prix dans la vue planning
+              startDay,
+              endDay,
+              status: r.status?.toLowerCase() === 'confirmed' ? 'confirmed' : 'pending',
+            } as ReservationBlock;
+          })
+          .filter((block) => block.endDay >= 0 && block.startDay < planningWindowDays);
 
-      // Calculate booked ranges
-      const bookedRanges: [number, number][] = blocks.map((b) => [b.startDay, b.endDay]);
+        // Calculate booked ranges
+        const bookedRanges: [number, number][] = blocks.map((b) => [b.startDay, b.endDay]);
 
-      return {
-        id: listingId,
-        name: listingName,
-        city: 'Casablanca', // TODO: Get from listing data
-        photoColor: 'gold' as const,
-        occupancyPct: 0, // Pas affiché dans la vue planning
-        monthRevenue: '', // Pas de revenus affichés dans la vue planning
-        bookedRanges,
-        closedDays: [],
-        reservations: blocks,
-      };
-    });
+        return {
+          id: listingId,
+          name: listingName,
+          city: 'Casablanca', // TODO: Get from listing data
+          photoColor: 'gold' as const,
+          occupancyPct: 0, // Pas affiché dans la vue planning
+          monthRevenue: '', // Pas de revenus affichés dans la vue planning
+          bookedRanges,
+          closedDays: [],
+          reservations: blocks,
+        };
+      })
+      // ✅ Filtrer les listings sans réservations (comme legacy)
+      .filter((property) => property.reservations.length > 0);
   }, [reservations, startDate, planningWindowDays]);
 
   const goToToday = () => setCurrentStart(new Date());

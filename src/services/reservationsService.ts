@@ -63,7 +63,7 @@ class ReservationsService {
   }
 
   /**
-   * GET /api/v1/reservations/reservations?dateType=arrival&startDate=...&endDate=...&limit=...
+   * GET /api/v1/reservations/reservations?dateType=arrival&startDate=...&endDate=...&limit=...&status=...
    * Récupère la liste des réservations avec filtres (authenticated with JWT)
    *
    * ⚠️ IMPORTANT: Utilise le path legacy /reservations/reservations (comme sojori-dashboard ancien)
@@ -72,6 +72,7 @@ class ReservationsService {
   async getList(params: {
     filter?: ReservationFilter;
     limit?: number;
+    status?: string; // Ex: 'Confirmed,Pending' pour filtrer côté backend
   }): Promise<{ success: boolean; data: Reservation[]; count: number }> {
     try {
       const queryParams = new URLSearchParams();
@@ -87,6 +88,11 @@ class ReservationsService {
       // Ajouter limit
       if (params.limit) {
         queryParams.append('limit', params.limit.toString());
+      }
+
+      // Ajouter status (filtrage backend comme legacy)
+      if (params.status) {
+        queryParams.append('status', params.status);
       }
 
       // ⚠️ FIX: Utiliser /reservations/reservations (pas /reservations seul)

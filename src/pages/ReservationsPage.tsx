@@ -29,7 +29,6 @@ import { toast } from 'react-toastify';
 import moment from 'moment';
 import 'moment/locale/fr';
 import reservationsService from '../services/reservationsService';
-import { filterActiveReservations } from '../utils/filterReservations';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CreateReservationModal } from '../components/modals/CreateReservationModal';
 
@@ -236,10 +235,11 @@ export function ReservationsPage() {
     setIsLoading(true);
     setError(null);
     try {
+      // ✅ Backend filtre automatiquement les cancelled (sauf dernières 24h)
+      // Pas besoin de passer status ici, contrairement au planning
       const response = await reservationsService.getList({ limit: 1000 });
-      const activeReservations = filterActiveReservations(response.data as any[]);
-      setReservations(activeReservations);
-      toast.success(`${activeReservations.length} réservation(s) active(s) chargée(s)`);
+      setReservations(response.data as any[]);
+      toast.success(`${response.data.length} réservation(s) chargée(s)`);
     } catch (err: any) {
       setError(err.message || 'Erreur');
       toast.error('Erreur lors du chargement');
