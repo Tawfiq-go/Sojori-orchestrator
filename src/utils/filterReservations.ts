@@ -21,6 +21,20 @@ export function filterActiveReservations(reservations: Reservation[]): Reservati
 }
 
 /**
+ * Filter reservations for planning view
+ * Shows only: Confirmed, Pending (excludes Cancelled and Completed)
+ */
+export function filterPlanningReservations(reservations: Reservation[]): Reservation[] {
+  return reservations.filter((res) => {
+    const status = res.status?.toLowerCase();
+    return (
+      status === 'confirmed' ||
+      status === 'pending'
+    );
+  });
+}
+
+/**
  * Check if a reservation is cancelled
  */
 export function isReservationCancelled(reservation: Reservation): boolean {

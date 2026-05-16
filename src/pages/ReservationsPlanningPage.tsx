@@ -14,7 +14,7 @@ import { MultiPropertyInventory, type PropertyRow, type ReservationBlock } from 
 import { useAuth } from '../hooks/useAuth';
 import reservationsService from '../services/reservationsService';
 import type { Reservation } from '../types/reservations.types';
-import { filterActiveReservations } from '../utils/filterReservations';
+import { filterPlanningReservations } from '../utils/filterReservations';
 
 export function ReservationsPlanningPage() {
   const { user } = useAuth();
@@ -41,10 +41,10 @@ export function ReservationsPlanningPage() {
       setError(null);
       const response = await reservationsService.getList({ limit: 1000 });
 
-      // Filtrer les réservations annulées
-      const activeReservations = filterActiveReservations(response.data as any[]);
+      // Filtrer pour le planning: seulement Confirmed et Pending
+      const planningReservations = filterPlanningReservations(response.data as any[]);
 
-      setReservations(activeReservations);
+      setReservations(planningReservations);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur chargement réservations');
       setReservations([]);
