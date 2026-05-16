@@ -1,0 +1,1170 @@
+import { isAxiosError } from 'axios';
+import apiClient from './apiClient';
+import {
+  getStoredChannelsData,
+  getStoredListings,
+} from '../data/catalogueMock';
+import { amenityNameToDisplay } from '../utils/amenityDisplayName';
+import {
+  CHANNEX_MAPPING_UNAVAILABLE_INFO,
+  type ListingChannelsSnapshot,
+  type ListingChannelsRoomType,
+  type ListingDetail,
+  type ListingImage,
+  type ListingMutationPayload,
+  type ListingPricingSnapshot,
+  type ListingsStats,
+  type ListingStatus,
+  type ListingSummary,
+  type ListingRoomTypeSummary,
+  type ServiceResult,
+} from '../types/listings.types';
+import type { ClientServicesPayload } from '../utils/mapApiListingToListingRecord';
+
+const LOCAL_LISTING_API = 'http://localhost:4001/api/v1/listing';
+
+/** Même ordre que sojori-dashboard `getPredefinedCategories` / AmenityCategories.jsx */
+export function normalizeAmenityCategoryTabs(apiCategories: string[]): string[] {
+  const rest = apiCategories.filter((cat) => {
+    const lower = cat.toLowerCase();
+    return lower !== 'all categories' && lower !== 'all' && lower !== 'basic';
+  });
+  return ['All Categories', 'Basic', ...rest];
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+function resolveListingApiBaseUrl(): string {
+  const configuredBase = import.meta.env.VITE_API_URL?.trim();
+
+  if (!configuredBase) {
+    return LOCAL_LISTING_API;
+  }
+
+  const normalized = trimTrailingSlash(configuredBase);
+  if (
+    normalized === 'http://localhost' ||
+    normalized === 'http://127.0.0.1' ||
+    normalized === 'https://localhost' ||
+    normalized === 'https://127.0.0.1'
+  ) {
+    return LOCAL_LISTING_API;
+  }
+
+  if (normalized.endsWith('/api/v1/listing')) {
+    return normalized;
+  }
+
+  return `${normalized}/api/v1/listing`;
+}
+
+const LISTING_API_BASE_URL = resolveListingApiBaseUrl();
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return isRecord(value) ? value : {};
+}
+
+function asString(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) {
+    return Number(value);
+  }
+  return null;
+}
+
+function asBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+  }
+  return null;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => asString(item).trim())
+    .filter((item) => item.length > 0);
+}
+
+function pickFirstNumber(source: UnknownRecord, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = asNumber(source[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function pickFirstString(source: UnknownRecord, keys: string[]): string {
+  for (const key of keys) {
+    const value = asString(source[key]).trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+function deriveListingStatus(source: UnknownRecord): ListingStatus {
+  if (source.staging === true || source.draft === true) return 'draft';
+  if (source.active === false) return 'inactive';
+  return 'active';
+}
+
+function normalizeListingImages(source: unknown): ListingImage[] {
+  if (!Array.isArray(source)) return [];
+
+  return source
+    .map((item, index) => {
+      const record = asRecord(item);
+      const url = asString(record.url || record.image || record.src).trim();
+      if (!url) return null;
+
+      return {
+        url,
+        sortOrder: asNumber(record.sortOrder) ?? index,
+      };
+    })
+    .filter((item): item is ListingImage => item !== null);
+}
+
+function normalizeRoomTypes(source: unknown): ListingRoomTypeSummary[] {
+  if (!Array.isArray(source)) return [];
+
+  return source.map((item, index) => {
+    const record = asRecord(item);
+    return {
+      id: asString(record._id || record.id || `room-type-${index}`),
+      name: pickFirstString(record, ['roomTypeName', 'name']) || `Room type ${index + 1}`,
+      basePrice: pickFirstNumber(record, ['basePrice', 'price', 'minimumPrice']),
+      roomCount: Array.isArray(record.rooms) ? record.rooms.length : asNumber(record.roomCount) ?? 0,
+      channexRoomTypeId: asString(record.channexRoomTypeId),
+      channexRatePlanIds: asStringArray(record.channexRatePlanIds),
+      raw: record,
+    };
+  });
+}
+
+function normalizePricing(source: UnknownRecord): ListingPricingSnapshot {
+  return {
+    basePrice: pickFirstNumber(source, ['basePrice', 'minimumPrice', 'pricePerNight', 'nightlyPrice']),
+    cleaningFee: pickFirstNumber(source, ['cleaningFee', 'cleaningPrice']),
+    weekendMultiplier: pickFirstNumber(source, ['weekendMultiplier', 'weekendPriceMultiplier']),
+    minNights: pickFirstNumber(source, ['minNights', 'minimumStay']),
+    maxNights: pickFirstNumber(source, ['maxNights', 'maximumStay']),
+    currency: pickFirstString(source, ['currency', 'currencyCode']) || null,
+    useDynamicPrice: asBoolean(source.useDynamicPrice),
+  };
+}
+
+function normalizeListingSummary(source: unknown): ListingSummary {
+  const record = asRecord(source);
+  const listingImages = normalizeListingImages(record.listingImages);
+  const owner = Array.isArray(record.owner) ? asRecord(record.owner[0]) : {};
+  const ownerName =
+    pickFirstString(record, ['ownerName']) ||
+    [asString(owner.firstName).trim(), asString(owner.lastName).trim()].filter(Boolean).join(' ');
+
+  return {
+    id: asString(record._id || record.id),
+    name: pickFirstString(record, ['name']) || 'Listing sans nom',
+    city: pickFirstString(record, ['city']),
+    country: pickFirstString(record, ['country']),
+    ownerId: asString(record.ownerId || owner._id) || null,
+    ownerName: ownerName || 'Owner inconnu',
+    status: deriveListingStatus(record),
+    active: record.active !== false,
+    propertyUnit: pickFirstString(record, ['propertyUnit']) || 'N/A',
+    channelManager: pickFirstString(record, ['channelManager']) || 'direct',
+    channexListingId: pickFirstString(record, ['channexListingId']),
+    rentalUnitedIds: asStringArray(record.rentalUnitedIds),
+    coverImageUrl: listingImages[0]?.url || '',
+    updatedAt: pickFirstString(record, ['updatedAt', 'createdAt']) || null,
+    raw: record,
+  };
+}
+
+function normalizeListingDetail(source: unknown): ListingDetail {
+  const summary = normalizeListingSummary(source);
+  const record = asRecord(source);
+
+  return {
+    ...summary,
+    address: pickFirstString(record, ['address']),
+    cityId: pickFirstString(record, ['cityId']),
+    lat: pickFirstNumber(record, ['lat', 'latitude']),
+    lng: pickFirstNumber(record, ['lng', 'longitude']),
+    description: pickFirstString(record, ['description', 'shortDescription', 'longDescription']),
+    listingImages: normalizeListingImages(record.listingImages),
+    roomTypes: normalizeRoomTypes(record.roomTypes),
+    pricing: normalizePricing(record),
+  };
+}
+
+function normalizeChannelsSnapshot(source: unknown, listing?: ListingSummary): ListingChannelsSnapshot {
+  const record = asRecord(source);
+  const myListing = asRecord(record.myListing);
+  const roomTypesSource = Array.isArray(record.roomTypes) ? record.roomTypes : [];
+
+  const roomTypes: ListingChannelsRoomType[] = roomTypesSource.map((item, index) => {
+    const roomTypeRecord = asRecord(item);
+    const myRoomType = asRecord(roomTypeRecord.myRoomType);
+    const ratePlansSource = Array.isArray(roomTypeRecord.ratePlans)
+      ? roomTypeRecord.ratePlans
+      : Array.isArray(roomTypeRecord.channexRatePlans)
+        ? roomTypeRecord.channexRatePlans
+        : [];
+
+    return {
+      id: asString(myRoomType._id || myRoomType.id || `channel-room-${index}`),
+      name: pickFirstString(myRoomType, ['roomTypeName', 'name']) || `Room type ${index + 1}`,
+      channexRoomTypeId: asString(myRoomType.channexRoomTypeId),
+      ratePlans: ratePlansSource
+        .map((plan) => {
+          const planRecord = asRecord(plan);
+          return pickFirstString(planRecord, ['title', 'name', 'id', '_id']);
+        })
+        .filter(Boolean),
+      raw: roomTypeRecord,
+    };
+  });
+
+  return {
+    listingId: asString(myListing._id || listing?.id),
+    listingName: pickFirstString(myListing, ['name']) || listing?.name || 'Listing',
+    channelManager: pickFirstString(myListing, ['channelManager']) || listing?.channelManager || 'direct',
+    channexListingId: pickFirstString(myListing, ['channexListingId']) || listing?.channexListingId || '',
+    channexListing: isRecord(record.channexListing) ? record.channexListing : null,
+    roomTypes,
+  };
+}
+
+function buildServiceError(error: unknown): string {
+  if (isRecord(error)) {
+    const response = asRecord(error.response);
+    const data = asRecord(response.data);
+    return (
+      pickFirstString(data, ['message', 'error']) ||
+      pickFirstString(asRecord(error), ['message']) ||
+      'Erreur API inconnue'
+    );
+  }
+  return 'Erreur API inconnue';
+}
+
+export interface ListingSrvConfigFetchResult {
+  data: unknown | null;
+  error?: string;
+}
+
+function parseListingConfigPayload(body: unknown): ListingSrvConfigFetchResult {
+  const p = asRecord(body);
+  if (p.success === false) {
+    return {
+      data: null,
+      error: pickFirstString(p, ['error', 'message']) || 'Requête refusée',
+    };
+  }
+  if ('data' in p) {
+    return { data: p.data };
+  }
+  return { data: p };
+}
+
+async function safeListingConfigGet(url: string): Promise<ListingSrvConfigFetchResult> {
+  try {
+    const response = await apiClient.get(url);
+    return parseListingConfigPayload(response.data);
+  } catch (error) {
+    if (isRecord(error)) {
+      const responsePayload = asRecord(error.response);
+      const responseData = responsePayload.data;
+      if (responseData !== undefined && responseData !== null) {
+        const parsed = parseListingConfigPayload(responseData);
+        if (parsed.error) {
+          return parsed;
+        }
+      }
+    }
+    return { data: null, error: buildServiceError(error) };
+  }
+}
+
+async function safeListingConfigPut(url: string, body: unknown): Promise<ListingSrvConfigFetchResult> {
+  try {
+    const response = await apiClient.put(url, body);
+    return parseListingConfigPayload(response.data);
+  } catch (error) {
+    if (isRecord(error)) {
+      const responsePayload = asRecord(error.response);
+      const responseData = responsePayload.data;
+      if (responseData !== undefined && responseData !== null) {
+        const parsed = parseListingConfigPayload(responseData);
+        if (parsed.error) {
+          return parsed;
+        }
+      }
+    }
+    return { data: null, error: buildServiceError(error) };
+  }
+}
+
+async function safeListingConfigPost(url: string, body: unknown): Promise<ListingSrvConfigFetchResult> {
+  try {
+    const response = await apiClient.post(url, body);
+    return parseListingConfigPayload(response.data);
+  } catch (error) {
+    if (isRecord(error)) {
+      const responsePayload = asRecord(error.response);
+      const responseData = responsePayload.data;
+      if (responseData !== undefined && responseData !== null) {
+        const parsed = parseListingConfigPayload(responseData);
+        if (parsed.error) {
+          return parsed;
+        }
+      }
+    }
+    return { data: null, error: buildServiceError(error) };
+  }
+}
+
+function buildMockListings(): ListingSummary[] {
+  return getStoredListings().map((listing) => ({
+    id: listing.id,
+    name: listing.name,
+    city: listing.city,
+    country: listing.country,
+    ownerId: listing.ownerId,
+    ownerName: listing.ownerName,
+    status: listing.status,
+    active: listing.status === 'active',
+    propertyUnit: listing.type,
+    channelManager: listing.channels[0]?.name || 'direct',
+    channexListingId: '',
+    rentalUnitedIds: [],
+    coverImageUrl: '',
+    updatedAt: listing.updatedAt,
+    raw: {
+      mock: true,
+      rating: listing.rating,
+      reviewCount: listing.reviewCount,
+      occupancy: listing.occupancy,
+      adr: listing.adr,
+      monthlyRevenue: listing.monthlyRevenue,
+    },
+  }));
+}
+
+function buildMockListingDetail(id: string): ListingDetail | null {
+  const listing = getStoredListings().find((item) => item.id === id);
+  if (!listing) return null;
+
+  return {
+    id: listing.id,
+    name: listing.name,
+    city: listing.city,
+    country: listing.country,
+    ownerId: listing.ownerId,
+    ownerName: listing.ownerName,
+    status: listing.status,
+    active: listing.status === 'active',
+    propertyUnit: listing.type,
+    channelManager: listing.form.channels.preferredChannel || 'direct',
+    channexListingId: '',
+    rentalUnitedIds: [],
+    coverImageUrl: listing.form.media.coverPhoto,
+    updatedAt: listing.updatedAt,
+    address: listing.form.address.street,
+    cityId: '',
+    lat: asNumber(listing.form.address.latitude),
+    lng: asNumber(listing.form.address.longitude),
+    description: listing.form.basic.longDescription,
+    listingImages: listing.form.media.coverPhoto
+      ? [{ url: listing.form.media.coverPhoto, sortOrder: 0 }]
+      : [],
+    roomTypes: [],
+    pricing: {
+      basePrice: listing.form.pricing.basePrice,
+      cleaningFee: listing.form.pricing.cleaningFee,
+      weekendMultiplier: listing.form.pricing.weekendMultiplier,
+      minNights: listing.form.pricing.minStay,
+      maxNights: listing.form.availability?.maxNights ?? null,
+      currency: listing.form.pricing.currency,
+      useDynamicPrice: null,
+    },
+    raw: { mock: true },
+  };
+}
+
+function buildMockStats(): ListingsStats {
+  const listings = getStoredListings();
+  const active = listings.filter((item) => item.status === 'active').length;
+  const inactive = listings.filter((item) => item.status === 'inactive').length;
+  const draft = listings.filter((item) => item.status === 'draft').length;
+
+  return {
+    total: listings.length,
+    active,
+    inactive,
+    draft,
+  };
+}
+
+function buildMockChannelsSnapshot(listingId: string): ListingChannelsSnapshot | null {
+  const listing = getStoredListings().find((item) => item.id === listingId);
+  if (!listing) return null;
+
+  const channelsData = getStoredChannelsData();
+  const overview = channelsData.overview.filter((channel) =>
+    listing.channels.some((connection) => connection.name === channel.name),
+  );
+
+  return {
+    listingId: listing.id,
+    listingName: listing.name,
+    channelManager: listing.form.channels.preferredChannel || 'direct',
+    channexListingId: '',
+    channexListing: null,
+    roomTypes: overview.map((channel) => ({
+      id: channel.id,
+      name: channel.name,
+      channexRoomTypeId: '',
+      ratePlans: channel.today > 0 ? [`ok:${channel.ok}/${channel.today}`] : [],
+      raw: { mock: true, status: channel.status },
+    })),
+  };
+}
+
+export interface ListingAmenityRow {
+  id: string;
+  displayName: string;
+  count: number;
+  iconUrl: string;
+}
+
+function isExpectedMissingChannexMapping(message: string): boolean {
+  const m = message.toLowerCase();
+  if (m.includes('listing not found or missing channex')) return true;
+  if (m.includes('missing channex')) return true;
+  if (m.includes('no channex')) return true;
+  if (m.includes('channex') && m.includes('not found')) return true;
+  if (m.includes('channex') && (m.includes('invalid') || m.includes('absent'))) return true;
+  return false;
+}
+
+async function withFallback<T>(
+  loader: () => Promise<T>,
+  fallback: () => T,
+): Promise<ServiceResult<T>> {
+  try {
+    return { data: await loader(), source: 'api' };
+  } catch (error) {
+    return {
+      data: fallback(),
+      source: 'mock',
+      warning: buildServiceError(error),
+    };
+  }
+}
+
+export const listingsService = {
+  apiBaseUrl: LISTING_API_BASE_URL,
+
+  /**
+   * Document listing brut tel que renvoyé par `GET /listings/by-id/:id` (pour le formulaire orchestrateur).
+   * Retourne null si erreur réseau / 404 / listing absent.
+   */
+  async getListingDocument(listingId: string): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/by-id/${listingId}`);
+      const payload = asRecord(response.data);
+      const listing = payload.listing;
+      return isRecord(listing) ? listing : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * GET /api/v1/listing/listings (paginated) pour calendar
+   * Basé sur sojori-dashboard/serverApi.calendar.js getMultiListing()
+   */
+  async getListingsForCalendar(
+    page: number = 0,
+    limit: number = 25,
+    filters?: {
+      countryNames?: string[];
+      cityIds?: string[];
+      tags?: string | string[];
+      active?: boolean;
+      name?: string;
+      staging?: boolean;
+    }
+  ): Promise<{ success: boolean; data: any[]; total: number }> {
+    try {
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('limit', limit.toString());
+      params.append('paged', 'true');
+      params.append('useActiveFilter', 'true');
+      params.append('active', (filters?.active ?? true).toString());
+      params.append('forCalendar', 'true');
+
+      if (filters?.countryNames && Array.isArray(filters.countryNames)) {
+        filters.countryNames.forEach(country => {
+          if (country) params.append('countryNames', country);
+        });
+      }
+
+      if (filters?.cityIds && Array.isArray(filters.cityIds)) {
+        filters.cityIds.forEach(cityId => {
+          if (cityId) params.append('cityId[]', cityId);
+        });
+      }
+
+      if (filters?.tags) {
+        const tagsString = Array.isArray(filters.tags)
+          ? filters.tags.join(',')
+          : filters.tags;
+        params.append('tags', tagsString);
+      }
+
+      if (filters?.name) {
+        params.append('name', filters.name);
+      }
+
+      if (filters?.staging !== undefined) {
+        params.append('staging', filters.staging.toString());
+      }
+
+      const url = `${LISTING_API_BASE_URL}/listings?${params.toString()}`;
+
+      const response = await apiClient.get(url, {
+        timeout: 60000,
+      });
+
+      const result = response.data;
+
+      return {
+        success: result.success !== false,
+        data: result.data || [],
+        total: result.total || 0,
+      };
+    } catch (error) {
+      console.error('Error fetching listings for calendar:', error);
+      return { success: false, data: [], total: 0 };
+    }
+  },
+
+  /**
+   * GET /api/v1/admin/country
+   */
+  async getCountries(): Promise<{ _id: string; name: string }[]> {
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'https://dev.sojori.com';
+      const response = await apiClient.get(`${baseUrl}/api/v1/admin/country?paged=false`);
+      return response.data?.data || [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * GET /api/v1/admin/city
+   */
+  async getCities(): Promise<{ _id: string; name: string; countryId?: string }[]> {
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'https://dev.sojori.com';
+      const response = await apiClient.get(`${baseUrl}/api/v1/admin/city?paged=false`);
+      return response.data?.data?.cities || [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * GET /api/v1/listing/tag
+   */
+  async getTags(): Promise<{ _id: string; name: string }[]> {
+    try {
+      const response = await apiClient.get(`${LISTING_API_BASE_URL}/tag?paged=false`);
+      return response.data?.data || [];
+    } catch {
+      return [];
+    }
+  },
+
+  /** Concierge + support (même agrégat que le dashboard admin). */
+  async getClientServicesBundle(listingId: string): Promise<ClientServicesPayload | null> {
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/listings/${listingId}/client-services`,
+      );
+      const payload = asRecord(response.data);
+      if (payload.success === false) return null;
+      const data = asRecord(payload.data);
+      const transport = Array.isArray(data.transport) ? data.transport : [];
+      const grocery = Array.isArray(data.grocery) ? data.grocery : [];
+      const custom = Array.isArray(data.custom) ? data.custom : [];
+      const support = Array.isArray(data.support) ? data.support : [];
+      return {
+        transport,
+        grocery,
+        custom,
+        support,
+        hasConciergeServices: Boolean(data.hasConciergeServices),
+        hasSupportCategories: Boolean(data.hasSupportCategories),
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  /** GET /listing-chatbot-config/:listingId — aligné dashboard admin (WhatsApp menu). */
+  async getListingChatbotConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigGet(`${LISTING_API_BASE_URL}/listing-chatbot-config/${listingId}`);
+  },
+
+  /** GET /concierge-config/:listingId */
+  async getListingConciergeConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigGet(`${LISTING_API_BASE_URL}/concierge-config/${listingId}`);
+  },
+
+  /** GET /listing-support-categories/:listingId */
+  async getListingSupportCategoriesConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigGet(`${LISTING_API_BASE_URL}/listing-support-categories/${listingId}`);
+  },
+
+  /** GET /rules-and-info/:listingId */
+  async getListingRulesAndInfoConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigGet(`${LISTING_API_BASE_URL}/rules-and-info/${listingId}`);
+  },
+
+  /** GET /listing-access/:listingId */
+  async getListingAccessConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigGet(`${LISTING_API_BASE_URL}/listing-access/${listingId}`);
+  },
+
+  async updateListingChatbotOverrides(
+    listingId: string,
+    overrides: unknown[],
+  ): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPut(`${LISTING_API_BASE_URL}/listing-chatbot-config/${listingId}`, {
+      overrides,
+    });
+  },
+
+  async createListingChatbotConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(`${LISTING_API_BASE_URL}/listing-chatbot-config`, { listingId });
+  },
+
+  async syncListingChatbotConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(`${LISTING_API_BASE_URL}/listing-chatbot-config/${listingId}/sync`, {});
+  },
+
+  async updateListingConciergeServices(
+    listingId: string,
+    body: { transportServices: unknown[]; groceryServices: unknown[]; customServices: unknown[] },
+  ): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPut(`${LISTING_API_BASE_URL}/concierge-config/${listingId}`, body);
+  },
+
+  async createListingConciergeConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(`${LISTING_API_BASE_URL}/concierge-config`, { listingId });
+  },
+
+  async syncListingConciergeConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(`${LISTING_API_BASE_URL}/concierge-config/${listingId}/sync`, {});
+  },
+
+  async updateListingSupportCategories(
+    listingId: string,
+    categories: unknown[],
+  ): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPut(`${LISTING_API_BASE_URL}/listing-support-categories/${listingId}`, {
+      categories,
+    });
+  },
+
+  async createListingSupportCategories(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(`${LISTING_API_BASE_URL}/listing-support-categories`, { listingId });
+  },
+
+  async syncListingSupportCategories(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(
+      `${LISTING_API_BASE_URL}/listing-support-categories/${listingId}/sync`,
+      {},
+    );
+  },
+
+  async updateListingRulesAndInfo(
+    listingId: string,
+    rulesAndInfo: unknown,
+  ): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPut(`${LISTING_API_BASE_URL}/rules-and-info/${listingId}`, {
+      rulesAndInfo,
+    });
+  },
+
+  async createListingRulesAndInfo(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(`${LISTING_API_BASE_URL}/rules-and-info`, { listingId });
+  },
+
+  async syncListingRulesAndInfo(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(`${LISTING_API_BASE_URL}/rules-and-info/${listingId}/sync`, {});
+  },
+
+  async updateListingAccess(listingId: string, body: unknown): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPut(`${LISTING_API_BASE_URL}/listing-access/${listingId}`, body);
+  },
+
+  async createListingAccess(body: unknown): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(`${LISTING_API_BASE_URL}/listing-access`, body);
+  },
+
+  /**
+   * GET /listings/listing-amenities/:listingId — aligné dashboard (`getListingAmenities`).
+   * Retourne les équipements propriété avec quantités.
+   */
+  async getListingAmenitiesWithCounts(
+    listingId: string,
+  ): Promise<{ items: ListingAmenityRow[]; error?: string }> {
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/listings/listing-amenities/${listingId}`,
+      );
+      const payload = asRecord(response.data);
+      if (payload.success === false) {
+        return {
+          items: [],
+          error: pickFirstString(payload, ['message', 'error']) || 'Erreur API',
+        };
+      }
+      const raw = payload.data;
+      if (!Array.isArray(raw)) {
+        return { items: [] };
+      }
+      const items: ListingAmenityRow[] = raw.map((row) => {
+        const r = asRecord(row);
+        return {
+          id: asString(r._id),
+          displayName: amenityNameToDisplay(r.name) || '—',
+          count: asNumber(r.count) ?? 1,
+          iconUrl: asString(r.iconUrl),
+        };
+      });
+      return { items };
+    } catch (error) {
+      return { items: [], error: buildServiceError(error) };
+    }
+  },
+
+  /**
+   * GET /amenities — catalogue paginé (même service que le dashboard, recherche + filtre lits).
+   * `useBed=false` & `ignoreBed=true` comme `getAmenities(..., false, true)` côté listing.
+   */
+  async getAmenitiesCatalogPage(options: {
+    page?: number;
+    limit?: number;
+    paged?: boolean;
+    searchText?: string;
+    categories?: string[];
+    roomIds?: Array<string | number>;
+  }): Promise<{ items: Record<string, unknown>[]; total: number; error?: string }> {
+    const page = options.page ?? 0;
+    const limit = options.limit ?? 40;
+    const paged = options.paged ?? true;
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    params.set('paged', String(paged));
+    params.set('useBed', 'false');
+    params.set('ignoreBed', 'true');
+    if (options.searchText?.trim()) {
+      params.set('search_text', options.searchText.trim());
+    }
+    if (options.categories && options.categories.length > 0) {
+      for (const category of options.categories) {
+        if (category.toLowerCase() === 'basic') {
+          params.set('basic', 'true');
+        } else {
+          params.append('categories', category);
+        }
+      }
+    }
+    if (options.roomIds && options.roomIds.length > 0) {
+      for (const roomId of options.roomIds) {
+        params.append('roomIds', String(roomId));
+      }
+    }
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/amenities?${params.toString()}`,
+      );
+      const payload = asRecord(response.data);
+      if (payload.success === false) {
+        return { items: [], total: asNumber(payload.total) ?? 0 };
+      }
+      const raw = payload.data;
+      const arr = Array.isArray(raw) ? raw : [];
+      const total = asNumber(payload.total) ?? arr.length;
+      const items = arr.map((row) => {
+        const r = asRecord(row);
+        const id = asString(r._id || r.id);
+        return {
+          ...r,
+          _id: id,
+          id,
+          name: r.name ?? amenityNameToDisplay(r.name) ?? '—',
+          iconUrl: asString(r.iconUrl),
+        };
+      });
+      return { items, total };
+    } catch (error) {
+      if (isAxiosError(error)) {
+        const body = asRecord(error.response?.data);
+        if (error.response?.status === 404 || body.success === false) {
+          return { items: [], total: asNumber(body.total) ?? 0 };
+        }
+      }
+      return { items: [], total: 0 };
+    }
+  },
+
+  /**
+   * Résout des équipements par ID — via GET /listings/listing-amenities/:listingId
+   * (srv-listing n’a pas de POST /amenities/by-ids ; le dashboard hydrate via le catalogue ou ce GET).
+   */
+  async getAmenitiesByIds(ids: string[], listingId?: string): Promise<Record<string, unknown>[]> {
+    if (ids.length === 0) return [];
+    if (!listingId) return [];
+
+    const idSet = new Set(ids.map(String));
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/listings/listing-amenities/${listingId}`,
+      );
+      const payload = asRecord(response.data);
+      if (payload.success === false) return [];
+      const raw = payload.data;
+      if (!Array.isArray(raw)) return [];
+
+      return raw
+        .filter((row) => idSet.has(String(asRecord(row)._id)))
+        .map((row) => {
+          const r = asRecord(row);
+          const id = asString(r._id);
+          return { ...r, _id: id, id };
+        });
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 404) {
+        return [];
+      }
+      console.warn('[listings] getAmenitiesByIds via listing-amenities:', error);
+      return [];
+    }
+  },
+
+  /**
+   * GET /composition-rooms/get — catalogue global des types de pièces (dashboard).
+   * Pas de route /room-composition/:listingId sur srv-listing.
+   */
+  async getRoomComposition(): Promise<{ rooms?: unknown[] } | null> {
+    try {
+      const response = await apiClient.get(`${LISTING_API_BASE_URL}/composition-rooms/get`);
+      const payload = asRecord(response.data);
+      if (payload.success === false) {
+        return null;
+      }
+      const data = payload.data;
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const doc = asRecord(data);
+        return { rooms: Array.isArray(doc.rooms) ? doc.rooms : [] };
+      }
+      return null;
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      console.warn('[listings] composition-rooms/get unavailable:', error);
+      return null;
+    }
+  },
+
+  /**
+   * GET /amenities/categories - Fetch predefined amenity categories
+   */
+  async getPredefinedCategories(): Promise<string[]> {
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/amenities/categories`,
+      );
+      const payload = asRecord(response.data);
+
+      const dataObj = asRecord(payload.data);
+      if (dataObj && Array.isArray(dataObj.categories)) {
+        return normalizeAmenityCategoryTabs(dataObj.categories as string[]);
+      }
+
+      if (Array.isArray(payload.data)) {
+        return normalizeAmenityCategoryTabs(payload.data as string[]);
+      }
+      if (Array.isArray(payload.categories)) {
+        return normalizeAmenityCategoryTabs(payload.categories as string[]);
+      }
+
+      return normalizeAmenityCategoryTabs([]);
+    } catch (error) {
+      console.error('Error fetching predefined categories:', error);
+      return normalizeAmenityCategoryTabs([]);
+    }
+  },
+
+  async getListings(): Promise<ServiceResult<{ items: ListingSummary[]; total: number }>> {
+    return withFallback(
+      async () => {
+        const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings`);
+        const payload = asRecord(response.data);
+        const items = Array.isArray(payload.data)
+          ? payload.data.map((item) => normalizeListingSummary(item))
+          : [];
+
+        return {
+          items,
+          total: asNumber(payload.total) ?? items.length,
+        };
+      },
+      () => {
+        const items = buildMockListings();
+        return { items, total: items.length };
+      },
+    );
+  },
+
+  async getListingById(listingId: string): Promise<ServiceResult<ListingDetail | null>> {
+    return withFallback(
+      async () => {
+        const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/by-id/${listingId}`);
+        const payload = asRecord(response.data);
+        const listing = normalizeListingDetail(payload.listing);
+        return listing.id ? listing : null;
+      },
+      () => buildMockListingDetail(listingId),
+    );
+  },
+
+  async getStats(): Promise<ServiceResult<ListingsStats>> {
+    return withFallback(
+      async () => {
+        const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/stats`);
+        const payload = asRecord(response.data);
+        const total = asNumber(payload.totalListing) ?? 0;
+        const active = asNumber(payload.totalActive) ?? 0;
+        const inactive = asNumber(payload.totalInactive) ?? 0;
+        return {
+          total,
+          active,
+          inactive,
+          draft: Math.max(0, total - active - inactive),
+        };
+      },
+      () => buildMockStats(),
+    );
+  },
+
+  async getChannels(listingId: string, listing?: ListingSummary): Promise<ServiceResult<ListingChannelsSnapshot | null>> {
+    try {
+      const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/channex-mapping/${listingId}`);
+      const payload = asRecord(response.data);
+      return {
+        data: normalizeChannelsSnapshot(asRecord(payload.data), listing),
+        source: 'api',
+      };
+    } catch (error) {
+      const msg = buildServiceError(error);
+      if (isExpectedMissingChannexMapping(msg)) {
+        return {
+          data: null,
+          source: 'api',
+          info: CHANNEX_MAPPING_UNAVAILABLE_INFO,
+        };
+      }
+      return {
+        data: buildMockChannelsSnapshot(listingId),
+        source: 'mock',
+        warning: msg,
+      };
+    }
+  },
+
+  async syncListing(listingId: string): Promise<void> {
+    await apiClient.post(`${LISTING_API_BASE_URL}/listings/sync-with-rental-united/${listingId}`);
+  },
+
+  async createListing(payload: ListingMutationPayload): Promise<ListingDetail> {
+    const response = await apiClient.post(`${LISTING_API_BASE_URL}/listings/create`, payload);
+    const body = asRecord(response.data);
+    return normalizeListingDetail(body.listing);
+  },
+
+  async updateListing(listingId: string, payload: Partial<ListingMutationPayload>): Promise<ListingDetail> {
+    const response = await apiClient.put(`${LISTING_API_BASE_URL}/listings/update/${listingId}`, payload);
+    const body = asRecord(response.data);
+    return normalizeListingDetail(body.listing);
+  },
+
+  async deleteListing(listingId: string): Promise<void> {
+    await apiClient.delete(`${LISTING_API_BASE_URL}/listings/delete-listing/${listingId}`);
+  },
+
+  /**
+   * POST /listings/ota-channels-verify/:listingId
+   * Rafraîchit les canaux de distribution connectés pour une annonce via Rental United
+   * et persiste `otaChannelsSnapshot` dans la base de données.
+   */
+  async verifyOtaChannels(listingId: string): Promise<{ success: boolean; data?: unknown; error?: string }> {
+    try {
+      const response = await apiClient.post(
+        `${LISTING_API_BASE_URL}/listings/ota-channels-verify/${listingId}`,
+        {},
+        { timeout: 240000 }, // 4 minutes timeout (API peut être lent)
+      );
+      const payload = asRecord(response.data);
+      return {
+        success: payload.success !== false,
+        data: payload.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: buildServiceError(error),
+      };
+    }
+  },
+
+  /**
+   * GET /api/v1/listing/listings?staging=false&compact=false
+   * Récupère la liste des listings avec leurs roomTypes (pour le modal de création de réservation)
+   *
+   * Basé sur le Legacy dashboard: serverApi.reservation.jsx getListings()
+   * ⚠️ IMPORTANT: compact=false pour avoir les roomTypes complets
+   */
+  async getListingsWithRoomTypes(options?: {
+    staging?: boolean;
+    compact?: boolean;
+  }): Promise<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      name: string;
+      checkInTime?: string;
+      checkOutTime?: string;
+      propertyUnit?: string;
+      roomTypes: Array<{
+        _id: string;
+        roomTypeName: string;
+        personCapacityMax?: number;
+      }>;
+    }>;
+  }> {
+    try {
+      const staging = options?.staging ?? false;
+      const compact = options?.compact ?? false; // false pour avoir roomTypes
+
+      const url = `${LISTING_API_BASE_URL}/listings?staging=${staging}&compact=${compact}`;
+
+      const response = await apiClient.get(url);
+
+      const payload = asRecord(response.data);
+
+      if (payload.success === false) {
+        return { success: false, data: [] };
+      }
+
+      const listings = Array.isArray(payload.data) ? payload.data : [];
+
+      const mappedListings = listings.map((listing: any) => {
+        const record = asRecord(listing);
+        return {
+          id: asString(record._id || record.id),
+          name: asString(record.name),
+          checkInTime: asString(record.checkInTimeStart || record.checkInTime),
+          checkOutTime: asString(record.checkOutTime),
+          propertyUnit: asString(record.propertyUnit),
+          roomTypes: Array.isArray(record.roomTypes)
+            ? record.roomTypes.map((rt: any) => {
+                const roomType = asRecord(rt);
+                return {
+                  _id: asString(roomType._id || roomType.id),
+                  roomTypeName: asString(roomType.roomTypeName || roomType.name),
+                  personCapacityMax: asNumber(roomType.personCapacityMax) ?? 0,
+                };
+              })
+            : [],
+        };
+      });
+
+      return {
+        success: true,
+        data: mappedListings,
+      };
+    } catch (error) {
+      console.error('Error fetching listings with room types:', error);
+
+      // Backend retourne 404 quand 0 listings → retourner [] au lieu de throw
+      if (isRecord(error)) {
+        const responsePayload = asRecord(error.response);
+        if (responsePayload.status === 404) {
+          const data = asRecord(responsePayload.data);
+          const listings = Array.isArray(data.data) ? data.data : [];
+
+          if (listings.length > 0) {
+            // Même mapping si des données sont présentes dans la 404
+            const mappedListings = listings.map((listing: any) => {
+              const record = asRecord(listing);
+              return {
+                id: asString(record._id || record.id),
+                name: asString(record.name),
+                checkInTime: asString(record.checkInTimeStart || record.checkInTime),
+                checkOutTime: asString(record.checkOutTime),
+                propertyUnit: asString(record.propertyUnit),
+                roomTypes: Array.isArray(record.roomTypes)
+                  ? record.roomTypes.map((rt: any) => {
+                      const roomType = asRecord(rt);
+                      return {
+                        _id: asString(roomType._id || roomType.id),
+                        roomTypeName: asString(roomType.roomTypeName || roomType.name),
+                        personCapacityMax: asNumber(roomType.personCapacityMax) ?? 0,
+                      };
+                    })
+                  : [],
+              };
+            });
+
+            return {
+              success: true,
+              data: mappedListings,
+            };
+          }
+        }
+      }
+
+      return { success: false, data: [] };
+    }
+  },
+};
+
+export default listingsService;

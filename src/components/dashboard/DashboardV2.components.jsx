@@ -20,20 +20,67 @@ import {
   Box, Stack, Typography, Button, IconButton, Avatar, Chip, Switch,
   TextField, InputAdornment, Divider, Tooltip,
 } from '@mui/material';
-
-// ─── Design tokens ──────────────────────────────────────────────
+import AnalyticsOutlined from '@mui/icons-material/AnalyticsOutlined';
+import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined';
+import AssignmentTurnedInOutlined from '@mui/icons-material/AssignmentTurnedInOutlined';
+import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined';
+import CalendarMonthOutlined from '@mui/icons-material/CalendarMonthOutlined';
+import ChevronRight from '@mui/icons-material/ChevronRight';
+import ConfirmationNumberOutlined from '@mui/icons-material/ConfirmationNumberOutlined';
+import DashboardOutlined from '@mui/icons-material/DashboardOutlined';
+import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined';
+import ExpandMore from '@mui/icons-material/ExpandMore';
+import ForumOutlined from '@mui/icons-material/ForumOutlined';
+import HelpOutlineOutlined from '@mui/icons-material/HelpOutlineOutlined';
+import HomeWorkOutlined from '@mui/icons-material/HomeWorkOutlined';
+import HubOutlined from '@mui/icons-material/HubOutlined';
+import MailOutlined from '@mui/icons-material/MailOutlined';
+import NotificationsNoneOutlined from '@mui/icons-material/NotificationsNoneOutlined';
+import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
+import PersonSearchOutlined from '@mui/icons-material/PersonSearchOutlined';
+import Search from '@mui/icons-material/Search';
+import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
+import ShowChartOutlined from '@mui/icons-material/ShowChartOutlined';
+import StarBorderOutlined from '@mui/icons-material/StarBorderOutlined';
+import SupportAgentOutlined from '@mui/icons-material/SupportAgentOutlined';
+import TodayOutlined from '@mui/icons-material/TodayOutlined';
+import GroupsOutlined from '@mui/icons-material/GroupsOutlined';
+import InboxOutlined from '@mui/icons-material/InboxOutlined';
 export const tokens = {
-  primary: '#e6b022', primaryDeep: '#b8881a', primarySoft: '#f4cf5e',
-  primaryTint: 'rgba(230,176,34,0.08)',
-  ai: '#8b5cf6', aiTint: 'rgba(139,92,246,0.08)',
-  success: '#10b981', successTint: 'rgba(16,185,129,0.08)',
-  warning: '#f59e0b', warningTint: 'rgba(245,158,11,0.08)',
-  error:   '#ef4444', errorTint:   'rgba(239,68,68,0.08)',
-  info:    '#06b6d4', infoTint:    'rgba(6,182,212,0.08)',
-  bg0: '#fbfaf6', bg1: '#ffffff', bg2: '#f5f3ec', bg3: '#ebe7da',
-  text:  '#1a1408', text2: '#4a4234', text3: '#8a8170', text4: '#b8b09b',
-  border: 'rgba(26,20,8,0.08)', borderStrong: 'rgba(26,20,8,0.14)',
-  sidebarW: 248, topbarH: 56,
+  // ── Brand · ambre dignifié (WCAG AA contrast on bg0) ──
+  primary:      '#b8851a',
+  primaryDeep:  '#876119',
+  primarySoft:  '#e6c46a',
+  primaryTint:  'rgba(184,133,26,0.10)',
+
+  // ── AI accent · violet ──
+  ai:           '#7c3aed',
+  aiTint:       'rgba(124,58,237,0.10)',
+
+  // ── Sémantique ──
+  success:      '#0a8f5e',  successTint: 'rgba(10,143,94,0.10)',
+  warning:      '#c46506',  warningTint: 'rgba(196,101,6,0.10)',
+  error:        '#c81e1e',  errorTint:   'rgba(200,30,30,0.10)',
+  info:         '#0673b3',  infoTint:    'rgba(6,115,179,0.10)',
+
+  // ── Surfaces · neutres chauds ──
+  bg0: '#f6f5f1',
+  bg1: '#ffffff',
+  bg2: '#f0eee8',
+  bg3: '#e7e4dc',
+
+  // ── Texte ──
+  text:  '#14110a',
+  text2: '#55504a',
+  text3: '#7a756c',
+  text4: '#a8a299',
+
+  // ── Bordures ──
+  border:        'rgba(20,17,10,0.07)',
+  borderStrong:  'rgba(20,17,10,0.14)',
+
+  sidebarW: 248,
+  topbarH:  56,
 };
 
 const t = tokens;
@@ -42,7 +89,7 @@ const t = tokens;
 // 1. DashboardLayout — root grid: sidebar + topbar + main
 // ════════════════════════════════════════════════════════════════════
 
-export function DashboardLayout({ user, activePath, onNavigate, onLogout, children, breadcrumb = [] }) {
+export function DashboardLayout({ user, activePath, onNavigate, onLogout, children, breadcrumb = [], compactMain = false }) {
   return (
     <Box sx={{
       display: 'grid',
@@ -55,16 +102,25 @@ export function DashboardLayout({ user, activePath, onNavigate, onLogout, childr
     }}>
       <AppSidebar user={user} activePath={activePath} onNavigate={onNavigate} onLogout={onLogout} />
       <TopBar breadcrumb={breadcrumb} />
-      <Box sx={{
-        gridArea: 'main',
-        overflowY: 'auto',
-        backgroundImage: `
-          radial-gradient(50% 40% at 100% 0%, rgba(230,176,34,0.04), transparent 60%),
-          radial-gradient(40% 30% at 0% 100%, rgba(139,92,246,0.03), transparent 70%)
+      <Box
+        className="sojori-main-enter"
+        sx={{
+          gridArea: 'main',
+          overflow: compactMain ? 'hidden' : 'auto',
+          display: compactMain ? 'flex' : 'block',
+          flexDirection: 'column',
+          minHeight: 0,
+          backgroundImage: compactMain
+            ? 'none'
+            : `
+          radial-gradient(50% 42% at 100% 0%, rgba(184,133,26,0.07), transparent 58%),
+          radial-gradient(38% 28% at 0% 100%, rgba(124,58,237,0.05), transparent 72%)
         `,
-        pt: { xs: 2, md: '24px' },
-        pb: { xs: 2, md: '48px' },
-      }}>
+          pt: compactMain ? 0 : { xs: 2, md: '24px' },
+          pb: compactMain ? 0 : { xs: 2, md: '48px' },
+          px: compactMain ? 0 : 0,
+        }}
+      >
         {children}
       </Box>
     </Box>
@@ -83,11 +139,7 @@ export const NAV = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: 'Live' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'reports', label: 'Reports', icon: '🧾' },
-    { id: 'orchestration', label: 'Orchestration', icon: '✨', badge: 'AI', sub: [
-      { id: 'orchestration/timeline', label: '› Chronologie' },
-      { id: 'orchestration/events',   label: '› Événements' },
-      { id: 'orchestration/config',   label: '› Configuration' },
-    ]},
+    { id: 'orchestrator', label: 'Orchestration', icon: '✨', badge: 'AI' },
   ]},
 
   // ═══════════════════════════════════════════════════════
@@ -104,8 +156,9 @@ export const NAV = [
   { group: 'Réservations', items: [
     { id: 'reservations/list', label: 'Liste', icon: '🎫', badge: '23',
       description: 'Toutes les réservations' },
-    { id: 'reservations/detail', label: 'Séjour', icon: '📋',
-      description: 'Détail réservation' },
+    { id: 'reservations/planning', label: 'Vue Planning', icon: '📆',
+      description: 'Calendrier type Gantt' },
+    // Note: "Séjour" est un onglet dans la page de détail, pas une page séparée
   ]},
 
   // ═══════════════════════════════════════════════════════
@@ -114,7 +167,7 @@ export const NAV = [
   { group: 'Tâches & Opérations', items: [
     { id: 'tasks/list', label: 'Liste', icon: '✅', badge: '7' },
     { id: 'tasks/team', label: 'Équipe', icon: '👥' },
-    { id: 'tasks/planning', label: 'Planning', icon: '📆' },
+    { id: 'tasks/planning', label: 'Vue Séjour', icon: '📆' },
     { id: 'tasks/staff-wa', label: 'Staff WhatsApp', icon: '💬' },
   ]},
 
@@ -122,9 +175,14 @@ export const NAV = [
   // COMMUNICATIONS HUB
   // ═══════════════════════════════════════════════════════
   { group: 'Communications', items: [
-    { id: 'comms/guests', label: 'WhatsApp Guests', icon: '💬', badge: '3', badgeRed: true },
-    { id: 'comms/staff', label: 'WhatsApp Staff', icon: '👷' },
-    { id: 'comms/ota', label: 'Messages OTA', icon: '📨' },
+    { id: 'comms', label: 'Communications Hub', icon: '📬', badge: '3', badgeRed: true, sub: [
+      { id: 'comms/guests', label: 'WhatsApp' },
+      { id: 'comms/staff', label: 'Staff WhatsApp' },
+      { id: 'comms/templates', label: 'Templates (QA)' },
+      { id: 'comms/ota', label: 'Messages OTA' },
+      { id: 'comms/leads', label: 'Demande' },
+      { id: 'comms/reviews', label: 'Avis' },
+    ]},
   ]},
 
   // ═══════════════════════════════════════════════════════
@@ -145,6 +203,72 @@ export const NAV = [
     { id: 'clients', label: 'Clients', icon: '👤' },
   ]},
 ];
+
+/** Icônes MUI alignées brief Claude Design (modules) — emoji en secours si id absent */
+const NAV_ICON_BY_ID = {
+  dashboard: DashboardOutlined,
+  analytics: AnalyticsOutlined,
+  reports: DescriptionOutlined,
+  orchestration: AutoAwesomeOutlined,
+  calendar: CalendarMonthOutlined,
+  'reservations/list': ConfirmationNumberOutlined,
+  'tasks/list': AssignmentTurnedInOutlined,
+  'tasks/team': GroupsOutlined,
+  'tasks/planning': TodayOutlined,
+  'tasks/staff-wa': SupportAgentOutlined,
+  'comms': ForumOutlined,
+  'comms/guests': ForumOutlined,
+  'comms/staff': SupportAgentOutlined,
+  'comms/templates': DescriptionOutlined,
+  'comms/ota': MailOutlined,
+  'comms/leads': PersonSearchOutlined,
+  'comms/reviews': StarBorderOutlined,
+  requests: InboxOutlined,
+  reviews: StarBorderOutlined,
+  listings: HomeWorkOutlined,
+  pricing: ShowChartOutlined,
+  channels: HubOutlined,
+  clients: PeopleOutlined,
+};
+
+function NavItemIcon({ item, active, sub }) {
+  if (sub) {
+    return (
+      <ChevronRight
+        sx={{
+          width: 16,
+          height: 16,
+          flexShrink: 0,
+          opacity: active ? 0.85 : 0.4,
+          color: 'inherit',
+          transition: 'opacity 0.18s ease, transform 0.18s ease',
+          transform: active ? 'translateX(1px)' : 'none',
+        }}
+      />
+    );
+  }
+  const Cmp = NAV_ICON_BY_ID[item.id];
+  if (Cmp) {
+    return (
+      <Cmp
+        sx={{
+          width: 18,
+          height: 18,
+          flexShrink: 0,
+          opacity: active ? 1 : 0.72,
+          color: 'inherit',
+          transition: 'opacity 0.18s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
+          transform: active ? 'scale(1.04)' : 'scale(1)',
+        }}
+      />
+    );
+  }
+  return (
+    <Box sx={{ width: 18, display: 'flex', justifyContent: 'center', opacity: active ? 1 : 0.75, fontSize: 13 }}>
+      {item.icon}
+    </Box>
+  );
+}
 
 export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogout }) {
   const [collapsed, setCollapsed] = React.useState({
@@ -250,24 +374,40 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   fontSize: 9.5,
-                  fontFamily: 'Geist Mono',
+                  fontFamily: 'Geist Mono, monospace',
                   fontWeight: 600,
                   color: t.text4,
                   letterSpacing: 1.4,
                   textTransform: 'uppercase',
                   p: '12px 10px 6px',
                   cursor: 'pointer',
-                  '&:hover': { color: t.text3 },
+                  userSelect: 'none',
+                  borderRadius: '8px',
+                  transition: 'color 0.18s ease, background-color 0.18s ease',
+                  '&:hover': { color: t.text3, bgcolor: 'rgba(23,19,13,0.03)' },
                 }}
               >
                 <span>{group.group}</span>
-                <span style={{ fontSize: 10 }}>{isCollapsed ? '›' : '⌄'}</span>
+                <ExpandMore
+                  sx={{
+                    fontSize: 18,
+                    color: t.text4,
+                    transition: 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
+                    transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                  }}
+                />
               </Box>
               {!isCollapsed && group.items.map(item => (
                 <React.Fragment key={item.id}>
                   <SideLink item={item} active={activePath === item.id} onClick={() => onNavigate?.(item.id)} />
-                  {item.sub?.map(s => (
-                    <SideLink key={s.id} item={s} sub active={activePath === s.id} onClick={() => onNavigate?.(s.id)} />
+                  {item.sub?.map((s) => (
+                    <SideLink
+                      key={s.id}
+                      item={s}
+                      sub
+                      active={activePath === s.id}
+                      onClick={() => onNavigate?.(s.id)}
+                    />
                   ))}
                 </React.Fragment>
               ))}
@@ -305,22 +445,29 @@ function SideLink({ item, active, sub, onClick }) {
   return (
     <Box component="button" onClick={onClick} sx={{
       all: 'unset', cursor: 'pointer', width: '100%', textAlign: 'left',
-      display: 'flex', alignItems: 'center', gap: 1.25,
-      p: sub ? '5px 10px 5px 36px' : '6.5px 10px',
-      borderRadius: '7px',
+      display: 'flex', alignItems: 'center', gap: 1.1,
+      p: sub ? '6px 10px 6px 12px' : '7px 10px',
+      borderRadius: '9px',
       fontSize: sub ? 12 : 12.5,
       color: active ? t.text : (sub ? t.text3 : t.text2),
       fontWeight: active ? 600 : 500,
       bgcolor: active ? t.primaryTint : 'transparent',
-      transition: 'background 0.12s',
-      '&:hover': { bgcolor: active ? t.primaryTint : t.bg2, color: t.text },
+      transition: 'background 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease',
+      '&:hover': {
+        bgcolor: active ? t.primaryTint : t.bg2,
+        color: t.text,
+        transform: 'translateX(1px)',
+      },
+      '&:active': { transform: 'scale(0.99)' },
       '&::before': active && !sub ? {
-        content: '""', width: 3, height: 16, bgcolor: t.primary, borderRadius: 1,
-        ml: -1.25, mr: 0.875,
+        content: '""', width: 3, height: 18, bgcolor: t.primary, borderRadius: 1,
+        ml: -1.1, mr: 0.75, flexShrink: 0,
       } : {},
     }}>
-      {!sub && <Box sx={{ width: 14, opacity: 0.75 }}>{item.icon}</Box>}
-      <Box sx={{ flex: 1 }}>{item.label}</Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: sub ? 22 : 22, flexShrink: 0 }}>
+        <NavItemIcon item={item} active={active} sub={sub} />
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>{item.label}</Box>
       {item.badge && (
         <Box sx={{
           fontFamily: 'Geist Mono', fontSize: 9.5, fontWeight: 700,
@@ -341,7 +488,7 @@ export function TopBar({ breadcrumb = [], onSearch }) {
   return (
     <Box sx={{
       gridArea: 'topbar',
-      bgcolor: 'rgba(251,250,246,0.85)', backdropFilter: 'blur(20px)',
+      bgcolor: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(16px) saturate(1.2)',
       borderBottom: `1px solid ${t.border}`,
       display: 'flex', alignItems: 'center', gap: 2, px: 3,
       position: 'sticky', top: 0, zIndex: 30,
@@ -361,40 +508,57 @@ export function TopBar({ breadcrumb = [], onSearch }) {
 
       <Box sx={{
         flex: 1, maxWidth: 440, mx: 2,
-        bgcolor: t.bg2, border: `1px solid ${t.border}`, borderRadius: '9px',
+        bgcolor: t.bg2, border: `1px solid ${t.border}`, borderRadius: '10px',
         py: 0.875, px: 1.5,
         display: 'flex', alignItems: 'center', gap: 1,
         fontSize: 12.5, color: t.text3, cursor: 'pointer',
+        transition: 'border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease',
+        '&:hover': {
+          borderColor: t.borderStrong,
+          bgcolor: t.bg1,
+          boxShadow: '0 2px 10px rgba(23,19,13,0.06)',
+        },
       }} onClick={onSearch}>
-        <Box>🔍</Box>
+        <Search sx={{ fontSize: 18, opacity: 0.55 }} />
         <Box>Rechercher voyageur, listing, réservation…</Box>
         <Box sx={{
-          ml: 'auto', fontFamily: 'Geist Mono', fontSize: 10,
-          p: '1px 6px', bgcolor: t.bg1, border: `1px solid ${t.border}`,
-          borderRadius: 0.5, color: t.text2,
+          ml: 'auto', fontFamily: 'Geist Mono, monospace', fontSize: 10,
+          px: 0.75, py: 0.25, bgcolor: t.bg1, border: `1px solid ${t.border}`,
+          borderRadius: 1, color: t.text2,
         }}>⌘K</Box>
       </Box>
 
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto' }}>
-        <IconButton sx={iconBtnSx}>
-          🔔
-          <Box sx={{
-            position: 'absolute', top: 7, right: 8,
-            width: 7, height: 7, borderRadius: '50%',
-            bgcolor: t.error, border: `2px solid ${t.bg0}`,
-          }} />
-        </IconButton>
-        <IconButton sx={iconBtnSx}>?</IconButton>
-        <IconButton sx={iconBtnSx}>⚙</IconButton>
+        <Tooltip title="Notifications">
+          <IconButton sx={iconBtnSx} aria-label="Notifications">
+            <NotificationsNoneOutlined sx={{ fontSize: 20 }} />
+            <Box sx={{
+              position: 'absolute', top: 7, right: 8,
+              width: 7, height: 7, borderRadius: '50%',
+              bgcolor: t.error, border: `2px solid ${t.bg1}`,
+            }} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Aide">
+          <IconButton sx={iconBtnSx} aria-label="Aide">
+            <HelpOutlineOutlined sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Paramètres">
+          <IconButton sx={iconBtnSx} aria-label="Paramètres">
+            <SettingsOutlined sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Tooltip>
       </Stack>
     </Box>
   );
 }
 
 const iconBtnSx = {
-  width: 34, height: 34, borderRadius: '8px',
-  color: t.text2, fontSize: 14,
-  '&:hover': { bgcolor: t.bg2, color: t.text },
+  width: 36, height: 36, borderRadius: '9px',
+  color: t.text2,
+  transition: 'background-color 0.18s ease, color 0.18s ease, transform 0.18s ease',
+  '&:hover': { bgcolor: t.bg2, color: t.text, transform: 'translateY(-1px)' },
   position: 'relative',
 };
 
@@ -404,20 +568,45 @@ const iconBtnSx = {
 
 export function PageHeader({ title, count, children }) {
   return (
-    <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 2.5 }}>
-      <Typography component="div" sx={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.4px',
-        display: 'flex', alignItems: 'center', gap: 1.5,
-      }}>
-        {title}
-        {count && (
-          <Box component="span" sx={{
-            fontFamily: 'Geist Mono', fontSize: 13, color: t.text3, fontWeight: 500,
-            bgcolor: t.bg2, p: '3px 9px', borderRadius: '99px',
-            border: `1px solid ${t.border}`, letterSpacing: 0.4,
-          }}>{count}</Box>
-        )}
-      </Typography>
-      <Stack direction="row" spacing={1} sx={{ ml: 'auto' }}>
+    <Stack
+      direction="row"
+      spacing={2}
+      sx={{
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        mb: 3,
+        pb: 2,
+        borderBottom: `1px solid ${t.border}`,
+        gap: 2,
+      }}
+    >
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography
+          component="h1"
+          variant="h5"
+          sx={{
+            fontSize: { xs: '1.2rem', sm: '1.45rem' },
+            fontWeight: 800,
+            letterSpacing: '-0.045em',
+            color: t.text,
+            lineHeight: 1.2,
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 1.5,
+          }}
+        >
+          {title}
+          {count && (
+            <Box component="span" sx={{
+              fontFamily: 'Geist Mono, monospace', fontSize: 12, color: t.text3, fontWeight: 600,
+              bgcolor: t.bg2, px: 1.25, py: 0.375, borderRadius: '999px',
+              border: `1px solid ${t.border}`, letterSpacing: 0.02,
+            }}>{count}</Box>
+          )}
+        </Typography>
+      </Box>
+      <Stack direction="row" spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
         {children}
       </Stack>
     </Stack>
@@ -425,31 +614,71 @@ export function PageHeader({ title, count, children }) {
 }
 
 export const btnPrimarySx = {
-  px: 1.75, py: 0.875, borderRadius: '8px',
-  fontSize: 12.5, fontWeight: 600, textTransform: 'none', letterSpacing: '-0.01em',
-  background: `linear-gradient(180deg, ${t.primarySoft} 0%, ${t.primary} 100%)`,
-  color: t.text,
-  boxShadow: '0 1px 0 rgba(255,255,255,0.4) inset, 0 4px 12px rgba(230,176,34,0.30), 0 0 0 1px rgba(184,136,26,0.20)',
+  textTransform: 'none',
+  fontWeight: 600,
+  fontSize: '0.8125rem',
+  borderRadius: 1.25,
+  px: 1.75,
+  py: 0.875,
+  minHeight: 36,
+  background: 'linear-gradient(180deg, #cb9b2c 0%, #b8851a 100%)',
+  color: '#1a1408',
+  boxShadow: '0 1px 2px rgba(135,97,25,0.30), inset 0 1px 0 rgba(255,255,255,0.30)',
+  transition: 'background 140ms ease, box-shadow 140ms ease, transform 100ms ease',
   '&:hover': {
-    transform: 'translateY(-1px)',
-    background: `linear-gradient(180deg, ${t.primarySoft} 0%, ${t.primary} 100%)`,
+    background: 'linear-gradient(180deg, #d4a432 0%, #b8851a 100%)',
+    boxShadow: '0 2px 6px rgba(135,97,25,0.36), inset 0 1px 0 rgba(255,255,255,0.30)',
+  },
+  '&:active': { transform: 'translateY(0.5px)' },
+  '&:focus-visible': {
+    outline: '2px solid rgba(184,133,26,0.55)',
+    outlineOffset: 2,
   },
 };
 export const btnGhostSx = {
-  px: 1.75, py: 0.875, borderRadius: '8px',
-  fontSize: 12.5, fontWeight: 600, textTransform: 'none',
-  bgcolor: t.bg1, color: t.text, border: `1px solid ${t.border}`,
-  '&:hover': { bgcolor: t.bg2, borderColor: t.borderStrong },
+  textTransform: 'none',
+  fontWeight: 600,
+  fontSize: '0.8125rem',
+  borderRadius: 1.25,
+  px: 1.75,
+  py: 0.875,
+  minHeight: 36,
+  border: '1px solid rgba(20,17,10,0.14)',
+  bgcolor: '#ffffff',
+  color: '#14110a',
+  transition: 'background 140ms ease, border-color 140ms ease',
+  '&:hover': {
+    bgcolor: '#fafaf7',
+    borderColor: 'rgba(20,17,10,0.22)',
+  },
 };
 export const btnAiSx = {
-  px: 1.75, py: 0.875, borderRadius: '8px',
-  fontSize: 12.5, fontWeight: 600, textTransform: 'none',
-  background: `linear-gradient(180deg, #a78bfa 0%, ${t.ai} 100%)`,
-  color: '#fff',
-  boxShadow: '0 1px 0 rgba(255,255,255,0.3) inset, 0 4px 12px rgba(139,92,246,0.30)',
-  '&:hover': { transform: 'translateY(-1px)', background: `linear-gradient(180deg, #a78bfa 0%, ${t.ai} 100%)` },
+  textTransform: 'none',
+  fontWeight: 600,
+  fontSize: '0.8125rem',
+  borderRadius: 1.25,
+  px: 1.75,
+  py: 0.875,
+  minHeight: 36,
+  background: 'linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)',
+  color: '#ffffff',
+  boxShadow: '0 1px 2px rgba(76,29,149,0.25), inset 0 1px 0 rgba(255,255,255,0.20)',
+  transition: 'background 140ms ease, box-shadow 140ms ease, transform 100ms ease',
+  '&:hover': {
+    background: 'linear-gradient(180deg, #9669f7 0%, #7c3aed 100%)',
+    boxShadow: '0 2px 6px rgba(76,29,149,0.32), inset 0 1px 0 rgba(255,255,255,0.20)',
+  },
+  '&:active': { transform: 'translateY(0.5px)' },
 };
-export const btnSmSx = { fontSize: 11.5, py: 0.625, px: 1.25 };
+export const btnSmSx = {
+  textTransform: 'none',
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  borderRadius: 1,
+  px: 1.25,
+  py: 0.5,
+  minHeight: 28,
+};
 
 // ════════════════════════════════════════════════════════════════════
 // 5. Stat cards
@@ -467,9 +696,13 @@ export function StatCard({ icon, iconBg, iconColor, value, label, trend, trendUp
   return (
     <Box sx={{
       bgcolor: t.bg1, border: `1px solid ${t.border}`,
-      borderRadius: '11px', p: 2,
-      transition: 'all 0.15s',
-      '&:hover': { boxShadow: '0 4px 12px rgba(26,20,8,0.06)', borderColor: t.borderStrong },
+      borderRadius: '10px', p: 2.25,
+      transition: 'box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
+      '&:hover': {
+        boxShadow: '0 10px 28px rgba(23,19,13,0.08)',
+        borderColor: t.borderStrong,
+        transform: 'translateY(-2px)',
+      },
     }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.25 }}>
         <Box sx={{
@@ -595,7 +828,21 @@ export function FilterBar({ children }) {
 // 7. DataTable (CORE — sortable, selectable, with row actions)
 // ════════════════════════════════════════════════════════════════════
 
-export function DataTable({ columns, rows, selectable, selectedIds = [], onSelectionChange, onRowClick, footer }) {
+export function DataTable({
+  columns,
+  rows,
+  selectable,
+  selectedIds = [],
+  onSelectionChange,
+  onRowClick,
+  footer,
+  /** Masque la colonne vide avec icônes (pour tables larges type liste tâches partners). */
+  hideRowActions = false,
+  /** Largeur minimale du tableau (ex. 2000) pour scroll horizontal avec colonnes fixes. */
+  tableMinWidth,
+  /** Style des en-têtes (partners = titres mixtes, pas tout en majuscules). */
+  headerTextTransform = 'uppercase',
+}) {
   const toggleRow = (id) => {
     const next = selectedIds.includes(id)
       ? selectedIds.filter(x => x !== id)
@@ -609,16 +856,35 @@ export function DataTable({ columns, rows, selectable, selectedIds = [], onSelec
       borderRadius: '12px', overflow: 'hidden',
       boxShadow: '0 1px 2px rgba(26,20,8,0.03)',
     }}>
-      <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+      <Box sx={{ overflowX: tableMinWidth ? 'auto' : 'visible', width: '100%' }}>
+      <Box
+        component="table"
+        sx={{
+          width: '100%',
+          minWidth: tableMinWidth || '100%',
+          borderCollapse: 'collapse',
+          fontSize: 12.5,
+          tableLayout: tableMinWidth ? 'fixed' : 'auto',
+        }}
+      >
         <Box component="thead">
           <Box component="tr">
             {selectable && <Box component="th" sx={thSx} style={{ width: 36 }}><Checkbox /></Box>}
             {columns.map(col => (
-              <Box component="th" key={col.key} sx={{ ...thSx, textAlign: col.align || 'left', width: col.width }}>
+              <Box
+                component="th"
+                key={col.key}
+                sx={{
+                  ...thSx,
+                  textAlign: col.align || 'left',
+                  width: col.width,
+                  textTransform: col.headerTextTransform ?? headerTextTransform,
+                }}
+              >
                 {col.label} {col.sortable && <Box component="span" sx={{ opacity: 0.4, ml: 0.5, fontSize: 9 }}>↕</Box>}
               </Box>
             ))}
-            <Box component="th" sx={thSx} style={{ width: 60 }} />
+            {!hideRowActions && <Box component="th" sx={thSx} style={{ width: 60 }} />}
           </Box>
         </Box>
         <Box component="tbody">
@@ -645,18 +911,21 @@ export function DataTable({ columns, rows, selectable, selectedIds = [], onSelec
                     {col.render ? col.render(row) : row[col.key]}
                   </Box>
                 ))}
-                <Box component="td" sx={tdSx}>
-                  <Stack direction="row" spacing={0.25} className="row-actions" sx={{
-                    justifyContent: 'flex-end', opacity: 0, transition: 'opacity 0.15s',
-                  }}>
-                    <IconButton size="small" sx={rowActionSx}>💬</IconButton>
-                    <IconButton size="small" sx={rowActionSx}>⋮</IconButton>
-                  </Stack>
-                </Box>
+                {!hideRowActions && (
+                  <Box component="td" sx={tdSx}>
+                    <Stack direction="row" spacing={0.25} className="row-actions" sx={{
+                      justifyContent: 'flex-end', opacity: 0, transition: 'opacity 0.15s',
+                    }}>
+                      <IconButton size="small" sx={rowActionSx}>💬</IconButton>
+                      <IconButton size="small" sx={rowActionSx}>⋮</IconButton>
+                    </Stack>
+                  </Box>
+                )}
               </Box>
             );
           })}
         </Box>
+      </Box>
       </Box>
       {footer && (
         <Stack direction="row" sx={{
@@ -1097,15 +1366,50 @@ export function TaskCard({ priority = 'low', type, title, listing, assignee, dea
 // 12. ChatLayout (Communications WhatsApp)
 // ════════════════════════════════════════════════════════════════════
 
-export function ChatLayout({ children }) {
+export function ChatLayout({ children, mobileView = 'both' }) {
+  // mobileView: 'list' | 'chat' | 'both'
+  // Sur desktop: toujours 'both' (3 colonnes)
+  // Sur mobile: 'list' (liste seule) ou 'chat' (messages seuls)
+
   return (
     <Box sx={{
       bgcolor: t.bg1, border: `1px solid ${t.border}`,
       borderRadius: '12px', overflow: 'hidden',
       display: 'grid',
-      gridTemplateColumns: { xs: '1fr', md: '300px 1fr 280px', lg: '300px 1fr 280px' },
+      gridTemplateColumns: {
+        xs: '1fr',  // Mobile: 1 colonne
+        md: '300px 1fr 280px',  // Desktop: 3 colonnes
+        lg: '320px 1fr 300px'  // Large: 3 colonnes plus larges
+      },
       height: 660,
       boxShadow: '0 1px 2px rgba(26,20,8,0.03)',
+      // Sur mobile, gérer quelle colonne est visible
+      '& > *': {
+        display: {
+          xs: 'none',  // Par défaut caché sur mobile
+          md: 'block'  // Tout visible sur desktop
+        },
+        height: '100%',  // TOUTES les colonnes prennent 100% de la hauteur du ChatLayout
+      },
+      // Sur mobile, afficher selon mobileView
+      '& > *:nth-of-type(1)': {  // ConversationList
+        display: {
+          xs: mobileView === 'list' || mobileView === 'both' ? 'block' : 'none',
+          md: 'block'
+        }
+      },
+      '& > *:nth-of-type(2)': {  // ChatThread
+        display: {
+          xs: mobileView === 'chat' ? 'block' : 'none',
+          md: 'flex'
+        }
+      },
+      '& > *:nth-of-type(3)': {  // ChatAside
+        display: {
+          xs: 'none',  // Toujours caché sur mobile
+          md: 'block'
+        }
+      },
     }}>{children}</Box>
   );
 }
@@ -1170,13 +1474,44 @@ function ConversationItem({ conv, active, onClick }) {
   );
 }
 
-export function ChatThread({ conv, messages, aiSuggestions = [], onSend }) {
+export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISuggestion, loading, onBack }) {
+  const [inputValue, setInputValue] = React.useState('');
+  const inputRef = React.useRef(null);
+  const messagesEndRef = React.useRef(null);
+
+  // Scroll automatique vers le bas quand nouveaux messages
+  React.useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [messages]);
+
+  const handleSend = () => {
+    if (inputValue.trim()) {
+      onSend?.(inputValue);
+      setInputValue('');
+    }
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', bgcolor: t.bg2 }}>
       <Stack direction="row" spacing={1.25} sx={{
         alignItems: 'center',
         p: '12px 18px', borderBottom: `1px solid ${t.border}`, bgcolor: t.bg1,
       }}>
+        {/* Bouton retour (mobile only) */}
+        {onBack && (
+          <IconButton
+            onClick={onBack}
+            sx={{
+              ...iconBtnSx,
+              display: { xs: 'flex', md: 'none' },
+              mr: 0.5,
+            }}
+          >
+            ←
+          </IconButton>
+        )}
         <Avatar sx={{ width: 36, height: 36, fontSize: 13, fontWeight: 700,
           background: avaColors[conv.color] || avaColors.gold }}>{conv.initials}</Avatar>
         <Box>
@@ -1191,10 +1526,24 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend }) {
 
       <Box sx={{ flex: 1, overflowY: 'auto', p: 2.25,
         display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {messages.map((m, i) =>
-          m.type === 'day'
-            ? <DayLabel key={i}>{m.text}</DayLabel>
-            : <Message key={i} from={m.from} text={m.text} when={m.when} />
+        {messages.length === 0 && !loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <Typography sx={{ fontSize: 13, color: t.text3 }}>Aucun message</Typography>
+          </Box>
+        ) : (
+          <>
+            {messages.map((m, i) =>
+              m.type === 'day'
+                ? <DayLabel key={i}>{m.text}</DayLabel>
+                : <Message key={i} from={m.from} text={m.text} when={m.when} />
+            )}
+            {loading && messages.length > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <Typography sx={{ fontSize: 11, color: t.text4 }}>Chargement...</Typography>
+              </Box>
+            )}
+            <div ref={messagesEndRef} />
+          </>
         )}
       </Box>
 
@@ -1204,22 +1553,69 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend }) {
             {aiSuggestions.map((s, i) => <AIChip key={i}>{s}</AIChip>)}
           </Stack>
         )}
+        {onAISuggestion && (
+          <Box sx={{ mb: 1 }}>
+            <Box
+              component="button"
+              onClick={onAISuggestion}
+              sx={{
+                px: 1.5,
+                py: 0.75,
+                fontSize: 12,
+                fontWeight: 600,
+                color: t.primary,
+                bgcolor: 'transparent',
+                border: `1px solid ${t.primary}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                '&:hover': {
+                  bgcolor: t.primaryTint,
+                },
+              }}
+            >
+              💡 Suggestion IA
+            </Box>
+          </Box>
+        )}
         <Stack direction="row" spacing={1} sx={{
           alignItems: 'center',
           p: '8px 10px', bgcolor: t.bg2, border: `1px solid ${t.border}`, borderRadius: '9px',
         }}>
           <IconButton sx={inputIconSx}>📎</IconButton>
           <IconButton sx={inputIconSx}>😊</IconButton>
-          <Box component="input" placeholder="Écrire un message…" sx={{
-            flex: 1, background: 'transparent', border: 0, outline: 0,
-            font: 'inherit', fontSize: 12.5, color: t.text,
-          }} onKeyDown={(e) => { if (e.key === 'Enter' && e.target.value) { onSend?.(e.target.value); e.target.value = ''; } }} />
+          <Box
+            component="input"
+            ref={inputRef}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="Écrire un message…"
+            sx={{
+              flex: 1, background: 'transparent', border: 0, outline: 0,
+              font: 'inherit', fontSize: 12.5, color: t.text,
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && inputValue.trim()) {
+                handleSend();
+              }
+            }}
+          />
           <IconButton sx={inputIconSx}>🎤</IconButton>
-          <Box component="button" sx={{
-            width: 30, height: 30, borderRadius: '7px',
-            bgcolor: t.primary, color: t.text, fontWeight: 800, fontSize: 13,
-            border: 0, cursor: 'pointer',
-          }}>→</Box>
+          <Box
+            component="button"
+            onClick={handleSend}
+            disabled={!inputValue.trim()}
+            sx={{
+              width: 30, height: 30, borderRadius: '7px',
+              bgcolor: inputValue.trim() ? t.primary : t.bg3,
+              color: inputValue.trim() ? t.text : t.text4,
+              fontWeight: 800, fontSize: 13,
+              border: 0, cursor: inputValue.trim() ? 'pointer' : 'not-allowed',
+              transition: 'all 0.15s',
+            }}
+          >
+            →
+          </Box>
         </Stack>
       </Box>
     </Box>

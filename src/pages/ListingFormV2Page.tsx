@@ -1,0 +1,102 @@
+import { useParams, useNavigate } from 'react-router-dom';
+import { Box, CircularProgress, Alert } from '@mui/material';
+import { DashboardWrapper } from '../components/DashboardWrapper';
+import ListingFormV2 from '../components/listing/form-v2/ListingFormV2';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import listingsService from '../services/listingsService';
+import { toast } from 'react-toastify';
+
+export function ListingFormV2Page() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  // Fetch listing data
+  const { data: listing, isLoading, error } = useQuery({
+    queryKey: ['listing', id],
+    queryFn: () => listingsService.getListingDocument(id!),
+    enabled: !!id,
+  });
+
+  // Update listing mutation
+  const { mutate: saveListing, isPending: isSaving } = useMutation({
+    mutationFn: (values: any) => listingsService.updateListing(id!, values),
+    onSuccess: () => {
+      toast.success('Listing enregistré avec succès');
+      queryClient.invalidateQueries({ queryKey: ['listing', id] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Erreur lors de l\'enregistrement');
+    },
+  });
+
+  // Verify Rental United OTA channels mutation
+  const { mutate: verifyRuChannels, isPending: isVerifyingRu } = useMutation({
+    mutationFn: () => listingsService.verifyOtaChannels(id!),
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success('Canaux OTA vérifiés avec succès');
+        queryClient.invalidateQueries({ queryKey: ['listing', id] });
+      } else {
+        toast.error(result.error || 'Erreur lors de la vérification');
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Erreur lors de la vérification des canaux OTA');
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <DashboardWrapper>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '80vh',
+        }}>
+          <CircularProgress size={48} sx={{ color: '#b8851a' }} />
+        </Box>
+      </DashboardWrapper>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardWrapper>
+        <Box sx={{ p: 4 }}>
+          <Alert severity="error">
+            Erreur lors du chargement du listing : {(error as Error)?.message}
+          </Alert>
+        </Box>
+      </DashboardWrapper>
+    );
+  }
+
+  if (!listing) {
+    return (
+      <DashboardWrapper>
+        <Box sx={{ p: 4 }}>
+          <Alert severity="warning">
+            Listing introuvable
+          </Alert>
+        </Box>
+      </DashboardWrapper>
+    );
+  }
+
+  return (
+    <DashboardWrapper>
+      <ListingFormV2
+        listingId={id!}
+        initialValues={listing}
+        onSave={saveListing}
+        isSaving={isSaving}
+        onVerifyRuChannels={verifyRuChannels}
+        verifyRuLoading={isVerifyingRu}
+      />
+    </DashboardWrapper>
+  );
+}
+
+export default ListingFormV2Page;

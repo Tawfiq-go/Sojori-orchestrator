@@ -1,26 +1,49 @@
+import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DashboardLayout } from './dashboard/DashboardV2.components';
 import { useAuth } from '../hooks/useAuth';
+import { runtimeLog } from '../utils/runtimeLog';
 
 interface DashboardWrapperProps {
   children: React.ReactNode;
   breadcrumb?: string[];
+  /** Formulaire listing plein écran : marges main réduites, hauteur utile maximale */
+  compactMain?: boolean;
 }
 
-export function DashboardWrapper({ children, breadcrumb = [] }: DashboardWrapperProps) {
+/**
+ * DashboardWrapper — coquille des pages.
+ * Édition 2026 « Atelier » : marge constante, animation d'entrée sojori-main-enter,
+ * gestion identité utilisateur identique au design précédent (zéro régression métier).
+ */
+export function DashboardWrapper({ children, breadcrumb = [], compactMain = false }: DashboardWrapperProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
 
-  // Mapping des IDs de navigation vers les routes
+  useEffect(() => {
+    runtimeLog('info', 'Layout', 'DashboardWrapper mount/update', {
+      path: location.pathname,
+      hasUser: Boolean(user),
+      userId: user?.id ?? null,
+      hasEmail: Boolean(user?.email?.trim()),
+      firstLen: (user?.firstName ?? '').length,
+      lastLen: (user?.lastName ?? '').length,
+      role: user?.role ?? null,
+    });
+  }, [location.pathname, user?.id, user?.email, user?.firstName, user?.lastName, user?.role]);
+
+  // Mapping des IDs de navigation vers les routes (inchangé)
   const navToRoute: Record<string, string> = {
     // Pilotage
     'dashboard': '/dashboard',
     'analytics': '/analytics',
     'reports': '/reports',
-    'orchestration': '/orchestration',
-    'orchestration/timeline': '/orchestration/timeline/1234',
+    'orchestrator': '/orchestrator',
+    'orchestration/plans': '/orchestration/plans',
+    'orchestration/timeline': '/orchestration/timeline',
     'orchestration/events': '/orchestration/events',
+    'orchestration/daily-ops': '/orchestration/daily-ops',
     'orchestration/config': '/orchestration/config',
 
     // Calendrier
@@ -28,7 +51,8 @@ export function DashboardWrapper({ children, breadcrumb = [] }: DashboardWrapper
 
     // Réservations
     'reservations/list': '/reservations',
-    'reservations/detail': '/reservations/1234',
+    'reservations/planning': '/reservations/planning',
+    // Note: 'reservations/detail' removed - Séjour is a tab, not a separate page
 
     // Tâches
     'tasks/list': '/tasks',
@@ -36,10 +60,14 @@ export function DashboardWrapper({ children, breadcrumb = [] }: DashboardWrapper
     'tasks/planning': '/tasks/planning',
     'tasks/staff-wa': '/tasks/staff-whatsapp',
 
-    // Communications
-    'comms/guests': '/communications/whatsapp',
-    'comms/staff': '/communications/staff',
-    'comms/ota': '/communications/ota',
+    // Communications Hub - Navigation principale
+    'comms': '/communications',
+    'comms/guests': '/communications?tab=whatsapp',
+    'comms/staff': '/communications?tab=staff',
+    'comms/templates': '/communications?tab=templates',
+    'comms/ota': '/communications?tab=ota',
+    'comms/leads': '/communications?tab=leads',
+    'comms/reviews': '/communications?tab=reviews',
 
     // Service Client
     'requests': '/requests',
@@ -52,7 +80,7 @@ export function DashboardWrapper({ children, breadcrumb = [] }: DashboardWrapper
     'clients': '/clients',
   };
 
-  // Trouver l'activePath à partir de l'URL actuelle
+  /** Détection robuste : on prend la route la plus longue qui matche (préfixes propres). */
   const getActivePathFromUrl = () => {
     const path = location.pathname;
 
@@ -70,14 +98,12 @@ export function DashboardWrapper({ children, breadcrumb = [] }: DashboardWrapper
       if (path.startsWith(route) && route !== '/') return key;
       if (path === route) return key;
     }
-    return 'dashboard'; // default
+    return 'dashboard';
   };
 
   const handleNavigate = (navId: string) => {
     const route = navToRoute[navId];
-    if (route) {
-      navigate(route);
-    }
+    if (route) navigate(route);
   };
 
   const handleLogout = () => {
@@ -85,19 +111,34 @@ export function DashboardWrapper({ children, breadcrumb = [] }: DashboardWrapper
     navigate('/login', { replace: true });
   };
 
+  // Identité affichée — préférence aux noms, sinon email, sinon fallback
+  const layoutUser =
+    user &&
+    (() => {
+      const first = (user.firstName ?? '').trim();
+      const last = (user.lastName ?? '').trim();
+      const name = [first, last].filter(Boolean).join(' ') || user.email?.trim() || 'Utilisateur';
+      const fromNames = `${first.charAt(0)}${last.charAt(0)}`.toUpperCase().trim();
+      const initials =
+        fromNames ||
+        (user.email?.trim().charAt(0) || '?').toUpperCase();
+      return {
+        name,
+        initials,
+        role: user.role,
+        email: user.email ?? '',
+        avatar: user.avatar,
+      };
+    })();
+
   return (
     <DashboardLayout
       activePath={getActivePathFromUrl()}
       onNavigate={handleNavigate}
       onLogout={handleLogout}
       breadcrumb={breadcrumb}
-      user={user ? {
-        name: `${user.firstName} ${user.lastName}`.trim(),
-        initials: `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase(),
-        role: user.role,
-        email: user.email,
-        avatar: user.avatar,
-      } : undefined}
+      compactMain={compactMain}
+      user={layoutUser || undefined}
     >
       {children}
     </DashboardLayout>
