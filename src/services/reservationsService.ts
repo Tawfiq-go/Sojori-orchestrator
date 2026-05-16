@@ -391,6 +391,30 @@ class ReservationsService {
       };
     }
   }
+
+  /**
+   * PUT /api/v1/reservations/update-fields/:id
+   * Met à jour des champs spécifiques (actualArrivalTime, actualDepartureTime, cancellationAcknowledged, etc.)
+   */
+  async updateReservationFields(reservationId: string, fields: Record<string, any>): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const url = `${BASE_URL}/api/v1/reservations/update-fields/${reservationId}`;
+
+      const response = await apiClient.put(url, fields);
+
+      if (response.data.success) {
+        return { success: true, data: response.data.data || response.data };
+      }
+
+      return { success: false, message: response.data.message || 'Erreur lors de la mise à jour' };
+    } catch (error: any) {
+      console.error('[ReservationsService] UpdateFields error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || 'Erreur lors de la mise à jour',
+      };
+    }
+  }
 }
 
 // Export singleton instance

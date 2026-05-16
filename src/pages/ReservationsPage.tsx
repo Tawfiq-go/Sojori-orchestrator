@@ -79,6 +79,11 @@ const T = {
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────
+const isReservationCancelled = (status: string) => {
+  const s = status?.toLowerCase() || '';
+  return s.includes('cancel') || s === 'rejected';
+};
+
 const formatTime = (timeInput: any): string | null => {
   if (timeInput === undefined || timeInput === null || timeInput === '') return null;
   try {
@@ -229,6 +234,46 @@ export function ReservationsPage() {
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // ─── Helper for cancellation acknowledgement ──────────────────────
+  const isCancellationUnacknowledged = (reservation: Reservation) => {
+    if (!isReservationCancelled(reservation.status)) return false;
+    return reservation.cancellationAcknowledged !== true;
+  };
+
+  // ─── Handler Acquitter ────────────────────────────────────────────
+  const handleAcknowledgeCancellation = async (reservation: Reservation) => {
+    const reservationId = reservation._id;
+    if (!reservationId) return;
+
+    // Optimistic update
+    const prevAck = reservation.cancellationAcknowledged;
+    setReservations(prev =>
+      prev.map(r => (r._id === reservationId ? { ...r, cancellationAcknowledged: true } : r)),
+    );
+
+    try {
+      const result = await reservationsService.updateReservationFields(reservationId, {
+        cancellationAcknowledged: true,
+      });
+
+      if (result.success) {
+        toast.success('Annulation acquittée');
+      } else {
+        // Rollback on error
+        setReservations(prev =>
+          prev.map(r => (r._id === reservationId ? { ...r, cancellationAcknowledged: prevAck } : r)),
+        );
+        toast.error(result.message || 'Erreur lors de l\'acquittement');
+      }
+    } catch (error: any) {
+      // Rollback on error
+      setReservations(prev =>
+        prev.map(r => (r._id === reservationId ? { ...r, cancellationAcknowledged: prevAck } : r)),
+      );
+      toast.error(error.message || 'Erreur lors de l\'acquittement');
+    }
+  };
 
   // ─── Fetch (logique métier inchangée) ────────────────────────────
   const fetchReservations = async () => {
@@ -527,7 +572,7 @@ export function ReservationsPage() {
         )}
         {!isLoading && isMobile && paged.length > 0 && (
           <Stack spacing={1.25}>
-            {paged.map((r) => <MobileCard key={r._id} r={r} onClick={() => handleViewDetails(r)} />)}
+            {paged.map((r) => <MobileCard key={r._id} r={r} onClick={() => handleViewDetails(r)} onAcknowledge={handleAcknowledgeCancellation} />)}
           </Stack>
         )}
 
@@ -791,14 +836,21 @@ function DesktopTable({ rows, onRowClick, onNavigate }: {
 }
 
 // ─── Mobile card ───────────────────────────────────────────────────
-function MobileCard({ r, onClick }: { r: Reservation; onClick: () => void }) {
+function MobileCard({ r, onClick, onAcknowledge }: { r: Reservation; onClick: () => void; onAcknowledge?: (r: Reservation) => void }) {
   const s = statusMeta(r.status);
   const p = presenceMeta(r);
+
+  const isCancelled = isReservationCancelled(r.status);
+  const unacknowledged = isCancelled && r.cancellationAcknowledged !== true;
+
   return (
     <Card onClick={onClick} sx={{
-      border: `1px solid ${T.border}`, borderRadius: 1.5, cursor: 'pointer',
+      border: `1px solid ${unacknowledged ? 'rgba(245, 158, 11, 0.28)' : T.border}`,
+      bgcolor: unacknowledged ? 'rgba(250, 204, 21, 0.12)' : T.bg1,
+      borderRadius: 1.5,
+      cursor: 'pointer',
       transition: 'box-shadow 140ms ease, border-color 140ms ease',
-      '&:hover': { borderColor: T.borderStrong },
+      '&:hover': { borderColor: unacknowledged ? 'rgba(245, 158, 11, 0.5)' : T.borderStrong },
     }}>
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
@@ -810,6 +862,38 @@ function MobileCard({ r, onClick }: { r: Reservation; onClick: () => void }) {
           </Stack>
           <Chip label={s.label} size="small" sx={{ bgcolor: s.bg, color: s.color, fontWeight: 600, fontSize: 10.5, height: 20 }} />
         </Stack>
+
+        {/* Annulation info + bouton acquitter */}
+        {isCancelled && r.cancellationDate && (
+          <Box sx={{ mb: 1, p: 1, bgcolor: 'rgba(255,255,255,0.5)', borderRadius: 1 }}>
+            <Typography sx={{ fontSize: 11, color: T.text3, mb: 0.5 }}>
+              Annulée le {moment(r.cancellationDate).format('DD/MM/YYYY HH:mm')}
+            </Typography>
+            {unacknowledged && onAcknowledge && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAcknowledge(r);
+                }}
+                sx={{
+                  fontSize: 10,
+                  minHeight: 22,
+                  py: 0.25,
+                  px: 1,
+                  fontWeight: 700,
+                  borderColor: T.warning,
+                  color: T.warning,
+                  '&:hover': { bgcolor: 'rgba(196,101,6,0.08)', borderColor: T.warning },
+                }}
+              >
+                Acquitter
+              </Button>
+            )}
+          </Box>
+        )}
+
         <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.text, mb: 0.5 }}>{r.listing?.name}</Typography>
         <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1.25 }}>
           {flagFor(r.guestCountry)} {r.guestName}
