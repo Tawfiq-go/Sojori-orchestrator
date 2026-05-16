@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { T } from './_shared';
 
 export default function UpdateInventoryModal({
-  open, onClose, selectedCells = [], currency = 'EUR', onSave,
+  open, onClose, selectedCells = [], currency = 'EUR', inventoryData = {}, onSave,
 }) {
   const [step, setStep] = useState('form'); // 'form' | 'confirm'
   const [error, setError] = useState(null);
@@ -25,6 +25,47 @@ export default function UpdateInventoryModal({
       nights: isos.length, listingsCount: listings.size, roomTypesCount: rooms.size,
     };
   }, [selectedCells]);
+
+  /* ─── Analyze current values from selected cells ─── */
+  const cellsAnalysis = useMemo(() => {
+    if (selectedCells.length === 0 || !inventoryData) {
+      return { prices: [], availabilities: [], stopSells: [], dynamicPrices: [], minStays: [], maxStays: [] };
+    }
+
+    const prices = [], availabilities = [], stopSells = [], dynamicPrices = [], minStays = [], maxStays = [];
+
+    selectedCells.forEach(cell => {
+      const inv = inventoryData[cell.listingId]?.[cell.roomTypeId]?.availability?.[cell.dateStr];
+      if (inv) {
+        if (inv.manualPrice != null) prices.push(inv.manualPrice);
+        if (inv.availableRoom != null) availabilities.push(inv.availableRoom);
+        if (inv.stopSell != null) stopSells.push(inv.stopSell);
+        if (inv.useDynamicPrice != null) dynamicPrices.push(inv.useDynamicPrice);
+        if (inv.minStay != null) minStays.push(inv.minStay);
+        if (inv.maxStay != null) maxStays.push(inv.maxStay);
+      }
+    });
+
+    const getCommonOrMinMax = (arr) => {
+      if (arr.length === 0) return { common: null, min: null, max: null };
+      const allSame = arr.every(v => v === arr[0]);
+      return {
+        common: allSame ? arr[0] : null,
+        min: Math.min(...arr),
+        max: Math.max(...arr),
+      };
+    };
+
+    return {
+      prices, availabilities, stopSells, dynamicPrices, minStays, maxStays,
+      price: getCommonOrMinMax(prices),
+      availability: getCommonOrMinMax(availabilities),
+      stopSell: stopSells.length > 0 && stopSells.every(v => v === stopSells[0]) ? stopSells[0] : null,
+      dynamicPrice: dynamicPrices.length > 0 && dynamicPrices.every(v => v === dynamicPrices[0]) ? dynamicPrices[0] : null,
+      minStay: getCommonOrMinMax(minStays),
+      maxStay: getCommonOrMinMax(maxStays),
+    };
+  }, [selectedCells, inventoryData]);
 
   /* ─── Form state ─── */
   const [form, setForm] = useState({
@@ -51,18 +92,15 @@ export default function UpdateInventoryModal({
 
   const calculateModalPosition = () => {
     const modalWidth = 520;
-    const modalHeight = 600; // Hauteur approximative du modal
     const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
     const scrollY = window.scrollY;
 
-    // Calculer le centre de l'écran visible
-    const centerX = viewportWidth / 2;
-    const centerY = (viewportHeight / 2) + scrollY;
+    // Positionner en haut de l'écran visible avec une marge
+    const topMargin = 40; // Marge depuis le haut du viewport
+    const top = scrollY + topMargin;
 
-    // Vérifier si le modal centré dépasse les bords
-    let left = centerX;
-    let top = centerY;
+    // Centrer horizontalement
+    let left = viewportWidth / 2;
 
     // Ajuster horizontalement si nécessaire
     if (left - modalWidth / 2 < 20) {
@@ -71,17 +109,10 @@ export default function UpdateInventoryModal({
       left = viewportWidth - modalWidth / 2 - 20;
     }
 
-    // Ajuster verticalement si nécessaire
-    if (top - modalHeight / 2 < scrollY + 20) {
-      top = scrollY + 20 + modalHeight / 2;
-    } else if (top + modalHeight / 2 > scrollY + viewportHeight - 20) {
-      top = scrollY + viewportHeight - modalHeight / 2 - 20;
-    }
-
     setModalPosition({
       top: `${top}px`,
       left: `${left}px`,
-      transform: 'translate(-50%, -50%)',
+      transform: 'translateX(-50%)',
     });
   };
 
@@ -194,16 +225,40 @@ export default function UpdateInventoryModal({
               </Section>
 
               <Section label="Prix manuel">
+                {cellsAnalysis.price.common !== null && (
+                  <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                    Actuel: <b>{cellsAnalysis.price.common} {currency}</b>
+                  </div>
+                )}
+                {cellsAnalysis.price.common === null && cellsAnalysis.price.min !== null && (
+                  <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                    Min: <b>{cellsAnalysis.price.min}</b> • Max: <b>{cellsAnalysis.price.max} {currency}</b>
+                  </div>
+                )}
                 <FieldBox>
-                  <input type="number" placeholder="Ex: 235" value={form.manualPrice}
+                  <input type="number"
+                    placeholder={cellsAnalysis.price.common !== null ? `Actuel: ${cellsAnalysis.price.common} ${currency}` : "Laisser vide pour ne pas modifier"}
+                    value={form.manualPrice}
                     onChange={e => upd('manualPrice', e.target.value)} />
                   <span style={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>{currency}</span>
                 </FieldBox>
               </Section>
 
               <Section label="Disponibilité">
+                {cellsAnalysis.availability.common !== null && (
+                  <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                    Actuel: <b>{cellsAnalysis.availability.common}</b>
+                  </div>
+                )}
+                {cellsAnalysis.availability.common === null && cellsAnalysis.availability.min !== null && (
+                  <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                    Min: <b>{cellsAnalysis.availability.min}</b> • Max: <b>{cellsAnalysis.availability.max}</b>
+                  </div>
+                )}
                 <FieldBox>
-                  <input type="number" placeholder="Ex: 1" value={form.availability}
+                  <input type="number"
+                    placeholder={cellsAnalysis.availability.common !== null ? `Actuel: ${cellsAnalysis.availability.common}` : "Laisser vide pour ne pas modifier"}
+                    value={form.availability}
                     onChange={e => upd('availability', e.target.value)} />
                   <span style={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>chambres</span>
                 </FieldBox>
@@ -274,6 +329,13 @@ export default function UpdateInventoryModal({
               <p style={{ fontSize: 12.5, color: T.text2, margin: '0 0 12px' }}>
                 Vous êtes sur le point de modifier <b>{nights} nuit(s)</b> pour <b>{roomTypesCount} room type(s)</b> :
               </p>
+              <div style={{
+                padding: '10px 12px', background: T.bg2, border: `1px solid ${T.border}`,
+                borderRadius: 8, fontSize: 12, color: T.text2, marginBottom: 12,
+                fontFamily: '"Geist Mono", monospace',
+              }}>
+                📅 Du <b>{startDate}</b> au <b>{endDate}</b>
+              </div>
               <ul style={{ paddingLeft: 18, margin: 0, fontSize: 12.5, color: T.text2, lineHeight: 1.9 }}>
                 {changesSummary.map((c, i) => <li key={i}>{c}</li>)}
               </ul>

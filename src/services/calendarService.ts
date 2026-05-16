@@ -1,0 +1,298 @@
+// ════════════════════════════════════════════════════════════════════
+// Sojori — Calendar Service
+// Service pour interagir avec srv-calendar (port 4006)
+// ════════════════════════════════════════════════════════════════════
+
+import type {
+  CalendarDay,
+  CalendarMonthRequest,
+  CalendarUpdateRequest,
+  CalendarMonthResponse,
+  CalendarUpdateResponse,
+} from '../types/calendar.types';
+
+// ⚠️ IMPORTANT: srv-calendar est sur le PORT 4004 (pas 4006!)
+// Prod: https://dev.sojori.com/api/v1/calendar
+// Local: http://localhost:4004/api/v1/calendar
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://dev.sojori.com';
+
+class CalendarService {
+  /**
+   * GET /api/v1/calendar/:listingId/calendar?startDate=...&endDate=...
+   * Récupère les jours du calendrier pour un listing et une période
+   */
+  async getMonthCalendar(params: CalendarMonthRequest): Promise<CalendarDay[]> {
+    try {
+      const { listingId, startDate, endDate } = params;
+
+      // Convert dates to ISO format
+      const start = new Date(startDate).toISOString().split('T')[0];
+      const end = new Date(endDate).toISOString().split('T')[0];
+
+      const url = `${BASE_URL}/api/v1/calendar/${listingId}/calendar?startDate=${start}&endDate=${end}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result: CalendarMonthResponse = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to fetch calendar');
+      }
+
+      return result.data;
+    } catch (error) {
+      console.error('Error fetching calendar:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * PUT /api/v1/calendar/inventory/update-inventory
+   * Met à jour l'inventaire (prix, disponibilité, min/max nights, etc.)
+   * Supporte bulk update (plusieurs jours à la fois)
+   * Format moderne avec type/roomTypeId/date_from/date_to
+   * IMPORTANT: L'API attend un ARRAY même pour un seul élément
+   */
+  async updateCalendar(params: CalendarUpdateRequest | CalendarUpdateRequest[]): Promise<CalendarDay[]> {
+    try {
+      const url = `${BASE_URL}/api/v1/calendar/inventory/update-inventory`;
+
+      // Toujours envoyer un array
+      const payload = Array.isArray(params) ? params : [params];
+
+      console.log('[CalendarService] updateCalendar payload:', JSON.stringify(payload, null, 2));
+
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // ⚠️ Important pour JWT cookies
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[CalendarService] updateCalendar error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result: CalendarUpdateResponse = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to update calendar');
+      }
+
+      return result.postUpdateDocs;
+    } catch (error) {
+      console.error('Error updating calendar:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * GET /api/v1/calendar/availability?listingIds=...&startDate=...&endDate=...
+   * Récupère la disponibilité multi-propriétés (pour vue globale)
+   */
+  async getMultiPropertyAvailability(params: {
+    listingIds: string[];
+    startDate: string;
+    endDate: string;
+  }): Promise<Record<string, CalendarDay[]>> {
+    try {
+      const { listingIds, startDate, endDate } = params;
+
+      // Convert dates
+      const start = new Date(startDate).toISOString().split('T')[0];
+      const end = new Date(endDate).toISOString().split('T')[0];
+
+      const url = `${BASE_URL}/api/v1/calendar/availability?listingIds=${listingIds.join(',')}&startDate=${start}&endDate=${end}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to fetch availability');
+      }
+
+      return result.data;
+    } catch (error) {
+      console.error('Error fetching multi-property availability:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * GET /api/v1/calendar/occupancy-rate?listingId=...&startDate=...&endDate=...
+   * Calcule le taux d'occupation pour une période donnée
+   */
+  async getOccupancyRate(params: {
+    listingId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<{ rate: number; bookedDays: number; totalDays: number }> {
+    try {
+      const { listingId, startDate, endDate } = params;
+
+      const start = new Date(startDate).toISOString().split('T')[0];
+      const end = new Date(endDate).toISOString().split('T')[0];
+
+      const url = `${BASE_URL}/api/v1/calendar/occupancy-rate?listingId=${listingId}&startDate=${start}&endDate=${end}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to fetch occupancy rate');
+      }
+
+      return result.data;
+    } catch (error) {
+      console.error('Error fetching occupancy rate:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * GET /api/v1/calendar/average-daily-rate?listingId=...&startDate=...&endDate=...
+   * Calcule le prix moyen journalier (ADR)
+   */
+  async getAverageDailyRate(params: {
+    listingId: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<{ adr: number; totalRevenue: number; bookedDays: number }> {
+    try {
+      const { listingId, startDate, endDate } = params;
+
+      const start = new Date(startDate).toISOString().split('T')[0];
+      const end = new Date(endDate).toISOString().split('T')[0];
+
+      const url = `${BASE_URL}/api/v1/calendar/average-daily-rate?listingId=${listingId}&startDate=${start}&endDate=${end}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to fetch ADR');
+      }
+
+      return result.data;
+    } catch (error) {
+      console.error('Error fetching ADR:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * GET /api/v1/calendar/inventory/get-inventory (BATCH)
+   * Récupère inventaire pour plusieurs listings en UNE requête
+   * Source: sojori-dashboard/serverApi.calendar.js getInventoryForListings()
+   */
+  async getInventoryForListings(
+    listingIds: string[],
+    startDate: string,
+    endDate: string,
+    includeReservations: boolean = true
+  ): Promise<any[]> {
+    try {
+      const start = new Date(startDate).toISOString().split('T')[0];
+      const end = new Date(endDate).toISOString().split('T')[0];
+
+      const listingIdsParams = listingIds.map(id => `listingIds[]=${id}`).join('&');
+      const inc = includeReservations ? 'true' : 'false';
+
+      const url = `${BASE_URL}/api/v1/calendar/inventory/get-inventory?${listingIdsParams}&startDate=${start}&endDate=${end}&includeReservations=${inc}`;
+
+      console.log('[CalendarService] getInventoryForListings URL:', url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      console.log('[CalendarService] getInventoryForListings result:', {
+        success: result?.success,
+        hasData: !!result?.data,
+        dataIsArray: Array.isArray(result?.data),
+        dataLength: Array.isArray(result?.data) ? result.data.length : 'not array',
+        dataHasData: !!result?.data?.data,
+        dataDataIsArray: Array.isArray(result?.data?.data),
+        dataDataLength: Array.isArray(result?.data?.data) ? result.data.data.length : 'not array',
+        fullResultKeys: Object.keys(result || {}),
+        dataKeys: result?.data ? Object.keys(result.data) : 'no data',
+      });
+      console.log('[CalendarService] Full result object:', result);
+
+      // L'API retourne DIRECTEMENT { success, data: [...] }
+      // PAS data.data comme dans sojori-dashboard !
+      if (Array.isArray(result?.data)) {
+        console.log('[CalendarService] Returning data array with length:', result.data.length);
+        return result.data;
+      }
+
+      // Fallback si structure différente
+      console.warn('[CalendarService] Unexpected data structure, returning empty array');
+      return [];
+    } catch (error) {
+      console.error('Error fetching inventory:', error);
+      throw error;
+    }
+  }
+}
+
+// Export singleton instance
+export const calendarService = new CalendarService();
+export default calendarService;

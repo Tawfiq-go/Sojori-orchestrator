@@ -13,6 +13,7 @@ export default function CalendarInventoryPage({
   startDate = new Date(),
   listings = [],
   inventoriesByListing = {}, // { [listingId]: { [iso]: inv } } — pour SimpleView
+  inventoryData = {},         // { [listingId]: { [roomTypeId]: { availability: {...} } } } — pour modal
   onUpdateInventory,         // (payloads) => Promise
   defaultView = 'multi',
 }) {
@@ -130,6 +131,7 @@ export default function CalendarInventoryPage({
         open={!!modalCells}
         selectedCells={modalCells || []}
         currency={selectedListing?.currencyCode || 'EUR'}
+        inventoryData={inventoryData}
         onClose={() => setModalCells(null)}
         onSave={async (payloads) => {
           await onUpdateInventory?.(payloads);

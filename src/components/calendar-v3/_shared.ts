@@ -104,12 +104,22 @@ export interface ColumnDef {
 /** Logique de prix unifiée (alignée legacy `priceOf(inv)`) */
 export function priceOf(inv?: InventoryDay): number {
   if (!inv) return 0;
-  if (inv.useDynamicPrice || inv.applyManual) {
-    return inv.calculatedPrice ?? inv.basePrice ?? inv.manualPrice ?? 0;
+
+  // Si prix manuel appliqué, le retourner en priorité
+  if (inv.applyManual && inv.manualPrice !== null && inv.manualPrice !== undefined) {
+    return inv.manualPrice;
   }
+
+  // Si prix dynamique activé, retourner le prix calculé
+  if (inv.useDynamicPrice) {
+    return inv.calculatedPrice ?? inv.basePrice ?? 0;
+  }
+
+  // Sinon, retourner le prix manuel s'il existe, sinon le prix de base
   if (inv.manualPrice !== null && inv.manualPrice !== undefined) {
     return inv.manualPrice;
   }
+
   return inv.basePrice ?? 0;
 }
 

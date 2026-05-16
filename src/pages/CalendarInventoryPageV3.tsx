@@ -289,6 +289,7 @@ export function CalendarInventoryPageV3() {
         startDate={currentDate.toDate()}
         listings={adaptedListings}
         inventoriesByListing={inventoriesByListing}
+        inventoryData={inventoryData}
         defaultView="multi"
         onUpdateInventory={handleUpdateInventory}
       />
