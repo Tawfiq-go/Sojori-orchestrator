@@ -312,6 +312,23 @@ function ListingRow({ listing, days, expanded, onToggle, selectedColumns, isSele
 function RateTopCell({ day, inv, price, currency }) {
   const isDynamic = !!inv.useDynamicPrice;
   const isStop = !!inv.stopSell;
+  const isBooked = (inv.reservations?.length ?? 0) > 0;
+  const isWeekend = day.isWeekend;
+
+  // Calculer la couleur de fond en fonction de l'état (priorité: stopSell > booked > weekend > today > dynamic)
+  let background = T.bg1;
+  if (isStop) {
+    background = 'rgba(200,30,30,0.05)'; // Rouge léger
+  } else if (isBooked) {
+    background = 'rgba(6,115,179,0.06)'; // Bleu léger
+  } else if (isWeekend) {
+    background = T.bg2; // Gris clair
+  } else if (day.isToday) {
+    background = 'rgba(184,133,26,0.04)'; // Jaune/gold léger
+  } else if (isDynamic) {
+    background = 'rgba(124,58,237,0.04)'; // Violet très léger
+  }
+
   return (
     <div
       style={{
@@ -320,12 +337,7 @@ function RateTopCell({ day, inv, price, currency }) {
         alignItems: 'center', justifyContent: 'center',
         padding: '8px 4px', minHeight: 54, position: 'relative',
         fontFamily: '"Geist Mono", monospace',
-        background: day.isToday
-          ? 'rgba(184,133,26,0.04)'
-          : day.isWeekend
-          ? T.bg2
-          : T.bg1,
-        ...(isStop ? { background: 'rgba(200,30,30,0.05)' } : {}),
+        background,
         transition: 'all 0.15s',
       }}>
       {isDynamic && (

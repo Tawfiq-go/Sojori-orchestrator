@@ -231,9 +231,10 @@ export function StickyActionButton({
 }: {
   label: string;
   onClick?: () => void;
-  variant?: 'gold' | 'airbnb';
+  variant?: 'gold' | 'airbnb' | 'booking';
 }) {
   const airbnb = variant === 'airbnb';
+  const booking = variant === 'booking';
   return (
     <Box
       sx={{
@@ -256,13 +257,17 @@ export function StickyActionButton({
           fontSize: 12.5,
           fontWeight: 700,
           fontFamily: 'inherit',
-          color: airbnb ? '#fff' : '#1a1408',
-          background: airbnb
-            ? 'linear-gradient(135deg,#ff8a8e,#FF5A5F)'
-            : `linear-gradient(180deg, #cb9b2c, ${T.primary})`,
-          boxShadow: airbnb
-            ? '0 2px 10px rgba(255,90,95,0.35)'
-            : '0 2px 10px rgba(184,133,26,0.30), inset 0 1px 0 rgba(255,255,255,0.30)',
+          color: airbnb || booking ? '#fff' : '#1a1408',
+          background: booking
+            ? 'linear-gradient(135deg,#4a7eb8,#003580)'
+            : airbnb
+              ? 'linear-gradient(135deg,#ff8a8e,#FF5A5F)'
+              : `linear-gradient(180deg, #cb9b2c, ${T.primary})`,
+          boxShadow: booking
+            ? '0 2px 10px rgba(0,53,128,0.35)'
+            : airbnb
+              ? '0 2px 10px rgba(255,90,95,0.35)'
+              : '0 2px 10px rgba(184,133,26,0.30), inset 0 1px 0 rgba(255,255,255,0.30)',
           '&:hover': { transform: 'translateY(-1px)' },
         }}
       >

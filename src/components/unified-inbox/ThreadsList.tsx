@@ -18,7 +18,7 @@ interface ThreadsListProps {
 }
 
 type WaFilter = 'all' | 'unread' | 'guests' | 'staff';
-type OtaFilter = 'ab' | 'bk' | 'vrbo';
+type OtaFilter = 'all' | 'ab' | 'bk' | 'vrbo';
 
 export default function ThreadsList({
   threads,
@@ -37,7 +37,7 @@ export default function ThreadsList({
   const accentColor = channel?.color || (mode === 'ota' ? '#FF5A5F' : T.green);
 
   const [waFilter, setWaFilter] = useState<WaFilter>('all');
-  const [otaFilter, setOtaFilter] = useState<OtaFilter>('ab');
+  const [otaFilter, setOtaFilter] = useState<OtaFilter>('all');
 
   const waUnreadCount = useMemo(() => threads.filter((t) => t.unread > 0).length, [threads]);
 
@@ -47,7 +47,7 @@ export default function ThreadsList({
       if (waFilter === 'unread') list = list.filter((t) => t.unread > 0);
       else if (waFilter === 'guests') list = list.filter((t) => t.reservationNumber && !t.isStaff);
       else if (waFilter === 'staff') list = list.filter((t) => t.isStaff || !t.reservationNumber);
-    } else {
+    } else if (otaFilter !== 'all') {
       if (otaFilter === 'ab') list = list.filter((t) => t.channel === 'ab');
       else if (otaFilter === 'bk') list = list.filter((t) => t.channel === 'bk');
       else list = list.filter((t) => (t.channel as string) === 'vrbo');
@@ -238,6 +238,7 @@ export default function ThreadsList({
         ) : (
           (
             [
+              { id: 'all' as const, label: 'Tout', count: threads.length },
               { id: 'ab' as const, label: '🏠 Airbnb', count: otaCounts.ab },
               { id: 'bk' as const, label: '🏨 Booking', count: otaCounts.bk },
               { id: 'vrbo' as const, label: '🌐 Vrbo', count: otaCounts.vrbo },

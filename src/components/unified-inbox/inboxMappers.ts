@@ -67,12 +67,16 @@ export function mapConversationToThread(
   };
 }
 
-export function otaChannelFromName(channelName?: string): 'ab' | 'bk' {
-  const ch = (channelName || '').toLowerCase();
-  if (ch.includes('booking') || ch === 'bk') return 'bk';
+export function otaChannelFromName(channelName?: string): 'ab' | 'bk' | 'vrbo' {
+  const ch = (channelName || '').toLowerCase().trim();
+  if (ch.includes('booking') || ch === 'bk' || ch.includes('book.com')) return 'bk';
+  if (ch.includes('vrbo') || ch === 'ha') return 'vrbo';
+  if (ch.includes('airbnb') || ch === 'ab') return 'ab';
   return 'ab';
 }
 
-export function otaChannelColor(channel: 'ab' | 'bk'): string {
-  return channel === 'bk' ? '#003580' : '#FF5A5F';
+export function otaChannelColor(channel: 'ab' | 'bk' | 'vrbo'): string {
+  if (channel === 'bk') return '#003580';
+  if (channel === 'vrbo') return '#1f4b99';
+  return '#FF5A5F';
 }

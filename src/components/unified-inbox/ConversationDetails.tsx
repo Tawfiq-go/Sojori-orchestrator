@@ -13,6 +13,7 @@ import {
   StickyActionButton,
 } from './inboxV4Ui';
 import { bookingSourceTone, normalizeBookingSource } from './inboxFormat';
+import { isBookingPlatform } from './otaPlatformTheme';
 import TasksSection from './TasksSection';
 
 interface ConversationDetailsProps {
@@ -256,7 +257,13 @@ export default function ConversationDetails({
 
       {!isStaff && (r.reservationNumber || thread.reservationNumber) && (
         <StickyActionButton
-          variant={isOtaStyle ? 'airbnb' : 'gold'}
+          variant={
+            isOtaStyle && isBookingPlatform(thread.channel, r.otaPlatform || bookingSource)
+              ? 'booking'
+              : isOtaStyle
+                ? 'airbnb'
+                : 'gold'
+          }
           label={
             isReviews
               ? '⭐ Publier réponse →'

@@ -24,6 +24,18 @@ export function ListingFormV2Page() {
 
   const formValues = listingDoc ? mapApiToFormV2Values(listingDoc) : null;
 
+  const { data: listingStructure } = useQuery({
+    queryKey: ['listing-structure'],
+    queryFn: () => listingsService.getListingStructure(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: roomTypeConfigs = [] } = useQuery({
+    queryKey: ['room-type-configs'],
+    queryFn: () => listingsService.getRoomTypeConfigs(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Update listing mutation
   const { mutate: saveListing, isPending: isSaving } = useMutation({
     mutationFn: (values: Record<string, unknown>) =>
@@ -104,6 +116,8 @@ export function ListingFormV2Page() {
         isSaving={isSaving}
         onVerifyRuChannels={verifyRuChannels}
         verifyRuLoading={isVerifyingRu}
+        listingStructure={listingStructure ?? null}
+        roomTypeConfigs={roomTypeConfigs}
       />
     </DashboardWrapper>
   );

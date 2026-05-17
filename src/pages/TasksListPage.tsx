@@ -66,27 +66,29 @@ import {
   normalizeTaskStatus,
 } from '../types/tasks.types';
 
-/** Largeur totale ~2060px — grille tâches (+ colonne catégorie élargie). */
-const TASK_TABLE_MIN_WIDTH = 2060;
+/** Largeur totale optimisée ~1750px pour éviter scroll horizontal sur écrans 1920px */
+const TASK_TABLE_MIN_WIDTH = 1750;
 
 const COLUMN_WIDTHS = {
-  name: '120px',
+  name: '100px',       // Réduit de 120 → 100
   /** Icône + libellé sur une ligne (ex. « 🛎️ Conciergerie », « 🧹 Ménage Gratuit »). */
-  category: '175px',
-  itemNumber: '110px',
-  createdAt: '90px',
-  executionDate: '120px',
-  timeslotClient: '120px',
-  heureTask: '140px',
-  timeslot: '110px',
-  listing: '100px',
-  reservation: '110px',
-  details: '150px',
-  status: '100px',
-  assignedStaff: '130px',
-  payment: '100px',
-  price: '80px',
-  urgence: '90px',
+  category: '145px',   // Réduit de 175 → 145
+  itemNumber: '90px',  // Réduit de 110 → 90
+  createdAt: '85px',   // Réduit de 90 → 85
+  executionDate: '105px', // Réduit de 120 → 105
+  timeslotClient: '100px', // Réduit de 120 → 100
+  heureTask: '115px',  // Réduit de 140 → 115
+  timeslot: '95px',    // Réduit de 110 → 95
+  source: '60px',      // Réduit de 70 → 60
+  voyageur: '125px',   // Réduit de 150 → 125
+  listing: '90px',     // Réduit de 100 → 90
+  reservation: '95px', // Réduit de 110 → 95
+  details: '120px',    // Réduit de 150 → 120
+  status: '90px',      // Réduit de 100 → 90
+  assignedStaff: '110px', // Réduit de 130 → 110
+  payment: '85px',     // Réduit de 100 → 85
+  price: '70px',       // Réduit de 80 → 70
+  urgence: '80px',     // Réduit de 90 → 80
 } as const;
 
 /** Palette alignée ReservationsPage (« Atelier 2026 ») — chrome compact */
@@ -225,6 +227,67 @@ function KpiCompact({
       </Typography>
     </Paper>
   );
+}
+
+/**
+ * Badge OTA circulaire avec initiale (comme ReservationsPage)
+ */
+function OTABadge({ source }: { source?: string | null }) {
+  const c = (source || '').toLowerCase();
+  const meta =
+    c.includes('airbnb')  ? { label: 'Airbnb',  bg: '#FF5A5F', initial: 'A' } :
+    c.includes('booking') ? { label: 'Booking', bg: '#003580', initial: 'B' } :
+    c.includes('vrbo')    ? { label: 'Vrbo',    bg: '#0e7490', initial: 'V' } :
+    c.includes('expedia') ? { label: 'Expedia', bg: '#FFCB08', initial: 'E' } :
+                            { label: 'Direct',  bg: T.primary, initial: 'S' };
+
+  return (
+    <Tooltip title={meta.label} arrow>
+      <Box
+        sx={{
+          width: 28,
+          height: 28,
+          borderRadius: '50%',
+          bgcolor: meta.bg,
+          color: '#fff',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12,
+          fontWeight: 700,
+          fontFamily: '"Geist Mono", monospace',
+        }}
+      >
+        {meta.initial}
+      </Box>
+    </Tooltip>
+  );
+}
+
+/**
+ * Convertit un code pays ISO 3166-1 alpha-2 ou nom de pays en emoji drapeau
+ * Ex: "FR" → 🇫🇷, "france" → 🇫🇷, "US" → 🇺🇸
+ */
+function flagFor(country?: string | null): string {
+  if (!country) return '🌐';
+
+  const countryNameToCode: Record<string, string> = {
+    'france': 'FR', 'united states': 'US', 'usa': 'US', 'italy': 'IT', 'spain': 'ES',
+    'germany': 'DE', 'united kingdom': 'GB', 'uk': 'GB', 'canada': 'CA', 'japan': 'JP',
+    'china': 'CN', 'india': 'IN', 'brazil': 'BR', 'australia': 'AU', 'mexico': 'MX',
+    'south korea': 'KR', 'russia': 'RU', 'netherlands': 'NL', 'belgium': 'BE',
+    'switzerland': 'CH', 'sweden': 'SE', 'norway': 'NO', 'denmark': 'DK', 'poland': 'PL',
+    'portugal': 'PT', 'greece': 'GR', 'turkey': 'TR', 'egypt': 'EG', 'morocco': 'MA',
+    'algeria': 'DZ', 'tunisia': 'TN', 'saudi arabia': 'SA', 'uae': 'AE',
+    'united arab emirates': 'AE', 'qatar': 'QA', 'kuwait': 'KW', 'lebanon': 'LB',
+  };
+
+  let code = country.length === 2 ? country.toUpperCase() : countryNameToCode[country.toLowerCase()];
+  if (!code) return '🌐';
+
+  // Convert ISO code to emoji flag (Regional Indicator Symbols)
+  const codePoints = code.split('').map(char => 127397 + char.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
 }
 
 function formatTimeValue(timeInput: string | number | null | undefined): string {
@@ -394,6 +457,8 @@ function detailsTimeslotSummary(task: TaskListItem): string {
 }
 
 export function TasksListPage() {
+  console.log('🎯 [TasksListPage] VERSION OPTIMISÉE CHARGÉE');
+
   const { user } = useAuth();
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
 
@@ -448,6 +513,12 @@ export function TasksListPage() {
   const [tempPayment, setTempPayment] = useState('all');
   const [tempHasAssociation, setTempHasAssociation] = useState<'all' | 'with' | 'without'>('all');
   const [tempSources, setTempSources] = useState<string[]>([]);
+
+  // Column visibility toggles
+  const [showCreatedAt, setShowCreatedAt] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showTimeslotClient, setShowTimeslotClient] = useState(false);
+  const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
 
   const loadStaffAndListings = useCallback(async () => {
     if (!scope.canAccessAllOwners && !scope.ownerId) return;
@@ -900,6 +971,44 @@ export function TasksListPage() {
       ),
     },
     {
+      key: 'source',
+      label: 'Source',
+      width: COLUMN_WIDTHS.source,
+      align: 'center' as const,
+      render: (row: TaskRow) => <OTABadge source={row.source} />,
+    },
+    {
+      key: 'voyageur',
+      label: 'Voyageur',
+      width: COLUMN_WIDTHS.voyageur,
+      align: 'left' as const,
+      render: (row: TaskRow) => {
+        if (!row.guestName) {
+          return (
+            <Typography sx={{ fontSize: 11, color: T.text4, textAlign: 'center' }}>—</Typography>
+          );
+        }
+        return (
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+            <span style={{ fontSize: 18 }}>{flagFor(row.guestCountry)}</span>
+            <Typography
+              sx={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: T.text2,
+                maxWidth: 120,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {row.guestName}
+            </Typography>
+          </Stack>
+        );
+      },
+    },
+    {
       key: 'listingName',
       label: 'Listing',
       width: COLUMN_WIDTHS.listing,
@@ -916,19 +1025,12 @@ export function TasksListPage() {
       width: COLUMN_WIDTHS.reservation,
       align: 'center' as const,
       render: (row: TaskRow) => (
-        <Stack spacing={0.25} sx={{ alignItems: 'center', maxWidth: 140 }}>
-          <Typography
-            sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 700, color: T.primaryDeep }}
-            noWrap
-          >
-            {row.reservationNumber || '—'}
-          </Typography>
-          {row.guestName ? (
-            <Typography sx={{ fontSize: 11, color: T.text3 }} noWrap>
-              {row.guestName}
-            </Typography>
-          ) : null}
-        </Stack>
+        <Typography
+          sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 700, color: T.primaryDeep }}
+          noWrap
+        >
+          {row.reservationNumber || '—'}
+        </Typography>
       ),
     },
     {
@@ -1059,6 +1161,21 @@ export function TasksListPage() {
     },
   ];
 
+  // Filter columns based on visibility toggles
+  const visibleColumns = columns.filter((col) => {
+    if (col.key === 'createdAt' && !showCreatedAt) return false;
+    if (col.key === 'timeslotDetails' && !showDetails) return false;
+    if (col.key === 'timeslotClient' && !showTimeslotClient) return false;
+    return true;
+  });
+
+  console.log('🔧 [TasksListPage] Colonnes:', {
+    total: columns.length,
+    visible: visibleColumns.length,
+    hidden: columns.length - visibleColumns.length,
+    toggles: { showCreatedAt, showDetails, showTimeslotClient }
+  });
+
   return (
     <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
       <Box sx={{ p: { xs: 2, md: 3 } }}>
@@ -1162,6 +1279,43 @@ export function TasksListPage() {
                 <RefreshIcon sx={{ fontSize: 18, color: T.primaryDeep }} />
               </IconButton>
             </Tooltip>
+            <Button
+              size="small"
+              sx={{
+                minHeight: 32,
+                py: 0.5,
+                px: 1.5,
+                flexShrink: 0,
+                borderRadius: 1,
+                border: `1px solid ${T.border}`,
+                bgcolor: (showCreatedAt || showDetails || showTimeslotClient) ? T.primaryTint : T.bg1,
+                color: (showCreatedAt || showDetails || showTimeslotClient) ? T.primary : T.text3,
+                fontWeight: 600,
+                fontSize: 12,
+                textTransform: 'none',
+                '&:hover': {
+                  bgcolor: T.primaryTint,
+                  color: T.primary,
+                  borderColor: T.primary,
+                },
+              }}
+              onClick={(e) => setColumnMenuAnchor(e.currentTarget)}
+            >
+              ⚙️ Colonnes
+              {(showCreatedAt || showDetails || showTimeslotClient) && (
+                <Chip
+                  label={(showCreatedAt ? 1 : 0) + (showDetails ? 1 : 0) + (showTimeslotClient ? 1 : 0)}
+                  size="small"
+                  sx={{
+                    height: 16,
+                    fontSize: 10,
+                    bgcolor: T.primary,
+                    color: '#fff',
+                    ml: 0.5,
+                  }}
+                />
+              )}
+            </Button>
             <Button
               size="small"
               sx={{ ...btnPrimarySx, minHeight: 32, py: 0.5, flexShrink: 0 }}
@@ -1351,7 +1505,7 @@ export function TasksListPage() {
         ) : (
           <Stack spacing={1.5} sx={{ mt: 0.5 }}>
             <DataTable
-              columns={columns}
+              columns={visibleColumns}
               rows={displayTasks.map((task) => ({ ...task, id: task._id }))}
               hideRowActions
               tableMinWidth={TASK_TABLE_MIN_WIDTH}
@@ -1557,6 +1711,91 @@ export function TasksListPage() {
             Supprimer
           </MenuItem>
         ) : null}
+      </Menu>
+
+      {/* Column Visibility Menu */}
+      <Menu
+        anchorEl={columnMenuAnchor}
+        open={Boolean(columnMenuAnchor)}
+        onClose={() => setColumnMenuAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        PaperProps={{
+          sx: {
+            mt: 0.5,
+            border: `1px solid ${T.border}`,
+            boxShadow: '0 4px 12px rgba(20,17,10,0.08)',
+            minWidth: 220,
+          }
+        }}
+      >
+        <Box sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${T.border}` }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2 }}>
+            Colonnes optionnelles
+          </Typography>
+        </Box>
+        <MenuItem
+          onClick={() => setShowCreatedAt(!showCreatedAt)}
+          sx={{ fontSize: 13, py: 1.25 }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+            <Box sx={{
+              width: 18, height: 18, borderRadius: '4px',
+              border: `2px solid ${showCreatedAt ? T.primary : T.border}`,
+              bgcolor: showCreatedAt ? T.primary : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 10, fontWeight: 700,
+            }}>
+              {showCreatedAt && '✓'}
+            </Box>
+            <Typography sx={{ fontSize: 13, color: T.text2 }}>
+              Créé le
+            </Typography>
+          </Box>
+        </MenuItem>
+        <MenuItem
+          onClick={() => setShowDetails(!showDetails)}
+          sx={{ fontSize: 13, py: 1.25 }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+            <Box sx={{
+              width: 18, height: 18, borderRadius: '4px',
+              border: `2px solid ${showDetails ? T.primary : T.border}`,
+              bgcolor: showDetails ? T.primary : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 10, fontWeight: 700,
+            }}>
+              {showDetails && '✓'}
+            </Box>
+            <Typography sx={{ fontSize: 13, color: T.text2 }}>
+              Détails
+            </Typography>
+          </Box>
+        </MenuItem>
+        <MenuItem
+          onClick={() => setShowTimeslotClient(!showTimeslotClient)}
+          sx={{ fontSize: 13, py: 1.25 }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+            <Box sx={{
+              width: 18, height: 18, borderRadius: '4px',
+              border: `2px solid ${showTimeslotClient ? T.primary : T.border}`,
+              bgcolor: showTimeslotClient ? T.primary : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 10, fontWeight: 700,
+            }}>
+              {showTimeslotClient && '✓'}
+            </Box>
+            <Typography sx={{ fontSize: 13, color: T.text2 }}>
+              Timeslot Client
+            </Typography>
+          </Box>
+        </MenuItem>
+        <Box sx={{ px: 2, py: 1.5, borderTop: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
+          <Typography sx={{ fontSize: 11, color: T.text3, fontStyle: 'italic' }}>
+            💡 {visibleColumns.length} colonnes visibles sur {columns.length}
+          </Typography>
+        </Box>
       </Menu>
     </DashboardWrapper>
   );

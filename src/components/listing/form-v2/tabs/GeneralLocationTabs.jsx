@@ -11,9 +11,10 @@ import {
   findDescIndexForLang,
   getDescEntryForLang,
 } from '../../../../utils/listingFormV2ApiAdapter';
+import { FieldIndicator } from '../components/FieldIndicator';
 import {
   Box, Stack, Typography, TextField, Select, MenuItem, FormControl,
-  Switch, IconButton, Chip, Button, Tooltip,
+  Switch, IconButton, Chip, Button,
 } from '@mui/material';
 
 const T = {
@@ -41,20 +42,54 @@ const sxInputAI = {
   },
 };
 
-function Label({ children, required, ai, charCount }) {
+function Label({ children, required, ai, charCount, ruField, listingStructure }) {
   return (
-    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, mb: 0.5 }}>
-      <Box>{children}{required && <Box component="span" sx={{ color: T.error, ml: 0.25 }}>*</Box>}</Box>
-      {ai && <Box sx={{ bgcolor: T.aiTint, color: T.ai, px: 0.625, py: '1px', borderRadius: '3px', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.04em' }}>✨ AI</Box>}
-      {charCount && <Box sx={{ ml: 'auto', fontSize: 9.5, color: T.text3, textTransform: 'none' }}>{charCount}</Box>}
+    <Stack
+      direction="row"
+      spacing={0.75}
+      sx={{
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        fontSize: 10.5,
+        color: T.text3,
+        fontFamily: '"Geist Mono", monospace',
+        textTransform: 'uppercase',
+        letterSpacing: '0.06em',
+        fontWeight: 700,
+        mb: 0.5,
+      }}
+    >
+      <Box sx={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+        {children}
+        {required && <Box component="span" sx={{ color: T.error }}>*</Box>}
+        {ruField && listingStructure ? (
+          <FieldIndicator field={ruField} listingStructure={listingStructure} dense />
+        ) : null}
+      </Box>
+      {ai && (
+        <Box sx={{ bgcolor: T.aiTint, color: T.ai, px: 0.625, py: '1px', borderRadius: '3px', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.04em' }}>
+          ✨ AI
+        </Box>
+      )}
+      {charCount && (
+        <Box sx={{ ml: 'auto', fontSize: 9.5, color: T.text3, textTransform: 'none' }}>{charCount}</Box>
+      )}
     </Stack>
   );
 }
 
-function Field({ label, required, ai, charCount, hint, children, fullWidth }) {
+function Field({ label, required, ai, charCount, hint, children, fullWidth, ruField, listingStructure }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.625, flex: fullWidth ? 1 : 'initial' }}>
-      <Label required={required} ai={ai} charCount={charCount}>{label}</Label>
+      <Label
+        required={required}
+        ai={ai}
+        charCount={charCount}
+        ruField={ruField}
+        listingStructure={listingStructure}
+      >
+        {label}
+      </Label>
       {children}
       {hint && <Typography sx={{ fontSize: 10.5, color: T.text4, mt: 0.25 }}>{hint}</Typography>}
     </Box>
@@ -134,9 +169,26 @@ function ChipsRow({ items, value, onToggle }) {
 /* ════════════════════════════════════════════════════════════════════
    GeneralTab
    ════════════════════════════════════════════════════════════════════ */
-export function GeneralTab({ values, onChange, aiFilled = new Set() }) {
+export function GeneralTab({
+  values,
+  onChange,
+  aiFilled = new Set(),
+  listingStructure = null,
+  roomTypeConfigs = [],
+}) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
   const isAI = (k) => aiFilled.has(k);
+
+  const patchRoomTypeConfig = (configId) => {
+    const selected = roomTypeConfigs.find((t) => t._id === configId);
+    const roomTypes = Array.isArray(values.roomTypes) ? values.roomTypes.map((rt) => ({ ...rt })) : [{}];
+    roomTypes[0] = {
+      ...roomTypes[0],
+      roomTypeConfigId: configId,
+      roomTypeName: selected?.type ?? roomTypes[0]?.roomTypeName,
+    };
+    onChange?.({ ...values, roomTypeConfigId: configId, roomTypes });
+  };
 
   const descLang = values._descLang || '🇫🇷 FR';
   const descriptions = useMemo(
@@ -206,48 +258,188 @@ export function GeneralTab({ values, onChange, aiFilled = new Set() }) {
         </Stack>
       )}
 
-      <Card title="📌 Identité" meta="Visible sur tous canaux">
-        <Box sx={{ mb: 1.75 }}>
-          <Field label="Nom de la propriété" required charCount={`${(values.name || '').length}/60`}
-            hint="3–60 caractères. Inclus ville + caractéristique unique.">
-            <TextField size="small" fullWidth value={values.name || ''} onChange={e => upd('name', e.target.value)} sx={sxInput} />
+      <Card title="📌 Informations générales" meta="R = Rentals United">
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(4, 1fr)' },
+            gap: 1.75,
+          }}
+        >
+          <Field
+            fullWidth
+            label="External Listing Name"
+            ruField="name"
+            listingStructure={listingStructure}
+            charCount={`${(values.name || '').length}/60`}
+            hint="Nom visible sur les OTA (RU)."
+          >
+            <TextField
+              size="small"
+              fullWidth
+              value={values.name || ''}
+              onChange={(e) => upd('name', e.target.value)}
+              sx={sxInput}
+            />
           </Field>
-        </Box>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.75}>
-          <Field fullWidth label="Type de propriété" required ai={isAI('propertyType')} hint="Détecté depuis photos + adresse.">
+
+          <Field
+            fullWidth
+            label="Property Type"
+            ruField="propertyType"
+            listingStructure={listingStructure}
+            ai={isAI('propertyType')}
+          >
             <FormControl size="small" fullWidth>
               <Select
                 value={values.propertyType === 'Apartment' ? 'Appartement' : (values.propertyType || 'Villa')}
-                onChange={e => upd('propertyType', e.target.value)}
+                onChange={(e) => upd('propertyType', e.target.value)}
                 sx={isAI('propertyType') ? sxInputAI['& .MuiOutlinedInput-root'] : sxInput['& .MuiOutlinedInput-root']}
               >
-                {['Villa', 'Appartement', 'Maison', 'Riad', 'Studio', 'Chalet', 'Loft'].map(o => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+                {['Villa', 'Appartement', 'Maison', 'Riad', 'Studio', 'Chalet', 'Loft'].map((o) => (
+                  <MenuItem key={o} value={o}>{o}</MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Field>
-          <Field fullWidth label="Unité de propriété">
-            <FormControl size="small" fullWidth>
-              <Select value={values.propertyUnit || 'Single'} onChange={e => upd('propertyUnit', e.target.value)}>
-                <MenuItem value="Single">Single</MenuItem>
-                <MenuItem value="Multi">Multi-unit</MenuItem>
-              </Select>
-            </FormControl>
+
+          {roomTypeConfigs.length > 0 && (
+            <Field
+              fullWidth
+              label="Room Type"
+              required
+              ruField="roomTypeConfigId"
+              listingStructure={listingStructure}
+            >
+              <FormControl size="small" fullWidth>
+                <Select
+                  value={values.roomTypeConfigId || values.roomTypes?.[0]?.roomTypeConfigId || ''}
+                  onChange={(e) => patchRoomTypeConfig(e.target.value)}
+                  displayEmpty
+                  sx={sxInput['& .MuiOutlinedInput-root']}
+                >
+                  <MenuItem value="">Sélectionner…</MenuItem>
+                  {roomTypeConfigs.map((rt) => (
+                    <MenuItem key={rt._id} value={rt._id}>{rt.type}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Field>
+          )}
+
+          <Field
+            fullWidth
+            label="number of floors"
+            ruField="floor"
+            listingStructure={listingStructure}
+          >
+            <TextField
+              size="small"
+              type="number"
+              fullWidth
+              value={values.floor ?? ''}
+              onChange={(e) => upd('floor', e.target.value === '' ? undefined : +e.target.value)}
+              sx={sxInput}
+              inputProps={{ min: 0 }}
+            />
           </Field>
-        </Stack>
+
+          <Field
+            fullWidth
+            label="Total Floors"
+            ruField="totalFloor"
+            listingStructure={listingStructure}
+          >
+            <TextField
+              size="small"
+              type="number"
+              fullWidth
+              value={values.totalFloor ?? ''}
+              onChange={(e) => upd('totalFloor', e.target.value === '' ? undefined : +e.target.value)}
+              sx={sxInput}
+              inputProps={{ min: 1 }}
+            />
+          </Field>
+
+          <Field
+            fullWidth
+            label="Person Capacity"
+            required
+            ruField="personCapacity"
+            listingStructure={listingStructure}
+          >
+            <TextField
+              size="small"
+              type="number"
+              fullWidth
+              value={values.personCapacity ?? ''}
+              onChange={(e) => {
+                const n = e.target.value === '' ? undefined : +e.target.value;
+                upd('personCapacity', n);
+              }}
+              sx={sxInput}
+              inputProps={{ min: 0 }}
+            />
+          </Field>
+
+          <Field
+            fullWidth
+            label="Max Person Capacity"
+            ruField="personCapacityMax"
+            listingStructure={listingStructure}
+          >
+            <TextField
+              size="small"
+              type="number"
+              fullWidth
+              value={values.personCapacityMax ?? values.guests ?? ''}
+              onChange={(e) => {
+                const n = e.target.value === '' ? undefined : +e.target.value;
+                onChange?.({ ...values, personCapacityMax: n, guests: n });
+              }}
+              sx={sxInput}
+              inputProps={{ min: 0 }}
+            />
+          </Field>
+
+          <Field
+            fullWidth
+            label="Surface (m²)"
+            ruField="surface"
+            listingStructure={listingStructure}
+            ai={isAI('sqm')}
+          >
+            <TextField
+              size="small"
+              type="number"
+              fullWidth
+              value={values.sqm ?? ''}
+              onChange={(e) => upd('sqm', e.target.value === '' ? undefined : +e.target.value)}
+              sx={isAI('sqm') ? sxInputAI : sxInput}
+              inputProps={{ min: 0 }}
+            />
+          </Field>
+        </Box>
+
+        <Box sx={{ mt: 2, pt: 2, borderTop: `1px dashed ${T.border}` }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.75}>
+            <Field fullWidth label="Unité de propriété">
+              <FormControl size="small" fullWidth>
+                <Select value={values.propertyUnit || 'Single'} onChange={(e) => upd('propertyUnit', e.target.value)}>
+                  <MenuItem value="Single">Single</MenuItem>
+                  <MenuItem value="Multi">Multi-unit</MenuItem>
+                </Select>
+              </FormControl>
+            </Field>
+          </Stack>
+        </Box>
       </Card>
 
-      <Card title="🛏 Capacité & dimensions">
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
-          <Field label="Chambres" required><Counter value={values.bedrooms ?? 0} onChange={v => upd('bedrooms', v)} /></Field>
-          <Field label="Salles de bain" required><Counter value={values.bathrooms ?? 0} onChange={v => upd('bathrooms', v)} /></Field>
-          <Field label="Invités max" required><Counter value={values.guests ?? 0} onChange={v => upd('guests', v)} /></Field>
-          <Field label="Lits"><Counter value={values.beds ?? 0} onChange={v => upd('beds', v)} /></Field>
-          <Field label="Surface (m²)" ai={isAI('sqm')}>
-            <TextField size="small" type="number" value={values.sqm ?? ''} onChange={e => upd('sqm', e.target.value === '' ? undefined : +e.target.value)} sx={isAI('sqm') ? sxInputAI : sxInput} />
-          </Field>
-          <Field label="Étage">
-            <TextField size="small" type="number" value={values.floor ?? ''} onChange={e => upd('floor', e.target.value === '' ? undefined : +e.target.value)} sx={sxInput} />
-          </Field>
+      <Card title="🛏 Chambres & lits">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
+          <Field label="Chambres" required><Counter value={values.bedrooms ?? 0} onChange={(v) => upd('bedrooms', v)} /></Field>
+          <Field label="Salles de bain" required><Counter value={values.bathrooms ?? 0} onChange={(v) => upd('bathrooms', v)} /></Field>
+          <Field label="Lits"><Counter value={values.beds ?? 0} onChange={(v) => upd('beds', v)} /></Field>
         </Box>
       </Card>
 

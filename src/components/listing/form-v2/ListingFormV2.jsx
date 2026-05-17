@@ -14,7 +14,15 @@ import { ChannelsTab, DirectBookingTab, RoomsTab, LicenseTab } from './tabs/Deta
 import { OrchestrationTab, CleaningTab }                    from './tabs/ConfigTabsWorkflow';
 import { AccessTab, WhatsAppTab, ConciergeTab, SupportTab, RulesTab } from './tabs/ConfigTabsCommunication';
 
-export default function ListingFormV2({ listingId, initialValues = {}, onSave, onVerifyRuChannels, verifyRuLoading = false }) {
+export default function ListingFormV2({
+  listingId,
+  initialValues = {},
+  onSave,
+  onVerifyRuChannels,
+  verifyRuLoading = false,
+  listingStructure = null,
+  roomTypeConfigs = [],
+}) {
   const [values, setValues] = useState(initialValues);
 
   useEffect(() => {
@@ -37,7 +45,16 @@ export default function ListingFormV2({ listingId, initialValues = {}, onSave, o
   const renderTab = (tabKey, level) => {
     const common = { values, onChange: handleFormChange };
     if (level === 'detail') {
-      if (tabKey === 'general')      return <GeneralTab     {...common} aiFilled={new Set(values._aiFilled || [])} />;
+      if (tabKey === 'general') {
+        return (
+          <GeneralTab
+            {...common}
+            aiFilled={new Set(values._aiFilled || [])}
+            listingStructure={listingStructure}
+            roomTypeConfigs={roomTypeConfigs}
+          />
+        );
+      }
       if (tabKey === 'location')     return <LocationTab    {...common} />;
       if (tabKey === 'photos')       return <PhotosTab      photos={values.photos || []} onChange={photos => setValues(v => ({ ...v, photos }))}
                                                             airbnbHeroOrder={values.airbnbHeroOrder} onAirbnbChange={v => setValues(s => ({ ...s, airbnbHeroOrder: v }))} />;
