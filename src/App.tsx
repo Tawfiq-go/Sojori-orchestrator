@@ -86,6 +86,15 @@ const TasksTeamPage = lazy(() =>
 const TasksPlanningPage = lazy(() =>
   import('./pages/TasksPlanningPage').then((module) => ({ default: module.TasksPlanningPage }))
 );
+const TasksPlanningPageV2 = lazy(() =>
+  import('./pages/TasksPlanningPageV2').then((module) => ({ default: module.default }))
+);
+const TasksTeamPageV2 = lazy(() =>
+  import('./pages/TasksTeamPageV2').then((module) => ({ default: module.default }))
+);
+const TasksKanbanPage = lazy(() =>
+  import('./pages/TasksKanbanPage').then((module) => ({ default: module.default }))
+);
 const StaffWhatsAppPage = lazy(() =>
   import('./pages/StaffWhatsAppPage').then((module) => ({ default: module.StaffWhatsAppPage }))
 );
@@ -121,6 +130,18 @@ const CommunicationsHubPage = lazy(() =>
 );
 const CRMPage = lazy(() =>
   import('./pages/CRMPage').then((module) => ({ default: module.CRMPage }))
+);
+const ChannelsAdminPage = lazy(() =>
+  import('./pages/ChannelsAdminPage').then((module) => ({ default: module.ChannelsAdminPage }))
+);
+const ChannelsLegacyRedirect = lazy(() =>
+  import('./pages/ChannelsAdminPage').then((module) => ({ default: module.ChannelsLegacyRedirect }))
+);
+const TeamRolesHubPage = lazy(() =>
+  import('./pages/TeamRolesHubPage').then((module) => ({ default: module.TeamRolesHubPage }))
+);
+const TeamLegacyRedirect = lazy(() =>
+  import('./pages/TeamRolesHubPage').then((module) => ({ default: module.TeamLegacyRedirect }))
 );
 const OnboardingPage = lazy(() =>
   import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage }))
@@ -185,8 +206,16 @@ function App() {
 
               <Route path="/tasks" element={<LazyRoute><TasksListPage /></LazyRoute>} />
               <Route path="/tasks/list" element={<LazyRoute><TasksListPage /></LazyRoute>} />
-              <Route path="/tasks/team" element={<LazyRoute><TasksTeamPage /></LazyRoute>} />
-              <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPage /></LazyRoute>} />
+
+              {/* Claude Design V2 - Remplace les anciennes vues */}
+              <Route path="/tasks/team" element={<LazyRoute><TasksTeamPageV2 /></LazyRoute>} />
+              <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPageV2 /></LazyRoute>} />
+              <Route path="/tasks/kanban" element={<LazyRoute><TasksKanbanPage /></LazyRoute>} />
+
+              {/* Anciennes vues (backup) */}
+              <Route path="/tasks/team-legacy" element={<LazyRoute><TasksTeamPage /></LazyRoute>} />
+              <Route path="/tasks/planning-legacy" element={<LazyRoute><TasksPlanningPage /></LazyRoute>} />
+
               <Route path="/tasks/staff-whatsapp" element={<LazyRoute><StaffWhatsAppPage /></LazyRoute>} />
 
               {/* Communications Hub - Page principale avec onglets */}
@@ -211,7 +240,7 @@ function App() {
               <Route path="/listings/:id" element={<LazyRoute><ListingFormV2Page /></LazyRoute>} />
               <Route path="/listings/:id/old" element={<LazyRoute><NewListingFormPage /></LazyRoute>} />
               <Route path="/pricing" element={<LazyRoute><PricingPage /></LazyRoute>} />
-              <Route path="/channels" element={<LazyRoute><ChannelsPage /></LazyRoute>} />
+              <Route path="/channels" element={<LazyRoute><ChannelsAdminPage /></LazyRoute>} />
               <Route path="/catalogue/listings" element={<LazyRoute><ListingsPage /></LazyRoute>} />
               <Route path="/catalogue/listings/new" element={<LazyRoute><ListingCreatePage /></LazyRoute>} />
               <Route path="/catalogue/listings/:id" element={<LazyRoute><ListingDetailPage /></LazyRoute>} />
@@ -220,6 +249,13 @@ function App() {
               <Route path="/clients" element={<LazyRoute><ClientsPage /></LazyRoute>} />
               <Route path="/clients/contacts" element={<LazyRoute><WhatsAppContactsPage /></LazyRoute>} />
               <Route path="/crm" element={<LazyRoute><CRMPage /></LazyRoute>} />
+              <Route path="/admin/channels" element={<LazyRoute><ChannelsAdminPage /></LazyRoute>} />
+              <Route path="/admin/Channels" element={<LazyRoute><ChannelsLegacyRedirect /></LazyRoute>} />
+              <Route path="/admin/equipe" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
+              <Route path="/admin/equipe/owners" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
+              <Route path="/admin/User/team" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
+              <Route path="/admin/User/owner" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
+              <Route path="/admin/User/owner/*" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
               <Route path="/onboarding" element={<LazyRoute><OnboardingPage /></LazyRoute>} />
 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
