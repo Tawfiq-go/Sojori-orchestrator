@@ -398,176 +398,224 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
   };
 
   const cols = [
-    // Column 1: Tâche (title + itemNumber) - sortable by name
+    // Column 1: Tâche (itemNumber cliquable + name)
     {
-      key: 'title',
-      label: <SortableHeader field="name" label="Tâche" />,
+      key: 'task',
+      label: 'Tâche',
       render: (r: Task) => (
-        <Box sx={{ cursor: 'pointer' }} onClick={() => onViewDetails(r)}>
-          <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: t.text, '&:hover': { textDecoration: 'underline' } }}>
-            {r.name}
-          </Typography>
-          <Box sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'Geist Mono', mt: 0.25 }}>
+        <Box>
+          <Box
+            sx={{
+              fontSize: 11,
+              fontFamily: 'Geist Mono',
+              fontWeight: 700,
+              color: t.primaryDeep,
+              cursor: 'pointer',
+              '&:hover': { textDecoration: 'underline' }
+            }}
+            onClick={() => onViewDetails(r)}
+          >
             {r.itemNumber}
+          </Box>
+          <Box sx={{ fontSize: 12, color: t.text2, mt: 0.25, fontWeight: 500 }}>
+            {r.name}
           </Box>
         </Box>
       )
     },
-    // Column 2: Type + SubType - sortable (avec icône colorée)
+    // Column 2: Catégorie (icône + type/subType)
     {
-      key: 'type',
-      label: <SortableHeader field="type" label="Type" />,
+      key: 'category',
+      label: 'Catégorie',
       render: (r: Task) => {
         const meta = getTaskIcon(r.type, r.subType);
         return (
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
             <Box sx={{
-              width: 28, height: 28, borderRadius: 0.75,
+              width: 24, height: 24, borderRadius: 0.5,
               bgcolor: `${meta.bg}15`, color: meta.bg,
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 14, border: `1px solid ${meta.bg}25`,
+              fontSize: 12, border: `1px solid ${meta.bg}25`,
             }}>
               {meta.emoji}
             </Box>
             <Box>
-              <Box sx={{ fontSize: 11.5, color: t.text2, fontWeight: 600 }}>{r.type}</Box>
-              <Box sx={{ fontSize: 10, color: t.text3, mt: 0.25 }}>{r.subType}</Box>
+              <Box sx={{ fontSize: 10.5, color: t.text2, fontWeight: 600, lineHeight: 1.2 }}>{r.type}</Box>
+              <Box sx={{ fontSize: 9, color: t.text3, lineHeight: 1.2 }}>{r.subType}</Box>
             </Box>
           </Stack>
         );
       }
     },
-    // Column 3: Source (OTA) - comme dans Reservations
-    {
-      key: 'source',
-      label: 'Source',
-      render: (r: Task) => <OTABadge channel={r.channelName} />
-    },
-    // Column 4: Voyageur (guest + country flag) - comme dans Reservations
-    {
-      key: 'guest',
-      label: 'Voyageur',
-      render: (r: Task) => (
-        r.guestName ? (
-          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-            <span style={{ fontSize: 18 }}>{flagFor(r.guestCountry)}</span>
-            <Typography sx={{ fontSize: 12, fontWeight: 500, color: t.text2 }}>
-              {r.guestName}
-            </Typography>
-          </Stack>
-        ) : (
-          <Box sx={{ fontSize: 11, color: t.text4, fontStyle: 'italic' }}>—</Box>
-        )
-      )
-    },
-    // Column 5: Listing - sortable
-    {
-      key: 'listing',
-      label: <SortableHeader field="listing" label="Propriété" />,
-      render: (r: Task) => <ListingCell name={r.listingName} color={getListingColor(r.listingName)} />
-    },
-    // Column 4: Date création - sortable
+    // Column 3: Créé le
     {
       key: 'createdAt',
-      label: <SortableHeader field="createdAt" label="Créée le" />,
+      label: 'Créé le',
       render: (r: Task) => (
-        <Box sx={{ fontFamily: 'Geist Mono', fontSize: 11.5, color: t.text2 }}>
-          {new Date(r.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+        <Box>
+          <Box sx={{ fontSize: 11, color: t.text2 }}>
+            {new Date(r.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}
+          </Box>
+          <Box sx={{ fontSize: 10, color: t.text3, fontFamily: 'Geist Mono' }}>
+            {new Date(r.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          </Box>
         </Box>
       )
     },
-    // Column 5: Échéance (startDate + startHour) - sortable by startDate
+    // Column 4: Date Prévue
     {
-      key: 'due',
-      label: <SortableHeader field="startDate" label="Échéance" />,
+      key: 'scheduled',
+      label: 'Date Prévue',
       render: (r: Task) => {
         const isUrgent = r.priority === 'Urgent' || r.priority === 'Critical';
         return (
-          <Box>
-            <Box sx={{ color: isUrgent ? t.error : t.text2, fontWeight: isUrgent ? 600 : 400, fontFamily: 'Geist Mono', fontSize: 12 }}>
-              {formatDate(r.startDate)} {r.startHour}
+          <Box sx={{ color: isUrgent ? t.error : t.text2, fontWeight: isUrgent ? 600 : 400 }}>
+            <Box sx={{ fontSize: 11 }}>
+              {new Date(r.startDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}
             </Box>
-            {r.clientTimeslot && (
-              <Box sx={{ fontSize: 10, color: t.ai, mt: 0.25 }}>Client: {r.clientTimeslot}</Box>
+            {r.status === 'CREATED' && (
+              <Box sx={{ fontSize: 9, color: t.text4, mt: 0.25 }}>En attente</Box>
             )}
           </Box>
         );
       }
     },
-    // Column 6: Réservation
+    // Column 5: Timeslot Client
+    {
+      key: 'clientTimeslot',
+      label: 'Timeslot Client',
+      render: (r: Task) => (
+        r.clientTimeslot ? (
+          <Box sx={{ fontSize: 11, color: t.ai, fontWeight: 600, fontFamily: 'Geist Mono' }}>
+            {r.clientTimeslot}
+          </Box>
+        ) : (
+          <Box sx={{ fontSize: 10, color: t.text4 }}>—</Box>
+        )
+      )
+    },
+    // Column 6: Heure Tâche
+    {
+      key: 'taskHour',
+      label: 'Heure Tâche',
+      render: (r: Task) => (
+        <Box sx={{ fontSize: 11, color: t.text2, fontFamily: 'Geist Mono' }}>
+          {r.startHour || '—'}
+        </Box>
+      )
+    },
+    // Column 7: Détails (descriptions courtes)
+    {
+      key: 'details',
+      label: 'Détails',
+      render: (r: Task) => (
+        r.descriptions && r.descriptions.length > 0 && r.descriptions[0].description ? (
+          <Box sx={{ fontSize: 10.5, color: t.text3, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {r.descriptions[0].description}
+          </Box>
+        ) : (
+          <Box sx={{ fontSize: 10, color: t.text4 }}>—</Box>
+        )
+      )
+    },
+    // Column 8: Listing
+    {
+      key: 'listing',
+      label: 'Listing',
+      render: (r: Task) => <ListingCell name={r.listingName} color={getListingColor(r.listingName)} />
+    },
+    // Column 9: Réservation
     {
       key: 'reservation',
       label: 'Réservation',
       render: (r: Task) => (
         r.reservationNumber ? (
           <Box>
-            <Box sx={{ fontSize: 11.5, color: t.primary, fontWeight: 600 }}>{r.reservationNumber}</Box>
-            {r.guestName && <Box sx={{ fontSize: 10, color: t.text3, mt: 0.25 }}>{r.guestName}</Box>}
+            <Box sx={{ fontSize: 11, color: t.primary, fontWeight: 600, fontFamily: 'Geist Mono' }}>
+              {r.reservationNumber}
+            </Box>
+            {r.guestName && (
+              <Box sx={{ fontSize: 9.5, color: t.text3, mt: 0.25 }}>{r.guestName}</Box>
+            )}
           </Box>
         ) : (
-          <Box sx={{ fontSize: 11, color: t.text4, fontStyle: 'italic' }}>-</Box>
+          <Box sx={{ fontSize: 10, color: t.text4 }}>—</Box>
         )
       )
     },
-    // Column 7: Assigné à (staff + avatar)
+    // Column 10: Description (notes/services)
     {
-      key: 'who',
-      label: 'Assigné à',
+      key: 'description',
+      label: 'Description',
       render: (r: Task) => {
-        const initials = r.staffName ? r.staffName.split(' ').map(n => n[0]).join('').toUpperCase() : null;
-        return (
-          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-            {initials ? (
-              <Ava initials={initials} />
-            ) : (
-              <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: t.bg3, color: t.text3, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                ?
-              </Box>
-            )}
-            <span style={{ color: r.staffName ? t.text : t.text3 }}>{r.staffName || 'Non assigné'}</span>
-          </Stack>
+        const desc = r.notes || (r.services && r.services.length > 0 ? r.services.join(', ') : null);
+        return desc ? (
+          <Box sx={{ fontSize: 10.5, color: t.text3, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {desc}
+          </Box>
+        ) : (
+          <Box sx={{ fontSize: 10, color: t.text4 }}>—</Box>
         );
       }
     },
-    // Column 8: Prix + Paiement
-    {
-      key: 'pricing',
-      label: 'Tarif',
-      render: (r: Task) => (
-        <Box>
-          <Box sx={{ fontSize: 12, fontWeight: 600, color: t.text }}>
-            {r.price} {r.currency}
-          </Box>
-          <Chip
-            label={r.paid ? 'Payé' : 'Non payé'}
-            size="small"
-            sx={{
-              height: 18,
-              fontSize: 10,
-              bgcolor: r.paid ? t.successTint : t.warningTint,
-              color: r.paid ? t.success : t.warning,
-              mt: 0.5
-            }}
-          />
-        </Box>
-      )
-    },
-    // Column 9: Statut - sortable
+    // Column 11: Statut
     {
       key: 'status',
-      label: <SortableHeader field="status" label="Statut" />,
+      label: 'Statut',
       render: (r: Task) => {
         const statusBadge = getStatusBadge(r.status);
         return <Badge variant={statusBadge.v as any} dot>{statusBadge.label}</Badge>;
       }
     },
-    // Column 10: Priorité - sortable
+    // Column 12: Staff
     {
-      key: 'prio',
-      label: <SortableHeader field="priority" label="Priorité" />,
+      key: 'staff',
+      label: 'Staff',
+      render: (r: Task) => {
+        const initials = r.staffName ? r.staffName.split(' ').map(n => n[0]).join('').toUpperCase() : null;
+        return (
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            {initials ? (
+              <Ava initials={initials} size={20} />
+            ) : (
+              <Box sx={{ width: 20, height: 20, borderRadius: '50%', bgcolor: t.bg3, color: t.text3, fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                ⏳
+              </Box>
+            )}
+            <Box sx={{ fontSize: 10.5, color: r.staffName ? t.text2 : t.text4 }}>
+              {r.staffName || '—'}
+            </Box>
+          </Stack>
+        );
+      }
+    },
+    // Column 13: Paiement
+    {
+      key: 'payment',
+      label: 'Paiement',
+      render: (r: Task) => (
+        <Box sx={{ fontSize: 10.5, color: t.text3 }}>
+          {r.requestPayment ? (r.paid ? '✓ Payé' : 'En attente') : 'NOT REQUIRED'}
+        </Box>
+      )
+    },
+    // Column 14: Prix
+    {
+      key: 'price',
+      label: 'Prix',
+      render: (r: Task) => (
+        <Box sx={{ fontSize: 11, fontWeight: 600, color: t.text, fontFamily: 'Geist Mono' }}>
+          {r.price > 0 ? `${r.price} ${r.currency}` : '—'}
+        </Box>
+      )
+    },
+    // Column 15: Urgence
+    {
+      key: 'urgency',
+      label: 'Urgence',
       render: (r: Task) => <Priority level={getPriorityLevel(r.priority)} />
     },
-    // Column 11: Actions (menu 3 points)
+    // Column 16: Actions
     {
       key: 'actions',
       label: '',
