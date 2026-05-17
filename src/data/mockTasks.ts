@@ -116,6 +116,7 @@ export const mockTasks: Task[] = [
     clientTimeslot: '14:00',
     timeslotSource: 'client',
     origin: 'task',
+    notes: 'Ménage complet avant arrivée, vérifier draps et serviettes',
   },
   {
     id: 'task-002',
@@ -155,6 +156,7 @@ export const mockTasks: Task[] = [
     TS_VAL: false,
     timeslotSource: 'default',
     origin: 'client',
+    notes: 'Fuite urgente, plombier à appeler rapidement',
   },
   {
     id: 'task-003',
