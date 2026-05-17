@@ -73,18 +73,78 @@ function Ava({ initials, size = 24 }: { initials: string; size?: number }) {
 }
 
 function Priority({ level }: { level: 'high' | 'med' | 'low' }) {
-  const c = level === 'high' ? t.error : level === 'med' ? t.warning : t.info;
-  const l = level === 'high' ? 'Haute' : level === 'med' ? 'Moyenne' : 'Basse';
+  const meta = level === 'high'
+    ? { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', label: '🔴 Haute', icon: '🔴' }
+    : level === 'med'
+    ? { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: '🟠 Moyenne', icon: '🟠' }
+    : { color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', label: '🔵 Basse', icon: '🔵' };
+
   return (
-    <Stack direction="row" spacing={0.5} sx={{
-      alignItems: 'center',
-      fontFamily: 'Geist Mono', fontSize: 10.5, fontWeight: 700, color: c, letterSpacing: 0.3,
+    <Box sx={{
+      px: 1, py: 0.5, borderRadius: 999,
+      bgcolor: meta.bg, color: meta.color,
+      fontSize: 10.5, fontWeight: 700,
+      display: 'inline-flex', alignItems: 'center', gap: 0.5,
+      border: `1px solid ${meta.color}30`,
     }}>
-      <Box sx={{ width: 7, height: 7, borderRadius: '2px', bgcolor: c }} />
-      <span>{l}</span>
-    </Stack>
+      <span style={{ fontSize: 8 }}>{meta.icon}</span>
+      <span>{meta.label.replace(/🔴|🟠|🔵/, '').trim()}</span>
+    </Box>
   );
 }
+
+// ─── Icônes par type de tâche (comme OTA badges) ───────────────────
+const getTaskIcon = (type: string, subType: string): { emoji: string; bg: string; label: string } => {
+  const t = type?.toLowerCase() || '';
+  const s = subType?.toLowerCase() || '';
+
+  if (t.includes('menage') || t.includes('cleaning') || s.includes('clean')) {
+    return { emoji: '🧹', bg: '#10b981', label: 'Ménage' };
+  }
+  if (t.includes('maintenance') || t.includes('repair')) {
+    return { emoji: '🔧', bg: '#f59e0b', label: 'Maintenance' };
+  }
+  if (t.includes('checkin') || s.includes('check-in') || s.includes('accueil')) {
+    return { emoji: '🛬', bg: '#3b82f6', label: 'Check-in' };
+  }
+  if (t.includes('checkout') || s.includes('check-out') || s.includes('depart')) {
+    return { emoji: '🛫', bg: '#8b5cf6', label: 'Check-out' };
+  }
+  if (t.includes('photo') || t.includes('shooting')) {
+    return { emoji: '📸', bg: '#ec4899', label: 'Photos' };
+  }
+  if (t.includes('inspection') || t.includes('controle')) {
+    return { emoji: '🔍', bg: '#06b6d4', label: 'Inspection' };
+  }
+  if (t.includes('linge') || t.includes('linen')) {
+    return { emoji: '🧺', bg: '#14b8a6', label: 'Linge' };
+  }
+  if (t.includes('livraison') || t.includes('delivery')) {
+    return { emoji: '📦', bg: '#f97316', label: 'Livraison' };
+  }
+  return { emoji: '📋', bg: t.primary, label: type || 'Tâche' };
+};
+
+const TaskIconBadge = ({ type, subType }: { type: string; subType: string }) => {
+  const meta = getTaskIcon(type, subType);
+  return (
+    <Box sx={{
+      width: 32,
+      height: 32,
+      borderRadius: 1,
+      bgcolor: `${meta.bg}15`,
+      color: meta.bg,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 16,
+      fontWeight: 700,
+      border: `1px solid ${meta.bg}30`,
+    }}>
+      {meta.emoji}
+    </Box>
+  );
+};
 
 // ─── Liste View ─────────────────────────────────────────
 type SortField = 'name' | 'type' | 'listing' | 'createdAt' | 'startDate' | 'priority' | 'status';
@@ -311,16 +371,29 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         </Box>
       )
     },
-    // Column 2: Type + SubType - sortable
+    // Column 2: Type + SubType - sortable (avec icône colorée)
     {
       key: 'type',
       label: <SortableHeader field="type" label="Type" />,
-      render: (r: Task) => (
-        <Box>
-          <Box sx={{ fontSize: 11.5, color: t.text2, fontWeight: 500 }}>{r.type}</Box>
-          <Box sx={{ fontSize: 10, color: t.text3, mt: 0.25 }}>{r.subType}</Box>
-        </Box>
-      )
+      render: (r: Task) => {
+        const meta = getTaskIcon(r.type, r.subType);
+        return (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Box sx={{
+              width: 28, height: 28, borderRadius: 0.75,
+              bgcolor: `${meta.bg}15`, color: meta.bg,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 14, border: `1px solid ${meta.bg}25`,
+            }}>
+              {meta.emoji}
+            </Box>
+            <Box>
+              <Box sx={{ fontSize: 11.5, color: t.text2, fontWeight: 600 }}>{r.type}</Box>
+              <Box sx={{ fontSize: 10, color: t.text3, mt: 0.25 }}>{r.subType}</Box>
+            </Box>
+          </Stack>
+        );
+      }
     },
     // Column 3: Listing - sortable
     {
@@ -444,24 +517,56 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
   return (
     <>
       <StatsRow>
-        <StatCard icon="📋" iconBg={t.infoTint}    iconColor={t.info}    value="14" label="En cours" />
-        <StatCard icon="⚡" iconBg={t.warningTint} iconColor="#b45309"   value="7"  label="Urgent aujourd'hui" />
-        <StatCard icon="🔴" iconBg={t.errorTint}   iconColor={t.error}   value="2"  label="En retard" trend="−3" />
-        <StatCard icon="✓"  iconBg={t.successTint} iconColor={t.success} value="28" label="Complétées cette semaine" trend="12%" trendUp />
-        <StatCard icon="✨" iconBg={t.aiTint}      iconColor={t.ai}      value="94%" label="Score AI qualité" />
+        <StatCard icon="📋" iconBg="rgba(59,130,246,0.12)"  iconColor="#3b82f6" value="14" label="En cours" />
+        <StatCard icon="⚡" iconBg="rgba(245,158,11,0.12)" iconColor="#f59e0b" value="7"  label="Urgent aujourd'hui" />
+        <StatCard icon="🔴" iconBg="rgba(239,68,68,0.12)"  iconColor="#ef4444" value="2"  label="En retard" trend="−3" />
+        <StatCard icon="✅" iconBg="rgba(16,185,129,0.12)" iconColor="#10b981" value="28" label="Complétées semaine" trend="12%" trendUp />
+        <StatCard icon="✨" iconBg={t.aiTint}              iconColor={t.ai}    value="94%" label="Score AI qualité" />
       </StatsRow>
 
       <FilterBar>
         <FilterChip label="Toutes · 156" active />
-        <FilterChip label="Urgent · 7" />
-        <FilterChip label="Aujourd'hui · 12" />
-        <FilterChip label="Cette semaine · 42" />
-        <FilterChip label="Non assignées · 3" />
+        <FilterChip label="🔴 Urgent · 7" />
+        <FilterChip label="📅 Aujourd'hui · 12" />
+        <FilterChip label="📆 Cette semaine · 42" />
+        <FilterChip label="👤 Non assignées · 3" />
         <Box sx={{ width: 1, height: 18, bgcolor: t.border, mx: 0.5 }} />
-        <FilterChip label="🧹 Ménage" />
-        <FilterChip label="🔧 Maintenance" />
-        <FilterChip label="🛬 Check-in" />
-        <FilterChip label="📸 Photos" />
+        <Box sx={{
+          px: 1.5, py: 0.625, borderRadius: 999, border: `1px solid ${t.border}`,
+          bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981',
+          fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 0.75,
+          cursor: 'pointer', transition: 'all 0.15s',
+          '&:hover': { bgcolor: 'rgba(16,185,129,0.20)', borderColor: '#10b981' },
+        }}>
+          <span>🧹</span> Ménage
+        </Box>
+        <Box sx={{
+          px: 1.5, py: 0.625, borderRadius: 999, border: `1px solid ${t.border}`,
+          bgcolor: 'rgba(245,158,11,0.12)', color: '#f59e0b',
+          fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 0.75,
+          cursor: 'pointer', transition: 'all 0.15s',
+          '&:hover': { bgcolor: 'rgba(245,158,11,0.20)', borderColor: '#f59e0b' },
+        }}>
+          <span>🔧</span> Maintenance
+        </Box>
+        <Box sx={{
+          px: 1.5, py: 0.625, borderRadius: 999, border: `1px solid ${t.border}`,
+          bgcolor: 'rgba(59,130,246,0.12)', color: '#3b82f6',
+          fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 0.75,
+          cursor: 'pointer', transition: 'all 0.15s',
+          '&:hover': { bgcolor: 'rgba(59,130,246,0.20)', borderColor: '#3b82f6' },
+        }}>
+          <span>🛬</span> Check-in
+        </Box>
+        <Box sx={{
+          px: 1.5, py: 0.625, borderRadius: 999, border: `1px solid ${t.border}`,
+          bgcolor: 'rgba(236,72,153,0.12)', color: '#ec4899',
+          fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 0.75,
+          cursor: 'pointer', transition: 'all 0.15s',
+          '&:hover': { bgcolor: 'rgba(236,72,153,0.20)', borderColor: '#ec4899' },
+        }}>
+          <span>📸</span> Photos
+        </Box>
       </FilterBar>
 
       <DataTable
