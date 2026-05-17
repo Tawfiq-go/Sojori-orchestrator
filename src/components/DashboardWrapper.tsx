@@ -78,6 +78,13 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'pricing': '/pricing',
     'channels': '/channels',
     'clients': '/clients',
+
+    // CRM
+    'crm': '/crm',
+    'crm/requests': '/crm?tab=requests',
+    'crm/leads': '/crm?tab=leads',
+    'crm/support': '/crm?tab=support',
+    'crm/onboarding': '/crm?tab=onboarding',
   };
 
   /** Détection robuste : on prend la route la plus longue qui matche (préfixes propres). */

@@ -17,11 +17,13 @@ import type {
 const API_BASE = import.meta.env.VITE_SRV_ORCHESTRATOR_URL || 'https://dev.sojori.com';
 const API_PREFIX = '/api/v1/orchestrator';
 
+import { getToken } from '../utils/authUtils';
+
 /**
- * Get auth token from localStorage
+ * JWT aligné sur le reste de l’app (cookie sojori_token + fallback localStorage legacy).
  */
 function getAuthToken(): string | null {
-  return localStorage.getItem('token') || null;
+  return getToken() ?? null;
 }
 
 /**

@@ -54,7 +54,7 @@ export function CalendarPage() {
             {value:'gantt', label:'Vue Gantt'}
           ]}
           value={viewMode}
-          onChange={(val) => setViewMode(val as 'simple' | 'gantt')}
+          onChange={(val: string) => setViewMode(val as 'simple' | 'gantt')}
         />
         <ViewToggle
           options={[{value:'21j', label:'21 jours'}, {value:'mois', label:'Mois'}, {value:'sem', label:'Semaine'}]}

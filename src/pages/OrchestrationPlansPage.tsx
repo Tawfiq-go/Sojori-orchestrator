@@ -414,8 +414,27 @@ const OrchestrationPlansPage: React.FC = () => {
     }
   };
 
+  const [tab, setTab] = useState(0);
+  const handleTabChange = (_: any, newValue: number) => {
+    setTab(newValue);
+    if (newValue === 1) navigate('/orchestration'); // Chronologie
+    if (newValue === 2) navigate('/orchestration/events'); // Événements
+    if (newValue === 4) navigate('/orchestration/config'); // Configuration
+  };
+
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Orchestration API', 'Plans']}>
+      {/* Navigation Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: t.border, mb: 0 }}>
+        <Tabs value={tab} onChange={handleTabChange} sx={{ px: 3 }}>
+          <Tab label="Plans" />
+          <Tab label="Chronologie" />
+          <Tab label="Événement" />
+          <Tab label="Daily Ops" />
+          <Tab label="Configuration" />
+        </Tabs>
+      </Box>
+
       <Box sx={{ p: 3 }}>
         <PageHeader
           title="🟣 Orchestration · Plans API"

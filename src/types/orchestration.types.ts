@@ -199,9 +199,12 @@ export interface SendNotificationAction {
   };
 }
 
-export type WorkflowActions =
-  | { requestTimeslot?: RequestTimeslotAction; assignStaff?: AssignStaffAction; deadlineEscalation?: DeadlineEscalationAction }
-  | { sendNotification: SendNotificationAction };
+export type WorkflowActions = {
+  requestTimeslot?: RequestTimeslotAction;
+  assignStaff?: AssignStaffAction;
+  deadlineEscalation?: DeadlineEscalationAction;
+  sendNotification?: SendNotificationAction;
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // WORKFLOW & PLAN

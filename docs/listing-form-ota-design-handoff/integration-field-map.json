@@ -1,0 +1,174 @@
+{
+  "_comment": "Pont design : chaque onglet = label UI, groupe, champs mock (paths), champs API (document by-id), persistance réelle.",
+  "configTabsPut": ["whatsapp", "concierge", "support", "rules", "access"],
+  "tabs": [
+    {
+      "key": "basic",
+      "group": "LISTING",
+      "liveDataSource": "GET /listings/by-id → voir api-document-keys-by-tab.basic",
+      "mockFormPaths": ["basic.name", "basic.type", "basic.ownerName", "basic.status", "basic.bedrooms", "basic.bathrooms", "basic.guests", "basic.surface", "basic.beds", "basic.shortDescription", "basic.longDescription"],
+      "persistenceNote": "Mise à jour réelle via dashboard admin / update-property (srv-listing), pas le bouton brouillon orchestrateur seul."
+    },
+    {
+      "key": "address",
+      "group": "LISTING",
+      "liveDataSource": "api-document-keys-by-tab.address",
+      "mockFormPaths": ["address.street", "address.postalCode", "address.city", "address.region", "address.country", "address.countryCode", "address.latitude", "address.longitude", "address.accessLandmark"],
+      "persistenceNote": "srv-listing"
+    },
+    {
+      "key": "media",
+      "group": "LISTING",
+      "liveDataSource": "listingImages[], videoTourUrl",
+      "mockFormPaths": ["media.coverPhoto", "media.galleryCount", "media.photoNotes", "media.videoTourUrl"],
+      "persistenceNote": "Galerie = API ; mock complète l’UX jusqu’à brancher upload."
+    },
+    {
+      "key": "equipment",
+      "group": "LISTING",
+      "liveDataSource": "listingAmenitiesIds[] (détails via endpoint amenities catalogue)",
+      "mockFormPaths": ["equipment.highlights", "equipment.kitchen", "equipment.pool", "equipment.parking", "equipment.wifi", "equipment.airConditioning", "equipment.safetyNotes"],
+      "persistenceNote": "Liste amenities = srv-listing ; mock masqué quand id Mongo + API."
+    },
+    {
+      "key": "pricing",
+      "group": "LISTING",
+      "liveDataSource": "api-document-keys-by-tab.pricing",
+      "mockFormPaths": ["pricing.basePrice", "pricing.cleaningFee", "pricing.weekendMultiplier", "pricing.currency", "pricing.cityTax", "pricing.petFee", "pricing.minStay (utilisé aussi logique dispo)"],
+      "persistenceNote": "Tarifs / roomTypes imbriqués côté API."
+    },
+    {
+      "key": "availability",
+      "group": "LISTING",
+      "liveDataSource": "api-document-keys-by-tab.availability",
+      "mockFormPaths": ["pricing.minStay", "availability.maxNights", "availability.preparationHoursBeforeArrival", "channels.allowInstantBook", "availability.notes"],
+      "persistenceNote": "Attention : minStay est sur form.pricing dans le mock."
+    },
+    {
+      "key": "deposit",
+      "group": "LISTING",
+      "liveDataSource": "deposit, securityDeposit, additionalFees",
+      "mockFormPaths": ["deposit.*", "extras.* (onglet deposit fusionne extras REQUIRED_FIELDS)"],
+      "persistenceNote": "Onglet deposit inclut extras dans completion — designer peut séparer visuellement deux cartes."
+    },
+    {
+      "key": "channels",
+      "group": "LISTING",
+      "liveDataSource": "channelManager, channex*, otaChannelsSnapshot, distribution",
+      "mockFormPaths": ["channels.preferredChannel", "channels.syncMode", "channels.allowInstantBook", "channels.channelNotes"],
+      "persistenceNote": "Channex mapping peut être absent (direct) — message info, pas erreur fatale."
+    },
+    {
+      "key": "roomtypes",
+      "group": "LISTING",
+      "liveDataSource": "roomTypes[], compositionRooms",
+      "mockFormPaths": ["roomtypes.*"],
+      "persistenceNote": "srv-listing roomTypes"
+    },
+    {
+      "key": "licenses",
+      "group": "LISTING",
+      "liveDataSource": "licenceInfo",
+      "mockFormPaths": ["licenses.*"],
+      "persistenceNote": "srv-listing"
+    },
+    {
+      "key": "houserules",
+      "group": "LISTING",
+      "liveDataSource": "description, horaires, houseRules, rulesAndInfo",
+      "mockFormPaths": ["houserules.*"],
+      "persistenceNote": "Chevauchement avec rules côté API — regrouper visuellement sans doublons."
+    },
+    {
+      "key": "orchestration",
+      "group": "CONFIG",
+      "liveDataSource": "orchestration_* booleans",
+      "mockFormPaths": ["orchestration.*"],
+      "persistenceNote": "Flags listing ; vérifier endpoints admin pour PUT global listing."
+    },
+    {
+      "key": "cleaning",
+      "group": "CONFIG",
+      "liveDataSource": "paidCleaningConfig, freeCleaningConfig, frequency",
+      "mockFormPaths": ["cleaning.*"],
+      "persistenceNote": "srv-listing"
+    },
+    {
+      "key": "access",
+      "group": "CONFIG",
+      "liveDataSource": "accessDetails[]",
+      "mockFormPaths": ["access.*"],
+      "persistenceNote": "Onglet CONFIG : éditeur JSON + PUT dédié (voir listingConfigTabApi)."
+    },
+    {
+      "key": "whatsapp",
+      "group": "CONFIG",
+      "liveDataSource": "whatsappServiceSettings",
+      "mockFormPaths": ["whatsapp.*"],
+      "persistenceNote": "CONFIG PUT WhatsApp (overrides)."
+    },
+    {
+      "key": "concierge",
+      "group": "CONFIG",
+      "liveDataSource": "orchestration_transport|grocery|custom",
+      "mockFormPaths": ["concierge.*"],
+      "persistenceNote": "CONFIG PUT services concierge."
+    },
+    {
+      "key": "support",
+      "group": "CONFIG",
+      "liveDataSource": "arrivalPhone, arrivalEmail, orchestration_support",
+      "mockFormPaths": ["support.*"],
+      "persistenceNote": "CONFIG PUT support categories."
+    },
+    {
+      "key": "rules",
+      "group": "CONFIG",
+      "liveDataSource": "rulesAndInfo, houseRules, description",
+      "mockFormPaths": ["rules.*"],
+      "persistenceNote": "CONFIG PUT rulesAndInfo."
+    },
+    {
+      "key": "services",
+      "group": "MORE",
+      "liveDataSource": "services[]",
+      "mockFormPaths": ["services.*"],
+      "persistenceNote": "srv-listing"
+    },
+    {
+      "key": "automsg",
+      "group": "MORE",
+      "liveDataSource": "messageCheckin, messageCheckout, messageGeneral, …",
+      "mockFormPaths": ["automsg.*"],
+      "persistenceNote": "srv-listing"
+    },
+    {
+      "key": "wifi",
+      "group": "MORE",
+      "liveDataSource": "wifiUsername, wifiPassword",
+      "mockFormPaths": ["wifi.*"],
+      "persistenceNote": "srv-listing"
+    },
+    {
+      "key": "autotasks",
+      "group": "MORE",
+      "liveDataSource": "tasks[]",
+      "mockFormPaths": ["autotasks.*"],
+      "persistenceNote": "srv-listing"
+    },
+    {
+      "key": "iot",
+      "group": "MORE",
+      "liveDataSource": "iot, connectedDevices",
+      "mockFormPaths": ["iot.*"],
+      "persistenceNote": "srv-listing"
+    },
+    {
+      "key": "extras",
+      "group": "MORE",
+      "liveDataSource": "additionalFees, extra, distribution",
+      "mockFormPaths": ["extras.*"],
+      "persistenceNote": "Doublon partiel avec deposit — designer peut unifier « frais »."
+    }
+  ]
+}

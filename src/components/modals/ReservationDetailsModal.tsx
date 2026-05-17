@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
-  Box, Stack, Typography, Button, IconButton, Tabs, Tab, Chip, Divider,
+  Box, Stack, Typography, Button, IconButton, Tabs, Tab, Chip,
   List, ListItem, ListItemText, Avatar,
 } from '@mui/material';
 
@@ -69,11 +69,11 @@ export const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = (
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth
-      PaperProps={{ sx: { borderRadius: 2, bgcolor: T.bg1, minHeight: 600 } }}>
+      slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: T.bg1, minHeight: 600 } } }}>
       <DialogTitle sx={{ pb: 0, borderBottom: `1px solid ${T.border}` }}>
-        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" sx={{ pb: 1.5 }}>
+        <Stack direction="row" sx={{ pb: 1.5, alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <Stack spacing={1}>
-            <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
               <Typography sx={{ fontWeight: 800, fontSize: 20, color: T.text }}>
                 Réservation {reservation.id}
               </Typography>
@@ -200,7 +200,7 @@ const HistoryTab: React.FC<{ r: ReservationDetails }> = ({ r }) => (
       { t: new Date(r.createdAt).toLocaleString('fr-FR'), label: '➕ Réservation créée', desc: 'Source: Airbnb' },
     ].map((e, i) => (
       <Box key={i} sx={{ p: 1.5, borderLeft: `3px solid ${T.primary}`, bgcolor: T.bg2, borderRadius: 1 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="baseline">
+        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
           <Typography sx={{ fontSize: 13, fontWeight: 600, color: T.text }}>{e.label}</Typography>
           <Typography sx={{ fontSize: 11, color: T.text3, fontFamily: 'Geist Mono' }}>{e.t}</Typography>
         </Stack>
@@ -220,7 +220,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 );
 
 const Row: React.FC<{ label: string; value: string; emphasize?: boolean }> = ({ label, value, emphasize }) => (
-  <Stack direction="row" justifyContent="space-between" alignItems="center">
+  <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
     <Typography sx={{ fontSize: 12, color: T.text3, fontWeight: 600 }}>{label}</Typography>
     <Typography sx={{ fontSize: 13, color: emphasize ? T.primary : T.text, fontWeight: emphasize ? 800 : 600, fontFamily: emphasize ? 'Geist Mono' : 'inherit' }}>{value}</Typography>
   </Stack>

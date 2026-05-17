@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Stack,
@@ -66,7 +66,7 @@ export function TravelersSection({ travelers, onUpdate, maxTravelers }: Traveler
   return (
     <Box>
       {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
           <Typography sx={{ fontSize: 16, fontWeight: 700, mb: 0.5 }}>
             👥 Voyageurs ({travelers.length}{maxTravelers ? `/${maxTravelers}` : ''})
@@ -180,7 +180,7 @@ function TravelerCard({ traveler, onEdit, onDelete }: {
         transform: 'translateY(-1px)',
       }
     }}>
-      <Stack direction="row" spacing={2} alignItems="center">
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
         {/* Avatar */}
         <Avatar sx={{
           width: 48,
@@ -195,7 +195,7 @@ function TravelerCard({ traveler, onEdit, onDelete }: {
 
         {/* Info */}
         <Box sx={{ flex: 1 }}>
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 0.5 }}>
+          <Stack direction="row" spacing={1.5} sx={{ mb: 0.5, alignItems: 'center' }}>
             <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
               {traveler.firstName} {traveler.lastName}
             </Typography>
@@ -300,8 +300,8 @@ function TravelerModal({ open, traveler, onClose, onSave }: {
     setStatus('DRAFT');
   };
 
-  // Load traveler data when modal opens
-  useState(() => {
+  useEffect(() => {
+    if (!open) return;
     if (traveler) {
       setFirstName(traveler.firstName);
       setLastName(traveler.lastName);
@@ -310,9 +310,14 @@ function TravelerModal({ open, traveler, onClose, onSave }: {
       setDateOfBirth(traveler.dateOfBirth);
       setStatus(traveler.status);
     } else {
-      resetForm();
+      setFirstName('');
+      setLastName('');
+      setNationality('');
+      setPassportNumber('');
+      setDateOfBirth('');
+      setStatus('DRAFT');
     }
-  });
+  }, [open, traveler]);
 
   return (
     <Dialog
@@ -320,7 +325,7 @@ function TravelerModal({ open, traveler, onClose, onSave }: {
       onClose={onClose}
       maxWidth="sm"
       fullWidth
-      PaperProps={{ sx: { borderRadius: '16px' } }}
+      slotProps={{ paper: { sx: { borderRadius: '16px' } } }}
     >
       <DialogTitle sx={{ pb: 2, borderBottom: `1px solid ${t.border}` }}>
         {traveler ? '✏️ Modifier le voyageur' : '➕ Ajouter un voyageur'}
@@ -367,7 +372,7 @@ function TravelerModal({ open, traveler, onClose, onSave }: {
             label="Date de naissance"
             value={dateOfBirth}
             onChange={(e) => setDateOfBirth(e.target.value)}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{ inputLabel: { shrink: true } }}
           />
 
           <FormControl fullWidth>

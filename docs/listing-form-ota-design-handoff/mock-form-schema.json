@@ -1,0 +1,320 @@
+{
+  "_comment": "Schéma formulaire mock orchestrateur (sections + champs). Chaque path = clé dans ListingRecord.form (ListingFormData).",
+  "basic": [
+    {
+      "title": "Identification",
+      "description": "Les informations fondamentales de l’annonce.",
+      "fields": [
+        { "label": "Nom de la propriété", "path": "basic.name", "type": "text", "required": true },
+        { "label": "Type de propriété", "path": "basic.type", "type": "select", "required": true },
+        { "label": "Propriétaire", "path": "basic.ownerName", "type": "text", "required": true },
+        { "label": "Statut", "path": "basic.status", "type": "select", "required": true },
+        { "label": "Chambres", "path": "basic.bedrooms", "type": "number", "required": true },
+        { "label": "Salles de bain", "path": "basic.bathrooms", "type": "number", "required": true },
+        { "label": "Capacité", "path": "basic.guests", "type": "number", "required": true },
+        { "label": "Surface (m²)", "path": "basic.surface", "type": "number", "required": true },
+        { "label": "Lits", "path": "basic.beds", "type": "number", "required": true }
+      ]
+    },
+    {
+      "title": "Description",
+      "fields": [
+        { "label": "Description courte", "path": "basic.shortDescription", "type": "textarea", "required": true },
+        { "label": "Description longue", "path": "basic.longDescription", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "address": [
+    {
+      "title": "Adresse complète",
+      "fields": [
+        { "label": "Rue", "path": "address.street", "type": "text", "required": true },
+        { "label": "Code postal", "path": "address.postalCode", "type": "text", "required": true },
+        { "label": "Ville", "path": "address.city", "type": "text", "required": true },
+        { "label": "Région", "path": "address.region", "type": "text", "required": true },
+        { "label": "Pays", "path": "address.country", "type": "text", "required": true },
+        { "label": "Code pays", "path": "address.countryCode", "type": "text", "required": true },
+        { "label": "Latitude", "path": "address.latitude", "type": "text", "required": true },
+        { "label": "Longitude", "path": "address.longitude", "type": "text", "required": true },
+        { "label": "Repère / landmark", "path": "address.accessLandmark", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "media": [
+    {
+      "title": "Bibliothèque média",
+      "fields": [
+        { "label": "Photo cover", "path": "media.coverPhoto", "type": "url", "required": true },
+        { "label": "Nombre de photos", "path": "media.galleryCount", "type": "number", "required": true },
+        { "label": "Notes photo", "path": "media.photoNotes", "type": "textarea", "required": true },
+        { "label": "URL video tour", "path": "media.videoTourUrl", "type": "url" }
+      ]
+    }
+  ],
+  "equipment": [
+    {
+      "title": "Équipements clés",
+      "fields": [
+        { "label": "Highlights (tags)", "path": "equipment.highlights", "type": "tags", "required": true },
+        { "label": "Cuisine équipée", "path": "equipment.kitchen", "type": "switch" },
+        { "label": "Piscine", "path": "equipment.pool", "type": "switch" },
+        { "label": "Parking", "path": "equipment.parking", "type": "switch" },
+        { "label": "WiFi", "path": "equipment.wifi", "type": "switch" },
+        { "label": "Climatisation", "path": "equipment.airConditioning", "type": "switch" },
+        { "label": "Notes sécurité", "path": "equipment.safetyNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "pricing": [
+    {
+      "title": "Core pricing",
+      "fields": [
+        { "label": "Base price / night", "path": "pricing.basePrice", "type": "number", "required": true },
+        { "label": "Cleaning fee", "path": "pricing.cleaningFee", "type": "number", "required": true },
+        { "label": "Weekend multiplier", "path": "pricing.weekendMultiplier", "type": "number", "required": true },
+        { "label": "Currency", "path": "pricing.currency", "type": "select", "required": true },
+        { "label": "City tax (per guest / night)", "path": "pricing.cityTax", "type": "number", "required": true },
+        { "label": "Pet fee", "path": "pricing.petFee", "type": "number" }
+      ]
+    }
+  ],
+  "availability": [
+    {
+      "title": "Availability & booking rules",
+      "description": "Inclut minStay sur path pricing.minStay (alignement dashboard).",
+      "fields": [
+        { "label": "Minimum nights", "path": "pricing.minStay", "type": "number", "required": true },
+        { "label": "Maximum nights", "path": "availability.maxNights", "type": "number", "required": true },
+        { "label": "Preparation hours before arrival", "path": "availability.preparationHoursBeforeArrival", "type": "number", "required": true },
+        { "label": "Instant book", "path": "channels.allowInstantBook", "type": "switch" },
+        { "label": "Internal notes", "path": "availability.notes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "orchestration": [
+    {
+      "title": "Orchestration (guest & ops flows)",
+      "fields": [
+        { "label": "Online registration flow", "path": "orchestration.registration", "type": "switch" },
+        { "label": "Choose arrival slot", "path": "orchestration.chooseArrival", "type": "switch" },
+        { "label": "Choose departure slot", "path": "orchestration.chooseDeparture", "type": "switch" },
+        { "label": "Declare arrival", "path": "orchestration.declareArrival", "type": "switch" },
+        { "label": "Declare departure", "path": "orchestration.declareDeparture", "type": "switch" },
+        { "label": "Transport (concierge)", "path": "orchestration.transport", "type": "switch" },
+        { "label": "Grocery (concierge)", "path": "orchestration.grocery", "type": "switch" },
+        { "label": "Custom requests", "path": "orchestration.custom", "type": "switch" },
+        { "label": "Support category", "path": "orchestration.support", "type": "switch" },
+        { "label": "Cleaning (free automation)", "path": "orchestration.cleaningFree", "type": "switch" },
+        { "label": "Cleaning (paid)", "path": "orchestration.cleaningPaid", "type": "switch" },
+        { "label": "Notes orchestration", "path": "orchestration.notes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "extras": [
+    {
+      "title": "Frais supplémentaires",
+      "fields": [
+        { "label": "Early check-in", "path": "extras.earlyCheckInFee", "type": "number", "required": true },
+        { "label": "Late check-out", "path": "extras.lateCheckOutFee", "type": "number", "required": true },
+        { "label": "Transfert aéroport", "path": "extras.airportTransferFee", "type": "number" },
+        { "label": "Baby kit", "path": "extras.babyKitFee", "type": "number" },
+        { "label": "Extra guest fee", "path": "extras.extraGuestFee", "type": "number" },
+        { "label": "Notes extras", "path": "extras.notes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "channels": [
+    {
+      "title": "Configuration OTA",
+      "fields": [
+        { "label": "Canal préféré", "path": "channels.preferredChannel", "type": "select", "required": true },
+        { "label": "Mode de sync", "path": "channels.syncMode", "type": "select", "required": true },
+        { "label": "Instant book autorisé", "path": "channels.allowInstantBook", "type": "switch" },
+        { "label": "Notes canaux", "path": "channels.channelNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "licenses": [
+    {
+      "title": "Conformité & licences",
+      "fields": [
+        { "label": "Licence tourisme", "path": "licenses.tourismLicense", "type": "text", "required": true },
+        { "label": "Numéro TVA", "path": "licenses.vatNumber", "type": "text", "required": true },
+        { "label": "Police assurance", "path": "licenses.insurancePolicy", "type": "text", "required": true },
+        { "label": "Expiration", "path": "licenses.expiresAt", "type": "date", "required": true },
+        { "label": "Notes licences", "path": "licenses.licensingNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "automsg": [
+    {
+      "title": "Messages automatiques",
+      "fields": [
+        { "label": "Messages actifs", "path": "automsg.enabled", "type": "switch" },
+        { "label": "Confirmation réservation", "path": "automsg.bookingConfirmation", "type": "textarea", "required": true },
+        { "label": "Rappel avant arrivée", "path": "automsg.preArrivalReminder", "type": "textarea", "required": true },
+        { "label": "Check-in séjour", "path": "automsg.stayCheckIn", "type": "textarea", "required": true },
+        { "label": "Avant départ", "path": "automsg.preDeparture", "type": "textarea", "required": true },
+        { "label": "Merci / review", "path": "automsg.thankYou", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "whatsapp": [
+    {
+      "title": "Menu WhatsApp",
+      "fields": [
+        { "label": "Titre menu", "path": "whatsapp.menuTitle", "type": "text", "required": true },
+        { "label": "Template accueil", "path": "whatsapp.welcomeTemplate", "type": "text", "required": true },
+        { "label": "Quick replies", "path": "whatsapp.quickReplies", "type": "tags", "required": true },
+        { "label": "Auto-reply actif", "path": "whatsapp.autoReplyEnabled", "type": "switch" },
+        { "label": "Numéro escalation", "path": "whatsapp.escalationNumber", "type": "tel", "required": true }
+      ]
+    }
+  ],
+  "concierge": [
+    {
+      "title": "Services concierge",
+      "fields": [
+        { "label": "Concierge active", "path": "concierge.enabled", "type": "switch" },
+        { "label": "Transfert aéroport", "path": "concierge.airportTransfer", "type": "switch" },
+        { "label": "Livraison courses", "path": "concierge.groceryDelivery", "type": "switch" },
+        { "label": "Chef privé", "path": "concierge.chefService", "type": "switch" },
+        { "label": "Guide local", "path": "concierge.localGuide", "type": "switch" },
+        { "label": "Notes concierge", "path": "concierge.conciergeNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "services": [
+    {
+      "title": "Services additionnels",
+      "fields": [
+        { "label": "Petit déjeuner", "path": "services.breakfast", "type": "switch" },
+        { "label": "Spa", "path": "services.spa", "type": "switch" },
+        { "label": "Housekeeping", "path": "services.housekeeping", "type": "switch" },
+        { "label": "Babysitting", "path": "services.babysitting", "type": "switch" },
+        { "label": "Location véhicule", "path": "services.carRental", "type": "switch" },
+        { "label": "Notes services", "path": "services.serviceNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "support": [
+    {
+      "title": "Support client",
+      "fields": [
+        { "label": "Téléphone support", "path": "support.phone", "type": "tel", "required": true },
+        { "label": "Email support", "path": "support.email", "type": "email", "required": true },
+        { "label": "Horaires support", "path": "support.hours", "type": "time", "required": true },
+        { "label": "Protocole urgence", "path": "support.emergencyProtocol", "type": "textarea", "required": true },
+        { "label": "Notes support", "path": "support.supportNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "cleaning": [
+    {
+      "title": "Instructions ménage",
+      "fields": [
+        { "label": "Checklist standard", "path": "cleaning.standardChecklist", "type": "textarea", "required": true },
+        { "label": "Rotation linge", "path": "cleaning.linenChange", "type": "text", "required": true },
+        { "label": "Stockage consommables", "path": "cleaning.suppliesStorage", "type": "text", "required": true },
+        { "label": "Contrôle qualité", "path": "cleaning.qualityControl", "type": "text", "required": true },
+        { "label": "Notes ménage", "path": "cleaning.cleaningNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "autotasks": [
+    {
+      "title": "Tâches automatiques",
+      "fields": [
+        { "label": "Créer tâche ménage", "path": "autotasks.createCleaningTask", "type": "switch" },
+        { "label": "Créer tâche maintenance", "path": "autotasks.createMaintenanceTask", "type": "switch" },
+        { "label": "Créer tâche welcome pack", "path": "autotasks.createWelcomePackTask", "type": "switch" },
+        { "label": "Assigner équipe par défaut", "path": "autotasks.assignDefaultTeam", "type": "switch" },
+        { "label": "Notes tâches auto", "path": "autotasks.taskNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "roomtypes": [
+    {
+      "title": "Gestion des types de chambres",
+      "fields": [
+        { "label": "Mode multi-room", "path": "roomtypes.multiRoomEnabled", "type": "switch" },
+        { "label": "Room type par défaut", "path": "roomtypes.defaultRoomType", "type": "select", "required": true },
+        { "label": "Inventaire chambres", "path": "roomtypes.roomInventory", "type": "textarea", "required": true },
+        { "label": "Matrice occupation", "path": "roomtypes.occupancyMatrix", "type": "text", "required": true },
+        { "label": "Notes room types", "path": "roomtypes.roomtypeNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "deposit": [
+    {
+      "title": "Caution",
+      "fields": [
+        { "label": "Caution activée", "path": "deposit.enabled", "type": "switch" },
+        { "label": "Montant caution", "path": "deposit.amount", "type": "number", "required": true },
+        { "label": "Méthode", "path": "deposit.method", "type": "select", "required": true },
+        { "label": "Délai remboursement (jours)", "path": "deposit.refundDelayDays", "type": "number", "required": true },
+        { "label": "Notes caution", "path": "deposit.depositNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "title": "Sécurité & conformité",
+      "fields": [
+        { "label": "Fumeur autorisé", "path": "rules.smokingAllowed", "type": "switch" },
+        { "label": "Évènements autorisés", "path": "rules.eventsAllowed", "type": "switch" },
+        { "label": "Enfants autorisés", "path": "rules.childrenAllowed", "type": "switch" },
+        { "label": "Animaux autorisés", "path": "rules.petAllowed", "type": "switch" },
+        { "label": "Notes sécurité", "path": "rules.securityNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "houserules": [
+    {
+      "title": "Règlement intérieur",
+      "fields": [
+        { "label": "Fenêtre check-in", "path": "houserules.checkInWindow", "type": "text", "required": true },
+        { "label": "Fenêtre check-out", "path": "houserules.checkOutWindow", "type": "text", "required": true },
+        { "label": "Heures calmes", "path": "houserules.quietHours", "type": "text", "required": true },
+        { "label": "Instructions poubelles", "path": "houserules.trashInstructions", "type": "textarea", "required": true },
+        { "label": "Texte house rules", "path": "houserules.houseRulesText", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "access": [
+    {
+      "title": "Instructions accès",
+      "fields": [
+        { "label": "Type d’accès", "path": "access.accessType", "type": "select", "required": true },
+        { "label": "Code keypad", "path": "access.keypadCode", "type": "text", "required": true },
+        { "label": "Code lockbox", "path": "access.lockboxCode", "type": "text" },
+        { "label": "Instructions parking", "path": "access.parkingInstructions", "type": "textarea", "required": true },
+        { "label": "Notes accès", "path": "access.accessNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "wifi": [
+    {
+      "title": "Configuration WiFi",
+      "fields": [
+        { "label": "SSID", "path": "wifi.ssid", "type": "text", "required": true },
+        { "label": "Mot de passe", "path": "wifi.password", "type": "text", "required": true },
+        { "label": "Débit / speed", "path": "wifi.speed", "type": "text", "required": true },
+        { "label": "Backup network", "path": "wifi.backupNetwork", "type": "text" },
+        { "label": "Notes WiFi", "path": "wifi.wifiNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ],
+  "iot": [
+    {
+      "title": "Appareils connectés",
+      "fields": [
+        { "label": "Smart lock", "path": "iot.smartLock", "type": "switch" },
+        { "label": "Thermostat connecté", "path": "iot.thermostat", "type": "switch" },
+        { "label": "Noise sensor", "path": "iot.noiseSensor", "type": "switch" },
+        { "label": "Caméra extérieure", "path": "iot.cameraOutdoor", "type": "switch" },
+        { "label": "Notes devices", "path": "iot.deviceNotes", "type": "textarea", "required": true }
+      ]
+    }
+  ]
+}

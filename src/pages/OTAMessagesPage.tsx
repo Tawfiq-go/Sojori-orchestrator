@@ -226,19 +226,27 @@ export function OTAMessagesPage() {
   const messageTemplates = useMemo<MessageComposeTemplate[]>(
     () => [
       {
-        label: 'Bienvenue',
+        id: 'ota-welcome',
+        name: 'Bienvenue',
+        channel: ['ota'],
         body: `Bonjour ${conv?.guestName.split(' ')[0] || 'guest'},\n\nMerci pour votre message sur ${conv?.ota || 'OTA'}. Nous serons ravis de vous accueillir à ${conv?.listingName || 'votre logement'}.`,
       },
       {
-        label: 'Code accès',
+        id: 'ota-access',
+        name: 'Code accès',
+        channel: ['ota'],
         body: `Bonjour ${conv?.guestName.split(' ')[0] || 'guest'},\n\nVoici vos informations d'accès pour ${conv?.listingName || 'le logement'}:\n- Porte principale: 4821\n- Coffre à clés: 9907`,
       },
       {
-        label: 'Guide local',
+        id: 'ota-guide',
+        name: 'Guide local',
+        channel: ['ota'],
         body: `Bonjour ${conv?.guestName.split(' ')[0] || 'guest'},\n\nJe vous envoie notre guide local avec restaurants, transferts et activités recommandées autour de ${conv?.listingName || 'votre séjour'}.`,
       },
       {
-        label: 'Transport',
+        id: 'ota-transport',
+        name: 'Transport',
+        channel: ['ota'],
         body: `Bonjour ${conv?.guestName.split(' ')[0] || 'guest'},\n\nNous pouvons organiser un transfert privé depuis l'aéroport. Merci de me confirmer l'heure d'arrivée et le nombre de passagers.`,
       },
     ],

@@ -1,0 +1,27 @@
+{
+  "name": "Sojori Orchestrator — Listing form ↔ OTA / srv-listing design handoff",
+  "version": "1.0.0",
+  "generated": "2026-05-15",
+  "sourceRepo": "Sojori-orchestrator",
+  "sourcePaths": [
+    "src/pages/NewListingFormPage.tsx (TAB_SCHEMAS, rail onglets)",
+    "src/data/catalogueMock.ts (ListingFormData, LISTING_TAB_META, ListingRecord)",
+    "src/utils/listingTabLivePayload.ts (extrait API par onglet)",
+    "src/utils/mapApiListingToListingRecord.ts (mapping document brut → formulaire)",
+    "src/utils/listingConfigTabApi.ts (onglets CONFIG + PUT)"
+  ],
+  "apiBase": "GET /api/v1/listing/listings/by-id/:id (document listing srv-listing)",
+  "zipLayout": "Archive plate : les 10 fichiers sont à la racine du .zip (pas de sous-dossier).",
+  "filesInZip": [
+    "INSTRUCTIONS.md",
+    "manifest.json",
+    "tabs-order.json",
+    "mock-form-schema.json",
+    "api-document-keys-by-tab.json",
+    "srv-listing-top-level-keys-reference.json",
+    "integration-field-map.json",
+    "listing-by-id.sample-rich.json",
+    "per-tab-live-payload-shapes.json",
+    "ota-category-hints.json"
+  ]
+}

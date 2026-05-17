@@ -54,6 +54,28 @@ export interface RegisterPayload {
  * Authentification RÉELLE depuis localhost ou production
  * Le dev token sert uniquement à bypasser CORS, pas à faire du mock
  */
+function userFromValidTokenPayload(data: Record<string, unknown>): User | undefined {
+  const raw = data.user;
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+  const r = raw as Record<string, unknown>;
+  const id = String(r._id ?? r.id ?? '').trim();
+  if (!id) {
+    return undefined;
+  }
+  return {
+    id,
+    email: String(r.email ?? ''),
+    firstName: String(r.firstName ?? ''),
+    lastName: String(r.lastName ?? ''),
+    role: String(r.role ?? ''),
+    phone: r.phone != null ? String(r.phone) : undefined,
+    company: r.company != null ? String(r.company) : undefined,
+    avatar: r.avatar != null ? String(r.avatar) : undefined,
+  };
+}
+
 const authService = {
   /**
    * Détecte si on est en mode localhost avec dev token (pour logs uniquement)
@@ -260,12 +282,13 @@ const authService = {
    */
   async validateToken(): Promise<ValidateTokenResponse> {
     try {
-      const response = await apiClient.get(AUTH_CONFIG.API_URL + '/me');
+      const response = await apiClient.get(AUTH_CONFIG.API_URL + '/valid-token-check');
+      const data = response.data as Record<string, unknown>;
 
       return {
-        success: true,
-        newToken: response.data.newToken,
-        user: response.data.user,
+        success: Boolean(data.success !== false),
+        newToken: data.newToken as string | undefined,
+        user: userFromValidTokenPayload(data),
       };
     } catch (error: any) {
       throw {

@@ -13,7 +13,12 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { listingsService } from '../services/listingsService';
-import type { ListingChannelsSnapshot, ListingDetail, ListingStatus } from '../types/listings.types';
+import {
+  CHANNEX_MAPPING_UNAVAILABLE_INFO,
+  type ListingChannelsSnapshot,
+  type ListingDetail,
+  type ListingStatus,
+} from '../types/listings.types';
 
 function getStatusVariant(status: ListingStatus): 'success' | 'warning' | 'neutral' {
   if (status === 'active') return 'success';
@@ -43,6 +48,7 @@ export function ListingDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [source, setSource] = useState<'api' | 'mock'>('api');
+  const [channexMappingInfo, setChannexMappingInfo] = useState(false);
 
   const loadData = async () => {
     if (!id) {
@@ -59,6 +65,7 @@ export function ListingDetailPage() {
       if (!listingData) {
         setListing(null);
         setChannels(null);
+        setChannexMappingInfo(false);
         setError('Listing introuvable');
         return;
       }
@@ -66,6 +73,7 @@ export function ListingDetailPage() {
       const channelsResult = await listingsService.getChannels(id, listingResult.data || undefined);
       setListing(listingData);
       setChannels(channelsResult.data);
+      setChannexMappingInfo(channelsResult.info === CHANNEX_MAPPING_UNAVAILABLE_INFO);
       setSource(listingResult.source === 'mock' || channelsResult.source === 'mock' ? 'mock' : 'api');
       setWarning(listingResult.warning || channelsResult.warning || null);
       setError(null);
@@ -74,6 +82,7 @@ export function ListingDetailPage() {
       setError(message);
       setListing(null);
       setChannels(null);
+      setChannexMappingInfo(false);
     } finally {
       setLoading(false);
     }
@@ -146,6 +155,15 @@ export function ListingDetailPage() {
               Détail: {warning}
             </Typography>
           )}
+        </Panel>
+      )}
+
+      {source === 'api' && channexMappingInfo && (
+        <Panel sx={{ mb: 2 }}>
+          <Typography sx={{ fontSize: 13, color: t.text2 }}>
+            Mapping Channex indisponible pour ce listing (ID absent ou gestion directe). Les infos annonce restent
+            valides ; les OTA du document listing s&apos;affichent lorsque Channex n&apos;est pas branché.
+          </Typography>
         </Panel>
       )}
 

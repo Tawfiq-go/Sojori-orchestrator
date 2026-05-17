@@ -2,9 +2,8 @@
 // Sojori — FinancialSection (réservation)
 // Cards résumé + table ventilation + actions (paiement, frais)
 // ════════════════════════════════════════════════════════════════════
-import React from 'react';
 import {
-  Box, Stack, Typography, Button, Chip, IconButton, Divider,
+  Box, Stack, Typography, Button, Chip, Divider,
   Table, TableBody, TableCell, TableHead, TableRow,
 } from '@mui/material';
 
@@ -83,7 +82,7 @@ export default function FinancialSection({
 
       {/* Table ventilation */}
       <Box sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2, overflow: 'hidden' }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2.5, py: 1.5, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
+        <Stack direction="row" spacing={2} sx={{ px: 2.5, py: 1.5, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2, alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography sx={{ fontWeight: 700 }}>Ventilation des frais</Typography>
           <Button size="small" onClick={onAddCharge} sx={{ textTransform: 'none' }}>+ Ajouter frais</Button>
         </Stack>
@@ -122,7 +121,7 @@ export default function FinancialSection({
 
       {/* Paiements */}
       <Box sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2 }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2.5, py: 1.5, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
+        <Stack direction="row" spacing={2} sx={{ px: 2.5, py: 1.5, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2, alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography sx={{ fontWeight: 700 }}>Paiements ({payments.length})</Typography>
           <Button size="small" variant="contained" onClick={onAddPayment} sx={{
             textTransform: 'none', fontWeight: 600,
@@ -136,7 +135,7 @@ export default function FinancialSection({
             const color = p.status === 'paid' ? T.success : p.status === 'pending' ? T.warning : T.error;
             const label = p.status === 'paid' ? '✓ Payé' : p.status === 'pending' ? '⏳ En attente' : '✕ Échec';
             return (
-              <Stack key={p.id} direction="row" alignItems="center" spacing={2} sx={{ px: 2.5, py: 1.5 }}>
+              <Stack key={p.id} direction="row" spacing={2} sx={{ px: 2.5, py: 1.5, alignItems: 'center' }}>
                 <Box sx={{ flex: 1 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: 13.5 }}>{p.method}</Typography>
                   <Typography sx={{ fontSize: 11.5, color: T.text3, fontFamily: 'Geist Mono' }}>

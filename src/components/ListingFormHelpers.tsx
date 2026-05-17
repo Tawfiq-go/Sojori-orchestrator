@@ -1,6 +1,7 @@
 // Helper components for Listing Form V2
-import React from 'react';
-import { Box, Stack, Typography, Button, TextField } from '@mui/material';
+import React, { type ReactElement } from 'react';
+import { Box, Stack, Typography, Button } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material/styles';
 import { tokens } from './ListingFormV2';
 
 // ════════════════════════════════════════════════════════════════════
@@ -21,8 +22,9 @@ export function SectionCard({ title, required, description, children }: SectionC
       borderRadius: '14px', p: '24px 24px 20px', mb: 2.25,
       boxShadow: '0 1px 2px rgba(26,20,8,0.03)',
     }}>
-      <Stack direction="row" alignItems="baseline" spacing={1.5} sx={{
+      <Stack direction="row" spacing={1.5} sx={{
         mb: 2.25, pb: 1.5, borderBottom: `1px dashed ${tokens.border}`,
+        alignItems: 'baseline',
       }}>
         <Typography sx={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.2px' }}>{title}</Typography>
         {required && (
@@ -50,21 +52,23 @@ export function SectionCard({ title, required, description, children }: SectionC
 // AIField — wrap a MUI input with AI indicator
 // ════════════════════════════════════════════════════════════════════
 
+type AiSlotChild = ReactElement<{ sx?: SxProps<Theme> }>;
+
 interface AIFieldProps {
   label: string;
   required?: boolean;
   hint?: string;
   aiFilled?: boolean;
   aiAccepted?: boolean;
+  /** Reserved for future “accept AI suggestion” control */
   onAccept?: () => void;
-  children: React.ReactElement;
-  [key: string]: any;
+  children: AiSlotChild;
 }
 
-export function AIField({ label, required, hint, aiFilled, aiAccepted, onAccept, children, ...rest }: AIFieldProps) {
+export function AIField({ label, required, hint, aiFilled, aiAccepted, onAccept: _onAccept, children }: AIFieldProps) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-      <Stack direction="row" alignItems="center" spacing={1}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <Typography sx={{ fontSize: 12, fontWeight: 600, color: tokens.text2 }}>
           {label} {required && <Box component="span" sx={{ color: '#b45309' }}>*</Box>}
         </Typography>
@@ -82,14 +86,15 @@ export function AIField({ label, required, hint, aiFilled, aiAccepted, onAccept,
       {React.cloneElement(children, {
         sx: {
           ...(children.props.sx || {}),
-          ...(aiFilled && !aiAccepted ? {
-            '& .MuiOutlinedInput-root': {
-              bgcolor: tokens.aiTint,
-              '& fieldset': { borderColor: 'rgba(139,92,246,0.25)' },
-            },
-          } : {}),
+          ...(aiFilled && !aiAccepted
+            ? {
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: tokens.aiTint,
+                  '& fieldset': { borderColor: 'rgba(139,92,246,0.25)' },
+                },
+              }
+            : {}),
         },
-        ...rest,
       })}
       {hint && (
         <Typography sx={{ fontSize: 11.5, color: tokens.text3, lineHeight: 1.4 }}>{hint}</Typography>
@@ -172,8 +177,9 @@ export function SaveBar({ savedAgo = '2s', onCancel, onSave }: SaveBarProps) {
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2,
       zIndex: 10,
     }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{
+      <Stack direction="row" spacing={1} sx={{
         fontSize: 12, color: tokens.text3, fontFamily: 'Geist Mono',
+        alignItems: 'center',
       }}>
         <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: tokens.success, boxShadow: `0 0 8px ${tokens.success}` }}/>
         Auto-saved · {savedAgo} ago

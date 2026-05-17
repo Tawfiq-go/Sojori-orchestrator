@@ -25,7 +25,7 @@ import {
   FilterList as FilterListIcon,
 } from '@mui/icons-material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
-import { taskTypes, taskSubTypes, mockListings, mockStaff, type Task } from '../../data/mockTasks';
+import { taskTypes, mockListings, mockStaff, type Task } from '../../data/mockTasks';
 
 // Exported interface for task filter state
 export interface TaskFilterState {
@@ -142,12 +142,14 @@ export function TaskFilters({ filters, onChange, onReset, taskCount, filteredCou
                 placeholder="Rechercher par nom, numéro réservation, guest..."
                 value={filters.searchText}
                 onChange={(e) => handleChange('searchText', e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ fontSize: 18 }} />
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ fontSize: 18 }} />
+                      </InputAdornment>
+                    ),
+                  },
                 }}
                 fullWidth
               />
@@ -197,10 +199,10 @@ export function TaskFilters({ filters, onChange, onReset, taskCount, filteredCou
                 value={filters.types}
                 onChange={(_, newValue) => handleChange('types', newValue)}
                 renderInput={(params) => <TextField {...params} label="Types de tâche" placeholder="Sélectionner..." />}
-                renderTags={(value, getTagProps) =>
+                renderValue={(value, getItemProps) =>
                   value.map((option, index) => {
                     const type = taskTypes.find((t) => t.value === option);
-                    return <Chip {...getTagProps({ index })} key={option} label={type?.label || option} size="small" />;
+                    return <Chip {...getItemProps({ index })} key={option} label={type?.label || option} size="small" />;
                   })
                 }
               />
@@ -212,9 +214,9 @@ export function TaskFilters({ filters, onChange, onReset, taskCount, filteredCou
                 onChange={(_, newValue) => handleChange('statuses', newValue)}
                 getOptionLabel={(option) => STATUS_LABELS[option]}
                 renderInput={(params) => <TextField {...params} label="Statuts" placeholder="Sélectionner..." />}
-                renderTags={(value, getTagProps) =>
+                renderValue={(value, getItemProps) =>
                   value.map((option, index) => (
-                    <Chip {...getTagProps({ index })} key={option} label={STATUS_LABELS[option]} size="small" />
+                    <Chip {...getItemProps({ index })} key={option} label={STATUS_LABELS[option]} size="small" />
                   ))
                 }
               />
@@ -252,10 +254,10 @@ export function TaskFilters({ filters, onChange, onReset, taskCount, filteredCou
                   return staff ? `${staff.name} (${staff.code})` : option;
                 }}
                 renderInput={(params) => <TextField {...params} label="Staff membres" placeholder="Sélectionner..." />}
-                renderTags={(value, getTagProps) =>
+                renderValue={(value, getItemProps) =>
                   value.map((option, index) => {
                     const staff = mockStaff.find((s) => s.id === option);
-                    return <Chip {...getTagProps({ index })} key={option} label={staff?.name || option} size="small" />;
+                    return <Chip {...getItemProps({ index })} key={option} label={staff?.name || option} size="small" />;
                   })
                 }
               />
@@ -270,10 +272,10 @@ export function TaskFilters({ filters, onChange, onReset, taskCount, filteredCou
                   return listing?.name || option;
                 }}
                 renderInput={(params) => <TextField {...params} label="Listings" placeholder="Sélectionner..." />}
-                renderTags={(value, getTagProps) =>
+                renderValue={(value, getItemProps) =>
                   value.map((option, index) => {
                     const listing = mockListings.find((l) => l.id === option);
-                    return <Chip {...getTagProps({ index })} key={option} label={listing?.name || option} size="small" />;
+                    return <Chip {...getItemProps({ index })} key={option} label={listing?.name || option} size="small" />;
                   })
                 }
               />
@@ -342,7 +344,7 @@ export function TaskFilters({ filters, onChange, onReset, taskCount, filteredCou
                   label="Du"
                   value={filters.dateFrom}
                   onChange={(e) => handleChange('dateFrom', e.target.value)}
-                  InputLabelProps={{ shrink: true }}
+                  slotProps={{ inputLabel: { shrink: true } }}
                   fullWidth
                 />
                 <TextField
@@ -351,7 +353,7 @@ export function TaskFilters({ filters, onChange, onReset, taskCount, filteredCou
                   label="Au"
                   value={filters.dateTo}
                   onChange={(e) => handleChange('dateTo', e.target.value)}
-                  InputLabelProps={{ shrink: true }}
+                  slotProps={{ inputLabel: { shrink: true } }}
                   fullWidth
                 />
               </Stack>

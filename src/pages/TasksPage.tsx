@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Stack, Button, Chip, Typography, IconButton, Menu, MenuItem, Select, FormControl } from '@mui/material';
+import { Box, Stack, Button, Chip, IconButton, Menu, MenuItem, Select, FormControl } from '@mui/material';
 import { MoreVert as MoreVertIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
@@ -144,7 +144,6 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
 
   const handleDuplicateClick = () => {
     if (selectedTaskForMenu) {
-      const duplicate = { ...selectedTaskForMenu, id: `task-${Date.now()}`, itemNumber: `TASK-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}` };
       toast.success('Tâche dupliquée avec succès (MOCK)');
     }
     handleMenuClose();

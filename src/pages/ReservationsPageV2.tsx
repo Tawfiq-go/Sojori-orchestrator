@@ -31,7 +31,7 @@ export function ReservationsPageV2() {
 
   // Actions menu
   const [actionsMenuAnchor, setActionsMenuAnchor] = useState<null | HTMLElement>(null);
-  const [actionRowId, setActionRowId] = useState<string | null>(null);
+  const [, setActionRowId] = useState<string | null>(null);
 
   // Column selector state
   const allColumnDefs: ColumnDef[] = [
@@ -383,7 +383,7 @@ export function ReservationsPageV2() {
       <Box sx={{ mb: 2.5 }}>
         <Stack spacing={1.5}>
           {/* Row 1: Search + Quick filters */}
-          <Stack direction="row" spacing={1.5} flexWrap="wrap">
+          <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap' }}>
             <TextField
               size="small"
               placeholder="Rechercher N° résa..."
@@ -478,7 +478,7 @@ export function ReservationsPageV2() {
         selectable
         selectedIds={selected}
         onSelectionChange={setSelected}
-        onRowClick={(row) => navigate(`/reservations/${row.id}`)}
+        onRowClick={(row: Reservation) => navigate(`/reservations/${row.id}`)}
         footer={<>
           <Box>{selected.length} sélectionnée(s) sur {filteredReservations.length}</Box>
           <Pagination page={1} totalPages={Math.ceil(filteredReservations.length / 20)} />

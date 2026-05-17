@@ -1,9 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Box, Stack, Typography, Button, Select, MenuItem, Drawer, IconButton, TextField, Switch,
   CircularProgress,
 } from '@mui/material';
-import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader, Panel, Badge, ViewToggle,
@@ -12,7 +11,9 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 import { MultiPropertyInventory, type PropertyRow } from '../components/MultiPropertyInventory';
 import calendarService from '../services/calendarService';
+import listingsService from '../services/listingsService';
 import type { CalendarDay } from '../types/calendar.types';
+import type { Listing } from '../types/listings.types';
 import { BulkPriceUpdateModal } from '../components/calendar/BulkPriceUpdateModal';
 import { BulkAvailabilityModal } from '../components/calendar/BulkAvailabilityModal';
 import { BulkRestrictionsModal } from '../components/calendar/BulkRestrictionsModal';
@@ -41,13 +42,9 @@ interface DayCell {
   isToday?: boolean;
 }
 
-const PROPERTIES = [
-  { id: 'p1', name: 'Villa Belvédère',  city: 'Nice',        color: '#d97706' },
-  { id: 'p2', name: 'Dar Sojori',       city: 'Marrakech',   color: '#0e7490' },
-  { id: 'p3', name: 'Villa Atlas',      city: 'Marrakech',   color: '#7c3aed' },
-  { id: 'p4', name: 'Atlas Loft',       city: 'Marrakech',   color: '#16a34a' },
-  { id: 'p5', name: 'Médina House',     city: 'Marrakech',   color: '#ec4899' },
-];
+// ❌ REMOVED: Mock PROPERTIES - Now fetching from API
+// Colors for property visual identification
+const PROPERTY_COLORS = ['#d97706', '#0e7490', '#7c3aed', '#16a34a', '#ec4899', '#f59e0b', '#8b5cf6', '#06b6d4'];
 
 const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const WEEKDAYS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
@@ -130,7 +127,15 @@ export function CalendarInventoryPage() {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
-  const [propertyId, setPropertyId] = useState(PROPERTIES[0].id);
+
+  // ✅ NEW: Real listings from API
+  const [properties, setProperties] = useState<Listing[]>([]);
+  const [page, setPage] = useState(0);
+  const [limit, setLimit] = useState(25);
+  const [total, setTotal] = useState(0);
+  const [loadingListings, setLoadingListings] = useState(true);
+
+  const [propertyId, setPropertyId] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selection, setSelection] = useState<string[]>([]);
   const [dragStart, setDragStart] = useState<string | null>(null);
@@ -152,8 +157,37 @@ export function CalendarInventoryPage() {
   const [showBulkCloseModal, setShowBulkCloseModal] = useState(false);
   const [showBulkRestrictionsModal, setShowBulkRestrictionsModal] = useState(false);
 
-  const property = PROPERTIES.find(p => p.id === propertyId)!;
+  const property = properties.find(p => p._id === propertyId);
   const selectedCell = selectedDate ? days.find(d => d.date === selectedDate) : null;
+
+  // ✅ NEW: Fetch listings from API
+  useEffect(() => {
+    const fetchListings = async () => {
+      try {
+        setLoadingListings(true);
+        const response = await listingsService.getListingsForCalendar(page, limit, {
+          active: true,
+        });
+
+        if (response.success && response.data.length > 0) {
+          setProperties(response.data);
+          setTotal(response.total);
+
+          // Auto-select first property
+          if (!propertyId && response.data[0]) {
+            setPropertyId(response.data[0]._id);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching listings:', err);
+        setError('Impossible de charger les propriétés');
+      } finally {
+        setLoadingListings(false);
+      }
+    };
+
+    fetchListings();
+  }, [page, limit]);
 
   // Fetch calendar data from API
   useEffect(() => {
@@ -229,22 +263,33 @@ export function CalendarInventoryPage() {
             { value: 'multi', label: '📊 Vue multi' }
           ]}
           value={view}
-          onChange={(v) => setView(v as 'single' | 'multi')}
+          onChange={(v: string) => setView(v as 'single' | 'multi')}
         />
         {view === 'single' && (
-          <Select size="small" value={propertyId} onChange={(e) => setPropertyId(e.target.value)} sx={{ fontSize: 13, minWidth: 220 }}>
-            {PROPERTIES.map(p => (
-              <MenuItem key={p.id} value={p.id} sx={{ fontSize: 13 }}>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: p.color }} />
+          <Select
+            size="small"
+            value={propertyId}
+            onChange={(e) => setPropertyId(e.target.value)}
+            sx={{ fontSize: 13, minWidth: 220 }}
+            disabled={loadingListings || properties.length === 0}
+          >
+            {properties.map((p, idx) => (
+              <MenuItem key={p._id} value={p._id} sx={{ fontSize: 13 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Box sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    bgcolor: PROPERTY_COLORS[idx % PROPERTY_COLORS.length]
+                  }} />
                   <span>{p.name}</span>
-                  <span style={{ color: t.text3, fontSize: 11 }}>· {p.city}</span>
+                  <span style={{ color: t.text3, fontSize: 11 }}>· {p.propertyUnit}</span>
                 </Stack>
               </MenuItem>
             ))}
           </Select>
         )}
-        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '8px', p: 0.375 }}>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center',  bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '8px', p: 0.375 }}>
           <IconButton size="small" onClick={() => navMonth(-1)} sx={{ width: 28, height: 28 }}>‹</IconButton>
           <Typography sx={{ px: 1.5, fontSize: 13, fontWeight: 600, minWidth: 110, textAlign: 'center' }}>{MONTHS[month]} {year}</Typography>
           <IconButton size="small" onClick={() => navMonth(1)} sx={{ width: 28, height: 28 }}>›</IconButton>
@@ -264,12 +309,15 @@ export function CalendarInventoryPage() {
       </Stack>
 
       {/* Loading/Error states */}
-      {loading && (
+      {(loading || loadingListings) && (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
           <CircularProgress size={32} sx={{ color: t.primary }} />
+          <Typography sx={{ ml: 2, color: t.text2 }}>
+            {loadingListings ? 'Chargement des propriétés...' : 'Chargement du calendrier...'}
+          </Typography>
         </Box>
       )}
-      {error && !loading && (
+      {error && !loading && !loadingListings && (
         <Panel sx={{ p: 3, textAlign: 'center' }}>
           <Typography sx={{ color: t.error, mb: 1 }}>❌ {error}</Typography>
           <Button onClick={() => window.location.reload()} sx={btnGhostSx}>Réessayer</Button>
@@ -282,7 +330,7 @@ export function CalendarInventoryPage() {
           properties={multiProperties}
           startDate={new Date(year, month, 1)}
           days={30}
-          onCellClick={(propertyId, dayIdx) => {
+          onCellClick={(_propertyId, dayIdx) => {
             // Calculer la date pour le jour cliqué
             const clickedDate = new Date(year, month, 1);
             clickedDate.setDate(clickedDate.getDate() + dayIdx);
@@ -292,8 +340,8 @@ export function CalendarInventoryPage() {
             setSelectedDate(dateString);
           }}
         />
-      ) : (
-        <Panel title={`${property.name} · ${property.city}`} desc={`${MONTHS[month]} ${year}`}>
+      ) : property ? (
+        <Panel title={`${property.name} · ${property.propertyUnit}`} desc={`${MONTHS[month]} ${year}`}>
         {/* Weekday header */}
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 1 }}>
           {WEEKDAYS.map(w => (
@@ -328,6 +376,12 @@ export function CalendarInventoryPage() {
           </Box>
         </Stack>
       </Panel>
+      ) : (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+          <Typography sx={{ color: t.text2 }}>
+            {loadingListings ? 'Chargement des propriétés...' : 'Sélectionnez une propriété'}
+          </Typography>
+        </Box>
       )}
 
       {/* Bulk actions */}
@@ -347,8 +401,12 @@ export function CalendarInventoryPage() {
       )}
 
       {/* Side drawer */}
-      <Drawer anchor="right" open={!!selectedCell} onClose={() => setSelectedDate(null)}
-        PaperProps={{ sx: { width: { xs: '100%', sm: 380 }, p: 2.5 } }}>
+      <Drawer
+        anchor="right"
+        open={!!selectedCell}
+        onClose={() => setSelectedDate(null)}
+        slotProps={{ paper: { sx: { width: { xs: '100%', sm: 380 }, p: 2.5 } } }}
+      >
         {selectedCell && <DayDetailPanel cell={selectedCell} onClose={() => setSelectedDate(null)} />}
       </Drawer>
 
@@ -484,7 +542,7 @@ function DayCellView({ cell, selected, onMouseDown, onMouseEnter, onClick }: {
         } : {},
       }}
     >
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between',  mb: 0.5 }}>
         <Typography sx={{
           fontSize: 12, fontWeight: cell.isToday ? 800 : 600,
           color: cell.isToday ? t.primaryDeep : t.text,
@@ -549,11 +607,10 @@ function DayCellView({ cell, selected, onMouseDown, onMouseEnter, onClick }: {
 
 // ─── Day detail drawer ──────────────────────────────────────────
 function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void }) {
-  const sty = STATUS_COLORS[cell.status];
   const aiHigher = cell.suggestedPrice && cell.suggestedPrice > cell.price;
   return (
     <Stack spacing={2.5}>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+      <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <Box>
           <Typography sx={{ fontSize: 11, color: t.text3, fontFamily: 'Geist Mono', letterSpacing: 1, textTransform: 'uppercase' }}>{cell.date}</Typography>
           <Typography sx={{ fontSize: 20, fontWeight: 700, mt: 0.25 }}>
@@ -573,7 +630,7 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
       {/* Price */}
       <Panel sx={{ p: 2 }}>
         <Typography sx={{ fontSize: 10, fontFamily: 'Geist Mono', fontWeight: 700, color: t.text3, letterSpacing: 1, textTransform: 'uppercase', mb: 1.25 }}>Prix</Typography>
-        <Stack direction="row" alignItems="baseline" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'baseline' }}>
           <Typography sx={{ fontSize: 28, fontWeight: 800, fontFamily: 'Geist Mono' }}>€{cell.price}</Typography>
           <Typography sx={{ fontSize: 12, color: t.text3 }}>/nuit</Typography>
         </Stack>
@@ -582,11 +639,11 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
             mt: 1.25, p: 1.25, borderRadius: '8px',
             bgcolor: t.aiTint, border: '1px solid rgba(139,92,246,0.20)',
           }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center',  mb: 0.5 }}>
               <Box sx={{ fontSize: 13 }}>✨</Box>
               <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.ai, fontFamily: 'Geist Mono', letterSpacing: 0.5 }}>SOJORI AI · suggestion</Typography>
             </Stack>
-            <Stack direction="row" alignItems="baseline" spacing={1}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
               <Typography sx={{ fontSize: 18, fontWeight: 700, fontFamily: 'Geist Mono', color: t.ai }}>€{cell.suggestedPrice}</Typography>
               <Typography sx={{ fontSize: 11, fontFamily: 'Geist Mono', color: aiHigher ? '#047857' : '#b91c1c', fontWeight: 700 }}>
                 {aiHigher ? '+' : ''}€{cell.suggestedPrice - cell.price} ({Math.round(((cell.suggestedPrice - cell.price) / cell.price) * 100)}%)
@@ -598,7 +655,17 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
           </Box>
         )}
         <Box sx={{ mt: 1.25 }}>
-          <TextField size="small" label="Modifier le prix" defaultValue={cell.price} fullWidth InputProps={{ startAdornment: <Box sx={{ pr: 0.5, color: t.text3 }}>€</Box> }} />
+          <TextField
+            size="small"
+            label="Modifier le prix"
+            defaultValue={cell.price}
+            fullWidth
+            slotProps={{
+              input: {
+                startAdornment: <Box sx={{ pr: 0.5, color: t.text3 }}>€</Box>,
+              },
+            }}
+          />
         </Box>
       </Panel>
 
@@ -606,15 +673,15 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
       <Panel sx={{ p: 2 }}>
         <Typography sx={{ fontSize: 10, fontFamily: 'Geist Mono', fontWeight: 700, color: t.text3, letterSpacing: 1, textTransform: 'uppercase', mb: 1.25 }}>Restrictions</Typography>
         <Stack spacing={1.25}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography sx={{ fontSize: 12.5 }}>Min nuits</Typography>
             <TextField size="small" defaultValue={cell.minNights || 1} sx={{ width: 70 }} />
           </Stack>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography sx={{ fontSize: 12.5 }}>Check-in autorisé</Typography>
             <Switch size="small" defaultChecked={cell.checkInAllowed} color="success" />
           </Stack>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography sx={{ fontSize: 12.5 }}>Check-out autorisé</Typography>
             <Switch size="small" defaultChecked={cell.checkOutAllowed} color="success" />
           </Stack>
@@ -628,7 +695,7 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
           {(['airbnb','booking','direct'] as const).map(ch => {
             const st = cell.channels?.[ch] || 'ok';
             return (
-              <Stack key={ch} direction="row" alignItems="center" spacing={1}>
+              <Stack key={ch} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: st === 'ok' ? t.success : st === 'pending' ? t.warning : t.error }} />
                 <Typography sx={{ fontSize: 12.5, textTransform: 'capitalize', flex: 1 }}>{ch}</Typography>
                 <Typography sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'Geist Mono' }}>
@@ -652,7 +719,7 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
 
 function StatPill({ color, label, value, highlight }: { color: string; label: string; value: string; highlight?: boolean }) {
   return (
-    <Stack direction="row" alignItems="center" spacing={1} sx={{
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', 
       px: 1.5, py: 1, bgcolor: t.bg1,
       border: `1px solid ${highlight ? 'rgba(139,92,246,0.30)' : t.border}`,
       borderRadius: '10px',
@@ -669,7 +736,7 @@ function StatPill({ color, label, value, highlight }: { color: string; label: st
 
 function LegendItem({ emoji, dot, label }: { emoji?: string; dot?: string; label: string }) {
   return (
-    <Stack direction="row" alignItems="center" spacing={0.75} sx={{ fontSize: 11, color: t.text3 }}>
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center',  fontSize: 11, color: t.text3 }}>
       {emoji ? <Box sx={{ fontSize: 11 }}>{emoji}</Box> : <Box sx={{ width: 10, height: 3, bgcolor: dot, borderRadius: '99px' }} />}
       <span>{label}</span>
     </Stack>

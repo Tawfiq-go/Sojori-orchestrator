@@ -1,0 +1,28 @@
+{
+  "_comment": "Indices pour regrouper les champs comme les extranets OTA / PMS — non normatif ; éviter les doublons entre onglets.",
+  "airbnb_host_style": {
+    "about_the_listing": ["basic", "media", "roomtypes"],
+    "location": ["address"],
+    "amenities": ["equipment"],
+    "booking_settings": ["availability", "channels", "pricing"],
+    "policies": ["houserules", "rules", "deposit"],
+    "co_host_tools": ["support", "whatsapp"]
+  },
+  "booking_com_extranet_style": {
+    "property_details": ["basic", "roomtypes", "media"],
+    "location_contact": ["address", "support"],
+    "policies_payments": ["deposit", "extras", "availability"],
+    "connectivity": ["channels", "pricing"]
+  },
+  "vrbo_expedia_style": {
+    "listing_content": ["basic", "media", "houserules"],
+    "rates_availability": ["pricing", "availability", "roomtypes"],
+    "distribution": ["channels"],
+    "guest_experience": ["orchestration", "automsg", "access", "wifi"]
+  },
+  "channel_manager_pms": {
+    "master_calendar": ["availability", "pricing", "roomtypes"],
+    "multi_channel": ["channels"],
+    "operations": ["cleaning", "autotasks", "iot", "concierge", "services"]
+  }
+}

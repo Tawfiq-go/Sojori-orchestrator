@@ -208,6 +208,26 @@ const flagFor = (country?: string): string => {
   return String.fromCodePoint(...codePoints);
 };
 
+// ─── Tri intelligent (comme legacy) ─────────────────────────────────
+const sortReservationsList = (list: Reservation[]): Reservation[] => {
+  return list.sort((a, b) => {
+    // 1️⃣ Annulations non acquittées d'abord (priorité absolue)
+    const aUnacked = isReservationCancelled(a.status) && a.cancellationAcknowledged !== true;
+    const bUnacked = isReservationCancelled(b.status) && b.cancellationAcknowledged !== true;
+    if (aUnacked && !bUnacked) return -1;
+    if (!aUnacked && bUnacked) return 1;
+
+    // 2️⃣ Puis autres annulés
+    const aCancelled = isReservationCancelled(a.status);
+    const bCancelled = isReservationCancelled(b.status);
+    if (aCancelled && !bCancelled) return -1;
+    if (!aCancelled && bCancelled) return 1;
+
+    // 3️⃣ Enfin par date de création (plus récent d'abord)
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+};
+
 // ─── Composant ──────────────────────────────────────────────────────
 export function ReservationsPage() {
   const navigate = useNavigate();
@@ -280,12 +300,38 @@ export function ReservationsPage() {
     setIsLoading(true);
     setError(null);
     try {
+      console.log('🔍 [ReservationsPage] Fetching reservations...');
+
       // ✅ Backend filtre automatiquement les cancelled (sauf dernières 24h)
       // Pas besoin de passer status ici, contrairement au planning
       const response = await reservationsService.getList({ limit: 1000 });
-      setReservations(response.data as any[]);
+
+      console.log('📦 [ReservationsPage] Response received:', {
+        success: response.success,
+        count: response.count,
+        dataLength: response.data?.length,
+        firstReservation: response.data?.[0],
+      });
+
+      // ⚠️ FIX: Tri prioritaire des annulations non acquittées (comme legacy)
+      const sorted = sortReservationsList(response.data as any[]);
+
+      console.log('🔀 [ReservationsPage] After sorting:', {
+        totalCount: sorted.length,
+        first5: sorted.slice(0, 5).map(r => ({
+          number: r.reservationNumber,
+          status: r.status,
+          cancellationAcknowledged: r.cancellationAcknowledged,
+          isCancelled: isReservationCancelled(r.status),
+          unacknowledged: isReservationCancelled(r.status) && r.cancellationAcknowledged !== true,
+        })),
+      });
+
+      setReservations(sorted);
+
       toast.success(`${response.data.length} réservation(s) chargée(s)`);
     } catch (err: any) {
+      console.error('❌ [ReservationsPage] Error fetching:', err);
       setError(err.message || 'Erreur');
       toast.error('Erreur lors du chargement');
     } finally {
@@ -318,7 +364,19 @@ export function ReservationsPage() {
         r.listing?.name?.toLowerCase().includes(s)
       );
     }
-    if (selectedStatuses.length > 0) f = f.filter(r => selectedStatuses.includes(r.status));
+    // ⚠️ FIX: Toujours inclure les annulations non acquittées (comme legacy)
+    // même si "CancelledByAdmin" n'est pas dans selectedStatuses
+    if (selectedStatuses.length > 0) {
+      f = f.filter(r => {
+        // Si la réservation match le filtre de statut, OK
+        if (selectedStatuses.includes(r.status)) return true;
+
+        // Sinon, si c'est une annulation non acquittée, on l'inclut quand même
+        const isCancelled = isReservationCancelled(r.status);
+        const unacknowledged = isCancelled && r.cancellationAcknowledged !== true;
+        return unacknowledged;
+      });
+    }
     if (selectedChannels.length > 0) {
       f = f.filter(r => {
         const c = r.channelName?.toLowerCase() || '';
@@ -568,7 +626,7 @@ export function ReservationsPage() {
 
         {/* MOBILE : cards · DESKTOP : table */}
         {!isLoading && !isMobile && paged.length > 0 && (
-          <DesktopTable rows={paged} onRowClick={handleViewDetails} onNavigate={navigate} />
+          <DesktopTable rows={paged} onRowClick={handleViewDetails} onNavigate={navigate} onAcknowledge={handleAcknowledgeCancellation} />
         )}
         {!isLoading && isMobile && paged.length > 0 && (
           <Stack spacing={1.25}>
@@ -681,20 +739,21 @@ const Pill = ({ label, count, active, onClick, color }: { label: string; count: 
 );
 
 // ─── Desktop table ─────────────────────────────────────────────────
-function DesktopTable({ rows, onRowClick, onNavigate }: {
+function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge }: {
   rows: Reservation[];
   onRowClick: (r: Reservation) => void;
   onNavigate: (path: string) => void;
+  onAcknowledge?: (r: Reservation) => void;
 }) {
   return (
     <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
       <Box sx={{ overflowX: 'auto' }}>
-        <Box component="table" sx={{ width: '100%', minWidth: 1400, borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <Box component="table" sx={{ width: '100%', minWidth: 1500, borderCollapse: 'collapse', fontSize: 12.5 }}>
           <Box component="thead">
             <Box component="tr" sx={{ bgcolor: T.bg2 }}>
-              {['Réservation', 'Source', 'Propriété', 'Voyageur', 'Pays', 'Créé', 'Check-in', 'Check-out', 'Nuits', 'Présence', 'Statut', 'Prix', 'Voyageurs', 'Paiement', ''].map((h) => (
+              {['Réservation', 'Source', 'Propriété', 'Voyageur', 'Pays', 'Créé', 'Check-in', 'Check-out', 'Nuits', 'Présence', 'Statut', 'Prix', 'Voyageurs', 'Paiement', 'Actions'].map((h) => (
                 <Box component="th" key={h} sx={{
-                  textAlign: h === 'Nuits' || h === 'Présence' || h === 'Voyageurs' || h === '' ? 'center' : 'left',
+                  textAlign: h === 'Nuits' || h === 'Présence' || h === 'Voyageurs' || h === 'Actions' ? 'center' : 'left',
                   px: 1.5, py: 1.25,
                   fontSize: 10.75, fontWeight: 700,
                   letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -707,11 +766,15 @@ function DesktopTable({ rows, onRowClick, onNavigate }: {
             {rows.map((r) => {
               const s = statusMeta(r.status);
               const p = presenceMeta(r);
+              const isCancelled = isReservationCancelled(r.status);
+              const unacknowledged = isCancelled && r.cancellationAcknowledged !== true;
+
               return (
                 <Box component="tr" key={r._id}
                   sx={{
                     transition: 'background-color 100ms ease',
-                    '&:hover': { bgcolor: T.bg2 },
+                    bgcolor: unacknowledged ? 'rgba(250, 204, 21, 0.08)' : 'transparent',
+                    '&:hover': { bgcolor: unacknowledged ? 'rgba(250, 204, 21, 0.15)' : T.bg2 },
                     '& > td': { borderBottom: `1px solid ${T.border}`, px: 1.5, py: 1.25, verticalAlign: 'middle' },
                   }}
                 >
@@ -787,9 +850,25 @@ function DesktopTable({ rows, onRowClick, onNavigate }: {
                     }} />
                   </Box>
                   <Box component="td">
-                    <Chip label={s.label} size="small" sx={{
-                      bgcolor: s.bg, color: s.color, fontWeight: 600, fontSize: 11, height: 22,
-                    }} />
+                    <Stack direction="row" spacing={0.5} alignItems="center">
+                      <Chip label={s.label} size="small" sx={{
+                        bgcolor: s.bg, color: s.color, fontWeight: 600, fontSize: 11, height: 22,
+                      }} />
+                      {unacknowledged && (
+                        <Chip label="Non acquitté" size="small" sx={{
+                          bgcolor: 'rgba(245, 158, 11, 0.12)',
+                          color: T.warning,
+                          fontWeight: 700,
+                          fontSize: 10,
+                          height: 20,
+                          animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                          '@keyframes pulse': {
+                            '0%, 100%': { opacity: 1 },
+                            '50%': { opacity: 0.7 }
+                          }
+                        }} />
+                      )}
+                    </Stack>
                   </Box>
                   <Box component="td">
                     {r.totalPrice != null ? (
@@ -809,21 +888,45 @@ function DesktopTable({ rows, onRowClick, onNavigate }: {
                     <Typography sx={{ fontSize: 11, fontWeight: 500, color: T.text2 }}>{r.paymentStatus || '—'}</Typography>
                   </Box>
                   <Box component="td" sx={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    <Stack direction="row" spacing={0.25} justifyContent="center">
-                      <Tooltip title="Voir détails">
-                        <IconButton size="small" onClick={() => onRowClick(r)}>
-                          <VisibilityIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Voir dans le calendrier">
-                        <IconButton size="small" onClick={(e) => {
+                    {unacknowledged && onAcknowledge ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={(e) => {
                           e.stopPropagation();
-                          onNavigate(`/calendar?listing=${r.listing._id}&startDate=${r.arrivalDate}&endDate=${r.departureDate}`);
-                        }}>
-                          <CalendarIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
+                          onAcknowledge(r);
+                        }}
+                        sx={{
+                          fontSize: 11,
+                          minHeight: 28,
+                          py: 0.5,
+                          px: 1.5,
+                          fontWeight: 700,
+                          textTransform: 'none',
+                          borderColor: T.warning,
+                          color: T.warning,
+                          '&:hover': { bgcolor: 'rgba(196,101,6,0.08)', borderColor: T.warning },
+                        }}
+                      >
+                        Acquitter
+                      </Button>
+                    ) : (
+                      <Stack direction="row" spacing={0.25} justifyContent="center">
+                        <Tooltip title="Voir détails">
+                          <IconButton size="small" onClick={() => onRowClick(r)}>
+                            <VisibilityIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Voir dans le calendrier">
+                          <IconButton size="small" onClick={(e) => {
+                            e.stopPropagation();
+                            onNavigate(`/calendar?listing=${r.listing._id}&startDate=${r.arrivalDate}&endDate=${r.departureDate}`);
+                          }}>
+                            <CalendarIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    )}
                   </Box>
                 </Box>
               );

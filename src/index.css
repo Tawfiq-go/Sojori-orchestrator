@@ -1,53 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ════════════════════════════════════════════════════════════════════
+   Sojori — index.css · édition 2026 « Atelier »
+   Globals : palette neutre chaude, animations discrètes, scrollbars,
+   focus visible, hiérarchie titres serrée.
+   ════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
+  /* Palette — alignée sur tokens (DashboardV2.components.jsx) et muiTheme */
+  --text: #55504a;
+  --text-h: #14110a;
+  --text-muted: #7a756c;
+
+  --bg: #f6f5f1;
+  --bg-paper: #ffffff;
+  --bg-sub: #fafaf7;
+  --bg-soft: #f0eee8;
+
+  --border: rgba(20, 17, 10, 0.07);
+  --border-strong: rgba(20, 17, 10, 0.14);
+
+  --accent: #b8851a;
+  --accent-soft: #e6c46a;
+  --accent-deep: #876119;
+  --accent-bg: rgba(184, 133, 26, 0.10);
+  --accent-border: rgba(184, 133, 26, 0.40);
+
+  --code-bg: #ecebe5;
   --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* Ombres système — très discrètes */
+  --shadow-1: 0 1px 2px rgba(20,17,10,0.05);
+  --shadow-2: 0 2px 6px -1px rgba(20,17,10,0.07), 0 1px 3px rgba(20,17,10,0.04);
+  --shadow-3: 0 6px 16px -4px rgba(20,17,10,0.09), 0 2px 6px -2px rgba(20,17,10,0.05);
+  --shadow:   var(--shadow-2);
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
+  --sans: 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --heading: var(--sans);
+  --mono: 'Geist Mono', ui-monospace, Consolas, monospace;
+
+  /* Base : 15px → 16 sur grand écran, échelle « produit » resserrée */
+  font: 15px/1.55 var(--sans);
+  letter-spacing: 0.005em;
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+@media (min-width: 1280px) {
+  :root { font-size: 16px; }
+}
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+/* Le mode dark est désactivé pour cette édition (light très soigné).
+   Pour le réactiver plus tard, remettre un block @media (prefers-color-scheme: dark). */
+
+* {
+  box-sizing: border-box;
 }
 
 #root {
@@ -58,48 +72,343 @@
 
 body {
   margin: 0;
+  /* Halo très subtil — densité produit, pas marketing */
+  background:
+    radial-gradient(60% 45% at 100% 0%, rgba(184,133,26,0.04), transparent 65%),
+    radial-gradient(45% 35% at 0% 100%, rgba(124,58,237,0.025), transparent 72%),
+    var(--bg);
+  background-attachment: fixed;
 }
 
-h1,
-h2 {
+/* ─── Hiérarchie titres in-app (MUI couvre <Typography>) ─────────── */
+#root h1,
+#root h2,
+#root h3 {
   font-family: var(--heading);
-  font-weight: 500;
   color: var(--text-h);
+  margin: 0;
+  font-weight: 700;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
+#root h1 {
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
+
+#root h2 {
+  font-size: 1.1875rem;
+  line-height: 1.3;
+  letter-spacing: -0.022em;
+  font-weight: 650;
 }
+
+#root h3 {
+  font-size: 1rem;
+  line-height: 1.35;
+  letter-spacing: -0.018em;
+  font-weight: 650;
+}
+
 p {
   margin: 0;
 }
 
+/* ─── Code & mono ──────────────────────────────────────────────── */
 code,
 .counter {
   font-family: var(--mono);
   display: inline-flex;
-  border-radius: 4px;
+  border-radius: 5px;
   color: var(--text-h);
 }
 
 code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  padding: 2px 6px;
   background: var(--code-bg);
+  border: 1px solid var(--border);
+}
+
+/* ─── Liens neutres ────────────────────────────────────────────── */
+a {
+  color: var(--accent-deep);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+a:hover {
+  border-bottom-color: var(--accent-deep);
+}
+
+/* ─── Animations d'entrée ─────────────────────────────────────── */
+@keyframes sojori-main-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sojori-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.sojori-main-enter {
+  animation: sojori-main-in 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sojori-fade-in {
+  animation: sojori-fade-in 0.4s ease both;
+}
+
+/* Désactive les animations pour les utilisateurs qui le demandent */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ─── Scrollbars discrètes (fallback non-WebKit déjà dans muiTheme) ─── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(20, 17, 10, 0.18) transparent;
+}
+
+/* ─── Focus visible — accessible, doux ───────────────────────── */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid rgba(184, 133, 26, 0.55);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Sélection de texte ─────────────────────────────────────── */
+::selection {
+  background: rgba(184, 133, 26, 0.25);
+  color: var(--text-h);
+}
+/* ════════════════════════════════════════════════════════════════════
+   Sojori · Orchestration — Atelier 2026
+   index.css ENRICHI — tokens status + animations GPU-accelerated.
+   À fusionner avec l'existant : on AJOUTE, on ne casse rien.
+   ════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ─── Tokens existants (rappel) ──────────────────────────────── */
+  --text: #55504a;
+  --text-h: #14110a;
+  --text-muted: #7a756c;
+  --text-faint: #a8a299;
+
+  --bg: #f6f5f1;
+  --bg-paper: #ffffff;
+  --bg-sub: #fafaf7;
+  --bg-soft: #f0eee8;
+  --bg-deep: #e7e4dc;
+
+  --border: rgba(20, 17, 10, 0.07);
+  --border-strong: rgba(20, 17, 10, 0.14);
+
+  --accent: #b8851a;
+  --accent-soft: #e6c46a;
+  --accent-deep: #876119;
+  --accent-bg: rgba(184, 133, 26, 0.10);
+  --accent-border: rgba(184, 133, 26, 0.40);
+
+  /* ─── NOUVEAU · Couleurs de statut ────────────────────────────── */
+  --success: #0a8f5e;
+  --success-tint: rgba(10, 143, 94, 0.10);
+  --success-glow: rgba(10, 143, 94, 0.50);
+
+  --warning: #c46506;
+  --warning-tint: rgba(196, 101, 6, 0.10);
+  --warning-glow: rgba(196, 101, 6, 0.65);
+
+  --error: #c81e1e;
+  --error-tint: rgba(200, 30, 30, 0.10);
+  --error-glow: rgba(200, 30, 30, 0.55);
+
+  --info: #0673b3;
+  --info-tint: rgba(6, 115, 179, 0.10);
+
+  --ai: #7c3aed;
+  --ai-tint: rgba(124, 58, 237, 0.10);
+
+  /* ─── NOUVEAU · Ombres système ─────────────────────────────── */
+  --shadow-1: 0 1px 2px rgba(20, 17, 10, 0.05);
+  --shadow-2: 0 2px 6px -1px rgba(20, 17, 10, 0.07), 0 1px 3px rgba(20, 17, 10, 0.04);
+  --shadow-3: 0 6px 16px -4px rgba(20, 17, 10, 0.09), 0 2px 6px -2px rgba(20, 17, 10, 0.05);
+  --shadow-lift: 0 12px 22px -8px rgba(20, 17, 10, 0.10), 0 4px 8px -4px rgba(20, 17, 10, 0.06);
+
+  /* ─── NOUVEAU · Easing premium ────────────────────────────── */
+  --ease-out-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Animations GPU-accelerated (transform / opacity / box-shadow)
+   ════════════════════════════════════════════════════════════════════ */
+
+@keyframes sojori-blink-warning {
+  0%, 100% { box-shadow: 0 0 0 0 var(--warning-glow); }
+  50%      { box-shadow: 0 0 0 7px rgba(196, 101, 6, 0); }
+}
+@keyframes sojori-pulse-success {
+  0%, 100% { box-shadow: 0 0 0 0 var(--success-glow); }
+  50%      { box-shadow: 0 0 0 6px rgba(10, 143, 94, 0); }
+}
+@keyframes sojori-pulse-error {
+  0%, 100% { box-shadow: 0 0 0 0 var(--error-glow); }
+  50%      { box-shadow: 0 0 0 8px rgba(200, 30, 30, 0); }
+}
+@keyframes sojori-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes sojori-shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-2px); }
+  75%      { transform: translateX(2px); }
+}
+@keyframes sojori-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes sojori-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes sojori-success-check {
+  0%   { transform: scale(0);   opacity: 0; }
+  50%  { transform: scale(1.2); }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+/* Désactivation propre pour utilisateurs sensibles */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Classes utilitaires Orchestration (réutilisables dans tous les .jsx)
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Status dots clignotants */
+.so-dot               { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.so-dot-warning       { background: var(--warning); animation: sojori-blink-warning 1.6s infinite; }
+.so-dot-success       { background: var(--success); animation: sojori-pulse-success 2.2s infinite; }
+.so-dot-error         { background: var(--error);   animation: sojori-pulse-error 1.4s infinite; }
+.so-dot-info          { background: var(--info); }
+.so-dot-neutral       { background: var(--text-faint); }
+
+/* Status chips (badges) */
+.so-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; }
+.so-chip-success { background: var(--success-tint); color: var(--success); }
+.so-chip-warning { background: var(--warning-tint); color: var(--warning); }
+.so-chip-error   { background: var(--error-tint);   color: var(--error); }
+.so-chip-info    { background: var(--info-tint);    color: var(--info); }
+.so-chip-neutral { background: var(--bg-deep);      color: var(--text-muted); }
+.so-chip-ai      { background: var(--ai-tint);      color: var(--ai); }
+.so-chip-accent  { background: var(--accent-bg);    color: var(--accent-deep); }
+
+/* Reservation card hover/selected */
+.so-rcard {
+  transition: transform 0.25s var(--ease-out-spring),
+              box-shadow 0.25s var(--ease-out-spring),
+              border-color 0.2s var(--ease-in-out);
+}
+.so-rcard:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
+}
+.so-rcard.so-selected {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--accent), 0 8px 18px -6px rgba(184, 133, 26, 0.20);
+}
+
+/* Progress bar shimmer */
+.so-progress { height: 4px; background: var(--bg-deep); border-radius: 99px; overflow: hidden; }
+.so-progress-bar {
+  height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent), var(--accent-soft), var(--accent), var(--accent-deep));
+  background-size: 200% 100%;
+  animation: sojori-shimmer 2.6s linear infinite;
+  transition: width 0.5s var(--ease-out-spring);
+}
+.so-progress-bar.so-progress-done {
+  background: var(--success);
+  animation: none;
+}
+
+/* Action buttons */
+.so-btn-act {
+  height: 26px; padding: 0 12px; border-radius: 7px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.01em;
+  border: 0; cursor: pointer;
+  background: linear-gradient(180deg, #cb9b2c 0%, var(--accent) 100%);
+  color: #1a1408;
+  box-shadow: 0 1px 2px rgba(135, 97, 25, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.30);
+  transition: filter 0.15s, transform 0.1s;
+}
+.so-btn-act:hover  { filter: brightness(1.05); }
+.so-btn-act:active { transform: translateY(0.5px); }
+.so-btn-act-ghost  { background: var(--bg-paper); color: var(--text-h); border: 1px solid var(--border-strong); box-shadow: none; }
+.so-btn-act-ai     { background: linear-gradient(180deg, #9669f7 0%, var(--ai) 100%); color: #fff; }
+
+/* Event timeline */
+.so-tl-line {
+  position: relative; padding-left: 30px;
+}
+.so-tl-line::before {
+  content: ''; position: absolute; left: 11px; top: 6px; bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, var(--border-strong), var(--bg-deep));
+}
+.so-ev-dot {
+  position: absolute; left: -30px; top: 14px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--bg-paper); border: 2px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--text-muted); z-index: 2;
+}
+.so-ev-pending .so-ev-dot   { border-color: var(--warning); color: var(--warning); animation: sojori-blink-warning 1.6s infinite; }
+.so-ev-completed .so-ev-dot { background: var(--success); border-color: var(--success); color: #fff; }
+.so-ev-executing .so-ev-dot { background: var(--info);    border-color: var(--info);    color: #fff; animation: sojori-spin 1.3s linear infinite; }
+.so-ev-failed .so-ev-dot    { background: var(--error);   border-color: var(--error);   color: #fff; animation: sojori-pulse-error 1.4s infinite; }
+.so-ev-skipped .so-ev-dot   { background: var(--bg-deep); border-color: var(--border-strong); opacity: 0.7; }
+
+.so-ev-card { background: var(--bg-paper); border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; transition: border-color 0.2s, box-shadow 0.2s; }
+.so-ev-card:hover               { border-color: var(--border-strong); box-shadow: var(--shadow-2); }
+.so-ev-pending .so-ev-card      { background: linear-gradient(180deg, var(--warning-tint), var(--bg-paper) 70%); border-color: rgba(196, 101, 6, 0.30); }
+.so-ev-completed .so-ev-card    { background: linear-gradient(180deg, var(--success-tint), var(--bg-paper) 70%); border-color: rgba(10, 143, 94, 0.30); }
+.so-ev-executing .so-ev-card    { background: linear-gradient(180deg, var(--info-tint),    var(--bg-paper) 70%); border-color: rgba(6, 115, 179, 0.30); }
+.so-ev-failed .so-ev-card       { background: linear-gradient(180deg, var(--error-tint),   var(--bg-paper) 70%); border-color: rgba(200, 30, 30, 0.30); animation: sojori-shake 0.5s 1; }
+.so-ev-skipped .so-ev-card      { opacity: 0.6; }
+
+/* Main view entry */
+.so-fade-in { animation: sojori-fade-up 0.36s var(--ease-out-spring) both; }
+
+
+/* ════════════════════════════════════════════════════════════════════
+   Calendar Inventory V3 — Animations Atelier 2026
+   ════════════════════════════════════════════════════════════════════ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

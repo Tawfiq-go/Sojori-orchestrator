@@ -1,5 +1,4 @@
-// Configuration de l'authentification
-// Basé sur /Users/gouacht/sojori-dashboard/src/config/auth.config.js
+// Configuration d'authentification client (source unique pour ce dépôt).
 
 // Détermination de l'URL de base de l'API
 const getApiBaseUrl = () => {
@@ -31,10 +30,11 @@ export const AUTH_CONFIG = {
   LOGOUT_REDIRECT: '/login',
   COOKIE_OPTIONS: {
     path: '/',
-    secure: import.meta.env.PROD,  // HTTPS only in production
+    /** Aligné avec cookieUtils : Secure seulement sur https (sinon preview http://127.0.0.1:4174 casse l’auth). */
+    secure: false,
     httpOnly: false,  // False car on doit lire les tokens côté client pour les envoyer dans headers
-    sameSite: 'Strict' as const,  // Strict pour meilleure protection CSRF
-    maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 jours en millisecondes
+    sameSite: 'Lax' as const,  // Lax (pas Strict) pour permettre navigation et reload
+    expires: 7,  // 7 jours
   }
 };
 
@@ -51,6 +51,10 @@ export const MICROSERVICE_BASE_URL = {
   SRV_RESERVATION: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4002/api/v1/reservations`
     : `${API_BASE_URL}/api/v1/reservations`,
+  /** Router Express `messageState` : `/api/v1/message/*` (pas sous `/reservations/`) */
+  SRV_RESERVATION_MESSAGE: useLocalMicroservicePorts
+    ? `${API_BASE_URL}:4002/api/v1/message`
+    : `${API_BASE_URL}/api/v1/message`,
   SRV_CALENDAR: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4004/api/v1/calendar`
     : `${API_BASE_URL}/api/v1/calendar`,
@@ -63,4 +67,30 @@ export const MICROSERVICE_BASE_URL = {
   SRV_CHATBOT: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4000/api/v1/ai`
     : `${API_BASE_URL}/api/v1/ai`,
+  SRV_CRM: useLocalMicroservicePorts
+    ? `${API_BASE_URL}:4013/api/v1/crm`
+    : `${API_BASE_URL}/api/v1/crm`,
+  SRV_CRM_DEMO: useLocalMicroservicePorts
+    ? `${API_BASE_URL}:4013/api/v1/demo`
+    : `${API_BASE_URL}/api/v1/demo`,
 };
+
+const logApiBases =
+  import.meta.env.DEV ||
+  (typeof window !== 'undefined' &&
+    (window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '[::1]'));
+
+if (logApiBases) {
+  console.info('[Sojori Orchestrator] API bases', {
+    API_BASE_URL,
+    useLocalMicroservicePorts,
+    viteProdBuild: import.meta.env.PROD,
+    viteApiUrl: import.meta.env.VITE_API_URL ?? '(non défini → fallback dev.sojori.com en build prod)',
+    SRV_ADMIN: MICROSERVICE_BASE_URL.SRV_ADMIN,
+    SRV_RESERVATION: MICROSERVICE_BASE_URL.SRV_RESERVATION,
+    SRV_RESERVATION_MESSAGE: MICROSERVICE_BASE_URL.SRV_RESERVATION_MESSAGE,
+    hasDevToken: !!import.meta.env.VITE_DEV_TOKEN,
+  });
+}

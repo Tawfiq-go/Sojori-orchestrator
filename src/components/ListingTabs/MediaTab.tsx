@@ -1,15 +1,14 @@
 // MediaTab.tsx - Photo grid with drag/drop, AI tags, captions
-import React from 'react';
-import { Box, Stack, Typography, Button, TextField } from '@mui/material';
+import { Box, Stack, Typography, Button } from '@mui/material';
 import { tokens } from '../ListingFormV2';
 import { SectionCard, AIBanner, SaveBar, FormPager } from '../ListingFormHelpers';
 
 interface MediaTabProps {
   data: any;
-  onChange: (field: string, value: any) => void;
+  onChange?: (field: string, value: any) => void;
 }
 
-export function MediaTab({ data, onChange }: MediaTabProps) {
+export function MediaTab({ data }: MediaTabProps) {
   const photos = data?.photos || [
     { id: 1, tag: 'Pool', caption: 'Piscine & terrasse vue mer', cover: true, color: 'linear-gradient(135deg,#fde68a,#d97706)' },
     { id: 2, tag: 'Living', caption: 'Salon principal', color: 'linear-gradient(135deg,#a5f3fc,#0e7490)' },
@@ -58,7 +57,7 @@ export function MediaTab({ data, onChange }: MediaTabProps) {
           gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
           gap: 1.5,
         }}>
-          {photos.map((photo, idx) => (
+          {photos.map((photo: { id: number; tag: string; caption: string; cover?: boolean; color: string }, idx: number) => (
             <Box
               key={photo.id}
               sx={{

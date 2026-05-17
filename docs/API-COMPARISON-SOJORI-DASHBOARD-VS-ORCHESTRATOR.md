@@ -1,8 +1,27 @@
 # 🧪 API COMPARISON - sojori-dashboard vs Sojori-orchestrator
 
-**Date:** 2026-05-14
+**Date:** 2026-05-14 (Updated: 2026-05-15 - CORS Fix Applied)
 **Objectif:** Comparer les appels API entre les deux systèmes pour validation
-**Status:** ✅ Prêt pour tests
+**Status:** ✅ Prêt pour tests | ✅ CORS Fix Appliqué
+
+---
+
+## 🚨 IMPORTANT - CORS Configuration Requise
+
+**❗ Avant de tester, vérifier que `VITE_DEV_TOKEN` est configuré dans `.env`**
+
+Sans ce token, toutes les requêtes localhost → production seront bloquées par CORS.
+
+### Quick Fix
+```bash
+# Ajouter dans /Users/gouacht/Sojori-orchestrator/.env
+VITE_DEV_TOKEN=eyJkZXZlbG9wZXIiOiJnb3VhY2h0IiwiaXAiOiIqIiwiZXhwaXJlc0F0IjoxNzc5Mzk1NzAwNDg3LCJzaWduYXR1cmUiOiJmNDI1ZmM0ZDc1MWMxMTAyOTFlZWE0NDJlYTEwMjU5NTRmM2VhYWE4ZjEyOTJkYmEwNDY0MzMxMmZhMjk0YjgyIn0=
+
+# Redémarrer le serveur
+pnpm dev
+```
+
+**📖 Documentation complète**: `docs/agent-inbox-CORS-FIX.md`
 
 ---
 

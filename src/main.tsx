@@ -20,24 +20,6 @@ const queryClient = new QueryClient({
   },
 })
 
-// 🔧 Fix Vite HMR "send was called before connect" error
-// Suppress non-critical HMR connection errors in development
-if (import.meta.env.DEV) {
-  const originalError = console.error
-  console.error = (...args: unknown[]) => {
-    const errorMsg = String(args[0])
-    if (
-      errorMsg.includes('send was called before connect') ||
-      errorMsg.includes('WebSocket connection failed')
-    ) {
-      // Silently ignore HMR connection issues during development
-      console.warn('[HMR] Connection issue suppressed:', errorMsg)
-      return
-    }
-    originalError.apply(console, args)
-  }
-}
-
 logAuth('app bootstrap', {
   mode: import.meta.env.MODE,
   apiUrl: import.meta.env.VITE_API_URL ?? '(default localhost)',

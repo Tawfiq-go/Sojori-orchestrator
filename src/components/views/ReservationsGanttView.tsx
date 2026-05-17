@@ -4,7 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo } from 'react';
 import {
-  Box, Stack, Typography, Button, IconButton, Tooltip, Chip,
+  Box, Stack, Typography, Button, IconButton, Tooltip,
 } from '@mui/material';
 
 const T = {
@@ -102,8 +102,8 @@ export default function ReservationsGanttView({
   return (
     <Box sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2, overflow: 'hidden' }}>
       {/* Toolbar */}
-      <Stack direction="row" alignItems="center" spacing={2} sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
-        <Stack direction="row" alignItems="center" spacing={1}>
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center',  px: 2, py: 1.5, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <IconButton size="small" onClick={() => setOffset(offset - days)}>‹</IconButton>
           <Button size="small" onClick={() => setOffset(0)} sx={{ textTransform: 'none', fontWeight: 600 }}>
             Aujourd'hui
@@ -125,7 +125,7 @@ export default function ReservationsGanttView({
         </Stack>
         <Stack direction="row" spacing={1.5}>
           {(['confirmed', 'pending', 'closed'] as Status[]).map(s => (
-            <Stack key={s} direction="row" alignItems="center" spacing={0.5}>
+            <Stack key={s} direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
               <Box sx={{ width: 10, height: 10, borderRadius: 0.5, bgcolor: STATUS_META[s].bg, border: `1px solid ${STATUS_META[s].color}` }} />
               <Typography sx={{ fontSize: 11, color: T.text3 }}>{STATUS_META[s].label}</Typography>
             </Stack>
@@ -155,7 +155,7 @@ export default function ReservationsGanttView({
           {/* Rows */}
           {listings.map(l => (
             <React.Fragment key={l.id}>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', 
                 position: 'sticky', left: 0, bgcolor: T.bg1,
                 borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
                 zIndex: 4, p: 1.5,
@@ -190,7 +190,7 @@ export default function ReservationsGanttView({
                         position: 'absolute',
                         left: `calc(220px + ${b.start * cellWidth}px + 4px)`,
                         width: b.length * cellWidth - 8,
-                        top: `calc(${listings.findIndex(x => x.id === b.id.split('').reduce(() => 0, 0))} * 56px + 8px)`,
+                        top: `calc(${listings.findIndex((l) => l.id === b.listingId)} * 56px + 8px)`,
                         // ... simplified, use marginTop trick below instead
                       }}
                     />
@@ -228,7 +228,7 @@ export default function ReservationsGanttView({
                     '&:hover': { transform: 'translateY(-1px)', boxShadow: `0 4px 12px ${meta.color}40` },
                   }}
                 >
-                  <Stack direction="row" alignItems="center" spacing={0.75}>
+                  <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                     <Box sx={{
                       width: 18, height: 18, borderRadius: '50%',
                       bgcolor: SOURCE_BG[b.source], color: '#fff',

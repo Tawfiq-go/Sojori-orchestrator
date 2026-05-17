@@ -73,6 +73,12 @@ export interface ListingFormData {
     cityTax: number;
     petFee: number;
   };
+  /** Aligné dashboard « Availability & Booking Rules » (complément pricing / dispo) */
+  availability: {
+    maxNights: number;
+    preparationHoursBeforeArrival: number;
+    notes: string;
+  };
   extras: {
     earlyCheckInFee: number;
     lateCheckOutFee: number;
@@ -86,6 +92,21 @@ export interface ListingFormData {
     syncMode: string;
     allowInstantBook: boolean;
     channelNotes: string;
+  };
+  /** Raccourcis CONFIG (dashboard) — flags orchestration listing */
+  orchestration: {
+    registration: boolean;
+    chooseArrival: boolean;
+    chooseDeparture: boolean;
+    declareArrival: boolean;
+    declareDeparture: boolean;
+    transport: boolean;
+    grocery: boolean;
+    custom: boolean;
+    support: boolean;
+    cleaningFree: boolean;
+    cleaningPaid: boolean;
+    notes: string;
   };
   licenses: {
     tourismLicense: string;
@@ -217,6 +238,10 @@ export interface ListingRecord {
   channels: ListingChannelConnection[];
   form: ListingFormData;
   updatedAt: string;
+  /** URLs images (API) pour l’aperçu galerie — ne pas persister en localStorage si non souhaité */
+  galleryImageUrls?: string[];
+  /** Réponse brute `GET /listings/by-id/:id` (panneaux live orchestrateur) — ne pas persister en local. */
+  rawApiDocument?: Record<string, unknown> | null;
 }
 
 export interface PricingMonthRule {
@@ -508,6 +533,36 @@ export interface ListingTabMeta {
 
 export const CATALOGUE_OWNERS_STORAGE_KEY = 'sojori_catalogue_owners_v1';
 export const CATALOGUE_LISTINGS_STORAGE_KEY = 'sojori_catalogue_listings_v1';
+
+/** Anciens enregistrements localStorage sans ces clés */
+const ORCHESTRATION_FORM_DEFAULT: ListingFormData['orchestration'] = {
+  registration: true,
+  chooseArrival: true,
+  chooseDeparture: true,
+  declareArrival: true,
+  declareDeparture: true,
+  transport: true,
+  grocery: true,
+  custom: true,
+  support: true,
+  cleaningFree: true,
+  cleaningPaid: false,
+  notes: '',
+};
+
+const AVAILABILITY_FORM_DEFAULT: ListingFormData['availability'] = {
+  maxNights: 365,
+  preparationHoursBeforeArrival: 24,
+  notes: '',
+};
+
+function normalizeListingFormShape(form: ListingFormData): ListingFormData {
+  return {
+    ...form,
+    availability: { ...AVAILABILITY_FORM_DEFAULT, ...(form.availability ?? {}) },
+    orchestration: { ...ORCHESTRATION_FORM_DEFAULT, ...(form.orchestration ?? {}) },
+  };
+}
 export const CATALOGUE_PRICING_STORAGE_KEY = 'sojori_catalogue_pricing_v1';
 export const CATALOGUE_CHANNELS_STORAGE_KEY = 'sojori_catalogue_channels_v1';
 export const CATALOGUE_CLIENTS_STORAGE_KEY = 'sojori_catalogue_clients_v1';
@@ -524,28 +579,33 @@ export const ownerOptionsSeed: OwnerOption[] = [
 ];
 
 export const LISTING_TAB_META: ListingTabMeta[] = [
-  { key: 'basic', icon: '🏠', label: 'Informations de base', group: 'PROPRIÉTÉ' },
-  { key: 'address', icon: '📍', label: 'Adresse', group: 'PROPRIÉTÉ' },
-  { key: 'media', icon: '📸', label: 'Médias', group: 'PROPRIÉTÉ' },
-  { key: 'equipment', icon: '✨', label: 'Équipements', group: 'PROPRIÉTÉ' },
-  { key: 'pricing', icon: '💰', label: 'Tarification', group: 'PROPRIÉTÉ' },
-  { key: 'extras', icon: 'ℹ️', label: 'Infos supplémentaires', group: 'PROPRIÉTÉ' },
-  { key: 'channels', icon: '🔗', label: 'Channel Manager', group: 'DISTRIBUTION' },
-  { key: 'licenses', icon: '📄', label: 'Licences', group: 'DISTRIBUTION' },
-  { key: 'automsg', icon: '💬', label: 'Messages auto', group: 'GUEST EXPERIENCE' },
-  { key: 'whatsapp', icon: '📱', label: 'Menu WhatsApp', group: 'GUEST EXPERIENCE' },
-  { key: 'concierge', icon: '🛎️', label: 'Conciergerie', group: 'GUEST EXPERIENCE' },
-  { key: 'services', icon: '🎯', label: 'Services', group: 'GUEST EXPERIENCE' },
-  { key: 'support', icon: '🆘', label: 'Support', group: 'GUEST EXPERIENCE' },
-  { key: 'cleaning', icon: '🧹', label: 'Ménage', group: 'OPÉRATIONS' },
-  { key: 'autotasks', icon: '✅', label: 'Tâches auto', group: 'OPÉRATIONS' },
-  { key: 'roomtypes', icon: '🛏️', label: 'Types de chambres', group: 'OPÉRATIONS' },
-  { key: 'deposit', icon: '💵', label: 'Caution', group: 'OPÉRATIONS' },
-  { key: 'rules', icon: '📜', label: 'Règles & sécurité', group: 'RÈGLES & SÉCURITÉ' },
-  { key: 'houserules', icon: '🎛️', label: 'Règles & informations', group: 'RÈGLES & SÉCURITÉ' },
-  { key: 'access', icon: '🔐', label: 'Configuration accès', group: 'ACCÈS & IOT' },
-  { key: 'wifi', icon: '🌐', label: 'WiFi', group: 'ACCÈS & IOT' },
-  { key: 'iot', icon: '🔌', label: 'Appareils IoT', group: 'ACCÈS & IOT' },
+  // Aligné https://dashboard.sojori.com/admin/Listing/edit/:id (NewListing.jsx + listingTabsConfig.js)
+  { key: 'basic', icon: '🏠', label: 'General Information', group: 'LISTING' },
+  { key: 'address', icon: '📍', label: 'Location & Address', group: 'LISTING' },
+  { key: 'media', icon: '📸', label: 'Photos & Media', group: 'LISTING' },
+  { key: 'equipment', icon: '✨', label: 'Amenities', group: 'LISTING' },
+  { key: 'pricing', icon: '💰', label: 'Pricing', group: 'LISTING' },
+  { key: 'availability', icon: '📅', label: 'Availability & Booking Rules', group: 'LISTING' },
+  { key: 'deposit', icon: '💳', label: 'Fees & Deposits', group: 'LISTING' },
+  { key: 'channels', icon: '🔗', label: 'Channel Management', group: 'LISTING' },
+  { key: 'roomtypes', icon: '🛏️', label: 'Rooms & Beds', group: 'LISTING' },
+  { key: 'licenses', icon: '📄', label: 'License info', group: 'LISTING' },
+  { key: 'houserules', icon: 'ℹ️', label: 'Others', group: 'LISTING' },
+  // Barre CONFIG (dashboard admin — même domaines que hooks listing)
+  { key: 'orchestration', icon: '🔀', label: 'Orchestration', group: 'CONFIG' },
+  { key: 'cleaning', icon: '🧹', label: 'Ménage & service', group: 'CONFIG' },
+  { key: 'access', icon: '🔐', label: 'Accès', group: 'CONFIG' },
+  { key: 'whatsapp', icon: '💬', label: 'WhatsApp', group: 'CONFIG' },
+  { key: 'concierge', icon: '🛎️', label: 'Conciergerie', group: 'CONFIG' },
+  { key: 'support', icon: '🎧', label: 'Support', group: 'CONFIG' },
+  { key: 'rules', icon: '📋', label: 'Règles', group: 'CONFIG' },
+  // Suite (dashboard : Services, Messages auto, Wi‑Fi, tâches auto, IoT)
+  { key: 'services', icon: '🎯', label: 'Services', group: 'MORE' },
+  { key: 'automsg', icon: '✉️', label: 'Automated messages', group: 'MORE' },
+  { key: 'wifi', icon: '🌐', label: 'Wi‑Fi', group: 'MORE' },
+  { key: 'autotasks', icon: '✅', label: 'Auto tasks', group: 'MORE' },
+  { key: 'iot', icon: '🔌', label: 'IoT', group: 'MORE' },
+  { key: 'extras', icon: '➕', label: 'Extra fees (detail)', group: 'MORE' },
 ];
 
 const createDefaultListingForm = (params: {
@@ -614,6 +674,11 @@ const createDefaultListingForm = (params: {
     cityTax: params.countryCode === 'FR' ? 4.2 : 2.1,
     petFee: 35,
   },
+  availability: {
+    maxNights: 365,
+    preparationHoursBeforeArrival: 24,
+    notes: 'Règles de disponibilité alignées sur le dashboard admin.',
+  },
   extras: {
     earlyCheckInFee: 35,
     lateCheckOutFee: 45,
@@ -627,6 +692,20 @@ const createDefaultListingForm = (params: {
     syncMode: '2-way',
     allowInstantBook: true,
     channelNotes: 'Sync prix et dispos toutes les 15 minutes.',
+  },
+  orchestration: {
+    registration: true,
+    chooseArrival: true,
+    chooseDeparture: true,
+    declareArrival: true,
+    declareDeparture: true,
+    transport: true,
+    grocery: true,
+    custom: true,
+    support: true,
+    cleaningFree: true,
+    cleaningPaid: false,
+    notes: 'Flags alignés sur les champs orchestration_* du listing (srv-listing).',
   },
   licenses: {
     tourismLicense: 'LIC-2026-001',
@@ -796,6 +875,7 @@ const createListingSeed = (params: {
     cleaningFee: Math.round(params.adr * 0.45),
   }),
   updatedAt: '2026-05-14T09:00:00Z',
+  rawApiDocument: null,
 });
 
 export const listingSeeds: ListingRecord[] = [
@@ -1116,11 +1196,14 @@ export const getStoredOwners = () => {
 
 export const getStoredListings = () => {
   const stored = readStorage<ListingRecord[]>(CATALOGUE_LISTINGS_STORAGE_KEY, []);
-  if (stored.length > 0) {
-    return stored;
+  const listings = stored.length > 0 ? stored : listingSeeds;
+  if (stored.length === 0) {
+    writeStorage(CATALOGUE_LISTINGS_STORAGE_KEY, listingSeeds);
   }
-  writeStorage(CATALOGUE_LISTINGS_STORAGE_KEY, listingSeeds);
-  return listingSeeds;
+  return listings.map((record) => ({
+    ...record,
+    form: normalizeListingFormShape(record.form),
+  }));
 };
 
 export const saveStoredListings = (listings: ListingRecord[]) => {

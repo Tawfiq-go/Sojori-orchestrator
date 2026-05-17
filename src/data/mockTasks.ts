@@ -58,6 +58,9 @@ export interface Task {
   // Origin
   origin: 'task' | 'client';
 
+  /** Scheduling mode (UI / orchestration) */
+  mode?: 'Auto' | 'Manu';
+
   // Notes
   notes?: string;
 }

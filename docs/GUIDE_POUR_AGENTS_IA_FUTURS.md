@@ -14,9 +14,10 @@ Si vous êtes un agent IA qui arrive sur ce projet, lisez ces fichiers dans l'or
 
 1. **`/Users/gouacht/sojori-production/CLAUDE.md`** - Règles du monorepo backend
 2. **`/Users/gouacht/sojori-production/.clinerules`** - Règles critiques non négociables
-3. **`docs/API_COMPARISON_TEST_GUIDE.md`** (CE REPO) - Comparaison API ancien/nouveau
-4. **`docs/ORCHESTRATION_API_INTEGRATION.md`** (CE REPO) - Guide d'intégration initial
-5. **`docs/ORCHESTRATION_API_FIX_REPORT.md`** (CE REPO) - Corrections appliquées
+3. **`docs/AI-READ-API-PARITY.md`** (CE REPO) — **INDEX principal** API dashboard ↔ orchestrator + script `scripts/test-api-parity-all.mjs`
+4. **`docs/API_COMPARISON_TEST_GUIDE.md`** (CE REPO) - Comparaison API ancien/nouveau (détail WhatsApp, etc.)
+5. **`docs/ORCHESTRATION_API_INTEGRATION.md`** (CE REPO) - Guide d'intégration initial
+6. **`docs/ORCHESTRATION_API_FIX_REPORT.md`** (CE REPO) - Corrections appliquées
 
 ### 2. Fichiers Techniques Clés
 

@@ -1,0 +1,112 @@
+{
+  "_comment": "Exemple document GET /listings/by-id enrichi pour maquettes — champs types réalistes ; IDs fictifs.",
+  "_id": "507f1f77bcf86cd799439011",
+  "name": "Sojori Majorelle piscine et parking",
+  "active": true,
+  "staging": false,
+  "draft": false,
+  "propertyType": "Apartment",
+  "propertyTypeId": "67fe57d4ff2473002ea6f98c",
+  "propertyUnit": "Single",
+  "personCapacityMax": 4,
+  "surface": 115,
+  "ownerId": "685933fa6e1529002e42cb29",
+  "owner": {
+    "_id": "685933fa6e1529002e42cb29",
+    "firstName": "host",
+    "lastName": "sojori2025",
+    "email": "host@sojori.com"
+  },
+  "description": [
+    {
+      "languageId": "67fe754e799bf0002e86edb5",
+      "languageRuId": "4",
+      "value": "Offrez-vous une immersion dans l’art de vivre marocain…",
+      "headline": "Riad moderne Majorelle",
+      "houseRules": "Pas de fête. Respect des voisins."
+    },
+    {
+      "languageId": "66698237fc98c2002e52a1a1",
+      "languageRuId": "1",
+      "value": "Immerse yourself in Moroccan lifestyle…"
+    }
+  ],
+  "address": "Rue Yves Saint Laurent",
+  "city": "Marrakech",
+  "zipcode": "40000",
+  "country": "Morocco",
+  "lat": 31.641,
+  "lng": -8.002,
+  "timeZoneName": "Africa/Casablanca",
+  "howToArrive": [{ "value": "Taxi depuis l’aéroport ~15 min." }],
+  "currencyCode": "EUR",
+  "minNights": 2,
+  "maxNights": 365,
+  "basePrice": 180,
+  "extra": 25,
+  "onlineCheckIn": true,
+  "checkInTimeStart": 15,
+  "checkInTimeEnd": 22,
+  "checkOutTime": 11,
+  "preparationTimeBeforeArrivalInHours": 4,
+  "cityTaxEnabled": true,
+  "cityTaxPerAdultPerNight": 2.5,
+  "channelManager": "direct",
+  "channexListingId": "",
+  "otaChannelsSnapshot": {
+    "updatedAt": "2026-05-01T10:00:00.000Z",
+    "channels": [
+      { "channelName": "Direct", "status": "synced", "channelId": "direct-1" },
+      { "channelName": "Airbnb", "status": "pending", "channelId": "airbnb-1" }
+    ]
+  },
+  "distribution": { "syncMode": "manual", "notes": "OTA prioritaires Q3" },
+  "roomTypes": [
+    {
+      "_id": "rt1",
+      "roomTypeName": "Logement entier",
+      "bedroomsNumber": 2,
+      "bathroomsNumber": 2,
+      "personCapacityMax": 4,
+      "bedsNumber": 2,
+      "surface": 115,
+      "basePrice": 180,
+      "minimumPrice": 160,
+      "channexRoomTypeId": ""
+    }
+  ],
+  "listingImages": [
+    {
+      "url": "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1200",
+      "caption": "Salon",
+      "sortOrder": 0
+    }
+  ],
+  "videoTourUrl": "https://example.com/tour",
+  "listingAmenitiesIds": [{ "amenityData": { "name": "POOL" }, "count": 1 }],
+  "deposit": { "value": 300, "currency": "EUR" },
+  "securityDeposit": { "value": 0 },
+  "additionalFees": [{ "category": "cleaning", "value": 45 }],
+  "licenceInfo": { "licenceNumber": "MA-12345", "expirationDate": "2027-01-01", "isExempt": false },
+  "orchestration_registration": true,
+  "orchestration_transport": true,
+  "orchestration_grocery": false,
+  "orchestration_custom": true,
+  "orchestration_support": true,
+  "messageCheckin": ["Bienvenue ! Code d’accès envoyé par SMS."],
+  "messageCheckout": ["Merci pour votre séjour."],
+  "messageGeneral": ["Besoin d’aide ? Répondez à ce message."],
+  "whatsappServiceSettings": [{ "serviceName": "Concierge", "enabled": true }],
+  "arrivalPhone": "+212600000000",
+  "arrivalEmail": "stay@sojori.com",
+  "wifiUsername": "Sojori_Guest",
+  "wifiPassword": "********",
+  "accessDetails": [{ "type": "Meet and greet", "access": [{ "type": "lockbox", "code": "1234" }] }],
+  "tasks": [{ "taskName": "cleaning auto", "taskCreatedAutomatically": true }],
+  "paidCleaningConfig": { "frequency": "each_checkout" },
+  "frequency": [{ "dayOfWeek": 6 }],
+  "rulesAndInfo": { "petsAllowed": false },
+  "houseRules": "Pas de fête.",
+  "services": ["breakfast", "airport_transfer"],
+  "updatedAt": "2026-05-15T12:00:00.000Z"
+}

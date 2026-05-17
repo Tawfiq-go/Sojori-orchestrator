@@ -11,7 +11,11 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { listingsService } from '../services/listingsService';
-import type { ListingChannelsSnapshot, ListingSummary } from '../types/listings.types';
+import {
+  CHANNEX_MAPPING_UNAVAILABLE_INFO,
+  type ListingChannelsSnapshot,
+  type ListingSummary,
+} from '../types/listings.types';
 
 export function ChannelsPage() {
   const navigate = useNavigate();
@@ -23,6 +27,7 @@ export function ChannelsPage() {
   const [mappingLoading, setMappingLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [channexInfo, setChannexInfo] = useState(false);
   const [source, setSource] = useState<'api' | 'mock'>('api');
 
   const selectedListing = useMemo(
@@ -56,10 +61,12 @@ export function ChannelsPage() {
   const loadChannels = async (listingId: string, listing?: ListingSummary) => {
     try {
       setMappingLoading(true);
+      setChannexInfo(false);
       const result = await listingsService.getChannels(listingId, listing);
       setSnapshot(result.data);
       setSource(result.source);
       setWarning(result.warning || null);
+      setChannexInfo(result.info === CHANNEX_MAPPING_UNAVAILABLE_INFO);
       setError(null);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : 'Erreur mapping channels';
@@ -104,6 +111,15 @@ export function ChannelsPage() {
               Détail: {warning}
             </Typography>
           )}
+        </Panel>
+      )}
+
+      {source === 'api' && channexInfo && (
+        <Panel sx={{ mb: 2 }}>
+          <Typography sx={{ fontSize: 13, color: t.text2 }}>
+            Pas de mapping Channex pour ce listing (ID absent ou gestion directe). Ce n&apos;est pas une erreur : les
+            canaux OTA restent visibles sur la fiche listing / document by-id lorsque Channex n&apos;est pas branché.
+          </Typography>
         </Panel>
       )}
 

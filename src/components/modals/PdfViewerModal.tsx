@@ -3,7 +3,7 @@
 // Afficher PDF (iframe simple, fallback react-pdf possible côté repo)
 // Navigation pages, zoom, download, print
 // ════════════════════════════════════════════════════════════════════
-import React, { useState } from 'react';
+import { useState, type FC, type ReactNode } from 'react';
 import {
   Dialog, DialogContent, Box, Stack, Typography, Button, IconButton, Chip,
   ToggleButton, ToggleButtonGroup,
@@ -22,10 +22,10 @@ export interface PdfViewerModalProps {
   filename?: string;
   pageCount?: number;
   /** Pour intégration react-pdf custom : si fourni, remplace l'iframe */
-  renderer?: React.ReactNode;
+  renderer?: ReactNode;
 }
 
-export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
+export const PdfViewerModal: FC<PdfViewerModalProps> = ({
   open, onClose, url, title = 'Document', filename, pageCount, renderer,
 }) => {
   const [zoom, setZoom] = useState(100);
@@ -46,11 +46,11 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth
-      PaperProps={{ sx: { borderRadius: 2, bgcolor: T.bg1, minHeight: '85vh' } }}>
+      slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: T.bg1, minHeight: '85vh' } } }}>
       {/* Toolbar */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between"
-        sx={{ p: 1.5, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+      <Stack direction="row"
+        sx={{ p: 1.5, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2, alignItems: 'center', justifyContent: 'space-between' }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Typography sx={{ fontWeight: 800, fontSize: 15, color: T.text }}>
             📄 {title}
           </Typography>
@@ -60,9 +60,9 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
           )}
         </Stack>
 
-        <Stack direction="row" alignItems="center" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           {pageCount && pageCount > 1 && (
-            <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
               <IconButton size="small" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹</IconButton>
               <Typography sx={{ fontSize: 12, fontFamily: 'Geist Mono', minWidth: 60, textAlign: 'center' }}>
                 {page} / {pageCount}

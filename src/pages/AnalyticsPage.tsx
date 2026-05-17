@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
+import { Alert, Box, Button, Skeleton, Stack, TextField, Typography } from '@mui/material';
 import {
   Bar,
   BarChart,
@@ -29,6 +30,7 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 import { analyticsService } from '../services/analyticsService';
 import { analyticsPeriodOptions } from '../types/analytics.types';
+import { runtimeLog } from '../utils/runtimeLog';
 import type {
   AnalyticsDistributionItem,
   AnalyticsPropertyPerformanceRow,
@@ -44,6 +46,12 @@ const currency = new Intl.NumberFormat('fr-FR', {
 
 const sourceOptions = ['Tous', 'Airbnb', 'Booking.com', 'Sojori', 'Vrbo'] as const;
 
+function isRequestCanceled(err: unknown): boolean {
+  if (axios.isCancel(err)) return true;
+  const o = err as { code?: string; name?: string };
+  return o?.code === 'ERR_CANCELED' || o?.name === 'CanceledError';
+}
+
 export function AnalyticsPage() {
   const [period, setPeriod] = useState<(typeof analyticsPeriodOptions)[number]['value']>('30d');
   const [comparison, setComparison] = useState<'vs-last-period' | 'vs-last-year'>('vs-last-period');
@@ -54,13 +62,40 @@ export function AnalyticsPage() {
   const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
+  const [reloadAttempt, setReloadAttempt] = useState(0);
+  const loadGenerationRef = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
+    const loadId = ++loadGenerationRef.current;
+
+    runtimeLog('info', 'AnalyticsPage', 'useEffect load cycle', {
+      loadId,
+      period,
+      comparison,
+      source,
+      listingIds: selectedProperties,
+      customStartDate: customStartDate || null,
+      customEndDate: customEndDate || null,
+      reloadAttempt,
+    });
+
+    if (period === 'custom' && (!customStartDate || !customEndDate)) {
+      runtimeLog('warn', 'AnalyticsPage', 'Skip fetch: custom period sans dates completes', { loadId });
+      if (loadId === loadGenerationRef.current) {
+        setLoading(false);
+      }
+      return;
+    }
 
     async function loadAnalytics() {
+      if (loadId !== loadGenerationRef.current) {
+        runtimeLog('info', 'AnalyticsPage', 'loadAnalytics abandon (stale loadId)', { loadId });
+        return;
+      }
+      setLoading(true);
+      runtimeLog('info', 'AnalyticsPage', 'loadAnalytics start', { loadId });
       try {
-        setLoading(true);
         const nextSnapshot = await analyticsService.getSnapshot({
           period,
           comparison,
@@ -70,33 +105,39 @@ export function AnalyticsPage() {
           customEndDate,
         });
 
-        if (!cancelled) {
-          setSnapshot(nextSnapshot);
-          setError(null);
+        if (loadId !== loadGenerationRef.current) {
+          runtimeLog('warn', 'AnalyticsPage', 'Snapshot recu mais loadId obsolete — ignore', { loadId });
+          return;
         }
+        setSnapshot(nextSnapshot);
+        setError(null);
+        runtimeLog('info', 'AnalyticsPage', 'loadAnalytics success', {
+          loadId,
+          periodLabel: nextSnapshot.periodLabel,
+        });
       } catch (err) {
-        console.error('Failed to load analytics page:', err);
-        if (!cancelled) {
-          setError('Impossible de charger les analytics en temps reel.');
+        if (loadId !== loadGenerationRef.current) {
+          return;
         }
+        if (isRequestCanceled(err)) {
+          runtimeLog('warn', 'AnalyticsPage', 'Requete annulee (ignorer si navigation)', { loadId });
+          return;
+        }
+        console.error('Failed to load analytics page:', err);
+        const msg = formatAnalyticsLoadError(err);
+        setSnapshot(null);
+        setError(msg);
+        runtimeLog('error', 'AnalyticsPage', 'loadAnalytics erreur', { loadId, msg, err });
       } finally {
-        if (!cancelled) {
+        if (loadId === loadGenerationRef.current) {
           setLoading(false);
+          runtimeLog('info', 'AnalyticsPage', 'loadAnalytics finally loading=false', { loadId });
         }
       }
     }
 
-    if (period === 'custom' && (!customStartDate || !customEndDate)) {
-      setLoading(false);
-      return;
-    }
-
     void loadAnalytics();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [comparison, customEndDate, customStartDate, period, selectedProperties, source]);
+  }, [comparison, customEndDate, customStartDate, period, reloadAttempt, selectedProperties, source]);
 
   const filteredSources = useMemo(() => {
     if (!snapshot) return [];
@@ -158,33 +199,65 @@ export function AnalyticsPage() {
   const sourceColors = ['#e6b022', '#8b5cf6', '#10b981', '#06b6d4'];
   const selectedCount =
     selectedProperties.length > 0 ? selectedProperties.length : snapshot?.propertyPerformance.length ?? 0;
+  const isCustomDateIncomplete = period === 'custom' && (!customStartDate || !customEndDate);
+  const exportDisabled = loading || !snapshot || isCustomDateIncomplete || exporting !== null;
+
+  const handleExport = async (format: 'csv' | 'pdf') => {
+    if (exportDisabled) return;
+
+    try {
+      setExporting(format);
+      if (format === 'pdf') {
+        await analyticsService.downloadPerformancePdf(currentQuery);
+      } else {
+        await analyticsService.downloadPerformanceCsv(currentQuery);
+      }
+    } catch (err) {
+      console.error(`Failed to export analytics ${format}:`, err);
+      setError(
+        format === 'pdf'
+          ? 'Impossible de generer le PDF analytics.'
+          : 'Impossible de generer le fichier analytics.',
+      );
+    } finally {
+      setExporting(null);
+    }
+  };
 
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Analytics']}>
       <PageHeader
         title="Analytics"
-        count={`${snapshot?.periodLabel ?? 'Chargement'} · ${
+        count={`${loading ? 'Actualisation' : snapshot?.periodLabel ?? 'Analytics'} · ${
           comparison === 'vs-last-period' ? 'vs periode precedente' : 'vs annee precedente'
         }`}
       >
-        <Button sx={btnGhostSx} onClick={() => window.print()}>
-          Export PDF
+        <Button
+          sx={btnGhostSx}
+          disabled={exportDisabled}
+          onClick={() => {
+            void handleExport('pdf');
+          }}
+        >
+          {exporting === 'pdf' ? 'Export PDF...' : 'Export PDF'}
         </Button>
         <Button
           sx={btnGhostSx}
+          disabled={exportDisabled}
           onClick={() => {
-            void analyticsService.downloadPerformanceCsv(currentQuery);
+            void handleExport('csv');
           }}
         >
-          Export Excel
+          {exporting === 'csv' ? 'Export Excel...' : 'Export Excel'}
         </Button>
         <Button
           sx={btnPrimarySx}
+          disabled={exportDisabled}
           onClick={() => {
-            void analyticsService.downloadPerformanceCsv(currentQuery);
+            void handleExport('csv');
           }}
         >
-          Export CSV
+          {exporting === 'csv' ? 'Export CSV...' : 'Export CSV'}
         </Button>
       </PageHeader>
 
@@ -225,6 +298,12 @@ export function AnalyticsPage() {
         </FilterBar>
       )}
 
+      {isCustomDateIncomplete && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Selectionne une date de debut et une date de fin pour charger et exporter la vue custom.
+        </Alert>
+      )}
+
       <FilterBar>
         {sourceOptions.map((item) => (
           <FilterChip
@@ -237,20 +316,26 @@ export function AnalyticsPage() {
       </FilterBar>
 
       <FilterBar>
-        {(snapshot?.properties ?? []).map((property) => (
-          <FilterChip
-            key={property.id}
-            label={property.label}
-            active={selectedProperties.includes(property.id)}
-            onClick={() =>
-              setSelectedProperties((prev) =>
-                prev.includes(property.id)
-                  ? prev.filter((value) => value !== property.id)
-                  : [...prev, property.id]
-              )
-            }
-          />
-        ))}
+        {(snapshot?.properties ?? []).length ? (
+          (snapshot?.properties ?? []).map((property) => (
+            <FilterChip
+              key={property.id}
+              label={property.label}
+              active={selectedProperties.includes(property.id)}
+              onClick={() =>
+                setSelectedProperties((prev) =>
+                  prev.includes(property.id)
+                    ? prev.filter((value) => value !== property.id)
+                    : [...prev, property.id]
+                )
+              }
+            />
+          ))
+        ) : (
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {loading ? 'Chargement des properties...' : 'Aucune property disponible pour ce filtre.'}
+          </Typography>
+        )}
       </FilterBar>
 
       {error && (
@@ -260,11 +345,7 @@ export function AnalyticsPage() {
       )}
 
       {loading && !snapshot ? (
-        <Panel title="Chargement analytics" desc="Récupération des données backend">
-          <Stack sx={{ alignItems: 'center', py: 6 }}>
-            <CircularProgress />
-          </Stack>
-        </Panel>
+        <AnalyticsPageSkeleton />
       ) : snapshot ? (
         <>
       <StatsRow>
@@ -316,35 +397,43 @@ export function AnalyticsPage() {
         }}
       >
         <Panel title="Evolution revenus" desc={snapshot.periodLabel}>
-          <StableChart height={320}>
-            {({ width, height }) => (
-              <LineChart width={width} height={height} data={snapshot.revenueEvolution}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
-                <XAxis dataKey="label" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="current" stroke="#e6b022" strokeWidth={3} />
-                <Line type="monotone" dataKey="previous" stroke="#8b5cf6" strokeWidth={2} />
-              </LineChart>
-            )}
-          </StableChart>
+          {snapshot.revenueEvolution.length > 0 ? (
+            <StableChart height={320}>
+              {({ width, height }: { width: number; height: number }) => (
+                <LineChart width={width} height={height} data={snapshot.revenueEvolution}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
+                  <XAxis dataKey="label" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="current" stroke="#e6b022" strokeWidth={3} />
+                  <Line type="monotone" dataKey="previous" stroke="#8b5cf6" strokeWidth={2} />
+                </LineChart>
+              )}
+            </StableChart>
+          ) : (
+            <EmptyPanelState message="Aucune serie de revenus disponible sur la periode selectionnee." />
+          )}
         </Panel>
 
         <Panel title="Analyse sources reservations" desc={source === 'Tous' ? 'Toutes sources' : source}>
-          <StableChart height={320}>
-            {({ width, height }) => (
-              <BarChart width={width} height={height} data={filteredSources}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
-                <XAxis dataKey="source" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="bookings" fill="#10b981" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="revenue" fill="#e6b022" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            )}
-          </StableChart>
+          {filteredSources.length > 0 ? (
+            <StableChart height={320}>
+              {({ width, height }: { width: number; height: number }) => (
+                <BarChart width={width} height={height} data={filteredSources}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
+                  <XAxis dataKey="source" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="bookings" fill="#10b981" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="revenue" fill="#e6b022" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              )}
+            </StableChart>
+          ) : (
+            <EmptyPanelState message="Aucune reservation canal disponible avec le filtre courant." />
+          )}
         </Panel>
       </Box>
 
@@ -358,49 +447,57 @@ export function AnalyticsPage() {
         }}
       >
         <Panel title="Saisonnalite" desc="Heatmap-like monthly bars">
-          <StableChart height={320}>
-            {({ width, height }) => (
-              <BarChart width={width} height={height} data={snapshot.seasonality}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="occupancy" radius={[8, 8, 0, 0]}>
-                  {snapshot.seasonality.map((item, index) => (
-                    <Cell
-                      key={item.month}
-                      fill={sourceColors[index % sourceColors.length]}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            )}
-          </StableChart>
+          {snapshot.seasonality.length > 0 ? (
+            <StableChart height={320}>
+              {({ width, height }: { width: number; height: number }) => (
+                <BarChart width={width} height={height} data={snapshot.seasonality}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="occupancy" radius={[8, 8, 0, 0]}>
+                    {snapshot.seasonality.map((item, index) => (
+                      <Cell
+                        key={item.month}
+                        fill={sourceColors[index % sourceColors.length]}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              )}
+            </StableChart>
+          ) : (
+            <EmptyPanelState message="Pas assez de donnees pour afficher la saisonnalite." />
+          )}
         </Panel>
 
         <Panel title="Guest demographics" desc="Top pays d’origine">
-          <Stack spacing={1.25}>
-            {snapshot.guestDemographics.map((item) => (
-              <Box key={item.country}>
-                <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.4 }}>
-                  <Typography variant="body2">{item.country}</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                    {item.guests} guests
-                  </Typography>
-                </Stack>
-                <Box sx={{ height: 8, bgcolor: 'rgba(26,20,8,0.06)', borderRadius: 99 }}>
-                  <Box
-                    sx={{
-                      height: '100%',
-                      width: `${(item.guests / Math.max(1, snapshot.guestDemographics[0]?.guests ?? 1)) * 100}%`,
-                      bgcolor: '#8b5cf6',
-                      borderRadius: 99,
-                    }}
-                  />
+          {snapshot.guestDemographics.length > 0 ? (
+            <Stack spacing={1.25}>
+              {snapshot.guestDemographics.map((item) => (
+                <Box key={item.country}>
+                  <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.4 }}>
+                    <Typography variant="body2">{item.country}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {item.guests} guests
+                    </Typography>
+                  </Stack>
+                  <Box sx={{ height: 8, bgcolor: 'rgba(26,20,8,0.06)', borderRadius: 99 }}>
+                    <Box
+                      sx={{
+                        height: '100%',
+                        width: `${(item.guests / Math.max(1, snapshot.guestDemographics[0]?.guests ?? 1)) * 100}%`,
+                        bgcolor: '#8b5cf6',
+                        borderRadius: 99,
+                      }}
+                    />
+                  </Box>
                 </Box>
-              </Box>
-            ))}
-          </Stack>
+              ))}
+            </Stack>
+          ) : (
+            <EmptyPanelState message="Aucune information de provenance voyageurs pour cette selection." />
+          )}
         </Panel>
       </Box>
 
@@ -413,27 +510,98 @@ export function AnalyticsPage() {
         }}
       >
         <Panel title="Duree moyenne sejour" desc="Buckets">
-          <MiniDistribution
-            rows={toDistributionRows(snapshot.lengthOfStay)}
-            color="#10b981"
-          />
+          {snapshot.lengthOfStay.length > 0 ? (
+            <MiniDistribution
+              rows={toDistributionRows(snapshot.lengthOfStay)}
+              color="#10b981"
+            />
+          ) : (
+            <EmptyPanelState message="Aucune distribution de sejour disponible." />
+          )}
         </Panel>
 
         <Panel title="Lead time moyen" desc="Avant check-in">
-          <MiniDistribution
-            rows={toDistributionRows(snapshot.leadTimeDistribution)}
-            color="#e6b022"
-          />
+          {snapshot.leadTimeDistribution.length > 0 ? (
+            <MiniDistribution
+              rows={toDistributionRows(snapshot.leadTimeDistribution)}
+              color="#e6b022"
+            />
+          ) : (
+            <EmptyPanelState message="Aucune distribution de lead time disponible." />
+          )}
         </Panel>
       </Box>
 
       <Panel title="Performance par property" desc={`${selectedCount} selection(s)`}>
-        <DataTable columns={performanceColumns} rows={snapshot.propertyPerformance} />
+        {snapshot.propertyPerformance.length > 0 ? (
+          <DataTable columns={performanceColumns} rows={snapshot.propertyPerformance} />
+        ) : (
+          <EmptyPanelState message="Aucune performance property disponible pour les filtres actifs." />
+        )}
       </Panel>
         </>
-      ) : null}
+      ) : (
+        <Panel title="Donnees analytics" desc="Aucun snapshot charge">
+          <Stack spacing={2} sx={{ py: 1, maxWidth: 520 }}>
+            {isCustomDateIncomplete ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Periode custom : choisis une date de debut et une date de fin. Les indicateurs se chargent
+                automatiquement une fois les deux dates renseignees.
+              </Typography>
+            ) : error ? (
+              <>
+                <Typography variant="body2">{error}</Typography>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setError(null);
+                    setReloadAttempt((n) => n + 1);
+                  }}
+                >
+                  Reessayer
+                </Button>
+              </>
+            ) : (
+              <>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Le chargement a ete interrompu avant reception des donnees (navigation rapide ou annulation).
+                  Reessaie pour relancer la requete.
+                </Typography>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setReloadAttempt((n) => n + 1);
+                  }}
+                >
+                  Reessayer
+                </Button>
+              </>
+            )}
+          </Stack>
+        </Panel>
+      )}
     </DashboardWrapper>
   );
+}
+
+function formatAnalyticsLoadError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as
+      | { error?: string; message?: string; errorMsg?: string }
+      | undefined;
+    const detail =
+      data?.error || data?.message || data?.errorMsg || (err.response?.status ? `HTTP ${err.response.status}` : null);
+    if (detail) {
+      return `Impossible de charger les analytics : ${detail}`;
+    }
+    if (err.message) {
+      return `Impossible de charger les analytics : ${err.message}`;
+    }
+  }
+  if (err instanceof Error && err.message) {
+    return `Impossible de charger les analytics : ${err.message}`;
+  }
+  return 'Impossible de charger les analytics en temps reel.';
 }
 
 function toDistributionRows(items: AnalyticsDistributionItem[]) {
@@ -476,5 +644,54 @@ function MiniDistribution({
         </Box>
       ))}
     </Stack>
+  );
+}
+
+function EmptyPanelState({ message }: { message: string }) {
+  return (
+    <Stack
+      sx={{
+        minHeight: 220,
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        px: 3,
+      }}
+    >
+      <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 360 }}>
+        {message}
+      </Typography>
+    </Stack>
+  );
+}
+
+function AnalyticsPageSkeleton() {
+  return (
+    <>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' },
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} variant="rounded" height={138} />
+        ))}
+      </Box>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', xl: '1fr 1fr' },
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        <Skeleton variant="rounded" height={360} />
+        <Skeleton variant="rounded" height={360} />
+      </Box>
+      <Skeleton variant="rounded" height={360} />
+    </>
   );
 }
