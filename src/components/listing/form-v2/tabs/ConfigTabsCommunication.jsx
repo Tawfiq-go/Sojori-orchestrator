@@ -4,7 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import { Box, Stack, Typography, TextField, Button, IconButton, Chip } from '@mui/material';
-import { T, sxInput, Field, Card, SectionH, ToggleRow, ChipsRow, NumberInput, SelectField, LangSwitcher, GlobalBanner } from './_shared';
+import { T, sxInput, Field, Card, SectionH, ToggleRow, ChipsRow, NumberInput, SelectField, LangSwitcher, GlobalBanner, RuFormLegend } from './_shared';
 
 /* ════════════════════ Access ════════════════════ */
 const ACCESS_MODES = [
@@ -22,6 +22,7 @@ export function AccessTab({ values = {}, onChange }) {
 
   return (
     <Box>
+      <RuFormLegend />
       <Card title="🚪 Mode d'accès" meta="accessMode · required">
         <Stack gap={0.75}>
           {ACCESS_MODES.map(m => {
@@ -69,7 +70,7 @@ export function AccessTab({ values = {}, onChange }) {
 
       <Card title="📝 Instructions d'arrivée" meta="howToArrive · FR / EN / AR">
         <LangSwitcher value={lang} onChange={setLang} />
-        <Field label="Comment arriver" hint="Envoyé automatiquement 24h avant le check-in via WhatsApp.">
+        <Field label="Comment arriver" ruField="howToArrive" hint="Envoyé automatiquement 24h avant le check-in via WhatsApp.">
           <TextField size="small" multiline rows={5} fullWidth
             value={lang === '🇫🇷 FR' ? values.howToArrive : lang === '🇬🇧 EN' ? values.howToArriveEn : values.howToArriveAr || ''}
             onChange={e => upd(lang === '🇫🇷 FR' ? 'howToArrive' : lang === '🇬🇧 EN' ? 'howToArriveEn' : 'howToArriveAr', e.target.value)}
@@ -101,6 +102,7 @@ export function WhatsAppTab({ values = {}, onChange }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
   return (
     <Box>
+      <RuFormLegend />
       <GlobalBanner>
         <strong>Le numéro WhatsApp Business est global</strong> (1 seul pour toute la propriété management). Configurable dans <a href="#" style={{ color: T.info, fontWeight: 600 }}>⚙️ Paramètres organisation</a> · pas géré au niveau du listing.
       </GlobalBanner>
@@ -129,8 +131,8 @@ export function WhatsAppTab({ values = {}, onChange }) {
 
       <Card title="📶 WiFi" meta="Variables dans templates">
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-          <Field label="SSID · wifiUsername"><TextField size="small" fullWidth value={values.wifiUsername || ''} onChange={e => upd('wifiUsername', e.target.value)} sx={sxInput} /></Field>
-          <Field label="Mot de passe · wifiPassword"><TextField size="small" fullWidth value={values.wifiPassword || ''} onChange={e => upd('wifiPassword', e.target.value)} sx={sxInput} /></Field>
+          <Field label="SSID · wifiUsername" ruField="wifiUsername"><TextField size="small" fullWidth value={values.wifiUsername || ''} onChange={e => upd('wifiUsername', e.target.value)} sx={sxInput} /></Field>
+          <Field label="Mot de passe · wifiPassword" ruField="wifiPassword"><TextField size="small" fullWidth value={values.wifiPassword || ''} onChange={e => upd('wifiPassword', e.target.value)} sx={sxInput} /></Field>
         </Box>
         <Typography sx={{ fontSize: 11, color: T.text3, mt: 1 }}>Inséré automatiquement via <code>{`{wifiUsername}`}</code> / <code>{`{wifiPassword}`}</code> dans les templates.</Typography>
       </Card>

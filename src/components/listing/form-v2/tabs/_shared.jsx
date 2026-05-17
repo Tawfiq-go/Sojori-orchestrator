@@ -6,6 +6,8 @@
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { Box, Stack, Typography, TextField, Switch, IconButton, Chip, Button, Select, MenuItem, FormControl } from '@mui/material';
+import { FieldIndicator } from '../components/FieldIndicator';
+import { useListingFormStructure } from '../ListingFormStructureContext';
 
 export const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a', primaryTint: 'rgba(184,133,26,0.10)',
@@ -32,23 +34,104 @@ export const sxInputAI = {
     '& fieldset': { borderColor: T.aiBorder } },
 };
 
-export function Label({ children, required, ai, charCount }) {
+export function RuFormLegend() {
+  const listingStructure = useListingFormStructure();
+  if (!listingStructure) return null;
   return (
-    <Stack direction="row" alignItems="center" spacing={0.75} sx={{
-      fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace',
-      textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, mb: 0.5,
-    }}>
-      <Box>{children}{required && <Box component="span" sx={{ color: T.error, ml: 0.25 }}>*</Box>}</Box>
-      {ai && <Box sx={{ bgcolor: T.aiTint, color: T.ai, px: 0.625, py: '1px', borderRadius: '3px', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.04em' }}>✨ AI</Box>}
-      {charCount && <Box sx={{ ml: 'auto', fontSize: 9.5, color: T.text3, textTransform: 'none' }}>{charCount}</Box>}
+    <Typography sx={{ fontSize: 11, color: T.text3, mb: 1.5, lineHeight: 1.45 }}>
+      <Box component="span" sx={{ color: '#4a90e2', fontWeight: 700 }}>R</Box>
+      {' '}= envoyé ou mappé vers Rentals United ·{' '}
+      <Box component="span" sx={{ color: '#b91c1c', fontWeight: 700 }}>*</Box>
+      {' '}= obligatoire pour une annonce valide
+    </Typography>
+  );
+}
+
+export function Label({
+  children,
+  required,
+  ai,
+  charCount,
+  ruField,
+  listingStructure: listingStructureProp,
+  inferRuWhenMissing = false,
+}) {
+  const listingStructure = listingStructureProp ?? useListingFormStructure();
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={0.75}
+      sx={{
+        flexWrap: 'wrap',
+        fontSize: 10.5,
+        color: T.text3,
+        fontFamily: '"Geist Mono", monospace',
+        textTransform: 'uppercase',
+        letterSpacing: '0.06em',
+        fontWeight: 700,
+        mb: 0.5,
+      }}
+    >
+      <Box sx={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+        {children}
+        {required && <Box component="span" sx={{ color: T.error, ml: 0.25 }}>*</Box>}
+        {ruField ? (
+          <FieldIndicator
+            field={ruField}
+            listingStructure={listingStructure}
+            inferRuWhenMissing={inferRuWhenMissing}
+            dense
+          />
+        ) : null}
+      </Box>
+      {ai && (
+        <Box
+          sx={{
+            bgcolor: T.aiTint,
+            color: T.ai,
+            px: 0.625,
+            py: '1px',
+            borderRadius: '3px',
+            fontSize: 8.5,
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+          }}
+        >
+          ✨ AI
+        </Box>
+      )}
+      {charCount && (
+        <Box sx={{ ml: 'auto', fontSize: 9.5, color: T.text3, textTransform: 'none' }}>{charCount}</Box>
+      )}
     </Stack>
   );
 }
 
-export function Field({ label, required, ai, charCount, hint, children, fullWidth }) {
+export function Field({
+  label,
+  required,
+  ai,
+  charCount,
+  hint,
+  children,
+  fullWidth,
+  ruField,
+  listingStructure,
+  inferRuWhenMissing = false,
+}) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.625, flex: fullWidth ? 1 : 'initial' }}>
-      <Label required={required} ai={ai} charCount={charCount}>{label}</Label>
+      <Label
+        required={required}
+        ai={ai}
+        charCount={charCount}
+        ruField={ruField}
+        listingStructure={listingStructure}
+        inferRuWhenMissing={inferRuWhenMissing}
+      >
+        {label}
+      </Label>
       {children}
       {hint && <Typography sx={{ fontSize: 10.5, color: T.text4, mt: 0.25 }}>{hint}</Typography>}
     </Box>
@@ -79,14 +162,27 @@ export function SectionH({ children }) {
   );
 }
 
-export function ToggleRow({ title, desc, badges = [], checked, onChange, disabled }) {
+export function ToggleRow({
+  title,
+  desc,
+  badges = [],
+  checked,
+  onChange,
+  disabled,
+  ruField,
+  listingStructure,
+}) {
+  const ls = listingStructure ?? useListingFormStructure();
   return (
     <Stack direction="row" alignItems="center" gap={1.75} sx={{
       p: '10px 12px', border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1, mb: 0.75,
       opacity: disabled ? 0.5 : 1,
     }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{title}</Typography>
+        <Typography sx={{ fontSize: 12.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+          {title}
+          {ruField ? <FieldIndicator field={ruField} listingStructure={ls} dense /> : null}
+        </Typography>
         {desc && <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.25 }}>{desc}</Typography>}
         {badges.length > 0 && (
           <Stack direction="row" gap={0.625} sx={{ mt: 0.625, flexWrap: 'wrap' }} useFlexGap>
