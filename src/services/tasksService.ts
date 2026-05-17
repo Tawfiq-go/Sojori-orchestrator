@@ -1,6 +1,7 @@
 import apiClient from './apiClient';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 import type {
+  ReservationTasksResult,
   StaffAssignmentsResult,
   StaffWorkloadResult,
   TaskAssignPayload,
@@ -291,6 +292,44 @@ class TasksService {
       },
     );
     return response.data;
+  }
+
+  /**
+   * Récupère toutes les tâches liées à une réservation
+   * GET /api/v1/internal/tasks/reservation/:reservationId
+   *
+   * @param reservationId - ID ou numéro de réservation
+   * @param includeCompleted - Inclure les tâches terminées/annulées (défaut: false)
+   */
+  async getTasksByReservation(
+    reservationId: string,
+    includeCompleted = false,
+  ): Promise<ReservationTasksResult> {
+    try {
+      const response = await apiClient.get<ReservationTasksResult>(
+        `${TASKS_BASE_URL}/internal/tasks/reservation/${reservationId}`,
+        {
+          params: { includeCompleted },
+        },
+      );
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.data || 'Erreur lors du chargement des tâches');
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Erreur récupération tâches pour réservation ${reservationId}:`, error);
+      // Retourner un résultat vide en cas d'erreur
+      return {
+        success: false,
+        data: {
+          reservationId,
+          total: 0,
+          tasks: [],
+        },
+      };
+    }
   }
 }
 

@@ -1,106 +1,88 @@
-import { useState, useEffect } from 'react';
-import { Box, Tabs, Tab } from '@mui/material';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Box } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
-import { tokens as t } from '../components/dashboard/DashboardV2.components';
 import WhatsAppTabV2 from '../components/communications/WhatsAppTabV2';
 import StaffWhatsAppTabV2 from '../components/communications/StaffWhatsAppTabV2';
+import WATemplatesTabV2 from '../components/communications/WATemplatesTabV2';
 import MessagesOTATabV2 from '../components/communications/MessagesOTATabV2';
-import LeadsTab from '../components/communications/LeadsTab';
-import ReviewsTab from '../components/communications/ReviewsTab';
+import LeadsTabV2 from '../components/communications/LeadsTabV2';
+import ReviewsTabV2 from '../components/communications/ReviewsTabV2';
+import InboxHubTabs, { type CommsHubTab } from '../components/unified-inbox/InboxHubTabs';
+import messagesService from '../services/messagesService';
 
-/**
- * Communications Hub - Page principale avec navigation par onglets
- * Route: /communications
- *
- * Onglets:
- * - Unified: Recherche multi-canaux par numéro réservation
- * - WhatsApp: Conversations WhatsApp guests (avec réservations)
- * - Staff WhatsApp: Conversations équipe (sans réservations)
- * - WA Templates (QA): Templates WhatsApp pour QA
- * - Messages OTA: Messages Airbnb/Booking confirmés
- * - Demande: Leads pré-réservation
- * - Avis: Reviews clients post-stay
- *
- * Basé sur: sojori-dashboard/src/features/communications/pages/CommunicationsHubPage.jsx
- */
+function isOtaChannel(ch?: string): boolean {
+  const c = (ch || '').toLowerCase();
+  if (!c || c.includes('whatsapp') || c === 'wa') return false;
+  return c.includes('airbnb') || c.includes('booking') || c.includes('vrbo') || c === 'ab' || c === 'bk';
+}
+
+function isWaGuestChannel(ch?: string): boolean {
+  return !isOtaChannel(ch);
+}
+
 export default function CommunicationsHubPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') || 'whatsapp') as CommsHubTab;
 
-  // Tab actif (sync avec URL ?tab=...)
-  const activeTab = searchParams.get('tab') || 'whatsapp';
+  const [counts, setCounts] = useState<Partial<Record<CommsHubTab, number>>>({});
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
-    setSearchParams({ tab: newValue });
-  };
+  useEffect(() => {
+    (async () => {
+      try {
+        const [guestRes, staffRes, otaRes, leadsRes, reviewsRes] = await Promise.all([
+          messagesService.getConversations({ filter: 'smart', hasReservation: true, limit: 80 }),
+          messagesService.getConversations({ filter: 'smart', hasReservation: false, limit: 50 }),
+          messagesService.getOTAThreads({ page: 0, limit: 50 }).catch(() => ({ threads: [] })),
+          messagesService.getLeads({ limit: 50 }).catch(() => ({ threads: [] })),
+          messagesService.getReviews({ limit: 50 }).catch(() => ({ threads: [] })),
+        ]);
 
-  // Liste des tabs - Aligné avec orchestrator backend
-  const tabs = [
-    { value: 'whatsapp', label: '💬 Guest WhatsApp', icon: '💬' },
-    { value: 'staff', label: '👷 Staff WhatsApp', icon: '👷' },
-    { value: 'ota', label: '📨 Messages OTA', icon: '📨' },
-    { value: 'leads', label: '🎯 Demandes', icon: '🎯' },
-    { value: 'reviews', label: '⭐ Avis', icon: '⭐' },
-  ];
+        let waGuest = 0;
+        let unread = 0;
+
+        if (guestRes.status === 'success') {
+          for (const c of guestRes.data.conversations) {
+            if (!isWaGuestChannel(c.channel_name)) continue;
+            unread += c.unread_count || 0;
+            waGuest += 1;
+          }
+        }
+
+        const ota = (otaRes.threads || otaRes.data?.threads || []).length;
+
+        const staffCount =
+          staffRes.status === 'success' ? staffRes.data.conversations.length : 0;
+        const leadsCount = leadsRes.threads?.length ?? 0;
+        const reviewsCount = (reviewsRes.threads || reviewsRes.data || []).length;
+
+        setCounts({
+          whatsapp: waGuest,
+          staff: staffCount,
+          templates: 6,
+          ota,
+          leads: leadsCount,
+          reviews: reviewsCount,
+        });
+        setUnreadCount(unread);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
 
   return (
-    <DashboardWrapper breadcrumb={['Communications', 'Hub']}>
+    <DashboardWrapper breadcrumb={['Communications', 'Inbox']}>
       <Box sx={{ maxWidth: 1600, mx: 'auto', px: { xs: 2, md: 3 } }}>
-        {/* Tabs Navigation */}
-        <Box
-          sx={{
-            borderBottom: 1,
-            borderColor: t.border,
-            mb: 3,
-          }}
-        >
-          <Tabs
-            value={activeTab}
-            onChange={handleTabChange}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              '& .MuiTab-root': {
-                textTransform: 'none',
-                fontSize: 13,
-                fontWeight: 600,
-                minHeight: 48,
-                color: t.text3,
-                '&.Mui-selected': {
-                  color: t.primary,
-                },
-              },
-              '& .MuiTabs-indicator': {
-                backgroundColor: t.primary,
-                height: 3,
-                borderRadius: '3px 3px 0 0',
-              },
-            }}
-          >
-            {tabs.map((tab) => (
-              <Tab
-                key={tab.value}
-                value={tab.value}
-                label={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
-                  </Box>
-                }
-              />
-            ))}
-          </Tabs>
-        </Box>
+        <InboxHubTabs counts={counts} unreadCount={unreadCount} />
 
-        {/* Tab Content */}
-        <Box>
-          {activeTab === 'whatsapp' && <WhatsAppTabV2 />}
-          {activeTab === 'staff' && <StaffWhatsAppTabV2 />}
-          {activeTab === 'ota' && <MessagesOTATabV2 />}
-          {activeTab === 'leads' && <LeadsTab />}
-          {activeTab === 'reviews' && <ReviewsTab />}
-        </Box>
+        {activeTab === 'whatsapp' && <WhatsAppTabV2 />}
+        {activeTab === 'staff' && <StaffWhatsAppTabV2 />}
+        {activeTab === 'templates' && <WATemplatesTabV2 />}
+        {activeTab === 'ota' && <MessagesOTATabV2 />}
+        {activeTab === 'leads' && <LeadsTabV2 />}
+        {activeTab === 'reviews' && <ReviewsTabV2 />}
       </Box>
     </DashboardWrapper>
   );

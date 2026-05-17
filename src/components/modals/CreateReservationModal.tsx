@@ -1,46 +1,126 @@
-import { useState, useEffect } from 'react';
+// ════════════════════════════════════════════════════════════════════
+// CreateReservationModal.tsx — Version Hybride
+// Design Claude V2 (Grid, scrollbar 8px) + Logique métier Sojori
+// ════════════════════════════════════════════════════════════════════
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Dialog,
-  Button,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Stack,
   Box,
   Typography,
+  IconButton,
+  TextField,
+  Button,
+  MenuItem,
+  Select,
+  FormControl,
   InputAdornment,
   CircularProgress,
   Alert,
   Autocomplete,
-  Collapse,
-  Divider,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import { toast } from 'react-toastify';
 import { reservationsService } from '../../services/reservationsService';
 import { listingsService } from '../../services/listingsService';
+import { ReservationAvailabilityCalendar } from './ReservationAvailabilityCalendar';
 
-// Liste complète des pays avec drapeaux (comme Legacy)
+// Liste complète des pays avec drapeaux
 const COUNTRIES = [
   '🇲🇦 Maroc', '🇫🇷 France', '🇪🇸 Espagne', '🇩🇪 Allemagne', '🇬🇧 Royaume-Uni',
   '🇮🇹 Italie', '🇧🇪 Belgique', '🇳🇱 Pays-Bas', '🇺🇸 États-Unis', '🇨🇦 Canada',
   '🇨🇭 Suisse', '🇸🇦 Arabie Saoudite', '🇦🇪 Émirats Arabes Unis', '🇵🇹 Portugal',
   '🇩🇿 Algérie', '🇹🇳 Tunisie', '🇸🇳 Sénégal', '🇨🇮 Côte d\'Ivoire', '🇵🇱 Pologne',
-  '🇷🇺 Russie', '🇹🇷 Turquie', '🇯🇵 Japon', '🇨🇳 Chine', '🇦🇫 Afghanistan',
-  '🇦🇱 Albanie', '🇦🇷 Argentine', '🇦🇺 Australie', '🇦🇹 Autriche', '🇧🇩 Bangladesh',
-  '🇧🇷 Brésil', '🇧🇬 Bulgarie', '🇨🇱 Chili', '🇨🇴 Colombie', '🇰🇷 Corée du Sud',
-  '🇨🇷 Costa Rica', '🇭🇷 Croatie', '🇩🇰 Danemark', '🇪🇬 Égypte', '🇪🇪 Estonie',
-  '🇪🇹 Éthiopie', '🇫🇮 Finlande', '🇬🇷 Grèce', '🇭🇰 Hong Kong', '🇭🇺 Hongrie',
-  '🇮🇳 Inde', '🇮🇩 Indonésie', '🇮🇪 Irlande', '🇮🇸 Islande', '🇮🇱 Israël',
-  '🇯🇴 Jordanie', '🇰🇪 Kenya', '🇰🇼 Koweït', '🇱🇧 Liban', '🇱🇾 Libye',
-  '🇱🇹 Lituanie', '🇱🇺 Luxembourg', '🇲🇾 Malaisie', '🇲🇽 Mexique', '🇳🇬 Nigeria',
-  '🇳🇴 Norvège', '🇳🇿 Nouvelle-Zélande', '🇵🇰 Pakistan', '🇵🇭 Philippines',
-  '🇶🇦 Qatar', '🇷🇴 Roumanie', '🇷🇸 Serbie', '🇸🇬 Singapour', '🇸🇰 Slovaquie',
-  '🇸🇮 Slovénie', '🇿🇦 Afrique du Sud', '🇸🇪 Suède', '🇸🇾 Syrie', '🇹🇭 Thaïlande',
-  '🇺🇦 Ukraine', '🇺🇾 Uruguay', '🇻🇪 Venezuela', '🇻🇳 Vietnam'
+  '🇷🇺 Russie', '🇹🇷 Turquie', '🇯🇵 Japon', '🇨🇳 Chine',
 ];
+
+/**
+ * Colonne scrollable — listener wheel non-passif (obligatoire sur Mac / React 19).
+ * capture:true pour intercepter la molette même au-dessus des TextField.
+ */
+function ModalScrollColumn({
+  active,
+  className,
+  wrapperSx,
+  innerSx,
+  children,
+}: {
+  active: boolean;
+  className: string;
+  wrapperSx?: Record<string, unknown>;
+  innerSx?: Record<string, unknown>;
+  children: React.ReactNode;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!active) return;
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollHeight <= el.clientHeight + 1) return;
+
+      let delta = e.deltaY;
+      if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) delta *= 16;
+      else if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) delta *= el.clientHeight;
+
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      const next = Math.min(maxScroll, Math.max(0, el.scrollTop + delta));
+      const canScrollDown = el.scrollTop < maxScroll - 1 && delta > 0;
+      const canScrollUp = el.scrollTop > 0 && delta < 0;
+
+      if (canScrollDown || canScrollUp) {
+        el.scrollTop = next;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false, capture: true });
+    return () => el.removeEventListener('wheel', onWheel, { capture: true });
+  }, [active]);
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+        minWidth: 0,
+        overflow: 'hidden',
+        ...wrapperSx,
+      }}
+    >
+      <Box
+        ref={scrollRef}
+        className={className}
+        tabIndex={-1}
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'scroll',
+          overflowX: 'hidden',
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain',
+          outline: 'none',
+          ...innerSx,
+        }}
+      >
+        {children}
+      </Box>
+    </Box>
+  );
+}
+
+/** Zone scroll imbriquée (grille prix/jour) */
+const modalScrollNestedSx = {
+  overflowY: 'scroll' as const,
+  overflowX: 'hidden' as const,
+  maxHeight: 240,
+  minHeight: 0,
+  overscrollBehavior: 'contain' as const,
+};
 
 interface CreateReservationModalProps {
   open: boolean;
@@ -51,8 +131,6 @@ interface CreateReservationModalProps {
 interface Listing {
   id: string;
   name: string;
-  checkInTime?: string;
-  checkOutTime?: string;
   propertyUnit?: string;
   roomTypes: Array<{
     _id: string;
@@ -61,67 +139,15 @@ interface Listing {
   }>;
 }
 
-// Animations keyframes
-const fadeInAnimation = `
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}`;
-
-/**
- * Colonne scrollable — règles critiques :
- * - parent en flex avec hauteur fixe + minHeight:0
- * - overflowY: scroll (pas auto) pour piste visible sur macOS
- * - !important sur scrollbar : index.css global met track transparent
- */
-const modalScrollColSx = {
-  overflowY: 'scroll',
-  overflowX: 'hidden',
-  minHeight: 0,
-  minWidth: 0,
-  flex: '1 1 0',
-  overscrollBehavior: 'contain',
-  WebkitOverflowScrolling: 'touch',
-  scrollbarWidth: 'thin',
-  scrollbarColor: '#b8851a #f0eee8 !important',
-  scrollbarGutter: 'stable',
-  '&::-webkit-scrollbar': {
-    width: '12px !important',
-    WebkitAppearance: 'none',
-  },
-  '&::-webkit-scrollbar-track': {
-    background: '#f0eee8 !important',
-    borderRadius: '8px !important',
-  },
-  '&::-webkit-scrollbar-thumb': {
-    background: '#b8851a !important',
-    borderRadius: '8px !important',
-    border: '3px solid #f0eee8 !important',
-    minHeight: '48px !important',
-  },
-  '&::-webkit-scrollbar-thumb:hover': {
-    background: '#876119 !important',
-  },
-} as const;
-
-/** Zone scroll imbriquée (grille prix/jour) — sans flex qui casse le layout grid. */
-const modalScrollNestedSx = {
-  ...modalScrollColSx,
-  flex: 'none',
-} as const;
-
 export function CreateReservationModal({ open, onClose, onSuccess }: CreateReservationModalProps) {
-  // Loading states
+  // ─── State ───────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-
-  // Data from API
   const [listings, setListings] = useState<Listing[]>([]);
   const [roomTypes, setRoomTypes] = useState<Array<{ _id: string; roomTypeName: string; personCapacityMax?: number }>>([]);
 
-  // Form state - Guest info
   const [guestFirstName, setGuestFirstName] = useState('');
   const [guestLastName, setGuestLastName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
@@ -129,52 +155,72 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
   const [guestCountry, setGuestCountry] = useState('');
   const [guestLanguage, setGuestLanguage] = useState('fr');
 
-  // Form state - Property & dates
   const [listingId, setListingId] = useState('');
   const [roomTypeId, setRoomTypeId] = useState('');
   const [checkInDate, setCheckInDate] = useState('');
   const [checkOutDate, setCheckOutDate] = useState('');
 
-  // Form state - Guests
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
   const [infants, setInfants] = useState(0);
 
-  // Form state - Pricing
-  const [pricingMode, setPricingMode] = useState<'calendar' | 'perDay' | 'total'>('calendar');
-  const [totalPrice, setTotalPrice] = useState(0);
   const [currency, setCurrency] = useState('EUR');
-  const [dailyPrices, setDailyPrices] = useState<Record<string, number>>({});
+  const [pricingMode, setPricingMode] = useState<'calendar' | 'perDay' | 'total'>('calendar');
   const [uniformPrice, setUniformPrice] = useState('');
+  const [dailyPrices, setDailyPrices] = useState<Record<string, number>>({});
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [calendarPriceEstimate, setCalendarPriceEstimate] = useState<number | null>(null);
 
-  // Form state - Payment & Status
   const [status, setStatus] = useState<'Pending' | 'Confirmed'>('Confirmed');
   const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'UnPaid'>('UnPaid');
   const [paymentType, setPaymentType] = useState<'cash' | 'bank_card'>('cash');
 
-  // Derived values
+  // ─── Derived ─────────────────────────────────────────
   const selectedListing = listings.find(l => l.id === listingId);
-  const nights = checkInDate && checkOutDate ?
-    Math.ceil((new Date(checkOutDate).getTime() - new Date(checkInDate).getTime()) / (1000 * 60 * 60 * 24)) : 0;
-  const numberOfGuests = adults + children + infants;
-
-  // Gestion Single vs Multiple property (CRITIQUE)
   const isSingleProperty = selectedListing?.propertyUnit === 'Single' || (selectedListing && roomTypes.length === 1);
   const showRoomType = listingId && !isSingleProperty;
 
-  // ✅ OPTIMISATION: Précharger les listings dès le montage du composant
-  useEffect(() => {
-    fetchListings();
-  }, []);
+  const nights = useMemo(() => {
+    if (!checkInDate || !checkOutDate) return 0;
+    return Math.ceil((new Date(checkOutDate).getTime() - new Date(checkInDate).getTime()) / (1000 * 60 * 60 * 24));
+  }, [checkInDate, checkOutDate]);
 
-  // Update room types when listing changes + auto-select if Single
+  const numberOfGuests = adults + children + infants;
+
+  // Daily dates for perDay mode
+  const dailyDates: string[] = [];
+  if (checkInDate && checkOutDate && nights > 0) {
+    const start = new Date(checkInDate);
+    for (let i = 0; i < nights; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      dailyDates.push(date.toISOString().split('T')[0]);
+    }
+  }
+
+  const perDayTotal = Object.values(dailyPrices).reduce((sum, price) => sum + (price || 0), 0);
+
+  const getCurrencySymbol = (curr: string) => {
+    switch (curr) {
+      case 'EUR': return '€';
+      case 'USD': return '$';
+      case 'MAD': return 'MAD';
+      default: return curr;
+    }
+  };
+
+  // ─── Effects ─────────────────────────────────────────
+  useEffect(() => {
+    if (open) {
+      fetchListings();
+    }
+  }, [open]);
+
   useEffect(() => {
     if (listingId) {
       const listing = listings.find(l => l.id === listingId);
       if (listing) {
         setRoomTypes(listing.roomTypes || []);
-
-        // ✅ CRITIQUE: Auto-sélection si Single property OU un seul room type
         const isSingle = listing.propertyUnit === 'Single' || listing.roomTypes?.length === 1;
         if (isSingle && listing.roomTypes?.[0]) {
           setRoomTypeId(listing.roomTypes[0]._id);
@@ -188,31 +234,40 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
     }
   }, [listingId, listings]);
 
-  // Generate daily dates array for perDay pricing mode
-  const dailyDates = [];
-  if (checkInDate && checkOutDate && nights > 0) {
-    const start = new Date(checkInDate);
-    for (let i = 0; i < nights; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      dailyDates.push(date.toISOString().split('T')[0]);
-    }
-  }
+  // ─── Handlers ────────────────────────────────────────
+  const fetchListings = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await listingsService.getListingsWithRoomTypes({
+        staging: false,
+        compact: false,
+        active: true, // ✅ Filtrer uniquement les listings actifs
+      });
 
-  // Calculate total for perDay mode
-  const perDayTotal = Object.values(dailyPrices).reduce((sum, price) => sum + (price || 0), 0);
-
-  // Get currency symbol
-  const getCurrencySymbol = (curr: string) => {
-    switch (curr) {
-      case 'EUR': return '€';
-      case 'USD': return '$';
-      case 'MAD': return 'MAD';
-      default: return curr;
+      if (result.success) {
+        setListings(result.data);
+      } else {
+        setError('Erreur lors du chargement des propriétés');
+      }
+    } catch (err) {
+      console.error('Error fetching listings:', err);
+      setError('Erreur lors du chargement des propriétés');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Handle uniform price fill
+  const handleModeChange = (mode: 'calendar' | 'perDay' | 'total') => {
+    if ((mode === 'perDay' || mode === 'total') && (!checkInDate || !checkOutDate)) {
+      toast.error('⚠️ Veuillez d\'abord sélectionner les dates de séjour');
+      return;
+    }
+    setPricingMode(mode);
+    if (mode !== 'perDay') setDailyPrices({});
+    if (mode !== 'total') setTotalPrice(0);
+  };
+
   const handleUniformPriceFill = () => {
     if (!uniformPrice || dailyDates.length === 0) return;
 
@@ -230,44 +285,18 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
     toast.success(`✅ Prix de ${price} ${getCurrencySymbol(currency)} appliqué à ${nights} nuit${nights > 1 ? 's' : ''}`);
   };
 
-  const fetchListings = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const result = await listingsService.getListingsWithRoomTypes({
-        staging: false,
-        compact: false,
-      });
-
-      if (result.success) {
-        setListings(result.data);
-      } else {
-        setError('Erreur lors du chargement des propriétés');
-      }
-    } catch (err) {
-      console.error('Error fetching listings:', err);
-      setError('Erreur lors du chargement des propriétés');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSubmit = async () => {
     // Validation
-    if (!guestFirstName.trim() || !guestLastName.trim()) {
+    if (!guestFirstName || !guestLastName) {
       toast.error('Prénom et nom du voyageur requis');
       return;
     }
-    if (!guestEmail.trim() || !/\S+@\S+\.\S+/.test(guestEmail)) {
-      toast.error('Email valide requis');
+    if (!guestEmail || !phone) {
+      toast.error('Email et téléphone requis');
       return;
     }
-    if (!phone.trim()) {
-      toast.error('Téléphone requis');
-      return;
-    }
-    if (!listingId || !roomTypeId) {
-      toast.error('Propriété et type de chambre requis');
+    if (!listingId) {
+      toast.error('Propriété requise');
       return;
     }
     if (!checkInDate || !checkOutDate) {
@@ -287,7 +316,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
     if (pricingMode === 'perDay') {
       const hasPrices = Object.keys(dailyPrices).some(key => dailyPrices[key] > 0);
       if (!hasPrices) {
-        toast.error('Veuillez définir au moins un prix pour les jours sélectionnés');
+        toast.error('Veuillez saisir au moins un prix par jour');
         return;
       }
     }
@@ -356,13 +385,14 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
           onSuccess();
         }
       } else {
-        throw new Error(result.message || 'Erreur lors de la création');
+        setError(result.error || 'Erreur lors de la création de la réservation');
+        toast.error(result.error || 'Erreur lors de la création');
       }
     } catch (err: any) {
       console.error('Error creating reservation:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Erreur lors de la création de la réservation';
-      setError(errorMessage);
-      toast.error(`❌ ${errorMessage}`);
+      const errorMsg = err?.response?.data?.error || err?.message || 'Erreur lors de la création';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -384,6 +414,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
     setInfants(0);
     setPricingMode('calendar');
     setTotalPrice(0);
+    setCalendarPriceEstimate(null);
     setCurrency('EUR');
     setDailyPrices({});
     setUniformPrice('');
@@ -393,1358 +424,1050 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
     setError(null);
   };
 
-  // Mode tabs component
-  const ModeTab = ({ mode, icon, title, desc, active }: any) => (
-    <Box
-      onClick={() => {
-        if (!checkInDate || !checkOutDate) {
-          if (mode !== 'calendar') {
-            toast.error('⚠️ Veuillez d\'abord sélectionner les dates de séjour');
-            return;
-          }
-        }
-        setPricingMode(mode);
-        if (mode !== 'perDay') setDailyPrices({});
-        if (mode !== 'total') setTotalPrice(0);
-      }}
-      sx={{
-        p: '14px 12px',
-        border: `2px solid ${active ? t.primary : t.border}`,
-        borderRadius: '12px',
-        background: active
-          ? `linear-gradient(180deg, ${t.primaryTint} 0%, ${t.bg} 100%)`
-          : t.bg,
-        cursor: 'pointer',
-        textAlign: 'center',
-        transition: 'all 0.2s',
-        position: 'relative',
-        '&:hover': {
-          borderColor: active ? t.primaryDeep : t.text3,
-          transform: 'translateY(-1px)',
-        },
-        ...(active && {
-          boxShadow: `0 4px 12px ${t.primary}26`,
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: '-2px',
-            left: '-2px',
-            right: '-2px',
-            height: '3px',
-            background: `linear-gradient(90deg, ${t.primaryDeep}, ${t.primary}, ${t.primarySoft})`,
-            borderRadius: '12px 12px 0 0',
-          },
-        }),
-      }}
-    >
-      <Typography sx={{ fontSize: 24, mb: 0.75 }}>{icon}</Typography>
-      <Typography sx={{
-        fontSize: 12.5,
-        fontWeight: 700,
-        color: active ? t.primaryDeep : t.text,
-        letterSpacing: '-0.005em',
-        mb: 0.5,
-      }}>
-        {title}
-      </Typography>
-      <Typography sx={{
-        fontSize: 10,
-        color: t.text3,
-        fontFamily: 'Geist Mono, monospace',
-      }}>
-        {desc}
-      </Typography>
-      {active && (
-        <Box sx={{
-          position: 'absolute',
-          top: 8,
-          right: 8,
-          width: 18,
-          height: 18,
-          borderRadius: '50%',
-          background: t.primary,
-          color: '#1a1408',
-          fontSize: 11,
-          fontWeight: 800,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          animation: 'fadeIn 0.3s both',
-        }}>
-          ✓
-        </Box>
-      )}
-    </Box>
-  );
-
-  // Currency pill component
-  const CurrencyPill = ({ curr, label }: any) => (
-    <Box
-      onClick={() => setCurrency(curr)}
-      sx={{
-        px: '11px',
-        py: '5px',
-        borderRadius: '7px',
-        fontFamily: 'Geist Mono, monospace',
-        fontSize: 11.5,
-        fontWeight: 700,
-        color: currency === curr ? '#1a1408' : t.text3,
-        background: currency === curr ? t.primary : t.bg,
-        border: `1px solid ${currency === curr ? t.primaryDeep : t.border}`,
-        cursor: 'pointer',
-        transition: 'all 0.15s',
-        ...(currency === curr && {
-          boxShadow: `0 2px 4px ${t.primary}33`,
-        }),
-        '&:hover': {
-          background: currency === curr ? t.primaryDeep : t.bg2,
-        },
-      }}
-    >
-      {label}
-    </Box>
-  );
+  // ─── Render ──────────────────────────────────────────
+  const modalWidth = 1220;
+  const modalHeight = 'min(84vh, 740px)';
+  const summaryColWidth = 420;
 
   return (
-    <>
-      <style>{fadeInAnimation}</style>
-      <Dialog
-        open={open}
-        onClose={onClose}
-        maxWidth="lg"
-        fullWidth
-        scroll="paper"
-        slotProps={{
-          paper: {
-            sx: {
-              display: 'flex',
-              flexDirection: 'column',
-              borderRadius: '20px',
-              height: 'min(90vh, 920px)',
-              maxHeight: '90vh',
-              overflow: 'hidden',
-              overflowY: 'hidden !important',
-              p: 0,
-              m: 2,
-              boxShadow: '0 32px 80px rgba(20,17,10,0.18), 0 12px 32px rgba(20,17,10,0.08)',
-            },
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={false}
+      disableScrollLock
+      slotProps={{
+        paper: {
+          sx: {
+            width: modalWidth,
+            maxWidth: '96vw',
+            height: modalHeight,
+            maxHeight: 'calc(100vh - 32px) !important',
+            borderRadius: '20px',
+            overflow: 'hidden !important',
+            overflowY: 'hidden !important',
+            display: 'flex !important',
+            flexDirection: 'column !important',
+            p: 0,
+            m: '16px auto',
+            boxShadow: '0 32px 80px rgba(20,17,10,0.18)',
+            boxSizing: 'border-box',
           },
+        },
+      }}
+    >
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr auto',
+          height: '100%',
+          minHeight: 0,
+          overflow: 'hidden',
         }}
       >
-        {/* Shell flex : empêche le scroll du Paper MUI (header/footer fixes) */}
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            flex: 1,
-            minHeight: 0,
-            height: '100%',
-            overflow: 'hidden',
-          }}
-        >
-        {/* Header */}
-        <Box sx={{
+      {/* ─── Header ─── */}
+      <Box
+        sx={{
           flexShrink: 0,
           p: '20px 24px',
           borderBottom: `1px solid ${t.border}`,
-          background: `linear-gradient(180deg, ${t.bg} 0%, ${t.bg2} 100%)`,
+          background: `linear-gradient(180deg, #fff, ${t.bg2})`,
           display: 'flex',
           alignItems: 'center',
-          gap: '14px',
-        }}>
-          <Box sx={{
+          gap: 1.75,
+        }}
+      >
+        <Box
+          sx={{
             width: 42,
             height: 42,
-            borderRadius: '11px',
+            borderRadius: 1.375,
             background: `linear-gradient(135deg, ${t.primarySoft}, ${t.primaryDeep})`,
             color: '#1a1408',
             fontSize: 20,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: `0 6px 16px ${t.primary}59, inset 0 1px 0 rgba(255,255,255,0.30)`,
-            flexShrink: 0,
-          }}>
-            🎫
-          </Box>
-          <Box sx={{ flex: 1 }}>
-            <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>
-              Nouvelle réservation
-            </Typography>
-            <Typography sx={{
-              fontSize: 11.5,
-              color: t.text3,
-              mt: 0.3,
-              fontFamily: 'Geist Mono, monospace',
-              letterSpacing: '0.02em',
-            }}>
-              SOJ-NEW · création manuelle
-            </Typography>
-          </Box>
-        </Box>
-
-        {/* Body — flex + hauteur fixe du Paper : les colonnes scrollent ici, pas le Dialog entier */}
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
-            flex: '1 1 0',
-            minHeight: 0,
-            overflow: 'hidden',
+            boxShadow: '0 6px 16px rgba(184,133,26,0.35), inset 0 1px 0 rgba(255,255,255,0.30)',
           }}
         >
-          {/* LEFT: Form column */}
-          <Box
-            className="create-reservation-form-scroll"
+          🎫
+        </Box>
+        <Box>
+          <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            Nouvelle réservation
+          </Typography>
+          <Typography
             sx={{
-              ...modalScrollColSx,
-              p: '22px 26px',
-              maxHeight: { xs: 'min(52vh, 480px)', md: 'none' },
+              fontSize: 11.5,
+              color: t.text3,
+              fontFamily: '"Geist Mono", monospace',
+              mt: 0.375,
             }}
-            onWheel={(e) => e.stopPropagation()}
           >
-            {error && (
-              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-                {error}
-              </Alert>
+            création manuelle
+          </Typography>
+        </Box>
+        <IconButton onClick={onClose} sx={{ ml: 'auto' }}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+
+      {/* ─── Body : 2 colonnes scrollables ─── */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
+        <ModalScrollColumn
+          active={open}
+          className="create-reservation-form-scroll"
+          wrapperSx={{ flex: { xs: '1 1 55%', md: '1 1 0' } }}
+          innerSx={{ p: '22px 26px' }}
+        >
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+
+          {/* Section 1: Voyageur */}
+          <Section num="1" title="👤 Voyageur" badge="Requis">
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 1.5 }}>
+              <Field label="Prénom" required>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={guestFirstName}
+                  onChange={e => setGuestFirstName(e.target.value)}
+                  placeholder="Sarah"
+                />
+              </Field>
+              <Field label="Nom" required>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={guestLastName}
+                  onChange={e => setGuestLastName(e.target.value)}
+                  placeholder="Johnson"
+                />
+              </Field>
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 1.5 }}>
+              <Field label="Email" required>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="email"
+                  value={guestEmail}
+                  onChange={e => setGuestEmail(e.target.value)}
+                  placeholder="sarah@example.com"
+                />
+              </Field>
+              <Field label="Téléphone" required>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  placeholder="+212 6 12 34 56 78"
+                />
+              </Field>
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+              <Field label="Pays">
+                <Autocomplete
+                  freeSolo
+                  options={COUNTRIES}
+                  value={guestCountry}
+                  onChange={(_, newValue) => setGuestCountry(newValue || '')}
+                  renderInput={params => (
+                    <TextField {...params} size="small" placeholder="Rechercher..." />
+                  )}
+                  size="small"
+                />
+              </Field>
+              <Field label="Langue">
+                <Select size="small" value={guestLanguage} onChange={e => setGuestLanguage(e.target.value)}>
+                  <MenuItem value="fr">🇫🇷 Français</MenuItem>
+                  <MenuItem value="en">🇬🇧 English</MenuItem>
+                  <MenuItem value="es">🇪🇸 Español</MenuItem>
+                  <MenuItem value="de">🇩🇪 Deutsch</MenuItem>
+                  <MenuItem value="it">🇮🇹 Italiano</MenuItem>
+                  <MenuItem value="pt">🇵🇹 Português</MenuItem>
+                  <MenuItem value="ar">🇲🇦 العربية</MenuItem>
+                </Select>
+              </Field>
+            </Box>
+          </Section>
+
+          {/* Section 2: Propriété */}
+          <Section num="2" title="🏠 Propriété">
+            <Field label="Propriété" required>
+              <Select
+                size="small"
+                value={listingId}
+                onChange={e => {
+                  setListingId(e.target.value);
+                  setRoomTypeId('');
+                }}
+                disabled={isLoading}
+              >
+                {isLoading && <MenuItem value="">Chargement...</MenuItem>}
+                {listings.map(listing => (
+                  <MenuItem key={listing.id} value={listing.id}>
+                    {listing.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Field>
+            {showRoomType && (
+              <Box sx={{ mt: 1.5 }}>
+                <Field label="Type de chambre" required>
+                  <Select size="small" value={roomTypeId} onChange={e => setRoomTypeId(e.target.value)}>
+                    {roomTypes.map(rt => (
+                      <MenuItem key={rt._id} value={rt._id}>
+                        {rt.roomTypeName} {rt.personCapacityMax ? `(max ${rt.personCapacityMax} pers.)` : ''}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Field>
+              </Box>
             )}
+          </Section>
 
-            <Stack spacing={2}>
-              {/* Section 1: Guest */}
-              <Section num="1" title="👤 Voyageur" badge="Requis">
-                <Stack spacing={2}>
-                  <Stack direction="row" spacing={2}>
-                    <TextField
-                      fullWidth
-                      required
-                      size="small"
-                      label="Prénom"
-                      value={guestFirstName}
-                      onChange={(e) => setGuestFirstName(e.target.value)}
-                      placeholder="Sarah"
-                    />
-                    <TextField
-                      fullWidth
-                      required
-                      size="small"
-                      label="Nom"
-                      value={guestLastName}
-                      onChange={(e) => setGuestLastName(e.target.value)}
-                      placeholder="Johnson"
-                    />
-                  </Stack>
-
-                  <Stack direction="row" spacing={2}>
-                    <TextField
-                      fullWidth
-                      required
-                      size="small"
-                      type="email"
-                      label="Email"
-                      value={guestEmail}
-                      onChange={(e) => setGuestEmail(e.target.value)}
-                      placeholder="sarah@example.com"
-                    />
-                    <TextField
-                      fullWidth
-                      required
-                      size="small"
-                      label="Téléphone"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+1 415 555 0123"
-                    />
-                  </Stack>
-
-                  <Stack direction="row" spacing={2}>
-                    <Autocomplete
-                      freeSolo
-                      options={COUNTRIES}
-                      value={guestCountry}
-                      onChange={(_, newValue) => setGuestCountry(newValue || '')}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Pays"
-                          placeholder="Rechercher..."
-                        />
-                      )}
-                      size="small"
-                      fullWidth
-                    />
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Langue</InputLabel>
-                      <Select value={guestLanguage} onChange={(e) => setGuestLanguage(e.target.value)} label="Langue">
-                        <MenuItem value="en">🇬🇧 English</MenuItem>
-                        <MenuItem value="fr">🇫🇷 Français</MenuItem>
-                        <MenuItem value="es">🇪🇸 Español</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Stack>
-                </Stack>
-              </Section>
-
-              {/* Section 2: Property */}
-              <Section num="2" title="🏠 Propriété">
-                <Stack spacing={2}>
-                  <FormControl fullWidth size="small" required>
-                    <InputLabel>Propriété *</InputLabel>
-                    <Select
-                      value={listingId}
-                      onChange={(e) => setListingId(e.target.value)}
-                      label="Propriété *"
-                      disabled={isLoading}
-                    >
-                      {isLoading && (
-                        <MenuItem disabled>
-                          <CircularProgress size={16} sx={{ mr: 1 }} />
-                          Chargement...
-                        </MenuItem>
-                      )}
-                      {listings.map(listing => (
-                        <MenuItem key={listing.id} value={listing.id}>
-                          {listing.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-
-                  {showRoomType && (
-                    <FormControl fullWidth size="small" required>
-                      <InputLabel>Type de chambre *</InputLabel>
-                      <Select
-                        value={roomTypeId}
-                        onChange={(e) => setRoomTypeId(e.target.value)}
-                        label="Type de chambre *"
-                      >
-                        {roomTypes.map(rt => (
-                          <MenuItem key={rt._id} value={rt._id}>
-                            {rt.roomTypeName} {rt.personCapacityMax ? `(max ${rt.personCapacityMax} pers.)` : ''}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  )}
-                </Stack>
-              </Section>
-
-              {/* Section 3: Dates (CRITICAL) */}
-              <Section num="3" title="📅 Dates de séjour" badge="Critique" critical>
-                <Stack spacing={2}>
-                  <Stack direction="row" spacing={2}>
-                    <TextField
-                      fullWidth
-                      required
-                      size="small"
-                      type="date"
-                      label="Arrivée"
-                      value={checkInDate}
-                      onChange={(e) => setCheckInDate(e.target.value)}
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    />
-                    <TextField
-                      fullWidth
-                      required
-                      size="small"
-                      type="date"
-                      label="Départ"
-                      value={checkOutDate}
-                      onChange={(e) => setCheckOutDate(e.target.value)}
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    />
-                  </Stack>
-
-                  {nights > 0 && (
-                    <Box sx={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr auto 1fr',
-                      alignItems: 'center',
-                      gap: '14px',
-                      p: '14px',
-                      background: t.bg2,
-                      border: `1px solid ${t.border}`,
-                      borderRadius: '11px',
-                    }}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography sx={{
-                          fontSize: 10.5,
-                          color: t.text3,
-                          fontFamily: 'Geist Mono, monospace',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.06em',
-                          fontWeight: 700,
-                          mb: 0.3,
-                        }}>
-                          Arrivée
-                        </Typography>
-                        <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
-                          {new Date(checkInDate).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
-                        </Typography>
-                      </Box>
-                      <Box sx={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        color: t.primary,
-                      }}>
-                        <Typography sx={{ fontSize: 18 }}>→</Typography>
-                        <Box sx={{
-                          fontSize: 9.5,
-                          fontFamily: 'Geist Mono, monospace',
-                          fontWeight: 800,
-                          background: `linear-gradient(135deg, #cb9b2c, ${t.primary})`,
-                          color: '#1a1408',
-                          px: 1,
-                          py: 0.25,
-                          borderRadius: '99px',
-                          letterSpacing: '0.04em',
-                          boxShadow: `0 2px 4px ${t.primary}33`,
-                        }}>
-                          {nights} NUIT{nights > 1 ? 'S' : ''}
-                        </Box>
-                      </Box>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography sx={{
-                          fontSize: 10.5,
-                          color: t.text3,
-                          fontFamily: 'Geist Mono, monospace',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.06em',
-                          fontWeight: 700,
-                          mb: 0.3,
-                        }}>
-                          Départ
-                        </Typography>
-                        <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
-                          {new Date(checkOutDate).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  )}
-                </Stack>
-              </Section>
-
-              {/* Section 4: Guests */}
-              <Section num="4" title="👥 Composition">
-                <Stack direction="row" spacing={2}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    type="number"
-                    label="Adultes"
-                    value={adults}
-                    onChange={(e) => setAdults(Number(e.target.value))}
-                    slotProps={{ htmlInput: { min: 1 } }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    type="number"
-                    label="Enfants"
-                    value={children}
-                    onChange={(e) => setChildren(Number(e.target.value))}
-                    slotProps={{ htmlInput: { min: 0 } }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    type="number"
-                    label="Bébés"
-                    value={infants}
-                    onChange={(e) => setInfants(Number(e.target.value))}
-                    slotProps={{ htmlInput: { min: 0 } }}
-                  />
-                </Stack>
-              </Section>
-
-              {/* Section 5: Pricing (CRITICAL) */}
-              <Section num="5" title="💰 Tarification" badge="⭐ Section critique" critical>
-                <Stack spacing={2}>
-                  {/* Currency Pills */}
-                  <Box sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    p: '10px 12px',
-                    background: t.bg2,
-                    border: `1px solid ${t.border}`,
-                    borderRadius: '9px',
-                  }}>
-                    <Typography sx={{
+          {/* Section 3: Dates + disponibilités API calendrier */}
+          <Section num="3" title="📅 Dates de séjour" critical badge="Critique">
+            <ReservationAvailabilityCalendar
+              listingId={listingId}
+              roomTypeId={roomTypeId || undefined}
+              checkInDate={checkInDate}
+              checkOutDate={checkOutDate}
+              onDatesChange={(inDate, outDate) => {
+                setCheckInDate(inDate);
+                setCheckOutDate(outDate);
+                if (!outDate) setCalendarPriceEstimate(null);
+              }}
+              onCalendarPriceHint={(total, n) => {
+                if (pricingMode === 'calendar' && n > 0) setCalendarPriceEstimate(total);
+              }}
+            />
+            {nights > 0 && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  p: 1.5,
+                  bgcolor: t.bg2,
+                  border: `1px solid ${t.border}`,
+                  borderRadius: 1.375,
+                }}
+              >
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  <Typography
+                    sx={{
                       fontSize: 10.5,
                       color: t.text3,
-                      fontFamily: 'Geist Mono, monospace',
+                      fontFamily: '"Geist Mono", monospace',
+                      fontWeight: 700,
                       textTransform: 'uppercase',
                       letterSpacing: '0.06em',
+                    }}
+                  >
+                    Arrivée
+                  </Typography>
+                  <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
+                    {new Date(checkInDate).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center', color: t.primary }}>
+                  <Typography sx={{ fontSize: 18, fontWeight: 700 }}>→</Typography>
+                  <Box
+                    sx={{
+                      fontSize: 9.5,
+                      fontFamily: '"Geist Mono", monospace',
+                      fontWeight: 800,
+                      background: `linear-gradient(135deg, #cb9b2c, ${t.primary})`,
+                      color: '#1a1408',
+                      px: 1,
+                      py: 0.25,
+                      borderRadius: '99px',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {nights} NUIT{nights > 1 ? 'S' : ''}
+                  </Box>
+                </Box>
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  <Typography
+                    sx={{
+                      fontSize: 10.5,
+                      color: t.text3,
+                      fontFamily: '"Geist Mono", monospace',
                       fontWeight: 700,
-                    }}>
-                      Devise
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    Départ
+                  </Typography>
+                  <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
+                    {new Date(checkOutDate).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+          </Section>
+
+          {/* Section 4: Composition */}
+          <Section num="4" title="👥 Composition">
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5 }}>
+              <Field label="Adultes" required>
+                <Counter value={adults} onChange={setAdults} min={1} />
+              </Field>
+              <Field label="Enfants">
+                <Counter value={children} onChange={setChildren} />
+              </Field>
+              <Field label="Bébés">
+                <Counter value={infants} onChange={setInfants} />
+              </Field>
+            </Box>
+          </Section>
+
+          {/* Section 5: Tarification */}
+          <Section num="5" title="💰 Tarification" critical badge="⭐ Critique">
+            {/* Devise pills */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
+                p: 1.25,
+                bgcolor: t.bg2,
+                border: `1px solid ${t.border}`,
+                borderRadius: 1.125,
+                mb: 1.75,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 10.5,
+                  color: t.text3,
+                  fontFamily: '"Geist Mono", monospace',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                Devise
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 0.625, ml: 'auto' }}>
+                {['EUR', 'MAD', 'USD'].map(c => (
+                  <Box
+                    key={c}
+                    component="button"
+                    onClick={() => setCurrency(c)}
+                    sx={{
+                      all: 'unset',
+                      cursor: 'pointer',
+                      px: 1.375,
+                      py: 0.625,
+                      borderRadius: 0.875,
+                      fontFamily: '"Geist Mono", monospace',
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      color: currency === c ? '#1a1408' : t.text3,
+                      bgcolor: currency === c ? t.primary : t.bg1,
+                      border: `1px solid ${currency === c ? t.primaryDeep : t.border}`,
+                    }}
+                  >
+                    {c} {c === 'EUR' ? '€' : c === 'MAD' ? 'DH' : '$'}
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+
+            {/* Mode tabs */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, mb: 1.75 }}>
+              {[
+                { id: 'calendar', icon: '📅', title: 'Prix Calendrier', desc: 'auto · le plus simple' },
+                { id: 'perDay', icon: '💵', title: 'Prix par Jour', desc: 'manuel · granulaire' },
+                { id: 'total', icon: '💰', title: 'Prix Total', desc: 'forfaitaire' },
+              ].map(opt => {
+                const active = pricingMode === opt.id;
+                return (
+                  <Box
+                    key={opt.id}
+                    onClick={() => handleModeChange(opt.id as any)}
+                    sx={{
+                      p: '14px 12px',
+                      border: `2px solid ${active ? t.primary : t.border}`,
+                      borderRadius: 1.5,
+                      background: active ? `linear-gradient(180deg, ${t.primaryTint}, ${t.bg1})` : t.bg1,
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'all 0.2s',
+                      boxShadow: active ? '0 4px 12px rgba(184,133,26,0.15)' : 'none',
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 24, mb: 0.75 }}>{opt.icon}</Typography>
+                    <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: active ? t.primaryDeep : t.text }}>
+                      {opt.title}
                     </Typography>
-                    <Box sx={{ display: 'flex', gap: 0.5, marginLeft: 'auto' }}>
-                      <CurrencyPill curr="EUR" label="EUR €" />
-                      <CurrencyPill curr="MAD" label="MAD DH" />
-                      <CurrencyPill curr="USD" label="USD $" />
-                    </Box>
+                    <Typography sx={{ fontSize: 10, color: t.text3, mt: 0.375, fontFamily: '"Geist Mono", monospace' }}>
+                      {opt.desc}
+                    </Typography>
                   </Box>
+                );
+              })}
+            </Box>
 
-                  {/* Mode Tabs */}
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
-                    <ModeTab
-                      mode="calendar"
-                      icon="📅"
-                      title="Prix Calendrier"
-                      desc="auto · le plus simple"
-                      active={pricingMode === 'calendar'}
-                    />
-                    <ModeTab
-                      mode="perDay"
-                      icon="💵"
-                      title="Prix par Jour"
-                      desc="manuel · granulaire"
-                      active={pricingMode === 'perDay'}
-                    />
-                    <ModeTab
-                      mode="total"
-                      icon="💰"
-                      title="Prix Total"
-                      desc="forfaitaire"
-                      active={pricingMode === 'total'}
+            {/* Mode panels */}
+            {pricingMode === 'calendar' && (
+              <Box
+                sx={{
+                  p: 2.25,
+                  background: `linear-gradient(135deg, rgba(6,115,179,0.05), ${t.bg1} 60%)`,
+                  border: `1px solid rgba(6,115,179,0.20)`,
+                  borderRadius: 1.375,
+                  display: 'flex',
+                  gap: 1.75,
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 1.125,
+                    background: `linear-gradient(135deg, #67e8f9, #0673b3)`,
+                    color: '#fff',
+                    fontSize: 18,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  ⚡
+                </Box>
+                <Box>
+                  <Typography sx={{ fontWeight: 700, fontSize: 13, mb: 0.375 }}>Récupération automatique</Typography>
+                  <Typography sx={{ fontSize: 12.5, color: t.text2 }}>
+                    Le prix sera calculé depuis le calendrier d&apos;inventaire selon les dates sélectionnées (incluant les prix
+                    dynamiques et overrides manuels).
+                  </Typography>
+                  {nights > 0 && calendarPriceEstimate != null && calendarPriceEstimate > 0 && (
+                    <Typography
+                      sx={{
+                        mt: 1,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        fontFamily: '"Geist Mono", monospace',
+                        color: t.primaryDeep,
+                      }}
+                    >
+                      Estimation : {calendarPriceEstimate.toFixed(0)} {currency} · {nights} nuit{nights > 1 ? 's' : ''}
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            )}
+
+            {pricingMode === 'perDay' && dailyDates.length > 0 && (
+              <>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    gap: 1,
+                    p: 1.5,
+                    background: `linear-gradient(135deg, ${t.primaryTint}, ${t.bg1} 60%)`,
+                    border: `1px solid rgba(184,133,26,0.20)`,
+                    borderRadius: 1.375,
+                    mb: 1.75,
+                  }}
+                >
+                  <Box sx={{ flex: 1 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 10.5,
+                        color: t.primaryDeep,
+                        fontFamily: '"Geist Mono", monospace',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        mb: 0.625,
+                      }}
+                    >
+                      Appliquer prix uniforme
+                    </Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="number"
+                      placeholder="Ex: 220"
+                      value={uniformPrice}
+                      onChange={e => setUniformPrice(e.target.value)}
                     />
                   </Box>
+                  <Button
+                    onClick={handleUniformPriceFill}
+                    sx={{
+                      height: 42,
+                      px: 2,
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      background: `linear-gradient(180deg, #cb9b2c, ${t.primary})`,
+                      color: '#1a1408',
+                      boxShadow: '0 2px 6px rgba(184,133,26,0.30), inset 0 1px 0 rgba(255,255,255,0.30)',
+                    }}
+                  >
+                    ⚡ Appliquer aux {nights} jours
+                  </Button>
+                </Box>
 
-                  {/* Mode Panels */}
-                  <Box sx={{ animation: 'fadeIn 0.3s both' }}>
-                    {/* Calendar Mode */}
-                    <Collapse in={pricingMode === 'calendar'} timeout={300}>
-                      <Box sx={{
-                        p: '18px 18px',
-                        background: 'linear-gradient(135deg, rgba(6,115,179,0.05), ' + t.bg + ' 60%)',
-                        border: '1px solid rgba(6,115,179,0.20)',
-                        borderRadius: '11px',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '14px',
-                      }}>
-                        <Box sx={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: '9px',
-                          background: 'linear-gradient(135deg, #67e8f9, #0673b3)',
-                          color: '#fff',
-                          fontSize: 18,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                          boxShadow: '0 4px 10px rgba(6,115,179,0.25)',
-                        }}>
-                          ⚡
-                        </Box>
-                        <Box sx={{ flex: 1, fontSize: 12.5, color: t.text2, lineHeight: 1.55 }}>
-                          <Typography sx={{ fontWeight: 700, fontSize: 13, mb: 0.3 }}>
-                            Récupération automatique
-                          </Typography>
-                          Le prix sera calculé depuis le calendrier d'inventaire selon les dates sélectionnées (incluant les prix dynamiques et les overrides manuels).
-                        </Box>
-                      </Box>
-                    </Collapse>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, mb: 1.25 }}>
+                  Prix par nuit · {nights} nuit(s)
+                </Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                    gap: 1,
+                    maxWidth: '100%',
+                    ...modalScrollNestedSx,
+                  }}
+                >
+                  {dailyDates.map(date => {
+                    const value = dailyPrices[date] ?? '';
+                    const dateObj = new Date(date);
+                    const dayName = dateObj.toLocaleDateString('fr-FR', { weekday: 'short' });
+                    const dayNum = dateObj.getDate();
 
-                    {/* Per Day Mode */}
-                    <Collapse in={pricingMode === 'perDay'} timeout={300}>
-                      {dailyDates.length > 0 ? (
-                        <Stack spacing={2}>
-                          {/* Uniform price */}
-                          <Box sx={{
-                            display: 'flex',
-                            alignItems: 'end',
-                            gap: 1,
-                            p: '12px',
-                            background: `linear-gradient(135deg, ${t.primaryTint}, ${t.bg} 60%)`,
-                            border: `1px solid ${t.primary}40`,
-                            borderRadius: '11px',
-                          }}>
-                            <Box sx={{ flex: 1 }}>
-                              <Typography sx={{
-                                fontSize: 10.5,
-                                color: t.primaryDeep,
-                                fontFamily: 'Geist Mono, monospace',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.06em',
-                                fontWeight: 700,
-                                mb: 0.5,
-                              }}>
-                                Appliquer un prix uniforme
-                              </Typography>
-                              <TextField
-                                fullWidth
-                                size="small"
-                                type="number"
-                                placeholder="Ex: 220"
-                                value={uniformPrice}
-                                onChange={(e) => setUniformPrice(e.target.value)}
-                                sx={{
-                                  '& input': {
-                                    fontFamily: 'Geist Mono, monospace',
-                                    fontWeight: 700,
-                                    fontSize: 14,
-                                  },
-                                }}
-                              />
-                            </Box>
-                            <Button
-                              onClick={handleUniformPriceFill}
-                              disabled={!uniformPrice}
-                              sx={{
-                                px: 2,
-                                py: 1.25,
-                                borderRadius: '8px',
-                                background: `linear-gradient(180deg, #cb9b2c, ${t.primary})`,
-                                color: '#1a1408',
-                                fontSize: 12.5,
-                                fontWeight: 700,
-                                boxShadow: `0 2px 6px ${t.primary}4d, inset 0 1px 0 rgba(255,255,255,0.30)`,
-                                height: 42,
-                                textTransform: 'none',
-                                '&:hover': {
-                                  filter: 'brightness(1.05)',
-                                },
-                                '&:disabled': {
-                                  opacity: 0.4,
-                                },
-                              }}
-                            >
-                              ⚡ Appliquer aux {nights} jours
-                            </Button>
-                          </Box>
-
-                          {/* Day grid header */}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                            <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text }}>
-                              Prix par nuit
-                            </Typography>
-                            <Box sx={{
-                              fontSize: 10.5,
-                              fontFamily: 'Geist Mono, monospace',
-                              background: t.primaryTint,
-                              color: t.primaryDeep,
-                              px: 1,
-                              py: 0.25,
-                              borderRadius: '99px',
-                              fontWeight: 700,
-                              letterSpacing: '0.04em',
-                            }}>
-                              {nights} nuit{nights > 1 ? 's' : ''}
-                            </Box>
-                          </Box>
-
-                          {/* Day grid */}
-                          <Box
-                            sx={{
-                              ...modalScrollNestedSx,
-                              display: 'grid',
-                              gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
-                              gap: 1,
-                              maxHeight: 240,
-                              p: 0.25,
-                            }}
-                          >
-                            {dailyDates.map(date => {
-                              const dateObj = new Date(date);
-                              const dayName = dateObj.toLocaleDateString('fr-FR', { weekday: 'short' });
-                              const dayNum = dateObj.getDate();
-                              const isFilled = dailyPrices[date] > 0;
-
-                              return (
-                                <Box
-                                  key={date}
-                                  sx={{
-                                    p: '9px 11px',
-                                    border: `1.5px solid ${t.primary}`,
-                                    borderRadius: '10px',
-                                    background: isFilled
-                                      ? `linear-gradient(135deg, ${t.primaryTint}, ${t.bg} 70%)`
-                                      : t.bg,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: 1,
-                                    transition: 'all 0.15s',
-                                    cursor: 'default',
-                                    ...(isFilled && {
-                                      borderColor: t.primary,
-                                      boxShadow: `0 1px 2px ${t.primary}14`,
-                                    }),
-                                    '&:hover': {
-                                      transform: 'translateY(-1px)',
-                                      boxShadow: `0 4px 12px ${t.primary}26`,
-                                      borderColor: t.primaryDeep,
-                                    },
-                                  }}
-                                >
-                                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.125, flexShrink: 0 }}>
-                                    <Typography sx={{
-                                      fontSize: 9.5,
-                                      color: t.text3,
-                                      fontFamily: 'Geist Mono, monospace',
-                                      textTransform: 'uppercase',
-                                      letterSpacing: '0.06em',
-                                      fontWeight: 700,
-                                    }}>
-                                      {dayName}.
-                                    </Typography>
-                                    <Typography sx={{
-                                      fontSize: 13,
-                                      fontWeight: 700,
-                                      color: t.primaryDeep,
-                                      fontFamily: 'Geist Mono, monospace',
-                                    }}>
-                                      {dayNum}
-                                    </Typography>
-                                  </Box>
-                                  <Box sx={{
-                                    flex: 1,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 0.5,
-                                    background: t.bg2,
-                                    borderRadius: '7px',
-                                    p: '5px 8px',
-                                  }}>
-                                    <Typography sx={{
-                                      fontSize: 10,
-                                      color: t.text3,
-                                      fontFamily: 'Geist Mono, monospace',
-                                      fontWeight: 600,
-                                    }}>
-                                      {getCurrencySymbol(currency)}
-                                    </Typography>
-                                    <TextField
-                                      size="small"
-                                      type="number"
-                                      value={dailyPrices[date] || ''}
-                                      onChange={(e) => {
-                                        const newPrices = { ...dailyPrices };
-                                        newPrices[date] = parseFloat(e.target.value) || 0;
-                                        setDailyPrices(newPrices);
-                                      }}
-                                      placeholder="0"
-                                      slotProps={{
-                                        htmlInput: {
-                                          style: {
-                                            border: 0,
-                                            background: 'transparent',
-                                            outline: 0,
-                                            fontSize: 13,
-                                            fontFamily: 'Geist Mono, monospace',
-                                            fontWeight: 700,
-                                            color: t.text,
-                                            minWidth: 0,
-                                            width: '100%',
-                                            padding: 0,
-                                            MozAppearance: 'textfield',
-                                          },
-                                        },
-                                      }}
-                                      sx={{
-                                        flex: 1,
-                                        '& .MuiOutlinedInput-root': {
-                                          '& fieldset': { border: 0 },
-                                          '& input': {
-                                            p: 0,
-                                            '&::-webkit-outer-spin-button, &::-webkit-inner-spin-button': {
-                                              WebkitAppearance: 'none',
-                                              margin: 0,
-                                            },
-                                          },
-                                        },
-                                      }}
-                                    />
-                                  </Box>
-                                </Box>
-                              );
-                            })}
-                          </Box>
-
-                          {/* Total pill */}
-                          <Box sx={{
-                            p: '14px 18px',
-                            background: `linear-gradient(135deg, ${t.primaryTint} 0%, rgba(184,133,26,0.04) 100%)`,
-                            border: `1.5px solid ${t.primary}`,
-                            borderRadius: '12px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '14px',
-                          }}>
-                            <Typography sx={{ fontSize: 22 }}>💎</Typography>
-                            <Box sx={{ flex: 1 }}>
-                              <Typography sx={{
-                                fontSize: 10.5,
-                                color: t.primaryDeep,
-                                fontFamily: 'Geist Mono, monospace',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.08em',
-                                fontWeight: 700,
-                              }}>
-                                Total séjour
-                              </Typography>
-                              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, mt: 0.25 }}>
-                                <Typography sx={{
-                                  fontSize: 22,
-                                  fontWeight: 800,
-                                  color: t.text,
-                                  fontFamily: 'Geist Mono, monospace',
-                                  letterSpacing: '-0.02em',
-                                }}>
-                                  {perDayTotal.toFixed(0)}
-                                </Typography>
-                                <Typography sx={{
-                                  fontSize: 13,
-                                  color: t.text3,
-                                  marginLeft: 0.5,
-                                  fontWeight: 600,
-                                }}>
-                                  {currency}
-                                </Typography>
-                              </Box>
-                            </Box>
-                            <Box sx={{ textAlign: 'right', fontFamily: 'Geist Mono, monospace', fontSize: 10.5 }}>
-                              <Typography sx={{ color: t.text3 }}>moyenne</Typography>
-                              <Typography sx={{ color: t.primaryDeep, fontSize: 13, fontWeight: 700 }}>
-                                {nights > 0 ? (perDayTotal / nights).toFixed(2) : '0'} {currency}/nuit
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Stack>
-                      ) : (
-                        <Alert severity="warning" sx={{ fontSize: 12 }}>
-                          ⚠️ Veuillez d'abord sélectionner les dates de séjour
-                        </Alert>
-                      )}
-                    </Collapse>
-
-                    {/* Total Mode */}
-                    <Collapse in={pricingMode === 'total'} timeout={300}>
-                      <Box sx={{
-                        p: '14px',
-                        background: t.bg2,
-                        borderRadius: '11px',
-                        border: `1px solid ${t.border}`,
-                      }}>
-                        <Typography sx={{
-                          fontSize: 10.5,
-                          color: t.text3,
-                          fontFamily: 'Geist Mono, monospace',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.06em',
-                          fontWeight: 700,
-                          mb: 0.75,
-                        }}>
-                          Prix total séjour <span style={{ color: t.error }}>*</span>
-                        </Typography>
-                        <Box sx={{
+                    return (
+                      <Box
+                        key={date}
+                        sx={{
+                          p: '9px 11px',
+                          border: `1.5px solid ${t.primary}`,
+                          borderRadius: 1.25,
+                          background: value ? `linear-gradient(135deg, ${t.primaryTint}, ${t.bg1} 70%)` : t.bg1,
                           display: 'flex',
                           alignItems: 'center',
                           gap: 1,
-                          p: '12px 14px',
-                          background: t.bg,
-                          border: `1.5px solid ${t.primary}`,
-                          borderRadius: '10px',
-                        }}>
-                          <Typography sx={{
-                            fontSize: 18,
-                            color: t.primary,
-                            fontFamily: 'Geist Mono, monospace',
-                            fontWeight: 700,
-                          }}>
-                            {getCurrencySymbol(currency)}
-                          </Typography>
-                          <TextField
-                            fullWidth
-                            type="number"
-                            placeholder="Ex: 1500"
-                            value={totalPrice || ''}
-                            onChange={(e) => setTotalPrice(Number(e.target.value))}
-                            slotProps={{
-                              htmlInput: {
-                                style: {
-                                  border: 0,
-                                  background: 'transparent',
-                                  outline: 0,
-                                  fontSize: 22,
-                                  fontWeight: 800,
-                                  color: t.text,
-                                  fontFamily: 'Geist Mono, monospace',
-                                  letterSpacing: '-0.02em',
-                                },
-                              },
-                            }}
+                        }}
+                      >
+                        <Box sx={{ flexShrink: 0 }}>
+                          <Typography
                             sx={{
-                              '& .MuiOutlinedInput-root': {
-                                '& fieldset': { border: 0 },
-                                '& input': { p: 0 },
-                              },
+                              fontSize: 9.5,
+                              color: t.text3,
+                              fontFamily: '"Geist Mono", monospace',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
                             }}
-                          />
-                          <Box sx={{
-                            fontSize: 11,
-                            color: t.text3,
-                            fontFamily: 'Geist Mono, monospace',
-                            fontWeight: 600,
-                            background: t.bg2,
-                            px: 1.125,
-                            py: 0.5,
-                            borderRadius: '6px',
-                          }}>
-                            {currency}
-                          </Box>
+                          >
+                            {dayName}.
+                          </Typography>
+                          <Typography
+                            sx={{
+                              fontSize: 13,
+                              fontWeight: 700,
+                              color: t.primaryDeep,
+                              fontFamily: '"Geist Mono", monospace',
+                            }}
+                          >
+                            {dayNum}
+                          </Typography>
                         </Box>
-                        {nights > 0 && totalPrice > 0 && (
-                          <Box sx={{
-                            mt: 1.25,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            p: '8px 12px',
-                            background: t.bg,
-                            borderRadius: '8px',
-                            fontSize: 11.5,
-                            color: t.text2,
-                            fontFamily: 'Geist Mono, monospace',
-                          }}>
-                            <Typography sx={{ color: '#7c3aed', fontSize: 13 }}>⚡</Typography>
-                            <Typography component="span">
-                              Prix par nuit calculé automatiquement : <b style={{ color: t.primary, fontWeight: 700 }}>{(totalPrice / nights).toFixed(2)} {currency}/nuit</b> · répartition uniforme sur {nights} nuits
-                            </Typography>
-                          </Box>
-                        )}
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={value}
+                          onChange={e => setDailyPrices(p => ({ ...p, [date]: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start" sx={{ '& p': { fontSize: 11, color: t.text3 } }}>
+                                {getCurrencySymbol(currency)}
+                              </InputAdornment>
+                            ),
+                          }}
+                          sx={{ flex: 1, '& input': { fontFamily: '"Geist Mono", monospace', fontWeight: 700, fontSize: 13 } }}
+                        />
                       </Box>
-                    </Collapse>
+                    );
+                  })}
+                </Box>
+
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    p: '14px 18px',
+                    background: `linear-gradient(135deg, ${t.primaryTint}, rgba(184,133,26,0.04))`,
+                    border: `1.5px solid ${t.primary}`,
+                    borderRadius: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.75,
+                  }}
+                >
+                  <Typography sx={{ fontSize: 22 }}>💎</Typography>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 10.5,
+                        color: t.primaryDeep,
+                        fontFamily: '"Geist Mono", monospace',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                      }}
+                    >
+                      Total séjour
+                    </Typography>
+                    <Typography sx={{ fontSize: 22, fontWeight: 800, fontFamily: '"Geist Mono", monospace', letterSpacing: '-0.02em' }}>
+                      {perDayTotal.toFixed(0)}{' '}
+                      <Box component="span" sx={{ fontSize: 13, color: t.text3, ml: 0.625, fontWeight: 600 }}>
+                        {currency}
+                      </Box>
+                    </Typography>
                   </Box>
-                </Stack>
-              </Section>
+                  <Typography sx={{ fontSize: 10.5, color: t.text3, textAlign: 'right', fontFamily: '"Geist Mono", monospace' }}>
+                    moyenne
+                    <br />
+                    <Box component="b" sx={{ color: t.primaryDeep, fontSize: 13 }}>
+                      {nights > 0 ? (perDayTotal / nights).toFixed(2) : 0} {currency}/nuit
+                    </Box>
+                  </Typography>
+                </Box>
+              </>
+            )}
 
-              {/* Section 6: Status & Payment */}
-              <Section num="6" title="🎫 Statut & paiement">
-                <Stack spacing={2}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Statut réservation</InputLabel>
-                    <Select value={status} onChange={(e) => setStatus(e.target.value as any)} label="Statut réservation">
-                      <MenuItem value="Confirmed">✅ Confirmée</MenuItem>
-                      <MenuItem value="Pending">⏳ En attente</MenuItem>
-                    </Select>
-                  </FormControl>
-
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Statut paiement</InputLabel>
-                    <Select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as any)} label="Statut paiement">
-                      <MenuItem value="Paid">💳 Payé</MenuItem>
-                      <MenuItem value="UnPaid">⌛ Non payé</MenuItem>
-                    </Select>
-                  </FormControl>
-
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Mode de paiement</InputLabel>
-                    <Select value={paymentType} onChange={(e) => setPaymentType(e.target.value as any)} label="Mode de paiement">
-                      <MenuItem value="cash">💵 Espèces</MenuItem>
-                      <MenuItem value="bank_card">💳 Carte bancaire</MenuItem>
-                    </Select>
-                  </FormControl>
-
-                  {paymentType === 'bank_card' && paymentStatus === 'UnPaid' && (
-                    <Box sx={{
-                      p: '11px 14px',
-                      background: 'linear-gradient(135deg, rgba(6,115,179,0.05), ' + t.bg + ')',
-                      border: '1px solid rgba(6,115,179,0.20)',
-                      borderRadius: '9px',
-                      fontSize: 11.5,
-                      color: t.text2,
+            {pricingMode === 'total' && (
+              <Box sx={{ p: 1.75, bgcolor: t.bg2, borderRadius: 1.375, border: `1px solid ${t.border}` }}>
+                <Typography
+                  sx={{
+                    fontSize: 10.5,
+                    color: t.text3,
+                    fontFamily: '"Geist Mono", monospace',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    mb: 0.75,
+                  }}
+                >
+                  Prix total séjour <Box component="span" sx={{ color: t.error }}>*</Box>
+                </Typography>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    p: '12px 14px',
+                    bgcolor: t.bg1,
+                    border: `1.5px solid ${t.primary}`,
+                    borderRadius: 1.25,
+                  }}
+                >
+                  <Typography sx={{ fontSize: 18, color: t.primary, fontFamily: '"Geist Mono", monospace', fontWeight: 700 }}>
+                    {getCurrencySymbol(currency)}
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    variant="standard"
+                    type="number"
+                    placeholder="Ex: 1500"
+                    value={totalPrice || ''}
+                    onChange={e => setTotalPrice(e.target.value === '' ? 0 : Number(e.target.value))}
+                    InputProps={{
+                      disableUnderline: true,
+                      sx: { fontSize: 22, fontWeight: 800, fontFamily: '"Geist Mono", monospace', letterSpacing: '-0.02em' },
+                    }}
+                  />
+                  <Box
+                    sx={{
+                      fontSize: 11,
+                      color: t.text3,
+                      fontFamily: '"Geist Mono", monospace',
+                      fontWeight: 600,
+                      bgcolor: t.bg2,
+                      px: 1.125,
+                      py: 0.5,
+                      borderRadius: 0.75,
+                    }}
+                  >
+                    {currency}
+                  </Box>
+                </Box>
+                {nights > 0 && totalPrice > 0 && (
+                  <Box
+                    sx={{
+                      mt: 1.25,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '9px',
-                    }}>
-                      <Typography sx={{ fontSize: 14, color: '#0673b3' }}>ℹ️</Typography>
-                      <Typography>
-                        Un <b>lien de paiement sécurisé</b> sera envoyé au voyageur par WhatsApp + Email après création.
-                      </Typography>
-                    </Box>
-                  )}
-                </Stack>
-              </Section>
-            </Stack>
-          </Box>
+                      gap: 1,
+                      p: '8px 12px',
+                      bgcolor: t.bg1,
+                      borderRadius: 1,
+                      fontSize: 11.5,
+                      color: t.text2,
+                      fontFamily: '"Geist Mono", monospace',
+                    }}
+                  >
+                    <Box sx={{ color: '#7c3aed', fontSize: 13 }}>⚡</Box>
+                    Prix par nuit calculé :{' '}
+                    <Box component="b" sx={{ color: t.primary, fontWeight: 700 }}>
+                      {(totalPrice / nights).toFixed(2)} {currency}/nuit
+                    </Box>{' '}
+                    · répartition uniforme sur {nights} nuits
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Section>
 
-          {/* RIGHT: Summary column */}
-          <Box
-            className="create-reservation-summary-scroll"
+          {/* Section 6: Statut & paiement */}
+          <Section num="6" title="🎫 Statut & paiement">
+            <Field label="Statut réservation">
+              <RadioRow
+                value={status}
+                onChange={setStatus}
+                options={[
+                  { value: 'Confirmed', label: '✅ Confirmée', tone: 'success' },
+                  { value: 'Pending', label: '⏳ En attente', tone: 'warning' },
+                ]}
+              />
+            </Field>
+            <Box sx={{ mt: 1.5 }}>
+              <Field label="Statut paiement">
+                <RadioRow
+                  value={paymentStatus}
+                  onChange={setPaymentStatus}
+                  options={[
+                    { value: 'Paid', label: '💳 Payé', tone: 'success' },
+                    { value: 'UnPaid', label: '⌛ Non payé', tone: 'warning' },
+                  ]}
+                />
+              </Field>
+            </Box>
+            <Box sx={{ mt: 1.5 }}>
+              <Field label="Mode de paiement">
+                <RadioRow
+                  value={paymentType}
+                  onChange={setPaymentType}
+                  options={[
+                    { value: 'cash', label: '💵 Espèces' },
+                    { value: 'bank_card', label: '💳 Carte bancaire' },
+                  ]}
+                />
+              </Field>
+            </Box>
+            {paymentType === 'bank_card' && paymentStatus === 'UnPaid' && (
+              <Box
+                sx={{
+                  mt: 1.25,
+                  p: '11px 14px',
+                  background: `linear-gradient(135deg, rgba(6,115,179,0.05), ${t.bg1})`,
+                  border: `1px solid rgba(6,115,179,0.20)`,
+                  borderRadius: 1.125,
+                  fontSize: 11.5,
+                  color: t.text2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.125,
+                }}
+              >
+                <Box sx={{ color: '#0673b3', fontSize: 14 }}>ℹ️</Box>
+                Un <b>lien de paiement sécurisé</b> sera envoyé au voyageur par WhatsApp + Email après création.
+              </Box>
+            )}
+          </Section>
+        </ModalScrollColumn>
+
+        <ModalScrollColumn
+          active={open}
+          className="create-reservation-summary-scroll"
+          wrapperSx={{
+            flex: { xs: '1 1 45%', md: `0 0 ${summaryColWidth}px` },
+            width: { xs: '100%', md: summaryColWidth },
+            minWidth: { md: summaryColWidth },
+          }}
+          innerSx={{
+            p: '22px 24px',
+            background: `linear-gradient(180deg, ${t.bg2}, ${t.bg0})`,
+            borderLeft: { xs: 'none', md: `1px solid ${t.border}` },
+            borderTop: { xs: `1px solid ${t.border}`, md: 'none' },
+          }}
+        >
+          <Typography
             sx={{
-              ...modalScrollColSx,
-              flex: { xs: '0 0 auto', md: '0 0 320px' },
-              width: { xs: '100%', md: 320 },
-              maxHeight: { xs: 'min(38vh, 360px)', md: 'none' },
-              background: `linear-gradient(180deg, ${t.bg2} 0%, ${t.bg0} 100%)`,
-              borderLeft: { xs: 'none', md: `1px solid ${t.border}` },
-              borderTop: { xs: `1px solid ${t.border}`, md: 'none' },
-              p: '22px 22px',
-            }}
-            onWheel={(e) => e.stopPropagation()}
-          >
-            <Box sx={{
               fontSize: 11,
               color: t.text3,
-              fontFamily: 'Geist Mono, monospace',
+              fontFamily: '"Geist Mono", monospace',
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               fontWeight: 700,
-              mb: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              '&::after': {
-                content: '""',
-                flex: 1,
-                height: '1px',
-                background: t.border,
-              },
-            }}>
-              📋 Récapitulatif
-            </Box>
+              mb: 1.75,
+            }}
+          >
+            📋 Récapitulatif
+          </Typography>
 
-            {/* Summary cards */}
-            <Stack spacing={1.25}>
-              <SummaryCard>
-                <SummaryRow
-                  icon="👤"
-                  label="Voyageur"
-                  value={
-                    <Box>
-                      <Typography sx={{ fontWeight: 700, fontSize: 12 }}>
-                        {guestFirstName && guestLastName ? `${guestFirstName} ${guestLastName}` : '—'}
-                      </Typography>
-                      {guestEmail && (
-                        <Typography sx={{ color: t.text3, fontSize: 10.5, fontFamily: 'Geist Mono, monospace' }}>
-                          {guestEmail}
-                        </Typography>
-                      )}
-                    </Box>
-                  }
-                />
-                <SummaryRow icon="🌍" label="Origine" value={guestCountry || '—'} />
-                <SummaryRow icon="👥" label="Composition" value={`${adults}A · ${children}C · ${infants}I`} />
-              </SummaryCard>
-
-              <SummaryCard>
-                <SummaryRow
-                  icon="🏠"
-                  label="Propriété"
-                  value={
-                    <Box>
-                      <Typography sx={{ fontWeight: 700, fontSize: 12 }}>
-                        {selectedListing?.name || '—'}
-                      </Typography>
-                      {roomTypes.find(rt => rt._id === roomTypeId) && (
-                        <Typography sx={{ color: t.text3, fontSize: 10.5 }}>
-                          {roomTypes.find(rt => rt._id === roomTypeId)?.roomTypeName}
-                        </Typography>
-                      )}
-                    </Box>
-                  }
-                />
-                <SummaryRow
-                  icon="📅"
-                  label="Arrivée"
-                  value={checkInDate ? new Date(checkInDate).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'}
-                />
-                <SummaryRow
-                  icon="📅"
-                  label="Départ"
-                  value={checkOutDate ? new Date(checkOutDate).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'}
-                />
-                <SummaryRow icon="🌙" label="Nuits" value={nights > 0 ? `${nights} nuits` : '—'} />
-              </SummaryCard>
-
-              <SummaryCard>
-                <SummaryRow
-                  icon="💰"
-                  label="Mode"
-                  value={
-                    pricingMode === 'calendar'
-                      ? '📅 Prix Calendrier'
-                      : pricingMode === 'perDay'
-                        ? '💵 Prix par jour'
-                        : '💰 Prix Total'
-                  }
-                />
-                {pricingMode === 'perDay' && perDayTotal > 0 && (
-                  <SummaryRow icon="📊" label="Moyenne" value={`${(perDayTotal / nights).toFixed(2)} ${currency}/nuit`} />
-                )}
-                <SummaryRow
-                  icon="⏳"
-                  label="Paiement"
-                  value={
-                    <Typography sx={{ fontWeight: 700, color: paymentStatus === 'Paid' ? t.success : '#c46506' }}>
-                      {paymentStatus === 'Paid' ? 'Payé' : 'Non payé'} · {paymentType === 'cash' ? 'Cash' : 'CB'}
-                    </Typography>
-                  }
-                />
-              </SummaryCard>
-
-              {/* Total Dark Panel */}
-              {((pricingMode === 'perDay' && perDayTotal > 0) || (pricingMode === 'total' && totalPrice > 0)) && (
-                <Box sx={{
-                  background: 'linear-gradient(135deg, #14110a 0%, #332b1c 100%)',
-                  color: '#fff',
-                  borderRadius: '13px',
-                  p: '18px',
-                  mt: '14px !important',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    top: '-50%',
-                    right: '-30%',
-                    width: '200px',
-                    height: '200px',
-                    background: `radial-gradient(circle, ${t.primary}4d, transparent 70%)`,
-                    pointerEvents: 'none',
-                  },
-                }}>
-                  <Typography sx={{
-                    fontSize: 10.5,
-                    fontFamily: 'Geist Mono, monospace',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    fontWeight: 700,
-                    color: 'rgba(255,255,255,0.55)',
-                    mb: 0.5,
-                    position: 'relative',
-                  }}>
-                    Total réservation
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, position: 'relative' }}>
-                    <Typography sx={{
-                      fontSize: 30,
-                      fontWeight: 800,
-                      fontFamily: 'Geist Mono, monospace',
-                      letterSpacing: '-0.03em',
-                      color: '#fff',
-                    }}>
-                      {(pricingMode === 'perDay' ? perDayTotal : totalPrice).toFixed(0)}
-                    </Typography>
-                    <Typography sx={{
-                      fontSize: 14,
-                      color: t.primarySoft,
-                      marginLeft: 0.5,
-                      fontWeight: 600,
-                    }}>
-                      {currency}
-                    </Typography>
-                  </Box>
-                  <Box sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    mt: 1.125,
-                    pt: 1.125,
-                    borderTop: '1px solid rgba(255,255,255,0.10)',
-                    fontSize: 11,
-                    color: 'rgba(255,255,255,0.65)',
-                    fontFamily: 'Geist Mono, monospace',
-                    position: 'relative',
-                  }}>
-                    <Typography component="span">
-                      {nights} nuits × {nights > 0 ? ((pricingMode === 'perDay' ? perDayTotal : totalPrice) / nights).toFixed(2) : '0'}
-                    </Typography>
-                    <Typography component="span" sx={{ color: t.primarySoft, fontWeight: 700 }}>
-                      {currency}
-                    </Typography>
-                  </Box>
-                </Box>
-              )}
-
-              {/* Action buttons */}
-              <Box sx={{
-                position: 'sticky',
-                bottom: '-22px',
-                background: `linear-gradient(180deg, transparent 0%, ${t.bg0} 30%)`,
-                pt: '14px',
-                mt: '14px !important',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 1,
-              }}>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  variant="contained"
-                  sx={{
-                    width: '100%',
-                    textTransform: 'none',
-                    background: `linear-gradient(180deg, #cb9b2c, ${t.primary})`,
-                    color: '#1a1408',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    boxShadow: `0 2px 8px ${t.primary}40, inset 0 1px 0 rgba(255,255,255,0.30)`,
-                    '&:hover': {
-                      filter: 'brightness(1.05)',
-                      transform: 'translateY(-1px)',
-                      boxShadow: `0 4px 12px ${t.primary}4d`,
-                    },
-                    '&:active': {
-                      transform: 'translateY(0)',
-                    },
-                    '&:disabled': {
-                      opacity: 0.5,
-                    },
-                  }}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <CircularProgress size={16} sx={{ mr: 1, color: '#1a1408' }} />
-                      Création...
-                    </>
-                  ) : (
-                    '✨ Créer la réservation'
-                  )}
-                </Button>
+          <SumCard>
+            <SumRow label="Voyageur">
+              <b>{guestFirstName || guestLastName ? `${guestFirstName} ${guestLastName}` : '—'}</b>
+              <br />
+              <Box component="span" sx={{ color: t.text3, fontSize: 10.5, fontFamily: '"Geist Mono", monospace' }}>
+                {guestEmail || '—'}
               </Box>
-            </Stack>
-          </Box>
-        </Box>
+            </SumRow>
+            <SumRow label="Composition">
+              <b>
+                {adults}A · {children}E · {infants}B
+              </b>
+            </SumRow>
+          </SumCard>
 
-        {/* Footer */}
-        <Box sx={{
+          {nights > 0 && (
+            <SumCard>
+              <SumRow label="Propriété">
+                <b>{selectedListing?.name || '—'}</b>
+              </SumRow>
+              <SumRow label="Arrivée">
+                <b>
+                  {new Date(checkInDate).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </b>
+              </SumRow>
+              <SumRow label="Départ">
+                <b>
+                  {new Date(checkOutDate).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </b>
+              </SumRow>
+              <SumRow label="Nuits">
+                <b>{nights} nuits</b>
+              </SumRow>
+            </SumCard>
+          )}
+
+          <SumCard>
+            <SumRow label="Mode">
+              <b>{pricingMode === 'calendar' ? '📅 Calendrier' : pricingMode === 'perDay' ? '💵 Par jour' : '💰 Total'}</b>
+            </SumRow>
+            <SumRow label="Paiement">
+              <Box component="b" sx={{ color: paymentStatus === 'Paid' ? t.success : t.warning }}>
+                {paymentStatus === 'Paid' ? 'Payé' : 'Non payé'}
+              </Box>{' '}
+              · {paymentType === 'bank_card' ? 'CB' : 'Cash'}
+            </SumRow>
+          </SumCard>
+
+          {pricingMode === 'calendar' && nights > 0 && calendarPriceEstimate != null && calendarPriceEstimate > 0 && (
+            <Box
+              sx={{
+                background: 'linear-gradient(135deg, #14110a, #332b1c)',
+                color: '#fff',
+                borderRadius: 1.625,
+                p: 2.25,
+                mt: 1.75,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 10,
+                  color: 'rgba(255,255,255,0.45)',
+                  fontFamily: '"Geist Mono", monospace',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  mb: 0.75,
+                }}
+              >
+                Total estimé (calendrier)
+              </Typography>
+              <Typography sx={{ fontSize: 30, fontWeight: 800, fontFamily: '"Geist Mono", monospace' }}>
+                {calendarPriceEstimate.toFixed(0)}{' '}
+                <Box component="span" sx={{ fontSize: 14, color: t.primarySoft, fontWeight: 600 }}>
+                  {currency}
+                </Box>
+              </Typography>
+            </Box>
+          )}
+
+          {((pricingMode === 'perDay' && perDayTotal > 0) || (pricingMode === 'total' && totalPrice > 0)) && (
+            <Box
+              sx={{
+                background: 'linear-gradient(135deg, #14110a, #332b1c)',
+                color: '#fff',
+                borderRadius: 1.625,
+                p: 2.25,
+                mt: 1.75,
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: '-50%',
+                  right: '-30%',
+                  width: 200,
+                  height: 200,
+                  background: 'radial-gradient(circle, rgba(184,133,26,0.30), transparent 70%)',
+                  pointerEvents: 'none',
+                }}
+              />
+              <Typography
+                sx={{
+                  fontSize: 10.5,
+                  fontFamily: '"Geist Mono", monospace',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  fontWeight: 700,
+                  color: 'rgba(255,255,255,0.55)',
+                  mb: 0.625,
+                  position: 'relative',
+                }}
+              >
+                Total réservation
+              </Typography>
+              <Typography
+                sx={{ fontSize: 30, fontWeight: 800, fontFamily: '"Geist Mono", monospace', letterSpacing: '-0.03em', position: 'relative' }}
+              >
+                {(pricingMode === 'perDay' ? perDayTotal : totalPrice).toFixed(0)}{' '}
+                <Box component="span" sx={{ fontSize: 14, color: t.primarySoft, ml: 0.625, fontWeight: 600 }}>
+                  {currency}
+                </Box>
+              </Typography>
+            </Box>
+          )}
+        </ModalScrollColumn>
+      </Box>
+
+      {/* ─── Footer (toujours visible, boutons remontés) ─── */}
+      <Box
+        sx={{
           flexShrink: 0,
-          p: '14px 24px',
+          px: 3,
+          py: 1.75,
           borderTop: `1px solid ${t.border}`,
-          background: t.bg2,
+          bgcolor: t.bg2,
           display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-        }}>
-          <Typography sx={{
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { xs: 'stretch', sm: 'center' },
+          justifyContent: 'flex-end',
+          gap: 1.25,
+          boxShadow: '0 -4px 12px rgba(20,17,10,0.06)',
+        }}
+      >
+        <Typography
+          sx={{
             fontSize: 11,
             color: t.text3,
-            fontFamily: 'Geist Mono, monospace',
-          }}>
-            ⌘+Enter pour créer · Esc pour annuler
-          </Typography>
-          <Box sx={{ marginLeft: 'auto', display: 'flex', gap: 1.125 }}>
-            <Button
-              onClick={onClose}
-              disabled={isSubmitting}
-              sx={{
-                textTransform: 'none',
-                px: 2.25,
-                py: 1.25,
-                borderRadius: '10px',
-                fontSize: 13,
-                fontWeight: 700,
-                letterSpacing: '-0.005em',
-                background: 'transparent',
-                color: t.text2,
-                '&:hover': {
-                  background: t.bg3,
-                  color: t.text,
-                },
-              }}
-            >
-              Annuler
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              variant="contained"
-              sx={{
-                textTransform: 'none',
-                px: 2.25,
-                py: 1.25,
-                borderRadius: '10px',
-                background: `linear-gradient(180deg, #cb9b2c, ${t.primary})`,
-                color: '#1a1408',
-                fontSize: 13,
-                fontWeight: 700,
-                letterSpacing: '-0.005em',
-                boxShadow: `0 2px 8px ${t.primary}40, inset 0 1px 0 rgba(255,255,255,0.30)`,
-                '&:hover': {
-                  filter: 'brightness(1.05)',
-                  transform: 'translateY(-1px)',
-                  boxShadow: `0 4px 12px ${t.primary}4d`,
-                },
-                '&:active': {
-                  transform: 'translateY(0)',
-                },
-              }}
-            >
-              ✨ Créer la réservation →
-            </Button>
-          </Box>
+            fontFamily: '"Geist Mono", monospace',
+            mr: { sm: 'auto' },
+            display: { xs: 'none', sm: 'block' },
+          }}
+        >
+          ⌘+Enter · Esc
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1.25, justifyContent: 'flex-end', flexShrink: 0 }}>
+          <Button
+            onClick={onClose}
+            disabled={isSubmitting}
+            sx={{
+              textTransform: 'none',
+              color: t.text2,
+              fontWeight: 700,
+              minWidth: 100,
+              py: 1,
+            }}
+          >
+            Annuler
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              minWidth: 200,
+              py: 1,
+              px: 2.5,
+              whiteSpace: 'nowrap',
+              background: `linear-gradient(180deg, #cb9b2c, ${t.primary})`,
+              color: '#1a1408',
+              boxShadow: '0 2px 8px rgba(184,133,26,0.25), inset 0 1px 0 rgba(255,255,255,0.30)',
+              '&:hover': { filter: 'brightness(1.05)' },
+              '&:disabled': { opacity: 0.5 },
+            }}
+          >
+            {isSubmitting ? (
+              <>
+                <CircularProgress size={16} sx={{ mr: 1, color: '#1a1408' }} />
+                Création...
+              </>
+            ) : (
+              '✨ Créer la réservation →'
+            )}
+          </Button>
         </Box>
-        </Box>
-      </Dialog>
-    </>
+      </Box>
+      </Box>
+    </Dialog>
   );
 }
 
-// Helper Components
-function Section({ num, title, badge, critical, children }: any) {
+/* ─── Helper Components ─────────────────────────────────────── */
+function Section({ num, title, badge, critical, children }: { num: string; title: string; badge?: string; critical?: boolean; children: React.ReactNode }) {
   return (
-    <Box sx={{
-      background: t.bg,
-      border: `1px solid ${critical ? t.primary + '40' : t.border}`,
-      borderRadius: '14px',
-      p: '18px',
-      transition: 'border 0.15s, box-shadow 0.15s',
-      ...(critical && {
-        background: `linear-gradient(180deg, ${t.bg} 0%, ${t.primaryTint} 100%)`,
-      }),
-      '&:hover': {
-        borderColor: critical ? t.primary + '40' : t.text4,
-      },
-    }}>
-      <Box sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        mb: '14px',
-      }}>
-        <Box sx={{
-          width: 24,
-          height: 24,
-          borderRadius: '7px',
-          background: critical ? t.primaryTint : t.bg2,
-          color: critical ? t.primaryDeep : t.text2,
-          fontSize: 11.5,
-          fontWeight: 700,
-          fontFamily: 'Geist Mono, monospace',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}>
+    <Box
+      sx={{
+        bgcolor: t.bg1,
+        border: `1px solid ${critical ? 'rgba(184,133,26,0.25)' : t.border}`,
+        borderRadius: 1.75,
+        p: 2.25,
+        mb: 1.75,
+        background: critical ? `linear-gradient(180deg, ${t.bg1}, rgba(184,133,26,0.02))` : t.bg1,
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.75 }}>
+        <Box
+          sx={{
+            width: 24,
+            height: 24,
+            borderRadius: 0.875,
+            bgcolor: critical ? t.primaryTint : t.bg2,
+            color: critical ? t.primaryDeep : t.text2,
+            fontFamily: '"Geist Mono", monospace',
+            fontSize: 11.5,
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
           {num}
         </Box>
-        <Typography sx={{
-          fontSize: 14,
-          fontWeight: 700,
-          letterSpacing: '-0.015em',
-          flex: 1,
-        }}>
-          {title}
-        </Typography>
+        <Typography sx={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.015em', flex: 1 }}>{title}</Typography>
         {badge && (
-          <Box sx={{
-            fontSize: 10,
-            fontFamily: 'Geist Mono, monospace',
-            fontWeight: 700,
-            color: critical ? t.primaryDeep : t.text3,
-            letterSpacing: '0.04em',
-            background: critical ? t.primaryTint : t.bg2,
-            px: 1,
-            py: 0.25,
-            borderRadius: '99px',
-          }}>
+          <Box
+            sx={{
+              fontSize: 10,
+              fontFamily: '"Geist Mono", monospace',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              color: critical ? t.primaryDeep : t.text3,
+              bgcolor: critical ? t.primaryTint : t.bg2,
+              px: 1,
+              py: 0.25,
+              borderRadius: '99px',
+            }}
+          >
             {badge}
           </Box>
         )}
@@ -1754,61 +1477,114 @@ function Section({ num, title, badge, critical, children }: any) {
   );
 }
 
-function SummaryCard({ children }: any) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <Box sx={{
-      background: t.bg,
-      border: `1px solid ${t.border}`,
-      borderRadius: '12px',
-      p: '14px',
-      animation: 'fadeIn 0.3s both',
-    }}>
-      <Stack spacing={0.75}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.625 }}>
+      <Typography
+        component="label"
+        sx={{
+          fontSize: 10.5,
+          color: t.text3,
+          fontFamily: '"Geist Mono", monospace',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          fontWeight: 700,
+        }}
+      >
+        {label}
+        {required && (
+          <Box component="span" sx={{ color: t.error, ml: 0.25 }}>
+            *
+          </Box>
+        )}
+      </Typography>
+      <FormControl size="small" fullWidth>
         {children}
-      </Stack>
+      </FormControl>
     </Box>
   );
 }
 
-function SummaryRow({ icon, label, value }: any) {
+function Counter({ value, onChange, min = 0, max = 20 }: { value: number; onChange: (v: number) => void; min?: number; max?: number }) {
   return (
-    <Box sx={{
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: '10px',
-      py: 0.75,
-      fontSize: 12,
-    }}>
-      <Typography sx={{
-        fontSize: 14,
-        width: 18,
-        textAlign: 'center',
-        color: t.text3,
-        flexShrink: 0,
-        mt: 0.125,
-      }}>
-        {icon}
-      </Typography>
-      <Typography sx={{
-        fontSize: 10.5,
-        color: t.text3,
-        fontFamily: 'Geist Mono, monospace',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        fontWeight: 700,
-        width: 78,
-        flexShrink: 0,
-        pt: 0.25,
-      }}>
+    <Box sx={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${t.border}`, borderRadius: 1, bgcolor: t.bg1, width: 'fit-content' }}>
+      <IconButton size="small" onClick={() => onChange(Math.max(min, value - 1))} sx={{ width: 32, height: 32 }}>
+        −
+      </IconButton>
+      <Box sx={{ px: 1.75, fontFamily: '"Geist Mono", monospace', fontWeight: 700, fontSize: 13, minWidth: 50, textAlign: 'center' }}>{value}</Box>
+      <IconButton size="small" onClick={() => onChange(Math.min(max, value + 1))} sx={{ width: 32, height: 32 }}>
+        +
+      </IconButton>
+    </Box>
+  );
+}
+
+function RadioRow<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; tone?: 'success' | 'warning' }[];
+}) {
+  return (
+    <Box sx={{ display: 'flex', gap: 1 }}>
+      {options.map(opt => {
+        const active = value === opt.value;
+        const tone = opt.tone === 'success' ? t.success : opt.tone === 'warning' ? t.warning : t.primary;
+        const tint = opt.tone === 'success' ? 'rgba(10,143,94,0.10)' : opt.tone === 'warning' ? 'rgba(196,101,6,0.10)' : t.primaryTint;
+        return (
+          <Box
+            key={opt.value}
+            component="button"
+            onClick={() => onChange(opt.value)}
+            sx={{
+              all: 'unset',
+              cursor: 'pointer',
+              flex: 1,
+              p: '10px 14px',
+              border: `1px solid ${active ? tone : t.border}`,
+              bgcolor: active ? tint : t.bg1,
+              color: active ? tone : t.text2,
+              borderRadius: 1.125,
+              textAlign: 'center',
+              fontSize: 12.5,
+              fontWeight: active ? 700 : 600,
+            }}
+          >
+            {opt.label}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+function SumCard({ children }: { children: React.ReactNode }) {
+  return (
+    <Box sx={{ bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: 1.5, p: 1.75, mb: 1.25 }}>{children}</Box>
+  );
+}
+
+function SumRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, py: 0.75, fontSize: 12 }}>
+      <Typography
+        sx={{
+          fontSize: 10.5,
+          color: t.text3,
+          fontFamily: '"Geist Mono", monospace',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          fontWeight: 700,
+          width: 78,
+          flexShrink: 0,
+        }}
+      >
         {label}
       </Typography>
-      <Box sx={{ flex: 1, color: t.text, fontWeight: 500, fontSize: 12 }}>
-        {typeof value === 'string' ? (
-          <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{value}</Typography>
-        ) : (
-          value
-        )}
-      </Box>
+      <Box sx={{ flex: 1, color: t.text, fontWeight: 500 }}>{children}</Box>
     </Box>
   );
 }

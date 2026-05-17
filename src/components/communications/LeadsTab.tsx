@@ -216,6 +216,9 @@ export default function LeadsTab() {
           sender: msg.isIncoming ? 'guest' : 'host',
           senderName: msg.senderName || (msg.isIncoming ? thread.guestName : 'Vous'),
           isIncoming: msg.isIncoming,
+          // ✅ Pass status and readAt for status indicators
+          status: msg.status,
+          readAt: msg.readAt,
         }));
 
         setMessages(formatted.sort((a: any, b: any) =>

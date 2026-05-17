@@ -78,7 +78,6 @@ export default function MessagesOTAPageV2() {
         conv.phone,
         { limit: 50 }
       );
-    </DashboardWrapper>
 
       if (response.status === 'success') {
         setMessages(response.data.exchanges);
@@ -358,8 +357,8 @@ export default function MessagesOTAPageV2() {
         </InboxLayout>
       )}
     </Box>
-  );
     </DashboardWrapper>
+  );
 }
 
 // Helper functions

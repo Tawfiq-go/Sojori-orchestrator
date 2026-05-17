@@ -16,6 +16,13 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { useAmenities } from '../../../../contexts/AmenitiesContext';
+import {
+  amenityMatchesCatalogCategories,
+  getAllEnabledCompositionRoomIds,
+  listingAmenityMatchesRoomTab,
+  resolveRoomIdsForTab,
+  resolveSelectedCategoriesForTab,
+} from '../../../../services/listingsService';
 import { AmenityCard } from '../components/AmenityCard';
 import { RoomSelectionModal } from '../components/RoomSelectionModal';
 
@@ -162,6 +169,9 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
 
   // State management
   const [categoryTab, setCategoryTab] = useState(0); // Sub-tab for categories (All, Basic, Kitchen, etc.)
+  /** Filtre catalogue actif — synchro explicite au clic (évite course avec useMemo). */
+  const [activeCatalogCategories, setActiveCatalogCategories] = useState<string[]>([]);
+  const [catalogEpoch, setCatalogEpoch] = useState(0);
   const [roomTab, setRoomTab] = useState(0); // Sub-tab for rooms (Chambre 1, Chambre 2, etc.)
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [rooms, setRooms] = useState<RoomTabOption[]>([
@@ -272,7 +282,7 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
     void hydrateSelected();
   }, [listingId, hydratedListingAmenities, values.listingAmenitiesIds, getAmenitiesByIds, onChange]);
 
-  const applyRoomsFromListingValues = useCallback(() => {
+  const applyRoomsFromListingValues = useCallback((): RoomTabOption[] | null => {
     const roomTypes = (values.roomTypes || []) as Array<Record<string, unknown>>;
     let extracted: RoomTabOption[] = [];
 
@@ -300,11 +310,11 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
       }));
     }
 
-    if (extracted.length > 0) {
-      setRooms([{ id: '__all__', label: 'Toutes les pièces' }, ...extracted]);
-    }
+    if (extracted.length === 0) return null;
+    return [{ id: '__all__', label: 'Toutes les pièces' }, ...extracted];
   }, [values.roomTypes]);
 
+  /** Charge la composition une fois — ne pas réinitialiser roomTab au clic (sinon retour « Toutes les pièces »). */
   useEffect(() => {
     let cancelled = false;
     void fetchRoomComposition().then((composition) => {
@@ -313,53 +323,42 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
       const rawRooms = Array.isArray(composition?.rooms) ? composition.rooms : [];
       const enabled = rawRooms.filter((r: { enable?: boolean }) => r.enable !== false);
       if (enabled.length > 0) {
-        setRooms([
+        const nextRooms: RoomTabOption[] = [
           { id: '__all__', label: 'Toutes les pièces' },
           ...enabled.map((room: Record<string, unknown>, idx: number) => ({
             id: String(room.rentalId ?? idx),
             label: getRoomLabelFromComposition(room, idx),
             rentalId: room.rentalId as string | number,
           })),
-        ]);
-        if (mainTab === 1) setRoomTab(0);
+        ];
+        setRooms(nextRooms);
         return;
       }
-      if (mainTab === 1) applyRoomsFromListingValues();
+      const fromListing = applyRoomsFromListingValues();
+      if (fromListing) setRooms(fromListing);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [mainTab, fetchRoomComposition, applyRoomsFromListingValues]);
+  }, [fetchRoomComposition, applyRoomsFromListingValues]);
 
   const activeFilterLabel =
     mainTab === 0
       ? categories[categoryTab] || 'Toutes les catégories'
       : rooms[roomTab]?.label || 'Pièce';
 
-  const selectedCategories = useMemo(() => {
-    if (mainTab === 1) return [];
-    if (categoryTab === 0) return [];
-    const selectedCategory = categories[categoryTab];
-    if (!selectedCategory) return [];
-    if (selectedCategory.toLowerCase() === 'all categories' || selectedCategory.toLowerCase() === 'all') {
-      return [];
-    }
-    return [selectedCategory];
-  }, [mainTab, categoryTab, categories]);
+  const selectedCategories = mainTab === 1 ? [] : activeCatalogCategories;
 
-  const selectedRoomIds = useMemo((): Array<string | number> | undefined => {
-    if (mainTab !== 1) return undefined;
-    const current = rooms[roomTab];
-    if (!current) return undefined;
-    if (current.id === '__all__') {
-      const ids = rooms
-        .filter((r) => r.id !== '__all__' && r.rentalId != null)
-        .map((r) => r.rentalId as string | number);
-      return ids.length > 0 ? ids : undefined;
-    }
-    return current.rentalId != null ? [current.rentalId] : [current.id];
-  }, [mainTab, roomTab, rooms]);
+  const allEnabledRoomIds = useMemo(
+    () => getAllEnabledCompositionRoomIds(rooms),
+    [rooms],
+  );
+
+  const selectedRoomIds = useMemo(
+    () => (mainTab === 1 ? resolveRoomIdsForTab(roomTab, rooms) : undefined),
+    [mainTab, roomTab, rooms],
+  );
 
   const fetchSeqRef = useRef(0);
   const lastFilterKeyRef = useRef('');
@@ -373,8 +372,9 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
         categoryTab,
         roomTab,
         debouncedSearch,
-        ...selectedCategories,
-        ...(selectedRoomIds ?? []).map(String),
+        activeCatalogCategories.join(','),
+        (selectedRoomIds ?? []).map(String).join(','),
+        String(catalogEpoch),
       ].join('|'),
     [
       categoriesReady,
@@ -383,8 +383,9 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
       categoryTab,
       roomTab,
       debouncedSearch,
-      selectedCategories,
+      activeCatalogCategories,
       selectedRoomIds,
+      catalogEpoch,
     ],
   );
 
@@ -396,12 +397,35 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
     return ids;
   }, [values.listingAmenitiesIds]);
 
+  type CatalogLoadOptions = {
+    categories?: string[];
+    roomIds?: Array<string | number>;
+  };
+
   const loadAmenities = useCallback(
-    async (pageNum: number, append: boolean = false) => {
+    async (
+      pageNum: number,
+      append: boolean = false,
+      overrides?: CatalogLoadOptions,
+    ) => {
       if (!categoriesReady) return;
 
+      const catsForRequest =
+        overrides?.categories !== undefined ? overrides.categories : selectedCategories;
+      const roomsForRequest =
+        overrides?.roomIds !== undefined
+          ? overrides.roomIds
+          : mainTab === 1
+            ? selectedRoomIds
+            : undefined;
+
       const seq = ++fetchSeqRef.current;
-      const requestLimit = debouncedSearch.trim() ? 300 : PAGE_LIMIT;
+      const requestLimit =
+        debouncedSearch.trim() ||
+        catsForRequest.length > 0 ||
+        (roomsForRequest && roomsForRequest.length > 0)
+          ? 300
+          : PAGE_LIMIT;
       const t0 = AMENITIES_DEBUG ? performance.now() : 0;
       setLoading(true);
       try {
@@ -410,8 +434,8 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
           requestLimit,
           false,
           debouncedSearch || undefined,
-          selectedCategories.length > 0 ? selectedCategories : undefined,
-          selectedRoomIds,
+          catsForRequest.length > 0 ? catsForRequest : undefined,
+          roomsForRequest,
         );
 
         if (seq !== fetchSeqRef.current) return;
@@ -440,7 +464,8 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
             count: filtered.length,
             total,
             ms: Math.round(performance.now() - t0),
-            categories: selectedCategories,
+            categories: catsForRequest,
+            roomIds: roomsForRequest,
           });
         } else {
           if (!append) setAvailableAmenities([]);
@@ -461,6 +486,7 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
       debouncedSearch,
       selectedCategories,
       selectedRoomIds,
+      mainTab,
       selectedIdsSet,
     ],
   );
@@ -488,34 +514,74 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
     void loadAmenities(page, true);
   }, [page, categoriesReady, loadAmenities]);
 
-  const handleMainTabChange = useCallback((_: unknown, newValue: number) => {
-    startTransition(() => {
+  const handleMainTabChange = useCallback(
+    (_: unknown, newValue: number) => {
       logAmenities('mainTab', { tab: newValue });
       setMainTab(newValue);
-      if (newValue === 1) setRoomTab(0);
-      else setCategoryTab(0);
-    });
-  }, []);
+      setPage(0);
+      setAvailableAmenities([]);
+      setCatalogTotal(0);
+      setHasMore(true);
+      fetchSeqRef.current += 1;
+      if (newValue === 1) {
+        setRoomTab(0);
+        setActiveCatalogCategories([]);
+        setCatalogEpoch((n) => n + 1);
+        void loadAmenities(0, false, {
+          categories: [],
+          roomIds: resolveRoomIdsForTab(0, rooms),
+        });
+      } else {
+        setCategoryTab(0);
+        setActiveCatalogCategories([]);
+        setCatalogEpoch((n) => n + 1);
+        void loadAmenities(0, false, { categories: [], roomIds: undefined });
+      }
+    },
+    [loadAmenities, rooms],
+  );
 
   const handleCategoryTabChange = useCallback(
     (_: unknown, newValue: number) => {
-      startTransition(() => {
-        logAmenities('categoryTab', {
-          index: newValue,
-          label: categories[newValue],
-        });
-        setCategoryTab(newValue);
+      const cats = resolveSelectedCategoriesForTab(newValue, categories);
+      logAmenities('categoryTab', {
+        index: newValue,
+        label: categories[newValue],
+        categories: cats,
       });
+      setCategoryTab(newValue);
+      setActiveCatalogCategories(cats);
+      setCatalogEpoch((n) => n + 1);
+      setPage(0);
+      setAvailableAmenities([]);
+      setCatalogTotal(0);
+      setHasMore(true);
+      fetchSeqRef.current += 1;
+      void loadAmenities(0, false, { categories: cats, roomIds: undefined });
     },
-    [categories],
+    [categories, loadAmenities],
   );
 
-  const handleRoomTabChange = useCallback((_: unknown, newValue: number) => {
-    startTransition(() => {
-      logAmenities('roomTab', { index: newValue, label: rooms[newValue]?.label });
+  const handleRoomTabChange = useCallback(
+    (_: unknown, newValue: number) => {
+      const roomIds = resolveRoomIdsForTab(newValue, rooms);
+      logAmenities('roomTab', {
+        index: newValue,
+        label: rooms[newValue]?.label,
+        roomIds,
+      });
+      fetchSeqRef.current += 1;
       setRoomTab(newValue);
-    });
-  }, [rooms]);
+      setActiveCatalogCategories([]);
+      setPage(0);
+      setAvailableAmenities([]);
+      setCatalogTotal(0);
+      setHasMore(true);
+      setCatalogEpoch((n) => n + 1);
+      void loadAmenities(0, false, { categories: [], roomIds });
+    },
+    [rooms, loadAmenities],
+  );
 
   // Get selected amenities
   const listingAmenitiesIds = values.listingAmenitiesIds || [];
@@ -535,6 +601,40 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
       amenityData: data.amenityData,
     }));
   }, [selectedAmenitiesMap]);
+
+  /** Legacy : filtrer sélectionnés par catégorie ou par pièce. */
+  const filteredSelectedAmenities = useMemo(() => {
+    let list = selectedAmenities;
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.trim().toLowerCase();
+      list = list.filter((item) => {
+        const name = item.amenityData?.name;
+        return getAmenityName(name ?? '').toLowerCase().includes(q);
+      });
+    }
+    if (mainTab === 1) {
+      return list.filter((item) =>
+        listingAmenityMatchesRoomTab(
+          item,
+          selectedRoomIds,
+          allEnabledRoomIds,
+          values.roomTypes,
+        ),
+      );
+    }
+    if (activeCatalogCategories.length === 0) return list;
+    return list.filter((item) =>
+      amenityMatchesCatalogCategories(item.amenityData || { _id: item._id }, activeCatalogCategories),
+    );
+  }, [
+    selectedAmenities,
+    mainTab,
+    activeCatalogCategories,
+    selectedRoomIds,
+    allEnabledRoomIds,
+    values.roomTypes,
+    debouncedSearch,
+  ]);
 
   const availableNotSelected = useMemo(() => {
     return availableAmenities.filter((amenity) => !selectedAmenitiesMap.has(amenity._id));
@@ -777,7 +877,7 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
       )}
 
       {/* Search */}
-      <Card title="🔍 Rechercher" meta={`${selectedAmenities.length} sélectionnés`}>
+      <Card title="🔍 Rechercher" meta={`${selectedAmenities.length} sélectionnés au total`}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <SearchIcon sx={{ color: T.text3, fontSize: 18 }} />
           <TextField
@@ -800,10 +900,19 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
       </Card>
 
       {/* Selected Amenities */}
-      {selectedAmenities.length > 0 && (
-        <Card title="✅ Équipements sélectionnés" meta={`${selectedAmenities.length} élément(s)`}>
+      {filteredSelectedAmenities.length > 0 && (
+        <Card
+          title="✅ Équipements sélectionnés"
+          meta={
+            mainTab === 1
+              ? `${filteredSelectedAmenities.length} pour « ${activeFilterLabel} » · ${selectedAmenities.length} au total`
+              : activeCatalogCategories.length > 0
+                ? `${filteredSelectedAmenities.length} dans « ${activeFilterLabel} » · ${selectedAmenities.length} au total`
+                : `${selectedAmenities.length} élément(s)`
+          }
+        >
           <Box sx={AMENITY_GRID_SX}>
-            {selectedAmenities.map((item, selectedIndex) => {
+            {filteredSelectedAmenities.map((item, selectedIndex) => {
               const amenityData = item.amenityData || { _id: item._id, name: 'Équipement' };
               // Ensure amenityData has valid structure
               const validAmenityData = {
@@ -833,8 +942,21 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
         </Card>
       )}
 
+      {mainTab === 0 && activeCatalogCategories.length > 0 && filteredSelectedAmenities.length === 0 && selectedAmenities.length > 0 && (
+        <Typography sx={{ fontSize: 12, color: T.text3, mb: 1.5, fontStyle: 'italic' }}>
+          Aucun équipement sélectionné dans « {activeFilterLabel} » — voir les autres catégories ou « All Categories ».
+        </Typography>
+      )}
+
+      {mainTab === 1 && filteredSelectedAmenities.length === 0 && selectedAmenities.length > 0 && (
+        <Typography sx={{ fontSize: 12, color: T.text3, mb: 1.5, fontStyle: 'italic' }}>
+          Aucun équipement sélectionné pour « {activeFilterLabel} » — essayez « Toutes les pièces » ou une autre pièce.
+        </Typography>
+      )}
+
       {/* Available Amenities */}
       <Card
+        key={`catalog-${catalogEpoch}-m${mainTab}-${activeCatalogCategories.join(',')}-r${(selectedRoomIds ?? []).join(',')}`}
         title="📦 Équipements disponibles"
         meta={
           loading
@@ -913,7 +1035,7 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
             </Table>
           </>
         ) : (
-          <Box sx={AMENITY_GRID_SX}>
+          <Box sx={AMENITY_GRID_SX} key={`avail-grid-${catalogEpoch}`}>
             {availableNotSelected.map((amenity, amenityIndex) => {
               const validAmenity = {
                 ...amenity,

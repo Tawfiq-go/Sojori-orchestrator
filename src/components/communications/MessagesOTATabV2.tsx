@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
@@ -7,154 +7,96 @@ import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
 import messagesService from '../../services/messagesService';
-import type {
-  Conversation,
-  MessageExchange,
-  ConversationDetailResponse,
-} from '../../types/messages.types';
-import type { Thread, Message, QuickTemplate } from '../../types/unifiedInbox.types';
+import type { Thread } from '../../types/unifiedInbox.types';
+import { useInboxOTAConversation } from '../../hooks/useInboxOTAConversation';
+import {
+  filterOtaThreadsByStatus,
+  mapApiItemToOtaThread,
+  mapOtaRowToThread,
+  type OtaThreadRow,
+} from '../unified-inbox/inboxOtaMappers';
+import { OTA_QUICK_REPLIES, OTA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
+import { formatThreadWhen, normalizeBookingSource } from '../unified-inbox/inboxFormat';
 
-/**
- * MessagesOTATabV2 - Onglet Messages OTA avec nouveau design
- * Utilisé dans CommunicationsHubPage (/communications?tab=ota)
- */
 export default function MessagesOTATabV2() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<MessageExchange[]>([]);
+  const [threads, setThreads] = useState<OtaThreadRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMessages, setLoadingMessages] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAIModal, setShowAIModal] = useState(false);
+  const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    loadConversations();
-  }, []);
+  const inbox = useInboxOTAConversation();
 
-  const loadConversations = async () => {
+  const loadThreads = useCallback(async (search?: string) => {
     try {
       setLoading(true);
-      const response = await messagesService.getConversations({
-        filter: 'smart',
-        hasReservation: true,
+      const response = await messagesService.getOTAThreads({
+        page: 0,
         limit: 50,
-        channel: 'ab',
+        search: search?.trim() || undefined,
       });
-
-      if (response.status === 'success') {
-        setConversations(response.data.conversations);
-        // ✅ RÈGLE 1: Ne PAS sélectionner automatiquement la première conversation
-      }
+      const items = response.threads || response.data?.threads || [];
+      const mapped = items.map(mapApiItemToOtaThread);
+      setThreads(filterOtaThreadsByStatus(mapped));
     } catch (err) {
-      console.error('❌ Erreur chargement conversations OTA:', err);
+      console.error('❌ Erreur chargement threads OTA:', err);
+      setThreads([]);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    void loadThreads();
+  }, [loadThreads]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadThreads(searchTerm);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm, loadThreads]);
+
+  useEffect(() => {
+    if (inbox.activeRow) {
+      setTaskCounts((prev) => ({
+        ...prev,
+        [inbox.activeRow!.threadId]: inbox.tasks.length,
+      }));
+    }
+  }, [inbox.tasks, inbox.activeRow]);
+
+  const formattedThreads: Thread[] = useMemo(
+    () =>
+      threads.map((row) => ({
+        ...mapOtaRowToThread(row, taskCounts[row.threadId]),
+        time: formatThreadWhen(row.lastMessageTime),
+      })),
+    [threads, taskCounts],
+  );
+
+  const activeThread: Thread | null = useMemo(() => {
+    if (!inbox.activeRow) return null;
+    return {
+      ...mapOtaRowToThread(inbox.activeRow, inbox.tasks.length),
+      preview: '',
+      unread: 0,
+      guestsLabel: inbox.reservation?.guestsLabel,
+      taskCount: inbox.tasks.length,
+      tasks: inbox.tasks,
+      tasksLoading: inbox.loadingTasks,
+    };
+  }, [inbox.activeRow, inbox.tasks, inbox.loadingTasks, inbox.reservation]);
+
+  const otaPlatform = inbox.activeRow
+    ? normalizeBookingSource(inbox.activeRow.channel)
+    : 'Airbnb';
+
+  const handleSelect = async (row: OtaThreadRow) => {
+    await inbox.selectOtaThread(row);
   };
 
-  const handleSelectConversation = async (conv: Conversation) => {
-    setActiveConversation(conv);
-    setLoadingMessages(true);
-
-    try {
-      const response: ConversationDetailResponse = await messagesService.getConversationMessages(
-        conv.phone,
-        { limit: 50 }
-      );
-
-      if (response.status === 'success') {
-        setMessages(response.data.exchanges);
-      }
-    } catch (err) {
-      console.error('❌ Erreur chargement messages:', err);
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
-
-  const handleSendMessage = async (text: string) => {
-    if (!activeConversation) return;
-    try {
-      await messagesService.sendMessage({
-        phone: activeConversation.phone,
-        message: text.trim(),
-      });
-      await handleSelectConversation(activeConversation);
-    } catch (err) {
-      console.error('❌ Erreur envoi message:', err);
-    }
-  };
-
-  const formattedThreads: Thread[] = conversations.map((conv) => ({
-    id: conv.phone,
-    name: conv.name || conv.phone,
-    phone: conv.phone,
-    channel: 'ab',
-    channelColor: '#0066FF',
-    preview: conv.recent_exchanges[0]?.user_message || 'Aucun message',
-    time: formatRelativeTime(conv.last_message_time),
-    unread: conv.unread_count,
-    avatarColor: getAvatarColor(conv.name),
-    listingName: conv.listing_name,
-    checkInDate: conv.checkin_date,
-  }));
-
-  const formattedMessages: Message[] = messages.flatMap((exchange, index) => {
-    const msgs: Message[] = [];
-    if (index === 0 || isDifferentDay(exchange.timestamp, messages[index - 1]?.timestamp)) {
-      msgs.push({
-        id: `day-${index}`,
-        from: 'guest',
-        text: formatDayLabel(exchange.timestamp),
-        time: '',
-        type: 'day-separator',
-      });
-    }
-    if (exchange.user_message) {
-      msgs.push({
-        id: `user-${index}`,
-        from: exchange.sent_by_admin ? 'you' : 'guest',
-        text: exchange.user_message,
-        time: formatTime(exchange.timestamp),
-      });
-    }
-    if (exchange.ai_response) {
-      msgs.push({
-        id: `ai-${index}`,
-        from: 'sojori',
-        text: exchange.ai_response,
-        time: formatTime(exchange.timestamp),
-        isAI: true,
-      });
-    }
-    return msgs;
-  });
-
-  const quickTemplates: QuickTemplate[] = [
-    { id: '1', label: '📋 Réponse standard', icon: '📋', text: 'Merci pour votre message. ' },
-    { id: '2', label: '📅 Confirmer dates', icon: '📅', text: 'Vos dates sont confirmées : ' },
-    { id: '3', label: '💰 Détails paiement', icon: '💰', text: 'Concernant le paiement : ' },
-  ];
-
-  const mockChannel = [{ id: 'ab', label: 'OTA', icon: '🏨', color: '#0066FF', count: conversations.length }];
-
-  const activeThread: Thread | null = activeConversation
-    ? {
-        id: activeConversation.phone,
-        name: activeConversation.name || activeConversation.phone,
-        phone: activeConversation.phone,
-        channel: 'ab',
-        channelColor: '#0066FF',
-        preview: '',
-        time: '',
-        unread: 0,
-        avatarColor: getAvatarColor(activeConversation.name),
-        listingName: activeConversation.listing_name,
-        checkInDate: activeConversation.checkin_date,
-      }
-    : null;
-
-  if (loading) {
+  if (loading && threads.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
         <CircularProgress size={32} sx={{ color: t.primary }} />
@@ -162,12 +104,25 @@ export default function MessagesOTATabV2() {
     );
   }
 
-  if (conversations.length === 0) {
+  if (!loading && threads.length === 0) {
     return (
       <InboxLayout>
-        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: 2 }}>
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            flexDirection: 'column',
+            gap: 2,
+            gridColumn: '1 / -1',
+          }}
+        >
           <Typography sx={{ fontSize: 48 }}>🏨</Typography>
           <Typography sx={{ fontSize: 15, fontWeight: 600 }}>Aucun message OTA</Typography>
+          <Typography sx={{ fontSize: 13, color: t.text3 }}>
+            Les threads confirmés apparaissent ici (API rentals/get-thread).
+          </Typography>
         </Box>
       </InboxLayout>
     );
@@ -178,12 +133,16 @@ export default function MessagesOTATabV2() {
       <InboxLayout>
         <ThreadsList
           threads={formattedThreads}
-          channels={mockChannel}
-          activeThreadId={activeThread?.id || null}
+          channels={[
+            { id: 'ab', label: 'OTA', icon: '🏨', color: '#FF5A5F', count: threads.length },
+          ]}
+          listTitle="Messages OTA"
+          mode="ota"
+          activeThreadId={activeThread?.id ?? null}
           searchTerm={searchTerm}
           onSelectThread={(thread) => {
-            const conv = conversations.find((c) => c.phone === thread.id);
-            if (conv) handleSelectConversation(conv);
+            const row = threads.find((r) => r.threadId === thread.id);
+            if (row) void handleSelect(row);
           }}
           onSearchChange={setSearchTerm}
         />
@@ -191,104 +150,68 @@ export default function MessagesOTATabV2() {
           <>
             <ConversationThread
               thread={activeThread}
-              messages={loadingMessages ? [] : formattedMessages}
-              quickTemplates={quickTemplates}
-              onSendMessage={handleSendMessage}
-              onSelectTemplate={(t) => console.log('Template:', t.text)}
+              messages={inbox.loadingMessages ? [] : inbox.messages}
+              quickTemplates={OTA_QUICK_TEMPLATES}
+              quickReplies={OTA_QUICK_REPLIES}
+              otaPlatform={otaPlatform}
+              onSendMessage={async (text) => {
+                if (!inbox.activeRow) return;
+                await messagesService.sendOTAMessage(inbox.activeRow.threadId, text.trim());
+                await handleSelect(inbox.activeRow);
+              }}
+              onSelectTemplate={(tpl) => {
+                if (tpl.text && inbox.activeRow) {
+                  void messagesService.sendOTAMessage(inbox.activeRow.threadId, tpl.text);
+                }
+              }}
               onAISuggestion={() => setShowAIModal(true)}
             />
-            {activeConversation && (
-              <ConversationDetails
-                thread={activeThread}
-                type="ota"
-                reservationData={{
-                  reservationNumber: activeConversation.reservation_number,
-                  listingName: activeConversation.listing_name,
-                  channel: 'Airbnb',
-                  status: activeConversation.status || 'Confirmée',
-                  checkInDate: activeConversation.checkin_date,
-                  checkOutDate: activeConversation.checkout_date,
-                }}
-                onAction={(action) => {
-                  if (action === 'view-platform') {
-                    console.log('Ouvrir sur plateforme OTA');
-                  }
-                }}
-              />
-            )}
+            <ConversationDetails
+              thread={activeThread}
+              type="ota"
+              reservation={inbox.reservation ?? undefined}
+              onAction={(action) => {
+                if (action === 'view-platform') {
+                  console.log('Ouvrir sur', otaPlatform);
+                }
+              }}
+            />
           </>
         ) : (
-          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 2 }}>
+          <Box
+            sx={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              gap: 2,
+              gridColumn: { xs: '1', lg: '2' },
+            }}
+          >
             <Typography sx={{ fontSize: 48 }}>📨</Typography>
             <Typography sx={{ fontSize: 15, fontWeight: 600, color: t.text2 }}>
-              Sélectionnez un message
-            </Typography>
-            <Typography sx={{ fontSize: 13, color: t.text3 }}>
-              Choisissez une réservation pour voir les messages OTA
+              Sélectionnez un message OTA
             </Typography>
           </Box>
         )}
       </InboxLayout>
 
-      {/* Modal de suggestion IA */}
       <AISuggestionModal
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
         onUseSuggestion={(text) => {
-          handleSendMessage(text);
+          if (inbox.activeRow) {
+            void messagesService.sendOTAMessage(inbox.activeRow.threadId, text);
+          }
         }}
         context={{
-          conversationHistory: messages,
-          guestName: activeConversation?.name,
-          reservationNumber: activeConversation?.reservation_number,
+          conversationHistory: [],
+          guestName: inbox.activeRow?.guestName,
+          reservationNumber: inbox.reservation?.reservationNumber,
           type: 'ota',
         }}
       />
     </>
   );
-}
-
-// Helper functions
-function formatRelativeTime(timestamp?: string): string {
-  if (!timestamp) return '';
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffMins < 1) return "À l'instant";
-  if (diffMins < 60) return `Il y a ${diffMins}min`;
-  if (diffHours < 24) return `Il y a ${diffHours}h`;
-  if (diffDays === 1) return 'Hier';
-  if (diffDays < 7) return `Il y a ${diffDays}j`;
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-}
-
-function formatTime(timestamp?: string): string {
-  if (!timestamp) return '';
-  return new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-}
-
-function isDifferentDay(ts1?: string, ts2?: string): boolean {
-  if (!ts1 || !ts2) return true;
-  return new Date(ts1).toDateString() !== new Date(ts2).toDateString();
-}
-
-function formatDayLabel(timestamp?: string): string {
-  if (!timestamp) return '';
-  const date = new Date(timestamp);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === today.toDateString()) return "Aujourd'hui";
-  if (date.toDateString() === yesterday.toDateString()) return 'Hier';
-  return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-}
-
-function getAvatarColor(name?: string): string {
-  const colors = ['#f59e0b', '#06b6d4', '#a78bfa', '#10b981', '#ec4899', '#f97316', '#3b82f6'];
-  if (!name) return colors[0];
-  const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[hash % colors.length];
 }

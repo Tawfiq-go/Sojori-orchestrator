@@ -47,7 +47,7 @@ export default function ListingFormV2({ listingId, initialValues = {}, onSave, o
       if (tabKey === 'fees')         return <FeesTab        {...common} />;
       if (tabKey === 'channels')     return <ChannelsTab    {...common} listingId={listingId} onVerifyRuChannels={onVerifyRuChannels} verifyRuLoading={verifyRuLoading} />;
       if (tabKey === 'direct')       return <DirectBookingTab {...common} />;
-      if (tabKey === 'rooms')        return <RoomsTab       {...common} />;
+      if (tabKey === 'rooms')        return <RoomsTab       {...common} listingId={listingId} />;
       if (tabKey === 'license')      return <LicenseTab     {...common} />;
     } else {
       if (tabKey === 'orchestration') return <OrchestrationTab {...common} />;

@@ -75,7 +75,6 @@ export default function WhatsAppStaffPageV2() {
         conv.phone,
         { limit: 50 }
       );
-    </DashboardWrapper>
 
       if (response.status === 'success') {
         setMessages(response.data.exchanges);
@@ -345,8 +344,8 @@ export default function WhatsAppStaffPageV2() {
         </InboxLayout>
       )}
     </Box>
-  );
     </DashboardWrapper>
+  );
 }
 
 // Helper functions

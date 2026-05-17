@@ -5,7 +5,12 @@
 // / counter / chips / multilingue / map). Branche-les dans le `renderTab`
 // du ListingFormShell livré précédemment.
 // ════════════════════════════════════════════════════════════════════
-import React, { useState } from 'react';
+import React, { useMemo } from 'react';
+import {
+  DESC_LANG_UI,
+  findDescIndexForLang,
+  getDescEntryForLang,
+} from '../../../../utils/listingFormV2ApiAdapter';
 import {
   Box, Stack, Typography, TextField, Select, MenuItem, FormControl,
   Switch, IconButton, Chip, Button, Tooltip,
@@ -133,6 +138,44 @@ export function GeneralTab({ values, onChange, aiFilled = new Set() }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
   const isAI = (k) => aiFilled.has(k);
 
+  const descLang = values._descLang || '🇫🇷 FR';
+  const descriptions = useMemo(
+    () => (Array.isArray(values.description) ? values.description.map((d) => ({ ...d })) : []),
+    [values.description],
+  );
+  const activeDesc = getDescEntryForLang(descriptions, descLang);
+
+  const setDescLang = (langUi) => {
+    const entry = getDescEntryForLang(descriptions, langUi);
+    onChange?.({
+      ...values,
+      _descLang: langUi,
+      shortDescription: entry.headline ?? '',
+      longDescription: entry.value ?? '',
+    });
+  };
+
+  const patchActiveDescription = (patch) => {
+    const next = descriptions.map((d) => ({ ...d }));
+    let idx = findDescIndexForLang(next, descLang);
+    if (idx < 0) {
+      next.push({
+        languageRuId: { '🇫🇷 FR': '4', '🇬🇧 EN': '1', '🇪🇸 ES': '2', '🇮🇹 IT': '3' }[descLang],
+        languageId: '',
+        headline: '',
+        value: '',
+      });
+      idx = next.length - 1;
+    }
+    next[idx] = { ...next[idx], ...patch };
+    onChange?.({
+      ...values,
+      description: next,
+      shortDescription: patch.headline !== undefined ? patch.headline : values.shortDescription,
+      longDescription: patch.value !== undefined ? patch.value : values.longDescription,
+    });
+  };
+
   return (
     <Box>
       {aiFilled.size > 0 && (
@@ -195,29 +238,57 @@ export function GeneralTab({ values, onChange, aiFilled = new Set() }) {
 
       <Card title="🛏 Capacité & dimensions">
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
-          <Field label="Chambres" required><Counter value={values.bedrooms ?? 4} onChange={v => upd('bedrooms', v)} /></Field>
-          <Field label="Salles de bain" required><Counter value={values.bathrooms ?? 2} onChange={v => upd('bathrooms', v)} /></Field>
-          <Field label="Invités max" required><Counter value={values.guests ?? 8} onChange={v => upd('guests', v)} /></Field>
-          <Field label="Lits"><Counter value={values.beds ?? 5} onChange={v => upd('beds', v)} /></Field>
+          <Field label="Chambres" required><Counter value={values.bedrooms ?? 0} onChange={v => upd('bedrooms', v)} /></Field>
+          <Field label="Salles de bain" required><Counter value={values.bathrooms ?? 0} onChange={v => upd('bathrooms', v)} /></Field>
+          <Field label="Invités max" required><Counter value={values.guests ?? 0} onChange={v => upd('guests', v)} /></Field>
+          <Field label="Lits"><Counter value={values.beds ?? 0} onChange={v => upd('beds', v)} /></Field>
           <Field label="Surface (m²)" ai={isAI('sqm')}>
-            <TextField size="small" type="number" value={values.sqm ?? 240} onChange={e => upd('sqm', +e.target.value)} sx={isAI('sqm') ? sxInputAI : sxInput} />
+            <TextField size="small" type="number" value={values.sqm ?? ''} onChange={e => upd('sqm', e.target.value === '' ? undefined : +e.target.value)} sx={isAI('sqm') ? sxInputAI : sxInput} />
           </Field>
           <Field label="Étage">
-            <TextField size="small" type="number" value={values.floor ?? 0} onChange={e => upd('floor', +e.target.value)} sx={sxInput} />
+            <TextField size="small" type="number" value={values.floor ?? ''} onChange={e => upd('floor', e.target.value === '' ? undefined : +e.target.value)} sx={sxInput} />
           </Field>
         </Box>
       </Card>
 
-      <Card title="📝 Descriptions" meta="Multilingue · auto-traduction">
-        <LangSwitcher value={values.lang || '🇫🇷 FR'} onChange={v => upd('lang', v)} />
-        <Field label="Résumé court" charCount={`${(values.shortDescription || '').length}/140`}
-          hint="Apparaît dans les résultats de recherche OTA.">
-          <TextField size="small" multiline rows={2} fullWidth value={values.shortDescription || ''} onChange={e => upd('shortDescription', e.target.value.slice(0, 140))} sx={sxInput} />
+      <Card title="📝 Descriptions" meta={`Multilingue · ${descriptions.length} langue(s)`}>
+        <LangSwitcher
+          value={descLang}
+          onChange={(v) => setDescLang(v)}
+          languages={[...DESC_LANG_UI]}
+        />
+        <Field
+          label="Résumé court (headline)"
+          charCount={`${(activeDesc.headline ?? values.shortDescription ?? '').length}/140`}
+          hint="Titre accrocheur · champ legacy description[].headline"
+        >
+          <TextField
+            size="small"
+            multiline
+            rows={2}
+            fullWidth
+            value={activeDesc.headline ?? values.shortDescription ?? ''}
+            onChange={(e) =>
+              patchActiveDescription({ headline: e.target.value.slice(0, 140) })
+            }
+            sx={sxInput}
+          />
         </Field>
         <Box sx={{ mt: 1.75 }}>
-          <Field label="Description longue" ai={isAI('longDescription')}
-            hint="Sera traduite automatiquement en EN / ES / IT après publication.">
-            <TextField size="small" multiline rows={5} fullWidth value={values.longDescription || ''} onChange={e => upd('longDescription', e.target.value)} sx={isAI('longDescription') ? sxInputAI : sxInput} />
+          <Field
+            label="Description longue"
+            ai={isAI('longDescription')}
+            hint="Texte principal · champ legacy description[].value"
+          >
+            <TextField
+              size="small"
+              multiline
+              rows={5}
+              fullWidth
+              value={activeDesc.value ?? values.longDescription ?? ''}
+              onChange={(e) => patchActiveDescription({ value: e.target.value })}
+              sx={isAI('longDescription') ? sxInputAI : sxInput}
+            />
           </Field>
         </Box>
         <Box sx={{ mt: 1.75 }}>

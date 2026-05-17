@@ -299,7 +299,7 @@ class ReservationsService {
    * Basé sur l'API du dashboard legacy (sojori-dashboard)
    * Gère automatiquement le lien de paiement selon paymentType et paymentStatus
    */
-  async create(data: any): Promise<{ success: boolean; message: string; data: Reservation }> {
+  async create(data: any): Promise<{ success: boolean; message?: string; error?: string; data?: Reservation }> {
     try {
       const paymentStatus = data?.paymentStatus || data?.initialPaymentStatus || 'UnPaid';
       const paymentType = data?.paymentType; // 'cash' | 'bank_card' | undefined
@@ -326,16 +326,26 @@ class ReservationsService {
 
       const url = `${BASE_URL}/api/v1/reservations/create`;
 
+      console.log('[ReservationsService] 📤 Creating reservation:', payload);
+
       const response = await apiClient.post(url, payload);
+
+      console.log('[ReservationsService] 📥 Response:', response.data);
 
       if (response.data.success) {
         return response.data;
       } else {
-        throw new Error(response.data.message || 'Erreur lors de la création de la réservation');
+        return {
+          success: false,
+          error: response.data.message || response.data.error || 'Erreur lors de la création de la réservation',
+        };
       }
     } catch (error: any) {
-      console.error('Error creating reservation:', error);
-      throw error;
+      console.error('[ReservationsService] ❌ Error creating reservation:', error);
+      return {
+        success: false,
+        error: error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Erreur lors de la création',
+      };
     }
   }
 
@@ -345,10 +355,21 @@ class ReservationsService {
   // ════════════════════════════════════════════════════════════════════
 
   /**
-   * TODO: Recherche une réservation par son numéro
-   * Endpoint non disponible dans l'API interne actuelle
+   * GET /api/v1/reservations/reservations/by-reservation-number/:reservationNumber
    */
-  // async searchByNumber(reservationNumber: string): Promise<Reservation> { ... }
+  async getByReservationNumber(reservationNumber: string): Promise<Reservation | null> {
+    try {
+      const url = `${BASE_URL}/api/v1/reservations/reservations/by-reservation-number/${encodeURIComponent(reservationNumber.trim())}`;
+      const response = await apiClient.get(url);
+      if (response.data?.success && response.data?.reservation) {
+        return response.data.reservation as Reservation;
+      }
+      return null;
+    } catch (error) {
+      console.warn(`[ReservationsService] getByReservationNumber(${reservationNumber}):`, error);
+      return null;
+    }
+  }
 
   /**
    * TODO: Recherche une réservation par téléphone

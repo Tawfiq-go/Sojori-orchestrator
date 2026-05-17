@@ -10,11 +10,10 @@ import type {
   CalendarMonthResponse,
   CalendarUpdateResponse,
 } from '../types/calendar.types';
+import apiClient from './apiClient';
+import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 
-// ⚠️ IMPORTANT: srv-calendar est sur le PORT 4004 (pas 4006!)
-// Prod: https://dev.sojori.com/api/v1/calendar
-// Local: http://localhost:4004/api/v1/calendar
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://dev.sojori.com';
+const CALENDAR_BASE = MICROSERVICE_BASE_URL.SRV_CALENDAR;
 
 class CalendarService {
   /**
@@ -24,27 +23,16 @@ class CalendarService {
   async getMonthCalendar(params: CalendarMonthRequest): Promise<CalendarDay[]> {
     try {
       const { listingId, startDate, endDate } = params;
-
-      // Convert dates to ISO format
       const start = new Date(startDate).toISOString().split('T')[0];
       const end = new Date(endDate).toISOString().split('T')[0];
 
-      const url = `${BASE_URL}/api/v1/calendar/${listingId}/calendar?startDate=${start}&endDate=${end}`;
+      // Route Express : app.use('/api/v1/calendar') + router.use('/calendar') + '/:listingId/calendar'
+      const response = await apiClient.get<CalendarMonthResponse>(
+        `${CALENDAR_BASE}/calendar/${listingId}/calendar`,
+        { params: { startDate: start, endDate: end } },
+      );
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result: CalendarMonthResponse = await response.json();
-
+      const result = response.data;
       if (!result.success) {
         throw new Error(result.message || 'Failed to fetch calendar');
       }
@@ -65,7 +53,7 @@ class CalendarService {
    */
   async updateCalendar(params: CalendarUpdateRequest | CalendarUpdateRequest[]): Promise<CalendarDay[]> {
     try {
-      const url = `${BASE_URL}/api/v1/calendar/inventory/update-inventory`;
+      const url = `${CALENDAR_BASE}/inventory/update-inventory`;
 
       // Toujours envoyer un array
       const payload = Array.isArray(params) ? params : [params];
@@ -116,7 +104,7 @@ class CalendarService {
       const start = new Date(startDate).toISOString().split('T')[0];
       const end = new Date(endDate).toISOString().split('T')[0];
 
-      const url = `${BASE_URL}/api/v1/calendar/availability?listingIds=${listingIds.join(',')}&startDate=${start}&endDate=${end}`;
+      const url = `${CALENDAR_BASE}/availability?listingIds=${listingIds.join(',')}&startDate=${start}&endDate=${end}`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -158,7 +146,7 @@ class CalendarService {
       const start = new Date(startDate).toISOString().split('T')[0];
       const end = new Date(endDate).toISOString().split('T')[0];
 
-      const url = `${BASE_URL}/api/v1/calendar/occupancy-rate?listingId=${listingId}&startDate=${start}&endDate=${end}`;
+      const url = `${CALENDAR_BASE}/calendar/occupancy-rate?listingId=${listingId}&startDate=${start}&endDate=${end}`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -200,7 +188,7 @@ class CalendarService {
       const start = new Date(startDate).toISOString().split('T')[0];
       const end = new Date(endDate).toISOString().split('T')[0];
 
-      const url = `${BASE_URL}/api/v1/calendar/average-daily-rate?listingId=${listingId}&startDate=${start}&endDate=${end}`;
+      const url = `${CALENDAR_BASE}/calendar/average-daily-rate?listingId=${listingId}&startDate=${start}&endDate=${end}`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -236,55 +224,29 @@ class CalendarService {
     listingIds: string[],
     startDate: string,
     endDate: string,
-    includeReservations: boolean = true
+    includeReservations: boolean = true,
   ): Promise<any[]> {
     try {
       const start = new Date(startDate).toISOString().split('T')[0];
       const end = new Date(endDate).toISOString().split('T')[0];
-
-      const listingIdsParams = listingIds.map(id => `listingIds[]=${id}`).join('&');
       const inc = includeReservations ? 'true' : 'false';
 
-      const url = `${BASE_URL}/api/v1/calendar/inventory/get-inventory?${listingIdsParams}&startDate=${start}&endDate=${end}&includeReservations=${inc}`;
+      const listingIdsParams = listingIds.map(id => `listingIds[]=${encodeURIComponent(id)}`).join('&');
+      const url =
+        `${CALENDAR_BASE}/inventory/get-inventory?${listingIdsParams}` +
+        `&startDate=${encodeURIComponent(start)}&endDate=${encodeURIComponent(end)}` +
+        `&includeReservations=${inc}`;
 
-      console.log('[CalendarService] getInventoryForListings URL:', url);
+      const response = await apiClient.get<{ success: boolean; data: any[]; message?: string }>(url);
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = response.data;
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to fetch inventory');
       }
 
-      const result = await response.json();
-
-      console.log('[CalendarService] getInventoryForListings result:', {
-        success: result?.success,
-        hasData: !!result?.data,
-        dataIsArray: Array.isArray(result?.data),
-        dataLength: Array.isArray(result?.data) ? result.data.length : 'not array',
-        dataHasData: !!result?.data?.data,
-        dataDataIsArray: Array.isArray(result?.data?.data),
-        dataDataLength: Array.isArray(result?.data?.data) ? result.data.data.length : 'not array',
-        fullResultKeys: Object.keys(result || {}),
-        dataKeys: result?.data ? Object.keys(result.data) : 'no data',
-      });
-      console.log('[CalendarService] Full result object:', result);
-
-      // L'API retourne DIRECTEMENT { success, data: [...] }
-      // PAS data.data comme dans sojori-dashboard !
-      if (Array.isArray(result?.data)) {
-        console.log('[CalendarService] Returning data array with length:', result.data.length);
+      if (Array.isArray(result.data)) {
         return result.data;
       }
-
-      // Fallback si structure différente
-      console.warn('[CalendarService] Unexpected data structure, returning empty array');
       return [];
     } catch (error) {
       console.error('Error fetching inventory:', error);

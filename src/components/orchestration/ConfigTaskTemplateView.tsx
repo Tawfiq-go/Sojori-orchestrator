@@ -137,20 +137,11 @@ const ConfigTaskTemplateView: React.FC<ConfigTaskTemplateViewProps> = ({ targetO
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="info">
-          <Typography sx={{ fontWeight: 600, mb: 0.5 }}>Configuration non disponible</Typography>
+        <Alert severity="error">
+          <Typography sx={{ fontWeight: 600, mb: 0.5 }}>Erreur de chargement</Typography>
           <Typography sx={{ fontSize: 13 }}>
             {error}
           </Typography>
-          <Button
-            variant="contained"
-            size="small"
-            href="https://dashboard.sojori.com/admin/orchestrator?tab=configuration&configTab=orchestration"
-            target="_blank"
-            sx={{ mt: 2, textTransform: 'none' }}
-          >
-            Ouvrir dans le dashboard legacy
-          </Button>
         </Alert>
       </Box>
     );
@@ -187,7 +178,7 @@ const ConfigTaskTemplateView: React.FC<ConfigTaskTemplateViewProps> = ({ targetO
       {/* Categories List */}
       {categories.length === 0 ? (
         <Alert severity="info">
-          Aucune catégorie configurée. Utilisez le dashboard legacy pour créer la configuration initiale.
+          Aucune catégorie configurée.
         </Alert>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -228,7 +219,7 @@ const ConfigTaskTemplateView: React.FC<ConfigTaskTemplateViewProps> = ({ targetO
                 {/* Category Name */}
                 <Box sx={{ flex: 1 }}>
                   <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
-                    {CATEGORY_LABELS[category.categoryName] || category.categoryName}
+                    {category.label || category.categoryDisplayLabel || CATEGORY_LABELS[category.categoryName] || category.categoryName}
                   </Typography>
                 </Box>
 
@@ -292,17 +283,6 @@ const ConfigTaskTemplateView: React.FC<ConfigTaskTemplateViewProps> = ({ targetO
                       />
                     )}
                   </Box>
-
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<SettingsIcon sx={{ fontSize: 16 }} />}
-                    href="https://dashboard.sojori.com/admin/orchestrator?tab=configuration&configTab=orchestration"
-                    target="_blank"
-                    sx={{ mt: 2, textTransform: 'none', fontSize: 12 }}
-                  >
-                    Éditer dans le dashboard legacy
-                  </Button>
                 </Box>
               </AccordionDetails>
             </Accordion>

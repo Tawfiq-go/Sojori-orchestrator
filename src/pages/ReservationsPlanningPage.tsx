@@ -2,6 +2,9 @@
  * Vue Planning Réservations — Calendrier Gantt type « Vue Séjour »
  * Inspiré de TasksPlanningPage mais affiche UNIQUEMENT les réservations
  * Design aligné sur tokens Atelier 2026
+ *
+ * ✅ IMPORTANT: Affiche TOUTES les propriétés actives, même sans réservations
+ * Basé sur specs user: "recupere les lisutng active (seuelelent active) on les affiche"
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -13,7 +16,9 @@ import { tokens as t } from '../components/dashboard/DashboardV2.components';
 import { MultiPropertyInventory, type PropertyRow, type ReservationBlock } from '../components/MultiPropertyInventory';
 import { useAuth } from '../hooks/useAuth';
 import reservationsService from '../services/reservationsService';
+import listingsService from '../services/listingsService';
 import type { Reservation } from '../types/reservations.types';
+import type { ListingSummary } from '../types/listings.types';
 
 export function ReservationsPlanningPage() {
   const { user } = useAuth();
@@ -21,6 +26,7 @@ export function ReservationsPlanningPage() {
   const startDate = format(currentStart, 'yyyy-MM-dd');
   const endDate = format(addDays(currentStart, 30), 'yyyy-MM-dd');
 
+  const [listings, setListings] = useState<ListingSummary[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,21 +39,36 @@ export function ReservationsPlanningPage() {
     }
   }, [startDate, endDate]);
 
-  // Fetch reservations
+  // Fetch active listings + reservations (Confirmed/Pending)
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // ✅ Filtrage backend: demander seulement Confirmed et Pending
-      const response = await reservationsService.getList({
+      // ✅ ÉTAPE 1: Récupérer TOUTES les propriétés actives
+      console.log('[ReservationsPlanningPage] 🔄 Fetching active listings...');
+      const listingsResponse = await listingsService.getListings({
+        useActiveFilter: true,
+        active: true,
         limit: 1000,
-        status: 'Confirmed,Pending'
       });
 
-      setReservations(response.data as any[]);
+      console.log('[ReservationsPlanningPage] ✅ Active listings:', listingsResponse.data.items.length);
+      setListings(listingsResponse.data.items);
+
+      // ✅ ÉTAPE 2: Récupérer les réservations Confirmed/Pending
+      console.log('[ReservationsPlanningPage] 🔄 Fetching reservations (Confirmed/Pending)...');
+      const reservationsResponse = await reservationsService.getList({
+        limit: 1000,
+        status: 'Confirmed,Pending',
+      });
+
+      console.log('[ReservationsPlanningPage] ✅ Reservations:', reservationsResponse.data.length);
+      setReservations(reservationsResponse.data as any[]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur chargement réservations');
+      console.error('[ReservationsPlanningPage] ❌ Error:', e);
+      setError(e instanceof Error ? e.message : 'Erreur chargement données');
+      setListings([]);
       setReservations([]);
     } finally {
       setLoading(false);
@@ -58,67 +79,72 @@ export function ReservationsPlanningPage() {
     void load();
   }, [load]);
 
-  // Group reservations by listing
+  // ✅ CHANGEMENT MAJEUR: Itérer sur les LISTINGS (pas les réservations)
+  // Afficher TOUTES les propriétés actives, même sans réservations
   const propertyRows: PropertyRow[] = useMemo(() => {
-    // Group by listing
-    const byListing = new Map<string, Reservation[]>();
+    console.log('[ReservationsPlanningPage] 🔨 Building property rows from', listings.length, 'listings');
 
+    // Map reservations by listingId for quick lookup
+    const reservationsByListing = new Map<string, Reservation[]>();
     reservations.forEach((res) => {
-      const listingId = res.listing?._id || 'unknown';
-      if (!byListing.has(listingId)) {
-        byListing.set(listingId, []);
+      const listingId = res.listing?._id || res.listingId || res.sojoriId;
+      if (listingId) {
+        if (!reservationsByListing.has(listingId)) {
+          reservationsByListing.set(listingId, []);
+        }
+        reservationsByListing.get(listingId)!.push(res);
       }
-      byListing.get(listingId)!.push(res);
     });
 
-    // Convert to PropertyRow format
-    return Array.from(byListing.entries())
-      .map(([listingId, resas]) => {
-        const firstRes = resas[0];
-        const listingName = firstRes.listing?.name || 'Propriété Inconnue';
+    // ✅ ITÉRER SUR LES LISTINGS (pas les réservations groupées)
+    return listings.map((listing) => {
+      const listingId = listing.id;
+      const resas = reservationsByListing.get(listingId) || [];
 
-        // Calculate reservation blocks
-        const blocks: ReservationBlock[] = resas
-          .filter((r) => r.arrivalDate && r.departureDate)
-          .map((r) => {
-            const arrival = parseISO(r.arrivalDate);
-            const departure = parseISO(r.departureDate);
-            const windowStart = parseISO(startDate);
+      console.log(`[ReservationsPlanningPage] 📊 Listing ${listing.name}: ${resas.length} reservations`);
 
-            // Calculate day indices relative to window start
-            const startDay = Math.max(0, differenceInCalendarDays(arrival, windowStart));
-            const endDay = differenceInCalendarDays(departure, windowStart);
+      // Calculate reservation blocks
+      const blocks: ReservationBlock[] = resas
+        .filter((r) => r.arrivalDate && r.departureDate)
+        .map((r) => {
+          const arrival = parseISO(r.arrivalDate);
+          const departure = parseISO(r.departureDate);
+          const windowStart = parseISO(startDate);
 
-            return {
-              id: r.reservationNumber || r._id,
-              guestName: r.guestName || 'Guest',
-              guestFlag: '🌍', // TODO: Use real country flag
-              amount: '', // Pas de prix dans la vue planning
-              startDay,
-              endDay,
-              status: r.status?.toLowerCase() === 'confirmed' ? 'confirmed' : 'pending',
-            } as ReservationBlock;
-          })
-          .filter((block) => block.endDay >= 0 && block.startDay < planningWindowDays);
+          // Calculate day indices relative to window start
+          const startDay = Math.max(0, differenceInCalendarDays(arrival, windowStart));
+          const endDay = differenceInCalendarDays(departure, windowStart);
 
-        // Calculate booked ranges
-        const bookedRanges: [number, number][] = blocks.map((b) => [b.startDay, b.endDay]);
+          return {
+            id: r.reservationNumber || r._id,
+            guestName: r.guestName || 'Guest',
+            guestFlag: '🌍', // TODO: Use real country flag
+            amount: '', // Pas de prix dans la vue planning
+            startDay,
+            endDay,
+            status: r.status?.toLowerCase() === 'confirmed' ? 'confirmed' : 'pending',
+          } as ReservationBlock;
+        })
+        .filter((block) => block.endDay >= 0 && block.startDay < planningWindowDays);
 
-        return {
-          id: listingId,
-          name: listingName,
-          city: 'Casablanca', // TODO: Get from listing data
-          photoColor: 'gold' as const,
-          occupancyPct: 0, // Pas affiché dans la vue planning
-          monthRevenue: '', // Pas de revenus affichés dans la vue planning
-          bookedRanges,
-          closedDays: [],
-          reservations: blocks,
-        };
-      })
-      // ✅ Filtrer les listings sans réservations (comme legacy)
-      .filter((property) => property.reservations.length > 0);
-  }, [reservations, startDate, planningWindowDays]);
+      // Calculate booked ranges
+      const bookedRanges: [number, number][] = blocks.map((b) => [b.startDay, b.endDay]);
+
+      return {
+        id: listingId,
+        name: listing.name,
+        city: listing.city || 'N/A',
+        photoColor: 'gold' as const,
+        occupancyPct: 0, // Pas affiché dans la vue planning
+        monthRevenue: '', // Pas de revenus affichés dans la vue planning
+        bookedRanges,
+        closedDays: [],
+        reservations: blocks,
+      };
+    });
+    // ✅ IMPORTANT: Ne PAS filtrer les listings sans réservations
+    // User spec: "on les affiche" (afficher TOUTES les propriétés actives)
+  }, [listings, reservations, startDate, planningWindowDays]);
 
   const goToToday = () => setCurrentStart(new Date());
   const goPrevWeek = () => setCurrentStart((d) => addDays(d, -7));
