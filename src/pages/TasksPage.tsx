@@ -658,6 +658,14 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
     ...cols.slice(2),
   ];
 
+  // Debug: Log final column count
+  console.log('🔧 [TasksPage] Colonnes finales:', finalColumns.length, 'colonnes');
+  console.log('🔧 [TasksPage] Colonnes optionnelles actives:', {
+    showCreatedAt,
+    showTimeslot,
+    total: (showCreatedAt ? 1 : 0) + (showTimeslot ? 1 : 0)
+  });
+
   return (
     <>
       <StatsRow>
@@ -1495,6 +1503,13 @@ export function TasksPage() {
   const [activeTab, setActiveTab] = useState('liste');
   const [tasks, setTasks] = useState<Task[]>(mockTasks);
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Debug: Confirm new code is loaded
+  console.log('🎯 [TasksPage] VERSION OPTIMISÉE CHARGÉE - 14 colonnes tableau', {
+    totalTasks: mockTasks.length,
+    activeTab,
+    timestamp: new Date().toISOString()
+  });
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -1580,7 +1595,7 @@ export function TasksPage() {
 
   return (
     <DashboardWrapper breadcrumb={['Activité', 'Tâches']}>
-      <PageHeader title="Tâches & opérations" count={`${filteredTasks.length}`}>
+      <PageHeader title="🚀 Tâches V2 OPTIMISÉE (14 colonnes)" count={`${filteredTasks.length}`}>
         <Button sx={btnGhostSx}>📤 Exporter</Button>
         <Button sx={btnAiSx}>✨ Auto-assigner</Button>
         <Button sx={btnPrimarySx} onClick={() => handleOpenModal()}>

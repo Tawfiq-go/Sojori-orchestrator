@@ -2,7 +2,7 @@
 // CalendarInventoryPage.jsx — wrapper toolbar + Multi/Simple toggle
 // Point d'entrée principal · à brancher sur la route /calendar-inventory
 // ════════════════════════════════════════════════════════════════════
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { T } from './_shared';
 import MultiView from './MultiView';
 import SimpleView from './SimpleView';
@@ -22,6 +22,13 @@ export default function CalendarInventoryPage({
   const [selectedColumns, setSelectedColumns] = useState(['availableRoom', 'rate']); // Présélection par défaut
   const [pivotDate, setPivotDate] = useState(startDate);
   const [modalCells, setModalCells] = useState(null);
+
+  // Présélectionner automatiquement le premier listing quand les listings arrivent
+  useEffect(() => {
+    if (listings.length > 0 && !selectedListingId) {
+      setSelectedListingId(listings[0]._id);
+    }
+  }, [listings, selectedListingId]);
 
   const selectedListing = listings.find(l => l._id === selectedListingId);
 
@@ -125,6 +132,22 @@ export default function CalendarInventoryPage({
           inventories={inventoriesByListing[selectedListingId] || {}}
           onCellsSelected={setModalCells}
         />
+      )}
+      {view === 'simple' && !selectedListing && (
+        <div style={{
+          background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 14,
+          padding: '60px 40px', textAlign: 'center', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+        }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 8 }}>
+            Aucun listing sélectionné
+          </div>
+          <div style={{ fontSize: 13, color: T.text3 }}>
+            {listings.length === 0
+              ? 'Aucun listing disponible. Veuillez ajouter des propriétés.'
+              : 'Veuillez sélectionner un listing dans le menu déroulant ci-dessus.'}
+          </div>
+        </div>
       )}
 
       <UpdateInventoryModal

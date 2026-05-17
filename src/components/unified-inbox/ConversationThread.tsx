@@ -3,6 +3,7 @@ import { Box, Stack, Typography } from '@mui/material';
 import { DoneAll } from '@mui/icons-material';
 import { T } from './_tokens';
 import { flagFromPhone } from './inboxFormat';
+import { getOtaTheme, isOtaChannelType } from './otaPlatformTheme';
 import type { Thread, Message, QuickTemplate, QuickAction } from '../../types/unifiedInbox.types';
 
 interface ConversationThreadProps {
@@ -36,9 +37,10 @@ export default function ConversationThread({
   const previousMessageCountRef = useRef(0);
   const isFirstLoadRef = useRef(true);
 
-  const isOta = thread.channel === 'ab' || thread.channel === 'bk';
+  const isOta = isOtaChannelType(thread.channel);
+  const otaTheme = getOtaTheme(thread.channel, otaPlatform);
   const flag = thread.guestFlag || flagFromPhone(thread.phone);
-  const platformLabel = otaPlatform || 'Airbnb';
+  const platformLabel = otaPlatform || otaTheme.label;
 
   useLayoutEffect(() => {
     const el = messagesContainerRef.current;
@@ -90,10 +92,10 @@ export default function ConversationThread({
         };
       }
       return {
-        bg: 'linear-gradient(135deg,rgba(255,90,95,0.12),rgba(255,90,95,0.06))',
-        border: '1px solid rgba(255,90,95,0.30)',
+        bg: otaTheme.bgTint,
+        border: `1px solid ${otaTheme.borderTint}`,
         radius: '18px 18px 6px 18px',
-        color: '#7a1a1d',
+        color: otaTheme.textAccent,
       };
     }
 
@@ -122,12 +124,7 @@ export default function ConversationThread({
     .join('')
     .slice(0, 2);
 
-  const avatarBg =
-    thread.channel === 'ab'
-      ? 'linear-gradient(135deg,#ff8a8e,#FF5A5F)'
-      : thread.channel === 'bk'
-        ? 'linear-gradient(135deg,#4a7eb8,#003580)'
-        : thread.avatarColor || T.green;
+  const avatarBg = isOta ? otaTheme.avatarGradient : thread.avatarColor || T.green;
 
   const checkInSub =
     thread.checkInBadge && thread.checkInDate
@@ -159,12 +156,12 @@ export default function ConversationThread({
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
             borderBottom: `1px solid ${T.border}`,
-            bgcolor: T.airbnbBg,
-            color: '#c0353a',
+            bgcolor: otaTheme.bgTint,
+            color: otaTheme.textAccent,
             flexShrink: 0,
           }}
         >
-          🏠 {platformLabel} · Hosting reply window 24h
+          {otaTheme.headerIcon} {platformLabel} · Hosting reply window 24h
         </Box>
       ) : (
         <Box
@@ -324,7 +321,7 @@ export default function ConversationThread({
           flexDirection: 'column',
           gap: 0.75,
           background: isOta
-            ? `linear-gradient(180deg, ${T.airbnbBg} 0%, ${T.bg0} 40%)`
+            ? `linear-gradient(180deg, ${otaTheme.bgTint} 0%, ${T.bg0} 40%)`
             : `linear-gradient(180deg, ${T.bg2} 0%, ${T.bg0} 100%)`,
         }}
       >
@@ -463,7 +460,7 @@ export default function ConversationThread({
                     fontFamily: '"Geist Mono", monospace',
                     px: 0.5,
                     letterSpacing: '0.02em',
-                    '& b': { color: '#c0353a', fontWeight: 700 },
+                    '& b': { color: otaTheme.textAccent, fontWeight: 700 },
                   }}
                 >
                   via <b>{platformLabel}</b> · auto-translate available
@@ -477,7 +474,7 @@ export default function ConversationThread({
                     fontFamily: '"Geist Mono", monospace',
                     px: 0.5,
                     textAlign: 'right',
-                    '& b': { color: '#c0353a', fontWeight: 700 },
+                    '& b': { color: otaTheme.textAccent, fontWeight: 700 },
                   }}
                 >
                   sent via <b>{platformLabel}</b>
@@ -509,13 +506,13 @@ export default function ConversationThread({
                     px: 1.5,
                     py: '6px',
                     bgcolor: T.bg1,
-                    border: '1px solid rgba(255,90,95,0.30)',
+                    border: `1px solid ${otaTheme.borderTint}`,
                     borderRadius: 999,
                     fontSize: 11.5,
                     fontWeight: 600,
-                    color: '#c0353a',
+                    color: otaTheme.textAccent,
                     cursor: 'pointer',
-                    '&:hover': { bgcolor: T.airbnbBg, borderColor: T.airbnb },
+                    '&:hover': { bgcolor: otaTheme.bgTint, borderColor: otaTheme.primary },
                   }}
                 >
                   {qr.label}
@@ -600,9 +597,9 @@ export default function ConversationThread({
             border: `1px solid ${T.border}`,
             borderRadius: '12px',
             '&:focus-within': {
-              borderColor: isOta ? '#FF5A5F' : T.primary,
+              borderColor: isOta ? otaTheme.focusBorder : T.primary,
               boxShadow: isOta
-                ? '0 0 0 3px rgba(255,90,95,0.15)'
+                ? `0 0 0 3px ${otaTheme.focusRing}`
                 : `0 0 0 3px ${T.primaryTint}`,
               bgcolor: T.bg1,
             },
@@ -656,12 +653,8 @@ export default function ConversationThread({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: isOta
-              ? 'linear-gradient(135deg,#ff8a8e,#FF5A5F)'
-              : 'linear-gradient(135deg,#34e07a,#25D366)',
-            boxShadow: isOta
-              ? '0 2px 10px rgba(255,90,95,0.40)'
-              : '0 2px 10px rgba(37,211,102,0.40)',
+            background: isOta ? otaTheme.sendGradient : 'linear-gradient(135deg,#34e07a,#25D366)',
+            boxShadow: isOta ? otaTheme.sendShadow : '0 2px 10px rgba(37,211,102,0.40)',
           }}
           title="Envoyer"
         >
@@ -674,16 +667,16 @@ export default function ConversationThread({
           sx={{
             px: '18px',
             py: '7px',
-            bgcolor: T.airbnbBg,
+            bgcolor: otaTheme.bgTint,
             borderTop: `1px solid ${T.border}`,
             fontSize: 10.5,
-            color: '#7a1a1d',
+            color: otaTheme.textAccent,
             fontFamily: '"Geist Mono", monospace',
             flexShrink: 0,
             '& b': { fontWeight: 800 },
           }}
         >
-          🏠 <b>{platformLabel} sync</b> · message envoyé via API · impact response time ⚡
+          {otaTheme.headerIcon} <b>{platformLabel} sync</b> · message envoyé via API · impact response time ⚡
         </Box>
       ) : (
         <Box

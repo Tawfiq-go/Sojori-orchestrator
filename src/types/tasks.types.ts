@@ -55,6 +55,7 @@ export interface TaskListItem {
   timeslot?: TaskTimeSlot | null;
   reservationNumber?: string;
   guestName?: string;
+  guestCountry?: string | null;
   listingId?: string;
   listingName?: string;
   /** Fin d’exécution (affichage « Heure tâche » comme partners). */

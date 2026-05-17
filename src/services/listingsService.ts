@@ -1027,6 +1027,45 @@ export const listingsService = {
    * GET /composition-rooms/get — catalogue global des types de pièces (dashboard).
    * Pas de route /room-composition/:listingId sur srv-listing.
    */
+  /** GET /listing-structure — config champs R / * (legacy FieldIndicator). */
+  async getListingStructure(): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await apiClient.get(`${LISTING_API_BASE_URL}/listing-structure`);
+      const payload = asRecord(response.data);
+      if (payload.success === false) return null;
+      const data = payload.data;
+      if (Array.isArray(data) && data.length > 0) {
+        return asRecord(data[0]);
+      }
+      if (data && typeof data === 'object') return asRecord(data);
+      return null;
+    } catch (error) {
+      console.warn('[listings] listing-structure unavailable:', error);
+      return null;
+    }
+  },
+
+  /** GET /room-type-config/get — types de logement (Two Bedroom, etc.). */
+  async getRoomTypeConfigs(): Promise<Array<{ _id: string; type: string }>> {
+    try {
+      const response = await apiClient.get(`${LISTING_API_BASE_URL}/room-type-config/get`);
+      const payload = asRecord(response.data);
+      if (payload.success === false) return [];
+      const raw = payload.data;
+      if (!Array.isArray(raw)) return [];
+      return raw.map((row, index) => {
+        const r = asRecord(row);
+        return {
+          _id: asString(r._id || r.id || `rtc-${index}`),
+          type: asString(r.type || r.name || r.roomTypeName || 'Type'),
+        };
+      });
+    } catch (error) {
+      console.warn('[listings] room-type-config/get unavailable:', error);
+      return [];
+    }
+  },
+
   async getRoomComposition(): Promise<{ rooms?: unknown[] } | null> {
     try {
       const response = await apiClient.get(`${LISTING_API_BASE_URL}/composition-rooms/get`);

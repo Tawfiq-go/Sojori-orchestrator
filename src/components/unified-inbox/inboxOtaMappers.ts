@@ -35,6 +35,7 @@ function normalizeChannel(raw?: string): string {
   if (ch.includes('booking')) return 'Booking.com';
   if (ch.includes('airbnb')) return 'Airbnb';
   if (ch.includes('vrbo')) return 'Vrbo';
+  if (ch.includes('sojori')) return 'Sojori';
   return raw || 'OTA';
 }
 

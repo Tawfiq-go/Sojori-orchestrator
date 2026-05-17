@@ -99,9 +99,14 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
       asNumber(rt.personCapacityMax) ??
       asNumber(raw.personCapacityMax) ??
       asNumber(rt.personCapacity),
+    personCapacity: asNumber(rt.personCapacity),
+    personCapacityMax:
+      asNumber(rt.personCapacityMax) ?? asNumber(raw.personCapacityMax),
     beds: asNumber(rt.bedsNumber) ?? asNumber(raw.bedsNumber),
     sqm: asNumber(rt.surface) ?? asNumber(raw.surface),
     floor: asNumber(raw.floor),
+    totalFloor: asNumber(raw.totalFloor),
+    roomTypeConfigId: asString(rt.roomTypeConfigId),
     description: descriptions,
     _descLang: descLang,
     shortDescription: asString(fr.headline),
@@ -148,12 +153,20 @@ export function mergeFormV2ToUpdatePropertyPayload(
         if (i === 0) {
           if (values.bedrooms != null) row.bedroomsNumber = values.bedrooms;
           if (values.bathrooms != null) row.bathroomsNumber = values.bathrooms;
-          if (values.guests != null) {
+          if (values.personCapacity != null) row.personCapacity = values.personCapacity;
+          if (values.personCapacityMax != null) {
+            row.personCapacityMax = values.personCapacityMax;
+          } else if (values.guests != null) {
             row.personCapacityMax = values.guests;
+          }
+          if (values.guests != null && values.personCapacity == null) {
             row.personCapacity = values.guests;
           }
           if (values.beds != null) row.bedsNumber = values.beds;
           if (values.sqm != null) row.surface = values.sqm;
+          if (values.roomTypeConfigId != null) {
+            row.roomTypeConfigId = values.roomTypeConfigId;
+          }
         }
         return row;
       })
@@ -168,8 +181,9 @@ export function mergeFormV2ToUpdatePropertyPayload(
     staging: values.staging,
     instantBookable: values.instantBooking,
     floor: values.floor,
+    totalFloor: values.totalFloor,
     surface: values.sqm,
-    personCapacityMax: values.guests,
+    personCapacityMax: values.personCapacityMax ?? values.guests,
   };
 
   if (roomTypes) payload.roomTypes = roomTypes;

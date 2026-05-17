@@ -2,17 +2,11 @@ import { useState, useEffect, useCallback, useMemo, useRef, startTransition } fr
 import {
   Box,
   Button,
-  Checkbox,
   TextField,
   Typography,
   CircularProgress,
   Tabs,
   Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { useAmenities } from '../../../../contexts/AmenitiesContext';
@@ -981,61 +975,8 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
                     : 'Tous les équipements visibles sont déjà sélectionnés.'}
             </Typography>
           </Box>
-        ) : mainTab === 1 ? (
-          <>
-            <Table size="small" sx={{ border: `1px solid ${T.border}`, borderRadius: 1 }}>
-              <TableHead>
-                <TableRow sx={{ bgcolor: T.bg2 }}>
-                  <TableCell sx={{ fontWeight: 700, fontSize: 11, width: 48 }} />
-                  <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>Équipement</TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>Catégorie</TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: 11, width: 72 }} align="right">
-                    Qté
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {availableNotSelected.map((amenity, amenityIndex) => {
-                  const id = amenity._id || `available-amenity-${amenityIndex}`;
-                  const subCat = amenity.SojoriSubcategory?.[0];
-                  const sub =
-                    subCat && typeof subCat === 'object'
-                      ? (subCat as { fr?: string }).fr || (subCat as { en?: string }).en || '—'
-                      : typeof amenity.category === 'string'
-                        ? amenity.category
-                        : '—';
-                  return (
-                    <TableRow
-                      key={id}
-                      hover
-                      sx={{ '&:last-child td': { borderBottom: 0 }, cursor: 'pointer' }}
-                      onClick={() => handleToggleAmenity(id, true)}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          size="small"
-                          checked={false}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            handleToggleAmenity(id, e.target.checked);
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 13, fontWeight: 600 }}>
-                        {getAmenityName(amenity.name)}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12, color: T.text3 }}>{sub}</TableCell>
-                      <TableCell align="right" sx={{ fontSize: 12, color: T.text3 }}>
-                        1
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </>
         ) : (
-          <Box sx={AMENITY_GRID_SX} key={`avail-grid-${catalogEpoch}`}>
+          <Box sx={AMENITY_GRID_SX} key={`avail-grid-${catalogEpoch}-m${mainTab}`}>
             {availableNotSelected.map((amenity, amenityIndex) => {
               const validAmenity = {
                 ...amenity,
