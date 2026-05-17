@@ -25,8 +25,10 @@ export interface Task {
   reservationId: string | null;
   reservationNumber: string | null;
   guestName: string | null;
+  guestCountry?: string | null; // Pays du voyageur (pour drapeau)
   arrivalDate: string | null;
   departureDate: string | null;
+  channelName?: string | null; // OTA source (Airbnb, Booking, etc.)
 
   // Listing
   listingId: string;
@@ -92,6 +94,8 @@ export const mockTasks: Task[] = [
     reservationId: 'res-123',
     reservationNumber: 'RES-2026-123',
     guestName: 'Sarah Johnson',
+    guestCountry: 'United States',
+    channelName: 'AirBNB',
     arrivalDate: today,
     departureDate: `${today.split('-')[0]}-${today.split('-')[1]}-${parseInt(today.split('-')[2]) + 7}`,
     listingId: 'listing-001',
@@ -172,6 +176,8 @@ export const mockTasks: Task[] = [
     reservationId: 'res-456',
     reservationNumber: 'RES-2026-456',
     guestName: 'Marco Rossi',
+    guestCountry: 'Italy',
+    channelName: 'BookingCom',
     arrivalDate: today,
     departureDate: `${today.split('-')[0]}-${today.split('-')[1]}-${parseInt(today.split('-')[2]) + 4}`,
     listingId: 'listing-003',
@@ -213,6 +219,8 @@ export const mockTasks: Task[] = [
     reservationId: 'res-789',
     reservationNumber: 'RES-2026-789',
     guestName: 'Yumi Kobayashi',
+    guestCountry: 'Japan',
+    channelName: 'AirBNB',
     arrivalDate: tomorrow,
     departureDate: `${today.split('-')[0]}-${today.split('-')[1]}-${parseInt(today.split('-')[2]) + 6}`,
     listingId: 'listing-004',
@@ -256,6 +264,8 @@ export const mockTasks: Task[] = [
     reservationId: 'res-321',
     reservationNumber: 'RES-2026-321',
     guestName: 'James Peterson',
+    guestCountry: 'Canada',
+    channelName: 'BookingCom',
     arrivalDate: `${today.split('-')[0]}-${today.split('-')[1]}-${parseInt(today.split('-')[2]) - 5}`,
     departureDate: `${today.split('-')[0]}-${today.split('-')[1]}-${parseInt(today.split('-')[2]) + 9}`,
     listingId: 'listing-005',
@@ -336,6 +346,8 @@ export const mockTasks: Task[] = [
     reservationId: 'res-654',
     reservationNumber: 'RES-2026-654',
     guestName: 'James Peterson',
+    guestCountry: 'Canada',
+    channelName: 'BookingCom',
     arrivalDate: `${yesterday.split('-')[0]}-${yesterday.split('-')[1]}-${parseInt(yesterday.split('-')[2]) - 7}`,
     departureDate: yesterday,
     listingId: 'listing-001',

@@ -357,16 +357,58 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
     </Box>
   );
 
+  // Helper pour badges OTA (comme dans ReservationsPage)
+  const OTABadge = ({ channel }: { channel?: string }) => {
+    if (!channel) return <Box sx={{ fontSize: 11, color: t.text4 }}>—</Box>;
+
+    const c = channel.toLowerCase();
+    const meta =
+      c.includes('airbnb')  ? { label: 'Airbnb',  bg: '#FF5A5F', initial: 'A' } :
+      c.includes('booking') ? { label: 'Booking', bg: '#003580', initial: 'B' } :
+      c.includes('expedia') ? { label: 'Expedia', bg: '#FECC00', initial: 'E' } :
+      c.includes('vrbo')    ? { label: 'Vrbo',    bg: '#0E6CB0', initial: 'V' } :
+                              { label: 'Direct',  bg: t.primary, initial: 'S' };
+    return (
+      <Box title={meta.label}>
+        <Box sx={{
+          width: 26, height: 26, borderRadius: '50%',
+          bgcolor: meta.bg, color: '#fff',
+          fontSize: 11, fontWeight: 700,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        }}>{meta.initial}</Box>
+      </Box>
+    );
+  };
+
+  // Helper pour drapeaux pays (comme dans ReservationsPage)
+  const flagFor = (country?: string): string => {
+    if (!country) return '🌐';
+    const countryNameToCode: Record<string, string> = {
+      'france': 'FR', 'germany': 'DE', 'spain': 'ES', 'italy': 'IT',
+      'united kingdom': 'GB', 'belgium': 'BE', 'netherlands': 'NL',
+      'switzerland': 'CH', 'portugal': 'PT', 'morocco': 'MA',
+      'united states': 'US', 'canada': 'CA', 'mexico': 'MX',
+      'china': 'CN', 'japan': 'JP', 'india': 'IN', 'australia': 'AU',
+    };
+    let code = country.length === 2 ? country.toUpperCase() : countryNameToCode[country.toLowerCase()];
+    if (code === 'UK') code = 'GB';
+    if (!code) return '🌐';
+    const codePoints = code.split('').map(char => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+  };
+
   const cols = [
     // Column 1: Tâche (title + itemNumber) - sortable by name
     {
       key: 'title',
       label: <SortableHeader field="name" label="Tâche" />,
       render: (r: Task) => (
-        <Box>
-          <strong>{r.name}</strong>
+        <Box sx={{ cursor: 'pointer' }} onClick={() => onViewDetails(r)}>
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: t.text, '&:hover': { textDecoration: 'underline' } }}>
+            {r.name}
+          </Typography>
           <Box sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'Geist Mono', mt: 0.25 }}>
-            {r.itemNumber} {r.guestName && `· ${r.guestName}`}
+            {r.itemNumber}
           </Box>
         </Box>
       )
@@ -395,10 +437,33 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         );
       }
     },
-    // Column 3: Listing - sortable
+    // Column 3: Source (OTA) - comme dans Reservations
+    {
+      key: 'source',
+      label: 'Source',
+      render: (r: Task) => <OTABadge channel={r.channelName} />
+    },
+    // Column 4: Voyageur (guest + country flag) - comme dans Reservations
+    {
+      key: 'guest',
+      label: 'Voyageur',
+      render: (r: Task) => (
+        r.guestName ? (
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+            <span style={{ fontSize: 18 }}>{flagFor(r.guestCountry)}</span>
+            <Typography sx={{ fontSize: 12, fontWeight: 500, color: t.text2 }}>
+              {r.guestName}
+            </Typography>
+          </Stack>
+        ) : (
+          <Box sx={{ fontSize: 11, color: t.text4, fontStyle: 'italic' }}>—</Box>
+        )
+      )
+    },
+    // Column 5: Listing - sortable
     {
       key: 'listing',
-      label: <SortableHeader field="listing" label="Listing" />,
+      label: <SortableHeader field="listing" label="Propriété" />,
       render: (r: Task) => <ListingCell name={r.listingName} color={getListingColor(r.listingName)} />
     },
     // Column 4: Date création - sortable
