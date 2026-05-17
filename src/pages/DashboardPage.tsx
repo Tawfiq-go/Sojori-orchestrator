@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Divider, Stack, Typography } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Divider,
+  Stack,
+  Typography,
+} from '@mui/material';
 import {
   Bar,
   BarChart,
@@ -28,27 +37,59 @@ import {
   btnPrimarySx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
+import { dashboardPeriods } from '../data/mockDashboard';
 import {
-  dashboardPeriods,
-  mockCheckFlow,
-  mockDashboardKPIs,
-  mockOccupancyByProperty,
-  mockAlerts,
-  mockRecentReviews,
-  mockRevenueChart,
-  mockSourceDistribution,
-  mockUnreadMessages,
-  mockUpcomingCheckIns,
-  mockUpcomingCheckOuts,
-  mockUrgentTasks,
-} from '../data/mockDashboard';
-import { dashboardService } from '../services/dashboardService';
+  fetchDashboardV1Core,
+  fetchDashboardV1Extras,
+  mergeDashboardSnapshots,
+} from '../services/dashboardV1Service';
+import {
+  readDashboardSnapshotCache,
+  writeDashboardSnapshotCache,
+} from '../utils/dashboardSnapshotCache';
+import { useAuth } from '../hooks/useAuth';
+import { dashboardDebugEnabled, logDashboard } from '../utils/dashboardDebug';
+import { getToken } from '../utils/authUtils';
 import type {
-  DashboardAlertItem,
+  DashboardCheckFlowItem,
   DashboardPeriod,
   DashboardPropertyOption,
   DashboardSnapshot,
 } from '../types/dashboard.types';
+
+const EMPTY_CHECK_FLOW: DashboardCheckFlowItem[] = [
+  { label: "Aujourd'hui", checkIns: 0, checkOuts: 0 },
+  { label: 'Demain', checkIns: 0, checkOuts: 0 },
+  { label: 'J+2', checkIns: 0, checkOuts: 0 },
+  { label: 'J+3', checkIns: 0, checkOuts: 0 },
+];
+
+const z = (value = 0, trend = '—') => ({ value, trend });
+
+const fallbackSnapshot: DashboardSnapshot = {
+  properties: [],
+  kpis: {
+    totalReservations: z(),
+    monthlyRevenue: z(),
+    occupancyRate: z(),
+    adr: z(),
+    revpar: z(),
+    guestsThisMonth: z(),
+    activeProperties: z(),
+    averageRating: z(),
+  },
+  revenueChart: [],
+  sourceDistribution: [],
+  occupancyByProperty: [],
+  alerts: [],
+  checkFlow: EMPTY_CHECK_FLOW,
+  upcomingCheckIns: [],
+  upcomingCheckOuts: [],
+  recentBookings: [],
+  urgentTasks: [],
+  unreadMessages: [],
+  recentReviews: [],
+};
 
 const chartColors = ['#e6b022', '#8b5cf6', '#10b981', '#06b6d4'];
 
@@ -58,82 +99,127 @@ const currency = new Intl.NumberFormat('fr-FR', {
   maximumFractionDigits: 0,
 });
 
-const fallbackAlerts: DashboardAlertItem[] = mockAlerts.map((alert) => ({
-  id: alert.id,
-  severity: alert.severity as DashboardAlertItem['severity'],
-  title: alert.title,
-  detail: alert.detail,
-}));
-
-const fallbackSnapshot: DashboardSnapshot = {
-  properties: [],
-  kpis: {
-    totalReservations: mockDashboardKPIs.totalReservations,
-    monthlyRevenue: mockDashboardKPIs.monthlyRevenue,
-    occupancyRate: mockDashboardKPIs.occupancyRate,
-    adr: mockDashboardKPIs.adr,
-    revpar: mockDashboardKPIs.revpar,
-    guestsThisMonth: mockDashboardKPIs.guestsThisMonth,
-    activeProperties: mockDashboardKPIs.activeProperties,
-    averageRating: mockDashboardKPIs.averageRating,
-  },
-  revenueChart: mockRevenueChart,
-  sourceDistribution: mockSourceDistribution,
-  occupancyByProperty: mockOccupancyByProperty,
-  alerts: fallbackAlerts,
-  checkFlow: mockCheckFlow,
-  upcomingCheckIns: mockUpcomingCheckIns,
-  upcomingCheckOuts: mockUpcomingCheckOuts,
-  recentBookings: [
-    ...mockUpcomingCheckIns.slice(0, 3).map((item) => ({ ...item, type: 'Check-in' })),
-    ...mockUpcomingCheckOuts.slice(0, 3).map((item) => ({ ...item, type: 'Check-out' })),
-  ],
-  urgentTasks: mockUrgentTasks,
-  unreadMessages: mockUnreadMessages,
-  recentReviews: mockRecentReviews,
-};
-
 export function DashboardPage() {
+  const { isAuthenticated, loading: authLoading, user, token, error: authError } = useAuth();
   const [period, setPeriod] = useState<DashboardPeriod>('Mois');
   const [properties, setProperties] = useState<DashboardPropertyOption[]>([]);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>(fallbackSnapshot);
-  const [loading, setLoading] = useState(true);
+  /** false tant que core + extras ne sont pas fusionnés (pas de KPI/graphiques à 0). */
+  const [dashboardReady, setDashboardReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  /** Toujours visible (même `vite preview` / build prod sur :4174) pour confirmer que la page tourne. */
   useEffect(() => {
+    console.info('[Sojori Orchestrator] DashboardPage montée', {
+      href: typeof window !== 'undefined' ? window.location.href : '',
+      dashboardDebugEnabled,
+    });
+  }, []);
+
+  useEffect(() => {
+    const coreAbort = new AbortController();
+    const extrasAbort = new AbortController();
     let cancelled = false;
 
     const loadDashboard = async () => {
-      setLoading(true);
+      if (authLoading) {
+        logDashboard('DashboardPage — attente session (checkAuth)', { isAuthenticated });
+        return;
+      }
+
+      if (!getToken()) {
+        logDashboard('⚠️ Pas de token JWT — les APIs renverront 401');
+        setError('Aucun jeton de session — connectez-vous pour charger le dashboard.');
+        setDashboardReady(false);
+        return;
+      }
+
+      const cached = readDashboardSnapshotCache(period, selectedPropertyIds);
+      if (cached && !cancelled) {
+        setSnapshot(cached);
+        setProperties(cached.properties);
+        setDashboardReady(true);
+        setError(null);
+        logDashboard('DashboardPage — cache session affiché', {
+          properties: cached.properties.length,
+        });
+      } else if (!cancelled) {
+        setDashboardReady(false);
+      }
+
+      logDashboard('DashboardPage load', {
+        authLoading,
+        isAuthenticated,
+        hasJwt: !!getToken(),
+        hasContextToken: !!token,
+        userEmail: user?.email,
+        authError,
+        hadCache: !!cached,
+      });
+
       try {
-        const nextSnapshot = await dashboardService.getSnapshot({
+        const core = await fetchDashboardV1Core({
           period,
           listingIds: selectedPropertyIds,
+          signal: coreAbort.signal,
         });
 
         if (cancelled) {
           return;
         }
 
-        setSnapshot(nextSnapshot);
-        setProperties(nextSnapshot.properties);
-        setError(null);
+        const listingIdsForExtras =
+          selectedPropertyIds.length > 0
+            ? selectedPropertyIds
+            : (core.listingIdsHint?.length
+                ? core.listingIdsHint
+                : core.properties.map((property) => property.id).filter(Boolean));
 
-        if (selectedPropertyIds.length === 0 && properties.length === 0 && nextSnapshot.properties.length > 0) {
-          setSelectedPropertyIds(nextSnapshot.properties.slice(0, 3).map((property) => property.id));
-        }
-      } catch (fetchError) {
+        logDashboard('extras listingIds', {
+          selected: selectedPropertyIds.length,
+          fromHint: core.listingIdsHint?.length ?? 0,
+          fromProperties: core.properties.length,
+          sent: listingIdsForExtras.length,
+        });
+
+        const extras = await fetchDashboardV1Extras({
+          period,
+          listingIds: listingIdsForExtras,
+          signal: extrasAbort.signal,
+        });
+
         if (cancelled) {
           return;
         }
-        console.error('Error loading dashboard page:', fetchError);
-        setError('Impossible de charger les KPIs live pour le dashboard.');
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+
+        const merged = mergeDashboardSnapshots(core, extras);
+        setSnapshot(merged);
+        setProperties(merged.properties.length > 0 ? merged.properties : core.properties);
+        setError(null);
+        setDashboardReady(true);
+        writeDashboardSnapshotCache(period, selectedPropertyIds, merged);
+        logDashboard('DashboardPage données prêtes (core + extras)', {
+          properties: merged.properties.length,
+          listingIdsHint: core.listingIdsHint?.length ?? 0,
+          occupancyByProperty: merged.occupancyByProperty.length,
+          sourceDistribution: merged.sourceDistribution.length,
+        });
+      } catch (fetchError) {
+        if (cancelled || (fetchError as { code?: string })?.code === 'ERR_CANCELED') {
+          return;
         }
+        console.error('Error loading dashboard page:', fetchError);
+        const axiosErr = fetchError as { response?: { data?: { error?: string; hint?: string } } };
+        const serverMsg = axiosErr.response?.data?.error;
+        const serverHint = axiosErr.response?.data?.hint;
+        setError(
+          serverMsg
+            ? `Dashboard : ${serverMsg}${serverHint ? ` — ${serverHint}` : ''}`
+            : 'Impossible de charger le dashboard (snapshot v1).',
+        );
+        setDashboardReady(false);
       }
     };
 
@@ -141,8 +227,10 @@ export function DashboardPage() {
 
     return () => {
       cancelled = true;
+      coreAbort.abort();
+      extrasAbort.abort();
     };
-  }, [period, refreshKey, selectedPropertyIds]);
+  }, [period, refreshKey, selectedPropertyIds, authLoading, isAuthenticated]);
 
   const topLiveProperties = useMemo(
     () =>
@@ -162,7 +250,10 @@ export function DashboardPage() {
 
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Dashboard']}>
-      <PageHeader title="Dashboard principal" count={loading ? 'Live data' : period}>
+      <PageHeader
+        title="Dashboard principal"
+        count={dashboardReady ? period : 'Chargement…'}
+      >
         <Button sx={btnGhostSx} onClick={() => setRefreshKey((value) => value + 1)}>
           Actualiser
         </Button>
@@ -172,11 +263,42 @@ export function DashboardPage() {
       </PageHeader>
 
       {error ? (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          {error} Affichage des donnees disponibles / fallback pour garder le dashboard exploitable.
+        <Alert severity={!getToken() ? 'error' : 'warning'} sx={{ mb: 2 }}>
+          <Stack spacing={1}>
+            <Typography variant="body2">{error}</Typography>
+            {!getToken() ? (
+              <Typography variant="caption" color="text.secondary">
+                Le jeton est lu depuis le cookie <code>sojori_token</code> ou, en secours,{' '}
+                <code>localStorage.token</code> (écrans legacy).
+              </Typography>
+            ) : null}
+            {!getToken() ? (
+              <Button component={RouterLink} to="/login" variant="outlined" size="small" sx={{ alignSelf: 'flex-start' }}>
+                Connexion
+              </Button>
+            ) : null}
+          </Stack>
         </Alert>
       ) : null}
 
+      {!dashboardReady ? (
+        <Box
+          sx={{
+            minHeight: 'min(70vh, 640px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+          }}
+        >
+          <CircularProgress size={48} />
+          <Typography variant="body2" color="text.secondary">
+            Chargement des indicateurs et graphiques…
+          </Typography>
+        </Box>
+      ) : (
+        <>
       <FilterBar>
         {dashboardPeriods.map((item) => (
           <FilterChip
@@ -188,28 +310,19 @@ export function DashboardPage() {
         ))}
       </FilterBar>
 
-      <FilterBar>
-        {properties.map((property) => (
-          <FilterChip
-            key={property.id}
-            label={property.label}
-            active={selectedPropertyIds.includes(property.id)}
-            onClick={() => toggleProperty(property.id)}
-          />
-        ))}
-      </FilterBar>
-
-      {loading && properties.length === 0 ? (
-        <Box
-          sx={{
-            minHeight: 280,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <CircularProgress />
-        </Box>
+      {properties.length > 0 ? (
+        <FilterBar>
+          {properties
+            .filter((property) => property.isActive !== false)
+            .map((property) => (
+              <FilterChip
+                key={property.id}
+                label={property.label}
+                active={selectedPropertyIds.includes(property.id)}
+                onClick={() => toggleProperty(property.id)}
+              />
+            ))}
+        </FilterBar>
       ) : null}
 
       <StatsRow>
@@ -291,7 +404,7 @@ export function DashboardPage() {
           '& > *': { minWidth: 0 },
         }}
       >
-        <Panel title="Revenus par jour / semaine / mois" desc="Logique API re-utilisee depuis sojori-dashboard">
+        <Panel title="Revenus par jour / semaine / mois" desc="Timeline réservations · période sélectionnée">
           <StableChart height={320}>
             {({ width, height }: { width: number; height: number }) => (
               <LineChart width={width} height={height} data={snapshot.revenueChart}>
@@ -537,6 +650,8 @@ export function DashboardPage() {
           </Panel>
         </Box>
       ) : null}
+        </>
+      )}
     </DashboardWrapper>
   );
 }

@@ -203,7 +203,7 @@ export function OrchestrationPage() {
 
 function RowKV({ k, v, mono, divider }) {
   return (
-    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{
+    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', 
       pt: divider ? 1.125 : 0,
       borderTop: divider ? `1px dashed ${t.border}` : 'none',
     }}>

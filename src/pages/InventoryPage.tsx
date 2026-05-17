@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Box, Stack, Typography, Button, Select, MenuItem, Drawer, IconButton,
   TextField, Switch, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
-  PageHeader, Panel, Badge, StatCard, StatsRow, DataTable,
+  PageHeader, Panel, Badge, StatCard, StatsRow,
   btnGhostSx, btnPrimarySx, btnAiSx, FilterBar, FilterChip,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
@@ -154,7 +154,7 @@ export function InventoryPage() {
   const [selection, setSelection] = useState<string[]>([]);
   const [dragStart, setDragStart] = useState<string | null>(null);
   const [blockModalOpen, setBlockModalOpen] = useState(false);
-  const [priceEditMode, setPriceEditMode] = useState(false);
+  const [, setPriceEditMode] = useState(false);
   const [expandedColumns, setExpandedColumns] = useState(false);
 
   const listing = LISTINGS.find(l => l.id === listingId)!;
@@ -226,7 +226,7 @@ export function InventoryPage() {
           >
             {LISTINGS.map(l => (
               <MenuItem key={l.id} value={l.id} sx={{ fontSize: 13 }}>
-                <Stack direction="row" alignItems="center" spacing={1}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: l.color }} />
                   <span>{l.name}</span>
                   <span style={{ color: t.text3, fontSize: 11 }}>· {l.city} · {l.bedrooms}ch</span>
@@ -234,7 +234,7 @@ export function InventoryPage() {
               </MenuItem>
             ))}
           </Select>
-          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '8px', p: 0.375 }}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center',  bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '8px', p: 0.375 }}>
             <IconButton size="small" onClick={() => navMonth(-1)} sx={{ width: 28, height: 28 }}>‹</IconButton>
             <Typography sx={{ px: 1.5, fontSize: 13, fontWeight: 600, minWidth: 110, textAlign: 'center' }}>
               {MONTHS[month]} {year}
@@ -300,11 +300,11 @@ export function InventoryPage() {
 
         {/* Calendar View */}
         <Panel>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between',  mb: 2 }}>
             <Typography sx={{ fontSize: 16, fontWeight: 700 }}>
               {listing.name} · {listing.city}
             </Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Typography sx={{ fontSize: 11, color: t.text3, fontFamily: 'Geist Mono' }}>
                 Glissez pour sélectionner plusieurs jours
               </Typography>
@@ -379,7 +379,7 @@ export function InventoryPage() {
           anchor="right"
           open={!!selectedCell}
           onClose={() => setSelectedDate(null)}
-          PaperProps={{ sx: { width: { xs: '100%', sm: 420 }, p: 2.5 } }}
+          slotProps={{ paper: { sx: { width: { xs: '100%', sm: 420 }, p: 2.5 } } }}
         >
           {selectedCell && <DayDetailPanel cell={selectedCell} onClose={() => setSelectedDate(null)} />}
         </Drawer>
@@ -461,7 +461,7 @@ function DayCellView({ cell, selected, expanded, onMouseDown, onMouseEnter, onCl
       }}
     >
       {/* Day number & status */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between',  mb: 0.5 }}>
         <Typography sx={{
           fontSize: 12,
           fontWeight: cell.isToday ? 800 : 600,
@@ -532,7 +532,7 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
 
   return (
     <Stack spacing={2.5}>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+      <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <Box>
           <Typography sx={{ fontSize: 11, color: t.text3, fontFamily: 'Geist Mono', letterSpacing: 1, textTransform: 'uppercase' }}>
             {cell.date}
@@ -564,19 +564,19 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
         <Typography sx={{ fontSize: 10, fontFamily: 'Geist Mono', fontWeight: 700, color: t.text3, letterSpacing: 1, textTransform: 'uppercase', mb: 1.25 }}>
           Prix
         </Typography>
-        <Stack direction="row" alignItems="baseline" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'baseline' }}>
           <Typography sx={{ fontSize: 28, fontWeight: 800, fontFamily: 'Geist Mono' }}>€{cell.basePrice}</Typography>
           <Typography sx={{ fontSize: 12, color: t.text3 }}>/nuit</Typography>
         </Stack>
         {cell.dynamicPrice && (
           <Box sx={{ mt: 1.25, p: 1.25, borderRadius: '8px', bgcolor: t.aiTint, border: '1px solid rgba(139,92,246,0.20)' }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center',  mb: 0.5 }}>
               <Box sx={{ fontSize: 13 }}>✨</Box>
               <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.ai, fontFamily: 'Geist Mono', letterSpacing: 0.5 }}>
                 PRIX DYNAMIQUE · suggestion
               </Typography>
             </Stack>
-            <Stack direction="row" alignItems="baseline" spacing={1}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
               <Typography sx={{ fontSize: 18, fontWeight: 700, fontFamily: 'Geist Mono', color: t.ai }}>
                 €{cell.dynamicPrice}
               </Typography>
@@ -595,7 +595,11 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
             label="Modifier le prix"
             defaultValue={cell.basePrice}
             fullWidth
-            InputProps={{ startAdornment: <Box sx={{ pr: 0.5, color: t.text3 }}>€</Box> }}
+            slotProps={{
+              input: {
+                startAdornment: <Box sx={{ pr: 0.5, color: t.text3 }}>€</Box>,
+              },
+            }}
           />
         </Box>
       </Panel>
@@ -606,15 +610,15 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
           Restrictions
         </Typography>
         <Stack spacing={1.25}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography sx={{ fontSize: 12.5 }}>Nuits minimum</Typography>
             <TextField size="small" defaultValue={cell.minNights} sx={{ width: 70 }} />
           </Stack>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography sx={{ fontSize: 12.5 }}>Check-in autorisé</Typography>
             <Switch size="small" defaultChecked={cell.checkInAllowed} color="success" />
           </Stack>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography sx={{ fontSize: 12.5 }}>Check-out autorisé</Typography>
             <Switch size="small" defaultChecked={cell.checkOutAllowed} color="success" />
           </Stack>
@@ -630,7 +634,7 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
           {(['airbnb', 'booking', 'vrbo'] as const).map(ch => {
             const st = cell.channels[ch];
             return (
-              <Stack key={ch} direction="row" alignItems="center" spacing={1}>
+              <Stack key={ch} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: st === 'ok' ? t.success : st === 'pending' ? t.warning : t.error }} />
                 <Typography sx={{ fontSize: 12.5, textTransform: 'capitalize', flex: 1 }}>{ch}</Typography>
                 <Typography sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'Geist Mono' }}>
@@ -655,7 +659,7 @@ function DayDetailPanel({ cell, onClose }: { cell: DayCell; onClose: () => void 
 
 function LegendItem({ emoji, dot, label }: { emoji?: string; dot?: string; label: string }) {
   return (
-    <Stack direction="row" alignItems="center" spacing={0.75} sx={{ fontSize: 11, color: t.text3 }}>
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center',  fontSize: 11, color: t.text3 }}>
       {emoji ? <Box sx={{ fontSize: 11 }}>{emoji}</Box> : <Box sx={{ width: 10, height: 3, bgcolor: dot, borderRadius: '99px' }} />}
       <span>{label}</span>
     </Stack>

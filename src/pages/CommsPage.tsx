@@ -79,15 +79,21 @@ export function CommsPage() {
   const guestTemplates = useMemo<MessageComposeTemplate[]>(
     () => [
       {
-        label: 'Welcome',
+        id: 'comms-guest-welcome',
+        name: 'Welcome',
+        channel: ['whatsapp'],
         body: `Bonjour ${conv?.name.split(' ')[0] || 'guest'},\n\nBienvenue chez Sojori. Je reste disponible si vous avez besoin de quoi que ce soit pendant votre séjour.`,
       },
       {
-        label: 'Code accès',
+        id: 'comms-guest-access',
+        name: 'Code accès',
+        channel: ['whatsapp'],
         body: `Bonjour ${conv?.name.split(' ')[0] || 'guest'},\n\nVoici le rappel de vos codes d'accès:\n- Porte principale: 4821\n- Coffre à clés: 9907\n\nDites-moi si vous avez besoin d'aide à l'arrivée.`,
       },
       {
-        label: 'Créer tâche',
+        id: 'comms-guest-task',
+        name: 'Créer tâche',
+        channel: ['whatsapp'],
         body: `Bonjour équipe,\n\nMerci de préparer une intervention pour la réservation ${conv?.reservationNumber || 'RES-XXXX'}.\n\nPriorité: standard.`,
       },
     ],
@@ -96,15 +102,21 @@ export function CommsPage() {
   const aiTemplates = useMemo<MessageComposeTemplate[]>(
     () => [
       {
-        label: 'Pickup',
+        id: 'comms-ai-pickup',
+        name: 'Pickup',
+        channel: ['whatsapp'],
         body: `Bonjour ${conv?.name.split(' ')[0] || 'guest'},\n\nNous pouvons organiser votre transfert aéroport. Merci de me confirmer le nombre de passagers et les bagages.`,
       },
       {
-        label: 'Early check-in',
+        id: 'comms-ai-early',
+        name: 'Early check-in',
+        channel: ['whatsapp'],
         body: `Bonjour ${conv?.name.split(' ')[0] || 'guest'},\n\nJe vérifie la disponibilité de l'appartement pour un early check-in et je vous confirme cela très vite.`,
       },
       {
-        label: 'Upsell',
+        id: 'comms-ai-upsell',
+        name: 'Upsell',
+        channel: ['whatsapp'],
         body: `Bonjour ${conv?.name.split(' ')[0] || 'guest'},\n\nJe peux aussi vous proposer un transport privé ou un panier d'accueil premium si vous le souhaitez.`,
       },
     ],

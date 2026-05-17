@@ -351,9 +351,9 @@ export function AddTeamMemberModal({ open, onClose, onSave, existingMember }: Ad
                     renderInput={(params) => <TextField {...params} label="Sous-types" size="small" />}
                     size="small"
                     fullWidth
-                    renderTags={(value, getTagProps) =>
+                    renderValue={(value, getItemProps) =>
                       value.map((option, index) => (
-                        <Chip label={option} size="small" {...getTagProps({ index })} />
+                        <Chip label={option} size="small" {...getItemProps({ index })} />
                       ))
                     }
                   />
@@ -365,7 +365,7 @@ export function AddTeamMemberModal({ open, onClose, onSave, existingMember }: Ad
                   onChange={(e) => setDateOfBirth(e.target.value)}
                   size="small"
                   fullWidth
-                  InputLabelProps={{ shrink: true }}
+                  slotProps={{ inputLabel: { shrink: true } }}
                 />
               </Stack>
             </Box>
@@ -455,7 +455,7 @@ export function AddTeamMemberModal({ open, onClose, onSave, existingMember }: Ad
                     onChange={(e) => setHireDate(e.target.value)}
                     size="small"
                     fullWidth
-                    InputLabelProps={{ shrink: true }}
+                    slotProps={{ inputLabel: { shrink: true } }}
                   />
                   <FormControl size="small" fullWidth>
                     <InputLabel>Type de contrat</InputLabel>
@@ -491,9 +491,9 @@ export function AddTeamMemberModal({ open, onClose, onSave, existingMember }: Ad
                   renderInput={(params) => <TextField {...params} label="Langues" size="small" />}
                   size="small"
                   fullWidth
-                  renderTags={(value, getTagProps) =>
+                  renderValue={(value, getItemProps) =>
                     value.map((option, index) => (
-                      <Chip label={option} size="small" color="primary" {...getTagProps({ index })} />
+                      <Chip label={option} size="small" color="primary" {...getItemProps({ index })} />
                     ))
                   }
                 />
@@ -505,9 +505,9 @@ export function AddTeamMemberModal({ open, onClose, onSave, existingMember }: Ad
                   renderInput={(params) => <TextField {...params} label="Compétences" size="small" />}
                   size="small"
                   fullWidth
-                  renderTags={(value, getTagProps) =>
+                  renderValue={(value, getItemProps) =>
                     value.map((option, index) => (
-                      <Chip label={option} size="small" color="secondary" {...getTagProps({ index })} />
+                      <Chip label={option} size="small" color="secondary" {...getItemProps({ index })} />
                     ))
                   }
                 />
@@ -532,8 +532,8 @@ export function AddTeamMemberModal({ open, onClose, onSave, existingMember }: Ad
             </Typography>
             {DAYS.map((day) => (
               <Box key={day} sx={{ border: `1px solid ${t.border}`, borderRadius: '8px', p: 2 }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-                  <Stack direction="row" alignItems="center" spacing={1.5}>
+                <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between',  mb: 1.5 }}>
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                     <FormControlLabel
                       control={
                         <Switch
@@ -564,13 +564,13 @@ export function AddTeamMemberModal({ open, onClose, onSave, existingMember }: Ad
                 {availability[day].present && (
                   <Stack spacing={1}>
                     {availability[day].timings.map((timing, idx) => (
-                      <Stack key={idx} direction="row" spacing={1} alignItems="center">
+                      <Stack key={idx} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <TextField
                           type="time"
                           value={timing.start}
                           onChange={(e) => updateTiming(day, idx, 'start', e.target.value)}
                           size="small"
-                          InputLabelProps={{ shrink: true }}
+                          slotProps={{ inputLabel: { shrink: true } }}
                           sx={{ width: 120 }}
                         />
                         <Typography sx={{ fontSize: 12, color: t.text3 }}>à</Typography>
@@ -579,7 +579,7 @@ export function AddTeamMemberModal({ open, onClose, onSave, existingMember }: Ad
                           value={timing.end}
                           onChange={(e) => updateTiming(day, idx, 'end', e.target.value)}
                           size="small"
-                          InputLabelProps={{ shrink: true }}
+                          slotProps={{ inputLabel: { shrink: true } }}
                           sx={{ width: 120 }}
                         />
                         <Box sx={{ flex: 1 }} />

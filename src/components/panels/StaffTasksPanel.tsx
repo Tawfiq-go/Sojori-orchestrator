@@ -2,10 +2,9 @@
 // Sojori — StaffTasksPanel (Drawer droit 400px)
 // Liste tâches d'un staff avec filtres rapides + click → détail
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Drawer, Box, Stack, Typography, IconButton, Avatar, Chip, Button,
-  Divider, Tooltip,
 } from '@mui/material';
 
 const T = {
@@ -78,13 +77,16 @@ export default function StaffTasksPanel({
   const filtered = filter === 'all' ? tasks : tasks.filter(t => t.status === filter);
 
   return (
-    <Drawer anchor="right" open={open} onClose={onClose}
-      PaperProps={{ sx: { width: { xs: '100%', sm: 400 }, bgcolor: T.bg2 } }}
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      slotProps={{ paper: { sx: { width: { xs: '100%', sm: 400 }, bgcolor: T.bg2 } } }}
     >
       {/* Header */}
       <Box sx={{ p: 2, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-          <Stack direction="row" alignItems="center" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} sx={{ mb: 1.5, alignItems: 'center', justifyContent: 'space-between' }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
             <Avatar sx={{ width: 40, height: 40, bgcolor: AVA_BG[staffInitials[0]] || T.text4, fontSize: 14, fontWeight: 700 }}>
               {staffInitials}
             </Avatar>
@@ -134,7 +136,7 @@ export default function StaffTasksPanel({
                     '&:hover': { boxShadow: '0 4px 12px rgba(26,20,8,0.06)', transform: 'translateY(-1px)' },
                   }}
                 >
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.75 }}>
+                  <Stack direction="row" spacing={1} sx={{ mb: 0.75, alignItems: 'center' }}>
                     <Box sx={{ fontSize: 16 }}>{t.emoji}</Box>
                     <Typography sx={{ fontSize: 11, fontWeight: 600, color: T.text3, fontFamily: 'Geist Mono', letterSpacing: 0.3, flex: 1 }}>
                       {t.type.toUpperCase()}
@@ -145,7 +147,7 @@ export default function StaffTasksPanel({
                   <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: T.text, lineHeight: 1.3, mb: 0.5 }}>
                     {t.title}
                   </Typography>
-                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ fontSize: 11 }}>
+                  <Stack direction="row" spacing={1} sx={{ fontSize: 11, alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography sx={{ fontSize: 11, color: T.text3 }}>📍 {t.listing}</Typography>
                     <Typography sx={{ fontSize: 11, color: T.text2, fontFamily: 'Geist Mono', fontWeight: 600 }}>
                       {t.datetime}

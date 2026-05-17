@@ -1,5 +1,4 @@
 // AddressTab.tsx - Address form with street, city, postal code, country, coordinates
-import React from 'react';
 import { Box, Stack, Typography, TextField, Select, MenuItem } from '@mui/material';
 import { tokens } from '../ListingFormV2';
 import { SectionCard, AIField, SaveBar, FormPager } from '../ListingFormHelpers';

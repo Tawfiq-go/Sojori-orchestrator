@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -26,7 +25,6 @@ import {
   CheckCircle as CheckCircleIcon,
   Info as InfoIcon,
 } from '@mui/icons-material';
-import { toast } from 'react-toastify';
 import { tokens as t, btnPrimarySx, btnGhostSx } from '../dashboard/DashboardV2.components';
 import type { Task } from '../../data/mockTasks';
 
@@ -126,11 +124,13 @@ export function TaskDetailsModal({
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '12px',
-          bgcolor: t.bg1,
-          maxHeight: '90vh',
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '12px',
+            bgcolor: t.bg1,
+            maxHeight: '90vh',
+          },
         },
       }}
     >
@@ -187,7 +187,7 @@ export function TaskDetailsModal({
       <DialogContent sx={{ p: 3 }}>
         <Grid container spacing={3}>
           {/* Section 1: Type & Origine */}
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Box
               sx={{
                 p: 2,
@@ -196,7 +196,7 @@ export function TaskDetailsModal({
                 border: `1px solid ${t.border}`,
               }}
             >
-              <Stack direction="row" spacing={2} alignItems="center">
+              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                 <InfoIcon sx={{ color: t.primary }} />
                 <Box sx={{ flex: 1 }}>
                   <Typography sx={{ fontSize: 12, color: t.text3, mb: 0.5 }}>
@@ -222,7 +222,7 @@ export function TaskDetailsModal({
           </Grid>
 
           {/* Section 2: Dates & Horaires */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Box
               sx={{
                 p: 2,
@@ -233,7 +233,7 @@ export function TaskDetailsModal({
               }}
             >
               <Stack spacing={1.5}>
-                <Stack direction="row" alignItems="center" spacing={1}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <CalendarIcon sx={{ fontSize: 18, color: t.primary }} />
                   <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.text }}>
                     Dates & horaires
@@ -264,7 +264,7 @@ export function TaskDetailsModal({
                   <Typography sx={{ fontSize: 11, color: t.text3, mb: 0.25 }}>
                     Horaires
                   </Typography>
-                  <Stack direction="row" alignItems="center" spacing={1}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <ScheduleIcon sx={{ fontSize: 16, color: t.text3 }} />
                     <Typography sx={{ fontSize: 13, color: t.text }}>
                       {task.startHour} - {task.endHour}
@@ -292,7 +292,7 @@ export function TaskDetailsModal({
           </Grid>
 
           {/* Section 3: Affectation */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Box
               sx={{
                 p: 2,
@@ -303,7 +303,7 @@ export function TaskDetailsModal({
               }}
             >
               <Stack spacing={1.5}>
-                <Stack direction="row" alignItems="center" spacing={1}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <PersonIcon sx={{ fontSize: 18, color: t.primary }} />
                   <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.text }}>
                     Affectation
@@ -312,7 +312,7 @@ export function TaskDetailsModal({
 
                 {task.staffName ? (
                   <>
-                    <Stack direction="row" alignItems="center" spacing={1.5}>
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                       <Avatar
                         sx={{
                           width: 40,
@@ -339,11 +339,11 @@ export function TaskDetailsModal({
                         Présence requise
                       </Typography>
                       <Chip
-                        label={task.presence === 'P' ? 'Présent' : 'Non présent'}
+                        label={task.presence === 'Y' ? 'Présent' : 'Non présent'}
                         size="small"
                         sx={{
-                          bgcolor: task.presence === 'P' ? t.successTint : t.bg3,
-                          color: task.presence === 'P' ? t.success : t.text3,
+                          bgcolor: task.presence === 'Y' ? t.successTint : t.bg3,
+                          color: task.presence === 'Y' ? t.success : t.text3,
                           fontSize: 11,
                         }}
                       />
@@ -379,7 +379,7 @@ export function TaskDetailsModal({
           </Grid>
 
           {/* Section 4: Propriété & Réservation */}
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Box
               sx={{
                 p: 2,
@@ -388,8 +388,8 @@ export function TaskDetailsModal({
                 border: `1px solid ${t.border}`,
               }}
             >
-              <Stack direction="row" spacing={3} alignItems="center">
-                <Stack direction="row" alignItems="center" spacing={1}>
+              <Stack direction="row" spacing={3} sx={{ alignItems: 'center' }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <HomeIcon sx={{ fontSize: 18, color: t.primary }} />
                   <Box>
                     <Typography sx={{ fontSize: 11, color: t.text3 }}>
@@ -433,7 +433,7 @@ export function TaskDetailsModal({
           </Grid>
 
           {/* Section 5: Tarification */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Box
               sx={{
                 p: 2,
@@ -443,14 +443,14 @@ export function TaskDetailsModal({
               }}
             >
               <Stack spacing={1.5}>
-                <Stack direction="row" alignItems="center" spacing={1}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <MoneyIcon sx={{ fontSize: 18, color: t.primary }} />
                   <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.text }}>
                     Tarification
                   </Typography>
                 </Stack>
 
-                <Stack direction="row" alignItems="baseline" spacing={1}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
                   <Typography sx={{ fontSize: 24, fontWeight: 700, color: t.text }}>
                     {task.price}
                   </Typography>
@@ -481,7 +481,7 @@ export function TaskDetailsModal({
           </Grid>
 
           {/* Section 6: Détails supplémentaires */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Box
               sx={{
                 p: 2,
@@ -538,7 +538,7 @@ export function TaskDetailsModal({
 
           {/* Section 7: Descriptions */}
           {task.descriptions && task.descriptions.length > 0 && (
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Box
                 sx={{
                   p: 2,
@@ -548,7 +548,7 @@ export function TaskDetailsModal({
                 }}
               >
                 <Stack spacing={1.5}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <DescriptionIcon sx={{ fontSize: 18, color: t.primary }} />
                     <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.text }}>
                       Notes & descriptions
@@ -577,7 +577,7 @@ export function TaskDetailsModal({
 
           {/* Section 8: Images */}
           {task.images && task.images.length > 0 && (
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Box
                 sx={{
                   p: 2,
@@ -587,14 +587,14 @@ export function TaskDetailsModal({
                 }}
               >
                 <Stack spacing={1.5}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <ImageIcon sx={{ fontSize: 18, color: t.primary }} />
                     <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.text }}>
                       Images ({task.images.length})
                     </Typography>
                   </Stack>
 
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                     {task.images.map((img, index) => (
                       <Box
                         key={index}

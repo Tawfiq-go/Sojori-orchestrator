@@ -100,10 +100,12 @@ export function ReservationModalCompact({
       onClose={onClose}
       maxWidth="sm"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '16px',
-          boxShadow: '0 8px 32px rgba(26,20,8,0.12)',
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '16px',
+            boxShadow: '0 8px 32px rgba(26,20,8,0.12)',
+          },
         },
       }}
     >
@@ -135,7 +137,7 @@ export function ReservationModalCompact({
 
       <DialogContent sx={{ p: 2.5 }}>
         {/* Guest Info */}
-        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2.5 }}>
+        <Stack direction="row" spacing={2} sx={{ mb: 2.5, alignItems: 'center' }}>
           <Avatar
             sx={{
               width: 48,
@@ -200,7 +202,7 @@ export function ReservationModalCompact({
         <Divider sx={{ my: 2 }} />
 
         {/* Source */}
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box
             sx={{
               width: 32,
@@ -336,7 +338,7 @@ function InfoRow({
   valueBold?: boolean;
 }) {
   return (
-    <Stack direction="row" justifyContent="space-between" alignItems="center">
+    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
       <Typography sx={{ fontSize: 13, color: T.text3 }}>{label}</Typography>
       <Box sx={{ textAlign: 'right' }}>
         <Typography

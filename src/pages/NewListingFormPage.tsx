@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Button,
   Chip,
+  CircularProgress,
   Divider,
   FormControlLabel,
   MenuItem,
@@ -28,6 +30,13 @@ import {
   btnPrimarySx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
+import { ListingAmenitiesPanel } from '../components/listing/ListingAmenitiesPanel';
+import { ListingSrvConfigEditor } from '../components/listing/ListingSrvConfigEditor';
+import { ListingTabLivePanel } from '../components/listing/ListingTabLivePanel';
+import { listingsService } from '../services/listingsService';
+import { mapApiListingToListingRecord } from '../utils/mapApiListingToListingRecord';
+import { isListingConfigTab, isMongoListingId, type ListingConfigTab } from '../utils/listingConfigTabApi';
+import { CHANNEX_MAPPING_UNAVAILABLE_INFO } from '../types/listings.types';
 
 type ListingTabKey = keyof ListingFormData;
 type FieldType =
@@ -174,15 +183,55 @@ const TAB_SCHEMAS: Record<ListingTabKey, SectionSchema[]> = {
   ],
   pricing: [
     {
-      title: 'Tarification de base',
+      title: 'Core pricing',
       fields: [
-        { label: 'Prix de base', path: 'pricing.basePrice', type: 'number', required: true, min: 0 },
-        { label: 'Frais de ménage', path: 'pricing.cleaningFee', type: 'number', required: true, min: 0 },
-        { label: 'Multiplicateur week-end', path: 'pricing.weekendMultiplier', type: 'number', required: true, min: 1 },
-        { label: 'Séjour minimum', path: 'pricing.minStay', type: 'number', required: true, min: 1 },
-        { label: 'Devise', path: 'pricing.currency', type: 'select', options: [...FIELD_OPTIONS.currency], required: true },
-        { label: 'Taxe de séjour', path: 'pricing.cityTax', type: 'number', required: true, min: 0 },
-        { label: 'Frais animaux', path: 'pricing.petFee', type: 'number', min: 0 },
+        { label: 'Base price / night', path: 'pricing.basePrice', type: 'number', required: true, min: 0 },
+        { label: 'Cleaning fee', path: 'pricing.cleaningFee', type: 'number', required: true, min: 0 },
+        { label: 'Weekend multiplier', path: 'pricing.weekendMultiplier', type: 'number', required: true, min: 1 },
+        { label: 'Currency', path: 'pricing.currency', type: 'select', options: [...FIELD_OPTIONS.currency], required: true },
+        { label: 'City tax (per guest / night)', path: 'pricing.cityTax', type: 'number', required: true, min: 0 },
+        { label: 'Pet fee', path: 'pricing.petFee', type: 'number', min: 0 },
+      ],
+    },
+  ],
+  availability: [
+    {
+      title: 'Availability & booking rules',
+      description:
+        'Aligné dashboard « AdditionalInfo » + séjour (min/max nuits, préparation, instant book).',
+      fields: [
+        { label: 'Minimum nights', path: 'pricing.minStay', type: 'number', required: true, min: 1 },
+        { label: 'Maximum nights', path: 'availability.maxNights', type: 'number', required: true, min: 1 },
+        {
+          label: 'Preparation hours before arrival',
+          path: 'availability.preparationHoursBeforeArrival',
+          type: 'number',
+          required: true,
+          min: 0,
+        },
+        { label: 'Instant book', path: 'channels.allowInstantBook', type: 'switch' },
+        { label: 'Internal notes', path: 'availability.notes', type: 'textarea', required: true },
+      ],
+    },
+  ],
+  orchestration: [
+    {
+      title: 'Orchestration (guest & ops flows)',
+      description:
+        'Barre CONFIG admin — intentions `orchestration_*` srv-listing (persistance API à brancher).',
+      fields: [
+        { label: 'Online registration flow', path: 'orchestration.registration', type: 'switch' },
+        { label: 'Choose arrival slot', path: 'orchestration.chooseArrival', type: 'switch' },
+        { label: 'Choose departure slot', path: 'orchestration.chooseDeparture', type: 'switch' },
+        { label: 'Declare arrival', path: 'orchestration.declareArrival', type: 'switch' },
+        { label: 'Declare departure', path: 'orchestration.declareDeparture', type: 'switch' },
+        { label: 'Transport (concierge)', path: 'orchestration.transport', type: 'switch' },
+        { label: 'Grocery (concierge)', path: 'orchestration.grocery', type: 'switch' },
+        { label: 'Custom requests', path: 'orchestration.custom', type: 'switch' },
+        { label: 'Support category', path: 'orchestration.support', type: 'switch' },
+        { label: 'Cleaning (free automation)', path: 'orchestration.cleaningFree', type: 'switch' },
+        { label: 'Cleaning (paid)', path: 'orchestration.cleaningPaid', type: 'switch' },
+        { label: 'Notes orchestration', path: 'orchestration.notes', type: 'textarea', required: true },
       ],
     },
   ],
@@ -404,6 +453,9 @@ const REQUIRED_FIELDS: Record<ListingTabKey, string[]> = Object.fromEntries(
   ]),
 ) as Record<ListingTabKey, string[]>;
 
+/** Onglet « Fees & Deposits » = caution + frais additionnels (dashboard). */
+REQUIRED_FIELDS.deposit = [...REQUIRED_FIELDS.deposit, ...REQUIRED_FIELDS.extras];
+
 const fieldPathGet = (source: Record<string, any>, path: string) => {
   return path.split('.').reduce<any>((acc, key) => (acc == null ? undefined : acc[key]), source);
 };
@@ -438,6 +490,15 @@ const isFilled = (value: unknown) => {
 };
 
 const computeTabCompletion = (listing: ListingRecord, tabKey: ListingTabKey) => {
+  if (isListingConfigTab(tabKey)) {
+    return 100;
+  }
+  if (tabKey === 'equipment' && isMongoListingId(listing.id)) {
+    return 100;
+  }
+  if (isMongoListingId(listing.id) && listing.rawApiDocument) {
+    return 100;
+  }
   const required = REQUIRED_FIELDS[tabKey];
   if (required.length === 0) {
     return 100;
@@ -655,23 +716,79 @@ function FormField({
   );
 }
 
+/** Pied de page : libellés/toasts quand l’onglet ne se « sauvegarde » pas comme le mock (API dédiée ou JSON lecture seule). */
+function getListingFooterSaveMode(
+  tab: ListingTabKey,
+  listing: ListingRecord,
+): 'api-panel' | 'local-draft-only' | 'standard' {
+  if (isListingConfigTab(tab)) return 'api-panel';
+  if (tab === 'equipment' && isMongoListingId(listing.id)) return 'api-panel';
+  const hasLiveDoc = isMongoListingId(listing.id) && Boolean(listing.rawApiDocument);
+  if (hasLiveDoc && tab !== 'media' && tab !== 'channels') return 'local-draft-only';
+  return 'standard';
+}
+
 function TabContent({
   listing,
   tabKey,
+  tabLabel,
   onChange,
+  onToast,
+  onReloadListingDoc,
 }: {
   listing: ListingRecord;
   tabKey: ListingTabKey;
+  tabLabel: string;
   onChange: (path: string, value: unknown) => void;
+  onToast: (message: string, severity?: 'success' | 'error' | 'info' | 'warning') => void;
+  onReloadListingDoc?: () => void | Promise<void>;
 }) {
-  const sections = TAB_SCHEMAS[tabKey];
+  const isSrvConfigTab = isListingConfigTab(tabKey);
+  const isEquipmentApi = tabKey === 'equipment' && isMongoListingId(listing.id);
+  const hasLiveDoc = isMongoListingId(listing.id) && Boolean(listing.rawApiDocument);
+  const showLiveJsonPanel = hasLiveDoc && !isSrvConfigTab && tabKey !== 'equipment';
+  const hideGenericMock =
+    isSrvConfigTab ||
+    isEquipmentApi ||
+    (hasLiveDoc && tabKey !== 'media' && tabKey !== 'channels');
+  const sections =
+    tabKey === 'deposit'
+      ? [...TAB_SCHEMAS.deposit, ...TAB_SCHEMAS.extras]
+      : TAB_SCHEMAS[tabKey];
+
+  if (!sections?.length && !isSrvConfigTab && !isEquipmentApi && !showLiveJsonPanel) {
+    return (
+      <Typography sx={{ fontSize: 13, color: t.text3 }}>
+        Onglet sans schéma local — à aligner champ par champ sur le dashboard admin.
+      </Typography>
+    );
+  }
 
   return (
     <Stack spacing={2.5}>
+      {showLiveJsonPanel && (
+        <ListingTabLivePanel
+          tabKey={tabKey}
+          tabLabel={tabLabel}
+          rawApiDocument={listing.rawApiDocument}
+          onReload={onReloadListingDoc}
+        />
+      )}
+      {isSrvConfigTab && (
+        <ListingSrvConfigEditor
+          tab={tabKey as ListingConfigTab}
+          listingId={listing.id}
+          listingName={listing.name}
+          onToast={onToast}
+        />
+      )}
+      {isEquipmentApi && (
+        <ListingAmenitiesPanel listingId={listing.id} onToast={onToast} />
+      )}
       {tabKey === 'media' && (
         <Panel sx={{ p: 2.5 }}>
           <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5 }}>
-            Aperçu galerie mock
+            Aperçu galerie
           </Typography>
           <Box
             sx={{
@@ -680,26 +797,57 @@ function TabContent({
               gap: 1.25,
             }}
           >
-            {Array.from({ length: Math.max(4, Number(listing.form.media.galleryCount || 0)) }).map(
-              (_, index) => (
-                <Box
-                  key={`media-${index}`}
-                  sx={{
-                    height: 90,
-                    borderRadius: '10px',
-                    border: `1px dashed ${t.borderStrong}`,
-                    bgcolor: t.bg2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: t.text3,
-                    fontSize: 12,
-                  }}
-                >
-                  Photo {index + 1}
-                </Box>
-              ),
-            )}
+            {(() => {
+              const fromApi =
+                listing.galleryImageUrls && listing.galleryImageUrls.length > 0
+                  ? listing.galleryImageUrls
+                  : listing.form.media.coverPhoto?.startsWith('http')
+                    ? [listing.form.media.coverPhoto]
+                    : [];
+              const count = Math.max(
+                fromApi.length,
+                4,
+                Number(listing.form.media.galleryCount || 0),
+              );
+              return Array.from({ length: count }).map((_, index) => {
+                const url = fromApi[index];
+                if (url && (url.startsWith('http') || url.startsWith('//'))) {
+                  return (
+                    <Box
+                      key={`media-${index}-${url.slice(0, 40)}`}
+                      component="img"
+                      src={url.startsWith('//') ? `https:${url}` : url}
+                      alt=""
+                      sx={{
+                        width: '100%',
+                        height: 90,
+                        objectFit: 'cover',
+                        borderRadius: '10px',
+                        border: `1px solid ${t.border}`,
+                      }}
+                    />
+                  );
+                }
+                return (
+                  <Box
+                    key={`media-ph-${index}`}
+                    sx={{
+                      height: 90,
+                      borderRadius: '10px',
+                      border: `1px dashed ${t.borderStrong}`,
+                      bgcolor: t.bg2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: t.text3,
+                      fontSize: 12,
+                    }}
+                  >
+                    Photo {index + 1}
+                  </Box>
+                );
+              });
+            })()}
           </Box>
         </Panel>
       )}
@@ -742,7 +890,8 @@ function TabContent({
         </Panel>
       )}
 
-      {sections.map((section) => (
+      {!hideGenericMock &&
+        (sections ?? []).map((section) => (
         <Panel key={section.title} sx={{ p: 2.5 }}>
           <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 0.5 }}>{section.title}</Typography>
           {section.description && (
@@ -785,8 +934,88 @@ export function NewListingFormPage() {
   const storedListings = getStoredListings();
   const existingListing = storedListings.find((item) => item.id === id);
   const isCreateMode = !id || id === 'new';
-  const [listing, setListing] = useState<ListingRecord>(existingListing || createEmptyListing());
+  const [listing, setListing] = useState<ListingRecord>(
+    () => existingListing ?? createEmptyListing(),
+  );
   const [activeTab, setActiveTab] = useState<ListingTabKey>('basic');
+  const [formLoading, setFormLoading] = useState(() => Boolean(id && id !== 'new'));
+  const [loadBanner, setLoadBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isCreateMode || !id) {
+      setFormLoading(false);
+      setLoadBanner(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setFormLoading(true);
+      setLoadBanner(null);
+      try {
+        const doc = await listingsService.getListingDocument(id);
+        if (cancelled) return;
+
+        if (doc) {
+          const [channelsResult, clientServices] = await Promise.all([
+            listingsService.getChannels(id),
+            listingsService.getClientServicesBundle(id),
+          ]);
+          if (cancelled) return;
+
+          const mapped = mapApiListingToListingRecord(
+            doc,
+            channelsResult.data,
+            clientServices,
+          );
+          setListing(mapped);
+
+          const parts: string[] = ['Données chargées depuis srv-listing.'];
+          if (channelsResult.info === CHANNEX_MAPPING_UNAVAILABLE_INFO) {
+            parts.push(
+              'Canaux : pas de mapping Channex pour ce listing (normal en gestion directe ou tant que l’ID Channex n’est pas créé). Les OTA du document by-id restent visibles dans l’onglet Canaux.',
+            );
+          } else if (channelsResult.source === 'mock' && channelsResult.warning) {
+            parts.push(`Canaux : ${channelsResult.warning}`);
+          }
+          if (
+            channelsResult.source === 'api' &&
+            channelsResult.data &&
+            !channelsResult.data.roomTypes?.length
+          ) {
+            parts.push('Snapshot Channex vide ou non configuré.');
+          }
+          setLoadBanner(parts.join(' '));
+          return;
+        }
+
+        const local = getStoredListings().find((item) => item.id === id);
+        if (local) {
+          setListing(local);
+          setLoadBanner('API indisponible ou ID inconnu — affichage des données locales (mock).');
+          return;
+        }
+
+        setListing(createEmptyListing());
+        setLoadBanner('Listing introuvable (API et stockage local). Formulaire vide.');
+      } catch {
+        if (!cancelled) {
+          const local = getStoredListings().find((item) => item.id === id);
+          setListing(local ?? createEmptyListing());
+          setLoadBanner('Erreur de chargement — données locales ou vides.');
+        }
+      } finally {
+        if (!cancelled) {
+          setFormLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isCreateMode]);
 
   const tabCompletions = useMemo(() => {
     return Object.fromEntries(
@@ -802,12 +1031,33 @@ export function NewListingFormPage() {
   const activeTabMeta = LISTING_TAB_META.find((item) => item.key === activeTab);
   const currentIndex = LISTING_TAB_META.findIndex((item) => item.key === activeTab);
 
+  const footerSaveMode = useMemo(
+    () => getListingFooterSaveMode(activeTab, listing),
+    [activeTab, listing.id, listing.rawApiDocument],
+  );
+
+  const savePrimaryLabel =
+    footerSaveMode === 'api-panel'
+      ? 'Infos sauvegarde'
+      : footerSaveMode === 'local-draft-only'
+        ? 'Sauvegarder brouillon local'
+        : 'Sauvegarder';
+
+  const saveContinueLabel =
+    footerSaveMode === 'api-panel'
+      ? 'Continuer →'
+      : footerSaveMode === 'local-draft-only'
+        ? 'Brouillon local & continuer →'
+        : 'Sauvegarder & continuer →';
+
   const persistListing = (nextListing: ListingRecord, message: string) => {
     const synced = syncListingMeta(nextListing);
+    const toPersist: ListingRecord = { ...synced };
+    delete toPersist.rawApiDocument;
     const currentListings = getStoredListings();
-    const nextListings = currentListings.some((item) => item.id === synced.id)
-      ? currentListings.map((item) => (item.id === synced.id ? synced : item))
-      : [synced, ...currentListings];
+    const nextListings = currentListings.some((item) => item.id === toPersist.id)
+      ? currentListings.map((item) => (item.id === toPersist.id ? toPersist : item))
+      : [toPersist, ...currentListings];
 
     saveStoredListings(nextListings);
     setListing(synced);
@@ -818,11 +1068,54 @@ export function NewListingFormPage() {
     }
   };
 
+  const reloadListingDocument = useCallback(async () => {
+    if (!id || id === 'new' || !isMongoListingId(id)) {
+      return;
+    }
+    try {
+      const doc = await listingsService.getListingDocument(id);
+      if (!doc) {
+        showToast('Rechargement impossible (document absent).', 'error');
+        return;
+      }
+      const [channelsResult, clientServices] = await Promise.all([
+        listingsService.getChannels(id),
+        listingsService.getClientServicesBundle(id),
+      ]);
+      const mapped = mapApiListingToListingRecord(doc, channelsResult.data, clientServices);
+      setListing(mapped);
+      showToast('Document srv-listing actualisé.', 'success');
+    } catch {
+      showToast('Erreur réseau au rechargement.', 'error');
+    }
+  }, [id, showToast]);
+
   const updateField = (path: string, value: unknown) => {
     setListing((prev) => fieldPathSet(prev, `form.${path}`, value) as ListingRecord);
   };
 
   const saveCurrentTab = () => {
+    if (isListingConfigTab(activeTab)) {
+      showToast(
+        'Cet onglet se persiste sur srv-listing via « Sauvegarder (PUT) » dans le panneau bleu (pas le bouton pied de page).',
+        'info',
+      );
+      return;
+    }
+    if (activeTab === 'equipment' && isMongoListingId(listing.id)) {
+      showToast(
+        'Les équipements affichés viennent de srv-listing (lecture seule). Pour modifier la liste et les quantités, utilisez le dashboard admin (update-property / listingAmenitiesIds).',
+        'info',
+      );
+      return;
+    }
+    if (footerSaveMode === 'local-draft-only') {
+      persistListing(
+        listing,
+        `Brouillon catalogue local enregistré (« ${activeTabMeta?.label ?? activeTab} » — vue onglet = srv-listing, lecture seule).`,
+      );
+      return;
+    }
     persistListing(listing, `Onglet "${activeTabMeta?.label}" sauvegardé`);
   };
 
@@ -831,7 +1124,14 @@ export function NewListingFormPage() {
     if (nextIndex < 0 || nextIndex >= LISTING_TAB_META.length) {
       return;
     }
-    persistListing(listing, `Progression sauvegardée sur "${activeTabMeta?.label}"`);
+    const tabLabel = activeTabMeta?.label ?? activeTab;
+    const progressionMessage =
+      footerSaveMode === 'local-draft-only'
+        ? `Brouillon catalogue (local) sauvegardé — « ${tabLabel} » (données onglet lues depuis srv-listing).`
+        : footerSaveMode === 'api-panel'
+          ? `Progression catalogue sauvegardée — « ${tabLabel} » se met à jour via le panneau API ci-dessus.`
+          : `Progression sauvegardée sur "${tabLabel}"`;
+    persistListing(listing, progressionMessage);
     setActiveTab(LISTING_TAB_META[nextIndex].key);
   };
 
@@ -893,7 +1193,34 @@ export function NewListingFormPage() {
           </Box>
 
           <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
-            <TabContent listing={listing} tabKey={activeTab} onChange={updateField} />
+            {loadBanner && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {loadBanner}
+              </Alert>
+            )}
+            {formLoading ? (
+              <Box
+                sx={{
+                  minHeight: 240,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 2,
+                }}
+              >
+                <CircularProgress size={28} />
+                <Typography sx={{ fontSize: 13, color: t.text3 }}>Chargement du listing…</Typography>
+              </Box>
+            ) : (
+              <TabContent
+                listing={listing}
+                tabKey={activeTab}
+                tabLabel={activeTabMeta?.label ?? activeTab}
+                onChange={updateField}
+                onToast={showToast}
+                onReloadListingDoc={reloadListingDocument}
+              />
+            )}
           </Box>
 
           <Box
@@ -919,14 +1246,14 @@ export function NewListingFormPage() {
                   ← Précédent
                 </Button>
                 <Button sx={btnGhostSx} onClick={saveCurrentTab}>
-                  Sauvegarder
+                  {savePrimaryLabel}
                 </Button>
                 <Button
                   sx={btnPrimarySx}
                   disabled={currentIndex === LISTING_TAB_META.length - 1}
                   onClick={() => goToSiblingTab(1)}
                 >
-                  Sauvegarder & continuer →
+                  {saveContinueLabel}
                 </Button>
               </Stack>
             </Stack>

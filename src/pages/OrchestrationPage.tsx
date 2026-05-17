@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -10,6 +11,8 @@ import {
   Drawer,
   IconButton,
   Stack,
+  Tabs,
+  Tab,
   Typography,
 } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
@@ -92,6 +95,8 @@ type MessagePreview = {
 // Page
 // ════════════════════════════════════════════════════════════════════
 export function OrchestrationPage() {
+  const navigate = useNavigate();
+  const [tab, setTab] = useState(0); // 0=Plans, 1=Chronologie, 2=Événement, 3=Daily Ops, 4=Config
   const [view, setView] = useState('chronologie');
   const [drawerContent, setDrawerContent] = useState<DrawerContent | null>(null);
   const [messagePreview, setMessagePreview] = useState<MessagePreview | null>(null);
@@ -118,7 +123,9 @@ export function OrchestrationPage() {
     setDrawerContent(null);
   };
 
-  const openEventDrawer = (detail: DrawerContent extends { type: 'event'; detail: infer T } ? T : never) => {
+  type EventDrawerDetail = Extract<DrawerContent, { type: 'event' }>['detail'];
+
+  const openEventDrawer = (detail: EventDrawerDetail) => {
     setDrawerContent({ type: 'event', detail });
   };
 
@@ -163,10 +170,27 @@ export function OrchestrationPage() {
     });
   };
 
+  const handleTabChange = (_: any, newValue: number) => {
+    setTab(newValue);
+    if (newValue === 0) navigate('/admin/orchestrator'); // Plans
+    if (newValue === 2) navigate('/orchestration/events'); // Événements
+    if (newValue === 4) navigate('/orchestration/config'); // Configuration
+  };
+
   return (
-    <DashboardWrapper breadcrumb={['Pilotage', 'Orchestration', view === 'chronologie' ? 'Chronologie' : 'Plan d\'orchestration']}>
+    <DashboardWrapper breadcrumb={['Pilotage', 'Orchestration']}>
+      <Box sx={{ borderBottom: 1, borderColor: t.border, mb: 3 }}>
+        <Tabs value={tab} onChange={handleTabChange} sx={{ px: 3 }}>
+          <Tab label="Plans" />
+          <Tab label="Chronologie" />
+          <Tab label="Événement" />
+          <Tab label="Daily Ops" />
+          <Tab label="Configuration" />
+        </Tabs>
+      </Box>
+
       <PageHeader
-        title={`✨ Orchestration · ${view === 'chronologie' ? 'Chronologie' : 'Plan d\'orchestration'}`}
+        title={`✨ Orchestration · ${tab === 1 ? 'Chronologie' : 'Plan d\'orchestration'}`}
         count={
           <Box
             component="button"
@@ -181,14 +205,6 @@ export function OrchestrationPage() {
           </Box>
         }
       >
-        <ViewToggle
-          options={[
-            { value: 'chronologie', label: 'Chronologie' },
-            { value: 'board', label: 'Plan d\'orchestration' }
-          ]}
-          value={view}
-          onChange={setView}
-        />
         <Button sx={btnGhostSx} onClick={openReservationDrawer}>📋 Voir réservation</Button>
         <Button sx={btnAiSx}>✨ Demander à l'AI</Button>
       </PageHeader>
@@ -677,11 +693,13 @@ export function OrchestrationPage() {
         anchor="right"
         open={Boolean(drawerContent)}
         onClose={closeDrawer}
-        PaperProps={{
-          sx: {
-            width: { xs: '100%', sm: 440 },
-            p: 0,
-            bgcolor: '#fbfaf6',
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: '100%', sm: 440 },
+              p: 0,
+              bgcolor: '#fbfaf6',
+            },
           },
         }}
       >

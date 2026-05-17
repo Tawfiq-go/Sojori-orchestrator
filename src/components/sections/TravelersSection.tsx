@@ -2,9 +2,9 @@
 // Sojori — TravelersSection (Section voyageurs d'une réservation)
 // Tabs Adultes / Enfants / Infants · Cards avec passeport, nationalité, statut
 // ════════════════════════════════════════════════════════════════════
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-  Box, Stack, Typography, Tabs, Tab, Avatar, IconButton, Button, Chip, Badge,
+  Box, Stack, Typography, Tabs, Tab, Avatar, Button, Chip,
   Card, CardContent, CardActions, Divider,
 } from '@mui/material';
 
@@ -65,7 +65,7 @@ export default function TravelersSection({ travelers = MOCK_TRAVELERS, onAdd, on
   return (
     <Box sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2 }}>
       <Box sx={{ px: 2.5, pt: 2, borderBottom: `1px solid ${T.border}` }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+        <Stack direction="row" spacing={2} sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.2px' }}>
             Voyageurs ({travelers.length})
           </Typography>
@@ -112,7 +112,7 @@ function TravelerCard({ traveler, onEdit, onDelete }: { traveler: Traveler; onEd
       '&:hover': { borderColor: T.primary, boxShadow: '0 4px 12px rgba(26,20,8,0.06)' },
     }}>
       <CardContent sx={{ pb: 1 }}>
-        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
           <Avatar sx={{ width: 44, height: 44, bgcolor: T.bg2, color: T.text2, fontSize: 14, fontWeight: 700 }}>
             {traveler.firstName[0]}{traveler.lastName[0]}
           </Avatar>

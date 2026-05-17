@@ -9,7 +9,7 @@
 // Uses tokens from DashboardV2.components.jsx
 // ════════════════════════════════════════════════════════════════════
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Box, Stack, Typography } from '@mui/material';
 import { tokens as t } from './dashboard/DashboardV2.components';
 

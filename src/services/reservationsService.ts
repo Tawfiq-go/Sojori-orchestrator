@@ -120,10 +120,27 @@ class ReservationsService {
         validateStatus: (status) => (status >= 200 && status < 300) || status === 404
       });
 
+      console.log('📡 [ReservationsService] API Response:', {
+        status: response.status,
+        success: response.data?.success,
+        dataLength: response.data?.data?.length,
+        hasData: !!response.data?.data,
+        firstItem: response.data?.data?.[0],
+      });
+
       // ⚠️ Backend retourne { success, data[], unmappedReservation[] }
       // Pas un array direct
       // Note: Backend returns 404 with success: false when no data found
       const reservations = response.data.data || [];
+
+      console.log('✅ [ReservationsService] Returning:', {
+        success: true,
+        count: reservations.length,
+        cancelled: reservations.filter((r: any) => /cancel/i.test(r.status)).length,
+        cancelledUnacked: reservations.filter((r: any) =>
+          /cancel/i.test(r.status) && r.cancellationAcknowledged !== true
+        ).length,
+      });
 
       return {
         success: true,

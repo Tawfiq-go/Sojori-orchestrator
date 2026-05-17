@@ -6,9 +6,9 @@
 // Click a cell → open the single-day drawer (reuse from CalendarPage.tsx).
 // ════════════════════════════════════════════════════════════════════
 
-import React, { useMemo, useState } from 'react';
-import { Box, Stack, Typography, Button } from '@mui/material';
-import { Panel, btnGhostSx, btnPrimarySx, tokens as t } from './dashboard/DashboardV2.components';
+import { useMemo } from 'react';
+import { Box, Typography } from '@mui/material';
+import { Panel, tokens as t } from './dashboard/DashboardV2.components';
 
 type CellStatus = 'available' | 'booked' | 'closed';
 

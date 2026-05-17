@@ -1,5 +1,6 @@
 import React from 'react';
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
+import { runtimeLog } from '../utils/runtimeLog';
 
 interface AppErrorBoundaryProps {
   children: React.ReactNode;
@@ -24,6 +25,10 @@ export class AppErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('AppErrorBoundary caught render error', { error, errorInfo });
+    runtimeLog('error', 'React', `ErrorBoundary: ${error.message}`, {
+      stack: error.stack?.slice(0, 500),
+      componentStack: errorInfo.componentStack?.slice(0, 500),
+    });
   }
 
   private handleReload = () => {

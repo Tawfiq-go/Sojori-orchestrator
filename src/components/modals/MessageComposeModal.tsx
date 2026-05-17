@@ -2,12 +2,12 @@
 // Sojori — MessageComposeModal 🔴 CRITIQUE
 // Composer WhatsApp / OTA / Email avec templates, variables, scheduling
 // ════════════════════════════════════════════════════════════════════
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Box, Stack, Typography, TextField, Button, IconButton,
   ToggleButton, ToggleButtonGroup, MenuItem, FormControl,
-  InputLabel, Select, Chip, Divider, Alert, Switch, FormControlLabel,
+  InputLabel, Select, Chip, Alert, Switch, FormControlLabel,
   List, ListItemButton, ListItemText, Paper,
 } from '@mui/material';
 
@@ -23,7 +23,11 @@ export type MessageChannel = 'whatsapp' | 'ota' | 'email';
 export type OtaProvider = 'airbnb' | 'booking' | 'vrbo';
 
 export interface MessageTemplate {
-  id: string; name: string; channel: MessageChannel[]; subject?: string; body: string;
+  id: string;
+  name: string;
+  channel: MessageChannel[];
+  subject?: string;
+  body: string;
 }
 
 export interface MessageComposeResult {
@@ -38,6 +42,8 @@ export interface MessageComposeResult {
   createdAt: string;
 }
 
+export type MessageComposeTemplate = MessageTemplate;
+
 export interface MessageComposeModalProps {
   open: boolean;
   onClose: () => void;
@@ -47,6 +53,12 @@ export interface MessageComposeModalProps {
   defaultChannel?: MessageChannel;
   templates?: MessageTemplate[];
   onSubmit?: (result: MessageComposeResult) => Promise<void> | void;
+  /** Legacy (Comms / OTA) — texte brut à l’envoi */
+  onSend?: (message: string) => void;
+  title?: string;
+  subtitle?: string;
+  initialMessage?: string;
+  sendLabel?: string;
 }
 
 const DEFAULT_TEMPLATES: MessageTemplate[] = [
@@ -71,6 +83,7 @@ const VARIABLES = [
 export const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
   open, onClose, guestName, guestPhone, guestEmail,
   defaultChannel = 'whatsapp', templates = DEFAULT_TEMPLATES, onSubmit,
+  onSend, title, subtitle, initialMessage, sendLabel,
 }) => {
   const [channel, setChannel] = useState<MessageChannel>(defaultChannel);
   const [otaProvider, setOtaProvider] = useState<OtaProvider>('airbnb');
@@ -83,6 +96,11 @@ export const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
   const [showPreview, setShowPreview] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialMessage) setBody(initialMessage);
+  }, [open, initialMessage]);
 
   const channelTemplates = useMemo(
     () => templates.filter(t => t.channel.includes(channel)),
@@ -147,6 +165,7 @@ export const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
       stored.push(result);
       localStorage.setItem('sojori.messages', JSON.stringify(stored));
       await onSubmit?.(result);
+      await onSend?.(body);
       reset(); onClose();
     } catch { setError('Erreur d\'envoi'); }
     finally { setLoading(false); }
@@ -160,15 +179,15 @@ export const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth
-      PaperProps={{ sx: { borderRadius: 2, bgcolor: T.bg1, minHeight: 600 } }}>
+      slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: T.bg1, minHeight: 600 } } }}>
       <DialogTitle sx={{ pb: 1.5, borderBottom: `1px solid ${T.border}` }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Stack>
             <Typography sx={{ fontWeight: 800, fontSize: 18, color: T.text }}>
-              Composer un message
+              {title ?? 'Composer un message'}
             </Typography>
             <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.5 }}>
-              Destinataire : {recipient}
+              {subtitle ?? `Destinataire : ${recipient}`}
             </Typography>
           </Stack>
           <IconButton size="small" onClick={handleClose}>✕</IconButton>
@@ -260,7 +279,7 @@ export const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
               </Box>
 
               {/* Attachments (mock) */}
-              <Stack direction="row" alignItems="center" spacing={1}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Button size="small" variant="outlined" onClick={() => setAttachments(a => [...a, `fichier-${a.length + 1}.pdf`])}
                   sx={{ textTransform: 'none', borderColor: T.border, color: T.text2 }}>
                   📎 Ajouter pièce jointe
@@ -272,13 +291,13 @@ export const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
               </Stack>
 
               {/* Schedule */}
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
                 <FormControlLabel
                   control={<Switch size="small" checked={scheduled} onChange={(_, c) => setScheduled(c)} />}
                   label={<Typography sx={{ fontSize: 13 }}>Programmer l'envoi</Typography>}
                 />
                 {scheduled && (
-                  <TextField type="datetime-local" size="small" InputLabelProps={{ shrink: true }}
+                  <TextField type="datetime-local" size="small" slotProps={{ inputLabel: { shrink: true } }}
                     value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} />
                 )}
               </Stack>
@@ -307,7 +326,7 @@ export const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
       </DialogContent>
 
       <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${T.border}`, gap: 1 }}>
-        <Stack direction="row" sx={{ flex: 1 }} alignItems="center" spacing={1}>
+        <Stack direction="row" sx={{ flex: 1, alignItems: 'center' }} spacing={1}>
           <Chip size="small" sx={{ bgcolor: channelMeta.color, color: '#fff', fontWeight: 700, fontSize: 11 }}
             label={`${channelMeta.icon} ${channelMeta.label}`} />
           {scheduled && scheduledAt && (
@@ -324,7 +343,7 @@ export const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
             color: T.text,
             '&:hover': { background: `linear-gradient(135deg, ${T.primarySoft} 0%, ${T.primary} 100%)` },
           }}>
-          {loading ? 'Envoi…' : scheduled ? 'Programmer' : 'Envoyer maintenant'}
+          {loading ? 'Envoi…' : scheduled ? 'Programmer' : (sendLabel ?? 'Envoyer maintenant')}
         </Button>
       </DialogActions>
     </Dialog>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   Dialog,
   DialogTitle,
@@ -72,7 +73,7 @@ export function AssignTaskModal({
     }
   }, [task]);
 
-  const handleChange = (event: any) => {
+  const handleChange = (event: SelectChangeEvent<string>) => {
     setStaffId(event.target.value);
     setError(null);
   };
@@ -102,7 +103,12 @@ export function AssignTaskModal({
 
       // Simuler succès
       const isUpdate = !!task.staffId;
-      const updatedTask = { ...task, staffId };
+      const member = staff.find((s) => s.id === staffId);
+      const updatedTask: Task = {
+        ...task,
+        staffId,
+        staffName: member ? `${member.firstName} ${member.lastName}`.trim() : null,
+      };
 
       toast.success(
         isUpdate ? 'Task staff updated successfully' : 'Task assigned successfully'
@@ -110,7 +116,7 @@ export function AssignTaskModal({
 
       onTaskUpdated(updatedTask);
       onClose();
-    } catch (err: any) {
+    } catch (_err: unknown) {
       const errorMsg = 'Failed to assign/update task. Please try again.';
       toast.error(errorMsg);
       setError(errorMsg);
@@ -131,10 +137,12 @@ export function AssignTaskModal({
       onClose={onClose}
       maxWidth="sm"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '12px',
-          bgcolor: t.bg1,
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '12px',
+            bgcolor: t.bg1,
+          },
         },
       }}
     >

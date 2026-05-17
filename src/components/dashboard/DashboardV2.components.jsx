@@ -202,6 +202,18 @@ export const NAV = [
     { id: 'channels', label: 'Canaux', icon: '🔗' },
     { id: 'clients', label: 'Clients', icon: '👤' },
   ]},
+
+  // ═══════════════════════════════════════════════════════
+  // CRM
+  // ═══════════════════════════════════════════════════════
+  { group: 'CRM', items: [
+    { id: 'crm', label: 'Sojori CRM', icon: '🎯', sub: [
+      { id: 'crm/requests', label: 'Demandes' },
+      { id: 'crm/leads', label: 'Leads & fiches' },
+      { id: 'crm/support', label: 'Équipe support' },
+      { id: 'crm/onboarding', label: 'Onboarding' },
+    ]},
+  ]},
 ];
 
 /** Icônes MUI alignées brief Claude Design (modules) — emoji en secours si id absent */
@@ -229,6 +241,11 @@ const NAV_ICON_BY_ID = {
   pricing: ShowChartOutlined,
   channels: HubOutlined,
   clients: PeopleOutlined,
+  crm: PersonSearchOutlined,
+  'crm/requests': InboxOutlined,
+  'crm/leads': PersonSearchOutlined,
+  'crm/support': SupportAgentOutlined,
+  'crm/onboarding': AssignmentOutlined,
 };
 
 function NavItemIcon({ item, active, sub }) {
@@ -1366,15 +1383,20 @@ export function TaskCard({ priority = 'low', type, title, listing, assignee, dea
 // 12. ChatLayout (Communications WhatsApp)
 // ════════════════════════════════════════════════════════════════════
 
-export function ChatLayout({ children, mobileView = 'both' }) {
+export const ChatLayout = React.memo(function ChatLayout({ children, mobileView = 'both' }) {
   // mobileView: 'list' | 'chat' | 'both'
   // Sur desktop: toujours 'both' (3 colonnes)
   // Sur mobile: 'list' (liste seule) ou 'chat' (messages seuls)
 
+  console.log('📱 ChatLayout render:', {
+    mobileView,
+    childrenCount: React.Children.count(children)
+  });
+
   return (
     <Box sx={{
       bgcolor: t.bg1, border: `1px solid ${t.border}`,
-      borderRadius: '12px', overflow: 'hidden',
+      borderRadius: '12px',
       display: 'grid',
       gridTemplateColumns: {
         xs: '1fr',  // Mobile: 1 colonne
@@ -1382,6 +1404,8 @@ export function ChatLayout({ children, mobileView = 'both' }) {
         lg: '320px 1fr 300px'  // Large: 3 colonnes plus larges
       },
       height: 660,
+      maxHeight: 660,  // ← FIX: Ferme la cascade scroll
+      overflow: 'hidden',
       boxShadow: '0 1px 2px rgba(26,20,8,0.03)',
       // Sur mobile, gérer quelle colonne est visible
       '& > *': {
@@ -1389,7 +1413,10 @@ export function ChatLayout({ children, mobileView = 'both' }) {
           xs: 'none',  // Par défaut caché sur mobile
           md: 'block'  // Tout visible sur desktop
         },
-        height: '100%',  // TOUTES les colonnes prennent 100% de la hauteur du ChatLayout
+        height: '100%',
+        minHeight: 0,  // ← FIX FLEX CRITIQUE: permet overflow
+        minWidth: 0,   // ← Pour ellipsis dans la liste
+        overflow: 'hidden',  // ← Chaque colonne contient son scroll
       },
       // Sur mobile, afficher selon mobileView
       '& > *:nth-of-type(1)': {  // ConversationList
@@ -1412,12 +1439,30 @@ export function ChatLayout({ children, mobileView = 'both' }) {
       },
     }}>{children}</Box>
   );
-}
+});
 
 export function ConversationList({ conversations, activeId, onSelect }) {
+  console.log('🔍 ConversationList render:', {
+    conversationsCount: conversations?.length || 0,
+    activeId,
+    hasOnSelect: !!onSelect
+  });
+
   return (
-    <Box sx={{ borderRight: `1px solid ${t.border}`, overflowY: 'auto' }}>
-      <Box sx={{ p: '14px 16px', borderBottom: `1px solid ${t.border}`, bgcolor: t.bg2 }}>
+    <Box sx={{
+      height: '100%',
+      minHeight: 0,  // ← FIX FLEX
+      display: 'flex',
+      flexDirection: 'column',
+      borderRight: `1px solid ${t.border}`
+    }}>
+      {/* Header fixe - ne scroll jamais */}
+      <Box sx={{
+        p: '14px 16px',
+        borderBottom: `1px solid ${t.border}`,
+        bgcolor: t.bg2,
+        flexShrink: 0  // Ne shrink jamais, reste toujours visible
+      }}>
         <Stack direction="row" spacing={0.75} sx={{
           alignItems: 'center',
           bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '7px',
@@ -1426,9 +1471,19 @@ export function ConversationList({ conversations, activeId, onSelect }) {
           🔍<Box>Rechercher conversation…</Box>
         </Stack>
       </Box>
-      {conversations.map(c => (
-        <ConversationItem key={c.id} conv={c} active={activeId === c.id} onClick={() => onSelect?.(c.id)} />
-      ))}
+
+      {/* Liste scrollable - prend le reste de l'espace */}
+      <Box sx={{
+        flex: 1,
+        minHeight: 0,  // ← FIX FLEX OBLIGATOIRE
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        overscrollBehavior: 'contain',  // ← Empêche cascade au parent
+      }}>
+        {conversations.map(c => (
+          <ConversationItem key={c.id} conv={c} active={activeId === c.id} onClick={() => onSelect?.(c.id)} />
+        ))}
+      </Box>
     </Box>
   );
 }
@@ -1477,14 +1532,29 @@ function ConversationItem({ conv, active, onClick }) {
 export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISuggestion, loading, onBack }) {
   const [inputValue, setInputValue] = React.useState('');
   const inputRef = React.useRef(null);
-  const messagesEndRef = React.useRef(null);
+  const messagesContainerRef = React.useRef(null);  // ← Changé: ref sur container, pas sur div vide
 
-  // Scroll automatique vers le bas quand nouveaux messages
-  React.useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  console.log('💬 ChatThread render:', {
+    conv: conv?.name,
+    messagesCount: messages?.length || 0,
+    loading
+  });
+
+  // ✅ FIX SCROLL: scrollTop direct au lieu de scrollIntoView
+  // useLayoutEffect = avant paint, pas de flicker
+  React.useLayoutEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    console.log('📜 Scroll direct (no cascade):', messages?.length);
+
+    // Auto-scroll uniquement si déjà en bas (comme WhatsApp)
+    const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (wasAtBottom || messages?.length === 1) {  // Ou si premier message
+      el.scrollTop = el.scrollHeight;
+      console.log('✅ Scrolled to bottom (no parent affected)');
     }
-  }, [messages]);
+  }, [messages?.length]);  // ← Dépendance sur length, pas messages (évite re-renders)
 
   const handleSend = () => {
     if (inputValue.trim()) {
@@ -1494,10 +1564,17 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', bgcolor: t.bg2 }}>
+    <Box sx={{
+      height: '100%',
+      minHeight: 0,  // ← FIX FLEX
+      display: 'flex',
+      flexDirection: 'column',
+      bgcolor: t.bg2
+    }}>
       <Stack direction="row" spacing={1.25} sx={{
         alignItems: 'center',
         p: '12px 18px', borderBottom: `1px solid ${t.border}`, bgcolor: t.bg1,
+        flexShrink: 0  // Header ne shrink jamais
       }}>
         {/* Bouton retour (mobile only) */}
         {onBack && (
@@ -1524,8 +1601,20 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
         </Stack>
       </Stack>
 
-      <Box sx={{ flex: 1, overflowY: 'auto', p: 2.25,
-        display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Box
+        ref={messagesContainerRef}  // ← FIX: Ref sur le container scrollable
+        sx={{
+          flex: 1,
+          minHeight: 0,  // ← FIX FLEX OBLIGATOIRE
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          overscrollBehavior: 'contain',  // ← Empêche cascade
+          p: 2.25,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1
+        }}
+      >
         {messages.length === 0 && !loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <Typography sx={{ fontSize: 13, color: t.text3 }}>Aucun message</Typography>
@@ -1542,12 +1631,17 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
                 <Typography sx={{ fontSize: 11, color: t.text4 }}>Chargement...</Typography>
               </Box>
             )}
-            <div ref={messagesEndRef} />
+            {/* Plus besoin de div avec ref - le scroll est direct sur le container */}
           </>
         )}
       </Box>
 
-      <Box sx={{ p: '12px 18px', borderTop: `1px solid ${t.border}`, bgcolor: t.bg1 }}>
+      <Box sx={{
+        p: '12px 18px',
+        borderTop: `1px solid ${t.border}`,
+        bgcolor: t.bg1,
+        flexShrink: 0  // Zone d'input ne shrink jamais
+      }}>
         {aiSuggestions.length > 0 && (
           <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', mb: 1, rowGap: 0.75 }}>
             {aiSuggestions.map((s, i) => <AIChip key={i}>{s}</AIChip>)}

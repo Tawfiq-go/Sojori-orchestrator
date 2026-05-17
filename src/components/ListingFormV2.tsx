@@ -5,7 +5,7 @@
 
 import React from 'react';
 import {
-  Box, Stack, Typography, Button, Avatar, Divider,
+  Box, Stack, Typography, Button, Avatar,
 } from '@mui/material';
 
 // ─── Design tokens ──────────────────────────────────────────────
@@ -186,7 +186,7 @@ function ListingTopbar({ listingName, activeTabLabel, completionPct = 0, onSave,
       px: 3.5, position: 'sticky', top: 0, zIndex: 30,
       height: `${tokens.topbarH}px`,
     }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, fontSize: 13, color: tokens.text2 }}>
+      <Stack direction="row" spacing={1} sx={{ minWidth: 0, fontSize: 13, color: tokens.text2, alignItems: 'center' }}>
         <Typography sx={{ fontSize: 13 }}>Listings</Typography>
         <Box sx={{ color: tokens.text4 }}>›</Box>
         <Box sx={{
@@ -205,12 +205,25 @@ function ListingTopbar({ listingName, activeTabLabel, completionPct = 0, onSave,
         </Typography>
       </Stack>
 
-      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ ml: 'auto' }}>
+      <Stack direction="row" spacing={1.25} sx={{ ml: 'auto', alignItems: 'center' }}>
         <Typography sx={{ fontSize: 11, color: tokens.text3, fontFamily: 'Geist Mono', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 0.75 }}>
           <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: tokens.success, boxShadow: `0 0 8px ${tokens.success}` }} />
           Saved 2s ago
         </Typography>
         <CompletionRing pct={completionPct} size={22} showLabel />
+        {onSave && (
+          <Button
+            onClick={onSave}
+            sx={{
+              px: 1.75, py: 1, borderRadius: '9px',
+              fontSize: 13, fontWeight: 600, textTransform: 'none',
+              bgcolor: tokens.bg1, color: tokens.text, border: `1px solid ${tokens.border}`,
+              '&:hover': { bgcolor: tokens.bg2, borderColor: tokens.borderStrong },
+            }}
+          >
+            Sauver
+          </Button>
+        )}
         <Button onClick={onPreview} sx={btnGhostSx}>Preview</Button>
         <Button onClick={onAiAssist} sx={btnAiSx}>✨ AI assist</Button>
         <Button onClick={onPublish} sx={btnPrimarySx}>Publish →</Button>
@@ -255,10 +268,11 @@ export function ListingTabsRail({ activeTab, onTabChange, tabsCompletion = {}, a
         const done = group.tabs.filter(t => (tabsCompletion[t.id] || 0) >= 100).length;
         return (
           <Box key={group.id} sx={{ px: 1, mb: 2.25 }}>
-            <Stack direction="row" alignItems="center" sx={{
+            <Stack direction="row" sx={{
               px: 1.25, pt: 0.75, pb: 1,
               fontSize: 10, fontFamily: 'Geist Mono', fontWeight: 600,
               color: tokens.text4, letterSpacing: 1.4, textTransform: 'uppercase',
+              alignItems: 'center',
             }}>
               <span>{group.label}</span>
               <span style={{ marginLeft: 'auto', color: tokens.text3 }}>{done}/{total}</span>
@@ -367,7 +381,7 @@ export function ListingAside({ aiChat = defaultAiChat, completion = defaultCompl
     }}>
       <AsideTitle>Assistant IA</AsideTitle>
       <AsideCard variant="ai">
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.75 }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 0.75, alignItems: 'center' }}>
           <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>✨ Sojori AI</Typography>
           <Typography sx={{ ml: 'auto', fontFamily: 'Geist Mono', fontSize: 9, color: tokens.text3, fontWeight: 500 }}>
             GPT-4 · v2.4
@@ -383,8 +397,8 @@ export function ListingAside({ aiChat = defaultAiChat, completion = defaultCompl
       <AsideCard>
         <Stack spacing={0.75}>
           {completion.map((c: any) => (
-            <Stack key={c.label} direction="row" alignItems="center" spacing={1.25}
-              sx={{ px: 0.5, py: 0.75, fontSize: 12 }}>
+            <Stack key={c.label} direction="row" spacing={1.25}
+              sx={{ px: 0.5, py: 0.75, fontSize: 12, alignItems: 'center' }}>
               <Box sx={{
                 width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
                 bgcolor: c.pct >= 100 ? tokens.success : c.pct > 0 ? tokens.warning : tokens.bg3,
@@ -401,7 +415,7 @@ export function ListingAside({ aiChat = defaultAiChat, completion = defaultCompl
       <AsideCard sx={{ p: 1.75 }}>
         <Stack spacing={1.25} sx={{ fontSize: 12, color: tokens.text2 }}>
           {activity.map((a: any, i: number) => (
-            <Stack key={i} direction="row" spacing={1.25} alignItems="flex-start">
+            <Stack key={i} direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
               <Box sx={{ color: a.kind === 'ai' ? tokens.ai : tokens.success }}>
                 {a.kind === 'ai' ? '✨' : '●'}
               </Box>

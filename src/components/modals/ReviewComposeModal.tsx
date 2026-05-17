@@ -93,9 +93,9 @@ export const ReviewComposeModal: React.FC<ReviewComposeModalProps> = ({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth
-      PaperProps={{ sx: { borderRadius: 2, bgcolor: T.bg1 } }}>
+      slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: T.bg1 } } }}>
       <DialogTitle sx={{ pb: 1.5, borderBottom: `1px solid ${T.border}` }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Stack>
             <Typography sx={{ fontWeight: 800, fontSize: 18, color: T.text }}>
               ⭐ Écrire un avis
@@ -129,8 +129,8 @@ export const ReviewComposeModal: React.FC<ReviewComposeModalProps> = ({
             </Typography>
             <Stack spacing={1.5}>
               {CATEGORIES.map(c => (
-                <Stack key={c.key} direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1 }}>
+                <Stack key={c.key} direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Stack direction="row" spacing={1} sx={{ flex: 1, alignItems: 'center' }}>
                     <Box sx={{ fontSize: 18 }}>{c.icon}</Box>
                     <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{c.label}</Typography>
                   </Stack>
@@ -148,7 +148,7 @@ export const ReviewComposeModal: React.FC<ReviewComposeModalProps> = ({
             <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Templates
             </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap: 1 }}>
+            <Stack direction="row" spacing={1} sx={{ gap: 1, flexWrap: 'wrap' }}>
               {TEMPLATES.map(t => (
                 <Chip key={t.label} size="small" label={t.label} onClick={() => applyTemplate(t.text)}
                   sx={{ bgcolor: T.bg2, '&:hover': { bgcolor: T.primaryTint } }} />

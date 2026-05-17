@@ -1,14 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader,
-  btnPrimarySx,
   StatCard,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import {
   Box,
-  Button,
   Stack,
   Typography,
   IconButton,
@@ -22,7 +20,20 @@ import {
 } from '@mui/material';
 
 // MOCK DATA - Tasks for planning
-const MOCK_TASKS = [];
+type PlanningMockTask = {
+  id: string;
+  staffId: string;
+  staffName: string;
+  type: string;
+  icon: string;
+  listing: string;
+  date: string;
+  time: string;
+  duration: number;
+  status: string;
+};
+
+const MOCK_TASKS: PlanningMockTask[] = [];
 for (let i = 0; i < 180; i++) {
   const dayOffset = Math.floor(i / 6);
   const date = new Date();
@@ -94,7 +105,6 @@ const STAFF_MEMBERS = [
 ];
 
 export function PlanningPage() {
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [selectedStaff, setSelectedStaff] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
@@ -195,7 +205,7 @@ export function PlanningPage() {
 
           {/* Filters */}
           <Box sx={{ bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '12px', p: 2 }}>
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <FormControl size="small" sx={{ minWidth: 200 }}>
                 <InputLabel>Staff membre</InputLabel>
                 <Select value={selectedStaff} onChange={(e) => setSelectedStaff(e.target.value)} label="Staff membre">
@@ -309,7 +319,7 @@ export function PlanningPage() {
 
           {/* Legend */}
           <Box sx={{ bgcolor: t.bg1, border: `1px solid ${t.border}`, borderRadius: '12px', p: 2 }}>
-            <Stack direction="row" spacing={3} alignItems="center">
+            <Stack direction="row" spacing={3} sx={{ alignItems: 'center' }}>
               <Typography sx={{ fontSize: '12px', fontWeight: 600 }}>Legende:</Typography>
               <Stack direction="row" spacing={2}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

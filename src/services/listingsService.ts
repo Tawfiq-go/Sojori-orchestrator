@@ -253,6 +253,17 @@ function normalizeChannelsSnapshot(source: unknown, listing?: ListingSummary): L
 }
 
 function buildServiceError(error: unknown): string {
+  if (isAxiosError(error)) {
+    const data = asRecord(error.response?.data);
+    return (
+      pickFirstString(data, ['message', 'error']) ||
+      error.message ||
+      `Erreur API (${error.response?.status ?? 'réseau'})`
+    );
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
   if (isRecord(error)) {
     const response = asRecord(error.response);
     const data = asRecord(response.data);
@@ -463,21 +474,6 @@ function isExpectedMissingChannexMapping(message: string): boolean {
   if (m.includes('channex') && m.includes('not found')) return true;
   if (m.includes('channex') && (m.includes('invalid') || m.includes('absent'))) return true;
   return false;
-}
-
-async function withFallback<T>(
-  loader: () => Promise<T>,
-  fallback: () => T,
-): Promise<ServiceResult<T>> {
-  try {
-    return { data: await loader(), source: 'api' };
-  } catch (error) {
-    return {
-      data: fallback(),
-      source: 'mock',
-      warning: buildServiceError(error),
-    };
-  }
 }
 
 export const listingsService = {
@@ -933,58 +929,77 @@ export const listingsService = {
     }
   },
 
-  async getListings(): Promise<ServiceResult<{ items: ListingSummary[]; total: number }>> {
-    return withFallback(
-      async () => {
-        const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings`);
-        const payload = asRecord(response.data);
-        const items = Array.isArray(payload.data)
-          ? payload.data.map((item) => normalizeListingSummary(item))
-          : [];
+  async getListings(options?: {
+    page?: number;
+    limit?: number;
+    staging?: boolean;
+    useActiveFilter?: boolean;
+    active?: boolean;
+    name?: string;
+  }): Promise<ServiceResult<{ items: ListingSummary[]; total: number }>> {
+    const page = options?.page ?? 0;
+    const limit = options?.limit ?? 20;
+    const staging = options?.staging ?? false;
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+      staging: String(staging),
+    });
+    if (options?.useActiveFilter) {
+      query.set('useActiveFilter', 'true');
+      query.set('active', String(options.active !== false));
+    }
+    if (options?.name?.trim()) {
+      query.set('name', options.name.trim());
+    }
 
-        return {
-          items,
-          total: asNumber(payload.total) ?? items.length,
-        };
-      },
-      () => {
-        const items = buildMockListings();
-        return { items, total: items.length };
-      },
-    );
+    try {
+      const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/?${query.toString()}`);
+      const payload = asRecord(response.data);
+      if (payload.success === false) {
+        throw new Error(pickFirstString(payload, ['message', 'error']) || 'Échec chargement listings');
+      }
+      const items = Array.isArray(payload.data)
+        ? payload.data.map((item) => normalizeListingSummary(item))
+        : [];
+      return {
+        data: { items, total: asNumber(payload.total) ?? items.length },
+        source: 'api',
+      };
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 404) {
+        return { data: { items: [], total: 0 }, source: 'api' };
+      }
+      throw error;
+    }
   },
 
   async getListingById(listingId: string): Promise<ServiceResult<ListingDetail | null>> {
-    return withFallback(
-      async () => {
-        const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/by-id/${listingId}`);
-        const payload = asRecord(response.data);
-        const listing = normalizeListingDetail(payload.listing);
-        return listing.id ? listing : null;
-      },
-      () => buildMockListingDetail(listingId),
-    );
+    const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/by-id/${listingId}`);
+    const payload = asRecord(response.data);
+    if (payload.success === false) {
+      throw new Error(pickFirstString(payload, ['message', 'error']) || 'Listing introuvable');
+    }
+    const listing = normalizeListingDetail(payload.listing);
+    return { data: listing.id ? listing : null, source: 'api' };
   },
 
   async getStats(): Promise<ServiceResult<ListingsStats>> {
-    return withFallback(
-      async () => {
-        const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/stats`);
-        const payload = asRecord(response.data);
-        const total = asNumber(payload.totalListing) ?? 0;
-        const active = asNumber(payload.totalActive) ?? 0;
-        const inactive = asNumber(payload.totalInactive) ?? 0;
-        return {
-          total,
-          active,
-          inactive,
-          draft: Math.max(0, total - active - inactive),
-        };
+    const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/stats`);
+    const payload = asRecord(response.data);
+    const total = asNumber(payload.totalListing) ?? 0;
+    const active = asNumber(payload.totalActive) ?? 0;
+    const inactive = asNumber(payload.totalInactive) ?? 0;
+    return {
+      data: {
+        total,
+        active,
+        inactive,
+        draft: Math.max(0, total - active - inactive),
       },
-      () => buildMockStats(),
-    );
+      source: 'api',
+    };
   },
-
   async getChannels(listingId: string, listing?: ListingSummary): Promise<ServiceResult<ListingChannelsSnapshot | null>> {
     try {
       const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/channex-mapping/${listingId}`);
@@ -1003,8 +1018,8 @@ export const listingsService = {
         };
       }
       return {
-        data: buildMockChannelsSnapshot(listingId),
-        source: 'mock',
+        data: null,
+        source: 'api',
         warning: msg,
       };
     }
@@ -1012,6 +1027,51 @@ export const listingsService = {
 
   async syncListing(listingId: string): Promise<void> {
     await apiClient.post(`${LISTING_API_BASE_URL}/listings/sync-with-rental-united/${listingId}`);
+  },
+
+
+  /** POST /listings/create-property — même endpoint que le dashboard legacy (NewListing). */
+
+  /** PUT /listings/quick-edit/:id — champs import RU (legacy ModifyListings). */
+  async updateListingQuickEdit(
+    listingId: string,
+    payload: {
+      name: string;
+      active: boolean;
+      rentalUnitedIds: string[];
+      roomTypes: Array<{ _id: string; rentalUnitedId: string }>;
+    },
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    data?: {
+      listing?: { name?: string; active?: boolean; rentalUnitedIds?: string[] };
+      roomTypes?: Array<{ _id: string; roomTypeName?: string; rentalUnitedId?: string }>;
+    };
+  }> {
+    const response = await apiClient.put(
+      `${LISTING_API_BASE_URL}/listings/quick-edit/${listingId}`,
+      payload,
+    );
+    return response.data as {
+      success: boolean;
+      message?: string;
+      data?: {
+        listing?: { name?: string; active?: boolean; rentalUnitedIds?: string[] };
+        roomTypes?: Array<{ _id: string; roomTypeName?: string; rentalUnitedId?: string }>;
+      };
+    };
+  },
+
+  async createListingProperty(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await apiClient.post(
+      `${LISTING_API_BASE_URL}/listings/create-property`,
+      payload,
+    );
+    const body = asRecord(response.data);
+    const data = body.data;
+    if (isRecord(data)) return data;
+    return body;
   },
 
   async createListing(payload: ListingMutationPayload): Promise<ListingDetail> {

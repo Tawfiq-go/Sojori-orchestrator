@@ -23,6 +23,7 @@ import {
   VisibilityOff,
 } from '@mui/icons-material';
 import { AUTH_CONFIG } from '../config/authConfig';
+import { logAuth } from '../utils/dashboardDebug';
 
 interface LoginFormState {
   email: string;
@@ -43,9 +44,13 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login, isAuthenticated, loading, error } = useAuth();
 
-  // Rediriger si déjà authentifié
+  useEffect(() => {
+    logAuth('LoginPage mount', { isAuthenticated, loading, error: error ?? null });
+  }, []);
+
   useEffect(() => {
     if (isAuthenticated) {
+      logAuth('LoginPage → dashboard (déjà connecté)');
       navigate(AUTH_CONFIG.LOGIN_REDIRECT);
     }
   }, [isAuthenticated, navigate]);

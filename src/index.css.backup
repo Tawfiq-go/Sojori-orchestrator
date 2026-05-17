@@ -1,0 +1,202 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ════════════════════════════════════════════════════════════════════
+   Sojori — index.css · édition 2026 « Atelier »
+   Globals : palette neutre chaude, animations discrètes, scrollbars,
+   focus visible, hiérarchie titres serrée.
+   ════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Palette — alignée sur tokens (DashboardV2.components.jsx) et muiTheme */
+  --text: #55504a;
+  --text-h: #14110a;
+  --text-muted: #7a756c;
+
+  --bg: #f6f5f1;
+  --bg-paper: #ffffff;
+  --bg-sub: #fafaf7;
+  --bg-soft: #f0eee8;
+
+  --border: rgba(20, 17, 10, 0.07);
+  --border-strong: rgba(20, 17, 10, 0.14);
+
+  --accent: #b8851a;
+  --accent-soft: #e6c46a;
+  --accent-deep: #876119;
+  --accent-bg: rgba(184, 133, 26, 0.10);
+  --accent-border: rgba(184, 133, 26, 0.40);
+
+  --code-bg: #ecebe5;
+  --social-bg: rgba(244, 243, 236, 0.5);
+
+  /* Ombres système — très discrètes */
+  --shadow-1: 0 1px 2px rgba(20,17,10,0.05);
+  --shadow-2: 0 2px 6px -1px rgba(20,17,10,0.07), 0 1px 3px rgba(20,17,10,0.04);
+  --shadow-3: 0 6px 16px -4px rgba(20,17,10,0.09), 0 2px 6px -2px rgba(20,17,10,0.05);
+  --shadow:   var(--shadow-2);
+
+  --sans: 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --heading: var(--sans);
+  --mono: 'Geist Mono', ui-monospace, Consolas, monospace;
+
+  /* Base : 15px → 16 sur grand écran, échelle « produit » resserrée */
+  font: 15px/1.55 var(--sans);
+  letter-spacing: 0.005em;
+  color-scheme: light;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (min-width: 1280px) {
+  :root { font-size: 16px; }
+}
+
+/* Le mode dark est désactivé pour cette édition (light très soigné).
+   Pour le réactiver plus tard, remettre un block @media (prefers-color-scheme: dark). */
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  width: 100%;
+  min-height: 100svh;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  /* Halo très subtil — densité produit, pas marketing */
+  background:
+    radial-gradient(60% 45% at 100% 0%, rgba(184,133,26,0.04), transparent 65%),
+    radial-gradient(45% 35% at 0% 100%, rgba(124,58,237,0.025), transparent 72%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* ─── Hiérarchie titres in-app (MUI couvre <Typography>) ─────────── */
+#root h1,
+#root h2,
+#root h3 {
+  font-family: var(--heading);
+  color: var(--text-h);
+  margin: 0;
+  font-weight: 700;
+}
+
+#root h1 {
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+#root h2 {
+  font-size: 1.1875rem;
+  line-height: 1.3;
+  letter-spacing: -0.022em;
+  font-weight: 650;
+}
+
+#root h3 {
+  font-size: 1rem;
+  line-height: 1.35;
+  letter-spacing: -0.018em;
+  font-weight: 650;
+}
+
+p {
+  margin: 0;
+}
+
+/* ─── Code & mono ──────────────────────────────────────────────── */
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 5px;
+  color: var(--text-h);
+}
+
+code {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  padding: 2px 6px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+}
+
+/* ─── Liens neutres ────────────────────────────────────────────── */
+a {
+  color: var(--accent-deep);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+a:hover {
+  border-bottom-color: var(--accent-deep);
+}
+
+/* ─── Animations d'entrée ─────────────────────────────────────── */
+@keyframes sojori-main-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sojori-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.sojori-main-enter {
+  animation: sojori-main-in 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sojori-fade-in {
+  animation: sojori-fade-in 0.4s ease both;
+}
+
+/* Désactive les animations pour les utilisateurs qui le demandent */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ─── Scrollbars discrètes (fallback non-WebKit déjà dans muiTheme) ─── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(20, 17, 10, 0.18) transparent;
+}
+
+/* ─── Focus visible — accessible, doux ───────────────────────── */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid rgba(184, 133, 26, 0.55);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Sélection de texte ─────────────────────────────────────── */
+::selection {
+  background: rgba(184, 133, 26, 0.25);
+  color: var(--text-h);
+}

@@ -18,7 +18,6 @@ import {
   StepLabel,
   Grid,
   CircularProgress,
-  InputAdornment,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -171,7 +170,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
     setActiveStep(0);
   }, [existingTask, open]);
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: string, value: unknown) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -184,13 +183,10 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
   const handleSubTypeChange = (subType: string) => {
     handleChange('subType', subType);
 
-    // Auto-set name based on subType
-    const taskType = taskTypes.find(t => t.value === formData.type);
-    if (taskType) {
-      const subTypeObj = taskType.subTypes.find(st => st.value === subType);
-      if (subTypeObj) {
-        handleChange('name', subTypeObj.label);
-      }
+    const subs = formData.type ? taskSubTypes[formData.type] : undefined;
+    const subTypeObj = subs?.find((st) => st.value === subType);
+    if (subTypeObj) {
+      handleChange('name', subTypeObj.label);
     }
   };
 
@@ -337,7 +333,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
         return (
           <Grid container spacing={2}>
             {/* Type */}
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <FormControl fullWidth size="small" required>
                 <InputLabel>Type</InputLabel>
                 <Select
@@ -347,7 +343,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
                 >
                   {taskTypes.map((type) => (
                     <MenuItem key={type.value} value={type.value}>
-                      {type.emoji} {type.label}
+                      {type.label}
                     </MenuItem>
                   ))}
                 </Select>
@@ -355,7 +351,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             </Grid>
 
             {/* SubType */}
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <FormControl fullWidth size="small" required disabled={!formData.type}>
                 <InputLabel>Sous-type</InputLabel>
                 <Select
@@ -364,9 +360,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
                   label="Sous-type"
                 >
                   {formData.type &&
-                    taskTypes
-                      .find((t) => t.value === formData.type)
-                      ?.subTypes.map((subType) => (
+                    (taskSubTypes[formData.type] ?? []).map((subType) => (
                         <MenuItem key={subType.value} value={subType.value}>
                           {subType.label}
                         </MenuItem>
@@ -376,7 +370,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             </Grid>
 
             {/* Mode */}
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Mode</InputLabel>
                 <Select
@@ -391,7 +385,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             </Grid>
 
             {/* Start Date + Toggle End Date */}
-            <Grid item xs={12} sm={showEndDate ? 6 : 12}>
+            <Grid size={{ xs: 12, sm: showEndDate ? 6 : 12 }}>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                 <TextField
                   fullWidth
@@ -400,8 +394,10 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
                   type="date"
                   value={formData.startDate}
                   onChange={(e) => handleStartDateChange(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  inputProps={{ min: formatDate(new Date()) }}
+                  slotProps={{
+                    inputLabel: { shrink: true },
+                    htmlInput: { min: formatDate(new Date()) },
+                  }}
                   required
                 />
                 <IconButton
@@ -422,7 +418,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
 
             {/* End Date (si visible) */}
             {showEndDate && (
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -430,15 +426,17 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
                   type="date"
                   value={formData.endDate}
                   onChange={(e) => handleChange('endDate', e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  inputProps={{ min: formData.startDate }}
+                  slotProps={{
+                    inputLabel: { shrink: true },
+                    htmlInput: { min: formData.startDate },
+                  }}
                   required
                 />
               </Grid>
             )}
 
             {/* Start Hour */}
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Heure de début</InputLabel>
                 <Select
@@ -456,7 +454,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             </Grid>
 
             {/* End Hour */}
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Heure de fin</InputLabel>
                 <Select
@@ -474,7 +472,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             </Grid>
 
             {/* Price */}
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -487,7 +485,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             </Grid>
 
             {/* Payment Mode */}
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Mode de paiement</InputLabel>
                 <Select
@@ -502,7 +500,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             </Grid>
 
             {/* Listing */}
-            <Grid item xs={12} sm={existingTask ? 4 : 12}>
+            <Grid size={{ xs: 12, sm: existingTask ? 4 : 12 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Propriété</InputLabel>
                 <Select
@@ -527,7 +525,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             {existingTask && (
               <>
                 {/* Status */}
-                <Grid item xs={12} sm={3}>
+                <Grid size={{ xs: 12, sm: 3 }}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Statut</InputLabel>
                     <Select
@@ -547,7 +545,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
                 </Grid>
 
                 {/* Staff */}
-                <Grid item xs={12} sm={3}>
+                <Grid size={{ xs: 12, sm: 3 }}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Staff</InputLabel>
                     <Select
@@ -569,7 +567,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
                 </Grid>
 
                 {/* TS_VAL Checkbox */}
-                <Grid item xs={12} sm={2}>
+                <Grid size={{ xs: 12, sm: 2 }}>
                   <FormControlLabel
                     control={
                       <Checkbox
@@ -584,7 +582,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             )}
 
             {/* Paid Checkbox */}
-            <Grid item xs={12} sm={existingTask ? 12 : 4}>
+            <Grid size={{ xs: 12, sm: existingTask ? 12 : 4 }}>
               <FormControlLabel
                 control={
                   <Checkbox
@@ -602,7 +600,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
         return (
           <Grid container spacing={2}>
             {/* Descriptions */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                 Descriptions
               </Typography>
@@ -641,7 +639,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             </Grid>
 
             {/* Services (TODO: Implement services selector) */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: t.text3 }}>
                 Services (à implémenter)
               </Typography>
@@ -656,7 +654,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
         return (
           <Grid container spacing={2}>
             {/* Recherche Réservation */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TextField
                   fullWidth
@@ -679,7 +677,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
 
             {/* Réservation Details (si trouvée) */}
             {formData.guestName && formData.departureDate && formData.arrivalDate && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Box
                   sx={{
                     p: 2,
@@ -707,7 +705,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             )}
 
             {/* Duration */}
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -719,7 +717,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             </Grid>
 
             {/* Emergency */}
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Priorité</InputLabel>
                 <Select
@@ -735,7 +733,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
             </Grid>
 
             {/* Presence */}
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Présence</InputLabel>
                 <Select
@@ -743,7 +741,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
                   onChange={(e) => handleChange('presence', e.target.value)}
                   label="Présence"
                 >
-                  <MenuItem value="P">Présent (P)</MenuItem>
+                  <MenuItem value="Y">Présent (Y)</MenuItem>
                   <MenuItem value="N">Non présent (N)</MenuItem>
                 </Select>
               </FormControl>
@@ -754,7 +752,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
       case 3: // Images
         return (
           <Grid container spacing={2}>
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                 Images
               </Typography>
@@ -791,11 +789,13 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '12px',
-          bgcolor: t.bg1,
-          maxHeight: '90vh',
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '12px',
+            bgcolor: t.bg1,
+            maxHeight: '90vh',
+          },
         },
       }}
     >

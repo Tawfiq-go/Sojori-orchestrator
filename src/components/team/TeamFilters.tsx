@@ -115,8 +115,10 @@ export function TeamFilters({ filters, onChange, onReset, teamCount, filteredCou
               placeholder="Rechercher par nom, email, code..."
               value={filters.searchText}
               onChange={(e) => updateFilter('searchText', e.target.value)}
-              InputProps={{
-                startAdornment: <InputAdornment position="start">🔍</InputAdornment>,
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start">🔍</InputAdornment>,
+                },
               }}
               fullWidth
             />
@@ -131,14 +133,14 @@ export function TeamFilters({ filters, onChange, onReset, teamCount, filteredCou
               onChange={(_, newValue) => updateFilter('statuses', newValue)}
               renderInput={(params) => <TextField {...params} label="Statuts" size="small" />}
               size="small"
-              renderTags={(value, getTagProps) =>
+              renderValue={(value, getItemProps) =>
                 value.map((option, index) => {
                   const labels = { active: 'Actif', inactive: 'Inactif', on_leave: 'En congé' };
                   return (
                     <Chip
                       label={labels[option as keyof typeof labels]}
                       size="small"
-                      {...getTagProps({ index })}
+                      {...getItemProps({ index })}
                     />
                   );
                 })
@@ -167,9 +169,9 @@ export function TeamFilters({ filters, onChange, onReset, teamCount, filteredCou
               onChange={(_, newValue) => updateFilter('roles', newValue)}
               renderInput={(params) => <TextField {...params} label="Rôles" size="small" />}
               size="small"
-              renderTags={(value, getTagProps) =>
+              renderValue={(value, getItemProps) =>
                 value.map((option, index) => (
-                  <Chip label={option} size="small" color="primary" {...getTagProps({ index })} />
+                  <Chip label={option} size="small" color="primary" {...getItemProps({ index })} />
                 ))
               }
             />
@@ -180,9 +182,9 @@ export function TeamFilters({ filters, onChange, onReset, teamCount, filteredCou
               onChange={(_, newValue) => updateFilter('skills', newValue)}
               renderInput={(params) => <TextField {...params} label="Compétences" size="small" />}
               size="small"
-              renderTags={(value, getTagProps) =>
+              renderValue={(value, getItemProps) =>
                 value.map((option, index) => (
-                  <Chip label={option} size="small" color="secondary" {...getTagProps({ index })} />
+                  <Chip label={option} size="small" color="secondary" {...getItemProps({ index })} />
                 ))
               }
             />
@@ -249,9 +251,9 @@ export function TeamFilters({ filters, onChange, onReset, teamCount, filteredCou
             onChange={(_, newValue) => updateFilter('zones', newValue)}
             renderInput={(params) => <TextField {...params} label="Zones" size="small" />}
             size="small"
-            renderTags={(value, getTagProps) =>
+            renderValue={(value, getItemProps) =>
               value.map((option, index) => (
-                <Chip label={option} size="small" {...getTagProps({ index })} />
+                <Chip label={option} size="small" {...getItemProps({ index })} />
               ))
             }
           />

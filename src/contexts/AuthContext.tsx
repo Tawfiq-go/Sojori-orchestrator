@@ -9,6 +9,7 @@ import authService from '../services/authService';
 import type {
   LoginCredentials,
   ResetPasswordPayload,
+  User as ApiUser,
 } from '../services/authService';
 import type { MockUser, RegisterPayload } from '../data/mockAuth';
 import {
@@ -17,7 +18,9 @@ import {
   getToken,
   setTokens,
 } from '../utils/authUtils';
-import { getPersistedUser } from '../data/mockAuth';
+import { clearPersistedUser, getPersistedUser, persistUser } from '../data/mockAuth';
+import { apiUserToMockUser } from '../utils/apiUserToMockUser';
+import { logAuth, logAuthError, logAuthWarn, maskToken } from '../utils/dashboardDebug';
 
 export type User = MockUser;
 
@@ -56,17 +59,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const refreshToken = getRefreshToken();
     const user = getPersistedUser();
 
+    const hasToken = !!token;
+    logAuth('init session', {
+      hasToken,
+      hasRefreshToken: !!refreshToken,
+      hasPersistedUser: !!user,
+      tokenPreview: maskToken(token),
+    });
+
     return {
-      user,
+      user: hasToken ? user : null,
       token: token || null,
       refreshToken: refreshToken || null,
-      isAuthenticated: !!user,
-      loading: !!user || !!token,
+      /** Validé par GET /auth/me dans checkAuth — pas au seul cookie */
+      isAuthenticated: false,
+      loading: hasToken,
       error: null,
     };
   });
 
   const logout = useCallback((): void => {
+    logAuth('logout');
+    clearPersistedUser();
+
     setState({
       user: null,
       token: null,
@@ -92,6 +107,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   );
 
   const checkAuth = useCallback(async (): Promise<void> => {
+    const token = getToken();
+    logAuth('checkAuth start', { tokenPreview: maskToken(token) });
+
+    if (!token) {
+      logAuthWarn('checkAuth: aucun token — redirection login imminente');
+      clearPersistedUser();
+      setState({
+        user: null,
+        token: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        loading: false,
+        error: null,
+      });
+      return;
+    }
+
     setState((prev) => ({ ...prev, loading: true }));
 
     try {
@@ -102,32 +134,69 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setTokens(response.newToken, refreshToken);
       }
 
+      const newUser = response.user ? apiUserToMockUser(response.user as ApiUser, null) : null;
+
+      // ✅ Persister le user mis à jour dans localStorage
+      if (newUser) {
+        persistUser(newUser);
+      }
+
+      logAuth('checkAuth OK', {
+        userId: newUser?.id,
+        email: newUser?.email,
+        role: newUser?.role,
+        newToken: !!response.newToken,
+      });
+
       setState((prev) => ({
         ...prev,
         token: response.newToken || prev.token,
         refreshToken: refreshToken || prev.refreshToken,
-        user: response.user || prev.user,
-        isAuthenticated: !!response.user,
+        user: newUser || prev.user,
+        /** Session valide dès que /valid-token-check répond OK (JWT accepté) */
+        isAuthenticated: true,
         loading: false,
         error: null,
       }));
-    } catch (error: any) {
-      if (error?.forceLogout) {
-        clearTokens();
-        logout();
-      } else {
-        setState((prev) => ({ ...prev, loading: false }));
-      }
+    } catch (error: unknown) {
+      const err = error as {
+        forceLogout?: boolean;
+        error?: string;
+        message?: string;
+        response?: { status?: number; data?: unknown };
+      };
+      logAuthError('checkAuth FAILED', {
+        forceLogout: err?.forceLogout,
+        status: err?.response?.status,
+        message: err?.message || err?.error,
+        body: err?.response?.data,
+      });
+      clearTokens();
+      clearPersistedUser();
+      setState({
+        user: null,
+        token: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        loading: false,
+        error: err?.error || err?.message || 'Session expirée — reconnectez-vous',
+      });
     }
-  }, [logout]);
+  }, []);
 
   const login = async (credentials: LoginCredentials): Promise<void> => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
       const response = await authService.login(credentials);
+      const user = apiUserToMockUser(response.user as ApiUser, null);
+
+      // ✅ Persister le user dans localStorage pour le garder après reload
+      persistUser(user);
+      logAuth('login OK', { userId: user.id, email: user.email, role: user.role });
+
       setState({
-        user: response.user,
+        user,
         token: response.token,
         refreshToken: response.refreshToken,
         isAuthenticated: true,
@@ -150,8 +219,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       const response = await authService.register(payload);
+      const user = apiUserToMockUser(response.user as ApiUser, null);
+
+      // ✅ Persister le user dans localStorage pour le garder après reload
+      persistUser(user);
+      logAuth('login OK', { userId: user.id, email: user.email, role: user.role });
+
       setState({
-        user: response.user,
+        user,
         token: response.token,
         refreshToken: response.refreshToken,
         isAuthenticated: true,
@@ -206,10 +281,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      const user = await authService.updateProfile(payload);
+      const apiUser = await authService.updateProfile(payload);
       setState((prev) => ({
         ...prev,
-        user,
+        user: apiUserToMockUser(apiUser as ApiUser, prev.user),
         loading: false,
         error: null,
       }));
@@ -224,15 +299,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
-    const hasPersistedSession = !!getToken() || !!getPersistedUser();
+    const token = getToken();
+    const persistedUser = getPersistedUser();
+    logAuth('mount', {
+      hasToken: Boolean(token),
+      hasPersistedUser: Boolean(persistedUser),
+      tokenPreview: maskToken(token),
+      path: window.location.pathname,
+    });
 
-    if (hasPersistedSession) {
+    if (token) {
       void checkAuth();
       return;
     }
 
-    setState((prev) => ({ ...prev, loading: false }));
-  }, [checkAuth]);
+    if (persistedUser) {
+      logAuthWarn('user localStorage sans token — nettoyage');
+      clearPersistedUser();
+    }
+
+    setState((prev) => ({
+      ...prev,
+      user: null,
+      isAuthenticated: false,
+      loading: false,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ FIX: tableau vide pour n'exécuter qu'au montage
 
   const contextValue = useMemo<AuthContextType>(
     () => ({

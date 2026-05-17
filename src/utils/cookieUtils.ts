@@ -1,14 +1,21 @@
 import Cookies from 'js-cookie';
 
-const COOKIE_CONFIG = {
-  secure: import.meta.env.PROD,
+/**
+ * `vite preview` (import.meta.env.PROD) sur http://127.0.0.1 — si secure=true, le navigateur
+ * ne persiste pas / n’envoie pas les cookies JWT. Secure uniquement en HTTPS réel.
+ */
+function cookieSecure(): boolean {
+  return typeof window !== 'undefined' && window.location.protocol === 'https:';
+}
+
+const baseCookieOptions = {
   sameSite: 'Lax' as const,
   path: '/',
-  expires: 365 * 10
+  expires: 7,
 };
 
 export const setCookie = (name: string, value: string) => {
-  Cookies.set(name, value, COOKIE_CONFIG);
+  Cookies.set(name, value, { ...baseCookieOptions, secure: cookieSecure() });
 };
 
 export const getCookie = (name: string): string | undefined => {
