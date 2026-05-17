@@ -249,7 +249,7 @@ export function Step1TypeSelection({
       ...params.InputProps,
       endAdornment: <>
                     {loadingListings && <CircularProgress color="inherit" size={20} />}
-                    {params.InputProps.endAdornment}
+                    {params.InputProps?.endAdornment}
                   </>
     }} />} renderOption={(props, option) => <li {...props} key={option._id || option.id}>
               <Box>

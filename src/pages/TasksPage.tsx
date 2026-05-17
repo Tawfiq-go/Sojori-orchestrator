@@ -518,13 +518,36 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         )
       )
     },
-    // Column 8: Listing
+    // Column 8: Source (OTA)
+    {
+      key: 'source',
+      label: 'Source',
+      render: (r: Task) => <OTABadge channel={r.channelName} />
+    },
+    // Column 9: Voyageur
+    {
+      key: 'guest',
+      label: 'Voyageur',
+      render: (r: Task) => (
+        r.guestName ? (
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <span style={{ fontSize: 16 }}>{flagFor(r.guestCountry)}</span>
+            <Typography sx={{ fontSize: 10.5, fontWeight: 500, color: t.text2 }}>
+              {r.guestName}
+            </Typography>
+          </Stack>
+        ) : (
+          <Box sx={{ fontSize: 10, color: t.text4 }}>—</Box>
+        )
+      )
+    },
+    // Column 10: Listing
     {
       key: 'listing',
       label: 'Listing',
       render: (r: Task) => <ListingCell name={r.listingName} color={getListingColor(r.listingName)} />
     },
-    // Column 9: Réservation
+    // Column 11: Réservation
     {
       key: 'reservation',
       label: 'Réservation',
@@ -543,7 +566,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         )
       )
     },
-    // Column 10: Description (notes/services)
+    // Column 12: Description (notes/services)
     {
       key: 'description',
       label: 'Description',
@@ -558,7 +581,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         );
       }
     },
-    // Column 11: Statut
+    // Column 13: Statut
     {
       key: 'status',
       label: 'Statut',
@@ -567,7 +590,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         return <Badge variant={statusBadge.v as any} dot>{statusBadge.label}</Badge>;
       }
     },
-    // Column 12: Staff
+    // Column 14: Staff
     {
       key: 'staff',
       label: 'Staff',
@@ -589,7 +612,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         );
       }
     },
-    // Column 13: Paiement
+    // Column 15: Paiement
     {
       key: 'payment',
       label: 'Paiement',
@@ -599,7 +622,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         </Box>
       )
     },
-    // Column 14: Prix
+    // Column 16: Prix
     {
       key: 'price',
       label: 'Prix',
@@ -609,13 +632,13 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         </Box>
       )
     },
-    // Column 15: Urgence
+    // Column 17: Urgence
     {
       key: 'urgency',
       label: 'Urgence',
       render: (r: Task) => <Priority level={getPriorityLevel(r.priority)} />
     },
-    // Column 16: Actions
+    // Column 18: Actions
     {
       key: 'actions',
       label: '',
