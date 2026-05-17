@@ -12,6 +12,8 @@ import {
   getDescEntryForLang,
 } from '../../../../utils/listingFormV2ApiAdapter';
 import { FieldIndicator } from '../components/FieldIndicator';
+import { useListingFormStructure } from '../ListingFormStructureContext';
+import { RuFormLegend } from './_shared';
 import {
   Box, Stack, Typography, TextField, Select, MenuItem, FormControl,
   Switch, IconButton, Chip, Button,
@@ -42,7 +44,8 @@ const sxInputAI = {
   },
 };
 
-function Label({ children, required, ai, charCount, ruField, listingStructure }) {
+function Label({ children, required, ai, charCount, ruField, listingStructure: lsProp, inferRuWhenMissing = false }) {
+  const listingStructure = lsProp ?? useListingFormStructure();
   return (
     <Stack
       direction="row"
@@ -62,8 +65,13 @@ function Label({ children, required, ai, charCount, ruField, listingStructure })
       <Box sx={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
         {children}
         {required && <Box component="span" sx={{ color: T.error }}>*</Box>}
-        {ruField && listingStructure ? (
-          <FieldIndicator field={ruField} listingStructure={listingStructure} dense />
+        {ruField ? (
+          <FieldIndicator
+            field={ruField}
+            listingStructure={listingStructure}
+            inferRuWhenMissing={inferRuWhenMissing}
+            dense
+          />
         ) : null}
       </Box>
       {ai && (
@@ -78,7 +86,7 @@ function Label({ children, required, ai, charCount, ruField, listingStructure })
   );
 }
 
-function Field({ label, required, ai, charCount, hint, children, fullWidth, ruField, listingStructure }) {
+function Field({ label, required, ai, charCount, hint, children, fullWidth, ruField, inferRuWhenMissing }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.625, flex: fullWidth ? 1 : 'initial' }}>
       <Label
@@ -86,7 +94,7 @@ function Field({ label, required, ai, charCount, hint, children, fullWidth, ruFi
         ai={ai}
         charCount={charCount}
         ruField={ruField}
-        listingStructure={listingStructure}
+        inferRuWhenMissing={inferRuWhenMissing}
       >
         {label}
       </Label>
@@ -118,11 +126,15 @@ function Counter({ value, onChange, min = 0, max = 99 }) {
   );
 }
 
-function ToggleRow({ title, desc, checked, onChange }) {
+function ToggleRow({ title, desc, checked, onChange, ruField }) {
+  const listingStructure = useListingFormStructure();
   return (
     <Stack direction="row" spacing={1.75} sx={{ alignItems: 'center', py: 1.25, '&:not(:last-child)': { borderBottom: `1px dashed ${T.border}` } }}>
       <Box sx={{ flex: 1 }}>
-        <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{title}</Typography>
+        <Typography sx={{ fontSize: 12.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+          {title}
+          {ruField ? <FieldIndicator field={ruField} listingStructure={listingStructure} dense /> : null}
+        </Typography>
         <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.25 }}>{desc}</Typography>
       </Box>
       <Switch checked={checked} onChange={(_, v) => onChange(v)}
@@ -173,7 +185,6 @@ export function GeneralTab({
   values,
   onChange,
   aiFilled = new Set(),
-  listingStructure = null,
   roomTypeConfigs = [],
 }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
@@ -230,6 +241,7 @@ export function GeneralTab({
 
   return (
     <Box>
+      <RuFormLegend />
       {aiFilled.size > 0 && (
         <Stack
           direction="row"
@@ -270,7 +282,6 @@ export function GeneralTab({
             fullWidth
             label="External Listing Name"
             ruField="name"
-            listingStructure={listingStructure}
             charCount={`${(values.name || '').length}/60`}
             hint="Nom visible sur les OTA (RU)."
           >
@@ -287,7 +298,6 @@ export function GeneralTab({
             fullWidth
             label="Property Type"
             ruField="propertyType"
-            listingStructure={listingStructure}
             ai={isAI('propertyType')}
           >
             <FormControl size="small" fullWidth>
@@ -309,7 +319,6 @@ export function GeneralTab({
               label="Room Type"
               required
               ruField="roomTypeConfigId"
-              listingStructure={listingStructure}
             >
               <FormControl size="small" fullWidth>
                 <Select
@@ -331,7 +340,6 @@ export function GeneralTab({
             fullWidth
             label="number of floors"
             ruField="floor"
-            listingStructure={listingStructure}
           >
             <TextField
               size="small"
@@ -348,7 +356,6 @@ export function GeneralTab({
             fullWidth
             label="Total Floors"
             ruField="totalFloor"
-            listingStructure={listingStructure}
           >
             <TextField
               size="small"
@@ -366,7 +373,6 @@ export function GeneralTab({
             label="Person Capacity"
             required
             ruField="personCapacity"
-            listingStructure={listingStructure}
           >
             <TextField
               size="small"
@@ -386,7 +392,6 @@ export function GeneralTab({
             fullWidth
             label="Max Person Capacity"
             ruField="personCapacityMax"
-            listingStructure={listingStructure}
           >
             <TextField
               size="small"
@@ -406,7 +411,6 @@ export function GeneralTab({
             fullWidth
             label="Surface (m²)"
             ruField="surface"
-            listingStructure={listingStructure}
             ai={isAI('sqm')}
           >
             <TextField
@@ -437,9 +441,9 @@ export function GeneralTab({
 
       <Card title="🛏 Chambres & lits">
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
-          <Field label="Chambres" required><Counter value={values.bedrooms ?? 0} onChange={(v) => upd('bedrooms', v)} /></Field>
-          <Field label="Salles de bain" required><Counter value={values.bathrooms ?? 0} onChange={(v) => upd('bathrooms', v)} /></Field>
-          <Field label="Lits"><Counter value={values.beds ?? 0} onChange={(v) => upd('beds', v)} /></Field>
+          <Field label="Chambres" required ruField="bedroomsNumber"><Counter value={values.bedrooms ?? 0} onChange={(v) => upd('bedrooms', v)} /></Field>
+          <Field label="Salles de bain" required ruField="bathroomsNumber"><Counter value={values.bathrooms ?? 0} onChange={(v) => upd('bathrooms', v)} /></Field>
+          <Field label="Lits" ruField="bedsNumber"><Counter value={values.beds ?? 0} onChange={(v) => upd('beds', v)} /></Field>
         </Box>
       </Card>
 
@@ -451,6 +455,8 @@ export function GeneralTab({
         />
         <Field
           label="Résumé court (headline)"
+          ruField="headline"
+          inferRuWhenMissing
           charCount={`${(activeDesc.headline ?? values.shortDescription ?? '').length}/140`}
           hint="Titre accrocheur · champ legacy description[].headline"
         >
@@ -469,6 +475,8 @@ export function GeneralTab({
         <Box sx={{ mt: 1.75 }}>
           <Field
             label="Description longue"
+            ruField="description"
+            inferRuWhenMissing
             ai={isAI('longDescription')}
             hint="Texte principal · champ legacy description[].value"
           >
@@ -491,9 +499,9 @@ export function GeneralTab({
       </Card>
 
       <Card title="⚙️ Statut & visibilité">
-        <ToggleRow title="Listing actif"  desc="Visible sur tous les canaux. Décocher pour masquer partout en 1 clic." checked={values.active !== false} onChange={v => upd('active', v)} />
-        <ToggleRow title="OTA only"        desc="Réservable uniquement via Airbnb / Booking. Bloque les réservations directes." checked={!!values.otaOnly} onChange={v => upd('otaOnly', v)} />
-        <ToggleRow title="Instant booking" desc="Pas d'approbation manuelle requise (recommandé Airbnb Plus)." checked={!!values.instantBooking} onChange={v => upd('instantBooking', v)} />
+        <ToggleRow title="Listing actif" ruField="active" desc="Visible sur tous les canaux. Décocher pour masquer partout en 1 clic." checked={values.active !== false} onChange={v => upd('active', v)} />
+        <ToggleRow title="OTA only" ruField="otaOnly" desc="Réservable uniquement via Airbnb / Booking. Bloque les réservations directes." checked={!!values.otaOnly} onChange={v => upd('otaOnly', v)} />
+        <ToggleRow title="Instant booking" ruField="instantBookable" desc="Pas d'approbation manuelle requise (recommandé Airbnb Plus)." checked={!!values.instantBooking} onChange={v => upd('instantBooking', v)} />
         <ToggleRow title="Staging (test)"  desc="Mode brouillon · non synchronisé OTA." checked={!!values.staging} onChange={v => upd('staging', v)} />
       </Card>
     </Box>
@@ -524,6 +532,7 @@ export function LocationTab({ values, onChange }) {
 
   return (
     <Box>
+      <RuFormLegend />
       {/* Map */}
       <Box sx={{
         bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5, p: 0,
@@ -563,20 +572,20 @@ export function LocationTab({ values, onChange }) {
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2.25, mb: 1.75 }}>
         <Card title="🏢 Adresse">
-          <Field label="Numéro & rue" required>
+          <Field label="Numéro & rue" required ruField="address">
             <TextField size="small" fullWidth value={values.street || ''} onChange={e => upd('street', e.target.value)} sx={sxInput} />
           </Field>
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mt: 1.5 }}>
-            <Field label="Code postal" required>
+            <Field label="Code postal" required ruField="zipcode">
               <TextField size="small" value={values.zipcode || ''} onChange={e => upd('zipcode', e.target.value)} sx={sxInput} />
             </Field>
-            <Field label="Ville" required>
+            <Field label="Ville" required ruField="city">
               <TextField size="small" value={values.city || ''} onChange={e => upd('city', e.target.value)} sx={sxInput} />
             </Field>
-            <Field label="État / Région">
+            <Field label="État / Région" ruField="state">
               <TextField size="small" value={values.region || ''} onChange={e => upd('region', e.target.value)} sx={sxInput} />
             </Field>
-            <Field label="Pays" required>
+            <Field label="Pays" required ruField="country">
               <FormControl size="small">
                 <Select value={values.country || 'FR'} onChange={e => upd('country', e.target.value)}>
                   <MenuItem value="FR">🇫🇷 France</MenuItem>
@@ -588,7 +597,7 @@ export function LocationTab({ values, onChange }) {
             </Field>
           </Box>
           <Box sx={{ mt: 1.5 }}>
-            <Field label="Quartier / zone" hint="Affiché aux voyageurs sur Airbnb / Booking.">
+            <Field label="Quartier / zone" ruField="zone" hint="Affiché aux voyageurs sur Airbnb / Booking.">
               <TextField size="small" fullWidth value={values.neighborhood || ''} onChange={e => upd('neighborhood', e.target.value)} sx={sxInput} />
             </Field>
           </Box>
@@ -596,10 +605,10 @@ export function LocationTab({ values, onChange }) {
 
         <Card title="🎯 Coordonnées GPS" meta="Drag du pin pour ajuster">
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 1.75 }}>
-            <Field label="Latitude" required>
+            <Field label="Latitude" required ruField="lat">
               <TextField size="small" type="number" inputProps={{ step: 0.0001 }} value={values.lat ?? ''} onChange={e => upd('lat', +e.target.value)} sx={sxInput} />
             </Field>
-            <Field label="Longitude" required>
+            <Field label="Longitude" required ruField="lng">
               <TextField size="small" type="number" inputProps={{ step: 0.0001 }} value={values.lng ?? ''} onChange={e => upd('lng', +e.target.value)} sx={sxInput} />
             </Field>
           </Box>
@@ -610,7 +619,7 @@ export function LocationTab({ values, onChange }) {
 
       <Card title="🚪 Instructions d'arrivée" meta="howToArrive · multilingue">
         <LangSwitcher value={values.howToArriveLang || '🇫🇷 FR'} onChange={v => upd('howToArriveLang', v)} />
-        <Field label="Comment arriver" hint="Envoyé automatiquement 24h avant le check-in via WhatsApp.">
+        <Field label="Comment arriver" ruField="howToArrive" hint="Envoyé automatiquement 24h avant le check-in via WhatsApp.">
           <TextField size="small" multiline rows={4} fullWidth value={values.howToArrive || ''} onChange={e => upd('howToArrive', e.target.value)} sx={sxInput} />
         </Field>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 1.5, mt: 1.75 }}>

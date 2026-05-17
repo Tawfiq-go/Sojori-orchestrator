@@ -4,6 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import { Box, Stack, Typography, TextField, Button, IconButton, Chip } from '@mui/material';
+import { RuFormLegend, Field } from './_shared';
 
 const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a', primaryTint: 'rgba(184,133,26,0.10)',
@@ -84,6 +85,10 @@ export function PhotosTab({ photos = [], onChange, airbnbHeroOrder = '', onAirbn
 
   return (
     <Box>
+      <RuFormLegend />
+      <Field label="Photos du listing" ruField="listingImages">
+        <Box />
+      </Field>
       <AiBanner
         title="L'IA suggère 3 améliorations"
         body="photos 5, 7, 11 : luminosité +12% pour matcher les standards Airbnb"

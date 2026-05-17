@@ -266,26 +266,67 @@ function OTABadge({ source }: { source?: string | null }) {
 
 /**
  * Convertit un code pays ISO 3166-1 alpha-2 ou nom de pays en emoji drapeau
- * Ex: "FR" → 🇫🇷, "france" → 🇫🇷, "US" → 🇺🇸
+ * Ex: "FR" → 🇫🇷, "france" → 🇫🇷, "US" → 🇺🇸, "morocco" → 🇲🇦
+ * (Copié depuis ReservationsPage.tsx pour cohérence)
  */
 function flagFor(country?: string | null): string {
   if (!country) return '🌐';
 
+  // Map exhaustif de noms de pays vers codes ISO
   const countryNameToCode: Record<string, string> = {
-    'france': 'FR', 'united states': 'US', 'usa': 'US', 'italy': 'IT', 'spain': 'ES',
-    'germany': 'DE', 'united kingdom': 'GB', 'uk': 'GB', 'canada': 'CA', 'japan': 'JP',
-    'china': 'CN', 'india': 'IN', 'brazil': 'BR', 'australia': 'AU', 'mexico': 'MX',
-    'south korea': 'KR', 'russia': 'RU', 'netherlands': 'NL', 'belgium': 'BE',
-    'switzerland': 'CH', 'sweden': 'SE', 'norway': 'NO', 'denmark': 'DK', 'poland': 'PL',
-    'portugal': 'PT', 'greece': 'GR', 'turkey': 'TR', 'egypt': 'EG', 'morocco': 'MA',
-    'algeria': 'DZ', 'tunisia': 'TN', 'saudi arabia': 'SA', 'uae': 'AE',
-    'united arab emirates': 'AE', 'qatar': 'QA', 'kuwait': 'KW', 'lebanon': 'LB',
+    // Europe
+    'france': 'FR', 'germany': 'DE', 'spain': 'ES', 'italy': 'IT',
+    'united kingdom': 'GB', 'belgium': 'BE', 'netherlands': 'NL',
+    'switzerland': 'CH', 'portugal': 'PT', 'austria': 'AT', 'sweden': 'SE',
+    'norway': 'NO', 'denmark': 'DK', 'finland': 'FI', 'ireland': 'IE',
+    'poland': 'PL', 'greece': 'GR', 'czech republic': 'CZ', 'hungary': 'HU',
+    'romania': 'RO', 'bulgaria': 'BG', 'croatia': 'HR', 'slovakia': 'SK',
+    'slovenia': 'SI', 'lithuania': 'LT', 'latvia': 'LV', 'estonia': 'EE',
+    'luxembourg': 'LU', 'malta': 'MT', 'cyprus': 'CY', 'iceland': 'IS',
+
+    // Amériques
+    'united states': 'US', 'canada': 'CA', 'mexico': 'MX', 'brazil': 'BR',
+    'argentina': 'AR', 'chile': 'CL', 'colombia': 'CO', 'peru': 'PE',
+    'venezuela': 'VE', 'ecuador': 'EC', 'bolivia': 'BO', 'paraguay': 'PY',
+    'uruguay': 'UY', 'costa rica': 'CR', 'panama': 'PA', 'jamaica': 'JM',
+
+    // Moyen-Orient & Afrique du Nord
+    'morocco': 'MA', 'saudi arabia': 'SA', 'united arab emirates': 'AE',
+    'algeria': 'DZ', 'tunisia': 'TN', 'egypt': 'EG', 'qatar': 'QA',
+    'kuwait': 'KW', 'bahrain': 'BH', 'oman': 'OM', 'jordan': 'JO',
+    'lebanon': 'LB', 'israel': 'IL', 'palestine': 'PS', 'syria': 'SY',
+    'iraq': 'IQ', 'iran': 'IR', 'yemen': 'YE', 'libya': 'LY',
+
+    // Asie
+    'china': 'CN', 'japan': 'JP', 'india': 'IN', 'south korea': 'KR',
+    'singapore': 'SG', 'malaysia': 'MY', 'thailand': 'TH', 'vietnam': 'VN',
+    'indonesia': 'ID', 'philippines': 'PH', 'pakistan': 'PK', 'bangladesh': 'BD',
+    'hong kong': 'HK', 'taiwan': 'TW', 'myanmar': 'MM', 'cambodia': 'KH',
+    'laos': 'LA', 'nepal': 'NP', 'sri lanka': 'LK', 'maldives': 'MV',
+    'brunei': 'BN', 'mongolia': 'MN', 'kazakhstan': 'KZ', 'uzbekistan': 'UZ',
+
+    // Afrique
+    'south africa': 'ZA', 'nigeria': 'NG', 'kenya': 'KE', 'ethiopia': 'ET',
+    'ghana': 'GH', 'tanzania': 'TZ', 'uganda': 'UG', 'senegal': 'SN',
+    'ivory coast': 'CI', 'cameroon': 'CM', 'mali': 'ML', 'rwanda': 'RW',
+
+    // Océanie
+    'australia': 'AU', 'new zealand': 'NZ', 'fiji': 'FJ', 'papua new guinea': 'PG',
+
+    // Autres
+    'russia': 'RU', 'turkey': 'TR', 'ukraine': 'UA', 'belarus': 'BY',
   };
 
+  // Si c'est déjà un code ISO à 2 lettres, l'utiliser directement
   let code = country.length === 2 ? country.toUpperCase() : countryNameToCode[country.toLowerCase()];
+
+  // Support pour UK -> GB
+  if (code === 'UK') code = 'GB';
+
+  // Si pas de code trouvé, retourner globe
   if (!code) return '🌐';
 
-  // Convert ISO code to emoji flag (Regional Indicator Symbols)
+  // Convertir le code ISO en drapeau emoji (Regional Indicator Symbols)
   const codePoints = code.split('').map(char => 127397 + char.charCodeAt(0));
   return String.fromCodePoint(...codePoints);
 }

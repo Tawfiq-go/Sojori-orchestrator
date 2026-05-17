@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { Box, Stack, Typography, TextField, Button, IconButton, Avatar } from '@mui/material';
-import { T, sxInput, Field, Card, ToggleRow, Counter, ChipsRow, NumberInput, SelectField, GlobalBanner } from './_shared';
+import { T, sxInput, Field, Card, ToggleRow, Counter, ChipsRow, NumberInput, SelectField, GlobalBanner, RuFormLegend } from './_shared';
 import { RoomsTab } from './RoomsTabComposition';
 export { RoomsTab };
 
@@ -189,6 +189,7 @@ export function ChannelsTab({ values = {}, onChange, listingId, onVerifyRuChanne
 
   return (
     <Box>
+      <RuFormLegend />
       <GlobalBanner>
         <strong>Channex est l'intégration centrale.</strong> Les credentials API sont gérés au niveau organisation. Ici tu actives/désactives la sync par canal, et tu mappes les IDs spécifiques au listing.
       </GlobalBanner>
@@ -236,16 +237,16 @@ export function ChannelsTab({ values = {}, onChange, listingId, onVerifyRuChanne
                 </Field>
                 {p.id === 'airbnb' && (
                   <>
-                    <Field label="airbnbName" hint="Override nom Airbnb spécifique">
+                    <Field label="airbnbName" ruField="airbnbName" hint="Override nom Airbnb spécifique">
                       <TextField size="small" value={cfg.airbnbName || ''} onChange={e => updChannel(p.id, { airbnbName: e.target.value })} sx={sxInput} />
                     </Field>
-                    <Field label="airbnbSummary" hint="Override résumé Airbnb">
+                    <Field label="airbnbSummary" ruField="airbnbSummary" hint="Override résumé Airbnb">
                       <TextField size="small" multiline rows={2} value={cfg.airbnbSummary || ''} onChange={e => updChannel(p.id, { airbnbSummary: e.target.value })} sx={sxInput} />
                     </Field>
                   </>
                 )}
                 {p.id === 'booking' && (
-                  <Field label="bookingcomPropertyName" hint="Override nom Booking">
+                  <Field label="bookingcomPropertyName" ruField="bookingcomPropertyName" hint="Override nom Booking">
                     <TextField size="small" value={cfg.bookingPropertyName || ''} onChange={e => updChannel(p.id, { bookingPropertyName: e.target.value })} sx={sxInput} />
                   </Field>
                 )}
@@ -263,6 +264,7 @@ export function DirectBookingTab({ values = {}, onChange }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
   return (
     <Box>
+      <RuFormLegend />
       <Card title="🌐 Portail Direct Booking" meta="Réservation sans commission OTA">
         <ToggleRow title="Activer la réservation directe" desc="Le listing apparaît sur sojori.com/villa-belvedere et accepte les réservations sans intermédiaire."
           checked={values.directEnabled !== false} onChange={v => upd('directEnabled', v)} />
@@ -303,12 +305,13 @@ export function LicenseTab({ values = {}, onChange }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
   return (
     <Box>
+      <RuFormLegend />
       <Card title="📄 Licence touristique" meta="Obligatoire dans certaines villes">
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
-          <Field label="Numéro de licence" required>
+          <Field label="Numéro de licence" required ruField="licenceNumber">
             <TextField size="small" value={values.licenseNumber || ''} onChange={e => upd('licenseNumber', e.target.value)} placeholder="ex: 06088-MEUB-2024" sx={sxInput} />
           </Field>
-          <Field label="Type de licence">
+          <Field label="Type de licence" ruField="licenceType">
             <SelectField value={values.licenseType || 'meuble_tourisme'} onChange={v => upd('licenseType', v)}
               options={[
                 { value: 'meuble_tourisme', label: 'Meublé de tourisme' },
@@ -317,10 +320,10 @@ export function LicenseTab({ values = {}, onChange }) {
                 { value: 'residence_secondaire', label: 'Résidence secondaire' },
               ]} />
           </Field>
-          <Field label="Date d'émission">
+          <Field label="Date d'émission" ruField="issueDate">
             <TextField size="small" type="date" InputLabelProps={{ shrink: true }} value={values.licenseIssueDate || ''} onChange={e => upd('licenseIssueDate', e.target.value)} sx={sxInput} />
           </Field>
-          <Field label="Date d'expiration" required>
+          <Field label="Date d'expiration" required ruField="expirationDate">
             <TextField size="small" type="date" InputLabelProps={{ shrink: true }} value={values.licenseExpiryDate || ''} onChange={e => upd('licenseExpiryDate', e.target.value)} sx={sxInput} />
           </Field>
         </Box>

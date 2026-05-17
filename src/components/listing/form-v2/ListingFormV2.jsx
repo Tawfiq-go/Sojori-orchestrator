@@ -5,6 +5,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useEffect, useState } from 'react';
 import ListingFormShell from './ListingFormShell';
+import { ListingFormStructureContext } from './ListingFormStructureContext';
 
 import { GeneralTab, LocationTab }                          from './tabs/GeneralLocationTabs';
 import { PhotosTab }                                        from './tabs/PhotosAmenitiesTabs';
@@ -50,7 +51,6 @@ export default function ListingFormV2({
           <GeneralTab
             {...common}
             aiFilled={new Set(values._aiFilled || [])}
-            listingStructure={listingStructure}
             roomTypeConfigs={roomTypeConfigs}
           />
         );
@@ -79,6 +79,7 @@ export default function ListingFormV2({
   };
 
   return (
+    <ListingFormStructureContext.Provider value={listingStructure}>
     <ListingFormShell
       listing={{
         id: listingId || 'SJ-LIST-9F2A',
@@ -113,5 +114,6 @@ export default function ListingFormV2({
       onAiAssist={() => console.log('AI assist · à brancher')}
       renderTab={renderTab}
     />
+    </ListingFormStructureContext.Provider>
   );
 }

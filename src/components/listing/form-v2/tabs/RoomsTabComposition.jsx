@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import listingsService from '../../../../services/listingsService';
 import RoomBedAmenitiesDialog from '../components/RoomBedAmenitiesDialog';
-import { T, Card } from './_shared';
+import { T, Card, RuFormLegend } from './_shared';
 
 function getCompositionRoomLabel(room) {
   if (!room) return '';

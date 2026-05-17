@@ -4,7 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import { Box, Stack, Typography, TextField, Button, IconButton } from '@mui/material';
-import { T, sxInput, Field, Card, SectionH, ToggleRow, Counter, ChipsRow, NumberInput, SelectField } from './_shared';
+import { T, sxInput, Field, Card, SectionH, ToggleRow, Counter, ChipsRow, NumberInput, SelectField, RuFormLegend } from './_shared';
 
 /* ════════════════════ Orchestration ════════════════════ */
 const ORCHESTRATION_GROUPS = [
@@ -36,6 +36,7 @@ export function OrchestrationTab({ values = {}, onChange }) {
   const globalOff = values.orchestrationEnabled === false;
   return (
     <Box>
+      <RuFormLegend />
       <Card title="⚡ Orchestration globale" accent="primary">
         <ToggleRow title="Activer l'orchestration pour ce listing"
           desc="Si désactivé, aucun workflow automatique ne se lance. Toutes les options ci-dessous sont mises en pause."
@@ -72,6 +73,7 @@ export function CleaningTab({ values = {}, onChange }) {
 
   return (
     <Box>
+      <RuFormLegend />
       <Stack direction="row" gap={0.625} sx={{ flexWrap: 'wrap', pb: 1, mb: 2.25, borderBottom: `1px solid ${T.border}` }} useFlexGap>
         {CLEANING_SUB_TABS.map(t => (
           <Box key={t.id} component="button" onClick={() => setSub(t.id)} sx={{
@@ -197,7 +199,7 @@ export function CleaningTab({ values = {}, onChange }) {
       {sub === 'checkout' && (
         <>
           <Card title="📝 Instructions de départ" meta="messageCheckout[] · FR + EN">
-            <Field label="Instructions départ · Français">
+            <Field label="Instructions départ · Français" ruField="messageCheckout">
               <TextField size="small" multiline rows={4} fullWidth placeholder="Avant votre départ, merci de : • Vider le réfrigérateur • Fermer toutes les fenêtres ..."
                 value={values.messageCheckout?.[0] || ''} onChange={e => upd('messageCheckout', [e.target.value, values.messageCheckout?.[1] || ''])} sx={sxInput} />
             </Field>
