@@ -1,0 +1,1065 @@
+import React, { useState, useCallback, useEffect } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { RU_API_MAPPING, getMongoFilterForApi, getBadgeColor } from '../../features/channels/data/ruApiMapping';
+import { RU_API_DOCS } from '../../features/channels/data/ruApiDocs';
+import ruApiUsageIndex from '../../features/channels/data/ruApiUsage.generated.json';
+import { formatCasablancaDate } from '../../utils/dateFormatting';
+import {
+  fetchChannelsCalendarRuApis,
+  fetchChannelsDistributionRuApis,
+  fetchChannelsIngressList,
+  fetchChannelsIngressById,
+  fetchChannelsDistributionRuCallBodies,
+  fetchChannelsDebugRuApis,
+  fetchChannelsOAuthRuApis,
+  fetchChannelsOAuthRuCallBodies,
+  resolveChannelsOwnerNames,
+} from '../../services/channelsDashboardApi';
+import {
+  getChannelDebugDateQuery,
+  getChannelDebugDatePresetLabel,
+  getMonitoringRuApisHoursHint,
+} from '../../features/channels/utils/channelDebugDateRange';
+
+const DEBUG_PAGE_SIZE = 20;
+
+const DATE_PRESETS = [
+  { id: 'today', label: "Aujourd'hui" },
+  { id: 'yesterday', label: 'Hier' },
+  { id: 'last7days', label: '7 jours' },
+  { id: 'all', label: 'Tout' },
+];
+
+const REST_LIST = RU_API_MAPPING.rest || [];
+const REST_NAME_SET = new Set(REST_LIST.map((a) => a.name));
+
+/** Toute action d’audit REST (Mongo `action`) — deep-links du type ?type=push&api=RU_REST_… */
+function isRestChannelAction(name) {
+  return Boolean(name && (REST_NAME_SET.has(name) || name.startsWith('RU_REST_')));
+}
+
+function resolveDebugApiEntry(apiName) {
+  const combined = [
+    ...RU_API_MAPPING.pull,
+    ...RU_API_MAPPING.push,
+    ...RU_API_MAPPING.oauth,
+    ...RU_API_MAPPING.webhooks,
+    ...REST_LIST,
+  ];
+  const found = combined.find((a) => a.name === apiName);
+  if (found) return found;
+  if (isRestChannelAction(apiName)) {
+    return {
+      name: apiName,
+      collection: 'ChannelRuApiCall',
+      service: 'srv-channels',
+      visibleIn: 'Debug',
+      category: 'REST RU',
+    };
+  }
+  return null;
+}
+
+/**
+ * Onglet Debug — audit ChannelRuApiCall (XML + proxy REST RU) et webhooks ingress.
+ * Clic ligne → détail JSON/XML.
+ */
+export function DebugApiTab() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const typeParam = searchParams.get('type') || 'pull';
+  const apiParam = searchParams.get('api') || '';
+  const docIdParam = searchParams.get('docId') || '';
+  const [infoApiName, setInfoApiName] = useState(null);
+
+  /**
+   * Onglet effectif : si `api` est une action REST (`RU_REST_*`), on affiche/charge la liste REST
+   * même si l’URL a encore `type=push` (liens partagés / bookmarks).
+   */
+  const effectiveType = isRestChannelAction(apiParam) ? 'rest' : typeParam;
+
+  // Single-document deep-link state
+  const [singleDoc, setSingleDoc] = useState(null);
+  const [singleDocLoading, setSingleDocLoading] = useState(false);
+  const [singleDocError, setSingleDocError] = useState(null);
+
+  // État pour les appels de l'API sélectionnée
+  const [apiCalls, setApiCalls] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  /** Fenêtre Mongo / ingress : aujourd’hui, hier, 7 j calendaires Casablanca, ou tout l’historique. */
+  const [datePreset, setDatePreset] = useState('last7days');
+  const [expandedId, setExpandedId] = useState(null);
+  const [bodiesById, setBodiesById] = useState({});
+  const [bodyLoadingId, setBodyLoadingId] = useState(null);
+
+  /** Cache ownerIds → display names (persiste entre les pages/APIs). */
+  const [ownerNamesCache, setOwnerNamesCache] = useState({});
+
+  const setType = (newType) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('type', newType);
+    next.delete('api'); // Reset API selection
+    setSearchParams(next);
+    setApiCalls(null);
+    setExpandedId(null);
+  };
+
+  const selectApi = (apiName) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('api', apiName);
+    setSearchParams(next);
+    setPage(1);
+    setExpandedId(null);
+  };
+
+  const changeDatePreset = (id) => {
+    setDatePreset(id);
+    setPage(1);
+    setExpandedId(null);
+  };
+
+  const fetchApiCalls = useCallback(async (apiName) => {
+    const api = resolveDebugApiEntry(apiName);
+    if (!api) return;
+
+    setLoading(true);
+    setError(null);
+
+    const dateQ = getChannelDebugDateQuery(datePreset);
+    const ruHoursHint = getMonitoringRuApisHoursHint(datePreset);
+
+    try {
+      let result;
+
+      // OAuth white-label (RuCallApi srv-user) — monitoring agrégé user
+      if (effectiveType === 'oauth' && api.collection === 'RuCallApi' && api.service === 'srv-user') {
+        result = await fetchChannelsOAuthRuApis({
+          page,
+          limit: DEBUG_PAGE_SIZE,
+          hours: ruHoursHint,
+        });
+      } else if (api.collection === 'RuCallApi') {
+        setError(
+          `⛔ API "${api.name}" : RuCallApi legacy (hors OAuth srv-user).\n\n✅ Le flux XML RU audité est ChannelRuApiCall sur srv-channels — mettre à jour ruApiMapping.js si ce flux a été migré.`,
+        );
+        setApiCalls(null);
+        setLoading(false);
+        return;
+      } else if (api.collection === 'ChannelRuApiCall') {
+        // Channel Manager : même route que l’onglet Distribution (filtres orchestration / listing)
+        if (api.category === 'Channel Manager') {
+          result = await fetchChannelsDistributionRuApis({
+            page,
+            limit: DEBUG_PAGE_SIZE,
+            ...dateQ,
+            action: api.name,
+          });
+        } else if (api.category === 'Calendar') {
+          result = await fetchChannelsCalendarRuApis({
+            page,
+            limit: DEBUG_PAGE_SIZE,
+            hours: ruHoursHint,
+            action: api.name,
+          });
+        } else {
+          // Tout le reste (dictionnaires, listings, réservations, owner RU, users, webhooks XML persistés, etc.) : Mongo ChannelRuApiCall filtré par `action`
+          result = await fetchChannelsDebugRuApis({
+            page,
+            limit: DEBUG_PAGE_SIZE,
+            ...dateQ,
+            action: api.name,
+          });
+        }
+      } else if (api.collection === 'ChannelBookingIngress') {
+        // Webhooks (ingress) — filtrer par `ruEventKey` (NewMessage, ModifiedMessage, etc.)
+        result = await fetchChannelsIngressList({
+          ...dateQ,
+          page,
+          limit: DEBUG_PAGE_SIZE,
+          ruEventKey: api.name,
+          kind: api.field === 'ruMessaging' ? 'messaging' : 'reservations',
+        });
+      }
+
+      if (result && result.data) {
+        // Les fonctions API retournent une réponse Axios avec result.data qui contient {success, data, error}
+        const responseData = result.data;
+
+        if (responseData.success) {
+          setApiCalls(responseData.data || {});
+        } else {
+          console.error('API Error:', responseData);
+          setError(responseData.error || 'Erreur lors du chargement');
+          setApiCalls(null);
+        }
+      } else {
+        console.error('Invalid response:', result);
+        setError('Réponse invalide du serveur');
+        setApiCalls(null);
+      }
+    } catch (err) {
+      console.error('Fetch Error:', err);
+      const cfg = err.config;
+      const reqUrl = cfg ? `${cfg.baseURL || ''}${cfg.url || ''}`.replace(/([^:])\/{2,}/g, '$1/') : '';
+      const st = err.response?.status;
+      let msg = err.response?.data?.error || err.message || 'Erreur réseau';
+      if (st === 404 && reqUrl) {
+        msg = `${msg} (${reqUrl})`;
+      }
+      setError(msg);
+      setApiCalls(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, effectiveType, datePreset]);
+
+  /** Résoudre les noms d'owner à partir des items chargés. */
+  useEffect(() => {
+    if (!apiCalls?.items?.length) return;
+    const unknownIds = [];
+    for (const row of apiCalls.items) {
+      const oid = row.auditContext?.ownerId || (row.auditContext?.ownerIds?.[0]);
+      if (oid && !ownerNamesCache[oid]) unknownIds.push(oid);
+    }
+    const unique = [...new Set(unknownIds)];
+    if (unique.length === 0) return;
+    resolveChannelsOwnerNames(unique)
+      .then((res) => {
+        if (res.data?.success && res.data.data?.owners) {
+          setOwnerNamesCache((prev) => ({ ...prev, ...res.data.data.owners }));
+        }
+      })
+      .catch(() => {});
+  }, [apiCalls]);
+
+  /** Chargement au deep-link (?tab=Debug&api=…) — y compris ?type=push&api=RU_REST_… */
+  useEffect(() => {
+    if (docIdParam) return; // docId mode takes over
+    if (!apiParam) {
+      setApiCalls(null);
+      setError(null);
+      return;
+    }
+    if (!resolveDebugApiEntry(apiParam)) {
+      setApiCalls(null);
+      setError(null);
+      return;
+    }
+    fetchApiCalls(apiParam);
+  }, [apiParam, typeParam, fetchApiCalls, docIdParam]);
+
+  /** Deep-link vers un document unique (?docId=…) */
+  useEffect(() => {
+    if (!docIdParam) {
+      setSingleDoc(null);
+      setSingleDocError(null);
+      return;
+    }
+    let cancelled = false;
+    setSingleDocLoading(true);
+    setSingleDocError(null);
+    setSingleDoc(null);
+
+    const isWebhook = effectiveType === 'webhooks';
+    const fetcher = isWebhook
+      ? fetchChannelsIngressById(docIdParam)
+      : fetchChannelsDistributionRuCallBodies(docIdParam);
+
+    fetcher
+      .then((result) => {
+        if (cancelled) return;
+        const d = result?.data;
+        if (d?.success && d.data) {
+          setSingleDoc(d.data);
+        } else {
+          setSingleDocError(d?.error || 'Document introuvable');
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setSingleDocError(err.response?.data?.error || err.message || 'Erreur réseau');
+      })
+      .finally(() => {
+        if (!cancelled) setSingleDocLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [docIdParam, effectiveType]);
+
+  const onDetailToggle = useCallback(async (rowId, row, api) => {
+    if (expandedId === rowId) {
+      setExpandedId(null);
+      return;
+    }
+
+    const cached = bodiesById[rowId];
+    if (
+      cached &&
+      cached.error == null &&
+      (cached.requestXml != null ||
+        cached.responseJson != null ||
+        cached.requestPayload != null ||
+        cached.ingressMeta != null)
+    ) {
+      setExpandedId(rowId);
+      return;
+    }
+
+    setBodyLoadingId(rowId);
+    try {
+      // Utiliser les fonctions API existantes pour fetch les détails
+      let result;
+      const docId = row._id || row.id;
+      console.log('[DebugApiTab] Fetching details:', { rowId, docId, row_id: row._id, row_id2: row.id, api: api?.name, category: api?.category });
+
+      if (docId) {
+        if (api.collection === 'RuCallApi' && api.category === 'OAuth PMS') {
+          result = await fetchChannelsOAuthRuCallBodies(docId);
+        } else if (api.collection === 'RuCallApi') {
+          setBodiesById((prev) => ({
+            ...prev,
+            [rowId]: { error: 'RuCallApi non-OAuth : détail non exposé ici — migrer vers ChannelRuApiCall si applicable.' },
+          }));
+          setExpandedId(rowId);
+          setBodyLoadingId(null);
+          return;
+        } else if (api.collection === 'ChannelRuApiCall') {
+          result = await fetchChannelsDistributionRuCallBodies(docId);
+        } else if (api.collection === 'ChannelBookingIngress') {
+          result = await fetchChannelsIngressById(docId);
+        }
+      } else {
+        console.warn('[DebugApiTab] No row._id found:', { row, rowId });
+      }
+
+      if (result && result.data) {
+        const responseData = result.data;
+        if (responseData.success && responseData.data) {
+          const d = responseData.data;
+          const normalized =
+            api.collection === 'ChannelBookingIngress'
+              ? {
+                  requestPayload: d.parsedData ?? d.ruMessaging ?? null,
+                  requestXml: typeof d.rawBody === 'string' ? d.rawBody : '',
+                  responseJson: null,
+                  responseXml: null,
+                  ingressMeta: {
+                    channel: d.channel,
+                    ruEventKey: d.ruEventKey,
+                    correlationId: d.correlationId,
+                    publishOk: d.publishOk,
+                    domainIntentPublished: d.domainIntentPublished,
+                  },
+                }
+              : d;
+          setBodiesById((prev) => ({ ...prev, [rowId]: normalized }));
+          setExpandedId(rowId);
+        } else {
+          setBodiesById((prev) => ({ ...prev, [rowId]: { error: responseData.error || responseData.message || 'Erreur lors du chargement' } }));
+          setExpandedId(rowId);
+        }
+      } else {
+        const errMsg = result?.data?.error || result?.data?.message || 'Réponse invalide du serveur';
+        console.error('[DebugApiTab] Invalid response structure:', { result, rowId, api: api?.name });
+        setBodiesById((prev) => ({ ...prev, [rowId]: { error: errMsg } }));
+        setExpandedId(rowId);
+      }
+    } catch (e) {
+      console.error('[DebugApiTab] Error fetching body:', {
+        error: e,
+        message: e.message,
+        response: e.response?.data,
+        status: e.response?.status,
+        rowId,
+        api: api?.name
+      });
+      setBodiesById((prev) => ({ ...prev, [rowId]: { error: e.response?.data?.error || e.response?.data?.message || e.message || 'Erreur inconnue' } }));
+      setExpandedId(rowId);
+    } finally {
+      setBodyLoadingId(null);
+    }
+  }, [expandedId, bodiesById]);
+
+  const prettyJson = (obj) => {
+    if (!obj || typeof obj !== 'object') return String(obj || '—');
+    return JSON.stringify(obj, null, 2);
+  };
+
+  const ruStatusBadgeClass = (status) => {
+    if (status === 'success' || status === 'ok') return 'inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-50 text-green-700 border border-green-200';
+    if (status === 'error' || status === 'fail') return 'inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-50 text-red-700 border border-red-200';
+    return 'inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200';
+  };
+
+  const copyFilter = (api) => {
+    const filter = getMongoFilterForApi(api.name, api.collection);
+    navigator.clipboard.writeText(JSON.stringify(filter, null, 2));
+    alert('Filtre MongoDB copié !');
+  };
+
+  const currentApis =
+    effectiveType === 'pull'
+      ? RU_API_MAPPING.pull
+      : effectiveType === 'push'
+        ? RU_API_MAPPING.push
+        : effectiveType === 'oauth'
+          ? RU_API_MAPPING.oauth
+          : effectiveType === 'rest'
+            ? REST_LIST
+            : RU_API_MAPPING.webhooks;
+
+  const PRIORITY = {
+    // Calendar (high)
+    Push_PutPrices_RQ: 100,
+    Push_PutAvbUnits_RQ: 95,
+    Pull_ListReservations_RQ: 90,
+    // Listing sync (high)
+    Push_PutProperty_RQ: 85,
+    Push_PutBuilding_RQ: 80,
+    Push_PutComposition_RQ: 75,
+    Push_PutDescription_RQ: 70,
+    Push_PutImage_RQ: 65,
+    Push_PutLocation_RQ: 60,
+    // Reservations (mid/high)
+    Push_PutConfirmedReservationMulti_RQ: 70,
+    Push_ConfirmReservation_RQ: 65,
+    Push_CancelReservation_RQ: 65,
+    Pull_GetReservationDetails_RQ: 60,
+    Pull_GetLeads_RQ: 55,
+    // Owner / Users (mid)
+    Pull_ListMyUsers_RQ: 55,
+    Push_CreateUser_RQ: 55,
+    Push_FillCompanyDetails_RQ: 50,
+    Push_ArchiveUser_RQ: 45,
+    LNM_PutHandlerUrl_RQ: 45,
+  };
+
+  const usage = ruApiUsageIndex?.usage || {};
+
+  const decoratedApis = (currentApis || [])
+    .map((api) => {
+      const hasDoc = Boolean(api?.name && RU_API_DOCS[api.name]);
+      // "Soon" = action listée mais pas utilisée dans le code (scan auto backend+front+docs/RU).
+      // On ne marque pas Soon pour OAuth/Webhooks/REST (toujours intégrés).
+      const integrated = usage?.[api.name]?.integrated !== false;
+      const soon = api.collection === 'ChannelRuApiCall' && integrated === false;
+
+      const prio = PRIORITY[api.name] || 0;
+      return { ...api, soon, hasDoc, prio, integrated };
+    })
+    .sort((a, b) => {
+      // 1) intégrées d'abord (soon = false)
+      if (a.soon !== b.soon) return a.soon ? 1 : -1;
+      // 2) ordre d'importance
+      if ((b.prio || 0) !== (a.prio || 0)) return (b.prio || 0) - (a.prio || 0);
+      // 3) catégorie puis nom
+      const ca = String(a.category || '');
+      const cb = String(b.category || '');
+      if (ca !== cb) return ca.localeCompare(cb);
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+
+  const selectedApiObj = currentApis.find((a) => a.name === apiParam) || resolveDebugApiEntry(apiParam);
+
+  const clearDocId = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('docId');
+    setSearchParams(next);
+  };
+
+  // Single-document deep-link view
+  if (docIdParam) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={clearDocId}
+            className="px-3 py-1.5 rounded border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            ← Retour à la liste
+          </button>
+          <span className="text-xs text-slate-500 font-mono">docId: {docIdParam}</span>
+          {apiParam && <span className="text-xs bg-slate-100 px-2 py-0.5 rounded font-semibold text-slate-600">{apiParam}</span>}
+        </div>
+
+        {singleDocLoading && (
+          <div className="text-center py-8">
+            <div className="animate-spin inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+            <p className="mt-2 text-sm text-slate-600">Chargement du document…</p>
+          </div>
+        )}
+
+        {singleDocError && (
+          <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-800">
+            <strong>Erreur:</strong> {singleDocError}
+          </div>
+        )}
+
+        {singleDoc && !singleDocLoading && (
+          <div className="space-y-3">
+            {/* Metadata cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {singleDoc.ruEventKey && (
+                <div className="bg-white border border-slate-200 rounded p-2">
+                  <div className="text-[10px] text-slate-500 uppercase">Event Key</div>
+                  <div className="font-mono text-xs font-semibold text-slate-900 mt-0.5">{singleDoc.ruEventKey}</div>
+                </div>
+              )}
+              {singleDoc.action && (
+                <div className="bg-white border border-slate-200 rounded p-2">
+                  <div className="text-[10px] text-slate-500 uppercase">Action</div>
+                  <div className="font-mono text-xs font-semibold text-slate-900 mt-0.5">{singleDoc.action}</div>
+                </div>
+              )}
+              {singleDoc.correlationId && (
+                <div className="bg-white border border-slate-200 rounded p-2">
+                  <div className="text-[10px] text-slate-500 uppercase">Correlation ID</div>
+                  <div className="font-mono text-[10px] text-slate-700 mt-0.5 break-all">{singleDoc.correlationId}</div>
+                </div>
+              )}
+              {singleDoc.channel && (
+                <div className="bg-white border border-slate-200 rounded p-2">
+                  <div className="text-[10px] text-slate-500 uppercase">Channel</div>
+                  <div className="text-xs font-semibold text-slate-900 mt-0.5">{singleDoc.channel}</div>
+                </div>
+              )}
+              {singleDoc.publishOk != null && (
+                <div className="bg-white border border-slate-200 rounded p-2">
+                  <div className="text-[10px] text-slate-500 uppercase">Publish</div>
+                  <div className={`text-xs font-semibold mt-0.5 ${singleDoc.publishOk ? 'text-green-700' : 'text-red-700'}`}>
+                    {singleDoc.publishOk ? 'OK' : 'FAIL'}
+                  </div>
+                </div>
+              )}
+              {singleDoc.status && (
+                <div className="bg-white border border-slate-200 rounded p-2">
+                  <div className="text-[10px] text-slate-500 uppercase">Status</div>
+                  <div className={`text-xs font-semibold mt-0.5 ${singleDoc.status === 'success' ? 'text-green-700' : 'text-red-700'}`}>
+                    {singleDoc.status}
+                  </div>
+                </div>
+              )}
+              {singleDoc.domainIntentPublished && (
+                <div className="bg-white border border-slate-200 rounded p-2">
+                  <div className="text-[10px] text-slate-500 uppercase">Domain Intent</div>
+                  <div className="font-mono text-xs text-slate-900 mt-0.5">{singleDoc.domainIntentPublished}</div>
+                </div>
+              )}
+              {singleDoc.createdAt && (
+                <div className="bg-white border border-slate-200 rounded p-2">
+                  <div className="text-[10px] text-slate-500 uppercase">Date</div>
+                  <div className="text-xs text-slate-900 mt-0.5">{new Date(singleDoc.createdAt).toLocaleString()}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Enrichment / ACK info */}
+            {singleDoc.enrichment && (
+              <div className="bg-white border border-slate-200 rounded p-3">
+                <div className="text-xs font-semibold text-slate-700 mb-2">Enrichissement (mapping Sojori)</div>
+                <pre className="text-[10px] bg-slate-50 border border-slate-100 rounded p-2 max-h-[200px] overflow-auto">
+                  {JSON.stringify(singleDoc.enrichment, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            {/* Parsed data / payload */}
+            {singleDoc.parsedData && (
+              <div className="bg-white border border-slate-200 rounded p-3">
+                <div className="text-xs font-semibold text-slate-700 mb-2">Parsed Data (JSON)</div>
+                <pre className="text-[9px] bg-slate-50 border border-slate-100 rounded p-2 max-h-[300px] overflow-auto">
+                  {JSON.stringify(singleDoc.parsedData, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            {singleDoc.canonicalRuBookingV2 && (
+              <div className="bg-white border border-slate-200 rounded p-3">
+                <div className="text-xs font-semibold text-slate-700 mb-2">Canonical Booking V2</div>
+                <pre className="text-[9px] bg-slate-50 border border-slate-100 rounded p-2 max-h-[300px] overflow-auto">
+                  {JSON.stringify(singleDoc.canonicalRuBookingV2, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            {/* Raw XML */}
+            {singleDoc.rawBody && (
+              <div className="bg-white border border-slate-200 rounded p-3">
+                <div className="text-xs font-semibold text-slate-700 mb-2">XML brut</div>
+                <pre className="text-[9px] bg-slate-50 border border-slate-100 rounded p-2 max-h-[300px] overflow-auto whitespace-pre-wrap break-all">
+                  {singleDoc.rawBody}
+                </pre>
+              </div>
+            )}
+
+            {/* For ChannelRuApiCall: request/response XML */}
+            {singleDoc.requestXml && (
+              <div className="bg-white border border-slate-200 rounded p-3">
+                <div className="text-xs font-semibold text-slate-700 mb-2">XML Requête</div>
+                <pre className="text-[9px] bg-slate-50 border border-slate-100 rounded p-2 max-h-[300px] overflow-auto whitespace-pre-wrap break-all">
+                  {singleDoc.requestXml}
+                </pre>
+              </div>
+            )}
+            {singleDoc.responseXml && (
+              <div className="bg-white border border-slate-200 rounded p-3">
+                <div className="text-xs font-semibold text-slate-700 mb-2">XML Réponse</div>
+                <pre className="text-[9px] bg-slate-50 border border-slate-100 rounded p-2 max-h-[300px] overflow-auto whitespace-pre-wrap break-all">
+                  {singleDoc.responseXml}
+                </pre>
+              </div>
+            )}
+            {singleDoc.requestPayload && (
+              <div className="bg-white border border-slate-200 rounded p-3">
+                <div className="text-xs font-semibold text-slate-700 mb-2">Payload</div>
+                <pre className="text-[9px] bg-slate-50 border border-slate-100 rounded p-2 max-h-[300px] overflow-auto">
+                  {JSON.stringify(singleDoc.requestPayload, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Navigation par type */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setType('pull')}
+          className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
+            effectiveType === 'pull' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          🔵 Pull ({RU_API_MAPPING.pull.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setType('push')}
+          className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
+            effectiveType === 'push' ? 'bg-green-600 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          🟢 Push ({RU_API_MAPPING.push.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setType('oauth')}
+          className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
+            effectiveType === 'oauth' ? 'bg-purple-600 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          🔑 OAuth ({RU_API_MAPPING.oauth.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setType('webhooks')}
+          className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
+            effectiveType === 'webhooks' ? 'bg-orange-600 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          📥 Webhooks ({RU_API_MAPPING.webhooks.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setType('rest')}
+          className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
+            effectiveType === 'rest' ? 'bg-cyan-600 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          🌐 REST ({REST_LIST.length})
+        </button>
+      </div>
+
+      {/* Liste API (1/4 gauche) + Tableau (3/4 droite) */}
+      <div className="grid grid-cols-[25%_75%] gap-4">
+        <div className="space-y-2">
+          <div className="text-sm font-bold text-slate-700">Sélectionner une API</div>
+          <div className="space-y-1.5 overflow-y-auto">
+            {decoratedApis.map((api) => {
+              const badgeColor = getBadgeColor(api);
+              const isSelected = apiParam === api.name;
+              const badgeClass =
+                badgeColor === 'green'
+                  ? 'bg-green-100 text-green-800'
+                  : badgeColor === 'orange'
+                    ? 'bg-orange-100 text-orange-800'
+                    : 'bg-red-100 text-red-800';
+
+              // NOTE: avoid nested <button> (invalid HTML) so the inner "i" never triggers selection.
+              return (
+                <div
+                  key={api.name}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => selectApi(api.name)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') selectApi(api.name);
+                  }}
+                  className={`w-full text-left border rounded p-2 transition-all cursor-pointer select-none ${
+                    isSelected ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-blue-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="font-mono text-xs font-semibold text-slate-900">
+                      {api.soon ? `(Soon) ${api.name}` : api.name}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setInfoApiName(api.name);
+                      }}
+                      onMouseDown={(e) => {
+                        // extra safety: prevent outer onClick on some browsers
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      className="w-6 h-6 rounded border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50"
+                      title="Informations (docs/RU)"
+                      aria-label={`Informations ${api.name}`}
+                    >
+                      i
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <span className={`px-1.5 py-0.5 rounded font-semibold ${badgeClass}`}>{api.category}</span>
+                  </div>
+                  <div className="text-[9px] text-slate-500 mt-1">
+                    📦 {api.collection} → {api.service}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Liste appels (moitié droite) */}
+        <div className="space-y-2">
+          {infoApiName && (() => {
+            const u = usage?.[infoApiName];
+            const integrated = u?.integrated !== false;
+            const hits = typeof u?.hits === 'number' ? u.hits : null;
+            const src = u?.source ? String(u.source) : 'unknown';
+            return (
+            <div className="border border-slate-200 bg-white rounded p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold text-slate-500">Informations (docs/RU)</div>
+                  <div className="font-mono text-sm font-bold text-slate-900 mt-1">{infoApiName}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInfoApiName(null)}
+                  className="px-2 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
+                >
+                  Fermer
+                </button>
+              </div>
+
+              <div className="mt-3 text-sm text-slate-700 leading-relaxed">
+                {RU_API_DOCS[infoApiName]?.summary ? (
+                  <div>{RU_API_DOCS[infoApiName].summary}</div>
+                ) : (
+                  <div className="text-slate-600">
+                    <strong>(Doc Soon)</strong> Description non encore copiée depuis <span className="font-mono">docs/RU</span> vers
+                    <span className="font-mono"> ruApiDocs.js</span>.
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 border border-slate-100 rounded p-3 bg-slate-50 text-xs">
+                <div className="font-semibold text-slate-700">Usage (scan code)</div>
+                <div className="mt-2 text-slate-600 space-y-1">
+                  <div>
+                    <span className="font-semibold text-slate-700">Intégrée :</span>{' '}
+                    {integrated ? (
+                      <span className="text-green-700 font-semibold">oui</span>
+                    ) : (
+                      <span className="text-amber-700 font-semibold">non (Soon)</span>
+                    )}
+                  </div>
+                  {hits !== null && (
+                    <div>
+                      <span className="font-semibold text-slate-700">Occurrences texte :</span> {hits}{' '}
+                      <span className="text-slate-500">
+                        (compte les chaînes exactes dans <span className="font-mono">sojori-production/apps</span>,{' '}
+                        <span className="font-mono">packages</span>, <span className="font-mono">sojori-dashboard/src</span>,{' '}
+                        <span className="font-mono">docs/RU</span> — peut inclure docs)
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-semibold text-slate-700">Source :</span> <span className="font-mono">{src}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div className="border border-slate-100 rounded p-3 bg-slate-50">
+                  <div className="font-semibold text-slate-700">Deep-link Debug</div>
+                  <div className="font-mono mt-1 text-[11px] text-slate-600 break-all">
+                    {`${window.location.origin}/channels?tab=Debug&type=${typeParam || 'pull'}&api=${encodeURIComponent(
+                      infoApiName,
+                    )}`}
+                  </div>
+                </div>
+                <div className="border border-slate-100 rounded p-3 bg-slate-50">
+                  <div className="font-semibold text-slate-700">Astuce</div>
+                  <div className="mt-1 text-slate-600">
+                    Clique sur l’API (à gauche) pour afficher les appels MongoDB. Clique sur <span className="font-semibold">i</span> pour la doc.
+                  </div>
+                </div>
+              </div>
+            </div>
+            );
+          })()}
+
+          {/* Si la "page i" est ouverte, on n’affiche pas le tableau d’appels en dessous */}
+          {infoApiName ? null : (
+            <>
+              {!apiParam && (
+                <div className="text-center py-8 text-slate-500">
+                  <p className="font-semibold">← Sélectionne une API</p>
+                  <p className="text-xs mt-1">
+                    Les derniers appels MongoDB s&apos;afficheront ici
+                  </p>
+                </div>
+              )}
+
+              {apiParam && loading && (
+                <div className="text-center py-8">
+                  <div className="animate-spin inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+                  <p className="mt-2 text-sm text-slate-600">Chargement...</p>
+                </div>
+              )}
+
+              {apiParam && error && (
+                <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-800">
+                  <strong>Erreur:</strong> {error}
+                </div>
+              )}
+
+              {apiParam && !loading && !error && apiCalls && (
+                <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm font-bold text-slate-700">
+                  {selectedApiObj?.name} ({apiCalls.pagination?.total ?? apiCalls.total ?? apiCalls.items?.length ?? 0}{' '}
+                  appels)
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Période</span>
+                  {DATE_PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => changeDatePreset(p.id)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors ${
+                        datePreset === p.id
+                          ? 'bg-slate-800 text-white border-slate-800'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {selectedApiObj && (
+                <button
+                  onClick={() => copyFilter(selectedApiObj)}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                >
+                  📋 Copier filtre MongoDB
+                </button>
+              )}
+
+              {apiCalls.items && apiCalls.items.length > 0 && (
+                <div className="bg-white rounded border border-slate-200 overflow-hidden">
+                  <div className="overflow-x-auto overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 sticky top-0 text-slate-700 border-b border-slate-200">
+                        <tr>
+                          <th className="text-left px-2 py-1.5 font-medium w-[30px]"></th>
+                          <th className="text-left px-2 py-1.5 font-medium">Date & Heure</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Owner</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Statut</th>
+                          <th className="text-right px-2 py-1.5 font-medium">ms</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Message</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {apiCalls.items.map((row, idx) => {
+                          const ts = row.createdAt || row.timestamp;
+                          const err = row.error || row.responseMsg || '';
+                          const rowId = row._id || row.id || `${row.action}-${idx}`;
+                          const body = bodiesById[rowId];
+                          const expanded = expandedId === rowId;
+                          const loadingBody = bodyLoadingId === rowId;
+                          const rowOwnerId = row.auditContext?.ownerId || (row.auditContext?.ownerIds?.[0]) || '';
+                          const ownerDisplay = rowOwnerId ? (ownerNamesCache[rowOwnerId] || rowOwnerId.slice(-6)) : '';
+
+                          return (
+                            <React.Fragment key={rowId}>
+                              <tr className="border-t border-slate-100 hover:bg-slate-50">
+                                <td className="px-2 py-1.5">
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center justify-center text-slate-500 hover:text-blue-700 p-0.5 rounded"
+                                    onClick={() => onDetailToggle(rowId, row, selectedApiObj)}
+                                    disabled={loadingBody}
+                                    aria-expanded={expanded}
+                                    aria-label={expanded ? 'Replier les détails XML / JSON' : 'Déplier les détails XML / JSON'}
+                                    title={expanded ? 'Replier les détails' : 'Voir détails XML / JSON'}
+                                  >
+                                    {loadingBody ? (
+                                      <span className="text-xs text-slate-400">⋯</span>
+                                    ) : expanded ? (
+                                      <ChevronUp className="w-4 h-4" aria-hidden />
+                                    ) : (
+                                      <ChevronDown className="w-4 h-4" aria-hidden />
+                                    )}
+                                  </button>
+                                </td>
+                                <td className="px-2 py-1.5">
+                                  <div className="text-[11px] font-medium text-slate-700">
+                                    {ts ? formatCasablancaDate(ts, 'dd/MM HH:mm:ss') : '—'}
+                                  </div>
+                                </td>
+                                <td className="px-2 py-1.5">
+                                  {ownerDisplay ? (
+                                    <span className="text-[11px] text-slate-700 truncate block max-w-[120px]" title={rowOwnerId}>
+                                      {ownerDisplay}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-300">—</span>
+                                  )}
+                                </td>
+                                <td className="px-2 py-1.5">
+                                  <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${ruStatusBadgeClass(row.status)}`}>
+                                    {row.status || row.statusCode || '—'}
+                                  </span>
+                                </td>
+                                <td className="px-2 py-1.5 text-right tabular-nums">{row.responseTime || '—'}</td>
+                                <td className="px-2 py-1.5 text-slate-600 truncate" title={String(err)}>
+                                  {String(err).slice(0, 80)}
+                                </td>
+                              </tr>
+                              {expanded && loadingBody && (
+                                <tr>
+                                  <td colSpan={6} className="px-2 py-3 bg-slate-50 text-center text-xs text-slate-500">
+                                    Chargement…
+                                  </td>
+                                </tr>
+                              )}
+                              {expanded && !loadingBody && body && (
+                                <tr>
+                                  <td colSpan={6} className="px-2 py-3 bg-slate-50">
+                                    {body.error && <div className="text-xs text-red-600 mb-2">{body.error}</div>}
+                                    {!body.error && (
+                                      <div className="space-y-2">
+                                        {body.ingressMeta && (
+                                          <div className="text-[10px] text-slate-600 border border-slate-200 rounded p-2 bg-white">
+                                            <div className="font-semibold text-slate-700 mb-1">Ingress</div>
+                                            <div className="font-mono break-all space-y-0.5">
+                                              <div>
+                                                <span className="text-slate-500">channel:</span> {String(body.ingressMeta.channel ?? '—')}
+                                              </div>
+                                              <div>
+                                                <span className="text-slate-500">ruEventKey:</span> {String(body.ingressMeta.ruEventKey ?? '—')}
+                                              </div>
+                                              <div>
+                                                <span className="text-slate-500">correlationId:</span> {String(body.ingressMeta.correlationId ?? '—')}
+                                              </div>
+                                              <div>
+                                                <span className="text-slate-500">publishOk:</span> {String(body.ingressMeta.publishOk ?? '—')}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                        <div>
+                                          <div className="text-[10px] font-semibold text-slate-700 mb-1">Payload JSON</div>
+                                          <pre className="text-[9px] bg-white border border-slate-200 rounded p-1.5 max-h-[200px] overflow-auto">
+                                            {prettyJson(body.requestPayload)}
+                                          </pre>
+                                        </div>
+                                        {body.requestXml && (
+                                          <div>
+                                            <div className="text-[10px] font-semibold text-slate-700 mb-1">XML Requête</div>
+                                            <pre className="text-[9px] bg-white border border-slate-200 rounded p-1.5 max-h-[160px] overflow-auto whitespace-pre-wrap break-all">
+                                              {body.requestXml}
+                                            </pre>
+                                          </div>
+                                        )}
+                                        {body.responseXml && (
+                                          <div>
+                                            <div className="text-[10px] font-semibold text-slate-700 mb-1">XML Réponse</div>
+                                            <pre className="text-[9px] bg-white border border-slate-200 rounded p-1.5 max-h-[160px] overflow-auto whitespace-pre-wrap break-all">
+                                              {String(body.responseXml).slice(0, 5000)}
+                                            </pre>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {apiCalls.items && apiCalls.items.length === 0 && (
+                <div className="text-center py-6 text-slate-500 text-sm">
+                  Aucun appel sur la période « {getChannelDebugDatePresetLabel(datePreset)} ».
+                  {datePreset !== 'all' ? ' Essaie « Tout » ou élargis les dates.' : ''}
+                </div>
+              )}
+
+              {(() => {
+                const total = apiCalls.pagination?.total ?? apiCalls.total ?? 0;
+                const pages = Math.max(1, Math.ceil(total / DEBUG_PAGE_SIZE));
+                if (!apiCalls.items || total <= DEBUG_PAGE_SIZE) return null;
+                return (
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      className="px-3 py-1 rounded border border-slate-200 font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
+                    >
+                      Précédent
+                    </button>
+                    <span className="text-slate-600 tabular-nums">
+                      Page {page} / {pages} — {total} ligne{total > 1 ? 's' : ''}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={page >= pages}
+                      onClick={() => setPage((p) => p + 1)}
+                      className="px-3 py-1 rounded border border-slate-200 font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
+                    >
+                      Suivant
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -342,6 +342,38 @@ a:hover {
 }
 
 /* Progress bar shimmer */
+/* Modal création réservation — scroll colonnes (priorité sur globals transparents) */
+.create-reservation-form-scroll,
+.create-reservation-summary-scroll {
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin !important;
+  scrollbar-color: #b8851a #f0eee8 !important;
+}
+
+.create-reservation-form-scroll::-webkit-scrollbar,
+.create-reservation-summary-scroll::-webkit-scrollbar {
+  width: 10px !important;
+  -webkit-appearance: none;
+}
+
+.create-reservation-form-scroll::-webkit-scrollbar-track,
+.create-reservation-summary-scroll::-webkit-scrollbar-track {
+  background: #f0eee8 !important;
+  border-radius: 8px;
+}
+
+.create-reservation-form-scroll::-webkit-scrollbar-thumb,
+.create-reservation-summary-scroll::-webkit-scrollbar-thumb {
+  background: #b8851a !important;
+  border-radius: 8px;
+  border: 2px solid #f0eee8 !important;
+  min-height: 48px;
+}
+
 .so-progress { height: 4px; background: var(--bg-deep); border-radius: 99px; overflow: hidden; }
 .so-progress-bar {
   height: 100%; border-radius: 99px;
@@ -411,4 +443,24 @@ a:hover {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Sojori Inbox V4 — Animations Atelier 2026 Light
+   ════════════════════════════════════════════════════════════════════ */
+@keyframes sojori-pulse-error {
+  0%,100%{box-shadow:0 0 0 0 rgba(200,30,30,0.55)}
+  50%{box-shadow:0 0 0 6px rgba(200,30,30,0)}
+}
+@keyframes sojori-pulse-success {
+  0%,100%{box-shadow:0 0 0 0 rgba(10,143,94,0.45)}
+  50%{box-shadow:0 0 0 5px rgba(10,143,94,0)}
+}
+@keyframes sojori-shimmer {
+  0%{background-position:-200% 0}
+  100%{background-position:200% 0}
+}
+@keyframes sojori-fadeIn {
+  from{opacity:0;transform:translateY(6px)}
+  to{opacity:1;transform:none}
 }

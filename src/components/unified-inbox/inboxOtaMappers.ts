@@ -1,0 +1,180 @@
+import type { Message } from '../../types/unifiedInbox.types';
+import type { InboxReservationData } from '../../types/inboxReservation.types';
+import type { Thread } from '../../types/unifiedInbox.types';
+import {
+  checkInDaysLabel,
+  formatInboxDaySeparator,
+  formatStayDateShort,
+  nightsBetween,
+  normalizeBookingSource,
+  stayStatusLabel,
+} from './inboxFormat';
+import { otaChannelColor, otaChannelFromName } from './inboxMappers';
+
+export interface OtaThreadRow {
+  id: string;
+  threadId: string;
+  guestName: string;
+  listingName: string;
+  channel: string;
+  reservationNumber: string;
+  lastMessage: string;
+  lastMessageTime?: string;
+  unreadCount: number;
+  checkInDate?: string;
+  checkOutDate?: string;
+  numberOfGuests?: number;
+  totalPrice?: number;
+  currency?: string;
+  status?: string;
+  preloadedMessages?: any[];
+}
+
+function normalizeChannel(raw?: string): string {
+  const ch = (raw || '').toLowerCase();
+  if (ch.includes('booking')) return 'Booking.com';
+  if (ch.includes('airbnb')) return 'Airbnb';
+  if (ch.includes('vrbo')) return 'Vrbo';
+  return raw || 'OTA';
+}
+
+/** Filtre statut — aligné legacy OTAMessagesTab.jsx */
+export function filterOtaThreadsByStatus(rows: OtaThreadRow[]): OtaThreadRow[] {
+  return rows.filter((thread) => {
+    const status = thread.status?.toLowerCase();
+    if (!status) return true;
+    if (status === 'confirmed' || status === 'pending') return true;
+    const hasUnread = thread.unreadCount > 0;
+    const isRecent =
+      thread.lastMessageTime &&
+      Date.now() - new Date(thread.lastMessageTime).getTime() < 7 * 86400000;
+    if ((status === 'completed' || status.includes('cancel')) && (hasUnread || isRecent)) {
+      return true;
+    }
+    return false;
+  });
+}
+
+export function mapApiItemToOtaThread(item: any): OtaThreadRow {
+  const threadData = item.thread || item;
+  const reservation = item.reservation || {};
+  const guestName = reservation.guestName || threadData.recipientName || 'Guest';
+  const reservationNumber =
+    reservation.reservationNumber || threadData.reservationId || threadData.reservationNumber || '';
+
+  return {
+    id: threadData._id,
+    threadId: threadData.threadId,
+    guestName,
+    listingName: reservation.listingName || threadData.listingName || 'Listing',
+    channel: normalizeChannel(
+      threadData.communicationChannel || threadData.channelName || reservation.channelName,
+    ),
+    reservationNumber,
+    lastMessage: threadData.preview || threadData.lastMessage || '',
+    lastMessageTime: threadData.lastMessageAt || threadData.lastMessageDate,
+    unreadCount: threadData.unreadCount || 0,
+    checkInDate: reservation.arrivalDate || reservation.checkInDate,
+    checkOutDate: reservation.departureDate || reservation.checkOutDate,
+    numberOfGuests: reservation.numberOfGuests,
+    totalPrice: reservation.totalPrice,
+    currency: reservation.currency || 'EUR',
+    status: reservation.status || threadData.status,
+    preloadedMessages: item.messages || [],
+  };
+}
+
+export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread {
+  const ch = otaChannelFromName(row.channel);
+  const checkInBadge = checkInDaysLabel(row.checkInDate);
+  return {
+    id: row.threadId,
+    name: row.guestName,
+    channel: ch,
+    channelColor: otaChannelColor(ch),
+    preview: row.lastMessage || 'Aucun message',
+    time: '',
+    unread: row.unreadCount,
+    avatarColor: '',
+    listingName: row.listingName,
+    reservationNumber: row.reservationNumber,
+    checkInDate: row.checkInDate,
+    checkOutDate: row.checkOutDate,
+    checkInBadge,
+    stayBadge: stayStatusLabel(row.checkInDate, row.checkOutDate, 'ota'),
+    guestsLabel: row.numberOfGuests ? `${row.numberOfGuests} voyageurs` : undefined,
+    nightsCount: nightsBetween(row.checkInDate, row.checkOutDate),
+    taskCount,
+  };
+}
+
+export function mapOtaRowToReservation(row: OtaThreadRow): InboxReservationData {
+  const source = normalizeBookingSource(row.channel);
+  const total = row.totalPrice;
+  const commission = total != null ? Math.round(total * 0.1) : undefined;
+  return {
+    reservationNumber: row.reservationNumber,
+    listingName: row.listingName,
+    bookingSource: source,
+    otaPlatform: source,
+    reservationStatus:
+      row.status?.toLowerCase() === 'confirmed'
+        ? 'Confirmée'
+        : row.status || 'Confirmée',
+    checkInDate: row.checkInDate,
+    checkOutDate: row.checkOutDate,
+    checkInDisplay: formatStayDateShort(row.checkInDate, '16h'),
+    checkOutDisplay: formatStayDateShort(row.checkOutDate, '11h'),
+    nightsCount: nightsBetween(row.checkInDate, row.checkOutDate),
+    guestsLabel: row.numberOfGuests ? `${row.numberOfGuests} voyageurs` : undefined,
+    totalPrice: total,
+    currency: row.currency,
+    netHost: total != null && commission != null ? total - commission : undefined,
+    commission,
+  };
+}
+
+export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Message[] {
+  const sorted = [...messages].sort(
+    (a, b) => new Date(a.createdAt || a.date).getTime() - new Date(b.createdAt || b.date).getTime(),
+  );
+
+  return sorted.flatMap((msg, index) => {
+    const out: Message[] = [];
+    const ts = msg.createdAt || msg.date;
+    if (index === 0 || new Date(ts).toDateString() !== new Date(sorted[index - 1].createdAt || sorted[index - 1].date).toDateString()) {
+      out.push({
+        id: `day-${index}`,
+        from: 'guest',
+        text: formatInboxDaySeparator(ts),
+        time: '',
+        type: 'day-separator',
+      });
+    }
+    const body = (msg.body || msg.message || '').trim();
+    if (!body) return out;
+
+    if (body.startsWith('[Auto]')) {
+      out.push({
+        id: msg._id || msg.messageId || `sys-${index}`,
+        from: 'sojori',
+        text: body.replace(/^\[Auto\]\s*/, '⚙ Auto · '),
+        time: '',
+        type: 'system-note',
+      });
+      return out;
+    }
+
+    const isIncoming = Boolean(msg.isIncoming);
+    out.push({
+      id: msg._id || msg.messageId || `m-${index}`,
+      from: isIncoming ? 'guest' : 'you',
+      text: body,
+      time: ts
+        ? new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        : '',
+      status: !isIncoming ? msg.status : undefined,
+    });
+    return out;
+  });
+}

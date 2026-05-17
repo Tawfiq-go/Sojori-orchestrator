@@ -17,7 +17,7 @@ export type PropertyRow = {
   name: string;
   city: string;
   photoColor: 'gold' | 'blue' | 'purple' | 'green' | 'pink';
-  occupancyPct: number;
+  occupancyPct?: number; // Calculé automatiquement depuis bookedRanges si absent
   monthRevenue: string;
   bookedRanges: [number, number][]; // [startDayIdx, endDayIdx] inclusive
   closedDays?: number[];
@@ -87,7 +87,7 @@ export function MultiPropertyInventory({
       <Box sx={{ overflowX: 'auto', position: 'relative' }}>
         <Box sx={{
           display: 'grid',
-          gridTemplateColumns: `230px repeat(${days}, minmax(64px, 1fr))`,
+          gridTemplateColumns: `180px repeat(${days}, minmax(64px, 1fr))`,
           minWidth: 'max-content',
           position: 'relative',
         }}>
@@ -95,7 +95,7 @@ export function MultiPropertyInventory({
           <Box sx={{
             position: 'sticky', left: 0, zIndex: 6,
             bgcolor: t.bg2, borderRight: `1px solid ${t.border}`,
-            p: '12px 16px',
+            p: '12px 14px',
             fontSize: 10.5, fontFamily: 'Geist Mono', fontWeight: 700,
             color: t.text3, letterSpacing: 0.6, textTransform: 'uppercase',
           }}>Listing · {days} jours</Box>
@@ -146,25 +146,42 @@ function PropertyRowView({
 }) {
   const cellWidth = 64; // matches minmax(64px, 1fr)
   const headerHeight = 52; // height of header row
-  const rowHeight = 64; // height of each property row
+  const rowHeight = 48; // ✅ RÉDUIT: 64px → 48px pour voir plus de lignes
+
+  // ✅ Calculer l'occupation réelle sur l'intervalle affiché
+  const occupancyPct = useMemo(() => {
+    if (property.occupancyPct !== undefined) return property.occupancyPct;
+
+    // Compter les jours occupés
+    const bookedDays = new Set<number>();
+    property.bookedRanges.forEach(([start, end]) => {
+      for (let d = start; d <= end; d++) {
+        if (d >= 0 && d < days) {
+          bookedDays.add(d);
+        }
+      }
+    });
+
+    return Math.round((bookedDays.size / days) * 100);
+  }, [property.bookedRanges, property.occupancyPct, days]);
 
   return (
     <>
       <Box sx={{
         position: 'sticky', left: 0, zIndex: 5,
         bgcolor: t.bg1, borderRight: `1px solid ${t.border}`, borderBottom: `1px solid ${t.border}`,
-        p: '10px 14px', display: 'flex', alignItems: 'center', gap: 1.125,
+        p: '8px 10px', display: 'flex', alignItems: 'center', gap: 0.875,
+        minHeight: rowHeight,
       }}>
-        <Box sx={{ width: 32, height: 32, borderRadius: '8px', background: PHOTO_GRAD[property.photoColor], flexShrink: 0 }} />
+        <Box sx={{ width: 28, height: 28, borderRadius: '6px', background: PHOTO_GRAD[property.photoColor], flexShrink: 0 }} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography sx={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <Typography sx={{ fontSize: 11.5, fontWeight: 700, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {property.name}
           </Typography>
-          <Typography sx={{ fontSize: 10, color: t.text3, fontFamily: 'Geist Mono', letterSpacing: 0.3, mt: 0.25 }}>
+          <Typography sx={{ fontSize: 9.5, fontFamily: 'Geist Mono', color: t.text3, mt: 0.25, lineHeight: 1.2 }}>
+            <Box component="strong" sx={{ color: occupancyPct > 70 ? '#16a34a' : occupancyPct > 40 ? '#f59e0b' : t.text2, fontWeight: 700 }}>Occ {occupancyPct}%</Box>
+            {' · '}
             {property.city.toUpperCase()}
-          </Typography>
-          <Typography sx={{ fontSize: 10, fontFamily: 'Geist Mono', color: t.text3, mt: 0.375 }}>
-            Occ <Box component="strong" sx={{ color: t.text2, fontWeight: 700 }}>{property.occupancyPct}%</Box> · <Box component="strong" sx={{ color: t.text2, fontWeight: 700 }}>{property.monthRevenue}</Box>
           </Typography>
         </Box>
       </Box>
@@ -190,7 +207,7 @@ function PropertyRowView({
               position: 'relative',
               borderLeft: `1px solid ${t.border}`,
               borderBottom: `1px solid ${t.border}`,
-              minHeight: 64, p: '6px 4px',
+              minHeight: rowHeight, p: '5px 3px',
               fontFamily: 'Geist Mono', cursor: 'pointer',
               transition: 'all 0.12s',
               bgcolor:
@@ -215,9 +232,9 @@ function PropertyRowView({
                 )}
                 {status === 'available' && (
                   <>
-                    <Box sx={{ fontSize: 11, fontWeight: 700, color: t.text2, textAlign: 'center' }}>€{price}</Box>
+                    <Box sx={{ fontSize: 10.5, fontWeight: 700, color: t.text2, textAlign: 'center' }}>€{price}</Box>
                     {aiDiff > 0 && (
-                      <Box sx={{ fontSize: 9, fontWeight: 700, color: '#047857', textAlign: 'center', mt: 0.125 }}>
+                      <Box sx={{ fontSize: 8.5, fontWeight: 700, color: '#047857', textAlign: 'center', mt: 0.125 }}>
                         ⬆+€{aiDiff}
                       </Box>
                     )}
@@ -225,8 +242,8 @@ function PropertyRowView({
                 )}
                 {status === 'booked' && (
                   <>
-                    <Box sx={{ fontSize: 10, fontWeight: 700, color: '#b91c1c', textAlign: 'center' }}>€{price}</Box>
-                    <Box sx={{ fontSize: 9, color: '#b91c1c', textAlign: 'center', fontWeight: 600, mt: 0.125 }}>{guestInitials}</Box>
+                    <Box sx={{ fontSize: 9.5, fontWeight: 700, color: '#b91c1c', textAlign: 'center' }}>€{price}</Box>
+                    <Box sx={{ fontSize: 8.5, color: '#b91c1c', textAlign: 'center', fontWeight: 600, mt: 0.125 }}>{guestInitials}</Box>
                   </>
                 )}
               </>
@@ -236,10 +253,15 @@ function PropertyRowView({
       })}
 
       {/* Reservation blocks overlay - positioned absolutely over the grid */}
-      {property.reservations?.map((reservation) => {
+      {property.reservations?.map((reservation, resIdx) => {
         const blockWidth = (reservation.endDay - reservation.startDay + 1) * cellWidth - 8;
-        const blockLeft = 230 + reservation.startDay * cellWidth + 4;
-        const blockTop = headerHeight + rowIndex * rowHeight + 10;
+        const blockLeft = 180 + reservation.startDay * cellWidth + 4; // ✅ 230 → 180 (colonne réduite)
+
+        // ✅ Position à mi-hauteur + offset vertical par réservation pour voir les limites
+        const baseTop = headerHeight + rowIndex * rowHeight;
+        const verticalOffset = (resIdx % 2) * 4; // Alterne légèrement
+        const blockTop = baseTop + rowHeight / 2 - 16 + verticalOffset; // Centré à mi-hauteur
+
         const bgColor = reservation.status === 'confirmed' ? '#10b981' : '#f59e0b';
 
         return (
@@ -250,30 +272,31 @@ function PropertyRowView({
               left: `${blockLeft}px`,
               top: `${blockTop}px`,
               width: `${blockWidth}px`,
-              height: 44,
+              height: 32, // ✅ RÉDUIT: 44px → 32px
               bgcolor: bgColor,
-              borderRadius: '8px',
+              borderRadius: '6px',
               display: 'flex',
               alignItems: 'center',
-              px: 1.5,
-              gap: 0.75,
+              px: 1.25,
+              gap: 0.625,
               color: '#fff',
               fontWeight: 600,
-              fontSize: 13,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              fontSize: 11.5,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
               zIndex: 20,
               cursor: 'pointer',
               transition: 'all 0.2s',
+              border: '1px solid rgba(255,255,255,0.2)', // ✅ Bordure pour voir les limites
               '&:hover': {
                 transform: 'translateY(-2px)',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
               },
             }}
           >
-            <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {reservation.guestName} {reservation.guestFlag}
             </Typography>
-            <Box sx={{ ml: 'auto', fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+            <Box sx={{ ml: 'auto', fontSize: 11.5, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
               {reservation.amount}
             </Box>
           </Box>

@@ -8,6 +8,10 @@ import App from './App.tsx'
 import { sojoriTheme } from './theme/muiTheme'
 import { logAuth } from './utils/dashboardDebug'
 import { AmenitiesProvider } from './contexts/AmenitiesContext'
+import './i18n'
+import { setupLegacyAxiosAuth } from './components/LegacyReduxBridge'
+
+setupLegacyAxiosAuth()
 
 // Create a client for React Query
 const queryClient = new QueryClient({

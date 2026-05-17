@@ -20,7 +20,9 @@ import {
   Box, Stack, Typography, Button, IconButton, Avatar, Chip, Switch,
   TextField, InputAdornment, Divider, Tooltip,
 } from '@mui/material';
+import AdminPanelSettingsOutlined from '@mui/icons-material/AdminPanelSettingsOutlined';
 import AnalyticsOutlined from '@mui/icons-material/AnalyticsOutlined';
+import BusinessOutlined from '@mui/icons-material/BusinessOutlined';
 import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined';
 import AssignmentTurnedInOutlined from '@mui/icons-material/AssignmentTurnedInOutlined';
 import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined';
@@ -146,8 +148,8 @@ export const NAV = [
   // CALENDRIER
   // ═══════════════════════════════════════════════════════
   { group: 'Calendrier', items: [
-    { id: 'calendar', label: 'Vue multi-propriétés', icon: '📅',
-      description: 'Gantt 21 jours' },
+    { id: 'calendar', label: 'Calendrier', icon: '📅',
+      description: 'Vue multi-propriétés & inventaire' },
   ]},
 
   // ═══════════════════════════════════════════════════════
@@ -214,6 +216,21 @@ export const NAV = [
       { id: 'crm/onboarding', label: 'Onboarding' },
     ]},
   ]},
+
+  // ═══════════════════════════════════════════════════════
+  // Admin
+  // ═══════════════════════════════════════════════════════
+    { group: 'Admin', items: [
+      { id: 'admin/channels', label: 'Channels Management', icon: '🔌' },
+    ]},
+
+    { group: 'Équipe & Rôles', items: [
+      { id: 'admin/equipe/owners', label: 'Property manager', icon: '🏢' },
+      { id: 'admin/equipe/staff', label: 'Dashboard Staff', icon: '👥' },
+      { id: 'admin/equipe/whatsapp', label: 'Admin WhatsApp', icon: '📱' },
+      { id: 'admin/equipe/roles', label: 'Rôles & Permissions', icon: '🔐' },
+      { id: 'admin/equipe/groups', label: 'Groupes', icon: '👨‍👩‍👧‍👦' },
+    ]},
 ];
 
 /** Icônes MUI alignées brief Claude Design (modules) — emoji en secours si id absent */
@@ -246,6 +263,12 @@ const NAV_ICON_BY_ID = {
   'crm/leads': PersonSearchOutlined,
   'crm/support': SupportAgentOutlined,
   'crm/onboarding': AssignmentOutlined,
+    'admin/channels': HubOutlined,
+    'admin/equipe/owners': BusinessOutlined,
+    'admin/equipe/staff': GroupsOutlined,
+    'admin/equipe/whatsapp': ForumOutlined,
+    'admin/equipe/roles': AdminPanelSettingsOutlined,
+    'admin/equipe/groups': GroupsOutlined,
 };
 
 function NavItemIcon({ item, active, sub }) {
@@ -1403,8 +1426,9 @@ export const ChatLayout = React.memo(function ChatLayout({ children, mobileView 
         md: '300px 1fr 280px',  // Desktop: 3 colonnes
         lg: '320px 1fr 300px'  // Large: 3 colonnes plus larges
       },
-      height: 660,
-      maxHeight: 660,  // ← FIX: Ferme la cascade scroll
+      height: 'calc(100vh - 200px)',  // ✅ Hauteur dynamique
+      minHeight: 660,                 // ✅ Minimum
+      maxHeight: 'calc(100vh - 180px)', // ✅ Maximum
       overflow: 'hidden',
       boxShadow: '0 1px 2px rgba(26,20,8,0.03)',
       // Sur mobile, gérer quelle colonne est visible
@@ -1540,21 +1564,61 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
     loading
   });
 
-  // ✅ FIX SCROLL: scrollTop direct au lieu de scrollIntoView
+  // Helper pour formater le timestamp si nécessaire
+  const formatTime = (dateStr) => {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // ✅ RÈGLE 2: Messages récents EN BAS (WhatsApp style) - Scroll intelligent
+  const previousMessageCountRef = React.useRef(0);
+  const isFirstLoadRef = React.useRef(true);
+
   // useLayoutEffect = avant paint, pas de flicker
   React.useLayoutEffect(() => {
     const el = messagesContainerRef.current;
-    if (!el) return;
-
-    console.log('📜 Scroll direct (no cascade):', messages?.length);
-
-    // Auto-scroll uniquement si déjà en bas (comme WhatsApp)
-    const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    if (wasAtBottom || messages?.length === 1) {  // Ou si premier message
-      el.scrollTop = el.scrollHeight;
-      console.log('✅ Scrolled to bottom (no parent affected)');
+    if (!el) {
+      console.log('📜 [ChatThread] Scroll: pas de ref');
+      return;
     }
+
+    console.log('📜 [ChatThread] Scroll check:', {
+      messagesCount: messages?.length || 0,
+      previousCount: previousMessageCountRef.current,
+      isFirstLoad: isFirstLoadRef.current,
+    });
+
+    // Premier chargement → scroll en bas IMMÉDIATEMENT
+    if (isFirstLoadRef.current && messages?.length > 0) {
+      console.log('📜 [ChatThread] ✅ PREMIER CHARGEMENT → Scroll en bas');
+      el.scrollTop = el.scrollHeight;
+      isFirstLoadRef.current = false;
+      previousMessageCountRef.current = messages.length;
+      return;
+    }
+
+    // Nouveau message ajouté → scroll seulement si on était déjà en bas
+    if (messages?.length > previousMessageCountRef.current) {
+      const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      console.log('📜 [ChatThread] Nouveau message:', { wasAtBottom });
+      if (wasAtBottom) {
+        console.log('📜 [ChatThread] ✅ Scroll en bas (était déjà en bas)');
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+
+    previousMessageCountRef.current = messages?.length || 0;
   }, [messages?.length]);  // ← Dépendance sur length, pas messages (évite re-renders)
+
+  // Reset isFirstLoad quand on change de conversation
+  React.useLayoutEffect(() => {
+    console.log('📜 [ChatThread] Nouvelle conversation:', conv?.name);
+    isFirstLoadRef.current = true;
+    previousMessageCountRef.current = 0;
+  }, [conv?.name]);
 
   const handleSend = () => {
     if (inputValue.trim()) {
@@ -1624,7 +1688,14 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
             {messages.map((m, i) =>
               m.type === 'day'
                 ? <DayLabel key={i}>{m.text}</DayLabel>
-                : <Message key={i} from={m.from} text={m.text} when={m.when} />
+                : <Message
+                    key={i}
+                    from={m.from || m.sender}
+                    text={m.text || m.content}
+                    when={m.when || formatTime(m.timestamp)}
+                    status={m.status}
+                    readAt={m.readAt}
+                  />
             )}
             {loading && messages.length > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
@@ -1647,37 +1718,28 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
             {aiSuggestions.map((s, i) => <AIChip key={i}>{s}</AIChip>)}
           </Stack>
         )}
-        {onAISuggestion && (
-          <Box sx={{ mb: 1 }}>
-            <Box
-              component="button"
-              onClick={onAISuggestion}
-              sx={{
-                px: 1.5,
-                py: 0.75,
-                fontSize: 12,
-                fontWeight: 600,
-                color: t.primary,
-                bgcolor: 'transparent',
-                border: `1px solid ${t.primary}`,
-                borderRadius: '6px',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                '&:hover': {
-                  bgcolor: t.primaryTint,
-                },
-              }}
-            >
-              💡 Suggestion IA
-            </Box>
-          </Box>
-        )}
+        {/* ✅ RÈGLE 3: Input bar uniforme - [✨ AI] [📎 Upload] [Input] [→ Send] */}
         <Stack direction="row" spacing={1} sx={{
           alignItems: 'center',
           p: '8px 10px', bgcolor: t.bg2, border: `1px solid ${t.border}`, borderRadius: '9px',
         }}>
-          <IconButton sx={inputIconSx}>📎</IconButton>
-          <IconButton sx={inputIconSx}>😊</IconButton>
+          {/* ✨ AI Suggestion - À GAUCHE */}
+          {onAISuggestion && (
+            <IconButton
+              onClick={onAISuggestion}
+              sx={{
+                ...inputIconSx,
+                color: t.primary,
+                '&:hover': { bgcolor: t.primaryTint, color: t.primary },
+              }}
+              title="Suggestion IA"
+            >
+              ✨
+            </IconButton>
+          )}
+          {/* 📎 Upload - Après AI (placeholder) */}
+          <IconButton sx={inputIconSx} title="Joindre un fichier">📎</IconButton>
+          {/* Input texte */}
           <Box
             component="input"
             ref={inputRef}
@@ -1694,7 +1756,7 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
               }
             }}
           />
-          <IconButton sx={inputIconSx}>🎤</IconButton>
+          {/* → Send - À DROITE */}
           <Box
             component="button"
             onClick={handleSend}
@@ -1729,8 +1791,9 @@ function DayLabel({ children }) {
   );
 }
 
-function Message({ from, text, when }) {
-  const you = from === 'you';
+function Message({ from, text, when, status, readAt }) {
+  const you = from === 'you' || from === 'host';
+
   return (
     <Box sx={{
       maxWidth: '70%', p: '8px 12px',
@@ -1744,8 +1807,38 @@ function Message({ from, text, when }) {
       border: '1px solid', borderColor: you ? 'rgba(230,176,34,0.25)' : t.border,
     }}>
       {text}
-      <Box sx={{ fontSize: 9.5, color: t.text4, mt: 0.5, fontFamily: 'Geist Mono',
-        letterSpacing: 0.3, textAlign: you ? 'right' : 'left' }}>{when}</Box>
+      {/* ✅ Status indicators + timestamp */}
+      <Box sx={{
+        fontSize: 9.5,
+        color: t.text4,
+        mt: 0.5,
+        fontFamily: 'Geist Mono',
+        letterSpacing: 0.3,
+        textAlign: you ? 'right' : 'left',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: you ? 'flex-end' : 'flex-start',
+        gap: 0.5,
+      }}>
+        <span>{when}</span>
+        {/* Status icons - SEULEMENT pour messages sortants (you/host) */}
+        {you && (
+          <>
+            {/* Legacy: readAt (timestamp) */}
+            {readAt ? (
+              <span style={{ fontSize: '14px', color: '#7DD3FC' }}>✓✓</span>
+            ) : status === 'read' ? (
+              <span style={{ fontSize: '14px', color: '#7DD3FC' }}>✓✓</span>
+            ) : status === 'delivered' ? (
+              <span style={{ fontSize: '14px', color: t.text3 }}>✓✓</span>
+            ) : status === 'sent' ? (
+              <span style={{ fontSize: '14px', color: t.text3 }}>✓</span>
+            ) : (
+              <span style={{ fontSize: '14px', color: '#9CA3AF' }}>✓</span>
+            )}
+          </>
+        )}
+      </Box>
     </Box>
   );
 }

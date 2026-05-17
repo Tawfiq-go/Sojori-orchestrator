@@ -4,6 +4,8 @@
 import React from 'react';
 import { Box, Stack, Typography, TextField, Button, IconButton, Avatar } from '@mui/material';
 import { T, sxInput, Field, Card, ToggleRow, Counter, ChipsRow, NumberInput, SelectField, GlobalBanner } from './_shared';
+import { RoomsTab } from './RoomsTabComposition';
+export { RoomsTab };
 
 /* ════════════════════ Channel Management ════════════════════ */
 const OTA_PROVIDERS = [
@@ -294,65 +296,7 @@ export function DirectBookingTab({ values = {}, onChange }) {
   );
 }
 
-/* ════════════════════ Rooms & Beds ════════════════════ */
-const BED_TYPES = [
-  { id: 'king', label: '🛏 King size' },
-  { id: 'queen', label: '🛏 Queen' },
-  { id: 'double', label: '🛏 Double' },
-  { id: 'single', label: '🛏 Simple' },
-  { id: 'sofa', label: '🛋 Canapé-lit' },
-  { id: 'crib', label: '👶 Lit bébé' },
-];
-
-export function RoomsTab({ values = {}, onChange }) {
-  const upd = (k, v) => onChange?.({ ...values, [k]: v });
-  const rooms = values.roomTypes || [
-    { id: 'r1', name: 'Chambre principale', beds: [{ type: 'king', count: 1 }], hasEnsuite: true, code: 'M1' },
-    { id: 'r2', name: 'Chambre 2', beds: [{ type: 'queen', count: 1 }], code: 'C2' },
-    { id: 'r3', name: 'Chambre 3', beds: [{ type: 'single', count: 2 }], code: 'C3' },
-    { id: 'r4', name: 'Chambre 4', beds: [{ type: 'queen', count: 1 }], code: 'C4' },
-  ];
-  const updRoom = (idx, patch) => upd('roomTypes', rooms.map((r, i) => i === idx ? { ...r, ...patch } : r));
-  const addRoom = () => upd('roomTypes', [...rooms, { id: `r${Date.now()}`, name: `Chambre ${rooms.length + 1}`, beds: [{ type: 'queen', count: 1 }], code: `C${rooms.length + 1}` }]);
-  const remRoom = (idx) => upd('roomTypes', rooms.filter((_, i) => i !== idx));
-
-  return (
-    <Box>
-      <Card title="🛏 Types de chambres" meta={`${rooms.length} chambres · structure roomTypes[]`}>
-        {rooms.map((r, idx) => (
-          <Box key={r.id} sx={{ border: `1px solid ${T.border}`, borderRadius: 1, p: 1.5, mb: 1, bgcolor: T.bg1 }}>
-            <Stack direction="row" alignItems="center" gap={1.5} sx={{ mb: 1 }}>
-              <Field label="Nom" fullWidth>
-                <TextField size="small" fullWidth value={r.name} onChange={e => updRoom(idx, { name: e.target.value })} sx={sxInput} />
-              </Field>
-              <Field label="Code">
-                <TextField size="small" value={r.code} onChange={e => updRoom(idx, { code: e.target.value })} sx={{ ...sxInput, width: 80 }} />
-              </Field>
-              <IconButton size="small" onClick={() => remRoom(idx)} sx={{ color: T.error, mt: 2 }}>🗑</IconButton>
-            </Stack>
-            <Field label="Lits">
-              <Stack direction="row" gap={1} flexWrap="wrap" useFlexGap>
-                {r.beds.map((bed, bidx) => (
-                  <Stack key={bidx} direction="row" gap={0.5} sx={{ border: `1px solid ${T.border}`, borderRadius: 1, p: 0.5, bgcolor: T.bg2 }}>
-                    <SelectField sx={{ minWidth: 130 }} value={bed.type} onChange={v => updRoom(idx, { beds: r.beds.map((b, i) => i === bidx ? { ...b, type: v } : b) })}
-                      options={BED_TYPES.map(b => ({ value: b.id, label: b.label }))} />
-                    <Counter value={bed.count} onChange={v => updRoom(idx, { beds: r.beds.map((b, i) => i === bidx ? { ...b, count: v } : b) })} min={1} max={5} />
-                  </Stack>
-                ))}
-                <Button size="small" onClick={() => updRoom(idx, { beds: [...r.beds, { type: 'queen', count: 1 }] })}
-                  sx={{ textTransform: 'none', borderStyle: 'dashed', border: `1px dashed ${T.borderStrong}`, color: T.text3 }}>+ Lit</Button>
-              </Stack>
-            </Field>
-            <ToggleRow title="Salle de bain attenante" desc="Suite parentale / en suite" checked={!!r.hasEnsuite} onChange={v => updRoom(idx, { hasEnsuite: v })} />
-          </Box>
-        ))}
-        <Button onClick={addRoom} fullWidth sx={{ borderStyle: 'dashed', border: `1px dashed ${T.borderStrong}`, color: T.text3, py: 1.5 }}>
-          + Ajouter une chambre
-        </Button>
-      </Card>
-    </Box>
-  );
-}
+/* RoomsTab — voir RoomsTabComposition.jsx (legacy Room Composition) */
 
 /* ════════════════════ License ════════════════════ */
 export function LicenseTab({ values = {}, onChange }) {

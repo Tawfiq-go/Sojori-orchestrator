@@ -344,3 +344,5 @@ export function getTaskPriorityLevel(
   if (emergency === 'Urgent') return 'med';
   return 'low';
 }
+
+export type { ReservationTask, ReservationTasksResult } from './reservationTask.types';

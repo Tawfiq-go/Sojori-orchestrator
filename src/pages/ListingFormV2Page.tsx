@@ -4,6 +4,10 @@ import { DashboardWrapper } from '../components/DashboardWrapper';
 import ListingFormV2 from '../components/listing/form-v2/ListingFormV2';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import listingsService from '../services/listingsService';
+import {
+  mapApiToFormV2Values,
+  mergeFormV2ToUpdatePropertyPayload,
+} from '../utils/listingFormV2ApiAdapter';
 import { toast } from 'react-toastify';
 
 export function ListingFormV2Page() {
@@ -12,15 +16,21 @@ export function ListingFormV2Page() {
   const queryClient = useQueryClient();
 
   // Fetch listing data
-  const { data: listing, isLoading, error } = useQuery({
+  const { data: listingDoc, isLoading, error } = useQuery({
     queryKey: ['listing', id],
     queryFn: () => listingsService.getListingDocument(id!),
     enabled: !!id,
   });
 
+  const formValues = listingDoc ? mapApiToFormV2Values(listingDoc) : null;
+
   // Update listing mutation
   const { mutate: saveListing, isPending: isSaving } = useMutation({
-    mutationFn: (values: any) => listingsService.updateListing(id!, values),
+    mutationFn: (values: Record<string, unknown>) =>
+      listingsService.updateListingProperty(
+        id!,
+        mergeFormV2ToUpdatePropertyPayload(values),
+      ),
     onSuccess: () => {
       toast.success('Listing enregistré avec succès');
       queryClient.invalidateQueries({ queryKey: ['listing', id] });
@@ -73,7 +83,7 @@ export function ListingFormV2Page() {
     );
   }
 
-  if (!listing) {
+  if (!formValues) {
     return (
       <DashboardWrapper>
         <Box sx={{ p: 4 }}>
@@ -89,7 +99,7 @@ export function ListingFormV2Page() {
     <DashboardWrapper>
       <ListingFormV2
         listingId={id!}
-        initialValues={listing}
+        initialValues={formValues}
         onSave={saveListing}
         isSaving={isSaving}
         onVerifyRuChannels={verifyRuChannels}

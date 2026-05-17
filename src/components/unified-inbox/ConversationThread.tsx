@@ -1,78 +1,64 @@
 import { useRef, useLayoutEffect } from 'react';
-import { Box, Stack, Typography, Avatar, TextField, IconButton, Chip } from '@mui/material';
-import { Send, AttachFile, AutoAwesome } from '@mui/icons-material';
-import { tokens as t } from '../dashboard/DashboardV2.components';
-import type { Thread, Message, QuickTemplate } from '../../types/unifiedInbox.types';
+import { Box, Stack, Typography } from '@mui/material';
+import { DoneAll } from '@mui/icons-material';
+import { T } from './_tokens';
+import { flagFromPhone } from './inboxFormat';
+import type { Thread, Message, QuickTemplate, QuickAction } from '../../types/unifiedInbox.types';
 
 interface ConversationThreadProps {
   thread: Thread;
   messages: Message[];
   quickTemplates: QuickTemplate[];
+  /** Réponses rapides OTA (pilules, entre messages et templates) */
+  quickReplies?: QuickTemplate[];
+  quickActions?: QuickAction[];
   onSendMessage: (text: string) => void;
   onSelectTemplate: (template: QuickTemplate) => void;
   onAISuggestion?: () => void;
+  otaPlatform?: string;
+  whatsappBusinessLine?: string;
 }
 
-/**
- * ConversationThread - Thread de conversation avec messages (col 3)
- * Design: Unified Inbox - Claude Design
- * Avec fix scroll: scrollTop direct, pas scrollIntoView
- */
 export default function ConversationThread({
   thread,
   messages,
   quickTemplates,
+  quickActions = [],
   onSendMessage,
   onSelectTemplate,
   onAISuggestion,
+  otaPlatform = 'Airbnb',
+  quickReplies = [],
+  whatsappBusinessLine = import.meta.env.VITE_WHATSAPP_BUSINESS_DISPLAY || '+33 7 56 84 21 09',
 }: ConversationThreadProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const previousMessageCountRef = useRef<number>(0);
-  const isFirstLoadRef = useRef<boolean>(true);
+  const previousMessageCountRef = useRef(0);
+  const isFirstLoadRef = useRef(true);
 
-  // ✅ FIX SCROLL: Scroll en bas au PREMIER chargement, puis seulement si déjà en bas
+  const isOta = thread.channel === 'ab' || thread.channel === 'bk';
+  const flag = thread.guestFlag || flagFromPhone(thread.phone);
+  const platformLabel = otaPlatform || 'Airbnb';
+
   useLayoutEffect(() => {
     const el = messagesContainerRef.current;
-    if (!el) {
-      console.log('📜 [ConversationThread] Scroll: pas de ref');
-      return;
-    }
+    if (!el) return;
 
-    console.log('📜 [ConversationThread] Scroll check:', {
-      messagesCount: messages.length,
-      previousCount: previousMessageCountRef.current,
-      isFirstLoad: isFirstLoadRef.current,
-      scrollHeight: el.scrollHeight,
-      scrollTop: el.scrollTop,
-      clientHeight: el.clientHeight,
-    });
-
-    // Premier chargement d'une conversation → scroll en bas IMMÉDIATEMENT
     if (isFirstLoadRef.current && messages.length > 0) {
-      console.log('📜 [ConversationThread] ✅ PREMIER CHARGEMENT → Scroll en bas');
       el.scrollTop = el.scrollHeight;
       isFirstLoadRef.current = false;
       previousMessageCountRef.current = messages.length;
       return;
     }
 
-    // Nouveau message ajouté → scroll seulement si on était déjà en bas
     if (messages.length > previousMessageCountRef.current) {
       const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-      console.log('📜 [ConversationThread] Nouveau message:', { wasAtBottom });
-      if (wasAtBottom) {
-        console.log('📜 [ConversationThread] ✅ Scroll en bas (était déjà en bas)');
-        el.scrollTop = el.scrollHeight;
-      }
+      if (wasAtBottom) el.scrollTop = el.scrollHeight;
     }
-
     previousMessageCountRef.current = messages.length;
   }, [messages.length]);
 
-  // Reset isFirstLoad quand on change de conversation (thread.id change)
   useLayoutEffect(() => {
-    console.log('📜 [ConversationThread] Nouvelle conversation:', thread.id);
     isFirstLoadRef.current = true;
     previousMessageCountRef.current = 0;
   }, [thread.id]);
@@ -90,263 +76,668 @@ export default function ConversationThread({
     }
   };
 
+  const bubbleStyles = (from: Message['from']) => {
+    const isGuest = from === 'guest';
+    const isOut = from === 'you' || from === 'sojori';
+
+    if (isOta) {
+      if (isGuest) {
+        return {
+          bg: T.bg1,
+          border: `1px solid ${T.border}`,
+          radius: '18px 18px 18px 6px',
+          color: T.text,
+        };
+      }
+      return {
+        bg: 'linear-gradient(135deg,rgba(255,90,95,0.12),rgba(255,90,95,0.06))',
+        border: '1px solid rgba(255,90,95,0.30)',
+        radius: '18px 18px 6px 18px',
+        color: '#7a1a1d',
+      };
+    }
+
+    if (isGuest) {
+      return {
+        bg: T.bg1,
+        border: `1px solid ${T.border}`,
+        radius: '14px 14px 14px 4px',
+        color: T.text,
+      };
+    }
+    if (isOut) {
+      return {
+        bg: 'linear-gradient(135deg,#dcf8c6,#c5e8b3)',
+        border: '1px solid rgba(37,211,102,0.30)',
+        radius: '14px 14px 4px 14px',
+        color: '#0a3a17',
+      };
+    }
+    return { bg: T.bg2, border: `1px solid ${T.border}`, radius: '14px', color: T.text };
+  };
+
+  const initials = thread.name
+    .split(' ')
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2);
+
+  const avatarBg =
+    thread.channel === 'ab'
+      ? 'linear-gradient(135deg,#ff8a8e,#FF5A5F)'
+      : thread.channel === 'bk'
+        ? 'linear-gradient(135deg,#4a7eb8,#003580)'
+        : thread.avatarColor || T.green;
+
+  const checkInSub =
+    thread.checkInBadge && thread.checkInDate
+      ? `Check-in ${thread.checkInBadge} · ${formatStayDateShort(thread.checkInDate)}`
+      : thread.checkInBadge
+        ? `Check-in ${thread.checkInBadge}`
+        : undefined;
+
   return (
     <Box
       sx={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        minHeight: 0,  // ← Fix scroll
+        minHeight: 0,
+        minWidth: 0,
         overflow: 'hidden',
+        bgcolor: T.bg1,
       }}
     >
-      {/* Header */}
-      <Box
-        sx={{
-          p: '14px 22px',
-          borderBottom: `1px solid ${t.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0,  // Ne jamais rétrécir
-        }}
-      >
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-          <Avatar
-            sx={{
-              width: 36,
-              height: 36,
-              fontSize: 13,
-              fontWeight: 700,
-              background: thread.avatarColor,
-            }}
-          >
-            {thread.name.split(' ').map((p) => p[0]).join('')}
-          </Avatar>
-          <Box>
-            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
-              {thread.name}
-            </Typography>
-            <Typography sx={{ fontSize: 11, color: t.text3 }}>
-              {thread.channel === 'wa' && 'WhatsApp'}
-              {thread.channel === 'ab' && 'Airbnb'}
-              {thread.channel === 'bk' && 'Booking'}
-              {thread.channel === 'em' && 'Email'}
-              {thread.listingName && ` · ${thread.listingName}`}
-              {thread.checkInDate && ` · check-in ${thread.checkInDate}`}
-            </Typography>
-          </Box>
-        </Stack>
-        {/* Actions header - Profil guest uniquement */}
+      {isOta ? (
         <Box
-          component="button"
           sx={{
-            background: 'rgba(255,255,255,0.04)',
-            border: `1px solid ${t.border}`,
-            color: t.text,
-            padding: '6px 10px',
-            borderRadius: '6px',
-            fontSize: 11,
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-            '&:hover': {
-              background: t.bg2,
-            },
+            px: '18px',
+            py: '7px',
+            fontSize: 10,
+            fontFamily: '"Geist Mono", monospace',
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            borderBottom: `1px solid ${T.border}`,
+            bgcolor: T.airbnbBg,
+            color: '#c0353a',
+            flexShrink: 0,
           }}
         >
-          Profil guest
+          🏠 {platformLabel} · Hosting reply window 24h
         </Box>
+      ) : (
+        <Box
+          sx={{
+            px: '18px',
+            py: '7px',
+            fontSize: 10,
+            fontFamily: '"Geist Mono", monospace',
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            borderBottom: `1px solid ${T.border}`,
+            bgcolor: T.greenBg,
+            color: '#0e8c4d',
+            flexShrink: 0,
+          }}
+        >
+          💬 WhatsApp Business · {whatsappBusinessLine}
+        </Box>
+      )}
+
+      <Box
+        sx={{
+          px: '18px',
+          py: '11px',
+          borderBottom: `1px solid ${T.border}`,
+          bgcolor: T.bg2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          flexShrink: 0,
+        }}
+      >
+        <Box sx={{ position: 'relative', flexShrink: 0 }}>
+          <Box
+            sx={{
+              width: 42,
+              height: 42,
+              borderRadius: '50%',
+              background: avatarBg,
+              fontSize: 14,
+              fontWeight: 700,
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {initials}
+          </Box>
+          {!isOta && (
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 1,
+                right: 1,
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                bgcolor: T.success,
+                border: `2px solid ${T.bg2}`,
+              }}
+            />
+          )}
+        </Box>
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" alignItems="center" gap={0.875} sx={{ mb: '2px' }}>
+            <Typography sx={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-0.015em' }}>
+              {thread.name}
+            </Typography>
+            {flag && <Typography sx={{ fontSize: 14, lineHeight: 1 }}>{flag}</Typography>}
+            {thread.isVip && (
+              <Box
+                sx={{
+                  background: `linear-gradient(135deg, ${T.primarySoft}, ${T.primaryDeep})`,
+                  color: '#1a1408',
+                  fontFamily: '"Geist Mono", monospace',
+                  fontSize: 9,
+                  fontWeight: 800,
+                  px: '6px',
+                  py: '1px',
+                  borderRadius: '4px',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                ⭐ VIP
+              </Box>
+            )}
+          </Stack>
+
+          <Box
+            sx={{
+              fontSize: 10.5,
+              color: T.text3,
+              fontFamily: '"Geist Mono", monospace',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              alignItems: 'center',
+            }}
+          >
+            {isOta ? (
+              <>
+                {thread.reservationNumber && <span>{thread.reservationNumber}</span>}
+                {checkInSub && (
+                  <>
+                    <span style={{ color: T.text4 }}>·</span>
+                    <span>{checkInSub}</span>
+                  </>
+                )}
+                {thread.guestsLabel && (
+                  <>
+                    <span style={{ color: T.text4 }}>·</span>
+                    <span>{thread.guestsLabel}</span>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                {thread.phone && <span>📱 {thread.phone}</span>}
+                {thread.guestPresence && (
+                  <>
+                    <span style={{ color: T.text4 }}>·</span>
+                    <span style={{ color: T.success, fontWeight: 700 }}>🟢 {thread.guestPresence}</span>
+                  </>
+                )}
+                {thread.reservationNumber && (
+                  <>
+                    <span style={{ color: T.text4 }}>·</span>
+                    <span>{thread.reservationNumber}</span>
+                  </>
+                )}
+              </>
+            )}
+          </Box>
+        </Box>
+
+        <Stack direction="row" gap={0.5} sx={{ flexShrink: 0 }}>
+          {(isOta ? ['🔗', '🌐', '⋮'] : ['📞', '🎥', '🔍', '⋮']).map((icon) => (
+            <Box key={icon} component="button" sx={headerActionBtnSx} title={icon}>
+              {icon}
+            </Box>
+          ))}
+        </Stack>
       </Box>
 
-      {/* Messages - SEULS ils scrollent */}
       <Box
         ref={messagesContainerRef}
         sx={{
           flex: 1,
-          minHeight: 0,                    // ← Fix scroll OBLIGATOIRE
+          minHeight: 0,
           overflowY: 'auto',
-          overflowX: 'hidden',
-          overscrollBehavior: 'contain',   // ← Empêche cascade
-          p: '22px',
+          px: '24px',
+          py: '18px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 1.25,
+          gap: 0.75,
+          background: isOta
+            ? `linear-gradient(180deg, ${T.airbnbBg} 0%, ${T.bg0} 40%)`
+            : `linear-gradient(180deg, ${T.bg2} 0%, ${T.bg0} 100%)`,
         }}
       >
         {messages.map((message) => {
+          if (message.type === 'system-note') {
+            return (
+              <Box
+                key={message.id}
+                sx={{
+                  alignSelf: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  px: 1.5,
+                  py: '5px',
+                  bgcolor: T.aiTint,
+                  border: '1px solid rgba(124,58,237,0.25)',
+                  borderRadius: 999,
+                  fontSize: 10.5,
+                  color: '#5b21b6',
+                  fontFamily: '"Geist Mono", monospace',
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                  my: 0.75,
+                }}
+              >
+                {message.text}
+              </Box>
+            );
+          }
+
+          if (message.type === 'day-separator') {
+            return (
+              <Box
+                key={message.id}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.25,
+                  my: 1,
+                  '&::before, &::after': {
+                    content: '""',
+                    flex: 1,
+                    height: '1px',
+                    bgcolor: T.border,
+                  },
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontFamily: '"Geist Mono", monospace',
+                    fontSize: 9.5,
+                    color: T.text3,
+                    bgcolor: T.bg1,
+                    px: 1.125,
+                    py: '2px',
+                    borderRadius: 999,
+                    border: `1px solid ${T.border}`,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {message.text}
+                </Typography>
+              </Box>
+            );
+          }
+
+          const isOut = message.from === 'you' || message.from === 'sojori';
           const isGuest = message.from === 'guest';
-          const isSojori = message.from === 'sojori';
+          const styles = bubbleStyles(message.from);
 
           return (
             <Box
               key={message.id}
               sx={{
-                alignSelf: isGuest ? 'flex-start' : 'flex-end',
-                maxWidth: '70%',
+                alignSelf: isOut ? 'flex-end' : 'flex-start',
+                maxWidth: '75%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
               }}
             >
               <Box
                 sx={{
-                  background: isGuest
-                    ? 'rgba(255,255,255,0.06)'
-                    : isSojori
-                    ? `linear-gradient(135deg, ${t.primaryTint}, rgba(244,207,94,0.08))`
-                    : t.bg2,
-                  border: `1px solid ${isSojori ? t.primary : t.border}`,
-                  borderRadius: isGuest
-                    ? '12px 12px 12px 2px'
-                    : '12px 12px 2px 12px',
-                  padding: '10px 14px',
+                  background: styles.bg,
+                  border: styles.border,
+                  borderRadius: styles.radius,
+                  px: isOta ? '15px' : '13px',
+                  py: isOta ? '11px' : '9px',
                   fontSize: 13,
-                  color: t.text,
-                  lineHeight: 1.45,
+                  color: styles.color,
+                  lineHeight: 1.5,
+                  boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
                 }}
               >
                 {message.isAI && (
                   <Typography
                     sx={{
-                      fontSize: 9,
-                      color: t.primary,
+                      fontSize: 9.5,
+                      color: T.ai,
                       fontWeight: 700,
-                      letterSpacing: 0.5,
+                      fontFamily: '"Geist Mono", monospace',
                       mb: 0.5,
-                      fontFamily: 'Geist Mono',
                     }}
                   >
-                    ✨ SOJORI AI · auto-réponse
+                    ✨ SOJORI AI
                   </Typography>
                 )}
                 {message.text}
+              </Box>
+              <Stack
+                direction="row"
+                spacing={0.625}
+                sx={{
+                  alignSelf: isOut ? 'flex-end' : 'flex-start',
+                  fontSize: 10,
+                  color: T.text4,
+                  fontFamily: '"Geist Mono", monospace',
+                  px: 0.5,
+                }}
+              >
+                <span>{message.time}</span>
+                {isOut && message.status === 'read' && (
+                  <DoneAll sx={{ fontSize: 14, color: '#0084FF' }} />
+                )}
+                {isOut && message.status === 'delivered' && (
+                  <DoneAll sx={{ fontSize: 14, color: T.text4 }} />
+                )}
+              </Stack>
+              {isOta && isGuest && (
                 <Typography
                   sx={{
-                    fontSize: 9,
-                    color: t.text3,
-                    mt: 0.5,
-                    textAlign: 'right',
-                    fontFamily: 'Geist Mono',
+                    fontSize: 9.5,
+                    color: T.text4,
+                    fontFamily: '"Geist Mono", monospace',
+                    px: 0.5,
+                    letterSpacing: '0.02em',
+                    '& b': { color: '#c0353a', fontWeight: 700 },
                   }}
                 >
-                  {message.time}
+                  via <b>{platformLabel}</b> · auto-translate available
                 </Typography>
-              </Box>
+              )}
+              {isOta && isOut && (
+                <Typography
+                  sx={{
+                    fontSize: 9.5,
+                    color: T.text4,
+                    fontFamily: '"Geist Mono", monospace',
+                    px: 0.5,
+                    textAlign: 'right',
+                    '& b': { color: '#c0353a', fontWeight: 700 },
+                  }}
+                >
+                  sent via <b>{platformLabel}</b>
+                </Typography>
+              )}
             </Box>
           );
         })}
+
+        {isOta &&
+          quickReplies.length > 0 &&
+          messages.some((m) => m.from === 'guest' && m.type !== 'day-separator' && m.type !== 'system-note') && (
+            <Box
+              sx={{
+                alignSelf: 'flex-start',
+                display: 'flex',
+                gap: 0.75,
+                flexWrap: 'wrap',
+                mt: 0.5,
+                maxWidth: '80%',
+              }}
+            >
+              {quickReplies.map((qr) => (
+                <Box
+                  key={qr.id}
+                  component="button"
+                  onClick={() => qr.text && onSendMessage(qr.text)}
+                  sx={{
+                    px: 1.5,
+                    py: '6px',
+                    bgcolor: T.bg1,
+                    border: '1px solid rgba(255,90,95,0.30)',
+                    borderRadius: 999,
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    color: '#c0353a',
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: T.airbnbBg, borderColor: T.airbnb },
+                  }}
+                >
+                  {qr.label}
+                </Box>
+              ))}
+            </Box>
+          )}
       </Box>
 
-      {/* Input zone */}
-      <Box
-        sx={{
-          p: '12px 22px',
-          borderTop: `1px solid ${t.border}`,
-          flexShrink: 0,  // Ne jamais rétrécir
-        }}
-      >
-        {/* Quick templates */}
-        {quickTemplates.length > 0 && (
-          <Stack
-            direction="row"
-            spacing={0.75}
-            sx={{ mb: 1.25, flexWrap: 'wrap', rowGap: 0.75 }}
-          >
-            {quickTemplates.map((template) => (
-              <Chip
-                key={template.id}
-                label={template.label}
-                size="small"
-                onClick={() => onSelectTemplate(template)}
-                sx={{
-                  background: t.primaryTint,
-                  border: `1px solid ${t.primary}`,
-                  color: t.primary,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  '&:hover': {
-                    background: t.primary,
-                    color: t.text,
-                  },
-                }}
-              />
-            ))}
-          </Stack>
-        )}
-
-        {/* Input bar - ✅ RÈGLE 3: AI + Upload + Send */}
-        <Stack
-          direction="row"
-          spacing={1}
+      {quickTemplates.length > 0 && (
+        <Box
           sx={{
-            alignItems: 'center',
-            background: 'rgba(255,255,255,0.04)',
-            border: `1px solid ${t.border}`,
-            borderRadius: '10px',
-            p: '10px 14px',
+            px: '18px',
+            py: 1,
+            display: 'flex',
+            gap: 0.75,
+            flexWrap: 'wrap',
+            bgcolor: T.bg2,
+            borderTop: `1px solid ${T.border}`,
+            flexShrink: 0,
           }}
         >
-          {/* Icône AI Suggestion */}
-          <IconButton
-            size="small"
-            onClick={onAISuggestion}
-            sx={{
-              color: t.primary,
-              '&:hover': { bgcolor: t.primaryTint },
-            }}
-            title="Suggestion IA"
-          >
-            <AutoAwesome fontSize="small" />
-          </IconButton>
+          {quickTemplates.map((item) => (
+            <Box
+              key={item.id}
+              component="button"
+              onClick={() => item.text ? onSelectTemplate(item) : undefined}
+              sx={{
+                px: '11px',
+                py: '6px',
+                bgcolor: T.bg1,
+                border: `1px solid ${T.border}`,
+                borderRadius: '8px',
+                fontSize: 11.5,
+                fontWeight: 600,
+                color: T.text2,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.625,
+                transition: 'all 0.12s',
+                '&:hover': {
+                  bgcolor: T.primaryTint,
+                  borderColor: T.primary,
+                  color: T.primaryDeep,
+                  transform: 'translateY(-1px)',
+                },
+              }}
+            >
+              {item.icon} {item.label}
+            </Box>
+          ))}
+        </Box>
+      )}
 
-          {/* Icône Upload */}
-          <IconButton
-            size="small"
-            sx={{
-              color: t.text3,
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.06)' },
-            }}
-            title="Joindre un fichier"
-          >
-            <AttachFile fontSize="small" />
-          </IconButton>
-
-          {/* Input texte */}
-          <TextField
-            inputRef={inputRef}
-            placeholder="Tapez votre message…"
-            fullWidth
-            variant="standard"
+      <Box
+        sx={{
+          px: '18px',
+          py: '11px',
+          borderTop: `1px solid ${T.border}`,
+          bgcolor: T.bg1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          flexShrink: 0,
+        }}
+      >
+        <Box component="button" sx={iconBtnSx} title="Joindre">
+          📎
+        </Box>
+        <Box component="button" sx={iconBtnSx} title={isOta ? 'Traduction' : 'Emoji'}>
+          {isOta ? '🌐' : '😊'}
+        </Box>
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            px: '13px',
+            py: 1,
+            bgcolor: T.bg2,
+            border: `1px solid ${T.border}`,
+            borderRadius: '12px',
+            '&:focus-within': {
+              borderColor: isOta ? '#FF5A5F' : T.primary,
+              boxShadow: isOta
+                ? '0 0 0 3px rgba(255,90,95,0.15)'
+                : `0 0 0 3px ${T.primaryTint}`,
+              bgcolor: T.bg1,
+            },
+          }}
+        >
+          <Box
+            component="input"
+            ref={inputRef}
+            placeholder={isOta ? `Reply via ${platformLabel}…` : 'Écrire un message WhatsApp…'}
             onKeyDown={handleKeyDown}
-            InputProps={{
-              disableUnderline: true,
-              sx: {
-                fontSize: 13,
-                color: t.text,
-              },
-            }}
             sx={{
-              '& .MuiInputBase-root': {
-                background: 'transparent',
-              },
+              flex: 1,
+              border: 0,
+              outline: 0,
+              font: 'inherit',
+              fontSize: 13,
+              color: T.text,
+              bgcolor: 'transparent',
+              '&::placeholder': { color: T.text4 },
             }}
           />
-
-          {/* Bouton Send */}
-          <IconButton
-            onClick={handleSend}
-            sx={{
-              background: t.primary,
-              color: t.text,
-              width: 32,
-              height: 32,
-              '&:hover': {
-                background: t.primaryDeep,
-              },
-            }}
-          >
-            <Send fontSize="small" />
-          </IconButton>
-        </Stack>
+        </Box>
+        <Box
+          component="button"
+          onClick={onAISuggestion}
+          sx={{
+            ...iconBtnSx,
+            width: 34,
+            height: 34,
+            borderRadius: '9px',
+            background: `linear-gradient(135deg,#9669f7,${T.ai})`,
+            color: '#fff',
+            boxShadow: '0 2px 8px rgba(124,58,237,0.30)',
+          }}
+          title="Suggestion IA"
+        >
+          ✨
+        </Box>
+        <Box
+          component="button"
+          onClick={handleSend}
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: '10px',
+            border: 0,
+            cursor: 'pointer',
+            fontSize: 15,
+            fontWeight: 800,
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: isOta
+              ? 'linear-gradient(135deg,#ff8a8e,#FF5A5F)'
+              : 'linear-gradient(135deg,#34e07a,#25D366)',
+            boxShadow: isOta
+              ? '0 2px 10px rgba(255,90,95,0.40)'
+              : '0 2px 10px rgba(37,211,102,0.40)',
+          }}
+          title="Envoyer"
+        >
+          ➤
+        </Box>
       </Box>
+
+      {isOta ? (
+        <Box
+          sx={{
+            px: '18px',
+            py: '7px',
+            bgcolor: T.airbnbBg,
+            borderTop: `1px solid ${T.border}`,
+            fontSize: 10.5,
+            color: '#7a1a1d',
+            fontFamily: '"Geist Mono", monospace',
+            flexShrink: 0,
+            '& b': { fontWeight: 800 },
+          }}
+        >
+          🏠 <b>{platformLabel} sync</b> · message envoyé via API · impact response time ⚡
+        </Box>
+      ) : (
+        <Box
+          sx={{
+            px: '18px',
+            py: '6px',
+            bgcolor: T.aiTint,
+            borderTop: `1px solid ${T.border}`,
+            fontSize: 10.5,
+            color: '#5b21b6',
+            fontFamily: '"Geist Mono", monospace',
+            flexShrink: 0,
+          }}
+        >
+          ⚠ Fenêtre 24h ouverte — réponses libres autorisées
+        </Box>
+      )}
     </Box>
   );
 }
+
+function formatStayDateShort(dateStr?: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+const iconBtnSx = {
+  width: 32,
+  height: 32,
+  borderRadius: '8px',
+  border: 0,
+  cursor: 'pointer',
+  fontSize: 15,
+  color: T.text3,
+  bgcolor: 'transparent',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  '&:hover': { bgcolor: T.bg3, color: T.text },
+} as const;
+
+const headerActionBtnSx = {
+  width: 32,
+  height: 32,
+  borderRadius: '8px',
+  border: 0,
+  cursor: 'pointer',
+  fontSize: 14,
+  color: T.text3,
+  bgcolor: 'transparent',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  '&:hover': { bgcolor: T.bg3, color: T.text },
+} as const;

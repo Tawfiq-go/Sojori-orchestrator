@@ -48,6 +48,10 @@ export const MICROSERVICE_BASE_URL = {
   SRV_ADMIN: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4006/api/v1/admin`
     : `${API_BASE_URL}/api/v1/admin`,
+  /** Villes (admin) — wizard import RU */
+  CITY: useLocalMicroservicePorts
+    ? `${API_BASE_URL}:4006/api/v1/admin/city`
+    : `${API_BASE_URL}/api/v1/admin/city`,
   SRV_RESERVATION: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4002/api/v1/reservations`
     : `${API_BASE_URL}/api/v1/reservations`,

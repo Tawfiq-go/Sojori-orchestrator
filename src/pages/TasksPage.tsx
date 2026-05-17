@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Box, Stack, Button, Chip, IconButton, Menu, MenuItem, Select, FormControl } from '@mui/material';
-import { MoreVert as MoreVertIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon } from '@mui/icons-material';
+import { Box, Stack, Button, Chip, IconButton, Menu, MenuItem, Select, FormControl, Typography } from '@mui/material';
+import { MoreVert as MoreVertIcon, ArrowUpward as ArrowUpIcon, ArrowDownward as ArrowDownIcon, ViewColumn as ViewColumnIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
@@ -162,6 +162,11 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
   // Sorting state
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // Column visibility toggle
+  const [showCreatedAt, setShowCreatedAt] = useState(false);
+  const [showTimeslot, setShowTimeslot] = useState(false);
+  const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, task: Task) => {
     setAnchorEl(event.currentTarget);
@@ -447,22 +452,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         );
       }
     },
-    // Column 3: Créé le
-    {
-      key: 'createdAt',
-      label: 'Créé le',
-      render: (r: Task) => (
-        <Box>
-          <Box sx={{ fontSize: 11, color: t.text2 }}>
-            {new Date(r.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}
-          </Box>
-          <Box sx={{ fontSize: 10, color: t.text3, fontFamily: 'Geist Mono' }}>
-            {new Date(r.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-          </Box>
-        </Box>
-      )
-    },
-    // Column 4: Date Prévue
+    // Column 3: Date Prévue
     {
       key: 'scheduled',
       label: 'Date Prévue',
@@ -480,51 +470,27 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         );
       }
     },
-    // Column 5: Timeslot Client
-    {
-      key: 'clientTimeslot',
-      label: 'Timeslot Client',
-      render: (r: Task) => (
-        r.clientTimeslot ? (
-          <Box sx={{ fontSize: 11, color: t.ai, fontWeight: 600, fontFamily: 'Geist Mono' }}>
-            {r.clientTimeslot}
-          </Box>
-        ) : (
-          <Box sx={{ fontSize: 10, color: t.text4 }}>—</Box>
-        )
-      )
-    },
-    // Column 6: Heure Tâche
+    // Column 4: Heure (clientTimeslot ou startHour)
     {
       key: 'taskHour',
-      label: 'Heure Tâche',
-      render: (r: Task) => (
-        <Box sx={{ fontSize: 11, color: t.text2, fontFamily: 'Geist Mono' }}>
-          {r.startHour || '—'}
-        </Box>
-      )
-    },
-    // Column 7: Détails (descriptions courtes)
-    {
-      key: 'details',
-      label: 'Détails',
-      render: (r: Task) => (
-        r.descriptions && r.descriptions.length > 0 && r.descriptions[0].description ? (
-          <Box sx={{ fontSize: 10.5, color: t.text3, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {r.descriptions[0].description}
+      label: 'Heure',
+      render: (r: Task) => {
+        const timeDisplay = r.clientTimeslot || r.startHour;
+        const isClientSlot = !!r.clientTimeslot;
+        return (
+          <Box sx={{ fontSize: 11, color: isClientSlot ? t.ai : t.text2, fontWeight: isClientSlot ? 600 : 400, fontFamily: 'Geist Mono' }}>
+            {timeDisplay || '—'}
           </Box>
-        ) : (
-          <Box sx={{ fontSize: 10, color: t.text4 }}>—</Box>
-        )
-      )
+        );
+      }
     },
-    // Column 8: Source (OTA)
+    // Column 5: Source (OTA)
     {
       key: 'source',
       label: 'Source',
       render: (r: Task) => <OTABadge channel={r.channelName} />
     },
-    // Column 9: Voyageur
+    // Column 6: Voyageur
     {
       key: 'guest',
       label: 'Voyageur',
@@ -532,7 +498,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         r.guestName ? (
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <span style={{ fontSize: 16 }}>{flagFor(r.guestCountry)}</span>
-            <Typography sx={{ fontSize: 10.5, fontWeight: 500, color: t.text2 }}>
+            <Typography sx={{ fontSize: 10.5, fontWeight: 500, color: t.text2, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {r.guestName}
             </Typography>
           </Stack>
@@ -541,39 +507,37 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         )
       )
     },
-    // Column 10: Listing
+    // Column 7: Listing
     {
       key: 'listing',
       label: 'Listing',
       render: (r: Task) => <ListingCell name={r.listingName} color={getListingColor(r.listingName)} />
     },
-    // Column 11: Réservation
+    // Column 8: Réservation (numéro seulement, pas de nom - évite doublon avec Voyageur)
     {
       key: 'reservation',
       label: 'Réservation',
       render: (r: Task) => (
         r.reservationNumber ? (
-          <Box>
-            <Box sx={{ fontSize: 11, color: t.primary, fontWeight: 600, fontFamily: 'Geist Mono' }}>
-              {r.reservationNumber}
-            </Box>
-            {r.guestName && (
-              <Box sx={{ fontSize: 9.5, color: t.text3, mt: 0.25 }}>{r.guestName}</Box>
-            )}
+          <Box sx={{ fontSize: 11, color: t.primary, fontWeight: 600, fontFamily: 'Geist Mono' }}>
+            {r.reservationNumber}
           </Box>
         ) : (
           <Box sx={{ fontSize: 10, color: t.text4 }}>—</Box>
         )
       )
     },
-    // Column 12: Description (notes/services)
+    // Column 9: Description (fusion notes + descriptions + services)
     {
       key: 'description',
       label: 'Description',
       render: (r: Task) => {
-        const desc = r.notes || (r.services && r.services.length > 0 ? r.services.join(', ') : null);
+        // Priorité: notes > descriptions[0] > services
+        const desc = r.notes ||
+                     (r.descriptions && r.descriptions.length > 0 && r.descriptions[0].description) ||
+                     (r.services && r.services.length > 0 ? r.services.join(', ') : null);
         return desc ? (
-          <Box sx={{ fontSize: 10.5, color: t.text3, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <Box sx={{ fontSize: 10.5, color: t.text3, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {desc}
           </Box>
         ) : (
@@ -581,7 +545,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         );
       }
     },
-    // Column 13: Statut
+    // Column 10: Statut
     {
       key: 'status',
       label: 'Statut',
@@ -590,7 +554,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         return <Badge variant={statusBadge.v as any} dot>{statusBadge.label}</Badge>;
       }
     },
-    // Column 14: Staff
+    // Column 11: Staff
     {
       key: 'staff',
       label: 'Staff',
@@ -612,33 +576,37 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         );
       }
     },
-    // Column 15: Paiement
+    // Column 12: Paiement/Prix (fusion)
     {
       key: 'payment',
       label: 'Paiement',
-      render: (r: Task) => (
-        <Box sx={{ fontSize: 10.5, color: t.text3 }}>
-          {r.requestPayment ? (r.paid ? '✓ Payé' : 'En attente') : 'NOT REQUIRED'}
-        </Box>
-      )
+      render: (r: Task) => {
+        if (!r.requestPayment) {
+          return <Box sx={{ fontSize: 10, color: t.text4 }}>—</Box>;
+        }
+        const priceDisplay = r.price > 0 ? `${r.price} ${r.currency}` : '';
+        const statusDisplay = r.paid ? '✓ Payé' : 'En attente';
+        return (
+          <Box>
+            {priceDisplay && (
+              <Box sx={{ fontSize: 11, fontWeight: 600, color: t.text, fontFamily: 'Geist Mono' }}>
+                {priceDisplay}
+              </Box>
+            )}
+            <Box sx={{ fontSize: 9.5, color: r.paid ? t.success : t.warning, mt: 0.25 }}>
+              {statusDisplay}
+            </Box>
+          </Box>
+        );
+      }
     },
-    // Column 16: Prix
-    {
-      key: 'price',
-      label: 'Prix',
-      render: (r: Task) => (
-        <Box sx={{ fontSize: 11, fontWeight: 600, color: t.text, fontFamily: 'Geist Mono' }}>
-          {r.price > 0 ? `${r.price} ${r.currency}` : '—'}
-        </Box>
-      )
-    },
-    // Column 17: Urgence
+    // Column 13: Urgence
     {
       key: 'urgency',
       label: 'Urgence',
       render: (r: Task) => <Priority level={getPriorityLevel(r.priority)} />
     },
-    // Column 18: Actions
+    // Column 14: Actions
     {
       key: 'actions',
       label: '',
@@ -648,6 +616,46 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         </IconButton>
       ),
     },
+  ];
+
+  // Optional columns (togglable)
+  const optionalColumns = [
+    // Créé le (optional)
+    ...(showCreatedAt ? [{
+      key: 'createdAt' as const,
+      label: 'Créé le',
+      render: (r: Task) => (
+        <Box>
+          <Box sx={{ fontSize: 11, color: t.text2 }}>
+            {new Date(r.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}
+          </Box>
+          <Box sx={{ fontSize: 10, color: t.text3, fontFamily: 'Geist Mono' }}>
+            {new Date(r.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          </Box>
+        </Box>
+      )
+    }] : []),
+    // Timeslot Client (optional - only show if different from startHour)
+    ...(showTimeslot ? [{
+      key: 'clientTimeslot' as const,
+      label: 'Timeslot Client',
+      render: (r: Task) => (
+        r.clientTimeslot ? (
+          <Box sx={{ fontSize: 11, color: t.ai, fontWeight: 600, fontFamily: 'Geist Mono' }}>
+            {r.clientTimeslot}
+          </Box>
+        ) : (
+          <Box sx={{ fontSize: 10, color: t.text4 }}>—</Box>
+        )
+      )
+    }] : []),
+  ];
+
+  // Insert optional columns after column 2 (Catégorie)
+  const finalColumns = [
+    ...cols.slice(0, 2),
+    ...optionalColumns,
+    ...cols.slice(2),
   ];
 
   return (
@@ -666,6 +674,27 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
         <FilterChip label="📅 Aujourd'hui · 12" />
         <FilterChip label="📆 Cette semaine · 42" />
         <FilterChip label="👤 Non assignées · 3" />
+        <Box sx={{ width: 1, height: 18, bgcolor: t.border, mx: 0.5 }} />
+
+        {/* Column visibility toggle */}
+        <Box
+          onClick={(e) => setColumnMenuAnchor(e.currentTarget)}
+          sx={{
+            px: 1.5, py: 0.625, borderRadius: 999, border: `1px solid ${t.border}`,
+            bgcolor: (showCreatedAt || showTimeslot) ? 'rgba(184,133,26,0.12)' : t.bg1,
+            color: (showCreatedAt || showTimeslot) ? t.primary : t.text3,
+            fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 0.75,
+            cursor: 'pointer', transition: 'all 0.15s',
+            '&:hover': { bgcolor: 'rgba(184,133,26,0.12)', color: t.primary, borderColor: t.primary },
+          }}
+        >
+          <ViewColumnIcon sx={{ fontSize: 14 }} />
+          Colonnes
+          {(showCreatedAt || showTimeslot) && (
+            <Chip label={(showCreatedAt ? 1 : 0) + (showTimeslot ? 1 : 0)} size="small" sx={{ height: 16, fontSize: 10, bgcolor: t.primary, color: '#fff' }} />
+          )}
+        </Box>
+
         <Box sx={{ width: 1, height: 18, bgcolor: t.border, mx: 0.5 }} />
         <Box sx={{
           px: 1.5, py: 0.625, borderRadius: 999, border: `1px solid ${t.border}`,
@@ -706,7 +735,7 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
       </FilterBar>
 
       <DataTable
-        columns={cols}
+        columns={finalColumns}
         rows={paginatedTasks}
         selectable
         selectedIds={selected}
@@ -809,6 +838,72 @@ function TasksListView({ tasks, onEditTask, onDeleteTask, onAssignTask, onViewDe
           </Box>
         </>}
       />
+
+      {/* Column Visibility Menu */}
+      <Menu
+        anchorEl={columnMenuAnchor}
+        open={Boolean(columnMenuAnchor)}
+        onClose={() => setColumnMenuAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        PaperProps={{
+          sx: {
+            mt: 0.5,
+            border: `1px solid ${t.border}`,
+            boxShadow: '0 4px 12px rgba(20,17,10,0.08)',
+            minWidth: 200,
+          }
+        }}
+      >
+        <Box sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${t.border}` }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text2 }}>
+            Colonnes optionnelles
+          </Typography>
+        </Box>
+        <MenuItem
+          onClick={() => setShowCreatedAt(!showCreatedAt)}
+          sx={{ fontSize: 13, py: 1.25 }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+            <Box sx={{
+              width: 18, height: 18, borderRadius: '4px',
+              border: `2px solid ${showCreatedAt ? t.primary : t.border}`,
+              bgcolor: showCreatedAt ? t.primary : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 10, fontWeight: 700,
+            }}>
+              {showCreatedAt && '✓'}
+            </Box>
+            <Typography sx={{ fontSize: 13, color: t.text2 }}>
+              Créé le
+            </Typography>
+          </Box>
+        </MenuItem>
+        <MenuItem
+          onClick={() => setShowTimeslot(!showTimeslot)}
+          sx={{ fontSize: 13, py: 1.25 }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+            <Box sx={{
+              width: 18, height: 18, borderRadius: '4px',
+              border: `2px solid ${showTimeslot ? t.primary : t.border}`,
+              bgcolor: showTimeslot ? t.primary : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 10, fontWeight: 700,
+            }}>
+              {showTimeslot && '✓'}
+            </Box>
+            <Typography sx={{ fontSize: 13, color: t.text2 }}>
+              Timeslot Client
+            </Typography>
+          </Box>
+        </MenuItem>
+        <Box sx={{ px: 2, py: 1.5, borderTop: `1px solid ${t.border}`, bgcolor: t.bg2 }}>
+          <Typography sx={{ fontSize: 11, color: t.text3, fontStyle: 'italic' }}>
+            💡 Les colonnes masquées optimisent l'affichage
+          </Typography>
+        </Box>
+      </Menu>
 
       {/* Actions Menu */}
       <Menu

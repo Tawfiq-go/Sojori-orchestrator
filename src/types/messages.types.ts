@@ -97,6 +97,7 @@ export interface ConversationMessage {
 export interface Conversation {
   phone: string;
   name?: string;
+  /** Champ API chatbot (contient souvent le n° SJ-xxx) */
   reservation_id?: string;
   reservation_number?: string;
   listing_id?: string;

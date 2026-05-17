@@ -1,0 +1,1129 @@
+/**
+ * BusinessTab — APIs, HTTP Logs, Hooks, Owner/Listing stats (legacy ChannelsHubPage Business)
+ */
+import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  HelpCircle,
+  Home,
+  KeyRound,
+  UserRound,
+  XCircle,
+} from 'lucide-react';
+import { tokens as T } from '../dashboard/DashboardV2.components';
+import {
+  fetchBusinessListingStats,
+  fetchBusinessOwnerStats,
+  fetchChannelsCalendarRuApis,
+  fetchChannelsCalendarRuCallBodies,
+  fetchChannelsDistributionRuCallBodies,
+  fetchChannelsHttpAccessLogs,
+  fetchChannelsIngressById,
+  fetchChannelsIngressList,
+  fetchChannelsListingRuApis,
+  fetchChannelsListingRuCallBodies,
+  fetchChannelsOAuthRuApis,
+  fetchChannelsOAuthRuCallBodies,
+  fetchChannelsOverview,
+  fetchChannelsOverviewReviews,
+  fetchChannelsOwnerRuApis,
+  fetchChannelsUserRuCallBodies,
+} from '../../services/channelsDashboardApi';
+import {
+  ingressKindFromHookSeg,
+  overviewViewFromApiSeg,
+  parseMrSeg,
+  prettyRuEventKey,
+} from '../../utils/channelsSharedUtils';
+import { formatCasablancaDate } from '../../utils/dateFormatting';
+import {
+  listingIdFromChannelOtaRow,
+  pickMessagingField,
+  prettyJson,
+  resolveBusinessViewTab,
+  ruCalendarStatusBadgeClass,
+  summarizeCalendarRuRow,
+} from '../../utils/businessTabHelpers';
+import './channels-hub.css';
+
+const LIMIT = 25;
+
+type RuBody = {
+  error?: string;
+  requestXml?: string;
+  responseXml?: string;
+  requestPayload?: unknown;
+  responseJson?: unknown;
+  auditContext?: unknown;
+  rawBody?: string;
+  ruMessaging?: unknown;
+  parsedData?: unknown;
+};
+
+type IngressRow = { id: string; createdAt?: string; ruEventKey?: string; correlationId?: string; publishOk?: boolean | null; rawBody?: string };
+
+type RuRow = Record<string, unknown> & {
+  _id?: string;
+  action?: string;
+  status?: string;
+  createdAt?: string;
+  timestamp?: string;
+  error?: string;
+  responseMsg?: string;
+  responseTime?: number;
+  statusCode?: number;
+};
+
+function patchParams(base: URLSearchParams, p: Record<string, string | undefined>) {
+  const n = new URLSearchParams(base);
+  for (const [k, v] of Object.entries(p)) {
+    if (v === undefined) n.delete(k);
+    else n.set(k, v);
+  }
+  return n;
+}
+
+function chLink(sp: URLSearchParams) {
+  const q = sp.toString();
+  return q ? `/channels?${q}` : '/channels';
+}
+
+function errMsg(e: unknown) {
+  const x = e as { response?: { data?: { error?: string } }; message?: string };
+  return x.response?.data?.error || x.message || 'Erreur réseau';
+}
+
+function Pag({
+  page,
+  prevOff,
+  nextOff,
+  onPrev,
+  onNext,
+}: {
+  page: number;
+  prevOff: boolean;
+  nextOff: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+      <button
+        type="button"
+        disabled={prevOff}
+        onClick={onPrev}
+        style={{
+          height: 24,
+          padding: '0 8px',
+          borderRadius: 4,
+          border: `1px solid ${T.border}`,
+          background: T.bg,
+          color: T.text,
+          fontSize: 12,
+          cursor: prevOff ? 'not-allowed' : 'pointer',
+          opacity: prevOff ? 0.4 : 1
+        }}
+      >
+        <ChevronLeft size={12} />
+      </button>
+      <span style={{ fontSize: 12, fontWeight: 600, color: T.text, padding: '0 8px' }}>{page}</span>
+      <button
+        type="button"
+        disabled={nextOff}
+        onClick={onNext}
+        style={{
+          height: 24,
+          padding: '0 8px',
+          borderRadius: 4,
+          border: `1px solid ${T.border}`,
+          background: T.bg,
+          color: T.text,
+          fontSize: 12,
+          cursor: nextOff ? 'not-allowed' : 'pointer',
+          opacity: nextOff ? 0.4 : 1
+        }}
+      >
+        <ChevronRight size={12} />
+      </button>
+    </div>
+  );
+}
+
+function useRuBodies(
+  fetchBody: (id: string) => Promise<{ data?: { success?: boolean; data?: RuBody; error?: string } }>,
+) {
+  const [expandId, setExpandId] = useState<string | null>(null);
+  const [bodies, setBodies] = useState<Record<string, RuBody>>({});
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+
+  const toggle = async (id: string) => {
+    if (!id) return;
+    if (expandId === id) {
+      setExpandId(null);
+      return;
+    }
+    const cached = bodies[id];
+    if (cached && cached.error == null && (cached.requestXml != null || cached.requestPayload != null)) {
+      setExpandId(id);
+      return;
+    }
+    setLoadingId(id);
+    try {
+      const { data } = await fetchBody(id);
+      if (!data?.success) throw new Error(data?.error || 'Fetch failed');
+      setBodies((p) => ({ ...p, [id]: data.data || {} }));
+      setExpandId(id);
+    } catch (e) {
+      setBodies((p) => ({ ...p, [id]: { error: errMsg(e) } }));
+      setExpandId(id);
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  return { expandId, bodies, loadingId, toggle, setExpandId };
+}
+
+function RuBodyPanels({ body, mode }: { body: RuBody; mode: 'calendar' | 'listing' | 'user' | 'oauth' }) {
+  if (body.error != null) {
+    return <div className="channels-alert channels-alert-error">{String(body.error)}</div>;
+  }
+  if (mode === 'calendar') {
+    return (
+      <div className="space-y-3">
+        <div>
+          <div className="channels-section-title mb-1.5">Contexte audit (JSON)</div>
+          <pre className="channels-code-block max-h-[220px] overflow-auto">{prettyJson(body.auditContext)}</pre>
+        </div>
+        <div>
+          <div className="channels-section-title mb-1.5">Corps JSON (requestPayload)</div>
+          <pre className="channels-code-block max-h-[280px] overflow-auto">{prettyJson(body.requestPayload)}</pre>
+        </div>
+        <div>
+          <div className="channels-section-title mb-1.5">XML requête</div>
+          <pre className="channels-code-block max-h-[320px] overflow-auto whitespace-pre-wrap break-all">{body.requestXml || '—'}</pre>
+        </div>
+        {body.responseXml ? (
+          <div>
+            <div className="channels-section-title mb-1.5">XML réponse RU</div>
+            <pre className="channels-code-block max-h-[220px] overflow-auto whitespace-pre-wrap break-all">{String(body.responseXml).slice(0, 120000)}</pre>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+  if (mode === 'listing') {
+    return (
+      <div className="space-y-3">
+        <div>
+          <div className="channels-section-title mb-1.5">requestPayload + auditContext</div>
+          <pre className="channels-code-block max-h-[220px] overflow-auto">{prettyJson({ requestPayload: body.requestPayload, auditContext: body.auditContext })}</pre>
+        </div>
+        <div>
+          <div className="channels-section-title mb-1.5">Réponse listing (JSON)</div>
+          <pre className="channels-code-block max-h-[280px] overflow-auto">{prettyJson(body.responseJson)}</pre>
+        </div>
+        <div>
+          <div className="channels-section-title mb-1.5">XML audit (requête)</div>
+          <pre className="channels-code-block max-h-[160px] overflow-auto whitespace-pre-wrap break-all">{body.requestXml || '—'}</pre>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="channels-section-title mb-1.5">Payload / JSON</div>
+        <pre className="channels-code-block max-h-[280px] overflow-auto">{prettyJson(body.requestPayload ?? body.responseJson)}</pre>
+      </div>
+      <div>
+        <div className="channels-section-title mb-1.5">XML requête</div>
+        <pre className="channels-code-block max-h-[280px] overflow-auto whitespace-pre-wrap break-all">{body.requestXml || '—'}</pre>
+      </div>
+    </div>
+  );
+}
+
+export function BusinessTab() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const businessBiz = (searchParams.get('biz') || 'api').toLowerCase();
+  const viewTab = resolveBusinessViewTab(businessBiz);
+  const apiSeg = parseMrSeg(searchParams.get('api'));
+  const hookSeg = parseMrSeg(searchParams.get('hook'));
+  const docId = searchParams.get('docId') || '';
+
+  const [hours, setHours] = useState(72);
+  const setSp = (patch: Record<string, string | undefined>) => setSearchParams(patchParams(searchParams, patch));
+
+  useEffect(() => {
+    const next = patchParams(searchParams, {});
+    let changed = false;
+    const b = (next.get('biz') || '').toLowerCase();
+    if (!b) {
+      next.set('biz', 'api');
+      if (!next.get('api')) next.set('api', 'm');
+      changed = true;
+    }
+    if (b === 'logapi' && next.get('api') !== 'g') {
+      next.set('api', 'g');
+      changed = true;
+    }
+    if (b === 'hooks' && !next.get('hook')) {
+      next.set('hook', 'm');
+      changed = true;
+    }
+    if (b === 'api' && next.get('api') === 'g') {
+      next.set('api', 'm');
+      changed = true;
+    }
+    if (changed) setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const [overviewPage, setOverviewPage] = useState(1);
+  const [calendarPage, setCalendarPage] = useState(1);
+  const [listingPage, setListingPage] = useState(1);
+  const [userPage, setUserPage] = useState(1);
+  const [oauthPage, setOauthPage] = useState(1);
+  const [httpPage, setHttpPage] = useState(1);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [hookPage, setHookPage] = useState(1);
+
+  const [overviewList, setOverviewList] = useState<{ items?: unknown[]; total?: number; limit?: number } | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+
+  const [calendarList, setCalendarList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const calBodies = useRuBodies((id) => fetchChannelsCalendarRuCallBodies(id));
+
+  const [listingList, setListingList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
+  const [listingLoading, setListingLoading] = useState(false);
+  const [listingError, setListingError] = useState<string | null>(null);
+  const listBodies = useRuBodies((id) => fetchChannelsListingRuCallBodies(id));
+
+  const [userList, setUserList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
+  const [userLoading, setUserLoading] = useState(false);
+  const [userError, setUserError] = useState<string | null>(null);
+  const userBodies = useRuBodies((id) => fetchChannelsUserRuCallBodies(id));
+
+  const [oauthList, setOauthList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  const oauthBodies = useRuBodies((id) => fetchChannelsOAuthRuCallBodies(id));
+
+  const [httpData, setHttpData] = useState<{ items?: unknown[]; pagination?: { total?: number } } | null>(null);
+  const [httpLoading, setHttpLoading] = useState(false);
+  const [httpError, setHttpError] = useState<string | null>(null);
+
+  const [reviewsList, setReviewsList] = useState<{ items?: unknown[]; total?: number } | null>(null);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
+
+  const [hookList, setHookList] = useState<{ items?: IngressRow[]; total?: number } | null>(null);
+  const [hookLoading, setHookLoading] = useState(false);
+  const [hookError, setHookError] = useState<string | null>(null);
+  const [hookExpanded, setHookExpanded] = useState<string | null>(null);
+  const [hookFullXml, setHookFullXml] = useState<Record<string, string>>({});
+
+  const [msgExpanded, setMsgExpanded] = useState<string | null>(null);
+  const [msgDetail, setMsgDetail] = useState<Record<string, RuBody>>({});
+
+  const [bizOwners, setBizOwners] = useState<unknown[]>([]);
+  const [bizOwnersLoading, setBizOwnersLoading] = useState(false);
+  const [bizOwnersError, setBizOwnersError] = useState<string | null>(null);
+
+  const [bizListings, setBizListings] = useState<unknown[]>([]);
+  const [bizListingsLoading, setBizListingsLoading] = useState(false);
+  const [bizListingsError, setBizListingsError] = useState<string | null>(null);
+
+  const [apiDoc, setApiDoc] = useState<RuBody | null>(null);
+  const [apiDocLoading, setApiDocLoading] = useState(false);
+  const [apiDocError, setApiDocError] = useState<string | null>(null);
+
+  const [hookDoc, setHookDoc] = useState<Record<string, unknown> | null>(null);
+  const [hookDocLoading, setHookDocLoading] = useState(false);
+  const [hookDocError, setHookDocError] = useState<string | null>(null);
+
+  const loadOverview = useCallback(async () => {
+    setOverviewLoading(true);
+    setOverviewError(null);
+    try {
+      const { data } = await fetchChannelsOverview({
+        hours,
+        page: overviewPage,
+        limit: LIMIT,
+        view: overviewViewFromApiSeg(apiSeg),
+      });
+      if (!data?.success) {
+        setOverviewError('Failed to load overview list');
+        setOverviewList(null);
+      } else setOverviewList(data.data);
+    } catch (e) {
+      setOverviewError(errMsg(e));
+      setOverviewList(null);
+    } finally {
+      setOverviewLoading(false);
+    }
+  }, [hours, overviewPage, apiSeg]);
+
+  const loadCalendar = useCallback(async () => {
+    setCalendarLoading(true);
+    setCalendarError(null);
+    try {
+      const { data } = await fetchChannelsCalendarRuApis({ hours, page: calendarPage, limit: LIMIT });
+      if (!data?.success) {
+        setCalendarError('Impossible de charger les appels RU calendrier');
+        setCalendarList(null);
+      } else {
+        setCalendarList(data.data);
+        calBodies.setExpandId(null);
+      }
+    } catch (e) {
+      setCalendarError(errMsg(e));
+      setCalendarList(null);
+    } finally {
+      setCalendarLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hours, calendarPage]);
+
+  const loadListing = useCallback(async () => {
+    setListingLoading(true);
+    setListingError(null);
+    try {
+      const { data } = await fetchChannelsListingRuApis({ hours, page: listingPage, limit: LIMIT });
+      if (!data?.success) {
+        setListingError('Impossible de charger l’audit OTA listing');
+        setListingList(null);
+      } else {
+        setListingList(data.data);
+        listBodies.setExpandId(null);
+      }
+    } catch (e) {
+      setListingError(errMsg(e));
+      setListingList(null);
+    } finally {
+      setListingLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hours, listingPage]);
+
+  const loadUser = useCallback(async () => {
+    setUserLoading(true);
+    setUserError(null);
+    try {
+      const { data } = await fetchChannelsOwnerRuApis({ hours, page: userPage, limit: LIMIT });
+      if (!data?.success) {
+        setUserError('Impossible de charger les appels owner RU');
+        setUserList(null);
+      } else {
+        setUserList(data.data);
+        userBodies.setExpandId(null);
+      }
+    } catch (e) {
+      setUserError(errMsg(e));
+      setUserList(null);
+    } finally {
+      setUserLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hours, userPage]);
+
+  const loadOAuth = useCallback(async () => {
+    setOauthLoading(true);
+    setOauthError(null);
+    try {
+      const { data } = await fetchChannelsOAuthRuApis({ hours, page: oauthPage, limit: LIMIT });
+      if (!data?.success) {
+        setOauthError('Impossible de charger OAuth PMS');
+        setOauthList(null);
+      } else {
+        setOauthList(data.data);
+        oauthBodies.setExpandId(null);
+      }
+    } catch (e) {
+      setOauthError(errMsg(e));
+      setOauthList(null);
+    } finally {
+      setOauthLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hours, oauthPage]);
+
+  const loadHttp = useCallback(async () => {
+    setHttpLoading(true);
+    setHttpError(null);
+    try {
+      const { data } = await fetchChannelsHttpAccessLogs({ hours, page: httpPage, limit: LIMIT });
+      if (!data?.success) {
+        setHttpError('Impossible de charger les logs HTTP');
+        setHttpData(null);
+      } else setHttpData(data.data);
+    } catch (e) {
+      setHttpError(errMsg(e));
+      setHttpData(null);
+    } finally {
+      setHttpLoading(false);
+    }
+  }, [hours, httpPage]);
+
+  const loadReviews = useCallback(async () => {
+    setReviewsLoading(true);
+    setReviewsError(null);
+    try {
+      const { data } = await fetchChannelsOverviewReviews({ hours, page: reviewsPage, limit: LIMIT });
+      if (!data?.success) {
+        setReviewsError('Failed to load reviews');
+        setReviewsList(null);
+      } else setReviewsList(data.data);
+    } catch (e) {
+      setReviewsError(errMsg(e));
+      setReviewsList(null);
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [hours, reviewsPage]);
+
+  const loadHooks = useCallback(async () => {
+    setHookLoading(true);
+    setHookError(null);
+    try {
+      const { data } = await fetchChannelsIngressList({
+        hours,
+        page: hookPage,
+        limit: LIMIT,
+        kind: ingressKindFromHookSeg(hookSeg),
+      });
+      if (!data?.success) {
+        setHookError('Failed to load ingress list');
+        setHookList(null);
+      } else setHookList(data.data);
+    } catch (e) {
+      setHookError(errMsg(e));
+      setHookList(null);
+    } finally {
+      setHookLoading(false);
+    }
+  }, [hours, hookPage, hookSeg]);
+
+  const loadBizOwners = useCallback(async () => {
+    setBizOwnersLoading(true);
+    setBizOwnersError(null);
+    try {
+      const { data } = await fetchBusinessOwnerStats({ hours });
+      if (!data?.success) {
+        setBizOwnersError(data?.error || 'Impossible de charger les stats owner');
+        setBizOwners([]);
+      } else setBizOwners(data.data?.items || []);
+    } catch (e) {
+      setBizOwnersError(errMsg(e));
+      setBizOwners([]);
+    } finally {
+      setBizOwnersLoading(false);
+    }
+  }, [hours]);
+
+  const loadBizListings = useCallback(async () => {
+    setBizListingsLoading(true);
+    setBizListingsError(null);
+    try {
+      const { data } = await fetchBusinessListingStats({ hours });
+      if (!data?.success) {
+        setBizListingsError(data?.error || 'Impossible de charger les stats listing');
+        setBizListings([]);
+      } else setBizListings(data.data?.items || []);
+    } catch (e) {
+      setBizListingsError(errMsg(e));
+      setBizListings([]);
+    } finally {
+      setBizListingsLoading(false);
+    }
+  }, [hours]);
+
+  useEffect(() => {
+    if (viewTab !== 'Api' || docId) return;
+    if (apiSeg === 'c') loadCalendar();
+    else if (apiSeg === 'l') loadListing();
+    else if (apiSeg === 'u') loadUser();
+    else if (apiSeg === 'o') loadOAuth();
+    else if (apiSeg === 'g') loadHttp();
+    else if (apiSeg === 'rev') loadReviews();
+    else loadOverview();
+  }, [viewTab, apiSeg, docId, loadOverview, loadCalendar, loadListing, loadUser, loadOAuth, loadHttp, loadReviews]);
+
+  useEffect(() => {
+    if (viewTab !== 'Hook') return;
+    if (docId) {
+      setHookDocLoading(true);
+      setHookDocError(null);
+      fetchChannelsIngressById(docId)
+        .then(({ data }) => {
+          if (data?.success && data.data) setHookDoc(data.data);
+          else setHookDocError(data?.error || 'Document introuvable');
+        })
+        .catch((e) => setHookDocError(errMsg(e)))
+        .finally(() => setHookDocLoading(false));
+    } else loadHooks();
+  }, [viewTab, docId, loadHooks]);
+
+  useEffect(() => {
+    if (viewTab === 'BizOwner') loadBizOwners();
+  }, [viewTab, loadBizOwners]);
+
+  useEffect(() => {
+    if (viewTab === 'BizListing') loadBizListings();
+  }, [viewTab, loadBizListings]);
+
+  useEffect(() => {
+    if (viewTab !== 'Api' || !docId) {
+      setApiDoc(null);
+      return;
+    }
+    setApiDocLoading(true);
+    setApiDocError(null);
+    fetchChannelsDistributionRuCallBodies(docId)
+      .then(({ data }) => {
+        if (data?.success && data.data) setApiDoc(data.data);
+        else setApiDocError(data?.error || 'Document introuvable');
+      })
+      .catch((e) => setApiDocError(errMsg(e)))
+      .finally(() => setApiDocLoading(false));
+  }, [viewTab, docId]);
+
+  const tableView = overviewViewFromApiSeg(apiSeg) === 'messaging' ? 'messaging' : 'reservations';
+
+  const bizBtn = (active: boolean) =>
+    `channels-tab-button ${active ? 'channels-tab-button-active' : 'channels-tab-button-inactive'}`;
+
+  const apiBtn = (seg: string) => bizBtn(apiSeg === seg && businessBiz !== 'logapi' || (seg === 'g' && businessBiz === 'logapi'));
+
+  const resetApiPages = () => {
+    setOverviewPage(1);
+    setCalendarPage(1);
+    setListingPage(1);
+    setUserPage(1);
+    setOauthPage(1);
+    setHttpPage(1);
+    setReviewsPage(1);
+  };
+
+  const loadHookFull = async (id: string) => {
+    if (hookFullXml[id] !== undefined) {
+      setHookExpanded(hookExpanded === id ? null : id);
+      return;
+    }
+    try {
+      const { data } = await fetchChannelsIngressById(id);
+      if (!data?.success) throw new Error(data?.error || 'Fetch failed');
+      setHookFullXml((p) => ({ ...p, [id]: data.data?.rawBody || '' }));
+      setHookExpanded(id);
+    } catch (e) {
+      setHookFullXml((p) => ({ ...p, [id]: `Error: ${errMsg(e)}` }));
+      setHookExpanded(id);
+    }
+  };
+
+  const loadMsgDetail = async (id: string) => {
+    if (msgDetail[id]) {
+      setMsgExpanded(msgExpanded === id ? null : id);
+      return;
+    }
+    try {
+      const { data } = await fetchChannelsIngressById(id);
+      if (!data?.success) throw new Error(data?.error || 'Fetch failed');
+      setMsgDetail((p) => ({ ...p, [id]: data.data }));
+      setMsgExpanded(id);
+    } catch (e) {
+      setMsgDetail((p) => ({ ...p, [id]: { error: errMsg(e) } }));
+      setMsgExpanded(id);
+    }
+  };
+
+  const renderRuTable = (
+    rows: RuRow[],
+    cols: number,
+    mode: 'calendar' | 'listing' | 'user' | 'oauth',
+    bodies: ReturnType<typeof useRuBodies>,
+  ) => (
+    <tbody>
+      {rows.map((row, idx) => {
+        const ts = (row.createdAt || row.timestamp) as string | undefined;
+        const err = String(row.error || row.responseMsg || '');
+        const rowId = String(row._id || `${row.action}-${idx}`);
+        const body = bodies.bodies[rowId];
+        const expanded = bodies.expandId === rowId;
+        const loadingBody = bodies.loadingId === rowId;
+        const sum = mode === 'calendar' ? summarizeCalendarRuRow(row as Parameters<typeof summarizeCalendarRuRow>[0]) : null;
+        return (
+          <Fragment key={rowId}>
+            <tr className="border-t border-slate-100 align-top">
+              <td className="px-2 py-2 text-xs text-slate-700 whitespace-nowrap">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <button
+                    type="button"
+                    className="channels-expand-button channels-expand-button-inline"
+                    disabled={loadingBody}
+                    onClick={() => bodies.toggle(rowId)}
+                  >
+                    {loadingBody ? '…' : expanded ? '▲ Masquer' : '▼ XML / JSON'}
+                  </button>
+                  <div className="text-[11px] text-slate-600">{ts ? new Date(ts).toLocaleString() : '—'}</div>
+                </div>
+              </td>
+              <td className="px-2 py-2 text-xs font-mono truncate" title={String(row.action || '')}>{String(row.action || '—')}</td>
+              <td className="px-2 py-2 text-xs">
+                <span className={`channels-badge text-xs ${ruCalendarStatusBadgeClass(row.status as string)}`}>{String(row.status || '—')}</span>
+              </td>
+              <td className="px-2 py-2 text-right tabular-nums text-xs">{row.responseTime != null ? String(row.responseTime) : '—'}</td>
+              {mode === 'calendar' && sum ? (
+                <>
+                  <td className="px-2 py-2 font-mono text-[10px]">{sum.propertyId != null ? String(sum.propertyId) : '—'}</td>
+                  <td className="px-2 py-2 text-xs line-clamp-2">{sum.listingLabel || '—'}</td>
+                  <td className="px-2 py-2 text-xs line-clamp-2">{sum.ownerLabel || '—'}</td>
+                  <td className="px-2 py-2 text-xs font-mono">{sum.rabbitSchemaDisplay}</td>
+                  <td className="px-2 py-2 text-xs line-clamp-3">{sum.source}</td>
+                  <td className="px-2 py-2 text-xs font-mono line-clamp-2">{sum.priceHint}</td>
+                  <td className="px-2 py-2 text-xs truncate">{sum.ranges}</td>
+                </>
+              ) : mode === 'listing' ? (
+                <td className="px-2 py-2 font-mono text-[10px]">{listingIdFromChannelOtaRow(row as Parameters<typeof listingIdFromChannelOtaRow>[0])}</td>
+              ) : (
+                <td className="px-2 py-2 font-mono text-[10px]">{row.statusCode != null ? String(row.statusCode) : '—'}</td>
+              )}
+              <td className="px-2 py-2 text-xs text-slate-600 line-clamp-3" title={err}>{err.slice(0, 200)}{err.length > 200 ? '…' : ''}</td>
+            </tr>
+            {expanded && (
+              <tr className="channels-expanded-row">
+                <td colSpan={cols} className="channels-expanded-content">
+                  {loadingBody ? (
+                    <div className="py-3 text-center text-xs text-slate-500">Chargement…</div>
+                  ) : body !== undefined ? (
+                    <RuBodyPanels body={body} mode={mode} />
+                  ) : null}
+                </td>
+              </tr>
+            )}
+          </Fragment>
+        );
+      })}
+    </tbody>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-wrap items-center gap-2">
+        <div className="channels-tabs-container">
+          <button type="button" className={bizBtn(businessBiz === 'api')} onClick={() => { resetApiPages(); setSp({ tab: 'Business', biz: 'api', api: 'm' }); }}>API</button>
+          <button type="button" className={bizBtn(businessBiz === 'logapi')} onClick={() => { resetApiPages(); setSp({ tab: 'Business', biz: 'logapi', api: 'g' }); }}>HTTP Logs</button>
+          <button type="button" className={bizBtn(businessBiz === 'hooks')} onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: hookSeg || 'm' })}>Hooks</button>
+          <span className="w-px h-5 bg-slate-200 mx-0.5" />
+          <button type="button" className={bizBtn(businessBiz === 'owner')} onClick={() => setSp({ tab: 'Business', biz: 'owner', api: undefined, hook: undefined })}>
+            <span className="inline-flex items-center gap-1"><UserRound size={12} /> Owners</span>
+          </button>
+          <button type="button" className={bizBtn(businessBiz === 'listing')} onClick={() => setSp({ tab: 'Business', biz: 'listing', api: undefined, hook: undefined })}>
+            <span className="inline-flex items-center gap-1"><Home size={12} /> Listings</span>
+          </button>
+        </div>
+      </div>
+
+      {(viewTab === 'Api' || businessBiz === 'logapi') && (
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-wrap items-center gap-2">
+          <select className="channels-select h-7 text-xs" value={hours} onChange={(e) => { setHours(Number(e.target.value)); resetApiPages(); }}>
+            <option value={6}>6h</option>
+            <option value={24}>24h</option>
+            <option value={72}>3j</option>
+            <option value={168}>7j</option>
+          </select>
+          {businessBiz === 'api' && (
+            <div className="channels-tabs-container">
+              {(['m', 'r', 'c', 'l', 'o', 'u', 'rev'] as const).map((seg) => (
+                <button key={seg} type="button" className={apiBtn(seg)} onClick={() => { resetApiPages(); setSp({ tab: 'Business', biz: 'api', api: seg }); }}>
+                  {seg === 'm' ? 'Messages' : seg === 'r' ? 'Réservations' : seg === 'c' ? 'Calendrier' : seg === 'l' ? 'Listing' : seg === 'o' ? 'OAuth' : seg === 'u' ? 'User' : 'Reviews'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {viewTab === 'Hook' && !docId && (
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-wrap items-center gap-2">
+          <select className="channels-select h-7 text-xs" value={hours} onChange={(e) => { setHours(Number(e.target.value)); setHookPage(1); }}>
+            <option value={24}>24h</option>
+            <option value={72}>3j</option>
+            <option value={168}>7j</option>
+          </select>
+          <div className="channels-tabs-container">
+            <button type="button" className={bizBtn(hookSeg === 'm')} onClick={() => { setHookPage(1); setSp({ tab: 'Business', biz: 'hooks', hook: 'm' }); }}>Messages</button>
+            <button type="button" className={bizBtn(hookSeg === 'r')} onClick={() => { setHookPage(1); setSp({ tab: 'Business', biz: 'hooks', hook: 'r' }); }}>Réservations</button>
+          </div>
+        </div>
+      )}
+
+      {/* API doc deep-link */}
+      {viewTab === 'Api' && docId && (
+        <div className="space-y-3">
+          <button type="button" className="px-3 py-1.5 rounded border border-slate-300 text-sm font-semibold" onClick={() => setSp({ docId: undefined })}>← Retour</button>
+          {apiDocLoading && <div className="channels-loading"><div className="channels-spinner mr-3" /> Chargement…</div>}
+          {apiDocError && <div className="channels-alert channels-alert-error">{apiDocError}</div>}
+          {apiDoc && !apiDocLoading && (
+            <pre className="channels-code-block">{prettyJson(apiDoc)}</pre>
+          )}
+        </div>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg !== 'c' && apiSeg !== 'u' && apiSeg !== 'o' && apiSeg !== 'l' && apiSeg !== 'g' && apiSeg !== 'rev' && overviewError && (
+        <div className="channels-alert channels-alert-error">{overviewError}</div>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg !== 'c' && apiSeg !== 'u' && apiSeg !== 'o' && apiSeg !== 'l' && apiSeg !== 'g' && apiSeg !== 'rev' && overviewList && (
+        <>
+          <div className="flex items-center justify-between text-xs text-slate-600 bg-white border border-slate-200 rounded px-3 py-1.5">
+            <span>{overviewList.total} résultats</span>
+            <Pag page={overviewPage} prevOff={overviewPage <= 1} nextOff={(overviewList.items?.length || 0) < LIMIT} onPrev={() => setOverviewPage((p) => Math.max(1, p - 1))} onNext={() => setOverviewPage((p) => p + 1)} />
+          </div>
+          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+            <div className="channels-table-scroll overflow-x-auto overflow-y-auto max-h-[min(78vh,calc(100vh-140px))] w-full">
+              <table className="w-full table-fixed text-sm min-w-0">
+                {tableView === 'messaging' ? (
+                  <>
+                    <thead className="channels-sticky-thead"><tr>
+                      {['Date', 'Event', 'Path', 'Thread', 'Message', 'Guest', 'Preview', 'Correlation'].map((h) => (
+                        <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {(overviewList.items as Record<string, unknown>[] || []).map((row) => {
+                        const m = (row.ruMessaging as { data?: Record<string, unknown> }) || {};
+                        const data = m.data || {};
+                        const threadId = pickMessagingField(data, ['ThreadID', 'threadId', 'ThreadId']);
+                        const messageId = pickMessagingField(data, ['MessageID', 'messageId', 'MessageId', 'Id']);
+                        const guest = pickMessagingField(data, ['GuestName', 'guestName', 'CustomerName', 'Name']) || '—';
+                        const preview = pickMessagingField(data, ['Body', 'body', 'Text', 'message', 'Content']) || '';
+                        const detail = msgDetail[String(row.id)];
+                        const rid = String(row.id);
+                        return (
+                          <Fragment key={rid}>
+                            <tr className="border-t border-slate-100 align-top">
+                              <td className="px-3 py-2 text-xs whitespace-nowrap">{row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : '—'}</td>
+                              <td className="px-3 py-2 text-xs">{prettyRuEventKey(row.ruEventKey as string)}</td>
+                              <td className="px-3 py-2 text-xs">srv-reservations</td>
+                              <td className="px-3 py-2 font-mono text-[10px] break-all">{threadId ? String(threadId) : '—'}</td>
+                              <td className="px-3 py-2 font-mono text-[10px] break-all">{messageId ? String(messageId) : '—'}</td>
+                              <td className="px-3 py-2 text-xs truncate">{String(guest)}</td>
+                              <td className="px-3 py-2 text-xs">{String(preview).slice(0, 200)}</td>
+                              <td className="px-3 py-2 font-mono text-[10px]">{String(row.correlationId || '').slice(0, 24)}</td>
+                            </tr>
+                            {msgExpanded === rid && detail && (
+                              <tr className="channels-expanded-row"><td colSpan={8} className="channels-expanded-content">
+                                {detail.error ? <div className="channels-alert channels-alert-error">{detail.error}</div> : (
+                                  <div className="space-y-2">
+                                    <pre className="channels-code-block">{detail.rawBody || '—'}</pre>
+                                    <pre className="channels-code-block">{prettyJson(detail.ruMessaging)}</pre>
+                                  </div>
+                                )}
+                              </td></tr>
+                            )}
+                            <tr className="channels-expand-button-row"><td colSpan={8} className="text-center">
+                              <button type="button" className="channels-expand-button" onClick={() => loadMsgDetail(rid)}>{msgExpanded === rid ? '▲ Masquer' : '▼ Détails'}</button>
+                            </td></tr>
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </>
+                ) : (
+                  <>
+                    <thead className="channels-sticky-thead"><tr>
+                      {['Date', 'Créée RU', 'In', 'Out', 'Client', 'Tél', 'Ad', 'Enf', '€', 'OTA', 'Map', 'Listing', 'Owner', 'RU ID'].map((h) => (
+                        <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {(overviewList.items as Record<string, unknown>[] || []).map((row) => {
+                        const c = (row.canonicalRuBookingV2 || {}) as Record<string, Record<string, unknown>>;
+                        const stay = c.stay || {};
+                        const party = c.party || {};
+                        const money = c.money || {};
+                        const ota = c.ota || {};
+                        const enr = (row.enrichment || {}) as Record<string, unknown>;
+                        const sojori = (c.sojori || enr) as Record<string, unknown>;
+                        const mapOk = sojori?.found === true;
+                        const guestName = c.guest ? `${(c.guest as Record<string, string>).firstName || ''} ${(c.guest as Record<string, string>).lastName || ''}`.trim() : '—';
+                        return (
+                          <tr key={String(row.id)} className="border-t border-slate-100 align-top">
+                            <td className="px-2 py-2 text-xs whitespace-nowrap">{row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : '—'}</td>
+                            <td className="px-2 py-2 text-xs">{c.createdDate ? String(c.createdDate).slice(0, 19).replace('T', ' ') : '—'}</td>
+                            <td className="px-2 py-2 text-xs">{String(stay.checkIn || '—')}</td>
+                            <td className="px-2 py-2 text-xs">{String(stay.checkOut || '—')}</td>
+                            <td className="px-2 py-2 text-xs truncate">{guestName || '—'}</td>
+                            <td className="px-2 py-2 font-mono text-[11px]">{(c.guest as Record<string, string>)?.phone || '—'}</td>
+                            <td className="px-2 py-2 text-right text-xs">{String(party.adults ?? '—')}</td>
+                            <td className="px-2 py-2 text-right text-xs">{String(party.children ?? '—')}</td>
+                            <td className="px-2 py-2 text-right text-xs">{money.ruPrice != null ? String(money.ruPrice) : money.clientPrice != null ? String(money.clientPrice) : '—'}</td>
+                            <td className="px-2 py-2 text-xs truncate">{String(ota.vendor || '—')}</td>
+                            <td className="px-2 py-2 text-center">{mapOk ? <span className="channels-badge channels-badge-success text-xs"><CheckCircle2 size={11} className="inline" /> OK</span> : <span className="channels-badge channels-badge-neutral text-xs">—</span>}</td>
+                            <td className="px-2 py-2 text-xs truncate">{String(sojori.listingName || sojori.listingId || '—')}</td>
+                            <td className="px-2 py-2 text-xs truncate">{String(sojori.ownerDisplayName || sojori.ownerId || '—')}</td>
+                            <td className="px-2 py-2 font-mono text-[11px]">{String(c.ruReservationId || '—')}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </>
+                )}
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'g' && (
+        <>
+          {httpError && <div className="channels-alert channels-alert-error">{httpError}</div>}
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">Journal HTTP srv-channels (Mongo logapis) — hors / et /health.</div>
+          {httpData && (
+            <>
+              <div className="flex justify-between text-xs bg-white border border-slate-200 rounded px-3 py-1.5 items-center">
+                <span>{httpData.pagination?.total ?? '—'} entrées · logapis</span>
+                <Pag page={httpPage} prevOff={httpPage <= 1} nextOff={(httpData.items?.length || 0) < LIMIT} onPrev={() => setHttpPage((p) => Math.max(1, p - 1))} onNext={() => setHttpPage((p) => p + 1)} />
+              </div>
+              <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div className="channels-table-scroll overflow-auto max-h-[78vh]">
+                  <table className="w-full text-sm min-w-[900px]">
+                    <thead className="channels-sticky-thead"><tr>
+                      {['Date', 'Méthode', 'Chemin', 'Cat.', 'HTTP', 'ms', 'Snippet'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}
+                    </tr></thead>
+                    <tbody>
+                      {(httpData.items as Record<string, unknown>[] || []).map((row) => (
+                        <tr key={String(row._id)} className="border-t border-slate-100">
+                          <td className="px-2 py-2 text-xs whitespace-nowrap">{row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : '—'}</td>
+                          <td className="px-2 py-2 text-xs font-mono">{String(row.method || '—')}</td>
+                          <td className="px-2 py-2 text-xs font-mono break-all">{String(row.path || '—')}</td>
+                          <td className="px-2 py-2 text-xs">{String(row.category || '—')}</td>
+                          <td className="px-2 py-2 text-right text-xs">{String(row.statusCode ?? '—')}</td>
+                          <td className="px-2 py-2 text-right text-xs">{row.durationMs != null ? String(row.durationMs) : '—'}</td>
+                          <td className="px-2 py-2 text-xs"><pre className="channels-code-block max-h-[120px] overflow-auto text-[10px]">{row.snippetRequest ? String(row.snippetRequest).slice(0, 2000) : '—'}</pre></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'c' && calendarList && (
+        <>
+          {calendarError && <div className="channels-alert channels-alert-error">{calendarError}</div>}
+          <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5 items-center">
+            <span className="flex gap-2 items-center"><CalendarDays size={11} /> Calendrier RU · {calendarList.pagination?.total ?? '—'}</span>
+            <Pag page={calendarPage} prevOff={calendarPage <= 1} nextOff={(calendarList.items?.length || 0) < LIMIT} onPrev={() => setCalendarPage((p) => Math.max(1, p - 1))} onNext={() => setCalendarPage((p) => p + 1)} />
+          </div>
+          <div className="bg-white rounded-lg border overflow-hidden">
+            <div className="channels-table-scroll overflow-auto max-h-[78vh]">
+              <table className="w-full text-sm min-w-[1100px]">
+                <thead className="channels-sticky-thead"><tr>
+                  {['Date', 'Action', 'Statut', 'ms', 'Prop', 'Listing', 'Owner', 'Queue', 'Source', 'Prix', 'Plages', 'Réponse'].map((h) => (
+                    <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr></thead>
+                {renderRuTable(calendarList.items || [], 12, 'calendar', calBodies)}
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'l' && listingList && (
+        <>
+          {listingError && <div className="channels-alert channels-alert-error">{listingError}</div>}
+          <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>Listing OTA</span><Pag page={listingPage} prevOff={listingPage <= 1} nextOff={(listingList.items?.length || 0) < LIMIT} onPrev={() => setListingPage((p) => Math.max(1, p - 1))} onNext={() => setListingPage((p) => p + 1)} /></div>
+          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
+            <table className="w-full text-sm min-w-[780px]">
+              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Listing ID', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+              {renderRuTable(listingList.items || [], 6, 'listing', listBodies)}
+            </table>
+          </div></div>
+        </>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'u' && userList && (
+        <>
+          {userError && <div className="channels-alert channels-alert-error">{userError}</div>}
+          <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>Owner RU</span><Pag page={userPage} prevOff={userPage <= 1} nextOff={(userList.items?.length || 0) < LIMIT} onPrev={() => setUserPage((p) => Math.max(1, p - 1))} onNext={() => setUserPage((p) => p + 1)} /></div>
+          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+              {renderRuTable(userList.items || [], 6, 'user', userBodies)}
+            </table>
+          </div></div>
+        </>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'o' && oauthList && (
+        <>
+          {oauthError && <div className="channels-alert channels-alert-error">{oauthError}</div>}
+          <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span className="inline-flex gap-1 items-center"><KeyRound size={11} /> OAuth PMS</span><Pag page={oauthPage} prevOff={oauthPage <= 1} nextOff={(oauthList.items?.length || 0) < LIMIT} onPrev={() => setOauthPage((p) => Math.max(1, p - 1))} onNext={() => setOauthPage((p) => p + 1)} /></div>
+          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+              {renderRuTable(oauthList.items || [], 6, 'oauth', oauthBodies)}
+            </table>
+          </div></div>
+        </>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'rev' && reviewsList && (
+        <>
+          {reviewsError && <div className="channels-alert channels-alert-error">{reviewsError}</div>}
+          <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>{reviewsList.total} reviews</span><Pag page={reviewsPage} prevOff={reviewsPage <= 1} nextOff={(reviewsList.items?.length || 0) < LIMIT} onPrev={() => setReviewsPage((p) => Math.max(1, p - 1))} onNext={() => setReviewsPage((p) => p + 1)} /></div>
+          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Owner', 'Statut', 'ms', 'Message', 'Correlation'].map((h) => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+              <tbody>
+                {(reviewsList.items as Record<string, unknown>[] || []).map((row) => (
+                  <tr key={String(row.id)} className="border-t border-slate-100">
+                    <td className="px-3 py-2">{row.createdAt ? formatCasablancaDate(String(row.createdAt), 'dd/MM HH:mm:ss') : '—'}</td>
+                    <td className="px-3 py-2"><span className="channels-badge channels-badge-neutral text-[10px]">{String(row.action || '').replace(/^RU_REST_GET_api_/, '')}</span></td>
+                    <td className="px-3 py-2">{String(row.ownerName || '—')}</td>
+                    <td className="px-3 py-2">{String(row.status || '—')}</td>
+                    <td className="px-3 py-2 text-right">{row.responseTime != null ? String(row.responseTime) : '—'}</td>
+                    <td className="px-3 py-2 truncate max-w-[200px]">{String(row.responseMsg || '').slice(0, 60) || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-[10px]">{String(row.correlationId || '').slice(0, 16)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div></div>
+        </>
+      )}
+
+      {viewTab === 'Hook' && docId && (
+        <div className="space-y-3">
+          <button type="button" className="px-3 py-1.5 rounded border text-sm font-semibold" onClick={() => setSp({ docId: undefined })}>← Retour</button>
+          {hookDocLoading && <div className="channels-loading">Chargement…</div>}
+          {hookDocError && <div className="channels-alert channels-alert-error">{hookDocError}</div>}
+          {hookDoc && <pre className="channels-code-block">{prettyJson(hookDoc)}</pre>}
+        </div>
+      )}
+
+      {viewTab === 'Hook' && !docId && (
+        <div className="space-y-3">
+          {hookError && <div className="channels-alert channels-alert-error">{hookError}</div>}
+          {hookList && (
+            <>
+              <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>{hookList.total} résultats</span><Pag page={hookPage} prevOff={hookPage <= 1} nextOff={(hookList.items?.length || 0) < LIMIT} onPrev={() => setHookPage((p) => Math.max(1, p - 1))} onNext={() => setHookPage((p) => p + 1)} /></div>
+              <div className="bg-white rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50"><tr>{['Date', 'Event', 'Correlation', 'Publish', 'XML'].map((h) => <th key={h} className="text-left px-2 py-1.5 text-[11px]">{h}</th>)}</tr></thead>
+                  <tbody>
+                    {(hookList.items as IngressRow[] || []).map((row) => (
+                      <Fragment key={row.id}>
+                        <tr className="border-t border-slate-100">
+                          <td className="px-2 py-1.5 text-xs">{row.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}</td>
+                          <td className="px-2 py-1.5 text-xs">{prettyRuEventKey(row.ruEventKey)}</td>
+                          <td className="px-2 py-1.5 font-mono text-[10px] break-all">{row.correlationId}</td>
+                          <td className="px-2 py-1.5">{row.publishOk === true ? <span className="channels-badge channels-badge-success text-xs"><CheckCircle2 size={11} className="inline" /> OK</span> : row.publishOk === false ? <span className="channels-badge channels-badge-error text-xs"><XCircle size={11} className="inline" /> Fail</span> : <span className="channels-badge channels-badge-neutral text-xs"><HelpCircle size={11} className="inline" /> —</span>}</td>
+                          <td className="px-2 py-1.5"><pre className="channels-code-block text-xs">{(row.rawBody || '').slice(0, 400)}</pre></td>
+                        </tr>
+                        {hookExpanded === row.id && hookFullXml[row.id] !== undefined && (
+                          <tr className="channels-expanded-row"><td colSpan={5} className="channels-expanded-content"><pre className="channels-code-block">{hookFullXml[row.id]}</pre></td></tr>
+                        )}
+                        <tr className="channels-expand-button-row"><td colSpan={5} className="text-center">
+                          <button type="button" className="channels-expand-button" onClick={() => loadHookFull(row.id)}>{hookExpanded === row.id ? '▲ Masquer' : '▼ XML complet'}</button>
+                          {' · '}
+                          <Link to={chLink(patchParams(searchParams, { tab: 'Business', biz: 'hooks', hook: hookSeg, docId: row.id }))} className="text-indigo-600 text-xs font-semibold hover:underline">Détail</Link>
+                        </td></tr>
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {viewTab === 'BizOwner' && (
+        <div className="space-y-2">
+          <div className="bg-white border rounded px-3 py-2 flex gap-2 items-center">
+            <select className="channels-select h-7 text-xs" value={hours} onChange={(e) => setHours(Number(e.target.value))}>
+              <option value={6}>6h</option><option value={24}>24h</option><option value={72}>3j</option><option value={168}>7j</option>
+            </select>
+            <span className="text-xs font-semibold"><UserRound size={13} className="inline" /> Agrégation par Owner</span>
+          </div>
+          {bizOwnersError && <div className="channels-alert channels-alert-error">{bizOwnersError}</div>}
+          {bizOwners.length > 0 && (
+            <div className="bg-white border rounded overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 sticky top-0"><tr>{['Owner', 'Total', 'Succès', 'Échecs', 'Taux', 'ms moy', 'Dernière activité', 'APIs'].map((h) => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+                <tbody>
+                  {(bizOwners as Record<string, unknown>[]).map((row) => (
+                    <tr key={String(row.ownerId)} className="border-t border-slate-100">
+                      <td className="px-3 py-2"><div className="font-medium">{String(row.ownerName)}</div><div className="text-[10px] font-mono text-slate-400">{String(row.ownerId || '').slice(-8)}</div></td>
+                      <td className="px-3 py-2 text-right font-semibold">{String(row.totalCalls)}</td>
+                      <td className="px-3 py-2 text-right text-green-700">{String(row.successCount)}</td>
+                      <td className="px-3 py-2 text-right text-red-600">{String(row.failedCount)}</td>
+                      <td className="px-3 py-2 text-right">{String(row.successRate)}%</td>
+                      <td className="px-3 py-2 text-right">{row.avgResponseTime != null ? String(row.avgResponseTime) : '—'}</td>
+                      <td className="px-3 py-2">{row.lastActivityAt ? formatCasablancaDate(String(row.lastActivityAt), 'dd/MM HH:mm') : '—'}</td>
+                      <td className="px-3 py-2 flex flex-wrap gap-1">{(row.actions as string[] || []).slice(0, 8).map((a) => <span key={a} className="channels-badge channels-badge-neutral text-[10px]">{a.replace(/^(Push_|Pull_|RU_REST_)/, '')}</span>)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {!bizOwnersLoading && bizOwners.length === 0 && !bizOwnersError && <div className="text-sm text-slate-500 p-4 border rounded bg-white text-center">Aucun appel API avec owner identifié.</div>}
+        </div>
+      )}
+
+      {viewTab === 'BizListing' && (
+        <div className="space-y-2">
+          <div className="bg-white border rounded px-3 py-2 flex gap-2 items-center">
+            <select className="channels-select h-7 text-xs" value={hours} onChange={(e) => setHours(Number(e.target.value))}>
+              <option value={6}>6h</option><option value={24}>24h</option><option value={72}>3j</option><option value={168}>7j</option>
+            </select>
+            <span className="text-xs font-semibold"><Home size={13} className="inline" /> Agrégation par Listing</span>
+          </div>
+          {bizListingsError && <div className="channels-alert channels-alert-error">{bizListingsError}</div>}
+          {bizListings.length > 0 && (
+            <div className="bg-white border rounded overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 sticky top-0"><tr>{['Listing', 'Owner', 'Total', 'Succès', 'Échecs', 'Taux', 'ms moy', 'Dernière activité', 'APIs'].map((h) => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+                <tbody>
+                  {(bizListings as Record<string, unknown>[]).map((row) => (
+                    <tr key={String(row.listingId)} className="border-t border-slate-100">
+                      <td className="px-3 py-2"><div className="font-medium">{String(row.listingName)}</div><div className="text-[10px] font-mono text-slate-400">{String(row.listingId || '').slice(-8)}</div></td>
+                      <td className="px-3 py-2">{String(row.ownerName || '—')}</td>
+                      <td className="px-3 py-2 text-right font-semibold">{String(row.totalCalls)}</td>
+                      <td className="px-3 py-2 text-right text-green-700">{String(row.successCount)}</td>
+                      <td className="px-3 py-2 text-right text-red-600">{String(row.failedCount)}</td>
+                      <td className="px-3 py-2 text-right">{String(row.successRate)}%</td>
+                      <td className="px-3 py-2 text-right">{row.avgResponseTime != null ? String(row.avgResponseTime) : '—'}</td>
+                      <td className="px-3 py-2">{row.lastActivityAt ? formatCasablancaDate(String(row.lastActivityAt), 'dd/MM HH:mm') : '—'}</td>
+                      <td className="px-3 py-2 flex flex-wrap gap-1">{(row.actions as string[] || []).slice(0, 6).map((a) => <span key={a} className="channels-badge channels-badge-neutral text-[10px]">{a}</span>)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {!bizListingsLoading && bizListings.length === 0 && !bizListingsError && <div className="text-sm text-slate-500 p-4 border rounded bg-white text-center">Aucun appel API avec listing identifié.</div>}
+        </div>
+      )}
+
+      {(overviewLoading || calendarLoading || listingLoading || userLoading || oauthLoading || httpLoading || reviewsLoading || hookLoading) && (
+        <div className="channels-loading" style={{ color: T.text3 }}><div className="channels-spinner mr-3" /> Chargement…</div>
+      )}
+    </div>
+  );
+}

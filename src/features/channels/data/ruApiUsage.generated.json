@@ -1,0 +1,365 @@
+{
+  "generatedAt": "2026-05-05T10:01:20.701Z",
+  "usage": {
+    "Pull_ListAmenities_RQ": {
+      "integrated": true,
+      "hits": 9,
+      "source": "scan"
+    },
+    "Pull_ListAmenitiesAvailableForRooms_RQ": {
+      "integrated": true,
+      "hits": 11,
+      "source": "scan"
+    },
+    "Pull_ListPropTypes_RQ": {
+      "integrated": true,
+      "hits": 8,
+      "source": "scan"
+    },
+    "Pull_ListOTAPropTypes_RQ": {
+      "integrated": true,
+      "hits": 8,
+      "source": "scan"
+    },
+    "Pull_ListDepositTypes_RQ": {
+      "integrated": true,
+      "hits": 8,
+      "source": "scan"
+    },
+    "Pull_ListPaymentMethods_RQ": {
+      "integrated": true,
+      "hits": 9,
+      "source": "scan"
+    },
+    "Pull_ListStatuses_RQ": {
+      "integrated": true,
+      "hits": 9,
+      "source": "scan"
+    },
+    "Pull_ListImageTypes_RQ": {
+      "integrated": true,
+      "hits": 9,
+      "source": "scan"
+    },
+    "Pull_ListLanguages_RQ": {
+      "integrated": true,
+      "hits": 14,
+      "source": "scan"
+    },
+    "Pull_GetLocationDetails_RQ": {
+      "integrated": true,
+      "hits": 10,
+      "source": "scan"
+    },
+    "Pull_ListLocations_RQ": {
+      "integrated": true,
+      "hits": 18,
+      "source": "scan"
+    },
+    "Pull_ListCurrencies_RQ": {
+      "integrated": true,
+      "hits": 2,
+      "source": "scan"
+    },
+    "Pull_ListProperties_RQ": {
+      "integrated": true,
+      "hits": 18,
+      "source": "scan"
+    },
+    "Pull_ListSpecProp_RQ": {
+      "integrated": true,
+      "hits": 2,
+      "source": "scan"
+    },
+    "Pull_GetMinStay_RQ": {
+      "integrated": true,
+      "hits": 2,
+      "source": "scan"
+    },
+    "Pull_ListReservations_RQ": {
+      "integrated": true,
+      "hits": 47,
+      "source": "scan"
+    },
+    "Pull_GetReservationDetails_RQ": {
+      "integrated": true,
+      "hits": 3,
+      "source": "scan"
+    },
+    "Pull_GetLeads_RQ": {
+      "integrated": true,
+      "hits": 16,
+      "source": "scan"
+    },
+    "Pull_ListMyUsers_RQ": {
+      "integrated": true,
+      "hits": 63,
+      "source": "scan"
+    },
+    "Pull_ListSalesChannels_RQ": {
+      "integrated": true,
+      "hits": 38,
+      "source": "scan"
+    },
+    "CM_Pull_PropertiesStatus_RQ": {
+      "integrated": true,
+      "hits": 63,
+      "source": "scan"
+    },
+    "CM_Pull_PropertySalesChannels_RQ": {
+      "integrated": true,
+      "hits": 15,
+      "source": "scan"
+    },
+    "Push_PutProperty_RQ": {
+      "integrated": true,
+      "hits": 43,
+      "source": "scan"
+    },
+    "Push_PutBuilding_RQ": {
+      "integrated": true,
+      "hits": 24,
+      "source": "scan"
+    },
+    "Push_PutComposition_RQ": {
+      "integrated": true,
+      "hits": 3,
+      "source": "scan"
+    },
+    "Push_PutDescription_RQ": {
+      "integrated": true,
+      "hits": 3,
+      "source": "scan"
+    },
+    "Push_PutImage_RQ": {
+      "integrated": true,
+      "hits": 3,
+      "source": "scan"
+    },
+    "Push_PutLocation_RQ": {
+      "integrated": true,
+      "hits": 3,
+      "source": "scan"
+    },
+    "Push_PutPaymentMethods_RQ": {
+      "integrated": true,
+      "hits": 2,
+      "source": "scan"
+    },
+    "Push_PutMinStay_RQ": {
+      "integrated": true,
+      "hits": 2,
+      "source": "scan"
+    },
+    "Push_PutChangeOver_RQ": {
+      "integrated": true,
+      "hits": 4,
+      "source": "scan"
+    },
+    "Push_PutPrices_RQ": {
+      "integrated": true,
+      "hits": 36,
+      "source": "scan"
+    },
+    "Push_PutAvbUnits_RQ": {
+      "integrated": true,
+      "hits": 34,
+      "source": "scan"
+    },
+    "Push_PutLongStayDiscounts_RQ": {
+      "integrated": true,
+      "hits": 14,
+      "source": "scan"
+    },
+    "Push_PutLastMinuteDiscounts_RQ": {
+      "integrated": true,
+      "hits": 13,
+      "source": "scan"
+    },
+    "Push_PutSeasons_RQ": {
+      "integrated": true,
+      "hits": 2,
+      "source": "scan"
+    },
+    "Push_ConfirmReservation_RQ": {
+      "integrated": true,
+      "hits": 20,
+      "source": "scan"
+    },
+    "Push_RejectRequest_RQ": {
+      "integrated": true,
+      "hits": 19,
+      "source": "scan"
+    },
+    "Push_PutConfirmedReservationMulti_RQ": {
+      "integrated": true,
+      "hits": 16,
+      "source": "scan"
+    },
+    "Push_CancelReservation_RQ": {
+      "integrated": true,
+      "hits": 14,
+      "source": "scan"
+    },
+    "Push_CreateUser_RQ": {
+      "integrated": true,
+      "hits": 33,
+      "source": "scan"
+    },
+    "Push_FillCompanyDetails_RQ": {
+      "integrated": true,
+      "hits": 52,
+      "source": "scan"
+    },
+    "Push_ArchiveUser_RQ": {
+      "integrated": true,
+      "hits": 43,
+      "source": "scan"
+    },
+    "LNM_PutHandlerUrl_RQ": {
+      "integrated": true,
+      "hits": 25,
+      "source": "scan"
+    },
+    "CM_ChangePropertySalesChannel_RQ": {
+      "integrated": true,
+      "hits": 7,
+      "source": "scan"
+    },
+    "GetMasterToken": {
+      "integrated": true,
+      "hits": 0,
+      "source": "oauth"
+    },
+    "GetUserToken": {
+      "integrated": true,
+      "hits": 0,
+      "source": "oauth"
+    },
+    "NewMessage": {
+      "integrated": true,
+      "hits": 0,
+      "source": "webhook"
+    },
+    "ModifiedMessage": {
+      "integrated": true,
+      "hits": 0,
+      "source": "webhook"
+    },
+    "ReadMessage": {
+      "integrated": true,
+      "hits": 0,
+      "source": "webhook"
+    },
+    "NewThread": {
+      "integrated": true,
+      "hits": 0,
+      "source": "webhook"
+    },
+    "NewReservation": {
+      "integrated": true,
+      "hits": 0,
+      "source": "webhook"
+    },
+    "ModifiedReservation": {
+      "integrated": true,
+      "hits": 0,
+      "source": "webhook"
+    },
+    "CancelledReservation": {
+      "integrated": true,
+      "hits": 0,
+      "source": "webhook"
+    },
+    "NewLead": {
+      "integrated": true,
+      "hits": 0,
+      "source": "webhook"
+    },
+    "RU_REST_GET_api_messaging_threads": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_GET_api_messaging_threads_x": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_GET_api_messaging_threads_x_messages": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_POST_api_messaging_threads_x_messages": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_PUT_api_messaging_threads_x_messages_markasread": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_GET_api_messaging_messages_x": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_GET_api_reviews_thread_x": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_GET_api_reviews_thread_x_messages": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_POST_api_reviews_airbnb_review": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_POST_api_reviews_vrbo_rateguest": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_POST_api_reviews_airbnb_reviewreply": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_POST_api_reviews_bcom_reviewreply": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_POST_api_reviews_vrbo_reviewreply": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_POST_api_reviews_expedia_reviewreply": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_GET_api_airbnb_specialOffers": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_POST_api_airbnb_specialOffers": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    },
+    "RU_REST_PUT_api_airbnb_specialOffers": {
+      "integrated": true,
+      "hits": 0,
+      "source": "ru_rest_proxy"
+    }
+  }
+}

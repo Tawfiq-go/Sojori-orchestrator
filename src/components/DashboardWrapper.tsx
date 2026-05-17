@@ -85,6 +85,16 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'crm/leads': '/crm?tab=leads',
     'crm/support': '/crm?tab=support',
     'crm/onboarding': '/crm?tab=onboarding',
+
+    // Admin
+    'admin/channels': '/channels',
+
+    // Équipe & Rôles
+    'admin/equipe/owners': '/admin/equipe/owners?tab=list',
+    'admin/equipe/staff': '/admin/equipe?tab=staff-dashboard',
+    'admin/equipe/whatsapp': '/admin/equipe?tab=admin-whatsapp',
+    'admin/equipe/roles': '/admin/equipe?tab=worker',
+    'admin/equipe/groups': '/admin/equipe?tab=groups',
   };
 
   /** Détection robuste : on prend la route la plus longue qui matche (préfixes propres). */
@@ -97,6 +107,25 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
       path.startsWith('/onboarding')
     ) {
       return 'clients';
+    }
+
+    // Channels route (specific check)
+    if (path.startsWith('/channels') || path.startsWith('/admin/channels')) {
+      return 'admin/channels';
+    }
+
+    if (path.startsWith('/admin/equipe/owners')) {
+      return 'admin/equipe/owners';
+    }
+    if (path.startsWith('/admin/equipe')) {
+      const tab = new URLSearchParams(location.search).get('tab') || 'staff-dashboard';
+      const map: Record<string, string> = {
+        'staff-dashboard': 'admin/equipe/staff',
+        'admin-whatsapp': 'admin/equipe/whatsapp',
+        worker: 'admin/equipe/roles',
+        groups: 'admin/equipe/groups',
+      };
+      return map[tab] || 'admin/equipe/staff';
     }
 
     const entries = Object.entries(navToRoute).sort((a, b) => b[1].length - a[1].length);

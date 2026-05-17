@@ -85,6 +85,22 @@ export default function MultiView({
       overflow: 'hidden', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
       userSelect: isDragging ? 'none' : 'auto',
     }}>
+      {/* Légende des couleurs - au-dessus du header */}
+      <div style={{
+        padding: '10px 16px', background: T.bg0, borderBottom: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'center', gap: 16,
+      }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: T.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          Légende
+        </span>
+        <div style={{ display: 'flex', gap: 12, fontSize: 10.5, color: T.text2, fontWeight: 600 }}>
+          <Legend dot="rgba(6,115,179,0.7)" label="Réservé" />
+          <Legend dot="rgba(200,30,30,0.7)" label="Stop sell" />
+          <Legend dot={T.ai} label="Prix dynamique" />
+          <Legend dot={T.bg2} label="Weekend" />
+        </div>
+      </div>
+
       {/* Header sticky avec scroll sync */}
       <div ref={headerRef} style={{
         position: 'sticky', top: 0, zIndex: 5,
@@ -180,6 +196,13 @@ function ListingRow({ listing, days, expanded, onToggle, selectedColumns, isSele
 
   const getInv = (dateStr) => roomType?.inventories?.[dateStr] || {};
 
+  // Calculer le prix moyen sur la période visible
+  const avgPrice = useMemo(() => {
+    const prices = days.map(d => priceOf(getInv(d.iso))).filter(p => p > 0);
+    if (prices.length === 0) return 0;
+    return Math.round(prices.reduce((sum, p) => sum + p, 0) / prices.length);
+  }, [days, roomType]);
+
   return (
     <div>
       {/* Rate TOP — toujours visible */}
@@ -206,10 +229,20 @@ function ListingRow({ listing, days, expanded, onToggle, selectedColumns, isSele
             background: `linear-gradient(135deg, ${listing.photoColor || '#fde68a'}, ${listing.photoColorDeep || '#d97706'})`,
             flexShrink: 0,
           }} />
-          <span style={{
-            fontSize: 12.5, fontWeight: 700, lineHeight: 1.1, flex: 1,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>{listing.name}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{
+              fontSize: 12.5, fontWeight: 700, lineHeight: 1.1,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block',
+            }}>{listing.name}</span>
+            {avgPrice > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 600, color: T.text3,
+                fontFamily: '"Geist Mono", monospace', marginTop: 2, display: 'block',
+              }}>
+                Moy: {avgPrice} {listing.currencyCode || 'EUR'}
+              </span>
+            )}
+          </div>
         </div>
 
         {days.map(d => {
@@ -316,6 +349,26 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   const ref = useRef(null);
   const currency = listing.currencyCode || 'EUR';
 
+  // Détecter les états de la cellule
+  const isStopSell = !!inv.stopSell;
+  const isBooked = (inv.reservations?.length ?? 0) > 0;
+  const isDynamic = !!inv.useDynamicPrice;
+  const isWeekend = day.isWeekend;
+
+  // Calculer la couleur de fond en fonction de l'état (priorité: selected > stopSell > booked > weekend > dynamic)
+  let background = 'transparent';
+  if (selected) {
+    background = T.primaryTint3;
+  } else if (isStopSell) {
+    background = 'rgba(200,30,30,0.05)'; // Rouge très léger
+  } else if (isBooked) {
+    background = 'rgba(6,115,179,0.06)'; // Bleu léger
+  } else if (isWeekend) {
+    background = T.bg2; // Gris clair
+  } else if (isDynamic) {
+    background = 'rgba(124,58,237,0.04)'; // Violet très léger
+  }
+
   let content = null;
   if (col.id === 'availableRoom') content = inv.availableRoom ?? '—';
   else if (col.id === 'rate')      content = inv.stopSell ? '—' : <span style={{ color: inv.useDynamicPrice ? T.ai : T.text }}>{priceOf(inv)}</span>;
@@ -351,7 +404,7 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
         padding: '6px 4px', minHeight: 38, position: 'relative',
         fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 600,
         cursor: draggable ? 'cell' : 'default',
-        background: selected ? T.primaryTint3 : 'transparent',
+        background,
         boxShadow: selected ? `inset 0 0 0 2px ${T.primary}` : 'none',
         color: selected ? T.primaryDeep : T.text,
         transition: 'background 0.1s',
@@ -359,5 +412,15 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
       {content}
       {col.hasTooltip && showTip && <TooltipBreakdown inv={inv} dateStr={day.iso} currency={currency} />}
     </div>
+  );
+}
+
+/* ─── Legend item (dot + label) ─── */
+function Legend({ dot, label }) {
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <i style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+      {label}
+    </span>
   );
 }

@@ -32,6 +32,155 @@ export function normalizeAmenityCategoryTabs(apiCategories: string[]): string[] 
   return ['All Categories', 'Basic', ...rest];
 }
 
+/**
+ * Même logique que sojori-dashboard `AmenitiesByCategories.handleTabChange` :
+ * index 0 = tout, index 1 = Basic (basic=true), index 2+ = libellé de l’onglet.
+ */
+export function resolveSelectedCategoriesForTab(
+  categoryTab: number,
+  categoryTabs: string[],
+): string[] {
+  if (categoryTab <= 0) return [];
+  if (categoryTab === 1) return ['Basic'];
+  const label = categoryTabs[categoryTab];
+  if (!label) return [];
+  const lower = label.toLowerCase();
+  if (lower === 'all categories' || lower === 'all' || lower === 'basic') {
+    return lower === 'basic' ? ['Basic'] : [];
+  }
+  return [label];
+}
+
+/** Filtre affichage sélectionnés / appartenance catégorie (legacy getFilteredSelectedAmenities). */
+export type RoomTabOptionLike = {
+  id: string;
+  label?: string;
+  rentalId?: string | number;
+};
+
+/** IDs Rental United pour GET /amenities?roomIds=… (legacy AmenitiesByRooms). */
+export function resolveRoomIdsForTab(
+  roomTab: number,
+  rooms: RoomTabOptionLike[],
+): Array<string | number> | undefined {
+  const current = rooms[roomTab];
+  if (!current) return undefined;
+  if (current.id === '__all__') {
+    const ids = rooms
+      .filter((r) => r.id !== '__all__' && r.rentalId != null)
+      .map((r) => r.rentalId as string | number);
+    return ids.length > 0 ? ids : undefined;
+  }
+  return current.rentalId != null ? [current.rentalId] : [current.id];
+}
+
+export function getAllEnabledCompositionRoomIds(rooms: RoomTabOptionLike[]): Array<string | number> {
+  return rooms
+    .filter((r) => r.id !== '__all__' && r.rentalId != null)
+    .map((r) => r.rentalId as string | number);
+}
+
+/** Équipement applicable à la pièce (compositionRooms). */
+export function amenityMatchesRoomFilter(
+  amenity: {
+    compositionRooms?: Array<{ roomId?: string | number }>;
+  },
+  filterRoomIds: Array<string | number> | undefined,
+  allEnabledRoomIds: Array<string | number>,
+): boolean {
+  const targetIds = (
+    filterRoomIds && filterRoomIds.length > 0
+      ? filterRoomIds
+      : allEnabledRoomIds
+  ).map(String);
+  if (targetIds.length === 0) return true;
+  const comp = amenity.compositionRooms;
+  if (!comp || comp.length === 0) return false;
+  return comp.some((r) => targetIds.includes(String(r.roomId)));
+}
+
+type RoomAmenityInstance = { amenities?: Array<{ _id?: string }> };
+type RoomAmenityConfig = {
+  roomId?: string | number;
+  rooms?: RoomAmenityInstance[];
+};
+type RoomTypeWithAmenities = { roomAmenities?: RoomAmenityConfig[] };
+
+/** Équipement assigné dans roomTypes[0].roomAmenities (instances par pièce). */
+export function isAmenityAssignedInRoomAmenities(
+  amenityId: string,
+  roomTypes: unknown,
+  filterRoomIds: Array<string | number> | undefined,
+  allEnabledRoomIds: Array<string | number>,
+): boolean {
+  const targetIds = (
+    filterRoomIds && filterRoomIds.length > 0
+      ? filterRoomIds
+      : allEnabledRoomIds
+  ).map(String);
+  if (targetIds.length === 0) return false;
+  const rts = Array.isArray(roomTypes) ? roomTypes : [];
+  const rt = rts[0] as RoomTypeWithAmenities | undefined;
+  if (!rt?.roomAmenities) return false;
+  for (const ra of rt.roomAmenities) {
+    if (!targetIds.includes(String(ra.roomId))) continue;
+    for (const inst of ra.rooms || []) {
+      if (inst.amenities?.some((a) => String(a._id) === amenityId)) return true;
+    }
+  }
+  return false;
+}
+
+export function listingAmenityMatchesRoomTab(
+  item: {
+    _id: string;
+    amenityData?: {
+      compositionRooms?: Array<{ roomId?: string | number }>;
+    };
+  },
+  filterRoomIds: Array<string | number> | undefined,
+  allEnabledRoomIds: Array<string | number>,
+  roomTypes: unknown,
+): boolean {
+  const data = item.amenityData || {};
+  if (amenityMatchesRoomFilter(data, filterRoomIds, allEnabledRoomIds)) return true;
+  return isAmenityAssignedInRoomAmenities(
+    item._id,
+    roomTypes,
+    filterRoomIds,
+    allEnabledRoomIds,
+  );
+}
+
+export function amenityMatchesCatalogCategories(
+  amenity: {
+    basic?: boolean;
+    SojoriSubcategory?: unknown[];
+    category?: string;
+  },
+  categories: string[],
+): boolean {
+  if (!categories.length) return true;
+  const current = categories[0];
+  if (current === 'Basic') return amenity.basic === true;
+  const subcats = Array.isArray(amenity.SojoriSubcategory) ? amenity.SojoriSubcategory : [];
+  for (const subcat of subcats) {
+    if (typeof subcat === 'string' && subcat === current) return true;
+    if (subcat && typeof subcat === 'object') {
+      const o = subcat as Record<string, string>;
+      if (
+        o.en === current ||
+        o.fr === current ||
+        o.es === current ||
+        o.it === current
+      ) {
+        return true;
+      }
+    }
+  }
+  return typeof amenity.category === 'string' && amenity.category === current;
+}
+
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
@@ -901,6 +1050,35 @@ export const listingsService = {
   },
 
   /**
+   * Lits disponibles pour une pièce du catalogue composition (legacy RoomAmenitiesPopup).
+   */
+  async getBedAmenitiesForCompositionRoom(
+    rentalId: string | number,
+  ): Promise<Record<string, unknown>[]> {
+    const params = new URLSearchParams();
+    params.set('page', '0');
+    params.set('limit', '300');
+    params.set('paged', 'true');
+    params.set('useBed', 'true');
+    params.append('roomIds', String(rentalId));
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/amenities?${params.toString()}`,
+      );
+      const payload = asRecord(response.data);
+      if (payload.success === false) return [];
+      const raw = payload.data;
+      const arr = Array.isArray(raw) ? raw : [];
+      return arr
+        .map((row) => asRecord(row))
+        .filter((r) => r.useBed === true);
+    } catch (error) {
+      console.warn('[listings] getBedAmenitiesForCompositionRoom:', error);
+      return [];
+    }
+  },
+
+  /**
    * GET /amenities/categories - Fetch predefined amenity categories
    */
   async getPredefinedCategories(): Promise<string[]> {
@@ -1086,6 +1264,26 @@ export const listingsService = {
     return normalizeListingDetail(body.listing);
   },
 
+  /**
+   * PUT /listings/update-property/:id — même contrat que sojori-dashboard (descriptions[], roomTypes, …).
+   */
+  async updateListingProperty(
+    listingId: string,
+    payload: Record<string, unknown>,
+  ): Promise<Record<string, unknown> | null> {
+    const response = await apiClient.put(
+      `${LISTING_API_BASE_URL}/listings/update-property/${listingId}`,
+      payload,
+    );
+    const body = asRecord(response.data);
+    if (body.success === false) {
+      throw new Error(asString(body.message) || 'update-property failed');
+    }
+    const data = body.data;
+    if (isRecord(data)) return data;
+    return body;
+  },
+
   async deleteListing(listingId: string): Promise<void> {
     await apiClient.delete(`${LISTING_API_BASE_URL}/listings/delete-listing/${listingId}`);
   },
@@ -1125,6 +1323,7 @@ export const listingsService = {
   async getListingsWithRoomTypes(options?: {
     staging?: boolean;
     compact?: boolean;
+    active?: boolean;
   }): Promise<{
     success: boolean;
     data: Array<{
@@ -1143,8 +1342,14 @@ export const listingsService = {
     try {
       const staging = options?.staging ?? false;
       const compact = options?.compact ?? false; // false pour avoir roomTypes
+      const active = options?.active ?? undefined;
 
-      const url = `${LISTING_API_BASE_URL}/listings?staging=${staging}&compact=${compact}`;
+      let url = `${LISTING_API_BASE_URL}/listings?staging=${staging}&compact=${compact}`;
+
+      // ✅ Si active est défini, ajouter useActiveFilter=true + active=true/false
+      if (active !== undefined) {
+        url += `&useActiveFilter=true&active=${active}`;
+      }
 
       const response = await apiClient.get(url);
 
