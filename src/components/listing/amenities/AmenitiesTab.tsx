@@ -18,6 +18,7 @@ import CategoryBlock from './CategoryBlock';
 import SelectedPanel from './SelectedPanel';
 import RoomAssignModal from './RoomAssignModal';
 import { amenityMatchesRoom } from './mapAmenityFromApi';
+import { LISTING_LAYOUT } from '../../../constants/listingLayout';
 
 export interface AmenitiesTabProps {
   catalog: Amenity[];                                  // 372 amenities
@@ -139,7 +140,7 @@ export default function AmenitiesTab({
     activeCat === 'all' ? ALL_CATEGORIES : [activeCat];
 
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto', p: { xs: 0, md: 0 }, mt: -0.5 }}>
+    <Box sx={{ maxWidth: LISTING_LAYOUT.amenitiesMaxWidth, width: '100%', mx: 0, p: 0, mt: -0.5 }}>
       <style>{KEYFRAMES}</style>
 
       {/* Completion bar (Basic OTA) */}
