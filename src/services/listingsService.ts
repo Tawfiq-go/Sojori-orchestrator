@@ -20,6 +20,8 @@ import {
   type ServiceResult,
 } from '../types/listings.types';
 import type { ClientServicesPayload } from '../utils/mapApiListingToListingRecord';
+import { getOwners } from './teamDashboardApi';
+import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
 
 const LOCAL_LISTING_API = 'http://localhost:4001/api/v1/listing';
 
@@ -319,13 +321,68 @@ function normalizePricing(source: UnknownRecord): ListingPricingSnapshot {
   };
 }
 
+function resolveOwnerRecord(record: UnknownRecord): UnknownRecord {
+  const ownerRaw = record.owner;
+  if (Array.isArray(ownerRaw) && ownerRaw.length > 0) return asRecord(ownerRaw[0]);
+  if (ownerRaw && typeof ownerRaw === 'object' && !Array.isArray(ownerRaw)) {
+    return asRecord(ownerRaw);
+  }
+  return asRecord(record.ownerDoc);
+}
+
+function collectRentalUnitedIds(record: UnknownRecord): string[] {
+  const fromListing = asStringArray(record.rentalUnitedIds);
+  const ids = new Set(fromListing.filter(Boolean));
+  const roomTypes = Array.isArray(record.roomTypes) ? record.roomTypes : [];
+  for (const rt of roomTypes) {
+    const ruId = asString(asRecord(rt).rentalUnitedId).trim();
+    if (ruId) ids.add(ruId);
+  }
+  const buildingId = asString(record.rentalUnitedBuildingId).trim();
+  if (buildingId && ids.size === 0) ids.add(buildingId);
+  return [...ids];
+}
+
+const UNKNOWN_OWNER_LABEL = 'Propriétaire inconnu';
+
+async function enrichListingSummariesWithOwners(items: ListingSummary[]): Promise<ListingSummary[]> {
+  const needsEnrich = items.some(
+    (item) => item.ownerId && (!item.ownerName || item.ownerName === UNKNOWN_OWNER_LABEL),
+  );
+  if (!needsEnrich) return items;
+  try {
+    const res = (await getOwners({ page: 0, limit: 500, deleted: false, banned: false })) as {
+      data?: unknown[];
+    };
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    const byId = new Map<string, string>();
+    for (const row of rows) {
+      const owner = asRecord(row);
+      const id = asString(owner._id);
+      if (id) byId.set(id, getOwnerListLabel(owner));
+    }
+    return items.map((item) => {
+      if (!item.ownerId || (item.ownerName && item.ownerName !== UNKNOWN_OWNER_LABEL)) return item;
+      const label = byId.get(String(item.ownerId));
+      return label ? { ...item, ownerName: label } : item;
+    });
+  } catch {
+    return items;
+  }
+}
+
 function normalizeListingSummary(source: unknown): ListingSummary {
   const record = asRecord(source);
   const listingImages = normalizeListingImages(record.listingImages);
-  const owner = Array.isArray(record.owner) ? asRecord(record.owner[0]) : {};
+  const owner = resolveOwnerRecord(record);
+  const ownerNameFromParts = [asString(owner.firstName).trim(), asString(owner.lastName).trim()]
+    .filter(Boolean)
+    .join(' ');
   const ownerName =
     pickFirstString(record, ['ownerName']) ||
-    [asString(owner.firstName).trim(), asString(owner.lastName).trim()].filter(Boolean).join(' ');
+    ownerNameFromParts ||
+    pickFirstString(owner, ['companyName', 'email']) ||
+    pickFirstString(record, ['ownerEmail']);
 
   return {
     id: asString(record._id || record.id),
@@ -333,13 +390,13 @@ function normalizeListingSummary(source: unknown): ListingSummary {
     city: pickFirstString(record, ['city']),
     country: pickFirstString(record, ['country']),
     ownerId: asString(record.ownerId || owner._id) || null,
-    ownerName: ownerName || 'Owner inconnu',
+    ownerName: ownerName || UNKNOWN_OWNER_LABEL,
     status: deriveListingStatus(record),
     active: record.active !== false,
     propertyUnit: pickFirstString(record, ['propertyUnit']) || 'N/A',
     channelManager: pickFirstString(record, ['channelManager']) || 'direct',
     channexListingId: pickFirstString(record, ['channexListingId']),
-    rentalUnitedIds: asStringArray(record.rentalUnitedIds),
+    rentalUnitedIds: collectRentalUnitedIds(record),
     coverImageUrl: listingImages[0]?.url || '',
     updatedAt: pickFirstString(record, ['updatedAt', 'createdAt']) || null,
     raw: record,
@@ -744,12 +801,50 @@ export const listingsService = {
 
   /**
    * GET /api/v1/admin/city
+   * @param allCities — true = toutes les villes admin (dont hors usedInSojoriSysytem), requis pour l’import RU
    */
-  async getCities(): Promise<{ _id: string; name: string; countryId?: string }[]> {
+  async getCities(options?: {
+    allCities?: boolean;
+    limit?: number;
+    search_text?: string;
+  }): Promise<{ _id: string; name: string; countryId?: string }[]> {
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'https://dev.sojori.com';
-      const response = await apiClient.get(`${baseUrl}/api/v1/admin/city?paged=false`);
-      return response.data?.data?.cities || [];
+      const params = new URLSearchParams({
+        page: '0',
+        limit: String(options?.limit ?? 2000),
+        paged: 'false',
+        allCities: String(options?.allCities !== false),
+        search_text: options?.search_text ?? '',
+      });
+      const response = await apiClient.get(`${baseUrl}/api/v1/admin/city?${params.toString()}`);
+      const body = response.data;
+      let rows: unknown[] = [];
+      if (Array.isArray(body)) rows = body;
+      else if (Array.isArray(asRecord(body).cities)) rows = asRecord(body).cities as unknown[];
+      else if (Array.isArray(asRecord(asRecord(body).data).cities)) {
+        rows = asRecord(asRecord(body).data).cities as unknown[];
+      }
+      return rows
+        .map((row) => {
+          const r = asRecord(row);
+          const nameRaw = r.name;
+          let name = '';
+          if (typeof nameRaw === 'string') name = nameRaw;
+          else if (isRecord(nameRaw)) {
+            name =
+              pickFirstString(nameRaw, ['fr', 'en', 'FR', 'EN', 'ar']) ||
+              Object.values(nameRaw).find((v) => typeof v === 'string' && v) as string ||
+              '';
+          }
+          return {
+            _id: asString(r._id),
+            name: name || asString(r._id),
+            countryId: asString(r.countryId) || undefined,
+          };
+        })
+        .filter((c) => c._id)
+        .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
     } catch {
       return [];
     }
@@ -1187,14 +1282,17 @@ export const listingsService = {
     useActiveFilter?: boolean;
     active?: boolean;
     name?: string;
+    forListingsOverview?: boolean;
   }): Promise<ServiceResult<{ items: ListingSummary[]; total: number }>> {
     const page = options?.page ?? 0;
     const limit = options?.limit ?? 20;
     const staging = options?.staging ?? false;
+    const forListingsOverview = options?.forListingsOverview ?? true; // ✅ Par défaut optimisé pour overview
     const query = new URLSearchParams({
       page: String(page),
       limit: String(limit),
       staging: String(staging),
+      forListingsOverview: String(forListingsOverview),
     });
     if (options?.useActiveFilter) {
       query.set('useActiveFilter', 'true');
@@ -1213,8 +1311,9 @@ export const listingsService = {
       const items = Array.isArray(payload.data)
         ? payload.data.map((item) => normalizeListingSummary(item))
         : [];
+      const enriched = await enrichListingSummariesWithOwners(items);
       return {
-        data: { items, total: asNumber(payload.total) ?? items.length },
+        data: { items: enriched, total: asNumber(payload.total) ?? enriched.length },
         source: 'api',
       };
     } catch (error) {
