@@ -1,0 +1,366 @@
+/* MailTemplates - Modern UI with sticky header and optimized height */
+
+/* Custom Sojori Orange Scrollbar */
+.mail-templates-container *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.mail-templates-container *::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.mail-templates-container *::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #FF6B35 0%, #E55A2B 100%);
+  border-radius: 4px;
+  border: 1px solid #f1f1f1;
+}
+
+.mail-templates-container *::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #E55A2B 0%, #D44920 100%);
+  box-shadow: 0 2px 6px rgba(255, 107, 53, 0.5);
+}
+
+/* Main Container - Fixed Height */
+.mail-templates-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 240px);
+  overflow: hidden;
+}
+
+/* Filter Bar - Sticky Top */
+.mail-templates-filters {
+  padding: 16px;
+  border-bottom: 1px solid #E0E0E0;
+  background-color: white;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Table Container - Scrollable */
+.mail-templates-table-container {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+/* Sticky Table Header */
+.mail-templates-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 100 !important;
+  background-color: #FF6B35 !important;
+  color: white !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-weight: 700 !important;
+  font-size: 0.95rem !important;
+  letter-spacing: 0.3px !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  padding: 18px 16px !important;
+}
+
+/* Table Body Cells */
+.mail-templates-table tbody td {
+  padding: 16px 14px;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 0.925rem;
+  line-height: 1.5;
+  color: #424242;
+}
+
+/* Row Hover Effect */
+.mail-templates-table tbody tr {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mail-templates-table tbody tr:hover {
+  background-color: #FFF3E0 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.15);
+}
+
+/* Pagination - Sticky Bottom */
+.mail-templates-pagination {
+  padding: 8px 16px;
+  border-top: 1px solid #E0E0E0;
+  background-color: white;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+/* Search Bar Styles */
+.mail-templates-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mail-templates-search .MuiOutlinedInput-root {
+  border-radius: 8px;
+}
+
+.mail-templates-search .MuiOutlinedInput-root.Mui-focused {
+  border-color: #FF6B35;
+}
+
+/* Filter Chips */
+.mail-templates-filter-chip {
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.mail-templates-filter-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+}
+
+.mail-templates-filter-chip.active {
+  background-color: #FF6B35 !important;
+  color: white !important;
+  font-weight: 600;
+}
+
+/* Loading State */
+.mail-templates-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Empty State */
+.mail-templates-empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  flex-direction: column;
+  gap: 16px;
+  color: #9E9E9E;
+}
+
+.mail-templates-empty-icon {
+  font-size: 64px;
+  color: #E0E0E0;
+}
+
+/* Action Buttons */
+.mail-templates-action-btn {
+  min-width: auto;
+  padding: 8px;
+  color: #FF6B35;
+  transition: all 0.2s ease;
+}
+
+.mail-templates-action-btn:hover {
+  background-color: #FFF3E0;
+  color: #E55A2B;
+  transform: scale(1.1);
+}
+
+/* Message Language Icons */
+.mail-templates-language-icons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+.mail-templates-language-icon {
+  font-size: 18px;
+  opacity: 0.9;
+  transition: opacity 0.2s ease;
+}
+
+.mail-templates-language-icon:hover {
+  opacity: 1;
+}
+
+/* Status Chip */
+.mail-templates-status-chip {
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 18px;
+  padding: 4px 12px;
+  letter-spacing: 0.2px;
+}
+
+/* Owner Avatar */
+.mail-templates-owner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.mail-templates-owner-avatar {
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  background-color: #FF6B35 !important;
+}
+
+/* Template Name Cell */
+.mail-templates-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: #424242;
+  transition: color 0.2s ease;
+  justify-content: flex-start;
+  padding-left: 16px;
+}
+
+.mail-templates-name:hover {
+  color: #FF6B35;
+}
+
+.mail-templates-name-icon {
+  color: #FF6B35;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.mail-templates-name-text {
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+/* Responsive Design */
+@media (max-width: 960px) {
+  .mail-templates-container {
+    height: calc(100vh - 200px);
+  }
+
+  .mail-templates-filters {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mail-templates-search {
+    width: 100%;
+  }
+
+  .mail-templates-table thead th {
+    font-size: 12px;
+    padding: 12px 8px !important;
+  }
+
+  .mail-templates-table tbody td {
+    font-size: 12px;
+    padding: 10px 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  .mail-templates-container {
+    height: calc(100vh - 160px);
+  }
+
+  .mail-templates-name {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .mail-templates-owner {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+/* Animation for modal open */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.MuiDialog-paper {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Custom button styles for create button */
+.mail-templates-create-btn {
+  background-color: #FF6B35 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  padding: 8px 20px !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+.mail-templates-create-btn:hover {
+  background-color: #E55A2B !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3) !important;
+}
+
+/* Tab navigation if needed */
+.mail-templates-tabs {
+  border-bottom: 2px solid #E0E0E0;
+  margin-bottom: 16px;
+}
+
+.mail-templates-tab {
+  text-transform: none !important;
+  font-weight: 500 !important;
+  color: #757575 !important;
+}
+
+.mail-templates-tab.Mui-selected {
+  color: #FF6B35 !important;
+  font-weight: 600 !important;
+}
+
+.MuiTabs-indicator {
+  background-color: #FF6B35 !important;
+  height: 3px !important;
+}
+
+/* Channel Priority Chips - Standardized */
+.mail-templates-table .MuiChip-root {
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  letter-spacing: 0.2px !important;
+  padding: 6px 14px !important;
+  height: auto !important;
+  border-radius: 18px !important;
+}
+
+/* Description Text - Standardized */
+.mail-templates-table .MuiTypography-caption {
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+  color: #757575 !important;
+}
+
+/* Click to edit text - Standardized */
+.mail-templates-table tbody td Typography[variant="caption"] {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: #FF6B35 !important;
+}
+
+/* Language Flags - Better spacing */
+.mail-templates-language-icons span {
+  font-size: 20px !important;
+}

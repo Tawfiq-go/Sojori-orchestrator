@@ -428,6 +428,8 @@ function buildServiceError(error: unknown): string {
 export interface ListingSrvConfigFetchResult {
   data: unknown | null;
   error?: string;
+  /** true when srv-listing returned HTTP 404 (config row missing). */
+  notFound?: boolean;
 }
 
 function parseListingConfigPayload(body: unknown): ListingSrvConfigFetchResult {
@@ -444,22 +446,35 @@ function parseListingConfigPayload(body: unknown): ListingSrvConfigFetchResult {
   return { data: p };
 }
 
+function listingConfigHttpStatus(error: unknown): number | undefined {
+  if (isAxiosError(error)) {
+    return error.response?.status;
+  }
+  if (isRecord(error)) {
+    const response = asRecord(error.response);
+    const status = response.status;
+    return typeof status === 'number' ? status : undefined;
+  }
+  return undefined;
+}
+
 async function safeListingConfigGet(url: string): Promise<ListingSrvConfigFetchResult> {
   try {
     const response = await apiClient.get(url);
     return parseListingConfigPayload(response.data);
   } catch (error) {
+    const httpStatus = listingConfigHttpStatus(error);
     if (isRecord(error)) {
       const responsePayload = asRecord(error.response);
       const responseData = responsePayload.data;
       if (responseData !== undefined && responseData !== null) {
         const parsed = parseListingConfigPayload(responseData);
         if (parsed.error) {
-          return parsed;
+          return { ...parsed, notFound: httpStatus === 404 };
         }
       }
     }
-    return { data: null, error: buildServiceError(error) };
+    return { data: null, error: buildServiceError(error), notFound: httpStatus === 404 };
   }
 }
 
@@ -783,9 +798,18 @@ export const listingsService = {
     return safeListingConfigGet(`${LISTING_API_BASE_URL}/listing-chatbot-config/${listingId}`);
   },
 
+  /** GET /listing-chatbot-config/:listingId/check-sync */
+  async getListingChatbotSyncStatus(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigGet(`${LISTING_API_BASE_URL}/listing-chatbot-config/${listingId}/check-sync`);
+  },
+
   /** GET /concierge-config/:listingId */
   async getListingConciergeConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
     return safeListingConfigGet(`${LISTING_API_BASE_URL}/concierge-config/${listingId}`);
+  },
+
+  async getListingConciergeSyncStatus(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigGet(`${LISTING_API_BASE_URL}/concierge-config/${listingId}/check-sync`);
   },
 
   /** GET /listing-support-categories/:listingId */
@@ -793,9 +817,19 @@ export const listingsService = {
     return safeListingConfigGet(`${LISTING_API_BASE_URL}/listing-support-categories/${listingId}`);
   },
 
+  async getListingSupportSyncStatus(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigGet(
+      `${LISTING_API_BASE_URL}/listing-support-categories/${listingId}/check-sync`,
+    );
+  },
+
   /** GET /rules-and-info/:listingId */
   async getListingRulesAndInfoConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
     return safeListingConfigGet(`${LISTING_API_BASE_URL}/rules-and-info/${listingId}`);
+  },
+
+  async getListingRulesSyncStatus(listingId: string): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigGet(`${LISTING_API_BASE_URL}/rules-and-info/${listingId}/check-sync`);
   },
 
   /** GET /listing-access/:listingId */

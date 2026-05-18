@@ -1,8 +1,21 @@
 /** Canonicalisation onglets URL — compat legacy sojori-dashboard `/admin/Channels`. */
 
-export const SECTION_VALID = new Set(['Sum', 'Business', 'Mapping', 'Debug', 'Cron', 'Import']);
+export const SECTION_VALID = new Set([
+  'Sum',
+  'Business',
+  'Mapping',
+  'Debug',
+  'Cron',
+  'Import',
+]);
 
-export type SectionTab = 'Sum' | 'Business' | 'Mapping' | 'Debug' | 'Cron' | 'Import';
+export type SectionTab =
+  | 'Sum'
+  | 'Business'
+  | 'Mapping'
+  | 'Debug'
+  | 'Cron'
+  | 'Import';
 
 export function canonicalSectionTab(tabParam: string | null): SectionTab {
   if (!tabParam) return 'Sum';
@@ -15,6 +28,10 @@ export function canonicalSectionTab(tabParam: string | null): SectionTab {
   if (lo === 'debug' || lo === 'audit') return 'Debug';
   if (lo === 'cron' || lo === 'crons' || lo === 'jobs') return 'Cron';
   if (lo === 'import' || lo === 'onboard') return 'Import';
+  if (lo === 'channel-manager' || lo === 'channelmanager' || lo === 'channel_manager') {
+    return 'Sum';
+  }
+  if (lo === 'distribution' || lo === 'dist') return 'Sum';
   if (lo === 'api' || lo === 'hook') return 'Business';
   if (lo === 'map' || lo === 'rulist') return 'Mapping';
   return 'Sum';
@@ -42,6 +59,10 @@ export function migrateLegacyChannelsSearchParams(sp: URLSearchParams): URLSearc
   const raw = (sp.get('tab') || '').trim();
   const lo = raw.toLowerCase();
   const next = new URLSearchParams(sp);
+
+  if (lo === 'channel-manager' || lo === 'distribution') {
+    return null;
+  }
 
   if (lo === 'api' || lo === 'hook' || lo === 'map' || lo === 'rulist') {
     if (lo === 'hook') {

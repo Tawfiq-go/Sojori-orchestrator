@@ -67,13 +67,13 @@ export default function ListingFormV2({
       if (tabKey === 'rooms')        return <RoomsTab       {...common} listingId={listingId} />;
       if (tabKey === 'license')      return <LicenseTab     {...common} />;
     } else {
-      if (tabKey === 'orchestration') return <OrchestrationTab {...common} />;
+      if (tabKey === 'orchestration') return <OrchestrationTab {...common} listingId={listingId} />;
       if (tabKey === 'menage')        return <CleaningTab      {...common} />;
-      if (tabKey === 'access')        return <AccessTab        {...common} />;
-      if (tabKey === 'whatsapp')      return <WhatsAppTab      {...common} />;
-      if (tabKey === 'concierge')     return <ConciergeTab     {...common} />;
-      if (tabKey === 'support')       return <SupportTab       {...common} />;
-      if (tabKey === 'rules')         return <RulesTab         {...common} />;
+      if (tabKey === 'access')        return <AccessTab        listingId={listingId} listingName={values.name} />;
+      if (tabKey === 'whatsapp')      return <WhatsAppTab      {...common} listingId={listingId} listingName={values.name} />;
+      if (tabKey === 'concierge')     return <ConciergeTab     listingId={listingId} listingName={values.name} />;
+      if (tabKey === 'support')       return <SupportTab       listingId={listingId} listingName={values.name} />;
+      if (tabKey === 'rules')         return <RulesTab         listingId={listingId} listingName={values.name} />;
     }
     return null;
   };

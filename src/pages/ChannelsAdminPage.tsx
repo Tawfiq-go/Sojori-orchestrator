@@ -1,6 +1,6 @@
 // ChannelsAdminPage — Hub OTA/RU (migration sojori-dashboard /admin/Channels)
 import { useEffect } from 'react';
-import { useSearchParams, Navigate } from 'react-router-dom';
+import { useSearchParams, Navigate, useNavigate } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { tokens as T } from '../components/dashboard/DashboardV2.components';
 import { SummaryTab } from '../components/channels/SummaryTab';
@@ -26,6 +26,14 @@ const TABS: Array<{ id: SectionTab; label: string; icon: string }> = [
 
 export function ChannelsAdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const tab = (searchParams.get('tab') || '').toLowerCase();
+    if (tab === 'channel-manager' || tab === 'distribution') {
+      navigate(`/admin/ChannelManager?tab=${tab}`, { replace: true });
+    }
+  }, [searchParams, navigate]);
 
   useEffect(() => {
     const migrated = migrateLegacyChannelsSearchParams(searchParams);
@@ -57,10 +65,10 @@ export function ChannelsAdminPage() {
       <div style={{ padding: '22px 28px 50px', maxWidth: 1600, margin: '0 auto' }}>
         <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 28, fontWeight: 800, color: T.text, margin: 0, fontFamily: 'inherit' }}>
-            Channels Management
+            Channels
           </h1>
           <p style={{ fontSize: 13, color: T.text3, margin: '6px 0 0', fontFamily: 'inherit' }}>
-            Gestion OTA/RU : webhooks, APIs, mappings, imports
+            KPIs OTA/RU, webhooks, APIs, mappings, imports
           </p>
         </div>
 
