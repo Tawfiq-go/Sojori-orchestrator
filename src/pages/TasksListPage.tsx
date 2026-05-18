@@ -52,6 +52,7 @@ import {
 
 moment.locale('fr');
 import { AddTaskModal } from '../components/tasks/AddTaskModal';
+import AssignStaffDialog from '../features/tasksNew/components/AssignStaffDialog.jsx';
 import { useAuth } from '../hooks/useAuth';
 import tasksService, { resolveTasksUserScope } from '../services/tasksService';
 import type {
@@ -83,7 +84,7 @@ const COLUMN_WIDTHS = {
   timeslot: '80px',
   details: '88px',
   status: '82px',
-  assignedStaff: '80px',
+  assignedStaff: '92px',
   paymentPrice: '68px',
 } as const;
 
@@ -100,6 +101,100 @@ function urgencyShortLabel(em: string): string {
   if (em === 'Critical') return 'Crit.';
   if (em === 'Urgent') return 'Urg.';
   return 'Norm.';
+}
+
+function StaffAssignCell({
+  task,
+  onAssign,
+}: {
+  task: TaskListItem;
+  onAssign: (task: TaskListItem) => void;
+}) {
+  const hasStaff = Boolean(task.staffName || task.staffCode);
+  const displayName = task.staffName || task.staffCode || '';
+
+  const assignBtnSx = {
+    textTransform: 'none' as const,
+    fontSize: 11,
+    px: 1.25,
+    py: 0,
+    minHeight: 22,
+    minWidth: 0,
+    lineHeight: '20px',
+    borderColor: T.primary,
+    color: T.primaryDeep,
+    '&:hover': {
+      borderColor: T.primaryDeep,
+      bgcolor: T.primaryTint,
+    },
+  };
+
+  if (!hasStaff) {
+    return (
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={(e) => {
+          e.stopPropagation();
+          onAssign(task);
+        }}
+        sx={assignBtnSx}
+      >
+        Assigner
+      </Button>
+    );
+  }
+
+  return (
+    <Stack spacing={0.25} sx={{ minWidth: 0, maxWidth: '100%' }}>
+      <Typography
+        sx={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: T.primaryDeep,
+          lineHeight: 1.15,
+          cursor: 'pointer',
+        }}
+        noWrap
+        title={displayName}
+        onClick={(e) => {
+          e.stopPropagation();
+          onAssign(task);
+        }}
+      >
+        {displayName}
+      </Typography>
+      {task.staffPhone ? (
+        <Typography
+          sx={{ fontSize: 10, color: T.text3, lineHeight: 1.1 }}
+          noWrap
+          title={task.staffPhone}
+        >
+          {task.staffPhone}
+        </Typography>
+      ) : null}
+      <Button
+        size="small"
+        variant="text"
+        onClick={(e) => {
+          e.stopPropagation();
+          onAssign(task);
+        }}
+        sx={{
+          ...assignBtnSx,
+          border: 'none',
+          p: 0,
+          minHeight: 18,
+          fontSize: 10,
+          fontWeight: 600,
+          justifyContent: 'flex-start',
+          color: T.primary,
+        }}
+      >
+        Changer
+      </Button>
+    </Stack>
+  );
 }
 
 /** Palette alignée ReservationsPage (« Atelier 2026 ») — chrome compact */
@@ -539,6 +634,8 @@ export function TasksListPage() {
   );
   const closeActionsMenu = useCallback(() => setActionsMenu(null), []);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [assignStaffOpen, setAssignStaffOpen] = useState(false);
+  const [taskToAssign, setTaskToAssign] = useState<TaskListItem | null>(null);
 
   const [searchInput, setSearchInput] = useState('');
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
@@ -869,6 +966,19 @@ export function TasksListPage() {
     }
   };
 
+  const openAssignStaff = useCallback((task: TaskListItem) => {
+    setTaskToAssign(task);
+    setAssignStaffOpen(true);
+  }, []);
+
+  const assignOwnerId = useMemo(() => {
+    if (!taskToAssign) return scope.canAccessAllOwners ? undefined : scope.ownerId;
+    if (scope.canAccessAllOwners) {
+      return taskToAssign.ownerId || scope.ownerId;
+    }
+    return scope.ownerId;
+  }, [taskToAssign, scope.canAccessAllOwners, scope.ownerId]);
+
   type TaskRow = TaskListItem & { id: string };
 
   const columns = [
@@ -1176,13 +1286,7 @@ export function TasksListPage() {
       label: 'Staff',
       width: COLUMN_WIDTHS.assignedStaff,
       render: (row: TaskRow) => (
-        <Typography
-          sx={{ fontSize: 11.5, fontWeight: 600, color: T.primaryDeep }}
-          noWrap
-          title={row.staffPhone ? `${row.staffName || row.staffCode} · ${row.staffPhone}` : undefined}
-        >
-          {row.staffName || row.staffCode || '—'}
-        </Typography>
+        <StaffAssignCell task={row} onAssign={openAssignStaff} />
       ),
     },
     {
@@ -1634,6 +1738,19 @@ export function TasksListPage() {
           </Dialog>
 
       </Box>
+
+      <AssignStaffDialog
+        open={assignStaffOpen}
+        onClose={() => {
+          setAssignStaffOpen(false);
+          setTaskToAssign(null);
+        }}
+        task={taskToAssign}
+        ownerId={assignOwnerId}
+        onSuccess={() => {
+          void fetchTasks();
+        }}
+      />
 
       <AddTaskModal
         open={addTaskOpen}
