@@ -662,7 +662,6 @@ const ConfigTaskTemplateView = ({
   /** Fermer les assistants au changement de propriétaire cible (admin / sélecteur) pour éviter mélange Config & Templates / AI */
   useEffect(() => {
     setConfigTemplatesOpen(false);
-    setAiWizardOpen(false);
     setSelectedCategories([]);
     setSelectedTemplate(null);
     setAddCatType('');
@@ -1669,11 +1668,11 @@ const ConfigTaskTemplateView = ({
       </Box>;
   }
   if (loading) {
-    return <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress sx={{
-        color: SOJORI_COLORS.primary
-      }} />
-      </Box>;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress sx={{ color: SOJORI_COLORS.primary }} />
+      </Box>
+    );
   }
   if (!template) {
     return <Alert severity="error">
