@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useSelector } from 'react-redux';
 import { API_BASE_URL } from '../../../config/backendServer.config';
 import { getToken as getAuthToken } from '../../../utils/auth.utils';
+import { useAuth } from '../../../hooks/useAuth';
 
 /**
  * 🛡️ STRATÉGIE ROBUSTE - Récupération OwnerId avec fallbacks multiples
@@ -67,10 +68,11 @@ function resolveTaskIdForStaffApi(task) {
   const code = String(task.itemNumber || task.taskCode || task.timeslotCode || task.itemCode || task.requestNumber || '').trim();
   return code || null;
 }
+/** Palette « Atelier 2026 » — alignée TasksListPage / ReservationsPage */
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
-  primaryPale: '#FFF3E0'
+  primary: '#b8851a',
+  primaryDark: '#876119',
+  primaryPale: 'rgba(184,133,26,0.10)',
 };
 
 /**
@@ -87,8 +89,9 @@ const AssignStaffDialog = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md')) || useMediaQuery('(max-width: 900px)');
 
-  // 🛡️ Redux user pour fallback ownerId
+  const { user: authUser } = useAuth();
   const reduxUser = useSelector(state => state.auth?.user);
+  const scopeUser = reduxUser || authUser;
   const [availableStaff, setAvailableStaff] = useState([]);
   const [unavailableStaff, setUnavailableStaff] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -145,7 +148,7 @@ const AssignStaffDialog = ({
       if (task.endTime) params.set('endTime', task.endTime);
 
       // 🛡️ ROBUSTESSE - Utiliser fonction avec fallbacks multiples
-      const resolvedOwnerId = resolveOwnerIdRobust(ownerIdProp, task, reduxUser);
+      const resolvedOwnerId = resolveOwnerIdRobust(ownerIdProp, task, scopeUser);
       if (resolvedOwnerId) {
         params.set('ownerId', resolvedOwnerId);
       } else {}
@@ -248,7 +251,7 @@ const AssignStaffDialog = ({
         {/* En-tête — même esprit que TaskDetailDrawer, sans contenu détail */}
         <div style={{
         padding: isMobile ? '12px 14px' : '14px 18px',
-        background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+        background: `linear-gradient(135deg, ${SOJORI_COLORS.primary} 0%, ${SOJORI_COLORS.primaryDark} 100%)`,
         color: '#fff',
         flexShrink: 0
       }}>
