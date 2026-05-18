@@ -34,7 +34,11 @@ const resolveOwnerIdRobust = (ownerIdProp, task, reduxUser) => {
 
   // Niveau 3: Redux state (utilisateur connecté)
   if (reduxUser) {
-    const fromRedux = reduxUser._id || reduxUser.id;
+    const fromRedux =
+      reduxUser.ownerId ||
+      reduxUser.theOwnerId ||
+      reduxUser._id ||
+      reduxUser.id;
     if (fromRedux && fromRedux !== 'undefined' && fromRedux !== 'null') {
       return String(fromRedux);
     }
