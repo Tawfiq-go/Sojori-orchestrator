@@ -4,8 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 import ConfigMessagesView from './ConfigMessagesView';
 import ConfigTaskTemplateView from './ConfigTaskTemplateView';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import { Box, FormControl, InputLabel, MenuItem, Select, Typography } from '@mui/material';
 import apiClient from '../../config/axios';
 import { MICROSERVICE_BASE_URL } from '../../config/backendServer.config';
@@ -119,7 +117,6 @@ const OrchestratorConfigContent = () => {
 
   return (
     <>
-      <ToastContainer />
       <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', pt: 1, pb: 0, px: 2 }}>
         {/* Onglets Modèles | Messages en haut de la page — toujours visibles */}
         <Box
