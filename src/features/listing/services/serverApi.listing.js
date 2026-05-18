@@ -23,6 +23,17 @@ export function getListings(params = {}) {
   return axios.get(`${MICROSERVICE_BASE_URL.LISTING}/listings?${q}`);
 }
 
+export function getCountries() {
+  return axios.get(`${MICROSERVICE_BASE_URL.COUNTRY}?page=0&limit=200&paged=false&search_text=`);
+}
+
+export async function getListingById(listingId, staging = false) {
+  const res = await axios.get(
+    `${MICROSERVICE_BASE_URL.LISTING}/listings/by-id/${encodeURIComponent(String(listingId))}?staging=${staging}`,
+  );
+  return res.data?.data ?? res.data;
+}
+
 export async function getOneListing(listingId, staging = false) {
   const res = await axios.get(
     `${MICROSERVICE_BASE_URL.LISTING}/listings/${encodeURIComponent(String(listingId))}?staging=${staging}`,

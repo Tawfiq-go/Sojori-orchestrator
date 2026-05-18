@@ -8,6 +8,7 @@ import React from 'react';
 import { Box, Stack, Typography, TextField, Switch, IconButton, Chip, Button, Select, MenuItem, FormControl } from '@mui/material';
 import { FieldIndicator } from '../components/FieldIndicator';
 import { useListingFormStructure } from '../ListingFormStructureContext';
+import { localizeField } from '../utils/localizeField';
 
 export const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a', primaryTint: 'rgba(184,133,26,0.10)',
@@ -139,13 +140,16 @@ export function Field({
 }
 
 export function Card({ title, meta, children, accent }) {
+  const titleText = typeof title === 'string' || typeof title === 'number'
+    ? title
+    : localizeField(title, '');
   return (
     <Box sx={{
       bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5, p: 2, mb: 1.75,
       ...(accent === 'primary' ? { background: `linear-gradient(180deg, ${T.primaryTint}, ${T.bg1} 70%)`, borderColor: T.primary } : {}),
     }}>
       <Stack direction="row" alignItems="center" sx={{ mb: 1.5 }}>
-        <Typography sx={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>{title}</Typography>
+        <Typography sx={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>{titleText}</Typography>
         {meta && <Typography sx={{ ml: 'auto', fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>{meta}</Typography>}
       </Stack>
       {children}
@@ -173,6 +177,8 @@ export function ToggleRow({
   listingStructure,
 }) {
   const ls = listingStructure ?? useListingFormStructure();
+  const titleText = typeof title === 'string' || typeof title === 'number' ? title : localizeField(title, '');
+  const descText = desc == null ? '' : typeof desc === 'string' ? desc : localizeField(desc, '');
   return (
     <Stack direction="row" alignItems="center" gap={1.75} sx={{
       p: '10px 12px', border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1, mb: 0.75,
@@ -180,10 +186,10 @@ export function ToggleRow({
     }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography sx={{ fontSize: 12.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
-          {title}
+          {titleText}
           {ruField ? <FieldIndicator field={ruField} listingStructure={ls} dense /> : null}
         </Typography>
-        {desc && <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.25 }}>{desc}</Typography>}
+        {descText ? <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.25 }}>{descText}</Typography> : null}
         {badges.length > 0 && (
           <Stack direction="row" gap={0.625} sx={{ mt: 0.625, flexWrap: 'wrap' }} useFlexGap>
             {badges.map((b, i) => (
@@ -215,7 +221,7 @@ export function Counter({ value, onChange, min = 0, max = 99 }) {
 
 export function ChipsRow({ items, value = [], onToggle, single = false }) {
   return (
-    <Stack direction="row" gap={0.75} flexWrap="wrap" useFlexGap>
+    <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap' }} useFlexGap>
       {items.map(item => {
         const active = single ? value === item.id : value.includes(item.id);
         return (

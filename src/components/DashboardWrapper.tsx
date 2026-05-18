@@ -76,7 +76,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     // Catalogue
     'listings': '/listings',
     'pricing': '/pricing',
-    'channels': '/channels',
+    'channels': '/catalogue/channels',
     'clients': '/clients',
 
     // CRM
@@ -88,6 +88,8 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
 
     // Admin
     'admin/channels': '/channels',
+    'admin/ChannelManager/channel-manager': '/admin/ChannelManager?tab=channel-manager',
+    'admin/ChannelManager/distribution': '/admin/ChannelManager?tab=distribution',
 
     // Équipe & Rôles
     'admin/equipe/owners': '/admin/equipe/owners?tab=list',
@@ -95,6 +97,12 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'admin/equipe/whatsapp': '/admin/equipe?tab=admin-whatsapp',
     'admin/equipe/roles': '/admin/equipe?tab=worker',
     'admin/equipe/groups': '/admin/equipe?tab=groups',
+
+    // Paramètres
+    'admin/settings/template': '/admin/settings?tab=template',
+    'admin/settings/host-profile': '/admin/settings?tab=host-profile',
+    'admin/settings/admin-config': '/admin/settings?tab=admin-config',
+    'admin/setting/currency': '/admin/setting/currency',
   };
 
   /** Détection robuste : on prend la route la plus longue qui matche (préfixes propres). */
@@ -109,9 +117,33 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
       return 'clients';
     }
 
-    // Channels route (specific check)
+    if (path.startsWith('/catalogue/channels')) {
+      return 'channels';
+    }
+
+    if (path.startsWith('/admin/ChannelManager')) {
+      const tab = new URLSearchParams(location.search).get('tab') || 'channel-manager';
+      return tab === 'distribution'
+        ? 'admin/ChannelManager/distribution'
+        : 'admin/ChannelManager/channel-manager';
+    }
+
+    // Channels admin hub (OTA/RU KPIs)
     if (path.startsWith('/channels') || path.startsWith('/admin/channels')) {
       return 'admin/channels';
+    }
+
+    if (path.includes('/admin/setting/currency') || path.includes('/admin/settings/currency')) {
+      return 'admin/setting/currency';
+    }
+    if (path.startsWith('/admin/settings') || path.startsWith('/admin/Settings')) {
+      const tab = new URLSearchParams(location.search).get('tab') || 'template';
+      const map: Record<string, string> = {
+        template: 'admin/settings/template',
+        'host-profile': 'admin/settings/host-profile',
+        'admin-config': 'admin/settings/admin-config',
+      };
+      return map[tab] || 'admin/settings/template';
     }
 
     if (path.startsWith('/admin/equipe/owners')) {

@@ -19,6 +19,7 @@ import {
 } from '../../../../services/listingsService';
 import { AmenityCard } from '../components/AmenityCard';
 import { RoomSelectionModal } from '../components/RoomSelectionModal';
+import { RuFormLegend } from './_shared';
 
 // Simple debounce implementation
 function debounce<T extends (...args: any[]) => any>(func: T, delay: number) {
@@ -725,6 +726,7 @@ export function AmenitiesTab({ values, onChange, listingId }: AmenitiesTabProps)
 
   return (
     <Box>
+      <RuFormLegend />
       {/* Main Tabs: By Categories vs By Room */}
       <Box
         sx={{

@@ -7,6 +7,57 @@
 
 const join = (directives: string[]) => directives.join('; ')
 
+/**
+ * Rental United Channel Manager (white-label iframe) — scripts/styles/API.
+ * @see features/rentalUnited/components/RentalUnitedIframe.jsx
+ */
+const RU_SCRIPT_SRC = [
+  'https://ajax.googleapis.com',
+  'https://maxcdn.bootstrapcdn.com',
+  'https://cdnjs.cloudflare.com',
+  'https://new.rentalsunited.com',
+  'https://*.rentalsunited.com',
+  // RU white-label charge parfois GTM (analytics) — sans ceci le widget reste utilisable mais console bruyante
+  'https://www.googletagmanager.com',
+  'https://www.google-analytics.com',
+].join(' ')
+
+const RU_STYLE_SRC = [
+  'https://maxcdn.bootstrapcdn.com',
+  'https://cdnjs.cloudflare.com',
+  'https://new.rentalsunited.com',
+  'https://*.rentalsunited.com',
+  'https://fonts.googleapis.com',
+].join(' ')
+
+const RU_FONT_SRC = [
+  'https://fonts.gstatic.com',
+  'https://fonts.googleapis.com',
+  'https://maxcdn.bootstrapcdn.com',
+  'https://cdnjs.cloudflare.com',
+  'https://new.rentalsunited.com',
+  'https://*.rentalsunited.com',
+].join(' ')
+
+const RU_CONNECT_SRC = [
+  'https://webapi.rentalsunited.com',
+  'https://rm.rentalsunited.com',
+  'https://*.rentalsunited.com',
+  'https://ajax.googleapis.com',
+  'https://maxcdn.bootstrapcdn.com',
+  'https://cdnjs.cloudflare.com',
+  'https://www.googletagmanager.com',
+  'https://www.google-analytics.com',
+  'https://*.google-analytics.com',
+  'https://*.analytics.google.com',
+  'https://*.googletagmanager.com',
+].join(' ')
+
+const RU_FRAME_SRC = 'https://*.rentalsunited.com'
+
+const SOJORI_API_CONNECT =
+  'https://dev.sojori.com wss://dev.sojori.com http://127.0.0.1:4174 ws://127.0.0.1:4174 http://localhost:4007 ws://localhost:4007'
+
 /** Headers applied by `vite dev` only — never sent with production static assets. */
 export const devSecurityHeaders: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
@@ -15,14 +66,15 @@ export const devSecurityHeaders: Record<string, string> = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Content-Security-Policy': join([
     "default-src 'self'",
-    // Vite dev client + React refresh
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    // Vite dev client + React refresh + RU white-label iframe (jquery/bootstrap/RU script)
+    `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${RU_SCRIPT_SRC}`,
     // Vite 8 server-ping uses a blob: SharedWorker — without this, console floods and HMR breaks
     "worker-src 'self' blob:",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    `style-src 'self' 'unsafe-inline' ${RU_STYLE_SRC}`,
     "img-src 'self' data: https: blob:",
-    "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' https://dev.sojori.com wss://dev.sojori.com http://127.0.0.1:4174 ws://127.0.0.1:4174 http://localhost:4007 ws://localhost:4007",
+    `font-src 'self' data: ${RU_FONT_SRC}`,
+    `connect-src 'self' ${SOJORI_API_CONNECT} ${RU_CONNECT_SRC}`,
+    `frame-src 'self' ${RU_FRAME_SRC}`,
     "media-src 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
@@ -40,11 +92,12 @@ export const previewSecurityHeaders: Record<string, string> = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   'Content-Security-Policy': join([
     "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    `script-src 'self' 'unsafe-inline' ${RU_SCRIPT_SRC}`,
+    `style-src 'self' 'unsafe-inline' ${RU_STYLE_SRC}`,
     "img-src 'self' data: https: blob:",
-    "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' https://dev.sojori.com wss://dev.sojori.com",
+    `font-src 'self' data: ${RU_FONT_SRC}`,
+    `connect-src 'self' https://dev.sojori.com wss://dev.sojori.com ${RU_CONNECT_SRC}`,
+    `frame-src 'self' ${RU_FRAME_SRC}`,
     "media-src 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",

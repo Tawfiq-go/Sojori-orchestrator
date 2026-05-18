@@ -137,11 +137,22 @@ const ChannelsAdminPage = lazy(() =>
 const ChannelsLegacyRedirect = lazy(() =>
   import('./pages/ChannelsAdminPage').then((module) => ({ default: module.ChannelsLegacyRedirect }))
 );
+const ChannelManagerHubPage = lazy(() =>
+  import('./pages/ChannelManagerHubPage').then((module) => ({
+    default: module.ChannelManagerHubPage,
+  }))
+);
 const TeamRolesHubPage = lazy(() =>
   import('./pages/TeamRolesHubPage').then((module) => ({ default: module.TeamRolesHubPage }))
 );
 const TeamLegacyRedirect = lazy(() =>
   import('./pages/TeamRolesHubPage').then((module) => ({ default: module.TeamLegacyRedirect }))
+);
+const SettingsHubPage = lazy(() =>
+  import('./pages/SettingsHubPage').then((module) => ({ default: module.SettingsHubPage }))
+);
+const SettingsLegacyRedirect = lazy(() =>
+  import('./pages/SettingsHubPage').then((module) => ({ default: module.SettingsLegacyRedirect }))
 );
 const OnboardingPage = lazy(() =>
   import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage }))
@@ -251,11 +262,16 @@ function App() {
               <Route path="/crm" element={<LazyRoute><CRMPage /></LazyRoute>} />
               <Route path="/admin/channels" element={<LazyRoute><ChannelsAdminPage /></LazyRoute>} />
               <Route path="/admin/Channels" element={<LazyRoute><ChannelsLegacyRedirect /></LazyRoute>} />
+              <Route path="/admin/ChannelManager" element={<LazyRoute><ChannelManagerHubPage /></LazyRoute>} />
               <Route path="/admin/equipe" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
               <Route path="/admin/equipe/owners" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
               <Route path="/admin/User/team" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
               <Route path="/admin/User/owner" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
               <Route path="/admin/User/owner/*" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
+              <Route path="/admin/settings" element={<LazyRoute><SettingsHubPage /></LazyRoute>} />
+              <Route path="/admin/Settings" element={<LazyRoute><SettingsLegacyRedirect /></LazyRoute>} />
+              <Route path="/admin/setting/currency" element={<LazyRoute><SettingsHubPage /></LazyRoute>} />
+              <Route path="/admin/settings/currency" element={<LazyRoute><SettingsLegacyRedirect /></LazyRoute>} />
               <Route path="/onboarding" element={<LazyRoute><OnboardingPage /></LazyRoute>} />
 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

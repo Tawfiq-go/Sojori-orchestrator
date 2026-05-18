@@ -1,0 +1,220 @@
+/* Mail Templates - Improved sticky header design (inspired by Reservations) */
+
+/* Container principal - enlever les marges/padding pour scroll propre */
+.mail-templates-container {
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Header section - sticky en haut */
+.mail-templates-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background-color: #f8fafc;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Filter bar - part of sticky header */
+.mail-templates-filters {
+  background-color: #ffffff;
+  padding: 16px 24px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+}
+
+/* Table container - pas de height fixe, utilise scroll de la page */
+.mail-templates-table-container {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  max-height: none !important;
+  border-radius: 8px;
+  margin: 0 24px 24px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Hide scrollbar on table container - use page scroll */
+.mail-templates-table-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.mail-templates-table-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.mail-templates-table-container::-webkit-scrollbar-thumb {
+  background: #FF6B35;
+  border-radius: 4px;
+}
+
+.mail-templates-table-container::-webkit-scrollbar-thumb:hover {
+  background: #E55A2B;
+}
+
+/* Table */
+.mail-templates-table {
+  min-width: 900px;
+}
+
+/* Table header cells - sticky */
+.mail-templates-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 100 !important;
+  background-color: #FF6B35 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  padding: 16px !important;
+  border-bottom: none !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  white-space: nowrap !important;
+}
+
+/* First column sticky (optional - si tu veux) */
+.mail-templates-table thead th:first-child,
+.mail-templates-table tbody td:first-child {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 101 !important;
+  background-color: inherit;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.mail-templates-table thead th:first-child {
+  z-index: 102 !important;
+  background-color: #FF6B35 !important;
+}
+
+.mail-templates-table tbody td:first-child {
+  background-color: white !important;
+}
+
+/* Table body cells */
+.mail-templates-table tbody td {
+  padding: 12px 16px !important;
+  font-size: 0.875rem !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* Table rows - hover effect */
+.mail-templates-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.mail-templates-table tbody tr:hover {
+  background-color: #FFF3E0 !important;
+}
+
+.mail-templates-table tbody tr:hover td:first-child {
+  background-color: #FFF3E0 !important;
+}
+
+/* Pagination - sticky en bas (optional) */
+.mail-templates-pagination {
+  position: sticky;
+  bottom: 0;
+  z-index: 99;
+  background-color: white;
+  border-top: 1px solid #e2e8f0;
+  padding: 8px 24px;
+}
+
+/* Status chip */
+.mail-templates-status-chip {
+  font-weight: 500 !important;
+  font-size: 0.75rem !important;
+}
+
+/* Action buttons */
+.mail-templates-action-btn {
+  transition: all 0.2s ease;
+}
+
+.mail-templates-action-btn:hover {
+  transform: scale(1.1);
+}
+
+/* Name cell with icon */
+.mail-templates-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mail-templates-name-icon {
+  color: #FF6B35;
+  font-size: 1.25rem;
+}
+
+.mail-templates-name-text {
+  font-weight: 500;
+  color: #1a202c;
+}
+
+/* Language icons */
+.mail-templates-language-icons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+/* Filter chips */
+.mail-templates-filter-chip {
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.mail-templates-filter-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3) !important;
+}
+
+/* Empty state */
+.mail-templates-empty {
+  padding: 64px 24px;
+  text-align: center;
+}
+
+/* Loading state */
+.mail-templates-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .mail-templates-header {
+    padding: 16px 16px;
+  }
+
+  .mail-templates-filters {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .mail-templates-table-container {
+    margin: 0 16px 16px 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .mail-templates-table thead th {
+    font-size: 0.75rem !important;
+    padding: 12px 8px !important;
+  }
+
+  .mail-templates-table tbody td {
+    font-size: 0.75rem !important;
+    padding: 8px !important;
+  }
+}

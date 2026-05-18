@@ -51,7 +51,7 @@ export const CONFIG_TABS = [
   ]},
   { group: 'Communication', items: [
     { id: 'access',     icon: '🔐', label: 'Accès' },
-    { id: 'whatsapp',   icon: '💬', label: 'WhatsApp' },
+    { id: 'whatsapp',   icon: '📱', label: 'Menu WhatsApp' },
     { id: 'concierge',  icon: '🛎️', label: 'Conciergerie' },
     { id: 'support',    icon: '🎧', label: 'Support' },
   ]},
@@ -207,6 +207,12 @@ export default function ListingFormShell({
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2.25 }}>
               <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>
                 {activeTabMeta.icon} {activeTabMeta.label}
+                {activeTab === 'whatsapp' && listing?.name ? (
+                  <Box component="span" sx={{ fontSize: 15, fontWeight: 600, color: T.text2 }}>
+                    {' '}
+                    · {listing.name}
+                  </Box>
+                ) : null}
               </Typography>
               {tabsStatus[activeTab] && <StatusChip {...tabsStatus[activeTab]} />}
             </Stack>

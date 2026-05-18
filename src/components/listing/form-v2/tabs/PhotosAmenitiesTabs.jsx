@@ -86,8 +86,8 @@ export function PhotosTab({ photos = [], onChange, airbnbHeroOrder = '', onAirbn
   return (
     <Box>
       <RuFormLegend />
-      <Field label="Photos du listing" ruField="listingImages">
-        <Box />
+      <Field label="Galerie photos" ruField="listingImages" hint="Images synchronisées vers Rentals United (Push_PutProperty).">
+        <Typography sx={{ fontSize: 11, color: T.text3 }}>Ajoutez ou réorganisez les photos ci-dessous.</Typography>
       </Field>
       <AiBanner
         title="L'IA suggère 3 améliorations"

@@ -338,6 +338,7 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
 
   return (
     <Box>
+      <RuFormLegend />
       {roomTypeLabel && (
         <Typography sx={{ fontSize: 12, color: T.text3, mb: 1.5 }}>
           Type de logement : <strong>{roomTypeLabel}</strong>

@@ -3,8 +3,16 @@
 // Aligné sur CONFIG_TABS_SPEC.md (Claude Code · 16 mai 2026)
 // ════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
-import { Box, Stack, Typography, TextField, Button, IconButton } from '@mui/material';
+import { Box, Stack, Typography, TextField, Button } from '@mui/material';
+import { toast } from 'react-toastify';
+import listingsService from '../../../../services/listingsService';
 import { T, sxInput, Field, Card, SectionH, ToggleRow, Counter, ChipsRow, NumberInput, SelectField, RuFormLegend } from './_shared';
+import {
+  AddFrequencyDialog,
+  AddTimeslotDialog,
+  DashedAddButton,
+  TimeslotChip,
+} from '../components/cleaning/CleaningSlotDialogs';
 
 /* ════════════════════ Orchestration ════════════════════ */
 const ORCHESTRATION_GROUPS = [
@@ -31,16 +39,34 @@ const ORCHESTRATION_GROUPS = [
   ]},
 ];
 
-export function OrchestrationTab({ values = {}, onChange }) {
+export function OrchestrationTab({ values = {}, onChange, listingId }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
   const globalOff = values.orchestrationEnabled === false;
+  const [savingField, setSavingField] = useState(null);
+
+  const handleToggle = async (field, checked) => {
+    upd(field, checked);
+    if (!listingId) return;
+    setSavingField(field);
+    try {
+      await listingsService.updateListingProperty(listingId, { [field]: checked });
+      toast.success(checked ? 'Activé' : 'Désactivé');
+    } catch (e) {
+      upd(field, !checked);
+      toast.error(e?.message || 'Erreur lors de la mise à jour');
+    } finally {
+      setSavingField(null);
+    }
+  };
+
   return (
     <Box>
-      <RuFormLegend />
       <Card title="⚡ Orchestration globale" accent="primary">
         <ToggleRow title="Activer l'orchestration pour ce listing"
           desc="Si désactivé, aucun workflow automatique ne se lance. Toutes les options ci-dessous sont mises en pause."
-          checked={values.orchestrationEnabled !== false} onChange={v => upd('orchestrationEnabled', v)} />
+          checked={values.orchestrationEnabled !== false}
+          disabled={savingField === 'orchestrationEnabled'}
+          onChange={(v) => handleToggle('orchestrationEnabled', v)} />
       </Card>
 
       {ORCHESTRATION_GROUPS.map(g => (
@@ -48,8 +74,8 @@ export function OrchestrationTab({ values = {}, onChange }) {
           <SectionH>{g.label}</SectionH>
           {g.items.map(it => (
             <ToggleRow key={it.id} title={it.title} desc={it.desc} badges={it.badges}
-              checked={values[it.id] !== false} disabled={globalOff}
-              onChange={v => upd(it.id, v)} />
+              checked={values[it.id] !== false} disabled={globalOff || savingField === it.id}
+              onChange={(v) => handleToggle(it.id, v)} />
           ))}
         </Box>
       ))}
@@ -67,9 +93,30 @@ const CLEANING_SUB_TABS = [
   { id: 'sojori',    label: 'Ménage Sojori' },
 ];
 
+const DEFAULT_FREQUENCY = [
+  { startDay: 1, endDay: 7, numberOfCleaning: 2 },
+  { startDay: 8, endDay: 14, numberOfCleaning: 3 },
+  { startDay: 15, endDay: 21, numberOfCleaning: 4 },
+  { startDay: 22, endDay: 30, numberOfCleaning: 6 },
+];
+const DEFAULT_TS_CLEAN = [
+  { start: 10, end: 12, price: 0, default: true },
+  { start: 14, end: 16, price: 0 },
+  { start: 16, end: 18, price: 0 },
+];
+
 export function CleaningTab({ values = {}, onChange }) {
   const [sub, setSub] = useState('free');
+  const [freqDialog, setFreqDialog] = useState(false);
+  const [cleanDialog, setCleanDialog] = useState(false);
+  const [checkinDialog, setCheckinDialog] = useState(false);
+  const [checkoutDialog, setCheckoutDialog] = useState(false);
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
+
+  const frequency = values.frequency?.length ? values.frequency : DEFAULT_FREQUENCY;
+  const tsClean = values.TS_CLEAN?.length ? values.TS_CLEAN : DEFAULT_TS_CLEAN;
+  const tsCheckin = values.TS_CHECKIN || [];
+  const tsCheckout = values.TS_CHECKOUT || [];
 
   return (
     <Box>
@@ -92,40 +139,41 @@ export function CleaningTab({ values = {}, onChange }) {
               checked={values.freeCleaningEnabled !== false} onChange={v => upd('freeCleaningEnabled', v)} />
             <SectionH>Fréquence selon durée séjour</SectionH>
             <Stack direction="row" gap={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
-              {(values.frequency || [
-                { startDay: 1, endDay: 7, numberOfCleaning: 2 },
-                { startDay: 8, endDay: 14, numberOfCleaning: 3 },
-                { startDay: 15, endDay: 21, numberOfCleaning: 4 },
-                { startDay: 22, endDay: 30, numberOfCleaning: 6 },
-              ]).map((p, i) => (
-                <Box key={i} sx={{ p: '10px 14px', border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1, minWidth: 100, textAlign: 'center' }}>
+              {frequency.map((p, i) => (
+                <Box key={i} sx={{ p: '10px 14px', border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1, minWidth: 100, textAlign: 'center', position: 'relative' }}>
+                  <Typography
+                    component="button"
+                    onClick={() => upd('frequency', frequency.filter((_, j) => j !== i))}
+                    sx={{ all: 'unset', cursor: 'pointer', position: 'absolute', top: 4, right: 6, fontSize: 12, color: T.text4 }}
+                  >×</Typography>
                   <Typography sx={{ fontSize: 10.5, fontFamily: '"Geist Mono", monospace', color: T.text3 }}>J {p.startDay}–{p.endDay}</Typography>
                   <Typography sx={{ fontSize: 18, fontWeight: 700, color: T.primaryDeep, fontFamily: '"Geist Mono", monospace' }}>{p.numberOfCleaning}</Typography>
                   <Typography sx={{ fontSize: 9.5, color: T.text3 }}>ménages</Typography>
                 </Box>
               ))}
-              <Box component="button" sx={{ all: 'unset', cursor: 'pointer', p: '10px 14px', border: `1px dashed ${T.borderStrong}`, borderRadius: 1, color: T.text3, fontSize: 11.5 }}>+ Ajouter palier</Box>
+              <DashedAddButton label="+ Ajouter palier" onClick={() => setFreqDialog(true)} />
             </Stack>
+            <AddFrequencyDialog
+              open={freqDialog}
+              onClose={() => setFreqDialog(false)}
+              onAdd={(row) => upd('frequency', [...frequency, row])}
+            />
           </Card>
 
           <Card title="🕒 Créneaux horaires" meta="TS_CLEAN[]">
             <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 1.25 }}>Le voyageur choisira son créneau via WhatsApp.</Typography>
-            <Stack direction="row" gap={0.75} flexWrap="wrap" useFlexGap>
-              {(values.TS_CLEAN || [
-                { start: 10, end: 12, price: 0, default: true },
-                { start: 14, end: 16, price: 0 },
-                { start: 16, end: 18, price: 0 },
-              ]).map((ts, i) => (
-                <Box key={i} sx={{
-                  px: 1.375, py: 0.75, border: `1px solid ${ts.default ? T.primary : T.border}`,
-                  bgcolor: ts.default ? T.primaryTint : T.bg1, color: ts.default ? T.primaryDeep : T.text2,
-                  borderRadius: 1, fontSize: 11.5, fontWeight: 600, fontFamily: '"Geist Mono", monospace',
-                }}>
-                  {String(ts.start).padStart(2, '0')}:00 → {String(ts.end).padStart(2, '0')}:00 {ts.default && '· défaut'}
-                </Box>
+            <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap' }} useFlexGap>
+              {tsClean.map((ts, i) => (
+                <TimeslotChip key={i} slot={ts} onRemove={() => upd('TS_CLEAN', tsClean.filter((_, j) => j !== i))} />
               ))}
-              <Box component="button" sx={{ all: 'unset', cursor: 'pointer', px: 1.375, py: 0.75, border: `1px dashed ${T.borderStrong}`, borderRadius: 1, color: T.text3, fontSize: 11.5 }}>+ Ajouter créneau</Box>
+              <DashedAddButton label="+ Ajouter créneau" onClick={() => setCleanDialog(true)} />
             </Stack>
+            <AddTimeslotDialog
+              open={cleanDialog}
+              onClose={() => setCleanDialog(false)}
+              title="Ajouter un créneau ménage"
+              onAdd={(slot) => upd('TS_CLEAN', [...tsClean, slot])}
+            />
           </Card>
         </>
       )}
@@ -169,19 +217,23 @@ export function CleaningTab({ values = {}, onChange }) {
         <>
           <Card title="🛬 Créneaux d'arrivée" meta="TS_CHECKIN[]">
             <ToggleRow title="Activer les créneaux d'arrivée" checked={values.checkinTimeslotsEnabled !== false} onChange={v => upd('checkinTimeslotsEnabled', v)} />
-            <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ mt: 1.5 }} useFlexGap>
-              <Box sx={{ px: 1.375, py: 0.75, border: `1px solid ${T.primary}`, bgcolor: T.primaryTint, color: T.primaryDeep, borderRadius: 1, fontSize: 11.5, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>14:00 → 15:00 · Normal · défaut</Box>
-              <Box sx={{ px: 1.375, py: 0.75, border: `1px solid ${T.info}40`, bgcolor: T.infoTint, color: T.info, borderRadius: 1, fontSize: 11.5, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>12:00 → 13:00 · Early · +50 MAD</Box>
-              <Box sx={{ px: 1.375, py: 0.75, border: `1px dashed ${T.borderStrong}`, borderRadius: 1, color: T.text3, fontSize: 11.5 }}>+ Ajouter</Box>
+            <Stack direction="row" gap={0.75} sx={{ mt: 1.5, flexWrap: 'wrap' }} useFlexGap>
+              {tsCheckin.map((ts, i) => (
+                <TimeslotChip key={i} slot={ts} onRemove={() => upd('TS_CHECKIN', tsCheckin.filter((_, j) => j !== i))} />
+              ))}
+              <DashedAddButton label="+ Ajouter créneau" onClick={() => setCheckinDialog(true)} />
             </Stack>
+            <AddTimeslotDialog open={checkinDialog} onClose={() => setCheckinDialog(false)} title="Créneau d'arrivée" onAdd={(s) => upd('TS_CHECKIN', [...tsCheckin, s])} />
           </Card>
           <Card title="🛫 Créneaux de départ" meta="TS_CHECKOUT[]">
             <ToggleRow title="Activer les créneaux de départ" checked={values.checkoutTimeslotsEnabled !== false} onChange={v => upd('checkoutTimeslotsEnabled', v)} />
-            <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ mt: 1.5 }} useFlexGap>
-              <Box sx={{ px: 1.375, py: 0.75, border: `1px solid ${T.primary}`, bgcolor: T.primaryTint, color: T.primaryDeep, borderRadius: 1, fontSize: 11.5, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>10:00 → 11:00 · Normal · défaut</Box>
-              <Box sx={{ px: 1.375, py: 0.75, border: `1px solid ${T.warning}40`, bgcolor: T.warningTint, color: T.warning, borderRadius: 1, fontSize: 11.5, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>12:00 → 13:00 · Late · +50 MAD</Box>
-              <Box sx={{ px: 1.375, py: 0.75, border: `1px dashed ${T.borderStrong}`, borderRadius: 1, color: T.text3, fontSize: 11.5 }}>+ Ajouter</Box>
+            <Stack direction="row" gap={0.75} sx={{ mt: 1.5, flexWrap: 'wrap' }} useFlexGap>
+              {tsCheckout.map((ts, i) => (
+                <TimeslotChip key={i} slot={ts} onRemove={() => upd('TS_CHECKOUT', tsCheckout.filter((_, j) => j !== i))} />
+              ))}
+              <DashedAddButton label="+ Ajouter créneau" onClick={() => setCheckoutDialog(true)} />
             </Stack>
+            <AddTimeslotDialog open={checkoutDialog} onClose={() => setCheckoutDialog(false)} title="Créneau de départ" onAdd={(s) => upd('TS_CHECKOUT', [...tsCheckout, s])} />
           </Card>
         </>
       )}
