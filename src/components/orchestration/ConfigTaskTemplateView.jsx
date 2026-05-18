@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSelector } from 'react-redux';
+import { useAuth } from '../../hooks/useAuth';
+import { resolveLegacyAuthUser } from '../../utils/legacyAuthUser';
+import { ORCHESTRATION_ADMIN_OWNER_ID } from '../../constants/orchestrationAdmin';
 import { useTranslation } from 'react-i18next';
 import { Box, Typography, CircularProgress, Button, Paper, Tabs, Tab, Accordion, AccordionSummary, AccordionDetails, Switch, FormControlLabel, Select, MenuItem, FormControl, InputLabel, TextField, Chip, Alert, Radio, RadioGroup, Grid, alpha, Card, CardHeader, CardContent, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Checkbox, Divider, IconButton, Tooltip } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
@@ -583,7 +586,12 @@ const ConfigTaskTemplateView = ({
   const {
     t
   } = useTranslation('common');
-  const user = useSelector(state => state.auth.user);
+  const reduxUser = useSelector(state => state.auth.user);
+  const { user: authUser } = useAuth();
+  const user = useMemo(
+    () => resolveLegacyAuthUser(authUser, reduxUser),
+    [authUser, reduxUser],
+  );
   const selfOwnerId = user?._id || user?.id;
   /** When set (incl. empty string), do not fall back to logged-in user — used for admin owner picker */
   const hasExplicitTarget = targetOwnerIdProp !== undefined;
@@ -690,18 +698,26 @@ const ConfigTaskTemplateView = ({
     }
   };
   const fetchTemplate = async () => {
+    const fetchOwnerId =
+      ownerId ||
+      (import.meta.env.VITE_DISABLE_AUTH === 'true' ? ORCHESTRATION_ADMIN_OWNER_ID : null);
+    if (!fetchOwnerId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const response = await getOrchestratorTaskTemplate(ownerId);
+      const response = await getOrchestratorTaskTemplate(fetchOwnerId);
       if (response?.notFound) {
         toast.info('Aucune configuration orchestrateur enregistrée pour ce compte. Ajoutez des catégories puis enregistrez : le template sera créé automatiquement.', {
           autoClose: 8000
         });
       }
-      if (response?.success && response?.data) {
+      const payload = response?.data ?? (response?.success ? { ownerId: fetchOwnerId, categories: [] } : null);
+      if (response?.success && payload) {
         // ✅ FIX: backend retourne un array — convertir en objet keyed par category (clé canonique)
         // IMPORTANT: utiliser category comme clé pour éviter corruption (categoryType = CHOICE_ARRIVAL ≠ arrival_choose)
-        const rawCategories = response.data.categories;
+        const rawCategories = payload.categories;
         const categoriesEntries = Array.isArray(rawCategories) ? rawCategories.map((cat, idx) => {
           // NOTIFICATION: clé unique par message (Bienvenue, Rappel, Demande Avis...) — INSERT pas overwrite
           const isNotif = cat?.categoryType === 'NOTIFICATION' || cat?.category === 'message' && cat?.type === 'message';
@@ -738,12 +754,19 @@ const ConfigTaskTemplateView = ({
           }
           return acc;
         }, {});
-        setTemplate(response.data);
+        setTemplate(payload);
         setEditedCategories(migratedCategories);
         setOriginalCategories(JSON.parse(JSON.stringify(migratedCategories))); // Deep copy pour dirty check
+      } else if (!response?.success) {
+        toast.error(response?.error || 'Réponse serveur invalide');
       }
     } catch (error) {
-      toast.error('Impossible de charger la configuration (réseau ou serveur)');
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        toast.error('Session requise — connectez-vous ou vérifiez VITE_DEV_TOKEN (localhost).');
+      } else {
+        toast.error('Impossible de charger la configuration (réseau ou serveur)');
+      }
     } finally {
       setLoading(false);
     }
@@ -1675,9 +1698,13 @@ const ConfigTaskTemplateView = ({
     );
   }
   if (!template) {
-    return <Alert severity="error">
-        Impossible de charger la configuration. Veuillez réessayer.
-      </Alert>;
+    return (
+      <Alert severity="error" sx={{ m: 2 }}>
+        {import.meta.env.VITE_DISABLE_AUTH === 'true'
+          ? 'Configuration non chargée. Vérifiez VITE_DEV_TOKEN dans .env, redémarrez pnpm dev, puis rafraîchissez.'
+          : 'Impossible de charger la configuration. Connectez-vous au dashboard puis réessayez.'}
+      </Alert>
+    );
   }
 
   // ========== MODE CARTE ==========
