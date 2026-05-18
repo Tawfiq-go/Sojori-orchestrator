@@ -14,6 +14,11 @@ import type {
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4007';
 
+/** ObjectId MongoDB 24 hex — sinon on traite le param route comme SJ-XX / numéro résa */
+export function isMongoObjectId(id: string): boolean {
+  return /^[a-f0-9]{24}$/i.test(id.trim());
+}
+
 class ReservationsService {
   private mapReservationToDetail(r: Reservation): ReservationDetail {
     const fmt = (d: Date | string | undefined | null): string => {
@@ -263,6 +268,25 @@ class ReservationsService {
    * GET /api/v1/reservations/by-id/:id
    * Récupère le détail complet d'une réservation
    */
+  /**
+   * Résout une réservation depuis le paramètre de route `/reservations/:id`
+   * — SJ-XXXXX via by-reservation-number, ObjectId via by-id
+   */
+  async getByRouteParam(routeId: string): Promise<Reservation> {
+    const param = decodeURIComponent(routeId.trim());
+    if (!param) {
+      throw new Error('Identifiant de réservation manquant');
+    }
+    if (isMongoObjectId(param)) {
+      return this.getById(param);
+    }
+    const byNumber = await this.getByReservationNumber(param);
+    if (byNumber) {
+      return byNumber;
+    }
+    throw new Error(`Réservation introuvable : ${param}`);
+  }
+
   async getById(reservationId: string): Promise<Reservation> {
     const startTime = performance.now();
     console.log(`[ReservationsService] Fetching reservation ${reservationId}...`);
@@ -288,7 +312,7 @@ class ReservationsService {
    * Détail réservation pour pages séjour (mappe la réponse `getById`).
    */
   async getDetail(reservationId: string): Promise<ReservationDetailResponse> {
-    const r = await this.getById(reservationId);
+    const r = await this.getByRouteParam(reservationId);
     return { success: true, reservation: this.mapReservationToDetail(r) };
   }
 

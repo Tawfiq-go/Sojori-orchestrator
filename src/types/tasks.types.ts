@@ -56,6 +56,8 @@ export interface TaskListItem {
   reservationNumber?: string;
   guestName?: string;
   guestCountry?: string | null;
+  /** Canal OTA (airbnb, booking…) — pour affichage, distinct de `source` interne */
+  channelName?: string | null;
   listingId?: string;
   listingName?: string;
   /** Fin d’exécution (affichage « Heure tâche » comme partners). */

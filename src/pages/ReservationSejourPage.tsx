@@ -63,7 +63,7 @@ export function ReservationSejourPage() {
       setError(null);
 
       try {
-        const response = await reservationsService.getById(id);
+        const response = await reservationsService.getByRouteParam(id);
         setReservationDetails(response);
 
         const duration = performance.now() - startTime;
@@ -120,7 +120,7 @@ export function ReservationSejourPage() {
         setIsEditMode(false);
         setEditedData({});
         // Recharger les données
-        const response = await reservationsService.getById(id);
+        const response = await reservationsService.getByRouteParam(id);
         setReservationDetails(response);
       } else {
         toast.error(result.message || 'Erreur lors de la mise à jour');

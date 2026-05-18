@@ -24,7 +24,7 @@ import { getStoredOwners } from '../data/catalogueMock';
 
 export default function TasksPlanningPageV2() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -117,8 +117,9 @@ export default function TasksPlanningPageV2() {
       }
     };
 
+    if (authLoading) return;
     fetchPlanning();
-  }, [startDate, daysCount, planningOwnerId, scope.canAccessAllOwners, scope.ownerId]);
+  }, [startDate, daysCount, planningOwnerId, scope.canAccessAllOwners, scope.ownerId, authLoading]);
 
   // ✅ CHANGEMENT: Transform en itérant sur activeListings (comme ReservationsPlanningPage)
   // Afficher TOUS les listings actifs, même sans réservations
@@ -186,9 +187,9 @@ export default function TasksPlanningPageV2() {
     // navigate(`/tasks/${item.data?.taskId}`);
   };
 
-  const handleReservationClick = (resId: string) => {
-    console.log('[TasksPlanningPageV2] Reservation clicked:', resId);
-    navigate(`/reservations/${resId}`);
+  const handleReservationClick = (routeId: string) => {
+    if (!routeId) return;
+    navigate(`/reservations/${encodeURIComponent(routeId)}`);
   };
 
   // Navigation temporelle
