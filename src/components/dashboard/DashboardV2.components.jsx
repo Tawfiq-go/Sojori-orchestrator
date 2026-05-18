@@ -39,6 +39,7 @@ import HubOutlined from '@mui/icons-material/HubOutlined';
 import MailOutlined from '@mui/icons-material/MailOutlined';
 import NotificationsNoneOutlined from '@mui/icons-material/NotificationsNoneOutlined';
 import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
+import PublicOutlined from '@mui/icons-material/PublicOutlined';
 import PersonSearchOutlined from '@mui/icons-material/PersonSearchOutlined';
 import Search from '@mui/icons-material/Search';
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
@@ -221,7 +222,12 @@ export const NAV = [
   // Admin
   // ═══════════════════════════════════════════════════════
     { group: 'Admin', items: [
-      { id: 'admin/channels', label: 'Channels Management', icon: '🔌' },
+      { id: 'admin/channels', label: 'Channels', icon: '🔌' },
+    ]},
+
+    { group: 'Channel Manager', items: [
+      { id: 'admin/ChannelManager/channel-manager', label: 'Channel Manager', icon: '⚙️' },
+      { id: 'admin/ChannelManager/distribution', label: 'Distribution', icon: '🌐' },
     ]},
 
     { group: 'Équipe & Rôles', items: [
@@ -230,6 +236,13 @@ export const NAV = [
       { id: 'admin/equipe/whatsapp', label: 'Admin WhatsApp', icon: '📱' },
       { id: 'admin/equipe/roles', label: 'Rôles & Permissions', icon: '🔐' },
       { id: 'admin/equipe/groups', label: 'Groupes', icon: '👨‍👩‍👧‍👦' },
+    ]},
+
+    { group: 'Paramètres', items: [
+      { id: 'admin/settings/template', label: 'Templates', icon: '📧' },
+      { id: 'admin/settings/host-profile', label: 'Profil hôte', icon: '🏠' },
+      { id: 'admin/settings/admin-config', label: 'Pays & Villes', icon: '🌍' },
+      { id: 'admin/setting/currency', label: 'Devises', icon: '💱' },
     ]},
 ];
 
@@ -264,11 +277,17 @@ const NAV_ICON_BY_ID = {
   'crm/support': SupportAgentOutlined,
   'crm/onboarding': AssignmentOutlined,
     'admin/channels': HubOutlined,
+    'admin/ChannelManager/channel-manager': HubOutlined,
+    'admin/ChannelManager/distribution': ShowChartOutlined,
     'admin/equipe/owners': BusinessOutlined,
     'admin/equipe/staff': GroupsOutlined,
     'admin/equipe/whatsapp': ForumOutlined,
     'admin/equipe/roles': AdminPanelSettingsOutlined,
     'admin/equipe/groups': GroupsOutlined,
+    'admin/settings/template': DescriptionOutlined,
+    'admin/settings/host-profile': BusinessOutlined,
+    'admin/settings/admin-config': PublicOutlined,
+    'admin/setting/currency': ShowChartOutlined,
 };
 
 function NavItemIcon({ item, active, sub }) {
@@ -880,6 +899,8 @@ export function DataTable({
   hideRowActions = false,
   /** Largeur minimale du tableau (ex. 2000) pour scroll horizontal avec colonnes fixes. */
   tableMinWidth,
+  /** Colonnes serrées, layout fixed, sans scroll horizontal forcé (liste tâches). */
+  compact = false,
   /** Style des en-têtes (partners = titres mixtes, pas tout en majuscules). */
   headerTextTransform = 'uppercase',
 }) {
@@ -896,15 +917,15 @@ export function DataTable({
       borderRadius: '12px', overflow: 'hidden',
       boxShadow: '0 1px 2px rgba(26,20,8,0.03)',
     }}>
-      <Box sx={{ overflowX: tableMinWidth ? 'auto' : 'visible', width: '100%' }}>
+      <Box sx={{ overflowX: tableMinWidth ? 'auto' : compact ? 'hidden' : 'visible', width: '100%' }}>
       <Box
         component="table"
         sx={{
           width: '100%',
           minWidth: tableMinWidth || '100%',
           borderCollapse: 'collapse',
-          fontSize: 12.5,
-          tableLayout: tableMinWidth ? 'fixed' : 'auto',
+          fontSize: compact ? 12 : 12.5,
+          tableLayout: (tableMinWidth || compact) ? 'fixed' : 'auto',
         }}
       >
         <Box component="thead">
@@ -916,8 +937,10 @@ export function DataTable({
                 key={col.key}
                 sx={{
                   ...thSx,
+                  ...(compact ? compactThSx : null),
                   textAlign: col.align || 'left',
                   width: col.width,
+                  maxWidth: col.width,
                   textTransform: col.headerTextTransform ?? headerTextTransform,
                 }}
               >
@@ -947,7 +970,7 @@ export function DataTable({
                   </Box>
                 )}
                 {columns.map(col => (
-                  <Box component="td" key={col.key} sx={{ ...tdSx, textAlign: col.align || 'left' }}>
+                  <Box component="td" key={col.key} sx={{ ...tdSx, ...(compact ? compactTdSx : null), textAlign: col.align || 'left', maxWidth: col.width, overflow: compact ? 'hidden' : undefined }}>
                     {col.render ? col.render(row) : row[col.key]}
                   </Box>
                 ))}
@@ -984,7 +1007,9 @@ const thSx = {
   letterSpacing: 0.4, textTransform: 'uppercase',
   borderBottom: `1px solid ${t.border}`, whiteSpace: 'nowrap',
 };
+const compactThSx = { p: '8px 6px', fontSize: 10, letterSpacing: 0.2 };
 const tdSx = { p: '12px 14px', borderBottom: `1px solid ${t.border}`, verticalAlign: 'middle' };
+const compactTdSx = { p: '8px 6px' };
 const rowActionSx = {
   width: 26, height: 26, borderRadius: '6px',
   color: t.text3, fontSize: 14,

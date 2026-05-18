@@ -10,13 +10,17 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Box, Stack, Typography, Popover } from '@mui/material';
 import {
   T, STAY, type ListingRow, type TimelineItem, channelFromName, genDays,
-  KpiPill, DayHeader, CleanlinessBadge, TaskChip, GanttBar, SOJORI_KEYFRAMES,
+  KpiPill, DayHeader, CleanlinessBadge, TaskChip, GanttBar, SOJORI_KEYFRAMES, computeReservationBarLayout,
 } from './_shared';
+
+export type StayViewVariant = 'tasks' | 'reservations';
 
 export interface StayViewProps {
   startDate: Date;
   daysCount?: number;           // défaut 30 (mini-map) — vue 14j visible
   listings: ListingRow[];
+  /** tasks = chips tâches + KPI ops ; reservations = barres séjour uniquement + filtres statut */
+  variant?: StayViewVariant;
   onTaskClick?: (item: TimelineItem) => void;
   onReservationClick?: (resId: string) => void;
   onCellClick?: (listingId: string, iso: string) => void;
@@ -31,19 +35,54 @@ export interface StayViewProps {
 const VISIBLE_DAYS = 14;
 
 export default function StayView({
-  startDate, daysCount = 30, listings, onTaskClick, onReservationClick,
+  startDate, daysCount = 30, listings, variant = 'tasks', onTaskClick, onReservationClick,
   onGoToday, onPrevDay, onNextDay, onPrevWeek, onNextWeek, onDateChange,
 }: StayViewProps) {
+  const isReservations = variant === 'reservations';
   const minimapDays = useMemo(() => genDays(startDate, daysCount), [startDate, daysCount]);
   const days = useMemo(() => genDays(startDate, VISIBLE_DAYS), [startDate]);
 
-  const [selectedCities, setSelectedCities] = useState<string[]>([]);
-  const [selectedListings, setSelectedListings] = useState<string[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [statusFilters, setStatusFilters] = useState<Set<'confirmed' | 'pending'>>(
+    () => new Set(['confirmed', 'pending']),
+  );
+
+  const toggleStatus = (s: 'confirmed' | 'pending') => {
+    setStatusFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(s)) {
+        if (next.size <= 1) return prev;
+        next.delete(s);
+      } else {
+        next.add(s);
+      }
+      return next;
+    });
+  };
+
+  const displayListings = useMemo(() => {
+    if (!isReservations) return listings;
+    return listings.map(l => ({
+      ...l,
+      reservations: l.reservations.filter(r => statusFilters.has(r.status)),
+    }));
+  }, [listings, isReservations, statusFilters]);
 
   // KPI "aujourd'hui"
   const kpis = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
+    if (isReservations) {
+      let arr = 0, dep = 0, confirmed = 0, pending = 0;
+      displayListings.forEach(l => l.reservations.forEach(r => {
+        const arrIso = (r.arrivalDate || '').slice(0, 10);
+        const depIso = (r.departureDate || '').slice(0, 10);
+        if (arrIso === today) arr++;
+        if (depIso === today) dep++;
+        if (r.status === 'confirmed') confirmed++;
+        else pending++;
+      }));
+      return { arr, dep, confirmed, pending };
+    }
     let arr = 0, dep = 0, cln = 0, na = 0;
     listings.forEach(l => l.reservations.forEach(r => r.timeline?.forEach(t => {
       if ((t.scheduledFor || '').slice(0, 10) !== today) return;
@@ -53,35 +92,46 @@ export default function StayView({
       if (!t.staffId && t.status !== 'COMPLETED') na++;
     })));
     return { arr, dep, cln, na };
-  }, [listings]);
+  }, [listings, displayListings, isReservations]);
 
   // Group by city
   const byCity = useMemo(() => {
     const map = new Map<string, ListingRow[]>();
-    listings.forEach(l => {
+    displayListings.forEach(l => {
       const c = l.city || 'Sans ville';
       if (!map.has(c)) map.set(c, []);
       map.get(c)!.push(l);
     });
     return Array.from(map.entries());
-  }, [listings]);
+  }, [displayListings]);
 
   return (
     <Box sx={{ maxWidth: 1440, mx: 'auto', p: { xs: 2, md: '20px 24px 50px' } }}>
       <style>{SOJORI_KEYFRAMES}</style>
 
       <Stack direction="row" alignItems="baseline" gap={1.75} sx={{ mb: 1.75 }}>
-        <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.025em' }}>Vue Séjour</Typography>
+        <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.025em' }}>
+          {isReservations ? 'Planning Réservations' : 'Vue Séjour'}
+        </Typography>
         <Typography sx={{ fontSize: 12, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
-          {listings.length} propriétés · {VISIBLE_DAYS} jours
+          {displayListings.length} propriétés · {daysCount}j (mini) · {VISIBLE_DAYS}j visibles
         </Typography>
       </Stack>
 
       <Stack direction="row" gap={1.25} flexWrap="wrap" sx={{ mb: 1.5 }}>
         <KpiPill icon="🏠" count={kpis.arr} label="Arrivées auj." tone="success" />
         <KpiPill icon="🚪" count={kpis.dep} label="Départs auj." tone="warning" />
-        <KpiPill icon="🧹" count={kpis.cln} label="Ménages" tone="primary" />
-        <KpiPill icon="⚠" count={kpis.na} label="Non assigné" tone="error" alert={kpis.na > 0} />
+        {isReservations ? (
+          <>
+            <KpiPill icon="✓" count={kpis.confirmed} label="Confirmées" tone="primary" />
+            <KpiPill icon="⏳" count={kpis.pending} label="En attente" tone="warning" />
+          </>
+        ) : (
+          <>
+            <KpiPill icon="🧹" count={kpis.cln} label="Ménages" tone="primary" />
+            <KpiPill icon="⚠" count={kpis.na} label="Non assigné" tone="error" alert={kpis.na > 0} />
+          </>
+        )}
       </Stack>
 
       {/* Toolbar - Navigation + Filtres + Légende */}
@@ -182,18 +232,44 @@ export default function StayView({
           }}>{listings.length}</Box> ▾
         </Box>
 
-        {/* Légende types */}
-        <Stack direction="row" gap={0.625} flexWrap="wrap" sx={{ ml: 'auto' }}>
-          <LegendPill icon="🏠" label="Arrivée" />
-          <LegendPill icon="🚪" label="Départ" />
-          <LegendPill icon="🧹" label="Ménage" />
-          <LegendPill icon="📝" label="Enreg." />
-          <LegendPill icon="🛎" label="Concierge" />
-        </Stack>
+        {isReservations ? (
+          <Stack direction="row" gap={0.625} flexWrap="wrap" sx={{ ml: 'auto' }}>
+            <FilterTogglePill
+              label="Confirmées"
+              active={statusFilters.has('confirmed')}
+              onClick={() => toggleStatus('confirmed')}
+              color={T.success}
+            />
+            <FilterTogglePill
+              label="En attente"
+              active={statusFilters.has('pending')}
+              onClick={() => toggleStatus('pending')}
+              color={T.warning}
+            />
+            <ChannelLegendPill label="Airbnb" color={T.airbnb} />
+            <ChannelLegendPill label="Booking" color={T.booking} />
+            <ChannelLegendPill label="Vrbo" color={T.vrbo} />
+            <ChannelLegendPill label="Direct" color={T.primary} />
+          </Stack>
+        ) : (
+          <Stack direction="row" gap={0.625} flexWrap="wrap" sx={{ ml: 'auto' }}>
+            <LegendPill icon="🏠" label="Arrivée" />
+            <LegendPill icon="🚪" label="Départ" />
+            <LegendPill icon="🧹" label="Ménage" />
+            <LegendPill icon="📝" label="Enreg." />
+            <LegendPill icon="🛎" label="Concierge" />
+          </Stack>
+        )}
       </Box>
 
       {/* Mini-map */}
-      <MiniMap days={minimapDays} listings={listings} visibleStart={0} visibleEnd={VISIBLE_DAYS} />
+      <MiniMap
+        days={minimapDays}
+        listings={displayListings}
+        visibleStart={0}
+        visibleEnd={VISIBLE_DAYS}
+        mode={isReservations ? 'reservations' : 'tasks'}
+      />
 
       {/* Grid */}
       <Box sx={{
@@ -233,6 +309,7 @@ export default function StayView({
             </Box>
             {lists.map(l => (
               <ListingRowComp key={l.listingId} listing={l} days={days}
+                showTaskChips={!isReservations}
                 onTaskClick={onTaskClick} onReservationClick={onReservationClick} />
             ))}
           </React.Fragment>
@@ -243,11 +320,11 @@ export default function StayView({
 }
 
 /* ─── Listing row ─── */
-function ListingRowComp({ listing, days, onTaskClick, onReservationClick }: {
+function ListingRowComp({ listing, days, showTaskChips = true, onTaskClick, onReservationClick }: {
   listing: ListingRow; days: ReturnType<typeof genDays>;
+  showTaskChips?: boolean;
   onTaskClick?: (i: TimelineItem) => void; onReservationClick?: (id: string) => void;
 }) {
-  // Stats line
   const numTasks = listing.reservations.reduce((n, r) => n + (r.timeline?.length || 0), 0);
 
   return (
@@ -272,15 +349,20 @@ function ListingRowComp({ listing, days, onTaskClick, onReservationClick }: {
         <Typography sx={{
           fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em',
         }}>
-          {days.length}j · <b style={{ color: T.text2, fontWeight: 700 }}>{listing.reservations.length} séj.</b> · <b style={{ color: T.text2, fontWeight: 700 }}>{numTasks} tâch.</b>
+          {days.length}j · <b style={{ color: T.text2, fontWeight: 700 }}>{listing.reservations.length} séj.</b>
+          {showTaskChips && (
+            <> · <b style={{ color: T.text2, fontWeight: 700 }}>{numTasks} tâch.</b></>
+          )}
         </Typography>
       </Stack>
 
       {/* Day cells */}
       {days.map(d => {
-        const tasks = (listing.reservations || []).flatMap(r =>
-          (r.timeline || []).filter(t => (t.scheduledFor || '').slice(0, 10) === d.iso)
-        );
+        const tasks = showTaskChips
+          ? (listing.reservations || []).flatMap(r =>
+              (r.timeline || []).filter(t => (t.scheduledFor || '').slice(0, 10) === d.iso)
+            )
+          : [];
         return <DayCell key={d.iso} day={d} tasks={tasks} onTaskClick={onTaskClick} />;
       })}
 
@@ -289,21 +371,38 @@ function ListingRowComp({ listing, days, onTaskClick, onReservationClick }: {
         position: 'absolute', top: 0, left: STAY.STICKY_W,
         width: days.length * STAY.CELL_W, height: STAY.ROW_H, pointerEvents: 'none', zIndex: 3,
       }}>
-        {listing.reservations.map(r => {
-          const arr = new Date(r.arrivalDate);
-          const dep = new Date(r.departureDate);
-          const firstDay = days[0].date;
-          const lastDay = days[days.length - 1].date;
-          const arrIdx = Math.floor((+arr - +firstDay) / 86400000);
-          const depIdx = Math.floor((+dep - +firstDay) / 86400000);
-          if (depIdx < 0 || arrIdx > days.length - 1) return null;
-          const startIdx = Math.max(0, arrIdx);
-          const endIdx = Math.min(days.length - 1, depIdx);
-          const leftPct = (startIdx / days.length) * 100;
-          const widthPct = ((endIdx - startIdx + 1) / days.length) * 100 - 1;
+        {(() => {
+          const arrivalSlotCount = new Map<number, number>();
+          const visibleReservations = listing.reservations
+            .map(r => {
+              const arr = new Date(r.arrivalDate);
+              const dep = new Date(r.departureDate);
+              const firstDay = days[0].date;
+              const arrIdx = Math.floor((+arr - +firstDay) / 86400000);
+              const depIdx = Math.floor((+dep - +firstDay) / 86400000);
+              if (depIdx < 0 || arrIdx > days.length - 1) return null;
+              const startIdx = Math.max(0, arrIdx);
+              const slot = arrivalSlotCount.get(startIdx) ?? 0;
+              arrivalSlotCount.set(startIdx, slot + 1);
+              return { r, startIdx, endIdx: Math.min(days.length - 1, depIdx), sameDaySlot: slot };
+            })
+            .filter(Boolean) as Array<{
+              r: (typeof listing.reservations)[0];
+              startIdx: number;
+              endIdx: number;
+              sameDaySlot: number;
+            }>;
+
+          return visibleReservations.map(({ r, startIdx, endIdx, sameDaySlot }) => {
+          const { leftPct, widthPct } = computeReservationBarLayout(
+            startIdx,
+            endIdx,
+            days.length,
+            sameDaySlot,
+          );
           const channel = channelFromName(r.channelName);
           return (
-            <Box key={r.reservationId} onClick={() => onReservationClick?.(r.reservationId)}
+            <Box key={r.reservationId} onClick={() => onReservationClick?.(r.reservationNumber || r.reservationId)}
               sx={{ pointerEvents: 'auto' }}>
               <GanttBar
                 channel={channel}
@@ -314,7 +413,8 @@ function ListingRowComp({ listing, days, onTaskClick, onReservationClick }: {
               />
             </Box>
           );
-        })}
+          });
+        })()}
       </Box>
     </Box>
   );
@@ -382,19 +482,31 @@ function DayCell({ day, tasks, onTaskClick }: {
 }
 
 /* ─── MiniMap 30j ─── */
-function MiniMap({ days, listings, visibleStart, visibleEnd }: {
+function MiniMap({ days, listings, visibleStart, visibleEnd, mode = 'tasks' }: {
   days: ReturnType<typeof genDays>; listings: ListingRow[];
   visibleStart: number; visibleEnd: number;
+  mode?: 'tasks' | 'reservations';
 }) {
-  // Charge per day
   const load = useMemo(() => {
     const map = new Map<string, number>();
+    if (mode === 'reservations') {
+      listings.forEach(l => l.reservations.forEach(r => {
+        const arr = (r.arrivalDate || '').slice(0, 10);
+        const dep = (r.departureDate || '').slice(0, 10);
+        days.forEach(d => {
+          if (d.iso >= arr && d.iso < dep) {
+            map.set(d.iso, (map.get(d.iso) || 0) + 1);
+          }
+        });
+      }));
+      return map;
+    }
     listings.forEach(l => l.reservations.forEach(r => r.timeline?.forEach(t => {
       const iso = (t.scheduledFor || '').slice(0, 10);
       map.set(iso, (map.get(iso) || 0) + 1);
     })));
     return map;
-  }, [listings]);
+  }, [listings, days, mode]);
 
   return (
     <Box sx={{
@@ -442,6 +554,36 @@ function LegendPill({ icon, label }: { icon: string; label: string }) {
       color: T.text2, bgcolor: T.bg2,
     }}>
       <span style={{ fontSize: 11 }}>{icon}</span>{label}
+    </Box>
+  );
+}
+
+function FilterTogglePill({ label, active, onClick, color }: {
+  label: string; active: boolean; onClick: () => void; color: string;
+}) {
+  return (
+    <Box component="button" onClick={onClick} sx={{
+      all: 'unset', cursor: 'pointer',
+      display: 'inline-flex', alignItems: 'center', gap: 0.625,
+      px: 1, py: '3px', borderRadius: 999, fontSize: 10.5, fontWeight: 700,
+      color: active ? color : T.text3,
+      bgcolor: active ? `${color}18` : T.bg2,
+      border: `1px solid ${active ? color : T.border}`,
+    }}>
+      {label}
+    </Box>
+  );
+}
+
+function ChannelLegendPill({ label, color }: { label: string; color: string }) {
+  return (
+    <Box sx={{
+      display: 'inline-flex', alignItems: 'center', gap: 0.5,
+      px: 1, py: '3px', borderRadius: 999, fontSize: 10.5, fontWeight: 600,
+      color: T.text2, bgcolor: T.bg2,
+    }}>
+      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color }} />
+      {label}
     </Box>
   );
 }

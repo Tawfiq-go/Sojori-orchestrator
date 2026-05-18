@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
+import { hasAdminAccess } from '../utils/rbac.utils';
 import type {
   ReservationTasksResult,
   StaffAssignmentsResult,
@@ -21,6 +22,7 @@ export interface TasksAuthLikeUser {
   _id?: string;
   role?: string;
   ownerId?: string;
+  theOwnerId?: string;
 }
 
 export interface TasksUserScope {
@@ -48,22 +50,24 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 export function resolveTasksUserScope(user: TasksAuthLikeUser | null | undefined): TasksUserScope {
   const role = String(user?.role || '').trim();
-  const normalizedRole = role.toLowerCase();
 
-  if (normalizedRole === 'admin' || normalizedRole === 'superadmin') {
+  // Localhost + VITE_DISABLE_AUTH : même comportement que /reservations (JWT / dev token côté API)
+  if (import.meta.env.VITE_DISABLE_AUTH === 'true') {
+    return { ownerId: undefined, canAccessAllOwners: true, role: role || 'dev' };
+  }
+
+  if (hasAdminAccess(role)) {
     return { ownerId: undefined, canAccessAllOwners: true, role };
   }
 
-  if (user?.ownerId) {
-    return { ownerId: String(user.ownerId), canAccessAllOwners: false, role };
-  }
+  const ownerId =
+    user?.ownerId ||
+    user?.theOwnerId ||
+    user?.id ||
+    user?._id;
 
-  if (user?.id) {
-    return { ownerId: String(user.id), canAccessAllOwners: false, role };
-  }
-
-  if (user?._id) {
-    return { ownerId: String(user._id), canAccessAllOwners: false, role };
+  if (ownerId) {
+    return { ownerId: String(ownerId), canAccessAllOwners: false, role };
   }
 
   return { ownerId: undefined, canAccessAllOwners: false, role };

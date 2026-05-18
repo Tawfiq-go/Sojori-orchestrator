@@ -4,12 +4,14 @@
 // ════════════════════════════════════════════════════════════════════
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import ClearAllIcon from '@mui/icons-material/ClearAll';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import InboxIcon from '@mui/icons-material/Inbox';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
+import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 import {
   Alert,
   Autocomplete,
@@ -26,7 +28,7 @@ import {
   FormControl,
   IconButton,
   InputAdornment,
-  InputLabel,
+  ListItemText,
   Menu,
   MenuItem,
   Paper,
@@ -66,30 +68,39 @@ import {
   normalizeTaskStatus,
 } from '../types/tasks.types';
 
-/** Largeur totale optimisée ~1750px pour éviter scroll horizontal sur écrans 1920px */
-const TASK_TABLE_MIN_WIDTH = 1750;
-
+/** Colonnes compactes — tableau ~100% viewport sans scroll horizontal (colonnes optionnelles via menu) */
 const COLUMN_WIDTHS = {
-  name: '100px',       // Réduit de 120 → 100
-  /** Icône + libellé sur une ligne (ex. « 🛎️ Conciergerie », « 🧹 Ménage Gratuit »). */
-  category: '145px',   // Réduit de 175 → 145
-  itemNumber: '90px',  // Réduit de 110 → 90
-  createdAt: '85px',   // Réduit de 90 → 85
-  executionDate: '105px', // Réduit de 120 → 105
-  timeslotClient: '100px', // Réduit de 120 → 100
-  heureTask: '115px',  // Réduit de 140 → 115
-  timeslot: '95px',    // Réduit de 110 → 95
-  source: '60px',      // Réduit de 70 → 60
-  voyageur: '125px',   // Réduit de 150 → 125
-  listing: '90px',     // Réduit de 100 → 90
-  reservation: '95px', // Réduit de 110 → 95
-  details: '120px',    // Réduit de 150 → 120
-  status: '90px',      // Réduit de 100 → 90
-  assignedStaff: '110px', // Réduit de 130 → 110
-  payment: '85px',     // Réduit de 100 → 85
-  price: '70px',       // Réduit de 80 → 70
-  urgence: '80px',     // Réduit de 90 → 80
+  createdAt: '72px',
+  urgence: '64px',
+  listing: '108px',
+  itemNumber: '78px',
+  reservationSource: '74px',
+  category: '108px',
+  voyageur: '96px',
+  executionDate: '72px',
+  timeslotClient: '72px',
+  heureTask: '72px',
+  timeslot: '80px',
+  details: '88px',
+  status: '82px',
+  assignedStaff: '80px',
+  paymentPrice: '68px',
 } as const;
+
+const toolbarSelectSx = { minWidth: 0, '& .MuiSelect-select': { py: 0.875 } } as const;
+
+const SORT_FIELD_LABELS: Record<string, string> = {
+  startDate: 'Date prévue',
+  createdAt: 'Création',
+  name: 'Code',
+  itemType: 'Type',
+};
+
+function urgencyShortLabel(em: string): string {
+  if (em === 'Critical') return 'Crit.';
+  if (em === 'Urgent') return 'Urg.';
+  return 'Norm.';
+}
 
 /** Palette alignée ReservationsPage (« Atelier 2026 ») — chrome compact */
 const T = {
@@ -114,17 +125,6 @@ const T = {
 };
 
 type QuickFilterKey = 'none' | 'dueToday' | 'dueTomorrow' | 'due7d' | 'urgent';
-
-const fieldSx = {
-  '& .MuiOutlinedInput-root': {
-    bgcolor: T.bg1,
-    borderRadius: 1,
-    '& fieldset': { borderColor: T.border },
-    '&:hover fieldset': { borderColor: T.borderStrong },
-    '&.Mui-focused fieldset': { borderColor: T.primary },
-  },
-  '& .MuiInputLabel-root.Mui-focused': { color: T.primaryDeep },
-};
 
 function Pill({
   label,
@@ -229,39 +229,50 @@ function KpiCompact({
   );
 }
 
-/**
- * Badge OTA circulaire avec initiale (comme ReservationsPage)
- */
-function OTABadge({ source }: { source?: string | null }) {
-  const c = (source || '').toLowerCase();
+/** Badge OTA circulaire — aligné sur ReservationsPage (channel = Airbnb, Booking…) */
+function OTABadge({ channel }: { channel?: string | null }) {
+  const c = (channel || '').toLowerCase();
   const meta =
     c.includes('airbnb')  ? { label: 'Airbnb',  bg: '#FF5A5F', initial: 'A' } :
     c.includes('booking') ? { label: 'Booking', bg: '#003580', initial: 'B' } :
-    c.includes('vrbo')    ? { label: 'Vrbo',    bg: '#0e7490', initial: 'V' } :
-    c.includes('expedia') ? { label: 'Expedia', bg: '#FFCB08', initial: 'E' } :
+    c.includes('vrbo')    ? { label: 'Vrbo',    bg: '#0E6CB0', initial: 'V' } :
+    c.includes('expedia') ? { label: 'Expedia', bg: '#FECC00', initial: 'E' } :
                             { label: 'Direct',  bg: T.primary, initial: 'S' };
 
   return (
     <Tooltip title={meta.label} arrow>
       <Box
         sx={{
-          width: 28,
-          height: 28,
+          width: 24,
+          height: 24,
           borderRadius: '50%',
           bgcolor: meta.bg,
           color: '#fff',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 700,
           fontFamily: '"Geist Mono", monospace',
+          boxShadow: '0 1px 2px rgba(20,17,10,0.1)',
         }}
       >
         {meta.initial}
       </Box>
     </Tooltip>
   );
+}
+
+function otaChannelForRow(row: { channelName?: string | null; source?: string | null }): string {
+  if (row.channelName) return row.channelName;
+  const s = String(row.source || '').toLowerCase();
+  if (['timeslot', 'manual', 'orchestration', 'concierge_flow', 'support_request'].includes(s)) {
+    return 'direct';
+  }
+  if (s.includes('airbnb')) return 'airbnb';
+  if (s.includes('booking')) return 'booking';
+  if (s.includes('vrbo')) return 'vrbo';
+  return row.source || 'direct';
 }
 
 /**
@@ -271,6 +282,13 @@ function OTABadge({ source }: { source?: string | null }) {
  */
 function flagFor(country?: string | null): string {
   if (!country) return '🌐';
+
+  const raw = country.trim();
+  // Déjà un drapeau en tête (ex. "🇲🇦 Maroc" venant de certaines APIs)
+  const leadingFlag = raw.match(/^(\p{Regional_Indicator}{2})/u);
+  if (leadingFlag) return leadingFlag[1];
+
+  const nameOnly = raw.replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, '').trim() || raw;
 
   // Map exhaustif de noms de pays vers codes ISO
   const countryNameToCode: Record<string, string> = {
@@ -318,7 +336,10 @@ function flagFor(country?: string | null): string {
   };
 
   // Si c'est déjà un code ISO à 2 lettres, l'utiliser directement
-  let code = country.length === 2 ? country.toUpperCase() : countryNameToCode[country.toLowerCase()];
+  let code =
+    nameOnly.length === 2
+      ? nameOnly.toUpperCase()
+      : countryNameToCode[nameOnly.toLowerCase()] || countryNameToCode[raw.toLowerCase()];
 
   // Support pour UK -> GB
   if (code === 'UK') code = 'GB';
@@ -498,9 +519,7 @@ function detailsTimeslotSummary(task: TaskListItem): string {
 }
 
 export function TasksListPage() {
-  console.log('🎯 [TasksListPage] VERSION OPTIMISÉE CHARGÉE');
-
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
 
   const [tasks, setTasks] = useState<TaskListItem[]>([]);
@@ -555,10 +574,11 @@ export function TasksListPage() {
   const [tempHasAssociation, setTempHasAssociation] = useState<'all' | 'with' | 'without'>('all');
   const [tempSources, setTempSources] = useState<string[]>([]);
 
-  // Column visibility toggles
-  const [showCreatedAt, setShowCreatedAt] = useState(false);
+  // Column visibility toggles (⚠️ "Créé le" est toujours visible maintenant)
   const [showDetails, setShowDetails] = useState(false);
   const [showTimeslotClient, setShowTimeslotClient] = useState(false);
+  const [showHeureTask, setShowHeureTask] = useState(false);
+  const [showDescription, setShowDescription] = useState(false);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
 
   const loadStaffAndListings = useCallback(async () => {
@@ -645,6 +665,7 @@ export function TasksListPage() {
 
       setTasks(tasksResult.tasks);
       setPagination(tasksResult.pagination);
+
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Erreur inconnue');
       setTasks([]);
@@ -675,8 +696,9 @@ export function TasksListPage() {
   ]);
 
   useEffect(() => {
+    if (authLoading) return;
     void fetchTasks();
-  }, [fetchTasks]);
+  }, [fetchTasks, authLoading]);
 
   const displayTasks = useMemo(() => {
     let list = tasks;
@@ -745,9 +767,12 @@ export function TasksListPage() {
     setPage(0);
   };
 
-  const handleSubmitSearch = useCallback(() => {
-    setActiveSearchTerm(searchInput);
-    setPage(0);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setActiveSearchTerm(searchInput.trim());
+      setPage(0);
+    }, 400);
+    return () => window.clearTimeout(timer);
   }, [searchInput]);
 
   const openAdvancedDialog = () => {
@@ -848,9 +873,65 @@ export function TasksListPage() {
 
   const columns = [
     {
+      key: 'createdAt',
+      label: 'Créé le',
+      width: COLUMN_WIDTHS.createdAt,
+      align: 'center' as const,
+      render: (row: TaskRow) => {
+        const parts = formatCreatedAtParts(row.createdAt);
+        if (!parts) {
+          return (
+            <Typography sx={{ fontSize: 12, color: T.text3, textAlign: 'center' }}>—</Typography>
+          );
+        }
+        return (
+          <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
+            <Typography sx={{ fontSize: 11, color: T.text2 }}>{parts.date}</Typography>
+            <Typography sx={{ fontSize: 10, color: T.text3, fontWeight: 600 }}>{parts.time}</Typography>
+          </Stack>
+        );
+      },
+    },
+    {
+      key: 'urgence',
+      label: 'Urgence',
+      width: COLUMN_WIDTHS.urgence,
+      align: 'center' as const,
+      render: (row: TaskRow) => {
+        const em = String(row.emergency || 'Normal');
+        const meta = emergencyChipMeta(em);
+        return (
+          <Chip
+            label={urgencyShortLabel(em)}
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: 10,
+              fontWeight: 700,
+              bgcolor: meta.bg,
+              color: meta.color,
+              border: `1px solid ${meta.color}33`,
+              '& .MuiChip-label': { px: 0.75 },
+            }}
+          />
+        );
+      },
+    },
+    {
+      key: 'listingName',
+      label: 'Listing',
+      width: COLUMN_WIDTHS.listing,
+      align: 'left' as const,
+      render: (row: TaskRow) => (
+        <Typography sx={{ fontSize: 12, fontWeight: 600 }} noWrap title={row.listingName || ''}>
+          {row.listingName || '—'}
+        </Typography>
+      ),
+    },
+    {
       key: 'name',
-      label: 'Tâche',
-      width: COLUMN_WIDTHS.name,
+      label: 'Code tâche',
+      width: COLUMN_WIDTHS.itemNumber,
       render: (row: TaskRow) => (
         <Typography
           sx={{
@@ -859,9 +940,34 @@ export function TasksListPage() {
             fontWeight: 700,
             color: T.primaryDeep,
           }}
+          noWrap
         >
           {row.itemNumber || '—'}
         </Typography>
+      ),
+    },
+    {
+      key: 'reservationSource',
+      label: 'Réservation',
+      width: COLUMN_WIDTHS.reservationSource,
+      align: 'center' as const,
+      render: (row: TaskRow) => (
+        <Stack spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+          <Typography
+            sx={{
+              fontFamily: '"Geist Mono", monospace',
+              fontSize: 11,
+              fontWeight: 700,
+              color: T.primaryDeep,
+              lineHeight: 1.2,
+            }}
+            noWrap
+            title={row.reservationNumber || ''}
+          >
+            {row.reservationNumber || '—'}
+          </Typography>
+          <OTABadge channel={otaChannelForRow(row)} />
+        </Stack>
       ),
     },
     {
@@ -895,28 +1001,39 @@ export function TasksListPage() {
       },
     },
     {
-      key: 'createdAt',
-      label: 'Créé le',
-      width: COLUMN_WIDTHS.createdAt,
-      align: 'center' as const,
+      key: 'voyageur',
+      label: 'Voyageur',
+      width: COLUMN_WIDTHS.voyageur,
+      align: 'left' as const,
       render: (row: TaskRow) => {
-        const parts = formatCreatedAtParts(row.createdAt);
-        if (!parts) {
-          return (
-            <Typography sx={{ fontSize: 12, color: T.text3, textAlign: 'center' }}>—</Typography>
-          );
+        if (!row.guestName) {
+          return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
         }
+        const tip = [row.guestName, row.guestCountry].filter(Boolean).join(' · ');
         return (
-          <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
-            <Typography sx={{ fontSize: 12, color: T.text2 }}>{parts.date}</Typography>
-            <Typography sx={{ fontSize: 11, color: T.text3, fontWeight: 600 }}>{parts.time}</Typography>
-          </Stack>
+          <Tooltip title={tip} arrow>
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+              <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{flagFor(row.guestCountry)}</span>
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: T.text,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {row.guestName}
+              </Typography>
+            </Stack>
+          </Tooltip>
         );
       },
     },
     {
       key: 'executionDate',
-      label: 'Date Prévue',
+      label: 'Prévu',
       width: COLUMN_WIDTHS.executionDate,
       align: 'center' as const,
       render: (row: TaskRow) => (
@@ -1012,69 +1129,6 @@ export function TasksListPage() {
       ),
     },
     {
-      key: 'source',
-      label: 'Source',
-      width: COLUMN_WIDTHS.source,
-      align: 'center' as const,
-      render: (row: TaskRow) => <OTABadge source={row.source} />,
-    },
-    {
-      key: 'voyageur',
-      label: 'Voyageur',
-      width: COLUMN_WIDTHS.voyageur,
-      align: 'left' as const,
-      render: (row: TaskRow) => {
-        if (!row.guestName) {
-          return (
-            <Typography sx={{ fontSize: 11, color: T.text4, textAlign: 'center' }}>—</Typography>
-          );
-        }
-        return (
-          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-            <span style={{ fontSize: 18 }}>{flagFor(row.guestCountry)}</span>
-            <Typography
-              sx={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: T.text2,
-                maxWidth: 120,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {row.guestName}
-            </Typography>
-          </Stack>
-        );
-      },
-    },
-    {
-      key: 'listingName',
-      label: 'Listing',
-      width: COLUMN_WIDTHS.listing,
-      align: 'center' as const,
-      render: (row: TaskRow) => (
-        <Typography sx={{ fontSize: 12 }} noWrap title={row.listingName || ''}>
-          {row.listingName || '—'}
-        </Typography>
-      ),
-    },
-    {
-      key: 'reservation',
-      label: 'Réservation',
-      width: COLUMN_WIDTHS.reservation,
-      align: 'center' as const,
-      render: (row: TaskRow) => (
-        <Typography
-          sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 700, color: T.primaryDeep }}
-          noWrap
-        >
-          {row.reservationNumber || '—'}
-        </Typography>
-      ),
-    },
-    {
       key: 'description',
       label: 'Description',
       width: COLUMN_WIDTHS.details,
@@ -1122,81 +1176,50 @@ export function TasksListPage() {
       label: 'Staff',
       width: COLUMN_WIDTHS.assignedStaff,
       render: (row: TaskRow) => (
-        <Stack spacing={0.25}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600, color: T.primaryDeep }}>
-            {row.staffName || row.staffCode || '—'}
-          </Typography>
-          {row.staffPhone ? (
-            <Typography sx={{ fontSize: 10, color: T.text3 }}>{row.staffPhone}</Typography>
-          ) : null}
-        </Stack>
+        <Typography
+          sx={{ fontSize: 11.5, fontWeight: 600, color: T.primaryDeep }}
+          noWrap
+          title={row.staffPhone ? `${row.staffName || row.staffCode} · ${row.staffPhone}` : undefined}
+        >
+          {row.staffName || row.staffCode || '—'}
+        </Typography>
       ),
     },
     {
-      key: 'payment',
+      key: 'paymentPrice',
       label: 'Paiement',
-      width: COLUMN_WIDTHS.payment,
+      width: COLUMN_WIDTHS.paymentPrice,
       align: 'center' as const,
       render: (row: TaskRow) => {
-        const ps = row.paymentStatus || 'NOT_PAID';
-        const meta = paymentChipMeta(ps);
+        // Si pas de prix ou prix = 0, afficher "—"
+        if (!row.price || row.price <= 0) {
+          return <Typography sx={{ fontSize: 10, color: T.text4 }}>—</Typography>;
+        }
+
         return (
-          <Chip
-            label={ps.replace(/_/g, ' ')}
-            size="small"
-            sx={{
-              height: 22,
-              fontSize: 11,
-              fontWeight: 700,
-              bgcolor: meta.bg,
-              color: meta.color,
-              border: `1px solid ${meta.color}33`,
-            }}
-          />
-        );
-      },
-    },
-    {
-      key: 'price',
-      label: 'Prix',
-      width: COLUMN_WIDTHS.price,
-      align: 'center' as const,
-      render: (row: TaskRow) =>
-        row.price != null && row.price > 0 ? (
-          <Typography
-            sx={{
-              fontSize: 13,
-              fontWeight: 700,
-              color: row.paid ? T.success : T.warning,
-            }}
-          >
-            {row.price} MAD
-          </Typography>
-        ) : (
-          <Typography sx={{ fontSize: 12, color: T.text3 }}>—</Typography>
-        ),
-    },
-    {
-      key: 'urgence',
-      label: 'Urgence',
-      width: COLUMN_WIDTHS.urgence,
-      align: 'center' as const,
-      render: (row: TaskRow) => {
-        const em = String(row.emergency || 'Normal');
-        const meta = emergencyChipMeta(em);
-        return (
-          <Chip
-            label={em}
-            size="small"
-            sx={{
-              height: 22,
-              fontSize: 11,
-              fontWeight: 600,
-              bgcolor: meta.bg,
-              color: meta.color,
-              border: `1px solid ${meta.color}33`,
-            }}
-          />
+          <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
+            {/* Prix sur la première ligne */}
+            <Typography
+              sx={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: T.text,
+                fontFamily: '"Geist Mono", monospace',
+              }}
+            >
+              {row.price} MAD
+            </Typography>
+            {/* Statut paiement sur la deuxième ligne */}
+            <Typography
+              sx={{
+                fontSize: 9.5,
+                fontWeight: 600,
+                color: row.paid ? T.success : T.warning,
+              }}
+            >
+              {row.paid ? '✓ Payé' : 'En attente'}
+            </Typography>
+          </Stack>
         );
       },
     },
@@ -1204,18 +1227,18 @@ export function TasksListPage() {
 
   // Filter columns based on visibility toggles
   const visibleColumns = columns.filter((col) => {
-    if (col.key === 'createdAt' && !showCreatedAt) return false;
     if (col.key === 'timeslotDetails' && !showDetails) return false;
     if (col.key === 'timeslotClient' && !showTimeslotClient) return false;
+    if (col.key === 'heureTask' && !showHeureTask) return false;
+    if (col.key === 'description' && !showDescription) return false;
     return true;
   });
 
-  console.log('🔧 [TasksListPage] Colonnes:', {
-    total: columns.length,
-    visible: visibleColumns.length,
-    hidden: columns.length - visibleColumns.length,
-    toggles: { showCreatedAt, showDetails, showTimeslotClient }
-  });
+  const optionalColumnsOn =
+    (showDetails ? 1 : 0) +
+    (showTimeslotClient ? 1 : 0) +
+    (showHeureTask ? 1 : 0) +
+    (showDescription ? 1 : 0);
 
   return (
     <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
@@ -1224,13 +1247,9 @@ export function TasksListPage() {
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
             <TextField
               size="small"
-              placeholder="Rechercher réservation, propriété, n° tâche…"
+              placeholder="Résa, propriété, code tâche…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSubmitSearch();
-              }}
-              sx={{ flex: 1, minWidth: 240, ...fieldSx }}
               slotProps={{
                 input: {
                   startAdornment: (
@@ -1240,11 +1259,103 @@ export function TasksListPage() {
                   ),
                 },
               }}
+              sx={{ flex: 1, minWidth: 180, maxWidth: 320 }}
             />
-            <FormControl size="small" sx={{ minWidth: 130, ...fieldSx }}>
-              <InputLabel>Origine</InputLabel>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={() => setAddTaskOpen(true)}
+              sx={{
+                textTransform: 'none',
+                bgcolor: T.primary,
+                color: '#fff',
+                fontWeight: 600,
+                px: 2,
+                whiteSpace: 'nowrap',
+                '&:hover': { bgcolor: T.primaryDeep },
+              }}
+            >
+              + Tâche
+            </Button>
+            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 168, flex: '1 1 140px', maxWidth: 220 }}>
               <Select
-                label="Origine"
+                multiple
+                displayEmpty
+                value={listFilters.listingIds}
+                onChange={(e) => {
+                  setListFilters((p) => ({ ...p, listingIds: e.target.value as string[] }));
+                  setPage(0);
+                }}
+                renderValue={(s) => `Propriété · ${(s as string[]).length || 'toutes'}`}
+              >
+                {listings.map((lst) => (
+                  <MenuItem key={lst._id} value={lst._id}>
+                    <Checkbox checked={listFilters.listingIds.indexOf(lst._id) > -1} size="small" />
+                    <ListItemText primary={lst.name} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 152, flex: '1 1 130px', maxWidth: 200 }}>
+              <Select
+                multiple
+                displayEmpty
+                value={listFilters.subTypes}
+                onChange={(e) => {
+                  setListFilters((p) => ({ ...p, subTypes: e.target.value as string[] }));
+                  setPage(0);
+                }}
+                renderValue={(s) => `Catégorie · ${(s as string[]).length || 'toutes'}`}
+              >
+                {CATEGORY_MULTI_OPTIONS.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    <Checkbox checked={listFilters.subTypes.indexOf(c.id) > -1} size="small" />
+                    <ListItemText primary={c.label} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 140, flex: '1 1 120px', maxWidth: 180 }}>
+              <Select
+                multiple
+                displayEmpty
+                value={listFilters.statuses}
+                onChange={(e) => {
+                  const v = e.target.value as string[];
+                  setListFilters((p) => ({ ...p, statuses: v.length ? v : [...DEFAULT_TASK_STATUSES] }));
+                  setPage(0);
+                }}
+                renderValue={(s) => `Statut · ${(s as string[]).length || 'tous'}`}
+              >
+                {STATUS_MULTI_OPTIONS.map((st) => (
+                  <MenuItem key={st.id} value={st.id}>
+                    <Checkbox checked={listFilters.statuses.indexOf(st.id) > -1} size="small" />
+                    <ListItemText primary={st.label} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 128, flex: '1 1 110px', maxWidth: 160 }}>
+              <Select
+                multiple
+                displayEmpty
+                value={listFilters.staffCodes}
+                onChange={(e) => {
+                  setListFilters((p) => ({ ...p, staffCodes: e.target.value as string[] }));
+                  setPage(0);
+                }}
+                renderValue={(s) => `Staff · ${(s as string[]).length || 'tous'}`}
+              >
+                {staff.map((m) => (
+                  <MenuItem key={m.staffCode} value={m.staffCode}>
+                    <Checkbox checked={listFilters.staffCodes.indexOf(m.staffCode) > -1} size="small" />
+                    <ListItemText primary={m.username} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 118, flex: '0 1 118px' }}>
+              <Select
                 value={listFilters.origin}
                 onChange={(e) => {
                   setListFilters((p) => ({
@@ -1253,50 +1364,50 @@ export function TasksListPage() {
                   }));
                   setPage(0);
                 }}
+                renderValue={(v) =>
+                  v === 'task' ? 'Origine · Internes' : v === 'client' ? 'Origine · Client' : 'Origine · toutes'
+                }
               >
                 <MenuItem value="all">Toutes</MenuItem>
                 <MenuItem value="task">Internes</MenuItem>
                 <MenuItem value="client">Client</MenuItem>
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 140, ...fieldSx }}>
-              <InputLabel>Trier</InputLabel>
+            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 132, flex: '0 1 132px' }}>
               <Select
-                label="Trier"
                 value={sortField}
                 onChange={(e) => {
                   setSortField(e.target.value as typeof sortField);
                   setPage(0);
                 }}
+                renderValue={(v) => `Tri · ${SORT_FIELD_LABELS[String(v)] || 'Date prévue'}`}
               >
-                <MenuItem value="startDate">Date exécution</MenuItem>
+                <MenuItem value="startDate">Date prévue</MenuItem>
                 <MenuItem value="createdAt">Création</MenuItem>
-                <MenuItem value="name">Nom</MenuItem>
+                <MenuItem value="name">Code</MenuItem>
                 <MenuItem value="itemType">Type</MenuItem>
-                <MenuItem value="source">Source</MenuItem>
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 108, ...fieldSx }}>
-              <InputLabel>Ordre</InputLabel>
-              <Select
-                label="Ordre"
-                value={sortDirection}
-                onChange={(e) => {
-                  setSortDirection(e.target.value as 'asc' | 'desc');
+            <Tooltip title={sortDirection === 'asc' ? 'Ordre croissant' : 'Ordre décroissant'}>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
                   setPage(0);
                 }}
               >
-                <MenuItem value="asc">↑</MenuItem>
-                <MenuItem value="desc">↓</MenuItem>
-              </Select>
-            </FormControl>
-            <Tooltip title="Filtres avancés (dates, urgence, paiement, sources…)">
+                {sortDirection === 'asc' ? (
+                  <ArrowUpwardIcon sx={{ fontSize: 18 }} />
+                ) : (
+                  <ArrowDownwardIcon sx={{ fontSize: 18 }} />
+                )}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Filtres avancés">
               <IconButton
                 size="small"
                 onClick={openAdvancedDialog}
                 sx={{
-                  border: `1px solid ${T.border}`,
-                  borderRadius: 1,
                   bgcolor:
                     advancedFilters.dateType ||
                     advancedFilters.emergency !== 'all' ||
@@ -1304,219 +1415,42 @@ export function TasksListPage() {
                     listFilters.hasAssociation !== 'all' ||
                     listFilters.sources.length > 0
                       ? T.primaryTint
-                      : T.bg1,
+                      : undefined,
                 }}
               >
                 <FilterListIcon sx={{ fontSize: 18, color: T.primaryDeep }} />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Réinitialiser tous les filtres">
-              <IconButton size="small" onClick={resetAllListFilters} sx={{ border: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
-                <ClearAllIcon sx={{ fontSize: 18, color: T.text3 }} />
+            <Tooltip title="Colonnes optionnelles">
+              <IconButton
+                size="small"
+                onClick={(e) => setColumnMenuAnchor(e.currentTarget)}
+                sx={{ bgcolor: optionalColumnsOn > 0 ? T.primaryTint : undefined }}
+              >
+                <ViewColumnIcon sx={{ fontSize: 18, color: optionalColumnsOn > 0 ? T.primary : T.text3 }} />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Recharger les données">
-              <IconButton size="small" onClick={() => void fetchTasks()} sx={{ border: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
-                <RefreshIcon sx={{ fontSize: 18, color: T.primaryDeep }} />
+            <Tooltip title="Réinitialiser les filtres">
+              <IconButton size="small" onClick={resetAllListFilters}>
+                <RefreshIcon sx={{ fontSize: 18 }} />
               </IconButton>
             </Tooltip>
-            <Button
-              size="small"
-              sx={{
-                minHeight: 32,
-                py: 0.5,
-                px: 1.5,
-                flexShrink: 0,
-                borderRadius: 1,
-                border: `1px solid ${T.border}`,
-                bgcolor: (showCreatedAt || showDetails || showTimeslotClient) ? T.primaryTint : T.bg1,
-                color: (showCreatedAt || showDetails || showTimeslotClient) ? T.primary : T.text3,
-                fontWeight: 600,
-                fontSize: 12,
-                textTransform: 'none',
-                '&:hover': {
-                  bgcolor: T.primaryTint,
-                  color: T.primary,
-                  borderColor: T.primary,
-                },
-              }}
-              onClick={(e) => setColumnMenuAnchor(e.currentTarget)}
-            >
-              ⚙️ Colonnes
-              {(showCreatedAt || showDetails || showTimeslotClient) && (
-                <Chip
-                  label={(showCreatedAt ? 1 : 0) + (showDetails ? 1 : 0) + (showTimeslotClient ? 1 : 0)}
-                  size="small"
-                  sx={{
-                    height: 16,
-                    fontSize: 10,
-                    bgcolor: T.primary,
-                    color: '#fff',
-                    ml: 0.5,
-                  }}
-                />
-              )}
-            </Button>
-            <Button
-              size="small"
-              sx={{ ...btnPrimarySx, minHeight: 32, py: 0.5, flexShrink: 0 }}
-              onClick={() => setAddTaskOpen(true)}
-            >
-              + Nouvelle tâche
-            </Button>
-          </Stack>
-
-          <Stack direction="row" sx={{ mt: 1.25, flexWrap: 'wrap', gap: 1, alignItems: 'stretch' }}>
-            <Autocomplete
-              multiple
-              size="small"
-              sx={{ minWidth: 180, flex: '1 1 160px', ...fieldSx }}
-              options={listings}
-              getOptionLabel={(o) => o.name}
-              value={listings.filter((l) => listFilters.listingIds.includes(l._id))}
-              onChange={(_, v) => {
-                setListFilters((p) => ({ ...p, listingIds: v.map((x) => x._id) }));
-                setPage(0);
-              }}
-              renderInput={(params) => <TextField {...params} label="Propriété(s)" placeholder="Toutes" />}
-              isOptionEqualToValue={(a, b) => a._id === b._id}
-            />
-            <Autocomplete
-              multiple
-              size="small"
-              sx={{ minWidth: 200, flex: '1 1 180px', ...fieldSx }}
-              options={CATEGORY_MULTI_OPTIONS}
-              getOptionLabel={(o) => o.label}
-              disableCloseOnSelect
-              value={CATEGORY_MULTI_OPTIONS.filter((c) => listFilters.subTypes.includes(c.id))}
-              onChange={(_, v) => {
-                setListFilters((p) => ({ ...p, subTypes: v.map((x) => x.id) }));
-                setPage(0);
-              }}
-              renderOption={(props, option, { selected }) => (
-                <li {...props}>
-                  <Checkbox checked={selected} sx={{ mr: 1 }} size="small" />
-                  {option.label}
-                </li>
-              )}
-              renderInput={(params) => <TextField {...params} label="Catégorie(s)" placeholder="Toutes" />}
-            />
-            <Autocomplete
-              multiple
-              size="small"
-              sx={{ minWidth: 180, flex: '1 1 160px', ...fieldSx }}
-              options={STATUS_MULTI_OPTIONS}
-              getOptionLabel={(o) => o.label}
-              disableCloseOnSelect
-              value={STATUS_MULTI_OPTIONS.filter((s) => listFilters.statuses.includes(s.id))}
-              onChange={(_, v) => {
-                setListFilters((p) => ({
-                  ...p,
-                  statuses: v.length ? v.map((x) => x.id) : [],
-                }));
-                setPage(0);
-              }}
-              renderOption={(props, option, { selected }) => (
-                <li {...props}>
-                  <Checkbox checked={selected} sx={{ mr: 1 }} size="small" />
-                  {option.label}
-                </li>
-              )}
-              renderInput={(params) => <TextField {...params} label="Statut(s)" placeholder="Tous" />}
-            />
-            <Autocomplete
-              multiple
-              size="small"
-              sx={{ minWidth: 180, flex: '1 1 160px', ...fieldSx }}
-              options={staff}
-              getOptionLabel={(o) => o.username}
-              value={staff.filter((s) => listFilters.staffCodes.includes(s.staffCode))}
-              onChange={(_, v) => {
-                setListFilters((p) => ({
-                  ...p,
-                  staffCodes: v.map((x) => x.staffCode),
-                }));
-                setPage(0);
-              }}
-              isOptionEqualToValue={(a, b) => a.staffCode === b.staffCode}
-              renderInput={(params) => <TextField {...params} label="Staff" placeholder="Tous" />}
-            />
           </Stack>
 
           <Stack
             direction="row"
-            sx={{
-              mt: 1.5,
-              gap: 0.75,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
+            sx={{ mt: 1.5, gap: 0.75, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}
           >
             <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
-              <Pill
-                label="Éch. auj."
-                count={filterCounts.dueToday}
-                active={quickFilterKey === 'dueToday'}
-                onClick={() => toggleQuickFilter('dueToday')}
-                color={T.info}
-              />
-              <Pill
-                label="Demain"
-                count={filterCounts.dueTomorrow}
-                active={quickFilterKey === 'dueTomorrow'}
-                onClick={() => toggleQuickFilter('dueTomorrow')}
-                color={T.warning}
-              />
-              <Pill
-                label="7 jours"
-                count={filterCounts.due7d}
-                active={quickFilterKey === 'due7d'}
-                onClick={() => toggleQuickFilter('due7d')}
-                color={T.primary}
-              />
-              <Pill
-                label="Urgent+"
-                count={filterCounts.urgent}
-                active={quickFilterKey === 'urgent'}
-                onClick={() => toggleQuickFilter('urgent')}
-                color={T.error}
-              />
+              <Pill label="Éch. auj." count={filterCounts.dueToday} active={quickFilterKey === 'dueToday'} onClick={() => toggleQuickFilter('dueToday')} color={T.info} />
+              <Pill label="Demain" count={filterCounts.dueTomorrow} active={quickFilterKey === 'dueTomorrow'} onClick={() => toggleQuickFilter('dueTomorrow')} color={T.warning} />
+              <Pill label="7 j" count={filterCounts.due7d} active={quickFilterKey === 'due7d'} onClick={() => toggleQuickFilter('due7d')} color={T.primary} />
+              <Pill label="Urgent" count={filterCounts.urgent} active={quickFilterKey === 'urgent'} onClick={() => toggleQuickFilter('urgent')} color={T.error} />
             </Stack>
             <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
-              <KpiCompact
-                label="À traiter"
-                value={kpis.created}
-                accent={T.info}
-                onClick={() => {
-                  setListFilters((p) => ({ ...p, statuses: ['CREATED'] }));
-                  setQuickFilterKey('none');
-                  setPage(0);
-                }}
-              />
-              <KpiCompact
-                label="En cours"
-                value={kpis.inProgress}
-                accent={T.warning}
-                onClick={() => {
-                  setListFilters((p) => ({
-                    ...p,
-                    statuses: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'],
-                  }));
-                  setQuickFilterKey('none');
-                  setPage(0);
-                }}
-              />
-              <KpiCompact
-                label="Terminées"
-                value={kpis.completed}
-                accent={T.success}
-                onClick={() => {
-                  setListFilters((p) => ({ ...p, statuses: ['COMPLETED'] }));
-                  setQuickFilterKey('none');
-                  setPage(0);
-                }}
-              />
+              <KpiCompact label="À traiter" value={kpis.created} accent={T.info} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['CREATED'] })); setQuickFilterKey('none'); setPage(0); }} />
+              <KpiCompact label="En cours" value={kpis.inProgress} accent={T.warning} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] })); setQuickFilterKey('none'); setPage(0); }} />
+              <KpiCompact label="OK" value={kpis.completed} accent={T.success} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['COMPLETED'] })); setQuickFilterKey('none'); setPage(0); }} />
               <KpiCompact label="Total" value={kpis.total} accent={T.primaryDeep} />
             </Stack>
           </Stack>
@@ -1549,7 +1483,7 @@ export function TasksListPage() {
               columns={visibleColumns}
               rows={displayTasks.map((task) => ({ ...task, id: task._id }))}
               hideRowActions
-              tableMinWidth={TASK_TABLE_MIN_WIDTH}
+              compact
               headerTextTransform="none"
             />
             <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
@@ -1774,26 +1708,10 @@ export function TasksListPage() {
           <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2 }}>
             Colonnes optionnelles
           </Typography>
+          <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.5 }}>
+            ✅ "Créé le" est toujours visible
+          </Typography>
         </Box>
-        <MenuItem
-          onClick={() => setShowCreatedAt(!showCreatedAt)}
-          sx={{ fontSize: 13, py: 1.25 }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-            <Box sx={{
-              width: 18, height: 18, borderRadius: '4px',
-              border: `2px solid ${showCreatedAt ? T.primary : T.border}`,
-              bgcolor: showCreatedAt ? T.primary : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 10, fontWeight: 700,
-            }}>
-              {showCreatedAt && '✓'}
-            </Box>
-            <Typography sx={{ fontSize: 13, color: T.text2 }}>
-              Créé le
-            </Typography>
-          </Box>
-        </MenuItem>
         <MenuItem
           onClick={() => setShowDetails(!showDetails)}
           sx={{ fontSize: 13, py: 1.25 }}
@@ -1828,8 +1746,36 @@ export function TasksListPage() {
               {showTimeslotClient && '✓'}
             </Box>
             <Typography sx={{ fontSize: 13, color: T.text2 }}>
-              Timeslot Client
+              Timeslot client
             </Typography>
+          </Box>
+        </MenuItem>
+        <MenuItem onClick={() => setShowHeureTask(!showHeureTask)} sx={{ fontSize: 13, py: 1.25 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+            <Box sx={{
+              width: 18, height: 18, borderRadius: '4px',
+              border: `2px solid ${showHeureTask ? T.primary : T.border}`,
+              bgcolor: showHeureTask ? T.primary : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 10, fontWeight: 700,
+            }}>
+              {showHeureTask && '✓'}
+            </Box>
+            <Typography sx={{ fontSize: 13, color: T.text2 }}>Heure tâche</Typography>
+          </Box>
+        </MenuItem>
+        <MenuItem onClick={() => setShowDescription(!showDescription)} sx={{ fontSize: 13, py: 1.25 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+            <Box sx={{
+              width: 18, height: 18, borderRadius: '4px',
+              border: `2px solid ${showDescription ? T.primary : T.border}`,
+              bgcolor: showDescription ? T.primary : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 10, fontWeight: 700,
+            }}>
+              {showDescription && '✓'}
+            </Box>
+            <Typography sx={{ fontSize: 13, color: T.text2 }}>Description</Typography>
           </Box>
         </MenuItem>
         <Box sx={{ px: 2, py: 1.5, borderTop: `1px solid ${T.border}`, bgcolor: T.bg2 }}>

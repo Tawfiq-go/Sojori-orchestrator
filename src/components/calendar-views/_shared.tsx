@@ -21,6 +21,49 @@ export const T = {
 
 /* ─── Constantes dimensions ─── */
 export const STAY = { CELL_W: 82, STICKY_W: 240, ROW_H: 76, MAX_CHIPS: 2 };
+
+/** Barres réservation : arrivée à 14h (40% jour), départ ~11h (fin à 40%), 10% marge si 2 resa/jour */
+export const STAY_RES_BAR = {
+  CHECKIN_OFFSET: 0.4,
+  CHECKOUT_END: 0.4,
+  SAME_DAY_WIDTH: 0.5,
+  TURNOVER_WIDTH: 0.4,
+} as const;
+
+/** Position % de la barre Gantt sur la timeline (jours = colonnes égales). */
+export function computeReservationBarLayout(
+  startIdx: number,
+  endIdx: number,
+  daysCount: number,
+  sameDaySlot = 0,
+): { leftPct: number; widthPct: number } {
+  if (daysCount <= 0) return { leftPct: 0, widthPct: 0 };
+
+  const cellPct = 100 / daysCount;
+  const { CHECKIN_OFFSET, CHECKOUT_END, SAME_DAY_WIDTH, TURNOVER_WIDTH } = STAY_RES_BAR;
+
+  if (sameDaySlot > 0) {
+    const leftPct = (startIdx / daysCount) * 100;
+    const widthPct = TURNOVER_WIDTH * cellPct;
+    return { leftPct, widthPct: Math.max(widthPct, 2) };
+  }
+
+  if (startIdx >= endIdx) {
+    return {
+      leftPct: ((startIdx + CHECKIN_OFFSET) / daysCount) * 100,
+      widthPct: Math.max(SAME_DAY_WIDTH * cellPct, 2),
+    };
+  }
+
+  const leftPct = ((startIdx + CHECKIN_OFFSET) / daysCount) * 100;
+  const rightPct = ((endIdx + CHECKOUT_END) / daysCount) * 100;
+  const widthPct = Math.max(rightPct - leftPct, SAME_DAY_WIDTH * cellPct);
+
+  return {
+    leftPct,
+    widthPct: Math.min(widthPct, 100 - leftPct - cellPct * 0.1),
+  };
+}
 export const TEAM = { CELL_W: 84, STICKY_W: 200, ROW_H: 60, MAX_CHIPS: 2 };
 
 /* ─── Types alignés API srv-task ─── */
@@ -104,12 +147,14 @@ export function genDays(start: Date, count: number) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   for (let i = 0; i < count; i++) {
     const d = new Date(start); d.setDate(d.getDate() + i);
+    const months = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
     arr.push({
       date: d,
       iso: d.toISOString().slice(0, 10),
       day: d.getDate(),
       weekday: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][(d.getDay() + 6) % 7],
-      month: ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'][d.getMonth()],
+      month: months[d.getMonth()],
+      frShort: `${d.getDate()} ${months[d.getMonth()]}`,
       isWeekend: d.getDay() === 0 || d.getDay() === 6,
       isToday: d.toDateString() === today.toDateString(),
     });

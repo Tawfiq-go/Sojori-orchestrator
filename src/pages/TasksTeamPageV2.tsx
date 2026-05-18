@@ -16,7 +16,7 @@ import { getStoredOwners } from '../data/catalogueMock';
 
 export default function TasksTeamPageV2() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -111,8 +111,9 @@ export default function TasksTeamPageV2() {
       }
     };
 
+    if (authLoading) return;
     fetchData();
-  }, [startDate, daysCount, planningOwnerId, scope.canAccessAllOwners, scope.ownerId]);
+  }, [startDate, daysCount, planningOwnerId, scope.canAccessAllOwners, scope.ownerId, authLoading]);
 
   // Transform API data to TaskItem[] format
   const tasks: TaskItem[] = useMemo(() => {

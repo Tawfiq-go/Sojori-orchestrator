@@ -15,7 +15,7 @@ import { useAuth } from '../hooks/useAuth';
 import { getStoredOwners } from '../data/catalogueMock';
 
 export default function TasksKanbanPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -70,8 +70,9 @@ export default function TasksKanbanPage() {
       }
     };
 
+    if (authLoading) return;
     fetchTasks();
-  }, [planningOwnerId, scope.canAccessAllOwners, scope.ownerId]);
+  }, [planningOwnerId, scope.canAccessAllOwners, scope.ownerId, authLoading]);
 
   // Transform API data to TaskItem[] format
   const tasks: TaskItem[] = useMemo(() => {
