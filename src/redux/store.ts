@@ -28,9 +28,18 @@ const authSlice = createSlice({
     error: null as string | null,
   } satisfies AuthState,
   reducers: {
-    setLegacyAuthUser(state, action: PayloadAction<LegacyAuthUser | null>) {
-      state.user = action.payload;
-      state.isAuthenticated = !!action.payload;
+    setLegacyAuthUser(
+      state,
+      action: PayloadAction<{ user: LegacyAuthUser | null; token?: string | null } | LegacyAuthUser | null>,
+    ) {
+      const payload = action.payload;
+      if (payload && typeof payload === 'object' && 'user' in payload) {
+        state.user = payload.user;
+        state.token = payload.token ?? state.token;
+      } else {
+        state.user = payload as LegacyAuthUser | null;
+      }
+      state.isAuthenticated = !!state.user;
     },
   },
 });

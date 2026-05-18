@@ -11,7 +11,12 @@ function SyncAuthToRedux() {
   const { user } = useAuth();
   const dispatch = useDispatch();
   useEffect(() => {
-    dispatch(setLegacyAuthUser(toLegacyAuthUser(user)));
+    dispatch(
+      setLegacyAuthUser({
+        user: toLegacyAuthUser(user),
+        token: getToken(),
+      }),
+    );
   }, [user, dispatch]);
   return null;
 }
