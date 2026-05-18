@@ -15,6 +15,7 @@ export default function CalendarInventoryPage({
   inventoriesByListing = {}, // { [listingId]: { [iso]: inv } } — pour SimpleView
   inventoryData = {},         // { [listingId]: { [roomTypeId]: { availability: {...} } } } — pour modal
   onUpdateInventory,         // (payloads) => Promise
+  onDateChange,              // (newDate) => void — callback pour remonter le changement de date
   defaultView = 'multi',
 }) {
   const [view, setView] = useState(defaultView);
@@ -36,6 +37,7 @@ export default function CalendarInventoryPage({
     const d = new Date(pivotDate);
     d.setMonth(d.getMonth() + delta);
     setPivotDate(d);
+    onDateChange?.(d); // Remonter le changement au parent
   };
 
   return (

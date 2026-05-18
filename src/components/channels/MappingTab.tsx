@@ -2,6 +2,7 @@
  * MappingTab — CRUD mappings RU + dictionnaires (legacy tab=Mapping)
  */
 import { useState, useEffect, useCallback } from 'react';
+import { onChannelsRefresh } from '../../utils/channelsRefresh';
 import { useSearchParams } from 'react-router-dom';
 import { tokens as T } from '../dashboard/DashboardV2.components';
 import { RuFieldMappingCrudDialog } from '../../features/channels/components/RuFieldMappingCrudDialog';
@@ -110,6 +111,15 @@ export function MappingTab() {
     else void loadDictionaries();
   }, [activeView, loadMappings, loadDictionaries]);
 
+  useEffect(
+    () =>
+      onChannelsRefresh(() => {
+        if (activeView === 'fields') void loadMappings();
+        else void loadDictionaries();
+      }),
+    [activeView, loadMappings, loadDictionaries],
+  );
+
   const handleDelete = async (id: string) => {
     if (!confirm('Supprimer ce mapping ?')) return;
     const { data } = await deleteChannelsRuFieldMapping(id);
@@ -137,35 +147,7 @@ export function MappingTab() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {SUB_VIEWS.map((view) => (
-          <button
-            key={view.id}
-            type="button"
-            onClick={() => patchParams({ mapSub: view.id })}
-            style={{
-              padding: '6px 16px',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              border: 'none',
-              cursor: 'pointer',
-              ...(activeView === view.id ? {
-                background: T.primary,
-                color: '#FFFFFF',
-                boxShadow: `0 2px 4px ${T.primaryTint}`,
-              } : {
-                background: 'transparent',
-                color: T.text2,
-              })
-            }}
-          >
-            {view.label}
-          </button>
-        ))}
-      </div>
-
+    <div className="space-y-3">
       {activeView === 'fields' && (
         <>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -195,14 +177,14 @@ export function MappingTab() {
             </button>
           </div>
 
-          <div style={{ overflow: "auto", border: `1px solid ${T.border}`, borderRadius: 8 }} style={{ maxHeight: '70vh', overflow: 'auto', border: `1px solid ${T.border}`, borderRadius: 8 }}>
+          <div className="channels-table-scroll" style={{ maxHeight: '70vh', overflow: 'auto', border: `1px solid ${T.border}`, borderRadius: 8 }}>
             {loading ? (
               <div style={{ padding: 32, textAlign: 'center', color: T.text3 }}>Chargement…</div>
             ) : mappings.length === 0 ? (
               <div style={{ padding: 32, textAlign: 'center', color: T.text3 }}>Aucun mapping trouvé</div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead style={{ position: "sticky", top: 0, zIndex: 100, background: T.primary, color: "white", fontWeight: 700, fontSize: 12 }}>
+                <thead className="channels-sticky-thead">
                   <tr>
                     <th>Domaine</th>
                     <th>RU path</th>
@@ -260,35 +242,6 @@ export function MappingTab() {
       {activeView === 'list' && (
         <>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              style={{ padding: "6px 16px", borderRadius: 6, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", ...(ruListMode === "locations" ? { background: T.primary, color: "#FFFFFF", boxShadow: `0 2px 4px ${T.primaryTint}` } : { background: "transparent", color: T.text2 }) }}
-              onClick={() => patchParams({ mapSub: 'list', ruListMode: undefined })}
-            >
-              Pays / lieux
-            </button>
-            <button
-              type="button"
-              onClick={() => patchParams({ mapSub: 'list', ruListMode: 'languages' })}
-              style={{
-                padding: '6px 16px',
-                borderRadius: 6,
-                fontSize: 13,
-                fontWeight: 600,
-                border: 'none',
-                cursor: 'pointer',
-                ...(ruListMode === 'languages' ? {
-                  background: T.primary,
-                  color: '#FFFFFF',
-                  boxShadow: `0 2px 4px ${T.primaryTint}`,
-                } : {
-                  background: 'transparent',
-                  color: T.text2,
-                })
-              }}
-            >
-              Langues
-            </button>
             {ruListMode === 'locations' && (
               <button
                 type="button"
@@ -332,6 +285,32 @@ export function MappingTab() {
           </pre>
         </>
       )}
+
+      <nav
+        className="sticky bottom-0 z-40 mt-3 rounded-lg border border-slate-200 bg-white/95 px-2 py-2 shadow-[0_-4px_14px_rgba(15,23,42,0.08)] backdrop-blur-sm"
+        aria-label="Sous-navigation Mapping"
+      >
+        <div className="mx-auto flex max-w-4xl flex-wrap justify-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => patchParams({ mapSub: 'fields' })}
+            className={`channels-tab-button px-3 py-1.5 text-xs font-semibold ${
+              activeView === 'fields' ? 'channels-tab-button-active' : 'channels-tab-button-inactive'
+            }`}
+          >
+            RU mapping
+          </button>
+          <button
+            type="button"
+            onClick={() => patchParams({ mapSub: 'list', ruDictType: searchParams.get('ruDictType') || '2' })}
+            className={`channels-tab-button px-3 py-1.5 text-xs font-semibold ${
+              activeView === 'list' ? 'channels-tab-button-active' : 'channels-tab-button-inactive'
+            }`}
+          >
+            RU list
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }

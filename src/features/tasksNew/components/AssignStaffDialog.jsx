@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { CircularProgress, List, ListItem, ListItemButton, ListItemText, ListItemAvatar, Avatar, TextField, InputAdornment, Typography, Chip, FormControlLabel, Checkbox, Box, Collapse, Button, useMediaQuery, useTheme } from '@mui/material';
 import { Search as SearchIcon, Person as PersonIcon, Check as CheckIcon, FilterList as FilterListIcon } from '@mui/icons-material';
 import axios from 'axios';
-import { useSelector } from 'react-redux';
 import { API_BASE_URL } from '../../../config/backendServer.config';
 import { getToken as getAuthToken } from '../../../utils/auth.utils';
 import { useAuth } from '../../../hooks/useAuth';
@@ -13,12 +12,12 @@ import { useAuth } from '../../../hooks/useAuth';
  * Niveaux de fallback (dans l'ordre):
  * 1. Props direct (ownerIdProp)
  * 2. Task object (task.ownerId, task.owner._id, task.__owner, etc.)
- * 3. Redux state (user._id ou user.id)
+ * 3. Session utilisateur (useAuth)
  * 4. LocalStorage (userId en dernier recours)
  *
  * @returns {string|null} ownerId trouvé ou null
  */
-const resolveOwnerIdRobust = (ownerIdProp, task, reduxUser) => {
+const resolveOwnerIdRobust = (ownerIdProp, task, sessionUser) => {
   // Niveau 1: Props direct
   if (ownerIdProp && ownerIdProp !== 'undefined' && ownerIdProp !== 'null') {
     return String(ownerIdProp);
@@ -32,15 +31,15 @@ const resolveOwnerIdRobust = (ownerIdProp, task, reduxUser) => {
     }
   }
 
-  // Niveau 3: Redux state (utilisateur connecté)
-  if (reduxUser) {
-    const fromRedux =
-      reduxUser.ownerId ||
-      reduxUser.theOwnerId ||
-      reduxUser._id ||
-      reduxUser.id;
-    if (fromRedux && fromRedux !== 'undefined' && fromRedux !== 'null') {
-      return String(fromRedux);
+  // Niveau 3: utilisateur connecté (useAuth)
+  if (sessionUser) {
+    const fromSession =
+      sessionUser.ownerId ||
+      sessionUser.theOwnerId ||
+      sessionUser._id ||
+      sessionUser.id;
+    if (fromSession && fromSession !== 'undefined' && fromSession !== 'null') {
+      return String(fromSession);
     }
   }
 
@@ -94,8 +93,6 @@ const AssignStaffDialog = ({
   const isMobile = useMediaQuery(theme.breakpoints.down('md')) || useMediaQuery('(max-width: 900px)');
 
   const { user: authUser } = useAuth();
-  const reduxUser = useSelector(state => state.auth?.user);
-  const scopeUser = reduxUser || authUser;
   const [availableStaff, setAvailableStaff] = useState([]);
   const [unavailableStaff, setUnavailableStaff] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -152,7 +149,7 @@ const AssignStaffDialog = ({
       if (task.endTime) params.set('endTime', task.endTime);
 
       // 🛡️ ROBUSTESSE - Utiliser fonction avec fallbacks multiples
-      const resolvedOwnerId = resolveOwnerIdRobust(ownerIdProp, task, scopeUser);
+      const resolvedOwnerId = resolveOwnerIdRobust(ownerIdProp, task, authUser);
       if (resolvedOwnerId) {
         params.set('ownerId', resolvedOwnerId);
       } else {}

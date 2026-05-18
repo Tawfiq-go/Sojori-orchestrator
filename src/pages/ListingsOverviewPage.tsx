@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { Box, Button, TextField, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, TextField, Typography } from '@mui/material';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   Badge,
@@ -14,7 +16,7 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { listingsService } from '../services/listingsService';
-import { RuImportDialog } from '../components/listing/RuImportDialog';
+import { ImportAirbnbModalContainer } from '../components/listing/import-airbnb';
 import { useAuth } from '../hooks/useAuth';
 import type { ListingStatus, ListingsStats, ListingSummary } from '../types/listings.types';
 import { ListingQuickEditDialog } from '../components/listing/ListingQuickEditDialog';
@@ -49,19 +51,27 @@ function formatDate(value: string | null): string {
   return parsed.toLocaleString('fr-FR');
 }
 
+function formatRuIdsLabel(ids: string[] | undefined): string | null {
+  const clean = (ids || []).map((id) => String(id).trim()).filter(Boolean);
+  if (!clean.length) return null;
+  return `RU #${clean.join(', #')}`;
+}
+
+function normalizeAuthRole(role?: string): string {
+  return String(role || '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/_/g, '');
+}
+
 function canCreateListing(role?: string): boolean {
-  const r = (role || '').toLowerCase();
-  return ['superadmin', 'admin', 'owner', 'worker'].includes(r);
+  const r = normalizeAuthRole(role);
+  return ['superadmin', 'admin', 'owner', 'worker', 'staff'].includes(r) || !r;
 }
 
 function isAdminRole(role?: string): boolean {
-  const r = (role || '').toLowerCase();
-  return r === 'superadmin' || r === 'admin';
-}
-
-function canUpdateListing(role?: string): boolean {
-  const r = (role || '').toLowerCase();
-  return ['superadmin', 'admin', 'owner', 'worker'].includes(r);
+  const r = normalizeAuthRole(role);
+  return r === 'superadmin' || r === 'admin' || r === 'super_admin';
 }
 
 function initialStats(): ListingsStats {
@@ -78,7 +88,8 @@ export function ListingsOverviewPage() {
   const { user } = useAuth();
   const isAdmin = isAdminRole(user?.role);
   const canCreate = canCreateListing(user?.role);
-  const canUpdate = canUpdateListing(user?.role);
+  /** Toujours afficher sur la liste — l’API quick-edit applique les droits côté srv-listing. */
+  const showQuickEdit = true;
   const [searchParams, setSearchParams] = useSearchParams();
   const [listings, setListings] = useState<ListingSummary[]>([]);
   const [stats, setStats] = useState<ListingsStats>(initialStats);
@@ -89,6 +100,7 @@ export function ListingsOverviewPage() {
   const [quickEditListing, setQuickEditListing] = useState<ListingSummary | null>(null);
   const [showImportRu, setShowImportRu] = useState(false);
   const [cities, setCities] = useState<Array<{ _id: string; name?: string }>>([]);
+  const [otaAuditListingId, setOtaAuditListingId] = useState<string | null>(null);
 
   // Initialize statusFilter from URL param ?tab=active/inactive/draft
   const tabParam = searchParams.get('tab') as 'all' | ListingStatus | null;
@@ -157,7 +169,7 @@ export function ListingsOverviewPage() {
   }, [listingsQueryOptions]);
 
   useEffect(() => {
-    void listingsService.getCities().then((rows) => {
+    void listingsService.getCities({ allCities: true, limit: 2000 }).then((rows) => {
       setCities(rows.map((c) => ({ _id: c._id, name: c.name })));
     });
   }, []);
@@ -194,6 +206,22 @@ export function ListingsOverviewPage() {
     setListings((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
   };
 
+  const handleOtaQuickAudit = async (listingId: string) => {
+    setOtaAuditListingId(listingId);
+    try {
+      const result = await listingsService.verifyOtaChannels(listingId);
+      if (result.success) {
+        toast.success('Audit OTA terminé — canaux Airbnb / Booking mis à jour.');
+      } else {
+        toast.error(result.error || 'Échec de l’audit OTA');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Échec de l’audit OTA');
+    } finally {
+      setOtaAuditListingId(null);
+    }
+  };
+
   return (
     <DashboardWrapper breadcrumb={['Catalogue', 'Annonces']}>
       {/* Boutons actions en haut */}
@@ -211,7 +239,7 @@ export function ListingsOverviewPage() {
             }}
             onClick={() => setShowImportRu(true)}
           >
-            Import from RU
+            Import Airbnb
           </Button>
         )}
         {canCreate && (
@@ -314,6 +342,8 @@ export function ListingsOverviewPage() {
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 2 }}>
             {filteredListings.map((listing, index) => {
               const gradient = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
+              const ruLabel = formatRuIdsLabel(listing.rentalUnitedIds);
+              const otaAuditing = otaAuditListingId === listing.id;
               return (
                 <Box
                   key={listing.id}
@@ -345,16 +375,18 @@ export function ListingsOverviewPage() {
                       {listing.city || 'Ville inconnue'} · {listing.country || 'Pays inconnu'}
                     </Typography>
                     <Typography sx={{ mt: 1.25, fontSize: 12.5, color: t.text2 }}>
-                      Owner: {listing.ownerName}
+                      Propriétaire : {listing.ownerName}
                     </Typography>
-                    <Typography sx={{ mt: 0.5, fontSize: 12.5, color: t.text2 }}>
-                      Type: {listing.propertyUnit}
-                    </Typography>
-                    {isAdmin && listing.rentalUnitedIds?.length > 0 && (
-                      <Typography sx={{ mt: 0.75, fontSize: 11, fontWeight: 600, color: '#f97316' }}>
-                        RU #{listing.rentalUnitedIds.join(', #')}
+                    {ruLabel && (
+                      <Typography
+                        sx={{ mt: 0.5, fontSize: 11.5, fontWeight: 700, color: '#f97316', fontFamily: 'Geist Mono' }}
+                      >
+                        {ruLabel}
                       </Typography>
                     )}
+                    <Typography sx={{ mt: 0.5, fontSize: 12.5, color: t.text2 }}>
+                      Type : {listing.propertyUnit}
+                    </Typography>
                     <Typography sx={{ mt: 0.5, fontSize: 12.5, color: t.text2 }}>
                       Channel manager: {listing.channelManager || 'Non défini'}
                     </Typography>
@@ -363,20 +395,41 @@ export function ListingsOverviewPage() {
                     </Typography>
 
                     <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-                      {canUpdate && (
+                      {showQuickEdit && (
                         <Button
                           size="small"
+                          variant="contained"
+                          startIcon={<EditOutlinedIcon sx={{ fontSize: 16 }} />}
+                          onClick={() => setQuickEditListing(listing)}
+                          sx={{
+                            textTransform: 'none',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            bgcolor: '#00b4b4',
+                            color: '#fff',
+                            boxShadow: 'none',
+                            '&:hover': { bgcolor: '#009999', boxShadow: '0 2px 8px rgba(0,180,180,0.35)' },
+                          }}
+                        >
+                          Quick edit
+                        </Button>
+                      )}
+                      {isAdmin && (
+                        <Button
+                          size="small"
+                          disabled={otaAuditing}
                           sx={{
                             minWidth: 0,
                             px: 0.5,
                             textTransform: 'none',
                             fontSize: 12,
                             fontWeight: 700,
-                            color: '#00b4b4',
+                            color: t.primaryDeep,
                           }}
-                          onClick={() => setQuickEditListing(listing)}
+                          onClick={() => void handleOtaQuickAudit(listing.id)}
+                          startIcon={otaAuditing ? <CircularProgress size={12} color="inherit" /> : undefined}
                         >
-                          Quick edit
+                          {otaAuditing ? 'Audit…' : 'Audit OTA'}
                         </Button>
                       )}
                       <Button sx={btnPrimarySx} onClick={() => navigate(`/catalogue/listings/${listing.id}`)}>
@@ -414,13 +467,13 @@ export function ListingsOverviewPage() {
             </Box>
           </Box>
         )}
-      <RuImportDialog
+      <ImportAirbnbModalContainer
         open={showImportRu}
+        initialCities={cities}
         onClose={() => setShowImportRu(false)}
-        cities={cities}
         onImported={() => {
-          setShowImportRu(false);
-          void loadListings(); void loadStats();
+          void loadListings();
+          void loadStats();
         }}
       />
       <ListingQuickEditDialog

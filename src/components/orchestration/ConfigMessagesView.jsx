@@ -14,16 +14,20 @@ import { can } from '../../utils/permissions';
 import MailTemplateContainer from '../../features/setting/components/MailTemplateContainer';
 import TemplateDetailModal from '../../features/setting/components/TemplateDetailModal';
 import '../../features/setting/styles/MailTemplates.css';
-const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
-  primaryPale: '#FFF3E0',
-  gray: {
-    300: '#E0E0E0',
-    500: '#9E9E9E',
-    700: '#616161'
-  }
-};
+import {
+  SOJORI_COLORS,
+  T,
+  btnPrimarySx,
+  btnGhostSx,
+  OrchStatCard,
+  orchStatsRowSx,
+  orchFilterBarSx,
+  orchFilterChipSx,
+  orchChipSx,
+  orchTableContainerSx,
+  orchActionIconSx,
+  orchPaginationSx,
+} from './orchestrationConfigUi';
 const ConfigMessagesView = () => {
   const {
     t
@@ -417,205 +421,15 @@ const ConfigMessagesView = () => {
   }}>
       {/* Titre remplacé par onglets Modèles | Messages dans OrchestratorConfigContent (bas gauche) */}
 
-      {/* Statistics Cards - compact */}
-      <Box sx={{
-      display: 'flex',
-      gap: 1.5,
-      px: 2,
-      py: 1.5,
-      bgcolor: '#F5F5F5',
-      borderBottom: 1,
-      borderColor: 'divider'
-    }}>
-        <Box sx={{
-        flex: 1,
-        bgcolor: 'white',
-        p: 1.5,
-        borderRadius: 1.5,
-        border: '1px solid #E0E0E0',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.5
-      }}>
-          <Box sx={{
-          width: 40,
-          height: 40,
-          borderRadius: '10px',
-          bgcolor: '#E3F2FD',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.25rem'
-        }}>
-            📊
-          </Box>
-          <Box>
-            <Typography variant="subtitle1" sx={{
-            fontWeight: 700,
-            color: '#1976D2'
-          }}>
-              {stats.total}
-            </Typography>
-            <Typography variant="caption" sx={{
-            color: '#666'
-          }}>
-              Templates Total
-            </Typography>
-          </Box>
-        </Box>
-        
-        <Box sx={{
-        flex: 1,
-        bgcolor: 'white',
-        p: 1.5,
-        borderRadius: 1.5,
-        border: '1px solid #E0E0E0',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.5
-      }}>
-          <Box sx={{
-          width: 40,
-          height: 40,
-          borderRadius: '10px',
-          bgcolor: '#E8F5E9',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.25rem'
-        }}>
-            ✅
-          </Box>
-          <Box>
-            <Typography variant="subtitle1" sx={{
-            fontWeight: 700,
-            color: '#4CAF50'
-          }}>
-              {stats.active}
-            </Typography>
-            <Typography variant="caption" sx={{
-            color: '#666'
-          }}>
-              Actifs
-            </Typography>
-          </Box>
-        </Box>
-        
-        <Box sx={{
-        flex: 1,
-        bgcolor: 'white',
-        p: 1.5,
-        borderRadius: 1.5,
-        border: '1px solid #E0E0E0',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.5
-      }}>
-          <Box sx={{
-          width: 40,
-          height: 40,
-          borderRadius: '10px',
-          bgcolor: '#FFF3E0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.25rem'
-        }}>
-            📧
-          </Box>
-          <Box>
-            <Typography variant="subtitle1" sx={{
-            fontWeight: 700,
-            color: '#FF9800'
-          }}>
-              {stats.email}
-            </Typography>
-            <Typography variant="caption" sx={{
-            color: '#666'
-          }}>
-              Email
-            </Typography>
-          </Box>
-        </Box>
-        
-        <Box sx={{
-        flex: 1,
-        bgcolor: 'white',
-        p: 1.5,
-        borderRadius: 1.5,
-        border: '1px solid #E0E0E0',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.5
-      }}>
-          <Box sx={{
-          width: 40,
-          height: 40,
-          borderRadius: '10px',
-          bgcolor: '#E8F5E9',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.25rem'
-        }}>
-            💬
-          </Box>
-          <Box>
-            <Typography variant="subtitle1" sx={{
-            fontWeight: 700,
-            color: '#4CAF50'
-          }}>{stats.whatsapp}</Typography>
-            <Typography variant="caption" sx={{
-            color: '#666'
-          }}>WhatsApp</Typography>
-          </Box>
-        </Box>
-        <Box sx={{
-        flex: 1,
-        bgcolor: 'white',
-        p: 1.5,
-        borderRadius: 1.5,
-        border: '1px solid #E0E0E0',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.5
-      }}>
-          <Box sx={{
-          width: 40,
-          height: 40,
-          borderRadius: '10px',
-          bgcolor: '#F3E5F5',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.25rem'
-        }}>
-            🔄
-          </Box>
-          <Box>
-            <Typography variant="subtitle1" sx={{
-            fontWeight: 700,
-            color: '#9C27B0'
-          }}>{stats.both}</Typography>
-            <Typography variant="caption" sx={{
-            color: '#666'
-          }}>Multi-canal</Typography>
-          </Box>
-        </Box>
+      <Box sx={orchStatsRowSx}>
+        <OrchStatCard emoji="📊" value={stats.total} label="Total" accent={{ bg: T.infoTint, text: T.info }} />
+        <OrchStatCard emoji="✅" value={stats.active} label="Actifs" accent={{ bg: T.successTint, text: T.success }} />
+        <OrchStatCard emoji="📧" value={stats.email} label="Email" accent={{ bg: T.primaryTint, text: T.primaryDeep }} />
+        <OrchStatCard emoji="💬" value={stats.whatsapp} label="WhatsApp" accent={{ bg: T.successTint, text: T.success }} />
+        <OrchStatCard emoji="🔄" value={stats.both} label="Multi-canal" accent={{ bg: T.aiTint, text: T.ai }} />
       </Box>
 
-      {/* Filter Bar - Enhanced */}
-      <Box sx={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 1.5,
-      px: 2,
-      py: 1.5,
-      bgcolor: 'white',
-      borderBottom: 1,
-      borderColor: 'divider',
-      flexWrap: 'wrap'
-    }}>
+      <Box sx={orchFilterBarSx}>
         <Box sx={{
         display: 'flex',
         alignItems: 'center',
@@ -628,12 +442,14 @@ const ConfigMessagesView = () => {
           <TextField placeholder={t('Rechercher un template...')} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} size="small" sx={{
           width: 280,
           '& .MuiOutlinedInput-root': {
-            borderRadius: '8px'
-          }
+            borderRadius: '10px',
+            bgcolor: T.bg1,
+            '&.Mui-focused fieldset': { borderColor: T.primary },
+          },
         }} InputProps={{
           startAdornment: <InputAdornment position="start">
                   <SearchIcon sx={{
-              color: SOJORI_COLORS.gray[500],
+              color: T.text3,
               fontSize: '1.3rem'
             }} />
                 </InputAdornment>
@@ -645,122 +461,34 @@ const ConfigMessagesView = () => {
           gap: 0.5,
           alignItems: 'center'
         }}>
-            <Typography variant="caption" sx={{
-            color: '#666',
-            fontWeight: 600,
-            mr: 0.5
-          }}>
+            <Typography variant="caption" sx={{ color: T.text3, fontWeight: 600, mr: 0.5 }}>
               Statut:
             </Typography>
-            <Button size="small" variant={statusFilter === 'all' ? 'contained' : 'outlined'} onClick={() => setStatusFilter('all')} sx={{
-            minWidth: 70,
-            borderRadius: '6px',
-            textTransform: 'none',
-            ...(statusFilter === 'all' && {
-              bgcolor: SOJORI_COLORS.primary,
-              '&:hover': {
-                bgcolor: SOJORI_COLORS.primaryDark
-              }
-            })
-          }}>
+            <Button size="small" variant="outlined" onClick={() => setStatusFilter('all')} sx={{ minWidth: 70, ...orchFilterChipSx(statusFilter === 'all') }}>
               Tous
             </Button>
-            <Button size="small" variant={statusFilter === 'active' ? 'contained' : 'outlined'} onClick={() => setStatusFilter('active')} sx={{
-            minWidth: 70,
-            borderRadius: '6px',
-            textTransform: 'none',
-            ...(statusFilter === 'active' && {
-              bgcolor: '#4CAF50',
-              color: 'white',
-              '&:hover': {
-                bgcolor: '#45A049'
-              }
-            })
-          }}>
+            <Button size="small" variant="outlined" onClick={() => setStatusFilter('active')} sx={{ minWidth: 70, ...orchFilterChipSx(statusFilter === 'active') }}>
               ✅ Actifs
             </Button>
-            <Button size="small" variant={statusFilter === 'inactive' ? 'contained' : 'outlined'} onClick={() => setStatusFilter('inactive')} sx={{
-            minWidth: 80,
-            borderRadius: '6px',
-            textTransform: 'none',
-            ...(statusFilter === 'inactive' && {
-              bgcolor: '#9E9E9E',
-              color: 'white',
-              '&:hover': {
-                bgcolor: '#757575'
-              }
-            })
-          }}>
+            <Button size="small" variant="outlined" onClick={() => setStatusFilter('inactive')} sx={{ minWidth: 80, ...orchFilterChipSx(statusFilter === 'inactive') }}>
               ⏸️ Inactifs
             </Button>
           </Box>
           
-          {/* Channel Filter */}
-          <Box sx={{
-          display: 'flex',
-          gap: 0.5,
-          alignItems: 'center'
-        }}>
-            <Typography variant="caption" sx={{
-            color: '#666',
-            fontWeight: 600,
-            mr: 0.5
-          }}>
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ color: T.text3, fontWeight: 600, mr: 0.5 }}>
               Canal:
             </Typography>
-            <Button size="small" variant={channelFilter === 'all' ? 'contained' : 'outlined'} onClick={() => setChannelFilter('all')} sx={{
-            minWidth: 70,
-            borderRadius: '6px',
-            textTransform: 'none',
-            ...(channelFilter === 'all' && {
-              bgcolor: SOJORI_COLORS.primary,
-              '&:hover': {
-                bgcolor: SOJORI_COLORS.primaryDark
-              }
-            })
-          }}>
+            <Button size="small" variant="outlined" onClick={() => setChannelFilter('all')} sx={{ minWidth: 70, ...orchFilterChipSx(channelFilter === 'all') }}>
               Tous
             </Button>
-            <Button size="small" variant={channelFilter === 'email' ? 'contained' : 'outlined'} onClick={() => setChannelFilter('email')} sx={{
-            minWidth: 70,
-            borderRadius: '6px',
-            textTransform: 'none',
-            ...(channelFilter === 'email' && {
-              bgcolor: '#FF9800',
-              color: 'white',
-              '&:hover': {
-                bgcolor: '#F57C00'
-              }
-            })
-          }}>
+            <Button size="small" variant="outlined" onClick={() => setChannelFilter('email')} sx={{ minWidth: 70, ...orchFilterChipSx(channelFilter === 'email') }}>
               📧 Email
             </Button>
-            <Button size="small" variant={channelFilter === 'whatsapp' ? 'contained' : 'outlined'} onClick={() => setChannelFilter('whatsapp')} sx={{
-            minWidth: 90,
-            borderRadius: '6px',
-            textTransform: 'none',
-            ...(channelFilter === 'whatsapp' && {
-              bgcolor: '#25D366',
-              color: 'white',
-              '&:hover': {
-                bgcolor: '#128C7E'
-              }
-            })
-          }}>
+            <Button size="small" variant="outlined" onClick={() => setChannelFilter('whatsapp')} sx={{ minWidth: 90, ...orchFilterChipSx(channelFilter === 'whatsapp') }}>
               💬 WhatsApp
             </Button>
-            <Button size="small" variant={channelFilter === 'both' ? 'contained' : 'outlined'} onClick={() => setChannelFilter('both')} sx={{
-            minWidth: 70,
-            borderRadius: '6px',
-            textTransform: 'none',
-            ...(channelFilter === 'both' && {
-              bgcolor: '#9C27B0',
-              color: 'white',
-              '&:hover': {
-                bgcolor: '#7B1FA2'
-              }
-            })
-          }}>
+            <Button size="small" variant="outlined" onClick={() => setChannelFilter('both')} sx={{ minWidth: 70, ...orchFilterChipSx(channelFilter === 'both') }}>
               🔄 Les 2
             </Button>
           </Box>
@@ -769,39 +497,18 @@ const ConfigMessagesView = () => {
           <Chip label="Orchestrator" onClick={() => {
           setFilterMode('orchestrator');
           setSelectedOwner('');
-        }} color={filterMode === 'orchestrator' ? 'primary' : 'default'} icon={<EmailIcon />} sx={{
-          backgroundColor: filterMode === 'orchestrator' ? SOJORI_COLORS.primary : 'white',
-          color: filterMode === 'orchestrator' ? 'white' : SOJORI_COLORS.gray[700],
-          fontWeight: 500,
-          '&:hover': {
-            backgroundColor: filterMode === 'orchestrator' ? SOJORI_COLORS.primaryDark : SOJORI_COLORS.primaryPale
-          }
-        }} />
+        }} icon={<EmailIcon />} sx={orchChipSx(filterMode === 'orchestrator')} />
 
           {/* Admin/Owner Filters */}
           {isAdmin && <>
               <Chip label={`Admin (${adminCount})`} onClick={() => {
             setFilterMode('admin');
             setSelectedOwner('');
-          }} color={filterMode === 'admin' ? 'primary' : 'default'} icon={<VerifiedUserIcon />} sx={{
-            backgroundColor: filterMode === 'admin' ? SOJORI_COLORS.primary : 'white',
-            color: filterMode === 'admin' ? 'white' : SOJORI_COLORS.gray[700],
-            fontWeight: 500,
-            '&:hover': {
-              backgroundColor: filterMode === 'admin' ? SOJORI_COLORS.primaryDark : SOJORI_COLORS.primaryPale
-            }
-          }} />
+          }} icon={<VerifiedUserIcon />} sx={orchChipSx(filterMode === 'admin')} />
               <Chip label={`Owners (${ownersCount})`} onClick={() => {
             setFilterMode('owners');
             setSelectedOwner('');
-          }} color={filterMode === 'owners' ? 'primary' : 'default'} icon={<PeopleAltIcon />} sx={{
-            backgroundColor: filterMode === 'owners' ? SOJORI_COLORS.primary : 'white',
-            color: filterMode === 'owners' ? 'white' : SOJORI_COLORS.gray[700],
-            fontWeight: 500,
-            '&:hover': {
-              backgroundColor: filterMode === 'owners' ? SOJORI_COLORS.primaryDark : SOJORI_COLORS.primaryPale
-            }
-          }} />
+          }} icon={<PeopleAltIcon />} sx={orchChipSx(filterMode === 'owners')} />
               {filterMode === 'owners' && <Autocomplete options={nonAdminOwners} getOptionLabel={option => option.email} value={nonAdminOwners.find(o => o._id === selectedOwner) || null} onChange={(event, newValue) => {
             setSelectedOwner(newValue ? newValue._id : '');
           }} renderInput={params => <TextField {...params} variant="outlined" placeholder={t('Search by email')} size="small" sx={{
@@ -816,33 +523,14 @@ const ConfigMessagesView = () => {
         gap: 1
       }}>
           {isAdmin && <>
-              <Button variant="outlined" size="small" onClick={handleSyncTemplateNames} sx={{
-            borderColor: '#2196F3',
-            color: '#2196F3',
-            '&:hover': {
-              borderColor: '#1976D2',
-              backgroundColor: '#E3F2FD'
-            }
-          }}>
+              <Button variant="outlined" size="small" onClick={handleSyncTemplateNames} sx={btnGhostSx}>
                 {t('Sync noms & RAPPEL_X')}
               </Button>
-              <Button variant="outlined" size="small" startIcon={<CleanIcon />} onClick={handleCleanupDuplicates} sx={{
-            borderColor: '#FF9800',
-            color: '#FF9800',
-            '&:hover': {
-              borderColor: '#F57C00',
-              backgroundColor: '#FFF3E0'
-            }
-          }}>
+              <Button variant="outlined" size="small" startIcon={<CleanIcon />} onClick={handleCleanupDuplicates} sx={btnGhostSx}>
                 {t('Cleanup Duplicates')}
               </Button>
             </>}
-          {canCreate && showCreateButton && <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={handleCreate} sx={{
-          backgroundColor: SOJORI_COLORS.primary,
-          '&:hover': {
-            backgroundColor: SOJORI_COLORS.primaryDark
-          }
-        }}>
+          {canCreate && showCreateButton && <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={handleCreate} sx={btnPrimarySx}>
               {t('Create')}
             </Button>}
         </Box>
@@ -855,21 +543,14 @@ const ConfigMessagesView = () => {
       justifyContent: 'center',
       flex: 1
     }}>
-          <CircularProgress sx={{
-        color: SOJORI_COLORS.primary
-      }} />
+          <CircularProgress sx={{ color: T.primary }} />
         </Box> : <Box sx={{
       flex: 1,
       overflow: 'auto',
       px: 2,
       py: 1
     }}>
-          <TableContainer component={Paper} sx={{
-        maxHeight: '100%',
-        overflow: 'auto',
-        borderRadius: 2,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-      }}>
+          <TableContainer component={Paper} sx={{ ...orchTableContainerSx, maxHeight: '100%', overflow: 'auto' }}>
             <Table stickyHeader size="medium" sx={{
           '& .MuiTableCell-root': {
             py: 0.75,
@@ -878,17 +559,7 @@ const ConfigMessagesView = () => {
           }
         }}>
               <TableHead>
-                <TableRow sx={{
-              '& .MuiTableCell-head': {
-                bgcolor: '#F8F9FA',
-                borderBottom: '2px solid #E0E0E0',
-                fontWeight: 700,
-                color: '#424242',
-                textTransform: 'uppercase',
-                fontSize: '0.75rem',
-                letterSpacing: '0.5px'
-              }
-            }}>
+                <TableRow>
                   <TableCell sx={{
                 width: 220,
                 minWidth: 200
@@ -1254,22 +925,12 @@ const ConfigMessagesView = () => {
 
                       {/* Actions - Enhanced */}
                       <TableCell align="center">
-                        <Box display="flex" justifyContent="center" gap={0.75}>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.75 }}>
                           <Tooltip title="Voir les détails" arrow placement="top">
                             <IconButton size="small" onClick={e => {
                         e.stopPropagation();
                         handleRowClick(template);
-                      }} sx={{
-                        bgcolor: '#E3F2FD',
-                        color: '#1976D2',
-                        width: 32,
-                        height: 32,
-                        '&:hover': {
-                          bgcolor: '#BBDEFB',
-                          transform: 'scale(1.1)',
-                          transition: 'all 0.2s ease'
-                        }
-                      }}>
+                      }} sx={orchActionIconSx.view}>
                               <VisibilityIcon sx={{
                           fontSize: '1rem'
                         }} />
@@ -1279,17 +940,7 @@ const ConfigMessagesView = () => {
                               <IconButton size="small" onClick={e => {
                         e.stopPropagation();
                         handleEdit(template._id);
-                      }} sx={{
-                        bgcolor: '#FFF3E0',
-                        color: SOJORI_COLORS.primary,
-                        width: 32,
-                        height: 32,
-                        '&:hover': {
-                          bgcolor: '#FFE0B2',
-                          transform: 'scale(1.1)',
-                          transition: 'all 0.2s ease'
-                        }
-                      }}>
+                      }} sx={orchActionIconSx.edit}>
                                 <EditIcon sx={{
                           fontSize: '1rem'
                         }} />
@@ -1300,17 +951,7 @@ const ConfigMessagesView = () => {
                         e.stopPropagation();
                         setTemplateToDelete(template._id);
                         setDeleteConfirmOpen(true);
-                      }} sx={{
-                        bgcolor: '#FFEBEE',
-                        color: '#C62828',
-                        width: 32,
-                        height: 32,
-                        '&:hover': {
-                          bgcolor: '#FFCDD2',
-                          transform: 'scale(1.1)',
-                          transition: 'all 0.2s ease'
-                        }
-                      }}>
+                      }} sx={orchActionIconSx.delete}>
                                 <DeleteIcon sx={{
                           fontSize: '1rem'
                         }} />
@@ -1333,9 +974,7 @@ const ConfigMessagesView = () => {
             minHeight: '48px',
             px: 2
           },
-          '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-            fontSize: '0.8rem'
-          }
+          ...orchPaginationSx,
         }} />
           </Box>
         </Box>}
@@ -1366,8 +1005,8 @@ const ConfigMessagesView = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setStatusDialogOpen(false)}>Annuler</Button>
-          <Button onClick={handleStatusSave} variant="contained" color="primary">
+          <Button onClick={() => setStatusDialogOpen(false)} sx={btnGhostSx}>Annuler</Button>
+          <Button onClick={handleStatusSave} variant="contained" sx={btnPrimarySx}>
             Confirmer
           </Button>
         </DialogActions>
@@ -1393,8 +1032,8 @@ const ConfigMessagesView = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setChannelDialogOpen(false)}>Annuler</Button>
-          <Button onClick={handleChannelSave} variant="contained" color="primary">
+          <Button onClick={() => setChannelDialogOpen(false)} sx={btnGhostSx}>Annuler</Button>
+          <Button onClick={handleChannelSave} variant="contained" sx={btnPrimarySx}>
             Enregistrer
           </Button>
         </DialogActions>
@@ -1409,8 +1048,8 @@ const ConfigMessagesView = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDeleteCancel}>Annuler</Button>
-          <Button onClick={handleDeleteConfirm} variant="contained" color="error">
+          <Button onClick={handleDeleteCancel} sx={btnGhostSx}>Annuler</Button>
+          <Button onClick={handleDeleteConfirm} variant="contained" sx={{ bgcolor: T.error, '&:hover': { bgcolor: '#b91c1c' } }}>
             Supprimer
           </Button>
         </DialogActions>

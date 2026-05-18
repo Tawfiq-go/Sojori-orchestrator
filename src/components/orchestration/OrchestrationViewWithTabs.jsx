@@ -7,6 +7,7 @@ import { Box, Tabs, Tab } from '@mui/material';
 import OrchestrationView from './OrchestrationView';
 import ChronologieView from './ChronologieView';
 import ConfigurationView from './ConfigurationView';
+import { T } from './orchestrationConfigUi';
 
 /** Aligné legacy : ?tab=configuration | orchestration | event | daily */
 const TAB_INDEX_BY_PARAM = {
@@ -62,11 +63,11 @@ const OrchestrationViewWithTabs = () => {
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Onglets en haut */}
       <Box sx={{
-        borderBottom: 1,
-        borderColor: 'var(--border)',
-        bgcolor: 'var(--bg-paper)',
+        borderBottom: `2px solid ${T.border}`,
+        bgcolor: T.bg1,
         px: 3,
         pt: 2,
+        fontFamily: 'Geist, system-ui, sans-serif',
       }}>
         <Tabs
           value={activeTab}
@@ -74,16 +75,16 @@ const OrchestrationViewWithTabs = () => {
           sx={{
             '& .MuiTab-root': {
               textTransform: 'none',
-              fontSize: 13.5,
-              fontWeight: 600,
+              fontSize: 13,
+              fontWeight: 700,
               minHeight: 44,
-              color: 'var(--text-muted)',
+              color: T.text3,
               '&.Mui-selected': {
-                color: 'var(--accent)',
+                color: T.primaryDeep,
               },
             },
             '& .MuiTabs-indicator': {
-              backgroundColor: 'var(--accent)',
+              backgroundColor: T.primary,
               height: 3,
               borderRadius: '3px 3px 0 0',
             },

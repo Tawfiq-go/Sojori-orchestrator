@@ -77,6 +77,13 @@ export const MICROSERVICE_BASE_URL = {
   SRV_CRM_DEMO: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4013/api/v1/demo`
     : `${API_BASE_URL}/api/v1/demo`,
+  // Upload endpoints
+  UPLOAD_IMAGE: useLocalMicroservicePorts
+    ? `${API_BASE_URL}:4006/api/v1/admin/uploads/image`
+    : `${API_BASE_URL}/api/v1/admin/uploads/image`,
+  UPLOAD_IMAGE_MULTIPLE: useLocalMicroservicePorts
+    ? `${API_BASE_URL}:4006/api/v1/admin/uploads/multiple`
+    : `${API_BASE_URL}/api/v1/admin/uploads/multiple`,
 };
 
 const logApiBases =

@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
 /* ════════════════════════════════════════════════════════════════════
    Sojori — index.css · édition 2026 « Atelier »

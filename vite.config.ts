@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { devSecurityHeaders, previewSecurityHeaders } from './security/csp'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -24,6 +25,18 @@ export default defineConfig({
     port: 4174,
     strictPort: true,
     headers: devSecurityHeaders,
+    proxy: {
+      '/api/v1/admin/channels-dashboard': {
+        target: process.env.VITE_DEV_PROXY_TARGET || 'https://dev.sojori.com',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/monitoring': {
+        target: process.env.VITE_DEV_PROXY_TARGET || 'https://dev.sojori.com',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
     hmr: {
       protocol: 'ws',
       host: '127.0.0.1',

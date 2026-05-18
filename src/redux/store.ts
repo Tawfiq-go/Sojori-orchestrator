@@ -1,4 +1,5 @@
 import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import uploadReducer from './slices/UploadSlice';
 
 export type LegacyAuthUser = Record<string, unknown> & {
   _id?: string;
@@ -47,7 +48,10 @@ const authSlice = createSlice({
 export const { setLegacyAuthUser } = authSlice.actions;
 
 const store = configureStore({
-  reducer: { auth: authSlice.reducer },
+  reducer: {
+    auth: authSlice.reducer,
+    uploadData: uploadReducer,
+  },
 });
 
 export type RootState = ReturnType<typeof store.getState>;

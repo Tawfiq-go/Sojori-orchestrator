@@ -10,6 +10,7 @@ export function parseMrSeg(q: string | null) {
   if (v === 'g' || v === 'http' || v === 'access' || v === 'logapi' || v === 'logapis') return 'g';
   if (v === 'lead' || v === 'leads') return 'lead';
   if (v === 'rev' || v === 'review' || v === 'reviews' || v === 'avis') return 'rev';
+  if (v === 'd' || v === 'dist' || v === 'distribution' || v === 'cm') return 'd';
   return 'm';
 }
 

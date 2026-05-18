@@ -27,7 +27,7 @@ export const DETAIL_TABS = [
     { id: 'general',      icon: '🏠', label: 'General Information' },
     { id: 'location',     icon: '📍', label: 'Location & Address' },
     { id: 'photos',       icon: '📸', label: 'Photos & Media' },
-    { id: 'amenities',    icon: '✨', label: 'Amenities' },
+    { id: 'amenities',    icon: '✨', label: 'Équipements' },
   ]},
   { group: 'Commercial', items: [
     { id: 'pricing',      icon: '💰', label: 'Pricing' },
@@ -204,8 +204,8 @@ export default function ListingFormShell({
 
           {/* Content */}
           <Box sx={{ p: { xs: 2, md: '22px 26px' }, overflowY: 'auto', maxHeight: '80vh', position: 'relative' }}>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2.25 }}>
-              <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: activeTab === 'amenities' ? 1.25 : 2.25 }}>
+              <Typography sx={{ fontSize: activeTab === 'amenities' ? 16 : 18, fontWeight: 700, letterSpacing: '-0.02em' }}>
                 {activeTabMeta.icon} {activeTabMeta.label}
                 {activeTab === 'whatsapp' && listing?.name ? (
                   <Box component="span" sx={{ fontSize: 15, fontWeight: 600, color: T.text2 }}>

@@ -2,6 +2,8 @@
  * Onglet Résumé — KPIs alignés backend srv-channels /kpi (legacy ChannelsHubPage tab=Sum)
  */
 import { Fragment, useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { onChannelsRefresh } from '../../utils/channelsRefresh';
 import { Link } from 'react-router-dom';
 import { tokens as T } from '../dashboard/DashboardV2.components';
 import {
@@ -52,7 +54,11 @@ type KpiData = {
 };
 
 export function SummaryTab() {
-  const [hours, setHours] = useState(72);
+  const [searchParams] = useSearchParams();
+  const hoursFromUrl = Number(searchParams.get('hours'));
+  const [hours, setHours] = useState(
+    Number.isFinite(hoursFromUrl) && hoursFromUrl > 0 ? hoursFromUrl : 72,
+  );
   const [ownerId, setOwnerId] = useState('');
   const [listingId, setListingId] = useState('');
   const [kpi, setKpi] = useState<KpiData | null>(null);
@@ -115,6 +121,13 @@ export function SummaryTab() {
   useEffect(() => {
     void loadKpi();
   }, [loadKpi]);
+
+  useEffect(() => {
+    const h = Number(searchParams.get('hours'));
+    if (Number.isFinite(h) && h > 0 && h !== hours) setHours(h);
+  }, [searchParams, hours]);
+
+  useEffect(() => onChannelsRefresh(() => void loadKpi()), [loadKpi]);
 
   const loadActionDetails = async (key: string, isWebhook: boolean) => {
     setActionLoading((p) => ({ ...p, [key]: true }));
@@ -248,10 +261,11 @@ export function SummaryTab() {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', ...cardStyle }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase' }}>Filtres</span>
         <select
+          className="channels-select h-7 text-xs"
           value={String(hours)}
           onChange={(e) => setHours(Number(e.target.value))}
-          style={{ padding: '6px 10px', fontSize: 12, borderRadius: 6, border: `1px solid ${T.border}` }}
         >
+          <option value="6">6h</option>
           <option value="24">24h</option>
           <option value="48">48h</option>
           <option value="72">72h</option>

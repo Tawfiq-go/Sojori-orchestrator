@@ -30,6 +30,7 @@ export default function MultiView({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [selectedCells, setSelectedCells] = useState([]);
+  const [currentHoverCell, setCurrentHoverCell] = useState(null);
 
   const selectedSet = useMemo(() => new Set(selectedCells.map(cellKey)), [selectedCells]);
   const isSelected = useCallback((c) => selectedSet.has(cellKey(c)), [selectedSet]);
@@ -37,6 +38,7 @@ export default function MultiView({
   const onMouseDown = (cell) => {
     setIsDragging(true);
     setDragStart(cell);
+    setCurrentHoverCell(cell);
     setSelectedCells([cell]);
   };
   const onMouseEnter = (cell) => {
@@ -44,6 +46,7 @@ export default function MultiView({
     if (dragStart.listingId !== cell.listingId ||
         dragStart.roomTypeId !== cell.roomTypeId ||
         dragStart.column !== cell.column) return;
+    setCurrentHoverCell(cell);
     const allIso = days.map(d => d.iso);
     const a = allIso.indexOf(dragStart.dateStr);
     const b = allIso.indexOf(cell.dateStr);
@@ -54,16 +57,73 @@ export default function MultiView({
     if (!isDragging) return;
     setIsDragging(false);
     setDragStart(null);
+    setCurrentHoverCell(null);
     if (selectedCells.length > 0) onCellsSelected?.(selectedCells);
   }, [isDragging, selectedCells, onCellsSelected]);
 
   useEffect(() => {
     const onUp = () => onMouseUp();
-    const onKey = (e) => { if (e.key === 'Escape') { setSelectedCells([]); setIsDragging(false); setDragStart(null); } };
+    const onKey = (e) => { if (e.key === 'Escape') { setSelectedCells([]); setIsDragging(false); setDragStart(null); setCurrentHoverCell(null); } };
     document.addEventListener('mouseup', onUp);
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mouseup', onUp); document.removeEventListener('keydown', onKey); };
   }, [onMouseUp]);
+
+  /* ─── Auto-scroll pendant le drag ─── */
+  useEffect(() => {
+    if (!isDragging) return;
+    let animationFrame;
+    const EDGE_SIZE = 100; // pixels du bord où déclencher l'auto-scroll
+    const MAX_SPEED = 20; // pixels par frame
+
+    const autoScroll = (e) => {
+      const body = bodyRef.current;
+      if (!body) return;
+
+      const rect = body.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const scrollWidth = body.scrollWidth;
+      const clientWidth = body.clientWidth;
+
+      let scrollDelta = 0;
+
+      // Scroll à gauche
+      if (mouseX < EDGE_SIZE && body.scrollLeft > 0) {
+        const ratio = 1 - (mouseX / EDGE_SIZE);
+        scrollDelta = -Math.ceil(ratio * MAX_SPEED);
+      }
+      // Scroll à droite
+      else if (mouseX > clientWidth - EDGE_SIZE && body.scrollLeft < scrollWidth - clientWidth) {
+        const ratio = (mouseX - (clientWidth - EDGE_SIZE)) / EDGE_SIZE;
+        scrollDelta = Math.ceil(ratio * MAX_SPEED);
+      }
+
+      if (scrollDelta !== 0) {
+        body.scrollLeft += scrollDelta;
+        // Mettre à jour la sélection après le scroll
+        if (currentHoverCell && dragStart) {
+          const allIso = days.map(d => d.iso);
+          const a = allIso.indexOf(dragStart.dateStr);
+          const b = allIso.indexOf(currentHoverCell.dateStr);
+          const [from, to] = a < b ? [a, b] : [b, a];
+          setSelectedCells(allIso.slice(from, to + 1).map(iso => ({ ...currentHoverCell, dateStr: iso })));
+        }
+      }
+
+      animationFrame = requestAnimationFrame(() => autoScroll(e));
+    };
+
+    const onMouseMove = (e) => {
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => autoScroll(e));
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    };
+  }, [isDragging, currentHoverCell, dragStart, days]);
 
   /* ─── Scroll sync header ↔ body ─── */
   useEffect(() => {

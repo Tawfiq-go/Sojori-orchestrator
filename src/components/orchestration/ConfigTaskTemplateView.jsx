@@ -22,63 +22,15 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { toast } from 'react-toastify';
 import { getOrchestratorTaskTemplate, updateOrchestratorTaskTemplate, getOrchestratorMailTemplates } from '../../features/setting/services/serverApi.orchestratorConfig';
 import CategoryFullEditDialog from './CategoryFullEditDialog';
-
-// Modern Design System (Slack/Linear inspired)
-const DS = {
-  neutral: {
-    50: '#FAFAFA',
-    100: '#F5F5F5',
-    200: '#EEEEEE',
-    300: '#E0E0E0',
-    400: '#BDBDBD',
-    500: '#9E9E9E',
-    600: '#757575',
-    700: '#616161',
-    900: '#212121'
-  },
-  primary: {
-    50: '#F3F0FF',
-    100: '#E9E3FF',
-    500: '#8B5CF6',
-    600: '#7C3AED',
-    700: '#6D28D9'
-  },
-  success: {
-    50: '#F0FDF4',
-    500: '#10B981',
-    600: '#059669'
-  },
-  error: {
-    50: '#FEF2F2',
-    500: '#EF4444'
-  },
-  warning: {
-    50: '#FFFBEB',
-    500: '#F59E0B'
-  },
-  info: {
-    50: '#EFF6FF',
-    100: '#DBEAFE',
-    500: '#3B82F6',
-    600: '#2563EB'
-  },
-  shadow: {
-    xs: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-    sm: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-    md: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-  }
-};
-
-// Sojori Colors (legacy - for compatibility)
-const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E85A2A',
-  primaryPale: 'rgba(255, 107, 53, 0.1)',
-  gray: {
-    300: '#E0E0E0',
-    700: '#616161'
-  }
-};
+import {
+  DS,
+  SOJORI_COLORS,
+  T,
+  btnPrimarySx,
+  btnGhostSx,
+  orchTableContainerSx,
+  orchMoveIconSx,
+} from './orchestrationConfigUi';
 
 // Noms alignés avec l'onglet Messages (templates) = noms des catégories
 const CATEGORY_LABELS = {
@@ -2877,17 +2829,16 @@ const ConfigTaskTemplateView = ({
 
   // ========== TABLEAU SIMPLIFIÉ (~10 colonnes, design orange comme vue réservations) ==========
   const th = (label, opts = {}) => <TableCell sx={{
-    fontWeight: 'bold',
-    fontSize: '1.05rem',
-    color: 'white',
-    backgroundColor: SOJORI_COLORS.primary,
-    borderRight: '1px solid rgba(255, 255, 255, 0.22)',
-    padding: '4px 8px',
+    fontWeight: 700,
+    fontSize: 12,
+    color: '#1a1408',
+    bgcolor: T.primary,
+    borderRight: `1px solid ${T.border}`,
+    py: 1.25,
+    px: 1,
     minWidth: opts.width || 90,
-    '&:last-of-type': {
-      borderRight: 'none'
-    },
-    ...opts.sx
+    '&:last-of-type': { borderRight: 'none' },
+    ...opts.sx,
   }}>
       {label}
     </TableCell>;
@@ -2920,11 +2871,7 @@ const ConfigTaskTemplateView = ({
     if (!p) return '—';
     return p === 'TIMESLOT_CONFIRMED' ? 'Timeslot' : p === 'NONE' ? 'Aucun' : p;
   };
-  const renderSimplifiedTableMode = () => <TableContainer component={Paper} className="reservations-table-container shadow-lg" sx={{
-    border: '1px solid #e2e8f0',
-    borderRadius: '12px',
-    marginBottom: 2
-  }}>
+  const renderSimplifiedTableMode = () => <TableContainer component={Paper} className="reservations-table-container" sx={orchTableContainerSx}>
       <Table size="small" stickyHeader sx={{
       minWidth: 1150
     }}>
@@ -2976,15 +2923,12 @@ const ConfigTaskTemplateView = ({
         </TableHead>
         <TableBody>
           {getSortedCategories(editedCategories).map(([categoryKey, categoryConfig]) => <TableRow key={categoryKey} sx={{
-          backgroundColor: categoryConfig.enabled ? 'white' : 'rgba(255, 107, 53, 0.05)'
+          bgcolor: categoryConfig.enabled ? T.bg1 : T.primaryTint,
         }}>
-              {td(<Box display="flex" flexDirection="column" alignItems="center">
+              {td(<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <Tooltip title="Remonter">
                     <span>
-                      <IconButton size="small" disableRipple onClick={() => handleMoveOrder(categoryKey, 'up')} disabled={getSortedCategories(editedCategories).findIndex(([k]) => k === categoryKey) === 0} sx={{
-                  p: 0.25,
-                  color: getSortedCategories(editedCategories).findIndex(([k]) => k === categoryKey) === 0 ? DS.neutral[400] : SOJORI_COLORS.primary
-                }}>
+                      <IconButton size="small" disableRipple onClick={() => handleMoveOrder(categoryKey, 'up')} disabled={getSortedCategories(editedCategories).findIndex(([k]) => k === categoryKey) === 0} sx={orchMoveIconSx(getSortedCategories(editedCategories).findIndex(([k]) => k === categoryKey) === 0)}>
                         <ArrowUpwardIcon sx={{
                     fontSize: 18
                   }} />
@@ -2993,10 +2937,7 @@ const ConfigTaskTemplateView = ({
                   </Tooltip>
                   <Tooltip title="Descendre">
                     <span>
-                      <IconButton size="small" disableRipple onClick={() => handleMoveOrder(categoryKey, 'down')} disabled={getSortedCategories(editedCategories).findIndex(([k]) => k === categoryKey) === getSortedCategories(editedCategories).length - 1} sx={{
-                  p: 0.25,
-                  color: getSortedCategories(editedCategories).findIndex(([k]) => k === categoryKey) === getSortedCategories(editedCategories).length - 1 ? DS.neutral[400] : SOJORI_COLORS.primary
-                }}>
+                      <IconButton size="small" disableRipple onClick={() => handleMoveOrder(categoryKey, 'down')} disabled={getSortedCategories(editedCategories).findIndex(([k]) => k === categoryKey) === getSortedCategories(editedCategories).length - 1} sx={orchMoveIconSx(getSortedCategories(editedCategories).findIndex(([k]) => k === categoryKey) === getSortedCategories(editedCategories).length - 1)}>
                         <ArrowDownwardIcon sx={{
                     fontSize: 18
                   }} />
@@ -3070,14 +3011,12 @@ const ConfigTaskTemplateView = ({
               backgroundColor: SOJORI_COLORS.primary
             }
           }} />)}
-              {td(<Box display="flex" justifyContent="center">
+              {td(<Box sx={{ display: 'flex', justifyContent: 'center' }}>
                   <Tooltip title="Modifier la configuration">
                     <IconButton size="small" onClick={() => {
                 setEditingCategoryKey(categoryKey);
                 setSimplifiedEditOpen(true);
-              }} sx={{
-                color: SOJORI_COLORS.primary
-              }}>
+              }} sx={{ color: T.primaryDeep, '&:hover': { bgcolor: T.primaryTint } }}>
                       <EditIcon sx={{
                   fontSize: 20
                 }} />
@@ -4551,38 +4490,23 @@ const ConfigTaskTemplateView = ({
       setAddCatType('');
       setAddCatSubType('');
       setAddCatForm({});
-    }} sx={{
-      borderColor: SOJORI_COLORS.primary,
-      color: SOJORI_COLORS.primary,
-      '&:hover': {
-        borderColor: SOJORI_COLORS.primaryDark,
-        backgroundColor: SOJORI_COLORS.primaryPale
-      },
-      textTransform: 'none',
-      fontWeight: 600
-    }}>
+    }} sx={btnGhostSx}>
         Config & Templates
       </Button>
       <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saving || !hasChanges()} sx={{
-      backgroundColor: SOJORI_COLORS.primary,
-      color: 'white !important',
-      '&:hover': {
-        backgroundColor: SOJORI_COLORS.primaryDark
-      },
+      ...btnPrimarySx,
       '&:disabled': {
-        backgroundColor: DS.neutral[300],
-        color: 'white !important'
+        background: T.bg3,
+        color: T.text4,
+        boxShadow: 'none',
       },
-      textTransform: 'none',
-      fontWeight: 600,
-      boxShadow: '0 2px 4px rgba(255, 107, 53, 0.2)'
     }}>
         {saving ? 'Sauvegarde...' : hasChanges() ? 'Sauvegarder' : 'Aucun changement'}
       </Button>
     </>;
   return <Box>
       {/* Ligne unique : Config & Templates, Configuration AI, Sauvegarder + Tableau */}
-      <Box display="flex" flexWrap="wrap" alignItems="center" gap={2} mb={2}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, mb: 2 }}>
         {toolbarSlotBefore}
       </Box>
       {renderSimplifiedTableMode()}
@@ -4597,14 +4521,13 @@ const ConfigTaskTemplateView = ({
       setAddCatForm({});
     }} maxWidth={configTemplatesTab === 'templates' ? 'md' : 'sm'} fullWidth>
         <DialogTitle sx={{
-        borderBottom: `2px solid ${DS.primary[500]}`,
+        borderBottom: `2px solid ${T.border}`,
         pb: 0
       }}>
           <Tabs value={configTemplatesTab} onChange={(e, v) => setConfigTemplatesTab(v)} sx={{
           minHeight: 48,
-          '& .Mui-selected': {
-            color: DS.primary[600]
-          }
+          '& .Mui-selected': { color: T.primaryDeep },
+          '& .MuiTabs-indicator': { bgcolor: T.primary },
         }}>
             <Tab label="Ajouter catégorie" value="add" />
             <Tab label="Appliquer template" value="templates" />
@@ -4913,15 +4836,8 @@ const ConfigTaskTemplateView = ({
             setConfigTemplatesOpen(false);
             setNewCatEditOpen(true);
           }} disabled={!addCatForm.key} sx={{
-            backgroundColor: SOJORI_COLORS.primary,
-            color: 'white !important',
-            '&:hover': {
-              backgroundColor: SOJORI_COLORS.primaryDark
-            },
-            '&:disabled': {
-              backgroundColor: DS.neutral[300],
-              color: 'white !important'
-            }
+            ...btnPrimarySx,
+            '&:disabled': { bgcolor: T.bg3, color: T.text4, boxShadow: 'none' },
           }}>
             Continuer
           </Button>
@@ -4936,12 +4852,7 @@ const ConfigTaskTemplateView = ({
           }}>
             Annuler
           </Button>
-          <Button onClick={() => handleApplyTemplate(selectedTemplate)} disabled={selectedCategories.length === 0 || !selectedTemplate} variant="contained" sx={{
-            backgroundColor: DS.primary[500],
-            '&:hover': {
-              backgroundColor: DS.primary[600]
-            }
-          }}>
+          <Button onClick={() => handleApplyTemplate(selectedTemplate)} disabled={selectedCategories.length === 0 || !selectedTemplate} variant="contained" sx={btnPrimarySx}>
             Appliquer ({selectedCategories.length})
           </Button>
           </>}
@@ -5025,12 +4936,7 @@ const ConfigTaskTemplateView = ({
         }}>
             Annuler
           </Button>
-          <Button onClick={handleSaveTemplate} variant="contained" disabled={!templateFormData.name.trim()} sx={{
-          backgroundColor: DS.primary[500],
-          '&:hover': {
-            backgroundColor: DS.primary[600]
-          }
-        }}>
+          <Button onClick={handleSaveTemplate} variant="contained" disabled={!templateFormData.name.trim()} sx={btnPrimarySx}>
             {editingTemplate?.isNew ? 'Créer' : 'Sauvegarder'}
           </Button>
         </DialogActions>
@@ -5038,10 +4944,7 @@ const ConfigTaskTemplateView = ({
 
       {/* Dialog de confirmation pour propagation */}
       <Dialog open={showPropagateDialog} onClose={() => setShowPropagateDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{
-        color: SOJORI_COLORS.primary,
-        fontWeight: 600
-      }}>
+        <DialogTitle sx={{ color: T.primaryDeep, fontWeight: 700 }}>
           ⚠️ Confirmer la propagation
         </DialogTitle>
         <DialogContent>
@@ -5077,12 +4980,7 @@ const ConfigTaskTemplateView = ({
           <Button onClick={() => {
           setShowPropagateDialog(false);
           setPropagateToListings(true);
-        }} variant="contained" sx={{
-          backgroundColor: SOJORI_COLORS.primary,
-          '&:hover': {
-            backgroundColor: SOJORI_COLORS.primaryDark
-          }
-        }}>
+        }} variant="contained" sx={btnPrimarySx}>
             Confirmer la propagation
           </Button>
         </DialogActions>

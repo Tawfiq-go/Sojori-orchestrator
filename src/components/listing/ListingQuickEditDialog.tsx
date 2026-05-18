@@ -161,10 +161,15 @@ export function ListingQuickEditDialog({ open, listing, onClose, onUpdated }: Li
   return (
     <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ pb: 0.5 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 18 }}>Quick edit — champs import RU</Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: 18 }}>Quick edit listing import fields</Typography>
         <Typography sx={{ fontSize: 13, color: t.text2, mt: 0.5 }}>
-          Nom, statut actif, IDs RU listing et room types — sans quitter la liste.
+          Update the listing name, listing RU IDs and room RU IDs without leaving this page.
         </Typography>
+        {listing?.name && (
+          <Typography sx={{ fontSize: 12, color: t.text3, mt: 0.75, fontStyle: 'italic' }}>
+            {listing.name}
+          </Typography>
+        )}
       </DialogTitle>
 
       <DialogContent dividers>
@@ -178,7 +183,7 @@ export function ListingQuickEditDialog({ open, listing, onClose, onUpdated }: Li
 
             <TextField
               fullWidth
-              label="Nom du listing"
+              label="Listing name"
               size="small"
               value={listingName}
               onChange={(e) => setListingName(e.target.value)}
@@ -192,7 +197,7 @@ export function ListingQuickEditDialog({ open, listing, onClose, onUpdated }: Li
                   color="primary"
                 />
               }
-              label={listingActive ? 'Actif dans Sojori' : 'Inactif dans Sojori'}
+              label={listingActive ? 'Active in Sojori' : 'Inactive in Sojori'}
             />
 
             <TextField
@@ -201,15 +206,15 @@ export function ListingQuickEditDialog({ open, listing, onClose, onUpdated }: Li
               size="small"
               value={listingRuIds}
               onChange={(e) => setListingRuIds(e.target.value)}
-              helperText="Séparés par des virgules. Vide = délier du RU."
+              helperText="Comma-separated. Leave empty to unlink the listing from RU."
             />
 
             <Divider />
 
             <Box>
-              <Typography sx={{ fontWeight: 600, fontSize: 14, mb: 1.5 }}>Room types — RU IDs</Typography>
+              <Typography sx={{ fontWeight: 600, fontSize: 15, mb: 1.5 }}>Room types RU IDs</Typography>
               {roomTypes.length === 0 ? (
-                <Typography sx={{ fontSize: 13, color: t.text3 }}>Aucun room type pour ce listing.</Typography>
+                <Typography sx={{ fontSize: 13, color: t.text3 }}>No room types found for this listing.</Typography>
               ) : (
                 <Stack spacing={1.5}>
                   {roomTypes.map((roomType) => (
@@ -220,7 +225,7 @@ export function ListingQuickEditDialog({ open, listing, onClose, onUpdated }: Li
                       label={roomType.roomTypeName}
                       value={roomType.rentalUnitedId}
                       onChange={(e) => handleRoomTypeRuChange(roomType._id, e.target.value)}
-                      helperText="Vide = délier ce room type du RU."
+                      helperText="Leave empty to unlink this room type from RU."
                     />
                   ))}
                 </Stack>
@@ -232,10 +237,10 @@ export function ListingQuickEditDialog({ open, listing, onClose, onUpdated }: Li
 
       <DialogActions sx={{ px: 2.5, py: 1.5 }}>
         <Button sx={btnGhostSx} onClick={onClose} disabled={saving}>
-          Annuler
+          Cancel
         </Button>
         <Button sx={btnPrimarySx} onClick={() => void handleUpdateListing()} disabled={!canSubmit}>
-          {saving ? 'Enregistrement…' : 'Mettre à jour'}
+          {saving ? 'Updating...' : 'Update'}
         </Button>
       </DialogActions>
     </Dialog>

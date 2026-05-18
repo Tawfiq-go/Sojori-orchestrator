@@ -6,7 +6,6 @@ import { RU_API_DOCS } from '../../features/channels/data/ruApiDocs';
 import ruApiUsageIndex from '../../features/channels/data/ruApiUsage.generated.json';
 import { formatCasablancaDate } from '../../utils/dateFormatting';
 import {
-  fetchChannelsCalendarRuApis,
   fetchChannelsDistributionRuApis,
   fetchChannelsIngressList,
   fetchChannelsIngressById,
@@ -21,6 +20,7 @@ import {
   getChannelDebugDatePresetLabel,
   getMonitoringRuApisHoursHint,
 } from '../../features/channels/utils/channelDebugDateRange';
+import { onChannelsRefresh } from '../../utils/channelsRefresh';
 
 const DEBUG_PAGE_SIZE = 20;
 
@@ -65,7 +65,7 @@ function resolveDebugApiEntry(apiName) {
  * Onglet Debug — audit ChannelRuApiCall (XML + proxy REST RU) et webhooks ingress.
  * Clic ligne → détail JSON/XML.
  */
-export function DebugApiTab() {
+export function DebugApiTab({ hideTypeNav = false }: { hideTypeNav?: boolean }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const typeParam = searchParams.get('type') || 'pull';
   const apiParam = searchParams.get('api') || '';
@@ -156,15 +156,8 @@ export function DebugApiTab() {
             ...dateQ,
             action: api.name,
           });
-        } else if (api.category === 'Calendar') {
-          result = await fetchChannelsCalendarRuApis({
-            page,
-            limit: DEBUG_PAGE_SIZE,
-            hours: ruHoursHint,
-            action: api.name,
-          });
         } else {
-          // Tout le reste (dictionnaires, listings, réservations, owner RU, users, webhooks XML persistés, etc.) : Mongo ChannelRuApiCall filtré par `action`
+          // Calendrier, dictionnaires, listings, réservations, etc. — ChannelRuApiCall via ru-debug-apis
           result = await fetchChannelsDebugRuApis({
             page,
             limit: DEBUG_PAGE_SIZE,
@@ -249,6 +242,14 @@ export function DebugApiTab() {
     }
     fetchApiCalls(apiParam);
   }, [apiParam, typeParam, fetchApiCalls, docIdParam]);
+
+  useEffect(
+    () =>
+      onChannelsRefresh(() => {
+        if (apiParam && !docIdParam) void fetchApiCalls(apiParam);
+      }),
+    [apiParam, docIdParam, fetchApiCalls],
+  );
 
   /** Deep-link vers un document unique (?docId=…) */
   useEffect(() => {
@@ -627,54 +628,45 @@ export function DebugApiTab() {
 
   return (
     <div className="space-y-4">
-      {/* Navigation par type */}
-      <div className="flex gap-2 flex-wrap">
-        <button
-          type="button"
-          onClick={() => setType('pull')}
-          className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
-            effectiveType === 'pull' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          🔵 Pull ({RU_API_MAPPING.pull.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setType('push')}
-          className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
-            effectiveType === 'push' ? 'bg-green-600 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          🟢 Push ({RU_API_MAPPING.push.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setType('oauth')}
-          className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
-            effectiveType === 'oauth' ? 'bg-purple-600 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          🔑 OAuth ({RU_API_MAPPING.oauth.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setType('webhooks')}
-          className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
-            effectiveType === 'webhooks' ? 'bg-orange-600 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          📥 Webhooks ({RU_API_MAPPING.webhooks.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setType('rest')}
-          className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
-            effectiveType === 'rest' ? 'bg-cyan-600 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          🌐 REST ({REST_LIST.length})
-        </button>
-      </div>
+      {!hideTypeNav && (
+        <div className="flex gap-2 flex-wrap channels-tabs-container">
+          <button
+            type="button"
+            onClick={() => setType('pull')}
+            className={`channels-tab-button ${effectiveType === 'pull' ? 'channels-tab-button-active' : 'channels-tab-button-inactive'}`}
+          >
+            Pull ({RU_API_MAPPING.pull.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setType('push')}
+            className={`channels-tab-button ${effectiveType === 'push' ? 'channels-tab-button-active' : 'channels-tab-button-inactive'}`}
+          >
+            Push ({RU_API_MAPPING.push.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setType('oauth')}
+            className={`channels-tab-button ${effectiveType === 'oauth' ? 'channels-tab-button-active' : 'channels-tab-button-inactive'}`}
+          >
+            OAuth ({RU_API_MAPPING.oauth.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setType('webhooks')}
+            className={`channels-tab-button ${effectiveType === 'webhooks' ? 'channels-tab-button-active' : 'channels-tab-button-inactive'}`}
+          >
+            Webhooks ({RU_API_MAPPING.webhooks.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setType('rest')}
+            className={`channels-tab-button ${effectiveType === 'rest' ? 'channels-tab-button-active' : 'channels-tab-button-inactive'}`}
+          >
+            REST ({REST_LIST.length})
+          </button>
+        </div>
+      )}
 
       {/* Liste API (1/4 gauche) + Tableau (3/4 droite) */}
       <div className="grid grid-cols-[25%_75%] gap-4">

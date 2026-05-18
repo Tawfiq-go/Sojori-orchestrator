@@ -3,7 +3,7 @@
 // Route: /tasks — toolbar, pills échéances, KPI compacts, tableau premium.
 // ════════════════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -76,16 +76,14 @@ const COLUMN_WIDTHS = {
   listing: '108px',
   itemNumber: '78px',
   reservationSource: '74px',
-  category: '108px',
+  category: '116px',
   voyageur: '96px',
   executionDate: '72px',
-  timeslotClient: '72px',
-  heureTask: '72px',
-  timeslot: '80px',
-  details: '88px',
+  taskHours: '76px',
+  description: '88px',
   status: '82px',
   assignedStaff: '92px',
-  paymentPrice: '68px',
+  paymentPrice: '48px',
 } as const;
 
 const toolbarSelectSx = { minWidth: 0, '& .MuiSelect-select': { py: 0.875 } } as const;
@@ -610,7 +608,125 @@ function detailsTimeslotSummary(task: TaskListItem): string {
       return `🕐 ${h}h${m > 0 ? String(m).padStart(2, '0') : ''}`;
     }
   }
-  return '—';
+  return '';
+}
+
+function renderHeureTaskTop(task: TaskListItem) {
+  if (!task.startDate || !task.endDate) {
+    return (
+      <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center', lineHeight: 1.2 }}>
+        —
+      </Typography>
+    );
+  }
+  const startHour = new Date(task.startDate).getUTCHours();
+  const endHour = new Date(task.endDate).getUTCHours();
+  const hourSource = task.hourSource || 'default';
+  const icon = hourSource === 'client' ? '✅' : hourSource === 'admin' ? '👤' : '📅';
+  const label = hourSource === 'client' ? 'Client' : hourSource === 'admin' ? 'Admin' : 'Défaut';
+  const color =
+    hourSource === 'client' ? T.success : hourSource === 'admin' ? T.warning : T.info;
+  return (
+    <Tooltip title={`Heure définie par: ${label}`} arrow placement="top">
+      <Stack
+        direction="row"
+        spacing={0.35}
+        sx={{ justifyContent: 'center', alignItems: 'center', lineHeight: 1.2 }}
+      >
+        <Typography sx={{ fontSize: 11, fontWeight: 700, color, lineHeight: 1.2 }}>
+          {startHour}h-{endHour}h
+        </Typography>
+        <Typography component="span" sx={{ fontSize: 10, lineHeight: 1 }}>
+          {icon}
+        </Typography>
+      </Stack>
+    </Tooltip>
+  );
+}
+
+function renderTimeslotClientBottom(task: TaskListItem) {
+  const sel = task.timeslot_selected;
+  if (!sel || sel.start == null || sel.end == null) {
+    return (
+      <Typography sx={{ fontSize: 10, color: T.text3, textAlign: 'center', lineHeight: 1.15 }}>
+        ⏳ En attente
+      </Typography>
+    );
+  }
+  return (
+    <Typography sx={{ fontSize: 10, fontWeight: 600, color: T.text2, textAlign: 'center', lineHeight: 1.15 }}>
+      Client {sel.start}h-{sel.end}h
+    </Typography>
+  );
+}
+
+function categorySubline(task: TaskListItem): ReactNode {
+  const typ = String(task.type || task.name || '').toLowerCase();
+  if (
+    typ === 'registration' &&
+    (task.adults != null || task.nbreGuestValidated != null)
+  ) {
+    const tip = `Adultes: ${task.adults ?? 0} · Validés: ${task.nbreGuestValidated ?? 0} · Brouillons: ${task.nbreGuestDraft ?? 0} · Non enregistrés: ${task.nbreGuestNotRegistered ?? 0}`;
+    return (
+      <Tooltip title={tip} arrow placement="top">
+        <Typography
+          component="span"
+          sx={{ fontSize: 10, lineHeight: 1.2, display: 'block', mt: 0.25 }}
+          noWrap
+        >
+          <Box component="span" sx={{ color: T.text2, fontWeight: 600 }}>{task.adults ?? 0}A</Box>
+          {' '}
+          <Box component="span" sx={{ color: T.success, fontWeight: 700 }}>{task.nbreGuestValidated ?? 0}V</Box>
+          <Box component="span" sx={{ color: T.text4 }}>/</Box>
+          <Box component="span" sx={{ color: T.warning, fontWeight: 600 }}>{task.nbreGuestDraft ?? 0}D</Box>
+          <Box component="span" sx={{ color: T.text4 }}>/</Box>
+          <Box component="span" sx={{ color: T.error, fontWeight: 600 }}>{task.nbreGuestNotRegistered ?? 0}N</Box>
+        </Typography>
+      </Tooltip>
+    );
+  }
+
+  if (task.timeslot || task.actual_time) {
+    const prev =
+      task.timeslot?.start !== undefined && task.timeslot?.end !== undefined
+        ? `Prév ${formatTimeValue(task.timeslot.start)}-${formatTimeValue(task.timeslot.end)}`
+        : '';
+    const actual = task.actual_time?.time
+      ? `✓ ${formatTimeValue(task.actual_time.time)}`
+      : typ === 'arrival'
+        ? 'Pas arrivé'
+        : typ === 'departure'
+          ? 'Pas parti'
+          : '';
+    const line = [prev, actual].filter(Boolean).join(' · ');
+    if (line) {
+      return (
+        <Typography sx={{ fontSize: 10, color: T.text3, lineHeight: 1.2, mt: 0.25 }} noWrap title={line}>
+          {line}
+        </Typography>
+      );
+    }
+  }
+
+  const summary = detailsTimeslotSummary(task);
+  if (summary) {
+    return (
+      <Typography sx={{ fontSize: 10, color: T.text3, lineHeight: 1.2, mt: 0.25 }} noWrap title={summary}>
+        {summary}
+      </Typography>
+    );
+  }
+
+  const desc = firstDescriptionLine(task);
+  if (desc && desc !== 'Sans description' && desc !== task.type) {
+    return (
+      <Typography sx={{ fontSize: 10, color: T.text3, lineHeight: 1.2, mt: 0.25 }} noWrap title={desc}>
+        {desc}
+      </Typography>
+    );
+  }
+
+  return null;
 }
 
 export function TasksListPage() {
@@ -671,10 +787,6 @@ export function TasksListPage() {
   const [tempHasAssociation, setTempHasAssociation] = useState<'all' | 'with' | 'without'>('all');
   const [tempSources, setTempSources] = useState<string[]>([]);
 
-  // Column visibility toggles (⚠️ "Créé le" est toujours visible maintenant)
-  const [showDetails, setShowDetails] = useState(false);
-  const [showTimeslotClient, setShowTimeslotClient] = useState(false);
-  const [showHeureTask, setShowHeureTask] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
 
@@ -1086,27 +1198,26 @@ export function TasksListPage() {
       width: COLUMN_WIDTHS.category,
       render: (row: TaskRow) => {
         const label = categoryLabel(row);
+        const sub = categorySubline(row);
         return (
-          <Tooltip title={label} arrow placement="top">
-            <Typography
-              component="span"
-              sx={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 0.5,
-                fontSize: 12,
-                fontWeight: 700,
-                color: T.text,
-                whiteSpace: 'nowrap',
-                lineHeight: 1.25,
-                maxWidth: '100%',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {label}
-            </Typography>
-          </Tooltip>
+          <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
+            <Tooltip title={label} arrow placement="top">
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: T.text,
+                  lineHeight: 1.2,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {label}
+              </Typography>
+            </Tooltip>
+            {sub}
+          </Box>
         );
       },
     },
@@ -1168,80 +1279,21 @@ export function TasksListPage() {
       ),
     },
     {
-      key: 'timeslotClient',
-      label: 'Timeslot Client',
-      width: COLUMN_WIDTHS.timeslotClient,
-      align: 'center' as const,
-      render: (row: TaskRow) => {
-        const sel = row.timeslot_selected;
-        if (!sel || sel.start == null || sel.end == null) {
-          return (
-            <Typography sx={{ textAlign: 'center', color: T.text3, fontSize: 12 }}>En attente</Typography>
-          );
-        }
-        return (
-          <Typography sx={{ textAlign: 'center', fontWeight: 600, fontSize: 12 }}>
-            {sel.start}h-{sel.end}h
-          </Typography>
-        );
-      },
-    },
-    {
-      key: 'heureTask',
-      label: 'Heure Tâche',
-      width: COLUMN_WIDTHS.heureTask,
-      align: 'center' as const,
-      render: (row: TaskRow) => {
-        if (!row.startDate || !row.endDate) {
-          return (
-            <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center' }}>—</Typography>
-          );
-        }
-        const startDate = new Date(row.startDate);
-        const endDate = new Date(row.endDate);
-        const startHour = startDate.getUTCHours();
-        const endHour = endDate.getUTCHours();
-        const hourSource = row.hourSource || 'default';
-        const icon = hourSource === 'client' ? '✅' : hourSource === 'admin' ? '👤' : '📅';
-        const label = hourSource === 'client' ? 'Client' : hourSource === 'admin' ? 'Admin' : 'Défaut';
-        const color = hourSource === 'client' ? '#4CAF50' : hourSource === 'admin' ? '#FF9800' : '#2196F3';
-        return (
-          <Tooltip title={`Heure définie par: ${label}`}>
-            <Stack
-              direction="row"
-              spacing={0.5}
-              sx={{
-                justifyContent: 'center',
-                alignItems: 'center',
-                fontWeight: 600,
-                color,
-                fontSize: 12,
-              }}
-            >
-              <span>
-                {startHour}h-{endHour}h
-              </span>
-              <span>{icon}</span>
-            </Stack>
-          </Tooltip>
-        );
-      },
-    },
-    {
-      key: 'timeslotDetails',
-      label: 'Détails',
-      width: COLUMN_WIDTHS.timeslot,
+      key: 'taskHours',
+      label: 'Heure tâche',
+      width: COLUMN_WIDTHS.taskHours,
       align: 'center' as const,
       render: (row: TaskRow) => (
-        <Typography sx={{ fontSize: 11, color: T.text2, textAlign: 'center' }}>
-          {detailsTimeslotSummary(row)}
-        </Typography>
+        <Stack spacing={0.35} sx={{ alignItems: 'center', minWidth: 0 }}>
+          {renderHeureTaskTop(row)}
+          {renderTimeslotClientBottom(row)}
+        </Stack>
       ),
     },
     {
       key: 'description',
       label: 'Description',
-      width: COLUMN_WIDTHS.details,
+      width: COLUMN_WIDTHS.description,
       align: 'center' as const,
       render: (row: TaskRow) => (
         <Tooltip title={firstDescriptionLine(row)}>
@@ -1295,35 +1347,39 @@ export function TasksListPage() {
       width: COLUMN_WIDTHS.paymentPrice,
       align: 'center' as const,
       render: (row: TaskRow) => {
-        // Si pas de prix ou prix = 0, afficher "—"
         if (!row.price || row.price <= 0) {
-          return <Typography sx={{ fontSize: 10, color: T.text4 }}>—</Typography>;
-        }
-
-        return (
-          <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
-            {/* Prix sur la première ligne */}
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: T.text,
-                fontFamily: '"Geist Mono", monospace',
-              }}
-            >
-              {row.price} MAD
-            </Typography>
-            {/* Statut paiement sur la deuxième ligne */}
+          return (
             <Typography
               sx={{
                 fontSize: 9.5,
                 fontWeight: 600,
-                color: row.paid ? T.success : T.warning,
+                color: T.text3,
+                textAlign: 'center',
+                letterSpacing: '0.02em',
               }}
             >
-              {row.paid ? '✓ Payé' : 'En attente'}
+              N/A
             </Typography>
-          </Stack>
+          );
+        }
+        const payMeta = paymentChipMeta(row.paymentStatus);
+        const payLabel = (row.paymentStatus || 'NOT_PAID').replace(/_/g, ' ');
+        return (
+          <Tooltip title={`${row.price} MAD · ${payLabel}`} arrow placement="top">
+            <Chip
+              size="small"
+              label={row.paid ? '✓' : '·'}
+              sx={{
+                height: 20,
+                minWidth: 28,
+                fontSize: 11,
+                fontWeight: 700,
+                bgcolor: payMeta.bg,
+                color: payMeta.color,
+                '& .MuiChip-label': { px: 0.75 },
+              }}
+            />
+          </Tooltip>
         );
       },
     },
@@ -1331,18 +1387,11 @@ export function TasksListPage() {
 
   // Filter columns based on visibility toggles
   const visibleColumns = columns.filter((col) => {
-    if (col.key === 'timeslotDetails' && !showDetails) return false;
-    if (col.key === 'timeslotClient' && !showTimeslotClient) return false;
-    if (col.key === 'heureTask' && !showHeureTask) return false;
     if (col.key === 'description' && !showDescription) return false;
     return true;
   });
 
-  const optionalColumnsOn =
-    (showDetails ? 1 : 0) +
-    (showTimeslotClient ? 1 : 0) +
-    (showHeureTask ? 1 : 0) +
-    (showDescription ? 1 : 0);
+  const optionalColumnsOn = showDescription ? 1 : 0;
 
   return (
     <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
@@ -1739,18 +1788,20 @@ export function TasksListPage() {
 
       </Box>
 
-      <AssignStaffDialog
-        open={assignStaffOpen}
-        onClose={() => {
-          setAssignStaffOpen(false);
-          setTaskToAssign(null);
-        }}
-        task={taskToAssign}
-        ownerId={assignOwnerId}
-        onSuccess={() => {
-          void fetchTasks();
-        }}
-      />
+      {assignStaffOpen && taskToAssign ? (
+        <AssignStaffDialog
+          open={assignStaffOpen}
+          onClose={() => {
+            setAssignStaffOpen(false);
+            setTaskToAssign(null);
+          }}
+          task={taskToAssign}
+          ownerId={assignOwnerId}
+          onSuccess={() => {
+            void fetchTasks();
+          }}
+        />
+      ) : null}
 
       <AddTaskModal
         open={addTaskOpen}
@@ -1826,61 +1877,9 @@ export function TasksListPage() {
             Colonnes optionnelles
           </Typography>
           <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.5 }}>
-            ✅ "Créé le" est toujours visible
+            Heure tâche et détails catégorie sont toujours visibles
           </Typography>
         </Box>
-        <MenuItem
-          onClick={() => setShowDetails(!showDetails)}
-          sx={{ fontSize: 13, py: 1.25 }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-            <Box sx={{
-              width: 18, height: 18, borderRadius: '4px',
-              border: `2px solid ${showDetails ? T.primary : T.border}`,
-              bgcolor: showDetails ? T.primary : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 10, fontWeight: 700,
-            }}>
-              {showDetails && '✓'}
-            </Box>
-            <Typography sx={{ fontSize: 13, color: T.text2 }}>
-              Détails
-            </Typography>
-          </Box>
-        </MenuItem>
-        <MenuItem
-          onClick={() => setShowTimeslotClient(!showTimeslotClient)}
-          sx={{ fontSize: 13, py: 1.25 }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-            <Box sx={{
-              width: 18, height: 18, borderRadius: '4px',
-              border: `2px solid ${showTimeslotClient ? T.primary : T.border}`,
-              bgcolor: showTimeslotClient ? T.primary : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 10, fontWeight: 700,
-            }}>
-              {showTimeslotClient && '✓'}
-            </Box>
-            <Typography sx={{ fontSize: 13, color: T.text2 }}>
-              Timeslot client
-            </Typography>
-          </Box>
-        </MenuItem>
-        <MenuItem onClick={() => setShowHeureTask(!showHeureTask)} sx={{ fontSize: 13, py: 1.25 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-            <Box sx={{
-              width: 18, height: 18, borderRadius: '4px',
-              border: `2px solid ${showHeureTask ? T.primary : T.border}`,
-              bgcolor: showHeureTask ? T.primary : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 10, fontWeight: 700,
-            }}>
-              {showHeureTask && '✓'}
-            </Box>
-            <Typography sx={{ fontSize: 13, color: T.text2 }}>Heure tâche</Typography>
-          </Box>
-        </MenuItem>
         <MenuItem onClick={() => setShowDescription(!showDescription)} sx={{ fontSize: 13, py: 1.25 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
             <Box sx={{

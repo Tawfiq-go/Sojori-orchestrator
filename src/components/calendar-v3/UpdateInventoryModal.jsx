@@ -5,6 +5,10 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo, useEffect } from 'react';
 import { T } from './_shared';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { fr } from 'date-fns/locale';
 
 export default function UpdateInventoryModal({
   open, onClose, selectedCells = [], currency = 'EUR', inventoryData = {}, onSave,
@@ -73,6 +77,10 @@ export default function UpdateInventoryModal({
     minStay: '', maxStay: '', closedArrival: false, closedDeparture: false,
     useDynamicPrice: null, dynamicBasePrice: '',
   });
+  // Dates toujours éditables (Date objects for MUI DatePicker)
+  const [editableStartDate, setEditableStartDate] = useState(null);
+  const [editableEndDate, setEditableEndDate] = useState(null);
+
   const upd = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
@@ -84,11 +92,17 @@ export default function UpdateInventoryModal({
         minStay: '', maxStay: '', closedArrival: false, closedDeparture: false,
         useDynamicPrice: null, dynamicBasePrice: '',
       });
+      setEditableStartDate(null);
+      setEditableEndDate(null);
     } else {
+      // Initialiser avec les dates sélectionnées (toujours éditables)
+      // Convert ISO string dates to Date objects for MUI DatePicker
+      setEditableStartDate(startDate ? new Date(startDate) : null);
+      setEditableEndDate(endDate ? new Date(endDate) : null);
       // Calculer la position optimale du modal quand il s'ouvre
       calculateModalPosition();
     }
-  }, [open]);
+  }, [open, startDate, endDate]);
 
   const calculateModalPosition = () => {
     const modalWidth = 520;
@@ -144,7 +158,15 @@ export default function UpdateInventoryModal({
     const groups = Object.values(cellsByRoom).map(g => ({ ...g, dates: [...g.dates].sort() }));
     const payloads = [];
     groups.forEach(g => {
-      const base = { roomTypeId: g.roomTypeId, date_from: g.dates[0], date_to: g.dates[g.dates.length - 1] };
+      // Toujours utiliser les dates éditables du formulaire (convertir Date → ISO string)
+      const formatDate = (date) => {
+        if (!date) return null;
+        const d = new Date(date);
+        return d.toISOString().split('T')[0]; // YYYY-MM-DD
+      };
+      const dateFrom = editableStartDate ? formatDate(editableStartDate) : g.dates[0];
+      const dateTo = editableEndDate ? formatDate(editableEndDate) : g.dates[g.dates.length - 1];
+      const base = { roomTypeId: g.roomTypeId, date_from: dateFrom, date_to: dateTo };
       if (form.manualPrice !== '')   payloads.push({ type: 'manualPrice',         ...base, price: +form.manualPrice });
       if (form.availability !== '')  payloads.push({ type: 'availability',        ...base, availableRoom: +form.availability });
       if (form.stopSell !== null)    payloads.push({ type: 'stopSell',            ...base, stopSell: form.stopSell });
@@ -217,11 +239,72 @@ export default function UpdateInventoryModal({
 
           {step === 'form' ? (
             <>
-              <Section label="Période">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
-                  <FieldBox><input type="date" value={startDate} readOnly /></FieldBox>
-                  <FieldBox><input type="date" value={endDate} readOnly /></FieldBox>
-                </div>
+              <Section label="Dates">
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
+                    <div>
+                      <label style={{ fontSize: 10, color: T.text3, display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                        Début
+                      </label>
+                      <DatePicker
+                        value={editableStartDate}
+                        onChange={(newValue) => setEditableStartDate(newValue)}
+                        format="dd/MM/yyyy"
+                        slotProps={{
+                          textField: {
+                            size: 'small',
+                            fullWidth: true,
+                            sx: {
+                              '& .MuiOutlinedInput-root': {
+                                fontSize: '12.5px',
+                                fontFamily: '"Geist Mono", monospace',
+                                fontWeight: 600,
+                                background: T.bg1,
+                                borderRadius: '9px',
+                                '& fieldset': { borderColor: T.border },
+                                '&:hover fieldset': { borderColor: T.primary },
+                                '&.Mui-focused fieldset': { borderColor: T.primary },
+                              },
+                            },
+                          },
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: T.text3, display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                        Fin
+                      </label>
+                      <DatePicker
+                        value={editableEndDate}
+                        onChange={(newValue) => setEditableEndDate(newValue)}
+                        format="dd/MM/yyyy"
+                        slotProps={{
+                          textField: {
+                            size: 'small',
+                            fullWidth: true,
+                            sx: {
+                              '& .MuiOutlinedInput-root': {
+                                fontSize: '12.5px',
+                                fontFamily: '"Geist Mono", monospace',
+                                fontWeight: 600,
+                                background: T.bg1,
+                                borderRadius: '9px',
+                                '& fieldset': { borderColor: T.border },
+                                '&:hover fieldset': { borderColor: T.primary },
+                                '&.Mui-focused fieldset': { borderColor: T.primary },
+                              },
+                            },
+                          },
+                        }}
+                      />
+                    </div>
+                  </div>
+                </LocalizationProvider>
+                {editableStartDate && editableEndDate && (
+                  <div style={{ fontSize: 11, color: T.ai, marginTop: 6, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>
+                    📅 {Math.ceil((editableEndDate - editableStartDate) / (1000 * 60 * 60 * 24)) + 1} jour(s)
+                  </div>
+                )}
               </Section>
 
               <Section label="Prix manuel">
