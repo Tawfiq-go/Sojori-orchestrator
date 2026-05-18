@@ -16,6 +16,7 @@
 // ════════════════════════════════════════════════════════════════════
 
 import React from 'react';
+import { LISTING_LAYOUT } from '../../constants/listingLayout';
 import {
   Box, Stack, Typography, Button, IconButton, Avatar, Chip, Switch,
   TextField, InputAdornment, Divider, Tooltip,
@@ -104,7 +105,7 @@ export function DashboardLayout({ user, activePath, onNavigate, onLogout, childr
       color: t.text, bgcolor: t.bg0,
     }}>
       <AppSidebar user={user} activePath={activePath} onNavigate={onNavigate} onLogout={onLogout} />
-      <TopBar breadcrumb={breadcrumb} />
+      <TopBar breadcrumb={breadcrumb} compact={compactMain} />
       <Box
         className="sojori-main-enter"
         sx={{
@@ -119,9 +120,9 @@ export function DashboardLayout({ user, activePath, onNavigate, onLogout, childr
           radial-gradient(50% 42% at 100% 0%, rgba(184,133,26,0.07), transparent 58%),
           radial-gradient(38% 28% at 0% 100%, rgba(124,58,237,0.05), transparent 72%)
         `,
-          pt: compactMain ? 0 : { xs: 2, md: '24px' },
-          pb: compactMain ? 0 : { xs: 2, md: '48px' },
-          px: compactMain ? 0 : 0,
+          pt: compactMain ? LISTING_LAYOUT.mainPadTop : { xs: 2, md: '24px' },
+          pb: compactMain ? LISTING_LAYOUT.mainPadBottom : { xs: 2, md: '48px' },
+          px: compactMain ? LISTING_LAYOUT.mainPadX : 0,
         }}
       >
         {children}
@@ -543,13 +544,13 @@ function SideLink({ item, active, sub, onClick }) {
 // 3. TopBar
 // ════════════════════════════════════════════════════════════════════
 
-export function TopBar({ breadcrumb = [], onSearch }) {
+export function TopBar({ breadcrumb = [], onSearch, compact = false }) {
   return (
     <Box sx={{
       gridArea: 'topbar',
       bgcolor: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(16px) saturate(1.2)',
       borderBottom: `1px solid ${t.border}`,
-      display: 'flex', alignItems: 'center', gap: 2, px: 3,
+      display: 'flex', alignItems: 'center', gap: 2, px: compact ? LISTING_LAYOUT.topBarPadX : 3,
       position: 'sticky', top: 0, zIndex: 30,
     }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0, fontSize: 12.5, color: t.text2 }}>

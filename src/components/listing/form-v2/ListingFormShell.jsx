@@ -9,6 +9,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import { Box, Stack, Typography, Button } from '@mui/material';
+import { LISTING_LAYOUT } from '../../../constants/listingLayout';
 
 const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a', primaryTint: 'rgba(184,133,26,0.10)',
@@ -136,7 +137,7 @@ export default function ListingFormShell({
 
   return (
     <Box sx={{ bgcolor: T.bg0, minHeight: '100vh' }}>
-      <Box sx={{ p: { xs: 2, md: '22px 28px 50px' }, maxWidth: 1500, mx: 'auto' }}>
+      <Box sx={{ p: LISTING_LAYOUT.pagePad, maxWidth: LISTING_LAYOUT.formMaxWidth, width: '100%', mx: 0 }}>
 
         {/* Level switcher */}
         <Box sx={{
@@ -174,13 +175,13 @@ export default function ListingFormShell({
         <Box sx={{
           bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
           overflow: 'hidden',
-          display: 'grid', gridTemplateColumns: { xs: '1fr', md: '240px 1fr' },
+          display: 'grid', gridTemplateColumns: { xs: '1fr', md: `${LISTING_LAYOUT.tabsRailWidth}px 1fr` },
           minHeight: 560,
         }}>
           {/* Tabs rail */}
           <Stack sx={{
             borderRight: { md: `1px solid ${T.border}` },
-            bgcolor: T.bg2, p: '14px 10px', overflowY: 'auto',
+            bgcolor: T.bg2, p: LISTING_LAYOUT.tabsRailPad, overflowY: 'auto',
           }}>
             {tabsConfig.map(g => (
               <React.Fragment key={g.group}>
@@ -203,7 +204,7 @@ export default function ListingFormShell({
           </Stack>
 
           {/* Content */}
-          <Box sx={{ p: { xs: 2, md: '22px 26px' }, overflowY: 'auto', maxHeight: '80vh', position: 'relative' }}>
+          <Box sx={{ p: LISTING_LAYOUT.contentPad, overflowY: 'auto', maxHeight: '80vh', position: 'relative' }}>
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: activeTab === 'amenities' ? 1.25 : 2.25 }}>
               <Typography sx={{ fontSize: activeTab === 'amenities' ? 16 : 18, fontWeight: 700, letterSpacing: '-0.02em' }}>
                 {activeTabMeta.icon} {activeTabMeta.label}
@@ -230,9 +231,9 @@ export default function ListingFormShell({
                 position: 'sticky',
                 bottom: 0,
                 mt: 2.25,
-                mx: { xs: -2, md: '-26px' },
-                mb: { xs: -2, md: '-22px' },
-                px: { xs: 2, md: '26px' },
+                mx: { xs: -1.5, md: '-7px' },
+                mb: { xs: -1.5, md: '-7px' },
+                px: LISTING_LAYOUT.saveBarPadX,
                 py: 1.5,
                 bgcolor: 'rgba(255,255,255,0.94)',
                 backdropFilter: 'blur(20px)',

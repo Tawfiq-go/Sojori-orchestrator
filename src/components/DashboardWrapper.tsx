@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { DashboardLayout } from './dashboard/DashboardV2.components';
 import { useAuth } from '../hooks/useAuth';
 import { runtimeLog } from '../utils/runtimeLog';
+import { isListingCataloguePath } from '../constants/listingLayout';
 
 interface DashboardWrapperProps {
   children: React.ReactNode;
@@ -20,6 +21,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const listingCompact = compactMain || isListingCataloguePath(location.pathname);
 
   useEffect(() => {
     runtimeLog('info', 'Layout', 'DashboardWrapper mount/update', {
@@ -205,7 +207,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
       onNavigate={handleNavigate}
       onLogout={handleLogout}
       breadcrumb={breadcrumb}
-      compactMain={compactMain}
+      compactMain={listingCompact}
       user={layoutUser || undefined}
     >
       {children}
