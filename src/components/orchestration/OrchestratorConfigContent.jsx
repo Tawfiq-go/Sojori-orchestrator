@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
+import { useAuth } from '../../hooks/useAuth';
+import { resolveLegacyAuthUser } from '../../utils/legacyAuthUser';
 import ConfigMessagesView from './ConfigMessagesView';
 import ConfigTaskTemplateView from './ConfigTaskTemplateView';
 import { Box, FormControl, InputLabel, MenuItem, Select, Typography } from '@mui/material';
@@ -21,7 +23,12 @@ const ORCH_SCOPE_OWNER = 'owner';
 /** Contenu de l'onglet Configuration : Modèles | Messages en haut de la page (pas dans le header) */
 const OrchestratorConfigContent = () => {
   const { t } = useTranslation('common');
-  const user = useSelector((state) => state.auth.user);
+  const reduxUser = useSelector((state) => state.auth.user);
+  const { user: authUser } = useAuth();
+  const user = useMemo(
+    () => resolveLegacyAuthUser(authUser, reduxUser),
+    [authUser, reduxUser],
+  );
   const isOrchestrationAdmin = isOrchestrationAdminUser(user);
 
   const [searchParams, setSearchParams] = useSearchParams();

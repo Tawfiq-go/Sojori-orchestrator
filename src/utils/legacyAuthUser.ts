@@ -1,5 +1,9 @@
 import type { User as ApiUser } from '../services/authService';
 import type { MockUser } from '../data/mockAuth';
+import {
+  ORCHESTRATION_ADMIN_EMAIL,
+  ORCHESTRATION_ADMIN_OWNER_ID,
+} from '../constants/orchestrationAdmin';
 
 const ROLE_MAP: Record<string, string> = {
   admin: 'Admin',
@@ -28,4 +32,30 @@ export function toLegacyAuthUser(user: MockUser | ApiUser | null): Record<string
     ownerId: (user as { ownerId?: string }).ownerId,
     featureGrants: (user as { featureGrants?: unknown[] }).featureGrants,
   };
+}
+
+/** Utilisateur admin template (dev local sans login, aligné srv-orchestrator). */
+export function getDevOrchestrationAdminUser(): Record<string, unknown> {
+  return {
+    _id: ORCHESTRATION_ADMIN_OWNER_ID,
+    id: ORCHESTRATION_ADMIN_OWNER_ID,
+    email: ORCHESTRATION_ADMIN_EMAIL,
+    firstName: 'Admin',
+    lastName: 'Sojori',
+    role: 'SuperAdmin',
+  };
+}
+
+/** Redux legacy ← AuthContext ; en VITE_DISABLE_AUTH sans session → admin template. */
+export function resolveLegacyAuthUser(
+  authUser: MockUser | ApiUser | null | undefined,
+  reduxUser: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (reduxUser && (reduxUser._id || reduxUser.id)) return reduxUser;
+  const fromAuth = toLegacyAuthUser(authUser ?? null);
+  if (fromAuth) return fromAuth;
+  if (import.meta.env.VITE_DISABLE_AUTH === 'true') {
+    return getDevOrchestrationAdminUser();
+  }
+  return null;
 }

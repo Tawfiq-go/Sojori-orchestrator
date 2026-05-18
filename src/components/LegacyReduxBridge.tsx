@@ -4,7 +4,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import store, { setLegacyAuthUser } from '../redux/store';
 import { useAuth } from '../hooks/useAuth';
-import { toLegacyAuthUser } from '../utils/legacyAuthUser';
+import { resolveLegacyAuthUser } from '../utils/legacyAuthUser';
 import { getToken } from '../utils/authUtils';
 
 function SyncAuthToRedux() {
@@ -13,7 +13,7 @@ function SyncAuthToRedux() {
   useEffect(() => {
     dispatch(
       setLegacyAuthUser({
-        user: toLegacyAuthUser(user),
+        user: resolveLegacyAuthUser(user, null),
         token: getToken(),
       }),
     );
