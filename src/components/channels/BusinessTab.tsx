@@ -1,7 +1,8 @@
 /**
  * BusinessTab — APIs, HTTP Logs, Hooks, Owner/Listing stats (legacy ChannelsHubPage Business)
  */
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { onChannelsRefresh } from '../../utils/channelsRefresh';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   CalendarDays,
@@ -20,6 +21,7 @@ import {
   fetchBusinessOwnerStats,
   fetchChannelsCalendarRuApis,
   fetchChannelsCalendarRuCallBodies,
+  fetchChannelsDistributionRuApis,
   fetchChannelsDistributionRuCallBodies,
   fetchChannelsHttpAccessLogs,
   fetchChannelsIngressById,
@@ -31,7 +33,7 @@ import {
   fetchChannelsOverview,
   fetchChannelsOverviewReviews,
   fetchChannelsOwnerRuApis,
-  fetchChannelsUserRuCallBodies,
+  fetchChannelsOwnerRuCallBodies,
 } from '../../services/channelsDashboardApi';
 import {
   ingressKindFromHookSeg,
@@ -48,6 +50,8 @@ import {
   ruCalendarStatusBadgeClass,
   summarizeCalendarRuRow,
 } from '../../utils/businessTabHelpers';
+import { buildCalendarModificationRecap } from '../../utils/calendarRecapHelpers';
+import { CalendarRuRecapModal, type CalendarRuRecapView } from './CalendarRuRecapModal';
 
 const LIMIT = 25;
 
@@ -255,7 +259,10 @@ export function BusinessTab() {
   const hookSeg = parseMrSeg(searchParams.get('hook'));
   const docId = searchParams.get('docId') || '';
 
-  const [hours, setHours] = useState(72);
+  const hoursFromUrl = Number(searchParams.get('hours'));
+  const [hours, setHours] = useState(
+    Number.isFinite(hoursFromUrl) && hoursFromUrl > 0 ? hoursFromUrl : 72,
+  );
   const setSp = (patch: Record<string, string | undefined>) => setSearchParams(patchParams(searchParams, patch));
 
   useEffect(() => {
@@ -287,6 +294,7 @@ export function BusinessTab() {
   const [listingPage, setListingPage] = useState(1);
   const [userPage, setUserPage] = useState(1);
   const [oauthPage, setOauthPage] = useState(1);
+  const [distPage, setDistPage] = useState(1);
   const [httpPage, setHttpPage] = useState(1);
   const [reviewsPage, setReviewsPage] = useState(1);
   const [hookPage, setHookPage] = useState(1);
@@ -308,12 +316,19 @@ export function BusinessTab() {
   const [userList, setUserList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
   const [userLoading, setUserLoading] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
-  const userBodies = useRuBodies((id) => fetchChannelsUserRuCallBodies(id));
+  const userBodies = useRuBodies((id) => fetchChannelsOwnerRuCallBodies(id));
 
   const [oauthList, setOauthList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [oauthError, setOauthError] = useState<string | null>(null);
   const oauthBodies = useRuBodies((id) => fetchChannelsOAuthRuCallBodies(id));
+
+  const [distList, setDistList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
+  const [distLoading, setDistLoading] = useState(false);
+  const [distError, setDistError] = useState<string | null>(null);
+  const distBodies = useRuBodies((id) => fetchChannelsDistributionRuCallBodies(id));
+
+  const [calendarRecapModal, setCalendarRecapModal] = useState<{ row: RuRow; rowId: string } | null>(null);
 
   const [httpData, setHttpData] = useState<{ items?: unknown[]; pagination?: { total?: number } } | null>(null);
   const [httpLoading, setHttpLoading] = useState(false);
@@ -454,6 +469,27 @@ export function BusinessTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hours, oauthPage]);
 
+  const loadDistribution = useCallback(async () => {
+    setDistLoading(true);
+    setDistError(null);
+    try {
+      const { data } = await fetchChannelsDistributionRuApis({ hours, page: distPage, limit: LIMIT });
+      if (!data?.success) {
+        setDistError('Impossible de charger les appels distribution RU (ChannelRuApiCall · srv-channels)');
+        setDistList(null);
+      } else {
+        setDistList(data.data);
+        distBodies.setExpandId(null);
+      }
+    } catch (e) {
+      setDistError(errMsg(e));
+      setDistList(null);
+    } finally {
+      setDistLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hours, distPage]);
+
   const loadHttp = useCallback(async () => {
     setHttpLoading(true);
     setHttpError(null);
@@ -552,8 +588,66 @@ export function BusinessTab() {
     else if (apiSeg === 'o') loadOAuth();
     else if (apiSeg === 'g') loadHttp();
     else if (apiSeg === 'rev') loadReviews();
+    else if (apiSeg === 'd') loadDistribution();
     else loadOverview();
-  }, [viewTab, apiSeg, docId, loadOverview, loadCalendar, loadListing, loadUser, loadOAuth, loadHttp, loadReviews]);
+  }, [viewTab, apiSeg, docId, loadOverview, loadCalendar, loadListing, loadUser, loadOAuth, loadHttp, loadReviews, loadDistribution]);
+
+  useEffect(() => {
+    const h = Number(searchParams.get('hours'));
+    if (Number.isFinite(h) && h > 0 && h !== hours) setHours(h);
+  }, [searchParams, hours]);
+
+  useEffect(
+    () =>
+      onChannelsRefresh(() => {
+        if (viewTab === 'BizOwner') void loadBizOwners();
+        else if (viewTab === 'BizListing') void loadBizListings();
+        else if (viewTab === 'Hook') void loadHooks();
+        else if (viewTab === 'Api' && !docId) {
+          if (apiSeg === 'c') void loadCalendar();
+          else if (apiSeg === 'l') void loadListing();
+          else if (apiSeg === 'u') void loadUser();
+          else if (apiSeg === 'o') void loadOAuth();
+          else if (apiSeg === 'g') void loadHttp();
+          else if (apiSeg === 'rev') void loadReviews();
+          else if (apiSeg === 'd') void loadDistribution();
+          else void loadOverview();
+        }
+      }),
+    [
+      viewTab,
+      docId,
+      apiSeg,
+      loadBizOwners,
+      loadBizListings,
+      loadHooks,
+      loadOverview,
+      loadCalendar,
+      loadListing,
+      loadUser,
+      loadOAuth,
+      loadHttp,
+      loadReviews,
+      loadDistribution,
+    ],
+  );
+
+  const calendarRuRecapView = useMemo((): CalendarRuRecapView | null => {
+    if (!calendarRecapModal?.rowId) return null;
+    const { row, rowId } = calendarRecapModal;
+    const body = calBodies.bodies[rowId];
+    const merged = {
+      ...row,
+      requestPayload: row.requestPayload ?? body?.requestPayload,
+      auditContext: (row.auditContext ?? body?.auditContext) as Record<string, unknown> | undefined,
+    };
+    return {
+      rowId,
+      merged,
+      sum: summarizeCalendarRuRow(merged),
+      recap: buildCalendarModificationRecap(merged),
+    };
+  }, [calendarRecapModal, calBodies.bodies]);
 
   useEffect(() => {
     if (viewTab !== 'Hook') return;
@@ -625,6 +719,7 @@ export function BusinessTab() {
     setOauthPage(1);
     setHttpPage(1);
     setReviewsPage(1);
+    setDistPage(1);
   };
 
   const loadHookFull = async (id: string) => {
@@ -766,56 +861,90 @@ export function BusinessTab() {
     </tbody>
   );
 
+  const renderCalendarRuTable = (rows: RuRow[]) => (
+    <tbody>
+      {rows.map((row, idx) => {
+        const ts = (row.createdAt || row.timestamp) as string | undefined;
+        const err = String(row.error || row.responseMsg || '');
+        const rowId = String(row._id || `${row.action}-${idx}`);
+        const body = calBodies.bodies[rowId];
+        const mergedRow = {
+          ...row,
+          requestPayload: row.requestPayload ?? body?.requestPayload,
+          auditContext: row.auditContext ?? body?.auditContext,
+        };
+        const sum = summarizeCalendarRuRow(mergedRow as Parameters<typeof summarizeCalendarRuRow>[0]);
+        const recap = buildCalendarModificationRecap(mergedRow);
+        const expanded = calBodies.expandId === rowId;
+        const loadingBody = calBodies.loadingId === rowId;
+        return (
+          <Fragment key={rowId}>
+            <tr className="border-t border-slate-100 align-top">
+              <td className="px-2 py-2 text-xs text-slate-700 whitespace-nowrap">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <button
+                    type="button"
+                    disabled={loadingBody}
+                    onClick={() => calBodies.toggle(rowId)}
+                    className="channels-expand-button channels-expand-button-inline"
+                  >
+                    {loadingBody ? '…' : expanded ? '▲ Masquer' : '▼ JSON / XML'}
+                  </button>
+                  <div className="whitespace-nowrap text-[11px] text-slate-600 font-medium">
+                    {ts ? new Date(ts).toLocaleString() : '—'}
+                  </div>
+                </div>
+              </td>
+              <td className="px-2 py-2 text-xs font-mono truncate" title={String(row.action || '')}>
+                {String(row.action || '—')}
+              </td>
+              <td className="px-2 py-2 text-xs">
+                <span className={`channels-badge text-xs ${ruCalendarStatusBadgeClass(String(row.status || ''))}`}>
+                  {String(row.status || '—')}
+                </span>
+              </td>
+              <td className="px-2 py-2 text-right tabular-nums text-xs">{row.responseTime != null ? String(row.responseTime) : '—'}</td>
+              <td className="px-2 py-2 font-mono text-[10px]">{sum.propertyId != null ? String(sum.propertyId) : '—'}</td>
+              <td className="px-2 py-2 text-xs line-clamp-2" title={sum.listingLabel}>{sum.listingLabel || '—'}</td>
+              <td className="px-2 py-2 text-xs line-clamp-2" title={sum.ownerLabel}>{sum.ownerLabel || '—'}</td>
+              <td className="px-2 py-2 text-xs font-mono" title={sum.rabbitSchemaVersion != null ? `schéma ${sum.rabbitSchemaDisplay}` : ''}>
+                {sum.rabbitSchemaDisplay}
+              </td>
+              <td className="px-2 py-2 text-xs line-clamp-3" title={sum.sourceTitle || sum.source}>{sum.source}</td>
+              <td className="px-2 py-2 text-xs font-mono line-clamp-2" title={sum.priceHint}>{sum.priceHint}</td>
+              <td className="px-2 py-2 text-xs truncate" title={sum.ranges}>{sum.ranges}</td>
+              <td className="px-2 py-2 text-xs align-top">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <span className="line-clamp-2 text-[11px]" title={recap.shortLine}>{recap.shortLine}</span>
+                  <button type="button" className="channels-ru-recap-table-btn" onClick={() => setCalendarRecapModal({ row, rowId })}>
+                    Récap
+                  </button>
+                </div>
+              </td>
+              <td className="px-2 py-2 text-xs text-slate-600 line-clamp-3" title={err}>
+                {err.slice(0, 120)}
+                {err.length > 120 ? '…' : ''}
+              </td>
+            </tr>
+            {expanded && (
+              <tr className="channels-expanded-row">
+                <td colSpan={13} className="channels-expanded-content">
+                  {loadingBody ? (
+                    <div className="py-3 text-center text-xs text-slate-500">Chargement…</div>
+                  ) : body !== undefined ? (
+                    <RuBodyPanels body={body} mode="calendar" />
+                  ) : null}
+                </td>
+              </tr>
+            )}
+          </Fragment>
+        );
+      })}
+    </tbody>
+  );
+
   return (
     <div className="space-y-3">
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-wrap items-center gap-2">
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          <button type="button" style={bizBtn(businessBiz === 'api')} onClick={() => { resetApiPages(); setSp({ tab: 'Business', biz: 'api', api: 'm' }); }}>API</button>
-          <button type="button" style={bizBtn(businessBiz === 'logapi')} onClick={() => { resetApiPages(); setSp({ tab: 'Business', biz: 'logapi', api: 'g' }); }}>HTTP Logs</button>
-          <button type="button" style={bizBtn(businessBiz === 'hooks')} onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: hookSeg || 'm' })}>Hooks</button>
-          <span className="w-px h-5 bg-slate-200 mx-0.5" />
-          <button type="button" style={bizBtn(businessBiz === 'owner')} onClick={() => setSp({ tab: 'Business', biz: 'owner', api: undefined, hook: undefined })}>
-            <span className="inline-flex items-center gap-1"><UserRound size={12} /> Owners</span>
-          </button>
-          <button type="button" style={bizBtn(businessBiz === 'listing')} onClick={() => setSp({ tab: 'Business', biz: 'listing', api: undefined, hook: undefined })}>
-            <span className="inline-flex items-center gap-1"><Home size={12} /> Listings</span>
-          </button>
-        </div>
-      </div>
-
-      {(viewTab === 'Api' || businessBiz === 'logapi') && (
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-wrap items-center gap-2">
-          <select style={{ padding: "4px 8px", borderRadius: 4, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, cursor: "pointer" }} className=" h-7 text-xs" value={hours} onChange={(e) => { setHours(Number(e.target.value)); resetApiPages(); }}>
-            <option value={6}>6h</option>
-            <option value={24}>24h</option>
-            <option value={72}>3j</option>
-            <option value={168}>7j</option>
-          </select>
-          {businessBiz === 'api' && (
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {(['m', 'r', 'c', 'l', 'o', 'u', 'rev'] as const).map((seg) => (
-                <button key={seg} type="button" style={apiBtn(seg)} onClick={() => { resetApiPages(); setSp({ tab: 'Business', biz: 'api', api: seg }); }}>
-                  {seg === 'm' ? 'Messages' : seg === 'r' ? 'Réservations' : seg === 'c' ? 'Calendrier' : seg === 'l' ? 'Listing' : seg === 'o' ? 'OAuth' : seg === 'u' ? 'User' : 'Reviews'}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {viewTab === 'Hook' && !docId && (
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-3 py-2 flex flex-wrap items-center gap-2">
-          <select style={{ padding: "4px 8px", borderRadius: 4, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, cursor: "pointer" }} className=" h-7 text-xs" value={hours} onChange={(e) => { setHours(Number(e.target.value)); setHookPage(1); }}>
-            <option value={24}>24h</option>
-            <option value={72}>3j</option>
-            <option value={168}>7j</option>
-          </select>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            <button type="button" style={bizBtn(hookSeg === 'm')} onClick={() => { setHookPage(1); setSp({ tab: 'Business', biz: 'hooks', hook: 'm' }); }}>Messages</button>
-            <button type="button" style={bizBtn(hookSeg === 'r')} onClick={() => { setHookPage(1); setSp({ tab: 'Business', biz: 'hooks', hook: 'r' }); }}>Réservations</button>
-          </div>
-        </div>
-      )}
 
       {/* API doc deep-link */}
       {viewTab === 'Api' && docId && (
@@ -829,22 +958,22 @@ export function BusinessTab() {
         </div>
       )}
 
-      {viewTab === 'Api' && !docId && apiSeg !== 'c' && apiSeg !== 'u' && apiSeg !== 'o' && apiSeg !== 'l' && apiSeg !== 'g' && apiSeg !== 'rev' && overviewError && (
+      {viewTab === 'Api' && !docId && apiSeg !== 'c' && apiSeg !== 'u' && apiSeg !== 'o' && apiSeg !== 'l' && apiSeg !== 'g' && apiSeg !== 'rev' && apiSeg !== 'd' && overviewError && (
         <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{overviewError}</div>
       )}
 
-      {viewTab === 'Api' && !docId && apiSeg !== 'c' && apiSeg !== 'u' && apiSeg !== 'o' && apiSeg !== 'l' && apiSeg !== 'g' && apiSeg !== 'rev' && overviewList && (
+      {viewTab === 'Api' && !docId && apiSeg !== 'c' && apiSeg !== 'u' && apiSeg !== 'o' && apiSeg !== 'l' && apiSeg !== 'g' && apiSeg !== 'rev' && apiSeg !== 'd' && overviewList && (
         <>
           <div className="flex items-center justify-between text-xs text-slate-600 bg-white border border-slate-200 rounded px-3 py-1.5">
             <span>{overviewList.total} résultats</span>
             <Pag page={overviewPage} prevOff={overviewPage <= 1} nextOff={(overviewList.items?.length || 0) < LIMIT} onPrev={() => setOverviewPage((p) => Math.max(1, p - 1))} onNext={() => setOverviewPage((p) => p + 1)} />
           </div>
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-            <div style={{ overflow: "auto", scrollbarWidth: "thin", scrollbarColor: `${T.primary} ${T.bg2}` }} className=" overflow-x-auto overflow-y-auto max-h-[min(78vh,calc(100vh-140px))] w-full">
+            <div className="channels-table-scroll overflow-x-auto overflow-y-auto max-h-[min(78vh,calc(100vh-140px))] w-full">
               <table className="w-full table-fixed text-sm min-w-0">
                 {tableView === 'messaging' ? (
                   <>
-                    <thead style={{ position: "sticky", top: 0, zIndex: 100, background: T.primary, boxShadow: "0 2px 4px rgba(0,0,0,0.1)", color: "white", fontWeight: 700, fontSize: 12, letterSpacing: "0.025em", textTransform: "uppercase" }}><tr>
+                    <thead className="channels-sticky-thead"><tr>
                       {['Date', 'Event', 'Path', 'Thread', 'Message', 'Guest', 'Preview', 'Correlation'].map((h) => (
                         <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>
                       ))}
@@ -891,7 +1020,7 @@ export function BusinessTab() {
                   </>
                 ) : (
                   <>
-                    <thead style={{ position: "sticky", top: 0, zIndex: 100, background: T.primary, boxShadow: "0 2px 4px rgba(0,0,0,0.1)", color: "white", fontWeight: 700, fontSize: 12, letterSpacing: "0.025em", textTransform: "uppercase" }}><tr>
+                    <thead className="channels-sticky-thead"><tr>
                       {['Date', 'Créée RU', 'In', 'Out', 'Client', 'Tél', 'Ad', 'Enf', '€', 'OTA', 'Map', 'Listing', 'Owner', 'RU ID'].map((h) => (
                         <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">{h}</th>
                       ))}
@@ -946,9 +1075,9 @@ export function BusinessTab() {
                 <Pag page={httpPage} prevOff={httpPage <= 1} nextOff={(httpData.items?.length || 0) < LIMIT} onPrev={() => setHttpPage((p) => Math.max(1, p - 1))} onNext={() => setHttpPage((p) => p + 1)} />
               </div>
               <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-                <div style={{ overflow: "auto", scrollbarWidth: "thin", scrollbarColor: `${T.primary} ${T.bg2}` }} className=" overflow-auto max-h-[78vh]">
+                <div className="channels-table-scroll overflow-auto max-h-[78vh]">
                   <table className="w-full text-sm min-w-[900px]">
-                    <thead style={{ position: "sticky", top: 0, zIndex: 100, background: T.primary, boxShadow: "0 2px 4px rgba(0,0,0,0.1)", color: "white", fontWeight: 700, fontSize: 12, letterSpacing: "0.025em", textTransform: "uppercase" }}><tr>
+                    <thead className="channels-sticky-thead"><tr>
                       {['Date', 'Méthode', 'Chemin', 'Cat.', 'HTTP', 'ms', 'Snippet'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}
                     </tr></thead>
                     <tbody>
@@ -972,22 +1101,31 @@ export function BusinessTab() {
         </>
       )}
 
-      {viewTab === 'Api' && !docId && apiSeg === 'c' && calendarList && (
+      {viewTab === 'Api' && !docId && apiSeg === 'c' && calendarError && (
+        <div style={{ padding: 8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 4, color: '#B91C1C', fontSize: 13 }}>
+          {calendarError}
+        </div>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'c' && !calendarLoading && !calendarError && calendarList && (calendarList.items?.length ?? 0) === 0 && (
+        <div className="text-sm text-slate-500 p-4 border rounded bg-white text-center">Aucun appel calendrier RU sur la période.</div>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'c' && calendarList && (calendarList.items?.length ?? 0) > 0 && (
         <>
-          {calendarError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{calendarError}</div>}
           <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5 items-center">
             <span className="flex gap-2 items-center"><CalendarDays size={11} /> Calendrier RU · {calendarList.pagination?.total ?? '—'}</span>
             <Pag page={calendarPage} prevOff={calendarPage <= 1} nextOff={(calendarList.items?.length || 0) < LIMIT} onPrev={() => setCalendarPage((p) => Math.max(1, p - 1))} onNext={() => setCalendarPage((p) => p + 1)} />
           </div>
           <div className="bg-white rounded-lg border overflow-hidden">
-            <div style={{ overflow: "auto", scrollbarWidth: "thin", scrollbarColor: `${T.primary} ${T.bg2}` }} className=" overflow-auto max-h-[78vh]">
+            <div className="channels-table-scroll overflow-auto max-h-[78vh]">
               <table className="w-full text-sm min-w-[1100px]">
-                <thead style={{ position: "sticky", top: 0, zIndex: 100, background: T.primary, boxShadow: "0 2px 4px rgba(0,0,0,0.1)", color: "white", fontWeight: 700, fontSize: 12, letterSpacing: "0.025em", textTransform: "uppercase" }}><tr>
-                  {['Date', 'Action', 'Statut', 'ms', 'Prop', 'Listing', 'Owner', 'Queue', 'Source', 'Prix', 'Plages', 'Réponse'].map((h) => (
+                <thead className="channels-sticky-thead channels-calendar-ru-thead text-slate-700"><tr>
+                  {['Quand + détail', 'Action', 'Statut', 'ms', 'Prop', 'Listing', 'Owner', 'Queue', 'Source', 'Prix', 'Plages', 'Modifs', 'Réponse'].map((h) => (
                     <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr></thead>
-                {renderRuTable(calendarList.items || [], 12, 'calendar', calBodies)}
+                {renderCalendarRuTable(calendarList.items || [])}
               </table>
             </div>
           </div>
@@ -998,9 +1136,9 @@ export function BusinessTab() {
         <>
           {listingError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{listingError}</div>}
           <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>Listing OTA</span><Pag page={listingPage} prevOff={listingPage <= 1} nextOff={(listingList.items?.length || 0) < LIMIT} onPrev={() => setListingPage((p) => Math.max(1, p - 1))} onNext={() => setListingPage((p) => p + 1)} /></div>
-          <div className="bg-white rounded-lg border overflow-hidden"><div style={{ overflow: "auto", scrollbarWidth: "thin", scrollbarColor: `${T.primary} ${T.bg2}` }} className=" overflow-auto max-h-[78vh]">
+          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
             <table className="w-full text-sm min-w-[780px]">
-              <thead style={{ position: "sticky", top: 0, zIndex: 100, background: T.primary, boxShadow: "0 2px 4px rgba(0,0,0,0.1)", color: "white", fontWeight: 700, fontSize: 12, letterSpacing: "0.025em", textTransform: "uppercase" }}><tr>{['Date', 'Action', 'Statut', 'ms', 'Listing ID', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Listing ID', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
               {renderRuTable(listingList.items || [], 6, 'listing', listBodies)}
             </table>
           </div></div>
@@ -1011,12 +1149,48 @@ export function BusinessTab() {
         <>
           {userError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{userError}</div>}
           <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>Owner RU</span><Pag page={userPage} prevOff={userPage <= 1} nextOff={(userList.items?.length || 0) < LIMIT} onPrev={() => setUserPage((p) => Math.max(1, p - 1))} onNext={() => setUserPage((p) => p + 1)} /></div>
-          <div className="bg-white rounded-lg border overflow-hidden"><div style={{ overflow: "auto", scrollbarWidth: "thin", scrollbarColor: `${T.primary} ${T.bg2}` }} className=" overflow-auto max-h-[78vh]">
+          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
             <table className="w-full text-sm min-w-[720px]">
-              <thead style={{ position: "sticky", top: 0, zIndex: 100, background: T.primary, boxShadow: "0 2px 4px rgba(0,0,0,0.1)", color: "white", fontWeight: 700, fontSize: 12, letterSpacing: "0.025em", textTransform: "uppercase" }}><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
               {renderRuTable(userList.items || [], 6, 'user', userBodies)}
             </table>
           </div></div>
+        </>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'd' && (
+        <>
+          {distError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{distError}</div>}
+          <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950">
+            Distribution RU · ChannelRuApiCall (CM_Pull, etc.) — srv-channels
+          </div>
+          {distList && (
+            <>
+              <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5 items-center">
+                <span>Distribution RU · {distList.pagination?.total ?? '—'}</span>
+                <Pag page={distPage} prevOff={distPage <= 1} nextOff={(distList.items?.length || 0) < LIMIT} onPrev={() => setDistPage((p) => Math.max(1, p - 1))} onNext={() => setDistPage((p) => p + 1)} />
+              </div>
+              <div className="bg-white rounded-lg border overflow-hidden">
+                <div className="overflow-auto max-h-[78vh]">
+                  <table className="w-full text-sm min-w-[720px]">
+                    <thead className="channels-sticky-thead text-slate-700">
+                      <tr>
+                        {['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => (
+                          <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    {renderRuTable(distList.items || [], 6, 'user', distBodies)}
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+          {distLoading && !distList && (
+            <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement distribution…</div>
+          )}
         </>
       )}
 
@@ -1024,9 +1198,9 @@ export function BusinessTab() {
         <>
           {oauthError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{oauthError}</div>}
           <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span className="inline-flex gap-1 items-center"><KeyRound size={11} /> OAuth PMS</span><Pag page={oauthPage} prevOff={oauthPage <= 1} nextOff={(oauthList.items?.length || 0) < LIMIT} onPrev={() => setOauthPage((p) => Math.max(1, p - 1))} onNext={() => setOauthPage((p) => p + 1)} /></div>
-          <div className="bg-white rounded-lg border overflow-hidden"><div style={{ overflow: "auto", scrollbarWidth: "thin", scrollbarColor: `${T.primary} ${T.bg2}` }} className=" overflow-auto max-h-[78vh]">
+          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
             <table className="w-full text-sm min-w-[720px]">
-              <thead style={{ position: "sticky", top: 0, zIndex: 100, background: T.primary, boxShadow: "0 2px 4px rgba(0,0,0,0.1)", color: "white", fontWeight: 700, fontSize: 12, letterSpacing: "0.025em", textTransform: "uppercase" }}><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
               {renderRuTable(oauthList.items || [], 6, 'oauth', oauthBodies)}
             </table>
           </div></div>
@@ -1037,9 +1211,9 @@ export function BusinessTab() {
         <>
           {reviewsError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{reviewsError}</div>}
           <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>{reviewsList.total} reviews</span><Pag page={reviewsPage} prevOff={reviewsPage <= 1} nextOff={(reviewsList.items?.length || 0) < LIMIT} onPrev={() => setReviewsPage((p) => Math.max(1, p - 1))} onNext={() => setReviewsPage((p) => p + 1)} /></div>
-          <div className="bg-white rounded-lg border overflow-hidden"><div style={{ overflow: "auto", scrollbarWidth: "thin", scrollbarColor: `${T.primary} ${T.bg2}` }} className=" overflow-auto">
+          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto">
             <table className="w-full text-xs">
-              <thead style={{ position: "sticky", top: 0, zIndex: 100, background: T.primary, boxShadow: "0 2px 4px rgba(0,0,0,0.1)", color: "white", fontWeight: 700, fontSize: 12, letterSpacing: "0.025em", textTransform: "uppercase" }}><tr>{['Date', 'Action', 'Owner', 'Statut', 'ms', 'Message', 'Correlation'].map((h) => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Owner', 'Statut', 'ms', 'Message', 'Correlation'].map((h) => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
               <tbody>
                 {(reviewsList.items as Record<string, unknown>[] || []).map((row) => (
                   <tr key={String(row.id)} className="border-t border-slate-100">
@@ -1173,9 +1347,19 @@ export function BusinessTab() {
         </div>
       )}
 
-      {(overviewLoading || calendarLoading || listingLoading || userLoading || oauthLoading || httpLoading || reviewsLoading || hookLoading) && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 32, color: T.text3, fontSize: 14 }} style={{ color: T.text3 }}><div style={{ border: "3px solid " + T.bg2, borderTop: "3px solid " + T.primary, borderRadius: "50%", width: 24, height: 24, animation: "spin 0.8s linear infinite", marginRight: 12 }} /> Chargement…</div>
+      {(overviewLoading || calendarLoading || listingLoading || userLoading || oauthLoading || distLoading || httpLoading || reviewsLoading || hookLoading) && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32, color: T.text3, fontSize: 14 }}>
+          <div style={{ border: `3px solid ${T.bg2}`, borderTop: `3px solid ${T.primary}`, borderRadius: '50%', width: 24, height: 24, animation: 'spin 0.8s linear infinite', marginRight: 12 }} />
+          Chargement…
+        </div>
       )}
+
+      <CalendarRuRecapModal
+        view={calendarRuRecapView}
+        bodyLoading={calBodies.loadingId === calendarRuRecapView?.rowId}
+        onClose={() => setCalendarRecapModal(null)}
+        onOpenJsonXml={(id) => void calBodies.toggle(id)}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { tokens as T } from '../dashboard/DashboardV2.components';
+import { onChannelsRefresh } from '../../utils/channelsRefresh';
 import { fetchChannelsCronJobs, patchChannelsCronJob } from '../../services/channelsDashboardApi';
 
 type CronJob = {
@@ -24,6 +25,8 @@ export function CronTab() {
     loadJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => onChannelsRefresh(() => void loadJobs()), []);
 
   const loadJobs = async () => {
     setLoading(true);

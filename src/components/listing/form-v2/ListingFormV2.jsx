@@ -8,8 +8,8 @@ import ListingFormShell from './ListingFormShell';
 import { ListingFormStructureContext } from './ListingFormStructureContext';
 
 import { GeneralTab, LocationTab }                          from './tabs/GeneralLocationTabs';
-import { PhotosTab }                                        from './tabs/PhotosAmenitiesTabs';
-import { AmenitiesTab }                                     from './tabs/DetailTabsAmenities';
+import { PhotosTabReal }                                    from './tabs/PhotosTabReal';
+import AmenitiesTab                                         from './tabs/DetailTabsAmenities';
 import { PricingTab, AvailabilityTab, FeesTab }             from './tabs/DetailTabsCommercial';
 import { ChannelsTab, DirectBookingTab, RoomsTab, LicenseTab } from './tabs/DetailTabsDistribution';
 import { OrchestrationTab, CleaningTab }                    from './tabs/ConfigTabsWorkflow';
@@ -28,9 +28,15 @@ export default function ListingFormV2({
 
   useEffect(() => {
     if (initialValues && Object.keys(initialValues).length > 0) {
+      console.log('🔵 [ListingFormV2] Setting initial values', {
+        listingId,
+        hasListingImages: Array.isArray(initialValues.listingImages),
+        listingImagesCount: Array.isArray(initialValues.listingImages) ? initialValues.listingImages.length : 0,
+        listingImages: initialValues.listingImages
+      });
       setValues(initialValues);
     }
-  }, [initialValues]);
+  }, [initialValues, listingId]);
 
   /** GeneralTab passe un objet ; AmenitiesTab passe (field, value). */
   const handleFormChange = (arg1, arg2) => {
@@ -56,8 +62,19 @@ export default function ListingFormV2({
         );
       }
       if (tabKey === 'location')     return <LocationTab    {...common} />;
-      if (tabKey === 'photos')       return <PhotosTab      photos={values.photos || []} onChange={photos => setValues(v => ({ ...v, photos }))}
-                                                            airbnbHeroOrder={values.airbnbHeroOrder} onAirbnbChange={v => setValues(s => ({ ...s, airbnbHeroOrder: v }))} />;
+      if (tabKey === 'photos') {
+        const images = values.listingImages || [];
+        console.log('🔵 [ListingFormV2] Rendering PhotosTabReal', {
+          imagesCount: images.length,
+          images: images,
+          airbnbHeroOrder: values.airbnbHeroOrder
+        });
+        return <PhotosTabReal  listingImages={images} onChange={imgs => {
+          console.log('🟢 [ListingFormV2] PhotosTabReal onChange', { newImagesCount: imgs.length, imgs });
+          setValues(v => ({ ...v, listingImages: imgs }));
+        }}
+        airbnbHeroOrder={values.airbnbHeroOrder} onAirbnbOrderChange={v => setValues(s => ({ ...s, airbnbHeroOrder: v }))} />;
+      }
       if (tabKey === 'amenities')    return <AmenitiesTab   {...common} listingId={listingId} />;
       if (tabKey === 'pricing')      return <PricingTab     {...common} />;
       if (tabKey === 'availability') return <AvailabilityTab {...common} />;

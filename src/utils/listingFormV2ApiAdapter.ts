@@ -88,6 +88,12 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
   const descLang: DescLangUi = '🇫🇷 FR';
   const fr = getDescEntryForLang(descriptions, descLang);
 
+  console.log('🔵 [mapApiToFormV2Values] Mapping listing data', {
+    hasListingImages: Array.isArray(raw.listingImages),
+    listingImagesCount: Array.isArray(raw.listingImages) ? raw.listingImages.length : 0,
+    listingImages: raw.listingImages
+  });
+
   return {
     ...raw,
     name: asString(raw.name),
@@ -112,6 +118,8 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     shortDescription: asString(fr.headline),
     longDescription: asString(fr.value),
     airbnbSummary: asString(raw.airbnbSummary),
+    listingImages: Array.isArray(raw.listingImages) ? raw.listingImages : [],
+    airbnbHeroOrder: asString(raw.airbnbHeroOrder),
     active: raw.active !== false,
     staging: raw.staging === true,
     instantBooking: raw.instantBookable === true,
@@ -188,6 +196,25 @@ export function mergeFormV2ToUpdatePropertyPayload(
 
   if (roomTypes) payload.roomTypes = roomTypes;
   if (values.airbnbSummary != null) payload.airbnbSummary = values.airbnbSummary;
+  if (Array.isArray(values.listingImages)) {
+    console.log('🔵 [mergeFormV2ToUpdatePropertyPayload] Saving listingImages', {
+      count: values.listingImages.length,
+      images: values.listingImages
+    });
+    payload.listingImages = values.listingImages;
+  }
+  if (values.airbnbHeroOrder != null) payload.airbnbHeroOrder = values.airbnbHeroOrder;
+
+  if (Array.isArray(values.listingAmenitiesIds)) {
+    payload.listingAmenitiesIds = values.listingAmenitiesIds
+      .map((row) => {
+        const r = isRecord(row) ? row : {};
+        const id = asString(r._id);
+        if (!id) return null;
+        return { _id: id, count: asNumber(r.count) ?? 1 };
+      })
+      .filter(Boolean);
+  }
 
   return payload;
 }

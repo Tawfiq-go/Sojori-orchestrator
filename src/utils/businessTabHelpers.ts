@@ -116,8 +116,26 @@ export function summarizeCalendarRuRow(row: {
     srcParts.push(String(audit.trigger));
   }
   if (audit.route) srcParts.push(`route:${String(audit.route)}`);
+  if (audit.userId != null && String(audit.userId).trim() !== '') {
+    const u = String(audit.userId);
+    srcParts.push(u.length > 14 ? `user:${u.slice(0, 12)}…` : `user:${u}`);
+  }
   const source = srcParts.length ? srcParts.join(' · ') : '—';
+  const sourceTitle =
+    srcParts.length > 0
+      ? srcParts.join('\n')
+      : Object.keys(audit).length > 0
+        ? JSON.stringify(audit)
+        : '';
   const lu = Array.isArray(audit.lightUpdates) ? audit.lightUpdates : [];
+  const kinds = [...new Set(lu.map((x: { type?: string }) => x?.type).filter(Boolean))];
+  let kindsStr = kinds.join(', ');
+  if (!kindsStr && row.action) {
+    const a = String(row.action);
+    if (/PutPrices/i.test(a)) kindsStr = 'prix';
+    else if (/PutAvbUnits|Avb/i.test(a)) kindsStr = 'dispo';
+    else kindsStr = '—';
+  }
   let ranges = '—';
   if (lu.length) {
     const froms = lu.map((x: { from?: string }) => x?.from).filter(Boolean);
@@ -143,12 +161,14 @@ export function summarizeCalendarRuRow(row: {
       : '';
   return {
     source,
-    sourceTitle: source,
+    sourceTitle: sourceTitle || source,
     ranges,
+    kindsStr: kindsStr || '—',
     propertyId: pid,
     listingLabel,
     ownerLabel,
     priceHint: extractCalendarPriceHint(row),
+    rabbitSchemaVersion,
     rabbitSchemaDisplay,
   };
 }

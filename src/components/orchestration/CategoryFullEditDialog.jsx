@@ -2,33 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography, TextField, Select, MenuItem, FormControl, InputLabel, Grid, Switch, FormControlLabel, Divider, Alert, Stack, Radio, RadioGroup, Checkbox, Accordion, AccordionSummary, AccordionDetails, CircularProgress, Chip } from '@mui/material';
 import { Save as SaveIcon, ExpandMore as ExpandMoreIcon, Bookmark as BookmarkIcon } from '@mui/icons-material';
 import { getOrchestratorMailTemplates } from '../../features/setting/services/serverApi.orchestratorConfig';
+import { T, btnPrimarySx, btnGhostSx } from './orchestrationConfigUi';
+
 const theme = {
   colors: {
-    primary: {
-      main: '#6366F1',
-      bg: '#EEF2FF'
-    },
-    success: {
-      main: '#10B981',
-      bg: '#D1FAE5'
-    },
-    warning: {
-      main: '#F59E0B',
-      bg: '#FEF3C7'
-    },
-    error: {
-      main: '#EF4444',
-      bg: '#FEE2E2'
-    },
+    primary: { main: T.primary, bg: T.primaryTint },
+    success: { main: T.success, bg: T.successTint, light: T.success },
+    warning: { main: T.warning, bg: T.warningTint },
+    error: { main: T.error, bg: T.errorTint },
     gray: {
-      50: '#F9FAFB',
-      200: '#E5E7EB',
-      500: '#6B7280',
-      600: '#4B5563',
-      700: '#374151',
-      900: '#111827'
-    }
-  }
+      50: T.bg2,
+      100: T.bg3,
+      200: T.border,
+      300: T.bg3,
+      400: T.text4,
+      500: T.text3,
+      600: T.text2,
+      700: T.text2,
+      800: T.text,
+      900: T.text,
+    },
+  },
 };
 
 /**
@@ -514,8 +508,8 @@ const CategoryFullEditDialog = ({
     }
   }}>
       <DialogTitle sx={{
-      background: categoryMeta?.gradient || theme.colors.primary.main,
-      color: 'white',
+      background: categoryMeta?.gradient || `linear-gradient(135deg, ${T.primaryDeep} 0%, ${T.primary} 100%)`,
+      color: '#1a1408',
       py: 2.5,
       px: 3
     }}>
@@ -2716,20 +2710,18 @@ const CategoryFullEditDialog = ({
           <Button variant="contained" onClick={handleSave} disabled={isSaving} startIcon={isSaving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon sx={{
           fontSize: 18
         }} />} sx={{
-          background: categoryMeta?.gradient || theme.colors.primary.main,
+          ...btnPrimarySx,
+          ...(categoryMeta?.gradient ? { background: categoryMeta.gradient } : {}),
           textTransform: 'none',
           px: 3,
           py: 1,
           fontSize: 13,
-          fontWeight: 700,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           minWidth: 140,
-          '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-          },
           '&:disabled': {
-            background: theme.colors.gray[400]
-          }
+            background: T.bg3,
+            color: T.text4,
+            boxShadow: 'none',
+          },
         }}>
             {isSaving ? 'Sauvegarde...' : 'Enregistrer'}
           </Button>

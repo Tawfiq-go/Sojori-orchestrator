@@ -82,6 +82,13 @@ export interface TaskListItem {
   } | null;
   computed_status?: string;
   timeslots_available?: Array<{ start: number; end: number; type?: string }>;
+  /** Enregistrement invités (colonne détails sous catégorie) */
+  adults?: number;
+  nbreGuestValidated?: number;
+  nbreGuestDraft?: number;
+  nbreGuestNotRegistered?: number;
+  checkinStatus?: string;
+  ownerId?: string;
 }
 
 export interface TasksPagination {

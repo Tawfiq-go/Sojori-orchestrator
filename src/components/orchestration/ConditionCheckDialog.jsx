@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { Dialog } from '@mui/material'
 import axios from 'axios'
 import { getOrchestratorApiBaseUrl } from 'config/backendServer.config'
+import { T } from './orchestrationConfigUi'
 
 const ORCHESTRATOR_BASE = getOrchestratorApiBaseUrl()
-const SOJORI = '#FF6B35'
+const SOJORI = T.primary
+const SOJORI_DEEP = T.primaryDeep
 const STALE_MS = 6 * 60 * 60 * 1000
 
 function fmtDate(d) {
@@ -40,7 +42,7 @@ function execSymbol(exec) {
       if (now - scheduledAt > STALE_MS) {
         return { sym: '⏳', label: 'En retard', color: '#F97316' }
       }
-      return { sym: '→', label: 'Prochain', color: SOJORI }
+      return { sym: '→', label: 'Prochain', color: SOJORI_DEEP }
     }
   }
 }
@@ -217,7 +219,7 @@ export default function ConditionCheckDialog({
                 ✓ Conditions remplies
               </span>
             ) : canBypass ? (
-              <span style={{ padding: '4px 12px', borderRadius: 99, background: '#FFF7ED', color: '#92400E', fontSize: 11, fontWeight: 700, border: `1px solid ${SOJORI}66` }}>
+              <span style={{ padding: '4px 12px', borderRadius: 99, background: T.primaryTint, color: T.primaryDeep, fontSize: 11, fontWeight: 700, border: `1px solid ${SOJORI}66` }}>
                 ⚡ Forçage disponible
               </span>
             ) : (

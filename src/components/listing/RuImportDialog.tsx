@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Button, TextField, Autocomplete, CircularProgress,
@@ -7,18 +7,15 @@ import {
 } from '@mui/material';
 import { Close } from '@mui/icons-material';
 import { toast } from 'react-toastify';
-import apiClient from '../../services/apiClient';
-import { getToken } from '../../utils/authUtils';
-import { MICROSERVICE_BASE_URL } from '../../config/backendServer.config';
 import {
   fetchRuOwnerProperties,
   importRuProperty,
   importRuPropertyBatch,
 } from '../../services/channelsDashboardApi';
+import { listingsService } from '../../services/listingsService';
+import { getOwners } from '../../services/teamDashboardApi';
 import { useRuImportProgress, getRuImportProgressPercent } from '../../hooks/useRuImportProgress';
 import { useAuth } from '../../hooks/useAuth';
-
-const USER_API = MICROSERVICE_BASE_URL.SRV_USER;
 
 interface RuImportDialogProps {
   open: boolean;
@@ -27,21 +24,32 @@ interface RuImportDialogProps {
   onImported?: () => void;
 }
 
-function resolveCityLabel(c: { _id: string; name?: string | { en?: string; FR?: string } }): string {
+type CityOption = { _id: string; name?: string | { fr?: string; en?: string; FR?: string; ar?: string } };
+
+function resolveCityLabel(c: CityOption): string {
   const n = c.name;
-  if (typeof n === 'string') return n;
-  if (n && typeof n === 'object') return n.en || n.FR || c._id;
+  if (typeof n === 'string' && n.trim()) return n.trim();
+  if (n && typeof n === 'object') {
+    return n.fr || n.en || n.FR || n.ar || c._id;
+  }
   return c._id;
 }
 
 function isAdminRole(role?: string): boolean {
-  const r = (role || '').toLowerCase();
-  return r === 'superadmin' || r === 'admin';
+  const r = (role || '').toLowerCase().replace(/\s+/g, '');
+  return r === 'superadmin' || r === 'admin' || r === 'super_admin';
 }
 
-export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImportDialogProps) {
+const devAuthBypass = import.meta.env.VITE_DISABLE_AUTH === 'true';
+
+export function RuImportDialog({ open, onClose, cities: citiesProp = [], onImported }: RuImportDialogProps) {
   const { user } = useAuth();
-  const isAdmin = isAdminRole(user?.role);
+  /** Sans session (dev local) : afficher le sélecteur propriétaire comme pour un admin. */
+  const isAdmin = isAdminRole(user?.role) || (devAuthBypass && !user?.id);
+
+  const [cityOptions, setCityOptions] = useState<CityOption[]>([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [citySearch, setCitySearch] = useState('');
 
   const [step, setStep] = useState(1);
 
@@ -90,6 +98,25 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
     }
   }, []);
 
+  const citiesPropRef = useRef(citiesProp);
+  citiesPropRef.current = citiesProp;
+
+  const loadCities = useCallback(async (search = '') => {
+    setCitiesLoading(true);
+    try {
+      const rows = await listingsService.getCities({
+        allCities: true,
+        limit: 2000,
+        search_text: search,
+      });
+      setCityOptions(rows.map((c) => ({ _id: c._id, name: c.name })));
+    } catch {
+      setCityOptions(citiesPropRef.current);
+    } finally {
+      setCitiesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!open) {
       setStep(1);
@@ -100,29 +127,37 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
       setRuMappingLookup(null);
       setSelected(new Set());
       setSelectedCity('');
+      setCitySearch('');
       setImportResults(null);
       setPropsError('');
       resetProgress();
       return;
     }
+    void loadCities('');
     if (!isAdmin && user?.id) {
-      const ownerAsSelection = { _id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, ruOwnerId: (user as { ruOwnerId?: string }).ruOwnerId };
+      const ownerAsSelection = {
+        _id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        ruOwnerId: (user as { ruOwnerId?: string }).ruOwnerId,
+      };
       setSelectedOwner(ownerAsSelection);
-      loadOwnerProperties(ownerAsSelection);
+      void loadOwnerProperties(ownerAsSelection);
     }
-  }, [open, isAdmin, user, loadOwnerProperties, resetProgress]);
+  }, [open, isAdmin, user?.id, user?.firstName, user?.lastName, user?.email, loadOwnerProperties, resetProgress, loadCities]);
+
+  useEffect(() => {
+    if (!open || citySearch === '') return;
+    const t = setTimeout(() => void loadCities(citySearch), 300);
+    return () => clearTimeout(t);
+  }, [citySearch, open, loadCities]);
 
   const fetchOwners = useCallback(async (q = '') => {
     setLoadingOwners(true);
     try {
-      const token = getToken();
-      const params = new URLSearchParams({ roles: 'Owner', limit: '50', page: '0', paged: 'true' });
-      if (q.trim()) params.set('search_text', q.trim());
-      const res = await apiClient.get(`${USER_API}/user/get-account?${params}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        timeout: 10000,
-      });
-      const data = res.data?.data ?? (Array.isArray(res.data) ? res.data : []);
+      const res = await getOwners({ limit: 50, page: 0, search_text: q.trim() });
+      const data = res?.data ?? (Array.isArray(res) ? res : []);
       setOwnerOptions(data);
     } catch {
       setOwnerOptions([]);
@@ -211,9 +246,9 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
     <Dialog open={open} onClose={importing ? undefined : onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
         <Box>
-          <Typography variant="h6" fontWeight={700}>Import from Rental United</Typography>
+          <Typography variant="h6" fontWeight={700}>Import Airbnb / Rental United</Typography>
           <Typography variant="caption" color="text.secondary">
-            Pull properties from RU and create Listings + Calendar in Sojori
+            Importer des annonces (Airbnb, Booking…) via RU — création listing + calendrier avec suivi de progression
           </Typography>
         </Box>
         <IconButton onClick={onClose} disabled={importing} size="small"><Close /></IconButton>
@@ -223,12 +258,14 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
         {/* Step 1: Select Owner (admin only) */}
         {step === 1 && isAdmin && (
           <Box>
-            <Typography variant="subtitle2" mb={1.5}>Select an owner</Typography>
+            <Typography variant="subtitle2" sx={{ mb: 1.5 }}>Select an owner</Typography>
             <Autocomplete
               options={ownerOptions}
               value={selectedOwner}
               onChange={(_e, val) => handleOwnerSelected(val)}
-              onInputChange={(_e, val) => setOwnerSearch(val)}
+              onInputChange={(_e, val, reason) => {
+                if (reason === 'input') setOwnerSearch(val);
+              }}
               loading={loadingOwners}
               getOptionLabel={(o) => `${o.firstName || ''} ${o.lastName || ''} — ${o.email || ''}`.trim()}
               isOptionEqualToValue={(a, b) => a._id === b._id}
@@ -255,16 +292,26 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
         )}
         {/* Step 1: Owner loading (non-admin auto-detect) */}
         {step === 1 && !isAdmin && (
-          <Box textAlign="center" py={4}>
-            <CircularProgress />
-            <Typography variant="caption" display="block" mt={1}>Loading your RU properties...</Typography>
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            {user?.id ? (
+              <>
+                <CircularProgress />
+                <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                  Loading your RU properties...
+                </Typography>
+              </>
+            ) : (
+              <Alert severity="warning">
+                Session non chargée. Connectez-vous ou activez VITE_DEV_TOKEN pour charger les propriétés RU.
+              </Alert>
+            )}
           </Box>
         )}
 
         {/* Step 2: Properties + City + Confirm */}
         {step === 2 && (
           <Box>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
               <Box>
                 <Typography variant="subtitle2">
                   {selectedOwner?.firstName} {selectedOwner?.lastName}
@@ -280,7 +327,14 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
               )}
             </Stack>
 
-            {propsLoading && <Box textAlign="center" py={4}><CircularProgress /><Typography variant="caption" display="block" mt={1}>Fetching properties from RU...</Typography></Box>}
+            {propsLoading && (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <CircularProgress />
+                <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                  Fetching properties from RU...
+                </Typography>
+              </Box>
+            )}
             {propsError && <Alert severity="error" sx={{ mb: 2 }}>{propsError}</Alert>}
             {!propsLoading && properties.length > 0 && ruMappingLookup && !ruMappingLookup.ok && (
               <Alert severity="warning" sx={{ mb: 2 }}>
@@ -292,7 +346,7 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
 
             {!propsLoading && properties.length > 0 && (
               <>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="caption" color="text.secondary">
                     {properties.length} properties — {notImported.length} importable
                   </Typography>
@@ -314,7 +368,7 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
                       {!p.alreadyImported ? (
                         <Checkbox size="small" checked={selected.has(p.ruPropertyId)} onChange={() => toggleProp(p.ruPropertyId)} sx={{ '&.Mui-checked': { color: '#FF6B35' } }} />
                       ) : <Box sx={{ width: 38 }} />}
-                      <Box flex={1} minWidth={0}>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="body2" fontWeight={500} noWrap>{p.name}</Typography>
                         <Typography variant="caption" color="text.secondary">RU #{p.ruPropertyId}</Typography>
                         {p.sojoriListingId && (
@@ -332,14 +386,33 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
                 </Box>
 
                 {selected.size > 0 && (
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel>Sojori City</InputLabel>
-                    <Select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} label="Sojori City">
-                      {cities.map((c) => (
-                        <MenuItem key={c._id} value={c._id}>{resolveCityLabel(c)}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <Box sx={{ mb: 2 }}>
+                    <Autocomplete
+                      options={cityOptions}
+                      value={cityOptions.find((c) => c._id === selectedCity) || null}
+                      onChange={(_e, val) => setSelectedCity(val?._id || '')}
+                      onInputChange={(_e, val, reason) => {
+                        if (reason === 'input') setCitySearch(val);
+                      }}
+                      loading={citiesLoading}
+                      getOptionLabel={(c) => resolveCityLabel(c)}
+                      isOptionEqualToValue={(a, b) => a._id === b._id}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Sojori City"
+                          size="small"
+                          placeholder="Rechercher une ville (ex. Casablanca, Marrakech…)"
+                          helperText={
+                            cityOptions.length === 0 && !citiesLoading
+                              ? 'Aucune ville — vérifiez la connexion admin /city'
+                              : `${cityOptions.length} ville(s) disponibles`
+                          }
+                        />
+                      )}
+                      noOptionsText={citiesLoading ? 'Chargement…' : 'Aucune ville trouvée'}
+                    />
+                  </Box>
                 )}
 
                 {importing && (
@@ -377,7 +450,7 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
                         },
                       }}
                     />
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                       <Typography variant="body2" fontWeight={700} sx={{ color: '#9a3412' }}>
                         {currentProgressStep?.label || progressData?.lastMessage || 'Initialisation de l’import RU'}
                       </Typography>
@@ -472,7 +545,7 @@ export function RuImportDialog({ open, onClose, cities = [], onImported }: RuImp
             {(importResults.results || []).map((r) => (
               <Box key={r.ruPropertyId} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 1, borderBottom: '1px solid #f1f5f9' }}>
                 <Chip label={r.success ? 'OK' : 'FAIL'} size="small" color={r.success ? 'success' : 'error'} sx={{ fontSize: '0.65rem', minWidth: 50 }} />
-                <Box flex={1}>
+                <Box sx={{ flex: 1 }}>
                   <Typography variant="body2" fontWeight={500}>RU #{r.ruPropertyId}</Typography>
                   {r.listingId && <Typography variant="caption" color="text.secondary">Listing: {r.listingId}</Typography>}
                   {r.calendarEntriesUpdated != null && <Typography variant="caption" color="text.secondary" ml={1}>{r.calendarEntriesUpdated} calendar entries</Typography>}

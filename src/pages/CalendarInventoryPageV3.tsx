@@ -283,6 +283,10 @@ export function CalendarInventoryPageV3() {
     );
   }
 
+  const handleDateChange = (newDate: Date) => {
+    setCurrentDate(moment(newDate));
+  };
+
   return (
     <DashboardWrapper>
       <CalendarInventoryPage
@@ -292,6 +296,7 @@ export function CalendarInventoryPageV3() {
         inventoryData={inventoryData}
         defaultView="multi"
         onUpdateInventory={handleUpdateInventory}
+        onDateChange={handleDateChange}
       />
     </DashboardWrapper>
   );
