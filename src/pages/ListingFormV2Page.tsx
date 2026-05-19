@@ -113,6 +113,9 @@ export function ListingFormV2Page() {
         listingId={id!}
         initialValues={formValues}
         onSave={saveListing}
+        onImagesPersisted={() => {
+          queryClient.invalidateQueries({ queryKey: ['listing', id] });
+        }}
         isSaving={isSaving}
         onVerifyRuChannels={verifyRuChannels}
         verifyRuLoading={isVerifyingRu}

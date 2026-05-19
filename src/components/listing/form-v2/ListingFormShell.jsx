@@ -87,8 +87,8 @@ function TabButton({ tab, active, statusBadge, onClick }) {
   return (
     <Box component="button" onClick={onClick} sx={{
       all: 'unset', cursor: 'pointer', width: '100%',
-      display: 'flex', alignItems: 'center', gap: 1.25,
-      px: 1.25, py: 0.875, borderRadius: '7px',
+      display: 'flex', alignItems: 'center', gap: 1,
+      px: 1.5, py: 1, borderRadius: '7px',
       fontSize: 12.5, fontWeight: active ? 600 : 500,
       color: active ? T.text : T.text2,
       bgcolor: active ? T.bg1 : 'transparent',
@@ -100,10 +100,11 @@ function TabButton({ tab, active, statusBadge, onClick }) {
         width: 2, borderRadius: 1, bgcolor: T.primary,
       } : {},
     }}>
-      <Box sx={{ fontSize: 14, width: 16, textAlign: 'center' }}>{tab.icon}</Box>
-      <Box sx={{ flex: 1 }}>{tab.label}</Box>
+      <Box sx={{ fontSize: 14, width: 18, textAlign: 'center', flexShrink: 0 }}>{tab.icon}</Box>
+      <Box sx={{ flex: 1, minWidth: 0, lineHeight: 1.35, letterSpacing: '-0.01em' }}>{tab.label}</Box>
       {statusBadge && (
         <Box sx={{
+          flexShrink: 0,
           fontSize: 9.5, fontFamily: '"Geist Mono", monospace', fontWeight: 700,
           bgcolor: statusBadge.tone === 'warning' ? T.warningTint :
                    statusBadge.tone === 'success' ? T.successTint : T.bg3,
@@ -132,44 +133,104 @@ export default function ListingFormShell({
   const [activeTab, setActiveTab] = useState(defaultTab);
 
   const tabsConfig = level === 'detail' ? DETAIL_TABS : CONFIG_TABS;
-  const totalTabs = tabsConfig.reduce((n, g) => n + g.items.length, 0);
   const activeTabMeta = tabsConfig.flatMap(g => g.items).find(t => t.id === activeTab) || tabsConfig[0].items[0];
+  const listingDisplayName = (listing?.name && String(listing.name).trim()) || 'Listing sans nom';
+  const locationLine = (listing?.location && String(listing.location).trim()) || '';
 
   return (
     <Box sx={{ bgcolor: T.bg0, minHeight: '100vh' }}>
       <Box sx={{ p: LISTING_LAYOUT.pagePad, maxWidth: LISTING_LAYOUT.formMaxWidth, width: '100%', mx: 0 }}>
 
-        {/* Level switcher */}
-        <Box sx={{
-          display: 'inline-flex', border: `1px solid ${T.border}`, borderRadius: 1.4, p: 0.375,
-          bgcolor: T.bg2, mb: 2, gap: 0.25,
-        }}>
-          {[
-            { id: 'detail', icon: '🏠', label: 'Détail listing', pillLabel: '11 onglets', accent: T.primary, tint: T.primaryTint, tintColor: T.primaryDeep },
-            { id: 'config', icon: '⚙️', label: 'Config orchestration', pillLabel: '7 onglets', accent: T.ai, tint: T.aiTint, tintColor: T.ai },
-          ].map(opt => {
-            const active = level === opt.id;
-            return (
-              <Box key={opt.id} component="button" onClick={() => { setLevel(opt.id); setActiveTab((opt.id === 'detail' ? DETAIL_TABS : CONFIG_TABS)[0].items[0].id); }}
-                sx={{
-                  all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1,
-                  px: 1.75, py: 1, borderRadius: 1, fontSize: 12.5, fontWeight: 700,
-                  color: active ? T.text : T.text2,
-                  bgcolor: active ? T.bg1 : 'transparent',
-                  boxShadow: active ? '0 1px 2px rgba(20,17,10,0.06)' : 'none',
-                  transition: 'background 140ms ease',
-                }}>
-                <span>{opt.icon}</span>{opt.label}
-                <Box sx={{
-                  bgcolor: active ? opt.tint : T.bg3,
-                  color: active ? opt.tintColor : T.text3,
-                  fontFamily: '"Geist Mono", monospace', fontSize: 10,
-                  px: 0.75, py: '1px', borderRadius: '99px', fontWeight: 700,
-                }}>{opt.pillLabel}</Box>
-              </Box>
-            );
-          })}
-        </Box>
+        {/* Toggle Détail/Config + nom listing sur une ligne (gain vertical) */}
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={{ xs: 1.25, sm: 2 }}
+          alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+          sx={{ mb: 2 }}
+        >
+          <Box
+            sx={{
+              display: 'inline-flex',
+              flexShrink: 0,
+              border: `1px solid ${T.border}`,
+              borderRadius: 1.4,
+              p: 0.375,
+              bgcolor: T.bg2,
+              gap: 0.25,
+              alignSelf: { xs: 'flex-start', sm: 'flex-start' },
+            }}
+          >
+            {[
+              { id: 'detail', icon: '🏠', label: 'Détail listing', pillLabel: '11 onglets', accent: T.primary, tint: T.primaryTint, tintColor: T.primaryDeep },
+              { id: 'config', icon: '⚙️', label: 'Config orchestration', pillLabel: '7 onglets', accent: T.ai, tint: T.aiTint, tintColor: T.ai },
+            ].map(opt => {
+              const active = level === opt.id;
+              return (
+                <Box
+                  key={opt.id}
+                  component="button"
+                  onClick={() => {
+                    setLevel(opt.id);
+                    setActiveTab((opt.id === 'detail' ? DETAIL_TABS : CONFIG_TABS)[0].items[0].id);
+                  }}
+                  sx={{
+                    all: 'unset',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    px: 1.75,
+                    py: 1,
+                    borderRadius: 1,
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    color: active ? T.text : T.text2,
+                    bgcolor: active ? T.bg1 : 'transparent',
+                    boxShadow: active ? '0 1px 2px rgba(20,17,10,0.06)' : 'none',
+                    transition: 'background 140ms ease',
+                  }}
+                >
+                  <span>{opt.icon}</span>
+                  {opt.label}
+                  <Box
+                    sx={{
+                      bgcolor: active ? opt.tint : T.bg3,
+                      color: active ? opt.tintColor : T.text3,
+                      fontFamily: '"Geist Mono", monospace',
+                      fontSize: 10,
+                      px: 0.75,
+                      py: '1px',
+                      borderRadius: '99px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {opt.pillLabel}
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0, pt: { xs: 0, sm: 0.25 } }}>
+            <Typography
+              component="h1"
+              sx={{
+                fontSize: { xs: 20, sm: 22 },
+                fontWeight: 800,
+                letterSpacing: '-0.03em',
+                color: T.text,
+                lineHeight: 1.15,
+                m: 0,
+              }}
+            >
+              {listingDisplayName}
+            </Typography>
+            {locationLine ? (
+              <Typography sx={{ fontSize: 13, color: T.text2, fontWeight: 500, mt: 0.25 }}>
+                {locationLine}
+              </Typography>
+            ) : null}
+          </Box>
+        </Stack>
 
         {/* Main frame */}
         <Box sx={{
@@ -188,7 +249,7 @@ export default function ListingFormShell({
                 <Typography sx={{
                   fontSize: 9.5, fontFamily: '"Geist Mono", monospace', fontWeight: 600,
                   color: T.text4, letterSpacing: '0.08em', textTransform: 'uppercase',
-                  px: 1.25, pt: 1, pb: 0.75,
+                  px: 1.5, pt: 1.25, pb: 0.75,
                 }}>{g.group}</Typography>
                 {g.items.map(t => (
                   <TabButton
@@ -205,15 +266,17 @@ export default function ListingFormShell({
 
           {/* Content */}
           <Box sx={{ p: LISTING_LAYOUT.contentPad, overflowY: 'auto', maxHeight: '80vh', position: 'relative' }}>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: activeTab === 'amenities' ? 1.25 : 2.25 }}>
-              <Typography sx={{ fontSize: activeTab === 'amenities' ? 16 : 18, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: activeTab === 'amenities' ? 1.25 : 2.25 }}>
+              <Typography
+                component="h2"
+                sx={{
+                  fontSize: activeTab === 'amenities' ? 16 : 18,
+                  fontWeight: 700,
+                  letterSpacing: '-0.02em',
+                  m: 0,
+                }}
+              >
                 {activeTabMeta.icon} {activeTabMeta.label}
-                {activeTab === 'whatsapp' && listing?.name ? (
-                  <Box component="span" sx={{ fontSize: 15, fontWeight: 600, color: T.text2 }}>
-                    {' '}
-                    · {listing.name}
-                  </Box>
-                ) : null}
               </Typography>
               {tabsStatus[activeTab] && <StatusChip {...tabsStatus[activeTab]} />}
             </Stack>

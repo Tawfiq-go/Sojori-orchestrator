@@ -46,12 +46,14 @@ export function amenityMatchesRoom(
   roomId: string | null,
   roomRentalIds: string[],
 ): boolean {
-  const ids = amenity.compositionRoomIds;
+  const ids = amenity.compositionRoomIds.map(String);
   if (!ids.length) return false;
+  const roomSet = new Set(roomRentalIds.map(String));
   if (roomId == null) {
-    return ids.some((id) => roomRentalIds.includes(String(id)));
+    return ids.some((id) => roomSet.has(id));
   }
-  return ids.some((id) => String(id) === String(roomId));
+  const active = String(roomId);
+  return ids.some((id) => id === active);
 }
 
 export function mapAmenityFromApi(row: Record<string, unknown>): Amenity {

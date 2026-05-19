@@ -82,8 +82,8 @@ export const MICROSERVICE_BASE_URL = {
     ? `${API_BASE_URL}:4006/api/v1/admin/uploads/image`
     : `${API_BASE_URL}/api/v1/admin/uploads/image`,
   UPLOAD_IMAGE_MULTIPLE: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4006/api/v1/admin/uploads/multiple`
-    : `${API_BASE_URL}/api/v1/admin/uploads/multiple`,
+    ? `${API_BASE_URL}:4006/api/v1/admin/upload/upload_multiple`
+    : `${API_BASE_URL}/api/v1/admin/upload/upload_multiple`,
 };
 
 const logApiBases =

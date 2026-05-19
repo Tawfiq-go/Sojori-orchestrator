@@ -6,9 +6,9 @@ export const LISTING_LAYOUT = {
   /** Conteneur page (ex. ListingFormShell) */
   pagePad: { xs: '8px 6px 16px', md: '6px 7px 12px' },
   formMaxWidth: '100%',
-  /** Rail onglets formulaire */
-  tabsRailWidth: 200,
-  tabsRailPad: '4px 3px',
+  /** Rail onglets — 260 px − 10 % */
+  tabsRailWidth: 234,
+  tabsRailPad: '8px 6px',
   /** Zone contenu onglet */
   contentPad: { xs: 1.5, md: '7px' },
   saveBarPadX: { xs: 1.5, md: '7px' },

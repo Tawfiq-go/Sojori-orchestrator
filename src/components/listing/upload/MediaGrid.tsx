@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Box, Typography, Button, IconButton, CircularProgress } from '@mui/material';
 import { useDispatch, useSelector } from 'react-redux';
 import { useDropzone } from 'react-dropzone';
@@ -6,13 +6,17 @@ import { toast } from 'react-toastify';
 import DeleteIcon from '@mui/icons-material/Delete';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
-import {
-  uploadMultipleImagesToAPI,
-  uploadImageResetAction,
-} from '../../../redux/slices/UploadSlice';
+import { uploadImageResetAction } from '../../../redux/slices/UploadSlice';
 import { LISTING_MEDIA_ACCEPT, MIN_IMAGE_WIDTH, MIN_IMAGE_HEIGHT, MAX_FILE_SIZE } from '../../../utils/upload/dropzoneConfig';
 import { logListingMedia } from '../../../utils/upload/helpers';
+import {
+  formatUploadError,
+  uploadMultipleInBatches,
+  UPLOAD_MAX_FILES_PER_REQUEST,
+} from '../../../utils/upload/uploadInBatches';
 import { getImageTypesSojori, type ImageType } from '../../../services/imageTypesService';
+import listingsService from '../../../services/listingsService';
+import { cleanListingImagesForPayload } from '../../../utils/listingFormV2ApiAdapter';
 import UploadDialog from './UploadDialog';
 import type { RootState } from '../../../redux/store';
 
@@ -38,11 +42,19 @@ interface ListingImage {
 }
 
 interface MediaGridProps {
+  listingId?: string;
   listingImages: ListingImage[];
   onChange: (images: ListingImage[]) => void;
+  /** Après persistance API réussie (invalidation cache parent). */
+  onImagesPersisted?: (images: ListingImage[]) => void;
 }
 
-const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
+const MediaGrid: React.FC<MediaGridProps> = ({
+  listingId,
+  listingImages,
+  onChange,
+  onImagesPersisted,
+}) => {
   const dispatch = useDispatch();
   const upload = useSelector((state: RootState) => state.uploadData);
   const { loading } = upload;
@@ -51,13 +63,40 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
   const [imageTypes, setImageTypes] = useState<ImageType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(false);
   const [imageToMove, setImageToMove] = useState<number | null>(null);
+  const [persisting, setPersisting] = useState(false);
 
-  console.log('🔵 [MediaGrid] Render', {
-    listingImagesCount: listingImages?.length || 0,
-    listingImages: listingImages,
-    loading,
-    uploadDialogOpen
-  });
+  const onImagesPersistedRef = useRef(onImagesPersisted);
+  onImagesPersistedRef.current = onImagesPersisted;
+
+  /** Enregistre listingImages sur le listing (update-property) — pas besoin du bouton Sauvegarder global. */
+  const persistListingImages = useCallback(
+    async (updatedImages: ListingImage[], action: string, successMessage?: string): Promise<void> => {
+      if (!listingId) {
+        onChange(updatedImages);
+        if (successMessage) toast.success(successMessage);
+        return;
+      }
+
+      setPersisting(true);
+      logListingMedia('grid.persist.start', { action, count: updatedImages.length, listingId });
+      try {
+        await listingsService.updateListingProperty(listingId, {
+          listingImages: cleanListingImagesForPayload(updatedImages),
+        });
+        onChange(updatedImages);
+        onImagesPersistedRef.current?.(updatedImages);
+        logListingMedia('grid.persist.ok', { action, count: updatedImages.length });
+        toast.success(successMessage || 'Photos enregistrées sur le listing');
+      } catch (error: unknown) {
+        logListingMedia('grid.persist.err', { action, error: formatUploadError(error) });
+        toast.error(`Échec enregistrement photos: ${formatUploadError(error)}`);
+        throw error;
+      } finally {
+        setPersisting(false);
+      }
+    },
+    [listingId, onChange],
+  );
 
   useEffect(() => {
     const fetchImageTypes = async () => {
@@ -128,14 +167,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
-      console.log('🔵 [MediaGrid] onDrop START', {
-        acceptedCount: acceptedFiles.length,
-        names: acceptedFiles.map((f) => f.name),
-        currentImagesCount: listingImages.length
-      });
-
       if (!acceptedFiles.length) {
-        console.warn('⚠️ [MediaGrid] No files accepted');
         return;
       }
 
@@ -144,13 +176,11 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
         names: acceptedFiles.map((f) => f.name),
       });
 
-      console.log('🔵 [MediaGrid] Checking dimensions...');
       const dimensionChecks = await Promise.all(acceptedFiles.map((file) => checkImageDimensions(file)));
 
       const validFiles: File[] = [];
       acceptedFiles.forEach((file, index) => {
         const dimensions = dimensionChecks[index];
-        console.log(`🔍 [MediaGrid] File "${file.name}": ${dimensions.width}x${dimensions.height} (valid: ${dimensions.isValid})`);
         if (!dimensions.isValid) {
           toast.error(`Image ${file.name} trop petite (${dimensions.width}x${dimensions.height}). Minimum: ${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}px`);
           return;
@@ -158,10 +188,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
         validFiles.push(file);
       });
 
-      console.log(`✅ [MediaGrid] ${validFiles.length}/${acceptedFiles.length} files valid`);
-
       if (!validFiles.length) {
-        console.error('❌ [MediaGrid] No valid files to upload');
         return;
       }
 
@@ -171,22 +198,16 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
       }
 
       try {
-        const result = await dispatch(
-          uploadMultipleImagesToAPI({
-            files: validFiles,
-            folder: 'listing',
-          })
-        ).unwrap();
-
-        let filesArray: Array<{ url: string; fileName?: string }> = [];
-        if (result && result.files && Array.isArray(result.files)) {
-          filesArray = result.files;
-        } else if (Array.isArray(result)) {
-          filesArray = result.map((item: any) => ({
-            url: item,
-            fileName: typeof item === 'string' ? item.split('/').pop() : null,
-          }));
+        const batchCount = Math.ceil(validFiles.length / UPLOAD_MAX_FILES_PER_REQUEST);
+        if (batchCount > 1) {
+          toast.info(`Envoi en ${batchCount} lots (max ${UPLOAD_MAX_FILES_PER_REQUEST} images par lot)…`);
         }
+
+        const filesArray = await uploadMultipleInBatches(dispatch, validFiles, 'listing', (current, total) => {
+          if (total > 1) {
+            toast.info(`Lot ${current}/${total}…`, { toastId: 'upload-batch' });
+          }
+        });
 
         const listingLenBefore = listingImages.length;
         const mainImageType = getMainImageType();
@@ -206,19 +227,18 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
         });
 
         const updatedImages = [...listingImages, ...newImages];
-        onChange(updatedImages);
-
-        if (listingLenBefore === 0) {
-          toast.success('Première image définie automatiquement comme Image principale');
-        }
-        toast.success(`${validFiles.length} image(s) uploadée(s) avec succès`);
-      } catch (error: any) {
-        toast.error(`Échec de l'upload: ${error?.message || 'Erreur inconnue'}`);
+        const mainMsg =
+          listingLenBefore === 0
+            ? `${validFiles.length} image(s) uploadée(s) — image principale définie`
+            : `${validFiles.length} image(s) uploadée(s) et enregistrées`;
+        await persistListingImages(updatedImages, 'grid.onDrop', mainMsg);
+      } catch (error: unknown) {
+        toast.error(`Échec: ${formatUploadError(error)}`);
       } finally {
         dispatch(uploadImageResetAction());
       }
     },
-    [listingImages, imageTypes, dispatch, onChange]
+    [listingImages, imageTypes, dispatch, persistListingImages],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -228,20 +248,27 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
     noClick: true,
   });
 
-  const handleFilesUpload = async (files: Array<{ file: File; imageTypeId: string | null }>) => {
-    try {
-      const validFiles = files.map((f) => f.file);
-      const result = await dispatch(
-        uploadMultipleImagesToAPI({
-          files: validFiles,
-          folder: 'listing',
-        })
-      ).unwrap();
+  const handleFilesUpload = async (
+    files: Array<{ file: File; imageTypeId: string | null }>,
+    onProgress?: (progress: { current: number; total: number }) => void,
+  ) => {
+    const validFiles = files.map((f) => f.file);
+    const batchCount = Math.ceil(validFiles.length / UPLOAD_MAX_FILES_PER_REQUEST);
 
-      let filesArray: Array<{ url: string; fileName?: string }> = [];
-      if (result && result.files && Array.isArray(result.files)) {
-        filesArray = result.files;
+    logListingMedia('grid.dialogUpload.start', {
+      count: validFiles.length,
+      batchCount,
+    });
+
+    try {
+      if (batchCount > 1) {
+        toast.info(`Envoi de ${validFiles.length} images en ${batchCount} lots…`, { toastId: 'upload-batch-info' });
       }
+
+      const filesArray = await uploadMultipleInBatches(dispatch, validFiles, 'listing', (current, total) => {
+        onProgress?.({ current, total });
+        logListingMedia('grid.dialogUpload.batch', { current, total });
+      });
 
       const listingLenBefore = listingImages.length;
       const newImages: ListingImage[] = filesArray.map((file, index) => {
@@ -259,25 +286,41 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
       });
 
       const updatedImages = [...listingImages, ...newImages];
-      onChange(updatedImages);
-      toast.success(`${validFiles.length} image(s) uploadée(s) avec succès`);
-    } catch (error: any) {
-      toast.error(`Échec de l'upload: ${error?.message || 'Erreur inconnue'}`);
+      await persistListingImages(
+        updatedImages,
+        'grid.dialogUpload',
+        `${validFiles.length} image(s) uploadée(s) et enregistrées sur le listing`,
+      );
+      logListingMedia('grid.dialogUpload.done', { uploaded: filesArray.length });
+    } catch (error: unknown) {
+      logListingMedia('grid.dialogUpload.err', { error: formatUploadError(error) });
+      toast.error(`Échec de l'upload: ${formatUploadError(error)}`);
+      throw error;
     } finally {
       dispatch(uploadImageResetAction());
     }
   };
 
-  const handleRemove = (index: number) => {
+  const handleRemove = async (index: number) => {
+    const removed = listingImages[index];
+    logListingMedia('grid.remove.request', {
+      index,
+      listLen: listingImages.length,
+      urlTail: typeof removed?.url === 'string' ? removed.url.slice(-72) : null,
+    });
     const updatedImages = listingImages.filter((_, i) => i !== index);
     updatedImages.forEach((img, i) => {
       img.sortOrder = i + 1;
     });
-    onChange(updatedImages);
-    toast.success('Image supprimée');
+    try {
+      await persistListingImages(updatedImages, 'grid.remove', 'Image supprimée (listing + GCS)');
+      logListingMedia('grid.remove.done', { newLen: updatedImages.length });
+    } catch {
+      // toast déjà affiché
+    }
   };
 
-  const handleSetMainImage = (index: number) => {
+  const handleSetMainImage = async (index: number) => {
     const updatedImages = [...listingImages];
     const mainImageType = getMainImageType();
 
@@ -303,11 +346,14 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
       img.sortOrder = i + 1;
     });
 
-    onChange(updatedImages);
-    toast.success('Image principale mise à jour');
+    try {
+      await persistListingImages(updatedImages, 'grid.setMain', 'Image principale mise à jour');
+    } catch {
+      // toast déjà affiché
+    }
   };
 
-  const handleImageClick = (index: number) => {
+  const handleImageClick = async (index: number) => {
     if (imageToMove === null) {
       setImageToMove(index);
       toast.info('Image sélectionnée. Cliquez sur une autre pour la déplacer.');
@@ -324,9 +370,12 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
         img.sortOrder = i + 1;
       });
 
-      onChange(updatedImages);
-      setImageToMove(null);
-      toast.success('Image déplacée avec succès');
+      try {
+        await persistListingImages(updatedImages, 'grid.reorder', 'Ordre des photos enregistré');
+        setImageToMove(null);
+      } catch {
+        // toast déjà affiché
+      }
     }
   };
 
@@ -389,7 +438,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
         }}
       >
         {listingImages.map((img, idx) => {
-          console.log(`🔍 [MediaGrid] Rendering image ${idx}`, { url: img.url, fileName: img.fileName, imageTypeId: img.imageTypeId });
+          // console.log(`🔍 [MediaGrid] Rendering image ${idx}`, { url: img.url, fileName: img.fileName, imageTypeId: img.imageTypeId });
           return (
           <Box
             key={idx}
@@ -483,7 +532,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({ listingImages, onChange }) => {
                 size="small"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleRemove(idx);
+                  void handleRemove(idx);
                 }}
                 sx={{ width: 22, height: 22, bgcolor: 'rgba(255,255,255,0.95)' }}
               >

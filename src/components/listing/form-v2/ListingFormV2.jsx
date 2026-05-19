@@ -19,6 +19,7 @@ export default function ListingFormV2({
   listingId,
   initialValues = {},
   onSave,
+  onImagesPersisted,
   onVerifyRuChannels,
   verifyRuLoading = false,
   listingStructure = null,
@@ -28,15 +29,9 @@ export default function ListingFormV2({
 
   useEffect(() => {
     if (initialValues && Object.keys(initialValues).length > 0) {
-      console.log('🔵 [ListingFormV2] Setting initial values', {
-        listingId,
-        hasListingImages: Array.isArray(initialValues.listingImages),
-        listingImagesCount: Array.isArray(initialValues.listingImages) ? initialValues.listingImages.length : 0,
-        listingImages: initialValues.listingImages
-      });
       setValues(initialValues);
     }
-  }, [initialValues, listingId]);
+  }, [initialValues]);
 
   /** GeneralTab passe un objet ; AmenitiesTab passe (field, value). */
   const handleFormChange = (arg1, arg2) => {
@@ -62,19 +57,12 @@ export default function ListingFormV2({
         );
       }
       if (tabKey === 'location')     return <LocationTab    {...common} />;
-      if (tabKey === 'photos') {
-        const images = values.listingImages || [];
-        console.log('🔵 [ListingFormV2] Rendering PhotosTabReal', {
-          imagesCount: images.length,
-          images: images,
-          airbnbHeroOrder: values.airbnbHeroOrder
-        });
-        return <PhotosTabReal  listingImages={images} onChange={imgs => {
-          console.log('🟢 [ListingFormV2] PhotosTabReal onChange', { newImagesCount: imgs.length, imgs });
-          setValues(v => ({ ...v, listingImages: imgs }));
-        }}
-        airbnbHeroOrder={values.airbnbHeroOrder} onAirbnbOrderChange={v => setValues(s => ({ ...s, airbnbHeroOrder: v }))} />;
-      }
+      if (tabKey === 'photos')       return <PhotosTabReal  listingId={listingId}
+                                                            listingImages={values.listingImages || []}
+                                                            onChange={imgs => setValues(v => ({ ...v, listingImages: imgs }))}
+                                                            onImagesPersisted={onImagesPersisted}
+                                                            airbnbHeroOrder={values.airbnbHeroOrder}
+                                                            onAirbnbOrderChange={v => setValues(s => ({ ...s, airbnbHeroOrder: v }))} />;
       if (tabKey === 'amenities')    return <AmenitiesTab   {...common} listingId={listingId} />;
       if (tabKey === 'pricing')      return <PricingTab     {...common} />;
       if (tabKey === 'availability') return <AvailabilityTab {...common} />;
@@ -100,11 +88,11 @@ export default function ListingFormV2({
     <ListingFormShell
       listing={{
         id: listingId || 'SJ-LIST-9F2A',
-        name: values.name || 'Villa Belvédère · Nice',
+        name: values.name || '',
         bedrooms: values.bedrooms ?? 4,
         bathrooms: values.bathrooms ?? 2,
         guests: values.guests ?? 8,
-        location: values.location || "Côte d'Azur",
+        location: values.locationLine || '',
         completionPct: 72,
       }}
       tabsStatus={{

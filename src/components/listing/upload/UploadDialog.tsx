@@ -22,6 +22,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { LISTING_MEDIA_ACCEPT, MIN_IMAGE_WIDTH, MIN_IMAGE_HEIGHT, MAX_FILE_SIZE } from '../../../utils/upload/dropzoneConfig';
 import { getImageTypesSojori, type ImageType } from '../../../services/imageTypesService';
 import { logListingMedia } from '../../../utils/upload/helpers';
+import { UPLOAD_MAX_FILES_PER_REQUEST } from '../../../utils/upload/uploadInBatches';
 import ImageTypeSelector from './ImageTypeSelector';
 
 const UploadContainer = styled(Box)(({ theme }) => ({
@@ -49,8 +50,8 @@ const UploadContainer = styled(Box)(({ theme }) => ({
 const ImageThumbnail = styled(Box)(({ theme }) => ({
   position: 'relative',
   width: '100%',
-  height: 200,
-  borderRadius: 16,
+  aspectRatio: '4/3',
+  borderRadius: 8,
   overflow: 'hidden',
   '&:hover .delete-button': {
     opacity: 1,
@@ -73,20 +74,21 @@ const DeleteButton = styled(IconButton)(({ theme }) => ({
 }));
 
 const AddMoreButton = styled(Box)(({ theme }) => ({
-  width: '100%',
-  height: 200,
-  borderRadius: 16,
-  border: '2px dashed #e0e0e0',
+  width: '140px',
+  height: '105px',
+  borderRadius: 12,
+  border: '2px dashed #d0d0d0',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
   cursor: 'pointer',
-  backgroundColor: '#fafafa',
+  backgroundColor: '#fff',
   transition: 'all 0.3s ease',
   '&:hover': {
     borderColor: '#b8851a',
-    backgroundColor: 'rgba(184,133,26,0.05)',
+    backgroundColor: 'rgba(184,133,26,0.08)',
+    transform: 'scale(1.02)',
   },
 }));
 
@@ -97,10 +99,15 @@ interface SelectedFile {
   imageTypeId: string | null;
 }
 
+export type UploadBatchProgress = { current: number; total: number };
+
 interface UploadDialogProps {
   open: boolean;
   onClose: () => void;
-  onFilesUpload: (files: Array<{ file: File; imageTypeId: string | null }>) => void;
+  onFilesUpload: (
+    files: Array<{ file: File; imageTypeId: string | null }>,
+    onProgress?: (progress: UploadBatchProgress) => void,
+  ) => Promise<void>;
   existingImages?: Array<{ url: string; imageTypeId?: string }>;
 }
 
@@ -113,29 +120,35 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [imageTypes, setImageTypes] = useState<ImageType[]>([]);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadBatchProgress | null>(null);
 
+  // Reset selected files when dialog closes
   useEffect(() => {
     if (!open) {
       setSelectedFiles([]);
     }
   }, [open]);
 
+  // Fetch image types when dialog opens
   useEffect(() => {
+    if (!open) return;
+
+    setLoading(true);
+
     const fetchImageTypes = async () => {
-      if (open) {
-        setLoading(true);
-        try {
-          const response = await getImageTypesSojori({ priority: '1,2,3' });
-          if (response.data && response.data.data) {
-            setImageTypes(response.data.data);
-          }
-        } catch (error) {
-          toast.error('Failed to load image types');
-        } finally {
-          setLoading(false);
+      try {
+        const response = await getImageTypesSojori({ priority: '1,2,3' });
+        if (response.data?.data) {
+          setImageTypes(response.data.data);
         }
+      } catch {
+        toast.error('Échec du chargement des types d\'images');
+      } finally {
+        setLoading(false);
       }
     };
+
     fetchImageTypes();
   }, [open]);
 
@@ -163,12 +176,15 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
     });
   };
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (!acceptedFiles.length) return;
+  const onDrop = useCallback(async (acceptedFiles: File[], typeId: string | null = null) => {
+    if (!acceptedFiles.length) {
+      return;
+    }
 
     logListingMedia('dialog.onDrop', {
       count: acceptedFiles.length,
       names: acceptedFiles.map((f) => f.name),
+      typeId: typeId || 'null',
     });
 
     const dimensionChecks = await Promise.all(acceptedFiles.map((file) => checkImageDimensions(file)));
@@ -195,16 +211,21 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
       file,
       preview: URL.createObjectURL(file),
       id: Math.random().toString(36).substr(2, 9),
-      imageTypeId: null,
+      imageTypeId: typeId,
     }));
 
     setSelectedFiles((prev) => [...prev, ...newFiles]);
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
+    onDrop: (files) => {
+      onDrop(files, null);
+    },
     accept: LISTING_MEDIA_ACCEPT,
     maxSize: MAX_FILE_SIZE,
+    multiple: true,
+    noClick: false,
+    noKeyboard: false,
   });
 
   const removeFile = (fileId: string) => {
@@ -235,9 +256,7 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
       }
     }
 
-    setSelectedFiles((prev) =>
-      prev.map((f) => (f.id === fileId ? { ...f, imageTypeId: typeId } : f))
-    );
+    setSelectedFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, imageTypeId: typeId } : f)));
   };
 
   const resolveMainImageType = (): ImageType | null => {
@@ -256,8 +275,8 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
     return other || imageTypes[0];
   };
 
-  const handleUpload = () => {
-    if (selectedFiles.length === 0) return;
+  const handleUpload = async () => {
+    if (selectedFiles.length === 0 || uploading) return;
 
     const mainT = resolveMainImageType();
     const defaultT = resolveDefaultNonMainType();
@@ -286,13 +305,23 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
       return { file: f.file, imageTypeId: tid };
     });
 
-    onFilesUpload(filesWithTypes);
-    selectedFiles.forEach((f) => URL.revokeObjectURL(f.preview));
-    setSelectedFiles([]);
-    onClose();
+    setUploading(true);
+    setUploadProgress(null);
+    try {
+      await onFilesUpload(filesWithTypes, setUploadProgress);
+      selectedFiles.forEach((f) => URL.revokeObjectURL(f.preview));
+      setSelectedFiles([]);
+      onClose();
+    } catch {
+      // Erreur déjà toastée dans MediaGrid
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
+    }
   };
 
   const handleCancel = () => {
+    if (uploading) return;
     selectedFiles.forEach((f) => URL.revokeObjectURL(f.preview));
     setSelectedFiles([]);
     onClose();
@@ -308,121 +337,312 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
     );
   };
 
+  const getDisplayName = (imageType: ImageType): string => {
+    if (!imageType) return '';
+    if (imageType.sojoriName && typeof imageType.sojoriName === 'object') {
+      if (imageType.sojoriName.fr) return imageType.sojoriName.fr;
+      if (imageType.sojoriName.en) return imageType.sojoriName.en;
+      const firstAvailable = Object.values(imageType.sojoriName)[0];
+      if (firstAvailable) return firstAvailable;
+    }
+    return imageType.airbnbCategory || imageType.bookingCategory || 'Autre';
+  };
+
+  const getFilesForType = (typeId: string | null) => {
+    return selectedFiles.filter(f => f.imageTypeId === typeId);
+  };
+
+  const compactFileList = selectedFiles.length > 12;
+
+  const renderFileThumb = (fileObj: SelectedFile, borderColor = '#e0e0e0') => (
+    <Box key={fileObj.id} sx={{ width: compactFileList ? 110 : 100, flexShrink: 0 }}>
+      <Box
+        sx={{
+          position: 'relative',
+          width: compactFileList ? 110 : 100,
+          height: compactFileList ? 82 : 75,
+          borderRadius: 1,
+          overflow: 'hidden',
+          border: `2px solid ${borderColor}`,
+          bgcolor: '#fff',
+        }}
+      >
+        <img src={fileObj.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <DeleteButton className="delete-button" onClick={() => removeFile(fileObj.id)} size="small">
+          <DeleteIcon sx={{ fontSize: 14 }} />
+        </DeleteButton>
+      </Box>
+      <Box sx={{ mt: 0.5 }}>
+        <ImageTypeSelector
+          value={fileObj.imageTypeId || ''}
+          onChange={(typeId) => handleTypeChange(fileObj.id, typeId)}
+          imageTypes={imageTypes}
+          disabled={loading}
+          existingImages={existingImages}
+          currentFileId={fileObj.id}
+          selectedFiles={selectedFiles}
+        />
+      </Box>
+    </Box>
+  );
+
   return (
     <Dialog
       open={open}
-      onClose={handleCancel}
-      maxWidth="sm"
+      onClose={uploading ? undefined : handleCancel}
+      maxWidth="lg"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 5,
-          padding: 2,
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 3,
+            maxHeight: 'min(90vh, 900px)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          },
         },
       }}
     >
-      <DialogTitle sx={{ pb: 1 }}>
-        <Box display="flex" alignItems="center" position="relative">
+      <DialogTitle sx={{ flexShrink: 0, pb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
           <IconButton onClick={handleCancel} size="small" sx={{ position: 'absolute', left: 0 }}>
             <CloseIcon />
           </IconButton>
-          <Box flex={1} display="flex" justifyContent="center">
+          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
             <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
               Upload images
             </Typography>
           </Box>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', pb: 0 }}>
-          {selectedFiles.length > 0 ? `${selectedFiles.length} fichier(s) sélectionné(s)` : 'Aucun fichier sélectionné'}
+          {uploading && uploadProgress
+            ? uploadProgress.total > 1
+              ? `Envoi lot ${uploadProgress.current}/${uploadProgress.total}…`
+              : `Envoi de ${selectedFiles.length} image${selectedFiles.length > 1 ? 's' : ''}…`
+            : selectedFiles.length > 0
+              ? `${selectedFiles.length} fichier(s) sélectionné(s)`
+              : 'Aucun fichier sélectionné'}
         </Typography>
       </DialogTitle>
 
-      <DialogContent sx={{ px: selectedFiles.length === 0 ? 3 : 0, py: selectedFiles.length === 0 ? 2 : 0 }}>
-        {selectedFiles.length === 0 ? (
-          <UploadContainer {...getRootProps()}>
-            <input {...getInputProps()} />
-            <PhotoIcon sx={{ fontSize: 60, color: '#ccc', mb: 2 }} />
-            <Typography variant="h6" sx={{ mb: 1, fontWeight: 800, color: '#000' }}>
-              {isDragActive ? 'Déposez les fichiers ici...' : 'Glisser-déposer'}
+      <DialogContent
+        sx={{
+          flex: '1 1 auto',
+          minHeight: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          p: 0,
+        }}
+      >
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain',
+            p: 3,
+          }}
+        >
+        {uploading ? (
+          <Box sx={{ textAlign: 'center', py: 6 }}>
+            <CircularProgress sx={{ color: '#b8851a' }} />
+            <Typography sx={{ mt: 2, fontWeight: 600 }}>
+              Upload en cours…
+              {uploadProgress && uploadProgress.total > 1
+                ? ` (lot ${uploadProgress.current}/${uploadProgress.total})`
+                : selectedFiles.length > 0
+                  ? ` (${selectedFiles.length} fichier${selectedFiles.length > 1 ? 's' : ''})`
+                  : ''}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mb: 3, color: '#666' }}>
-              ou parcourir pour des photos
+            <Typography sx={{ mt: 1, fontSize: 12, color: '#7a756c' }}>
+              {uploadProgress && uploadProgress.total > 1
+                ? `Ne fermez pas cette fenêtre — envoi par lots de ${UPLOAD_MAX_FILES_PER_REQUEST} max.`
+                : 'Ne fermez pas cette fenêtre — enregistrement automatique sur le listing à la fin.'}
             </Typography>
-            <Button
-              variant="contained"
-              sx={{
-                bgcolor: '#b8851a',
-                color: 'white',
-                px: 4,
-                py: 1.5,
-                borderRadius: 2,
-                textTransform: 'none',
-                '&:hover': {
-                  bgcolor: '#876119',
-                },
-              }}
-            >
-              Parcourir
-            </Button>
-          </UploadContainer>
+          </Box>
+        ) : loading || imageTypes.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <CircularProgress />
+            <Typography sx={{ mt: 2, color: '#666' }}>
+              {loading ? 'Chargement des types d\'images...' : 'Aucun type d\'image disponible'}
+            </Typography>
+          </Box>
         ) : (
-          <Box sx={{ p: 0 }}>
-            <Grid container spacing={2} sx={{ p: 2 }}>
-              {selectedFiles.map((fileObj) => (
-                <Grid item xs={6} key={fileObj.id}>
-                  <Box>
-                    <ImageThumbnail>
-                      <img
-                        src={fileObj.preview}
-                        alt="Preview"
-                        style={{
-                          width: '100%',
-                          height: '200px',
-                          objectFit: 'cover',
-                          borderRadius: '16px',
-                        }}
-                      />
-                      <DeleteButton className="delete-button" onClick={() => removeFile(fileObj.id)} size="small">
-                        <DeleteIcon fontSize="small" />
-                      </DeleteButton>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* ZONE D'UPLOAD PRINCIPALE EN PREMIER */}
+            <Box sx={{
+              border: '2px dashed #b8851a',
+              borderRadius: 2,
+              p: 3,
+              bgcolor: 'rgba(184,133,26,0.02)',
+              textAlign: 'center'
+            }}>
+              <Typography sx={{
+                fontSize: 15,
+                fontWeight: 700,
+                mb: 1,
+                color: '#333'
+              }}>
+                📤 Upload images
+              </Typography>
+              <Typography sx={{ fontSize: 12, color: '#666', mb: 2 }}>
+                Ajoutez toutes vos images ici. Vous pourrez ensuite les organiser par catégorie.
+              </Typography>
 
-                      <Box sx={{ position: 'absolute', bottom: 8, left: 8, right: 8, zIndex: 20 }}>
-                        <ImageTypeSelector
-                          value={fileObj.imageTypeId || ''}
-                          onChange={(typeId) => handleTypeChange(fileObj.id, typeId)}
-                          imageTypes={imageTypes}
-                          disabled={loading}
-                          existingImages={existingImages}
-                          currentFileId={fileObj.id}
-                          selectedFiles={selectedFiles}
-                        />
-                      </Box>
-                    </ImageThumbnail>
-                  </Box>
-                </Grid>
-              ))}
-              <Grid item xs={6}>
-                <AddMoreButton {...getRootProps()}>
-                  <input {...getInputProps()} />
-                  <AddIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
-                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                    Ajouter plus
+              <Box {...getRootProps()} sx={{
+                cursor: 'pointer',
+                py: 3,
+                px: 2,
+                bgcolor: '#fff',
+                borderRadius: 1.5,
+                border: '1px solid #e0e0e0',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  bgcolor: 'rgba(184,133,26,0.05)',
+                  borderColor: '#b8851a'
+                }
+              }}>
+                <input {...getInputProps()} />
+                <CloudUploadIcon sx={{ fontSize: 48, color: '#b8851a', mb: 1 }} />
+                <Typography sx={{ fontSize: 14, fontWeight: 600, color: '#333', mb: 0.5 }}>
+                  {isDragActive ? 'Déposez vos images ici' : 'Cliquez pour parcourir ou glissez-déposez'}
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: '#999' }}>
+                  JPG, PNG, WEBP · plusieurs fichiers · envoi par lots de {UPLOAD_MAX_FILES_PER_REQUEST} max
+                </Typography>
+                {selectedFiles.length > 0 && (
+                  <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#b8851a', mt: 1.5 }}>
+                    ✓ {selectedFiles.length} image{selectedFiles.length > 1 ? 's' : ''} au total
                   </Typography>
-                </AddMoreButton>
-              </Grid>
-            </Grid>
+                )}
+              </Box>
+            </Box>
+
+            {compactFileList && selectedFiles.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5, color: '#333' }}>
+                  {selectedFiles.length} images — assignez un type à chacune
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                  {selectedFiles.map((fileObj) => renderFileThumb(fileObj, fileObj.imageTypeId ? '#e0e0e0' : '#f59e0b'))}
+                </Box>
+              </Box>
+            )}
+
+            {/* IMAGES NON CATÉGORISÉES - Affichées en priorité */}
+            {!compactFileList && getFilesForType(null).length > 0 && (
+              <Box sx={{
+                border: '2px solid #f59e0b',
+                borderRadius: 2,
+                p: 2,
+                bgcolor: 'rgba(245,158,11,0.05)'
+              }}>
+                <Typography sx={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  mb: 1,
+                  color: '#f59e0b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
+                }}>
+                  📁 Images à catégoriser
+                  <Box component="span" sx={{
+                    ml: 'auto',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#f59e0b',
+                    bgcolor: '#fff',
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 1
+                  }}>
+                    {getFilesForType(null).length}
+                  </Box>
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: '#d97706', mb: 2 }}>
+                  ⚠️ Assignez un type à chaque image via le menu déroulant
+                </Typography>
+                <Box sx={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 1.5
+                }}>
+                  {getFilesForType(null).map((fileObj) => renderFileThumb(fileObj, '#f59e0b'))}
+                </Box>
+              </Box>
+            )}
+
+            {/* GALERIES PAR TYPE */}
+            {!compactFileList && imageTypes.filter(type => getFilesForType(type._id).length > 0).map((type) => {
+              const filesForType = getFilesForType(type._id);
+              const displayName = getDisplayName(type);
+              const isMain = isMainImage(type._id);
+
+              return (
+                <Box key={type._id} sx={{
+                  border: '1px solid #e0e0e0',
+                  borderRadius: 2,
+                  p: 2,
+                  bgcolor: '#fafafa'
+                }}>
+                  {/* Header */}
+                  <Typography sx={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    mb: 1.5,
+                    color: '#333',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                  }}>
+                    {displayName}
+                    {isMain && ' ⭐'}
+                    <Box component="span" sx={{
+                      ml: 'auto',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: '#999',
+                      bgcolor: '#fff',
+                      px: 1,
+                      py: 0.25,
+                      borderRadius: 1
+                    }}>
+                      {filesForType.length} image{filesForType.length > 1 ? 's' : ''}
+                    </Box>
+                  </Typography>
+
+                  {/* Gallery */}
+                  <Box sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 1.5,
+                    minHeight: 60
+                  }}>
+                    {filesForType.map((fileObj) => renderFileThumb(fileObj))}
+
+                  </Box>
+                </Box>
+              );
+            })}
+
           </Box>
         )}
+        </Box>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, pb: 3, justifyContent: 'space-between' }}>
-        <Button onClick={handleCancel} color="inherit">
+      <DialogActions sx={{ flexShrink: 0, px: 3, pb: 3, justifyContent: 'space-between' }}>
+        <Button onClick={handleCancel} color="inherit" disabled={uploading}>
           Annuler
         </Button>
         <Button
           variant="contained"
-          onClick={handleUpload}
-          disabled={selectedFiles.length === 0}
+          onClick={() => void handleUpload()}
+          disabled={selectedFiles.length === 0 || uploading}
           sx={{
             bgcolor: selectedFiles.length > 0 ? '#b8851a' : '#e0e0e0',
             color: selectedFiles.length > 0 ? 'white' : '#999',

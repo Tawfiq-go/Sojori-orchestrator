@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { FormControl, Select, MenuItem, type SelectChangeEvent } from '@mui/material';
 import { type ImageType } from '../../../services/imageTypesService';
 
@@ -60,6 +60,18 @@ const ImageTypeSelector: React.FC<ImageTypeSelectorProps> = ({
     return false;
   };
 
+  if (!imageTypes || imageTypes.length === 0) {
+    return (
+      <FormControl fullWidth size="small" disabled>
+        <Select value="" displayEmpty sx={{ fontSize: '0.75rem', bgcolor: '#fafafa' }}>
+          <MenuItem value="">
+            <em>Types non disponibles</em>
+          </MenuItem>
+        </Select>
+      </FormControl>
+    );
+  }
+
   return (
     <FormControl fullWidth size="small" disabled={disabled}>
       <Select
@@ -67,11 +79,11 @@ const ImageTypeSelector: React.FC<ImageTypeSelectorProps> = ({
         onChange={handleChange}
         displayEmpty
         sx={{
-          bgcolor: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(4px)',
+          bgcolor: 'rgba(255, 255, 255, 0.95)',
           fontSize: '0.75rem',
+          border: '1px solid #e0e0e0',
           '& .MuiSelect-select': {
-            padding: '4px 8px',
+            padding: '6px 10px',
           },
           '& .MuiOutlinedInput-notchedOutline': {
             border: 'none',
@@ -93,4 +105,4 @@ const ImageTypeSelector: React.FC<ImageTypeSelectorProps> = ({
   );
 };
 
-export default ImageTypeSelector;
+export default memo(ImageTypeSelector);

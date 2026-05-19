@@ -851,6 +851,39 @@ export const listingsService = {
   },
 
   /**
+   * GET /api/v1/listing/user/rentals-cities-mapping/:ownerId
+   * Auto-sélection devise quand la ville change (legacy Address.jsx).
+   */
+  async getRentalsCitiesCurrencyMapping(ownerId: string): Promise<{
+    hasMapping?: boolean;
+    rentalsCitiesAndCurrencyMapping?: Array<{
+      cityId?: string;
+      cityName?: string;
+      currency?: string;
+    }>;
+  } | null> {
+    if (!ownerId) return null;
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/user/rentals-cities-mapping/${ownerId}`,
+      );
+      const body = asRecord(response.data);
+      return {
+        hasMapping: body.hasMapping === true,
+        rentalsCitiesAndCurrencyMapping: Array.isArray(body.rentalsCitiesAndCurrencyMapping)
+          ? (body.rentalsCitiesAndCurrencyMapping as Array<{
+              cityId?: string;
+              cityName?: string;
+              currency?: string;
+            }>)
+          : [],
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  /**
    * GET /api/v1/listing/tag
    */
   async getTags(): Promise<{ _id: string; name: string }[]> {

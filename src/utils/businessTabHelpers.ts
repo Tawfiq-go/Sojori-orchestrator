@@ -173,6 +173,40 @@ export function summarizeCalendarRuRow(row: {
   };
 }
 
+export function summarizeListingRuRow(row: {
+  action?: string;
+  auditContext?: Record<string, unknown>;
+  requestPayload?: unknown;
+  responseMsg?: string;
+  listing?: { name?: string; city?: string };
+  owner?: { firstName?: string; lastName?: string };
+}) {
+  const audit = row.auditContext && typeof row.auditContext === 'object' ? row.auditContext : {};
+  const lid = listingIdFromChannelOtaRow(row);
+  const listingLabel =
+    row.listing && typeof row.listing === 'object'
+      ? [row.listing.name, row.listing.city].filter((x) => x && String(x).trim()).join(' · ')
+      : lid !== '—'
+        ? lid
+        : '';
+  const ownerLabel =
+    row.owner && typeof row.owner === 'object'
+      ? `${row.owner.firstName || ''} ${row.owner.lastName || ''}`.trim()
+      : audit.ownerId
+        ? String(audit.ownerId).slice(-8)
+        : '';
+  const route = audit.route ? String(audit.route) : '—';
+  const actionShort = String(row.action || '—').replace(/_RQ$/, '').replace(/^(Push_|Pull_)/, '');
+  return {
+    listingId: lid,
+    listingLabel,
+    ownerLabel,
+    route,
+    actionShort,
+    propertyId: extractPropertyIdFromPayloadLike(row) || audit.propertyId || '—',
+  };
+}
+
 export type BusinessViewTab = 'Api' | 'Hook' | 'BizOwner' | 'BizListing';
 
 export function resolveBusinessViewTab(biz: string): BusinessViewTab {
