@@ -253,6 +253,7 @@ const NAV_ICON_BY_ID = {
   analytics: AnalyticsOutlined,
   reports: DescriptionOutlined,
   orchestration: AutoAwesomeOutlined,
+  orchestrator: AutoAwesomeOutlined,
   calendar: CalendarMonthOutlined,
   'reservations/list': ConfirmationNumberOutlined,
   'tasks/list': AssignmentTurnedInOutlined,
