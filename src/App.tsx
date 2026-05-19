@@ -200,10 +200,13 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/orchestrator" element={<Navigate to="/orchestration" replace />} />
-              <Route path="/orchestration" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
-              <Route path="/orchestration/plans" element={<LazyRoute><OrchestrationPlansPageV2 /></LazyRoute>} />
+              {/* Route principale: système complet avec onglets (Plans, Chronologie, Config legacy) */}
               <Route path="/orchestrator" element={<LazyRoute><OrchestrationReservationsPage /></LazyRoute>} />
+              <Route path="/orchestration" element={<LazyRoute><OrchestrationReservationsPage /></LazyRoute>} />
+
+              {/* Routes alternatives */}
+              <Route path="/orchestration/plans" element={<LazyRoute><OrchestrationPlansPageV2 /></LazyRoute>} />
+              <Route path="/orchestration/mockup" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
               <Route path="/orchestration/timeline/:id" element={<LazyRoute><OrchestrationTimelinePageV2 /></LazyRoute>} />
               <Route path="/orchestration/events" element={<LazyRoute><OrchestrationEventsPage /></LazyRoute>} />
               <Route path="/orchestration/daily-ops" element={<LazyRoute><OrchestrationDailyOpsPage /></LazyRoute>} />
