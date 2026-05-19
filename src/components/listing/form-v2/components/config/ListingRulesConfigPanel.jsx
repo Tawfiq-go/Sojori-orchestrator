@@ -15,12 +15,14 @@ import { localizeField } from '../../utils/localizeField';
 
 export default function ListingRulesConfigPanel({ listingId, listingName }) {
   const { data: config, isLoading, error, isFetching, refetch } = useListingRulesAndInfo(listingId);
-  const { data: syncStatus, isLoading: syncLoading, refetch: refetchSync } = useListingRulesSyncStatus(listingId);
+  const isNotFound = Boolean(error?.notFound);
+  const { data: syncStatus, isLoading: syncLoading, refetch: refetchSync } = useListingRulesSyncStatus(
+    listingId,
+    { enabled: !isNotFound },
+  );
   const createMutation = useCreateListingRulesAndInfo();
   const syncMutation = useSyncListingRulesAndInfo();
   const updateMutation = useUpdateListingRulesAndInfo();
-
-  const isNotFound = Boolean(error?.notFound);
   const [rulesAndInfo, setRulesAndInfo] = useState({ Rules: [], InfoUtils: [] });
   const [dirty, setDirty] = useState(false);
 

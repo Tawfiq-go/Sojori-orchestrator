@@ -19,12 +19,14 @@ import { T, menuBtnPrimary, menuBtnOutlined } from './menuTheme';
 const ChatbotMenuConfig = ({ listingId, listingName, embedded = false }) => {
   const hasListingId = Boolean(listingId);
   const { data: config, isLoading, error, isFetching, refetch: refetchConfig } = useListingChatbotConfig(listingId);
-  const { data: syncStatus, isLoading: syncLoading, refetch: refetchSyncStatus } = useListingChatbotSyncStatus(listingId);
+  const isNotFound = Boolean(error?.notFound);
+  const { data: syncStatus, isLoading: syncLoading, refetch: refetchSyncStatus } = useListingChatbotSyncStatus(
+    listingId,
+    { enabled: !isNotFound },
+  );
   const createMutation = useCreateListingChatbotConfig();
   const syncMutation = useSyncListingChatbotConfig();
   const updateOverridesMutation = useUpdateListingChatbotOverrides();
-
-  const isNotFound = Boolean(error?.notFound);
 
   const handleSync = async () => {
     if (!listingId || syncMutation.isPending) return;

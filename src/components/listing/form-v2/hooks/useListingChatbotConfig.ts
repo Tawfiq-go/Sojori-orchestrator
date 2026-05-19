@@ -25,16 +25,17 @@ export function useListingChatbotConfig(listingId?: string) {
   });
 }
 
-export function useListingChatbotSyncStatus(listingId?: string) {
+export function useListingChatbotSyncStatus(listingId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['listingChatbotSync', listingId],
     queryFn: async () => {
       if (!listingId) return null;
       const result = await listingsService.getListingChatbotSyncStatus(listingId);
+      if (result.notFound) return null;
       if (result.error && !result.data) throw new Error(result.error);
       return result.data ?? null;
     },
-    enabled: Boolean(listingId),
+    enabled: Boolean(listingId) && options?.enabled !== false,
     retry: 1,
   });
 }
