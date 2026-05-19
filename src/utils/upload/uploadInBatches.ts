@@ -2,13 +2,23 @@ import type { AppDispatch } from '../../redux/store';
 import { uploadMultipleImagesToAPI } from '../../redux/slices/UploadSlice';
 import { logListingMedia } from './helpers';
 
-/** Aligné sur srv-admin: upload.array('media', 30) */
+/** Limite API srv-admin (multer). */
 export const UPLOAD_MAX_FILES_PER_REQUEST = 30;
+
+/** Taille des lots réseau + affichage progression (ex. 21 → 5 lots : 1/5 … 5/5). */
+export const UPLOAD_BATCH_SIZE = 5;
 
 export interface UploadedFileResult {
   url: string;
   fileName?: string;
 }
+
+export type UploadProgressInfo = {
+  batchCurrent: number;
+  batchTotal: number;
+  filesUploaded: number;
+  filesTotal: number;
+};
 
 function normalizeUploadResponse(result: unknown): UploadedFileResult[] {
   if (!result || typeof result !== 'object') return [];
@@ -29,41 +39,60 @@ function normalizeUploadResponse(result: unknown): UploadedFileResult[] {
 }
 
 /**
- * Envoie les fichiers en lots (limite API admin upload_multiple).
+ * Envoie les fichiers en lots de {@link UPLOAD_BATCH_SIZE} (max API = 30).
  */
 export async function uploadMultipleInBatches(
   dispatch: AppDispatch,
   files: File[],
   folder: string,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (info: UploadProgressInfo) => void,
 ): Promise<UploadedFileResult[]> {
   if (!files.length) return [];
 
+  const batchSize = Math.min(UPLOAD_BATCH_SIZE, UPLOAD_MAX_FILES_PER_REQUEST);
   const batches: File[][] = [];
-  for (let i = 0; i < files.length; i += UPLOAD_MAX_FILES_PER_REQUEST) {
-    batches.push(files.slice(i, i + UPLOAD_MAX_FILES_PER_REQUEST));
+  for (let i = 0; i < files.length; i += batchSize) {
+    batches.push(files.slice(i, i + batchSize));
   }
 
   const allUploaded: UploadedFileResult[] = [];
+  const filesTotal = files.length;
 
   for (let b = 0; b < batches.length; b += 1) {
-    onProgress?.(b + 1, batches.length);
+    const filesBeforeBatch = allUploaded.length;
+
+    onProgress?.({
+      batchCurrent: b + 1,
+      batchTotal: batches.length,
+      filesUploaded: filesBeforeBatch,
+      filesTotal,
+    });
+
     logListingMedia('upload.batch.start', {
       batch: b + 1,
       totalBatches: batches.length,
       filesInBatch: batches[b].length,
     });
+
     const result = await dispatch(
-      uploadMultipleImagesToAPI({ files: batches[b], folder })
+      uploadMultipleImagesToAPI({ files: batches[b], folder }),
     ).unwrap();
+
     logListingMedia('upload.batch.ok', { batch: b + 1, totalBatches: batches.length });
     const chunk = normalizeUploadResponse(result);
     if (chunk.length !== batches[b].length) {
       throw new Error(
-        `Réponse incomplète (lot ${b + 1}/${batches.length}: ${chunk.length}/${batches[b].length} fichiers)`
+        `Réponse incomplète (lot ${b + 1}/${batches.length}: ${chunk.length}/${batches[b].length} fichiers)`,
       );
     }
     allUploaded.push(...chunk);
+
+    onProgress?.({
+      batchCurrent: b + 1,
+      batchTotal: batches.length,
+      filesUploaded: allUploaded.length,
+      filesTotal,
+    });
   }
 
   return allUploaded;

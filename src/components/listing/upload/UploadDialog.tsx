@@ -1,16 +1,14 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import {
   Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   Box,
   Typography,
   IconButton,
-  Grid,
   CircularProgress,
+  LinearProgress,
 } from '@mui/material';
+import { ModalScrollColumn } from '../../common/ModalScrollColumn';
 import { styled } from '@mui/material/styles';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'react-toastify';
@@ -22,7 +20,12 @@ import AddIcon from '@mui/icons-material/Add';
 import { LISTING_MEDIA_ACCEPT, MIN_IMAGE_WIDTH, MIN_IMAGE_HEIGHT, MAX_FILE_SIZE } from '../../../utils/upload/dropzoneConfig';
 import { getImageTypesSojori, type ImageType } from '../../../services/imageTypesService';
 import { logListingMedia } from '../../../utils/upload/helpers';
-import { UPLOAD_MAX_FILES_PER_REQUEST } from '../../../utils/upload/uploadInBatches';
+import { UPLOAD_BATCH_SIZE } from '../../../utils/upload/uploadInBatches';
+import type { UploadProgressInfo } from '../../../utils/upload/uploadInBatches';
+import {
+  getImageCategoryLabel,
+  isImageCategoryUndefined,
+} from '../../../utils/upload/imageTypeDisplay';
 import ImageTypeSelector from './ImageTypeSelector';
 
 const UploadContainer = styled(Box)(({ theme }) => ({
@@ -99,7 +102,9 @@ interface SelectedFile {
   imageTypeId: string | null;
 }
 
-export type UploadBatchProgress = { current: number; total: number };
+export type UploadBatchProgress = UploadProgressInfo & {
+  phase?: 'upload' | 'save';
+};
 
 interface UploadDialogProps {
   open: boolean;
@@ -154,8 +159,10 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
 
   const checkImageDimensions = (file: File): Promise<{ width: number; height: number; isValid: boolean; file: File }> => {
     return new Promise((resolve) => {
+      const objectUrl = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
         const isValid = img.width >= MIN_IMAGE_WIDTH && img.height >= MIN_IMAGE_HEIGHT;
         resolve({
           width: img.width,
@@ -165,6 +172,7 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
         });
       };
       img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
         resolve({
           width: 0,
           height: 0,
@@ -172,8 +180,20 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
           file,
         });
       };
-      img.src = URL.createObjectURL(file);
+      img.src = objectUrl;
     });
+  };
+
+  /** Vérifie les dimensions par petits groupes (évite blocage / crash avec 20+ fichiers). */
+  const checkDimensionsInChunks = async (files: File[], chunkSize = 4) => {
+    const results: Awaited<ReturnType<typeof checkImageDimensions>>[] = [];
+    for (let i = 0; i < files.length; i += chunkSize) {
+      const chunk = files.slice(i, i + chunkSize);
+      const part = await Promise.all(chunk.map((file) => checkImageDimensions(file)));
+      results.push(...part);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return results;
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[], typeId: string | null = null) => {
@@ -187,7 +207,7 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
       typeId: typeId || 'null',
     });
 
-    const dimensionChecks = await Promise.all(acceptedFiles.map((file) => checkImageDimensions(file)));
+    const dimensionChecks = await checkDimensionsInChunks(acceptedFiles);
 
     const validFiles: File[] = [];
     dimensionChecks.forEach(({ width, height, isValid, file }) => {
@@ -259,54 +279,23 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
     setSelectedFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, imageTypeId: typeId } : f)));
   };
 
-  const resolveMainImageType = (): ImageType | null => {
-    if (!imageTypes.length) return null;
-    let mainType = imageTypes.find((t) => t.sojoriName?.en === 'Main Image');
-    if (!mainType) {
-      mainType = imageTypes.find((t) => t.rentalAmenityIds && t.rentalAmenityIds.includes(1));
-    }
-    return mainType || imageTypes[0];
-  };
-
-  const resolveDefaultNonMainType = (): ImageType | null => {
-    const main = resolveMainImageType();
-    if (!imageTypes.length) return null;
-    const other = imageTypes.find((t) => t._id !== main?._id);
-    return other || imageTypes[0];
-  };
-
   const handleUpload = async () => {
     if (selectedFiles.length === 0 || uploading) return;
 
-    const mainT = resolveMainImageType();
-    const defaultT = resolveDefaultNonMainType();
-
-    const anyExplicitMainInDialog = selectedFiles.some((f) => f.imageTypeId && isMainImage(f.imageTypeId));
-    let mainAlreadyReserved = hasExistingMainImage() || anyExplicitMainInDialog;
-
-    const filesWithTypes = selectedFiles.map((f) => {
-      let tid = f.imageTypeId;
-
-      if (tid) {
-        return { file: f.file, imageTypeId: tid };
-      }
-
-      if (!imageTypes.length) {
-        return { file: f.file, imageTypeId: null };
-      }
-
-      if (!mainAlreadyReserved && mainT) {
-        tid = mainT._id;
-        mainAlreadyReserved = true;
-      } else {
-        tid = defaultT?._id ?? mainT?._id ?? null;
-      }
-
-      return { file: f.file, imageTypeId: tid };
-    });
+    /** Seul un type choisi explicitement dans le dialogue est conservé — pas d’auto-assignation. */
+    const filesWithTypes = selectedFiles.map((f) => ({
+      file: f.file,
+      imageTypeId: f.imageTypeId || null,
+    }));
 
     setUploading(true);
-    setUploadProgress(null);
+    setUploadProgress({
+      batchCurrent: 0,
+      batchTotal: Math.ceil(filesWithTypes.length / UPLOAD_BATCH_SIZE) || 1,
+      filesUploaded: 0,
+      filesTotal: filesWithTypes.length,
+      phase: 'upload',
+    });
     try {
       await onFilesUpload(filesWithTypes, setUploadProgress);
       selectedFiles.forEach((f) => URL.revokeObjectURL(f.preview));
@@ -353,24 +342,46 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
   };
 
   const compactFileList = selectedFiles.length > 12;
+  const manyFiles = selectedFiles.length > 6;
 
-  const renderFileThumb = (fileObj: SelectedFile, borderColor = '#e0e0e0') => (
+  const renderFileThumb = (fileObj: SelectedFile, borderColor = '#e0e0e0') => {
+    const categoryLabel = getImageCategoryLabel(fileObj.imageTypeId, imageTypes);
+    return (
     <Box key={fileObj.id} sx={{ width: compactFileList ? 110 : 100, flexShrink: 0 }}>
       <Box
         sx={{
           position: 'relative',
           width: compactFileList ? 110 : 100,
-          height: compactFileList ? 82 : 75,
           borderRadius: 1,
           overflow: 'hidden',
           border: `2px solid ${borderColor}`,
           bgcolor: '#fff',
         }}
       >
-        <img src={fileObj.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        <DeleteButton className="delete-button" onClick={() => removeFile(fileObj.id)} size="small">
-          <DeleteIcon sx={{ fontSize: 14 }} />
-        </DeleteButton>
+        <Box sx={{ position: 'relative', height: compactFileList ? 82 : 75 }}>
+          <img src={fileObj.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <DeleteButton className="delete-button" onClick={() => removeFile(fileObj.id)} size="small">
+            <DeleteIcon sx={{ fontSize: 14 }} />
+          </DeleteButton>
+        </Box>
+        <Box
+          sx={{
+            px: 0.75,
+            py: 0.5,
+            bgcolor: isImageCategoryUndefined(fileObj.imageTypeId) ? 'rgba(220,38,38,0.12)' : 'rgba(20,17,10,0.88)',
+          }}
+        >
+          <Typography
+            noWrap
+            sx={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: isImageCategoryUndefined(fileObj.imageTypeId) ? '#dc2626' : '#fff',
+            }}
+          >
+            {categoryLabel}
+          </Typography>
+        </Box>
       </Box>
       <Box sx={{ mt: 0.5 }}>
         <ImageTypeSelector
@@ -384,7 +395,8 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
         />
       </Box>
     </Box>
-  );
+    );
+  };
 
   return (
     <Dialog
@@ -392,76 +404,115 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
       onClose={uploading ? undefined : handleCancel}
       maxWidth="lg"
       fullWidth
+      disableScrollLock
       slotProps={{
         paper: {
           sx: {
-            borderRadius: 3,
-            maxHeight: 'min(90vh, 900px)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: 960,
+            height: manyFiles ? 'min(88vh, 820px)' : 'min(72vh, 640px)',
+            maxHeight: 'calc(100vh - 32px) !important',
+            overflow: 'hidden !important',
+            overflowY: 'hidden !important',
+            display: 'flex !important',
+            flexDirection: 'column !important',
+            p: 0,
+            m: '16px auto',
+            boxShadow: '0 32px 80px rgba(20,17,10,0.18)',
+            boxSizing: 'border-box',
           },
         },
       }}
     >
-      <DialogTitle sx={{ flexShrink: 0, pb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-          <IconButton onClick={handleCancel} size="small" sx={{ position: 'absolute', left: 0 }}>
-            <CloseIcon />
-          </IconButton>
-          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-            <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
-              Upload images
-            </Typography>
-          </Box>
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', pb: 0 }}>
-          {uploading && uploadProgress
-            ? uploadProgress.total > 1
-              ? `Envoi lot ${uploadProgress.current}/${uploadProgress.total}…`
-              : `Envoi de ${selectedFiles.length} image${selectedFiles.length > 1 ? 's' : ''}…`
-            : selectedFiles.length > 0
-              ? `${selectedFiles.length} fichier(s) sélectionné(s)`
-              : 'Aucun fichier sélectionné'}
-        </Typography>
-      </DialogTitle>
-
-      <DialogContent
+      <Box
         sx={{
-          flex: '1 1 auto',
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr auto',
+          height: '100%',
           minHeight: 0,
           overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          p: 0,
         }}
       >
         <Box
           sx={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-            p: 3,
+            flexShrink: 0,
+            px: 2,
+            py: 1.75,
+            borderBottom: '1px solid #eee',
+            background: 'linear-gradient(180deg, #fff, #fafaf7)',
           }}
         >
+          <Box sx={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+            <IconButton
+              onClick={handleCancel}
+              size="small"
+              disabled={uploading}
+              sx={{ position: 'absolute', left: 0 }}
+            >
+              <CloseIcon />
+            </IconButton>
+            <Box sx={{ flex: 1, textAlign: 'center' }}>
+              <Typography sx={{ fontSize: 17, fontWeight: 700 }}>Upload images</Typography>
+              <Typography sx={{ fontSize: 12.5, color: '#7a756c', mt: 0.25 }}>
+                {uploading && uploadProgress
+                  ? uploadProgress.phase === 'save'
+                    ? 'Enregistrement sur le listing…'
+                    : `${uploadProgress.filesUploaded} / ${uploadProgress.filesTotal} image${uploadProgress.filesTotal > 1 ? 's' : ''}`
+                  : selectedFiles.length > 0
+                    ? `${selectedFiles.length} fichier(s) sélectionné(s)`
+                    : 'Aucun fichier sélectionné'}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+
+        <ModalScrollColumn
+          active={open}
+          className="upload-images-modal-scroll"
+          wrapperSx={{ minHeight: 0 }}
+          innerSx={{ px: 2, py: 2 }}
+        >
         {uploading ? (
-          <Box sx={{ textAlign: 'center', py: 6 }}>
+          <Box sx={{ textAlign: 'center', py: 6, px: 3 }}>
             <CircularProgress sx={{ color: '#b8851a' }} />
             <Typography sx={{ mt: 2, fontWeight: 600 }}>
-              Upload en cours…
-              {uploadProgress && uploadProgress.total > 1
-                ? ` (lot ${uploadProgress.current}/${uploadProgress.total})`
-                : selectedFiles.length > 0
-                  ? ` (${selectedFiles.length} fichier${selectedFiles.length > 1 ? 's' : ''})`
-                  : ''}
+              {uploadProgress?.phase === 'save'
+                ? 'Enregistrement sur le listing…'
+                : 'Upload en cours…'}
             </Typography>
-            <Typography sx={{ mt: 1, fontSize: 12, color: '#7a756c' }}>
-              {uploadProgress && uploadProgress.total > 1
-                ? `Ne fermez pas cette fenêtre — envoi par lots de ${UPLOAD_MAX_FILES_PER_REQUEST} max.`
-                : 'Ne fermez pas cette fenêtre — enregistrement automatique sur le listing à la fin.'}
+            {uploadProgress && uploadProgress.filesTotal > 0 && (
+              <>
+                <Typography
+                  sx={{
+                    mt: 2,
+                    fontSize: 28,
+                    fontWeight: 700,
+                    fontFamily: '"Geist Mono", monospace',
+                    color: '#b8851a',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {uploadProgress.phase === 'save'
+                    ? `${uploadProgress.filesTotal} / ${uploadProgress.filesTotal}`
+                    : `${uploadProgress.filesUploaded} / ${uploadProgress.filesTotal}`}
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={
+                    uploadProgress.phase === 'save'
+                      ? 100
+                      : Math.min(
+                          100,
+                          Math.round((uploadProgress.filesUploaded / uploadProgress.filesTotal) * 100),
+                        )
+                  }
+                  sx={{ mt: 2, height: 10, borderRadius: 5, bgcolor: '#eee', '& .MuiLinearProgress-bar': { bgcolor: '#b8851a' } }}
+                />
+              </>
+            )}
+            <Typography sx={{ mt: 2, fontSize: 12, color: '#7a756c' }}>
+              Ne fermez pas cette fenêtre — les images sont enregistrées automatiquement sur le listing.
             </Typography>
           </Box>
         ) : loading || imageTypes.length === 0 ? (
@@ -472,68 +523,79 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
             </Typography>
           </Box>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* ZONE D'UPLOAD PRINCIPALE EN PREMIER */}
-            <Box sx={{
-              border: '2px dashed #b8851a',
-              borderRadius: 2,
-              p: 3,
-              bgcolor: 'rgba(184,133,26,0.02)',
-              textAlign: 'center'
-            }}>
-              <Typography sx={{
-                fontSize: 15,
-                fontWeight: 700,
-                mb: 1,
-                color: '#333'
-              }}>
-                📤 Upload images
-              </Typography>
-              <Typography sx={{ fontSize: 12, color: '#666', mb: 2 }}>
-                Ajoutez toutes vos images ici. Vous pourrez ensuite les organiser par catégorie.
-              </Typography>
-
-              <Box {...getRootProps()} sx={{
-                cursor: 'pointer',
-                py: 3,
-                px: 2,
-                bgcolor: '#fff',
-                borderRadius: 1.5,
-                border: '1px solid #e0e0e0',
-                transition: 'all 0.2s',
-                '&:hover': {
-                  bgcolor: 'rgba(184,133,26,0.05)',
-                  borderColor: '#b8851a'
-                }
-              }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Zone d’ajout : compacte si des fichiers sont déjà sélectionnés */}
+            {manyFiles ? (
+              <Box
+                {...getRootProps()}
+                sx={{
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                  py: 1.25,
+                  px: 2,
+                  borderRadius: 1.5,
+                  border: `1px dashed ${isDragActive ? '#b8851a' : '#d0d0d0'}`,
+                  bgcolor: isDragActive ? 'rgba(184,133,26,0.08)' : '#fafafa',
+                  textAlign: 'center',
+                }}
+              >
                 <input {...getInputProps()} />
-                <CloudUploadIcon sx={{ fontSize: 48, color: '#b8851a', mb: 1 }} />
-                <Typography sx={{ fontSize: 14, fontWeight: 600, color: '#333', mb: 0.5 }}>
-                  {isDragActive ? 'Déposez vos images ici' : 'Cliquez pour parcourir ou glissez-déposez'}
+                <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: '#555' }}>
+                  {isDragActive ? 'Déposez pour ajouter…' : '+ Ajouter d’autres images (clic ou glisser-déposer)'}
                 </Typography>
-                <Typography sx={{ fontSize: 11, color: '#999' }}>
-                  JPG, PNG, WEBP · plusieurs fichiers · envoi par lots de {UPLOAD_MAX_FILES_PER_REQUEST} max
-                </Typography>
-                {selectedFiles.length > 0 && (
-                  <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#b8851a', mt: 1.5 }}>
-                    ✓ {selectedFiles.length} image{selectedFiles.length > 1 ? 's' : ''} au total
-                  </Typography>
-                )}
               </Box>
-            </Box>
+            ) : (
+              <Box
+                sx={{
+                  flexShrink: 0,
+                  border: '2px dashed #b8851a',
+                  borderRadius: 2,
+                  p: 2,
+                  bgcolor: 'rgba(184,133,26,0.02)',
+                  textAlign: 'center',
+                }}
+              >
+                <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 0.5, color: '#333' }}>
+                  Ajoutez vos images
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: '#666', mb: 1.5 }}>
+                  Puis assignez une catégorie à chacune (optionnel).
+                </Typography>
+                <Box
+                  {...getRootProps()}
+                  sx={{
+                    cursor: 'pointer',
+                    py: 2.5,
+                    px: 2,
+                    bgcolor: '#fff',
+                    borderRadius: 1.5,
+                    border: '1px solid #e0e0e0',
+                    '&:hover': { bgcolor: 'rgba(184,133,26,0.05)', borderColor: '#b8851a' },
+                  }}
+                >
+                  <input {...getInputProps()} />
+                  <CloudUploadIcon sx={{ fontSize: 40, color: '#b8851a', mb: 0.5 }} />
+                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#333' }}>
+                    {isDragActive ? 'Déposez ici' : 'Parcourir ou glisser-déposer'}
+                  </Typography>
+                  <Typography sx={{ fontSize: 11, color: '#999', mt: 0.5 }}>
+                    JPG, PNG, WEBP · min {MIN_IMAGE_WIDTH}×{MIN_IMAGE_HEIGHT} px
+                  </Typography>
+                </Box>
+              </Box>
+            )}
 
             {compactFileList && selectedFiles.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5, color: '#333' }}>
+              <Box>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: '#333' }}>
                   {selectedFiles.length} images — assignez un type à chacune
                 </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25 }}>
                   {selectedFiles.map((fileObj) => renderFileThumb(fileObj, fileObj.imageTypeId ? '#e0e0e0' : '#f59e0b'))}
                 </Box>
               </Box>
             )}
 
-            {/* IMAGES NON CATÉGORISÉES - Affichées en priorité */}
             {!compactFileList && getFilesForType(null).length > 0 && (
               <Box sx={{
                 border: '2px solid #f59e0b',
@@ -632,29 +694,39 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
 
           </Box>
         )}
-        </Box>
-      </DialogContent>
+        </ModalScrollColumn>
 
-      <DialogActions sx={{ flexShrink: 0, px: 3, pb: 3, justifyContent: 'space-between' }}>
-        <Button onClick={handleCancel} color="inherit" disabled={uploading}>
-          Annuler
-        </Button>
-        <Button
-          variant="contained"
-          onClick={() => void handleUpload()}
-          disabled={selectedFiles.length === 0 || uploading}
+        <Box
           sx={{
-            bgcolor: selectedFiles.length > 0 ? '#b8851a' : '#e0e0e0',
-            color: selectedFiles.length > 0 ? 'white' : '#999',
-            textTransform: 'none',
-            '&:hover': {
-              bgcolor: selectedFiles.length > 0 ? '#876119' : '#e0e0e0',
-            },
+            flexShrink: 0,
+            px: 2,
+            py: 1.5,
+            display: 'flex',
+            justifyContent: 'space-between',
+            borderTop: '1px solid #eee',
+            bgcolor: '#fafafa',
           }}
         >
-          Upload
-        </Button>
-      </DialogActions>
+          <Button onClick={handleCancel} color="inherit" disabled={uploading}>
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void handleUpload()}
+            disabled={selectedFiles.length === 0 || uploading}
+            sx={{
+              bgcolor: selectedFiles.length > 0 ? '#b8851a' : '#e0e0e0',
+              color: selectedFiles.length > 0 ? 'white' : '#999',
+              textTransform: 'none',
+              '&:hover': {
+                bgcolor: selectedFiles.length > 0 ? '#876119' : '#e0e0e0',
+              },
+            }}
+          >
+            Upload
+          </Button>
+        </Box>
+      </Box>
     </Dialog>
   );
 };
