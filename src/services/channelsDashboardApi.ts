@@ -64,31 +64,82 @@ export function fetchChannelsCalendarRuCallBodies(id: string) {
   return fetchChannelsDistributionRuCallBodies(id);
 }
 
+/** OAuth PMS — RuCallApi srv-user via channels-dashboard (proxy interne admin → user). */
 export function fetchChannelsOAuthRuApis(query: Record<string, unknown> = {}) {
   const page = query.page != null ? Math.max(1, Number(query.page)) : 1;
   const limit = query.limit != null ? Math.min(100, Math.max(1, Number(query.limit))) : 25;
-  const timeRange = mapOverviewHoursToRuTimeRange(query.hours as number | string | undefined);
   const params = new URLSearchParams();
   params.set('page', String(page));
   params.set('limit', String(limit));
-  params.set('service', 'user');
-  params.set('oauthOnly', 'true');
-  params.set('enrich', 'true');
-  params.set('timeRange', timeRange);
-  const cfg = monitoringAxiosConfig();
-  const url = `${MONITORING}/ru/apis?${params.toString()}`;
-  return apiClient.get(url, cfg).catch((err: unknown) => {
-    if (!shouldRetryMonitoringRuApisWithoutEnrich(err)) return Promise.reject(err);
-    params.set('enrich', 'false');
-    return apiClient.get(`${MONITORING}/ru/apis?${params.toString()}`, cfg);
+  if (query.period === 'all') {
+    params.set('period', 'all');
+  } else if (query.from && query.to) {
+    params.set('from', String(query.from));
+    params.set('to', String(query.to));
+  } else {
+    const hours =
+      query.hours != null ? Math.min(8760, Math.max(1, Math.floor(Number(query.hours)))) : 72;
+    params.set('hours', String(hours));
+  }
+  return apiClient.get(`${CHANNELS_DASHBOARD}/ru-oauth-apis?${params.toString()}`, {
+    timeout: 120_000,
+    ...channelsDashboardAxiosConfig(),
   });
 }
 
 export function fetchChannelsOAuthRuCallBodies(id: string) {
   return apiClient.get(
-    `${MONITORING}/ru/apis/user-call/${encodeURIComponent(String(id))}`,
-    monitoringAxiosConfig(),
+    `${CHANNELS_DASHBOARD}/ru-oauth-call/${encodeURIComponent(String(id))}`,
+    channelsDashboardAxiosConfig(),
   );
+}
+
+/** Messagerie REST RU (cron owner) — ChannelRuApiCall srv-channels. */
+export function fetchChannelsMessagingRuApis(query: Record<string, unknown> = {}) {
+  const page = query.page != null ? Math.max(1, Number(query.page)) : 1;
+  const limit = query.limit != null ? Math.min(100, Math.max(1, Number(query.limit))) : 25;
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('limit', String(limit));
+  if (query.period === 'all') {
+    params.set('period', 'all');
+  } else if (query.from && query.to) {
+    params.set('from', String(query.from));
+    params.set('to', String(query.to));
+  } else {
+    const hours =
+      query.hours != null ? Math.min(8760, Math.max(1, Math.floor(Number(query.hours)))) : 72;
+    params.set('hours', String(hours));
+  }
+  if (query.ownerId) params.set('ownerId', String(query.ownerId));
+  return apiClient.get(`${CHANNELS_DASHBOARD}/ru-messaging-apis?${params.toString()}`, {
+    timeout: 120_000,
+    ...channelsDashboardAxiosConfig(),
+  });
+}
+
+/** Leads RU (Pull_GetLeads + webhook LNM) — ChannelRuApiCall srv-channels. */
+export function fetchChannelsLeadsRuApis(query: Record<string, unknown> = {}) {
+  const page = query.page != null ? Math.max(1, Number(query.page)) : 1;
+  const limit = query.limit != null ? Math.min(100, Math.max(1, Number(query.limit))) : 25;
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('limit', String(limit));
+  if (query.period === 'all') {
+    params.set('period', 'all');
+  } else if (query.from && query.to) {
+    params.set('from', String(query.from));
+    params.set('to', String(query.to));
+  } else {
+    const hours =
+      query.hours != null ? Math.min(8760, Math.max(1, Math.floor(Number(query.hours)))) : 72;
+    params.set('hours', String(hours));
+  }
+  if (query.ownerId) params.set('ownerId', String(query.ownerId));
+  return apiClient.get(`${CHANNELS_DASHBOARD}/ru-leads-apis?${params.toString()}`, {
+    timeout: 120_000,
+    ...channelsDashboardAxiosConfig(),
+  });
 }
 
 export function fetchChannelsDebugRuApis(query: Record<string, unknown> = {}) {
@@ -125,19 +176,43 @@ export function fetchChannelsUserRuCallBodies(id: string) {
 
 export const CHANNEL_LISTING_OTA_AUDIT_ACTION = 'ListingOtaSync_From_Channels';
 
-/** ChannelRuApiCall srv-channels — pas RuCallApi monitoring. */
+/** ChannelRuApiCall srv-channels — toutes actions listing (Pull/Push propriété, sync, import). */
 export function fetchChannelsListingRuApis(query: Record<string, unknown> = {}) {
-  return fetchChannelsDebugRuApis({
-    page: query.page,
-    limit: query.limit,
-    action: CHANNEL_LISTING_OTA_AUDIT_ACTION,
-    period: query.period,
-    from: query.from,
-    to: query.to,
-    hours: query.hours,
-    orchestrationId: query.orchestrationId,
-    listingId: query.listingId,
-    ownerId: query.ownerId,
+  if (query.action) {
+    return fetchChannelsDebugRuApis({
+      page: query.page,
+      limit: query.limit,
+      action: query.action,
+      period: query.period,
+      from: query.from,
+      to: query.to,
+      hours: query.hours,
+      orchestrationId: query.orchestrationId,
+      listingId: query.listingId,
+      ownerId: query.ownerId,
+    });
+  }
+  const page = query.page != null ? Math.max(1, Number(query.page)) : 1;
+  const limit = query.limit != null ? Math.min(100, Math.max(1, Number(query.limit))) : 25;
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('limit', String(limit));
+  if (query.period === 'all') {
+    params.set('period', 'all');
+  } else if (query.from && query.to) {
+    params.set('from', String(query.from));
+    params.set('to', String(query.to));
+  } else {
+    const hours =
+      query.hours != null ? Math.min(8760, Math.max(1, Math.floor(Number(query.hours)))) : 72;
+    params.set('hours', String(hours));
+  }
+  if (query.orchestrationId) params.set('orchestrationId', String(query.orchestrationId));
+  if (query.listingId) params.set('listingId', String(query.listingId));
+  if (query.ownerId) params.set('ownerId', String(query.ownerId));
+  return apiClient.get(`${CHANNELS_DASHBOARD}/ru-listing-apis?${params.toString()}`, {
+    timeout: 120_000,
+    ...channelsDashboardAxiosConfig(),
   });
 }
 

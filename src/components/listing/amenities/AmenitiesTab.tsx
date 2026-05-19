@@ -2,7 +2,7 @@
 // AmenitiesTab.tsx — orchestrateur 3 vues (Catégories / Pièces / Plan)
 // Inline : CategoryTabs · RoomTabs · DensityToggle · RoomPlanView
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Box, Stack, Typography, TextField, InputAdornment, Skeleton, Tooltip } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { T, KEYFRAMES, CATEGORY_META, ALL_CATEGORIES } from './_tokens';
@@ -15,6 +15,7 @@ import type {
   ViewMode,
 } from './_tokens';
 import CategoryBlock from './CategoryBlock';
+import RoomBlock from './RoomBlock';
 import SelectedPanel from './SelectedPanel';
 import RoomAssignModal from './RoomAssignModal';
 import { amenityMatchesRoom } from './mapAmenityFromApi';
@@ -100,6 +101,45 @@ export default function AmenitiesTab({
   const totalBasic = useMemo(() => catalog.filter(a => a.basic && !a.useBed).length, [catalog]);
   const completionPct = Math.round((totalBasicSelected / Math.max(1, totalBasic)) * 100);
 
+  const sortedRooms = useMemo(() => [...rooms].sort((a, b) => a.order - b.order), [rooms]);
+  const roomRentalIds = useMemo(() => sortedRooms.map((r) => String(r.rentalId)), [sortedRooms]);
+
+  const countsByRoom = useMemo(() => {
+    const perRoom = new Map<string, number>();
+    let tout = 0;
+    for (const a of filtered) {
+      if (amenityMatchesRoom(a, null, roomRentalIds)) tout++;
+      for (const r of sortedRooms) {
+        const rid = String(r.rentalId);
+        if (amenityMatchesRoom(a, rid, roomRentalIds)) {
+          perRoom.set(rid, (perRoom.get(rid) ?? 0) + 1);
+        }
+      }
+    }
+    return { tout, perRoom };
+  }, [filtered, sortedRooms, roomRentalIds]);
+
+  const roomCatalog = useMemo(
+    () => (view === 'rooms' ? filtered.filter((a) => amenityMatchesRoom(a, activeRoom, roomRentalIds)) : []),
+    [filtered, activeRoom, roomRentalIds, view],
+  );
+
+  /** Pièce active invalide après reload composition → retour « Tout » */
+  useEffect(() => {
+    if (view !== 'rooms' || activeRoom == null) return;
+    if (!roomRentalIds.includes(String(activeRoom))) setActiveRoom(null);
+  }, [view, activeRoom, roomRentalIds]);
+
+  const selectView = useCallback((next: ViewMode) => {
+    setView(next);
+    if (next === 'categories') {
+      setActiveCat('all');
+      setActiveRoom(null);
+    } else if (next === 'rooms') {
+      setActiveRoom(null);
+    }
+  }, []);
+
   /* ─── Handlers ─── */
   const handleToggle = useCallback((a: Amenity) => {
     const existing = selectedMap.get(a._id);
@@ -107,8 +147,8 @@ export default function AmenitiesTab({
       onChange(value.filter(s => s._id !== a._id));
     } else {
       const prefillRoom =
-        view === 'rooms' && activeRoom && a.compositionRoomIds.includes(activeRoom)
-          ? [activeRoom]
+        view === 'rooms' && activeRoom && a.compositionRoomIds.map(String).includes(String(activeRoom))
+          ? [String(activeRoom)]
           : undefined;
       const newSel: SelectedAmenity = { _id: a._id, count: 1, ...(prefillRoom ? { roomRentalIds: prefillRoom } : {}) };
       onChange([...value, newSel]);
@@ -185,7 +225,7 @@ export default function AmenitiesTab({
             ...(showRoomTab ? [{ id: 'rooms' as const, em: '🚪', l: 'Par pièce' }] : []),
             { id: 'plan' as const, em: '🗺', l: 'Vue plan' },
           ].map(opt => (
-            <Box key={opt.id} component="button" onClick={() => { setView(opt.id); if (opt.id === 'rooms') setActiveRoom(null); }} sx={{
+            <Box key={opt.id} component="button" onClick={() => selectView(opt.id)} sx={{
               all: 'unset', cursor: 'pointer', px: 1.625, py: 0.875, borderRadius: 1,
               fontSize: 12, fontWeight: 700, color: view === opt.id ? T.text : T.text3,
               bgcolor: view === opt.id ? T.bg2 : 'transparent',
@@ -242,10 +282,10 @@ export default function AmenitiesTab({
         </Stack>
       </Stack>
 
-      {/* Category tabs (vue catégories uniquement) */}
+      {/* Filtres catégories — uniquement en vue « Par catégories » */}
       {view === 'categories' && (
-        <Box sx={filterTabsRowSx}>
-          <CatTab active={activeCat === 'all'} onClick={() => setActiveCat('all')} emoji="⭐" total={filtered.length}>Toutes</CatTab>
+        <Box key="amenity-filters-categories" sx={filterTabsRowSx} role="tablist" aria-label="Catégories équipements">
+          <CatTab active={activeCat === 'all'} onClick={() => setActiveCat('all')} emoji="⭐" total={filtered.length}>Tout</CatTab>
           <CatTab active={activeCat === 'basic'} onClick={() => setActiveCat('basic')} emoji="⚡" total={totalBasic}>Basic</CatTab>
           {ALL_CATEGORIES.map(c => {
             const meta = CATEGORY_META[c];
@@ -253,6 +293,37 @@ export default function AmenitiesTab({
             return (
               <CatTab key={c} active={activeCat === c} onClick={() => setActiveCat(c)} emoji={meta.emoji} total={ct?.total || 0} title={c}>
                 {meta.short}
+              </CatTab>
+            );
+          })}
+        </Box>
+      )}
+
+      {/* Filtres pièces — uniquement en vue « Par pièce » (jamais les catégories) */}
+      {view === 'rooms' && showRoomTab && (
+        <Box key="amenity-filters-rooms" sx={filterTabsRowSx} role="tablist" aria-label="Pièces du logement">
+          <CatTab
+            active={activeRoom == null}
+            onClick={() => setActiveRoom(null)}
+            emoji="⭐"
+            total={countsByRoom.tout}
+            title="Toutes les pièces"
+          >
+            Tout
+          </CatTab>
+          {sortedRooms.map((r) => {
+            const rid = String(r.rentalId);
+            const full = r.nameFr || r.roomName;
+            return (
+              <CatTab
+                key={`room-${rid}`}
+                active={activeRoom != null && String(activeRoom) === rid}
+                onClick={() => setActiveRoom(rid)}
+                emoji={r.useBed ? '🛏' : '🚪'}
+                total={countsByRoom.perRoom.get(rid) ?? 0}
+                title={full}
+              >
+                {truncateTabLabel(full)}
               </CatTab>
             );
           })}
@@ -280,12 +351,48 @@ export default function AmenitiesTab({
                 : activeCat === 'basic'
                 ? <SingleGrid amenities={filtered.filter(a => a.basic)} selected={selectedMap} density={density} onToggle={handleToggle} onQty={handleQty} />
                 : <SingleGrid amenities={filtered.filter(a => a.categories.includes(activeCat))} selected={selectedMap} density={density} onToggle={handleToggle} onQty={handleQty} />
-            ) : (
-              // Vue par pièce
-              <RoomsView rooms={rooms} activeRoom={activeRoom} setActiveRoom={setActiveRoom}
-                catalog={filtered} selected={selectedMap} density={density}
-                onToggle={handleToggle} onQty={handleQty} />
-            )}
+            ) : view === 'rooms' && showRoomTab ? (
+              activeRoom == null ? (
+                sortedRooms.map((r) => {
+                  const rid = String(r.rentalId);
+                  const roomAmenities = filtered.filter((a) => amenityMatchesRoom(a, rid, roomRentalIds));
+                  const selCount = roomAmenities.filter((a) => selectedMap.has(a._id)).length;
+                  return (
+                    <RoomBlock
+                      key={`room-block-${rid}`}
+                      room={r}
+                      amenities={roomAmenities}
+                      selected={selectedMap}
+                      density={density}
+                      selectedCount={selCount}
+                      onToggle={handleToggle}
+                      onQty={handleQty}
+                    />
+                  );
+                })
+              ) : (() => {
+                const r = sortedRooms.find((x) => String(x.rentalId) === String(activeRoom));
+                if (!r) {
+                  return (
+                    <Typography sx={{ fontSize: 13, color: T.text3, py: 3, textAlign: 'center' }}>
+                      Pièce introuvable.
+                    </Typography>
+                  );
+                }
+                const selCount = roomCatalog.filter((a) => selectedMap.has(a._id)).length;
+                return (
+                  <RoomBlock
+                    room={r}
+                    amenities={roomCatalog}
+                    selected={selectedMap}
+                    density={density}
+                    selectedCount={selCount}
+                    onToggle={handleToggle}
+                    onQty={handleQty}
+                  />
+                );
+              })()
+            ) : null}
           </Box>
           <SelectedPanel
             selected={selectedMap} catalog={catalogById}
@@ -353,7 +460,7 @@ function CatTab({
   const tip = title && title !== label ? title : undefined;
 
   const button = (
-    <Box component="button" onClick={onClick} sx={{
+    <Box component="button" type="button" onClick={(e) => { e.preventDefault(); onClick(); }} sx={{
       all: 'unset', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 0.75,
       px: 1.625, py: 1, borderRadius: 1.125, fontSize: 12, fontWeight: active ? 700 : 600,
       whiteSpace: 'nowrap', transition: 'all 0.15s', maxWidth: 168,
@@ -390,89 +497,6 @@ function CatTab({
 function SingleGrid({ amenities, selected, density, onToggle, onQty }: any) {
   return <CategoryBlock category={'Bathroom' as CategoryName /* dummy */} amenities={amenities} selected={selected} density={density} totalInCategory={amenities.length} selectedCount={amenities.filter((a: Amenity) => selected.has(a._id)).length} onToggle={onToggle} onQty={onQty} />;
 }
-
-/* ─── Vue Par pièce ─── */
-function RoomsView({ rooms, activeRoom, setActiveRoom, catalog, selected, density, onToggle, onQty }: {
-  rooms: CompositionRoom[]; activeRoom: string | null; setActiveRoom: (id: string | null) => void;
-  catalog: Amenity[]; selected: Map<string, SelectedAmenity>; density: Density;
-  onToggle: (a: Amenity) => void; onQty: (a: Amenity, d: 1 | -1) => void;
-}) {
-  const sortedRooms = useMemo(() => [...rooms].sort((a, b) => a.order - b.order), [rooms]);
-  const roomRentalIds = useMemo(() => sortedRooms.map((r) => r.rentalId), [sortedRooms]);
-
-  const countsByRoom = useMemo(() => {
-    const perRoom = new Map<string, number>();
-    let tout = 0;
-    for (const a of catalog) {
-      if (amenityMatchesRoom(a, null, roomRentalIds)) tout++;
-      for (const r of sortedRooms) {
-        if (amenityMatchesRoom(a, r.rentalId, roomRentalIds)) {
-          perRoom.set(r.rentalId, (perRoom.get(r.rentalId) ?? 0) + 1);
-        }
-      }
-    }
-    return { tout, perRoom };
-  }, [catalog, sortedRooms, roomRentalIds]);
-
-  const roomCatalog = useMemo(
-    () => catalog.filter((a) => amenityMatchesRoom(a, activeRoom, roomRentalIds)),
-    [catalog, activeRoom, roomRentalIds],
-  );
-
-  return (
-    <Box>
-      <Box sx={filterTabsRowSx}>
-        <CatTab
-          active={activeRoom == null}
-          onClick={() => setActiveRoom(null)}
-          emoji="⭐"
-          total={countsByRoom.tout}
-          title="Toutes les pièces"
-        >
-          Tout
-        </CatTab>
-        {sortedRooms.map((r) => {
-          const full = r.nameFr || r.roomName;
-          const short = truncateTabLabel(full);
-          return (
-            <CatTab
-              key={r.rentalId}
-              active={activeRoom === r.rentalId}
-              onClick={() => setActiveRoom(r.rentalId)}
-              emoji={r.useBed ? '🛏' : '🚪'}
-              total={countsByRoom.perRoom.get(r.rentalId) ?? 0}
-              title={full}
-            >
-              {short}
-            </CatTab>
-          );
-        })}
-      </Box>
-
-      {roomCatalog.length === 0 ? (
-        <Typography sx={{ fontSize: 13, color: T.text3, py: 3, textAlign: 'center' }}>
-          Aucun équipement pour cette pièce.
-        </Typography>
-      ) : (
-        <Box sx={{
-          display: 'grid',
-          gridTemplateColumns: density === 'list' ? 'repeat(auto-fill, minmax(280px, 1fr))' :
-                               density === 'cozy' ? 'repeat(auto-fill, minmax(180px, 1fr))' :
-                               'repeat(auto-fill, minmax(150px, 1fr))',
-          gap: density === 'list' ? 0.5 : 0.75,
-        }}>
-          {roomCatalog.map((a) => (
-            <AmenityCardSimple key={a._id} amenity={a} selected={selected.get(a._id)}
-              density={density} onToggle={onToggle} onQty={onQty} />
-          ))}
-        </Box>
-      )}
-    </Box>
-  );
-}
-
-import AmenityCard from './AmenityCard';
-const AmenityCardSimple = AmenityCard;
 
 /* ─── Vue Plan (bento simple) ─── */
 function RoomPlanView({ rooms, catalog, value }: { rooms: CompositionRoom[]; catalog: Amenity[]; value: SelectedAmenity[] }) {

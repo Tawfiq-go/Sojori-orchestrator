@@ -1,4 +1,7 @@
 import apiClient from './apiClient';
+import { MICROSERVICE_BASE_URL } from '../config/authConfig';
+
+const LISTING_API = MICROSERVICE_BASE_URL.SRV_LISTING;
 
 export interface ImageType {
   _id: string;
@@ -34,33 +37,37 @@ export async function getImageTypesSojori(params: ImageTypesParams = {}) {
 
   const queryString = queryParams.toString();
   const url = queryString
-    ? `/listing/image-types-sojori?${queryString}`
-    : '/listing/image-types-sojori';
+    ? `${LISTING_API}/image-types-sojori?${queryString}`
+    : `${LISTING_API}/image-types-sojori`;
 
-  const response = await apiClient.get(url);
-  return response;
+  return apiClient.get(url);
 }
 
 /**
  * Met à jour un type d'image
  */
-export async function updateImageTypesSojori(imageTypeId: string, formData: any) {
-  const response = await apiClient.put(`/listing/image-types-sojori/update/${imageTypeId}`, formData);
-  return response.data;
+export async function updateImageTypesSojori(imageTypeId: string, formData: unknown) {
+  const response = await apiClient.put(
+    `${LISTING_API}/image-types-sojori/update/${imageTypeId}`,
+    formData,
+  );
+  return response;
 }
 
 /**
- * Crée un nouveau type d'image
+ * Crée un type d'image
  */
-export async function createImageTypesSojori(formData: any) {
-  const response = await apiClient.post('/listing/image-types-sojori/create', formData);
-  return response.data;
+export async function createImageTypesSojori(formData: unknown) {
+  const response = await apiClient.post(`${LISTING_API}/image-types-sojori/create`, formData);
+  return response;
 }
 
 /**
  * Supprime un type d'image
  */
 export async function deleteImageTypesSojori(imageTypeId: string) {
-  const response = await apiClient.delete(`/listing/image-types-sojori/delete/${imageTypeId}`);
-  return response.data;
+  const response = await apiClient.delete(
+    `${LISTING_API}/image-types-sojori/delete/${imageTypeId}`,
+  );
+  return response;
 }

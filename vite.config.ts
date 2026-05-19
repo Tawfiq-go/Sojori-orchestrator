@@ -4,8 +4,20 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { devSecurityHeaders, previewSecurityHeaders } from './security/csp'
 
+const devProxyTarget = process.env.VITE_DEV_PROXY_TARGET || 'https://dev.sojori.com'
+
+/** Proxy API dev — évite les appels relatifs vers 127.0.0.1:4174 (404 Not Found App). */
+const apiDevProxy = {
+  '/api': {
+    target: devProxyTarget,
+    changeOrigin: true,
+    secure: false,
+  },
+} as const
+
 // https://vite.dev/config/
 export default defineConfig({
+  appType: 'spa',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -26,16 +38,7 @@ export default defineConfig({
     strictPort: true,
     headers: devSecurityHeaders,
     proxy: {
-      '/api/v1/admin/channels-dashboard': {
-        target: process.env.VITE_DEV_PROXY_TARGET || 'https://dev.sojori.com',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/api/monitoring': {
-        target: process.env.VITE_DEV_PROXY_TARGET || 'https://dev.sojori.com',
-        changeOrigin: true,
-        secure: false,
-      },
+      ...apiDevProxy,
     },
     hmr: {
       protocol: 'ws',
@@ -45,6 +48,12 @@ export default defineConfig({
     },
   },
   preview: {
+    host: '127.0.0.1',
+    port: 4174,
+    strictPort: true,
     headers: previewSecurityHeaders,
+    proxy: {
+      ...apiDevProxy,
+    },
   },
 })

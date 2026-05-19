@@ -266,7 +266,7 @@ export function buildCalendarModificationRecap(row) {
   let shortLine = shortParts.join(' · ');
   if (!shortLine && detailLines.length) {
     const action = String(row.action || '');
-    if (/Put_PutPrices/i.test(action)) {
+    if (/PutPrices/i.test(action)) {
       const prLines = detailLines.filter((ln) => ln.startsWith('Saison / prix RU ·'));
       const avLines = detailLines.filter((ln) => ln.startsWith('Calendrier RU ·'));
       if (prLines.length && !avLines.length) {
@@ -285,7 +285,7 @@ export function buildCalendarModificationRecap(row) {
             ? detailLines.join(' · ')
             : `${detailLines.length} modification(s) (voir récap)`;
       }
-    } else if (/Put_PutAvbUnits|Avb/i.test(action)) {
+    } else if (/PutAvbUnits|Avb/i.test(action)) {
       const avLines = detailLines.filter((ln) => ln.startsWith('Calendrier RU ·'));
       shortLine =
         (avLines.length ? avLines : detailLines).length <= 2
@@ -300,8 +300,8 @@ export function buildCalendarModificationRecap(row) {
   }
   if (!shortLine || shortLine === '—') {
     const a = String(row.action || '');
-    if (/Put_PutPrices/i.test(a)) shortLine = 'Prix RU — ouvrir Récap (corps requête si absent)';
-    else if (/Put_PutAvbUnits|Avb/i.test(a)) shortLine = 'Dispo RU — ouvrir Récap (corps requête si absent)';
+    if (/PutPrices/i.test(a)) shortLine = 'Prix RU — ouvrir Récap (corps requête si absent)';
+    else if (/PutAvbUnits|Avb/i.test(a)) shortLine = 'Dispo RU — ouvrir Récap (corps requête si absent)';
     else if (!shortLine) shortLine = '—';
   }
   const rtHint = auditRoomTypeHint(audit);

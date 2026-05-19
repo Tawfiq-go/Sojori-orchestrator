@@ -2,6 +2,7 @@
 import React from 'react';
 import { Box, Typography, TextField, Stack } from '@mui/material';
 import MediaGrid from '../../upload/MediaGrid';
+import { LegacyReduxProvider } from '../../../LegacyReduxBridge';
 
 const T = {
   primary: '#b8851a',
@@ -29,8 +30,10 @@ interface ListingImage {
 }
 
 interface PhotosTabProps {
+  listingId?: string;
   listingImages: ListingImage[];
   onChange: (images: ListingImage[]) => void;
+  onImagesPersisted?: (images: ListingImage[]) => void;
   airbnbHeroOrder?: string;
   onAirbnbOrderChange?: (order: string) => void;
 }
@@ -89,7 +92,14 @@ function Field({
   );
 }
 
-export function PhotosTabReal({ listingImages = [], onChange, airbnbHeroOrder = '', onAirbnbOrderChange }: PhotosTabProps) {
+export function PhotosTabReal({
+  listingId,
+  listingImages = [],
+  onChange,
+  onImagesPersisted,
+  airbnbHeroOrder = '',
+  onAirbnbOrderChange,
+}: PhotosTabProps) {
   const validImageCount = listingImages.filter((img) => img.url && img.url.trim() !== '').length;
 
   return (
@@ -116,9 +126,16 @@ export function PhotosTabReal({ listingImages = [], onChange, airbnbHeroOrder = 
       <Field
         label="Galerie photos"
         ruField="listingImages"
-        hint="Images synchronisées vers Rentals United (Push_PutProperty). Glisser-déposer pour réordonner."
+        hint="Upload = enregistrement immédiat sur le listing (GCS + base). Pas besoin du bouton Sauvegarder pour les photos."
       >
-        <MediaGrid listingImages={listingImages} onChange={onChange} />
+        <LegacyReduxProvider>
+          <MediaGrid
+            listingId={listingId}
+            listingImages={listingImages}
+            onChange={onChange}
+            onImagesPersisted={onImagesPersisted}
+          />
+        </LegacyReduxProvider>
       </Field>
 
       {/* Airbnb specific order */}

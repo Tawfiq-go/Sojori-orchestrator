@@ -31,6 +31,34 @@ function asNumber(v: unknown): number | undefined {
   return undefined;
 }
 
+/** Aligné dashboard `cleanMediaData` — URLs GCS + métadonnées pour update-property. */
+export function cleanListingImagesForPayload(images: unknown): UnknownRecord[] {
+  if (!Array.isArray(images)) return [];
+  return images
+    .map((image) => {
+      const row = isRecord(image) ? image : {};
+      const url = asString(row.url).trim();
+      if (!url) return null;
+      const sortOrder = asNumber(row.sortOrder);
+      return {
+        fileName: asString(row.fileName),
+        imageTypeId: row.imageTypeId ?? '',
+        imageTypeRuId: Array.isArray(row.imageTypeRuId) ? row.imageTypeRuId : [],
+        sortOrder: sortOrder ?? 0,
+        url,
+      };
+    })
+    .filter((row): row is UnknownRecord => row !== null);
+}
+
+/** Sous-titre lieu (ville · région · pays) — uniquement champs API réels, pas de fallback mock. */
+export function formatListingLocationLine(raw: UnknownRecord): string {
+  const parts = [asString(raw.city), asString(raw.country)]
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return parts.join(' · ');
+}
+
 function firstRoomType(raw: UnknownRecord): UnknownRecord {
   const rts = raw.roomTypes;
   if (!Array.isArray(rts) || rts.length === 0) return {};
@@ -88,15 +116,10 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
   const descLang: DescLangUi = '🇫🇷 FR';
   const fr = getDescEntryForLang(descriptions, descLang);
 
-  console.log('🔵 [mapApiToFormV2Values] Mapping listing data', {
-    hasListingImages: Array.isArray(raw.listingImages),
-    listingImagesCount: Array.isArray(raw.listingImages) ? raw.listingImages.length : 0,
-    listingImages: raw.listingImages
-  });
-
   return {
     ...raw,
     name: asString(raw.name),
+    locationLine: formatListingLocationLine(raw),
     propertyType: propertyTypeToUi(raw.propertyType),
     propertyUnit: asString(raw.propertyUnit) || 'Single',
     bedrooms: asNumber(rt.bedroomsNumber) ?? asNumber(raw.bedroomsNumber),
@@ -118,12 +141,20 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     shortDescription: asString(fr.headline),
     longDescription: asString(fr.value),
     airbnbSummary: asString(raw.airbnbSummary),
-    listingImages: Array.isArray(raw.listingImages) ? raw.listingImages : [],
-    airbnbHeroOrder: asString(raw.airbnbHeroOrder),
     active: raw.active !== false,
     staging: raw.staging === true,
     instantBooking: raw.instantBookable === true,
     otaOnly: raw.otaOnly === true,
+    lat: asNumber(raw.lat) ?? 0,
+    lng: asNumber(raw.lng) ?? 0,
+    address: asString(raw.address),
+    state: asString(raw.state),
+    city: asString(raw.city),
+    cityId: asString(raw.cityId),
+    zipcode: asString(raw.zipcode),
+    place: asString(raw.place),
+    country: asString(raw.country),
+    countryCode: asString(raw.countryCode),
   };
 }
 
@@ -196,14 +227,6 @@ export function mergeFormV2ToUpdatePropertyPayload(
 
   if (roomTypes) payload.roomTypes = roomTypes;
   if (values.airbnbSummary != null) payload.airbnbSummary = values.airbnbSummary;
-  if (Array.isArray(values.listingImages)) {
-    console.log('🔵 [mergeFormV2ToUpdatePropertyPayload] Saving listingImages', {
-      count: values.listingImages.length,
-      images: values.listingImages
-    });
-    payload.listingImages = values.listingImages;
-  }
-  if (values.airbnbHeroOrder != null) payload.airbnbHeroOrder = values.airbnbHeroOrder;
 
   if (Array.isArray(values.listingAmenitiesIds)) {
     payload.listingAmenitiesIds = values.listingAmenitiesIds
@@ -214,6 +237,24 @@ export function mergeFormV2ToUpdatePropertyPayload(
         return { _id: id, count: asNumber(r.count) ?? 1 };
       })
       .filter(Boolean);
+  }
+
+  const lat = asNumber(values.lat);
+  const lng = asNumber(values.lng);
+  if (lat != null) payload.lat = lat;
+  if (lng != null) payload.lng = lng;
+  if (values.address != null) payload.address = asString(values.address);
+  if (values.city != null) payload.city = asString(values.city);
+  if (values.cityId != null) payload.cityId = values.cityId;
+  if (values.state != null) payload.state = asString(values.state);
+  if (values.zipcode != null) payload.zipcode = asString(values.zipcode);
+  if (values.place != null) payload.place = asString(values.place);
+  if (values.country != null) payload.country = asString(values.country);
+  if (values.countryCode != null) payload.countryCode = asString(values.countryCode);
+  if (values.currencyCode != null) payload.currencyCode = asString(values.currencyCode);
+
+  if (Array.isArray(values.listingImages)) {
+    payload.listingImages = cleanListingImagesForPayload(values.listingImages);
   }
 
   return payload;

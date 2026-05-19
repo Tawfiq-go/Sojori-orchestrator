@@ -22,14 +22,22 @@ export default React.memo(function AmenityCard({ amenity, selected, density, onT
   if (density === 'list') {
     return (
       <Box onClick={() => onToggle(amenity)} sx={{
-        ...baseSx(isOn), p: '5px 10px', minHeight: 34, borderRadius: 0.75, borderWidth: 1,
-        display: 'flex', alignItems: 'center', gap: 1,
+        ...baseSx(isOn), p: '6px 10px', minHeight: isOn ? 52 : 34, borderRadius: 0.75, borderWidth: 1,
+        display: 'flex', flexDirection: isOn ? 'column' : 'row', gap: isOn ? 0.5 : 1,
       }}>
-        <Box sx={{ fontSize: 15, width: 18, textAlign: 'center', flexShrink: 0 }}>{emojiFor(amenity)}</Box>
-        <Typography sx={nmSx(isOn, 11.5)}>{amenity.nameFr}</Typography>
-        {amenity.basic && <BasicBadge tiny />}
-        {isOn && <Stepper count={selected!.count} onMinus={() => onQty(amenity, -1)} onPlus={() => onQty(amenity, +1)} mini />}
-        <Check on={isOn} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, width: '100%' }}>
+          <Box sx={{ fontSize: 15, width: 18, textAlign: 'center', flexShrink: 0 }}>{emojiFor(amenity)}</Box>
+          <Typography sx={{ ...nmSx(isOn, 11.5), whiteSpace: isOn ? 'normal' : 'nowrap' }}>{amenity.nameFr}</Typography>
+          {!isOn && amenity.basic && <BasicBadge tiny />}
+          <Box sx={{ ml: 'auto', flexShrink: 0 }}><Check on={isOn} /></Box>
+        </Box>
+        {isOn && (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75, pl: 3.25 }}
+            onClick={(e) => e.stopPropagation()}>
+            {amenity.basic && <BasicBadge tiny />}
+            <Stepper count={selected!.count} onMinus={() => onQty(amenity, -1)} onPlus={() => onQty(amenity, +1)} mini />
+          </Box>
+        )}
       </Box>
     );
   }
@@ -56,19 +64,54 @@ export default React.memo(function AmenityCard({ amenity, selected, density, onT
     );
   }
 
-  // dense (default)
+  // dense (default) — sélectionné : nom sur ligne 1, ± sur ligne 2
   return (
     <Box onClick={() => onToggle(amenity)} sx={{
-      ...baseSx(isOn), p: '8px 10px', minHeight: 42, gap: 1.125,
-      display: 'flex', alignItems: 'center', position: 'relative',
+      ...baseSx(isOn),
+      p: '8px 10px',
+      minHeight: isOn ? 56 : 42,
+      gap: isOn ? 0.625 : 1.125,
+      display: 'flex',
+      flexDirection: isOn ? 'column' : 'row',
+      alignItems: isOn ? 'stretch' : 'center',
+      position: 'relative',
     }}>
-      <Check on={isOn} dense />
-      <Box sx={{ fontSize: 18, width: 22, textAlign: 'center', flexShrink: 0, animation: isOn ? 'sj-scaleIn 0.2s' : undefined }}>
-        {emojiFor(amenity)}
+      <Box sx={{
+        display: 'flex', alignItems: 'flex-start', gap: 1.125, minWidth: 0, width: '100%',
+      }}>
+        <Box sx={{ pt: 0.125, flexShrink: 0 }}><Check on={isOn} dense /></Box>
+        <Box sx={{
+          fontSize: 18, width: 22, textAlign: 'center', flexShrink: 0,
+          animation: isOn ? 'sj-scaleIn 0.2s' : undefined,
+        }}>
+          {emojiFor(amenity)}
+        </Box>
+        <Typography sx={{
+          ...nmSx(isOn, 12),
+          whiteSpace: isOn ? 'normal' : 'nowrap',
+          display: '-webkit-box',
+          WebkitLineClamp: isOn ? 2 : 1,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}>
+          {amenity.nameFr}
+        </Typography>
+        {!isOn && amenity.basic && <BasicBadge />}
       </Box>
-      <Typography sx={nmSx(isOn, 12)}>{amenity.nameFr}</Typography>
-      {amenity.basic && <BasicBadge />}
-      {isOn && <Stepper count={selected!.count} onMinus={() => onQty(amenity, -1)} onPlus={() => onQty(amenity, +1)} mini />}
+      {isOn && (
+        <Box
+          onClick={(e) => e.stopPropagation()}
+          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75, pl: 4.5 }}
+        >
+          {amenity.basic && <BasicBadge tiny />}
+          <Stepper
+            count={selected!.count}
+            onMinus={() => onQty(amenity, -1)}
+            onPlus={() => onQty(amenity, +1)}
+            mini
+          />
+        </Box>
+      )}
       {hasRooms && (
         <Box sx={{
           position: 'absolute', bottom: -1, right: -1, fontSize: 8, color: T.info,
@@ -132,7 +175,7 @@ function Stepper({ count, onMinus, onPlus, mini }: { count: number; onMinus: () 
   return (
     <Stack direction="row" onClick={e => e.stopPropagation()} sx={{
       border: `1px solid ${T.borderStrong}`, borderRadius: 0.625, overflow: 'hidden',
-      bgcolor: T.bg1, flexShrink: 0, ml: mini ? 'auto' : 0, height: h,
+      bgcolor: T.bg1, flexShrink: 0, height: h,
     }}>
       <IconButton size="small" onClick={onMinus} disableRipple sx={{ width: w, height: h, borderRadius: 0, fontSize: mini ? 11 : 13, color: T.text2, fontWeight: 700, '&:hover': { bgcolor: T.bg2, color: T.text } }}>−</IconButton>
       <Box sx={{ px: mini ? 0.75 : 1.125, display: 'flex', alignItems: 'center', fontFamily: '"Geist Mono", monospace', fontWeight: 700, fontSize: mini ? 11 : 12, minWidth: mini ? 20 : 30, justifyContent: 'center' }}>{count}</Box>

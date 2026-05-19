@@ -26,8 +26,10 @@ import {
   fetchChannelsHttpAccessLogs,
   fetchChannelsIngressById,
   fetchChannelsIngressList,
+  fetchChannelsLeadsRuApis,
   fetchChannelsListingRuApis,
   fetchChannelsListingRuCallBodies,
+  fetchChannelsMessagingRuApis,
   fetchChannelsOAuthRuApis,
   fetchChannelsOAuthRuCallBodies,
   fetchChannelsOverview,
@@ -49,9 +51,15 @@ import {
   resolveBusinessViewTab,
   ruCalendarStatusBadgeClass,
   summarizeCalendarRuRow,
+  summarizeListingRuRow,
 } from '../../utils/businessTabHelpers';
-import { buildCalendarModificationRecap } from '../../utils/calendarRecapHelpers';
+import {
+  buildCalendarModificationRecap,
+  recapLinesFromRequestPayload,
+} from '../../utils/calendarRecapHelpers';
+import { buildListingRuRecap } from '../../utils/listingRecapHelpers';
 import { CalendarRuRecapModal, type CalendarRuRecapView } from './CalendarRuRecapModal';
+import { ListingRuRecapModal, type ListingRuRecapView } from './ListingRuRecapModal';
 
 const LIMIT = 25;
 
@@ -163,6 +171,24 @@ function useRuBodies(
   const [bodies, setBodies] = useState<Record<string, RuBody>>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
+  const loadBody = async (id: string) => {
+    if (!id) return;
+    const cached = bodies[id];
+    if (cached && cached.error == null && (cached.requestXml != null || cached.requestPayload != null)) {
+      return;
+    }
+    setLoadingId(id);
+    try {
+      const { data } = await fetchBody(id);
+      if (!data?.success) throw new Error(data?.error || 'Fetch failed');
+      setBodies((p) => ({ ...p, [id]: data.data || {} }));
+    } catch (e) {
+      setBodies((p) => ({ ...p, [id]: { error: errMsg(e) } }));
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
   const toggle = async (id: string) => {
     if (!id) return;
     if (expandId === id) {
@@ -174,21 +200,11 @@ function useRuBodies(
       setExpandId(id);
       return;
     }
-    setLoadingId(id);
-    try {
-      const { data } = await fetchBody(id);
-      if (!data?.success) throw new Error(data?.error || 'Fetch failed');
-      setBodies((p) => ({ ...p, [id]: data.data || {} }));
-      setExpandId(id);
-    } catch (e) {
-      setBodies((p) => ({ ...p, [id]: { error: errMsg(e) } }));
-      setExpandId(id);
-    } finally {
-      setLoadingId(null);
-    }
+    await loadBody(id);
+    setExpandId(id);
   };
 
-  return { expandId, bodies, loadingId, toggle, setExpandId };
+  return { expandId, bodies, loadingId, toggle, setExpandId, loadBody };
 }
 
 function RuBodyPanels({ body, mode }: { body: RuBody; mode: 'calendar' | 'listing' | 'user' | 'oauth' }) {
@@ -297,6 +313,8 @@ export function BusinessTab() {
   const [distPage, setDistPage] = useState(1);
   const [httpPage, setHttpPage] = useState(1);
   const [reviewsPage, setReviewsPage] = useState(1);
+  const [messagingPage, setMessagingPage] = useState(1);
+  const [leadsPage, setLeadsPage] = useState(1);
   const [hookPage, setHookPage] = useState(1);
 
   const [overviewList, setOverviewList] = useState<{ items?: unknown[]; total?: number; limit?: number } | null>(null);
@@ -329,6 +347,7 @@ export function BusinessTab() {
   const distBodies = useRuBodies((id) => fetchChannelsDistributionRuCallBodies(id));
 
   const [calendarRecapModal, setCalendarRecapModal] = useState<{ row: RuRow; rowId: string } | null>(null);
+  const [listingRecapModal, setListingRecapModal] = useState<{ row: RuRow; rowId: string } | null>(null);
 
   const [httpData, setHttpData] = useState<{ items?: unknown[]; pagination?: { total?: number } } | null>(null);
   const [httpLoading, setHttpLoading] = useState(false);
@@ -337,6 +356,16 @@ export function BusinessTab() {
   const [reviewsList, setReviewsList] = useState<{ items?: unknown[]; total?: number } | null>(null);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewsError, setReviewsError] = useState<string | null>(null);
+
+  const [messagingRuList, setMessagingRuList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
+  const [messagingRuLoading, setMessagingRuLoading] = useState(false);
+  const [messagingRuError, setMessagingRuError] = useState<string | null>(null);
+  const messagingBodies = useRuBodies((id) => fetchChannelsDistributionRuCallBodies(id));
+
+  const [leadsRuList, setLeadsRuList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
+  const [leadsRuLoading, setLeadsRuLoading] = useState(false);
+  const [leadsRuError, setLeadsRuError] = useState<string | null>(null);
+  const leadsBodies = useRuBodies((id) => fetchChannelsDistributionRuCallBodies(id));
 
   const [hookList, setHookList] = useState<{ items?: IngressRow[]; total?: number } | null>(null);
   const [hookLoading, setHookLoading] = useState(false);
@@ -412,7 +441,7 @@ export function BusinessTab() {
     try {
       const { data } = await fetchChannelsListingRuApis({ hours, page: listingPage, limit: LIMIT });
       if (!data?.success) {
-        setListingError('Impossible de charger l’audit OTA listing');
+        setListingError('Impossible de charger les appels listing RU (ChannelRuApiCall)');
         setListingList(null);
       } else {
         setListingList(data.data);
@@ -524,6 +553,48 @@ export function BusinessTab() {
     }
   }, [hours, reviewsPage]);
 
+  const loadMessagingRu = useCallback(async () => {
+    setMessagingRuLoading(true);
+    setMessagingRuError(null);
+    try {
+      const { data } = await fetchChannelsMessagingRuApis({ hours, page: messagingPage, limit: LIMIT });
+      if (!data?.success) {
+        setMessagingRuError('Impossible de charger les appels messagerie RU');
+        setMessagingRuList(null);
+      } else {
+        setMessagingRuList(data.data);
+        messagingBodies.setExpandId(null);
+      }
+    } catch (e) {
+      setMessagingRuError(errMsg(e));
+      setMessagingRuList(null);
+    } finally {
+      setMessagingRuLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hours, messagingPage]);
+
+  const loadLeadsRu = useCallback(async () => {
+    setLeadsRuLoading(true);
+    setLeadsRuError(null);
+    try {
+      const { data } = await fetchChannelsLeadsRuApis({ hours, page: leadsPage, limit: LIMIT });
+      if (!data?.success) {
+        setLeadsRuError('Impossible de charger les appels leads RU');
+        setLeadsRuList(null);
+      } else {
+        setLeadsRuList(data.data);
+        leadsBodies.setExpandId(null);
+      }
+    } catch (e) {
+      setLeadsRuError(errMsg(e));
+      setLeadsRuList(null);
+    } finally {
+      setLeadsRuLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hours, leadsPage]);
+
   const loadHooks = useCallback(async () => {
     setHookLoading(true);
     setHookError(null);
@@ -589,8 +660,28 @@ export function BusinessTab() {
     else if (apiSeg === 'g') loadHttp();
     else if (apiSeg === 'rev') loadReviews();
     else if (apiSeg === 'd') loadDistribution();
-    else loadOverview();
-  }, [viewTab, apiSeg, docId, loadOverview, loadCalendar, loadListing, loadUser, loadOAuth, loadHttp, loadReviews, loadDistribution]);
+    else if (apiSeg === 'm') {
+      void loadMessagingRu();
+      void loadOverview();
+    } else if (apiSeg === 'lead') {
+      void loadLeadsRu();
+      void loadOverview();
+    } else if (apiSeg === 'r') void loadOverview();
+  }, [
+    viewTab,
+    apiSeg,
+    docId,
+    loadOverview,
+    loadCalendar,
+    loadListing,
+    loadUser,
+    loadOAuth,
+    loadHttp,
+    loadReviews,
+    loadDistribution,
+    loadMessagingRu,
+    loadLeadsRu,
+  ]);
 
   useEffect(() => {
     const h = Number(searchParams.get('hours'));
@@ -611,7 +702,13 @@ export function BusinessTab() {
           else if (apiSeg === 'g') void loadHttp();
           else if (apiSeg === 'rev') void loadReviews();
           else if (apiSeg === 'd') void loadDistribution();
-          else void loadOverview();
+          else if (apiSeg === 'm') {
+            void loadMessagingRu();
+            void loadOverview();
+          } else if (apiSeg === 'lead') {
+            void loadLeadsRu();
+            void loadOverview();
+          } else if (apiSeg === 'r') void loadOverview();
         }
       }),
     [
@@ -629,6 +726,8 @@ export function BusinessTab() {
       loadHttp,
       loadReviews,
       loadDistribution,
+      loadMessagingRu,
+      loadLeadsRu,
     ],
   );
 
@@ -648,6 +747,50 @@ export function BusinessTab() {
       recap: buildCalendarModificationRecap(merged),
     };
   }, [calendarRecapModal, calBodies.bodies]);
+
+  /** Charger requestPayload pour le récap si la liste ne l’inclut pas (comme legacy ChannelsHubPage). */
+  useEffect(() => {
+    const id = calendarRecapModal?.rowId;
+    const row = calendarRecapModal?.row;
+    if (!id || !row) return;
+    const cached = calBodies.bodies[id];
+    if (cached?.error) return;
+    const payloadHasRecapLines = (p: unknown) =>
+      p && typeof p === 'object' && recapLinesFromRequestPayload(p).length > 0;
+    if (payloadHasRecapLines(cached?.requestPayload)) return;
+    if (payloadHasRecapLines(row.requestPayload)) return;
+    if (buildCalendarModificationRecap(row).detailLines.length > 0) return;
+    void calBodies.loadBody(id);
+  }, [calendarRecapModal, calBodies.bodies, calBodies.loadBody]);
+
+  const listingRuRecapView = useMemo((): ListingRuRecapView | null => {
+    if (!listingRecapModal?.rowId) return null;
+    const { row, rowId } = listingRecapModal;
+    const body = listBodies.bodies[rowId];
+    const merged = {
+      ...row,
+      requestPayload: row.requestPayload ?? body?.requestPayload,
+      auditContext: (row.auditContext ?? body?.auditContext) as Record<string, unknown> | undefined,
+      responseMsg: row.responseMsg ?? body?.responseJson,
+    };
+    return {
+      rowId,
+      merged,
+      sum: summarizeListingRuRow(merged),
+      recap: buildListingRuRecap(merged),
+    };
+  }, [listingRecapModal, listBodies.bodies]);
+
+  useEffect(() => {
+    const id = listingRecapModal?.rowId;
+    const row = listingRecapModal?.row;
+    if (!id || !row) return;
+    const cached = listBodies.bodies[id];
+    if (cached?.error) return;
+    if (cached?.requestPayload || row.requestPayload) return;
+    if (buildListingRuRecap(row).detailLines.length > 1) return;
+    void listBodies.loadBody(id);
+  }, [listingRecapModal, listBodies.bodies, listBodies.loadBody]);
 
   useEffect(() => {
     if (viewTab !== 'Hook') return;
@@ -688,7 +831,9 @@ export function BusinessTab() {
       .finally(() => setApiDocLoading(false));
   }, [viewTab, docId]);
 
-  const tableView = overviewViewFromApiSeg(apiSeg) === 'messaging' ? 'messaging' : 'reservations';
+  const overviewKind = overviewViewFromApiSeg(apiSeg);
+  const tableView =
+    overviewKind === 'messaging' ? 'messaging' : overviewKind === 'leads' ? 'leads' : 'reservations';
 
   const bizBtn = (active: boolean) => ({
     padding: '6px 16px',
@@ -719,6 +864,8 @@ export function BusinessTab() {
     setOauthPage(1);
     setHttpPage(1);
     setReviewsPage(1);
+    setMessagingPage(1);
+    setLeadsPage(1);
     setDistPage(1);
   };
 
@@ -943,6 +1090,82 @@ export function BusinessTab() {
     </tbody>
   );
 
+  const renderListingRuTable = (rows: RuRow[]) => (
+    <tbody>
+      {rows.map((row, idx) => {
+        const ts = (row.createdAt || row.timestamp) as string | undefined;
+        const err = String(row.error || row.responseMsg || '');
+        const rowId = String(row._id || `${row.action}-${idx}`);
+        const body = listBodies.bodies[rowId];
+        const mergedRow = {
+          ...row,
+          requestPayload: row.requestPayload ?? body?.requestPayload,
+          auditContext: row.auditContext ?? body?.auditContext,
+        };
+        const sum = summarizeListingRuRow(mergedRow as Parameters<typeof summarizeListingRuRow>[0]);
+        const recap = buildListingRuRecap(mergedRow);
+        const expanded = listBodies.expandId === rowId;
+        const loadingBody = listBodies.loadingId === rowId;
+        return (
+          <Fragment key={rowId}>
+            <tr className="border-t border-slate-100 align-top">
+              <td className="px-2 py-2 text-xs text-slate-700 whitespace-nowrap">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <button
+                    type="button"
+                    disabled={loadingBody}
+                    onClick={() => listBodies.toggle(rowId)}
+                    className="channels-expand-button channels-expand-button-inline"
+                  >
+                    {loadingBody ? '…' : expanded ? '▲ Masquer' : '▼ JSON / XML'}
+                  </button>
+                  <div className="whitespace-nowrap text-[11px] text-slate-600 font-medium">
+                    {ts ? new Date(ts).toLocaleString() : '—'}
+                  </div>
+                </div>
+              </td>
+              <td className="px-2 py-2 text-xs font-mono truncate" title={String(row.action || '')}>
+                {String(row.action || '—')}
+              </td>
+              <td className="px-2 py-2 text-xs">
+                <span className={`channels-badge text-xs ${ruCalendarStatusBadgeClass(String(row.status || ''))}`}>
+                  {String(row.status || '—')}
+                </span>
+              </td>
+              <td className="px-2 py-2 text-right tabular-nums text-xs">{row.responseTime != null ? String(row.responseTime) : '—'}</td>
+              <td className="px-2 py-2 font-mono text-[10px]" title={sum.listingId}>{sum.listingLabel || sum.listingId || '—'}</td>
+              <td className="px-2 py-2 font-mono text-[10px]">{sum.propertyId != null ? String(sum.propertyId) : '—'}</td>
+              <td className="px-2 py-2 text-xs line-clamp-2" title={sum.route}>{sum.route}</td>
+              <td className="px-2 py-2 text-xs align-top">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <span className="line-clamp-2 text-[11px]" title={recap.shortLine}>{recap.shortLine}</span>
+                  <button type="button" className="channels-ru-recap-table-btn" onClick={() => setListingRecapModal({ row, rowId })}>
+                    Récap
+                  </button>
+                </div>
+              </td>
+              <td className="px-2 py-2 text-xs text-slate-600 line-clamp-3" title={err}>
+                {err.slice(0, 120)}
+                {err.length > 120 ? '…' : ''}
+              </td>
+            </tr>
+            {expanded && (
+              <tr className="channels-expanded-row">
+                <td colSpan={9} className="channels-expanded-content">
+                  {loadingBody ? (
+                    <div className="py-3 text-center text-xs text-slate-500">Chargement…</div>
+                  ) : body !== undefined ? (
+                    <RuBodyPanels body={body} mode="listing" />
+                  ) : null}
+                </td>
+              </tr>
+            )}
+          </Fragment>
+        );
+      })}
+    </tbody>
+  );
+
   return (
     <div className="space-y-3">
 
@@ -958,11 +1181,73 @@ export function BusinessTab() {
         </div>
       )}
 
-      {viewTab === 'Api' && !docId && apiSeg !== 'c' && apiSeg !== 'u' && apiSeg !== 'o' && apiSeg !== 'l' && apiSeg !== 'g' && apiSeg !== 'rev' && apiSeg !== 'd' && overviewError && (
+      {viewTab === 'Api' && !docId && apiSeg === 'm' && (
+        <>
+          {messagingRuError && (
+            <div style={{ padding: 8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 4, color: '#B91C1C', fontSize: 13 }}>{messagingRuError}</div>
+          )}
+          <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+            <strong>API RU</strong> (pull REST) · <code className="font-mono">RU_REST_GET_api_messaging_*</code>. Webhooks ci-dessous (ingress).
+          </div>
+          {messagingRuLoading && !messagingRuList && (
+            <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement API messagerie…</div>
+          )}
+          {messagingRuList && (
+            <>
+              <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5">
+                <span>API messagerie · {messagingRuList.pagination?.total ?? '—'}</span>
+                <Pag page={messagingPage} prevOff={messagingPage <= 1} nextOff={(messagingRuList.items?.length || 0) < LIMIT} onPrev={() => setMessagingPage((p) => Math.max(1, p - 1))} onNext={() => setMessagingPage((p) => p + 1)} />
+              </div>
+              <div className="bg-white rounded-lg border overflow-hidden">
+                <div className="channels-table-scroll overflow-auto max-h-[50vh]">
+                  <table className="w-full text-sm min-w-[720px]">
+                    <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+                    {renderRuTable(messagingRuList.items || [], 6, 'user', messagingBodies)}
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+          <div className="text-xs font-semibold text-slate-600 pt-2">Webhooks messagerie (ingress)</div>
+        </>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'lead' && (
+        <>
+          {leadsRuError && (
+            <div style={{ padding: 8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 4, color: '#B91C1C', fontSize: 13 }}>{leadsRuError}</div>
+          )}
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+            <strong>API RU</strong> · <code className="font-mono">Pull_GetLeads_RQ</code>, <code className="font-mono">LNM_PutLeadReservation_RQ</code>.
+          </div>
+          {leadsRuLoading && !leadsRuList && (
+            <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement API leads…</div>
+          )}
+          {leadsRuList && (
+            <>
+              <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5">
+                <span>API leads · {leadsRuList.pagination?.total ?? '—'}</span>
+                <Pag page={leadsPage} prevOff={leadsPage <= 1} nextOff={(leadsRuList.items?.length || 0) < LIMIT} onPrev={() => setLeadsPage((p) => Math.max(1, p - 1))} onNext={() => setLeadsPage((p) => p + 1)} />
+              </div>
+              <div className="bg-white rounded-lg border overflow-hidden">
+                <div className="channels-table-scroll overflow-auto max-h-[50vh]">
+                  <table className="w-full text-sm min-w-[720px]">
+                    <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+                    {renderRuTable(leadsRuList.items || [], 6, 'user', leadsBodies)}
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+          <div className="text-xs font-semibold text-slate-600 pt-2">Ingress leads (LNM)</div>
+        </>
+      )}
+
+      {viewTab === 'Api' && !docId && (apiSeg === 'r' || apiSeg === 'm' || apiSeg === 'lead') && overviewError && (
         <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{overviewError}</div>
       )}
 
-      {viewTab === 'Api' && !docId && apiSeg !== 'c' && apiSeg !== 'u' && apiSeg !== 'o' && apiSeg !== 'l' && apiSeg !== 'g' && apiSeg !== 'rev' && apiSeg !== 'd' && overviewList && (
+      {viewTab === 'Api' && !docId && (apiSeg === 'r' || apiSeg === 'm' || apiSeg === 'lead') && overviewList && (
         <>
           <div className="flex items-center justify-between text-xs text-slate-600 bg-white border border-slate-200 rounded px-3 py-1.5">
             <span>{overviewList.total} résultats</span>
@@ -1014,6 +1299,34 @@ export function BusinessTab() {
                               <button type="button" style={{ color: T.text3, fontWeight: 600, fontSize: 11, padding: "3px 0", transition: "color 0.15s ease", cursor: "pointer", background: "none", border: "none" }} onClick={() => loadMsgDetail(rid)}>{msgExpanded === rid ? '▲ Masquer' : '▼ Détails'}</button>
                             </td></tr>
                           </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </>
+                ) : tableView === 'leads' ? (
+                  <>
+                    <thead className="channels-sticky-thead"><tr>
+                      {['Date', 'Event', 'Guest', 'Email', 'Tél', 'In', 'Out', 'Correlation'].map((h) => (
+                        <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {(overviewList.items as Record<string, unknown>[] || []).map((row) => {
+                        const pd = (row.parsedData || row.canonicalRuBookingV2 || {}) as Record<string, Record<string, unknown>>;
+                        const stay = pd.stay || (pd as Record<string, unknown>).stay as Record<string, unknown> || {};
+                        const guest = (pd.guest || {}) as Record<string, string>;
+                        const guestName = [guest.firstName, guest.lastName].filter(Boolean).join(' ').trim() || '—';
+                        return (
+                          <tr key={String(row.id)} className="border-t border-slate-100 align-top">
+                            <td className="px-2 py-2 text-xs whitespace-nowrap">{row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : '—'}</td>
+                            <td className="px-2 py-2 text-xs">{prettyRuEventKey(row.ruEventKey as string)}</td>
+                            <td className="px-2 py-2 text-xs truncate">{guestName}</td>
+                            <td className="px-2 py-2 text-xs truncate">{guest.email || '—'}</td>
+                            <td className="px-2 py-2 font-mono text-[11px]">{guest.phone || '—'}</td>
+                            <td className="px-2 py-2 text-xs">{String(stay.checkIn || '—')}</td>
+                            <td className="px-2 py-2 text-xs">{String(stay.checkOut || '—')}</td>
+                            <td className="px-2 py-2 font-mono text-[10px]">{String(row.correlationId || '').slice(0, 20)}</td>
+                          </tr>
                         );
                       })}
                     </tbody>
@@ -1132,29 +1445,92 @@ export function BusinessTab() {
         </>
       )}
 
-      {viewTab === 'Api' && !docId && apiSeg === 'l' && listingList && (
+      {viewTab === 'Api' && !docId && apiSeg === 'l' && listingError && (
+        <div style={{ padding: 8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 4, color: '#B91C1C', fontSize: 13 }}>
+          {listingError}
+        </div>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'l' && !listingLoading && !listingError && listingList && (listingList.items?.length ?? 0) === 0 && (
+        <div className="text-sm text-slate-500 p-4 border rounded bg-white text-center space-y-2">
+          <p>Aucun appel listing RU sur la période (Pull/Push propriété, sync OTA, import).</p>
+          <p className="text-xs text-slate-400">
+            APIs : Pull_ListProperties, Pull_ListSpecProp, Push_PutProperty, Push_PutDescription, ListingOtaSync, etc.
+          </p>
+          <Link to={chLink(patchParams(searchParams, { tab: 'Import' }))} className="text-indigo-600 font-semibold text-sm hover:underline">
+            Importer depuis RU →
+          </Link>
+        </div>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'l' && listingList && (listingList.items?.length ?? 0) > 0 && (
         <>
-          {listingError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{listingError}</div>}
-          <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>Listing OTA</span><Pag page={listingPage} prevOff={listingPage <= 1} nextOff={(listingList.items?.length || 0) < LIMIT} onPrev={() => setListingPage((p) => Math.max(1, p - 1))} onNext={() => setListingPage((p) => p + 1)} /></div>
-          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
-            <table className="w-full text-sm min-w-[780px]">
-              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Listing ID', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
-              {renderRuTable(listingList.items || [], 6, 'listing', listBodies)}
-            </table>
-          </div></div>
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950 leading-relaxed">
+            <span className="inline-flex items-center gap-1 font-semibold"><Home size={11} /> Listing RU</span>
+            {' '}— ChannelRuApiCall (Pull/Push propriété, sync canal, import). Pas calendrier / réservations.
+          </div>
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between text-xs bg-white border border-slate-200 rounded px-3 py-1.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+              <span>{listingList.pagination?.total ?? '—'} résultats</span>
+              <span className="text-slate-400 hidden sm:inline">•</span>
+              <span className="channels-badge channels-badge-neutral text-xs">srv-channels</span>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Link
+                to={chLink(patchParams(searchParams, { tab: 'Import' }))}
+                className="text-indigo-600 font-semibold hover:underline whitespace-nowrap"
+              >
+                Import RU →
+              </Link>
+              <Pag
+                page={listingPage}
+                prevOff={listingPage <= 1}
+                nextOff={(listingList.items?.length || 0) < LIMIT}
+                onPrev={() => setListingPage((p) => Math.max(1, p - 1))}
+                onNext={() => setListingPage((p) => p + 1)}
+              />
+            </div>
+          </div>
+          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+            <div className="channels-table-scroll overflow-auto max-h-[78vh]">
+              <table className="w-full text-sm min-w-[960px]">
+                <thead className="channels-sticky-thead channels-calendar-ru-thead text-slate-700">
+                  <tr>
+                    {['Date', 'Action', 'Statut', 'ms', 'Listing', 'Property RU', 'Route', 'Récap', 'Message'].map((h) => (
+                      <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                {renderListingRuTable(listingList.items || [])}
+              </table>
+            </div>
+          </div>
         </>
       )}
 
-      {viewTab === 'Api' && !docId && apiSeg === 'u' && userList && (
+      {viewTab === 'Api' && !docId && apiSeg === 'u' && (
         <>
           {userError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{userError}</div>}
-          <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>Owner RU</span><Pag page={userPage} prevOff={userPage <= 1} nextOff={(userList.items?.length || 0) < LIMIT} onPrev={() => setUserPage((p) => Math.max(1, p - 1))} onNext={() => setUserPage((p) => p + 1)} /></div>
-          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
-            <table className="w-full text-sm min-w-[720px]">
-              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
-              {renderRuTable(userList.items || [], 6, 'user', userBodies)}
-            </table>
-          </div></div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+            Owner RU · <code className="font-mono">Push_CreateUser</code>, <code className="font-mono">Push_FillCompanyDetails</code>, <code className="font-mono">Pull_ListMyUsers</code>…
+          </div>
+          {userLoading && !userList && <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement owner RU…</div>}
+          {!userLoading && !userError && userList && (userList.items?.length ?? 0) === 0 && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">Aucun appel owner RU sur la période.</div>
+          )}
+          {userList && (userList.items?.length ?? 0) > 0 && (
+            <>
+              <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>Owner RU · {userList.pagination?.total ?? '—'}</span><Pag page={userPage} prevOff={userPage <= 1} nextOff={(userList.items?.length || 0) < LIMIT} onPrev={() => setUserPage((p) => Math.max(1, p - 1))} onNext={() => setUserPage((p) => p + 1)} /></div>
+              <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
+                <table className="w-full text-sm min-w-[720px]">
+                  <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+                  {renderRuTable(userList.items || [], 6, 'user', userBodies)}
+                </table>
+              </div></div>
+            </>
+          )}
         </>
       )}
 
@@ -1191,19 +1567,35 @@ export function BusinessTab() {
           {distLoading && !distList && (
             <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement distribution…</div>
           )}
+          {!distLoading && !distError && distList && (distList.items?.length ?? 0) === 0 && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+              Aucun appel distribution (Pull_ListSalesChannels, CM_Pull_PropertiesStatus…) sur la période.
+            </div>
+          )}
         </>
       )}
 
-      {viewTab === 'Api' && !docId && apiSeg === 'o' && oauthList && (
+      {viewTab === 'Api' && !docId && apiSeg === 'o' && (
         <>
           {oauthError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{oauthError}</div>}
-          <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span className="inline-flex gap-1 items-center"><KeyRound size={11} /> OAuth PMS</span><Pag page={oauthPage} prevOff={oauthPage <= 1} nextOff={(oauthList.items?.length || 0) < LIMIT} onPrev={() => setOauthPage((p) => Math.max(1, p - 1))} onNext={() => setOauthPage((p) => p + 1)} /></div>
-          <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
-            <table className="w-full text-sm min-w-[720px]">
-              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
-              {renderRuTable(oauthList.items || [], 6, 'oauth', oauthBodies)}
-            </table>
-          </div></div>
+          <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950">
+            OAuth PMS · <code className="font-mono">GetMasterToken</code>, <code className="font-mono">GetUserToken</code> (RuCallApi srv-user)
+          </div>
+          {oauthLoading && !oauthList && <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement OAuth…</div>}
+          {!oauthLoading && !oauthError && oauthList && (oauthList.items?.length ?? 0) === 0 && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">Aucun token OAuth sur la période.</div>
+          )}
+          {oauthList && (oauthList.items?.length ?? 0) > 0 && (
+            <>
+              <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span className="inline-flex gap-1 items-center"><KeyRound size={11} /> OAuth PMS</span><Pag page={oauthPage} prevOff={oauthPage <= 1} nextOff={(oauthList.items?.length || 0) < LIMIT} onPrev={() => setOauthPage((p) => Math.max(1, p - 1))} onNext={() => setOauthPage((p) => p + 1)} /></div>
+              <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
+                <table className="w-full text-sm min-w-[720px]">
+                  <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+                  {renderRuTable(oauthList.items || [], 6, 'oauth', oauthBodies)}
+                </table>
+              </div></div>
+            </>
+          )}
         </>
       )}
 
@@ -1359,6 +1751,12 @@ export function BusinessTab() {
         bodyLoading={calBodies.loadingId === calendarRuRecapView?.rowId}
         onClose={() => setCalendarRecapModal(null)}
         onOpenJsonXml={(id) => void calBodies.toggle(id)}
+      />
+      <ListingRuRecapModal
+        view={listingRuRecapView}
+        bodyLoading={listBodies.loadingId === listingRuRecapView?.rowId}
+        onClose={() => setListingRecapModal(null)}
+        onOpenJsonXml={(id) => void listBodies.toggle(id)}
       />
     </div>
   );

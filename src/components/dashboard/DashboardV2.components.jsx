@@ -110,7 +110,7 @@ export function DashboardLayout({ user, activePath, onNavigate, onLogout, childr
         className="sojori-main-enter"
         sx={{
           gridArea: 'main',
-          overflow: compactMain ? 'hidden' : 'auto',
+          overflow: 'auto',
           display: compactMain ? 'flex' : 'block',
           flexDirection: 'column',
           minHeight: 0,

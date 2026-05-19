@@ -5,12 +5,15 @@
 // / counter / chips / multilingue / map). Branche-les dans le `renderTab`
 // du ListingFormShell livré précédemment.
 // ════════════════════════════════════════════════════════════════════
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   DESC_LANG_UI,
   findDescIndexForLang,
+  formatListingLocationLine,
   getDescEntryForLang,
 } from '../../../../utils/listingFormV2ApiAdapter';
+import listingsService from '../../../../services/listingsService';
+import ListingLocationMap from '../ListingLocationMap';
 import { FieldIndicator } from '../components/FieldIndicator';
 import { useListingFormStructure } from '../ListingFormStructureContext';
 import { RuFormLegend } from './_shared';
@@ -27,6 +30,28 @@ const T = {
   text: '#14110a', text2: '#55504a', text3: '#7a756c', text4: '#a8a299',
   border: 'rgba(20,17,10,0.07)', borderStrong: 'rgba(20,17,10,0.14)',
 };
+
+const PROPERTY_TYPE_OPTIONS = ['Villa', 'Appartement', 'Maison', 'Riad', 'Studio', 'Chalet', 'Loft'];
+
+/** Valeurs RU / legacy anglaises → libellés du select français. */
+const PROPERTY_TYPE_FROM_API = {
+  Apartment: 'Appartement',
+  'Vacation home': 'Maison',
+  House: 'Maison',
+  Home: 'Maison',
+  Villa: 'Villa',
+  Riad: 'Riad',
+  Studio: 'Studio',
+  Chalet: 'Chalet',
+  Loft: 'Loft',
+};
+
+function resolvePropertyTypeSelectValue(raw) {
+  if (!raw || typeof raw !== 'string') return 'Villa';
+  if (PROPERTY_TYPE_FROM_API[raw]) return PROPERTY_TYPE_FROM_API[raw];
+  if (PROPERTY_TYPE_OPTIONS.includes(raw)) return raw;
+  return 'Villa';
+}
 
 /* ─── Primitives ────────────────────────────────────────────────── */
 const sxInput = {
@@ -302,11 +327,11 @@ export function GeneralTab({
           >
             <FormControl size="small" fullWidth>
               <Select
-                value={values.propertyType === 'Apartment' ? 'Appartement' : (values.propertyType || 'Villa')}
+                value={resolvePropertyTypeSelectValue(values.propertyType)}
                 onChange={(e) => upd('propertyType', e.target.value)}
                 sx={isAI('propertyType') ? sxInputAI['& .MuiOutlinedInput-root'] : sxInput['& .MuiOutlinedInput-root']}
               >
-                {['Villa', 'Appartement', 'Maison', 'Riad', 'Studio', 'Chalet', 'Loft'].map((o) => (
+                {PROPERTY_TYPE_OPTIONS.map((o) => (
                   <MenuItem key={o} value={o}>{o}</MenuItem>
                 ))}
               </Select>
@@ -509,144 +534,230 @@ export function GeneralTab({
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   LocationTab
+   LocationTab — aligné legacy dashboard Address.jsx
    ════════════════════════════════════════════════════════════════════ */
-const POIS = [
-  { id: 'beach',      label: '🏖 Plage 800m' },
-  { id: 'restaurant', label: '🍽 Restaurants' },
-  { id: 'tram',       label: '🚇 Tram T2' },
-  { id: 'super',      label: '🛒 Supermarché' },
-  { id: 'parking',    label: '🅿️ Parking privé' },
-  { id: 'hospital',   label: '🏥 Hôpital 3km' },
-  { id: 'church',     label: '⛪ Église' },
-  { id: 'gym',        label: '💪 Salle de sport' },
-  { id: 'golf',       label: '🏌️ Golf' },
-];
-
 export function LocationTab({ values, onChange }) {
-  const upd = (k, v) => onChange?.({ ...values, [k]: v });
-  const togglePoi = (id) => {
-    const cur = values.pois || [];
-    upd('pois', cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]);
+  const [cities, setCities] = useState([]);
+  const [rentalsMapping, setRentalsMapping] = useState(null);
+  const [mapKey, setMapKey] = useState(0);
+
+  const ownerId =
+    values.ownerId ||
+    (values.owner && typeof values.owner === 'object' ? values.owner._id : null);
+
+  const patch = (partial) => {
+    const next = { ...values, ...partial };
+    if ('city' in partial || 'country' in partial) {
+      next.locationLine = formatListingLocationLine({
+        city: next.city,
+        country: next.country,
+      });
+    }
+    onChange?.(next);
   };
+
+  const upd = (k, v) => patch({ [k]: v });
+
+  const setCoords = ({ lat, lng }) => patch({ lat, lng });
+
+  const parseCoord = (raw) => {
+    if (raw === '' || raw == null) return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    listingsService.getCities({ allCities: true, limit: 2000 }).then((rows) => {
+      if (!cancelled) setCities(rows || []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ownerId) {
+      setRentalsMapping(null);
+      return undefined;
+    }
+    let cancelled = false;
+    listingsService.getRentalsCitiesCurrencyMapping(String(ownerId)).then((data) => {
+      if (!cancelled) setRentalsMapping(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ownerId]);
+
+  useEffect(() => {
+    const cityId = values.cityId;
+    const city = values.city;
+    if (!cityId || !city || !rentalsMapping?.hasMapping) return;
+    const row = (rentalsMapping.rentalsCitiesAndCurrencyMapping || []).find(
+      (m) => m.cityId === cityId || m.cityName === city,
+    );
+    if (row?.currency && row.currency !== values.currencyCode) {
+      patch({ currencyCode: row.currency });
+    }
+  }, [values.cityId, values.city, rentalsMapping]);
+
+  const citySelectValue =
+    values.city && cities.some((c) => c.name === values.city) ? values.city : '';
 
   return (
     <Box>
       <RuFormLegend />
-      {/* Map */}
-      <Box sx={{
-        bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5, p: 0,
-        overflow: 'hidden', mb: 1.75,
-      }}>
-        <Box sx={{
-          height: 240, position: 'relative',
-          background: `linear-gradient(135deg, #e8e3d5, #d4ccb9)`,
-          backgroundImage: `
-            linear-gradient(rgba(184,133,26,0.04) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(184,133,26,0.04) 1px, transparent 1px),
-            radial-gradient(circle at 30% 40%, rgba(10,143,94,0.10) 0, transparent 20%),
-            radial-gradient(circle at 70% 60%, rgba(6,115,179,0.10) 0, transparent 25%)`,
-          backgroundSize: '20px 20px, 20px 20px, auto, auto',
-        }}>
-          <Stack direction="row" spacing={0.625} sx={{ position: 'absolute', top: 8, left: 8, right: 8 }}>
-            <TextField size="small" fullWidth value={values.searchQuery || ''}
-              placeholder="Rechercher une adresse…"
-              onChange={e => upd('searchQuery', e.target.value)}
-              sx={{ bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 0.875, '& .MuiOutlinedInput-root': { fontSize: 12 } }} />
-            <Button size="small" variant="outlined" sx={{ bgcolor: '#fff', borderColor: T.border, color: T.text, fontSize: 11.5, textTransform: 'none', whiteSpace: 'nowrap' }}>
-              🎯 Centrer
-            </Button>
-          </Stack>
-          <Box sx={{
-            position: 'absolute', left: '50%', top: '42%', transform: 'translate(-50%,-50%)',
-            width: 48, height: 48, borderRadius: '50%',
-            bgcolor: 'rgba(184,133,26,0.20)', border: `2px solid ${T.primary}`,
-            animation: 'sojori-pulse-success 2s infinite',
-          }} />
-          <Box sx={{ position: 'absolute', left: '50%', top: '42%', transform: 'translate(-50%, -100%)', fontSize: 32, filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.25))' }}>📍</Box>
-          <Typography sx={{ position: 'absolute', bottom: 6, right: 8, fontSize: 9.5, color: 'rgba(20,17,10,0.35)', fontFamily: '"Geist Mono", monospace' }}>
-            © OpenStreetMap · Sojori Geo
-          </Typography>
-        </Box>
-      </Box>
+      <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 1.5 }}>
+        Carte OpenStreetMap — cliquez ou déplacez le pin pour définir lat/lng (comme le dashboard legacy).
+      </Typography>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2.25, mb: 1.75 }}>
-        <Card title="🏢 Adresse">
-          <Field label="Numéro & rue" required ruField="address">
-            <TextField size="small" fullWidth value={values.street || ''} onChange={e => upd('street', e.target.value)} sx={sxInput} />
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 2.25, mb: 1.75 }}>
+        <Card title="🌍 Région & ville">
+          <Field label="État / région" ruField="state">
+            <TextField
+              size="small"
+              fullWidth
+              value={values.state || ''}
+              onChange={(e) => upd('state', e.target.value)}
+              sx={sxInput}
+            />
           </Field>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mt: 1.5 }}>
-            <Field label="Code postal" required ruField="zipcode">
-              <TextField size="small" value={values.zipcode || ''} onChange={e => upd('zipcode', e.target.value)} sx={sxInput} />
-            </Field>
+          <Box sx={{ mt: 1.5 }}>
             <Field label="Ville" required ruField="city">
-              <TextField size="small" value={values.city || ''} onChange={e => upd('city', e.target.value)} sx={sxInput} />
-            </Field>
-            <Field label="État / Région" ruField="state">
-              <TextField size="small" value={values.region || ''} onChange={e => upd('region', e.target.value)} sx={sxInput} />
-            </Field>
-            <Field label="Pays" required ruField="country">
-              <FormControl size="small">
-                <Select value={values.country || 'FR'} onChange={e => upd('country', e.target.value)}>
-                  <MenuItem value="FR">🇫🇷 France</MenuItem>
-                  <MenuItem value="MA">🇲🇦 Maroc</MenuItem>
-                  <MenuItem value="IT">🇮🇹 Italie</MenuItem>
-                  <MenuItem value="ES">🇪🇸 Espagne</MenuItem>
+              <FormControl size="small" fullWidth>
+                <Select
+                  displayEmpty
+                  value={citySelectValue}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    const selected = cities.find((c) => c.name === name);
+                    patch({
+                      city: name,
+                      cityId: selected?._id || '',
+                    });
+                  }}
+                  sx={sxInput}
+                >
+                  <MenuItem value="" disabled>
+                    <em>Sélectionner une ville</em>
+                  </MenuItem>
+                  {cities.map((c) => (
+                    <MenuItem key={c._id} value={c.name}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Field>
           </Box>
-          <Box sx={{ mt: 1.5 }}>
-            <Field label="Quartier / zone" ruField="zone" hint="Affiché aux voyageurs sur Airbnb / Booking.">
-              <TextField size="small" fullWidth value={values.neighborhood || ''} onChange={e => upd('neighborhood', e.target.value)} sx={sxInput} />
-            </Field>
-          </Box>
         </Card>
 
-        <Card title="🎯 Coordonnées GPS" meta="Drag du pin pour ajuster">
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 1.75 }}>
-            <Field label="Latitude" required ruField="lat">
-              <TextField size="small" type="number" inputProps={{ step: 0.0001 }} value={values.lat ?? ''} onChange={e => upd('lat', +e.target.value)} sx={sxInput} />
+        <Card title="📍 Rue & détails">
+          <Field label="Adresse" required ruField="address">
+            <TextField
+              size="small"
+              fullWidth
+              value={values.address || ''}
+              onChange={(e) => upd('address', e.target.value)}
+              sx={sxInput}
+            />
+          </Field>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mt: 1.5 }}>
+            <Field label="Code postal" ruField="zipcode">
+              <TextField
+                size="small"
+                fullWidth
+                value={values.zipcode || ''}
+                onChange={(e) => upd('zipcode', e.target.value)}
+                sx={sxInput}
+              />
             </Field>
-            <Field label="Longitude" required ruField="lng">
-              <TextField size="small" type="number" inputProps={{ step: 0.0001 }} value={values.lng ?? ''} onChange={e => upd('lng', +e.target.value)} sx={sxInput} />
+            <Field label="Place / zone" ruField="place">
+              <TextField
+                size="small"
+                fullWidth
+                value={values.place || ''}
+                onChange={(e) => upd('place', e.target.value)}
+                sx={sxInput}
+              />
+            </Field>
+            <Field label="Pays" ruField="country">
+              <TextField
+                size="small"
+                fullWidth
+                value={values.country || ''}
+                onChange={(e) => upd('country', e.target.value)}
+                sx={sxInput}
+              />
             </Field>
           </Box>
-          <ToggleRow title="Adresse exacte (vs zone)" desc="Si décoché, Airbnb affichera un cercle approximatif (recommandé pour sécurité)." checked={!!values.exactAddress} onChange={v => upd('exactAddress', v)} />
-          <ToggleRow title="Géofencing check-in"    desc="Vérifie que le voyageur est sur place pour l'auto check-in." checked={values.geofencing !== false} onChange={v => upd('geofencing', v)} />
         </Card>
       </Box>
 
-      <Card title="🚪 Instructions d'arrivée" meta="howToArrive · multilingue">
-        <LangSwitcher value={values.howToArriveLang || '🇫🇷 FR'} onChange={v => upd('howToArriveLang', v)} />
-        <Field label="Comment arriver" ruField="howToArrive" hint="Envoyé automatiquement 24h avant le check-in via WhatsApp.">
-          <TextField size="small" multiline rows={4} fullWidth value={values.howToArrive || ''} onChange={e => upd('howToArrive', e.target.value)} sx={sxInput} />
-        </Field>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 1.5, mt: 1.75 }}>
-          <Field label="Aéroport le plus proche">
-            <TextField size="small" value={values.nearestAirport || ''} onChange={e => upd('nearestAirport', e.target.value)} sx={sxInput} />
-          </Field>
-          <Field label="Distance aéroport (km)">
-            <TextField size="small" type="number" value={values.airportDistance ?? ''} onChange={e => upd('airportDistance', +e.target.value)} sx={sxInput} />
-          </Field>
-          <Field label="Transfert recommandé">
-            <FormControl size="small">
-              <Select value={values.transferOption || 'Taxi'} onChange={e => upd('transferOption', e.target.value)}>
-                <MenuItem value="Taxi">Taxi (~25 €)</MenuItem>
-                <MenuItem value="Public">Tram + bus</MenuItem>
-                <MenuItem value="Car">Voiture de location</MenuItem>
-                <MenuItem value="Sojori">Service Sojori</MenuItem>
-              </Select>
-            </FormControl>
-          </Field>
+      <Card title="🗺 Carte" meta="OpenStreetMap">
+        <Box
+          sx={{
+            height: 300,
+            borderRadius: 1,
+            overflow: 'hidden',
+            border: `1px solid ${T.border}`,
+          }}
+        >
+          <ListingLocationMap
+            key={mapKey}
+            lat={values.lat}
+            lng={values.lng}
+            height={300}
+            onCoordsChange={setCoords}
+          />
         </Box>
+        <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => setMapKey((k) => k + 1)}
+            sx={{ textTransform: 'none', fontSize: 11.5, borderColor: T.border, color: T.text2 }}
+          >
+            Rafraîchir la carte
+          </Button>
+          {values.lat && values.lng ? (
+            <Typography sx={{ fontSize: 11, color: T.text3, alignSelf: 'center', fontFamily: '"Geist Mono", monospace' }}>
+              {Number(values.lat).toFixed(5)}, {Number(values.lng).toFixed(5)}
+            </Typography>
+          ) : null}
+        </Stack>
       </Card>
 
-      <Card title="🏛 Points d'intérêt" meta="Affichés sur la page guest">
-        <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 1.25 }}>
-          Cocher les catégories pertinentes pour le voyageur :
-        </Typography>
-        <ChipsRow items={POIS} value={values.pois || []} onToggle={togglePoi} />
+      <Card title="🎯 Coordonnées GPS" meta="Saisie manuelle ou via la carte">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+          <Field label="Latitude" required ruField="lat">
+            <TextField
+              size="small"
+              type="number"
+              inputProps={{ step: 0.0001 }}
+              value={values.lat ?? ''}
+              onChange={(e) => {
+                const n = parseCoord(e.target.value);
+                if (n != null) upd('lat', n);
+              }}
+              sx={sxInput}
+            />
+          </Field>
+          <Field label="Longitude" required ruField="lng">
+            <TextField
+              size="small"
+              type="number"
+              inputProps={{ step: 0.0001 }}
+              value={values.lng ?? ''}
+              onChange={(e) => {
+                const n = parseCoord(e.target.value);
+                if (n != null) upd('lng', n);
+              }}
+              sx={sxInput}
+            />
+          </Field>
+        </Box>
       </Card>
     </Box>
   );

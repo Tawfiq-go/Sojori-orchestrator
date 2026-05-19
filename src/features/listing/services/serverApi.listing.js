@@ -34,9 +34,7 @@ export async function getListingById(listingId, staging = false) {
   return res.data?.data ?? res.data;
 }
 
+/** Aligné backend : GET /listings/by-id/:id (pas /listings/:id). */
 export async function getOneListing(listingId, staging = false) {
-  const res = await axios.get(
-    `${MICROSERVICE_BASE_URL.LISTING}/listings/${encodeURIComponent(String(listingId))}?staging=${staging}`,
-  );
-  return res.data?.data ?? res.data;
+  return getListingById(listingId, staging);
 }
