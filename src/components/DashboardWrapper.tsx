@@ -39,7 +39,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'dashboard': '/dashboard',
     'analytics': '/analytics',
     'reports': '/reports',
-    'orchestrator': '/orchestrator',
+    'orchestrator': '/orchestration',
     'orchestration/plans': '/orchestration/plans',
     'orchestration/timeline': '/orchestration/timeline',
     'orchestration/events': '/orchestration/events',

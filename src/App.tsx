@@ -139,6 +139,7 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/orchestrator" element={<Navigate to="/orchestration" replace />} />
               <Route path="/orchestration" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
               <Route path="/orchestration/plans" element={<LazyRoute><OrchestrationPlansPage /></LazyRoute>} />
               <Route path="/admin/orchestrator" element={<LazyRoute><OrchestrationPlansPage /></LazyRoute>} />
