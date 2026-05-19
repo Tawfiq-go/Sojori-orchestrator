@@ -4,6 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 
 import { formatCasablancaDateTime, formatCasablancaDateOnly, formatCasablancaTimeOnly } from './dateFormatting';
+import { buildActionConfigEntries, buildConfigSections } from './orchestrationConfigDisplay';
 
 /**
  * Calculate relative day label from check-in date
@@ -175,44 +176,9 @@ const buildAssignments = (assignStaffAction) => {
   return assignments;
 };
 
-/**
- * Build config object from action config
- */
-const buildConfig = (action, actionKey) => {
-  if (!action?.config) return {};
-
-  const config = {};
-
-  switch (actionKey) {
-    case 'sendNotification':
-      if (action.config.channelDisplayLabel) config.Canal = action.config.channelDisplayLabel;
-      if (action.config.templateName) config.Template = action.config.templateName;
-      if (action.config.momentLabel) config.Moment = action.config.momentLabel;
-      break;
-
-    case 'requestTimeslot':
-      if (action.config.channelDisplayLabel) config.Canal = action.config.channelDisplayLabel;
-      if (action.config.templateName) config.Template = action.config.templateName;
-      if (action.config.deadlineHours) config.Deadline = `${action.config.deadlineHours}h`;
-      break;
-
-    case 'assignStaff':
-      if (action.config.strategy) config.Stratégie = action.config.strategy;
-      if (action.config.dayJ) config['Jour J'] = action.config.dayJ;
-      if (action.config.dayJPlusOne) config['Jour J+1'] = action.config.dayJPlusOne;
-      break;
-
-    case 'deadlineEscalation':
-      if (action.config.escalateTo) config['Escalade à'] = action.config.escalateTo;
-      if (action.config.deadlineTiming) {
-        const t = action.config.deadlineTiming;
-        config.Échéance = `${t.value} ${t.unit === 'DAYS' ? 'jour(s)' : 'heure(s)'} avant`;
-      }
-      break;
-  }
-
-  return config;
-};
+/** @deprecated use buildActionConfigEntries / buildConfigSections */
+const buildConfig = (action, actionKey, workflow) =>
+  buildActionConfigEntries(action, actionKey, workflow);
 
 /**
  * Build audit trail from workflow metadata and action executions
@@ -291,7 +257,7 @@ const buildActions = (actionKey, action) => {
 /**
  * Map a single workflow action to a SubStep
  */
-const mapActionToSubStep = (workflow, actionKey, action) => {
+const mapActionToSubStep = (workflow, actionKey, action, enrichment = {}) => {
   const subStep = {
     id: actionKey,
     actionId: action?.actionId, // Add actionId for reminder actions
@@ -321,18 +287,37 @@ const mapActionToSubStep = (workflow, actionKey, action) => {
     subStep.sideBadge = { tone: 'warning', label: 'EN COURS' };
   }
 
-  // L3 Details
-  if (action?.scheduledExecutions) {
+  // L3 Details — relances from scheduledExecutions or scheduledReminders
+  if (action?.scheduledExecutions?.length) {
     subStep.reminders = buildReminders(action.scheduledExecutions);
+  } else if (action?.scheduledReminders?.length) {
+    subStep.reminders = buildReminders(
+      action.scheduledReminders.map((r) => ({
+        scheduledFor: r.scheduledFor,
+        status: 'PENDING',
+        condition: r.condition,
+      })),
+    );
   }
 
   if (actionKey === 'assignStaff') {
     subStep.assignments = buildAssignments(action);
   }
 
-  subStep.config = buildConfig(action, actionKey);
+  const { configCards, flatConfig } = buildConfigSections({
+    action,
+    actionKey,
+    workflow,
+    ownerTemplate: enrichment.ownerTemplate,
+    listingDoc: enrichment.listingDoc,
+    planMeta: enrichment.planMeta,
+  });
+  subStep.config = flatConfig;
+  subStep.configCards = configCards;
   subStep.audit = buildAudit(workflow, action);
-  subStep.actions = buildActions(actionKey, action);
+  const isPlaceholder = (workflow.workflowId || '').toString().startsWith('PLACEHOLDER-');
+  subStep.isPlaceholder = isPlaceholder;
+  subStep.actions = isPlaceholder ? [] : buildActions(actionKey, action);
 
   return subStep;
 };
@@ -340,7 +325,7 @@ const mapActionToSubStep = (workflow, actionKey, action) => {
 /**
  * Map API workflow to WorkflowTimeline workflow format
  */
-const mapWorkflow = (workflow, reservationNumber) => {
+const mapWorkflow = (workflow, reservationNumber, enrichment = {}) => {
   // Build sub-steps from workflow actions
   const subSteps = [];
 
@@ -350,7 +335,7 @@ const mapWorkflow = (workflow, reservationNumber) => {
       if (actionKey === 'createTask') return;
 
       if (action && typeof action === 'object') {
-        const subStep = mapActionToSubStep(workflow, actionKey, action);
+        const subStep = mapActionToSubStep(workflow, actionKey, action, enrichment);
         // Add reservationNumber to each action for execution
         if (subStep.actions) {
           subStep.actions = subStep.actions.map(act => ({
@@ -363,11 +348,14 @@ const mapWorkflow = (workflow, reservationNumber) => {
     });
   }
 
+  const isPlaceholder = (workflow.workflowId || '').toString().startsWith('PLACEHOLDER-');
+
   return {
     id: workflow.workflowId,
     type: workflow.category,
     icon: ICON_BY_CATEGORY[workflow.category] || ICON_BY_CATEGORY.default,
     title: workflow.categoryDisplayLabel || workflow.category,
+    isPlaceholder,
     createdAt: formatCasablancaDateTime(workflow.createdAt),
     timeslotId: workflow.timeslotCode || null,
     globalStatus: {
@@ -385,7 +373,7 @@ const mapWorkflow = (workflow, reservationNumber) => {
  * @param {Object} planData - Data from /orchestrator/plans/:reservationCode
  * @returns {Object} { workflows, daySeparators }
  */
-export const mapReservationToWorkflows = (planData) => {
+export const mapReservationToWorkflows = (planData, enrichment = {}) => {
   if (!planData || !planData.workflows) {
     return { workflows: [], daySeparators: [] };
   }
@@ -395,7 +383,9 @@ export const mapReservationToWorkflows = (planData) => {
   const reservationNumber = planData.reservationCode;
 
   // Map workflows
-  const workflows = planData.workflows.map(wf => mapWorkflow(wf, reservationNumber));
+  const workflows = planData.workflows.map((wf) =>
+    mapWorkflow(wf, reservationNumber, enrichment),
+  );
 
   // Build day separators (group by creation date) with relative day labels
   const daySeparators = [];

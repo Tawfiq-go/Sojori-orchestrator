@@ -14,12 +14,14 @@ import { menuBtnPrimary } from '../ChatbotMenuConfig/menuTheme';
 
 export default function ListingConciergeConfigPanel({ listingId, listingName }) {
   const { data: config, isLoading, error, isFetching, refetch } = useListingConciergeConfig(listingId);
-  const { data: syncStatus, isLoading: syncLoading, refetch: refetchSync } = useListingConciergeSyncStatus(listingId);
+  const isNotFound = Boolean(error?.notFound);
+  const { data: syncStatus, isLoading: syncLoading, refetch: refetchSync } = useListingConciergeSyncStatus(
+    listingId,
+    { enabled: !isNotFound },
+  );
   const createMutation = useCreateListingConciergeConfig();
   const syncMutation = useSyncListingConciergeConfig();
   const updateMutation = useUpdateListingConciergeServices();
-
-  const isNotFound = Boolean(error?.notFound);
 
   const initialData = useMemo(() => {
     if (!config) return null;

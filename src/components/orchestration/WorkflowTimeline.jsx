@@ -10,6 +10,7 @@
 // `sojori-pulse-success`, `sojori-pulse-error`, `sojori-shake`, `sojori-fade-up`.
 // ════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
+import OrchestrationConfigCards from './OrchestrationConfigCards';
 
 /* ─── Mappings status ──────────────────────────────────────────── */
 const DOT_CLASS = {
@@ -286,8 +287,61 @@ function ActionButtons({ actions, onAction, subStepId }) {
   );
 }
 
+
+function DetailPanelToggle({ label, open, onToggle, variant = 'default' }) {
+  const active = open;
+  const styles =
+    variant === 'audit'
+      ? {
+          bg: active ? 'var(--info)' : 'var(--bg-paper)',
+          color: active ? '#fff' : 'var(--info)',
+          border: active ? 'var(--info)' : 'rgba(6, 115, 179, 0.35)',
+        }
+      : {
+          bg: active ? 'var(--accent)' : 'var(--bg-paper)',
+          color: active ? '#fff' : 'var(--accent-deep)',
+          border: active ? 'var(--accent)' : 'var(--accent-border)',
+        };
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        height: 28,
+        padding: '0 10px',
+        fontSize: 10.5,
+        fontWeight: 700,
+        borderRadius: 6,
+        border: `1px solid ${styles.border}`,
+        background: styles.bg,
+        color: styles.color,
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ fontSize: 9 }}>{open ? '▼' : '▶'}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
 /* ─── Level 3 : SubStep details (relances + config + audit) ─── */
-function SubStepDetails({ sub, onAction, reservationNumber }) {
+function SubStepDetails({ sub, onAction, reservationNumber, isPlaceholder }) {
+  const [showConfig, setShowConfig] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
+
+  const hasConfig =
+    (sub.configCards?.length > 0) || (sub.config && Object.keys(sub.config).length > 0);
+  const hasAudit = sub.audit?.length > 0;
+
   const handleSendReminder = (reminder, index) => {
     // Trigger resend action for this specific reminder
     if (sub.actionId && reservationNumber) {
@@ -365,21 +419,57 @@ function SubStepDetails({ sub, onAction, reservationNumber }) {
         </>
       )}
 
-      {sub.config && Object.keys(sub.config).length > 0 && (
-        <>
-          <SectionH>Config</SectionH>
-          {Object.entries(sub.config).map(([k, v]) => v ? <KV key={k} k={k} v={v} /> : null)}
-        </>
+      {(hasConfig || hasAudit) && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 10, marginBottom: 6 }}>
+          {hasConfig && (
+            <DetailPanelToggle
+              label="Config"
+              open={showConfig}
+              onToggle={() => setShowConfig((v) => !v)}
+            />
+          )}
+          {hasAudit && (
+            <DetailPanelToggle
+              label={`Audit · ${sub.audit.length}`}
+              open={showAudit}
+              onToggle={() => setShowAudit((v) => !v)}
+              variant="audit"
+            />
+          )}
+        </div>
       )}
 
-      {sub.audit?.length > 0 && (
-        <>
-          <SectionH>Audit · {sub.audit.length}</SectionH>
+      {showConfig && hasConfig && (
+        <div style={{ marginBottom: 8 }}>
+          <OrchestrationConfigCards cards={sub.configCards} />
+        </div>
+      )}
+
+      {showAudit && hasAudit && (
+        <div style={{ marginBottom: 8 }}>
           <AuditList items={sub.audit} />
-        </>
+        </div>
       )}
 
-      <ActionButtons actions={sub.actions} onAction={onAction} subStepId={sub.id} />
+      {isPlaceholder ? (
+        <div
+          style={{
+            marginTop: 8,
+            padding: '8px 10px',
+            fontSize: 10.5,
+            lineHeight: 1.45,
+            color: 'var(--warning)',
+            background: 'var(--warning-tint)',
+            border: '1px solid rgba(196, 101, 6, 0.25)',
+            borderRadius: 6,
+          }}
+        >
+          Envoi manuel indisponible — workflow placeholder (pas de plan réel). Configurez le modèle
+          propriétaire et activez la catégorie sur le listing, puis recalculez le plan.
+        </div>
+      ) : (
+        <ActionButtons actions={sub.actions} onAction={onAction} subStepId={sub.id} />
+      )}
     </div>
   );
 }
@@ -440,7 +530,14 @@ function SubStepRow({ sub, open, onToggle, onAction, reservationNumber }) {
       </div>
 
       {/* Level 3 */}
-      {open && <SubStepDetails sub={sub} onAction={onAction} reservationNumber={reservationNumber} />}
+      {open && (
+        <SubStepDetails
+          sub={sub}
+          onAction={onAction}
+          reservationNumber={reservationNumber}
+          isPlaceholder={sub.isPlaceholder}
+        />
+      )}
     </div>
   );
 }

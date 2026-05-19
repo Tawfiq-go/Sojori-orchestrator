@@ -24,16 +24,17 @@ export function useListingConciergeConfig(listingId?: string) {
   });
 }
 
-export function useListingConciergeSyncStatus(listingId?: string) {
+export function useListingConciergeSyncStatus(listingId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['listingConciergeSync', listingId],
     queryFn: async () => {
       if (!listingId) return null;
       const result = await listingsService.getListingConciergeSyncStatus(listingId);
+      if (result.notFound) return null;
       if (result.error && !result.data) throw new Error(result.error);
       return result.data ?? null;
     },
-    enabled: Boolean(listingId),
+    enabled: Boolean(listingId) && options?.enabled !== false,
     retry: 1,
   });
 }
@@ -103,16 +104,17 @@ export function useListingSupportCategories(listingId?: string) {
   });
 }
 
-export function useListingSupportSyncStatus(listingId?: string) {
+export function useListingSupportSyncStatus(listingId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['listingSupportSync', listingId],
     queryFn: async () => {
       if (!listingId) return null;
       const result = await listingsService.getListingSupportSyncStatus(listingId);
+      if (result.notFound) return null;
       if (result.error && !result.data) throw new Error(result.error);
       return result.data ?? null;
     },
-    enabled: Boolean(listingId),
+    enabled: Boolean(listingId) && options?.enabled !== false,
     retry: 1,
   });
 }
@@ -173,16 +175,17 @@ export function useListingRulesAndInfo(listingId?: string) {
   });
 }
 
-export function useListingRulesSyncStatus(listingId?: string) {
+export function useListingRulesSyncStatus(listingId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['listingRulesSync', listingId],
     queryFn: async () => {
       if (!listingId) return null;
       const result = await listingsService.getListingRulesSyncStatus(listingId);
+      if (result.notFound) return null;
       if (result.error && !result.data) throw new Error(result.error);
       return result.data ?? null;
     },
-    enabled: Boolean(listingId),
+    enabled: Boolean(listingId) && options?.enabled !== false,
     retry: 1,
   });
 }

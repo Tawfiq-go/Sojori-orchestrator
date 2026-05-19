@@ -10,6 +10,7 @@ import OrchestrationFilters from './filters/OrchestrationFilters';
 import ReservationCard from './ReservationCard';
 import WorkflowTimeline from './WorkflowTimeline';
 import { mapReservationToWorkflows } from '../../utils/workflowMapper';
+import { fetchOrchestrationPlanContext } from '../../utils/fetchOrchestrationPlanContext';
 import { dispatchWorkflowAction } from './WorkflowActionsHandler';
 import ViewMessagesModal from './modals/ViewMessagesModal';
 import ReassignStaffModal from './modals/ReassignStaffModal';
@@ -86,8 +87,9 @@ const OrchestrationView = () => {
         const response = await axios.get(url);
 
         if (response.data.success) {
-          // Map API response to WorkflowTimeline format
-          const mapped = mapReservationToWorkflows(response.data.data);
+          const planData = response.data.data;
+          const enrichment = await fetchOrchestrationPlanContext(planData);
+          const mapped = mapReservationToWorkflows(planData, enrichment);
           setWorkflowsData(mapped);
         }
       } catch (err) {
@@ -241,7 +243,9 @@ const OrchestrationView = () => {
                     const url = `${API_URL}/api/v1/orchestrator/orchestration/plans/${reservationNumber}`;
                     const response = await axios.get(url);
                     if (response.data.success) {
-                      const mapped = mapReservationToWorkflows(response.data.data);
+                      const planData = response.data.data;
+                      const enrichment = await fetchOrchestrationPlanContext(planData);
+                      const mapped = mapReservationToWorkflows(planData, enrichment);
                       setWorkflowsData(mapped);
                     }
                   } catch (err) {

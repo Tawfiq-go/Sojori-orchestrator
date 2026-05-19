@@ -14,12 +14,14 @@ import { menuBtnPrimary } from '../ChatbotMenuConfig/menuTheme';
 
 export default function ListingSupportConfigPanel({ listingId, listingName }) {
   const { data: config, isLoading, error, isFetching, refetch } = useListingSupportCategories(listingId);
-  const { data: syncStatus, isLoading: syncLoading, refetch: refetchSync } = useListingSupportSyncStatus(listingId);
+  const isNotFound = Boolean(error?.notFound);
+  const { data: syncStatus, isLoading: syncLoading, refetch: refetchSync } = useListingSupportSyncStatus(
+    listingId,
+    { enabled: !isNotFound },
+  );
   const createMutation = useCreateListingSupportCategories();
   const syncMutation = useSyncListingSupportCategories();
   const updateMutation = useUpdateListingSupportCategories();
-
-  const isNotFound = Boolean(error?.notFound);
 
   const initialCategories = useMemo(
     () => config?.categories || [],
