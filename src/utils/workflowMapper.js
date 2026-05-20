@@ -226,9 +226,17 @@ const buildAudit = (workflow, action) => {
 /**
  * Build actions array (interactive buttons for L3)
  */
-const buildActions = (actionKey, action) => {
+const buildActions = (actionKey, action, workflow) => {
   const actions = [];
   const actionId = action?.actionId; // ID from API for execution
+
+  // Ménage payant : requestTimeslot = trace client WhatsApp (COMPLETED), pas de relances orchestrateur
+  if (
+    workflow?.categoryType === 'CLEANING_PAID' &&
+    actionKey === 'requestTimeslot'
+  ) {
+    return actions;
+  }
 
   if (actionKey === 'sendNotification' || actionKey === 'requestTimeslot') {
     if (action?.status === 'PENDING') {
@@ -269,6 +277,8 @@ const mapActionToSubStep = (workflow, actionKey, action, enrichment = {}) => {
   // Primary metric (summary line)
   if (actionKey === 'sendNotification' && action?.executedAt) {
     subStep.primaryMetric = `Email · envoyé ${formatCasablancaTimeOnly(action.executedAt)}`;
+  } else if (actionKey === 'requestTimeslot' && workflow?.categoryType === 'CLEANING_PAID') {
+    subStep.primaryMetric = 'Créneau commandé par le client (WhatsApp)';
   } else if (actionKey === 'requestTimeslot' && action?.scheduledReminders) {
     const remindersCount = action.scheduledReminders.length || 0;
     subStep.primaryMetric = `${remindersCount} relance(s) envoyée(s)`;
@@ -317,7 +327,7 @@ const mapActionToSubStep = (workflow, actionKey, action, enrichment = {}) => {
   subStep.audit = buildAudit(workflow, action);
   const isPlaceholder = (workflow.workflowId || '').toString().startsWith('PLACEHOLDER-');
   subStep.isPlaceholder = isPlaceholder;
-  subStep.actions = isPlaceholder ? [] : buildActions(actionKey, action);
+  subStep.actions = isPlaceholder ? [] : buildActions(actionKey, action, workflow);
 
   return subStep;
 };

@@ -18,10 +18,11 @@ import axios from 'axios';
 import { API_BASE_URL as API_URL } from '../../../config/backendServer.config';
 import { formatCasablancaDateTime } from '../../../utils/dateFormatting';
 
-const ViewMessagesModal = ({ open, onClose, actionId, reservationNumber }) => {
+const ViewMessagesModal = ({ open, onClose, actionId, reservationNumber, timeslotCode }) => {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [emptyHint, setEmptyHint] = useState(null);
 
   useEffect(() => {
     if (!open || !actionId) return;
@@ -34,18 +35,21 @@ const ViewMessagesModal = ({ open, onClose, actionId, reservationNumber }) => {
         // Appel API pour récupérer l'historique des messages
         const url = `${API_URL}/api/v1/orchestrator/actions/${actionId}/messages`;
         const response = await axios.get(url, {
-          params: { reservationNumber },
+          params: { reservationNumber, ...(timeslotCode ? { timeslotCode } : {}) },
           timeout: 10000,
         });
 
         if (response.data?.success) {
           setMessages(response.data.data || []);
+          setEmptyHint(response.data.hint || null);
         } else {
           setError(response.data?.error || 'Erreur lors du chargement');
+          setEmptyHint(null);
         }
       } catch (err) {
         console.error('[ViewMessagesModal] Error fetching messages:', err);
         setError(err.response?.data?.error || err.message || 'Erreur réseau');
+        setEmptyHint(null);
       } finally {
         setIsLoading(false);
       }
@@ -115,8 +119,13 @@ const ViewMessagesModal = ({ open, onClose, actionId, reservationNumber }) => {
         ) : messages.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 4, color: 'var(--text-muted)' }}>
             <Typography sx={{ fontSize: 14 }}>
-              Aucun message trouvé
+              Aucun message orchestrateur pour cette action.
             </Typography>
+            {emptyHint && (
+              <Typography sx={{ fontSize: 12, mt: 1.5, maxWidth: 480, mx: 'auto' }}>
+                {emptyHint}
+              </Typography>
+            )}
           </Box>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
