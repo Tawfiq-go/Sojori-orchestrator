@@ -14,9 +14,9 @@ export default function TooltipBreakdown({ inv, dateStr, currency = 'EUR', place
   return (
     <div role="tooltip" style={{
       position: 'absolute', zIndex: 100,
-      ...(placement === 'left'  ? { right: 'calc(100% + 12px)', top: 0 } : { left: 'calc(100% + 12px)', top: 0 }),
+      ...(placement === 'left'  ? { right: 'calc(100% + 12px)', bottom: 0 } : { left: 'calc(100% + 12px)', bottom: 0 }),
       minWidth: 220, maxWidth: 280,
-      background: 'rgba(255,255,255,0.85)',
+      background: 'rgba(255,255,255,0.95)',
       backdropFilter: 'blur(20px) saturate(180%)',
       WebkitBackdropFilter: 'blur(20px) saturate(180%)',
       border: `1px solid ${T.borderStrong}`, borderRadius: 14,

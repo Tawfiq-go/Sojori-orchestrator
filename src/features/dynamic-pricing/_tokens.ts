@@ -168,6 +168,18 @@ export interface PortfolioRow {
   aiEnabled: boolean;
   mode?: PricingMode;
   bounds?: { floor: number; ceiling: number };
+  pilotConfig?: {
+    enabled: boolean;
+    applyPrice?: boolean;
+    applyMinStay?: boolean;
+    modeEnabled: boolean;
+    mode: string;
+    floorNormal: number;
+    ceiling: number;
+    minStayDelta: number;
+    minStayPlancher: number;
+    eventsCount: number;
+  } | null;
   thumbColor?: 1 | 2 | 3 | 4 | 5 | 6;
 }
 

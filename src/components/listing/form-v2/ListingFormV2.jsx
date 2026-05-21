@@ -22,11 +22,13 @@ import GroceryConfigTab from '../../../features/listing/components/ConfigOrchest
 import ServiceClientConfigTab from '../../../features/listing/components/ConfigOrchestration/ServiceClientConfigTab';
 import MessagesConfigTab from '../../../features/listing/components/ConfigOrchestration/MessagesConfigTab';
 import OrchestrationConfigTab from '../../../features/listing/components/ConfigOrchestration/OrchestrationConfigTab';
-import ConfigOrchestrationListingView from '../../../features/listing/components/ConfigOrchestrationNew/ConfigOrchestrationListingView';
+import PmConfigTabFrame from '../../../features/listing/components/ConfigOrchestration/PmConfigTabFrame';
 
 export default function ListingFormV2({
   listingId,
   initialValues = {},
+  defaultLevel = 'detail',
+  defaultTab,
   onSave,
   onImagesPersisted,
   onVerifyRuChannels,
@@ -89,21 +91,21 @@ export default function ListingFormV2({
       if (tabKey === 'support')       return <SupportTab       listingId={listingId} listingName={values.name} />;
       if (tabKey === 'rules')         return <RulesTab         listingId={listingId} listingName={values.name} />;
     } else if (level === 'config-new') {
-      // Config Orchestration NEW - Vue unifiée avec le design Claude Desktop
-      if (tabKey === 'overview-config') {
-        return <ConfigOrchestrationListingView listingId={listingId} ownerId={values.ownerId} />;
+      const wrap = (tabId, node) => (
+        <PmConfigTabFrame tabKey={tabId}>{node}</PmConfigTabFrame>
+      );
+      if (tabKey === 'support-config')        return wrap('support-config', <SupportConfigTabContainer listingId={listingId} ownerId={values.ownerId} />);
+      if (tabKey === 'concierge-config')      return wrap('concierge-config', <ConciergeConfigTab listingId={listingId} ownerId={values.ownerId} />);
+      if (tabKey === 'cleaning-config')       return wrap('cleaning-config', <CleaningConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} onListingPatch={patch => setValues(v => ({ ...v, ...patch }))} />);
+      if (tabKey === 'transport-config')      return wrap('transport-config', <TransportConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} />);
+      if (tabKey === 'grocery-config')        return wrap('grocery-config', <GroceryConfigTab listingId={listingId} ownerId={values.ownerId} />);
+      if (tabKey === 'service-client-config') return wrap('service-client-config', <ServiceClientConfigTab listingId={listingId} ownerId={values.ownerId} />);
+      if (tabKey === 'messages-config')       return wrap('messages-config', <MessagesConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} />);
+      if (tabKey === 'orchestration-config')  return wrap('orchestration-config', <OrchestrationConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} />);
+      // Menu WhatsApp : même UI que Config orchestration (7 onglets) — sans cadre schéma/mockup
+      if (tabKey === 'whatsapp-config') {
+        return <WhatsAppTab {...common} listingId={listingId} listingName={values.name} />;
       }
-
-      // Tabs individuels (fallback)
-      if (tabKey === 'support-config')        return <SupportConfigTabContainer listingId={listingId} ownerId={values.ownerId} />;
-      if (tabKey === 'concierge-config')      return <ConciergeConfigTab listingId={listingId} ownerId={values.ownerId} />;
-      if (tabKey === 'cleaning-config')       return <CleaningConfigTab listingId={listingId} ownerId={values.ownerId} />;
-      if (tabKey === 'transport-config')      return <TransportConfigTab listingId={listingId} ownerId={values.ownerId} />;
-      if (tabKey === 'grocery-config')        return <GroceryConfigTab listingId={listingId} ownerId={values.ownerId} />;
-      if (tabKey === 'service-client-config') return <ServiceClientConfigTab listingId={listingId} ownerId={values.ownerId} />;
-      if (tabKey === 'messages-config')       return <MessagesConfigTab listingId={listingId} ownerId={values.ownerId} />;
-      if (tabKey === 'orchestration-config')  return <OrchestrationConfigTab listingId={listingId} ownerId={values.ownerId} />;
-      if (tabKey === 'whatsapp-config')       return <WhatsAppTab {...common} listingId={listingId} listingName={values.name} />;
     }
     return null;
   };
@@ -137,17 +139,17 @@ export default function ListingFormV2({
         rules:         { tone: 'neutral', label: '3' },
         // Config NEW tabs
         'support-config':        { tone: 'neutral', label: '3' },
-        'concierge-config':      { tone: 'neutral', label: '5' },
-        'cleaning-config':       { tone: 'neutral', label: '2' },
-        'transport-config':      { tone: 'neutral', label: '0' },
+        'concierge-config':      { tone: 'neutral', label: '6' },
+        'cleaning-config':       { tone: 'neutral', label: '7' },
+        'transport-config':      { tone: 'neutral', label: '9' },
         'grocery-config':        { tone: 'neutral', label: '1' },
         'service-client-config': { tone: 'neutral', label: '4' },
         'messages-config':       { tone: 'neutral', label: '2' },
         'orchestration-config':  { tone: 'neutral', label: '3' },
         'whatsapp-config':       { tone: 'success', label: '✓' },
       }}
-      defaultLevel="detail"
-      defaultTab="general"
+      defaultLevel={defaultLevel}
+      defaultTab={defaultTab || (defaultLevel === 'config-new' ? 'support-config' : defaultLevel === 'config' ? 'orchestration' : 'general')}
       onSave={() => onSave?.(values)}
       onPublish={() => onSave?.({ ...values, status: 'published' })}
       onPreview={() => window.open(`/listings/${listingId}/preview`)}

@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, CircularProgress, Alert } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import ListingFormV2 from '../components/listing/form-v2/ListingFormV2';
@@ -13,6 +13,13 @@ import { toast } from 'react-toastify';
 export function ListingFormV2Page() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const levelParam = searchParams.get('level');
+  const tabParam = searchParams.get('tab');
+  const defaultLevel =
+    levelParam === 'config-new' || levelParam === 'config' || levelParam === 'detail'
+      ? levelParam
+      : 'detail';
   const queryClient = useQueryClient();
 
   // Fetch listing data
@@ -112,6 +119,8 @@ export function ListingFormV2Page() {
       <ListingFormV2
         listingId={id!}
         initialValues={formValues}
+        defaultLevel={defaultLevel}
+        defaultTab={tabParam || undefined}
         onSave={saveListing}
         onImagesPersisted={() => {
           queryClient.invalidateQueries({ queryKey: ['listing', id] });

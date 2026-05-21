@@ -20,7 +20,7 @@ function GaugeBar({ label, num, den, hint }: { label: string; num: number; den: 
   const barPct = den > 0 ? Math.min(100, (num / den) * 100) : 0;
   return (
     <Box sx={{ flex: 1, minWidth: 140 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 0.5 }}>
+      <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between',  mb: 0.5 }}>
         <Typography sx={{
           fontSize: 10, fontWeight: 800, fontFamily: '"Geist Mono", monospace',
           color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em',
@@ -70,7 +70,7 @@ export default function PortfolioDataMaturityCard({ maturity, cityLabel, loading
       boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
       animation: 'sj-fadeIn 0.35s',
     }}>
-      <Stack direction="row" alignItems="center" gap={2} sx={{ mb: 1.75, flexWrap: 'wrap' }}>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 2,  mb: 1.75, flexWrap: 'wrap' }}>
         <Box>
           <Typography sx={{
             fontSize: 10, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
@@ -101,8 +101,7 @@ export default function PortfolioDataMaturityCard({ maturity, cityLabel, loading
       </Stack>
       <Stack
         direction={{ xs: 'column', md: 'row' }}
-        gap={2}
-        sx={{ flexWrap: 'wrap' }}
+        sx={{ gap: 2,  flexWrap: 'wrap' }}
       >
         {maturity.gauges.map((g) => (
           <GaugeBar key={g.id} label={g.label} num={g.num} den={g.den} hint={g.hint} />

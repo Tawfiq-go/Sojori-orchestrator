@@ -42,7 +42,12 @@ function toListingRow(dto: PortfolioListingDto, index: number): PortfolioRow {
     airroiCalendarDays: dto.airroiCalendarDays ?? [],
     airroiCalendarDaysCount: dto.airroiCalendarDaysCount ?? dto.airroiCalendarDays?.length ?? 0,
     perfMeta: dto.perfMeta,
-    aiEnabled: dto.useDynamicPrice,
+    aiEnabled: dto.pilotConfig?.enabled ?? dto.useDynamicPrice,
+    mode: dto.pilotConfig?.mode as PortfolioRow['mode'],
+    bounds: dto.pilotConfig
+      ? { floor: dto.pilotConfig.floorNormal, ceiling: dto.pilotConfig.ceiling }
+      : undefined,
+    pilotConfig: dto.pilotConfig ?? null,
     thumbColor: dto.thumbColor ?? (((index % 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6),
   };
 }

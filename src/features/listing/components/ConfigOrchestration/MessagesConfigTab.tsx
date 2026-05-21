@@ -1,60 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Button, TextField } from '@mui/material';
-import axios from 'axios';
+import { Box, CircularProgress, Typography } from '@mui/material';
+import { SOJORI_TOKENS as T } from './types';
+import { SectionHeader, Card, FormRow, TextArea, WhenOffNote } from './SHARED';
 
-export default function MessagesConfigTab({ listingId, ownerId }: any) {
-  const [config, setConfig] = useState<any>(null);
+interface Props {
+  listingId: string;
+  ownerId?: string;
+  listingValues?: Record<string, unknown>;
+}
+
+export default function MessagesConfigTab({ listingValues = {} }: Props) {
+  const messageCheckout = (listingValues.messageCheckout as string[]) || ['', ''];
+  const [messageFr, setMessageFr] = useState(messageCheckout[0] || messageCheckout[1] || '');
 
   useEffect(() => {
-    fetchConfig();
-  }, [listingId]);
+    const mc = (listingValues.messageCheckout as string[]) || ['', ''];
+    setMessageFr(mc[0] || mc[1] || '');
+  }, [listingValues.messageCheckout]);
 
-  const fetchConfig = async () => {
-    try {
-      const res = await axios.get(`/api/v1/listing/internal/${listingId}/messages`);
-      setConfig(res.data.data);
-    } catch (error) {
-    }
-  };
-
-  const saveConfig = async () => {
-    try {
-      await axios.post(`/api/v1/listing/internal/${listingId}/messages`, config);
-      alert('✅ Sauvegardé');
-    } catch (error) {
-      alert('❌ Erreur');
-    }
-  };
-
-  if (!config) return <div>Chargement...</div>;
+  if (!listingValues || Object.keys(listingValues).length === 0) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center', color: T.text3 }}>
+        <CircularProgress size={24} sx={{ color: T.primary, mb: 2 }} />
+        <Typography>Chargement des instructions départ depuis le listing…</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>📜 Messages Départ</Typography>
-      <TextField
-        fullWidth
-        multiline
-        rows={4}
-        label="Instructions départ (FR)"
-        value={config.departureInstructions?.fr}
-        onChange={(e) => setConfig({
-          ...config,
-          departureInstructions: { ...config.departureInstructions, fr: e.target.value }
-        })}
-        sx={{ mb: 2 }}
+      <SectionHeader
+        icon="📜"
+        title="Instructions départ"
+        badge="WA · OUI"
+        badgeKind="wa-yes"
+        subtitle={
+          <>
+            Message envoyé au voyageur avant le départ. Persisté via <b>messageCheckout</b> sur le document listing (onglet Détail → sauvegarde globale).
+          </>
+        }
       />
-      <TextField
-        fullWidth
-        multiline
-        rows={4}
-        label="Departure instructions (EN)"
-        value={config.departureInstructions?.en}
-        onChange={(e) => setConfig({
-          ...config,
-          departureInstructions: { ...config.departureInstructions, en: e.target.value }
-        })}
-      />
-      <Button variant="contained" onClick={saveConfig} sx={{ mt: 2 }}>Sauvegarder</Button>
+
+      <Card icon="📝" title="Message check-out" subtitle="Français uniquement · EN = copie FR à la sauvegarde listing" meta="messageCheckout[0]">
+        <FormRow label="Instructions départ" schemaPath="messageCheckout[0]" inSchema>
+          <TextArea
+            rows={5}
+            value={messageFr}
+            onChange={e => setMessageFr(e.target.value)}
+            placeholder="Consignes de départ, clés, poubelles…"
+          />
+        </FormRow>
+      </Card>
+
+      <WhenOffNote>
+        <b style={{ color: T.text }}>Sauvegarde</b> · utilisez « Sauvegarder » en bas du formulaire listing (onglet Détail) pour persister{' '}
+        <code>messageCheckout</code>. Collection dédiée messages-config : à créer côté srv-listing.
+      </WhenOffNote>
     </Box>
   );
 }

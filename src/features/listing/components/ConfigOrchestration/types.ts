@@ -2,7 +2,11 @@
 // types.ts — Sojori PM Dashboard · Support Config
 // ════════════════════════════════════════════════════════════════════
 
-export type UrgencyLevel = 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW';
+/** Aligné sur listing_support_categories.priority : normal | high | urgent */
+export type SupportPriority = 'normal' | 'high' | 'urgent';
+
+/** @deprecated alias */
+export type UrgencyLevel = SupportPriority;
 
 export interface LocalizedString {
   fr: string;
@@ -16,8 +20,9 @@ export interface SupportCategory {
   label: LocalizedString;
   description?: LocalizedString;
   icon: string;                  // emoji
-  defaultUrgency: UrgencyLevel;
-  urgencyLocked: boolean;
+  defaultUrgency: SupportPriority;
+  /** true = le voyageur choisit l'urgence dans le flow · false = urgence forcée (défaut catégorie) */
+  guestCanChoosePriority: boolean;
   order: number;
 }
 
@@ -50,12 +55,17 @@ export const SOJORI_TOKENS = {
   errorTint: 'rgba(200,30,30,0.10)',
 } as const;
 
-/* ─── Couleurs urgences ─── */
-export const URGENCY_COLORS: Record<UrgencyLevel, { bg: string; fg: string; label: string }> = {
-  CRITICAL: { bg: 'rgba(200,30,30,0.10)',   fg: '#c81e1e', label: 'CRITICAL' },
-  HIGH:     { bg: 'rgba(196,101,6,0.12)',   fg: '#c46506', label: 'HIGH' },
-  NORMAL:   { bg: 'rgba(10,143,94,0.10)',   fg: '#0a8f5e', label: 'NORMAL' },
-  LOW:      { bg: 'rgba(20,17,10,0.06)',    fg: '#55504a', label: 'LOW' },
+/** Typographie Atelier 2026 — Config Orch. (aligné Support / SHARED) */
+export const CONFIG_ORCH_FONT = {
+  sans: 'inherit',
+  mono: '"Geist Mono", "SF Mono", ui-monospace, monospace',
+} as const;
+
+/* ─── Couleurs urgences (FR) ─── */
+export const URGENCY_COLORS: Record<SupportPriority, { bg: string; fg: string; label: string }> = {
+  normal: { bg: 'rgba(10,143,94,0.10)', fg: '#0a8f5e', label: 'Normal' },
+  high: { bg: 'rgba(196,101,6,0.12)', fg: '#c46506', label: 'Haute' },
+  urgent: { bg: 'rgba(200,30,30,0.10)', fg: '#c81e1e', label: 'Critique' },
 };
 
 /* ─── Seeds par défaut (3 catégories Sojori) ─── */
@@ -66,8 +76,8 @@ export const DEFAULT_CATEGORIES: SupportCategory[] = [
     label: { fr: 'Problème technique', en: 'Technical issue', ar: 'مشكلة تقنية' },
     description: { fr: 'Électricité, plomberie, Wi-Fi', en: 'Electricity, plumbing, Wi-Fi' },
     icon: '🔧',
-    defaultUrgency: 'HIGH',
-    urgencyLocked: false,
+    defaultUrgency: 'high',
+    guestCanChoosePriority: true,
     order: 0,
   },
   {
@@ -76,8 +86,8 @@ export const DEFAULT_CATEGORIES: SupportCategory[] = [
     label: { fr: 'Confort', en: 'Comfort' },
     description: { fr: 'Climatisation, chauffage, literie', en: 'A/C, heating, bedding' },
     icon: '🌡️',
-    defaultUrgency: 'NORMAL',
-    urgencyLocked: false,
+    defaultUrgency: 'normal',
+    guestCanChoosePriority: true,
     order: 1,
   },
   {
@@ -86,8 +96,8 @@ export const DEFAULT_CATEGORIES: SupportCategory[] = [
     label: { fr: 'Question générale', en: 'General question' },
     description: { fr: 'Règles, accès, informations', en: 'Rules, access, information' },
     icon: '💬',
-    defaultUrgency: 'LOW',
-    urgencyLocked: false,
+    defaultUrgency: 'normal',
+    guestCanChoosePriority: true,
     order: 2,
   },
 ];

@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isAxiosError } from 'axios';
 import type { BienViewProps } from '../BienView';
-import type { PricingMode } from '../bien/PricingControls';
+import {
+  DEFAULT_PRICING_MODES,
+  type PricingMode,
+  type PricingModeDef,
+} from '../bien/PricingControls';
 import type { MarketKpis } from '../bien/MarketCharts';
 import type { MarketCityKpis } from '../PortfolioView';
 import type { CalendarDay } from '../bien/YearlyCalendar';
@@ -11,6 +15,8 @@ import {
   fetchDynamicPricingPortfolio,
   fetchPilotConfig,
   refreshOneListingPerformanceAirroi,
+  savePilotConfig,
+  type PilotPricingEventDto,
 } from '../../../services/dynamicPricingApi';
 import type { PricingEvent } from '../bien/PricingControls';
 import { usePilotPricing } from './usePilotPricing';
@@ -23,8 +29,24 @@ import {
   computeCompsMarketStats,
 } from '../utils/computeCompsMarketStats';
 import { normalizeCityKey } from '../cityScope';
+import { overlayEventsOnCalendarDays } from '../utils/overlayEventsOnCalendar';
 
 const USD_TO_MAD = 10;
+
+function mapUiEventsToDto(events: PricingEvent[]): PilotPricingEventDto[] {
+  return events.map((e) => {
+    const parts = e.dateRange.split('→').map((s) => s.trim());
+    return {
+      _id: e.id,
+      label: e.name,
+      emoji: e.emoji,
+      startDate: (parts[0] ?? '').slice(0, 10),
+      endDate: (parts[1] ?? parts[0] ?? '').slice(0, 10),
+      eventFloorMad: e.fixedPrice,
+      minNightsOverride: e.minNights > 0 ? e.minNights : undefined,
+    };
+  });
+}
 
 function mapAirroiCalendarDays(row: PortfolioRow): CalendarDay[] {
   return (row.airroiCalendarDays ?? []).map((d) => ({
@@ -137,6 +159,7 @@ function buildCompRowFromAirroi(
     id: c.airbnbListingId ?? c.name,
     isSelf: false,
     name: c.name,
+    airbnbListingId: c.airbnbListingId ?? null,
     photoGradient: (thumb % 6) + 1 as 1 | 2 | 3 | 4 | 5 | 6,
     distanceMeters,
     rating: c.rating,
@@ -186,6 +209,22 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const [floor, setFloor] = useState<number | null>(null);
   const [ceiling, setCeiling] = useState<number | null>(null);
   const [mode, setMode] = useState<PricingMode>('equilibre');
+  const [activeModeId, setActiveModeId] = useState('equilibre');
+  const [pricingModes, setPricingModes] = useState<PricingModeDef[]>(DEFAULT_PRICING_MODES);
+  const [minStayDelta, setMinStayDelta] = useState(0);
+  const [minStayPlancher, setMinStayPlancher] = useState(1);
+  const [modeEnabled, setModeEnabled] = useState(true);
+  const [applyPrice, setApplyPrice] = useState(true);
+  const [applyMinStay, setApplyMinStay] = useState(true);
+  const [scopeModalOpen, setScopeModalOpen] = useState(false);
+  const [scopeModalEdit, setScopeModalEdit] = useState(false);
+  const [scopeSaving, setScopeSaving] = useState(false);
+  const [scopeSaveError, setScopeSaveError] = useState<string | null>(null);
+  const [configSaveStatus, setConfigSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const configSaveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const configHydratedRef = useRef(false);
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [calendarYear, setCalendarYear] = useState(new Date().getUTCFullYear());
   const [portfolioRow, setPortfolioRow] = useState<PortfolioRow | null>(null);
   const [hasMarketProd, setHasMarketProd] = useState(false);
@@ -209,13 +248,64 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const pilot = usePilotPricing({
     listingId,
     hasAirroiSnapshot: Boolean(portfolioRow?.hasAirroiSnapshot),
-    mode,
+    activeModeId,
+    pricingModes,
+    legacyMode: mode,
     floor,
     ceiling,
     aiEnabled,
     events,
+    minStayDelta,
+    minStayPlancher,
+    modeEnabled,
+    applyPrice,
+    applyMinStay,
     calendarYear,
   });
+
+  const persistPilotConfig = useCallback(
+    async (eventsOverride?: PricingEvent[]) => {
+      if (!listingId || floor == null || ceiling == null) return;
+      const payload = pilot.buildConfigPayload();
+      if (!payload) return;
+      setConfigSaveStatus('saving');
+      try {
+        await savePilotConfig(listingId, {
+          ...payload,
+          enabled: aiEnabled,
+          applyPrice,
+          applyMinStay,
+          ...(eventsOverride !== undefined
+            ? { events: mapUiEventsToDto(eventsOverride) }
+            : {}),
+        });
+        setConfigSaveStatus('saved');
+      } catch (e) {
+        setConfigSaveStatus('error');
+        throw e;
+      }
+    },
+    [listingId, floor, ceiling, pilot, aiEnabled, applyPrice, applyMinStay],
+  );
+
+  const scheduleConfigSave = useCallback(() => {
+    if (!configHydratedRef.current || !listingId) return;
+    if (configSaveDebounceRef.current) clearTimeout(configSaveDebounceRef.current);
+    configSaveDebounceRef.current = setTimeout(() => {
+      void persistPilotConfig().catch(() => undefined);
+    }, 900);
+  }, [listingId, persistPilotConfig]);
+
+  const mapPilotEventsToUi = useCallback((evs: PilotPricingEventDto[]): PricingEvent[] => {
+    return evs.map((e) => ({
+      id: e._id,
+      emoji: e.emoji ?? '📅',
+      name: e.label,
+      dateRange: `${e.startDate.slice(0, 10)} → ${e.endDate.slice(0, 10)}`,
+      fixedPrice: e.eventFloorMad,
+      minNights: e.minNightsOverride ?? 0,
+    }));
+  }, []);
 
   const load = useCallback(async () => {
     if (!listingId) return;
@@ -279,13 +369,27 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         if (cfgRes.data?.success && cfgRes.data.config) {
           const c = cfgRes.data.config;
           setMode(c.mode);
+          setActiveModeId(c.activeModeId ?? c.mode ?? 'equilibre');
+          setPricingModes(
+            c.modes?.length
+              ? c.modes.map((m) => ({ ...m, kind: m.kind ?? 'preset' }))
+              : DEFAULT_PRICING_MODES,
+          );
           setFloor(c.floorNormal);
           setCeiling(c.ceiling);
           setAiEnabled(c.enabled);
+          setMinStayDelta(c.minStayDelta ?? 0);
+          setMinStayPlancher(c.minStayPlancher ?? 1);
+          setModeEnabled(c.modeEnabled !== false);
+          setApplyPrice(c.applyPrice !== false);
+          setApplyMinStay(c.applyMinStay !== false && c.applyPrice !== false);
+          setEvents(mapPilotEventsToUi(c.events ?? []));
+          configHydratedRef.current = true;
         }
       } catch {
         /* défauts locaux */
       }
+      if (!configHydratedRef.current) configHydratedRef.current = true;
 
       let days: CalendarDay[] = [];
       let fromCache = false;
@@ -402,18 +506,26 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     return { compMapPins: pins, bienMapPosition };
   }, [portfolioRow]);
 
-  /** Snapshot marché (future/rates) : prioritaire — courbe 365j + grille dès le mois courant */
+  /** Snapshot marché brut (future/rates) */
   const showAirroiCalendar = calendarFromAirroi && calendarDays.length > 0;
-  const displayCalendarDays = showAirroiCalendar
-    ? calendarDays
-    : pilot.hasSojoriPreview
-      ? pilot.previewDays
-      : calendarDays;
+  /** Preview mixEngine uniquement si pilote actif — sinon courbe = snapshot AirROI brut */
+  const usesPilotPreview =
+    aiEnabled && pilot.hasSojoriPreview && pilot.previewDays.length > 0;
+  const marketBaseDays = showAirroiCalendar ? calendarDays : calendarDays;
+  const displayCalendarDays = usesPilotPreview
+    ? pilot.previewDays
+    : events.length > 0
+      ? overlayEventsOnCalendarDays(marketBaseDays, events)
+      : pilot.previewDays.length > 0 && pilot.previewLoading
+        ? pilot.previewDays
+        : marketBaseDays;
+  const calendarHasEventOverlay = !usesPilotPreview && events.length > 0;
   const displayHasCalendarProd =
-    showAirroiCalendar || pilot.hasSojoriPreview || calendarFromCache || calendarFromAirroi;
-  const displayCalendarFromAirroi = showAirroiCalendar;
+    showAirroiCalendar || pilot.hasSojoriPreview || pilot.previewLoading || calendarFromCache || calendarFromAirroi;
+  const displayCalendarFromAirroi = !usesPilotPreview && !calendarHasEventOverlay && showAirroiCalendar;
   const displayCalendarFromCache =
-    !showAirroiCalendar && (pilot.hasSojoriPreview || calendarFromCache);
+    usesPilotPreview || (!showAirroiCalendar && (pilot.hasSojoriPreview || calendarFromCache));
+  const displayUsesRolling365 = displayCalendarFromAirroi || usesPilotPreview || calendarHasEventOverlay;
 
   const onExpandDay = pilot.expandDay;
 
@@ -540,6 +652,10 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       hasCalendarProd: displayHasCalendarProd,
       calendarFromAirroi: displayCalendarFromAirroi,
       calendarFromCache: displayCalendarFromCache,
+      calendarUsesPilotPreview: usesPilotPreview,
+      calendarHasEventOverlay,
+      calendarUsesRolling365: displayUsesRolling365,
+      eventsCount: events.length,
       pilotPreviewLoading: pilot.previewLoading,
       pilotApplyLoading: pilot.applyLoading,
       pilotApplySummary: pilot.lastApplySummary,
@@ -556,10 +672,26 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       floor: floor ?? 0,
       ceiling: ceiling ?? 0,
       mode,
+      activeModeId,
+      pricingModes,
+      minStayDelta,
+      minStayPlancher,
+      modeEnabled,
+      applyPrice: aiEnabled && applyPrice,
+      applyMinStay: aiEnabled && applyMinStay,
+      scopeModalOpen,
+      scopeModalEdit,
+      scopeSaving,
+      scopeSaveError,
+      configSaveStatus,
       events,
+      eventModalOpen,
+      editingEventId,
       suggestions: [],
       calendarYear,
       calendarDays: displayCalendarDays,
+      calendarMarketDays:
+        usesPilotPreview && showAirroiCalendar ? calendarDays : undefined,
       calendarYearOptions: [calendarYear, calendarYear + 1],
       compsMarketStats,
       selfVsComps,
@@ -570,23 +702,174 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       compMapPins,
       bienMapPosition,
       calendarAirroiError,
+      airroiCalendarDaysCount: portfolioRow.airroiCalendarDaysCount ?? calendarDays.length,
       compRows,
       estimatedRevenueMad: undefined,
       estimatedRevenueLiftPct: undefined,
-      onToggleAi: setAiEnabled,
-      onFloorChange: (v) => setFloor(v),
-      onCeilingChange: (v) => setCeiling(v),
+      onToggleAi: async (enabled: boolean) => {
+        if (!listingId) return;
+        if (enabled) {
+          setScopeModalEdit(false);
+          setScopeModalOpen(true);
+          return;
+        }
+        setAiEnabled(false);
+        try {
+          await savePilotConfig(listingId, { enabled: false });
+        } catch {
+          /* garde état local */
+        }
+      },
+      onScopeModalClose: () => {
+        if (scopeSaving) return;
+        setScopeModalOpen(false);
+        setScopeSaveError(null);
+      },
+      onScopeModalConfirm: async (choice: { applyPrice: boolean; applyMinStay: boolean }) => {
+        if (!listingId) return;
+        setScopeSaving(true);
+        setScopeSaveError(null);
+        setApplyPrice(choice.applyPrice);
+        setApplyMinStay(choice.applyMinStay);
+        try {
+          const payload = pilot.buildConfigPayload();
+          await savePilotConfig(listingId, {
+            ...(scopeModalEdit ? {} : { enabled: true }),
+            applyPrice: choice.applyPrice,
+            applyMinStay: choice.applyMinStay,
+            ...(payload ?? {}),
+          });
+          if (!scopeModalEdit) setAiEnabled(true);
+          setScopeModalOpen(false);
+          setConfigSaveStatus('saved');
+          await pilot.runPreview();
+        } catch (e) {
+          let msg = 'Enregistrement impossible';
+          if (isAxiosError(e)) {
+            const data = e.response?.data as { error?: string } | undefined;
+            msg = data?.error ?? `HTTP ${e.response?.status ?? '—'} — ${e.message}`;
+          } else if (e instanceof Error) {
+            msg = e.message;
+          }
+          setScopeSaveError(msg);
+        } finally {
+          setScopeSaving(false);
+        }
+      },
+      onEditSyncScope: () => {
+        setScopeModalEdit(true);
+        setScopeModalOpen(true);
+      },
+      onFloorChange: (v) => {
+        setFloor(v);
+        scheduleConfigSave();
+      },
+      onCeilingChange: (v) => {
+        setCeiling(v);
+        scheduleConfigSave();
+      },
       onApplyRecoBounds: () => {
         const adr = portfolioRow.airroiRaw?.ttm_avg_rate;
         if (adr == null) return;
         const m = Math.round(adr * USD_TO_MAD);
         setFloor(Math.round(m * 0.65));
         setCeiling(Math.round(m * 1.35));
+        scheduleConfigSave();
       },
-      onModeChange: setMode,
-      onAddEvent: () => {},
-      onEditEvent: () => {},
-      onDeleteEvent: () => {},
+      onActiveModeChange: (id: string) => {
+        setActiveModeId(id);
+        if (['prudent', 'equilibre', 'agressif'].includes(id)) {
+          setMode(id as PricingMode);
+        }
+        scheduleConfigSave();
+      },
+      onModeToggle: (modeId: string, enabled: boolean) => {
+        setPricingModes((prev) => {
+          const next = prev.map((m) => (m.id === modeId ? { ...m, enabled } : m));
+          if (!enabled && activeModeId === modeId) {
+            const fallback = next.find((m) => m.enabled);
+            if (fallback) {
+              setActiveModeId(fallback.id);
+              if (fallback.kind === 'preset') setMode(fallback.id as PricingMode);
+            }
+          }
+          return next;
+        });
+        scheduleConfigSave();
+      },
+      onAddCustomMode: () => {
+        const id = `custom_${Date.now()}`;
+        setPricingModes((prev) => [
+          ...prev,
+          { id, label: 'Personnalisé', multiplier: 1.05, kind: 'custom', enabled: true },
+        ]);
+        setActiveModeId(id);
+        scheduleConfigSave();
+      },
+      onUpdateCustomMode: (modeId: string, patch: Partial<Pick<PricingModeDef, 'label' | 'multiplier'>>) => {
+        setPricingModes((prev) =>
+          prev.map((m) => (m.id === modeId ? { ...m, ...patch } : m)),
+        );
+        scheduleConfigSave();
+      },
+      onDeleteCustomMode: (modeId: string) => {
+        setPricingModes((prev) => {
+          const next = prev.filter((m) => m.id !== modeId);
+          if (activeModeId === modeId) {
+            const fallback = next.find((m) => m.enabled) ?? next[0];
+            if (fallback) {
+              setActiveModeId(fallback.id);
+              if (fallback.kind === 'preset') setMode(fallback.id as PricingMode);
+            }
+          }
+          return next.length ? next : DEFAULT_PRICING_MODES;
+        });
+        scheduleConfigSave();
+      },
+      onMinStayDeltaChange: (v) => {
+        setMinStayDelta(v);
+        scheduleConfigSave();
+      },
+      onMinStayPlancherChange: (v) => {
+        setMinStayPlancher(v);
+        scheduleConfigSave();
+      },
+      onModeEnabledChange: (v) => {
+        setModeEnabled(v);
+        scheduleConfigSave();
+      },
+      onAddEvent: () => {
+        setEditingEventId(null);
+        setEventModalOpen(true);
+      },
+      onEditEvent: (id: string) => {
+        setEditingEventId(id);
+        setEventModalOpen(true);
+      },
+      onDeleteEvent: async (id: string) => {
+        const next = events.filter((e) => e.id !== id);
+        setEvents(next);
+        try {
+          await persistPilotConfig(next);
+          await pilot.runPreview().catch(() => undefined);
+        } catch {
+          /* configSaveStatus = error */
+        }
+      },
+      onEventModalClose: () => setEventModalOpen(false),
+      onEventSave: async (ev: PricingEvent) => {
+        const next = editingEventId
+          ? events.map((e) => (e.id === editingEventId ? ev : e))
+          : [...events, ev];
+        setEvents(next);
+        setEventModalOpen(false);
+        try {
+          await persistPilotConfig(next);
+          await pilot.runPreview().catch(() => undefined);
+        } catch {
+          /* configSaveStatus = error */
+        }
+      },
       onAcceptSuggestion: () => {},
       onYearChange: setCalendarYear,
       onApplyToOps: applyToOps,

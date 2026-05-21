@@ -25,7 +25,7 @@ export default function PortfolioCityScopeBar({
 
   return (
     <Box sx={{ mb: 2 }}>
-      <Stack direction="row" gap={1} sx={{ alignItems: 'center', mb: 1 }}>
+      <Stack direction="row" sx={{ gap: 1,  alignItems: 'center', mb: 1 }}>
         <Typography sx={{
           fontSize: 10, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
           color: T.text3, textTransform: 'uppercase', letterSpacing: '0.10em',
@@ -47,7 +47,7 @@ export default function PortfolioCityScopeBar({
         ) : null}
       </Stack>
 
-      <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap', mb: 1.25 }}>
+      <Stack direction="row" sx={{ gap: 0.75,  flexWrap: 'wrap', mb: 1.25 }}>
         {options.map(opt => {
           const active = opt.id === '__all__' ? !activeScope : opt.id === activeScope;
           return (
