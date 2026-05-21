@@ -342,6 +342,35 @@ export function fetchChannelsOverview(query: Record<string, unknown>) {
   return apiClient.get(`${CHANNELS_DASHBOARD}/overview?${params.toString()}`, channelsDashboardAxiosConfig());
 }
 
+/** Agrégats webhooks ingress (même filtre que overview). */
+export function fetchChannelsOverviewSummary(query: Record<string, unknown> = {}) {
+  const params = new URLSearchParams();
+  params.append('view', String(query.view || 'reservations'));
+  if (query.period === 'all') {
+    params.append('period', 'all');
+  } else if (query.from && query.to) {
+    params.append('from', String(query.from));
+    params.append('to', String(query.to));
+  } else {
+    params.append('hours', String(query.hours != null ? query.hours : 72));
+  }
+  return apiClient.get(`${CHANNELS_DASHBOARD}/overview-summary?${params.toString()}`, channelsDashboardAxiosConfig());
+}
+
+/** Summary optionnel — ne fait pas échouer la liste si le proxy admin n’est pas encore déployé (404). */
+export async function fetchChannelsOverviewSummarySafe(
+  query: Record<string, unknown> = {},
+): Promise<Record<string, unknown> | null> {
+  try {
+    const { data } = await fetchChannelsOverviewSummary(query);
+    return data?.success ? (data.data as Record<string, unknown>) : null;
+  } catch (e: unknown) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return null;
+    throw e;
+  }
+}
+
 export function fetchChannelsOverviewReviews(query: Record<string, unknown> = {}) {
   const params = new URLSearchParams();
   params.append('page', String(query.page || 1));

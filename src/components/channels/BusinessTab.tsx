@@ -25,7 +25,6 @@ import {
   fetchChannelsDistributionRuCallBodies,
   fetchChannelsHttpAccessLogs,
   fetchChannelsIngressById,
-  fetchChannelsIngressList,
   fetchChannelsLeadsRuApis,
   fetchChannelsListingRuApis,
   fetchChannelsListingRuCallBodies,
@@ -33,20 +32,21 @@ import {
   fetchChannelsOAuthRuApis,
   fetchChannelsOAuthRuCallBodies,
   fetchChannelsOverview,
+  fetchChannelsOverviewSummarySafe,
   fetchChannelsOverviewReviews,
   fetchChannelsOwnerRuApis,
   fetchChannelsOwnerRuCallBodies,
 } from '../../services/channelsDashboardApi';
 import {
-  ingressKindFromHookSeg,
   overviewViewFromApiSeg,
+  overviewViewFromHookSeg,
   parseMrSeg,
-  prettyRuEventKey,
 } from '../../utils/channelsSharedUtils';
+import type { IngressOverviewRow } from '../../utils/ingressRowHelpers';
+import { IngressOverviewSection } from './IngressOverviewSection';
 import { formatCasablancaDate } from '../../utils/dateFormatting';
 import {
   listingIdFromChannelOtaRow,
-  pickMessagingField,
   prettyJson,
   resolveBusinessViewTab,
   ruCalendarStatusBadgeClass,
@@ -74,8 +74,6 @@ type RuBody = {
   ruMessaging?: unknown;
   parsedData?: unknown;
 };
-
-type IngressRow = { id: string; createdAt?: string; ruEventKey?: string; correlationId?: string; publishOk?: boolean | null; rawBody?: string };
 
 type RuRow = Record<string, unknown> & {
   _id?: string;
@@ -317,7 +315,8 @@ export function BusinessTab() {
   const [leadsPage, setLeadsPage] = useState(1);
   const [hookPage, setHookPage] = useState(1);
 
-  const [overviewList, setOverviewList] = useState<{ items?: unknown[]; total?: number; limit?: number } | null>(null);
+  const [overviewList, setOverviewList] = useState<{ items?: IngressOverviewRow[]; total?: number; limit?: number } | null>(null);
+  const [overviewSummary, setOverviewSummary] = useState<Record<string, unknown> | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
 
@@ -367,11 +366,10 @@ export function BusinessTab() {
   const [leadsRuError, setLeadsRuError] = useState<string | null>(null);
   const leadsBodies = useRuBodies((id) => fetchChannelsDistributionRuCallBodies(id));
 
-  const [hookList, setHookList] = useState<{ items?: IngressRow[]; total?: number } | null>(null);
+  const [hookList, setHookList] = useState<{ items?: IngressOverviewRow[]; total?: number } | null>(null);
+  const [hookSummary, setHookSummary] = useState<Record<string, unknown> | null>(null);
   const [hookLoading, setHookLoading] = useState(false);
   const [hookError, setHookError] = useState<string | null>(null);
-  const [hookExpanded, setHookExpanded] = useState<string | null>(null);
-  const [hookFullXml, setHookFullXml] = useState<Record<string, string>>({});
 
   const [msgExpanded, setMsgExpanded] = useState<string | null>(null);
   const [msgDetail, setMsgDetail] = useState<Record<string, RuBody>>({});
@@ -393,22 +391,27 @@ export function BusinessTab() {
   const [hookDocError, setHookDocError] = useState<string | null>(null);
 
   const loadOverview = useCallback(async () => {
+    const view = overviewViewFromApiSeg(apiSeg);
     setOverviewLoading(true);
     setOverviewError(null);
     try {
-      const { data } = await fetchChannelsOverview({
-        hours,
-        page: overviewPage,
-        limit: LIMIT,
-        view: overviewViewFromApiSeg(apiSeg),
-      });
+      const [listRes, summary] = await Promise.all([
+        fetchChannelsOverview({ hours, page: overviewPage, limit: LIMIT, view }),
+        fetchChannelsOverviewSummarySafe({ hours, view }),
+      ]);
+      const { data } = listRes;
       if (!data?.success) {
         setOverviewError('Failed to load overview list');
         setOverviewList(null);
-      } else setOverviewList(data.data);
+        setOverviewSummary(null);
+      } else {
+        setOverviewList(data.data);
+        setOverviewSummary(summary);
+      }
     } catch (e) {
       setOverviewError(errMsg(e));
       setOverviewList(null);
+      setOverviewSummary(null);
     } finally {
       setOverviewLoading(false);
     }
@@ -596,22 +599,27 @@ export function BusinessTab() {
   }, [hours, leadsPage]);
 
   const loadHooks = useCallback(async () => {
+    const view = overviewViewFromHookSeg(hookSeg);
     setHookLoading(true);
     setHookError(null);
     try {
-      const { data } = await fetchChannelsIngressList({
-        hours,
-        page: hookPage,
-        limit: LIMIT,
-        kind: ingressKindFromHookSeg(hookSeg),
-      });
+      const [listRes, summary] = await Promise.all([
+        fetchChannelsOverview({ hours, page: hookPage, limit: LIMIT, view }),
+        fetchChannelsOverviewSummarySafe({ hours, view }),
+      ]);
+      const { data } = listRes;
       if (!data?.success) {
-        setHookError('Failed to load ingress list');
+        setHookError('Failed to load hooks overview');
         setHookList(null);
-      } else setHookList(data.data);
+        setHookSummary(null);
+      } else {
+        setHookList(data.data);
+        setHookSummary(summary);
+      }
     } catch (e) {
       setHookError(errMsg(e));
       setHookList(null);
+      setHookSummary(null);
     } finally {
       setHookLoading(false);
     }
@@ -687,6 +695,10 @@ export function BusinessTab() {
     const h = Number(searchParams.get('hours'));
     if (Number.isFinite(h) && h > 0 && h !== hours) setHours(h);
   }, [searchParams, hours]);
+
+  useEffect(() => {
+    if (viewTab === 'Hook') setHookPage(1);
+  }, [hookSeg, viewTab]);
 
   useEffect(
     () =>
@@ -832,8 +844,16 @@ export function BusinessTab() {
   }, [viewTab, docId]);
 
   const overviewKind = overviewViewFromApiSeg(apiSeg);
+  const hookView = overviewViewFromHookSeg(hookSeg);
   const tableView =
     overviewKind === 'messaging' ? 'messaging' : overviewKind === 'leads' ? 'leads' : 'reservations';
+
+  const hookBanner =
+    hookView === 'messaging'
+      ? 'Webhooks messagerie RU — lecture métier (listing, owner, type événement, publish).'
+      : hookView === 'leads'
+        ? 'Webhooks leads (LNM_PutLeadReservation) — guest, dates, listing, owner.'
+        : 'Webhooks réservations — création / modification / annulation, Sojori #, check-in/out, listing, owner.';
 
   const bizBtn = (active: boolean) => ({
     padding: '6px 16px',
@@ -867,22 +887,6 @@ export function BusinessTab() {
     setMessagingPage(1);
     setLeadsPage(1);
     setDistPage(1);
-  };
-
-  const loadHookFull = async (id: string) => {
-    if (hookFullXml[id] !== undefined) {
-      setHookExpanded(hookExpanded === id ? null : id);
-      return;
-    }
-    try {
-      const { data } = await fetchChannelsIngressById(id);
-      if (!data?.success) throw new Error(data?.error || 'Fetch failed');
-      setHookFullXml((p) => ({ ...p, [id]: data.data?.rawBody || '' }));
-      setHookExpanded(id);
-    } catch (e) {
-      setHookFullXml((p) => ({ ...p, [id]: `Error: ${errMsg(e)}` }));
-      setHookExpanded(id);
-    }
   };
 
   const loadMsgDetail = async (id: string) => {
@@ -1243,138 +1247,24 @@ export function BusinessTab() {
         </>
       )}
 
-      {viewTab === 'Api' && !docId && (apiSeg === 'r' || apiSeg === 'm' || apiSeg === 'lead') && overviewError && (
-        <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{overviewError}</div>
-      )}
-
-      {viewTab === 'Api' && !docId && (apiSeg === 'r' || apiSeg === 'm' || apiSeg === 'lead') && overviewList && (
-        <>
-          <div className="flex items-center justify-between text-xs text-slate-600 bg-white border border-slate-200 rounded px-3 py-1.5">
-            <span>{overviewList.total} résultats</span>
-            <Pag page={overviewPage} prevOff={overviewPage <= 1} nextOff={(overviewList.items?.length || 0) < LIMIT} onPrev={() => setOverviewPage((p) => Math.max(1, p - 1))} onNext={() => setOverviewPage((p) => p + 1)} />
-          </div>
-          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-            <div className="channels-table-scroll overflow-x-auto overflow-y-auto max-h-[min(78vh,calc(100vh-140px))] w-full">
-              <table className="w-full table-fixed text-sm min-w-0">
-                {tableView === 'messaging' ? (
-                  <>
-                    <thead className="channels-sticky-thead"><tr>
-                      {['Date', 'Event', 'Path', 'Thread', 'Message', 'Guest', 'Preview', 'Correlation'].map((h) => (
-                        <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr></thead>
-                    <tbody>
-                      {(overviewList.items as Record<string, unknown>[] || []).map((row) => {
-                        const m = (row.ruMessaging as { data?: Record<string, unknown> }) || {};
-                        const data = m.data || {};
-                        const threadId = pickMessagingField(data, ['ThreadID', 'threadId', 'ThreadId']);
-                        const messageId = pickMessagingField(data, ['MessageID', 'messageId', 'MessageId', 'Id']);
-                        const guest = pickMessagingField(data, ['GuestName', 'guestName', 'CustomerName', 'Name']) || '—';
-                        const preview = pickMessagingField(data, ['Body', 'body', 'Text', 'message', 'Content']) || '';
-                        const detail = msgDetail[String(row.id)];
-                        const rid = String(row.id);
-                        return (
-                          <Fragment key={rid}>
-                            <tr className="border-t border-slate-100 align-top">
-                              <td className="px-3 py-2 text-xs whitespace-nowrap">{row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : '—'}</td>
-                              <td className="px-3 py-2 text-xs">{prettyRuEventKey(row.ruEventKey as string)}</td>
-                              <td className="px-3 py-2 text-xs">srv-reservations</td>
-                              <td className="px-3 py-2 font-mono text-[10px] break-all">{threadId ? String(threadId) : '—'}</td>
-                              <td className="px-3 py-2 font-mono text-[10px] break-all">{messageId ? String(messageId) : '—'}</td>
-                              <td className="px-3 py-2 text-xs truncate">{String(guest)}</td>
-                              <td className="px-3 py-2 text-xs">{String(preview).slice(0, 200)}</td>
-                              <td className="px-3 py-2 font-mono text-[10px]">{String(row.correlationId || '').slice(0, 24)}</td>
-                            </tr>
-                            {msgExpanded === rid && detail && (
-                              <tr style={{ background: T.bg2, borderTop: "none", animation: "expandFade 0.2s ease-out" }}><td colSpan={8} style={{ padding: "8px 12px" }}>
-                                {detail.error ? <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{detail.error}</div> : (
-                                  <div className="space-y-2">
-                                    <pre style={{ background: T.bg, color: T.text, padding: "6px 8px", borderRadius: 4, fontFamily: "monospace", fontSize: 10, lineHeight: 1.3, overflow: "auto", border: `1px solid ${T.border}`, maxHeight: 180 }} className="">{detail.rawBody || '—'}</pre>
-                                    <pre style={{ background: T.bg, color: T.text, padding: "6px 8px", borderRadius: 4, fontFamily: "monospace", fontSize: 10, lineHeight: 1.3, overflow: "auto", border: `1px solid ${T.border}`, maxHeight: 180 }} className="">{prettyJson(detail.ruMessaging)}</pre>
-                                  </div>
-                                )}
-                              </td></tr>
-                            )}
-                            <tr style={{ background: T.bg2, borderTop: `1px solid ${T.border}`, transition: "background-color 0.15s ease" }}><td colSpan={8} className="text-center">
-                              <button type="button" style={{ color: T.text3, fontWeight: 600, fontSize: 11, padding: "3px 0", transition: "color 0.15s ease", cursor: "pointer", background: "none", border: "none" }} onClick={() => loadMsgDetail(rid)}>{msgExpanded === rid ? '▲ Masquer' : '▼ Détails'}</button>
-                            </td></tr>
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </>
-                ) : tableView === 'leads' ? (
-                  <>
-                    <thead className="channels-sticky-thead"><tr>
-                      {['Date', 'Event', 'Guest', 'Email', 'Tél', 'In', 'Out', 'Correlation'].map((h) => (
-                        <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr></thead>
-                    <tbody>
-                      {(overviewList.items as Record<string, unknown>[] || []).map((row) => {
-                        const pd = (row.parsedData || row.canonicalRuBookingV2 || {}) as Record<string, Record<string, unknown>>;
-                        const stay = pd.stay || (pd as Record<string, unknown>).stay as Record<string, unknown> || {};
-                        const guest = (pd.guest || {}) as Record<string, string>;
-                        const guestName = [guest.firstName, guest.lastName].filter(Boolean).join(' ').trim() || '—';
-                        return (
-                          <tr key={String(row.id)} className="border-t border-slate-100 align-top">
-                            <td className="px-2 py-2 text-xs whitespace-nowrap">{row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : '—'}</td>
-                            <td className="px-2 py-2 text-xs">{prettyRuEventKey(row.ruEventKey as string)}</td>
-                            <td className="px-2 py-2 text-xs truncate">{guestName}</td>
-                            <td className="px-2 py-2 text-xs truncate">{guest.email || '—'}</td>
-                            <td className="px-2 py-2 font-mono text-[11px]">{guest.phone || '—'}</td>
-                            <td className="px-2 py-2 text-xs">{String(stay.checkIn || '—')}</td>
-                            <td className="px-2 py-2 text-xs">{String(stay.checkOut || '—')}</td>
-                            <td className="px-2 py-2 font-mono text-[10px]">{String(row.correlationId || '').slice(0, 20)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </>
-                ) : (
-                  <>
-                    <thead className="channels-sticky-thead"><tr>
-                      {['Date', 'Créée RU', 'In', 'Out', 'Client', 'Tél', 'Ad', 'Enf', '€', 'OTA', 'Map', 'Listing', 'Owner', 'RU ID'].map((h) => (
-                        <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr></thead>
-                    <tbody>
-                      {(overviewList.items as Record<string, unknown>[] || []).map((row) => {
-                        const c = (row.canonicalRuBookingV2 || {}) as Record<string, Record<string, unknown>>;
-                        const stay = c.stay || {};
-                        const party = c.party || {};
-                        const money = c.money || {};
-                        const ota = c.ota || {};
-                        const enr = (row.enrichment || {}) as Record<string, unknown>;
-                        const sojori = (c.sojori || enr) as Record<string, unknown>;
-                        const mapOk = sojori?.found === true;
-                        const guestName = c.guest ? `${(c.guest as Record<string, string>).firstName || ''} ${(c.guest as Record<string, string>).lastName || ''}`.trim() : '—';
-                        return (
-                          <tr key={String(row.id)} className="border-t border-slate-100 align-top">
-                            <td className="px-2 py-2 text-xs whitespace-nowrap">{row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : '—'}</td>
-                            <td className="px-2 py-2 text-xs">{c.createdDate ? String(c.createdDate).slice(0, 19).replace('T', ' ') : '—'}</td>
-                            <td className="px-2 py-2 text-xs">{String(stay.checkIn || '—')}</td>
-                            <td className="px-2 py-2 text-xs">{String(stay.checkOut || '—')}</td>
-                            <td className="px-2 py-2 text-xs truncate">{guestName || '—'}</td>
-                            <td className="px-2 py-2 font-mono text-[11px]">{(c.guest as Record<string, string>)?.phone || '—'}</td>
-                            <td className="px-2 py-2 text-right text-xs">{String(party.adults ?? '—')}</td>
-                            <td className="px-2 py-2 text-right text-xs">{String(party.children ?? '—')}</td>
-                            <td className="px-2 py-2 text-right text-xs">{money.ruPrice != null ? String(money.ruPrice) : money.clientPrice != null ? String(money.clientPrice) : '—'}</td>
-                            <td className="px-2 py-2 text-xs truncate">{String(ota.vendor || '—')}</td>
-                            <td className="px-2 py-2 text-center">{mapOk ? <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }} data-variant="success text-xs"><CheckCircle2 size={11} className="inline" /> OK</span> : <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }} data-variant="neutral text-xs">—</span>}</td>
-                            <td className="px-2 py-2 text-xs truncate">{String(sojori.listingName || sojori.listingId || '—')}</td>
-                            <td className="px-2 py-2 text-xs truncate">{String(sojori.ownerDisplayName || sojori.ownerId || '—')}</td>
-                            <td className="px-2 py-2 font-mono text-[11px]">{String(c.ruReservationId || '—')}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </>
-                )}
-              </table>
-            </div>
-          </div>
-        </>
+      {viewTab === 'Api' && !docId && (apiSeg === 'r' || apiSeg === 'm' || apiSeg === 'lead') && (
+        <IngressOverviewSection
+          view={tableView}
+          list={overviewList}
+          loading={overviewLoading}
+          error={overviewError}
+          summary={overviewSummary as Parameters<typeof IngressOverviewSection>[0]['summary']}
+          page={overviewPage}
+          limit={LIMIT}
+          onPagePrev={() => setOverviewPage((p) => Math.max(1, p - 1))}
+          onPageNext={() => setOverviewPage((p) => p + 1)}
+          detailLink={(rowId) =>
+            chLink(patchParams(searchParams, { tab: 'Business', biz: 'hooks', hook: apiSeg === 'lead' ? 'lead' : apiSeg === 'r' ? 'r' : 'm', docId: rowId }))
+          }
+          msgDetail={msgDetail}
+          msgExpanded={msgExpanded}
+          onToggleMsgDetail={loadMsgDetail}
+        />
       )}
 
       {viewTab === 'Api' && !docId && apiSeg === 'g' && (
@@ -1634,40 +1524,24 @@ export function BusinessTab() {
       )}
 
       {viewTab === 'Hook' && !docId && (
-        <div className="space-y-3">
-          {hookError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{hookError}</div>}
-          {hookList && (
-            <>
-              <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>{hookList.total} résultats</span><Pag page={hookPage} prevOff={hookPage <= 1} nextOff={(hookList.items?.length || 0) < LIMIT} onPrev={() => setHookPage((p) => Math.max(1, p - 1))} onNext={() => setHookPage((p) => p + 1)} /></div>
-              <div className="bg-white rounded-lg border overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50"><tr>{['Date', 'Event', 'Correlation', 'Publish', 'XML'].map((h) => <th key={h} className="text-left px-2 py-1.5 text-[11px]">{h}</th>)}</tr></thead>
-                  <tbody>
-                    {(hookList.items as IngressRow[] || []).map((row) => (
-                      <Fragment key={row.id}>
-                        <tr className="border-t border-slate-100">
-                          <td className="px-2 py-1.5 text-xs">{row.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}</td>
-                          <td className="px-2 py-1.5 text-xs">{prettyRuEventKey(row.ruEventKey)}</td>
-                          <td className="px-2 py-1.5 font-mono text-[10px] break-all">{row.correlationId}</td>
-                          <td className="px-2 py-1.5">{row.publishOk === true ? <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }} data-variant="success text-xs"><CheckCircle2 size={11} className="inline" /> OK</span> : row.publishOk === false ? <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }} data-variant="error text-xs"><XCircle size={11} className="inline" /> Fail</span> : <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }} data-variant="neutral text-xs"><HelpCircle size={11} className="inline" /> —</span>}</td>
-                          <td className="px-2 py-1.5"><pre style={{ background: T.bg, color: T.text, padding: "6px 8px", borderRadius: 4, fontFamily: "monospace", fontSize: 10, lineHeight: 1.3, overflow: "auto", border: `1px solid ${T.border}`, maxHeight: 180 }} className=" text-xs">{(row.rawBody || '').slice(0, 400)}</pre></td>
-                        </tr>
-                        {hookExpanded === row.id && hookFullXml[row.id] !== undefined && (
-                          <tr style={{ background: T.bg2, borderTop: "none", animation: "expandFade 0.2s ease-out" }}><td colSpan={5} style={{ padding: "8px 12px" }}><pre style={{ background: T.bg, color: T.text, padding: "6px 8px", borderRadius: 4, fontFamily: "monospace", fontSize: 10, lineHeight: 1.3, overflow: "auto", border: `1px solid ${T.border}`, maxHeight: 180 }} className="">{hookFullXml[row.id]}</pre></td></tr>
-                        )}
-                        <tr style={{ background: T.bg2, borderTop: `1px solid ${T.border}`, transition: "background-color 0.15s ease" }}><td colSpan={5} className="text-center">
-                          <button type="button" style={{ color: T.text3, fontWeight: 600, fontSize: 11, padding: "3px 0", transition: "color 0.15s ease", cursor: "pointer", background: "none", border: "none" }} onClick={() => loadHookFull(row.id)}>{hookExpanded === row.id ? '▲ Masquer' : '▼ XML complet'}</button>
-                          {' · '}
-                          <Link to={chLink(patchParams(searchParams, { tab: 'Business', biz: 'hooks', hook: hookSeg, docId: row.id }))} className="text-indigo-600 text-xs font-semibold hover:underline">Détail</Link>
-                        </td></tr>
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
+        <IngressOverviewSection
+          view={hookView}
+          list={hookList}
+          loading={hookLoading}
+          error={hookError}
+          summary={hookSummary as Parameters<typeof IngressOverviewSection>[0]['summary']}
+          page={hookPage}
+          limit={LIMIT}
+          banner={hookBanner}
+          onPagePrev={() => setHookPage((p) => Math.max(1, p - 1))}
+          onPageNext={() => setHookPage((p) => p + 1)}
+          detailLink={(rowId) =>
+            chLink(patchParams(searchParams, { tab: 'Business', biz: 'hooks', hook: hookSeg, docId: rowId }))
+          }
+          msgDetail={msgDetail}
+          msgExpanded={msgExpanded}
+          onToggleMsgDetail={loadMsgDetail}
+        />
       )}
 
       {viewTab === 'BizOwner' && (

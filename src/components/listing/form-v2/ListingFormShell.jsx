@@ -61,6 +61,27 @@ export const CONFIG_TABS = [
   ]},
 ];
 
+export const CONFIG_NEW_TABS = [
+  { group: 'Vue d\'ensemble', items: [
+    { id: 'overview-config',       icon: '📊', label: 'Vue d\'ensemble' },
+  ]},
+  { group: 'Services', items: [
+    { id: 'support-config',        icon: '🆘', label: 'Support' },
+    { id: 'concierge-config',      icon: '🛎️', label: 'Conciergerie' },
+    { id: 'cleaning-config',       icon: '🏠', label: 'Ménage' },
+    { id: 'transport-config',      icon: '🚗', label: 'Transport' },
+    { id: 'grocery-config',        icon: '🛒', label: 'Courses' },
+  ]},
+  { group: 'Communication', items: [
+    { id: 'service-client-config', icon: '💌', label: 'Service Client' },
+    { id: 'messages-config',       icon: '📜', label: 'Messages' },
+    { id: 'whatsapp-config',       icon: '📱', label: 'WhatsApp' },
+  ]},
+  { group: 'Automation', items: [
+    { id: 'orchestration-config',  icon: '🧼', label: 'Automatisations' },
+  ]},
+];
+
 /* ─── Helpers UI ───────────────────────────────────────────── */
 function StatusChip({ tone, label, dot = true }) {
   const map = {
@@ -121,7 +142,7 @@ function TabButton({ tab, active, statusBadge, onClick }) {
 export default function ListingFormShell({
   listing,                    // { id, name, photoColor, bedrooms, bathrooms, guests, location, completionPct }
   tabsStatus = {},            // { [tabKey]: { tone, label } } — pour les badges
-  defaultLevel = 'detail',    // 'detail' | 'config'
+  defaultLevel = 'detail',    // 'detail' | 'config' | 'config-new'
   defaultTab = 'photos',
   onSave,
   onPublish,
@@ -132,7 +153,7 @@ export default function ListingFormShell({
   const [level, setLevel] = useState(defaultLevel);
   const [activeTab, setActiveTab] = useState(defaultTab);
 
-  const tabsConfig = level === 'detail' ? DETAIL_TABS : CONFIG_TABS;
+  const tabsConfig = level === 'detail' ? DETAIL_TABS : level === 'config' ? CONFIG_TABS : CONFIG_NEW_TABS;
   const activeTabMeta = tabsConfig.flatMap(g => g.items).find(t => t.id === activeTab) || tabsConfig[0].items[0];
   const listingDisplayName = (listing?.name && String(listing.name).trim()) || 'Listing sans nom';
   const locationLine = (listing?.location && String(listing.location).trim()) || '';
@@ -163,6 +184,7 @@ export default function ListingFormShell({
             {[
               { id: 'detail', icon: '🏠', label: 'Détail listing', pillLabel: '11 onglets', accent: T.primary, tint: T.primaryTint, tintColor: T.primaryDeep },
               { id: 'config', icon: '⚙️', label: 'Config orchestration', pillLabel: '7 onglets', accent: T.ai, tint: T.aiTint, tintColor: T.ai },
+              { id: 'config-new', icon: '✨', label: 'Config Orch. NEW', pillLabel: '9 onglets', accent: '#10b981', tint: 'rgba(16,185,129,0.10)', tintColor: '#059669' },
             ].map(opt => {
               const active = level === opt.id;
               return (
@@ -171,7 +193,8 @@ export default function ListingFormShell({
                   component="button"
                   onClick={() => {
                     setLevel(opt.id);
-                    setActiveTab((opt.id === 'detail' ? DETAIL_TABS : CONFIG_TABS)[0].items[0].id);
+                    const tabs = opt.id === 'detail' ? DETAIL_TABS : opt.id === 'config' ? CONFIG_TABS : CONFIG_NEW_TABS;
+                    setActiveTab(tabs[0].items[0].id);
                   }}
                   sx={{
                     all: 'unset',

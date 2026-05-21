@@ -71,7 +71,7 @@ export const devSecurityHeaders: Record<string, string> = {
     // Vite 8 server-ping uses a blob: SharedWorker — without this, console floods and HMR breaks
     "worker-src 'self' blob:",
     `style-src 'self' 'unsafe-inline' ${RU_STYLE_SRC}`,
-    "img-src 'self' data: https: blob:",
+    "img-src 'self' data: https: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com https://*.tile.openstreetmap.org",
     `font-src 'self' data: ${RU_FONT_SRC}`,
     `connect-src 'self' ${SOJORI_API_CONNECT} ${RU_CONNECT_SRC}`,
     `frame-src 'self' ${RU_FRAME_SRC}`,
@@ -94,7 +94,7 @@ export const previewSecurityHeaders: Record<string, string> = {
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline' ${RU_SCRIPT_SRC}`,
     `style-src 'self' 'unsafe-inline' ${RU_STYLE_SRC}`,
-    "img-src 'self' data: https: blob:",
+    "img-src 'self' data: https: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com https://*.tile.openstreetmap.org",
     `font-src 'self' data: ${RU_FONT_SRC}`,
     `connect-src 'self' https://dev.sojori.com wss://dev.sojori.com ${RU_CONNECT_SRC}`,
     `frame-src 'self' ${RU_FRAME_SRC}`,

@@ -1,0 +1,52 @@
+.sojori-logs-hub {
+  padding: 1rem 1.25rem 2rem;
+  max-width: 1400px;
+}
+
+.sojori-logs-hub .sl-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.sojori-logs-hub .sl-tab {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  cursor: pointer;
+}
+
+.sojori-logs-hub .sl-tab.active {
+  background: #fff0eb;
+  border-color: #ff6b35;
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.sojori-logs-hub .sl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.sojori-logs-hub .sl-table th,
+.sojori-logs-hub .sl-table td {
+  border-bottom: 1px solid #f1f5f9;
+  padding: 0.45rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.sojori-logs-hub .sl-detail {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+  max-height: 420px;
+  overflow: auto;
+}

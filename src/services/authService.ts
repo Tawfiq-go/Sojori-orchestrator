@@ -103,12 +103,13 @@ const authService = {
     try {
       const loginUrl = AUTH_CONFIG.API_URL + '/login';
 
-      if (this.isDevMode()) {
-        console.log('🔐 LOCALHOST MODE: Real login to', loginUrl);
-        console.log('🔑 Dev token will bypass CORS');
-      } else {
-        console.log('🔐 PROD MODE: Real login to', loginUrl);
-      }
+      // Logs désactivés pour nettoyer la console
+      // if (this.isDevMode()) {
+      //   console.log('🔐 LOCALHOST MODE: Real login to', loginUrl);
+      //   console.log('🔑 Dev token will bypass CORS');
+      // } else {
+      //   console.log('🔐 PROD MODE: Real login to', loginUrl);
+      // }
 
       const response = await apiClient.post(loginUrl, {
         email: email.trim().toLowerCase(),
@@ -124,7 +125,8 @@ const authService = {
 
       setTokens(token, refreshToken);
 
-      console.log('✅ Connexion réussie:', user.email, '- Role:', user.role);
+      // Logs désactivés pour nettoyer la console
+      // console.log('✅ Connexion réussie:', user.email, '- Role:', user.role);
 
       return {
         token,
