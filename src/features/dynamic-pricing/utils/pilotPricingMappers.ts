@@ -1,6 +1,24 @@
 import type { CalendarDay } from '../bien/YearlyCalendar';
 import type { PriceFactor } from '../_tokens';
-import type { G7Factor } from '../../../services/dynamicPricingApi';
+import type { G7Factor, MinStayFactorDto } from '../../../services/dynamicPricingApi';
+
+export interface MinStayFactorView {
+  key: string;
+  label: string;
+  sub?: string;
+  nights: number;
+  kind: 'base' | 'plus' | 'neutral' | 'clamp';
+}
+
+export function mapMinStayFactorsToView(factors: MinStayFactorDto[]): MinStayFactorView[] {
+  return factors.map((f) => ({
+    key: f.key,
+    label: f.label,
+    sub: f.sub,
+    nights: f.nightsAfter,
+    kind: f.kind,
+  }));
+}
 
 export function mapG7FactorsToPriceFactors(factors: G7Factor[]): PriceFactor[] {
   return factors.map((f) => ({

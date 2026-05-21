@@ -17,7 +17,7 @@ import DynamicPricingBreadcrumb, {
 } from '../features/dynamic-pricing/DynamicPricingBreadcrumb';
 import { buildListingDataCoverage } from '../features/dynamic-pricing/bienDataCoverage';
 import { listingMatchesCityScope, normalizeCityKey } from '../features/dynamic-pricing/cityScope';
-import { applyPilotPricing } from '../services/dynamicPricingApi';
+import { applyPilotPricing, type PilotPricingConfigDto } from '../services/dynamicPricingApi';
 
 /**
  * Dynamic Pricing — portefeuille (tableau brut) + fiche bien (dashboard design Claude).
@@ -83,6 +83,8 @@ export function DynamicPricingPage() {
   };
 
   const isBienPage = Boolean(listingId);
+
+  const patchPilotConfig = portfolio.patchListingPilot;
 
   const listingFieldCoverage =
     isBienPage && bienDetail
@@ -275,6 +277,7 @@ export function DynamicPricingPage() {
                 marketFromCache={Boolean(portfolio.marketCache?.hasCity)}
                 marketFetchedAt={portfolio.marketCache?.fetchedAt ?? null}
                 onDrillDown={(id) => navigate(bienHref(id, cityScope))}
+                onPatchPilotConfig={patchPilotConfig}
                 onBulkAction={async (action, ids) => {
                   if (action === 'apply-to-calendar') {
                     await Promise.all(

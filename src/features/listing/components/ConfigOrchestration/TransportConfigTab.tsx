@@ -1,19 +1,6 @@
-// ════════════════════════════════════════════════════════════════════
-// TransportConfigTab.tsx
-// Configuration transport/navette avec design Claude
-// ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Box,
-  Stack,
-  Typography,
-  IconButton,
-  TextField,
-  Switch,
-  Button,
-  Tooltip,
-  Collapse,
-} from '@mui/material';
+// Transport — FR uniquement · transportServices[]
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Box, Stack, Typography, CircularProgress, IconButton, Collapse, Tooltip } from '@mui/material';
 import {
   DndContext,
   closestCenter,
@@ -31,426 +18,564 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import axios from 'axios';
-import { SOJORI_TOKENS } from './types';
+import { listingsService } from '../../../../services/listingsService';
+import { SOJORI_TOKENS as T, CONFIG_ORCH_FONT } from './types';
+import {
+  Card,
+  FormRow,
+  TextInput,
+  TextArea,
+  ConfigIntroBar,
+  PillButton,
+  LockedPropertyBox,
+  PlaceEndpointField,
+  chipActionSx,
+  TYPO,
+} from './SHARED';
+import { DashedAddButton } from '../../../../components/listing/form-v2/components/cleaning/CleaningSlotDialogs';
+import {
+  TRANSPORT_ROUTE_PRESETS,
+  TRANSPORT_JOURNEY_OPTIONS,
+  journeyLabel,
+  type TransportExternalKind,
+  type TransportJourneyTag,
+  type TransportPriceType,
+  type TransportRouteItem,
+} from './transportRouteCatalog';
+import { listingPropertyFromValues, type ListingPropertyPlace } from './transportListingProperty';
+import { syncRouteEndpoints, TRANSPORT_V1_NOTE } from './transportRouteRules';
 
-const T = SOJORI_TOKENS;
+const MAX_ROUTES = 10;
 
-interface LocalizedString {
-  fr: string;
-  en: string;
-  ar?: string;
-}
-
-interface TransportRoute {
-  id: string;
-  label: LocalizedString;
-  description?: LocalizedString;
-  origin: {
-    address: string;
-    lat?: number;
-    lng?: number;
+function mapApiRoute(t: Record<string, unknown>, i: number, fallbackProperty: ListingPropertyPlace): TransportRouteItem {
+  const name = (t.name as { fr?: string }) || {};
+  const desc = (t.description as { fr?: string }) || {};
+  const route = (t.route as {
+    from?: string;
+    to?: string;
+    estimatedDuration?: string;
+    journeyTag?: TransportJourneyTag;
+    departureType?: string;
+    arrivalType?: string;
+    propertyName?: string;
+    propertyAddress?: string;
+    propertyLat?: number;
+    propertyLng?: number;
+    externalLabel?: string;
+    externalKind?: TransportExternalKind;
+  }) || {};
+  const pricing = (t.pricing as {
+    type?: TransportPriceType;
+    amount?: number;
+    pricePerPerson?: number;
+  }) || {};
+  const capacity = (t.capacity as { maxPassengers?: number }) || {};
+  const journeyTag = route.journeyTag || 'other';
+  const propertyPlace: ListingPropertyPlace = {
+    name: route.propertyName || fallbackProperty.name,
+    address: route.propertyAddress || fallbackProperty.address,
+    lat: route.propertyLat ?? fallbackProperty.lat,
+    lng: route.propertyLng ?? fallbackProperty.lng,
   };
-  destination: {
-    address: string;
-    lat?: number;
-    lng?: number;
+  const externalLabel =
+    route.externalLabel ||
+    (journeyTag === 'arrival' ? route.from : journeyTag === 'departure' ? route.to : route.from) ||
+    '';
+  const draft: TransportRouteItem = {
+    id: String(t.id || `route_${i}`),
+    labelFr: name.fr || 'Route',
+    descriptionFr: desc.fr || '',
+    from: route.from || '',
+    to: route.to || '',
+    journeyTag,
+    departureType: route.departureType as TransportRouteItem['departureType'],
+    arrivalType: route.arrivalType as TransportRouteItem['arrivalType'],
+    externalLabel,
+    externalKind: route.externalKind || 'other',
+    propertyPlace,
+    priceType: pricing.type === 'per_person' ? 'per_person' : 'total',
+    price: Number(pricing.amount) || 0,
+    pricePerPerson: Number(pricing.pricePerPerson) || 0,
+    maxPassengers: Number(capacity.maxPassengers) || 4,
+    estimatedDuration: route.estimatedDuration || '',
+    enabled: t.enabled !== false,
+    order: i,
   };
-  price: number;
-  duration: string;
-  enabled: boolean;
-  order: number;
+  return syncRouteEndpoints(draft, propertyPlace);
 }
 
-interface TransportConfig {
-  enabled: boolean;
-  routes: TransportRoute[];
+function routeToApi(r: TransportRouteItem, i: number, property: ListingPropertyPlace) {
+  const synced = syncRouteEndpoints(r, property);
+  const fr = synced.labelFr;
+  const p = synced.propertyPlace || property;
+  return {
+    id: synced.id,
+    enabled: synced.enabled,
+    name: { fr, en: fr, ar: fr },
+    description: { fr: synced.descriptionFr, en: synced.descriptionFr, ar: synced.descriptionFr },
+    route: {
+      from: synced.from,
+      to: synced.to,
+      estimatedDuration: synced.estimatedDuration || undefined,
+      journeyTag: synced.journeyTag,
+      ...(synced.departureType ? { departureType: synced.departureType } : {}),
+      ...(synced.arrivalType ? { arrivalType: synced.arrivalType } : {}),
+      propertyName: p.name,
+      propertyAddress: p.address,
+      ...(p.lat != null ? { propertyLat: p.lat } : {}),
+      ...(p.lng != null ? { propertyLng: p.lng } : {}),
+      externalLabel: synced.externalLabel,
+      externalKind: synced.externalKind,
+    },
+    pricing: {
+      type: synced.priceType,
+      amount: synced.priceType === 'total' ? synced.price : undefined,
+      pricePerPerson: synced.priceType === 'per_person' ? synced.pricePerPerson || synced.price : undefined,
+      currency: 'MAD',
+    },
+    capacity: {
+      maxPassengers: synced.maxPassengers,
+      errorMessage: {
+        fr: `Maximum ${synced.maxPassengers} passagers`,
+        en: `Maximum ${synced.maxPassengers} passengers`,
+        ar: `الحد الأقصى ${synced.maxPassengers} ركاب`,
+      },
+    },
+    clientFields: {},
+    availability: { type: 'always' },
+    images: [],
+    order: i,
+  };
 }
-
-const DEFAULT_ROUTES: TransportRoute[] = [
-  {
-    id: 'aeroport-listing',
-    label: { fr: 'Aéroport → Logement', en: 'Airport → Property', ar: 'المطار ← السكن' },
-    description: { fr: 'Transfert depuis l\'aéroport', en: 'Transfer from airport', ar: 'نقل من المطار' },
-    origin: {
-      address: 'Aéroport Mohammed V, Casablanca',
-      lat: 33.3673,
-      lng: -7.5898,
-    },
-    destination: {
-      address: 'À compléter (adresse du logement)',
-      lat: 0,
-      lng: 0,
-    },
-    price: 250,
-    duration: '45 min',
-    enabled: true,
-    order: 0,
-  },
-  {
-    id: 'listing-aeroport',
-    label: { fr: 'Logement → Aéroport', en: 'Property → Airport', ar: 'السكن ← المطار' },
-    description: { fr: 'Transfert vers l\'aéroport', en: 'Transfer to airport', ar: 'نقل إلى المطار' },
-    origin: {
-      address: 'À compléter (adresse du logement)',
-      lat: 0,
-      lng: 0,
-    },
-    destination: {
-      address: 'Aéroport Mohammed V, Casablanca',
-      lat: 33.3673,
-      lng: -7.5898,
-    },
-    price: 250,
-    duration: '45 min',
-    enabled: true,
-    order: 1,
-  },
-];
 
 interface Props {
   listingId: string;
   ownerId?: string;
+  listingValues?: Record<string, unknown>;
 }
 
-export default function TransportConfigTab({ listingId }: Props) {
-  const [config, setConfig] = useState<TransportConfig>({ enabled: true, routes: DEFAULT_ROUTES });
+export default function TransportConfigTab({ listingId, listingValues = {} }: Props) {
+  const listingProperty = listingPropertyFromValues(listingValues);
+
+  const defaultRoutes = () =>
+    TRANSPORT_ROUTE_PRESETS.map((p, i) =>
+      syncRouteEndpoints({ ...p, enabled: true, order: i }, listingProperty),
+    );
+
+  const [routes, setRoutes] = useState<TransportRouteItem[]>(defaultRoutes);
   const [loading, setLoading] = useState(true);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const routesRef = useRef(routes);
+  const hydratedRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { routesRef.current = routes; }, [routes]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   useEffect(() => {
-    fetchConfig();
+    hydratedRef.current = false;
+    dirtyRef.current = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await listingsService.getListingConciergeConfig(listingId);
+        const transport = (res.data as { transportServices?: Array<Record<string, unknown>> } | null)
+          ?.transportServices;
+        if (Array.isArray(transport) && transport.length > 0) {
+          setRoutes(transport.map((t, i) => mapApiRoute(t, i, listingProperty)));
+        } else {
+          setRoutes(defaultRoutes());
+        }
+      } catch {
+        /* défauts */
+      } finally {
+        setLoading(false);
+        hydratedRef.current = true;
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-fetch si autre listing
   }, [listingId]);
 
-  const fetchConfig = async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get(`/api/v1/listing/internal/${listingId}/transport-config`);
-      const data = res.data?.data;
-      if (data && data.routes && data.routes.length > 0) {
-        setConfig(data);
-      } else {
-        // Utiliser les routes par défaut si aucune config
-        setConfig({ enabled: true, routes: DEFAULT_ROUTES });
-      }
-    } catch (err: any) {
-      if (err.response?.status === 404) {
-        setConfig({ enabled: true, routes: DEFAULT_ROUTES });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const debouncedSave = useCallback(() => {
+  const persist = useCallback(async () => {
     setSavingState('saving');
-    if ((debouncedSave as any)._t) clearTimeout((debouncedSave as any)._t);
-    (debouncedSave as any)._t = setTimeout(async () => {
-      try {
-        await axios.post(`/api/v1/listing/internal/${listingId}/transport-config`, config);
-        setSavingState('saved');
-        setTimeout(() => setSavingState('idle'), 2000);
-      } catch (error) {
-        setSavingState('idle');
-      }
-    }, 800);
-  }, [config, listingId]);
+    try {
+      const existing = await listingsService.getListingConciergeConfig(listingId);
+      const doc = (existing.data || {}) as { groceryServices?: unknown[]; customServices?: unknown[] };
+      await listingsService.updateListingConciergeServices(listingId, {
+        transportServices: routesRef.current.map((r, i) => routeToApi(r, i, listingProperty)),
+        groceryServices: doc.groceryServices || [],
+        customServices: doc.customServices || [],
+      });
+      setSavingState('saved');
+    } catch {
+      setSavingState('idle');
+      dirtyRef.current = true;
+    }
+  }, [listingId, listingProperty]);
 
   useEffect(() => {
-    if (!loading) {
-      debouncedSave();
-    }
-  }, [config, loading]);
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setConfig((prev) => {
-        const oldIndex = prev.routes.findIndex((r) => r.id === active.id);
-        const newIndex = prev.routes.findIndex((r) => r.id === over.id);
-        const reordered = arrayMove(prev.routes, oldIndex, newIndex).map((r, i) => ({ ...r, order: i }));
-        return { ...prev, routes: reordered };
+    if (loading || !hydratedRef.current || !dirtyRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      persist().finally(() => {
+        dirtyRef.current = false;
       });
-    }
-  };
-
-  const addRoute = () => {
-    const newRoute: TransportRoute = {
-      id: `route-${Date.now()}`,
-      label: { fr: 'Nouvelle route', en: 'New route', ar: 'طريق جديد' },
-      description: { fr: '', en: '', ar: '' },
-      origin: { address: '' },
-      destination: { address: '' },
-      price: 0,
-      duration: '',
-      enabled: true,
-      order: config.routes.length,
+    }, 800);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-    setConfig((prev) => ({ ...prev, routes: [...prev.routes, newRoute] }));
+  }, [routes, loading, persist]);
+
+  const mutateRoutes = (fn: (prev: TransportRouteItem[]) => TransportRouteItem[]) => {
+    dirtyRef.current = true;
+    setRoutes(fn);
   };
 
-  const deleteRoute = (id: string) => {
-    setConfig((prev) => ({
-      ...prev,
-      routes: prev.routes.filter((r) => r.id !== id),
-    }));
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    mutateRoutes(prev => {
+      const o = prev.findIndex(r => r.id === active.id);
+      const n = prev.findIndex(r => r.id === over.id);
+      return arrayMove(prev, o, n).map((r, i) => ({ ...r, order: i }));
+    });
   };
 
-  const updateRoute = (id: string, updates: Partial<TransportRoute>) => {
-    setConfig((prev) => ({
-      ...prev,
-      routes: prev.routes.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-    }));
+  const updateRoute = (id: string, patch: Partial<TransportRouteItem>) => {
+    mutateRoutes(prev =>
+      prev.map(r => (r.id === id ? syncRouteEndpoints({ ...r, ...patch }, listingProperty) : r)),
+    );
   };
+
+  const presetsAvailable = TRANSPORT_ROUTE_PRESETS.filter(p => !routes.some(r => r.id === p.id));
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 8 }}>
-        <Typography>Chargement...</Typography>
+      <Box sx={{ p: 4, textAlign: 'center' }}>
+        <CircularProgress size={28} sx={{ color: T.primary }} />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
-        <Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.01em' }}>
-            🚗 Transport / Navette
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: T.text3, mt: 0.5 }}>
-            Routes fixes affichées dans le flow WhatsApp transport.
-          </Typography>
-        </Box>
-        <Stack direction="row" alignItems="center" gap={1.5}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-            Activer transport
-          </Typography>
-          <Switch
-            checked={config.enabled}
-            onChange={(e) => setConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
-            sx={{
-              '& .MuiSwitch-switchBase.Mui-checked': { color: T.primary },
-              '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: T.primary },
-            }}
+    <Box>
+      <ConfigIntroBar saveState={savingState}>
+        Arrivée / départ · logement = <b>{listingProperty.name}</b> (adresse & GPS listing). {TRANSPORT_V1_NOTE}
+      </ConfigIntroBar>
+
+      <Card compact icon="📍" title={`Routes · ${routes.length}/${MAX_ROUTES}`} meta="transportServices[]">
+        <Stack direction="row" alignItems="center" flexWrap="wrap" gap={0.75} sx={{ mb: catalogOpen ? 1 : 0 }}>
+          <DashedAddButton
+            label={catalogOpen ? '▲ Masquer modèles' : '▼ Modèles (aéroport, gare…)'}
+            onClick={() => setCatalogOpen(o => !o)}
           />
         </Stack>
-      </Stack>
-
-      {/* Status badge */}
-      <Box sx={{
-        display: 'inline-flex',
-        px: 1.5,
-        py: 0.5,
-        borderRadius: 1,
-        bgcolor: savingState === 'saved' ? '#e8f5e9' : savingState === 'saving' ? '#fff3e0' : T.bg2,
-        border: `1px solid ${savingState === 'saved' ? '#4caf50' : savingState === 'saving' ? '#ff9800' : T.border}`,
-        mb: 3,
-      }}>
-        <Typography sx={{ fontSize: 11, fontWeight: 700, color: savingState === 'saved' ? '#2e7d32' : savingState === 'saving' ? '#e65100' : T.text3 }}>
-          {savingState === 'saved' ? '✓ Sauvegardé' : savingState === 'saving' ? '⏳ Sauvegarde...' : 'Aucun changement'}
-        </Typography>
-      </Box>
-
-      {/* Routes list */}
-      <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.text3, mb: 1.5 }}>
-        📍 Routes ({config.routes.length} / 10 max)
-      </Typography>
-
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={config.routes.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-          <Stack spacing={1.5}>
-            {config.routes.map((route) => (
-              <SortableRoute
-                key={route.id}
-                route={route}
-                onUpdate={(updates) => updateRoute(route.id, updates)}
-                onDelete={() => deleteRoute(route.id)}
-              />
-            ))}
+        <Collapse in={catalogOpen}>
+          <Stack direction="row" gap={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+            {presetsAvailable.length === 0 ? (
+              <Typography sx={{ ...TYPO.caption }}>Tous les modèles sont déjà ajoutés.</Typography>
+            ) : (
+              presetsAvailable.map(preset => (
+                <Tooltip key={preset.id} title={`${preset.from} → ${preset.to}`} placement="top">
+                  <Box
+                    component="button"
+                    type="button"
+                    disabled={routes.length >= MAX_ROUTES}
+                    onClick={() =>
+                      mutateRoutes(prev => [
+                        ...prev,
+                        syncRouteEndpoints({ ...preset, enabled: true, order: prev.length }, listingProperty),
+                      ])
+                    }
+                    sx={{
+                      ...chipActionSx(false, { compact: true }),
+                      '&:disabled': { opacity: 0.45, cursor: 'not-allowed' },
+                    }}
+                  >
+                    + {preset.labelFr}
+                  </Box>
+                </Tooltip>
+              ))
+            )}
           </Stack>
-        </SortableContext>
-      </DndContext>
+        </Collapse>
 
-      {/* Add button */}
-      {config.routes.length < 10 && (
-        <Button
-          variant="outlined"
-          onClick={addRoute}
-          sx={{
-            mt: 2,
-            borderColor: T.border,
-            color: T.text2,
-            '&:hover': { borderColor: T.primary, bgcolor: T.bg2 },
-          }}
-        >
-          + Ajouter une route
-        </Button>
-      )}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={routes.map(r => r.id)} strategy={verticalListSortingStrategy}>
+            <Stack gap={1}>
+              {routes.map(route => (
+                <SortableRoute
+                  key={route.id}
+                  route={route}
+                  listingProperty={listingProperty}
+                  onUpdate={p => updateRoute(route.id, p)}
+                  onDelete={() => mutateRoutes(prev => prev.filter(r => r.id !== route.id))}
+                />
+              ))}
+            </Stack>
+          </SortableContext>
+        </DndContext>
+
+        {routes.length < MAX_ROUTES && (
+          <Box sx={{ mt: 1 }}>
+            <DashedAddButton
+              label="+ Route personnalisée"
+              onClick={() =>
+                mutateRoutes(prev => [
+                  ...prev,
+                  syncRouteEndpoints(
+                    {
+                      id: `route_${Date.now()}`,
+                      labelFr: 'Arrivée — nouveau point',
+                      descriptionFr: 'Transfert vers le logement',
+                      from: '',
+                      to: '',
+                      journeyTag: 'arrival',
+                      externalKind: 'other',
+                      externalLabel: '',
+                      priceType: 'total',
+                      price: 0,
+                      maxPassengers: 4,
+                      estimatedDuration: '',
+                      enabled: true,
+                      order: prev.length,
+                    },
+                    listingProperty,
+                  ),
+                ])
+              }
+            />
+          </Box>
+        )}
+      </Card>
     </Box>
   );
 }
 
-// ════════════════════════════════════════════════════════════════════
-// SortableRoute
-// ════════════════════════════════════════════════════════════════════
+type RouteEndpointMode = 'locked' | 'external' | 'free';
+
+function RouteEndpointColumn({
+  title,
+  mode,
+  place,
+  value,
+  onChange,
+  placeholder,
+}: {
+  title: string;
+  mode: RouteEndpointMode;
+  place: ListingPropertyPlace;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  if (mode === 'locked') {
+    return (
+      <Box>
+        <Typography sx={{ ...TYPO.caps, color: T.text4, mb: 0.5 }}>{title}</Typography>
+        <LockedPropertyBox name={place.name} address={place.address} />
+      </Box>
+    );
+  }
+  return (
+    <PlaceEndpointField label={title} value={value} onChange={onChange} placeholder={placeholder} />
+  );
+}
+
 function SortableRoute({
   route,
+  listingProperty,
   onUpdate,
   onDelete,
 }: {
-  route: TransportRoute;
-  onUpdate: (updates: Partial<TransportRoute>) => void;
+  route: TransportRouteItem;
+  listingProperty: ListingPropertyPlace;
+  onUpdate: (p: Partial<TransportRouteItem>) => void;
   onDelete: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: route.id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
+  const priceLabel =
+    route.priceType === 'per_person'
+      ? `${route.pricePerPerson || route.price} MAD/pers. · max ${route.maxPassengers}`
+      : `${route.price} MAD · max ${route.maxPassengers}`;
+  const isArrival = route.journeyTag === 'arrival';
+  const isDeparture = route.journeyTag === 'departure';
+  const isOther = route.journeyTag === 'other';
+  const place = route.propertyPlace || listingProperty;
+  const depuisMode: RouteEndpointMode = isDeparture ? 'locked' : isOther ? 'free' : 'external';
+  const versMode: RouteEndpointMode = isArrival ? 'locked' : isOther ? 'free' : 'external';
 
   return (
     <Box
       ref={setNodeRef}
-      style={style}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
       sx={{
-        border: `2px solid ${expanded ? T.primary : T.border}`,
-        borderRadius: 1.5,
-        p: 2,
-        bgcolor: '#fff',
-        boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.12)' : 'none',
+        border: `1px solid ${expanded ? T.primary : T.border}`,
+        borderRadius: 1,
+        bgcolor: T.bg1,
+        overflow: 'hidden',
       }}
     >
-      {/* Header */}
-      <Stack direction="row" alignItems="center" gap={1.5}>
+      <Stack direction="row" alignItems="center" gap={1} sx={{ p: '8px 10px', bgcolor: T.bg2 }}>
+        <Box {...attributes} {...listeners} sx={{ cursor: 'grab', color: T.text3, fontSize: 14 }}>⠿</Box>
         <Box
-          {...attributes}
-          {...listeners}
+          component="button"
+          type="button"
+          onClick={() => onUpdate({ enabled: !route.enabled })}
           sx={{
-            cursor: 'grab',
-            color: T.text3,
-            fontSize: 16,
-            '&:active': { cursor: 'grabbing' },
-          }}
-        >
-          ⠿
-        </Box>
-
-        <Switch
-          checked={route.enabled}
-          onChange={(e) => onUpdate({ enabled: e.target.checked })}
-          size="small"
-          sx={{
-            '& .MuiSwitch-switchBase.Mui-checked': { color: T.primary },
-            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: T.primary },
+            all: 'unset',
+            cursor: 'pointer',
+            width: 32,
+            height: 18,
+            borderRadius: '99px',
+            bgcolor: route.enabled ? T.primary : T.borderStrong,
+            position: 'relative',
+            flexShrink: 0,
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              top: 2,
+              left: route.enabled ? 16 : 2,
+              width: 14,
+              height: 14,
+              bgcolor: '#fff',
+              borderRadius: '50%',
+              transition: 'left 0.2s',
+            },
           }}
         />
-
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontSize: 14, fontWeight: 700 }}>{route.label.fr}</Typography>
-          {route.description && (
-            <Typography sx={{ fontSize: 12, color: T.text3 }}>{route.description.fr}</Typography>
-          )}
+        <Box sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setExpanded(e => !e)}>
+          <Typography sx={{ ...TYPO.bodyBold, fontSize: 12.5 }} noWrap>{route.labelFr}</Typography>
+          <Typography sx={{ ...TYPO.monoHelp, fontSize: 10.5 }} noWrap>
+            {route.from} → {route.to} · {journeyLabel(route.journeyTag)} · {priceLabel}
+          </Typography>
         </Box>
-
-        <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.primary }}>{route.price} MAD</Typography>
-
-        <IconButton size="small" onClick={() => setExpanded(!expanded)}>
-          <Box sx={{ fontSize: 18 }}>{expanded ? '▲' : '▼'}</Box>
+        <IconButton size="small" onClick={() => setExpanded(e => !e)} sx={{ p: 0.25 }}>
+          <Typography sx={{ fontSize: 14 }}>{expanded ? '▲' : '▼'}</Typography>
         </IconButton>
-
-        <Tooltip title="Supprimer">
-          <IconButton size="small" onClick={onDelete} sx={{ color: '#c62828' }}>
-            ✕
-          </IconButton>
-        </Tooltip>
+        <IconButton size="small" onClick={onDelete} sx={{ color: T.error, p: 0.25 }}>✕</IconButton>
       </Stack>
 
-      {/* Expanded form */}
       <Collapse in={expanded}>
-        <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${T.border}` }}>
-          <Stack spacing={2}>
-            {/* Label FR/EN/AR */}
-            <Box>
-              <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', mb: 0.5 }}>
-                Label
-              </Typography>
-              <Stack spacing={1}>
-                <TextField
-                  size="small"
-                  label="FR"
-                  value={route.label.fr}
-                  onChange={(e) => onUpdate({ label: { ...route.label, fr: e.target.value } })}
-                  fullWidth
-                />
-                <TextField
-                  size="small"
-                  label="EN"
-                  value={route.label.en}
-                  onChange={(e) => onUpdate({ label: { ...route.label, en: e.target.value } })}
-                  fullWidth
-                />
-              </Stack>
-            </Box>
-
-            {/* Origine */}
-            <Box>
-              <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', mb: 0.5 }}>
-                📍 Origine
-              </Typography>
-              <TextField
-                size="small"
-                label="Adresse de départ"
-                value={route.origin.address}
-                onChange={(e) => onUpdate({ origin: { ...route.origin, address: e.target.value } })}
-                fullWidth
-              />
-            </Box>
-
-            {/* Destination */}
-            <Box>
-              <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', mb: 0.5 }}>
-                📍 Destination
-              </Typography>
-              <TextField
-                size="small"
-                label="Adresse d'arrivée"
-                value={route.destination.address}
-                onChange={(e) => onUpdate({ destination: { ...route.destination, address: e.target.value } })}
-                fullWidth
-              />
-            </Box>
-
-            {/* Prix et durée */}
-            <Stack direction="row" spacing={2}>
-              <TextField
-                size="small"
-                label="Prix (MAD)"
-                type="number"
-                value={route.price}
-                onChange={(e) => onUpdate({ price: Number(e.target.value) })}
-                sx={{ flex: 1 }}
-              />
-              <TextField
-                size="small"
-                label="Durée"
-                value={route.duration}
-                onChange={(e) => onUpdate({ duration: e.target.value })}
-                placeholder="ex: 45 min"
-                sx={{ flex: 1 }}
-              />
+        <Box sx={{ p: 1.25 }}>
+          <FormRow compact label="Type de trajet" schemaPath="transportServices[].route.journeyTag" inSchema>
+            <Stack direction="row" gap={0.5} flexWrap="wrap">
+              {TRANSPORT_JOURNEY_OPTIONS.map(tag => (
+                <PillButton key={tag} active={route.journeyTag === tag} onClick={() => onUpdate({ journeyTag: tag })}>
+                  {journeyLabel(tag)}
+                </PillButton>
+              ))}
             </Stack>
-          </Stack>
+          </FormRow>
+
+          <Box
+            sx={{
+              mb: 1.25,
+              p: 1.25,
+              borderRadius: 1,
+              border: `1px solid ${T.border}`,
+              bgcolor: T.bg2,
+            }}
+          >
+            <Typography sx={{ ...TYPO.caps, mb: 1 }}>Itinéraire</Typography>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: '1fr auto 1fr' },
+                gap: { xs: 1, md: 1.25 },
+                alignItems: 'stretch',
+              }}
+            >
+              <RouteEndpointColumn
+                title="Depuis"
+                mode={depuisMode}
+                place={place}
+                value={isOther ? route.from : route.externalLabel}
+                onChange={v =>
+                  isOther ? onUpdate({ from: v }) : onUpdate({ externalLabel: v })
+                }
+                placeholder="Lieu de départ"
+              />
+              <Typography
+                sx={{
+                  display: { xs: 'none', md: 'flex' },
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 16,
+                  fontWeight: 800,
+                  color: T.text4,
+                  fontFamily: CONFIG_ORCH_FONT.mono,
+                  pt: 2,
+                }}
+              >
+                →
+              </Typography>
+              <RouteEndpointColumn
+                title="Vers"
+                mode={versMode}
+                place={place}
+                value={isOther ? route.to : route.externalLabel}
+                onChange={v =>
+                  isOther ? onUpdate({ to: v }) : onUpdate({ externalLabel: v })
+                }
+                placeholder="Lieu d'arrivée"
+              />
+            </Box>
+            {isOther && (
+              <Typography sx={{ ...TYPO.caption, mt: 0.75, color: T.text3 }}>
+                Saisissez librement les deux extrémités (ex. Gare Gueliz → Aéroport Marrakech).
+              </Typography>
+            )}
+          </Box>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 0 }}>
+            <FormRow compact label="Nom affiché" schemaPath="transportServices[].name.fr" inSchema>
+              <TextInput value={route.labelFr} onChange={e => onUpdate({ labelFr: e.target.value })} />
+            </FormRow>
+            <FormRow compact label="Tarif" schemaPath="transportServices[].pricing.type" inSchema>
+              <Stack direction="row" gap={0.5}>
+                <PillButton active={route.priceType === 'total'} onClick={() => onUpdate({ priceType: 'total' })}>Fixe</PillButton>
+                <PillButton active={route.priceType === 'per_person'} onClick={() => onUpdate({ priceType: 'per_person' })}>/pers.</PillButton>
+              </Stack>
+            </FormRow>
+            <FormRow
+              compact
+              label={route.priceType === 'per_person' ? 'MAD/pers.' : 'MAD total'}
+              schemaPath={
+                route.priceType === 'per_person'
+                  ? 'transportServices[].pricing.pricePerPerson'
+                  : 'transportServices[].pricing.amount'
+              }
+              inSchema
+            >
+              <TextInput
+                type="number"
+                value={route.priceType === 'per_person' ? route.pricePerPerson ?? route.price : route.price}
+                onChange={e => {
+                  const v = Number(e.target.value);
+                  onUpdate(route.priceType === 'per_person' ? { pricePerPerson: v, price: v } : { price: v });
+                }}
+              />
+            </FormRow>
+            <FormRow compact label="Durée" schemaPath="transportServices[].route.estimatedDuration" inSchema>
+              <TextInput value={route.estimatedDuration} onChange={e => onUpdate({ estimatedDuration: e.target.value })} placeholder="45 min" />
+            </FormRow>
+            <FormRow compact label="Max pers." schemaPath="transportServices[].capacity.maxPassengers" inSchema>
+              <TextInput type="number" value={route.maxPassengers} onChange={e => onUpdate({ maxPassengers: Math.max(1, Number(e.target.value) || 1) })} />
+            </FormRow>
+            <FormRow compact label="Description" optional schemaPath="transportServices[].description.fr" inSchema>
+              <TextArea rows={1} value={route.descriptionFr} onChange={e => onUpdate({ descriptionFr: e.target.value })} />
+            </FormRow>
+          </Box>
         </Box>
       </Collapse>
     </Box>
   );
 }
+

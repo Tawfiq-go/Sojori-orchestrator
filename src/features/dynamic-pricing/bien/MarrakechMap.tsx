@@ -285,8 +285,7 @@ export default function MarrakechMap({
     >
       <Stack
         direction="row"
-        gap={1.75}
-        sx={{
+        sx={{ gap: 1.75, 
           flexWrap: 'wrap',
           alignItems: 'center',
           p: '14px 18px',
@@ -386,11 +385,11 @@ export default function MarrakechMap({
             pointerEvents: 'none',
           }}
         >
-          <Stack direction="row" gap={0.75} sx={{ alignItems: 'center', mb: 0.5 }}>
+          <Stack direction="row" sx={{ gap: 0.75,  alignItems: 'center', mb: 0.5 }}>
             <Box sx={{ fontSize: 16, color: T.gold }}>★</Box>
             <span>Votre bien</span>
           </Stack>
-          <Stack direction="row" gap={0.5} sx={{ alignItems: 'center' }}>
+          <Stack direction="row" sx={{ gap: 0.5,  alignItems: 'center' }}>
             <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: T.success }} />
             <span>★ 4.8+</span>
             <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: T.goldDeep, ml: 0.5 }} />
@@ -412,7 +411,7 @@ function Pills<T extends string | number>({
   onChange: (v: T) => void;
 }) {
   return (
-    <Stack direction="row" gap={0.5}>
+    <Stack direction="row" sx={{ gap: 0.5 }}>
       {options.map((opt) => (
         <Box
           key={String(opt.id)}
