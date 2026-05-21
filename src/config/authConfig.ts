@@ -86,22 +86,23 @@ export const MICROSERVICE_BASE_URL = {
     : `${API_BASE_URL}/api/v1/admin/upload/upload_multiple`,
 };
 
-const logApiBases =
-  import.meta.env.DEV ||
-  (typeof window !== 'undefined' &&
-    (window.location.hostname === '127.0.0.1' ||
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '[::1]'));
+// Logs désactivés pour nettoyer la console
+// const logApiBases =
+//   import.meta.env.DEV ||
+//   (typeof window !== 'undefined' &&
+//     (window.location.hostname === '127.0.0.1' ||
+//       window.location.hostname === 'localhost' ||
+//       window.location.hostname === '[::1]'));
 
-if (logApiBases) {
-  console.info('[Sojori Orchestrator] API bases', {
-    API_BASE_URL,
-    useLocalMicroservicePorts,
-    viteProdBuild: import.meta.env.PROD,
-    viteApiUrl: import.meta.env.VITE_API_URL ?? '(non défini → fallback dev.sojori.com en build prod)',
-    SRV_ADMIN: MICROSERVICE_BASE_URL.SRV_ADMIN,
-    SRV_RESERVATION: MICROSERVICE_BASE_URL.SRV_RESERVATION,
-    SRV_RESERVATION_MESSAGE: MICROSERVICE_BASE_URL.SRV_RESERVATION_MESSAGE,
-    hasDevToken: !!import.meta.env.VITE_DEV_TOKEN,
-  });
-}
+// if (logApiBases) {
+//   console.info('[Sojori Orchestrator] API bases', {
+//     API_BASE_URL,
+//     useLocalMicroservicePorts,
+//     viteProdBuild: import.meta.env.PROD,
+//     viteApiUrl: import.meta.env.VITE_API_URL ?? '(non défini → fallback dev.sojori.com en build prod)',
+//     SRV_ADMIN: MICROSERVICE_BASE_URL.SRV_ADMIN,
+//     SRV_RESERVATION: MICROSERVICE_BASE_URL.SRV_RESERVATION,
+//     SRV_RESERVATION_MESSAGE: MICROSERVICE_BASE_URL.SRV_RESERVATION_MESSAGE,
+//     hasDevToken: !!import.meta.env.VITE_DEV_TOKEN,
+//   });
+// }
