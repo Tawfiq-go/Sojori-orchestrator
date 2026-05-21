@@ -77,6 +77,9 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
 
     // Catalogue
     'listings': '/listings',
+    'dynamic-pricing': '/dynamic-pricing/portefeuille',
+    'dynamic-pricing/portefeuille': '/dynamic-pricing/portefeuille',
+    'dynamic-pricing/bien': '/dynamic-pricing/portefeuille',
     'pricing': '/pricing',
     'channels': '/catalogue/channels',
     'clients': '/clients',
@@ -87,6 +90,17 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'crm/leads': '/crm?tab=leads',
     'crm/support': '/crm?tab=support',
     'crm/onboarding': '/crm?tab=onboarding',
+
+    // Admin — Monitor
+    'admin/monitor': '/monitor?tab=Summary',
+    'admin/monitor/summary': '/monitor?tab=Summary',
+    'admin/monitor/logs': '/monitor?tab=Logs',
+    'admin/monitor/metrics': '/monitor?tab=Metrics',
+    'admin/monitor/rabbitmq': '/monitor?tab=RabbitMQ',
+    'admin/monitor/whatsapp': '/monitor?tab=WhatsApp',
+    'admin/monitor/ai': '/monitor?tab=AI',
+    'admin/monitor/infrastructure': '/monitor?tab=Infrastructure',
+    'admin/sojori-logs': '/admin/sojori-logs',
 
     // Admin
     'admin/channels': '/channels',
@@ -123,11 +137,49 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
       return 'channels';
     }
 
+    if (path.startsWith('/dynamic-pricing/bien/')) {
+      return 'dynamic-pricing/portefeuille';
+    }
+    if (path.startsWith('/dynamic-pricing/portefeuille') || path === '/dynamic-pricing') {
+      return 'dynamic-pricing/portefeuille';
+    }
+    if (path.startsWith('/catalogue/dynamic-pricing')) {
+      if (path.includes('/bien/')) return 'dynamic-pricing/bien';
+      if (path.includes('/bien')) return 'dynamic-pricing/bien';
+      return 'dynamic-pricing/portefeuille';
+    }
+
     if (path.startsWith('/admin/ChannelManager')) {
       const tab = new URLSearchParams(location.search).get('tab') || 'channel-manager';
       return tab === 'distribution'
         ? 'admin/ChannelManager/distribution'
         : 'admin/ChannelManager/channel-manager';
+    }
+
+    // Monitor hub (onglets via ?tab=)
+    if (path.startsWith('/monitor') || path.startsWith('/admin/monitor')) {
+      const tab = new URLSearchParams(location.search).get('tab') || 'Summary';
+      const tabToNav: Record<string, string> = {
+        Summary: 'admin/monitor/summary',
+        summary: 'admin/monitor/summary',
+        Logs: 'admin/monitor/logs',
+        logs: 'admin/monitor/logs',
+        Metrics: 'admin/monitor/metrics',
+        metrics: 'admin/monitor/metrics',
+        RabbitMQ: 'admin/monitor/rabbitmq',
+        rabbitmq: 'admin/monitor/rabbitmq',
+        WhatsApp: 'admin/monitor/whatsapp',
+        whatsapp: 'admin/monitor/whatsapp',
+        AI: 'admin/monitor/ai',
+        ai: 'admin/monitor/ai',
+        Infrastructure: 'admin/monitor/infrastructure',
+        infrastructure: 'admin/monitor/infrastructure',
+      };
+      return tabToNav[tab] || 'admin/monitor/summary';
+    }
+
+    if (path.startsWith('/admin/sojori-logs')) {
+      return 'admin/sojori-logs';
     }
 
     // Channels admin hub (OTA/RU KPIs)

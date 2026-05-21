@@ -50,6 +50,9 @@ import SupportAgentOutlined from '@mui/icons-material/SupportAgentOutlined';
 import TodayOutlined from '@mui/icons-material/TodayOutlined';
 import GroupsOutlined from '@mui/icons-material/GroupsOutlined';
 import InboxOutlined from '@mui/icons-material/InboxOutlined';
+import AutoGraphOutlined from '@mui/icons-material/AutoGraphOutlined';
+import InsightsOutlined from '@mui/icons-material/InsightsOutlined';
+import VillaOutlined from '@mui/icons-material/VillaOutlined';
 export const tokens = {
   // ── Brand · ambre dignifié (WCAG AA contrast on bg0) ──
   primary:      '#b8851a',
@@ -137,9 +140,9 @@ export function DashboardLayout({ user, activePath, onNavigate, onLogout, childr
 
 export const NAV = [
   // ═══════════════════════════════════════════════════════
-  // PILOTAGE (Strategic)
+  // 📊 DASHBOARD
   // ═══════════════════════════════════════════════════════
-  { group: 'Pilotage', items: [
+  { group: 'Dashboard', items: [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: 'Live' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'reports', label: 'Reports', icon: '🧾' },
@@ -147,104 +150,102 @@ export const NAV = [
   ]},
 
   // ═══════════════════════════════════════════════════════
-  // CALENDRIER
+  // 📅 CALENDRIER
   // ═══════════════════════════════════════════════════════
   { group: 'Calendrier', items: [
-    { id: 'calendar', label: 'Calendrier', icon: '📅',
-      description: 'Vue multi-propriétés & inventaire' },
+    { id: 'calendar', label: 'Calendrier', icon: '📅' },
   ]},
 
   // ═══════════════════════════════════════════════════════
-  // RÉSERVATIONS
+  // 🎫 RÉSERVATIONS
   // ═══════════════════════════════════════════════════════
   { group: 'Réservations', items: [
-    { id: 'reservations/list', label: 'Liste', icon: '🎫', badge: '23',
-      description: 'Toutes les réservations' },
-    { id: 'reservations/planning', label: 'Vue Planning', icon: '📆',
-      description: 'Calendrier type Gantt' },
-    // Note: "Séjour" est un onglet dans la page de détail, pas une page séparée
+    { id: 'reservations/list', label: 'Liste', icon: '🎫', badge: '23' },
+    { id: 'reservations/planning', label: 'Planning', icon: '📆' },
   ]},
 
   // ═══════════════════════════════════════════════════════
-  // TÂCHES & OPÉRATIONS
+  // ✅ TÂCHES
   // ═══════════════════════════════════════════════════════
-  { group: 'Tâches & Opérations', items: [
+  { group: 'Tâches', items: [
     { id: 'tasks/list', label: 'Liste', icon: '✅', badge: '7' },
-    { id: 'tasks/team', label: 'Équipe', icon: '👥' },
-    { id: 'tasks/planning', label: 'Vue Séjour', icon: '📆' },
-    { id: 'tasks/staff-wa', label: 'Staff WhatsApp', icon: '💬' },
+    { id: 'tasks/planning', label: 'Planning', icon: '📆' },
+    { id: 'tasks/kanban', label: 'Kanban', icon: '📋' },
+    { id: 'tasks/team', label: 'Équipe Staff', icon: '👥' },
+    { id: 'tasks/staff-wa', label: 'WhatsApp Staff', icon: '💬' },
   ]},
 
   // ═══════════════════════════════════════════════════════
-  // COMMUNICATIONS HUB
+  // 💬 COMMUNICATIONS
   // ═══════════════════════════════════════════════════════
   { group: 'Communications', items: [
-    { id: 'comms', label: 'Communications Hub', icon: '📬', badge: '3', badgeRed: true, sub: [
-      { id: 'comms/guests', label: 'WhatsApp' },
-      { id: 'comms/staff', label: 'Staff WhatsApp' },
-      { id: 'comms/templates', label: 'Templates (QA)' },
-      { id: 'comms/ota', label: 'Messages OTA' },
-      { id: 'comms/leads', label: 'Demande' },
-      { id: 'comms/reviews', label: 'Avis' },
-    ]},
+    { id: 'comms', label: 'Unified Inbox', icon: '📬', badge: '3', badgeRed: true },
+    { id: 'comms/guests', label: 'WhatsApp Guests', icon: '💬' },
+    { id: 'comms/staff', label: 'WhatsApp Staff', icon: '💬' },
+    { id: 'comms/ota', label: 'Messages OTA', icon: '📧' },
+    { id: 'comms/templates', label: 'Templates', icon: '📄' },
   ]},
 
   // ═══════════════════════════════════════════════════════
-  // SERVICE CLIENT
-  // ═══════════════════════════════════════════════════════
-  { group: 'Service Client', items: [
-    { id: 'requests', label: 'Demandes', icon: '🎫' },
-    { id: 'reviews', label: 'Avis', icon: '⭐' },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // CATALOGUE
+  // 🏠 CATALOGUE
   // ═══════════════════════════════════════════════════════
   { group: 'Catalogue', items: [
     { id: 'listings', label: 'Annonces', icon: '🏠', badge: '42' },
-    { id: 'pricing', label: 'Tarification', icon: '📈' },
+    { id: 'pricing', label: 'Tarifs calendrier', icon: '📈' },
     { id: 'channels', label: 'Canaux', icon: '🔗' },
+  ]},
+
+  // ═══════════════════════════════════════════════════════
+  // ⚡ DYNAMIC PRICING
+  // ═══════════════════════════════════════════════════════
+  { group: 'Dynamic Pricing', items: [
+    { id: 'dynamic-pricing/portefeuille', label: 'Portefeuille', icon: '⚡', description: 'Marché marché' },
+  ]},
+
+  // ═══════════════════════════════════════════════════════
+  // 👥 CRM & CLIENTS
+  // ═══════════════════════════════════════════════════════
+  { group: 'CRM & Clients', items: [
     { id: 'clients', label: 'Clients', icon: '👤' },
+    { id: 'requests', label: 'Demandes', icon: '🎫' },
+    { id: 'crm/leads', label: 'Leads & Fiches', icon: '🔍' },
+    { id: 'reviews', label: 'Avis', icon: '⭐' },
+    { id: 'crm/support', label: 'Support', icon: '🎧' },
+    { id: 'crm/onboarding', label: 'Onboarding', icon: '🚀' },
   ]},
 
   // ═══════════════════════════════════════════════════════
-  // CRM
+  // 📊 MONITOR & INFRA
   // ═══════════════════════════════════════════════════════
-  { group: 'CRM', items: [
-    { id: 'crm', label: 'Sojori CRM', icon: '🎯', sub: [
-      { id: 'crm/requests', label: 'Demandes' },
-      { id: 'crm/leads', label: 'Leads & fiches' },
-      { id: 'crm/support', label: 'Équipe support' },
-      { id: 'crm/onboarding', label: 'Onboarding' },
-    ]},
+  { group: 'Monitor & Infra', items: [
+    { id: 'admin/monitor/summary', label: 'Live', icon: '📊', badge: 'Live' },
+    { id: 'admin/monitor/logs', label: 'Logs', icon: '📄' },
+    { id: 'admin/monitor/metrics', label: 'Metrics', icon: '📈' },
+    { id: 'admin/monitor/rabbitmq', label: 'RabbitMQ', icon: '🔗' },
+    { id: 'admin/monitor/whatsapp', label: 'WhatsApp', icon: '💬' },
+    { id: 'admin/monitor/ai', label: 'IA', icon: '✨' },
+    { id: 'admin/monitor/infrastructure', label: 'Infrastructure', icon: '🌐' },
+    { id: 'admin/sojori-logs', label: 'Logs Sojori', icon: '📝' },
   ]},
 
   // ═══════════════════════════════════════════════════════
-  // Admin
+  // ⚙️ ADMIN
   // ═══════════════════════════════════════════════════════
-    { group: 'Admin', items: [
-      { id: 'admin/channels', label: 'Channels', icon: '🔌' },
+  { group: 'Admin', items: [
+    { id: 'admin/channels', label: 'Channels', icon: '🔌', sub: [
+      { id: 'admin/ChannelManager/channel-manager', label: 'Manager' },
+      { id: 'admin/ChannelManager/distribution', label: 'Distribution' },
     ]},
-
-    { group: 'Channel Manager', items: [
-      { id: 'admin/ChannelManager/channel-manager', label: 'Channel Manager', icon: '⚙️' },
-      { id: 'admin/ChannelManager/distribution', label: 'Distribution', icon: '🌐' },
+    { id: 'admin/equipe/owners', label: 'Property Manager', icon: '🏢' },
+    { id: 'admin/equipe/roles', label: 'Rôles & Permissions', icon: '🔐' },
+    { id: 'admin/equipe/groups', label: 'Groupes', icon: '👨‍👩‍👧‍👦' },
+    { id: 'admin/settings/template', label: 'Paramètres', icon: '⚙️', sub: [
+      { id: 'admin/settings/template', label: 'Templates' },
+      { id: 'admin/settings/host-profile', label: 'Profil hôte' },
+      { id: 'admin/settings/admin-config', label: 'Pays & Villes' },
+      { id: 'admin/setting/currency', label: 'Devises' },
     ]},
-
-    { group: 'Équipe & Rôles', items: [
-      { id: 'admin/equipe/owners', label: 'Property manager', icon: '🏢' },
-      { id: 'admin/equipe/staff', label: 'Dashboard Staff', icon: '👥' },
-      { id: 'admin/equipe/whatsapp', label: 'Admin WhatsApp', icon: '📱' },
-      { id: 'admin/equipe/roles', label: 'Rôles & Permissions', icon: '🔐' },
-      { id: 'admin/equipe/groups', label: 'Groupes', icon: '👨‍👩‍👧‍👦' },
-    ]},
-
-    { group: 'Paramètres', items: [
-      { id: 'admin/settings/template', label: 'Templates', icon: '📧' },
-      { id: 'admin/settings/host-profile', label: 'Profil hôte', icon: '🏠' },
-      { id: 'admin/settings/admin-config', label: 'Pays & Villes', icon: '🌍' },
-      { id: 'admin/setting/currency', label: 'Devises', icon: '💱' },
-    ]},
+  ]},
 ];
 
 /** Icônes MUI alignées brief Claude Design (modules) — emoji en secours si id absent */
@@ -256,9 +257,11 @@ const NAV_ICON_BY_ID = {
   orchestrator: AutoAwesomeOutlined,
   calendar: CalendarMonthOutlined,
   'reservations/list': ConfirmationNumberOutlined,
+  'reservations/planning': TodayOutlined,
   'tasks/list': AssignmentTurnedInOutlined,
-  'tasks/team': GroupsOutlined,
   'tasks/planning': TodayOutlined,
+  'tasks/kanban': DashboardOutlined,
+  'tasks/team': GroupsOutlined,
   'tasks/staff-wa': SupportAgentOutlined,
   'comms': ForumOutlined,
   'comms/guests': ForumOutlined,
@@ -270,6 +273,8 @@ const NAV_ICON_BY_ID = {
   requests: InboxOutlined,
   reviews: StarBorderOutlined,
   listings: HomeWorkOutlined,
+  'dynamic-pricing': AutoGraphOutlined,
+  'dynamic-pricing/portefeuille': InsightsOutlined,
   pricing: ShowChartOutlined,
   channels: HubOutlined,
   clients: PeopleOutlined,
@@ -278,6 +283,15 @@ const NAV_ICON_BY_ID = {
   'crm/leads': PersonSearchOutlined,
   'crm/support': SupportAgentOutlined,
   'crm/onboarding': AssignmentOutlined,
+    'admin/monitor': AnalyticsOutlined,
+    'admin/monitor/summary': DashboardOutlined,
+    'admin/monitor/logs': DescriptionOutlined,
+    'admin/monitor/metrics': ShowChartOutlined,
+    'admin/monitor/rabbitmq': HubOutlined,
+    'admin/monitor/whatsapp': ForumOutlined,
+    'admin/monitor/ai': AutoAwesomeOutlined,
+    'admin/monitor/infrastructure': PublicOutlined,
+    'admin/sojori-logs': DescriptionOutlined,
     'admin/channels': HubOutlined,
     'admin/ChannelManager/channel-manager': HubOutlined,
     'admin/ChannelManager/distribution': ShowChartOutlined,
@@ -332,15 +346,43 @@ function NavItemIcon({ item, active, sub }) {
 }
 
 export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogout }) {
-  const [collapsed, setCollapsed] = React.useState({
-    'Pilotage': false,
+  // États par défaut pour les groupes
+  const defaultCollapsedState = {
+    'Dashboard': false,
     'Calendrier': false,
     'Réservations': false,
-    'Tâches & Opérations': true,
+    'Tâches': false,
     'Communications': true,
-    'Service Client': true,
-    'Catalogue': true,
+    'Catalogue': false,
+    'Dynamic Pricing': true,
+    'CRM & Clients': true,
+    'Monitor & Infra': true,
+    'Admin': true,
+  };
+
+  // Initialiser depuis localStorage ou utiliser les défauts
+  const [collapsed, setCollapsed] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem('sojori-sidebar-collapsed');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Merge avec les défauts pour gérer les nouveaux groupes
+        return { ...defaultCollapsedState, ...parsed };
+      }
+    } catch (error) {
+      console.warn('Erreur chargement état sidebar:', error);
+    }
+    return defaultCollapsedState;
   });
+
+  // Sauvegarder dans localStorage quand collapsed change
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('sojori-sidebar-collapsed', JSON.stringify(collapsed));
+    } catch (error) {
+      console.warn('Erreur sauvegarde état sidebar:', error);
+    }
+  }, [collapsed]);
 
   // Auto-ouvrir le groupe qui contient l'item actif
   React.useEffect(() => {
@@ -370,34 +412,56 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
       gridArea: 'sidebar',
       display: { xs: 'none', md: 'flex' },
       flexDirection: 'column',
-      bgcolor: t.bg1,
-      borderRight: `1px solid ${t.border}`,
+      bgcolor: 'rgba(255,255,255,0.85)',
+      backdropFilter: 'blur(20px) saturate(1.4)',
+      borderRight: `1px solid rgba(23,19,13,0.08)`,
       position: 'sticky',
       top: 0,
       height: '100vh',
       overflow: 'hidden',
+      boxShadow: '4px 0 24px rgba(0,0,0,0.03)',
+      // Gradient overlay subtil
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'linear-gradient(180deg, rgba(230,176,34,0.02) 0%, transparent 50%, rgba(139,92,246,0.02) 100%)',
+        pointerEvents: 'none',
+        zIndex: 0,
+      },
+      '& > *': {
+        position: 'relative',
+        zIndex: 1,
+      },
     }}>
-      <Stack direction="row" spacing={1.25} sx={{
+      <Stack direction="row" spacing={1.5} sx={{
         alignItems: 'center',
-        p: '14px 18px', borderBottom: `1px solid ${t.border}`,
+        p: '16px 20px',
+        borderBottom: `1px solid ${t.border}`,
         minHeight: `${t.topbarH}px`,
         flexShrink: 0,
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.8), rgba(255,255,255,0.4))',
+        backdropFilter: 'blur(10px)',
       }}>
         <Box sx={{
-          width: 28, height: 28, borderRadius: '8px',
+          width: 32, height: 32, borderRadius: '10px',
           background: `linear-gradient(135deg, ${t.primarySoft}, ${t.primaryDeep})`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: t.text, fontWeight: 800, fontSize: 14,
-          boxShadow: '0 4px 12px rgba(230,176,34,0.30)',
+          color: '#fff', fontWeight: 900, fontSize: 15,
+          boxShadow: '0 6px 16px rgba(230,176,34,0.35), inset 0 1px 0 rgba(255,255,255,0.3)',
+          border: '1px solid rgba(255,255,255,0.2)',
         }}>S</Box>
-        <Box sx={{ lineHeight: 1.1 }}>
-          <Typography sx={{ fontWeight: 700, fontSize: 14.5, letterSpacing: '-0.3px' }}>Sojori</Typography>
-          <Typography sx={{ color: t.text3, fontWeight: 500, fontSize: 10.5, mt: 0.1 }}>Property Owner</Typography>
+        <Box sx={{ lineHeight: 1.15 }}>
+          <Typography sx={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.4px', color: t.text }}>Sojori</Typography>
+          <Typography sx={{ color: t.text3, fontWeight: 600, fontSize: 10, mt: 0.2, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Property Owner</Typography>
         </Box>
       </Stack>
 
-      <Stack spacing={0.25} sx={{
-        p: 1.25,
+      <Stack spacing={0.5} sx={{
+        p: '16px 14px',
         overflowY: 'auto',
         overflowX: 'hidden',
         flex: 1,
@@ -409,18 +473,24 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
         willChange: 'transform',
         transform: 'translateZ(0)',
         backfaceVisibility: 'hidden',
-        // Scrollbar discrète
+        // Scrollbar ultra-moderne
         '&::-webkit-scrollbar': {
-          width: 6,
+          width: 8,
         },
         '&::-webkit-scrollbar-track': {
           background: 'transparent',
+          m: '4px',
         },
         '&::-webkit-scrollbar-thumb': {
-          background: 'rgba(0,0,0,0.1)',
-          borderRadius: 10,
+          background: 'linear-gradient(180deg, rgba(230,176,34,0.3), rgba(230,176,34,0.2))',
+          borderRadius: '10px',
+          border: '2px solid transparent',
+          backgroundClip: 'padding-box',
           '&:hover': {
-            background: 'rgba(0,0,0,0.2)',
+            background: 'linear-gradient(180deg, rgba(230,176,34,0.5), rgba(230,176,34,0.3))',
+            borderRadius: '10px',
+            border: '2px solid transparent',
+            backgroundClip: 'padding-box',
           },
         },
       }}>
@@ -434,33 +504,50 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  fontSize: 9.5,
-                  fontFamily: 'Geist Mono, monospace',
-                  fontWeight: 600,
-                  color: t.text4,
-                  letterSpacing: 1.4,
+                  fontSize: 10,
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  fontWeight: 700,
+                  color: t.text2,
+                  letterSpacing: 0.5,
                   textTransform: 'uppercase',
-                  p: '12px 10px 6px',
+                  p: '14px 12px 8px',
+                  mx: '-2px',
                   cursor: 'pointer',
                   userSelect: 'none',
-                  borderRadius: '8px',
-                  transition: 'color 0.18s ease, background-color 0.18s ease',
-                  '&:hover': { color: t.text3, bgcolor: 'rgba(23,19,13,0.03)' },
+                  borderRadius: '10px',
+                  background: isCollapsed ? 'transparent' : 'linear-gradient(135deg, rgba(230,176,34,0.04), rgba(230,176,34,0.01))',
+                  borderLeft: isCollapsed ? 'none' : `2px solid rgba(230,176,34,0.3)`,
+                  pl: isCollapsed ? '12px' : '14px',
+                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    color: t.text,
+                    bgcolor: 'rgba(230,176,34,0.06)',
+                    borderLeft: `2px solid rgba(230,176,34,0.5)`,
+                    pl: '14px',
+                  },
                 }}
               >
                 <span>{group.group}</span>
                 <ExpandMore
                   sx={{
-                    fontSize: 18,
-                    color: t.text4,
-                    transition: 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
+                    fontSize: 19,
+                    color: 'currentColor',
+                    opacity: 0.6,
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
                   }}
                 />
               </Box>
               {!isCollapsed && group.items.map(item => (
                 <React.Fragment key={item.id}>
-                  <SideLink item={item} active={activePath === item.id} onClick={() => onNavigate?.(item.id)} />
+                  <SideLink
+                    item={item}
+                    active={
+                      activePath === item.id ||
+                      Boolean(item.sub?.some((s) => activePath === s.id || activePath.startsWith(`${s.id}/`)))
+                    }
+                    onClick={() => onNavigate?.(item.id)}
+                  />
                   {item.sub?.map((s) => (
                     <SideLink
                       key={s.id}
@@ -478,22 +565,68 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
       </Stack>
 
       {user && (
-        <Box sx={{ p: '12px 16px', borderTop: `1px solid ${t.border}` }}>
-          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-            <Avatar sx={{ width: 28, height: 28, fontSize: 10.5, fontWeight: 700,
-              background: 'linear-gradient(135deg,#c4b5fd,#8b5cf6)' }}>
+        <Box sx={{
+          p: '14px 18px',
+          borderTop: `1px solid ${t.border}`,
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0.8))',
+          backdropFilter: 'blur(10px)',
+        }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+            <Avatar sx={{
+              width: 32,
+              height: 32,
+              fontSize: 11,
+              fontWeight: 800,
+              background: 'linear-gradient(135deg, #c4b5fd, #8b5cf6)',
+              border: '2px solid rgba(255,255,255,0.5)',
+              boxShadow: '0 4px 12px rgba(139,92,246,0.3)',
+            }}>
               {user.initials}
             </Avatar>
-            <Box sx={{ lineHeight: 1.1, minWidth: 0 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{user.name}</Typography>
-              <Typography sx={{ fontSize: 10, color: t.text3, fontFamily: 'Geist Mono', mt: 0.1 }}>
+            <Box sx={{ lineHeight: 1.15, minWidth: 0, flex: 1 }}>
+              <Typography sx={{
+                fontSize: 12.5,
+                fontWeight: 700,
+                color: t.text,
+                letterSpacing: '-0.2px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>{user.name}</Typography>
+              <Typography sx={{
+                fontSize: 10,
+                color: t.text3,
+                fontFamily: 'Geist Mono, monospace',
+                mt: 0.2,
+                fontWeight: 600,
+                letterSpacing: '0.3px',
+                textTransform: 'uppercase',
+              }}>
                 {user.role}
               </Typography>
             </Box>
           </Stack>
           {onLogout && (
-            <Button onClick={onLogout} sx={{ ...btnGhostSx, ...btnSmSx, width: '100%', mt: 1.25 }}>
-              Se deconnecter
+            <Button
+              onClick={onLogout}
+              sx={{
+                ...btnGhostSx,
+                ...btnSmSx,
+                width: '100%',
+                mt: 1.5,
+                fontSize: 11.5,
+                fontWeight: 600,
+                py: 0.75,
+                borderRadius: '8px',
+                border: `1px solid ${t.border}`,
+                '&:hover': {
+                  bgcolor: 'rgba(239,68,68,0.08)',
+                  borderColor: 'rgba(239,68,68,0.3)',
+                  color: '#dc2626',
+                },
+              }}
+            >
+              Se déconnecter
             </Button>
           )}
         </Box>
@@ -506,35 +639,49 @@ function SideLink({ item, active, sub, onClick }) {
   return (
     <Box component="button" onClick={onClick} sx={{
       all: 'unset', cursor: 'pointer', width: '100%', textAlign: 'left',
-      display: 'flex', alignItems: 'center', gap: 1.1,
-      p: sub ? '6px 10px 6px 12px' : '7px 10px',
-      borderRadius: '9px',
-      fontSize: sub ? 12 : 12.5,
+      display: 'flex', alignItems: 'center', gap: sub ? 1.2 : 1.3,
+      p: sub ? '7px 12px 7px 16px' : '9px 12px',
+      ml: sub ? 1.5 : 0,
+      borderRadius: '10px',
+      fontSize: sub ? 12.5 : 13,
       color: active ? t.text : (sub ? t.text3 : t.text2),
-      fontWeight: active ? 600 : 500,
-      bgcolor: active ? t.primaryTint : 'transparent',
-      transition: 'background 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease',
+      fontWeight: active ? 600 : (sub ? 500 : 550),
+      bgcolor: active ? 'linear-gradient(135deg, rgba(230,176,34,0.12), rgba(230,176,34,0.08))' : 'transparent',
+      border: active ? `1px solid rgba(230,176,34,0.25)` : '1px solid transparent',
+      boxShadow: active ? '0 2px 8px rgba(230,176,34,0.15), inset 0 1px 0 rgba(255,255,255,0.4)' : 'none',
+      transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+      position: 'relative',
       '&:hover': {
-        bgcolor: active ? t.primaryTint : t.bg2,
+        bgcolor: active ? 'linear-gradient(135deg, rgba(230,176,34,0.15), rgba(230,176,34,0.1))' : 'rgba(23,19,13,0.04)',
         color: t.text,
-        transform: 'translateX(1px)',
+        transform: sub ? 'translateX(2px)' : 'translateX(1px)',
+        border: `1px solid ${active ? 'rgba(230,176,34,0.3)' : 'rgba(23,19,13,0.08)'}`,
+        boxShadow: active ? '0 4px 12px rgba(230,176,34,0.2), inset 0 1px 0 rgba(255,255,255,0.5)' : '0 2px 6px rgba(0,0,0,0.04)',
       },
-      '&:active': { transform: 'scale(0.99)' },
+      '&:active': { transform: 'scale(0.98)' },
       '&::before': active && !sub ? {
-        content: '""', width: 3, height: 18, bgcolor: t.primary, borderRadius: 1,
-        ml: -1.1, mr: 0.75, flexShrink: 0,
+        content: '""',
+        position: 'absolute',
+        left: -10,
+        width: 3,
+        height: 20,
+        bgcolor: t.primary,
+        borderRadius: '0 2px 2px 0',
+        boxShadow: '0 0 8px rgba(230,176,34,0.4)',
       } : {},
     }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: sub ? 22 : 22, flexShrink: 0 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: sub ? 20 : 22, flexShrink: 0 }}>
         <NavItemIcon item={item} active={active} sub={sub} />
       </Box>
-      <Box sx={{ flex: 1, minWidth: 0 }}>{item.label}</Box>
+      <Box sx={{ flex: 1, minWidth: 0, letterSpacing: '-0.1px' }}>{item.label}</Box>
       {item.badge && (
         <Box sx={{
-          fontFamily: 'Geist Mono', fontSize: 9.5, fontWeight: 700,
-          p: '1px 6px', borderRadius: '99px',
-          bgcolor: item.badgeRed ? t.error : (active ? t.bg1 : t.bg2),
+          fontFamily: 'Geist Mono, monospace', fontSize: 9.5, fontWeight: 700,
+          p: '2px 7px', borderRadius: '12px',
+          bgcolor: item.badgeRed ? 'linear-gradient(135deg, #ef4444, #dc2626)' : (active ? 'rgba(255,255,255,0.9)' : 'rgba(23,19,13,0.06)'),
           color: item.badgeRed ? '#fff' : (active ? t.primaryDeep : t.text3),
+          border: item.badgeRed ? 'none' : `1px solid ${active ? 'rgba(230,176,34,0.2)' : 'rgba(23,19,13,0.08)'}`,
+          boxShadow: item.badgeRed ? '0 2px 6px rgba(239,68,68,0.3)' : (active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'),
         }}>{item.badge}</Box>
       )}
     </Box>

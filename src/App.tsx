@@ -7,6 +7,7 @@ import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { DevRuntimeLogPanel } from './components/DevRuntimeLogPanel';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import './styles/monitoring-theme.css';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -104,6 +105,9 @@ const OTAMessagesPage = lazy(() =>
 const PricingPage = lazy(() =>
   import('./pages/PricingSnapshotPage').then((module) => ({ default: module.PricingSnapshotPage }))
 );
+const DynamicPricingPage = lazy(() =>
+  import('./pages/DynamicPricingPage').then((module) => ({ default: module.DynamicPricingPage }))
+);
 const ChannelsPage = lazy(() =>
   import('./pages/ChannelsPage').then((module) => ({ default: module.ChannelsPage }))
 );
@@ -156,6 +160,12 @@ const SettingsLegacyRedirect = lazy(() =>
 );
 const OnboardingPage = lazy(() =>
   import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage }))
+);
+const MonitoringHubPage = lazy(() =>
+  import('./pages/Monitor/MonitoringHubPage').then((module) => ({ default: module.default }))
+);
+const SojoriLogsAdminPage = lazy(() =>
+  import('./pages/SojoriLogsAdminPage').then((module) => ({ default: module.default }))
 );
 
 function RouteLoader() {
@@ -255,6 +265,14 @@ function App() {
               <Route path="/listings/:id" element={<LazyRoute><ListingFormV2Page /></LazyRoute>} />
               <Route path="/listings/:id/old" element={<LazyRoute><NewListingFormPage /></LazyRoute>} />
               <Route path="/pricing" element={<LazyRoute><PricingPage /></LazyRoute>} />
+              <Route path="/dynamic-pricing" element={<Navigate to="/dynamic-pricing/portefeuille" replace />} />
+              <Route path="/dynamic-pricing/portefeuille" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
+              <Route path="/dynamic-pricing/bien" element={<Navigate to="/dynamic-pricing/portefeuille" replace />} />
+              <Route path="/dynamic-pricing/bien/:listingId" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
+              <Route path="/catalogue/dynamic-pricing" element={<Navigate to="/dynamic-pricing/portefeuille" replace />} />
+              <Route path="/catalogue/dynamic-pricing/portefeuille" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
+              <Route path="/catalogue/dynamic-pricing/bien" element={<Navigate to="/dynamic-pricing/portefeuille" replace />} />
+              <Route path="/catalogue/dynamic-pricing/bien/:listingId" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
               <Route path="/channels" element={<LazyRoute><ChannelsAdminPage /></LazyRoute>} />
               <Route path="/catalogue/listings" element={<LazyRoute><ListingsPage /></LazyRoute>} />
               <Route path="/catalogue/listings/new" element={<LazyRoute><ListingCreatePage /></LazyRoute>} />
@@ -264,6 +282,9 @@ function App() {
               <Route path="/clients" element={<LazyRoute><ClientsPage /></LazyRoute>} />
               <Route path="/clients/contacts" element={<LazyRoute><WhatsAppContactsPage /></LazyRoute>} />
               <Route path="/crm" element={<LazyRoute><CRMPage /></LazyRoute>} />
+              <Route path="/monitor" element={<LazyRoute><MonitoringHubPage /></LazyRoute>} />
+              <Route path="/admin/monitor" element={<LazyRoute><MonitoringHubPage /></LazyRoute>} />
+              <Route path="/admin/sojori-logs" element={<LazyRoute><SojoriLogsAdminPage /></LazyRoute>} />
               <Route path="/admin/channels" element={<LazyRoute><ChannelsAdminPage /></LazyRoute>} />
               <Route path="/admin/Channels" element={<LazyRoute><ChannelsLegacyRedirect /></LazyRoute>} />
               <Route path="/admin/ChannelManager" element={<LazyRoute><ChannelManagerHubPage /></LazyRoute>} />

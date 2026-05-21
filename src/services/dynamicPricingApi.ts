@@ -1,0 +1,362 @@
+/**
+ * Dynamic Pricing — BFF srv-admin → srv-dynamic-pricing
+ */
+import apiClient from './apiClient';
+import { MICROSERVICE_BASE_URL } from '../config/authConfig';
+import type { AirroiRawFields } from '../features/dynamic-pricing/_tokens';
+
+const BASE = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/dynamic-pricing`;
+
+export type PortfolioListingDto = {
+  id: string;
+  name: string;
+  city: string;
+  district: string | null;
+  zoneId: string;
+  lat?: number;
+  lng?: number;
+  bedrooms?: number | null;
+  guests?: number | null;
+  useDynamicPrice: boolean;
+  active?: boolean;
+  ruPropertyKey?: string | null;
+  airbnbConnected?: boolean;
+  airbnbListingId?: string | null;
+  airbnbPublicUrl?: string | null;
+  airbnbStatus?: string | null;
+  airbnbMarkup?: number | null;
+  otaVerifiedAt?: string | null;
+  otaChannelCount?: number;
+  thumbColor: 1 | 2 | 3 | 4 | 5 | 6;
+  hasAirroiSnapshot?: boolean;
+  airroiSnapshotAt?: string | null;
+  airroiSnapshotCostUsd?: number | null;
+  airroiRaw?: AirroiRawFields | null;
+  airroiComps?: Array<{
+    airbnbListingId: string | null;
+    name: string;
+    rating: number;
+    reviews: number;
+    bedrooms: number;
+    adrTtmMad: number;
+    occupancyTtm: number;
+    revenueTtmMad: number;
+    locality: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  }>;
+  airroiCompsCount?: number;
+  airroiCalendarDays?: Array<{
+    date: string;
+    priceMad: number;
+    status: 'std' | 'prem' | 'blocked';
+    available: boolean;
+  }>;
+  airroiCalendarDaysCount?: number;
+  perfMeta?: {
+    source: 'airroi_snapshot' | 'estimate';
+    snapshotAt: string | null;
+    ttmPeriodStart: string | null;
+    ttmPeriodEnd: string | null;
+    metricsHistoryStart: string | null;
+    metricsHistoryEnd: string | null;
+    ttmPeriodLabel: string;
+    metricsPeriodLabel: string;
+    metricsHistoryMonths: number;
+  };
+};
+
+export type PortfolioApiResponse = {
+  success: boolean;
+  year: number;
+  dataMode?: 'airroi_raw_test';
+  macro: {
+    totalPotentialMad: number;
+    realizedTtmMad: number;
+    realizedPctOfPotential: number;
+    avgPacingPct: number;
+    pacingTrendPts: number;
+    aiEnabledCount: number;
+    totalListings: number;
+    aiOpportunityMad: number;
+  };
+  cityKpis: {
+    cityName: string;
+    occupancyAvg24m: number;
+    adrMedianCity: number;
+    pacingCurrent: { monthLabel: string; fillRate: number };
+    pacingNext: { monthLabel: string; fillRate: number };
+    supplyGrowthPct: number;
+    supplyGrowthMonths: number;
+    bookingLeadTimeDays?: number;
+    avgStayNightsCity?: number;
+    activeListingsCount?: number;
+  };
+  zoneStats: Record<
+    string,
+    {
+      zoneId: string;
+      zoneName: string;
+      airroiListings: number;
+      adrMedian: number;
+      occupancyAvg: number;
+      myListingsCount: number;
+    }
+  >;
+  listings: PortfolioListingDto[];
+  count: number;
+  meta?: {
+    totalSojoriListings: number;
+    withDynamicPrice: number;
+    withAirbnbConnected?: number;
+    withAirroiSnapshot?: number;
+    source: string;
+  };
+  marketCache?: {
+    hasCity: boolean;
+    fetchedAt: string | null;
+    zoneCount: number;
+    hasCharts?: boolean;
+    city?: string;
+  };
+  marketCharts?: {
+    seasonality: Array<{ month: string; occupancy: number; adr: number }>;
+    pacing: Array<{ month: string; fillRate: number }>;
+    supplyGrowth: Array<{ label: string; listingCount: number }>;
+  };
+};
+
+export type ListingDetailApiResponse = {
+  success: boolean;
+  listingId: string;
+  year: number;
+  listing: {
+    _id: string;
+    name: string;
+    city?: string;
+    district?: string;
+    lat?: number;
+    lng?: number;
+    bedrooms?: number;
+    guests?: number;
+    useDynamicPrice: boolean;
+  };
+  currency: string;
+  days: Array<{ date: string; price: number; status: string }>;
+  computedAt: string;
+  validUntil: string;
+  mixVersion: string;
+};
+
+export async function fetchDynamicPricingPortfolio(params?: {
+  year?: number;
+  ownerId?: string;
+  /** Ville active — charge cache marché `marrakech:*` ou `casablanca:*` */
+  city?: string | null;
+}) {
+  const qs = new URLSearchParams();
+  if (params?.year) qs.set('year', String(params.year));
+  if (params?.ownerId) qs.set('ownerId', params.ownerId);
+  if (params?.city) qs.set('city', params.city);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return apiClient.get<PortfolioApiResponse>(`${BASE}/portfolio${suffix}`);
+}
+
+export async function fetchDynamicPricingListing(
+  listingId: string,
+  params?: { year?: number },
+) {
+  const qs = new URLSearchParams();
+  if (params?.year) qs.set('year', String(params.year));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return apiClient.get<ListingDetailApiResponse>(
+    `${BASE}/listings/${encodeURIComponent(listingId)}${suffix}`,
+  );
+}
+
+export async function recomputeDynamicPricingListing(listingId: string) {
+  return apiClient.post<{ success: boolean; listingId: string; days: number; applied: boolean }>(
+    `${BASE}/listings/${encodeURIComponent(listingId)}/recompute`,
+    {},
+  );
+}
+
+export async function recomputeAllDynamicPricing() {
+  return apiClient.post(`${BASE}/internal/cron/recompute-all`, {});
+}
+
+export async function refreshMarketDynamicPricing(city?: string | null) {
+  return apiClient.post(
+    `${BASE}/internal/cron/market-refresh`,
+    city ? { city } : {},
+    { timeout: 300_000 },
+  );
+}
+
+export type ListingPerformanceRefreshResult = {
+  success: boolean;
+  refreshed: number;
+  skipped: number;
+  failed: number;
+  totalCostUsd: number;
+  errors: string[];
+  listingIds: string[];
+};
+
+export async function refreshListingPerformanceAirroi(
+  ownerId?: string,
+  city?: string | null,
+) {
+  const body: { ownerId?: string; city?: string } = {};
+  if (ownerId) body.ownerId = ownerId;
+  if (city) body.city = city;
+  return apiClient.post<ListingPerformanceRefreshResult>(
+    `${BASE}/internal/cron/listing-performance-refresh`,
+    body,
+    { timeout: 300_000 },
+  );
+}
+
+export type OneListingPerformanceRefreshResult = {
+  success: boolean;
+  listingId: string;
+  ok: boolean;
+  costUsd?: number;
+  error?: string;
+};
+
+export async function refreshOneListingPerformanceAirroi(listingId: string) {
+  return apiClient.post<OneListingPerformanceRefreshResult>(
+    `${BASE}/listings/${encodeURIComponent(listingId)}/listing-performance-refresh`,
+    {},
+    { timeout: 120_000 },
+  );
+}
+
+/* ─── Pilote auto v2 ─────────────────────────────────────────── */
+
+export type PilotMode = 'prudent' | 'equilibre' | 'agressif';
+
+export interface G7Factor {
+  key: string;
+  label: string;
+  sub?: string;
+  valueMad: number;
+  kind: 'base' | 'plus' | 'minus' | 'clamp' | 'neutral';
+  appliedAt: string;
+  inputBefore: number;
+  inputAfter: number;
+}
+
+export interface G7Breakdown {
+  airroiSnapshotId: string;
+  airroiRateUsd: number;
+  fxUsdMad: number;
+  factors: G7Factor[];
+  finalPriceMad: number;
+  finalMinStay: number;
+  finalMinStaySource: string;
+  computedAt: string;
+  mixEngineVersion: string;
+}
+
+export interface PilotPricingEventDto {
+  _id: string;
+  label: string;
+  emoji?: string;
+  startDate: string;
+  endDate: string;
+  eventFloorMad: number;
+  minNightsOverride?: number;
+}
+
+export interface PilotPricingConfigDto {
+  listingId: string;
+  enabled: boolean;
+  mode: PilotMode;
+  floorNormal: number;
+  ceiling: number;
+  floorAggressive?: number;
+  lastMinuteEnabled?: boolean;
+  lastMinuteWindowDays?: number;
+  minStayDelta: number;
+  minStayPlancher?: number;
+  events: PilotPricingEventDto[];
+  fxUsdMad?: number;
+  lastAppliedAt?: string;
+  lastPreviewAt?: string;
+}
+
+export interface PilotPreviewDay {
+  date: string;
+  price: number;
+  finalPriceMad: number;
+  minStay: number;
+  status: string;
+  breakdown: G7Breakdown;
+  pushToCalendar?: boolean;
+  skipReason?: string;
+}
+
+export async function fetchPilotConfig(listingId: string) {
+  return apiClient.get<{ success: boolean; config: PilotPricingConfigDto }>(
+    `${BASE}/listings/${encodeURIComponent(listingId)}/pilot-config`,
+  );
+}
+
+export async function savePilotConfig(
+  listingId: string,
+  config: Partial<PilotPricingConfigDto>,
+) {
+  return apiClient.put<{ success: boolean; config: PilotPricingConfigDto }>(
+    `${BASE}/listings/${encodeURIComponent(listingId)}/pilot-config`,
+    config,
+  );
+}
+
+export async function previewPilotPricing(
+  listingId: string,
+  config?: Partial<PilotPricingConfigDto>,
+) {
+  return apiClient.post<{
+    success: boolean;
+    listingId: string;
+    days: PilotPreviewDay[];
+    summary: Record<string, number>;
+    airroiSnapshotId: string;
+  }>(`${BASE}/listings/${encodeURIComponent(listingId)}/preview`, config ? { config } : {});
+}
+
+export async function applyPilotPricing(
+  listingId: string,
+  body?: { config?: Partial<PilotPricingConfigDto>; triggerSource?: string },
+) {
+  return apiClient.post<{
+    success: boolean;
+    listingId: string;
+    applyAuditId: string;
+    daysChanged: number;
+    daysSkipped: number;
+    ruPublishQueued: boolean;
+    recommendedPriceCacheId: string;
+  }>(`${BASE}/listings/${encodeURIComponent(listingId)}/apply`, body ?? {}, {
+    timeout: 180_000,
+  });
+}
+
+export async function fetchDayBreakdown(
+  listingId: string,
+  date: string,
+  year?: number,
+) {
+  const qs = year ? `?year=${year}` : '';
+  return apiClient.get<{
+    success: boolean;
+    date: string;
+    finalPriceMad: number;
+    breakdown: G7Breakdown;
+    computedAt: string;
+  }>(
+    `${BASE}/listings/${encodeURIComponent(listingId)}/days/${encodeURIComponent(date)}/breakdown${qs}`,
+  );
+}

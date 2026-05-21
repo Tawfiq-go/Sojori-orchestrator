@@ -1,0 +1,1222 @@
+// ════════════════════════════════════════════════════════════════════
+// PortfolioView.tsx — vue portefeuille (38 biens · drill-down)
+//
+// Compose : MacroKpis · MarketCityBand · PortfolioMap · BulkActionsPanel · PortfolioTable
+// ════════════════════════════════════════════════════════════════════
+import React, { useState, useMemo, useEffect } from 'react';
+import { Box, Stack, Typography, Skeleton, Tooltip } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { T, KEYFRAMES, fmtMADCompact } from './_tokens';
+import type { Listing, PortfolioRow, PortfolioMacro } from './_tokens';
+import MarketCityBand from './MarketCityBand';
+import PortfolioMap from './PortfolioMap';
+import type { PortfolioMapPin } from './PortfolioMap';
+import {
+  AIRROI_RAW_COLUMNS,
+  AIRROI_RAW_TABLE_INTRO,
+  formatAirroiRawValue,
+  getOperationalSnapshotColumns,
+  type AirroiColumnDef,
+} from './airroiRawColumns';
+import { DataSourceLegend, SectionSourceBar } from './DataSourceBadges';
+import PortfolioCityScopeBar from './PortfolioCityScopeBar';
+import PortfolioDataMaturityCard from './PortfolioDataMaturityCard';
+import {
+  buildCityScopeOptions,
+  computeCityScopeStats,
+  listingMatchesCityScope,
+  marketBandAppliesToCityScope,
+  MARKET_CACHE_CITY,
+} from './cityScope';
+import {
+  computeDataMaturity,
+  DATA_GAP_LABELS,
+  getDataGapReason,
+  isExploitableListing,
+  rowMatchesTableTab,
+  type DataGapReason,
+} from './listingFilters';
+
+export type PortfolioTableTab = 'operational' | 'audit' | 'todo';
+
+/* ─── Types exported (utilisés par MarketCityBand + PortfolioMap) ─── */
+
+/** KPIs marché ville (Marrakech) — ligne séparée sous les 4 macros portefeuille */
+export interface MarketCityKpis {
+  cityName: string;
+  occupancyAvg24m: number;          // 0-1
+  adrMedianCity: number;            // MAD
+  pacingCurrent: { monthLabel: string; fillRate: number };
+  pacingNext:    { monthLabel: string; fillRate: number };
+  supplyGrowthPct: number;
+  supplyGrowthMonths: number;
+  bookingLeadTimeDays?: number;
+  avgStayNightsCity?: number;
+  activeListingsCount?: number;
+}
+
+/** Stats par zone — clé = zoneId */
+export interface PortfolioZoneStats {
+  zoneId: string;
+  zoneName: string;
+  airroiListings: number;
+  adrMedian: number;
+  occupancyAvg: number;             // 0-1
+  myListingsCount: number;
+}
+
+/* ─── Props ─── */
+export type BulkAction =
+  | 'activate-ai' | 'deactivate-ai'
+  | { type: 'set-mode'; mode: PricingMode }
+  | { type: 'set-bounds-default' }
+  | 'apply-to-calendar' | 'export-csv';
+
+interface Props {
+  macro: PortfolioMacro;
+  /** NOUVEAU : bande MARCHÉ MARRAKECH (rangée 2 sous les 4 macros) */
+  cityKpis: MarketCityKpis;
+  /** Dernier refresh marché Marrakech (si cache Mongo) */
+  marketFromCache?: boolean;
+  marketFetchedAt?: string | null;
+  /** NOUVEAU : KPIs par zone pour le tooltip carte au hover */
+  zoneStats: Record<string, PortfolioZoneStats>;
+  /** Pins biens pré-mappés (taille = potentiel, couleur = perf vs potentiel) */
+  mapPins: PortfolioMapPin[];
+  rows: PortfolioRow[];
+  /** Ville active (clé canonique) · null = tous */
+  cityScope?: string | null;
+  onCityScopeChange?: (scope: string | null) => void;
+  loading?: boolean;
+  onDrillDown: (listingId: string) => void;
+  onBulkAction: (action: BulkAction, selectedIds: string[]) => void;
+}
+
+export default function PortfolioView({
+  macro, cityKpis, zoneStats, mapPins, rows, loading, onDrillDown, onBulkAction,
+  cityScope = null,
+  onCityScopeChange,
+  marketFromCache = false,
+  marketFetchedAt = null,
+}: Props) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [exploitableOnly, setExploitableOnly] = useState(true);
+  const [tableTab, setTableTab] = useState<PortfolioTableTab>('operational');
+  const [airbnbOnly, setAirbnbOnly] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const scopedRows = useMemo(
+    () => rows.filter(r => listingMatchesCityScope(r.listing.city, cityScope)),
+    [rows, cityScope],
+  );
+  const cityScopeOptions = useMemo(() => buildCityScopeOptions(rows), [rows]);
+  const scopedPins = useMemo(
+    () => mapPins.filter(p => {
+      const row = rows.find(r => r.listing._id === p.id);
+      return row ? listingMatchesCityScope(row.listing.city, cityScope) : !cityScope;
+    }),
+    [mapPins, rows, cityScope],
+  );
+  const showMarketBand = marketBandAppliesToCityScope(cityScope);
+
+  useEffect(() => {
+    if (!cityScope) setSelectedIds([]);
+  }, [cityScope]);
+
+  const displayRows = useMemo(() => {
+    let list = scopedRows.filter((r) => r.listingActive !== false);
+    if (exploitableOnly) list = list.filter((r) => isExploitableListing(r.listing.name));
+    return list;
+  }, [scopedRows, exploitableOnly]);
+  const displayStats = useMemo(() => computeCityScopeStats(displayRows), [displayRows]);
+
+  const dataMaturity = useMemo(
+    () => computeDataMaturity(scopedRows, marketFromCache, cityScope),
+    [scopedRows, marketFromCache, cityScope],
+  );
+
+  const todoRowsCount = useMemo(
+    () => displayRows.filter((r) => rowMatchesTableTab(r, 'todo')).length,
+    [displayRows],
+  );
+
+  const toggleRow = (id: string) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const airbnbConnectedCount = useMemo(
+    () => displayRows.filter((r) => r.listing.airbnbConnected && r.listing.airbnbListingId).length,
+    [displayRows],
+  );
+
+  const filtered = useMemo(() => displayRows.filter(r => {
+    if (!rowMatchesTableTab(r, tableTab)) return false;
+    if (airbnbOnly && !(r.listing.airbnbConnected && r.listing.airbnbListingId)) return false;
+    if (search && !r.listing.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  }), [displayRows, tableTab, airbnbOnly, search]);
+
+  const latestSnapshotAt = useMemo(() => {
+    let max = 0;
+    for (const r of rows) {
+      if (!r.airroiSnapshotAt) continue;
+      const t = new Date(r.airroiSnapshotAt).getTime();
+      if (!Number.isNaN(t) && t > max) max = t;
+    }
+    return max > 0 ? new Date(max).toISOString() : null;
+  }, [rows]);
+
+  const scopedMacro = useMemo((): PortfolioMacro => ({
+    ...macro,
+    totalListings: displayRows.length,
+    realizedTtmMad: displayStats.ttmRevenueUsd,
+  }), [macro, displayRows.length, displayStats.ttmRevenueUsd]);
+
+  return (
+    <Box>
+      <style>{KEYFRAMES}</style>
+
+      <DataSourceLegend />
+
+      <PortfolioCityScopeBar
+        options={cityScopeOptions}
+        activeScope={cityScope}
+        onScopeChange={onCityScopeChange ?? (() => undefined)}
+        stats={displayStats}
+        globalTotal={rows.length}
+        loading={loading}
+      />
+
+      <PortfolioDataMaturityCard
+        maturity={dataMaturity}
+        cityLabel={cityScope}
+        loading={loading}
+      />
+
+      {/* ─── Rangée 1 · 4 macros KPIs (MES biens) ─── */}
+      <SectionSourceBar
+        compact
+        items={[
+          { kind: 'prod', label: 'PROD', tooltip: 'srv-listing — tous les biens actifs' },
+        ]}
+        note="Rechargé à chaque ouverture (GET /portfolio) — pas d’appel marché automatique"
+      />
+      <MacroKpisTest macro={scopedMacro} rows={displayRows} loading={loading} cityLabel={cityScope} />
+
+      {/* ─── Bande marché ville (Marrakech uniquement quand filtre ville = Marrakech) ─── */}
+      {showMarketBand ? (
+        <>
+          <SectionSourceBar
+            compact
+            items={[
+              marketFromCache
+                ? { kind: 'prod', label: 'PROD', tooltip: 'MarketDataSnapshot Mongo après refresh marché' }
+                : { kind: 'empty', label: 'VIDE', tooltip: `Lancer « Actualiser marché ${MARKET_CACHE_CITY} » dans ⟳` },
+            ]}
+            snapshotAt={marketFetchedAt}
+            snapshotLabel="Cache marché"
+            note={`Cache marché · ${cityScope}`}
+          />
+          <MarketCityBand city={cityKpis} hasData={marketFromCache} fetchedAt={marketFetchedAt} />
+        </>
+      ) : null}
+
+      {cityScope ? (
+        <>
+          <SectionSourceBar
+            compact
+            items={[
+              { kind: 'prod', label: 'PROD', tooltip: 'Pins si lat/lng marché ou Sojori' },
+              { kind: 'empty', label: 'VIDE', tooltip: 'Pas de pin sans coordonnées' },
+            ]}
+            snapshotAt={latestSnapshotAt}
+            snapshotLabel="Dernier snapshot (max. biens)"
+          />
+          <Box sx={{
+            display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 480px' },
+            gap: 2, mb: 2.25,
+          }}>
+            <PortfolioMap
+              pins={scopedPins}
+              zoneStats={zoneStats}
+              cityLabel={cityScope}
+              onPinClick={onDrillDown}
+            />
+            <BulkActionsPanel
+              selectedCount={selectedIds.length}
+              aiOpportunityMad={macro.aiOpportunityMad}
+              aiOffCount={macro.totalListings - macro.aiEnabledCount}
+              showAiHint={macro.aiOpportunityMad > 0}
+              onAction={(a) => onBulkAction(a, selectedIds)}
+            />
+          </Box>
+        </>
+      ) : null}
+
+      {/* ─── Table ─── */}
+      {!loading && displayRows.length > 0 && filtered.length === 0 ? (
+        <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1.5, bgcolor: T.warningTint, border: `1px solid ${T.border}` }}>
+          <Typography sx={{ fontSize: 12.5, color: T.text2 }}>
+            Aucun bien ne correspond aux filtres ({displayRows.length} dans {cityScope ?? 'toutes villes'}
+            {exploitableOnly ? ', exploitables uniquement' : ''}).
+            Désactivez les filtres actifs ou élargissez la recherche.
+          </Typography>
+        </Box>
+      ) : null}
+
+      <PortfolioTable
+        rows={filtered}
+        totalCount={displayRows.length}
+        portfolioTotal={rows.length}
+        cityScope={cityScope}
+        tableTab={tableTab}
+        onTableTabChange={setTableTab}
+        todoTabCount={todoRowsCount}
+        exploitableOnly={exploitableOnly}
+        onExploitableOnlyChange={setExploitableOnly}
+        stagingHiddenCount={scopedRows.length - displayRows.length}
+        selectedIds={selectedIds}
+        onToggleRow={toggleRow}
+        onDrillDown={onDrillDown}
+        search={search} onSearch={setSearch}
+        airbnbOnly={airbnbOnly}
+        onAirbnbOnlyChange={setAirbnbOnly}
+        airbnbConnectedCount={airbnbConnectedCount}
+      />
+    </Box>
+  );
+}
+
+/* ════════════════════════ MacroKpis (mode test brut marché) ════════════════════════ */
+function MacroKpisTest({
+  macro, rows, loading, cityLabel,
+}: { macro: PortfolioMacro; rows: PortfolioRow[]; loading?: boolean; cityLabel?: string | null }) {
+  if (loading) {
+    return (
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, mb: 2.25 }}>
+        {[1, 2, 3, 4].map(i => <Skeleton key={i} variant="rounded" height={100} sx={{ borderRadius: 1.75 }} />)}
+      </Box>
+    );
+  }
+  const withSnap = rows.filter(r => r.hasAirroiSnapshot).length;
+  const withAirbnb = rows.filter(r => r.listing.airbnbConnected).length;
+  return (
+    <Box sx={{
+      display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
+      gap: 2, mb: 2.25, animation: 'sj-fadeIn 0.4s',
+    }}>
+      <MacroCard label="BIENS SOJORI" emoji="🏠" value={String(macro.totalListings)}
+        ctx={<>{cityLabel ? `Vue ${cityLabel}` : 'Toutes villes'} · hors staging</>} />
+      <MacroCard label="ID AIRBNB" emoji="🔗" value={String(withAirbnb)}
+        ctx={<>Prêts pour refresh marché</>} />
+      <MacroCard label="SNAPSHOTS" emoji="💾" value={String(withSnap)}
+        ctx={<>Données brutes en base (channels)</>} />
+      <MacroCard label="Σ ttm_revenue (USD)" emoji="📊"
+        value={macro.realizedTtmMad > 0 ? macro.realizedTtmMad.toLocaleString('fr-FR') : '—'}
+        ctx={<>Somme brute des biens avec snapshot</>} />
+    </Box>
+  );
+}
+
+function MacroCard({ label, emoji, value, ctx, trend, progress }: {
+  label: string; emoji: string; value: string;
+  ctx: React.ReactNode; trend?: { pts: number; label: string }; progress?: number;
+}) {
+  return (
+    <Box sx={{
+      background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
+      p: 2.25, position: 'relative', overflow: 'hidden',
+      boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+      '&::before': {
+        content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+        background: `linear-gradient(90deg, ${T.gold}, ${T.goldSoft})`,
+      },
+    }}>
+      <Stack direction="row" alignItems="center" gap={0.875} sx={{
+        fontSize: 10, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
+        color: T.text3, textTransform: 'uppercase', letterSpacing: '0.08em', mb: 1.25,
+      }}>
+        <Box component="span" sx={{ fontSize: 12, letterSpacing: 0 }}>{emoji}</Box>
+        {label}
+      </Stack>
+      <Typography sx={{
+        fontFamily: '"Geist Mono", monospace', fontSize: 28, fontWeight: 800,
+        letterSpacing: '-0.03em', lineHeight: 1,
+      }}>{value}</Typography>
+      <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.75 }}>{ctx}</Typography>
+      {trend && (
+        <Stack direction="row" alignItems="center" gap={0.5} sx={{
+          mt: 1, display: 'inline-flex', fontSize: 10.5, fontFamily: '"Geist Mono", monospace',
+          fontWeight: 700, px: 1, py: 0.25, borderRadius: 999,
+          color: trend.pts >= 0 ? T.success : T.error,
+          background: trend.pts >= 0 ? T.successTint : T.errorTint,
+        }}>{trend.pts >= 0 ? '↗' : '↘'} {trend.pts > 0 ? '+' : ''}{trend.pts} pts {trend.label}</Stack>
+      )}
+      {progress != null && (
+        <Box sx={{ mt: 1.25 }}>
+          <Box sx={{ height: 6, background: T.bg3, borderRadius: 999, overflow: 'hidden' }}>
+            <Box sx={{
+              height: '100%', width: `${progress}%`,
+              background: `linear-gradient(90deg, ${T.gold}, ${T.goldDeep})`,
+              backgroundSize: '200% 100%', animation: 'sj-shimmer 2s infinite linear',
+            }} />
+          </Box>
+          <Stack direction="row" justifyContent="space-between" sx={{
+            fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace',
+            mt: 0.625, fontWeight: 700, letterSpacing: '0.02em',
+          }}>
+            <span>0</span>
+            <span style={{ color: T.goldDeep }}>{progress}%</span>
+            <span>100%</span>
+          </Stack>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+/* ════════════════════════ BulkActionsPanel ════════════════════════ */
+function BulkActionsPanel({ selectedCount, aiOpportunityMad, aiOffCount, showAiHint, onAction }: {
+  selectedCount: number; aiOpportunityMad: number; aiOffCount: number;
+  showAiHint?: boolean;
+  onAction: (a: BulkAction) => void;
+}) {
+  return (
+    <Box sx={{
+      background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+    }}>
+      <Stack direction="row" alignItems="center" gap={1.25} sx={{
+        p: 1.5, borderBottom: `1px solid ${T.border}`, background: T.bg2,
+      }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 800 }}>⚙ Actions groupées</Typography>
+        <Box sx={{
+          ml: 'auto', fontFamily: '"Geist Mono", monospace', fontSize: 10.5, fontWeight: 800,
+          color: T.goldDeep, background: T.goldTint, px: 1.125, py: 0.375,
+          borderRadius: 999, letterSpacing: '0.04em',
+        }}>{selectedCount} sélectionné{selectedCount !== 1 ? 's' : ''}</Box>
+      </Stack>
+
+      <Stack gap={1.5} sx={{ p: 1.75, flex: 1 }}>
+        {showAiHint ? (
+          <Stack direction="row" alignItems="center" gap={1.125} sx={{
+            p: '10px 12px',
+            background: `linear-gradient(135deg, ${T.aiTint}, transparent 70%)`,
+            border: `1px solid rgba(124,58,237,0.25)`, borderRadius: 1.25,
+          }}>
+            <Box sx={{
+              width: 28, height: 28, borderRadius: 1, background: `linear-gradient(135deg, #9669f7, ${T.ai})`,
+              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, flexShrink: 0,
+            }}>✨</Box>
+            <Typography sx={{ flex: 1, fontSize: 11.5, color: T.text2, lineHeight: 1.4 }}>
+              <b style={{ color: T.text }}>Sojori AI</b> · {aiOffCount} biens sans pricing dynamique
+              {aiOpportunityMad > 0 && (
+                <>
+                  {' '}· <b style={{ color: T.goldDeep, fontFamily: '"Geist Mono", monospace' }}>
+                    +{fmtMADCompact(aiOpportunityMad)}/an
+                  </b>
+                </>
+              )}
+            </Typography>
+          </Stack>
+        ) : null}
+
+        <BulkSection label="⚡ ACTIVATION">
+          <BulkBtn prim emoji="✨" onClick={() => onAction('activate-ai')}>
+            Activer AI sur {selectedCount} bien{selectedCount > 1 ? 's' : ''}
+          </BulkBtn>
+          <BulkBtn emoji="⊘" onClick={() => onAction('deactivate-ai')}>Désactiver AI</BulkBtn>
+        </BulkSection>
+
+        <BulkSection label="🎯 APPLIQUER UN MODE">
+          <BulkBtn emoji="🛡" onClick={() => onAction({ type: 'set-mode', mode: 'prudent' })}>Prudent</BulkBtn>
+          <BulkBtn emoji="⚖" onClick={() => onAction({ type: 'set-mode', mode: 'balanced' })}>Équilibré</BulkBtn>
+          <BulkBtn emoji="🚀" onClick={() => onAction({ type: 'set-mode', mode: 'aggressive' })}>Agressif</BulkBtn>
+        </BulkSection>
+
+        <BulkSection label="💰 BORNES PAR DÉFAUT">
+          <BulkBtn emoji="📍" onClick={() => onAction({ type: 'set-bounds-default' })}>Reco par zone (P25→P75)</BulkBtn>
+          <BulkBtn emoji="✏" onClick={() => {}}>Bornes custom…</BulkBtn>
+        </BulkSection>
+
+        <BulkSection label="📤 EXPORT">
+          <BulkBtn emoji="📅" onClick={() => onAction('apply-to-calendar')}>Appliquer prix au calendrier ops</BulkBtn>
+          <BulkBtn emoji="📊" onClick={() => onAction('export-csv')}>Export CSV</BulkBtn>
+        </BulkSection>
+      </Stack>
+    </Box>
+  );
+}
+
+function BulkSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Box sx={{ p: 1.5, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 1.25 }}>
+      <Typography sx={{
+        fontSize: 10, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
+        color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1,
+      }}>{label}</Typography>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>{children}</Box>
+    </Box>
+  );
+}
+
+function BulkBtn({ emoji, prim, onClick, children }: {
+  emoji: string; prim?: boolean; onClick: () => void; children: React.ReactNode;
+}) {
+  return (
+    <Box component="button" onClick={onClick} sx={{
+      all: 'unset', cursor: 'pointer',
+      px: 1.375, py: 0.875, borderRadius: 1, fontSize: 11.5, fontWeight: 700,
+      display: 'inline-flex', alignItems: 'center', gap: 0.625,
+      ...(prim
+        ? { background: `linear-gradient(180deg, #f9dc7a, ${T.gold})`, color: T.text,
+            border: `1px solid ${T.goldDeep}`, boxShadow: '0 2px 6px rgba(244,207,94,0.30)',
+            '&:hover': { transform: 'translateY(-1px)' } }
+        : { background: T.bg1, color: T.text2, border: `1px solid ${T.border}`,
+            '&:hover': { borderColor: T.gold, background: T.goldTint, color: T.goldDeep } }),
+    }}>
+      <Box component="span" sx={{ fontSize: 13 }}>{emoji}</Box>{children}
+    </Box>
+  );
+}
+
+const TABLE_TABS: { id: PortfolioTableTab; label: string }[] = [
+  { id: 'operational', label: 'Opérationnel' },
+  { id: 'todo', label: 'À traiter' },
+  { id: 'audit', label: 'Audit données' },
+];
+
+/* ════════════════════════ PortfolioTable ════════════════════════ */
+function PortfolioTable({
+  rows, totalCount, portfolioTotal, cityScope, tableTab, onTableTabChange, todoTabCount,
+  exploitableOnly, onExploitableOnlyChange, stagingHiddenCount,
+  selectedIds, onToggleRow, onDrillDown,
+  search, onSearch,
+  airbnbOnly, onAirbnbOnlyChange, airbnbConnectedCount,
+}: {
+  rows: PortfolioRow[]; totalCount: number;
+  portfolioTotal?: number;
+  cityScope?: string | null;
+  tableTab: PortfolioTableTab;
+  onTableTabChange: (t: PortfolioTableTab) => void;
+  todoTabCount: number;
+  exploitableOnly: boolean;
+  onExploitableOnlyChange: (v: boolean) => void;
+  stagingHiddenCount: number;
+  selectedIds: string[]; onToggleRow: (id: string) => void;
+  onDrillDown: (id: string) => void;
+  search: string; onSearch: (v: string) => void;
+  airbnbOnly: boolean;
+  onAirbnbOnlyChange: (v: boolean) => void;
+  airbnbConnectedCount: number;
+}) {
+  const bulkSelectEnabled = Boolean(cityScope);
+  const [showAllSnapshotKpis, setShowAllSnapshotKpis] = useState(false);
+  const snapshotCols = useMemo(
+    () => getOperationalSnapshotColumns(showAllSnapshotKpis),
+    [showAllSnapshotKpis],
+  );
+  const tabNote =
+    tableTab === 'audit'
+      ? 'Toutes les colonnes brutes snapshot (USD)'
+      : tableTab === 'todo'
+        ? 'Biens sans Airbnb ou sans snapshot ⟳'
+        : 'Vue synthèse · statut données par bien';
+
+  return (
+    <Box sx={{
+      background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
+      overflow: 'hidden', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+      animation: 'sj-fadeIn 0.6s 0.10s both',
+    }}>
+      <Stack direction="row" alignItems="center" gap={1.5} sx={{
+        p: '14px 18px', borderBottom: `1px solid ${T.border}`, background: T.bg2, flexWrap: 'wrap',
+      }}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
+          <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
+            🏠 {totalCount} bien{totalCount !== 1 ? 's' : ''}
+            {cityScope ? ` · ${cityScope}` : ''}
+          </Typography>
+          {tableTab === 'audit' ? (
+            <HeaderInfoIcon title="Portefeuille · données brutes" body={AIRROI_RAW_TABLE_INTRO} />
+          ) : null}
+        </Stack>
+        <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap' }}>
+          {TABLE_TABS.map((t) => (
+            <Box
+              key={t.id}
+              component="button"
+              type="button"
+              onClick={() => onTableTabChange(t.id)}
+              sx={{
+                all: 'unset', cursor: 'pointer',
+                px: 1.25, py: 0.625, borderRadius: 0.875,
+                fontSize: 11.5, fontWeight: tableTab === t.id ? 800 : 600,
+                bgcolor: tableTab === t.id ? T.goldTint : T.bg1,
+                border: `1px solid ${tableTab === t.id ? T.goldDeep : T.border}`,
+                color: tableTab === t.id ? T.goldDeep : T.text2,
+                display: 'inline-flex', alignItems: 'center', gap: 0.5,
+              }}
+            >
+              {t.label}
+              {t.id === 'todo' && todoTabCount > 0 ? (
+                <Box component="span" sx={{
+                  fontFamily: '"Geist Mono", monospace', fontSize: 9, fontWeight: 800,
+                  px: 0.5, borderRadius: 999, bgcolor: T.warningTint, color: T.warning,
+                }}>
+                  {todoTabCount}
+                </Box>
+              ) : null}
+            </Box>
+          ))}
+        </Stack>
+        <Stack direction="row" gap={0.75} sx={{ ml: { md: 'auto' }, flexWrap: 'wrap' }}>
+          <Box sx={{
+            display: 'inline-flex', alignItems: 'center', gap: 0.875,
+            px: 1.375, py: 0.75, background: T.bg1, border: `1px solid ${T.border}`,
+            borderRadius: 0.875, fontSize: 11.5,
+          }}>
+            <span>🔍</span>
+            <input value={search} onChange={e => onSearch(e.target.value)}
+              placeholder="Rechercher…"
+              style={{ border: 0, outline: 0, font: 'inherit', background: 'transparent',
+                width: 140, color: T.text }} />
+          </Box>
+          <FilterChip on={exploitableOnly} onClick={() => onExploitableOnlyChange(!exploitableOnly)}>
+            Exploitables
+            {stagingHiddenCount > 0 && exploitableOnly ? (
+              <Box component="span" sx={{
+                fontFamily: '"Geist Mono", monospace', fontSize: 10, fontWeight: 800,
+                color: T.text3,
+              }}>
+                −{stagingHiddenCount}
+              </Box>
+            ) : null}
+          </FilterChip>
+          {tableTab === 'operational' ? (
+            <FilterChip
+              on={showAllSnapshotKpis}
+              onClick={() => setShowAllSnapshotKpis((v) => !v)}
+              activeVariant="gold"
+            >
+              Tous les KPI snapshot
+              <Box component="span" sx={{
+                fontFamily: '"Geist Mono", monospace', fontSize: 10, fontWeight: 800,
+                color: showAllSnapshotKpis ? T.goldDeep : T.text3,
+              }}>
+                {showAllSnapshotKpis ? 'ON' : `${snapshotCols.length} cols`}
+              </Box>
+            </FilterChip>
+          ) : null}
+          <FilterChip
+            on={airbnbOnly}
+            onClick={() => onAirbnbOnlyChange(!airbnbOnly)}
+            activeVariant="success"
+          >
+            <Box component="span" sx={{
+              width: 6, height: 6, borderRadius: '50%',
+              bgcolor: airbnbOnly ? T.success : T.text4,
+            }} />
+            ID Airbnb
+            <Box component="span" sx={{
+              fontFamily: '"Geist Mono", monospace', fontSize: 10, fontWeight: 800,
+              px: 0.625, py: 0.125, borderRadius: 999,
+              bgcolor: airbnbOnly ? 'rgba(10,143,94,0.15)' : T.bg3,
+              color: airbnbOnly ? T.success : T.text3,
+            }}>
+              {airbnbConnectedCount}
+            </Box>
+          </FilterChip>
+        </Stack>
+      </Stack>
+
+      <Box sx={{ px: '18px', py: 1, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
+        <SectionSourceBar
+          compact
+          items={[
+            { kind: 'prod', label: 'Sojori · OTA', tooltip: 'Colonnes Bien + Airbnb (srv-listing)' },
+            tableTab === 'audit'
+              ? {
+                  kind: 'prod',
+                  label: 'Colonnes snapshot',
+                  tooltip: 'ListingPerformanceSnapshot — voir colonne Snapshot pour la date par bien',
+                }
+              : { kind: 'prod', label: 'Synthèse', tooltip: tabNote },
+          ]}
+          note={tabNote}
+        />
+      </Box>
+
+      <Box sx={{ overflowX: 'auto' }}>
+        {tableTab === 'audit' ? (
+          <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <Box component="thead">
+              <Box component="tr">
+                {AIRROI_RAW_COLUMNS.filter((col) => bulkSelectEnabled || col.id !== 'check').map((col) => {
+                  if (col.id === 'action') return null;
+                  if (col.hintTitle && col.hintBody) {
+                    return (
+                      <SnapshotHeaderCell
+                        key={col.id}
+                        label={col.label}
+                        hintTitle={col.hintTitle}
+                        hintBody={col.hintBody}
+                        gold={col.kind === 'airroi'}
+                      />
+                    );
+                  }
+                  return (
+                    <Box component="th" key={col.id} sx={tableHeadSx(col.kind === 'airroi' ? T.goldDeep : T.text3)}>
+                      {col.label}
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
+            <Box component="tbody">
+              {rows.map(r => (
+                <PortfolioRowComp key={r.listing._id} row={r}
+                  bulkSelectEnabled={bulkSelectEnabled}
+                  selected={selectedIds.includes(r.listing._id)}
+                  onToggle={() => onToggleRow(r.listing._id)}
+                  onDrillDown={() => onDrillDown(r.listing._id)} />
+              ))}
+            </Box>
+          </Box>
+        ) : (
+          <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <Box component="thead">
+              <Box component="tr">
+                {bulkSelectEnabled ? (
+                  <Box component="th" sx={tableHeadSx(T.text3)} />
+                ) : null}
+                <Box component="th" sx={tableHeadSx(T.text3)}>Bien</Box>
+                <Box component="th" sx={tableHeadSx(T.text3)}>Statut</Box>
+                <Box component="th" sx={tableHeadSx(T.text3)}>Airbnb</Box>
+                <SnapshotHeaderCell
+                  label="Snapshot"
+                  hintTitle="Date snapshot"
+                  hintBody="Dernière récupération ⟳ enregistrée en base pour ce bien."
+                />
+                {snapshotCols.map((col) => (
+                  <SnapshotHeaderCell
+                    key={col.id}
+                    label={col.label}
+                    hintTitle={col.hintTitle ?? col.label}
+                    hintBody={col.hintBody ?? 'Champ brut du snapshot marché (USD sauf occupation en %).'}
+                    gold
+                  />
+                ))}
+                <Box component="th" sx={tableHeadSx(T.text3)}>AI</Box>
+              </Box>
+            </Box>
+            <Box component="tbody">
+              {rows.map(r => (
+                <PortfolioOperationalRow key={r.listing._id} row={r}
+                  bulkSelectEnabled={bulkSelectEnabled}
+                  snapshotCols={snapshotCols}
+                  selected={selectedIds.includes(r.listing._id)}
+                  onToggle={() => onToggleRow(r.listing._id)}
+                  onDrillDown={() => onDrillDown(r.listing._id)} />
+              ))}
+            </Box>
+          </Box>
+        )}
+      </Box>
+
+      <Stack direction="row" alignItems="center" gap={1.5} sx={{
+        p: '10px 18px', borderTop: `1px solid ${T.border}`, background: T.bg2,
+        fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace', flexWrap: 'wrap',
+      }}>
+        <span>
+          <b style={{ color: T.text }}>{rows.length} / {totalCount}</b> affichés
+          {portfolioTotal != null && portfolioTotal !== totalCount
+            ? ` · ${portfolioTotal} au catalogue`
+            : ''}
+          {bulkSelectEnabled ? (
+            <>
+              {' · '}{selectedIds.length} sélectionné{selectedIds.length !== 1 ? 's' : ''}
+            </>
+          ) : null}
+        </span>
+      </Stack>
+    </Box>
+  );
+}
+
+const tableCellSx = {
+  p: '10px',
+  borderBottom: `1px solid ${T.border}`,
+} as const;
+
+function tableHeadSx(color: string) {
+  return {
+    p: '11px 10px',
+    textAlign: 'left' as const,
+    fontSize: 9,
+    fontFamily: '"Geist Mono", monospace',
+    fontWeight: 800,
+    color,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+    borderBottom: `1px solid ${T.border}`,
+    background: T.bg2,
+    position: 'sticky' as const,
+    top: 0,
+    whiteSpace: 'nowrap' as const,
+  };
+}
+
+function SnapshotHeaderCell({
+  label,
+  hintTitle,
+  hintBody,
+  gold,
+}: {
+  label: string;
+  hintTitle: string;
+  hintBody: string;
+  gold?: boolean;
+}) {
+  return (
+    <Box component="th" sx={tableHeadSx(gold ? T.goldDeep : T.text3)}>
+      <Tooltip
+        title={
+          <Box sx={{ maxWidth: 280 }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, mb: 0.5 }}>{hintTitle}</Typography>
+            <Typography sx={{ fontSize: 10.5, lineHeight: 1.45 }}>{hintBody}</Typography>
+          </Box>
+        }
+        arrow
+        placement="top"
+      >
+        <Stack direction="row" alignItems="center" gap={0.375} sx={{ cursor: 'help', width: 'fit-content' }}>
+          <span>{label}</span>
+          <InfoOutlinedIcon sx={{ fontSize: 11, color: gold ? T.goldDeep : T.text4, opacity: 0.85 }} />
+        </Stack>
+      </Tooltip>
+    </Box>
+  );
+}
+
+function ListingNameLink({
+  name,
+  sub,
+  onNavigate,
+}: {
+  name: string;
+  sub: string;
+  onNavigate: () => void;
+}) {
+  return (
+    <Box>
+      <Box
+        component="button"
+        type="button"
+        onClick={onNavigate}
+        sx={{
+          all: 'unset',
+          cursor: 'pointer',
+          display: 'block',
+          fontWeight: 800,
+          fontSize: 12.5,
+          color: T.text,
+          letterSpacing: '-0.01em',
+          textAlign: 'left',
+          maxWidth: '100%',
+          '&:hover': { color: T.goldDeep, textDecoration: 'underline' },
+        }}
+      >
+        {name}
+      </Box>
+      <Box sx={{ fontSize: 9.5, color: T.text3, fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
+        {sub}
+      </Box>
+    </Box>
+  );
+}
+
+function RowCheckbox({ selected, onToggle }: { selected: boolean; onToggle: () => void }) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      onClick={onToggle}
+      aria-pressed={selected}
+      sx={{
+        all: 'unset',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Box sx={{
+        width: 18, height: 18, borderRadius: 0.625,
+        border: `1.5px solid ${selected ? T.goldDeep : T.borderStrong}`,
+        background: selected ? T.gold : T.bg1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {selected ? (
+          <Box sx={{
+            width: 5, height: 9, borderRight: `2px solid ${T.text}`,
+            borderBottom: `2px solid ${T.text}`,
+            transform: 'rotate(45deg) translate(-1px,-1px)', mt: '-2px',
+          }} />
+        ) : null}
+      </Box>
+    </Box>
+  );
+}
+
+function GapStatusBadge({ reason }: { reason: DataGapReason }) {
+  const colors: Record<DataGapReason, { bg: string; color: string }> = {
+    ok: { bg: T.successTint, color: T.success },
+    no_airbnb: { bg: T.warningTint, color: T.warning },
+    no_snapshot: { bg: T.goldTint, color: T.goldDeep },
+    staging: { bg: T.bg3, color: T.text3 },
+  };
+  const c = colors[reason];
+  return (
+    <Box sx={{
+      display: 'inline-block', fontSize: 10, fontWeight: 800, px: 0.875, py: 0.25,
+      borderRadius: 999, bgcolor: c.bg, color: c.color, whiteSpace: 'nowrap',
+    }}>
+      {DATA_GAP_LABELS[reason]}
+    </Box>
+  );
+}
+
+function PortfolioOperationalRow({ row, bulkSelectEnabled = true, snapshotCols, selected, onToggle, onDrillDown }: {
+  row: PortfolioRow; bulkSelectEnabled?: boolean; snapshotCols: AirroiColumnDef[];
+  selected: boolean; onToggle: () => void; onDrillDown: () => void;
+}) {
+  const gap = getDataGapReason(row);
+  const snapLabel = row.airroiSnapshotAt
+    ? new Date(row.airroiSnapshotAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+    : '—';
+
+  return (
+    <Box component="tr" sx={{
+      ...(selected ? { background: T.goldTint } : {}),
+      '&:hover td': { background: selected ? T.goldTint : T.bg2 },
+    }}>
+      {bulkSelectEnabled ? (
+        <Box component="td" sx={tableCellSx}>
+          <RowCheckbox selected={selected} onToggle={onToggle} />
+        </Box>
+      ) : null}
+      <Box component="td" sx={{ ...tableCellSx, minWidth: 160 }}>
+        <ListingNameLink
+          name={row.listing.name}
+          sub={row.listing.ruPropertyKey ? `RU ${row.listing.ruPropertyKey}` : row.listing._id.slice(-8)}
+          onNavigate={onDrillDown}
+        />
+      </Box>
+      <Box component="td" sx={tableCellSx}>
+        <GapStatusBadge reason={gap} />
+      </Box>
+      <Box component="td" sx={tableCellSx}>
+        <AirbnbConnectCell listing={row.listing} />
+      </Box>
+      <RawCell value={snapLabel} muted={!row.hasAirroiSnapshot} />
+      {snapshotCols.map((col) => {
+        if (!col.field) return null;
+        const v = formatAirroiRawValue(col.field, row.airroiRaw);
+        return (
+          <RawCell key={col.id} value={v} highlight={!row.hasAirroiSnapshot} />
+        );
+      })}
+      <Box component="td" sx={tableCellSx}>
+        <Box sx={{
+          fontSize: 10, fontWeight: 800, fontFamily: '"Geist Mono", monospace',
+          color: row.aiEnabled ? T.success : T.text3,
+        }}>
+          {row.aiEnabled ? 'ON' : 'OFF'}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+function PortfolioRowComp({ row, bulkSelectEnabled = true, selected, onToggle, onDrillDown }: {
+  row: PortfolioRow; bulkSelectEnabled?: boolean; selected: boolean;
+  onToggle: () => void; onDrillDown: () => void;
+}) {
+  const snapLabel = row.airroiSnapshotAt
+    ? new Date(row.airroiSnapshotAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+    : '—';
+
+  return (
+    <Box component="tr" sx={{
+      ...(selected ? { background: T.goldTint } : {}),
+      '&:hover td': { background: selected ? T.goldTint : T.bg2 },
+    }}>
+      {AIRROI_RAW_COLUMNS.filter((col) => bulkSelectEnabled || col.id !== 'check').map(col => {
+        if (col.id === 'check') {
+          return (
+            <Box key={col.id} component="td" sx={tableCellSx}>
+              <RowCheckbox selected={selected} onToggle={onToggle} />
+            </Box>
+          );
+        }
+        if (col.id === 'bien') {
+          return (
+            <Box key={col.id} component="td" sx={{ ...tableCellSx, minWidth: 160 }}>
+              <ListingNameLink
+                name={row.listing.name}
+                sub={row.listing.ruPropertyKey ? `RU ${row.listing.ruPropertyKey}` : row.listing._id.slice(-8)}
+                onNavigate={onDrillDown}
+              />
+            </Box>
+          );
+        }
+        if (col.id === 'airbnb') {
+          return (
+            <Box key={col.id} component="td" sx={tableCellSx}>
+              <AirbnbConnectCell listing={row.listing} />
+            </Box>
+          );
+        }
+        if (col.id === 'snapshot') {
+          return (
+            <RawCell key={col.id} value={snapLabel} muted />
+          );
+        }
+        if (col.id === 'action') {
+          return null;
+        }
+        if (col.field) {
+          const v = formatAirroiRawValue(col.field, row.airroiRaw);
+          return <RawCell key={col.id} value={v} highlight={!row.hasAirroiSnapshot} />;
+        }
+        return null;
+      })}
+    </Box>
+  );
+}
+
+function RawCell({ value, muted, highlight }: { value: string; muted?: boolean; highlight?: boolean }) {
+  return (
+    <Box component="td" sx={{
+      p: '10px', borderBottom: `1px solid ${T.border}`,
+      fontFamily: '"Geist Mono", monospace', fontSize: 11, fontWeight: 600,
+      color: highlight ? T.text4 : muted ? T.text3 : T.text,
+      whiteSpace: 'nowrap',
+    }}>{value}</Box>
+  );
+}
+
+function AirbnbConnectCell({ listing }: { listing: Listing }) {
+  const connected = Boolean(listing.airbnbConnected && listing.airbnbListingId);
+  const url = listing.airbnbPublicUrl;
+  const status = listing.airbnbStatus;
+  const markup = listing.airbnbMarkup;
+  return (
+    <Stack sx={{ gap: 0.375, minWidth: 88 }}>
+      <Box sx={{
+        display: 'inline-flex', alignItems: 'center', gap: 0.5,
+        fontSize: 11, fontWeight: 800,
+        color: connected ? T.success : T.text4,
+      }}>
+        <Box component="span" sx={{
+          width: 7, height: 7, borderRadius: '50%',
+          bgcolor: connected ? T.success : T.text4,
+        }} />
+        {connected ? 'Connecté' : 'Non connecté'}
+      </Box>
+      {connected && listing.airbnbListingId && (
+        <Box sx={{ fontSize: 9.5, fontFamily: '"Geist Mono", monospace', color: T.text3, fontWeight: 600 }}>
+          {listing.airbnbListingId}
+        </Box>
+      )}
+      {connected && status && (
+        <Box sx={{ fontSize: 9.5, color: T.text3 }}>{status}{markup != null ? ` · ${markup}%` : ''}</Box>
+      )}
+      {connected && url && (
+        <Box component="a" href={url} target="_blank" rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          sx={{
+            fontSize: 10, fontWeight: 700, color: T.info, textDecoration: 'none',
+            '&:hover': { textDecoration: 'underline' },
+          }}>
+          Ouvrir Airbnb
+        </Box>
+      )}
+      {!connected && listing.otaVerifiedAt && (
+        <Box sx={{ fontSize: 9, color: T.text4 }} title="Vérifier les canaux sur le dashboard legacy">
+          OTA vérifié — pas d’ID Airbnb
+        </Box>
+      )}
+    </Stack>
+  );
+}
+
+function AirroiSnapshotHint({ row }: { row: PortfolioRow }) {
+  if (!row.hasAirroiSnapshot || !row.airroiSnapshotAt) return null;
+  const d = new Date(row.airroiSnapshotAt);
+  const label = Number.isNaN(d.getTime())
+    ? row.airroiSnapshotAt
+    : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  return (
+    <Box sx={{ fontSize: 9, color: T.success, fontWeight: 700 }} title="Données marché snapshot (pas d’appel API au chargement)">
+      Snapshot · {label}
+    </Box>
+  );
+}
+
+function HeaderInfoIcon({ title, body }: { title: string; body: string }) {
+  if (!body) return null;
+  return (
+    <Tooltip
+      title={
+        <Box sx={{ maxWidth: 320, p: 0.5 }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 800, mb: 0.5 }}>{title}</Typography>
+          <Typography sx={{ fontSize: 11, lineHeight: 1.45 }}>{body}</Typography>
+        </Box>
+      }
+      arrow
+      placement="bottom-start"
+    >
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: T.text3,
+          cursor: 'help',
+          '&:hover': { color: T.goldDeep },
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+      </Box>
+    </Tooltip>
+  );
+}
+
+function ColumnHeaderLabel({
+  label,
+  sortMark,
+  title,
+  body,
+  periodHint,
+}: {
+  label: string;
+  sortMark?: boolean;
+  title: string;
+  body: string;
+  periodHint?: 'period';
+}) {
+  if (!label && !title) return null;
+  const fullBody =
+    body +
+    (periodHint
+      ? `\n\nPériode conservée en historique : TTM = ${TTM_MONTHS} mois avant la date du snapshot ; série mensuelle = ${METRICS_HISTORY_MONTHS} mois (metrics/all).`
+      : '');
+  return (
+    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.375 }}>
+      <span>{label}{sortMark ? ' ↓' : ''}</span>
+      {title && body && <HeaderInfoIcon title={title} body={fullBody} />}
+    </Box>
+  );
+}
+
+function NumCell({
+  value,
+  gold,
+  ok,
+  warn,
+  hint,
+}: {
+  value: string;
+  gold?: boolean;
+  ok?: boolean;
+  warn?: boolean;
+  hint?: string;
+}) {
+  const cell = (
+    <Box component="td" sx={{
+      p: '12px 14px', borderBottom: `1px solid ${T.border}`,
+      fontFamily: '"Geist Mono", monospace', fontWeight: 700, letterSpacing: '-0.005em',
+      color: gold ? T.goldDeep : ok ? T.success : warn ? T.error : T.text,
+    }}>
+      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.375 }}>
+        {value}
+        {hint && (
+          <HeaderInfoIcon title="Période · ce bien" body={hint} />
+        )}
+      </Box>
+    </Box>
+  );
+  return cell;
+}
+
+function ModeChip({ kind, children }: { kind: 'pr' | 'eq' | 'ag' | 'off'; children: React.ReactNode }) {
+  const styles = {
+    pr: { bg: T.infoTint, c: T.info },
+    eq: { bg: T.goldTint, c: T.goldDeep },
+    ag: { bg: T.errorTint, c: T.error },
+    off:{ bg: T.bg3, c: T.text3 },
+  }[kind];
+  return (
+    <Box component="span" sx={{
+      display: 'inline-flex', alignItems: 'center', gap: 0.5,
+      px: 1, py: 0.25, borderRadius: 0.625,
+      fontFamily: '"Geist Mono", monospace', fontSize: 9.5, fontWeight: 800,
+      letterSpacing: '0.04em', background: styles.bg, color: styles.c,
+    }}>{children}</Box>
+  );
+}
+
+function ScoreBar({ score }: { score: number }) {
+  const status = perfStatus(score);
+  const grads = {
+    over: `linear-gradient(90deg, ${T.success}, #0d6a47)`,
+    par:  `linear-gradient(90deg, ${T.gold}, ${T.goldDeep})`,
+    under:`linear-gradient(90deg, #fca5a5, ${T.error})`,
+  };
+  const colors = { over: T.success, par: T.text, under: T.error };
+  return (
+    <Stack direction="row" alignItems="center" gap={1} sx={{ maxWidth: 120 }}>
+      <Box sx={{ flex: 1, height: 6, background: T.bg3, borderRadius: 999, overflow: 'hidden' }}>
+        <Box sx={{ height: '100%', width: `${score}%`, background: grads[status], borderRadius: 999 }} />
+      </Box>
+      <Box sx={{
+        fontFamily: '"Geist Mono", monospace', fontSize: 11, fontWeight: 800,
+        color: colors[status], minWidth: 30,
+      }}>{Math.round(score)}</Box>
+    </Stack>
+  );
+}
+
+function FilterChip({
+  on,
+  onClick,
+  children,
+  activeVariant = 'gold',
+}: {
+  on?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  activeVariant?: 'gold' | 'success';
+}) {
+  const activeStyle =
+    activeVariant === 'success'
+      ? { background: T.successTint, border: `1px solid ${T.success}`, color: T.success }
+      : { background: T.goldTint, border: `1px solid ${T.gold}`, color: T.goldDeep };
+  return (
+    <Box component="button" onClick={onClick} sx={{
+      all: 'unset', cursor: 'pointer',
+      display: 'inline-flex', alignItems: 'center', gap: 0.625,
+      px: 1.25, py: 0.75, borderRadius: 0.875, fontSize: 11, fontWeight: 700,
+      transition: 'border-color 0.15s, background 0.15s',
+      ...(on
+        ? activeStyle
+        : { background: T.bg1, border: `1px solid ${T.border}`, color: T.text2,
+            '&:hover': { borderColor: T.borderStrong, bgcolor: T.bg2 } }),
+    }}>{children}</Box>
+  );
+}
