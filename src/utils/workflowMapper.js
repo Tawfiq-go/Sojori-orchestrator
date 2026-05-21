@@ -389,6 +389,8 @@ const mapWorkflow = (workflow, reservationNumber, enrichment = {}) => {
   return {
     id: workflow.workflowId,
     type: workflow.category,
+    categoryType: workflow.categoryType,
+    metadata: workflow.metadata,
     icon: ICON_BY_CATEGORY[workflow.category] || ICON_BY_CATEGORY.default,
     title: workflow.categoryDisplayLabel || workflow.category,
     isPlaceholder,

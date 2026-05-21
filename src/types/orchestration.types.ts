@@ -253,15 +253,27 @@ export interface CategoryWorkflow {
   completedAt?: string;
 }
 
+export interface ListingOperationalSnapshot {
+  listingId?: string;
+  name?: string;
+  occupancyStatus?: string;
+  cleanlinessStatus_v2?: string;
+  cleanlinessStatus?: string;
+  cleanlinessEmergency?: boolean;
+  orchestration_cleaning_sojori?: boolean;
+}
+
 export interface OrchestrationPlanDetail {
   reservationCode: string;
   planId: string;
   systemType: 'new';
   reservationId: string;
   listingId: string;
+  listingName?: string;
   ownerId: string;
   checkInDate?: string;
   checkOutDate?: string;
+  listingOperational?: ListingOperationalSnapshot | null;
   workflows: CategoryWorkflow[];
   planCreated?: boolean;
   planCreationReason?: string;

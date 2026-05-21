@@ -11,6 +11,9 @@ import {
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { PageHeader, tokens as t } from '../components/dashboard/DashboardV2.components';
 import { getOrchestrationPlans, getOrchestrationPlanDetail } from '../services/orchestrationService';
+import cleanlinessService from '../services/cleanlinessService';
+import { CleaningSojoriSchedulePanel } from '../components/orchestration/CleaningSojoriSchedulePanel';
+import type { DisplayCleanliness } from '../utils/cleanlinessDisplay';
 import type { OrchestrationPlan, OrchestrationPlanDetail, CategoryWorkflow } from '../types/orchestration.types';
 
 // ════════════════════════════════════════════════════════════════════
@@ -109,6 +112,13 @@ function transformWorkflowToActions(workflow: CategoryWorkflow) {
   return actions;
 }
 
+function isCleaningSojoriWorkflow(workflow: CategoryWorkflow): boolean {
+  return (
+    workflow.categoryType === 'CLEANING_SOJORI' ||
+    workflow.category === 'cleaning_sojori'
+  );
+}
+
 // ════════════════════════════════════════════════════════════════════
 // RESERVATION CARD (horizontal, en haut)
 // ════════════════════════════════════════════════════════════════════
@@ -205,6 +215,7 @@ const ReservationCard: React.FC<ReservationCardProps> = ({ plan, onSelect, selec
 interface WorkflowColumnProps {
   title: string;
   badge?: string;
+  timeslotCode?: string;
   actions: Array<{
     type: string;
     label: string;
@@ -212,9 +223,16 @@ interface WorkflowColumnProps {
     icon: string;
     detail?: string;
   }>;
+  cleaningPanel?: React.ReactNode;
 }
 
-const WorkflowColumn: React.FC<WorkflowColumnProps> = ({ title, badge, actions }) => {
+const WorkflowColumn: React.FC<WorkflowColumnProps> = ({
+  title,
+  badge,
+  timeslotCode,
+  actions,
+  cleaningPanel,
+}) => {
   return (
     <Box
       sx={{
@@ -237,19 +255,36 @@ const WorkflowColumn: React.FC<WorkflowColumnProps> = ({ title, badge, actions }
         <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text, mb: 0.5 }}>
           {title}
         </Typography>
-        {badge && (
-          <Chip
-            size="small"
-            label={badge}
-            sx={{
-              bgcolor: t.infoTint,
-              color: t.info,
-              fontWeight: 600,
-              fontSize: 9,
-              height: 16,
-            }}
-          />
-        )}
+        <Stack direction="row" flexWrap="wrap" gap={0.5}>
+          {badge && (
+            <Chip
+              size="small"
+              label={badge}
+              sx={{
+                bgcolor: t.infoTint,
+                color: t.info,
+                fontWeight: 600,
+                fontSize: 9,
+                height: 16,
+              }}
+            />
+          )}
+          {timeslotCode && (
+            <Chip
+              size="small"
+              label={timeslotCode}
+              sx={{
+                bgcolor: t.bg1,
+                color: t.text2,
+                fontWeight: 600,
+                fontSize: 8,
+                height: 16,
+                fontFamily: '"Geist Mono", monospace',
+              }}
+            />
+          )}
+        </Stack>
+        {cleaningPanel}
       </Box>
 
       {/* Actions */}
@@ -317,6 +352,37 @@ export default function OrchestrationPlansPageV2() {
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cleanlinessSaving, setCleanlinessSaving] = useState(false);
+
+  const handleCleanlinessChange = async (listingId: string, status: DisplayCleanliness) => {
+    setCleanlinessSaving(true);
+    try {
+      const result = await cleanlinessService.updateListingStatus(listingId, status);
+      if (!result.success) {
+        throw new Error(result.message || 'Échec mise à jour propreté');
+      }
+      if (result.data && planDetail) {
+        setPlanDetail({
+          ...planDetail,
+          listingOperational: {
+            ...planDetail.listingOperational,
+            listingId,
+            cleanlinessStatus_v2: result.data.cleanlinessStatus_v2,
+            cleanlinessStatus: result.data.cleanlinessStatus,
+            cleanlinessEmergency: result.data.cleanlinessEmergency,
+            occupancyStatus: result.data.occupancyStatus,
+          },
+        });
+      }
+      const rn = selectedPlan?.reservationNumber;
+      if (rn) {
+        const detail = await getOrchestrationPlanDetail(rn);
+        setPlanDetail(detail);
+      }
+    } finally {
+      setCleanlinessSaving(false);
+    }
+  };
 
   const handleTabChange = (_: any, newValue: number) => {
     setTab(newValue);
@@ -445,6 +511,9 @@ export default function OrchestrationPlansPageV2() {
 
     console.log('🔄 Transforming workflows into columns:', planDetail.workflows.length);
 
+    const listingId = planDetail.listingId;
+    const listingOperational = planDetail.listingOperational;
+
     return planDetail.workflows.map((workflow) => {
       const actions = transformWorkflowToActions(workflow);
 
@@ -454,15 +523,29 @@ export default function OrchestrationPlansPageV2() {
         badge += ` · ${workflow.metadata.timeslotType}`;
       }
 
+      const cleaningPanel = isCleaningSojoriWorkflow(workflow) ? (
+        <CleaningSojoriSchedulePanel
+          metadata={(workflow as CategoryWorkflow & { metadata?: Record<string, unknown> }).metadata}
+          compact
+          listingId={listingId}
+          listingOperational={listingOperational}
+          checkInDate={planDetail.checkInDate}
+          checkOutDate={planDetail.checkOutDate}
+          onCleanlinessChange={cleanlinessSaving ? undefined : handleCleanlinessChange}
+        />
+      ) : undefined;
+
       return {
         title: workflow.categoryDisplayLabel || workflow.category,
         badge,
+        timeslotCode: workflow.timeslotCode,
         actions,
+        cleaningPanel,
         workflowId: workflow.workflowId,
         status: workflow.status,
       };
     });
-  }, [planDetail]);
+  }, [planDetail, cleanlinessSaving]);
 
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Orchestration', 'Plans']}>
