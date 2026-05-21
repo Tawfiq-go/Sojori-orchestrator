@@ -71,7 +71,7 @@ export default function BienAirroiView({ row }: { row: PortfolioRow }) {
             RU {row.listing.ruPropertyKey}
           </Typography>
         )}
-        <Stack direction="row" gap={2} sx={{ flexWrap: 'wrap', fontSize: 12, color: T.text2 }}>
+        <Stack direction="row" sx={{ gap: 2,  flexWrap: 'wrap', fontSize: 12, color: T.text2 }}>
           <span>
             Snapshot marché :{' '}
             <b style={{ color: row.hasAirroiSnapshot ? T.success : T.text4 }}>{snapLabel}</b>

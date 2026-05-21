@@ -144,6 +144,10 @@ export default function MultiView({
       background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 14,
       overflow: 'hidden', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
       userSelect: isDragging ? 'none' : 'auto',
+      maxWidth: '100%',
+      maxHeight: 'calc(100vh - 220px)',
+      display: 'flex',
+      flexDirection: 'column',
     }}>
       {/* Légende des couleurs - au-dessus du header */}
       <div style={{
@@ -177,6 +181,9 @@ export default function MultiView({
             fontSize: 11, fontWeight: 700, color: T.text3,
             letterSpacing: '0.08em', textTransform: 'uppercase',
             borderRight: `1px solid ${T.border}`,
+            position: 'sticky', left: 0, zIndex: 10,
+            background: T.bg2,
+            boxShadow: '2px 0 4px rgba(0,0,0,0.04)',
           }}>Listing</div>
           {days.map(d => (
             <DayHeader key={d.iso} day={d} />
@@ -185,7 +192,7 @@ export default function MultiView({
       </div>
 
       {/* Body scrollable */}
-      <div ref={bodyRef} style={{ overflowX: 'auto', overflowY: 'visible' }}>
+      <div ref={bodyRef} style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0 }}>
         <div style={{ minWidth: LEFT_W + days.length * CELL_W }}>
           {listings.map(listing => (
             <ListingRow
@@ -276,6 +283,8 @@ function ListingRow({ listing, days, expanded, onToggle, selectedColumns, isSele
           background: T.bg1, borderRight: `1px solid ${T.border}`,
           cursor: showChevron ? 'pointer' : 'default',
           transition: 'background 0.15s',
+          position: 'sticky', left: 0, zIndex: 4,
+          boxShadow: '2px 0 4px rgba(0,0,0,0.04)',
         }}>
           {showChevron && (
             <span style={{
@@ -337,6 +346,9 @@ function ListingRow({ listing, days, expanded, onToggle, selectedColumns, isSele
               fontSize: 11, fontWeight: 600, color: T.text2,
               fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em',
               borderRight: `1px solid ${T.border}`,
+              position: 'sticky', left: 0, zIndex: 3,
+              background: T.bg2,
+              boxShadow: '2px 0 4px rgba(0,0,0,0.04)',
             }}>
               {col.short}
               {col.hasTooltip && <span style={{ fontSize: 11, color: T.ai, cursor: 'help' }} title="Tooltip breakdown au hover">ⓘ</span>}

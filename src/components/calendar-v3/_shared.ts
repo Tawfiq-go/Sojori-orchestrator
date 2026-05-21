@@ -139,6 +139,12 @@ export const ALL_COLUMNS: ColumnDef[] = [
     hasTooltip: true,
   },
   {
+    id: 'minStay',
+    label: 'Séjour minimum',
+    short: 'Min',
+    excelSelectable: true,
+  },
+  {
     id: 'basePrice',
     label: 'Prix de base',
     short: 'Base',
@@ -166,12 +172,6 @@ export const ALL_COLUMNS: ColumnDef[] = [
     id: 'stopSell',
     label: 'Arrêt des ventes',
     short: 'Stop',
-    excelSelectable: true,
-  },
-  {
-    id: 'minStay',
-    label: 'Séjour minimum',
-    short: 'Min',
     excelSelectable: true,
   },
   {

@@ -53,6 +53,20 @@ export type PortfolioListingDto = {
     available: boolean;
   }>;
   airroiCalendarDaysCount?: number;
+  pilotConfig?: {
+    enabled: boolean;
+    applyPrice?: boolean;
+    applyMinStay?: boolean;
+    modeEnabled: boolean;
+    mode: string;
+    activeModeId?: string;
+    modes?: PricingModeDefinitionDto[];
+    floorNormal: number;
+    ceiling: number;
+    minStayDelta: number;
+    minStayPlancher: number;
+    eventsCount: number;
+  } | null;
   perfMeta?: {
     source: 'airroi_snapshot' | 'estimate';
     snapshotAt: string | null;
@@ -248,11 +262,22 @@ export interface G7Factor {
   inputAfter: number;
 }
 
+export interface MinStayFactorDto {
+  key: string;
+  label: string;
+  sub?: string;
+  nightsBefore: number;
+  nightsAfter: number;
+  kind: 'base' | 'plus' | 'neutral' | 'clamp';
+}
+
 export interface G7Breakdown {
   airroiSnapshotId: string;
   airroiRateUsd: number;
   fxUsdMad: number;
   factors: G7Factor[];
+  marketMinNights: number;
+  minStayFactors: MinStayFactorDto[];
   finalPriceMad: number;
   finalMinStay: number;
   finalMinStaySource: string;
@@ -270,10 +295,23 @@ export interface PilotPricingEventDto {
   minNightsOverride?: number;
 }
 
+export interface PricingModeDefinitionDto {
+  id: string;
+  label: string;
+  multiplier: number;
+  kind: 'preset' | 'custom';
+  enabled: boolean;
+}
+
 export interface PilotPricingConfigDto {
   listingId: string;
   enabled: boolean;
+  applyPrice?: boolean;
+  applyMinStay?: boolean;
+  modeEnabled?: boolean;
   mode: PilotMode;
+  activeModeId?: string;
+  modes?: PricingModeDefinitionDto[];
   floorNormal: number;
   ceiling: number;
   floorAggressive?: number;

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { BienViewProps } from '../BienView';
-import type { PricingMode } from '../bien/PricingControls';
+import { DEFAULT_PRICING_MODES, type PricingMode } from '../bien/PricingControls';
 import type { PriceFactor } from '../_tokens';
 import {
   buildCompMapPins,
@@ -23,6 +23,7 @@ export function useBienDetailMock(listingId: string | undefined): BienViewProps 
   const [floor, setFloor] = useState(900);
   const [ceiling, setCeiling] = useState(2800);
   const [mode, setMode] = useState<PricingMode>('equilibre');
+  const [activeModeId, setActiveModeId] = useState('equilibre');
   const [calendarYear, setCalendarYear] = useState(2026);
 
   const listing = useMemo(() => buildMajorelleListing(), []);
@@ -49,6 +50,9 @@ export function useBienDetailMock(listingId: string | undefined): BienViewProps 
     return {
       factors,
       finalPrice: 1850,
+      finalMinStay: 2,
+      marketMinNights: 2,
+      minStayFactors: [],
       competitorsDay: [
         { _id: 'c1', name: 'Apartment with rooftop pool', distance: 400, rating: 4.89, reviews: 210, bedrooms: 2, adrTtm: 2100, occTtm: 0.63, revenueTtm: 480_000 },
         { _id: 'c2', name: 'Gueliz Medina Apt', distance: 520, rating: 4.91, reviews: 98, bedrooms: 2, adrTtm: 1750, occTtm: 0.27, revenueTtm: 172_000 },
@@ -85,6 +89,15 @@ export function useBienDetailMock(listingId: string | undefined): BienViewProps 
     floor,
     ceiling,
     mode,
+    activeModeId,
+    pricingModes: DEFAULT_PRICING_MODES,
+    minStayDelta: 0,
+    minStayPlancher: 1,
+    modeEnabled: true,
+    applyPrice: true,
+    applyMinStay: true,
+    scopeModalOpen: false,
+    scopeModalEdit: false,
     events: defaultEvents(),
     suggestions: defaultSuggestions(),
     calendarYear,
@@ -102,13 +115,26 @@ export function useBienDetailMock(listingId: string | undefined): BienViewProps 
     estimatedRevenueMad: 198_400,
     estimatedRevenueLiftPct: 12,
     onToggleAi: setAiEnabled,
+    onScopeModalClose: () => {},
+    onScopeModalConfirm: async () => {},
+    onEditSyncScope: () => {},
     onFloorChange: setFloor,
     onCeilingChange: setCeiling,
     onApplyRecoBounds: () => {
       setFloor(800);
       setCeiling(2400);
     },
-    onModeChange: setMode,
+    onActiveModeChange: (id) => {
+      setActiveModeId(id);
+      if (['prudent', 'equilibre', 'agressif'].includes(id)) setMode(id as PricingMode);
+    },
+    onModeToggle: () => {},
+    onAddCustomMode: () => {},
+    onUpdateCustomMode: () => {},
+    onDeleteCustomMode: () => {},
+    onMinStayDeltaChange: () => {},
+    onMinStayPlancherChange: () => {},
+    onModeEnabledChange: () => {},
     onAddEvent: () => console.log('[dynamic-pricing mock] add event'),
     onEditEvent: (id) => console.log('[dynamic-pricing mock] edit event', id),
     onDeleteEvent: (id) => console.log('[dynamic-pricing mock] delete event', id),

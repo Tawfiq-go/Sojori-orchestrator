@@ -5,7 +5,10 @@ import {
   refreshMarketDynamicPricing,
   refreshListingPerformanceAirroi,
   recomputeAllDynamicPricing,
+  savePilotConfig,
+  type PilotPricingConfigDto,
 } from '../../../services/dynamicPricingApi';
+import type { PortfolioRow } from '../_tokens';
 import type { PortfolioMockData } from './usePortfolioMock';
 import { mapPortfolioApiToView } from './mapPortfolioApi';
 import { runtimeLog } from '../../../utils/runtimeLog';
@@ -55,6 +58,11 @@ export function usePortfolio(
   withAirbnbCount: number;
   withAirroiSnapshotCount: number;
   marketCache?: { hasCity: boolean; fetchedAt: string | null; zoneCount: number };
+  /** Mise à jour locale d’une ligne (toggle AI, prix…) sans recharger tout le portefeuille */
+  patchListingPilot: (
+    listingId: string,
+    partial: Partial<PilotPricingConfigDto>,
+  ) => Promise<void>;
 } {
   const [data, setData] = useState<PortfolioMockData>(EMPTY_PORTFOLIO);
   const [loading, setLoading] = useState(true);
@@ -68,10 +76,12 @@ export function usePortfolio(
     zoneCount: number;
   }>();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setFetchFailed(false);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoading(true);
+      setError(null);
+      setFetchFailed(false);
+    }
     try {
       const res = await fetchDynamicPricingPortfolio({ ownerId, city: cityScope ?? undefined });
       if (!res.data?.success) {
@@ -108,9 +118,37 @@ export function usePortfolio(
       setData(EMPTY_PORTFOLIO);
       runtimeLog('error', 'DynamicPricing', 'portfolio failed', { msg });
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [ownerId, cityScope]);
+
+  const patchListingPilot = useCallback(
+    async (listingId: string, partial: Partial<PilotPricingConfigDto>) => {
+      setData((prev) => {
+        const rows = prev.rows.map((r) =>
+          r.listing._id === listingId ? applyPilotPartialToRow(r, partial) : r,
+        );
+        const aiEnabledCount = rows.filter((r) => r.aiEnabled).length;
+        return {
+          ...prev,
+          rows,
+          macro: { ...prev.macro, aiEnabledCount },
+          mapPins: prev.mapPins.map((p) =>
+            p.id === listingId && partial.enabled !== undefined
+              ? { ...p, aiEnabled: partial.enabled }
+              : p,
+          ),
+        };
+      });
+      try {
+        await savePilotConfig(listingId, partial);
+      } catch (e) {
+        await load({ silent: true });
+        throw e;
+      }
+    },
+    [load],
+  );
 
   useEffect(() => {
     void load();
@@ -153,12 +191,51 @@ export function usePortfolio(
     loading,
     error,
     fetchFailed,
-    refetch: load,
+    refetch: () => load(),
+    patchListingPilot,
     refreshMarket,
     refreshListingPerformance,
     recomputeAll,
     withAirbnbCount,
     withAirroiSnapshotCount,
     marketCache,
+  };
+}
+
+function applyPilotPartialToRow(
+  row: PortfolioRow,
+  partial: Partial<PilotPricingConfigDto>,
+): PortfolioRow {
+  const prevPc = row.pilotConfig ?? {
+    enabled: row.aiEnabled,
+    modeEnabled: true,
+    mode: 'equilibre',
+    floorNormal: row.bounds?.floor ?? 900,
+    ceiling: row.bounds?.ceiling ?? 2800,
+    minStayDelta: 0,
+    minStayPlancher: 1,
+    eventsCount: 0,
+  };
+  const nextPc = {
+    ...prevPc,
+    ...(partial.enabled !== undefined ? { enabled: partial.enabled } : {}),
+    ...(partial.modeEnabled !== undefined ? { modeEnabled: partial.modeEnabled } : {}),
+    ...(partial.mode !== undefined ? { mode: partial.mode } : {}),
+    ...(partial.floorNormal !== undefined ? { floorNormal: partial.floorNormal } : {}),
+    ...(partial.ceiling !== undefined ? { ceiling: partial.ceiling } : {}),
+    ...(partial.minStayDelta !== undefined ? { minStayDelta: partial.minStayDelta } : {}),
+    ...(partial.minStayPlancher !== undefined ? { minStayPlancher: partial.minStayPlancher } : {}),
+    ...(partial.applyPrice !== undefined ? { applyPrice: partial.applyPrice } : {}),
+    ...(partial.applyMinStay !== undefined ? { applyMinStay: partial.applyMinStay } : {}),
+  };
+  const aiEnabled = partial.enabled !== undefined ? partial.enabled : row.aiEnabled;
+  return {
+    ...row,
+    aiEnabled,
+    pilotConfig: nextPc,
+    bounds: {
+      floor: partial.floorNormal ?? row.bounds?.floor ?? nextPc.floorNormal,
+      ceiling: partial.ceiling ?? row.bounds?.ceiling ?? nextPc.ceiling,
+    },
   };
 }

@@ -123,8 +123,7 @@ export function SectionSourceBar({
   return (
     <Stack
       direction="row"
-      gap={compact ? 0.5 : 0.75}
-      sx={{
+      sx={{ gap: compact ? 0.5 : 0.75, 
         flexWrap: 'wrap',
         alignItems: 'center',
         mb: compact ? 1 : 1.5,
@@ -174,8 +173,7 @@ export function DataSourceLegend({ sx }: { sx?: object }) {
   return (
     <Stack
       direction="row"
-      gap={1}
-      sx={{
+      sx={{ gap: 1, 
         flexWrap: 'wrap',
         alignItems: 'center',
         p: 1,

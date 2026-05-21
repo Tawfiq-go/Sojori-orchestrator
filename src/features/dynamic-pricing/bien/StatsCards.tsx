@@ -162,7 +162,7 @@ function StatCard({
         },
       }}
     >
-      <Stack direction="row" alignItems="center" gap={0.75} sx={{ mb: 1.75 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75,  mb: 1.75 }}>
         <Box sx={{ fontSize: 13 }}>{emoji}</Box>
         <Typography
           sx={{
@@ -217,7 +217,7 @@ function ValueBlock({
 }) {
   return (
     <>
-      <Stack direction="row" alignItems="baseline" gap={1} sx={{ mb: 0.375 }}>
+      <Stack direction="row" sx={{ alignItems: 'baseline', gap: 1,  mb: 0.375 }}>
         <Typography
           sx={{
             fontFamily: '"Geist Mono", monospace',
@@ -270,7 +270,7 @@ function RangeBar({ p25, p50, p75 }: { p25: number; p50: number; p75: number }) 
   return (
     <Box sx={{ position: 'relative', height: 34, my: '14px' }}>
       <Box sx={{ position: 'absolute', left: 0, right: 0, top: 14, height: 6, bgcolor: T.bg3, borderRadius: '99px' }} />
-      <Stack direction="row" justifyContent="space-between" sx={{ mt: '22px', fontSize: 9.5, fontFamily: '"Geist Mono", monospace', color: T.text4, fontWeight: 700 }}>
+      <Stack direction="row" sx={{ justifyContent: 'space-between',  mt: '22px', fontSize: 9.5, fontFamily: '"Geist Mono", monospace', color: T.text4, fontWeight: 700 }}>
         <span>P25 · {fmt(p25)}</span>
         <Box component="span" sx={{ color: T.goldDeep, fontWeight: 800 }}>
           P50 · {fmt(p50)}
