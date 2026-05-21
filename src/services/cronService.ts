@@ -107,6 +107,11 @@ export type CronNextExecutionResponse = {
 
 export type CronDayViewParams = {
   view: string;
+  /** YYYY-MM-DD — jour unique (view custom_day) */
+  date?: string;
+  /** YYYY-MM-DD — intervalle (view custom_range) */
+  dateFrom?: string;
+  dateTo?: string;
   reservationNumber?: string;
   reservationStatus?: string;
 };
@@ -122,6 +127,7 @@ export type CronDayViewResponse = {
     attemptNumber?: number;
     condition?: string;
     conditionMet?: boolean;
+    isOverdue?: boolean;
   }>;
   counts: { audit: number; projection: number };
   windows?: { audit?: { label: string }; projection?: { label: string } };
@@ -147,6 +153,9 @@ export async function getCronSchedule(params: CronScheduleParams = {}): Promise<
 export async function getCronDayView(params: CronDayViewParams): Promise<CronDayViewResponse> {
   return apiGet<CronDayViewResponse>('/cron/day-view', {
     view: params.view,
+    date: params.date || undefined,
+    dateFrom: params.dateFrom || undefined,
+    dateTo: params.dateTo || undefined,
     reservationStatus: params.reservationStatus ?? 'all',
     reservationNumber: params.reservationNumber || undefined,
   });

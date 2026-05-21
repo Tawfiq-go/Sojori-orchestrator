@@ -53,6 +53,8 @@ export function deriveDisplayCleanliness(
   const v2 = String(listing.cleanlinessStatus_v2 || '').toLowerCase();
   if (v2 === 'in_progress') return 'in_progress';
   if (v2 === 'dirty') return 'dirty';
+  // Explicit v2 "clean" wins over legacy "dirty" (avoid filter/badge drift during migration)
+  if (v2 === 'clean') return 'clean';
 
   const legacy = String(listing.cleanlinessStatus || '').toLowerCase();
   if (legacy === 'dirty') return 'dirty';
