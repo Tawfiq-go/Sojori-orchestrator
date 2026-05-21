@@ -70,6 +70,8 @@ export interface YearlyCalendarProps {
   onDayClick: (day: CalendarDay) => void;
   onApplyToOps: () => void | Promise<void>;
   applyLoading?: boolean;
+  /** Masquer le CTA ops quand lecture seule (ex. marché sans pilote actif) */
+  showApplyButton?: boolean;
 }
 
 const STATUS_BG: Record<DayStatus, string> = {
@@ -102,6 +104,7 @@ export default function YearlyCalendar({
   onDayClick,
   onApplyToOps,
   applyLoading = false,
+  showApplyButton = true,
 }: YearlyCalendarProps) {
   const today = todayIsoLocal();
   const windowEnd = addDaysIso(today, 365);
@@ -303,34 +306,36 @@ export default function YearlyCalendar({
             </Stack>
           )}
 
-          <Button
-            onClick={() => void onApplyToOps()}
-            disabled={applyLoading}
-            sx={{
-              alignSelf: { xs: 'stretch', sm: 'flex-start' },
-              flexShrink: 0,
-              px: 2,
-              py: 1.125,
-              borderRadius: 1.25,
-              fontSize: 12,
-              fontWeight: 800,
-              background: `linear-gradient(180deg, #f9dc7a, ${T.gold})`,
-              color: T.text,
-              boxShadow: `0 2px 8px ${T.goldTint2}, inset 0 1px 0 rgba(255,255,255,0.40)`,
-              textTransform: 'none',
-              whiteSpace: 'nowrap',
-              '&:hover': {
-                transform: 'translateY(-1px)',
-                boxShadow: '0 4px 12px rgba(244,207,94,0.50)',
-              },
-            }}
-          >
-            {applyLoading
-              ? 'Application…'
-              : pricingSource === 'airroi'
-                ? 'Activer pilote §03 puis appliquer'
-                : '✨ Appliquer au calendrier ops + RU'}
-          </Button>
+          {showApplyButton ? (
+            <Button
+              onClick={() => void onApplyToOps()}
+              disabled={applyLoading}
+              sx={{
+                alignSelf: { xs: 'stretch', sm: 'flex-start' },
+                flexShrink: 0,
+                px: 2,
+                py: 1.125,
+                borderRadius: 1.25,
+                fontSize: 12,
+                fontWeight: 800,
+                background: `linear-gradient(180deg, #f9dc7a, ${T.gold})`,
+                color: T.text,
+                boxShadow: `0 2px 8px ${T.goldTint2}, inset 0 1px 0 rgba(255,255,255,0.40)`,
+                textTransform: 'none',
+                whiteSpace: 'nowrap',
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 4px 12px rgba(244,207,94,0.50)',
+                },
+              }}
+            >
+              {applyLoading
+                ? 'Application…'
+                : pricingSource === 'airroi'
+                  ? 'Activer pilote §03 puis appliquer'
+                  : '✨ Appliquer au calendrier ops + RU'}
+            </Button>
+          ) : null}
         </Stack>
 
         {coverage && pricingSource === 'airroi' ? (

@@ -302,8 +302,8 @@ export default function BienView(props: BienViewProps) {
         </Section>
       )}
 
-      {/* ── Section 4 ── */}
-      {aiEnabled && (
+      {/* ── Section 4 — toujours visible si snapshot / calendrier (même AI OFF) ── */}
+      {(hasCalendarProd || provenance.hasAirroiSnapshot || calendarDays.length > 0) && (
         <Section
           num="04"
           title={
@@ -312,19 +312,21 @@ export default function BienView(props: BienViewProps) {
               : 'Calendrier de recommandations'
           }
           sub={
-            pilotPreviewLoading
-              ? 'Simulation pilote v2…'
-              : calendarFromCache || !calendarFromAirroi
-                ? `Prix/jour · pilote Sojori (mixEngine v2 + audit G7)${pilotApplySummary ? ` · ${pilotApplySummary}` : ''}`
-                : calendarFromAirroi
-                  ? `${calendarDays.length} jours suggérés · ajustez §03 pour preview Sojori`
-                  : '365 jours · snapshot marché requis'
+            calendarFromAirroi
+              ? `${calendarDays.length} jours · courbe + grille à partir du mois courant (365 j futurs)`
+              : pilotPreviewLoading
+                ? 'Simulation pilote v2…'
+                : calendarFromCache
+                  ? `Prix/jour · pilote Sojori (mixEngine v2 + audit G7)${pilotApplySummary ? ` · ${pilotApplySummary}` : ''}`
+                  : aiEnabled
+                    ? 'Activez le pilote §03 ou lancez ⟳ snapshot pour les tarifs/jour'
+                    : '365 jours · snapshot marché requis (⟳ sur cette fiche)'
           }
           sources={[
-            !calendarFromAirroi
-              ? { kind: 'prod', label: 'Pilote v2', tooltip: 'POST preview / apply' }
-              : calendarFromAirroi
-                ? { kind: 'prod', label: 'Prix/jour', tooltip: 'Tarifs journaliers (API)' }
+            calendarFromAirroi
+              ? { kind: 'prod', label: 'Prix/jour', tooltip: 'future/rates snapshot · fenêtre glissante 365j' }
+              : calendarFromCache || pilotPreviewLoading
+                ? { kind: 'prod', label: 'Pilote v2', tooltip: 'POST preview / apply' }
                 : { kind: 'empty', label: 'VIDE' },
           ]}
         >
@@ -338,23 +340,29 @@ export default function BienView(props: BienViewProps) {
             compactHeader
             pricingSource={calendarFromAirroi ? 'airroi' : 'sojori'}
             applyLoading={pilotApplyLoading}
-            windowMode={(calendarFromAirroi ? 'rolling365' : 'calendarYear') as CalendarWindowMode}
+            windowMode={
+              (calendarFromAirroi ? 'rolling365' : 'calendarYear') as CalendarWindowMode
+            }
             year={calendarYear}
-            yearOptions={calendarFromCache ? calendarYearOptions : undefined}
+            yearOptions={calendarFromCache && !calendarFromAirroi ? calendarYearOptions : undefined}
+            showApplyButton={aiEnabled && !calendarFromAirroi}
             sourceHint={
               calendarFromAirroi
-                ? 'Tarifs journaliers suggérés · 1 prix/jour (USD→MAD ×10) · couleurs bas/moyen/haut = tertiles Sojori'
+                ? 'Tarifs journaliers suggérés · 1 prix/jour (USD→MAD ×10) · couleurs bas/moyen/haut = tertiles · survol = aperçu'
                 : calendarFromCache
-                  ? 'Tarifs Sojori mixEngine — vue par année civile'
+                  ? 'Tarifs Sojori mixEngine — vue par année civile · clic = Justification G7'
                   : undefined
             }
             emptyHint={
               calendarAirroiError
                 ? `Les tarifs journaliers n’ont pas été renvoyés : ${calendarAirroiError}. Relancez ⟳ ou contactez le support si l’erreur persiste (HTTP 400 connu sur certaines annonces).`
-                : undefined
+                : provenance.hasAirroiSnapshot
+                  ? 'Aucun jour future/rates dans le snapshot — relancez ⟳ Envoyer · récupérer'
+                  : undefined
             }
-            onYearChange={calendarFromCache ? onYearChange : undefined}
-            onDayClick={handleDayClick} onApplyToOps={onApplyToOps}
+            onYearChange={calendarFromCache && !calendarFromAirroi ? onYearChange : undefined}
+            onDayClick={handleDayClick}
+            onApplyToOps={onApplyToOps}
           />
         </Section>
       )}

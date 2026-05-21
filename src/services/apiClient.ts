@@ -10,19 +10,20 @@ import { runtimeLog } from '../utils/runtimeLog';
  * Les appels API doivent TOUJOURS envoyer le JWT — sinon 401 sur listing / admin / etc.
  */
 const devBypassFrontendGuard = import.meta.env.VITE_DISABLE_AUTH === 'true';
-let loggedDisableAuthApiClient = false;
-if (devBypassFrontendGuard && !loggedDisableAuthApiClient) {
-  loggedDisableAuthApiClient = true;
-  console.warn(
-    '⚠️ VITE_DISABLE_AUTH : garde UI désactivée ; Authorization: Bearer est quand même envoyé — sans JWT valide les APIs (listing, admin…) répondront 401.',
-  );
-  console.log('🔍 [apiClient] Variables d\'environnement:', {
-    VITE_DISABLE_AUTH: import.meta.env.VITE_DISABLE_AUTH,
-    VITE_DEV_TOKEN: import.meta.env.VITE_DEV_TOKEN ? '✅ défini' : '❌ non défini',
-    VITE_API_URL: import.meta.env.VITE_API_URL,
-    MODE: import.meta.env.MODE,
-  });
-}
+// Logs désactivés pour nettoyer la console
+// let loggedDisableAuthApiClient = false;
+// if (devBypassFrontendGuard && !loggedDisableAuthApiClient) {
+//   loggedDisableAuthApiClient = true;
+//   console.warn(
+//     '⚠️ VITE_DISABLE_AUTH : garde UI désactivée ; Authorization: Bearer est quand même envoyé — sans JWT valide les APIs (listing, admin…) répondront 401.',
+//   );
+//   console.log('🔍 [apiClient] Variables d\'environnement:', {
+//     VITE_DISABLE_AUTH: import.meta.env.VITE_DISABLE_AUTH,
+//     VITE_DEV_TOKEN: import.meta.env.VITE_DEV_TOKEN ? '✅ défini' : '❌ non défini',
+//     VITE_API_URL: import.meta.env.VITE_API_URL,
+//     MODE: import.meta.env.MODE,
+//   });
+// }
 
 // Variable pour gérer la validation de token
 let isValidatingToken = false;
@@ -47,15 +48,10 @@ const isLocalhost = typeof window !== 'undefined' && (
   window.location.hostname === '127.0.0.1' ||
   window.location.hostname === '0.0.0.0'
 );
-let loggedDevTokenHeader = false;
+// Logs désactivés pour nettoyer la console
 if (isLocalhost && import.meta.env.VITE_DEV_TOKEN) {
   apiClient.defaults.headers.common['X-Dev-Token'] = import.meta.env.VITE_DEV_TOKEN;
-  if (!loggedDevTokenHeader) {
-    loggedDevTokenHeader = true;
-    console.log(
-      '🔑 X-Dev-Token défini pour localhost → prod (port ' + window.location.port + '). Logs requête désactivés.',
-    );
-  }
+  // console.log('🔑 X-Dev-Token défini pour localhost → prod (port ' + window.location.port + '). Logs requête désactivés.');
 }
 
 // Intercepteur de requête

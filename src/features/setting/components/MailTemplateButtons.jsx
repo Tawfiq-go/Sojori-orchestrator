@@ -37,11 +37,6 @@ const TabButton = styled(Button)({
 
 const MailTemplateButtons = ({ activeTab, setActiveTab, t, showForm }) => {
   const buttons = [
-    {
-      tab: 'message',
-      label: t('message'),
-      icon: <EmailIcon sx={{ fontSize: '1rem', mr: 1 }} />,
-    },
     ...(SHOW_MAIL_TEMPLATE_DESCRIPTION_TAB
       ? [
           {

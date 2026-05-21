@@ -115,7 +115,8 @@ class ReservationsService {
 
         if (isLocalhost && import.meta.env.VITE_DEV_TOKEN) {
           headers['X-Dev-Token'] = import.meta.env.VITE_DEV_TOKEN;
-          console.log('🔑 X-Dev-Token added to reservations request (fix 404)');
+          // Logs désactivés pour nettoyer la console
+          // console.log('🔑 X-Dev-Token added to reservations request (fix 404)');
         }
       }
 
@@ -125,27 +126,29 @@ class ReservationsService {
         validateStatus: (status) => (status >= 200 && status < 300) || status === 404
       });
 
-      console.log('📡 [ReservationsService] API Response:', {
-        status: response.status,
-        success: response.data?.success,
-        dataLength: response.data?.data?.length,
-        hasData: !!response.data?.data,
-        firstItem: response.data?.data?.[0],
-      });
+      // Logs désactivés pour nettoyer la console
+      // console.log('📡 [ReservationsService] API Response:', {
+      //   status: response.status,
+      //   success: response.data?.success,
+      //   dataLength: response.data?.data?.length,
+      //   hasData: !!response.data?.data,
+      //   firstItem: response.data?.data?.[0],
+      // });
 
       // ⚠️ Backend retourne { success, data[], unmappedReservation[] }
       // Pas un array direct
       // Note: Backend returns 404 with success: false when no data found
       const reservations = response.data.data || [];
 
-      console.log('✅ [ReservationsService] Returning:', {
-        success: true,
-        count: reservations.length,
-        cancelled: reservations.filter((r: any) => /cancel/i.test(r.status)).length,
-        cancelledUnacked: reservations.filter((r: any) =>
-          /cancel/i.test(r.status) && r.cancellationAcknowledged !== true
-        ).length,
-      });
+      // Logs désactivés pour nettoyer la console
+      // console.log('✅ [ReservationsService] Returning:', {
+      //   success: true,
+      //   count: reservations.length,
+      //   cancelled: reservations.filter((r: any) => /cancel/i.test(r.status)).length,
+      //   cancelledUnacked: reservations.filter((r: any) =>
+      //     /cancel/i.test(r.status) && r.cancellationAcknowledged !== true
+      //   ).length,
+      // });
 
       return {
         success: true,
@@ -289,7 +292,8 @@ class ReservationsService {
 
   async getById(reservationId: string): Promise<Reservation> {
     const startTime = performance.now();
-    console.log(`[ReservationsService] Fetching reservation ${reservationId}...`);
+    // Logs désactivés pour nettoyer la console
+    // console.log(`[ReservationsService] Fetching reservation ${reservationId}...`);
 
     try {
       const url = `${BASE_URL}/api/v1/reservations/by-id/${reservationId}`;
@@ -297,7 +301,8 @@ class ReservationsService {
       const response = await apiClient.get(url);
 
       const duration = performance.now() - startTime;
-      console.log(`[ReservationsService] ✅ Fetched reservation in ${duration.toFixed(0)}ms`);
+      // Logs désactivés pour nettoyer la console
+      // console.log(`[ReservationsService] ✅ Fetched reservation in ${duration.toFixed(0)}ms`);
 
       // ⚠️ FIX: Backend retourne { success, message, reservation }
       return response.data.reservation;
@@ -350,11 +355,13 @@ class ReservationsService {
 
       const url = `${BASE_URL}/api/v1/reservations/create`;
 
-      console.log('[ReservationsService] 📤 Creating reservation:', payload);
+      // Logs désactivés pour nettoyer la console
+      // console.log('[ReservationsService] 📤 Creating reservation:', payload);
 
       const response = await apiClient.post(url, payload);
 
-      console.log('[ReservationsService] 📥 Response:', response.data);
+      // Logs désactivés pour nettoyer la console
+      // console.log('[ReservationsService] 📥 Response:', response.data);
 
       if (response.data.success) {
         return response.data;

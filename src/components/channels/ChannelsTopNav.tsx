@@ -234,13 +234,19 @@ export function ChannelsTopNav() {
           <div className="channels-tabs-container flex-wrap">
             <TabBtn
               active={hookSeg === 'm'}
-              onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: 'm' })}
+              onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: 'm', docId: undefined })}
             >
               Messages
             </TabBtn>
             <TabBtn
+              active={hookSeg === 'lead'}
+              onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: 'lead', docId: undefined })}
+            >
+              Leads
+            </TabBtn>
+            <TabBtn
               active={hookSeg === 'r'}
-              onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: 'r' })}
+              onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: 'r', docId: undefined })}
             >
               Réservations
             </TabBtn>

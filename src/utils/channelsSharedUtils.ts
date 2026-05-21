@@ -35,7 +35,14 @@ export function actionToApiSeg(action: string | undefined) {
 }
 
 export function ingressKindFromHookSeg(seg: string) {
-  return seg === 'r' ? 'reservations' : 'messaging';
+  return overviewViewFromHookSeg(seg);
+}
+
+/** Vue overview / hooks : messages, leads, réservations (reviews = REST, onglet API). */
+export function overviewViewFromHookSeg(seg: string): 'reservations' | 'messaging' | 'leads' {
+  if (seg === 'r') return 'reservations';
+  if (seg === 'lead') return 'leads';
+  return 'messaging';
 }
 
 const RU_EVENT_LABELS: Record<string, string> = {

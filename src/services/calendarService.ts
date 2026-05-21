@@ -58,7 +58,8 @@ class CalendarService {
       // Toujours envoyer un array
       const payload = Array.isArray(params) ? params : [params];
 
-      console.log('[CalendarService] updateCalendar payload:', JSON.stringify(payload, null, 2));
+      // Logs désactivés pour nettoyer la console
+      // console.log('[CalendarService] updateCalendar payload:', JSON.stringify(payload, null, 2));
 
       const response = await fetch(url, {
         method: 'PUT',

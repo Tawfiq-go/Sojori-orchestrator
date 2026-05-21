@@ -402,11 +402,18 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     return { compMapPins: pins, bienMapPosition };
   }, [portfolioRow]);
 
-  const displayCalendarDays = pilot.hasSojoriPreview ? pilot.previewDays : calendarDays;
+  /** Snapshot marché (future/rates) : prioritaire — courbe 365j + grille dès le mois courant */
+  const showAirroiCalendar = calendarFromAirroi && calendarDays.length > 0;
+  const displayCalendarDays = showAirroiCalendar
+    ? calendarDays
+    : pilot.hasSojoriPreview
+      ? pilot.previewDays
+      : calendarDays;
   const displayHasCalendarProd =
-    pilot.hasSojoriPreview || calendarFromCache || calendarFromAirroi;
-  const displayCalendarFromAirroi = pilot.hasSojoriPreview ? false : calendarFromAirroi;
-  const displayCalendarFromCache = pilot.hasSojoriPreview || calendarFromCache;
+    showAirroiCalendar || pilot.hasSojoriPreview || calendarFromCache || calendarFromAirroi;
+  const displayCalendarFromAirroi = showAirroiCalendar;
+  const displayCalendarFromCache =
+    !showAirroiCalendar && (pilot.hasSojoriPreview || calendarFromCache);
 
   const onExpandDay = pilot.expandDay;
 

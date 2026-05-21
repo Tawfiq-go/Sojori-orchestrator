@@ -307,7 +307,8 @@ class MessagesService {
    */
   async markAsRead(phone: string): Promise<{ success: boolean }> {
     // TODO: Implémenter endpoint backend si nécessaire
-    console.log(`Marquer conversation ${phone} comme lue`);
+    // Logs désactivés pour nettoyer la console
+    // console.log(`Marquer conversation ${phone} comme lue`);
     return { success: true };
   }
 
