@@ -103,7 +103,9 @@ export interface ListingRow {
   listingName: string;
   city?: string;
   cleanlinessStatus_v2?: Cleanliness;
-  occupancyStatus?: 'available' | 'occupied';
+  cleanlinessStatus?: string;
+  occupancyStatus?: 'available' | 'occupied' | 'vacant';
+  cleanlinessEmergency?: boolean;
   reservations: ReservationRow[];
 }
 
@@ -232,18 +234,22 @@ export function DayHeader({ day, width }: { day: ReturnType<typeof genDays>[0]; 
 
 export function CleanlinessBadge({ status }: { status?: Cleanliness }) {
   const map = {
-    clean:       { label: 'CLEAN',     bg: T.successTint, color: T.success },
-    dirty:       { label: 'DIRTY',     bg: T.errorTint,   color: T.error },
-    in_progress: { label: 'EN COURS',  bg: T.warningTint, color: T.warning },
-    occupied:    { label: 'OCCUPÉ',    bg: T.infoTint,    color: T.info },
+    clean:       { label: 'CLEAN',     icon: '✨', bg: T.successTint, color: T.success },
+    dirty:       { label: 'DIRTY',     icon: '🚫', bg: T.errorTint,   color: T.error },
+    in_progress: { label: 'EN COURS',  icon: '🧹', bg: T.warningTint, color: T.warning },
+    occupied:    { label: 'OCCUPÉ',    icon: '🏠', bg: T.infoTint,    color: T.info },
   };
   const s = map[status || 'clean'];
   return (
     <Box component="span" sx={{
-      display: 'inline-block', fontFamily: '"Geist Mono", monospace', fontSize: 9, fontWeight: 700,
+      display: 'inline-flex', alignItems: 'center', gap: 0.375,
+      fontFamily: '"Geist Mono", monospace', fontSize: 9, fontWeight: 700,
       px: 0.75, py: '1px', borderRadius: 999, letterSpacing: '0.06em',
       bgcolor: s.bg, color: s.color, width: 'fit-content',
-    }}>{s.label}</Box>
+    }}>
+      <span aria-hidden>{s.icon}</span>
+      {s.label}
+    </Box>
   );
 }
 

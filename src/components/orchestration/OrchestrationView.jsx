@@ -233,7 +233,7 @@ const OrchestrationView = () => {
               daySeparators={workflowsData.daySeparators}
               onAction={async (action) => {
                 // Handle action execution
-                const { id: actionType, actionId, reservationNumber } = action;
+                const { id: actionType, actionId, reservationNumber, executionId, lastMinute } = action;
 
                 // Refresh callback après l'action
                 const handleRefresh = async () => {
@@ -256,7 +256,10 @@ const OrchestrationView = () => {
                 };
 
                 // Dispatch action
-                const result = await dispatchWorkflowAction(actionType, actionId, reservationNumber, handleRefresh);
+                const result = await dispatchWorkflowAction(actionType, actionId, reservationNumber, handleRefresh, {
+                  executionId,
+                  lastMinute,
+                });
 
                 // Si l'action demande d'ouvrir une modale
                 if (result?.openModal === 'view-messages') {

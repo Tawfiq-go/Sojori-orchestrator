@@ -188,6 +188,13 @@ function RemindersList({ items, onSendReminder }) {
     failed:  { c: 'var(--error)',      s: '✕' },
     pending: { c: 'var(--warning)',    s: '⧗' },
   };
+  const statusBadge = (r) => {
+    if (r.statusLabel) return r.statusLabel;
+    if (r.status === 'sent') return 'Exécuté';
+    if (r.status === 'missed') return 'Ignoré';
+    if (r.status === 'failed') return 'Échec';
+    return 'Planifié';
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {items.map((r, i) => {
@@ -207,23 +214,37 @@ function RemindersList({ items, onSendReminder }) {
           }}>
             <span style={{ width: 14, textAlign: 'center', fontSize: 11, color: ic.c }}>{ic.s}</span>
             <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 11, fontWeight: 500 }}>
+              <span style={{ fontSize: 11, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {r.executionType && (
+                  <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600 }}>{r.executionType}</span>
+                )}
                 {r.when}
               </span>
+              <span style={{ fontSize: 9.5, color: r.status === 'missed' ? 'var(--text-faint)' : r.status === 'sent' ? 'var(--success)' : 'var(--warning)' }}>
+                {statusBadge(r)}
+              </span>
+              {r.skipReasonLabel && (
+                <span style={{ fontSize: 9.5, color: 'var(--text-faint)', fontStyle: 'italic' }}>
+                  {r.skipReasonLabel}
+                </span>
+              )}
               {r.firedAt && (
                 <span style={{ fontSize: 10, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span>✓</span>
                   <b>{r.firedAt}</b>
                 </span>
               )}
+              {r.error && (
+                <span style={{ fontSize: 9.5, color: 'var(--error)' }}>{r.error}</span>
+              )}
             </span>
             {r.lastMinute && (
-              <span style={{ background: 'var(--ai-tint)', color: 'var(--ai)', fontSize: 8.5, fontWeight: 700, padding: '1px 4px', borderRadius: 3, letterSpacing: '0.04em' }}>LM</span>
+              <span style={{ background: 'var(--ai-tint)', color: 'var(--ai)', fontSize: 8.5, fontWeight: 700, padding: '1px 4px', borderRadius: 3, letterSpacing: '0.04em' }} title="Dernier créneau — rattrapage last minute">Dernier</span>
             )}
             <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
               {r.channel === 'whatsapp' ? '📱' : r.channel === 'email' ? '📧' : r.channel === 'sms' ? '✉' : r.channelLabel || ''}
             </span>
-            {onSendReminder && (
+            {onSendReminder && r.status !== 'missed' && (
               <button
                 onClick={() => onSendReminder(r, i)}
                 style={{
@@ -343,13 +364,14 @@ function SubStepDetails({ sub, onAction, reservationNumber, isPlaceholder }) {
   const hasAudit = sub.audit?.length > 0;
 
   const handleSendReminder = (reminder, index) => {
-    // Trigger resend action for this specific reminder
     if (sub.actionId && reservationNumber) {
       onAction?.({
         id: reminder.status === 'sent' ? 'resend' : 'force-send',
         actionId: sub.actionId,
         reservationNumber,
         reminderIndex: index,
+        executionId: reminder.executionId || null,
+        lastMinute: reminder.lastMinute === true,
       });
     }
   };

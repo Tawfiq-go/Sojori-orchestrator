@@ -10,8 +10,16 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Box, Stack, Typography, Popover } from '@mui/material';
 import {
   T, STAY, type ListingRow, type TimelineItem, channelFromName, genDays,
-  KpiPill, DayHeader, CleanlinessBadge, TaskChip, GanttBar, SOJORI_KEYFRAMES, computeReservationBarLayout,
+  KpiPill, DayHeader, TaskChip, GanttBar, SOJORI_KEYFRAMES, computeReservationBarLayout,
 } from './_shared';
+import { CleanlinessBadgeInteractive } from './CleanlinessBadgeInteractive';
+import {
+  deriveDisplayCleanliness,
+  displayCleanlinessLabel,
+  matchesCleanlinessFilter,
+  type CleanlinessFilter,
+  type DisplayCleanliness,
+} from '../../utils/cleanlinessDisplay';
 
 export type StayViewVariant = 'tasks' | 'reservations';
 
@@ -30,13 +38,15 @@ export interface StayViewProps {
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
   onDateChange?: (date: Date) => void;
+  /** Manual cleanliness change from planning grid */
+  onCleanlinessChange?: (listingId: string, status: DisplayCleanliness) => void | Promise<void>;
 }
 
 const VISIBLE_DAYS = 14;
 
 export default function StayView({
   startDate, daysCount = 30, listings, variant = 'tasks', onTaskClick, onReservationClick,
-  onGoToday, onPrevDay, onNextDay, onPrevWeek, onNextWeek, onDateChange,
+  onGoToday, onPrevDay, onNextDay, onPrevWeek, onNextWeek, onDateChange, onCleanlinessChange,
 }: StayViewProps) {
   const isReservations = variant === 'reservations';
   const minimapDays = useMemo(() => genDays(startDate, daysCount), [startDate, daysCount]);
@@ -46,6 +56,16 @@ export default function StayView({
   const [statusFilters, setStatusFilters] = useState<Set<'confirmed' | 'pending'>>(
     () => new Set(['confirmed', 'pending']),
   );
+  const [cleanlinessFilters, setCleanlinessFilters] = useState<Set<CleanlinessFilter>>(new Set());
+
+  const toggleCleanlinessFilter = (f: CleanlinessFilter) => {
+    setCleanlinessFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(f)) next.delete(f);
+      else next.add(f);
+      return next;
+    });
+  };
 
   const toggleStatus = (s: 'confirmed' | 'pending') => {
     setStatusFilters(prev => {
@@ -61,12 +81,21 @@ export default function StayView({
   };
 
   const displayListings = useMemo(() => {
-    if (!isReservations) return listings;
-    return listings.map(l => ({
-      ...l,
-      reservations: l.reservations.filter(r => statusFilters.has(r.status)),
-    }));
-  }, [listings, isReservations, statusFilters]);
+    let rows = listings;
+    if (isReservations) {
+      rows = rows.map((l) => ({
+        ...l,
+        reservations: l.reservations.filter((r) => statusFilters.has(r.status)),
+      }));
+    }
+    if (cleanlinessFilters.size === 0) return rows;
+    return rows.filter((l) =>
+      matchesCleanlinessFilter(
+        { ...l, reservations: l.reservations },
+        cleanlinessFilters,
+      ),
+    );
+  }, [listings, isReservations, statusFilters, cleanlinessFilters]);
 
   // KPI "aujourd'hui"
   const kpis = useMemo(() => {
@@ -207,6 +236,37 @@ export default function StayView({
           </Popover>
         )}
 
+        {/* Filtres propreté */}
+        <Stack direction="row" gap={0.5} flexWrap="wrap" alignItems="center">
+          {(['clean', 'dirty', 'in_progress', 'occupied', 'emergency'] as CleanlinessFilter[]).map((f) => (
+            <FilterTogglePill
+              key={f}
+              label={f === 'emergency' ? '⚠ Urgent' : displayCleanlinessLabel(f as DisplayCleanliness)}
+              active={cleanlinessFilters.has(f)}
+              onClick={() => toggleCleanlinessFilter(f)}
+              color={
+                f === 'clean' ? T.success
+                  : f === 'dirty' ? T.error
+                    : f === 'in_progress' ? T.warning
+                      : f === 'occupied' ? T.info
+                        : T.error
+              }
+            />
+          ))}
+          {cleanlinessFilters.size > 0 && (
+            <Box
+              component="button"
+              onClick={() => setCleanlinessFilters(new Set())}
+              sx={{
+                all: 'unset', cursor: 'pointer', fontSize: 10, fontWeight: 700,
+                color: T.text3, px: 0.75, '&:hover': { color: T.text },
+              }}
+            >
+              Effacer filtres
+            </Box>
+          )}
+        </Stack>
+
         {/* Filtres Villes + Toutes */}
         <Box component="button" sx={{
           all: 'unset', cursor: 'pointer', height: 30, px: 1.375, borderRadius: 1,
@@ -310,7 +370,8 @@ export default function StayView({
             {lists.map(l => (
               <ListingRowComp key={l.listingId} listing={l} days={days}
                 showTaskChips={!isReservations}
-                onTaskClick={onTaskClick} onReservationClick={onReservationClick} />
+                onTaskClick={onTaskClick} onReservationClick={onReservationClick}
+                onCleanlinessChange={onCleanlinessChange} />
             ))}
           </React.Fragment>
         ))}
@@ -320,12 +381,21 @@ export default function StayView({
 }
 
 /* ─── Listing row ─── */
-function ListingRowComp({ listing, days, showTaskChips = true, onTaskClick, onReservationClick }: {
+function ListingRowComp({
+  listing, days, showTaskChips = true, onTaskClick, onReservationClick, onCleanlinessChange,
+}: {
   listing: ListingRow; days: ReturnType<typeof genDays>;
   showTaskChips?: boolean;
-  onTaskClick?: (i: TimelineItem) => void; onReservationClick?: (id: string) => void;
+  onTaskClick?: (i: TimelineItem) => void;
+  onReservationClick?: (id: string) => void;
+  onCleanlinessChange?: (listingId: string, status: DisplayCleanliness) => void | Promise<void>;
 }) {
   const numTasks = listing.reservations.reduce((n, r) => n + (r.timeline?.length || 0), 0);
+  const displayStatus = deriveDisplayCleanliness(listing, listing.reservations);
+  const badgeStatus =
+    displayStatus === 'occupied'
+      ? 'occupied'
+      : (listing.cleanlinessStatus_v2 || displayStatus || 'clean');
 
   return (
     <Box sx={{
@@ -345,7 +415,16 @@ function ListingRowComp({ listing, days, showTaskChips = true, onTaskClick, onRe
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>{listing.listingName}</Typography>
         </Stack>
-        <CleanlinessBadge status={listing.cleanlinessStatus_v2} />
+        <CleanlinessBadgeInteractive
+          status={badgeStatus}
+          displayStatus={displayStatus}
+          emergency={listing.cleanlinessEmergency}
+          onChange={
+            onCleanlinessChange
+              ? (next) => onCleanlinessChange(listing.listingId, next)
+              : undefined
+          }
+        />
         <Typography sx={{
           fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em',
         }}>

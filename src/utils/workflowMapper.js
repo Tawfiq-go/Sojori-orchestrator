@@ -5,6 +5,11 @@
 
 import { formatCasablancaDateTime, formatCasablancaDateOnly, formatCasablancaTimeOnly } from './dateFormatting';
 import { buildActionConfigEntries, buildConfigSections } from './orchestrationConfigDisplay';
+import {
+  getExecutionTypeLabel,
+  getSkippedReasonLabel,
+  mapExecutionRowStatus,
+} from './orchestrationExecutionLabels';
 
 /**
  * Calculate relative day label from check-in date
@@ -117,19 +122,24 @@ const buildReminders = (scheduledExecutions) => {
   }
 
   return scheduledExecutions.map(exec => {
-    // Support both scheduledFor and scheduledAt field names
     const scheduledDate = exec.scheduledFor || exec.scheduledAt;
     const executedDate = exec.executedAt;
+    const rowStatus = mapExecutionRowStatus(exec);
+    const skipLabel = getSkippedReasonLabel(exec.skippedReason);
 
     return {
       when: formatReminderDate(scheduledDate),
       firedAt: executedDate ? formatReminderDate(executedDate) : null,
-      status: exec.status === 'EXECUTED' ? 'sent' :
-              exec.status === 'FAILED' ? 'failed' :
-              exec.status === 'SKIPPED' ? 'missed' : 'pending',
+      status: rowStatus.key,
+      statusLabel: rowStatus.label,
       channel: exec.executionResult?.channel || exec.channel || 'whatsapp',
-      crossed: exec.status === 'SKIPPED',
+      crossed: rowStatus.crossed,
       lastMinute: exec.condition === 'LAST_CHANCE' || exec.metadata?.lastMinuteRecovery === true,
+      executionType: getExecutionTypeLabel(exec),
+      skippedReason: exec.skippedReason,
+      skipReasonLabel: skipLabel,
+      executionId: exec.executionId,
+      error: exec.executionResult?.error || exec.error,
     };
   });
 };
@@ -199,12 +209,28 @@ const buildAudit = (workflow, action) => {
   // Add action executions
   if (action?.scheduledExecutions) {
     action.scheduledExecutions.forEach(exec => {
+      const skipLabel = getSkippedReasonLabel(exec.skippedReason);
+      const typeLabel = getExecutionTypeLabel(exec);
       if (exec.executedAt) {
         audit.push({
           at: formatCasablancaDateTime(exec.executedAt),
           icon: exec.status === 'EXECUTED' ? '✅' : '⚠',
-          label: `${exec.status === 'EXECUTED' ? 'Exécuté' : 'Échec'} · ${exec.executionId || 'N/A'}`,
-          source: 'cron',
+          label: `${exec.status === 'EXECUTED' ? 'Exécuté' : 'Échec'} · ${typeLabel} · ${exec.executionId || 'N/A'}`,
+          source: exec.executionResult?.triggeredBy === 'MANUAL' ? 'manual' : 'cron',
+        });
+      } else if (String(exec.status).toUpperCase() === 'SKIPPED') {
+        audit.push({
+          at: formatCasablancaDateTime(exec.scheduledAt || exec.scheduledFor),
+          icon: '⊘',
+          label: `Ignoré · ${typeLabel}${skipLabel ? ` · ${skipLabel}` : ''}`,
+          source: 'srv-orchestrator',
+        });
+      } else if (exec.metadata?.lastMinuteRecovery && String(exec.status).toUpperCase() === 'PENDING') {
+        audit.push({
+          at: formatCasablancaDateTime(exec.scheduledAt || exec.scheduledFor),
+          icon: '⏱',
+          label: `Dernier créneau (LM) planifié · ${exec.executionId || 'N/A'}`,
+          source: 'srv-orchestrator',
         });
       }
     });

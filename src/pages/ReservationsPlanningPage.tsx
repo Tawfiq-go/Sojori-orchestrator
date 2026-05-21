@@ -14,6 +14,10 @@ import StayView from '../components/calendar-views/StayView';
 import type { ListingRow } from '../components/calendar-views/_shared';
 import reservationsService from '../services/reservationsService';
 import listingsService from '../services/listingsService';
+import tasksService, { resolveTasksUserScope } from '../services/tasksService';
+import cleanlinessService from '../services/cleanlinessService';
+import type { DisplayCleanliness } from '../utils/cleanlinessDisplay';
+import { useAuth } from '../hooks/useAuth';
 import type { Reservation } from '../types/reservations.types';
 import type { ListingSummary } from '../types/listings.types';
 
@@ -36,6 +40,8 @@ function toIsoDate(d: Date | string | undefined): string {
 
 export function ReservationsPlanningPage() {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+  const scope = useMemo(() => resolveTasksUserScope(user), [user]);
   const [startDate, setStartDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -48,6 +54,8 @@ export function ReservationsPlanningPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [operationalByListing, setOperationalByListing] = useState<Map<string, any>>(new Map());
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(async (refresh = false) => {
     if (!refresh) {
@@ -70,6 +78,23 @@ export function ReservationsPlanningPage() {
         status: 'Confirmed,Pending',
       });
       setReservations(reservationsResponse.data);
+
+      const endDateStr = format(addDays(startDate, daysCount), 'yyyy-MM-dd');
+      const startDateStr = format(startDate, 'yyyy-MM-dd');
+      const ownerId = scope.canAccessAllOwners ? undefined : scope.ownerId;
+      if (ownerId || scope.canAccessAllOwners) {
+        const planning = await tasksService.getReservationPlanning({
+          startDate: startDateStr,
+          endDate: endDateStr,
+          ownerId,
+        });
+        const map = new Map<string, any>();
+        planning.data?.listings?.forEach((l: any) => {
+          const id = String(l.listingId || l._id || '');
+          if (id) map.set(id, l);
+        });
+        setOperationalByListing(map);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur chargement données');
       setListings([]);
@@ -78,11 +103,12 @@ export function ReservationsPlanningPage() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [startDate, daysCount, scope.canAccessAllOwners, scope.ownerId]);
 
   useEffect(() => {
+    if (authLoading) return;
     void load();
-  }, [load]);
+  }, [load, authLoading, refreshKey]);
 
   const listingRows: ListingRow[] = useMemo(() => {
     if (listings.length === 0) return [];
@@ -112,13 +138,21 @@ export function ReservationsPlanningPage() {
     return listings.map((listing) => {
       const listingId = listing.id;
       const resas = reservationsByListing.get(listingId) || [];
+      const op = operationalByListing.get(listingId);
+      const raw = listing.raw as Record<string, unknown> | undefined;
 
       return {
         listingId,
         listingName: listing.name || 'Sans nom',
         city: listing.city || 'Sans ville',
-        cleanlinessStatus_v2: 'clean',
-        occupancyStatus: 'available',
+        cleanlinessStatus_v2:
+          op?.cleanlinessStatus_v2 ||
+          (raw?.cleanlinessStatus_v2 as string) ||
+          (raw?.cleanlinessStatus as string) ||
+          'clean',
+        cleanlinessStatus: op?.cleanlinessStatus || (raw?.cleanlinessStatus as string),
+        occupancyStatus: op?.occupancyStatus || (raw?.occupancyStatus as string) || 'vacant',
+        cleanlinessEmergency: Boolean(op?.cleanlinessEmergency || raw?.cleanlinessEmergency),
         reservations: resas.map((r) => ({
           reservationId: r.id || (r as { _id?: string })._id || '',
           guestName: r.guestName || 'Guest',
@@ -132,7 +166,15 @@ export function ReservationsPlanningPage() {
         })),
       };
     });
-  }, [listings, reservations, startDate, daysCount]);
+  }, [listings, reservations, startDate, daysCount, operationalByListing]);
+
+  const handleCleanlinessChange = useCallback(async (listingId: string, status: DisplayCleanliness) => {
+    const result = await cleanlinessService.updateListingStatus(listingId, status);
+    if (!result.success) {
+      throw new Error(result.message || 'Échec mise à jour propreté');
+    }
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   const goToday = () => {
     const d = new Date();
@@ -210,6 +252,7 @@ export function ReservationsPlanningPage() {
               onPrevWeek={() => shiftDays(-7)}
               onNextWeek={() => shiftDays(7)}
               onDateChange={handleDateChange}
+              onCleanlinessChange={handleCleanlinessChange}
             />
           </Box>
         )}

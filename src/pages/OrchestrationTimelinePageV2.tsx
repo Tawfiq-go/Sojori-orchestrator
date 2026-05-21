@@ -30,6 +30,7 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 import { getOrchestrationPlanDetail } from '../services/orchestrationService';
 import type { OrchestrationPlanDetail, CategoryWorkflow } from '../types/orchestration.types';
+import { CleaningSojoriSchedulePanel } from '../components/orchestration/CleaningSojoriSchedulePanel';
 
 // ════════════════════════════════════════════════════════════════════
 // COULEURS PAR STATUT (aligné avec ancien dashboard)
@@ -273,6 +274,10 @@ const WorkflowColumn: React.FC<WorkflowColumnProps> = ({ workflow, onCardClick }
             📋 {workflow.registrationStats.validated}V / {workflow.registrationStats.draft}D / {workflow.registrationStats.notRegistered}N
           </Typography>
         )}
+
+        {(workflow.categoryType === 'CLEANING_SOJORI' || workflow.category === 'cleaning_sojori') && (
+          <CleaningSojoriSchedulePanel metadata={(workflow as any).metadata} compact />
+        )}
       </Box>
 
       {/* Actions cards empilées */}
@@ -370,12 +375,29 @@ const DetailDrawer: React.FC<DetailDrawerProps> = ({ open, onClose, action, acti
                 />
               </Box>
 
+              {(workflow.categoryType === 'CLEANING_SOJORI' || workflow.category === 'cleaning_sojori') && (
+                <CleaningSojoriSchedulePanel metadata={(workflow as any).metadata} />
+              )}
+
               {/* Config details */}
               {action.config && (
                 <Box sx={{ p: 2, bgcolor: t.bg2, borderRadius: 1 }}>
                   <pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap', color: t.text2 }}>
                     {JSON.stringify(action.config, null, 2)}
                   </pre>
+                </Box>
+              )}
+
+              {(workflow as any).metadata?.scheduling?.logs?.length > 0 && (
+                <Box sx={{ mt: 1 }}>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text, mb: 0.5 }}>
+                    📜 Logs planification
+                  </Typography>
+                  <Box component="ul" sx={{ m: 0, pl: 2, fontSize: 11, color: t.text2 }}>
+                    {((workflow as any).metadata.scheduling.logs as string[]).map((line: string, i: number) => (
+                      <li key={i}>{line}</li>
+                    ))}
+                  </Box>
                 </Box>
               )}
 
