@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, Card, CardContent, CircularProgress, Alert, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, TablePagination, Paper, Grid, IconButton, Tooltip, TextField, MenuItem, Button, Divider, ListSubheader } from '@mui/material';
+import { format, subDays, addDays } from 'date-fns';
+import { Box, Typography, Card, CardContent, CircularProgress, Alert, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, TablePagination, Paper, Grid, IconButton, Tooltip, TextField, MenuItem, Button, Divider, ListSubheader, Stack } from '@mui/material';
 import { AccessTime as ClockIcon, CheckCircle as CheckIcon, Error as ErrorIcon, Schedule as ScheduleIcon, Refresh as RefreshIcon, Warning as WarningIcon, ExpandMore as ExpandMoreIcon, FilterList as FilterIcon, Clear as ClearIcon, Send as SendIcon, Notifications as NotificationIcon, Assignment as TaskIcon, Timer as DeadlineIcon, PlayArrow as PlayIcon, InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 import {
   getCronNextExecution,
@@ -215,6 +216,10 @@ const CronMonitoringView = () => {
   const [reservationStatus, setReservationStatus] = useState('all');
   /** '', 'manual' = dashboard forcé/manuel, 'cron' = automatique */
   const [executionSource, setExecutionSource] = useState('');
+  const todayYmd = format(new Date(), 'yyyy-MM-dd');
+  const [customSingleDate, setCustomSingleDate] = useState(todayYmd);
+  const [customDateFrom, setCustomDateFrom] = useState(format(subDays(new Date(), 2), 'yyyy-MM-dd'));
+  const [customDateTo, setCustomDateTo] = useState(todayYmd);
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -244,26 +249,39 @@ const CronMonitoringView = () => {
     p === 'dayview-today-projection' ||
     p === 'dayview-tomorrow' ||
     p === 'dayview-after' ||
-    p === 'dayview-yesterday' || // ✅ FIX: Ajouter yesterday
+    p === 'dayview-yesterday' ||
+    p === 'dayview-custom-day' ||
+    p === 'dayview-custom-range' ||
     p === 'dayview-last' ||
     p === 'dayview-next';
+
   const mapDayViewQuery = p => {
     if (p === 'dayview-today' || p === 'dayview-today-audit' || p === 'dayview-today-projection') return 'today';
     if (p === 'dayview-tomorrow') return 'tomorrow';
     if (p === 'dayview-after') return 'day_after_tomorrow';
-    if (p === 'dayview-yesterday') return 'yesterday'; // ✅ FIX: Ajouter yesterday
+    if (p === 'dayview-yesterday') return 'yesterday';
+    if (p === 'dayview-custom-day') return 'custom_day';
+    if (p === 'dayview-custom-range') return 'custom_range';
     if (p === 'dayview-last') return 'last_run';
     if (p === 'dayview-next') return 'next_run';
     return 'today';
   };
+
   const fetchDayView = async () => {
     try {
       setIsLoadingEvents(true);
-      const data = await getCronDayView({
-        view: mapDayViewQuery(period),
+      const view = mapDayViewQuery(period);
+      const params = {
+        view,
         reservationStatus,
         reservationNumber: reservationNumber.trim() || undefined,
-      });
+      };
+      if (view === 'custom_day') params.date = customSingleDate;
+      if (view === 'custom_range') {
+        params.dateFrom = customDateFrom;
+        params.dateTo = customDateTo;
+      }
+      const data = await getCronDayView(params);
       setDayViewData(data);
       setEvents([]);
       setStats(null);
@@ -327,7 +345,7 @@ const CronMonitoringView = () => {
       fetchEvents();
     }
     setPage(0);
-  }, [period, status, action, category, reservationNumber, reservationStatus, executionSource]);
+  }, [period, status, action, category, reservationNumber, reservationStatus, executionSource, customSingleDate, customDateFrom, customDateTo]);
 
   // Auto-refresh every 60 seconds (⚠️ DÉSACTIVÉ si erreur API)
   useEffect(() => {
@@ -345,7 +363,7 @@ const CronMonitoringView = () => {
       setLastRefresh(new Date());
     }, 60000);
     return () => clearInterval(interval);
-  }, [period, status, action, category, reservationNumber, reservationStatus, executionSource, hasError]);
+  }, [period, status, action, category, reservationNumber, reservationStatus, executionSource, customSingleDate, customDateFrom, customDateTo, hasError]);
 
   // Manual refresh (✅ FIX: Réinitialise hasError pour relancer auto-refresh)
   const handleRefresh = () => {
@@ -392,6 +410,24 @@ const CronMonitoringView = () => {
     setReservationNumber('');
     setReservationStatus('all');
     setExecutionSource('');
+    setCustomSingleDate(todayYmd);
+    setCustomDateFrom(format(subDays(new Date(), 2), 'yyyy-MM-dd'));
+    setCustomDateTo(todayYmd);
+    setPage(0);
+  };
+
+  const applyQuickDay = (offsetDays) => {
+    const d = format(addDays(new Date(), offsetDays), 'yyyy-MM-dd');
+    setCustomSingleDate(d);
+    setCustomDateFrom(d);
+    setCustomDateTo(d);
+    if (offsetDays === -1) setPeriod('dayview-yesterday');
+    else if (offsetDays === 0) setPeriod('dayview-today');
+    else if (offsetDays === 1) setPeriod('dayview-tomorrow');
+    else if (offsetDays === 2) setPeriod('dayview-after');
+    else {
+      setPeriod('dayview-custom-day');
+    }
     setPage(0);
   };
   const handleCronScenarioChange = presetId => {
@@ -656,7 +692,7 @@ const CronMonitoringView = () => {
   const showDayViewAuditPanel =
     inDayView && period !== 'dayview-next' && period !== 'dayview-today-projection';
   const showDayViewProjectionPanel =
-    inDayView && period !== 'dayview-last' && period !== 'dayview-yesterday' && period !== 'dayview-today-audit'; // ✅ FIX: Yesterday = audit seul
+    inDayView && period !== 'dayview-last' && period !== 'dayview-today-audit';
 
   const dayViewFilteredSummary = (() => {
     if (!inDayView) return '';
@@ -795,12 +831,83 @@ const CronMonitoringView = () => {
               </ListSubheader>
               <MenuItem value="dayview-tomorrow">Demain (audit + plan)</MenuItem>
               <MenuItem value="dayview-after">Après-demain (audit + plan)</MenuItem>
-              <MenuItem value="dayview-yesterday">Hier (audit seul)</MenuItem>
+              <MenuItem value="dayview-yesterday">Hier (audit + plan)</MenuItem>
+              <ListSubheader disableSticky sx={{ fontSize: '0.7rem', fontWeight: 700, lineHeight: '28px', bgcolor: SOJORI_COLORS.gray[100] }}>
+                Calendrier
+              </ListSubheader>
+              <MenuItem value="dayview-custom-day">Jour au choix</MenuItem>
+              <MenuItem value="dayview-custom-range">Intervalle (du → au)</MenuItem>
               <ListSubheader disableSticky sx={{ fontSize: '0.7rem', fontWeight: 700, lineHeight: '28px', bgcolor: SOJORI_COLORS.gray[100] }}>
                 Liste
               </ListSubheader>
               <MenuItem value="next-7-days">7 prochains jours</MenuItem>
             </TextField>
+
+            {(period === 'dayview-custom-day' || period === 'dayview-custom-range') && (
+              <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" sx={{ width: '100%' }}>
+                {period === 'dayview-custom-day' && (
+                  <TextField
+                    label="Date"
+                    type="date"
+                    size="small"
+                    value={customSingleDate}
+                    onChange={e => setCustomSingleDate(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ ...FILTER_FIELD_SX, minWidth: 160 }}
+                  />
+                )}
+                {period === 'dayview-custom-range' && (
+                  <>
+                    <TextField
+                      label="Du"
+                      type="date"
+                      size="small"
+                      value={customDateFrom}
+                      onChange={e => setCustomDateFrom(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      sx={{ ...FILTER_FIELD_SX, minWidth: 150 }}
+                    />
+                    <TextField
+                      label="Au"
+                      type="date"
+                      size="small"
+                      value={customDateTo}
+                      onChange={e => setCustomDateTo(e.target.value)}
+                      inputProps={{ min: customDateFrom }}
+                      InputLabelProps={{ shrink: true }}
+                      sx={{ ...FILTER_FIELD_SX, minWidth: 150 }}
+                    />
+                  </>
+                )}
+              </Stack>
+            )}
+
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ display: { xs: 'none', md: 'flex' } }}>
+              {[
+                { label: 'Hier', offset: -1 },
+                { label: "Aujourd'hui", offset: 0 },
+                { label: 'Demain', offset: 1 },
+              ].map(({ label, offset }) => (
+                <Button
+                  key={label}
+                  size="small"
+                  variant="outlined"
+                  onClick={() => applyQuickDay(offset)}
+                  sx={{
+                    minWidth: 'auto',
+                    px: 1.25,
+                    height: 32,
+                    fontSize: '0.7rem',
+                    textTransform: 'none',
+                    borderColor: SOJORI_COLORS.gray[300],
+                    color: SOJORI_COLORS.gray[700],
+                    '&:hover': { borderColor: SOJORI_COLORS.primary, color: SOJORI_COLORS.primary },
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </Stack>
 
             <TextField
               select
@@ -1180,7 +1287,10 @@ const CronMonitoringView = () => {
           p: 2
         }}><Alert severity="info" sx={{
             py: 0.5
-          }}>Aucune projection dans cette fenêtre.</Alert></Box> : <TableContainer sx={{
+          }}>
+            Aucun créneau <strong>pending</strong> dans le plan pour cette journée (Casablanca).
+            Les relances déjà exécutées sont dans l&apos;audit ; les prochaines dates peuvent être demain ou plus tard — essayez « Demain » ou « 7 prochains jours ».
+          </Alert></Box> : <TableContainer sx={{
           maxHeight: 'min(400px, 50vh)',
           // ✅ Scroll orange Sojori
           '&::-webkit-scrollbar': {
@@ -1252,7 +1362,9 @@ const CronMonitoringView = () => {
                       {dayViewProjRows.map(row => {
                 const apiA = mapProjectionKeyToAction(row.actionKey);
                 const lbl = row.actionKey === 'requestTimeslot' ? 'request timeslot' : (apiA || row.actionKey || '').replace(/_/g, ' ');
-                return <TableRow key={`${row.reservationCode}-${row.actionId}-${row.scheduledAt}-${row.attemptNumber ?? 0}`}>
+                return <TableRow key={`${row.reservationCode}-${row.actionId}-${row.scheduledAt}-${row.attemptNumber ?? 0}`} sx={{
+                  bgcolor: row.isOverdue ? SOJORI_COLORS.warning + '14' : undefined,
+                }}>
                             <TableCell>
                               <Typography variant="caption" fontWeight="bold">{row.reservationCode}</Typography>
                             </TableCell>
@@ -1272,9 +1384,21 @@ const CronMonitoringView = () => {
                             <TableCell><Typography variant="caption" sx={{
                     fontSize: '0.7rem'
                   }}>{getCategoryLabel(row.workflowCategory)}</Typography></TableCell>
-                            <TableCell><Typography variant="caption" sx={{
-                    fontSize: '0.7rem'
-                  }}>{formatTime(row.scheduledAt)}</Typography></TableCell>
+                            <TableCell>
+                              <Typography variant="caption" sx={{ fontSize: '0.7rem', display: 'block' }}>
+                                {formatTime(row.scheduledAt)}
+                              </Typography>
+                              {row.isOverdue && (
+                                <Chip label="En retard" size="small" sx={{
+                                  mt: 0.25,
+                                  height: 18,
+                                  fontSize: '0.6rem',
+                                  bgcolor: SOJORI_COLORS.error + '18',
+                                  color: SOJORI_COLORS.error,
+                                  fontWeight: 700,
+                                }} />
+                              )}
+                            </TableCell>
                             <TableCell sx={{
                     maxWidth: 120
                   }}>

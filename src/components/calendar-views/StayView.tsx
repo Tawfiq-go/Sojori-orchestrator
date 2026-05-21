@@ -392,10 +392,8 @@ function ListingRowComp({
 }) {
   const numTasks = listing.reservations.reduce((n, r) => n + (r.timeline?.length || 0), 0);
   const displayStatus = deriveDisplayCleanliness(listing, listing.reservations);
-  const badgeStatus =
-    displayStatus === 'occupied'
-      ? 'occupied'
-      : (listing.cleanlinessStatus_v2 || displayStatus || 'clean');
+  // Badge must match filter logic (deriveDisplayCleanliness). Do not prefer cleanlinessStatus_v2
+  // alone — it can be "clean" while legacy cleanlinessStatus is still "dirty".
 
   return (
     <Box sx={{
@@ -416,7 +414,7 @@ function ListingRowComp({
           }}>{listing.listingName}</Typography>
         </Stack>
         <CleanlinessBadgeInteractive
-          status={badgeStatus}
+          status={displayStatus}
           displayStatus={displayStatus}
           emergency={listing.cleanlinessEmergency}
           onChange={
