@@ -420,10 +420,7 @@ function MarketFrame({
     >
       <Stack
         direction="row"
-        alignItems="flex-start"
-        justifyContent="space-between"
-        gap={1}
-        sx={{
+        sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, 
           px: 2,
           py: 1.5,
           borderBottom: `1px solid ${T.border}`,

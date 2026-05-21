@@ -6,6 +6,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Box, Stack, Typography, Button, IconButton, Tooltip,
 } from '@mui/material';
+import { ReservationDetailsModal, type ReservationDetails } from '../modals/ReservationDetailsModal';
 
 const T = {
   primary: '#e6b022', primarySoft: '#f4cf5e', primaryTint: 'rgba(230,176,34,0.10)',
@@ -81,8 +82,47 @@ export default function ReservationsGanttView({
 }: Props) {
   const [zoom, setZoom] = useState<'week' | 'month'>('month');
   const [offset, setOffset] = useState(0);
+  const [selectedReservation, setSelectedReservation] = useState<ReservationDetails | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const cellWidth = zoom === 'week' ? 96 : 56;
+
+  // Convert ReservationBlock to ReservationDetails for the modal
+  const convertToReservationDetails = (block: ReservationBlock): ReservationDetails => {
+    const listing = listings.find(l => l.id === block.listingId);
+    const checkInDate = new Date(startDate);
+    checkInDate.setDate(checkInDate.getDate() + block.start + offset);
+    const checkOutDate = new Date(checkInDate);
+    checkOutDate.setDate(checkOutDate.getDate() + block.length);
+
+    return {
+      id: block.id,
+      status: block.status === 'closed' ? 'cancelled' : block.status,
+      channel: block.source,
+      guestName: block.guestName,
+      guestEmail: undefined,
+      guestPhone: undefined,
+      checkIn: checkInDate.toISOString(),
+      checkOut: checkOutDate.toISOString(),
+      nights: block.length,
+      travelers: 2, // Default value
+      property: {
+        id: listing?.id || '',
+        name: listing?.name || 'Listing non trouvé',
+        address: listing?.city || '',
+      },
+      totalAmount: parseFloat(block.amount.replace(/[€,\s]/g, '')) || 0,
+      paidAmount: 0, // Default value
+      notes: undefined,
+      createdAt: new Date().toISOString(),
+    };
+  };
+
+  const handleBlockClick = (block: ReservationBlock) => {
+    setSelectedReservation(convertToReservationDetails(block));
+    setModalOpen(true);
+    onBlockClick?.(block);
+  };
   const headers = useMemo(() => {
     const out: { date: Date; weekend: boolean; isToday: boolean }[] = [];
     const today = new Date();
@@ -100,7 +140,7 @@ export default function ReservationsGanttView({
   }, [startDate, days, offset]);
 
   return (
-    <Box sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2, overflow: 'hidden' }}>
+    <Box sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2, overflow: 'hidden', maxHeight: 'calc(100vh - 250px)' }}>
       {/* Toolbar */}
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center',  px: 2, py: 1.5, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -134,7 +174,7 @@ export default function ReservationsGanttView({
       </Stack>
 
       {/* Grid */}
-      <Box sx={{ overflowX: 'auto' }}>
+      <Box sx={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 310px)' }}>
         <Box sx={{ display: 'grid', gridTemplateColumns: `220px repeat(${days}, ${cellWidth}px)`, minWidth: 'max-content' }}>
           {/* Header */}
           <Box sx={{ position: 'sticky', left: 0, bgcolor: T.bg2, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, zIndex: 5, p: 1.5,
@@ -212,7 +252,7 @@ export default function ReservationsGanttView({
             return (
               <Tooltip key={b.id} title={`${b.guestName} · ${meta.label} · ${b.amount}`}>
                 <Box
-                  onClick={() => onBlockClick?.(b)}
+                  onClick={() => handleBlockClick(b)}
                   sx={{
                     position: 'absolute',
                     left: 220 + startVisible * cellWidth + 4,
@@ -248,6 +288,15 @@ export default function ReservationsGanttView({
           })}
         </Box>
       </Box>
+
+      {/* Reservation Details Modal */}
+      {selectedReservation && (
+        <ReservationDetailsModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          reservation={selectedReservation}
+        />
+      )}
     </Box>
   );
 }

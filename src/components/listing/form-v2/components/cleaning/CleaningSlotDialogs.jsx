@@ -110,8 +110,17 @@ export function DashedAddButton({ label, onClick }) {
       type="button"
       onClick={onClick}
       sx={{
-        all: 'unset', cursor: 'pointer', px: 1.375, py: 0.75,
-        border: `1px dashed ${T.borderStrong}`, borderRadius: 1, color: T.text3, fontSize: 11.5, fontWeight: 600,
+        all: 'unset',
+        cursor: 'pointer',
+        px: 1.375,
+        py: 0.75,
+        border: `1.5px dashed ${T.borderStrong}`,
+        borderRadius: 1.125,
+        color: T.text3,
+        fontSize: 12.5,
+        fontWeight: 700,
+        letterSpacing: '-0.005em',
+        fontFamily: 'inherit',
         '&:hover': { borderColor: T.primary, color: T.primaryDeep, bgcolor: T.primaryTint },
       }}
     >

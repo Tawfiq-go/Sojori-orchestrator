@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import { Box, Stack, Typography, Button } from '@mui/material';
 import { LISTING_LAYOUT } from '../../../constants/listingLayout';
+import { countSchemaGaps } from '../../../features/listing/components/ConfigOrchestration/pmConfigSchemaRegistry';
 
 const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a', primaryTint: 'rgba(184,133,26,0.10)',
@@ -62,9 +63,6 @@ export const CONFIG_TABS = [
 ];
 
 export const CONFIG_NEW_TABS = [
-  { group: 'Vue d\'ensemble', items: [
-    { id: 'overview-config',       icon: '📊', label: 'Vue d\'ensemble' },
-  ]},
   { group: 'Services', items: [
     { id: 'support-config',        icon: '🆘', label: 'Support' },
     { id: 'concierge-config',      icon: '🛎️', label: 'Conciergerie' },
@@ -75,7 +73,7 @@ export const CONFIG_NEW_TABS = [
   { group: 'Communication', items: [
     { id: 'service-client-config', icon: '💌', label: 'Service Client' },
     { id: 'messages-config',       icon: '📜', label: 'Messages' },
-    { id: 'whatsapp-config',       icon: '📱', label: 'WhatsApp' },
+    { id: 'whatsapp-config',       icon: '📱', label: 'Menu WhatsApp' },
   ]},
   { group: 'Automation', items: [
     { id: 'orchestration-config',  icon: '🧼', label: 'Automatisations' },
@@ -155,6 +153,7 @@ export default function ListingFormShell({
 
   const tabsConfig = level === 'detail' ? DETAIL_TABS : level === 'config' ? CONFIG_TABS : CONFIG_NEW_TABS;
   const activeTabMeta = tabsConfig.flatMap(g => g.items).find(t => t.id === activeTab) || tabsConfig[0].items[0];
+  const schemaGaps = level === 'config-new' ? countSchemaGaps(activeTab) : null;
   const listingDisplayName = (listing?.name && String(listing.name).trim()) || 'Listing sans nom';
   const locationLine = (listing?.location && String(listing.location).trim()) || '';
 
@@ -184,7 +183,7 @@ export default function ListingFormShell({
             {[
               { id: 'detail', icon: '🏠', label: 'Détail listing', pillLabel: '11 onglets', accent: T.primary, tint: T.primaryTint, tintColor: T.primaryDeep },
               { id: 'config', icon: '⚙️', label: 'Config orchestration', pillLabel: '7 onglets', accent: T.ai, tint: T.aiTint, tintColor: T.ai },
-              { id: 'config-new', icon: '✨', label: 'Config Orch. NEW', pillLabel: '9 onglets', accent: '#10b981', tint: 'rgba(16,185,129,0.10)', tintColor: '#059669' },
+              { id: 'config-new', icon: '✨', label: 'Config Orch. NEW', pillLabel: '9 onglets', accent: '#b8851a', tint: 'rgba(184,133,26,0.10)', tintColor: '#876119' },
             ].map(opt => {
               const active = level === opt.id;
               return (
@@ -289,7 +288,13 @@ export default function ListingFormShell({
 
           {/* Content */}
           <Box sx={{ p: LISTING_LAYOUT.contentPad, overflowY: 'auto', maxHeight: '80vh', position: 'relative' }}>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: activeTab === 'amenities' ? 1.25 : 2.25 }}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: activeTab === 'amenities' ? 1.25 : 1.5 }}>
+              {schemaGaps?.mockup > 0 && (
+                <StatusChip tone="warning" label={`${schemaGaps.mockup} mockup`} dot />
+              )}
+              {schemaGaps?.inSchema > 0 && level === 'config-new' && (
+                <StatusChip tone="success" label={`${schemaGaps.inSchema} schéma`} dot={false} />
+              )}
               <Typography
                 component="h2"
                 sx={{

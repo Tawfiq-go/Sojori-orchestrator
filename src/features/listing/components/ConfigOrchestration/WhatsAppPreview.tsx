@@ -6,6 +6,7 @@ import React from 'react';
 import { Box, Stack, Typography } from '@mui/material';
 import type { SupportCategory } from './types';
 import { SOJORI_TOKENS } from './types';
+import { SUPPORT_PRIORITIES, priorityMeta } from './supportPriority';
 
 const T = SOJORI_TOKENS;
 const WA_BG = '#075E54';
@@ -17,6 +18,10 @@ interface Props {
 }
 
 export default function WhatsAppPreview({ categories }: Props) {
+  const previewCat = categories[0];
+  const guestChooses = previewCat?.guestCanChoosePriority !== false;
+  const forced = previewCat ? priorityMeta(previewCat.defaultUrgency) : null;
+
   return (
     <Box sx={{
       width: 300, mx: 'auto', bgcolor: '#1a1a1a', borderRadius: 3.75, p: '7px',
@@ -95,20 +100,39 @@ export default function WhatsAppPreview({ categories }: Props) {
             boxSizing: 'border-box',
           }} />
 
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{
-            mt: 1.5, p: 0, borderTop: `1px dashed ${T.border}`, pt: 1.25,
+          <Typography sx={{
+            fontSize: 9.5, fontWeight: 800, color: T.text3,
+            fontFamily: '"Geist Mono", monospace',
+            textTransform: 'uppercase', letterSpacing: '0.06em', mt: 1.5, mb: 0.75,
           }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 600 }}>Urgent ?</Typography>
+            Urgence{guestChooses ? '' : ' (imposée)'}
+          </Typography>
+          {guestChooses ? (
+            <Stack gap={0.5}>
+              {SUPPORT_PRIORITIES.map((p, i) => (
+                <Stack key={p.id} direction="row" alignItems="center" gap={1} sx={{
+                  p: '7px 9px', borderRadius: 0.875,
+                  border: `1px solid ${i === 0 ? WA_GREEN : T.border}`,
+                  bgcolor: i === 0 ? '#F0FAF3' : '#fff',
+                }}>
+                  <Box sx={{
+                    width: 13, height: 13, borderRadius: '50%',
+                    border: `2px solid ${i === 0 ? WA_GREEN : T.borderStrong}`,
+                    flexShrink: 0,
+                    background: i === 0 ? `radial-gradient(circle at center, ${WA_GREEN} 0 3px, transparent 3px)` : 'transparent',
+                  }} />
+                  <Typography sx={{ fontSize: 11.5, fontWeight: 700 }}>{p.emoji} {p.labelFr}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+          ) : forced ? (
             <Box sx={{
-              width: 28, height: 16, borderRadius: '99px', position: 'relative',
-              background: `linear-gradient(135deg, #cb9b2c, ${T.primary})`,
-              '&::after': {
-                content: '""', position: 'absolute', top: 2, right: 2,
-                width: 12, height: 12, bgcolor: '#fff', borderRadius: '50%',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.20)',
-              },
-            }} />
-          </Stack>
+              p: '9px 11px', borderRadius: 0.875, fontSize: 11.5, fontWeight: 700,
+              bgcolor: forced.bg, color: forced.fg, border: `1px solid ${forced.fg}`,
+            }}>
+              {forced.emoji} {forced.labelFr} · définie par la catégorie
+            </Box>
+          ) : null}
 
           <Box sx={{
             mt: 1.5, p: '11px', textAlign: 'center',

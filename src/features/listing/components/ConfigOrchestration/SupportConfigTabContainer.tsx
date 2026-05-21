@@ -1,71 +1,128 @@
-// ════════════════════════════════════════════════════════════════════
-// SupportConfigTabContainer.tsx
-// Wrapper qui gère l'API et passe les données au composant Claude Desktop
-// ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Box, CircularProgress, Typography } from '@mui/material';
+// Wrapper API réelle listing-support-categories + design SupportConfigTab
+import React, { useState, useEffect, useCallback } from 'react';
+import { Box, CircularProgress, Typography, Button } from '@mui/material';
+import { listingsService } from '../../../../services/listingsService';
 import SupportConfigTab from './SupportConfigTab';
-import type { SupportConfig } from './types';
+import type { SupportConfig, SupportCategory, SupportPriority } from './types';
 import { DEFAULT_CATEGORIES } from './types';
+import {
+  mergeSojoriMeta,
+  readSojoriMeta,
+  type SupportPriority as SP,
+} from './supportPriority';
+
+function normalizePriority(raw: string): SupportPriority {
+  if (raw === 'urgent' || raw === 'CRITICAL') return 'urgent';
+  if (raw === 'high' || raw === 'HIGH') return 'high';
+  if (raw === 'normal' || raw === 'NORMAL') return 'normal';
+  return 'normal';
+}
+
+function mapApiToDesign(apiDoc: { categories?: unknown[] } | null): SupportConfig {
+  const cats = apiDoc?.categories;
+  if (!Array.isArray(cats) || cats.length === 0) {
+    return { enabled: true, categories: DEFAULT_CATEGORIES };
+  }
+  return {
+    enabled: true,
+    categories: cats.map((c: Record<string, unknown>, i: number) => {
+      const name = (c.name as { fr?: string; en?: string; ar?: string }) || { fr: 'Catégorie' };
+      const desc = c.description as { fr?: string; en?: string } | undefined;
+      const fields = (c.fields as Record<string, unknown>) || {};
+      const meta = readSojoriMeta(fields);
+      const priority = normalizePriority(String(c.priority || 'normal'));
+      return {
+        id: String(c.id || `cat_${i}`),
+        enabled: c.enabled !== false,
+        label: {
+          fr: name.fr || '',
+          en: name.en || name.fr || '',
+          ar: name.ar,
+        },
+        description: desc ? { fr: desc.fr || '', en: desc.en || '' } : { fr: '', en: '' },
+        icon: String(c.icon || '💬'),
+        defaultUrgency: priority,
+        guestCanChoosePriority: meta.guestCanChoosePriority !== false,
+        order: Number(c.displayOrder ?? i),
+        _fields: fields,
+      } as SupportCategory & { _fields?: Record<string, unknown> };
+    }),
+  };
+}
+
+function mapDesignToApi(config: SupportConfig) {
+  return config.categories.map((cat, i) => {
+    const ext = cat as SupportCategory & { _fields?: Record<string, unknown> };
+    const baseFields = ext._fields || {};
+    return {
+      id: cat.id,
+      enabled: true,
+      category: String((ext as Record<string, unknown>).category || 'other'),
+      name: {
+        fr: cat.label.fr,
+        en: cat.label.en || cat.label.fr,
+        ar: cat.label.ar || '',
+      },
+      description: cat.description
+        ? { fr: cat.description.fr, en: cat.description.en || cat.description.fr, ar: '' }
+        : undefined,
+      icon: cat.icon,
+      displayOrder: cat.order ?? i,
+      priority: cat.defaultUrgency as SP,
+      requiresPhoto: false,
+      requiresPMValidation: false,
+      alertPM: cat.defaultUrgency === 'urgent',
+      estimatedResponseTime: { fr: '24h', en: '24h', ar: '' },
+      fields: mergeSojoriMeta(baseFields, {
+        guestCanChoosePriority: cat.guestCanChoosePriority,
+      }),
+      relatedToAmenities: false,
+    };
+  });
+}
 
 interface Props {
   listingId: string;
   ownerId?: string;
 }
 
-export default function SupportConfigTabContainer({ listingId, ownerId }: Props) {
+export default function SupportConfigTabContainer({ listingId }: Props) {
   const [config, setConfig] = useState<SupportConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [provisionLoading, setProvisionLoading] = useState(false);
 
-  // Fetch initial config
-  useEffect(() => {
-    fetchConfig();
+  const fetchConfig = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    let res = await listingsService.getListingSupportCategoriesConfig(listingId);
+    if (res.error?.includes('404') || (!res.data && res.error)) {
+      setProvisionLoading(true);
+      await listingsService.createListingSupportCategories(listingId);
+      setProvisionLoading(false);
+      res = await listingsService.getListingSupportCategoriesConfig(listingId);
+    }
+    if (res.error && !res.data) {
+      setConfig({ enabled: true, categories: DEFAULT_CATEGORIES });
+      setError(res.error);
+    } else {
+      setConfig(mapApiToDesign(res.data as { categories?: unknown[] }));
+    }
+    setLoading(false);
   }, [listingId]);
 
-  const fetchConfig = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await axios.get(`/api/v1/listing/internal/${listingId}/support-config`);
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
-      // Si pas de config, utiliser les catégories par défaut
-      const initialConfig = res.data?.data || {
-        enabled: true,
-        categories: DEFAULT_CATEGORIES,
-      };
-
-      setConfig(initialConfig);
-    } catch (err: any) {
-
-      // En cas d'erreur 404, utiliser config par défaut
-      if (err.response?.status === 404) {
-        setConfig({
-          enabled: true,
-          categories: DEFAULT_CATEGORIES,
-        });
-      } else {
-        setError(err.message || 'Erreur lors du chargement de la configuration');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Save config to API
   const handleSave = async (updatedConfig: SupportConfig) => {
-    try {
-      await axios.post(
-        `/api/v1/listing/internal/${listingId}/support-config`,
-        updatedConfig
-      );
-    } catch (err: any) {
-      throw err; // Re-throw pour que le composant puisse gérer l'erreur
-    }
+    const categories = mapDesignToApi(updatedConfig);
+    const res = await listingsService.updateListingSupportCategories(listingId, categories);
+    if (res.error) throw new Error(res.error);
+    setConfig(updatedConfig);
   };
 
-  if (loading) {
+  if (loading || provisionLoading) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 8 }}>
         <CircularProgress />
@@ -73,27 +130,16 @@ export default function SupportConfigTabContainer({ listingId, ownerId }: Props)
     );
   }
 
-  if (error) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Typography color="error">Erreur : {error}</Typography>
-      </Box>
-    );
-  }
-
   if (!config) {
     return (
       <Box sx={{ p: 3 }}>
-        <Typography>Aucune configuration disponible</Typography>
+        <Typography color="error">{error || 'Configuration indisponible'}</Typography>
+        <Button onClick={fetchConfig} sx={{ mt: 2 }}>
+          Réessayer
+        </Button>
       </Box>
     );
   }
 
-  return (
-    <SupportConfigTab
-      listingId={listingId}
-      initial={config}
-      onSave={handleSave}
-    />
-  );
+  return <SupportConfigTab listingId={listingId} initial={config} onSave={handleSave} />;
 }

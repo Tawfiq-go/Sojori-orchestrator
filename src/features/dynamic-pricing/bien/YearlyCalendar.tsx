@@ -56,6 +56,8 @@ const TIER_BG: Record<PriceTier, string> = {
 
 export interface YearlyCalendarProps {
   days: CalendarDay[];
+  /** Snapshot AirROI brut (future/rates) — 2ᵉ courbe quand pilote actif */
+  compareMarketDays?: CalendarDay[];
   /** Dans BienView : pas de titre dupliqué, en-tête compact */
   compactHeader?: boolean;
   /** airroi = suggestion marché (1 prix/jour) · sojori = moteur interne */
@@ -65,6 +67,8 @@ export interface YearlyCalendarProps {
   year?: number;
   yearOptions?: number[];
   sourceHint?: string;
+  /** Libellé du lien d’aide (défaut selon pricingSource) */
+  sourceLinkLabel?: string;
   emptyHint?: string;
   onYearChange?: (year: number) => void;
   onDayClick: (day: CalendarDay) => void;
@@ -72,6 +76,10 @@ export interface YearlyCalendarProps {
   applyLoading?: boolean;
   /** Masquer le CTA ops quand lecture seule (ex. marché sans pilote actif) */
   showApplyButton?: boolean;
+  /** Vue prix : sync pilote active */
+  priceSyncActive?: boolean;
+  /** Min stay non sync → bandeau rouge */
+  minStaySyncActive?: boolean;
 }
 
 const STATUS_BG: Record<DayStatus, string> = {
@@ -91,33 +99,56 @@ const chartTooltipStyle = {
   fontFamily: '"Geist Mono", monospace',
 };
 
+function sliceVisibleDays(
+  source: CalendarDay[],
+  windowMode: CalendarWindowMode,
+  year: number,
+  today: string,
+  enrichTiers: boolean,
+): CalendarDay[] {
+  const slice =
+    windowMode === 'calendarYear'
+      ? filterCalendarYear(source, year)
+      : filterRolling365(source, today);
+  return enrichTiers ? enrichDaysWithPriceTiers(slice) : slice;
+}
+
 export default function YearlyCalendar({
   days,
+  compareMarketDays,
   compactHeader = false,
   pricingSource = 'sojori',
   windowMode = 'rolling365',
   year = new Date().getFullYear(),
   yearOptions = [year],
   sourceHint,
+  sourceLinkLabel,
   emptyHint,
   onYearChange,
   onDayClick,
   onApplyToOps,
   applyLoading = false,
   showApplyButton = true,
+  priceSyncActive = true,
+  minStaySyncActive = true,
 }: YearlyCalendarProps) {
   const today = todayIsoLocal();
   const windowEnd = addDaysIso(today, 365);
+  const helpLinkLabel =
+    sourceLinkLabel ??
+    (pricingSource === 'airroi' ? 'Source marché (AirROI) ⓘ' : 'Source pilote Sojori ⓘ');
 
-  const visibleDays = useMemo(() => {
-    let slice: CalendarDay[];
-    if (windowMode === 'calendarYear') {
-      slice = filterCalendarYear(days, year);
-    } else {
-      slice = filterRolling365(days, today);
-    }
-    return pricingSource === 'airroi' ? enrichDaysWithPriceTiers(slice) : slice;
-  }, [days, windowMode, year, today, pricingSource]);
+  const dualCurve = Boolean(compareMarketDays?.length && windowMode === 'rolling365');
+
+  const visibleDays = useMemo(
+    () => sliceVisibleDays(days, windowMode, year, today, pricingSource === 'airroi' && !dualCurve),
+    [days, windowMode, year, today, pricingSource, dualCurve],
+  );
+
+  const visibleMarketDays = useMemo(() => {
+    if (!compareMarketDays?.length) return [];
+    return sliceVisibleDays(compareMarketDays, windowMode, year, today, true);
+  }, [compareMarketDays, windowMode, year, today]);
 
   const coverage = useMemo(() => {
     if (windowMode !== 'rolling365') return null;
@@ -130,31 +161,112 @@ export default function YearlyCalendar({
     return { expected, withPrice, blocked, missing };
   }, [visibleDays, windowMode, today, windowEnd]);
 
-  const chartData = useMemo(
-    () =>
-      visibleDays.map((d) => ({
-        date: d.date,
-        price: d.status === 'blocked' || d.recommendedPrice <= 0 ? null : d.recommendedPrice,
-        status: d.status,
-        tierLabel:
-          d.priceTier === 'low'
-            ? 'Bas'
-            : d.priceTier === 'high'
-              ? 'Haut'
-              : d.priceTier === 'mid'
-                ? 'Moyen'
-                : undefined,
-      })),
+  const eventDayCount = useMemo(
+    () => visibleDays.filter((d) => d.status === 'override').length,
     [visibleDays],
   );
 
+  const chartData = useMemo(() => {
+    if (!dualCurve) {
+      return visibleDays.map((d) => ({
+        date: d.date,
+        marketPrice: null as number | null,
+        pilotPrice:
+          d.status === 'blocked' || d.recommendedPrice <= 0 ? null : d.recommendedPrice,
+        price:
+          d.status === 'blocked' || d.recommendedPrice <= 0 ? null : d.recommendedPrice,
+        status: d.status,
+        tierLabel:
+          d.status === 'override'
+            ? 'Event'
+            : d.priceTier === 'low'
+              ? 'Bas'
+              : d.priceTier === 'high'
+                ? 'Haut'
+                : d.priceTier === 'mid'
+                  ? 'Moyen'
+                  : undefined,
+      }));
+    }
+    const marketByDate = new Map(
+      visibleMarketDays.map((d) => [
+        d.date,
+        {
+          price:
+            d.status === 'blocked' || d.recommendedPrice <= 0 ? null : d.recommendedPrice,
+          tierLabel:
+            d.priceTier === 'low'
+              ? 'Bas'
+              : d.priceTier === 'high'
+                ? 'Haut'
+                : d.priceTier === 'mid'
+                  ? 'Moyen'
+                  : undefined,
+        },
+      ]),
+    );
+    const pilotByDate = new Map(
+      visibleDays.map((d) => [
+        d.date,
+        {
+          price:
+            d.status === 'blocked' || d.recommendedPrice <= 0 ? null : d.recommendedPrice,
+          status: d.status,
+        },
+      ]),
+    );
+    const dates = new Set([...marketByDate.keys(), ...pilotByDate.keys()]);
+    return [...dates]
+      .sort()
+      .map((date) => {
+        const pilot = pilotByDate.get(date);
+        const market = marketByDate.get(date);
+        return {
+          date,
+          marketPrice: market?.price ?? null,
+          pilotPrice: pilot?.price ?? null,
+          price: pilot?.price ?? market?.price ?? null,
+          status: pilot?.status,
+          tierLabel: market?.tierLabel,
+        };
+      });
+  }, [dualCurve, visibleDays, visibleMarketDays]);
+
   const priceExtent = useMemo(() => {
-    const prices = visibleDays
-      .map((d) => d.recommendedPrice)
-      .filter((p) => p > 0);
-    if (!prices.length) return { min: 0, max: 0 };
-    return { min: Math.min(...prices), max: Math.max(...prices) };
-  }, [visibleDays]);
+    const prices: number[] = [];
+    for (const row of chartData) {
+      if (row.marketPrice != null && row.marketPrice > 0) prices.push(row.marketPrice);
+      if (row.pilotPrice != null && row.pilotPrice > 0) prices.push(row.pilotPrice);
+      if (!dualCurve && row.price != null && row.price > 0) prices.push(row.price);
+    }
+    if (!prices.length) return { min: 0, max: 0, marketMin: 0, marketMax: 0, pilotMin: 0, pilotMax: 0 };
+    const marketPrices = chartData
+      .map((r) => r.marketPrice)
+      .filter((p): p is number => p != null && p > 0);
+    const pilotPrices = chartData
+      .map((r) => r.pilotPrice)
+      .filter((p): p is number => p != null && p > 0);
+    return {
+      min: Math.min(...prices),
+      max: Math.max(...prices),
+      marketMin: marketPrices.length ? Math.min(...marketPrices) : 0,
+      marketMax: marketPrices.length ? Math.max(...marketPrices) : 0,
+      pilotMin: pilotPrices.length ? Math.min(...pilotPrices) : 0,
+      pilotMax: pilotPrices.length ? Math.max(...pilotPrices) : 0,
+    };
+  }, [chartData, dualCurve]);
+
+  const dualCoverage = useMemo(() => {
+    if (!dualCurve || windowMode !== 'rolling365') return null;
+    const expected = countExpectedDaysInWindow(today, windowEnd);
+    const marketWith = visibleMarketDays.filter(
+      (d) => d.status !== 'blocked' && d.recommendedPrice > 0,
+    ).length;
+    const pilotWith = visibleDays.filter(
+      (d) => d.status !== 'blocked' && d.recommendedPrice > 0,
+    ).length;
+    return { expected, marketWith, pilotWith };
+  }, [dualCurve, windowMode, today, windowEnd, visibleMarketDays, visibleDays]);
 
   const monthGrids: HeatmapMonth[] = useMemo(() => {
     if (windowMode === 'calendarYear') {
@@ -202,6 +314,17 @@ export default function YearlyCalendar({
     );
   }
 
+  const syncBanner =
+    priceSyncActive === false ? (
+      <Typography sx={{ fontSize: 11, color: '#c62828', fontWeight: 700, mb: 1 }}>
+        Vue prix : non synchronisée vers le calendrier (activez « Prix » dans Sojori AI).
+      </Typography>
+    ) : minStaySyncActive === false ? (
+      <Typography sx={{ fontSize: 11, color: '#c62828', fontWeight: 700, mb: 1 }}>
+        Vue prix uniquement — le séjour minimum n’est pas poussé au calendrier (min stay sync OFF).
+      </Typography>
+    ) : null;
+
   return (
     <Box
       sx={{
@@ -214,11 +337,11 @@ export default function YearlyCalendar({
         boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
       }}
     >
-      <Stack gap={1.25} sx={{ mb: 2 }}>
+      <Stack sx={{ gap: 1.25,  mb: 2 }}>
+        {syncBanner}
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          gap={1.25}
-          sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, justifyContent: 'space-between' }}
+          sx={{ gap: 1.25,  alignItems: { xs: 'stretch', sm: 'flex-start' }, justifyContent: 'space-between' }}
         >
           <Box sx={{ minWidth: 0, flex: 1 }}>
             {!compactHeader ? (
@@ -226,48 +349,66 @@ export default function YearlyCalendar({
                 {title}
               </Typography>
             ) : null}
-            {rangeLabel ? (
-              <Typography
-                sx={{
-                  fontSize: 12,
-                  color: T.text2,
-                  mt: compactHeader ? 0 : 0.25,
-                  fontWeight: 600,
-                  fontFamily: '"Geist Mono", monospace',
-                }}
+            {compactHeader ? (
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                sx={{ gap: 1, alignItems: { xs: 'stretch', md: 'center' }, minWidth: 0 }}
               >
-                {rangeLabel}
-              </Typography>
-            ) : null}
-            {sourceHint ? (
-              <Stack direction="row" alignItems="center" gap={0.5} sx={{ mt: 0.5, minWidth: 0 }}>
-                <Typography
-                  sx={{
-                    fontSize: 11,
-                    color: T.text3,
-                    lineHeight: 1.35,
-                    display: compactHeader ? 'none' : 'block',
-                  }}
-                >
-                  {sourceHint}
-                </Typography>
-                {compactHeader ? (
-                  <Tooltip title={sourceHint} arrow placement="top">
+                <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
+                  {rangeLabel ? (
                     <Typography
-                      component="span"
                       sx={{
-                        fontSize: 11,
-                        color: T.text3,
-                        cursor: 'help',
-                        borderBottom: `1px dotted ${T.borderStrong}`,
+                        fontSize: 12,
+                        color: T.text2,
+                        fontWeight: 600,
+                        fontFamily: '"Geist Mono", monospace',
                       }}
                     >
-                      Source marché ⓘ
+                      {rangeLabel}
                     </Typography>
-                  </Tooltip>
-                ) : null}
+                  ) : null}
+                  {sourceHint ? (
+                    <Tooltip title={sourceHint} arrow placement="top">
+                      <Typography
+                        component="span"
+                        sx={{
+                          fontSize: 11,
+                          color: T.text3,
+                          cursor: 'help',
+                          borderBottom: `1px dotted ${T.borderStrong}`,
+                          display: 'inline-block',
+                          mt: 0.25,
+                        }}
+                      >
+                        {helpLinkLabel}
+                      </Typography>
+                    </Tooltip>
+                  ) : null}
+                </Box>
+                <CalendarLegendBar pricingSource={pricingSource} windowMode={windowMode} />
               </Stack>
-            ) : null}
+            ) : (
+              <>
+                {rangeLabel ? (
+                  <Typography
+                    sx={{
+                      fontSize: 12,
+                      color: T.text2,
+                      mt: 0.25,
+                      fontWeight: 600,
+                      fontFamily: '"Geist Mono", monospace',
+                    }}
+                  >
+                    {rangeLabel}
+                  </Typography>
+                ) : null}
+                {sourceHint ? (
+                  <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.35, mt: 0.5 }}>
+                    {sourceHint}
+                  </Typography>
+                ) : null}
+              </>
+            )}
           </Box>
 
           {windowMode === 'calendarYear' && yearOptions.length > 1 && onYearChange && (
@@ -338,8 +479,8 @@ export default function YearlyCalendar({
           ) : null}
         </Stack>
 
-        {coverage && pricingSource === 'airroi' ? (
-          <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap', width: '100%' }}>
+        {coverage ? (
+          <Stack direction="row" sx={{ gap: 0.75,  flexWrap: 'wrap', width: '100%' }}>
             <Chip
               size="small"
               label={`${coverage.withPrice} j prix`}
@@ -361,96 +502,102 @@ export default function YearlyCalendar({
                 sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 10.5 }}
               />
             ) : null}
-            <Chip
-              size="small"
-              variant="outlined"
-              label="Couleurs : bas · moyen · haut"
-              sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 10.5 }}
-            />
+            {pricingSource === 'airroi' ? (
+              <Chip
+                size="small"
+                variant="outlined"
+                label="Couleurs : bas · moyen · haut"
+                sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 10.5 }}
+              />
+            ) : (
+              <Chip
+                size="small"
+                variant="outlined"
+                label="Standard · Premium · Borne · Event…"
+                sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 10.5 }}
+              />
+            )}
           </Stack>
         ) : null}
 
-        <Stack
-          direction="row"
-          alignItems="center"
-          gap={0.75}
-          flexWrap="wrap"
-          sx={{
-            p: '8px 12px',
-            bgcolor: T.bg2,
-            border: `1px solid ${T.border}`,
-            borderRadius: 1.125,
-            fontSize: 11.5,
-            fontFamily: '"Geist Mono", monospace',
-            fontWeight: 600,
-            color: T.text2,
-            width: '100%',
-            rowGap: 0.75,
-          }}
-        >
-          {pricingSource === 'airroi' ? (
-            <>
-              <LegendItem color={TIER_BG.low}>Bas</LegendItem>
-              <Sep />
-              <LegendItem color={TIER_BG.mid}>Moyen</LegendItem>
-              <Sep />
-              <LegendItem color={TIER_BG.high}>Haut</LegendItem>
-              <Sep />
-              <LegendItem color={T.bg3} bordered>
-                Indisponible
-              </LegendItem>
-              <Sep />
-              <LegendItem color="#f0ebe3" bordered>
-                Sans donnée
-              </LegendItem>
-            </>
-          ) : (
-            <>
-              <LegendItem color={STATUS_BG.std}>Standard</LegendItem>
-              <Sep />
-              <LegendItem color={STATUS_BG.prem}>Premium</LegendItem>
-              <Sep />
-              <LegendItem color={STATUS_BG.clamp}>Borne</LegendItem>
-              <Sep />
-              <LegendItem color={STATUS_BG.override}>Override</LegendItem>
-              <Sep />
-              <LegendItem color={STATUS_BG.anomaly}>Anomalie</LegendItem>
-              <Sep />
-              <LegendItem color={STATUS_BG.blocked} bordered>
-                Bloqué
-              </LegendItem>
-            </>
-          )}
-          {windowMode === 'rolling365' && (
-            <>
-              <Sep />
-              <LegendItem color={T.gold}>Aujourd’hui</LegendItem>
-            </>
-          )}
-        </Stack>
+        {!compactHeader ? (
+          <CalendarLegendBar pricingSource={pricingSource} windowMode={windowMode} />
+        ) : null}
       </Stack>
 
       {/* Courbe prix/jour — fenêtre glissante depuis aujourd'hui */}
       {windowMode === 'rolling365' && chartData.length > 0 && (
         <Box sx={{ mb: 2.5 }}>
-          <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
+          <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 0.75 }}>
             <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text2 }}>
-              Courbe des prix (MAD / nuit)
+              {dualCurve ? 'Courbes des prix (MAD / nuit)' : 'Courbe des prix (MAD / nuit)'}
             </Typography>
-            <Typography sx={{ fontSize: 10.5, color: T.text4, fontFamily: '"Geist Mono", monospace' }}>
-              {coverage
-                ? `${coverage.withPrice}/${coverage.expected} j`
-                : `${visibleDays.length} j`}{' '}
-              · min {priceExtent.min} · max {priceExtent.max} MAD
+            <Typography
+              sx={{
+                fontSize: 10.5,
+                color: T.text4,
+                fontFamily: '"Geist Mono", monospace',
+                textAlign: 'right',
+                maxWidth: '62%',
+              }}
+            >
+              {dualCoverage ? (
+                <>
+                  AirROI {dualCoverage.marketWith}/{dualCoverage.expected} j
+                  <Box component="span" sx={{ mx: 0.5 }}>·</Box>
+                  Pilote {dualCoverage.pilotWith}/{dualCoverage.expected} j
+                  <Box component="span" sx={{ display: 'block', mt: 0.25 }}>
+                    Marché {priceExtent.marketMin}–{priceExtent.marketMax} MAD
+                    <Box component="span" sx={{ mx: 0.5 }}>·</Box>
+                    Pilote {priceExtent.pilotMin}–{priceExtent.pilotMax} MAD
+                  </Box>
+                </>
+              ) : (
+                <>
+                  {coverage
+                    ? `${coverage.withPrice}/${coverage.expected} j`
+                    : `${visibleDays.length} j`}{' '}
+                  · min {priceExtent.min} · max {priceExtent.max} MAD
+                </>
+              )}
+              {eventDayCount > 0 ? (
+                <Box component="span" sx={{ color: STATUS_BG.override, fontWeight: 800, ml: 0.75 }}>
+                  · {eventDayCount} event
+                </Box>
+              ) : null}
             </Typography>
           </Stack>
-          <Box sx={{ height: 168, width: '100%' }}>
-            <ResponsiveContainer width="100%" height="100%">
+          {dualCurve ? (
+            <Stack direction="row" sx={{ gap: 1.5, mb: 1, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontSize: 10.5, color: T.text2 }}>
+                <Box sx={{ width: 22, height: 0, borderTop: '2px dashed #4a7fb8' }} />
+                <b>AirROI brut</b> (snapshot future/rates)
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontSize: 10.5, color: T.text2 }}>
+                <Box sx={{ width: 22, height: 3, bgcolor: T.goldDeep, borderRadius: 0.5 }} />
+                <b>Pilote Sojori</b> (modes + bornes + events)
+              </Box>
+            </Stack>
+          ) : null}
+          <Box
+            sx={{
+              height: dualCurve ? 200 : 168,
+              width: '100%',
+              minWidth: 0,
+              minHeight: dualCurve ? 200 : 168,
+              position: 'relative',
+            }}
+          >
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={dualCurve ? 200 : 168}>
               <AreaChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
                 <defs>
                   <linearGradient id="dpPriceGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={T.gold} stopOpacity={0.45} />
                     <stop offset="100%" stopColor={T.gold} stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="dpMarketGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4a7fb8" stopOpacity={0.22} />
+                    <stop offset="100%" stopColor="#4a7fb8" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid stroke={T.border} strokeDasharray="2 2" vertical={false} />
@@ -476,21 +623,92 @@ export default function YearlyCalendar({
                 <RechartsTooltip
                   contentStyle={chartTooltipStyle}
                   labelFormatter={(l) => formatFrShort(String(l))}
-                  formatter={(v: number, _n, item) => {
-                    const tier = (item?.payload as { tierLabel?: string })?.tierLabel;
-                    return [`${v} MAD`, tier ? `marché · ${tier}` : 'Prix'];
+                  formatter={(v: number, name: string, item) => {
+                    const p = item?.payload as { tierLabel?: string; status?: DayStatus };
+                    if (name === 'Pilote Sojori' && p?.status === 'override') {
+                      return [`${Math.round(v).toLocaleString('fr-FR')} MAD`, 'Pilote · event forcé'];
+                    }
+                    if (name === 'Marché AirROI') {
+                      const tier = p?.tierLabel;
+                      return [
+                        `${Math.round(v).toLocaleString('fr-FR')} MAD`,
+                        tier ? `AirROI · ${tier}` : 'AirROI brut',
+                      ];
+                    }
+                    const tier = p?.tierLabel;
+                    return [
+                      `${Math.round(v).toLocaleString('fr-FR')} MAD`,
+                      tier ? `marché · ${tier}` : String(name || 'Prix'),
+                    ];
                   }}
                 />
-                <Area
-                  type="monotone"
-                  dataKey="price"
-                  connectNulls={false}
-                  stroke={T.goldDeep}
-                  strokeWidth={2}
-                  fill="url(#dpPriceGrad)"
-                  dot={false}
-                  activeDot={{ r: 4, fill: T.goldDeep, stroke: '#fff', strokeWidth: 2 }}
-                />
+                {dualCurve ? (
+                  <>
+                    <Area
+                      type="monotone"
+                      name="Marché AirROI"
+                      dataKey="marketPrice"
+                      connectNulls={false}
+                      stroke="#4a7fb8"
+                      strokeWidth={1.75}
+                      strokeDasharray="5 4"
+                      fill="url(#dpMarketGrad)"
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                    <Area
+                      type="monotone"
+                      name="Pilote Sojori"
+                      dataKey="pilotPrice"
+                      connectNulls={false}
+                      stroke={T.goldDeep}
+                      strokeWidth={2}
+                      fill="url(#dpPriceGrad)"
+                      dot={ChartEventDot}
+                      activeDot={(props: {
+                        cx?: number;
+                        cy?: number;
+                        payload?: { status?: DayStatus };
+                      }) => {
+                        const isEvent = props.payload?.status === 'override';
+                        return (
+                          <circle
+                            cx={props.cx}
+                            cy={props.cy}
+                            r={isEvent ? 6 : 4}
+                            fill={isEvent ? STATUS_BG.override : T.goldDeep}
+                            stroke="#fff"
+                            strokeWidth={2}
+                          />
+                        );
+                      }}
+                      isAnimationActive={false}
+                    />
+                  </>
+                ) : (
+                  <Area
+                    type="monotone"
+                    dataKey="price"
+                    connectNulls={false}
+                    stroke={T.goldDeep}
+                    strokeWidth={2}
+                    fill="url(#dpPriceGrad)"
+                    dot={ChartEventDot}
+                    activeDot={(props: { cx?: number; cy?: number; payload?: { status?: DayStatus } }) => {
+                      const isEvent = props.payload?.status === 'override';
+                      return (
+                        <circle
+                          cx={props.cx}
+                          cy={props.cy}
+                          r={isEvent ? 6 : 4}
+                          fill={isEvent ? STATUS_BG.override : T.goldDeep}
+                          stroke="#fff"
+                          strokeWidth={2}
+                        />
+                      );
+                    }}
+                  />
+                )}
               </AreaChart>
             </ResponsiveContainer>
           </Box>
@@ -541,9 +759,7 @@ export default function YearlyCalendar({
 
       <Stack
         direction="row"
-        alignItems="center"
-        gap={1.125}
-        sx={{
+        sx={{ alignItems: 'center', gap: 1.125, 
           mt: 1.75,
           p: '11px 14px',
           borderRadius: 1.125,
@@ -560,6 +776,11 @@ export default function YearlyCalendar({
               jour reçu. Cases pointillées = jour absent de l’API. Couleurs = bas / moyen / haut
               (tertiles). Clic jour = détail.
             </>
+          ) : windowMode === 'rolling365' && eventDayCount > 0 ? (
+            <>
+              Courbe pilote · <b style={{ color: STATUS_BG.override }}>points orange = event</b>{' '}
+              (prix forcé MAD/nuit). Reste = marché + modes + bornes. Clic jour = justification G7.
+            </>
           ) : windowMode === 'rolling365' ? (
             <>
               Calendrier prospectif Sojori · <b>aujourd’hui</b> en or. Clic = justification.
@@ -573,6 +794,27 @@ export default function YearlyCalendar({
         </Box>
       </Stack>
     </Box>
+  );
+}
+
+function ChartEventDot(props: {
+  cx?: number;
+  cy?: number;
+  payload?: { status?: DayStatus; price?: number | null };
+}) {
+  const { cx, cy, payload } = props;
+  if (cx == null || cy == null || payload?.status !== 'override' || payload.price == null) {
+    return null;
+  }
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={5}
+      fill={STATUS_BG.override}
+      stroke="#fff"
+      strokeWidth={1.5}
+    />
   );
 }
 
@@ -698,6 +940,84 @@ function DayCell({
   );
 }
 
+function CalendarLegendBar({
+  pricingSource,
+  windowMode,
+}: {
+  pricingSource: CalendarPricingSource;
+  windowMode: CalendarWindowMode;
+}) {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        flexWrap: 'nowrap',
+        alignItems: 'center',
+        flexShrink: 0,
+        minWidth: 0,
+        maxWidth: '100%',
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        gap: 0,
+        py: 0.625,
+        px: 1,
+        bgcolor: T.bg2,
+        border: `1px solid ${T.border}`,
+        borderRadius: 1.125,
+        fontSize: 10.5,
+        fontFamily: '"Geist Mono", monospace',
+        fontWeight: 600,
+        color: T.text2,
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'thin',
+        '&::-webkit-scrollbar': { height: 4 },
+        '&::-webkit-scrollbar-thumb': { bgcolor: T.borderStrong, borderRadius: 99 },
+      }}
+    >
+      {pricingSource === 'airroi' ? (
+        <>
+          <LegendItem color={TIER_BG.low}>Bas</LegendItem>
+          <Sep />
+          <LegendItem color={TIER_BG.mid}>Moyen</LegendItem>
+          <Sep />
+          <LegendItem color={TIER_BG.high}>Haut</LegendItem>
+          <Sep />
+          <LegendItem color={T.bg3} bordered>
+            Indisponible
+          </LegendItem>
+          <Sep />
+          <LegendItem color="#f0ebe3" bordered>
+            Sans donnée
+          </LegendItem>
+        </>
+      ) : (
+        <>
+          <LegendItem color={STATUS_BG.std}>Standard</LegendItem>
+          <Sep />
+          <LegendItem color={STATUS_BG.prem}>Premium</LegendItem>
+          <Sep />
+          <LegendItem color={STATUS_BG.clamp}>Borne</LegendItem>
+          <Sep />
+          <LegendItem color={STATUS_BG.override}>Override</LegendItem>
+          <Sep />
+          <LegendItem color={STATUS_BG.anomaly}>Anomalie</LegendItem>
+          <Sep />
+          <LegendItem color={STATUS_BG.blocked} bordered>
+            Bloqué
+          </LegendItem>
+        </>
+      )}
+      {windowMode === 'rolling365' && (
+        <>
+          <Sep />
+          <LegendItem color={T.gold}>Aujourd’hui</LegendItem>
+        </>
+      )}
+    </Box>
+  );
+}
+
 function LegendItem({
   color,
   bordered,
@@ -708,21 +1028,33 @@ function LegendItem({
   children: React.ReactNode;
 }) {
   return (
-    <Stack direction="row" gap={0.625} sx={{ alignItems: 'center', px: 0.875 }}>
+    <Stack
+      direction="row"
+      sx={{
+        gap: 0.5,
+        alignItems: 'center',
+        px: 0.75,
+        flexShrink: 0,
+        whiteSpace: 'nowrap',
+      }}
+    >
       <Box
         sx={{
-          width: 13,
-          height: 13,
-          borderRadius: '5px',
+          width: 12,
+          height: 12,
+          borderRadius: '4px',
           bgcolor: color,
           border: bordered ? `1px solid ${T.borderStrong}` : 'none',
+          flexShrink: 0,
         }}
       />
-      {children}
+      <Box component="span" sx={{ lineHeight: 1.2 }}>
+        {children}
+      </Box>
     </Stack>
   );
 }
 
 function Sep() {
-  return <Box sx={{ width: 1, height: 14, bgcolor: T.border }} />;
+  return <Box sx={{ width: 1, height: 12, bgcolor: T.border, flexShrink: 0, mx: 0.125 }} />;
 }

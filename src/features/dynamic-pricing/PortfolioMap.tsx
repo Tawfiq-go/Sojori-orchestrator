@@ -222,7 +222,7 @@ export default function PortfolioMap({
                   {s.myListingsCount} BIEN{s.myListingsCount !== 1 ? 'S' : ''}
                 </Box>
               </Stack>
-              <Stack gap={0.625}>
+              <Stack sx={{ gap: 0.625 }}>
                 <KvRow k="Listings actifs" v={`${s.airroiListings.toLocaleString('fr-FR')}`} sub="parc estimé" />
                 <KvRow k="ADR médian" v={s.adrMedian.toLocaleString('fr-FR')} sub="MAD" />
                 <KvRow k="Occupation" v={`${Math.round(s.occupancyAvg * 100)}%`} sub="moyenne" />

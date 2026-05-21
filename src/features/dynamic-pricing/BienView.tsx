@@ -9,7 +9,12 @@ import type { Listing, BienDetailPerformance, MarketData, CompListing, PriceFact
 
 import StatsCards from './bien/StatsCards';
 import PricingControls from './bien/PricingControls';
-import type { PricingMode, PricingEvent, PricingSuggestion } from './bien/PricingControls';
+import type {
+  PricingMode,
+  PricingModeDef,
+  PricingEvent,
+  PricingSuggestion,
+} from './bien/PricingControls';
 import YearlyCalendar from './bien/YearlyCalendar';
 import type { CalendarDay, CalendarWindowMode } from './bien/YearlyCalendar';
 import MarketCharts from './bien/MarketCharts';
@@ -20,6 +25,8 @@ import type { CompMapPin } from './bien/MarrakechMap';
 import CompsTable from './bien/CompsTable';
 import type { CompRow } from './bien/CompsTable';
 import JustificationModalG7 from './JustificationModalG7';
+import EventEditorModal from './bien/EventEditorModal';
+import DynamicPriceScopeModal from './bien/DynamicPriceScopeModal';
 import { SectionSourceBar, type DataSourceItem } from './DataSourceBadges';
 import DataEmptyPlaceholder from './DataEmptyPlaceholder';
 import { normalizeCityKey } from './cityScope';
@@ -41,7 +48,12 @@ export interface BienViewProps {
   hasCalendarProd: boolean;
   calendarFromAirroi?: boolean;
   calendarFromCache?: boolean;
+  calendarUsesPilotPreview?: boolean;
+  calendarHasEventOverlay?: boolean;
+  calendarUsesRolling365?: boolean;
+  eventsCount?: number;
   calendarAirroiError?: string | null;
+  airroiCalendarDaysCount?: number;
   potentialHint?: string;
   hasCompsProd: boolean;
   performance: BienDetailPerformance;
@@ -52,11 +64,27 @@ export interface BienViewProps {
   floor: number;
   ceiling: number;
   mode: PricingMode;
+  activeModeId: string;
+  pricingModes: PricingModeDef[];
+  minStayDelta: number;
+  minStayPlancher: number;
+  modeEnabled: boolean;
+  applyPrice: boolean;
+  applyMinStay: boolean;
+  scopeModalOpen?: boolean;
+  scopeModalEdit?: boolean;
+  scopeSaving?: boolean;
+  scopeSaveError?: string | null;
+  configSaveStatus?: 'idle' | 'saving' | 'saved' | 'error';
   events: PricingEvent[];
+  eventModalOpen?: boolean;
+  editingEventId?: string | null;
   suggestions: PricingSuggestion[];
 
   calendarYear: number;
   calendarDays: CalendarDay[];
+  /** Jours AirROI brut pour comparer à la courbe pilote (2 graphes) */
+  calendarMarketDays?: CalendarDay[];
   calendarYearOptions?: number[];
 
   compsMarketStats: CompsMarketStats | null;
@@ -76,17 +104,36 @@ export interface BienViewProps {
 
   // Callbacks
   onToggleAi: (enabled: boolean) => void;
+  onScopeModalClose?: () => void;
+  onScopeModalConfirm?: (choice: { applyPrice: boolean; applyMinStay: boolean }) => void;
+  onEditSyncScope?: () => void;
   onFloorChange: (v: number) => void;
   onCeilingChange: (v: number) => void;
   onApplyRecoBounds: () => void;
-  onModeChange: (m: PricingMode) => void;
+  onActiveModeChange: (modeId: string) => void;
+  onModeToggle: (modeId: string, enabled: boolean) => void;
+  onAddCustomMode: () => void;
+  onUpdateCustomMode: (modeId: string, patch: Partial<Pick<PricingModeDef, 'label' | 'multiplier'>>) => void;
+  onDeleteCustomMode: (modeId: string) => void;
+  onMinStayDeltaChange: (v: number) => void;
+  onMinStayPlancherChange: (v: number) => void;
+  onModeEnabledChange: (enabled: boolean) => void;
   onAddEvent: () => void;
+  onEventModalClose?: () => void;
+  onEventSave?: (event: PricingEvent) => void | Promise<void>;
   onEditEvent: (id: string) => void;
   onDeleteEvent: (id: string) => void;
   onAcceptSuggestion: (id: string) => void;
   onYearChange?: (year: number) => void;
   onApplyToOps: () => void | Promise<void>;
-  onExpandDay: (date: string) => Promise<{ factors: PriceFactor[]; finalPrice: number; competitorsDay: CompListing[] }>;
+  onExpandDay: (date: string) => Promise<{
+    factors: PriceFactor[];
+    finalPrice: number;
+    finalMinStay: number;
+    marketMinNights: number;
+    minStayFactors: Array<{ key: string; label: string; sub?: string; nights: number; kind: string }>;
+    competitorsDay: CompListing[];
+  }>;
   pilotPreviewLoading?: boolean;
   pilotApplyLoading?: boolean;
   pilotApplySummary?: string | null;
@@ -96,16 +143,25 @@ export interface BienViewProps {
 export default function BienView(props: BienViewProps) {
   const {
     listing, provenance, hasTtm, hasL90d, hasPotentialProd, hasMarketProd, hasCalendarProd,
-    calendarFromAirroi, calendarFromCache, calendarAirroiError, potentialHint, hasCompsProd,
+    calendarFromAirroi, calendarFromCache, calendarUsesPilotPreview, calendarHasEventOverlay,
+    calendarUsesRolling365, eventsCount, calendarAirroiError, airroiCalendarDaysCount,
+    potentialHint, hasCompsProd,
     performance, market, aiEnabled,
-    floor, ceiling, mode, events, suggestions,
-    calendarYear, calendarDays, calendarYearOptions,
+    floor, ceiling, mode, activeModeId, pricingModes, minStayDelta, minStayPlancher, modeEnabled,
+    applyPrice, applyMinStay, scopeModalOpen, scopeModalEdit, scopeSaving, scopeSaveError,
+    configSaveStatus, events, suggestions,
+    eventModalOpen, editingEventId,
+    calendarYear, calendarDays, calendarMarketDays, calendarYearOptions,
     compsMarketStats, selfVsComps, hasCompsMarket,
     seasonality, pacing, supplyGrowth,
     compMapPins, bienMapPosition, compRows,
     estimatedRevenueMad, estimatedRevenueLiftPct,
-    onToggleAi, onFloorChange, onCeilingChange, onApplyRecoBounds,
-    onModeChange, onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
+    onToggleAi, onScopeModalClose, onScopeModalConfirm, onEditSyncScope,
+    onFloorChange, onCeilingChange, onApplyRecoBounds,
+    onActiveModeChange, onModeToggle, onAddCustomMode, onUpdateCustomMode, onDeleteCustomMode,
+    onMinStayDeltaChange, onMinStayPlancherChange, onModeEnabledChange,
+    onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
+    onEventModalClose, onEventSave,
     onYearChange, onApplyToOps, onExpandDay,
     pilotPreviewLoading, pilotApplyLoading, pilotApplySummary, pilotApplyError,
   } = props;
@@ -115,6 +171,11 @@ export default function BienView(props: BienViewProps) {
   /* ─── Modal G7 state ─── */
   const [g7Day, setG7Day] = useState<CalendarDay | null>(null);
   const [g7Factors, setG7Factors] = useState<PriceFactor[]>([]);
+  const [g7MinStayFactors, setG7MinStayFactors] = useState<
+    Array<{ key: string; label: string; sub?: string; nights: number; kind: string }>
+  >([]);
+  const [g7FinalMinStay, setG7FinalMinStay] = useState(1);
+  const [g7MarketMinNights, setG7MarketMinNights] = useState(1);
   const [g7CompsDay, setG7CompsDay] = useState<CompListing[]>([]);
   const [g7Loading, setG7Loading] = useState(false);
 
@@ -124,6 +185,9 @@ export default function BienView(props: BienViewProps) {
     try {
       const result = await onExpandDay(d.date);
       setG7Factors(result.factors);
+      setG7MinStayFactors(result.minStayFactors);
+      setG7FinalMinStay(result.finalMinStay);
+      setG7MarketMinNights(result.marketMinNights);
       setG7CompsDay(result.competitorsDay);
     } finally {
       setG7Loading(false);
@@ -165,9 +229,7 @@ export default function BienView(props: BienViewProps) {
           </Typography>
           <Stack
             direction="row"
-            alignItems="center"
-            gap={0.75}
-            sx={{ fontSize: 12, color: T.text3, mt: 0.25, flexWrap: 'wrap' }}
+            sx={{ alignItems: 'center', gap: 0.75,  fontSize: 12, color: T.text3, mt: 0.25, flexWrap: 'wrap' }}
           >
             📍{' '}
             {[listing.district, listing.city].filter((x) => x && x !== '—').join(', ') ||
@@ -184,7 +246,7 @@ export default function BienView(props: BienViewProps) {
               </Box>
             )}
           </Stack>
-          <Stack direction="row" gap={1.5} sx={{
+          <Stack direction="row" sx={{ gap: 1.5, 
             mt: 0.625, fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace',
           }}>
             <span>🛏 {listing.bedrooms} chambres</span>
@@ -192,14 +254,25 @@ export default function BienView(props: BienViewProps) {
             {listing.amenities.slice(0, 3).map((a, i) => <span key={i}>{a}</span>)}
           </Stack>
         </Box>
-        <Button onClick={() => onToggleAi(!aiEnabled)} sx={{
+        <Box
+          role="button"
+          tabIndex={0}
+          onClick={() => onToggleAi(!aiEnabled)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onToggleAi(!aiEnabled);
+            }
+          }}
+          sx={{
           flex: '0 0 auto',
           display: 'flex', alignItems: 'center', gap: 1.5, p: '8px 14px',
+          cursor: 'pointer',
           background: aiEnabled
             ? `linear-gradient(135deg, ${T.goldTint}, ${T.bg1})`
             : T.bg2,
           border: `1px solid ${aiEnabled ? T.gold : T.border}`,
-          borderRadius: 1.5, textTransform: 'none',
+          borderRadius: 1.5,
           animation: aiEnabled ? 'sj-pulseGold 2.4s infinite' : undefined,
         }}>
           <Box sx={{
@@ -220,9 +293,33 @@ export default function BienView(props: BienViewProps) {
             <Typography sx={{
               fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace',
               textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700,
-            }}>{aiEnabled ? 'Pricing dynamique actif' : 'Désactivé'}</Typography>
+            }}>{aiEnabled ? 'Sync auto ON (cron + snapshot)' : 'Sync auto OFF — écran inchangé'}</Typography>
+            {aiEnabled ? (
+              <Stack direction="row" sx={{ gap: 0.75,  mt: 0.5, flexWrap: 'wrap' }}>
+                <SyncScopeChip label="Prix" active={applyPrice} />
+                <SyncScopeChip label="Min stay" active={applyMinStay} inactiveColor="#d32f2f" />
+                {onEditSyncScope ? (
+                  <Typography
+                    component="span"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditSyncScope();
+                    }}
+                    sx={{
+                      cursor: 'pointer',
+                      fontSize: 10,
+                      color: T.goldDeep,
+                      fontWeight: 700,
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Modifier
+                  </Typography>
+                ) : null}
+              </Stack>
+            ) : null}
           </Box>
-        </Button>
+        </Box>
         <Box sx={{
           flex: '0 0 auto',
           fontSize: 10.5, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
@@ -274,45 +371,72 @@ export default function BienView(props: BienViewProps) {
         />
       </Section>
 
-      {/* ── Section 3 ── */}
-      {aiEnabled && (
-        <Section
-          num="03"
-          title="Configurez votre pricing"
-          sub="Bornes, mode d'agressivité, événements"
-          sources={[
-            { kind: floor > 0 ? 'prod' : 'empty', label: 'Bornes' },
-            { kind: 'empty', label: 'Événements VIDE' },
-          ]}
-        >
-          <PricingControls
-            floor={floor} ceiling={ceiling}
-            floorRange={[500, 3000]} ceilingRange={[1500, 8000]}
-            recoFloor={market.recoBounds?.floor ?? 0} recoCeiling={market.recoBounds?.ceiling ?? 0}
-            mode={mode}
-            events={events} suggestions={suggestions}
-            hasBoundsProd={floor > 0 && ceiling > 0}
-            estimatedRevenue={estimatedRevenueMad}
-            estimatedRevenueLiftPct={estimatedRevenueLiftPct}
-            onFloorChange={onFloorChange} onCeilingChange={onCeilingChange}
-            onApplyRecoBounds={onApplyRecoBounds} onModeChange={onModeChange}
-            onAddEvent={onAddEvent} onEditEvent={onEditEvent}
-            onDeleteEvent={onDeleteEvent} onAcceptSuggestion={onAcceptSuggestion}
-          />
-        </Section>
-      )}
+      {/* ── Section 3 — toujours visible (AI OFF = pas de sync auto seulement) ── */}
+      <Section
+        num="03"
+        title="Configurez votre pricing"
+        sub={
+          configSaveStatus === 'saving'
+            ? 'Enregistrement automatique…'
+            : configSaveStatus === 'saved'
+              ? 'Modifications enregistrées (auto-save ~1s)'
+              : configSaveStatus === 'error'
+                ? 'Erreur enregistrement — réessayez ou activez Sojori AI'
+                : 'Bornes, modes, min stay, events — sauvegarde auto après chaque réglage'
+        }
+        sources={[
+          { kind: floor > 0 ? 'prod' : 'empty', label: 'Bornes' },
+          { kind: events.length > 0 ? 'prod' : 'empty', label: events.length ? `${events.length} event(s)` : 'Événements' },
+        ]}
+      >
+        <PricingControls
+          floor={floor} ceiling={ceiling}
+          floorRange={[500, 3000]} ceilingRange={[1500, 8000]}
+          recoFloor={market.recoBounds?.floor ?? 0} recoCeiling={market.recoBounds?.ceiling ?? 0}
+          pricingModes={pricingModes}
+          activeModeId={activeModeId}
+          modeEnabled={modeEnabled}
+          minStaySyncActive={aiEnabled && applyMinStay}
+          minStayDelta={minStayDelta}
+          minStayPlancher={minStayPlancher}
+          events={events} suggestions={suggestions}
+          hasBoundsProd={floor > 0 && ceiling > 0}
+          estimatedRevenue={estimatedRevenueMad}
+          estimatedRevenueLiftPct={estimatedRevenueLiftPct}
+          onFloorChange={onFloorChange} onCeilingChange={onCeilingChange}
+          onMinStayDeltaChange={onMinStayDeltaChange}
+          onMinStayPlancherChange={onMinStayPlancherChange}
+          onModeEnabledChange={onModeEnabledChange}
+          onApplyRecoBounds={onApplyRecoBounds}
+          onActiveModeChange={onActiveModeChange}
+          onModeToggle={onModeToggle}
+          onAddCustomMode={onAddCustomMode}
+          onUpdateCustomMode={onUpdateCustomMode}
+          onDeleteCustomMode={onDeleteCustomMode}
+          onAddEvent={onAddEvent} onEditEvent={onEditEvent}
+          onDeleteEvent={onDeleteEvent} onAcceptSuggestion={onAcceptSuggestion}
+        />
+      </Section>
 
       {/* ── Section 4 — toujours visible si snapshot / calendrier (même AI OFF) ── */}
       {(hasCalendarProd || provenance.hasAirroiSnapshot || calendarDays.length > 0) && (
         <Section
           num="04"
           title={
-            calendarFromAirroi
-              ? 'Suggestion de prix marché'
-              : 'Calendrier de recommandations'
+            calendarUsesPilotPreview
+              ? 'Calendrier pilote Sojori'
+              : calendarHasEventOverlay
+                ? 'Marché + events (aperçu)'
+                : calendarFromAirroi
+                  ? 'Suggestion de prix marché'
+                  : 'Calendrier de recommandations'
           }
           sub={
-            calendarFromAirroi
+            calendarUsesPilotPreview
+              ? `${calendarDays.length} jours · pilote v2 (modes, bornes${(eventsCount ?? 0) > 0 ? ', events' : ''}) · courbe 365j`
+              : calendarHasEventOverlay
+                ? `${calendarDays.length} j · events en orange sur la courbe · preview pilote en cours…`
+                : calendarFromAirroi
               ? `${calendarDays.length} jours · courbe + grille à partir du mois courant (365 j futurs)`
               : pilotPreviewLoading
                 ? 'Simulation pilote v2…'
@@ -323,7 +447,13 @@ export default function BienView(props: BienViewProps) {
                     : '365 jours · snapshot marché requis (⟳ sur cette fiche)'
           }
           sources={[
-            calendarFromAirroi
+            calendarUsesPilotPreview || calendarHasEventOverlay
+              ? {
+                  kind: 'prod',
+                  label: (eventsCount ?? 0) > 0 ? 'Pilote + events' : 'Pilote v2',
+                  tooltip: 'Preview mixEngine · jours event = prix forcé (orange)',
+                }
+              : calendarFromAirroi
               ? { kind: 'prod', label: 'Prix/jour', tooltip: 'future/rates snapshot · fenêtre glissante 365j' }
               : calendarFromCache || pilotPreviewLoading
                 ? { kind: 'prod', label: 'Pilote v2', tooltip: 'POST preview / apply' }
@@ -337,20 +467,60 @@ export default function BienView(props: BienViewProps) {
           ) : null}
           <YearlyCalendar
             days={calendarDays}
+            compareMarketDays={calendarMarketDays}
             compactHeader
-            pricingSource={calendarFromAirroi ? 'airroi' : 'sojori'}
+            pricingSource={
+              calendarUsesPilotPreview || calendarHasEventOverlay ? 'sojori' : calendarFromAirroi ? 'airroi' : 'sojori'
+            }
             applyLoading={pilotApplyLoading}
             windowMode={
-              (calendarFromAirroi ? 'rolling365' : 'calendarYear') as CalendarWindowMode
+              (calendarUsesRolling365 ? 'rolling365' : 'calendarYear') as CalendarWindowMode
             }
             year={calendarYear}
             yearOptions={calendarFromCache && !calendarFromAirroi ? calendarYearOptions : undefined}
-            showApplyButton={aiEnabled && !calendarFromAirroi}
-            sourceHint={
-              calendarFromAirroi
-                ? 'Tarifs journaliers suggérés · 1 prix/jour (USD→MAD ×10) · couleurs bas/moyen/haut = tertiles · survol = aperçu'
-                : calendarFromCache
-                  ? 'Tarifs Sojori mixEngine — vue par année civile · clic = Justification G7'
+            showApplyButton={!calendarFromAirroi}
+            priceSyncActive={aiEnabled && applyPrice}
+            minStaySyncActive={aiEnabled && applyMinStay}
+            sourceHint={(() => {
+              const snap = provenance.snapshotAt
+                ? new Date(provenance.snapshotAt).toLocaleString('fr-FR', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  })
+                : null;
+              const snapDays = airroiCalendarDaysCount ?? 0;
+              if (calendarUsesPilotPreview) {
+                return [
+                  'Deux courbes : bleu pointillé = AirROI brut (snapshot), or = pilote Sojori (preview live).',
+                  snap ? `Snapshot du ${snap}.` : '',
+                  snapDays ? `${snapDays} j avec tarif marché dans future/rates.` : '',
+                  'Pilote = modes + bornes + events — non écrit au calendrier ops sans « Appliquer ».',
+                ]
+                  .filter(Boolean)
+                  .join(' ');
+              }
+              if (calendarHasEventOverlay) {
+                return `Snapshot marché${snap ? ` (${snap})` : ''} + events en orange (aperçu local, pas encore appliqué).`;
+              }
+              if (calendarFromAirroi) {
+                return [
+                  'Lecture seule du snapshot AirROI (future/rates) — pas le calendrier ops Sojori.',
+                  snap ? `Dernier refresh : ${snap}.` : '',
+                  'USD→MAD ×10 · couleurs = tertiles bas/moyen/haut sur la fenêtre affichée.',
+                ]
+                  .filter(Boolean)
+                  .join(' ');
+              }
+              if (calendarFromCache) {
+                return 'Tarifs Sojori mixEngine — vue par année civile · clic = Justification G7';
+              }
+              return undefined;
+            })()}
+            sourceLinkLabel={
+              calendarUsesPilotPreview || (calendarHasEventOverlay && aiEnabled)
+                ? 'Source pilote Sojori ⓘ'
+                : calendarFromAirroi
+                  ? 'Source marché (AirROI) ⓘ'
                   : undefined
             }
             emptyHint={
@@ -428,7 +598,7 @@ export default function BienView(props: BienViewProps) {
       <Section
         num="07"
         title={`Vos ${compRows.length - 1} concurrents directs`}
-        sub="Comps premium · drill-down"
+        sub="Comparables snapshot · tri colonnes · lien Airbnb si ID connu · carte §06"
         sources={[
           hasCompsProd || compRows.length > 0
             ? { kind: 'prod', label: 'Ligne bien (snapshot)' }
@@ -439,16 +609,67 @@ export default function BienView(props: BienViewProps) {
       </Section>
 
       {/* ── Modale G7 ── */}
+      <EventEditorModal
+        open={Boolean(eventModalOpen)}
+        initial={editingEventId ? events.find((e) => e.id === editingEventId) ?? null : null}
+        onClose={() => onEventModalClose?.()}
+        onSave={(ev) => void onEventSave?.(ev)}
+      />
+
+      <DynamicPriceScopeModal
+        open={Boolean(scopeModalOpen)}
+        editMode={scopeModalEdit}
+        saving={scopeSaving}
+        errorMessage={scopeSaveError}
+        listingName={listing.name}
+        initialApplyPrice={applyPrice}
+        initialApplyMinStay={applyMinStay}
+        onClose={() => onScopeModalClose?.()}
+        onConfirm={(c) => void onScopeModalConfirm?.(c)}
+      />
+
       <JustificationModalG7
         open={!!g7Day}
         date={g7Day?.date || ''}
         factors={g7Factors}
+        minStayFactors={g7MinStayFactors}
+        finalMinStay={g7FinalMinStay}
+        marketMinNights={g7MarketMinNights}
+        loading={g7Loading}
         comps={g7CompsDay}
         total={g7Day?.recommendedPrice || 0}
         onClose={() => setG7Day(null)}
         onApply={() => setG7Day(null)}
         onEditManual={() => setG7Day(null)}
       />
+    </Box>
+  );
+}
+
+function SyncScopeChip({
+  label,
+  active,
+  inactiveColor = T.text3,
+}: {
+  label: string;
+  active: boolean;
+  inactiveColor?: string;
+}) {
+  return (
+    <Box
+      sx={{
+        fontSize: 9.5,
+        fontWeight: 800,
+        fontFamily: '"Geist Mono", monospace',
+        px: 0.625,
+        py: 0.125,
+        borderRadius: '99px',
+        bgcolor: active ? 'rgba(46,125,50,0.12)' : 'rgba(211,47,47,0.10)',
+        color: active ? T.success : inactiveColor,
+        border: `1px solid ${active ? T.success : inactiveColor}`,
+      }}
+    >
+      {label} {active ? '✓' : '✗'}
     </Box>
   );
 }
@@ -480,8 +701,8 @@ function Section({
         animation: 'sj-fadeIn 0.5s both',
       }}
     >
-      <Stack gap={1} sx={{ mb: 2, maxWidth: 1380, mx: 'auto', width: '100%' }}>
-        <Stack direction="row" alignItems="center" gap={1.25} sx={{ minWidth: 0 }}>
+      <Stack sx={{ gap: 1,  mb: 2, maxWidth: 1380, mx: 'auto', width: '100%' }}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25,  minWidth: 0 }}>
           <Box
             sx={{
               width: 28,

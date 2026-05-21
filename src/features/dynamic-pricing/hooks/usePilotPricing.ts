@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PricingMode } from '../bien/PricingControls';
-import type { PricingEvent } from '../bien/PricingControls';
+import type { PricingEvent, PricingMode, PricingModeDef } from '../bien/PricingControls';
 import type { CalendarDay } from '../bien/YearlyCalendar';
 import type { PriceFactor } from '../_tokens';
 import {
@@ -12,49 +11,101 @@ import {
   type PilotPricingConfigDto,
   type PilotPreviewDay,
 } from '../../../services/dynamicPricingApi';
-import { mapG7FactorsToPriceFactors, mapPilotDayToCalendar } from '../utils/pilotPricingMappers';
+import {
+  mapG7FactorsToPriceFactors,
+  mapMinStayFactorsToView,
+  mapPilotDayToCalendar,
+  type MinStayFactorView,
+} from '../utils/pilotPricingMappers';
+
+const PRESET_MODES: PricingMode[] = ['prudent', 'equilibre', 'agressif'];
+
+function legacyModeFromActive(activeModeId: string, fallback: PricingMode): PricingMode {
+  return PRESET_MODES.includes(activeModeId as PricingMode)
+    ? (activeModeId as PricingMode)
+    : fallback;
+}
 
 function buildConfigPayload(
-  mode: PricingMode,
+  activeModeId: string,
+  pricingModes: PricingModeDef[],
+  legacyMode: PricingMode,
   floor: number,
   ceiling: number,
   enabled: boolean,
   events: PricingEvent[],
+  minStayDelta: number,
+  minStayPlancher: number,
+  modeEnabled: boolean,
+  applyPrice: boolean,
+  applyMinStay: boolean,
 ): Partial<PilotPricingConfigDto> {
   return {
     enabled,
-    mode,
+    applyPrice,
+    applyMinStay: applyPrice ? applyMinStay : false,
+    modeEnabled,
+    mode: legacyModeFromActive(activeModeId, legacyMode),
+    activeModeId,
+    modes: pricingModes,
     floorNormal: floor,
     ceiling,
     floorAggressive: Math.round(floor * 0.7),
     lastMinuteEnabled: true,
     lastMinuteWindowDays: 7,
-    minStayDelta: 0,
-    minStayPlancher: 1,
-    events: events.map((e) => ({
-      _id: e.id,
-      label: e.name,
-      emoji: e.emoji,
-      startDate: e.dateRange.slice(0, 10),
-      endDate: e.dateRange.slice(0, 10),
-      eventFloorMad: e.fixedPrice,
-      minNightsOverride: e.minNights > 0 ? e.minNights : undefined,
-    })),
+    minStayDelta,
+    minStayPlancher,
+    events: events.map((e) => {
+      const parts = e.dateRange.split('→').map((s) => s.trim());
+      const startDate = (parts[0] ?? e.dateRange).slice(0, 10);
+      const endDate = (parts[1] ?? parts[0] ?? e.dateRange).slice(0, 10);
+      return {
+        _id: e.id,
+        label: e.name,
+        emoji: e.emoji,
+        startDate,
+        endDate,
+        eventFloorMad: e.fixedPrice,
+        minNightsOverride: e.minNights > 0 ? e.minNights : undefined,
+      };
+    }),
   };
 }
 
 export function usePilotPricing(options: {
   listingId: string | undefined;
   hasAirroiSnapshot: boolean;
-  mode: PricingMode;
+  activeModeId: string;
+  pricingModes: PricingModeDef[];
+  legacyMode: PricingMode;
   floor: number | null;
   ceiling: number | null;
   aiEnabled: boolean;
   events: PricingEvent[];
+  minStayDelta: number;
+  minStayPlancher: number;
+  modeEnabled: boolean;
+  applyPrice: boolean;
+  applyMinStay: boolean;
   calendarYear: number;
 }) {
-  const { listingId, hasAirroiSnapshot, mode, floor, ceiling, aiEnabled, events, calendarYear } =
-    options;
+  const {
+    listingId,
+    hasAirroiSnapshot,
+    activeModeId,
+    pricingModes,
+    legacyMode,
+    floor,
+    ceiling,
+    aiEnabled,
+    events,
+    minStayDelta,
+    minStayPlancher,
+    modeEnabled,
+    applyPrice,
+    applyMinStay,
+    calendarYear,
+  } = options;
 
   const [pilotReady, setPilotReady] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -63,6 +114,37 @@ export function usePilotPricing(options: {
   const [hasSojoriPreview, setHasSojoriPreview] = useState(false);
   const [lastApplySummary, setLastApplySummary] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const configPayload = useCallback(() => {
+    if (floor == null || ceiling == null) return null;
+    return buildConfigPayload(
+      activeModeId,
+      pricingModes,
+      legacyMode,
+      floor,
+      ceiling,
+      aiEnabled,
+      events,
+      minStayDelta,
+      minStayPlancher,
+      modeEnabled,
+      applyPrice,
+      applyMinStay,
+    );
+  }, [
+    activeModeId,
+    pricingModes,
+    legacyMode,
+    floor,
+    ceiling,
+    aiEnabled,
+    events,
+    minStayDelta,
+    minStayPlancher,
+    modeEnabled,
+    applyPrice,
+    applyMinStay,
+  ]);
 
   const loadConfig = useCallback(async () => {
     if (!listingId) return;
@@ -79,17 +161,15 @@ export function usePilotPricing(options: {
   }, [listingId]);
 
   const runPreview = useCallback(async () => {
-    if (!listingId || !hasAirroiSnapshot || floor == null || ceiling == null) {
+    const payload = configPayload();
+    if (!listingId || !hasAirroiSnapshot || !aiEnabled || !payload) {
       setPreviewDays([]);
       setHasSojoriPreview(false);
       return;
     }
     setPreviewLoading(true);
     try {
-      const res = await previewPilotPricing(
-        listingId,
-        buildConfigPayload(mode, floor, ceiling, aiEnabled, events),
-      );
+      const res = await previewPilotPricing(listingId, payload);
       if (res.data?.success && res.data.days?.length) {
         const days = res.data.days
           .filter((d) => d.finalPriceMad > 0 || d.status === 'blocked')
@@ -104,7 +184,7 @@ export function usePilotPricing(options: {
     } finally {
       setPreviewLoading(false);
     }
-  }, [listingId, hasAirroiSnapshot, mode, floor, ceiling, aiEnabled, events]);
+  }, [listingId, hasAirroiSnapshot, aiEnabled, configPayload]);
 
   useEffect(() => {
     if (!listingId) return;
@@ -113,17 +193,22 @@ export function usePilotPricing(options: {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!listingId || !hasAirroiSnapshot || floor == null || ceiling == null) return;
+    if (!aiEnabled || !listingId || !hasAirroiSnapshot || floor == null || ceiling == null) {
+      setPreviewDays([]);
+      setHasSojoriPreview(false);
+      return;
+    }
     debounceRef.current = setTimeout(() => {
       void runPreview();
     }, 700);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [listingId, hasAirroiSnapshot, mode, floor, ceiling, aiEnabled, events, runPreview]);
+  }, [aiEnabled, listingId, hasAirroiSnapshot, configPayload, runPreview]);
 
   const applyToCalendar = useCallback(async () => {
-    if (!listingId || floor == null || ceiling == null) {
+    const payload = configPayload();
+    if (!listingId || !payload) {
       throw new Error('Bornes prix requises');
     }
     if (!hasAirroiSnapshot) {
@@ -131,12 +216,9 @@ export function usePilotPricing(options: {
     }
     setApplyLoading(true);
     try {
-      await savePilotConfig(
-        listingId,
-        buildConfigPayload(mode, floor, ceiling, true, events),
-      );
+      await savePilotConfig(listingId, { ...payload, enabled: true });
       const res = await applyPilotPricing(listingId, {
-        config: buildConfigPayload(mode, floor, ceiling, true, events),
+        config: { ...payload, enabled: true },
         triggerSource: 'orchestrator-ui',
       });
       if (!res.data?.success) {
@@ -150,28 +232,62 @@ export function usePilotPricing(options: {
     } finally {
       setApplyLoading(false);
     }
-  }, [listingId, floor, ceiling, mode, aiEnabled, events, hasAirroiSnapshot, runPreview]);
+  }, [listingId, configPayload, hasAirroiSnapshot, runPreview]);
 
   const expandDay = useCallback(
     async (date: string): Promise<{
       factors: PriceFactor[];
       finalPrice: number;
+      finalMinStay: number;
+      marketMinNights: number;
+      minStayFactors: MinStayFactorView[];
       competitorsDay: [];
     }> => {
       if (!listingId) {
-        return { factors: [], finalPrice: 0, competitorsDay: [] };
+        return {
+          factors: [],
+          finalPrice: 0,
+          finalMinStay: 1,
+          marketMinNights: 1,
+          minStayFactors: [],
+          competitorsDay: [],
+        };
       }
       try {
         const res = await fetchDayBreakdown(listingId, date, calendarYear);
         if (res.data?.success && res.data.breakdown) {
+          const b = res.data.breakdown;
           return {
-            factors: mapG7FactorsToPriceFactors(res.data.breakdown.factors),
+            factors: mapG7FactorsToPriceFactors(b.factors),
             finalPrice: res.data.finalPriceMad,
+            finalMinStay: b.finalMinStay ?? 1,
+            marketMinNights: b.marketMinNights ?? 1,
+            minStayFactors: mapMinStayFactorsToView(b.minStayFactors ?? []),
             competitorsDay: [],
           };
         }
       } catch {
-        /* fallback preview day */
+        /* fallback preview */
+      }
+      const payload = configPayload();
+      if (payload) {
+        try {
+          const preview = await previewPilotPricing(listingId, payload);
+          const row = preview.data?.days?.find((d) => d.date === date);
+          if (row?.breakdown) {
+            const b = row.breakdown;
+            return {
+              factors: mapG7FactorsToPriceFactors(b.factors),
+              finalPrice: row.finalPriceMad,
+              finalMinStay: b.finalMinStay ?? row.minStay ?? 1,
+              marketMinNights: b.marketMinNights ?? 1,
+              minStayFactors: mapMinStayFactorsToView(b.minStayFactors ?? []),
+              competitorsDay: [],
+            };
+          }
+        } catch {
+          /* ignore */
+        }
       }
       const day = previewDays.find((d) => d.date === date);
       return {
@@ -179,7 +295,7 @@ export function usePilotPricing(options: {
           ? [
               {
                 key: 'base',
-                label: 'Prix Sojori pilote',
+                label: 'Prix pilote',
                 sub: date,
                 value: day.recommendedPrice,
                 kind: 'base' as const,
@@ -187,10 +303,13 @@ export function usePilotPricing(options: {
             ]
           : [],
         finalPrice: day?.recommendedPrice ?? 0,
+        finalMinStay: 1,
+        marketMinNights: 1,
+        minStayFactors: [],
         competitorsDay: [],
       };
     },
-    [listingId, calendarYear, previewDays],
+    [listingId, calendarYear, previewDays, configPayload],
   );
 
   return {
@@ -204,5 +323,6 @@ export function usePilotPricing(options: {
     applyToCalendar,
     expandDay,
     loadConfig,
+    buildConfigPayload: configPayload,
   };
 }

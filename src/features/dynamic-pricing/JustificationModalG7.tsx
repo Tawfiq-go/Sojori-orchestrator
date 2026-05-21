@@ -8,11 +8,23 @@ import CloseIcon from '@mui/icons-material/Close';
 import { T } from './_tokens';
 import type { PriceFactor, CompListing } from './_tokens';
 
+export interface MinStayFactorView {
+  key: string;
+  label: string;
+  sub?: string;
+  nights: number;
+  kind: string;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
-  date?: string;                  // "Vendredi 14 juin 2026"
+  date?: string;
   factors: PriceFactor[];
+  minStayFactors?: MinStayFactorView[];
+  finalMinStay?: number;
+  marketMinNights?: number;
+  loading?: boolean;
   comps: CompListing[];
   total: number;
   onApply?: () => void;
@@ -20,7 +32,18 @@ interface Props {
 }
 
 export default function JustificationModalG7({
-  open, onClose, date, factors, comps, total, onApply, onEditManual,
+  open,
+  onClose,
+  date,
+  factors,
+  minStayFactors = [],
+  finalMinStay = 1,
+  marketMinNights = 1,
+  loading = false,
+  comps,
+  total,
+  onApply,
+  onEditManual,
 }: Props) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth={false}
@@ -34,7 +57,7 @@ export default function JustificationModalG7({
       BackdropProps={{ sx: { background: 'rgba(20,17,10,0.55)', backdropFilter: 'blur(4px)' } }}
     >
       {/* Header noir + gold */}
-      <Stack direction="row" alignItems="center" gap={1.75} sx={{
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1.75, 
         p: '20px 26px', borderBottom: `1px solid ${T.border}`,
         background: 'linear-gradient(135deg, #1a1408, #332b1c)', color: '#fff',
       }}>
@@ -53,7 +76,7 @@ export default function JustificationModalG7({
             Justification du prix
           </Typography>
         </Box>
-        <Stack alignItems="flex-end">
+        <Stack sx={{ alignItems: 'flex-end' }}>
           <Typography sx={{
             fontSize: 10, color: 'rgba(255,255,255,0.55)', fontFamily: '"Geist Mono", monospace',
             textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700,
@@ -76,10 +99,53 @@ export default function JustificationModalG7({
         <Typography sx={{
           fontSize: 10.5, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
           color: T.text3, textTransform: 'uppercase', letterSpacing: '0.08em', mb: 1.75,
-        }}>📊 Décomposition · {factors.length} facteurs</Typography>
+        }}>💰 Prix · {loading ? '…' : `${factors.length} facteur(s)`}</Typography>
 
-        {/* Waterfall */}
-        {factors.map(f => <WaterfallRow key={f.key} factor={f} />)}
+        {loading ? (
+          <Typography sx={{ fontSize: 12, color: T.text3, mb: 2 }}>Chargement breakdown…</Typography>
+        ) : (
+          factors.map((f) => <WaterfallRow key={f.key} factor={f} />)
+        )}
+
+        <Typography sx={{
+          mt: 2.5,
+          mb: 1.25,
+          fontSize: 10.5,
+          fontFamily: '"Geist Mono", monospace',
+          fontWeight: 800,
+          color: T.text3,
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+        }}>
+          🌙 Séjour minimum · base marché {marketMinNights} nuit{marketMinNights > 1 ? 's' : ''}
+        </Typography>
+        {minStayFactors.length > 0 ? (
+          minStayFactors.map((f) => <MinStayRow key={f.key} factor={f} />)
+        ) : (
+          <Typography sx={{ fontSize: 12, color: T.text3, mb: 1 }}>
+            Marché : {marketMinNights} nuit(s) — lancez preview/apply pour le détail.
+          </Typography>
+        )}
+        <Box sx={{
+          display: 'grid',
+          gridTemplateColumns: '200px 1fr 100px',
+          gap: 1.75,
+          alignItems: 'center',
+          py: 0.75,
+          mb: 1.5,
+        }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Min. appliqué</Typography>
+          <Box />
+          <Typography sx={{
+            fontFamily: '"Geist Mono", monospace',
+            fontSize: 16,
+            fontWeight: 800,
+            color: T.goldDeep,
+            textAlign: 'right',
+          }}>
+            {finalMinStay} nuit{finalMinStay > 1 ? 's' : ''}
+          </Typography>
+        </Box>
 
         {/* Total final */}
         <Box sx={{
@@ -118,7 +184,7 @@ export default function JustificationModalG7({
               mt: 2.25, mb: 1.5, fontSize: 10.5, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
               color: T.text3, textTransform: 'uppercase', letterSpacing: '0.08em',
             }}>🏨 Vos {comps.length} concurrents directs ce jour-là</Typography>
-            <Stack gap={0.625}>
+            <Stack sx={{ gap: 0.625 }}>
               {comps.map(c => <CompRow key={c._id} comp={c} />)}
             </Stack>
           </>
@@ -126,7 +192,7 @@ export default function JustificationModalG7({
       </Box>
 
       {/* Footer */}
-      <Stack direction="row" gap={1.25} justifyContent="flex-end" sx={{
+      <Stack direction="row" sx={{ justifyContent: 'flex-end', gap: 1.25, 
         p: '14px 26px', borderTop: `1px solid ${T.border}`, background: T.bg2,
       }}>
         <Button onClick={onEditManual || onClose} sx={{
@@ -183,13 +249,46 @@ function WaterfallRow({ factor }: { factor: PriceFactor }) {
   );
 }
 
+function MinStayRow({ factor }: { factor: MinStayFactorView }) {
+  const accent =
+    factor.kind === 'base' ? T.text : factor.kind === 'plus' ? T.success : T.text2;
+  return (
+    <Box sx={{
+      display: 'grid',
+      gridTemplateColumns: '200px 1fr 100px',
+      gap: 1.75,
+      alignItems: 'center',
+      py: 0.65,
+    }}>
+      <Typography sx={{ fontSize: 12, color: T.text2 }}>
+        <Box component="b" sx={{ color: T.text, fontWeight: 700 }}>{factor.label}</Box>
+        {factor.sub && (
+          <Box component="span" sx={{ display: 'block', fontSize: 10.5, color: T.text3 }}>
+            {factor.sub}
+          </Box>
+        )}
+      </Typography>
+      <Box sx={{ height: 10, bgcolor: T.bg2, borderRadius: 0.5 }} />
+      <Typography sx={{
+        fontFamily: '"Geist Mono", monospace',
+        fontSize: 12.5,
+        fontWeight: 800,
+        textAlign: 'right',
+        color: accent,
+      }}>
+        {factor.nights} nuit{factor.nights > 1 ? 's' : ''}
+      </Typography>
+    </Box>
+  );
+}
+
 function CompRow({ comp }: { comp: CompListing }) {
   return (
-    <Stack direction="row" alignItems="center" gap={1.375} sx={{
+    <Stack direction="row" sx={{ alignItems: 'center', gap: 1.375, 
       p: '9px 12px', background: T.bg2, borderRadius: 1.125,
     }}>
       <Typography sx={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{comp.name}</Typography>
-      <Stack direction="row" gap={1.125} sx={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
+      <Stack direction="row" sx={{ gap: 1.125,  fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
         <span>occ <b style={{ color: T.text }}>{Math.round(comp.occTtm * 100)}%</b></span>
         <span style={{ color: T.gold }}>★ {comp.rating.toFixed(2)}</span>
       </Stack>

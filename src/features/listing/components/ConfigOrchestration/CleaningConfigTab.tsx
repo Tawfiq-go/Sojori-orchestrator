@@ -1,443 +1,595 @@
-// ════════════════════════════════════════════════════════════════════
-// CleaningConfigTab.tsx
-// Configuration conciergerie avec design Claude
-// ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect, useCallback } from 'react';
+// Ménage — 2 onglets : Inclus · Payant (listing API)
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Box, Stack, Typography, CircularProgress } from '@mui/material';
+import { listingsService } from '../../../../services/listingsService';
+import { SOJORI_TOKENS as T, CONFIG_ORCH_FONT } from './types';
 import {
-  Box,
-  Stack,
-  Typography,
-  IconButton,
-  TextField,
-  Switch,
-  Button,
-  Tooltip,
-  Collapse,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-} from '@mui/material';
+  Card,
+  FormRow,
+  TextArea,
+  TextInput,
+  DayPills,
+  ConfigIntroBar,
+  PillButton,
+  chipActionSx,
+  TYPO,
+} from './SHARED';
 import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
+  AddFrequencyDialog,
+  AddTimeslotDialog,
+  DashedAddButton,
+  TimeslotChip,
+} from '../../../../components/listing/form-v2/components/cleaning/CleaningSlotDialogs';
+import AddIncludedExtraDialog from './AddIncludedExtraDialog';
+import CleaningPaidWhatsAppPreview from './CleaningPaidWhatsAppPreview';
 import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import axios from 'axios';
-import { SOJORI_TOKENS } from './types';
+  PAID_CLEANING_CATALOG,
+  mapCleaningConfigToListingPatch,
+  mapListingToCleaningConfig,
+  type CleaningListingConfig,
+  type FrequencyTier,
+  type IncludedCleaningExtra,
+  type PaidCleaningServiceType,
+  type TimeSlot,
+} from './cleaningConfigTypes';
 
-const T = SOJORI_TOKENS;
+const SUB_TABS = [
+  { id: 'included', label: 'Ménage inclus', icon: '🎁' },
+  { id: 'paid', label: 'Ménage payant', icon: '💰' },
+] as const;
 
-interface LocalizedString {
-  fr: string;
-  en: string;
-  ar?: string;
-}
-
-interface CleaningType {
-  id: string;
-  label: LocalizedString;
-  description?: LocalizedString;
-  icon: string;
-  price: number;
-  duration: string;
-  enabled: boolean;
-  order: number;
-}
-
-interface CleaningConfig {
-  enabled: boolean;
-  cleaningTypes: CleaningType[];
-}
-
-const DEFAULT_CLEANING_TYPES: CleaningType[] = [
-  {
-    id: 'standard',
-    label: { fr: 'Ménage standard', en: 'Standard cleaning', ar: 'تنظيف قياسي' },
-    description: { fr: 'Nettoyage complet du logement', en: 'Complete property cleaning', ar: 'تنظيف كامل للسكن' },
-    icon: '🧹',
-    price: 150,
-    duration: '2-3h',
-    enabled: true,
-    order: 0,
-  },
-  {
-    id: 'deep',
-    label: { fr: 'Ménage approfondi', en: 'Deep cleaning', ar: 'تنظيف عميق' },
-    description: { fr: 'Nettoyage en profondeur', en: 'Deep cleaning', ar: 'تنظيف شامل' },
-    icon: '✨',
-    price: 300,
-    duration: '4-5h',
-    enabled: true,
-    order: 1,
-  },
-];
+type SubTab = (typeof SUB_TABS)[number]['id'];
 
 interface Props {
   listingId: string;
   ownerId?: string;
+  listingValues?: Record<string, unknown>;
+  onListingPatch?: (patch: Record<string, unknown>) => void;
 }
 
-export default function CleaningConfigTab({ listingId }: Props) {
-  const [config, setConfig] = useState<CleaningConfig>({ enabled: true, cleaningTypes: DEFAULT_CLEANING_TYPES });
-  const [loading, setLoading] = useState(true);
+export default function CleaningConfigTab({
+  listingId,
+  listingValues = {},
+  onListingPatch,
+}: Props) {
+  const [sub, setSub] = useState<SubTab>('included');
+  const [config, setConfig] = useState<CleaningListingConfig | null>(null);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const [freqDialog, setFreqDialog] = useState(false);
+  const [cleanDialog, setCleanDialog] = useState(false);
+  const [paidSlotDialog, setPaidSlotDialog] = useState<string | null>(null);
+  const [extraDialogOpen, setExtraDialogOpen] = useState(false);
+  const configRef = useRef<CleaningListingConfig | null>(null);
+  const hydratedRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    fetchConfig();
+    hydratedRef.current = false;
+    dirtyRef.current = false;
   }, [listingId]);
 
-  const fetchConfig = async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get(`/api/v1/listing/internal/${listingId}/cleaning-config`);
-      const data = res.data?.data;
-      if (data && data.cleaningTypes && data.cleaningTypes.length > 0) {
-        setConfig(data);
-      } else {
-        setConfig({ enabled: true, cleaningTypes: DEFAULT_CLEANING_TYPES });
-      }
-    } catch (err: any) {
-      if (err.response?.status === 404) {
-        setConfig({ enabled: true, cleaningTypes: DEFAULT_CLEANING_TYPES });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    if (!listingValues || !Object.keys(listingValues).length) return;
+    const mapped = mapListingToCleaningConfig(listingValues);
+    setConfig(mapped);
+    configRef.current = mapped;
+    hydratedRef.current = true;
+  }, [listingValues, listingId]);
 
-  const debouncedSave = useCallback(() => {
+  const patch = useCallback((fn: (c: CleaningListingConfig) => CleaningListingConfig) => {
+    dirtyRef.current = true;
+    setConfig(prev => {
+      if (!prev) return prev;
+      const next = fn(prev);
+      configRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const persist = useCallback(async () => {
+    const cfg = configRef.current;
+    if (!cfg || !listingId) return;
+    const paidExisting = (listingValues.paidCleaningConfig as { enabled?: boolean }) || {};
+    const payload = mapCleaningConfigToListingPatch(cfg, {
+      preservePaidEnabled: paidExisting.enabled !== false,
+    });
     setSavingState('saving');
-    if ((debouncedSave as any)._t) clearTimeout((debouncedSave as any)._t);
-    (debouncedSave as any)._t = setTimeout(async () => {
-      try {
-        await axios.post(`/api/v1/listing/internal/${listingId}/cleaning-config`, config);
-        setSavingState('saved');
-        setTimeout(() => setSavingState('idle'), 2000);
-      } catch (error) {
-        setSavingState('idle');
-      }
-    }, 800);
-  }, [config, listingId]);
+    try {
+      await listingsService.updateListingProperty(listingId, payload);
+      onListingPatch?.(payload);
+      setSavingState('saved');
+    } catch {
+      setSavingState('idle');
+      dirtyRef.current = true;
+    }
+  }, [listingId, onListingPatch, listingValues]);
 
   useEffect(() => {
-    if (!loading) {
-      debouncedSave();
-    }
-  }, [config, loading]);
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setConfig((prev) => {
-        const oldIndex = prev.cleaningTypes.findIndex((s) => s.id === active.id);
-        const newIndex = prev.cleaningTypes.findIndex((s) => s.id === over.id);
-        const reordered = arrayMove(prev.cleaningTypes, oldIndex, newIndex).map((s, i) => ({ ...s, order: i }));
-        return { ...prev, cleaningTypes: reordered };
+    if (!config || !dirtyRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      persist().finally(() => {
+        dirtyRef.current = false;
       });
-    }
-  };
-
-  const addCleaningType = () => {
-    const newType: CleaningType = {
-      id: `cleaning-${Date.now()}`,
-      label: { fr: 'Nouveau type', en: 'New type', ar: 'نوع جديد' },
-      description: { fr: '', en: '', ar: '' },
-      icon: '🧽',
-      price: 0,
-      duration: '',
-      enabled: true,
-      order: config.cleaningTypes.length,
+    }, 800);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-    setConfig((prev) => ({ ...prev, cleaningTypes: [...prev.cleaningTypes, newType] }));
-  };
+  }, [config, persist]);
 
-  const deleteCleaningType = (id: string) => {
-    setConfig((prev) => ({
-      ...prev,
-      cleaningTypes: prev.cleaningTypes.filter((c) => c.id !== id),
-    }));
-  };
-
-  const updateCleaningType = (id: string, updates: Partial<CleaningType>) => {
-    setConfig((prev) => ({
-      ...prev,
-      cleaningTypes: prev.cleaningTypes.map((c) => (c.id === id ? { ...c, ...updates } : c)),
-    }));
-  };
-
-  if (loading) {
+  if (!config || !Object.keys(listingValues).length) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 8 }}>
-        <Typography>Chargement...</Typography>
+      <Box sx={{ p: 4, textAlign: 'center' }}>
+        <CircularProgress size={28} sx={{ color: T.primary }} />
+        <Typography sx={{ mt: 2, ...TYPO.intro }}>Chargement ménage…</Typography>
       </Box>
     );
   }
 
+  const paid = config.paidCleaningConfig;
+
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
-        <Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.01em' }}>
-            🧹 Ménage
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: T.text3, mt: 0.5 }}>
-            Types de ménage proposés aux voyageurs via WhatsApp.
-          </Typography>
-        </Box>
-        <Stack direction="row" alignItems="center" gap={1.5}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-            Activer ménage
-          </Typography>
-          <Switch
-            checked={config.enabled}
-            onChange={(e) => setConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
+    <Box>
+      <ConfigIntroBar saveState={savingState}>
+        Inclus + payant · <b>activation</b> Menu WhatsApp & Orchestration
+      </ConfigIntroBar>
+
+      <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mb: 1.5 }}>
+        {SUB_TABS.map(t => (
+          <Box
+            key={t.id}
+            component="button"
+            type="button"
+            onClick={() => setSub(t.id)}
             sx={{
-              '& .MuiSwitch-switchBase.Mui-checked': { color: T.primary },
-              '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: T.primary },
+              all: 'unset',
+              cursor: 'pointer',
+              px: 1.25,
+              py: 0.65,
+              borderRadius: 1,
+              fontSize: 12.5,
+              fontWeight: 700,
+              letterSpacing: '-0.005em',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.5,
+              ...(sub === t.id
+                ? { bgcolor: T.primaryTint, color: T.primaryDeep, border: `1px solid ${T.primary}` }
+                : { bgcolor: T.bg1, color: T.text2, border: `1px solid ${T.border}` }),
             }}
-          />
-        </Stack>
+          >
+            <span>{t.icon}</span>
+            {t.label}
+          </Box>
+        ))}
       </Stack>
 
-      {/* Status badge */}
-      <Box sx={{
-        display: 'inline-flex',
-        px: 1.5,
-        py: 0.5,
-        borderRadius: 1,
-        bgcolor: savingState === 'saved' ? '#e8f5e9' : savingState === 'saving' ? '#fff3e0' : T.bg2,
-        border: `1px solid ${savingState === 'saved' ? '#4caf50' : savingState === 'saving' ? '#ff9800' : T.border}`,
-        mb: 3,
-      }}>
-        <Typography sx={{ fontSize: 11, fontWeight: 700, color: savingState === 'saved' ? '#2e7d32' : savingState === 'saving' ? '#e65100' : T.text3 }}>
-          {savingState === 'saved' ? '✓ Sauvegardé' : savingState === 'saving' ? '⏳ Sauvegarde...' : 'Aucun changement'}
-        </Typography>
-      </Box>
-
-      {/* Services list */}
-      <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.text3, mb: 1.5 }}>
-        🧽 Types de ménage ({config.cleaningTypes.length} / 15 max)
-      </Typography>
-
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={config.cleaningTypes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <Stack spacing={1.5}>
-            {config.cleaningTypes.map((type) => (
-              <SortableCleaningType
-                key={type.id}
-                type={type}
-                onUpdate={(updates) => updateCleaningType(type.id, updates)}
-                onDelete={() => deleteCleaningType(type.id)}
+      {sub === 'included' && (
+        <>
+          <Card compact icon="🎁" title="Inclus" meta="frequency[] · TS_CLEAN[]">
+            <FormRow compact label="Description" schemaPath="includedCleaningDescription.fr" inSchema>
+              <TextArea
+                rows={2}
+                value={config.includedDescriptionFr}
+                onChange={e => patch(c => ({ ...c, includedDescriptionFr: e.target.value }))}
+                placeholder="Ex. : Ménages inclus selon la durée de votre séjour (voir planning)."
               />
-            ))}
-          </Stack>
-        </SortableContext>
-      </DndContext>
+            </FormRow>
 
-      {/* Add button */}
-      {config.cleaningTypes.length < 10 && (
-        <Button
-          variant="outlined"
-          onClick={addCleaningType}
-          sx={{
-            mt: 2,
-            borderColor: T.border,
-            color: T.text2,
-            '&:hover': { borderColor: T.primary, bgcolor: T.bg2 },
+            <FormRow compact label="Paliers durée" schemaPath="frequency[]" inSchema>
+              <Stack direction="row" gap={1} flexWrap="wrap" useFlexGap>
+                {config.frequency.map((tier, i) => (
+                  <FrequencyChip
+                    key={`${tier.startDay}-${tier.endDay}-${i}`}
+                    tier={tier}
+                    onRemove={() =>
+                      patch(c => ({
+                        ...c,
+                        frequency: c.frequency.filter((_, j) => j !== i),
+                      }))
+                    }
+                  />
+                ))}
+                <DashedAddButton label="+ Palier" onClick={() => setFreqDialog(true)} />
+              </Stack>
+            </FormRow>
+
+            <FormRow compact label="Créneaux" schemaPath="TS_CLEAN[]" inSchema>
+              <Stack direction="row" gap={0.75} flexWrap="wrap" useFlexGap>
+                {config.TS_CLEAN.map((ts, i) => (
+                  <TimeslotChip
+                    key={`${ts.start}-${ts.end}-${i}`}
+                    slot={ts}
+                    onRemove={() =>
+                      patch(c => ({
+                        ...c,
+                        TS_CLEAN: c.TS_CLEAN.filter((_, j) => j !== i),
+                      }))
+                    }
+                  />
+                ))}
+                <DashedAddButton label="+ Créneau" onClick={() => setCleanDialog(true)} />
+              </Stack>
+            </FormRow>
+          </Card>
+
+          <Card compact icon="➕" title="Extras payants" meta="includedCleaningExtras[]">
+            <Stack gap={1}>
+              {config.includedExtras.filter(e => e.enabled).length === 0 && (
+                <Typography sx={{ ...TYPO.caption }}>
+                  Aucun extra — ajoutez depuis la bibliothèque ou créez le vôtre.
+                </Typography>
+              )}
+              {config.includedExtras
+                .filter(e => e.enabled)
+                .map(extra => (
+                  <IncludedExtraRow
+                    key={extra.id}
+                    extra={extra}
+                    onUpdate={updates =>
+                      patch(c => ({
+                        ...c,
+                        includedExtras: c.includedExtras.map(x =>
+                          x.id === extra.id ? { ...x, ...updates } : x,
+                        ),
+                      }))
+                    }
+                    onRemove={() =>
+                      patch(c => ({
+                        ...c,
+                        includedExtras: c.includedExtras.filter(x => x.id !== extra.id),
+                      }))
+                    }
+                  />
+                ))}
+              <DashedAddButton label="+ Ajouter extra" onClick={() => setExtraDialogOpen(true)} />
+            </Stack>
+          </Card>
+        </>
+      )}
+
+      {sub === 'paid' && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 300px' }, gap: 2, alignItems: 'start' }}>
+          <Box>
+          <Card compact icon="💰" title="Payant — règles" meta="paidCleaningConfig">
+            <FormRow compact label="Fréquence" schemaPath="paidCleaningConfig.frequency" inSchema>
+              <Stack direction="row" gap={0.75} flexWrap="wrap">
+                <PillButton
+                  active={paid.frequency === 'all_days'}
+                  onClick={() =>
+                    patch(c => ({
+                      ...c,
+                      paidCleaningConfig: { ...c.paidCleaningConfig, frequency: 'all_days' },
+                    }))
+                  }
+                >
+                  Tous les jours du séjour
+                </PillButton>
+                <PillButton
+                  active={paid.frequency === 'per_week'}
+                  onClick={() =>
+                    patch(c => ({
+                      ...c,
+                      paidCleaningConfig: { ...c.paidCleaningConfig, frequency: 'per_week' },
+                    }))
+                  }
+                >
+                  Par semaine
+                </PillButton>
+              </Stack>
+            </FormRow>
+
+            {paid.frequency === 'per_week' && (
+              <FormRow compact label="Max / semaine" schemaPath="paidCleaningConfig.perWeekCount" inSchema>
+                <Stack direction="row" gap={0.5} alignItems="center">
+                  {[1, 2, 3].map(n => (
+                    <PillButton
+                      key={n}
+                      active={paid.perWeekCount === n}
+                      onClick={() =>
+                        patch(c => ({
+                          ...c,
+                          paidCleaningConfig: { ...c.paidCleaningConfig, perWeekCount: n },
+                        }))
+                      }
+                    >
+                      {n}
+                    </PillButton>
+                  ))}
+                </Stack>
+              </FormRow>
+            )}
+
+            <FormRow compact label="Jours" schemaPath="paidCleaningConfig.availableWeekdays">
+              <DayPills
+                value={paid.availableWeekdays}
+                onChange={days =>
+                  patch(c => ({
+                    ...c,
+                    paidCleaningConfig: { ...c.paidCleaningConfig, availableWeekdays: days },
+                  }))
+                }
+              />
+            </FormRow>
+          </Card>
+
+          <Card compact icon="🧽" title="Types & créneaux" meta="serviceTypes[]">
+            <Stack gap={1}>
+              {paid.serviceTypes.map(svc => (
+                <PaidServiceRow
+                  key={svc.id}
+                  service={svc}
+                  onUpdate={updates =>
+                    patch(c => ({
+                      ...c,
+                      paidCleaningConfig: {
+                        ...c.paidCleaningConfig,
+                        serviceTypes: c.paidCleaningConfig.serviceTypes.map(s =>
+                          s.id === svc.id ? { ...s, ...updates } : s,
+                        ),
+                      },
+                    }))
+                  }
+                  onAddSlot={() => setPaidSlotDialog(svc.id)}
+                  onRemoveSlot={idx =>
+                    patch(c => ({
+                      ...c,
+                      paidCleaningConfig: {
+                        ...c.paidCleaningConfig,
+                        serviceTypes: c.paidCleaningConfig.serviceTypes.map(s =>
+                          s.id === svc.id
+                            ? { ...s, timeslots: s.timeslots.filter((_, j) => j !== idx) }
+                            : s,
+                        ),
+                      },
+                    }))
+                  }
+                />
+              ))}
+            </Stack>
+            <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mt: 1 }}>
+              {PAID_CLEANING_CATALOG.filter(
+                cat => !paid.serviceTypes.some(s => s.id === cat.id),
+              ).map(cat => (
+                <Box
+                  key={cat.id}
+                  component="button"
+                  type="button"
+                  onClick={() =>
+                    patch(c => ({
+                      ...c,
+                      paidCleaningConfig: {
+                        ...c.paidCleaningConfig,
+                        serviceTypes: [
+                          ...c.paidCleaningConfig.serviceTypes,
+                          {
+                            ...cat,
+                            enabled: true,
+                            timeslots: [],
+                            displayOrder: c.paidCleaningConfig.serviceTypes.length,
+                          },
+                        ],
+                      },
+                    }))
+                  }
+                  sx={{
+                    ...chipActionSx(false, { compact: true }),
+                    borderStyle: 'dashed',
+                  }}
+                >
+                  {cat.icon} + {cat.labelFr}
+                </Box>
+              ))}
+            </Stack>
+          </Card>
+          </Box>
+
+          <CleaningPaidWhatsAppPreview serviceTypes={paid.serviceTypes} />
+        </Box>
+      )}
+
+      <AddIncludedExtraDialog
+        open={extraDialogOpen}
+        onClose={() => setExtraDialogOpen(false)}
+        existingIds={config.includedExtras.filter(e => e.enabled).map(e => e.id)}
+        onAdd={item =>
+          patch(c => {
+            const exists = c.includedExtras.find(e => e.id === item.id);
+            if (exists) {
+              return {
+                ...c,
+                includedExtras: c.includedExtras.map(e =>
+                  e.id === item.id ? { ...e, ...item, enabled: true } : e,
+                ),
+              };
+            }
+            return {
+              ...c,
+              includedExtras: [...c.includedExtras, { ...item, enabled: true }],
+            };
+          })
+        }
+      />
+
+      <AddFrequencyDialog
+        open={freqDialog}
+        onClose={() => setFreqDialog(false)}
+        onAdd={(row: FrequencyTier) => patch(c => ({ ...c, frequency: [...c.frequency, row] }))}
+      />
+      <AddTimeslotDialog
+        open={cleanDialog}
+        onClose={() => setCleanDialog(false)}
+        title="Créneau ménage inclus"
+        onAdd={(slot: TimeSlot) => patch(c => ({ ...c, TS_CLEAN: [...c.TS_CLEAN, slot] }))}
+      />
+      {paidSlotDialog && (
+        <AddTimeslotDialog
+          open={Boolean(paidSlotDialog)}
+          onClose={() => setPaidSlotDialog(null)}
+          title="Créneau ménage payant"
+          onAdd={(slot: TimeSlot) => {
+            patch(c => ({
+              ...c,
+              paidCleaningConfig: {
+                ...c.paidCleaningConfig,
+                serviceTypes: c.paidCleaningConfig.serviceTypes.map(s =>
+                  s.id === paidSlotDialog ? { ...s, timeslots: [...s.timeslots, slot] } : s,
+                ),
+              },
+            }));
+            setPaidSlotDialog(null);
           }}
-        >
-          + Ajouter un type de ménage
-        </Button>
+        />
       )}
     </Box>
   );
 }
 
-// ════════════════════════════════════════════════════════════════════
-// SortableCleaningType
-// ════════════════════════════════════════════════════════════════════
-function SortableCleaningType({
-  type,
+function IncludedExtraRow({
+  extra,
   onUpdate,
-  onDelete,
+  onRemove,
 }: {
-  type: CleaningType;
-  onUpdate: (updates: Partial<CleaningType>) => void;
-  onDelete: () => void;
+  extra: IncludedCleaningExtra;
+  onUpdate: (u: Partial<IncludedCleaningExtra>) => void;
+  onRemove: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: type.id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  // Safety check: ensure type has valid structure
-  if (!type.label || !type.label.fr) {
-    return null;
-  }
-
   return (
     <Box
-      ref={setNodeRef}
-      style={style}
       sx={{
-        border: `2px solid ${expanded ? T.primary : T.border}`,
-        borderRadius: 1.5,
-        p: 2,
-        bgcolor: '#fff',
-        boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.12)' : 'none',
+        p: 1,
+        borderRadius: 1,
+        border: `1px solid ${T.border}`,
+        bgcolor: T.bg2,
       }}
     >
-      {/* Header */}
-      <Stack direction="row" alignItems="center" gap={1.5}>
+      <Stack direction="row" alignItems="flex-start" gap={1}>
+        <Typography sx={{ fontSize: 20, lineHeight: 1, pt: 0.25 }}>{extra.icon}</Typography>
+        <Box sx={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
+          <TextInput value={extra.labelFr} onChange={e => onUpdate({ labelFr: e.target.value })} />
+          <TextInput
+            type="number"
+            value={extra.price}
+            onChange={e => onUpdate({ price: Number(e.target.value) || 0 })}
+            style={{ maxWidth: 100 }}
+          />
+          <Box sx={{ gridColumn: { sm: '1 / -1' } }}>
+            <TextArea
+              rows={1}
+              value={extra.descriptionFr}
+              onChange={e => onUpdate({ descriptionFr: e.target.value })}
+              placeholder="Description pour le voyageur"
+            />
+          </Box>
+        </Box>
+        <Typography
+          component="button"
+          type="button"
+          onClick={onRemove}
+          sx={{ all: 'unset', cursor: 'pointer', fontSize: 16, color: T.error, lineHeight: 1, px: 0.5 }}
+          title="Retirer"
+        >
+          ✕
+        </Typography>
+      </Stack>
+      <Typography sx={{ ...TYPO.monoHelp, mt: 0.5 }}>
+        {extra.price} MAD · {extra.id}
+      </Typography>
+    </Box>
+  );
+}
+
+function FrequencyChip({ tier, onRemove }: { tier: FrequencyTier; onRemove: () => void }) {
+  return (
+    <Box
+      sx={{
+        p: '6px 10px',
+        border: `1px solid ${T.border}`,
+        borderRadius: 1,
+        bgcolor: T.bg1,
+        minWidth: 100,
+        textAlign: 'center',
+        position: 'relative',
+      }}
+    >
+      <Typography
+        component="button"
+        onClick={onRemove}
+        sx={{ all: 'unset', cursor: 'pointer', position: 'absolute', top: 4, right: 6, fontSize: 12, color: T.text4 }}
+      >
+        ×
+      </Typography>
+      <Typography sx={{ ...TYPO.monoHelp, fontSize: 10.5, color: T.text3 }}>
+        J {tier.startDay}–{tier.endDay}
+      </Typography>
+      <Typography sx={{ fontSize: 18, fontWeight: 700, color: T.primaryDeep, fontFamily: CONFIG_ORCH_FONT.mono, letterSpacing: '-0.02em' }}>
+        {tier.numberOfCleaning}
+      </Typography>
+      <Typography sx={{ ...TYPO.monoHelp, fontSize: 9.5 }}>ménages</Typography>
+    </Box>
+  );
+}
+
+function PaidServiceRow({
+  service,
+  onUpdate,
+  onAddSlot,
+  onRemoveSlot,
+}: {
+  service: PaidCleaningServiceType;
+  onUpdate: (u: Partial<PaidCleaningServiceType>) => void;
+  onAddSlot: () => void;
+  onRemoveSlot: (idx: number) => void;
+}) {
+  return (
+    <Box
+      sx={{
+        p: 1,
+        border: `1px solid ${service.enabled ? T.primary : T.border}`,
+        borderRadius: 1,
+        bgcolor: service.enabled ? T.primaryTint : T.bg2,
+      }}
+    >
+      <Stack direction="row" alignItems="center" gap={1}>
+        <Typography sx={{ fontSize: 18 }}>{service.icon}</Typography>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ ...TYPO.bodyBold, fontSize: 12.5 }} noWrap>{service.labelFr}</Typography>
+        </Box>
+        <Typography sx={{ ...TYPO.price }}>
+          {service.price} MAD · {service.duration}h
+        </Typography>
         <Box
-          {...attributes}
-          {...listeners}
+          component="button"
+          type="button"
+          onClick={() => onUpdate({ enabled: !service.enabled })}
           sx={{
-            cursor: 'grab',
-            color: T.text3,
-            fontSize: 16,
-            '&:active': { cursor: 'grabbing' },
+            all: 'unset',
+            cursor: 'pointer',
+            fontSize: 11,
+            fontWeight: 700,
+            color: service.enabled ? T.success : T.text4,
           }}
         >
-          ⠿
+          {service.enabled ? 'ON' : 'OFF'}
         </Box>
-
-        <Switch
-          checked={type.enabled}
-          onChange={(e) => onUpdate({ enabled: e.target.checked })}
-          size="small"
-          sx={{
-            '& .MuiSwitch-switchBase.Mui-checked': { color: T.primary },
-            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: T.primary },
-          }}
-        />
-
-        <Box sx={{ fontSize: 20, flexShrink: 0 }}>{type.icon}</Box>
-
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontSize: 14, fontWeight: 700 }}>{type.label.fr}</Typography>
-          {type.description && (
-            <Typography sx={{ fontSize: 12, color: T.text3 }}>{type.description.fr}</Typography>
-          )}
-        </Box>
-
-        <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.primary }}>{type.price} MAD</Typography>
-        <Typography sx={{ fontSize: 12, color: T.text3 }}>{type.duration}</Typography>
-
-        <IconButton size="small" onClick={() => setExpanded(!expanded)}>
-          <Box sx={{ fontSize: 18 }}>{expanded ? '▲' : '▼'}</Box>
-        </IconButton>
-
-        <Tooltip title="Supprimer">
-          <IconButton size="small" onClick={onDelete} sx={{ color: '#c62828' }}>
-            ✕
-          </IconButton>
-        </Tooltip>
       </Stack>
-
-      {/* Expanded form */}
-      <Collapse in={expanded}>
-        <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${T.border}` }}>
-          <Stack spacing={2}>
-            {/* Icon */}
-            <TextField
-              size="small"
-              label="Icône (emoji)"
-              value={type.icon}
-              onChange={(e) => onUpdate({ icon: e.target.value })}
-              fullWidth
-            />
-
-            {/* Label FR/EN */}
-            <Box>
-              <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', mb: 0.5 }}>
-                Label
-              </Typography>
-              <Stack spacing={1}>
-                <TextField
-                  size="small"
-                  label="FR"
-                  value={type.label.fr}
-                  onChange={(e) => onUpdate({ label: { ...type.label, fr: e.target.value } })}
-                  fullWidth
-                />
-                <TextField
-                  size="small"
-                  label="EN"
-                  value={type.label.en}
-                  onChange={(e) => onUpdate({ label: { ...type.label, en: e.target.value } })}
-                  fullWidth
-                />
-              </Stack>
-            </Box>
-
-            {/* Description */}
-            <Box>
-              <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', mb: 0.5 }}>
-                Description
-              </Typography>
-              <Stack spacing={1}>
-                <TextField
-                  size="small"
-                  label="FR"
-                  value={type.description?.fr || ''}
-                  onChange={(e) => onUpdate({ description: { ...type.description, fr: e.target.value } as LocalizedString })}
-                  fullWidth
-                />
-                <TextField
-                  size="small"
-                  label="EN"
-                  value={type.description?.en || ''}
-                  onChange={(e) => onUpdate({ description: { ...type.description, en: e.target.value } as LocalizedString })}
-                  fullWidth
-                />
-              </Stack>
-            </Box>
-
-            {/* Prix et durée */}
-            <Stack direction="row" spacing={2}>
-              <TextField
-                size="small"
-                label="Prix (MAD)"
-                type="number"
-                value={type.price}
-                onChange={(e) => onUpdate({ price: Number(e.target.value) })}
-                sx={{ flex: 1 }}
-              />
-              <TextField
-                size="small"
-                label="Durée"
-                value={type.duration}
-                onChange={(e) => onUpdate({ duration: e.target.value })}
-                placeholder="ex: 2-3h"
-                sx={{ flex: 1 }}
-              />
-            </Stack>
-          </Stack>
-        </Box>
-      </Collapse>
+      <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ mt: 1 }}>
+        {service.timeslots.map((ts, i) => (
+          <TimeslotChip key={i} slot={ts} onRemove={() => onRemoveSlot(i)} />
+        ))}
+        <DashedAddButton label="+ Créneau" onClick={onAddSlot} />
+      </Stack>
+      <Stack direction="row" gap={1} sx={{ mt: 1 }}>
+        <TextInput
+          type="number"
+          value={service.price}
+          onChange={e => onUpdate({ price: Number(e.target.value) })}
+          style={{ maxWidth: 100 }}
+        />
+        <Typography sx={{ ...TYPO.monoHelp, alignSelf: 'center' }}>MAD</Typography>
+      </Stack>
     </Box>
   );
 }

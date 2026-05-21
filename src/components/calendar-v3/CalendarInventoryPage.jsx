@@ -20,7 +20,7 @@ export default function CalendarInventoryPage({
 }) {
   const [view, setView] = useState(defaultView);
   const [selectedListingId, setSelectedListingId] = useState(listings[0]?._id);
-  const [selectedColumns, setSelectedColumns] = useState(['availableRoom', 'rate']); // Présélection par défaut
+  const [selectedColumns, setSelectedColumns] = useState(['availableRoom', 'rate', 'minStay']); // Présélection par défaut
   const [pivotDate, setPivotDate] = useState(startDate);
   const [modalCells, setModalCells] = useState(null);
 
@@ -41,7 +41,7 @@ export default function CalendarInventoryPage({
   };
 
   return (
-    <div style={{ padding: '22px 28px 50px', maxWidth: 1500, margin: '0 auto' }}>
+    <div style={{ padding: '22px 40px 50px 40px', maxWidth: '100%', margin: '0 auto', width: '100%', overflow: 'hidden' }}>
       {/* Toolbar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,

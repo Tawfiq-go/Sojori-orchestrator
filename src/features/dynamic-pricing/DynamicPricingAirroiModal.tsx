@@ -415,7 +415,7 @@ export default function DynamicPricingAirroiModal({
                   tooltips carte pour la ville sélectionnée (indépendant de l’onglet portefeuille).
                 </Typography>
 
-                <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap', mb: 1.25 }}>
+                <Stack direction="row" sx={{ gap: 0.75,  flexWrap: 'wrap', mb: 1.25 }}>
                   {MARKET_REFRESH_CITIES.map((city) => {
                     const active = marketRefreshCity === city;
                     return (

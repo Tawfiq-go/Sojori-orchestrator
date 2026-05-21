@@ -3,8 +3,10 @@
 //
 // Compose : MacroKpis · MarketCityBand · PortfolioMap · BulkActionsPanel · PortfolioTable
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Box, Stack, Typography, Skeleton, Tooltip } from '@mui/material';
+import type { PilotPricingConfigDto } from '../../services/dynamicPricingApi';
+import DynamicPriceScopeModal from './bien/DynamicPriceScopeModal';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { T, KEYFRAMES, fmtMADCompact } from './_tokens';
 import type { Listing, PortfolioRow, PortfolioMacro } from './_tokens';
@@ -90,10 +92,13 @@ interface Props {
   loading?: boolean;
   onDrillDown: (listingId: string) => void;
   onBulkAction: (action: BulkAction, selectedIds: string[]) => void;
+  /** Sauvegarde inline config pilote (même schéma que fiche bien) */
+  onPatchPilotConfig?: (listingId: string, partial: Partial<PilotPricingConfigDto>) => Promise<void>;
 }
 
 export default function PortfolioView({
   macro, cityKpis, zoneStats, mapPins, rows, loading, onDrillDown, onBulkAction,
+  onPatchPilotConfig,
   cityScope = null,
   onCityScopeChange,
   marketFromCache = false,
@@ -104,6 +109,32 @@ export default function PortfolioView({
   const [tableTab, setTableTab] = useState<PortfolioTableTab>('operational');
   const [airbnbOnly, setAirbnbOnly] = useState(false);
   const [search, setSearch] = useState('');
+  const [scopeModal, setScopeModal] = useState<{
+    listingId: string;
+    listingName: string;
+    applyPrice: boolean;
+    applyMinStay: boolean;
+  } | null>(null);
+  const [scopeSaving, setScopeSaving] = useState(false);
+  const [scopeSaveError, setScopeSaveError] = useState<string | null>(null);
+
+  const patchWithScopeGate = useCallback(
+    async (listingId: string, partial: Partial<PilotPricingConfigDto>) => {
+      if (!onPatchPilotConfig) return;
+      if (partial.enabled === true && partial.applyPrice === undefined) {
+        const row = rows.find((r) => r.listing._id === listingId);
+        setScopeModal({
+          listingId,
+          listingName: row?.listing.name ?? listingId,
+          applyPrice: row?.pilotConfig?.applyPrice !== false,
+          applyMinStay: row?.pilotConfig?.applyMinStay !== false,
+        });
+        return;
+      }
+      await onPatchPilotConfig(listingId, partial);
+    },
+    [onPatchPilotConfig, rows],
+  );
 
   const scopedRows = useMemo(
     () => rows.filter(r => listingMatchesCityScope(r.listing.city, cityScope)),
@@ -281,6 +312,38 @@ export default function PortfolioView({
         airbnbOnly={airbnbOnly}
         onAirbnbOnlyChange={setAirbnbOnly}
         airbnbConnectedCount={airbnbConnectedCount}
+        onPatchPilotConfig={patchWithScopeGate}
+      />
+
+      <DynamicPriceScopeModal
+        open={Boolean(scopeModal)}
+        saving={scopeSaving}
+        errorMessage={scopeSaveError}
+        listingName={scopeModal?.listingName}
+        initialApplyPrice={scopeModal?.applyPrice}
+        initialApplyMinStay={scopeModal?.applyMinStay}
+        onClose={() => {
+          if (scopeSaving) return;
+          setScopeModal(null);
+          setScopeSaveError(null);
+        }}
+        onConfirm={async (choice) => {
+          if (!scopeModal || !onPatchPilotConfig) return;
+          setScopeSaving(true);
+          setScopeSaveError(null);
+          try {
+            await onPatchPilotConfig(scopeModal.listingId, {
+              enabled: true,
+              applyPrice: choice.applyPrice,
+              applyMinStay: choice.applyMinStay,
+            });
+            setScopeModal(null);
+          } catch (e) {
+            setScopeSaveError(e instanceof Error ? e.message : 'Activation impossible');
+          } finally {
+            setScopeSaving(false);
+          }
+        }}
       />
     </Box>
   );
@@ -331,7 +394,7 @@ function MacroCard({ label, emoji, value, ctx, trend, progress }: {
         background: `linear-gradient(90deg, ${T.gold}, ${T.goldSoft})`,
       },
     }}>
-      <Stack direction="row" alignItems="center" gap={0.875} sx={{
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 0.875, 
         fontSize: 10, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
         color: T.text3, textTransform: 'uppercase', letterSpacing: '0.08em', mb: 1.25,
       }}>
@@ -344,7 +407,7 @@ function MacroCard({ label, emoji, value, ctx, trend, progress }: {
       }}>{value}</Typography>
       <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.75 }}>{ctx}</Typography>
       {trend && (
-        <Stack direction="row" alignItems="center" gap={0.5} sx={{
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5, 
           mt: 1, display: 'inline-flex', fontSize: 10.5, fontFamily: '"Geist Mono", monospace',
           fontWeight: 700, px: 1, py: 0.25, borderRadius: 999,
           color: trend.pts >= 0 ? T.success : T.error,
@@ -360,7 +423,7 @@ function MacroCard({ label, emoji, value, ctx, trend, progress }: {
               backgroundSize: '200% 100%', animation: 'sj-shimmer 2s infinite linear',
             }} />
           </Box>
-          <Stack direction="row" justifyContent="space-between" sx={{
+          <Stack direction="row" sx={{ justifyContent: 'space-between', 
             fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace',
             mt: 0.625, fontWeight: 700, letterSpacing: '0.02em',
           }}>
@@ -386,7 +449,7 @@ function BulkActionsPanel({ selectedCount, aiOpportunityMad, aiOffCount, showAiH
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
       boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
     }}>
-      <Stack direction="row" alignItems="center" gap={1.25} sx={{
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25, 
         p: 1.5, borderBottom: `1px solid ${T.border}`, background: T.bg2,
       }}>
         <Typography sx={{ fontSize: 13, fontWeight: 800 }}>⚙ Actions groupées</Typography>
@@ -397,9 +460,9 @@ function BulkActionsPanel({ selectedCount, aiOpportunityMad, aiOffCount, showAiH
         }}>{selectedCount} sélectionné{selectedCount !== 1 ? 's' : ''}</Box>
       </Stack>
 
-      <Stack gap={1.5} sx={{ p: 1.75, flex: 1 }}>
+      <Stack sx={{ gap: 1.5,  p: 1.75, flex: 1 }}>
         {showAiHint ? (
-          <Stack direction="row" alignItems="center" gap={1.125} sx={{
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1.125, 
             p: '10px 12px',
             background: `linear-gradient(135deg, ${T.aiTint}, transparent 70%)`,
             border: `1px solid rgba(124,58,237,0.25)`, borderRadius: 1.25,
@@ -494,6 +557,7 @@ function PortfolioTable({
   selectedIds, onToggleRow, onDrillDown,
   search, onSearch,
   airbnbOnly, onAirbnbOnlyChange, airbnbConnectedCount,
+  onPatchPilotConfig,
 }: {
   rows: PortfolioRow[]; totalCount: number;
   portfolioTotal?: number;
@@ -510,6 +574,7 @@ function PortfolioTable({
   airbnbOnly: boolean;
   onAirbnbOnlyChange: (v: boolean) => void;
   airbnbConnectedCount: number;
+  onPatchPilotConfig?: (listingId: string, partial: Partial<PilotPricingConfigDto>) => Promise<void>;
 }) {
   const bulkSelectEnabled = Boolean(cityScope);
   const [showAllSnapshotKpis, setShowAllSnapshotKpis] = useState(false);
@@ -530,9 +595,17 @@ function PortfolioTable({
       overflow: 'hidden', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
       animation: 'sj-fadeIn 0.6s 0.10s both',
     }}>
-      <Stack direction="row" alignItems="center" gap={1.5} sx={{
-        p: '14px 18px', borderBottom: `1px solid ${T.border}`, background: T.bg2, flexWrap: 'wrap',
-      }}>
+      <Stack
+        direction="row"
+        sx={{
+          alignItems: 'center',
+          gap: 1.5,
+          p: '14px 18px',
+          borderBottom: `1px solid ${T.border}`,
+          background: T.bg2,
+          flexWrap: 'wrap',
+        }}
+      >
         <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
           <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
             🏠 {totalCount} bien{totalCount !== 1 ? 's' : ''}
@@ -542,7 +615,7 @@ function PortfolioTable({
             <HeaderInfoIcon title="Portefeuille · données brutes" body={AIRROI_RAW_TABLE_INTRO} />
           ) : null}
         </Stack>
-        <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap' }}>
+        <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
           {TABLE_TABS.map((t) => (
             <Box
               key={t.id}
@@ -571,7 +644,7 @@ function PortfolioTable({
             </Box>
           ))}
         </Stack>
-        <Stack direction="row" gap={0.75} sx={{ ml: { md: 'auto' }, flexWrap: 'wrap' }}>
+        <Stack direction="row" sx={{ gap: 0.75, ml: { md: 'auto' }, flexWrap: 'wrap' }}>
           <Box sx={{
             display: 'inline-flex', alignItems: 'center', gap: 0.875,
             px: 1.375, py: 0.75, background: T.bg1, border: `1px solid ${T.border}`,
@@ -708,7 +781,29 @@ function PortfolioTable({
                     gold
                   />
                 ))}
-                <Box component="th" sx={tableHeadSx(T.text3)}>AI</Box>
+                <SnapshotHeaderCell
+                  label="Prix min"
+                  hintTitle="Prix plancher pilote"
+                  hintBody="floorNormal · même champ que §03 fiche bien. Éditable ici."
+                  gold
+                />
+                <SnapshotHeaderCell
+                  label="Prix max"
+                  hintTitle="Prix plafond pilote"
+                  hintBody="ceiling · envoyé au mixEngine et au calendrier après Apply."
+                  gold
+                />
+                <SnapshotHeaderCell
+                  label="Min stay"
+                  hintTitle="Séjour minimum"
+                  hintBody="minStayPlancher (+ delta en fiche). Base marché par jour non désactivable."
+                  gold
+                />
+                <SnapshotHeaderCell
+                  label="Sojori AI"
+                  hintTitle="Sync automatique"
+                  hintBody="ON = cron + refresh snapshot marché. OFF = tout reste visible, pas de sync auto."
+                />
               </Box>
             </Box>
             <Box component="tbody">
@@ -718,17 +813,29 @@ function PortfolioTable({
                   snapshotCols={snapshotCols}
                   selected={selectedIds.includes(r.listing._id)}
                   onToggle={() => onToggleRow(r.listing._id)}
-                  onDrillDown={() => onDrillDown(r.listing._id)} />
+                  onDrillDown={() => onDrillDown(r.listing._id)}
+                  onPatchPilotConfig={onPatchPilotConfig}
+                />
               ))}
             </Box>
           </Box>
         )}
       </Box>
 
-      <Stack direction="row" alignItems="center" gap={1.5} sx={{
-        p: '10px 18px', borderTop: `1px solid ${T.border}`, background: T.bg2,
-        fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace', flexWrap: 'wrap',
-      }}>
+      <Stack
+        direction="row"
+        sx={{
+          alignItems: 'center',
+          gap: 1.5,
+          p: '10px 18px',
+          borderTop: `1px solid ${T.border}`,
+          background: T.bg2,
+          fontSize: 11,
+          color: T.text3,
+          fontFamily: '"Geist Mono", monospace',
+          flexWrap: 'wrap',
+        }}
+      >
         <span>
           <b style={{ color: T.text }}>{rows.length} / {totalCount}</b> affichés
           {portfolioTotal != null && portfolioTotal !== totalCount
@@ -748,6 +855,14 @@ function PortfolioTable({
 const tableCellSx = {
   p: '10px',
   borderBottom: `1px solid ${T.border}`,
+} as const;
+
+/** Typo alignée colonnes snapshot (ADR, TTM, Tarifs/j) */
+const rawMonoCellSx = {
+  fontFamily: '"Geist Mono", monospace',
+  fontSize: 11,
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
 } as const;
 
 function tableHeadSx(color: string) {
@@ -791,7 +906,7 @@ function SnapshotHeaderCell({
         arrow
         placement="top"
       >
-        <Stack direction="row" alignItems="center" gap={0.375} sx={{ cursor: 'help', width: 'fit-content' }}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.375,  cursor: 'help', width: 'fit-content' }}>
           <span>{label}</span>
           <InfoOutlinedIcon sx={{ fontSize: 11, color: gold ? T.goldDeep : T.text4, opacity: 0.85 }} />
         </Stack>
@@ -888,9 +1003,22 @@ function GapStatusBadge({ reason }: { reason: DataGapReason }) {
   );
 }
 
-function PortfolioOperationalRow({ row, bulkSelectEnabled = true, snapshotCols, selected, onToggle, onDrillDown }: {
-  row: PortfolioRow; bulkSelectEnabled?: boolean; snapshotCols: AirroiColumnDef[];
-  selected: boolean; onToggle: () => void; onDrillDown: () => void;
+function PortfolioOperationalRow({
+  row,
+  bulkSelectEnabled = true,
+  snapshotCols,
+  selected,
+  onToggle,
+  onDrillDown,
+  onPatchPilotConfig,
+}: {
+  row: PortfolioRow;
+  bulkSelectEnabled?: boolean;
+  snapshotCols: AirroiColumnDef[];
+  selected: boolean;
+  onToggle: () => void;
+  onDrillDown: () => void;
+  onPatchPilotConfig?: (listingId: string, partial: Partial<PilotPricingConfigDto>) => Promise<void>;
 }) {
   const gap = getDataGapReason(row);
   const snapLabel = row.airroiSnapshotAt
@@ -928,14 +1056,215 @@ function PortfolioOperationalRow({ row, bulkSelectEnabled = true, snapshotCols, 
           <RawCell key={col.id} value={v} highlight={!row.hasAirroiSnapshot} />
         );
       })}
-      <Box component="td" sx={tableCellSx}>
-        <Box sx={{
-          fontSize: 10, fontWeight: 800, fontFamily: '"Geist Mono", monospace',
-          color: row.aiEnabled ? T.success : T.text3,
-        }}>
-          {row.aiEnabled ? 'ON' : 'OFF'}
-        </Box>
+      <PilotNumberCell
+        listingId={row.listing._id}
+        value={row.pilotConfig?.floorNormal ?? row.bounds?.floor ?? 900}
+        disabled={!onPatchPilotConfig}
+        onCommit={(v) => onPatchPilotConfig?.(row.listing._id, { floorNormal: v })}
+      />
+      <PilotNumberCell
+        listingId={row.listing._id}
+        value={row.pilotConfig?.ceiling ?? row.bounds?.ceiling ?? 2800}
+        disabled={!onPatchPilotConfig}
+        onCommit={(v) => onPatchPilotConfig?.(row.listing._id, { ceiling: v })}
+      />
+      <PilotNumberCell
+        listingId={row.listing._id}
+        value={row.pilotConfig?.minStayPlancher ?? 1}
+        disabled={!onPatchPilotConfig}
+        min={1}
+        max={14}
+        compact
+        inactive={row.aiEnabled && row.pilotConfig?.applyMinStay === false}
+        inactiveHint="Min stay non sync"
+        onCommit={(v) => onPatchPilotConfig?.(row.listing._id, { minStayPlancher: v })}
+      />
+      <Box component="td" sx={rawCellTdSx()}>
+        <AiSyncToggle
+          enabled={row.aiEnabled}
+          disabled={!onPatchPilotConfig}
+          applyMinStay={row.pilotConfig?.applyMinStay !== false}
+          onToggle={(v) => void onPatchPilotConfig?.(row.listing._id, { enabled: v })}
+        />
       </Box>
+    </Box>
+  );
+}
+
+function rawCellTdSx() {
+  return {
+    p: '10px',
+    borderBottom: `1px solid ${T.border}`,
+    ...rawMonoCellSx,
+    color: T.text,
+  };
+}
+
+function formatPilotDisplay(value: number, compact?: boolean): string {
+  if (!Number.isFinite(value)) return '—';
+  return compact ? String(value) : value.toLocaleString('fr-FR');
+}
+
+function PilotNumberCell({
+  listingId,
+  value,
+  onCommit,
+  disabled,
+  min = 100,
+  max = 20000,
+  compact,
+  inactive,
+  inactiveHint,
+}: {
+  listingId: string;
+  value: number;
+  onCommit: (v: number) => void | Promise<void>;
+  disabled?: boolean;
+  min?: number;
+  max?: number;
+  /** Min stay : entier sans séparateur milliers */
+  compact?: boolean;
+  inactive?: boolean;
+  inactiveHint?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [local, setLocal] = useState(String(value));
+
+  useEffect(() => {
+    setLocal(String(value));
+    setEditing(false);
+  }, [value, listingId]);
+
+  const commit = () => {
+    const n = Math.round(Number(local));
+    if (!Number.isFinite(n) || n < min || n > max) {
+      setLocal(String(value));
+      setEditing(false);
+      return;
+    }
+    setEditing(false);
+    if (n !== value) void onCommit(n);
+  };
+
+  const tdSx = {
+    ...rawCellTdSx(),
+    ...(inactive
+      ? { color: '#c62828', bgcolor: 'rgba(211,47,47,0.06)' }
+      : {}),
+  };
+
+  if (editing && !disabled) {
+    return (
+      <Box component="td" sx={tdSx}>
+        <Box
+          component="input"
+          type="number"
+          autoFocus
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') {
+              setLocal(String(value));
+              setEditing(false);
+            }
+          }}
+          sx={{
+            width: compact ? 28 : 52,
+            maxWidth: '100%',
+            border: 'none',
+            outline: 'none',
+            bgcolor: 'transparent',
+            ...rawMonoCellSx,
+            color: T.goldDeep,
+            borderBottom: `1px solid ${T.goldTint2}`,
+            p: 0,
+            m: 0,
+          }}
+        />
+      </Box>
+    );
+  }
+
+  return (
+    <Box component="td" sx={tdSx}>
+      <Box
+        component="button"
+        type="button"
+        disabled={disabled}
+        title={
+          inactive
+            ? inactiveHint ?? 'Non synchronisé au calendrier'
+            : disabled
+              ? undefined
+              : 'Cliquer pour modifier'
+        }
+        onClick={() => {
+          if (disabled) return;
+          setLocal(String(value));
+          setEditing(true);
+        }}
+        sx={{
+          all: 'unset',
+          cursor: disabled ? 'default' : 'pointer',
+          color: inactive ? '#c62828' : undefined,
+          display: 'inline',
+          ...rawMonoCellSx,
+          color: T.text,
+          opacity: disabled ? 0.45 : 1,
+          '&:hover': disabled ? {} : { color: T.goldDeep },
+        }}
+      >
+        {formatPilotDisplay(value, compact)}
+      </Box>
+    </Box>
+  );
+}
+
+function AiSyncToggle({
+  enabled,
+  disabled,
+  applyMinStay = true,
+  onToggle,
+}: {
+  enabled: boolean;
+  disabled?: boolean;
+  applyMinStay?: boolean;
+  onToggle: (v: boolean) => void | Promise<void>;
+}) {
+  const [pending, setPending] = useState(false);
+  return (
+    <Box
+      component="button"
+      type="button"
+      disabled={disabled || pending}
+      onClick={() => {
+        if (disabled || pending) return;
+        setPending(true);
+        void Promise.resolve(onToggle(!enabled)).finally(() => setPending(false));
+      }}
+      title={
+        enabled
+          ? applyMinStay
+            ? 'Sync prix + min stay'
+            : 'Sync prix seul (min stay OFF)'
+          : 'Sync auto OFF — affichage inchangé'
+      }
+      sx={{
+        all: 'unset',
+        cursor: disabled || pending ? 'default' : 'pointer',
+        display: 'inline-block',
+        fontSize: 10,
+        fontWeight: 800,
+        fontFamily: '"Geist Mono", monospace',
+        color: pending ? T.text3 : enabled ? T.success : T.text3,
+        letterSpacing: '0.02em',
+        opacity: disabled ? 0.5 : pending ? 0.65 : 1,
+        '&:hover': disabled || pending ? {} : { textDecoration: 'underline' },
+      }}
+    >
+      {pending ? '…' : enabled ? (applyMinStay ? 'ON' : 'PRIX') : 'OFF'}
     </Box>
   );
 }
@@ -1000,10 +1329,8 @@ function PortfolioRowComp({ row, bulkSelectEnabled = true, selected, onToggle, o
 function RawCell({ value, muted, highlight }: { value: string; muted?: boolean; highlight?: boolean }) {
   return (
     <Box component="td" sx={{
-      p: '10px', borderBottom: `1px solid ${T.border}`,
-      fontFamily: '"Geist Mono", monospace', fontSize: 11, fontWeight: 600,
+      ...rawCellTdSx(),
       color: highlight ? T.text4 : muted ? T.text3 : T.text,
-      whiteSpace: 'nowrap',
     }}>{value}</Box>
   );
 }
@@ -1180,7 +1507,7 @@ function ScoreBar({ score }: { score: number }) {
   };
   const colors = { over: T.success, par: T.text, under: T.error };
   return (
-    <Stack direction="row" alignItems="center" gap={1} sx={{ maxWidth: 120 }}>
+    <Stack direction="row" sx={{ alignItems: 'center', gap: 1,  maxWidth: 120 }}>
       <Box sx={{ flex: 1, height: 6, background: T.bg3, borderRadius: 999, overflow: 'hidden' }}>
         <Box sx={{ height: '100%', width: `${score}%`, background: grads[status], borderRadius: 999 }} />
       </Box>
