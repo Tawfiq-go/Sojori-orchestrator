@@ -19,18 +19,25 @@ const apiDevProxy = {
 export default defineConfig({
   appType: 'spa',
   plugins: [react(), tailwindcss()],
+  optimizeDeps: {
+    include: ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+  },
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      'config': path.resolve(__dirname, './src/config'),
-      'components': path.resolve(__dirname, './src/components'),
-      'features': path.resolve(__dirname, './src/features'),
-      'utils': path.resolve(__dirname, './src/utils'),
-      'services': path.resolve(__dirname, './src/services'),
-      'contexts': path.resolve(__dirname, './src/contexts'),
-      'context': path.resolve(__dirname, './src/context'),
-      'constants': path.resolve(__dirname, './src/constants'),
-    },
+    alias: [
+      // Regex only matches `@/…` — bare `@` would shadow npm scopes like @dnd-kit, @mui
+      {
+        find: /^@\//,
+        replacement: `${path.resolve(__dirname, './src')}/`,
+      },
+      { find: 'config', replacement: path.resolve(__dirname, './src/config') },
+      { find: 'components', replacement: path.resolve(__dirname, './src/components') },
+      { find: 'features', replacement: path.resolve(__dirname, './src/features') },
+      { find: 'utils', replacement: path.resolve(__dirname, './src/utils') },
+      { find: 'services', replacement: path.resolve(__dirname, './src/services') },
+      { find: 'contexts', replacement: path.resolve(__dirname, './src/contexts') },
+      { find: 'context', replacement: path.resolve(__dirname, './src/context') },
+      { find: 'constants', replacement: path.resolve(__dirname, './src/constants') },
+    ],
   },
   server: {
     host: '127.0.0.1',

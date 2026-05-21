@@ -28,6 +28,7 @@ const ORCHESTRATION_GROUPS = [
   { label: 'Ménage', items: [
     { id: 'orchestration_cleaning_free',     title: '🧹 Ménage gratuit',     desc: 'Crée les tâches selon frequency[] configurée', badges: [{ tone: 'success', label: '→ frequency, TS_CLEAN[]' }] },
     { id: 'orchestration_cleaning_paid',     title: '💰 Ménage payant',      desc: 'Proposition WhatsApp · flow sélection + paiement', badges: [{ tone: 'info', label: '📱 WhatsApp' }, { tone: 'success', label: '→ paidCleaningConfig' }] },
+    { id: 'orchestration_cleaning_sojori',   title: '🧼 Ménage Sojori',      desc: 'Ménage auto post-checkout · replanifié si nouvelle résa avant deadline', badges: [{ tone: 'warning', label: 'srv-orchestrator' }] },
   ]},
   { label: 'Conciergerie', items: [
     { id: 'orchestration_transport', title: '🚗 Transport',                 desc: 'Option transport dans menu chatbot WhatsApp',     badges: [{ tone: 'ai', label: 'srv-chatbot' }] },
@@ -277,13 +278,26 @@ export function CleaningTab({ values = {}, onChange }) {
 
       {sub === 'sojori' && (
         <Card title="🧼 Ménage Sojori automatique" meta="cleaningOrchestration">
-          <ToggleRow title="Créer automatiquement les ménages Sojori après checkout"
-            desc="Sojori prend en charge le ménage entre 2 séjours. Activé = workflow auto avec filet de sécurité."
+          <ToggleRow title="Activer Ménage Sojori (listing)"
+            desc="Doit aussi être activé dans Orchestration → Ménage Sojori. Crée un workflow à chaque réservation."
+            checked={values.orchestration_cleaning_sojori !== false}
+            onChange={v => upd('orchestration_cleaning_sojori', v)} />
+          <ToggleRow title="Créer automatiquement les ménages après checkout"
+            desc="Planification selon la config ci-dessous + replanification si une nouvelle réservation arrive avant la deadline."
             checked={!!values.cleaningOrchestration?.enabled}
             onChange={v => upd('cleaningOrchestration', { ...(values.cleaningOrchestration || {}), enabled: v })} />
+          <Box sx={{ mt: 1.5, p: 1.5, bgcolor: T.bg2, borderRadius: 1, border: `1px solid ${T.border}` }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text2, mb: 0.75 }}>Règle de planification</Typography>
+            <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.5 }}>
+              1) Deadline = checkout + <b>J+N</b> (délai normal).<br />
+              2) Si une <b>prochaine réservation</b> arrive avant cette deadline → ménage <b>urgent</b> placé avant son check-in (marge incluse).<br />
+              3) Sinon ménage le jour <b>checkout + N</b> à 12h.<br />
+              4) Une nouvelle réservation peut <b>replanifier</b> les ménages des séjours précédents (audit + logs).
+            </Typography>
+          </Box>
           {values.cleaningOrchestration?.enabled && (
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mt: 1.5 }}>
-              <Field label="Jours après checkout" hint="0 = jour J, 1 = J+1, etc.">
+              <Field label="Délai normal (J+N après checkout)" hint="Ex: 3 = ménage au plus tard 3j après départ">
                 <SelectField value={values.cleaningOrchestration?.preferredDayAfterCheckout ?? 0}
                   onChange={v => upd('cleaningOrchestration', { ...(values.cleaningOrchestration || {}), preferredDayAfterCheckout: v })}
                   options={[
@@ -291,15 +305,24 @@ export function CleaningTab({ values = {}, onChange }) {
                     { value: 1, label: 'J+1' },
                     { value: 2, label: 'J+2' },
                     { value: 3, label: 'J+3' },
+                    { value: 4, label: 'J+4' },
+                    { value: 5, label: 'J+5' },
                   ]} />
               </Field>
-              <Field label="🛡 Max jours en statut DIRTY" hint="Au-delà → ménage urgence auto">
+              <Field label="Jours avant check-in (mode urgent)" hint="Ménage X jours avant la prochaine arrivée">
+                <SelectField value={values.cleaningOrchestration?.daysBeforeCheckin ?? 1}
+                  onChange={v => upd('cleaningOrchestration', { ...(values.cleaningOrchestration || {}), daysBeforeCheckin: v })}
+                  options={[0,1,2,3,4,5].map(n => ({ value: n, label: `${n} jour(s)` }))} />
+              </Field>
+              <Field label="Marge sécurité avant check-in" hint="Jours additionnels soustraits en mode urgent">
+                <SelectField value={values.cleaningOrchestration?.securityMarginBeforeCheckin ?? 2}
+                  onChange={v => upd('cleaningOrchestration', { ...(values.cleaningOrchestration || {}), securityMarginBeforeCheckin: v })}
+                  options={[0,1,2,3,4,5].map(n => ({ value: n, label: `+${n} jour(s)` }))} />
+              </Field>
+              <Field label="Max jours en statut DIRTY" hint="Au-delà → alerte urgence propreté">
                 <SelectField value={values.cleaningOrchestration?.safetyMaxDirtyDays ?? 4}
                   onChange={v => upd('cleaningOrchestration', { ...(values.cleaningOrchestration || {}), safetyMaxDirtyDays: v })}
-                  options={[
-                    { value: 1, label: '1 jour' }, { value: 2, label: '2 jours' },
-                    { value: 3, label: '3 jours' }, { value: 4, label: '4 jours' },
-                  ]} />
+                  options={[1,2,3,4,5].map(n => ({ value: n, label: `${n} jour(s)` }))} />
               </Field>
             </Box>
           )}

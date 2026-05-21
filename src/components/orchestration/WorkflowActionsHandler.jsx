@@ -100,17 +100,22 @@ export const useWorkflowActions = (reservationNumber, onRefresh) => {
 /**
  * Handler pour "force-send" - Envoyer hors date
  */
-export const handleForceSend = async (actionId, reservationNumber, onRefresh) => {
-  const confirmed = window.confirm(
-    'Voulez-vous vraiment forcer l\'envoi de ce message maintenant (hors délai normal) ?'
-  );
+export const handleForceSend = async (actionId, reservationNumber, onRefresh, options = {}) => {
+  const { executionId, lastMinute } = options;
+  const confirmMsg = lastMinute
+    ? 'Envoyer maintenant la relance « Dernier créneau » (last minute) ?'
+    : 'Voulez-vous vraiment forcer l\'envoi de ce message maintenant (hors délai normal) ?';
+  const confirmed = window.confirm(confirmMsg);
 
   if (!confirmed) return;
 
   try {
+    const body = { reservationNumber };
+    if (executionId) body.executionId = executionId;
+
     const response = await axios.post(
       `${API_URL}/api/v1/orchestrator/actions/${actionId}/execute`,
-      { reservationNumber },
+      body,
       { timeout: 15000 }
     );
 
@@ -313,7 +318,10 @@ export const dispatchWorkflowAction = async (actionType, actionId, reservationNu
 
   switch (actionType) {
     case 'force-send':
-      return handleForceSend(actionId, reservationNumber, onRefresh);
+      return handleForceSend(actionId, reservationNumber, onRefresh, {
+        executionId: options.executionId,
+        lastMinute: options.lastMinute,
+      });
 
     case 'resend':
       return handleResend(actionId, reservationNumber, onRefresh);

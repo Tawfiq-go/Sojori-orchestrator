@@ -11,6 +11,8 @@ import StayView from '../components/calendar-views/StayView';
 import type { ListingRow, TimelineItem } from '../components/calendar-views/_shared';
 import tasksService, { resolveTasksUserScope } from '../services/tasksService';
 import listingsService from '../services/listingsService';
+import cleanlinessService from '../services/cleanlinessService';
+import type { DisplayCleanliness } from '../utils/cleanlinessDisplay';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { getStoredOwners } from '../data/catalogueMock';
@@ -41,6 +43,7 @@ export default function TasksPlanningPageV2() {
   const [activeListings, setActiveListings] = useState<any[]>([]);
   const [rawData, setRawData] = useState<any>(null);
   const [adminOwnerId, setAdminOwnerId] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Owner options pour le filtre admin
   const ownerOptions = useMemo(
@@ -119,7 +122,7 @@ export default function TasksPlanningPageV2() {
 
     if (authLoading) return;
     fetchPlanning();
-  }, [startDate, daysCount, planningOwnerId, scope.canAccessAllOwners, scope.ownerId, authLoading]);
+  }, [startDate, daysCount, planningOwnerId, scope.canAccessAllOwners, scope.ownerId, authLoading, refreshKey]);
 
   // ✅ CHANGEMENT: Transform en itérant sur activeListings (comme ReservationsPlanningPage)
   // Afficher TOUS les listings actifs, même sans réservations
@@ -128,30 +131,35 @@ export default function TasksPlanningPageV2() {
 
     console.log('[TasksPlanningPageV2] 🔨 Building listing rows from', activeListings.length, 'active listings');
 
-    // Map réservations par listingId pour lookup rapide
+    // Map réservations + statuts opérationnels (srv-task planning = source of truth propreté)
     const reservationsByListing = new Map<string, any[]>();
+    const operationalByListing = new Map<string, any>();
     if (rawData?.listings) {
       rawData.listings.forEach((l: any) => {
-        const listingId = l.listingId || l._id;
-        if (listingId && l.reservations) {
-          reservationsByListing.set(listingId, l.reservations);
-        }
+        const listingId = String(l.listingId || l._id || '');
+        if (!listingId) return;
+        if (l.reservations) reservationsByListing.set(listingId, l.reservations);
+        operationalByListing.set(listingId, l);
       });
     }
 
     // ✅ ITÉRER SUR LES LISTINGS ACTIFS (pas sur rawData.listings)
     return activeListings.map((listing: any) => {
-      const listingId = listing.id || listing._id;
+      const listingId = String(listing.id || listing._id || '');
       const resas = reservationsByListing.get(listingId) || [];
+      const op = operationalByListing.get(listingId);
 
       console.log(`[TasksPlanningPageV2] 📊 Listing ${listing.name}: ${resas.length} reservations`);
 
       return {
         listingId,
-        listingName: listing.name || 'Sans nom',
-        city: listing.city || 'Sans ville',
-        cleanlinessStatus_v2: listing.cleanlinessStatus_v2 || listing.cleanlinessStatus || 'clean',
-        occupancyStatus: listing.occupancyStatus || 'available',
+        listingName: listing.name || op?.listingName || 'Sans nom',
+        city: listing.city || op?.city || 'Sans ville',
+        cleanlinessStatus_v2:
+          op?.cleanlinessStatus_v2 || listing.cleanlinessStatus_v2 || listing.cleanlinessStatus || 'clean',
+        cleanlinessStatus: op?.cleanlinessStatus || listing.cleanlinessStatus,
+        occupancyStatus: op?.occupancyStatus || listing.occupancyStatus || 'vacant',
+        cleanlinessEmergency: Boolean(op?.cleanlinessEmergency || listing.cleanlinessEmergency),
         reservations: resas.map((r: any) => ({
           reservationId: r.reservationId || r._id || '',
           guestName: r.guestName || 'Guest',
@@ -210,6 +218,20 @@ export default function TasksPlanningPageV2() {
     setStartDate(newDate);
   };
 
+  const handleCleanlinessChange = useCallback(async (listingId: string, status: DisplayCleanliness) => {
+    try {
+      const result = await cleanlinessService.updateListingStatus(listingId, status);
+      if (!result.success) {
+        throw new Error(result.message || 'Échec mise à jour propreté');
+      }
+      setRefreshKey((k) => k + 1);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur mise à jour propreté';
+      setError(msg);
+      throw err;
+    }
+  }, []);
+
   return (
     <DashboardWrapper breadcrumb={[]}>
       <Box sx={{ bgcolor: '#f6f5f1', minHeight: '100vh' }}>
@@ -266,6 +288,7 @@ export default function TasksPlanningPageV2() {
               onPrevWeek={() => shiftDays(-7)}
               onNextWeek={() => shiftDays(7)}
               onDateChange={handleDateChange}
+              onCleanlinessChange={handleCleanlinessChange}
             />
           </Box>
         )}

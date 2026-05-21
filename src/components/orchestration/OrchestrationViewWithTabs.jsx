@@ -7,6 +7,7 @@ import { Box, Tabs, Tab } from '@mui/material';
 import OrchestrationView from './OrchestrationView';
 import ChronologieView from './ChronologieView';
 import ConfigurationView from './ConfigurationView';
+import CronMonitoringView from './CronMonitoringView';
 import { T } from './orchestrationConfigUi';
 
 /** Aligné legacy : ?tab=configuration | orchestration | event | daily */
@@ -54,7 +55,7 @@ const OrchestrationViewWithTabs = () => {
   const tabs = [
     { label: 'Plans', component: <OrchestrationView /> },
     { label: 'Chronologie', component: <ChronologieView /> },
-    { label: 'Événement', component: <Box sx={{ p: 3 }}>Événement - À venir</Box> },
+    { label: 'Événement', component: <CronMonitoringView /> },
     { label: 'Daily Ops', component: <Box sx={{ p: 3 }}>Daily Ops - À venir</Box> },
     { label: 'Configuration', component: <ConfigurationView /> },
   ];
