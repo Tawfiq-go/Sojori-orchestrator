@@ -247,6 +247,12 @@ function getOrchestrationFromAction(action) {
   );
 }
 
+function isCleaningSojoriWorkflow(workflow) {
+  const cat = String(workflow?.category || '').toLowerCase();
+  const ct = String(workflow?.categoryType || '');
+  return cat === 'cleaning_sojori' || ct === 'CLEANING_SOJORI';
+}
+
 function resolveListingOrchField(workflow) {
   const candidates = [
     workflow?.category,
@@ -440,6 +446,41 @@ export function buildFriendlyConfigCards({
 
   const cards = [];
   const isPlaceholder = (workflow?.workflowId || '').toString().startsWith('PLACEHOLDER-');
+  const isSojoriMenage = isCleaningSojoriWorkflow(workflow);
+
+  if (isSojoriMenage) {
+    const scheduling = workflow?.metadata?.scheduling || workflow?.metadata || {};
+    cards.push({
+      id: 'sojori-internal',
+      icon: '🧹',
+      title: 'Ménage Sojori (gestion interne)',
+      theme: 'listing',
+      bullets: [
+        {
+          label: 'Propreté logement',
+          value: 'CLEAN / DIRTY / OCCUPÉ — modifiable sur la carte « Logement » (pas un template message invité)',
+        },
+        {
+          label: 'Tâche SM-',
+          value: workflow?.timeslotCode || 'PENDING-CLEAN-… puis SM- via cron si dirty + vacant',
+          mono: true,
+        },
+        {
+          label: 'Planification',
+          value: scheduling.cleaningDateIso
+            ? `Ménage prévu ${formatCasablancaDateTime(scheduling.cleaningDateIso)}`
+            : 'Calculée au checkout',
+        },
+        {
+          label: 'Modèle propriétaire',
+          value: ownerCategory
+            ? 'Config staff / deadline (assignStaff) — pas de template WhatsApp ménage'
+            : 'Catégorie absente du modèle tâches — staff/deadline peuvent être incomplets',
+          accent: !ownerCategory,
+        },
+      ],
+    });
+  }
 
   // —— Règle ——
   const ruleBullets = [];
@@ -478,8 +519,11 @@ export function buildFriendlyConfigCards({
 
   cards.push({ id: 'rule', icon: '⚙️', title: 'Règle', theme: 'rule', bullets: ruleBullets });
 
-  // —— Canal & Message ——
-  if (actionKey === 'sendNotification' || actionKey === 'requestTimeslot' || actionKey === 'createTask') {
+  // —— Canal & Message —— (pas pour Ménage Sojori : gestion interne listing + SM-)
+  if (
+    !isSojoriMenage &&
+    (actionKey === 'sendNotification' || actionKey === 'requestTimeslot' || actionKey === 'createTask')
+  ) {
     cards.push({
       id: 'channel',
       icon: '📨',
@@ -501,7 +545,8 @@ export function buildFriendlyConfigCards({
   const isRegistration =
     workflow?.categoryType === 'DECLARATION_REGISTRATION' ||
     workflow?.category === 'registration';
-  const showRelanceCard = isRegistration || actionKey === 'requestTimeslot';
+  const showRelanceCard =
+    !isSojoriMenage && (isRegistration || actionKey === 'requestTimeslot');
 
   if (showRelanceCard) {
     const { label: refLabel, date: refDate } = getReferenceDateLabel(workflow, planMeta);

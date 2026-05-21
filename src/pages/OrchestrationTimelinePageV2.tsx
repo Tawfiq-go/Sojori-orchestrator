@@ -29,6 +29,8 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { getOrchestrationPlanDetail } from '../services/orchestrationService';
+import cleanlinessService from '../services/cleanlinessService';
+import type { DisplayCleanliness } from '../utils/cleanlinessDisplay';
 import type { OrchestrationPlanDetail, CategoryWorkflow } from '../types/orchestration.types';
 import { CleaningSojoriSchedulePanel } from '../components/orchestration/CleaningSojoriSchedulePanel';
 
@@ -201,10 +203,17 @@ const ActionCard: React.FC<ActionCardProps> = ({ action, actionType, workflow, o
 
 interface WorkflowColumnProps {
   workflow: CategoryWorkflow;
+  plan: OrchestrationPlanDetail | null;
   onCardClick: (action: any, actionType: string, workflow: CategoryWorkflow) => void;
+  onCleanlinessChange?: (listingId: string, status: DisplayCleanliness) => void | Promise<void>;
 }
 
-const WorkflowColumn: React.FC<WorkflowColumnProps> = ({ workflow, onCardClick }) => {
+const WorkflowColumn: React.FC<WorkflowColumnProps> = ({
+  workflow,
+  plan,
+  onCardClick,
+  onCleanlinessChange,
+}) => {
   const statusColor = getWorkflowStatusColor(workflow.status);
 
   // Collecter toutes les actions
@@ -276,7 +285,15 @@ const WorkflowColumn: React.FC<WorkflowColumnProps> = ({ workflow, onCardClick }
         )}
 
         {(workflow.categoryType === 'CLEANING_SOJORI' || workflow.category === 'cleaning_sojori') && (
-          <CleaningSojoriSchedulePanel metadata={(workflow as any).metadata} compact />
+          <CleaningSojoriSchedulePanel
+            metadata={(workflow as any).metadata}
+            compact
+            listingId={plan?.listingId}
+            listingOperational={plan?.listingOperational}
+            checkInDate={plan?.checkInDate}
+            checkOutDate={plan?.checkOutDate}
+            onCleanlinessChange={onCleanlinessChange}
+          />
         )}
       </Box>
 
@@ -319,9 +336,19 @@ interface DetailDrawerProps {
   action: any;
   actionType: string;
   workflow: CategoryWorkflow;
+  plan: OrchestrationPlanDetail | null;
+  onCleanlinessChange?: (listingId: string, status: DisplayCleanliness) => void | Promise<void>;
 }
 
-const DetailDrawer: React.FC<DetailDrawerProps> = ({ open, onClose, action, actionType, workflow }) => {
+const DetailDrawer: React.FC<DetailDrawerProps> = ({
+  open,
+  onClose,
+  action,
+  actionType,
+  workflow,
+  plan,
+  onCleanlinessChange,
+}) => {
   const [tab, setTab] = useState(0);
 
   if (!action) return null;
@@ -376,7 +403,14 @@ const DetailDrawer: React.FC<DetailDrawerProps> = ({ open, onClose, action, acti
               </Box>
 
               {(workflow.categoryType === 'CLEANING_SOJORI' || workflow.category === 'cleaning_sojori') && (
-                <CleaningSojoriSchedulePanel metadata={(workflow as any).metadata} />
+                <CleaningSojoriSchedulePanel
+                  metadata={(workflow as any).metadata}
+                  listingId={plan?.listingId}
+                  listingOperational={plan?.listingOperational}
+                  checkInDate={plan?.checkInDate}
+                  checkOutDate={plan?.checkOutDate}
+                  onCleanlinessChange={onCleanlinessChange}
+                />
               )}
 
               {/* Config details */}
@@ -386,6 +420,17 @@ const DetailDrawer: React.FC<DetailDrawerProps> = ({ open, onClose, action, acti
                     {JSON.stringify(action.config, null, 2)}
                   </pre>
                 </Box>
+              )}
+
+              {(workflow.categoryType === 'CLEANING_SOJORI' || workflow.category === 'cleaning_sojori') && plan && (
+                <CleaningSojoriSchedulePanel
+                  metadata={(workflow as any).metadata}
+                  listingId={plan.listingId}
+                  listingOperational={plan.listingOperational}
+                  checkInDate={plan.checkInDate}
+                  checkOutDate={plan.checkOutDate}
+                  onCleanlinessChange={onCleanlinessChange}
+                />
               )}
 
               {(workflow as any).metadata?.scheduling?.logs?.length > 0 && (
@@ -491,6 +536,14 @@ export const OrchestrationTimelinePageV2: React.FC = () => {
     setDrawerOpen(true);
   };
 
+  const handleCleanlinessChange = async (listingId: string, status: DisplayCleanliness) => {
+    const result = await cleanlinessService.updateListingStatus(listingId, status);
+    if (!result.success) {
+      throw new Error(result.message || 'Échec mise à jour propreté');
+    }
+    await fetchPlan();
+  };
+
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Orchestration', 'Timeline']}>
       <Box sx={{ p: 3 }}>
@@ -575,7 +628,9 @@ export const OrchestrationTimelinePageV2: React.FC = () => {
                 <WorkflowColumn
                   key={workflow.workflowId}
                   workflow={workflow}
+                  plan={plan}
                   onCardClick={handleCardClick}
+                  onCleanlinessChange={handleCleanlinessChange}
                 />
               ))}
 
@@ -596,6 +651,8 @@ export const OrchestrationTimelinePageV2: React.FC = () => {
         action={selectedAction}
         actionType={selectedActionType}
         workflow={selectedWorkflow!}
+        plan={plan}
+        onCleanlinessChange={handleCleanlinessChange}
       />
     </DashboardWrapper>
   );

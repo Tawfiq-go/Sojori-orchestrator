@@ -11,6 +11,7 @@ import ReservationCard from './ReservationCard';
 import WorkflowTimeline from './WorkflowTimeline';
 import { mapReservationToWorkflows } from '../../utils/workflowMapper';
 import { fetchOrchestrationPlanContext } from '../../utils/fetchOrchestrationPlanContext';
+import cleanlinessService from '../../services/cleanlinessService';
 import { dispatchWorkflowAction } from './WorkflowActionsHandler';
 import ViewMessagesModal from './modals/ViewMessagesModal';
 import ReassignStaffModal from './modals/ReassignStaffModal';
@@ -32,7 +33,9 @@ const OrchestrationView = () => {
 
   // States pour les workflows de la réservation sélectionnée
   const [workflowsData, setWorkflowsData] = useState(null);
+  const [planContext, setPlanContext] = useState(null);
   const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
+  const [cleanlinessSaving, setCleanlinessSaving] = useState(false);
 
   // States pour les modales
   const [viewMessagesModal, setViewMessagesModal] = useState({ open: false, actionId: null, reservationNumber: null });
@@ -73,28 +76,59 @@ const OrchestrationView = () => {
     fetchReservations();
   }, [selectedListings, sortBy, listRefreshKey]);
 
+  const loadPlanForReservation = async (reservationNumber) => {
+    const url = `${API_URL}/api/v1/orchestrator/orchestration/plans/${reservationNumber}`;
+    const response = await axios.get(url);
+    if (!response.data.success) {
+      setWorkflowsData({ workflows: [], daySeparators: [] });
+      setPlanContext(null);
+      return;
+    }
+    const planData = response.data.data;
+    const enrichment = await fetchOrchestrationPlanContext(planData);
+    const mapped = mapReservationToWorkflows(planData, enrichment);
+    setWorkflowsData(mapped);
+    setPlanContext({
+      listingId: planData.listingId,
+      listingName: planData.listingName,
+      listingOperational: planData.listingOperational,
+      checkInDate: planData.checkInDate,
+      checkOutDate: planData.checkOutDate,
+      workflows: planData.workflows,
+    });
+  };
+
+  const handleCleanlinessChange = async (listingId, status) => {
+    setCleanlinessSaving(true);
+    try {
+      const result = await cleanlinessService.updateListingStatus(listingId, status);
+      if (!result.success) {
+        throw new Error(result.message || 'Échec mise à jour propreté');
+      }
+      if (selectedReservation?.reservationNumber) {
+        await loadPlanForReservation(selectedReservation.reservationNumber);
+      }
+    } finally {
+      setCleanlinessSaving(false);
+    }
+  };
+
   // Fetch workflows when a reservation is selected
   useEffect(() => {
     const fetchWorkflows = async () => {
       if (!selectedReservation) {
         setWorkflowsData(null);
+        setPlanContext(null);
         return;
       }
 
       try {
         setIsLoadingWorkflows(true);
-        const url = `${API_URL}/api/v1/orchestrator/orchestration/plans/${selectedReservation.reservationNumber}`;
-        const response = await axios.get(url);
-
-        if (response.data.success) {
-          const planData = response.data.data;
-          const enrichment = await fetchOrchestrationPlanContext(planData);
-          const mapped = mapReservationToWorkflows(planData, enrichment);
-          setWorkflowsData(mapped);
-        }
+        await loadPlanForReservation(selectedReservation.reservationNumber);
       } catch (err) {
         console.error('[OrchestrationView] Erreur fetch workflows:', err);
         setWorkflowsData({ workflows: [], daySeparators: [] });
+        setPlanContext(null);
       } finally {
         setIsLoadingWorkflows(false);
       }
@@ -231,23 +265,26 @@ const OrchestrationView = () => {
             <WorkflowTimeline
               workflows={workflowsData.workflows}
               daySeparators={workflowsData.daySeparators}
+              planContext={
+                planContext?.listingId
+                  ? {
+                      listingId: planContext.listingId,
+                      listingOperational: planContext.listingOperational,
+                      checkInDate: planContext.checkInDate,
+                      checkOutDate: planContext.checkOutDate,
+                      onCleanlinessChange: cleanlinessSaving ? undefined : handleCleanlinessChange,
+                    }
+                  : null
+              }
               onAction={async (action) => {
                 // Handle action execution
                 const { id: actionType, actionId, reservationNumber, executionId, lastMinute } = action;
 
                 // Refresh callback après l'action
                 const handleRefresh = async () => {
-                  // Refetch workflows
                   setIsLoadingWorkflows(true);
                   try {
-                    const url = `${API_URL}/api/v1/orchestrator/orchestration/plans/${reservationNumber}`;
-                    const response = await axios.get(url);
-                    if (response.data.success) {
-                      const planData = response.data.data;
-                      const enrichment = await fetchOrchestrationPlanContext(planData);
-                      const mapped = mapReservationToWorkflows(planData, enrichment);
-                      setWorkflowsData(mapped);
-                    }
+                    await loadPlanForReservation(reservationNumber);
                   } catch (err) {
                     console.error('[OrchestrationView] Erreur refresh workflows:', err);
                   } finally {

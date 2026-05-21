@@ -11,6 +11,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import OrchestrationConfigCards from './OrchestrationConfigCards';
+import { CleaningSojoriSchedulePanel } from './CleaningSojoriSchedulePanel';
 
 /* ─── Mappings status ──────────────────────────────────────────── */
 const DOT_CLASS = {
@@ -565,7 +566,13 @@ function SubStepRow({ sub, open, onToggle, onAction, reservationNumber }) {
 }
 
 /* ─── Level 1 : Workflow row + dot + nested L2/L3 ──────────────── */
-function WorkflowNode({ workflow, open, onToggle, onAction, defaultOpenSubSteps = [] }) {
+function isCleaningSojoriWorkflow(workflow) {
+  const t = String(workflow?.type || '').toLowerCase();
+  const ct = String(workflow?.categoryType || '');
+  return t === 'cleaning_sojori' || ct === 'CLEANING_SOJORI';
+}
+
+function WorkflowNode({ workflow, open, onToggle, onAction, defaultOpenSubSteps = [], planContext }) {
   const [openSubs, setOpenSubs] = useState(new Set(defaultOpenSubSteps));
   const toggleSub = (id) => setOpenSubs(prev => {
     const next = new Set(prev);
@@ -630,6 +637,23 @@ function WorkflowNode({ workflow, open, onToggle, onAction, defaultOpenSubSteps 
         }}>▼</span>
       </div>
 
+      {open && isCleaningSojoriWorkflow(workflow) && planContext?.listingId && (
+        <div
+          className="so-fade-in"
+          style={{ marginTop: 8, marginLeft: 18, maxWidth: 520 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <CleaningSojoriSchedulePanel
+            metadata={workflow.metadata}
+            listingId={planContext.listingId}
+            listingOperational={planContext.listingOperational}
+            checkInDate={planContext.checkInDate}
+            checkOutDate={planContext.checkOutDate}
+            onCleanlinessChange={planContext.onCleanlinessChange}
+          />
+        </div>
+      )}
+
       {/* Level 2 — sub-steps timeline */}
       {open && workflow.subSteps && workflow.subSteps.length > 0 && (
         <div className="so-fade-in" style={{ marginTop: 8, marginLeft: 18 }}>
@@ -662,6 +686,7 @@ export default function WorkflowTimeline({
   defaultOpenWorkflows = [],
   defaultOpenSubSteps = {}, // { [workflowId]: ['subId1', 'subId2'] }
   onAction,
+  planContext = null,
 }) {
   const [openWf, setOpenWf] = useState(new Set(defaultOpenWorkflows));
   const toggle = (id) => setOpenWf(prev => {
@@ -694,6 +719,7 @@ export default function WorkflowTimeline({
               onToggle={() => toggle(wf.id)}
               onAction={onAction}
               defaultOpenSubSteps={defaultOpenSubSteps[wf.id] || []}
+              planContext={planContext}
             />
           </React.Fragment>
         );
