@@ -4,7 +4,7 @@
 // Génère 1 payload par type de modif pour calendarService.updateCalendar
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo, useEffect } from 'react';
-import { T } from './_shared';
+import { T, toIso, parseIsoLocal, daysBetweenIsoInclusive } from './_shared';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -19,14 +19,20 @@ export default function UpdateInventoryModal({
   const [modalPosition, setModalPosition] = useState({ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' });
 
   /* ─── Date range from selectedCells ─── */
-  const { startDate, endDate, nights, listingsCount, roomTypesCount } = useMemo(() => {
-    if (selectedCells.length === 0) return { startDate: '', endDate: '', nights: 0, listingsCount: 0, roomTypesCount: 0 };
-    const isos = selectedCells.map(c => c.dateStr).sort();
-    const listings = new Set(selectedCells.map(c => c.listingId));
-    const rooms = new Set(selectedCells.map(c => `${c.listingId}|${c.roomTypeId}`));
+  const selectionMeta = useMemo(() => {
+    if (selectedCells.length === 0) {
+      return { startDate: '', endDate: '', nights: 0, listingsCount: 0, roomTypesCount: 0, cellsCount: 0 };
+    }
+    const isos = selectedCells.map((c) => c.dateStr).sort();
+    const listings = new Set(selectedCells.map((c) => c.listingId));
+    const rooms = new Set(selectedCells.map((c) => `${c.listingId}|${c.roomTypeId}`));
     return {
-      startDate: isos[0], endDate: isos[isos.length - 1],
-      nights: isos.length, listingsCount: listings.size, roomTypesCount: rooms.size,
+      startDate: isos[0],
+      endDate: isos[isos.length - 1],
+      nights: isos.length,
+      listingsCount: listings.size,
+      roomTypesCount: rooms.size,
+      cellsCount: selectedCells.length,
     };
   }, [selectedCells]);
 
@@ -81,6 +87,26 @@ export default function UpdateInventoryModal({
   const [editableStartDate, setEditableStartDate] = useState(null);
   const [editableEndDate, setEditableEndDate] = useState(null);
 
+  /** Période réellement envoyée à l’API (dates du formulaire, pas seule la sélection Excel). */
+  const applyRange = useMemo(() => {
+    if (editableStartDate && editableEndDate) {
+      const start = toIso(editableStartDate);
+      const end = toIso(editableEndDate);
+      if (start && end && start <= end) {
+        return {
+          startDate: start,
+          endDate: end,
+          nights: daysBetweenIsoInclusive(start, end),
+        };
+      }
+    }
+    return {
+      startDate: selectionMeta.startDate,
+      endDate: selectionMeta.endDate,
+      nights: selectionMeta.nights,
+    };
+  }, [editableStartDate, editableEndDate, selectionMeta]);
+
   const upd = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
@@ -97,12 +123,12 @@ export default function UpdateInventoryModal({
     } else {
       // Initialiser avec les dates sélectionnées (toujours éditables)
       // Convert ISO string dates to Date objects for MUI DatePicker
-      setEditableStartDate(startDate ? new Date(startDate) : null);
-      setEditableEndDate(endDate ? new Date(endDate) : null);
+      setEditableStartDate(selectionMeta.startDate ? parseIsoLocal(selectionMeta.startDate) : null);
+      setEditableEndDate(selectionMeta.endDate ? parseIsoLocal(selectionMeta.endDate) : null);
       // Calculer la position optimale du modal quand il s'ouvre
       calculateModalPosition();
     }
-  }, [open, startDate, endDate]);
+  }, [open, selectionMeta.startDate, selectionMeta.endDate]);
 
   const calculateModalPosition = () => {
     const modalWidth = 520;
@@ -159,13 +185,8 @@ export default function UpdateInventoryModal({
     const payloads = [];
     groups.forEach(g => {
       // Toujours utiliser les dates éditables du formulaire (convertir Date → ISO string)
-      const formatDate = (date) => {
-        if (!date) return null;
-        const d = new Date(date);
-        return d.toISOString().split('T')[0]; // YYYY-MM-DD
-      };
-      const dateFrom = editableStartDate ? formatDate(editableStartDate) : g.dates[0];
-      const dateTo = editableEndDate ? formatDate(editableEndDate) : g.dates[g.dates.length - 1];
+      const dateFrom = editableStartDate ? toIso(editableStartDate) : g.dates[0];
+      const dateTo = editableEndDate ? toIso(editableEndDate) : g.dates[g.dates.length - 1];
       const base = { roomTypeId: g.roomTypeId, date_from: dateFrom, date_to: dateTo };
       if (form.manualPrice !== '')   payloads.push({ type: 'manualPrice',         ...base, price: +form.manualPrice });
       if (form.availability !== '')  payloads.push({ type: 'availability',        ...base, availableRoom: +form.availability });
@@ -185,7 +206,19 @@ export default function UpdateInventoryModal({
       await onSave?.(buildPayloads());
       onClose?.();
     } catch (e) {
-      setError(e.message || 'Erreur lors de la sauvegarde');
+      const body = e?.response?.data;
+      const msg =
+        body?.errorMsg ||
+        body?.error ||
+        e?.message ||
+        'Erreur lors de la sauvegarde';
+      setError(
+        msg.includes('Session expired') ||
+          msg.includes('refreshToken') ||
+          body?.forceLogout
+          ? 'Session expirée — reconnectez-vous puis réessayez.'
+          : msg,
+      );
     } finally {
       setLoading(false);
     }
@@ -218,9 +251,10 @@ export default function UpdateInventoryModal({
               {step === 'form' ? "Modifier l'inventaire" : 'Confirmer les modifications'}
             </h3>
             <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-              <Chip>{nights} nuit(s)</Chip>
-              <Chip>{roomTypesCount} room type(s)</Chip>
-              {listingsCount > 1 && <Chip>{listingsCount} listings</Chip>}
+              <Chip>{selectionMeta.cellsCount} cellule(s)</Chip>
+              <Chip>{applyRange.nights} j · période appliquée</Chip>
+              <Chip>{selectionMeta.roomTypesCount} room type(s)</Chip>
+              {selectionMeta.listingsCount > 1 && <Chip>{selectionMeta.listingsCount} listings</Chip>}
             </div>
           </div>
           <button onClick={onClose} style={{
@@ -248,7 +282,14 @@ export default function UpdateInventoryModal({
                       </label>
                       <DatePicker
                         value={editableStartDate}
-                        onChange={(newValue) => setEditableStartDate(newValue)}
+                        referenceDate={editableStartDate ?? undefined}
+                        maxDate={editableEndDate ?? undefined}
+                        onChange={(newValue) => {
+                          setEditableStartDate(newValue);
+                          if (newValue && editableEndDate && newValue > editableEndDate) {
+                            setEditableEndDate(newValue);
+                          }
+                        }}
                         format="dd/MM/yyyy"
                         slotProps={{
                           textField: {
@@ -276,6 +317,8 @@ export default function UpdateInventoryModal({
                       </label>
                       <DatePicker
                         value={editableEndDate}
+                        referenceDate={editableEndDate ?? editableStartDate ?? undefined}
+                        minDate={editableStartDate ?? undefined}
                         onChange={(newValue) => setEditableEndDate(newValue)}
                         format="dd/MM/yyyy"
                         slotProps={{
@@ -302,7 +345,7 @@ export default function UpdateInventoryModal({
                 </LocalizationProvider>
                 {editableStartDate && editableEndDate && (
                   <div style={{ fontSize: 11, color: T.ai, marginTop: 6, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>
-                    📅 {Math.ceil((editableEndDate - editableStartDate) / (1000 * 60 * 60 * 24)) + 1} jour(s)
+                    📅 {daysBetweenIsoInclusive(toIso(editableStartDate), toIso(editableEndDate))} jour(s)
                   </div>
                 )}
               </Section>
@@ -409,15 +452,17 @@ export default function UpdateInventoryModal({
             </>
           ) : (
             <>
-              <p style={{ fontSize: 12.5, color: T.text2, margin: '0 0 12px' }}>
-                Vous êtes sur le point de modifier <b>{nights} nuit(s)</b> pour <b>{roomTypesCount} room type(s)</b> :
+              <p style={{ fontSize: 12.5, color: T.text2, margin: '0 0 8px' }}>
+                Sélection Excel : <b>{selectionMeta.cellsCount}</b> cellule(s) · application sur la période ci-dessous
+                pour <b>{selectionMeta.roomTypesCount}</b> room type(s).
               </p>
               <div style={{
                 padding: '10px 12px', background: T.bg2, border: `1px solid ${T.border}`,
                 borderRadius: 8, fontSize: 12, color: T.text2, marginBottom: 12,
                 fontFamily: '"Geist Mono", monospace',
               }}>
-                📅 Du <b>{startDate}</b> au <b>{endDate}</b>
+                📅 Période appliquée : <b>{applyRange.startDate}</b> → <b>{applyRange.endDate}</b>
+                {' '}({applyRange.nights} jour(s) calendrier)
               </div>
               <ul style={{ paddingLeft: 18, margin: 0, fontSize: 12.5, color: T.text2, lineHeight: 1.9 }}>
                 {changesSummary.map((c, i) => <li key={i}>{c}</li>)}

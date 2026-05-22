@@ -35,6 +35,8 @@ export const T = {
 
 // Types
 export interface InventoryDay {
+  /** true = jour issu de InventoryArchive (lecture seule côté UI) */
+  isArchived?: boolean;
   availableRoom?: number;
   basePrice?: number;
   calculatedPrice?: number;
@@ -122,6 +124,77 @@ export function priceOf(inv?: InventoryDay): number {
 
   return inv.basePrice ?? 0;
 }
+
+/** Fond cellule historique (InventoryArchive) — aligné dashboard legacy */
+export const ARCHIVE_CELL_BG = '#e8ecf1';
+export const ARCHIVE_CELL_TEXT = '#475569';
+
+export function isArchiveDay(inv?: InventoryDay): boolean {
+  return Boolean(inv?.isArchived);
+}
+
+/** Au moins un champ inventaire renvoyé par l’API (≠ cellule vide `{}`). */
+export function hasInventoryData(inv?: InventoryDay | null): boolean {
+  if (!inv || typeof inv !== 'object') return false;
+  if (Object.keys(inv).length === 0) return false;
+  return (
+    inv.isArchived === true ||
+    inv.basePrice != null ||
+    inv.availableRoom != null ||
+    inv.stopSell != null ||
+    inv.useDynamicPrice != null ||
+    inv.manualPrice != null ||
+    inv.calculatedPrice != null ||
+    inv.minStay != null ||
+    inv.maxStay != null ||
+    (Array.isArray(inv.reservations) && inv.reservations.length > 0)
+  );
+}
+
+export type InventoryCellState = 'data' | 'archive' | 'out_of_window' | 'missing';
+
+/** État d’affichage d’une cellule (évite les « 0 MAD » hors inventaire). */
+export function resolveInventoryCellState(
+  iso: string,
+  inv?: InventoryDay | null,
+  opts?: { futureHorizonDays?: number },
+): InventoryCellState {
+  if (isArchiveDay(inv)) return 'archive';
+  if (hasInventoryData(inv)) return 'data';
+
+  const horizon = opts?.futureHorizonDays ?? 1095;
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const day = parseIsoLocal(iso);
+  const futureEnd = new Date(today);
+  futureEnd.setDate(futureEnd.getDate() + horizon);
+  if (day.getTime() > futureEnd.getTime()) return 'out_of_window';
+
+  return 'missing';
+}
+
+/** Libellé tarif Rate TOP / vue simple — jamais « 0 » si pas de donnée inventaire. */
+export function formatInventoryRateLabel(
+  state: InventoryCellState,
+  inv?: InventoryDay | null,
+): { main: string; hint?: string; showCurrency: boolean } {
+  if (state === 'data') {
+    if (inv?.stopSell) return { main: '—', showCurrency: false };
+    const p = priceOf(inv ?? undefined);
+    return { main: String(p), showCurrency: true };
+  }
+  if (state === 'archive') {
+    if (inv?.stopSell) return { main: '—', hint: 'historique', showCurrency: false };
+    const p = priceOf(inv ?? undefined);
+    return { main: String(p), showCurrency: true, hint: 'historique' };
+  }
+  if (state === 'out_of_window') {
+    return { main: '—', hint: 'Hors fenêtre calendrier', showCurrency: false };
+  }
+  return { main: '—', hint: 'Pas de donnée inventaire', showCurrency: false };
+}
+
+export const OUT_OF_WINDOW_CELL_BG = 'repeating-linear-gradient(-45deg, #fafaf7, #fafaf7 4px, #f0eee8 4px, #f0eee8 8px)';
 
 /** Liste de toutes les colonnes affichables dans le collapse */
 export const ALL_COLUMNS: ColumnDef[] = [
@@ -232,6 +305,19 @@ export const RESERVATION_PALETTE = [
 export function toIso(d: Date): string {
   const z = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
+}
+
+/** Parse YYYY-MM-DD en date locale (évite le décalage UTC de `new Date('2026-05-22')`). */
+export function parseIsoLocal(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0, 0);
+}
+
+/** Nombre de jours calendaires entre deux ISO inclusives. */
+export function daysBetweenIsoInclusive(fromIso: string, toIsoStr: string): number {
+  const a = parseIsoLocal(fromIso).getTime();
+  const b = parseIsoLocal(toIsoStr).getTime();
+  return Math.max(1, Math.round((b - a) / 86400000) + 1);
 }
 
 /** Génère un range de N jours à partir de startDate */

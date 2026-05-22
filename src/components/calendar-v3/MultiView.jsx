@@ -2,8 +2,12 @@
 // MultiView.jsx — grille Multi-listing · Rate TOP + collapse
 // Excel selection drag · scroll sync · tooltip breakdown · popover rotations
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { T, ALL_COLUMNS, priceOf, cellKey, genDays } from './_shared';
+import React, { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
+import {
+  T, ALL_COLUMNS, priceOf, cellKey, genDays, isArchiveDay, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
+  hasInventoryData, resolveInventoryCellState, formatInventoryRateLabel, OUT_OF_WINDOW_CELL_BG,
+} from './_shared';
+import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
 import PopoverReservations from './PopoverReservations';
 
@@ -13,10 +17,14 @@ const LEFT_W = 200;
 export default function MultiView({
   startDate = new Date(),
   daysCount = 31,
-  listings = [],            // [{ _id, name, photoColor, currencyCode, roomTypes: [{ _id, inventories: {[dateStr]: inv} }] }]
-  selectedColumns = [],     // ids depuis ALL_COLUMNS
-  onCellsSelected,          // (cells) => void  → ouvre UpdateInventoryModal
+  listingCatalog = [],
+  listings: listingsLegacy,
+  inventoriesByListing = {},
+  inventoryLoading = false,
+  selectedColumns = [],
+  onCellsSelected,
 }) {
+  const listings = listingCatalog.length > 0 ? listingCatalog : listingsLegacy || [];
   const days = useMemo(() => genDays(startDate, daysCount), [startDate, daysCount]);
   const headerRef = useRef(null);
   const bodyRef = useRef(null);
@@ -36,6 +44,9 @@ export default function MultiView({
   const isSelected = useCallback((c) => selectedSet.has(cellKey(c)), [selectedSet]);
 
   const onMouseDown = (cell) => {
+    const inv = inventoriesByListing[cell.listingId]?.[cell.dateStr];
+    const st = resolveInventoryCellState(cell.dateStr, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
+    if (st !== 'data') return;
     setIsDragging(true);
     setDragStart(cell);
     setCurrentHoverCell(cell);
@@ -162,6 +173,8 @@ export default function MultiView({
           <Legend dot="rgba(200,30,30,0.7)" label="Stop sell" />
           <Legend dot={T.ai} label="Prix dynamique" />
           <Legend dot={T.bg2} label="Weekend" />
+          <Legend dot={ARCHIVE_CELL_BG} label="Historique (lecture seule)" />
+          <Legend dot={T.text4} label="Hors inventaire (—)" />
         </div>
       </div>
 
@@ -186,18 +199,37 @@ export default function MultiView({
             boxShadow: '2px 0 4px rgba(0,0,0,0.04)',
           }}>Listing</div>
           {days.map(d => (
-            <DayHeader key={d.iso} day={d} />
+            <DayHeader key={d.iso} day={d} loading={inventoryLoading} />
           ))}
         </div>
       </div>
 
-      {/* Body scrollable */}
-      <div ref={bodyRef} style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+      {/* Body scrollable — overlay chargement uniquement sur la zone dates */}
+      <div
+        ref={bodyRef}
+        style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, position: 'relative' }}
+      >
+        {inventoryLoading && (
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              left: LEFT_W,
+              top: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 8,
+              background: 'rgba(255,255,255,0.55)',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
         <div style={{ minWidth: LEFT_W + days.length * CELL_W }}>
-          {listings.map(listing => (
+          {listings.map((listing) => (
             <ListingRow
               key={listing._id}
               listing={listing}
+              inventories={inventoriesByListing[listing._id] || {}}
               days={days}
               expanded={!!expanded[listing._id]}
               onToggle={() => toggleListing(listing._id)}
@@ -225,13 +257,15 @@ export default function MultiView({
 }
 
 /* ─── Header d'un jour ─── */
-function DayHeader({ day }) {
+const DayHeader = memo(function DayHeader({ day, loading }) {
   return (
     <div style={{
       padding: '10px 0', textAlign: 'center',
       borderRight: `1px solid ${T.border}`,
       background: day.isToday ? T.primaryTint : 'transparent',
       position: 'relative',
+      opacity: loading ? 0.55 : 1,
+      transition: 'opacity 0.15s',
     }}>
       <div style={{
         fontFamily: '"Geist Mono", monospace', fontSize: 9.5, fontWeight: 700,
@@ -254,21 +288,104 @@ function DayHeader({ day }) {
       )}
     </div>
   );
-}
+});
+
+/* ─── Colonne listing (sticky) — ne dépend pas des dates ─── */
+const ListingLabel = memo(function ListingLabel({ listing, expanded, showChevron, onToggle, avgPrice }) {
+  return (
+    <div
+      onClick={onToggle}
+      style={{
+        padding: '12px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 9,
+        background: T.bg1,
+        borderRight: `1px solid ${T.border}`,
+        cursor: showChevron ? 'pointer' : 'default',
+        transition: 'background 0.15s',
+        position: 'sticky',
+        left: 0,
+        zIndex: 4,
+        boxShadow: '2px 0 4px rgba(0,0,0,0.04)',
+      }}
+    >
+      {showChevron && (
+        <span
+          style={{
+            fontSize: 10,
+            color: expanded ? T.primary : T.text3,
+            width: 14,
+            textAlign: 'center',
+            transform: expanded ? 'rotate(90deg)' : 'none',
+            transition: 'transform 0.2s',
+          }}
+        >
+          ▶
+        </span>
+      )}
+      <div
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 6,
+          background: `linear-gradient(135deg, ${listing.photoColor || '#fde68a'}, ${listing.photoColorDeep || '#d97706'})`,
+          flexShrink: 0,
+        }}
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span
+          style={{
+            fontSize: 12.5,
+            fontWeight: 700,
+            lineHeight: 1.1,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: 'block',
+          }}
+        >
+          {listing.name}
+        </span>
+        {avgPrice > 0 && (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: T.text3,
+              fontFamily: '"Geist Mono", monospace',
+              marginTop: 2,
+              display: 'block',
+            }}
+          >
+            Moy: {avgPrice} {listing.currencyCode || 'EUR'}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+});
 
 /* ─── Ligne d'un listing (Rate TOP + collapse) ─── */
-function ListingRow({ listing, days, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onReservationClick }) {
-  const roomType = listing.roomTypes?.[0]; // simplifié — un seul room type par listing
+function ListingRow({
+  listing, inventories, days, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onReservationClick,
+}) {
   const showChevron = selectedColumns.length > 0;
+  const getInv = (dateStr) => inventories[dateStr];
 
-  const getInv = (dateStr) => roomType?.inventories?.[dateStr] || {};
-
-  // Calculer le prix moyen sur la période visible
   const avgPrice = useMemo(() => {
-    const prices = days.map(d => priceOf(getInv(d.iso))).filter(p => p > 0);
+    const prices = days
+      .map((d) => {
+        const inv = getInv(d.iso);
+        if (resolveInventoryCellState(d.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS }) !== 'data') {
+          return 0;
+        }
+        return priceOf(inv);
+      })
+      .filter((p) => p > 0);
     if (prices.length === 0) return 0;
     return Math.round(prices.reduce((sum, p) => sum + p, 0) / prices.length);
-  }, [days, roomType]);
+  }, [days, inventories]);
 
   return (
     <div>
@@ -278,51 +395,21 @@ function ListingRow({ listing, days, expanded, onToggle, selectedColumns, isSele
         gridTemplateColumns: `${LEFT_W}px repeat(${days.length}, ${CELL_W}px)`,
         borderBottom: `1px solid ${T.border}`,
       }}>
-        <div onClick={onToggle} style={{
-          padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 9,
-          background: T.bg1, borderRight: `1px solid ${T.border}`,
-          cursor: showChevron ? 'pointer' : 'default',
-          transition: 'background 0.15s',
-          position: 'sticky', left: 0, zIndex: 4,
-          boxShadow: '2px 0 4px rgba(0,0,0,0.04)',
-        }}>
-          {showChevron && (
-            <span style={{
-              fontSize: 10, color: expanded ? T.primary : T.text3,
-              width: 14, textAlign: 'center',
-              transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s',
-            }}>▶</span>
-          )}
-          <div style={{
-            width: 24, height: 24, borderRadius: 6,
-            background: `linear-gradient(135deg, ${listing.photoColor || '#fde68a'}, ${listing.photoColorDeep || '#d97706'})`,
-            flexShrink: 0,
-          }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{
-              fontSize: 12.5, fontWeight: 700, lineHeight: 1.1,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block',
-            }}>{listing.name}</span>
-            {avgPrice > 0 && (
-              <span style={{
-                fontSize: 10, fontWeight: 600, color: T.text3,
-                fontFamily: '"Geist Mono", monospace', marginTop: 2, display: 'block',
-              }}>
-                Moy: {avgPrice} {listing.currencyCode || 'EUR'}
-              </span>
-            )}
-          </div>
-        </div>
+        <ListingLabel
+          listing={listing}
+          expanded={expanded}
+          showChevron={showChevron}
+          onToggle={onToggle}
+          avgPrice={avgPrice}
+        />
 
         {days.map(d => {
           const inv = getInv(d.iso);
-          const price = priceOf(inv);
           return (
             <RateTopCell
               key={d.iso}
               day={d}
               inv={inv}
-              price={price}
               currency={listing.currencyCode || 'EUR'}
             />
           );
@@ -356,14 +443,19 @@ function ListingRow({ listing, days, expanded, onToggle, selectedColumns, isSele
 
             {days.map(d => {
               const inv = getInv(d.iso);
-              const cellMeta = { listingId: listing._id, roomTypeId: roomType?._id, dateStr: d.iso, column: colId };
+              const cellMeta = {
+                listingId: listing._id,
+                roomTypeId: listing.roomTypeId || 'default',
+                dateStr: d.iso,
+                column: colId,
+              };
               const sel = isSelected(cellMeta);
               const draggable = col.excelSelectable;
               return (
                 <CollapseCell
                   key={d.iso} col={col} day={d} inv={inv} listing={listing}
                   selected={sel} draggable={draggable}
-                  onMouseDown={draggable ? () => onMouseDown(cellMeta) : undefined}
+                  onMouseDown={draggable && state !== 'archive' && state !== 'out_of_window' && state !== 'missing' ? () => onMouseDown(cellMeta) : undefined}
                   onMouseEnter={draggable ? () => onMouseEnter(cellMeta) : undefined}
                   onReservationClick={(rect) => {
                     if (colId === 'reservations' && (inv.reservations?.length ?? 0) >= 2) {
@@ -381,15 +473,24 @@ function ListingRow({ listing, days, expanded, onToggle, selectedColumns, isSele
 }
 
 /* ─── Rate TOP cell (lecture seule, pas de sélection Excel) ─── */
-function RateTopCell({ day, inv, price, currency }) {
-  const isDynamic = !!inv.useDynamicPrice;
-  const isStop = !!inv.stopSell;
-  const isBooked = (inv.reservations?.length ?? 0) > 0;
+function RateTopCell({ day, inv, currency }) {
+  const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
+  const rate = formatInventoryRateLabel(state, inv);
+  const archived = state === 'archive';
+  const noData = state === 'out_of_window' || state === 'missing';
+  const isDynamic = hasInventoryData(inv) && !!inv.useDynamicPrice;
+  const isStop = hasInventoryData(inv) && !!inv.stopSell;
+  const isBooked = (inv?.reservations?.length ?? 0) > 0;
   const isWeekend = day.isWeekend;
 
-  // Calculer la couleur de fond en fonction de l'état (priorité: stopSell > booked > weekend > today > dynamic)
   let background = T.bg1;
-  if (isStop) {
+  if (state === 'out_of_window') {
+    background = OUT_OF_WINDOW_CELL_BG;
+  } else if (archived) {
+    background = ARCHIVE_CELL_BG;
+  } else if (noData) {
+    background = T.bg2;
+  } else if (isStop) {
     background = 'rgba(200,30,30,0.05)'; // Rouge léger
   } else if (isBooked) {
     background = 'rgba(6,115,179,0.06)'; // Bleu léger
@@ -412,16 +513,27 @@ function RateTopCell({ day, inv, price, currency }) {
         background,
         transition: 'all 0.15s',
       }}>
-      {isDynamic && (
+      {isDynamic && state === 'data' && (
         <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, color: T.ai }}>⚡</span>
       )}
-      <span style={{
-        fontSize: 13, fontWeight: 700,
-        color: isDynamic ? T.ai : T.text,
-        letterSpacing: '-0.01em',
-      }}>{isStop ? '—' : price}</span>
-      {!isStop && (
+      <span
+        title={rate.hint}
+        style={{
+          fontSize: state === 'data' ? 13 : 12,
+          fontWeight: 700,
+          color: archived ? ARCHIVE_CELL_TEXT : noData ? T.text4 : isDynamic ? T.ai : T.text,
+          letterSpacing: '-0.01em',
+        }}
+      >
+        {rate.main}
+      </span>
+      {rate.showCurrency && (
         <span style={{ fontSize: 9, color: T.text3, fontWeight: 600, letterSpacing: '0.04em' }}>{currency}</span>
+      )}
+      {rate.hint && state !== 'data' && (
+        <span style={{ fontSize: 7.5, color: T.text4, fontWeight: 600, marginTop: 2, textAlign: 'center', lineHeight: 1.1 }}>
+          {state === 'out_of_window' ? 'hors fen.' : state === 'archive' ? 'hist.' : 'n/d'}
+        </span>
       )}
     </div>
   );
@@ -434,14 +546,22 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   const currency = listing.currencyCode || 'EUR';
 
   // Détecter les états de la cellule
-  const isStopSell = !!inv.stopSell;
-  const isBooked = (inv.reservations?.length ?? 0) > 0;
-  const isDynamic = !!inv.useDynamicPrice;
+  const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
+  const noData = state === 'out_of_window' || state === 'missing';
+  const archived = state === 'archive';
+  const isStopSell = hasInventoryData(inv) && !!inv.stopSell;
+  const isBooked = (inv?.reservations?.length ?? 0) > 0;
+  const isDynamic = hasInventoryData(inv) && !!inv.useDynamicPrice;
   const isWeekend = day.isWeekend;
 
-  // Calculer la couleur de fond en fonction de l'état (priorité: selected > stopSell > booked > weekend > dynamic)
   let background = 'transparent';
-  if (selected) {
+  if (state === 'out_of_window') {
+    background = OUT_OF_WINDOW_CELL_BG;
+  } else if (archived) {
+    background = ARCHIVE_CELL_BG;
+  } else if (noData) {
+    background = T.bg2;
+  } else if (selected) {
     background = T.primaryTint3;
   } else if (isStopSell) {
     background = 'rgba(200,30,30,0.05)'; // Rouge très léger
@@ -453,15 +573,22 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
     background = 'rgba(124,58,237,0.04)'; // Violet très léger
   }
 
+  const dash = '—';
   let content = null;
-  if (col.id === 'availableRoom') content = inv.availableRoom ?? '—';
-  else if (col.id === 'rate')      content = inv.stopSell ? '—' : <span style={{ color: inv.useDynamicPrice ? T.ai : T.text }}>{priceOf(inv)}</span>;
-  else if (col.id === 'basePrice') content = inv.basePrice ?? '—';
-  else if (col.id === 'manualPrice') content = inv.manualPrice ?? '—';
-  else if (col.id === 'dynamicPrice') content = inv.calculatedPrice ?? '—';
+  if (!hasInventoryData(inv) && state !== 'archive') {
+    content = <span style={{ color: T.text4, fontSize: 11 }} title={formatInventoryRateLabel(state, inv).hint}>{dash}</span>;
+  } else if (col.id === 'availableRoom') content = inv.availableRoom ?? dash;
+  else if (col.id === 'rate') {
+    const rate = formatInventoryRateLabel(state, inv);
+    content = rate.showCurrency
+      ? <span style={{ color: inv.useDynamicPrice ? T.ai : T.text }}>{rate.main}</span>
+      : <span style={{ color: T.text4 }}>{rate.main}</span>;
+  } else if (col.id === 'basePrice') content = inv.basePrice ?? dash;
+  else if (col.id === 'manualPrice') content = inv.manualPrice ?? dash;
+  else if (col.id === 'dynamicPrice') content = inv.calculatedPrice ?? dash;
   else if (col.id === 'stopSell')  content = inv.stopSell ? <span style={{ color: T.error }}>🚫</span> : <span style={{ color: T.success }}>✅</span>;
-  else if (col.id === 'minStay')   content = inv.minStay ?? '—';
-  else if (col.id === 'maxStay')   content = inv.maxStay ?? '—';
+  else if (col.id === 'minStay')   content = inv.minStay ?? dash;
+  else if (col.id === 'maxStay')   content = inv.maxStay ?? dash;
   else if (col.id === 'closedArrival') content = inv.closedArrival ? <span style={{ color: T.error }}>⛔</span> : <span style={{ color: T.success }}>✅</span>;
   else if (col.id === 'closedDeparture') content = inv.closedDeparture ? <span style={{ color: T.error }}>⛔</span> : <span style={{ color: T.success }}>✅</span>;
   else if (col.id === 'reservations') {
@@ -487,14 +614,16 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '6px 4px', minHeight: 38, position: 'relative',
         fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 600,
-        cursor: draggable ? 'cell' : 'default',
+        cursor: archived ? 'not-allowed' : draggable ? 'cell' : 'default',
         background,
         boxShadow: selected ? `inset 0 0 0 2px ${T.primary}` : 'none',
         color: selected ? T.primaryDeep : T.text,
         transition: 'background 0.1s',
       }}>
       {content}
-      {col.hasTooltip && showTip && <TooltipBreakdown inv={inv} dateStr={day.iso} currency={currency} />}
+      {col.hasTooltip && showTip && hasInventoryData(inv) && (
+        <TooltipBreakdown inv={inv} dateStr={day.iso} currency={currency} />
+      )}
     </div>
   );
 }

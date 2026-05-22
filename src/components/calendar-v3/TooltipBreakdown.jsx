@@ -1,21 +1,73 @@
 // ════════════════════════════════════════════════════════════════════
-// TooltipBreakdown.jsx — glassmorphism · Base/Dynamique/Manuel/Prix
+// TooltipBreakdown.jsx — cascade Sojori AI + prix actif (dynamique vs manuel)
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
-import { T, priceOf } from './_shared';
+import { T, priceOf, isArchiveDay, hasInventoryData } from './_shared';
+
+function normalizeFactorLabel(label) {
+  return String(label || '')
+    .replace(/\(estimate\)/gi, '')
+    .replace(/estimate/gi, 'marché')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function PilotFactorsBlock({ history, currency }) {
+  const factors = history?.pilotFactors ?? [];
+  if (history?.source !== 'pilot-v2' && factors.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${T.border}` }}>
+      <div style={{
+        fontSize: 10, fontWeight: 800, color: T.ai, marginBottom: 6,
+        fontFamily: '"Geist Mono", monospace', textTransform: 'uppercase',
+      }}>
+        Sojori AI · {history.mixEngineVersion ?? 'v2.4'}
+      </div>
+      {factors.map((f, i) => {
+        const isBase = f.key === 'base';
+        const label = isBase ? 'Prix marché' : normalizeFactorLabel(f.label);
+        const after = f.after ?? (isBase ? history?.base : null);
+        const valueText = isBase
+          ? `${Math.round(after ?? f.valueMad ?? 0)} ${currency}`
+          : `${(f.valueMad ?? 0) >= 0 ? '+' : ''}${Math.round(f.valueMad ?? 0)} ${currency}`;
+
+        return (
+          <div key={`${f.key ?? i}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', gap: 8 }}>
+            <span style={{ fontSize: 11, color: T.text2, fontWeight: 600 }}>{label}</span>
+            <span style={{
+              fontSize: 11, fontWeight: 700, fontFamily: '"Geist Mono", monospace',
+              color: isBase ? T.text : (f.valueMad ?? 0) >= 0 ? T.success : T.error,
+            }}>
+              {valueText}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function TooltipBreakdown({ inv, dateStr, currency = 'EUR', placement = 'left' }) {
-  if (!inv) return null;
-  const base = inv.basePrice ?? 0;
-  const dyn = inv.useDynamicPrice ? inv.calculatedPrice : null;
-  const man = (inv.manualPrice !== null && inv.manualPrice !== undefined) ? inv.manualPrice : null;
+  if (!inv || !hasInventoryData(inv)) return null;
+  const history = inv.calculatedPriceHistory;
+  const hasPilot =
+    history?.source === 'pilot-v2' || (Array.isArray(history?.pilotFactors) && history.pilotFactors.length > 0);
+
+  const baseInv = inv.basePrice ?? 0;
+  const calc =
+    inv.calculatedPrice != null && inv.calculatedPrice !== undefined ? inv.calculatedPrice : null;
+  const man = inv.manualPrice != null && inv.manualPrice !== undefined ? inv.manualPrice : null;
+
+  const manualActive = Boolean(inv.applyManual && man != null);
+  const dynamicActive = !manualActive && Boolean(inv.useDynamicPrice);
   const total = priceOf(inv);
 
   return (
     <div role="tooltip" style={{
       position: 'absolute', zIndex: 100,
-      ...(placement === 'left'  ? { right: 'calc(100% + 12px)', bottom: 0 } : { left: 'calc(100% + 12px)', bottom: 0 }),
-      minWidth: 220, maxWidth: 280,
+      ...(placement === 'left' ? { right: 'calc(100% + 12px)', bottom: 0 } : { left: 'calc(100% + 12px)', bottom: 0 }),
+      minWidth: 240, maxWidth: 300,
       background: 'rgba(255,255,255,0.95)',
       backdropFilter: 'blur(20px) saturate(180%)',
       WebkitBackdropFilter: 'blur(20px) saturate(180%)',
@@ -32,34 +84,89 @@ export default function TooltipBreakdown({ inv, dateStr, currency = 'EUR', place
         paddingBottom: 8, borderBottom: `1px solid ${T.border}`, marginBottom: 8,
       }}>
         {dateStr}{inv.availableRoom != null ? ` · ${inv.availableRoom} dispo` : ''}
+        {isArchiveDay(inv) ? ' · historique (lecture seule)' : ''}
       </div>
 
-      <Row label="Base" value={`${base.toFixed(0)} ${currency}`} />
-      {dyn !== null && <Row label="⚡ Dynamique" value={`${dyn.toFixed(0)} ${currency}`} accent={T.ai} />}
-      {man !== null && <Row label="✏ Manuel"     value={`${man.toFixed(0)} ${currency}`} accent={T.warning} />}
+      <PilotFactorsBlock history={history} currency={currency} />
+
+      <div style={{ fontSize: 10, fontWeight: 700, color: T.text3, marginBottom: 4, textTransform: 'uppercase' }}>
+        Prix affiché calendrier
+      </div>
+
+      {calc != null && (
+        <PriceModeRow
+          label="⚡ Dynamique"
+          value={`${calc.toFixed(0)} ${currency}`}
+          active={dynamicActive}
+          accent={T.ai}
+        />
+      )}
+      {man != null && (
+        <PriceModeRow
+          label="✏ Manuel"
+          value={`${man.toFixed(0)} ${currency}`}
+          active={manualActive}
+          accent={T.warning}
+        />
+      )}
+      {!hasPilot && baseInv > 0 && (
+        <PriceModeRow
+          label="Base inventaire"
+          value={`${baseInv.toFixed(0)} ${currency}`}
+          active={!dynamicActive && !manualActive}
+          accent={T.text2}
+        />
+      )}
 
       <div style={{
         paddingTop: 8, marginTop: 8, borderTop: `1px solid ${T.border}`,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>Prix final</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
+          Prix final{manualActive ? ' · manuel' : dynamicActive ? ' · dynamique' : ''}
+        </span>
         <span style={{
-          fontSize: 15, fontWeight: 800, color: T.primary,
+          fontSize: 15, fontWeight: 800,
+          color: manualActive ? T.warning : dynamicActive ? T.ai : T.primary,
           fontFamily: '"Geist Mono", monospace',
-        }}>{total.toFixed(0)} {currency}</span>
+        }}>
+          {total.toFixed(0)} {currency}
+        </span>
       </div>
     </div>
   );
 }
 
-function Row({ label, value, accent }) {
+function PriceModeRow({ label, value, active, accent }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-      <span style={{ fontSize: 12, color: T.text3, fontWeight: 500 }}>{label}</span>
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '5px 0', gap: 8,
+      opacity: active ? 1 : 0.45,
+    }}>
       <span style={{
-        fontSize: 12, color: accent || T.text,
-        fontFamily: '"Geist Mono", monospace', fontWeight: 600,
-      }}>{value}</span>
+        fontSize: 12,
+        fontWeight: active ? 700 : 500,
+        color: active ? accent : T.text4,
+      }}>
+        {label}
+        {active ? (
+          <span style={{
+            marginLeft: 6, fontSize: 9, fontWeight: 800, color: accent,
+            fontFamily: '"Geist Mono", monospace',
+          }}>
+            ACTIF
+          </span>
+        ) : null}
+      </span>
+      <span style={{
+        fontSize: 12,
+        fontWeight: active ? 700 : 500,
+        color: active ? accent : T.text4,
+        fontFamily: '"Geist Mono", monospace',
+      }}>
+        {value}
+      </span>
     </div>
   );
 }

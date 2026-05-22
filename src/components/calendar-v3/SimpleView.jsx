@@ -3,7 +3,11 @@
 // Inspiration Airbnb Host · stat cards en haut · cellules riches
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo } from 'react';
-import { T, priceOf, toIso } from './_shared';
+import {
+  T, priceOf, toIso, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
+  resolveInventoryCellState, formatInventoryRateLabel, hasInventoryData, OUT_OF_WINDOW_CELL_BG,
+} from './_shared';
+import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import PopoverReservations from './PopoverReservations';
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -13,7 +17,8 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
   const first = useMemo(() => new Date(year, month, 1), [year, month]);
   const offset = (first.getDay() + 6) % 7;     // Mon = 0
   const lastDay = new Date(year, month + 1, 0).getDate();
-  const totalCells = Math.ceil((offset + lastDay) / 7) * 7;
+  /** Grille 6×7 = taille visuelle stable quel que soit le mois */
+  const totalCells = 42;
   const todayIso = toIso(new Date());
 
   /* ─── Stats du mois ─── */
@@ -21,7 +26,8 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
     let available = 0, booked = 0, stop = 0, revenue = 0, dynamicWin = 0;
     for (let day = 1; day <= lastDay; day++) {
       const iso = toIso(new Date(year, month, day));
-      const inv = inventories[iso] || {};
+      const inv = inventories[iso];
+      if (!hasInventoryData(inv)) continue;
       if (inv.stopSell) stop++;
       else if (inv.reservations?.length > 0) { booked++; revenue += priceOf(inv); }
       else available++;
@@ -37,6 +43,9 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
   const [popover, setPopover] = useState(null);
 
   const toggleDay = (iso, e) => {
+    const inv = inventories[iso];
+    const st = resolveInventoryCellState(iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
+    if (st !== 'data') return;
     if (e.shiftKey && selected.length > 0) {
       const isos = [];
       for (let d = 1; d <= lastDay; d++) isos.push(toIso(new Date(year, month, d)));
@@ -66,18 +75,26 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
     if (!inMonth) { cells.push({ inMonth: false, key: `e${i}` }); continue; }
     const d = new Date(year, month, dayNum);
     const iso = toIso(d);
-    const inv = inventories[iso] || {};
+    const inv = inventories[iso];
+    const cellState = resolveInventoryCellState(iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
+    const rate = formatInventoryRateLabel(cellState, inv);
     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
     cells.push({
       inMonth: true, key: iso, num: dayNum, iso,
       isToday: iso === todayIso, isWeekend,
-      stopSell: !!inv.stopSell,
-      booked: (inv.reservations?.length ?? 0) > 0,
-      reservations: inv.reservations || [],
-      useDynamic: !!inv.useDynamicPrice,
-      hasManual: inv.manualPrice !== null && inv.manualPrice !== undefined,
-      price: priceOf(inv), basePrice: inv.basePrice,
-      available: inv.availableRoom ?? 1,
+      cellState,
+      isArchived: cellState === 'archive',
+      noInventory: cellState === 'out_of_window' || cellState === 'missing',
+      stopSell: hasInventoryData(inv) && !!inv.stopSell,
+      booked: (inv?.reservations?.length ?? 0) > 0,
+      reservations: inv?.reservations || [],
+      useDynamic: hasInventoryData(inv) && !!inv.useDynamicPrice,
+      hasManual: inv?.manualPrice != null,
+      priceLabel: rate.main,
+      showPriceCurrency: rate.showCurrency,
+      priceHint: rate.hint,
+      basePrice: inv?.basePrice,
+      available: inv?.availableRoom ?? 1,
       currency: listing.currencyCode || 'EUR',
     });
   }
@@ -109,6 +126,7 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
             <Legend dot={T.info} label="Réservé" />
             <Legend dot={T.error} label="Stop sell" />
             <Legend dot={T.ai} label="Prix dynamique" />
+            <Legend dot={ARCHIVE_CELL_BG} label="Historique" />
           </div>
         </div>
 
@@ -134,8 +152,11 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
               <div key={c.key} onClick={(e) => toggleDay(c.iso, e)} style={{
                 borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
                 padding: 8, display: 'flex', flexDirection: 'column', gap: 5,
-                cursor: 'cell', transition: 'all 0.15s', position: 'relative',
+                cursor: c.noInventory || c.isArchived ? 'not-allowed' : 'cell', transition: 'all 0.15s', position: 'relative',
                 background:
+                  c.cellState === 'out_of_window' ? OUT_OF_WINDOW_CELL_BG :
+                  c.isArchived ? ARCHIVE_CELL_BG :
+                  c.noInventory ? T.bg2 :
                   isSel ? T.primaryTint3 :
                   c.isToday ? T.primaryTint :
                   c.stopSell ? 'rgba(200,30,30,0.05)' :
@@ -147,23 +168,39 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
                   <span style={{
                     fontFamily: '"Geist Mono", monospace',
                     fontSize: 13, fontWeight: c.isToday ? 800 : 700,
-                    color: c.isToday ? T.primaryDeep : T.text,
+                    color: c.isArchived ? ARCHIVE_CELL_TEXT : c.isToday ? T.primaryDeep : T.text,
                   }}>{c.num}</span>
+                  {c.isArchived && (
+                    <span style={{ fontSize: 8, fontWeight: 700, color: ARCHIVE_CELL_TEXT }}>hist.</span>
+                  )}
                   <span style={{ display: 'flex', gap: 3 }}>
                     {c.useDynamic && <i style={{ width: 6, height: 6, borderRadius: '50%', background: T.ai }} />}
                     {c.hasManual && <i style={{ width: 6, height: 6, borderRadius: '50%', background: T.warning }} />}
                   </span>
                 </div>
-                {c.stopSell ? (
+                {c.noInventory || c.cellState === 'out_of_window' ? (
+                  <div
+                    title={c.priceHint}
+                    style={{
+                      fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
+                      color: T.text4, marginTop: 2,
+                    }}
+                  >
+                    {c.priceLabel}
+                    <small style={{ fontSize: 9, color: T.text4, marginLeft: 3, display: 'block', fontWeight: 600 }}>
+                      {c.cellState === 'out_of_window' ? 'hors fenêtre' : 'n/d'}
+                    </small>
+                  </div>
+                ) : c.stopSell ? (
                   <div style={{
                     fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
                     color: T.error, textDecoration: 'line-through', marginTop: 2,
-                  }}>{c.basePrice}<small style={{ fontSize: 9.5, color: T.text3, marginLeft: 3, fontWeight: 600 }}>{c.currency}</small></div>
+                  }}>{c.basePrice ?? '—'}<small style={{ fontSize: 9.5, color: T.text3, marginLeft: 3, fontWeight: 600 }}>{c.currency}</small></div>
                 ) : (
                   <div style={{
                     fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
                     color: c.useDynamic ? T.ai : T.text, letterSpacing: '-0.01em', marginTop: 2,
-                  }}>{c.price}<small style={{ fontSize: 9.5, color: T.text3, marginLeft: 3, fontWeight: 600 }}>{c.currency}</small></div>
+                  }}>{c.priceLabel}{c.showPriceCurrency ? <small style={{ fontSize: 9.5, color: T.text3, marginLeft: 3, fontWeight: 600 }}>{c.currency}</small> : null}</div>
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 'auto' }}>
                   {c.stopSell && (
@@ -172,7 +209,7 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
                   {!c.stopSell && c.booked && (
                     <span style={{ fontSize: 9.5, color: T.error, fontFamily: '"Geist Mono", monospace', fontWeight: 700 }}>0 / {c.available}</span>
                   )}
-                  {!c.stopSell && !c.booked && (
+                  {!c.noInventory && !c.stopSell && !c.booked && (
                     <span style={{ fontSize: 9.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>{c.available} / {c.available}</span>
                   )}
                   {c.reservations.length >= 2 && (
