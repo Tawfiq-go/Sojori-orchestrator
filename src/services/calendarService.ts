@@ -61,28 +61,19 @@ class CalendarService {
       // Logs désactivés pour nettoyer la console
       // console.log('[CalendarService] updateCalendar payload:', JSON.stringify(payload, null, 2));
 
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // ⚠️ Important pour JWT cookies
-        body: JSON.stringify(payload),
-      });
+      const response = await apiClient.put<CalendarUpdateResponse>(url, payload);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[CalendarService] updateCalendar error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result: CalendarUpdateResponse = await response.json();
+      const result = response.data;
 
       if (!result.success) {
-        throw new Error(result.message || 'Failed to update calendar');
+        const msg =
+          (result as { error?: string; message?: string }).error ||
+          result.message ||
+          'Échec mise à jour inventaire';
+        throw new Error(msg);
       }
 
-      return result.postUpdateDocs;
+      return result.postUpdateDocs ?? [];
     } catch (error) {
       console.error('Error updating calendar:', error);
       throw error;
@@ -226,17 +217,20 @@ class CalendarService {
     startDate: string,
     endDate: string,
     includeReservations: boolean = true,
+    /** true = fusion Inventory + InventoryArchive (historique lecture seule) */
+    includeArchive: boolean = true,
   ): Promise<any[]> {
     try {
       const start = new Date(startDate).toISOString().split('T')[0];
       const end = new Date(endDate).toISOString().split('T')[0];
       const inc = includeReservations ? 'true' : 'false';
+      const arch = includeArchive ? 'true' : 'false';
 
       const listingIdsParams = listingIds.map(id => `listingIds[]=${encodeURIComponent(id)}`).join('&');
       const url =
         `${CALENDAR_BASE}/inventory/get-inventory?${listingIdsParams}` +
         `&startDate=${encodeURIComponent(start)}&endDate=${encodeURIComponent(end)}` +
-        `&includeReservations=${inc}`;
+        `&includeReservations=${inc}&includeArchive=${arch}`;
 
       const response = await apiClient.get<{ success: boolean; data: any[]; message?: string }>(url);
 
