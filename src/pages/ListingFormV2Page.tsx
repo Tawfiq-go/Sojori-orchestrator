@@ -15,7 +15,10 @@ export function ListingFormV2Page() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const levelParam = searchParams.get('level');
-  const tabParam = searchParams.get('tab');
+  const tabParamRaw = searchParams.get('tab');
+  /** Ancien onglet « Montant & devise » fusionné dans Instructions départ */
+  const tabParam =
+    tabParamRaw === 'city-tax-config' ? 'messages-config' : tabParamRaw;
   const defaultLevel =
     levelParam === 'config-new' || levelParam === 'config' || levelParam === 'detail'
       ? levelParam

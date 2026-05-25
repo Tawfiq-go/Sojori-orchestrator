@@ -32,6 +32,8 @@ export interface AddTaskModalProps {
   onSuccess: (newTask?: unknown) => void;
   ownerId?: string;
   isAdminUser?: boolean;
+  useFulltaskApi?: boolean;
+  createTaskFn?: (formData: TaskFormData, ownerId?: string) => Promise<{ task?: unknown; data?: unknown }>;
 }
 
 const INITIAL_FORM_DATA: TaskFormData = {
@@ -54,7 +56,8 @@ const INITIAL_FORM_DATA: TaskFormData = {
   },
 };
 
-const STEPS = ['Contexte', 'Demande Client', 'Tâche'];
+const STEPS_LEGACY = ['Contexte', 'Demande Client', 'Tâche'];
+const STEPS_FULLTASK = ['Contexte', 'Tâche'];
 
 export function AddTaskModal({
   open,
@@ -62,6 +65,8 @@ export function AddTaskModal({
   onSuccess,
   ownerId,
   isAdminUser = false,
+  useFulltaskApi = false,
+  createTaskFn,
 }: AddTaskModalProps) {
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState<TaskFormData>(INITIAL_FORM_DATA);
@@ -79,16 +84,20 @@ export function AddTaskModal({
     try {
       setLoading(true);
       setError(null);
-      const response = await createTaskFromFormData(formData, ownerId);
-      onSuccess(response?.task);
+      const response =
+        useFulltaskApi && createTaskFn
+          ? await createTaskFn(formData, ownerId)
+          : await createTaskFromFormData(formData, ownerId);
+      onSuccess((response as { task?: unknown })?.task ?? (response as { data?: unknown })?.data);
       handleClose();
     } catch (err: unknown) {
       const axiosErr = err as {
-        response?: { data?: { message?: string } };
+        response?: { data?: { error?: string; message?: string } };
         message?: string;
       };
       setError(
-        axiosErr.response?.data?.message ||
+        axiosErr.response?.data?.error ||
+          axiosErr.response?.data?.message ||
           axiosErr.message ||
           'Erreur lors de la création de la tâche',
       );
@@ -97,9 +106,12 @@ export function AddTaskModal({
     }
   };
 
-  const canProceedStep1 =
-    formData.taskType && formData.listing && formData.reservation;
+  const steps = useFulltaskApi ? STEPS_FULLTASK : STEPS_LEGACY;
+  const canProceedStep1 = useFulltaskApi
+    ? formData.fulltaskTypeId && formData.listing && formData.reservation
+    : formData.taskType && formData.listing && formData.reservation;
   const canSubmit = formData.taskInfo.startDate && formData.taskInfo.endDate;
+  const lastStepIndex = steps.length - 1;
 
   const resolvedOwnerId =
     ownerId ||
@@ -114,6 +126,21 @@ export function AddTaskModal({
       maxWidth="md"
       fullWidth
       disableEscapeKeyDown={loading}
+      slotProps={{
+        backdrop: {
+          sx: {
+            backgroundColor: 'rgba(20, 17, 10, 0.35)',
+            backdropFilter: 'blur(2px)',
+          },
+        },
+        paper: {
+          sx: {
+            borderRadius: '12px',
+            overflow: 'hidden',
+            boxShadow: '0 24px 48px rgba(20,17,10,0.15)',
+          },
+        },
+      }}
     >
       <DialogTitle
         sx={{
@@ -138,7 +165,7 @@ export function AddTaskModal({
 
       <Box sx={{ px: 3, pt: 2 }}>
         <Stepper activeStep={activeStep}>
-          {STEPS.map((label) => (
+          {steps.map((label) => (
             <Step key={label}>
               <StepLabel>{label}</StepLabel>
             </Step>
@@ -153,9 +180,10 @@ export function AddTaskModal({
             onChange={(data) => setFormData((prev) => ({ ...prev, ...data }))}
             ownerId={ownerId}
             isAdminUser={isAdminUser}
+            useFulltaskApi={useFulltaskApi}
           />
         )}
-        {activeStep === 1 && (
+        {!useFulltaskApi && activeStep === 1 && (
           <Step2ClientRequest
             formData={formData}
             onChange={(clientRequest) =>
@@ -163,7 +191,7 @@ export function AddTaskModal({
             }
           />
         )}
-        {activeStep === 2 && (
+        {activeStep === lastStepIndex && (
           <Step3TaskInfo
             formData={formData}
             onChange={(taskInfo) =>
@@ -171,6 +199,8 @@ export function AddTaskModal({
             }
             ownerId={resolvedOwnerId}
             error={error}
+            useFulltaskApi={useFulltaskApi}
+            listingId={formData.listing?._id || formData.listing?.id}
           />
         )}
       </DialogContent>
@@ -187,10 +217,10 @@ export function AddTaskModal({
             Précédent
           </Button>
         )}
-        {activeStep < STEPS.length - 1 ? (
+        {activeStep < lastStepIndex ? (
           <Button
             onClick={() =>
-              setActiveStep((s) => Math.min(STEPS.length - 1, s + 1))
+              setActiveStep((s) => Math.min(lastStepIndex, s + 1))
             }
             variant="contained"
             disabled={activeStep === 0 && !canProceedStep1}

@@ -27,9 +27,43 @@ export function formatFrShort(iso: string): string {
 }
 
 export function filterRolling365(days: CalendarDay[], start = todayIsoLocal()): CalendarDay[] {
-  const end = addDaysIso(start, 365);
+  const windowEndExclusive = addDaysIso(start, 365);
+  const lastData = lastDayInSeries(days);
+  const endExclusive =
+    lastData && lastData >= addDaysIso(windowEndExclusive, -1)
+      ? addDaysIso(lastData, 1)
+      : windowEndExclusive;
   return [...days]
-    .filter((d) => d.date >= start && d.date < end)
+    .filter((d) => d.date >= start && d.date < endExclusive)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Dernier jour du 12ᵉ mois calendaire à partir du mois courant (ex. mai ’26 → 30 avr. ’27). */
+export function rolling12mEndIso(start = todayIsoLocal()): string {
+  const [y, m] = start.split('-').map(Number);
+  const last = new Date(y, m - 1 + 12, 0);
+  const yy = last.getFullYear();
+  const mm = String(last.getMonth() + 1).padStart(2, '0');
+  const dd = String(last.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+/** Fin d’affichage : 12 mois calendaires, ou dernier jour de données si au-delà (ex. mai ’27). */
+export function rolling12mDisplayEnd(start = todayIsoLocal(), lastDataIso?: string | null): string {
+  const windowEnd = rolling12mEndIso(start);
+  if (!lastDataIso) return windowEnd;
+  return lastDataIso > windowEnd ? lastDataIso : windowEnd;
+}
+
+export function lastDayInSeries(days: CalendarDay[]): string | null {
+  if (days.length === 0) return null;
+  return days.reduce((max, d) => (d.date > max ? d.date : max), days[0].date);
+}
+
+export function filterRolling12Months(days: CalendarDay[], start = todayIsoLocal()): CalendarDay[] {
+  const end = rolling12mDisplayEnd(start, lastDayInSeries(days));
+  return [...days]
+    .filter((d) => d.date >= start && d.date <= end)
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -77,17 +111,38 @@ function parseWeekday(iso: string): number {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
-/** Grille chronologique : uniquement du mois courant → fin fenêtre 365j (pas de mois passés). */
-export function buildRollingHeatmapMonths(
+/** Libellés mois pour la bande horizontale sous la grille (Mai ’26 … Mai ’27). */
+export function buildMonthAxisLabels(
+  today = todayIsoLocal(),
+  lastDataIso?: string | null,
+): { label: string; sortKey: number }[] {
+  const rangeEnd = rolling12mDisplayEnd(today, lastDataIso ?? null);
+  const startYear = Number(today.slice(0, 4));
+  const startMonth = Number(today.slice(5, 7)) - 1;
+  const endYear = Number(rangeEnd.slice(0, 4));
+  const endMonth = Number(rangeEnd.slice(5, 7)) - 1;
+  const endKey = monthSortKey(endYear, endMonth);
+  const labels: { label: string; sortKey: number }[] = [];
+  let y = startYear;
+  let mi = startMonth;
+  while (monthSortKey(y, mi) <= endKey) {
+    const yy = String(y).slice(2);
+    labels.push({ label: `${MONTHS_SHORT[mi]} '${yy}`, sortKey: monthSortKey(y, mi) });
+    mi += 1;
+    if (mi > 11) {
+      mi = 0;
+      y += 1;
+    }
+  }
+  return labels;
+}
+
+export function buildRolling12MonthsHeatmapMonths(
   days: CalendarDay[],
   today = todayIsoLocal(),
 ): HeatmapMonth[] {
-  const windowEnd = addDaysIso(today, 365);
-  const lastData =
-    days.length > 0
-      ? days.reduce((max, d) => (d.date > max ? d.date : max), days[0].date)
-      : windowEnd;
-  const rangeEnd = lastData < windowEnd ? lastData : addDaysIso(windowEnd, -1);
+  const lastData = lastDayInSeries(days);
+  const rangeEnd = rolling12mDisplayEnd(today, lastData);
 
   const startYear = Number(today.slice(0, 4));
   const startMonth = Number(today.slice(5, 7)) - 1;
@@ -110,17 +165,16 @@ export function buildRollingHeatmapMonths(
 
   return monthList
     .map(({ year, mi }) => {
-      const visibleDays = isoDaysInMonth(year, mi).filter(
-        (iso) => iso >= today && iso <= rangeEnd,
-      );
-      if (visibleDays.length === 0) {
-        return { label: '', sortKey: monthSortKey(year, mi), cells: [] as HeatmapCell[] };
+      const monthDays = isoDaysInMonth(year, mi).filter((iso) => iso >= today && iso <= rangeEnd);
+      if (monthDays.length === 0) {
+        const yy = String(year).slice(2);
+        return { label: `${MONTHS_SHORT[mi]} '${yy}`, sortKey: monthSortKey(year, mi), cells: [] as HeatmapCell[] };
       }
 
-      const lead = mondayFirstOffset(parseWeekday(visibleDays[0]));
+      const lead = mondayFirstOffset(parseWeekday(monthDays[0]));
       const cells: HeatmapCell[] = Array.from({ length: lead }, () => ({ type: 'pad' }));
 
-      for (const iso of visibleDays) {
+      for (const iso of monthDays) {
         const data = byDate.get(iso);
         if (data) {
           const phase: DayPhase = iso === today ? 'today' : 'future';
@@ -138,7 +192,68 @@ export function buildRollingHeatmapMonths(
         cells,
       };
     })
-    .filter((m) => m.cells.length > 0);
+    .filter((m) => m.label !== '');
+}
+
+/** Grille chronologique : uniquement du mois courant → fin fenêtre 365j (pas de mois passés). */
+export function buildRollingHeatmapMonths(
+  days: CalendarDay[],
+  today = todayIsoLocal(),
+): HeatmapMonth[] {
+  const windowEndInclusive = addDaysIso(today, 364);
+  const lastData = lastDayInSeries(days);
+  const rangeEnd =
+    lastData && lastData > windowEndInclusive ? lastData : windowEndInclusive;
+
+  const startYear = Number(today.slice(0, 4));
+  const startMonth = Number(today.slice(5, 7)) - 1;
+  const endYear = Number(rangeEnd.slice(0, 4));
+  const endMonth = Number(rangeEnd.slice(5, 7)) - 1;
+  const endKey = monthSortKey(endYear, endMonth);
+  const byDate = new Map(days.map((d) => [d.date, d]));
+
+  const monthList: { year: number; mi: number }[] = [];
+  let y = startYear;
+  let mi = startMonth;
+  while (monthSortKey(y, mi) <= endKey) {
+    monthList.push({ year: y, mi });
+    mi += 1;
+    if (mi > 11) {
+      mi = 0;
+      y += 1;
+    }
+  }
+
+  return monthList
+    .map(({ year, mi }) => {
+      const monthDays = isoDaysInMonth(year, mi).filter((iso) => iso >= today && iso <= rangeEnd);
+      if (monthDays.length === 0) {
+        const yy = String(year).slice(2);
+        return { label: `${MONTHS_SHORT[mi]} '${yy}`, sortKey: monthSortKey(year, mi), cells: [] as HeatmapCell[] };
+      }
+
+      const lead = mondayFirstOffset(parseWeekday(monthDays[0]));
+      const cells: HeatmapCell[] = Array.from({ length: lead }, () => ({ type: 'pad' }));
+
+      for (const iso of monthDays) {
+        const data = byDate.get(iso);
+        if (data) {
+          const phase: DayPhase = iso === today ? 'today' : 'future';
+          cells.push({ type: 'day', day: data, phase });
+        } else {
+          cells.push({ type: 'missing', date: iso });
+        }
+      }
+      while (cells.length % 7 !== 0) cells.push({ type: 'pad' });
+
+      const yy = String(year).slice(2);
+      return {
+        label: `${MONTHS_SHORT[mi]} '${yy}`,
+        sortKey: monthSortKey(year, mi),
+        cells,
+      };
+    })
+    .filter((m) => m.label !== '');
 }
 
 /** Année civile : Jan → Déc, passé / aujourd’hui / futur. */

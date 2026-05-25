@@ -7,10 +7,9 @@
 // • Header listing résumé + save bar sticky
 // • Slot `renderTab(tabKey)` à brancher sur tes composants existants
 // ════════════════════════════════════════════════════════════════════
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Stack, Typography, Button } from '@mui/material';
 import { LISTING_LAYOUT } from '../../../constants/listingLayout';
-import { countSchemaGaps } from '../../../features/listing/components/ConfigOrchestration/pmConfigSchemaRegistry';
 
 const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a', primaryTint: 'rgba(184,133,26,0.10)',
@@ -64,21 +63,30 @@ export const CONFIG_TABS = [
 
 export const CONFIG_NEW_TABS = [
   { group: 'Services', items: [
-    { id: 'support-config',        icon: '🆘', label: 'Support' },
-    { id: 'concierge-config',      icon: '🛎️', label: 'Conciergerie' },
-    { id: 'cleaning-config',       icon: '🏠', label: 'Ménage' },
-    { id: 'transport-config',      icon: '🚗', label: 'Transport' },
-    { id: 'grocery-config',        icon: '🛒', label: 'Courses' },
+    { id: 'access-config',            icon: '🔐', label: 'Accès' },
+    { id: 'support-config',           icon: '🆘', label: 'Support' },
+    { id: 'concierge-config',         icon: '🛎️', label: 'Conciergerie' },
+    { id: 'cleaning-config',          icon: '🏠', label: 'Ménage' },
+    { id: 'cleaning-sojori-config',   icon: '🧼', label: 'Ménage Sojori' },
+    { id: 'transport-config',         icon: '🚗', label: 'Transport' },
+    { id: 'grocery-config',           icon: '🛒', label: 'Courses' },
+    { id: 'messages-config',          icon: '🚪', label: 'Instructions départ' },
   ]},
   { group: 'Communication', items: [
     { id: 'service-client-config', icon: '💌', label: 'Service Client' },
-    { id: 'messages-config',       icon: '📜', label: 'Messages' },
     { id: 'whatsapp-config',       icon: '📱', label: 'Menu WhatsApp' },
   ]},
-  { group: 'Automation', items: [
-    { id: 'orchestration-config',  icon: '🧼', label: 'Automatisations' },
+  { group: 'Orchestration', items: [
+    { id: 'orchestration-config',  icon: '⚡', label: 'Orchestration' },
   ]},
 ];
+
+/** Nombre d’onglets Config Orch. NEW (pill toggle + vérif rail). */
+export const CONFIG_NEW_TAB_COUNT = CONFIG_NEW_TABS.reduce((n, g) => n + g.items.length, 0);
+
+const CONFIG_NEW_TAB_IDS = new Set(
+  CONFIG_NEW_TABS.flatMap(g => g.items.map(t => t.id)),
+);
 
 /* ─── Helpers UI ───────────────────────────────────────────── */
 function StatusChip({ tone, label, dot = true }) {
@@ -142,32 +150,56 @@ export default function ListingFormShell({
   tabsStatus = {},            // { [tabKey]: { tone, label } } — pour les badges
   defaultLevel = 'detail',    // 'detail' | 'config' | 'config-new'
   defaultTab = 'photos',
+  lockLevel,                  // masque le toggle et fige le niveau (ex. embed chatbot)
+  embedded = false,           // rendu dans un panneau (pas pleine page)
   onSave,
   onPublish,
   onPreview,
   onAiAssist,
   renderTab,                  // (tabKey, level) => ReactNode — branche tes vrais composants ici
 }) {
-  const [level, setLevel] = useState(defaultLevel);
+  const [level, setLevel] = useState(lockLevel || defaultLevel);
   const [activeTab, setActiveTab] = useState(defaultTab);
+
+  useEffect(() => {
+    setLevel(lockLevel || defaultLevel);
+  }, [defaultLevel, lockLevel]);
+
+  useEffect(() => {
+    if (!defaultTab) return;
+    if (defaultLevel === 'config-new' && !CONFIG_NEW_TAB_IDS.has(defaultTab)) return;
+    setActiveTab(defaultTab);
+  }, [defaultTab, defaultLevel]);
 
   const tabsConfig = level === 'detail' ? DETAIL_TABS : level === 'config' ? CONFIG_TABS : CONFIG_NEW_TABS;
   const activeTabMeta = tabsConfig.flatMap(g => g.items).find(t => t.id === activeTab) || tabsConfig[0].items[0];
-  const schemaGaps = level === 'config-new' ? countSchemaGaps(activeTab) : null;
   const listingDisplayName = (listing?.name && String(listing.name).trim()) || 'Listing sans nom';
   const locationLine = (listing?.location && String(listing.location).trim()) || '';
 
+  const lockedConfigNew = lockLevel === 'config-new';
+
   return (
-    <Box sx={{ bgcolor: T.bg0, minHeight: '100vh' }}>
-      <Box sx={{ p: LISTING_LAYOUT.pagePad, maxWidth: LISTING_LAYOUT.formMaxWidth, width: '100%', mx: 0 }}>
+    <Box sx={{ bgcolor: T.bg0, minHeight: embedded ? 0 : '100vh' }}>
+      <Box
+        sx={{
+          p: embedded ? { xs: 1, sm: 1.25 } : LISTING_LAYOUT.pagePad,
+          maxWidth: LISTING_LAYOUT.formMaxWidth,
+          width: '100%',
+          mx: 0,
+        }}
+      >
 
         {/* Toggle Détail/Config + nom listing sur une ligne (gain vertical) */}
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={{ xs: 1.25, sm: 2 }}
-          alignItems={{ xs: 'stretch', sm: 'flex-start' }}
-          sx={{ mb: 2 }}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: { xs: 1.25, sm: 2 },
+            mb: embedded ? 1.25 : 2,
+            alignItems: { xs: 'stretch', sm: 'flex-start' },
+          }}
         >
+          {!lockLevel && (
           <Box
             sx={{
               display: 'inline-flex',
@@ -183,7 +215,7 @@ export default function ListingFormShell({
             {[
               { id: 'detail', icon: '🏠', label: 'Détail listing', pillLabel: '11 onglets', accent: T.primary, tint: T.primaryTint, tintColor: T.primaryDeep },
               { id: 'config', icon: '⚙️', label: 'Config orchestration', pillLabel: '7 onglets', accent: T.ai, tint: T.aiTint, tintColor: T.ai },
-              { id: 'config-new', icon: '✨', label: 'Config Orch. NEW', pillLabel: '9 onglets', accent: '#b8851a', tint: 'rgba(184,133,26,0.10)', tintColor: '#876119' },
+              { id: 'config-new', icon: '✨', label: 'Config Orch. NEW', pillLabel: `${CONFIG_NEW_TAB_COUNT} onglets`, accent: '#b8851a', tint: 'rgba(184,133,26,0.10)', tintColor: '#876119' },
             ].map(opt => {
               const active = level === opt.id;
               return (
@@ -232,11 +264,47 @@ export default function ListingFormShell({
               );
             })}
           </Box>
+          )}
           <Box sx={{ flex: 1, minWidth: 0, pt: { xs: 0, sm: 0.25 } }}>
+            {lockedConfigNew && (
+              <Box
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  mb: 0.75,
+                  px: 1.25,
+                  py: 0.5,
+                  borderRadius: 1,
+                  bgcolor: 'rgba(184,133,26,0.10)',
+                  border: `1px solid ${T.primary}`,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  color: T.primaryDeep,
+                }}
+              >
+                <span>✨</span>
+                Config Orch. NEW
+                <Box
+                  component="span"
+                  sx={{
+                    fontFamily: '"Geist Mono", monospace',
+                    fontSize: 10,
+                    px: 0.75,
+                    py: '1px',
+                    borderRadius: '99px',
+                    bgcolor: T.bg1,
+                    color: T.text3,
+                  }}
+                >
+                  {CONFIG_NEW_TAB_COUNT} onglets
+                </Box>
+              </Box>
+            )}
             <Typography
               component="h1"
               sx={{
-                fontSize: { xs: 20, sm: 22 },
+                fontSize: embedded ? { xs: 17, sm: 18 } : { xs: 20, sm: 22 },
                 fontWeight: 800,
                 letterSpacing: '-0.03em',
                 color: T.text,
@@ -252,19 +320,20 @@ export default function ListingFormShell({
               </Typography>
             ) : null}
           </Box>
-        </Stack>
+        </Box>
 
         {/* Main frame */}
         <Box sx={{
           bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
           overflow: 'hidden',
           display: 'grid', gridTemplateColumns: { xs: '1fr', md: `${LISTING_LAYOUT.tabsRailWidth}px 1fr` },
-          minHeight: 560,
+          minHeight: embedded ? 420 : 560,
         }}>
           {/* Tabs rail */}
           <Stack sx={{
             borderRight: { md: `1px solid ${T.border}` },
             bgcolor: T.bg2, p: LISTING_LAYOUT.tabsRailPad, overflowY: 'auto',
+            maxHeight: { md: embedded ? 'calc(100vh - 220px)' : '80vh' },
           }}>
             {tabsConfig.map(g => (
               <React.Fragment key={g.group}>
@@ -287,14 +356,8 @@ export default function ListingFormShell({
           </Stack>
 
           {/* Content */}
-          <Box sx={{ p: LISTING_LAYOUT.contentPad, overflowY: 'auto', maxHeight: '80vh', position: 'relative' }}>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: activeTab === 'amenities' ? 1.25 : 1.5 }}>
-              {schemaGaps?.mockup > 0 && (
-                <StatusChip tone="warning" label={`${schemaGaps.mockup} mockup`} dot />
-              )}
-              {schemaGaps?.inSchema > 0 && level === 'config-new' && (
-                <StatusChip tone="success" label={`${schemaGaps.inSchema} schéma`} dot={false} />
-              )}
+          <Box sx={{ p: LISTING_LAYOUT.contentPad, overflowY: 'auto', maxHeight: embedded ? 'calc(100vh - 220px)' : '80vh', position: 'relative' }}>
+            <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center', flexWrap: 'wrap', mb: activeTab === 'amenities' ? 1.25 : 1.5 }}>
               <Typography
                 component="h2"
                 sx={{
@@ -316,8 +379,8 @@ export default function ListingFormShell({
             {/* Save bar sticky */}
             <Stack
               direction="row"
-              spacing={1.5}
               sx={{
+                gap: 1.5,
                 alignItems: 'center',
                 position: 'sticky',
                 bottom: 0,
@@ -333,16 +396,18 @@ export default function ListingFormShell({
             >
               <Stack
                 direction="row"
-                spacing={0.75}
                 sx={{
+                  gap: 0.75,
                   alignItems: 'center',
                   fontSize: 11,
                   color: T.text3,
                   fontFamily: '"Geist Mono", monospace',
                 }}
               >
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: T.success, boxShadow: `0 0 6px ${T.success}` }} />
-                Sauvegardé · il y a 2 s
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: level === 'config-new' ? T.info : T.success, boxShadow: level === 'config-new' ? `0 0 6px ${T.info}` : `0 0 6px ${T.success}` }} />
+                {level === 'config-new'
+                  ? 'Autosave par onglet · barre globale = détail OTA'
+                  : 'Sauvegarder pour enregistrer cet écran'}
               </Stack>
               <Box sx={{ flex: 1 }} />
               <Button onClick={onSave}    sx={btnGhost}>Sauvegarder</Button>

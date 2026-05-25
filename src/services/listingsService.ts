@@ -922,8 +922,12 @@ export const listingsService = {
   },
 
   /** GET /listing-chatbot-config/:listingId — aligné dashboard admin (WhatsApp menu). */
-  async getListingChatbotConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
-    return safeListingConfigGet(`${LISTING_API_BASE_URL}/listing-chatbot-config/${listingId}`);
+  async getListingChatbotConfig(
+    listingId: string,
+    ownerId?: string,
+  ): Promise<ListingSrvConfigFetchResult> {
+    const q = ownerId ? `?ownerId=${encodeURIComponent(ownerId)}` : '';
+    return safeListingConfigGet(`${LISTING_API_BASE_URL}/listing-chatbot-config/${listingId}${q}`);
   },
 
   /** GET /listing-chatbot-config/:listingId/check-sync */
@@ -941,8 +945,12 @@ export const listingsService = {
   },
 
   /** GET /listing-support-categories/:listingId */
-  async getListingSupportCategoriesConfig(listingId: string): Promise<ListingSrvConfigFetchResult> {
-    return safeListingConfigGet(`${LISTING_API_BASE_URL}/listing-support-categories/${listingId}`);
+  async getListingSupportCategoriesConfig(
+    listingId: string,
+    ownerId?: string,
+  ): Promise<ListingSrvConfigFetchResult> {
+    const q = ownerId ? `?ownerId=${encodeURIComponent(ownerId)}` : '';
+    return safeListingConfigGet(`${LISTING_API_BASE_URL}/listing-support-categories/${listingId}${q}`);
   },
 
   async getListingSupportSyncStatus(listingId: string): Promise<ListingSrvConfigFetchResult> {
@@ -1006,8 +1014,46 @@ export const listingsService = {
     });
   },
 
-  async createListingSupportCategories(listingId: string): Promise<ListingSrvConfigFetchResult> {
-    return safeListingConfigPost(`${LISTING_API_BASE_URL}/listing-support-categories`, { listingId });
+  async createListingSupportCategories(
+    listingId: string,
+    ownerId?: string,
+  ): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(`${LISTING_API_BASE_URL}/listing-support-categories`, {
+      listingId,
+      ...(ownerId ? { ownerId } : {}),
+    });
+  },
+
+  /** GET /listing-service-client-config/:listingId */
+  async getListingServiceClientConfig(
+    listingId: string,
+    ownerId?: string,
+  ): Promise<ListingSrvConfigFetchResult> {
+    const q = ownerId ? `?ownerId=${encodeURIComponent(ownerId)}` : '';
+    return safeListingConfigGet(
+      `${LISTING_API_BASE_URL}/listing-service-client-config/${listingId}${q}`,
+    );
+  },
+
+  async createListingServiceClientConfig(
+    listingId: string,
+    ownerId?: string,
+  ): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPost(`${LISTING_API_BASE_URL}/listing-service-client-config`, {
+      listingId,
+      ...(ownerId ? { ownerId } : {}),
+    });
+  },
+
+  async updateListingServiceClientConfig(
+    listingId: string,
+    body: Record<string, unknown>,
+    ownerId?: string,
+  ): Promise<ListingSrvConfigFetchResult> {
+    return safeListingConfigPut(
+      `${LISTING_API_BASE_URL}/listing-service-client-config/${listingId}`,
+      { ...body, ...(ownerId ? { ownerId } : {}) },
+    );
   },
 
   async syncListingSupportCategories(listingId: string): Promise<ListingSrvConfigFetchResult> {

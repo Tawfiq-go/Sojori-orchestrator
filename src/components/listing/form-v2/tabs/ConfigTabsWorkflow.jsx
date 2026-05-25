@@ -38,6 +38,9 @@ const ORCHESTRATION_GROUPS = [
   { label: 'Support', items: [
     { id: 'orchestration_support',   title: '🎧 Support',                   desc: 'Demandes support technique / urgence via chatbot · création ticket auto', badges: [{ tone: 'ai', label: 'srv-task' }] },
   ]},
+  { label: 'Service client', items: [
+    { id: 'orchestration_service_client', title: '💌 Service client', desc: 'Formulaire contact voyageur (menu WhatsApp L) · tâche service_client', badges: [{ tone: 'info', label: '📱 WhatsApp' }, { tone: 'ai', label: 'srv-fulltask' }] },
+  ]},
 ];
 
 export function OrchestrationTab({ values = {}, onChange, listingId }) {

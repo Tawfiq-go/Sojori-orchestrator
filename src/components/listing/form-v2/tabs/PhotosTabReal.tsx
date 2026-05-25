@@ -1,5 +1,5 @@
 // PhotosTabReal.tsx — Galerie prioritaire, aide / upload repliables
-import React, { useState } from 'react';
+import React, { useState, memo, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -44,7 +44,7 @@ interface PhotosTabProps {
   onAirbnbOrderChange?: (order: string) => void;
 }
 
-export function PhotosTabReal({
+export const PhotosTabReal = memo(function PhotosTabReal({
   listingId,
   listingImages = [],
   onChange,
@@ -52,7 +52,10 @@ export function PhotosTabReal({
   airbnbHeroOrder = '',
   onAirbnbOrderChange,
 }: PhotosTabProps) {
-  const validImageCount = listingImages.filter((img) => img.url && img.url.trim() !== '').length;
+  const validImageCount = useMemo(
+    () => listingImages.filter((img) => img.url && img.url.trim() !== '').length,
+    [listingImages],
+  );
   const [helpOpen, setHelpOpen] = useState(false);
   const [airbnbOpen, setAirbnbOpen] = useState(false);
 
@@ -164,6 +167,6 @@ export function PhotosTabReal({
       </Collapse>
     </Box>
   );
-}
+});
 
 export default PhotosTabReal;

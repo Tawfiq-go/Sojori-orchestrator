@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { listingsService } from '../../../../services/listingsService';
 
-export function useListingChatbotConfig(listingId?: string) {
+export function useListingChatbotConfig(listingId?: string, ownerId?: string) {
   return useQuery({
-    queryKey: ['listingChatbotConfig', listingId],
+    queryKey: ['listingChatbotConfig', listingId, ownerId],
     queryFn: async () => {
       if (!listingId) return null;
-      const result = await listingsService.getListingChatbotConfig(listingId);
+      const result = await listingsService.getListingChatbotConfig(listingId, ownerId);
       if (result.notFound) {
         const err = new Error(result.error || 'Configuration not found') as Error & { notFound?: boolean };
         err.notFound = true;

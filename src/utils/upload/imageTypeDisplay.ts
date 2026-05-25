@@ -1,6 +1,7 @@
 import type { ImageType } from '../../services/imageTypesService';
 
 export const IMAGE_CATEGORY_UNDEFINED_LABEL = 'Non défini';
+export const IMAGE_CATEGORY_LEGACY_LABEL = 'Type hors catalogue';
 
 export function isImageCategoryUndefined(imageTypeId: string | null | undefined): boolean {
   return !imageTypeId || !String(imageTypeId).trim();
@@ -23,6 +24,6 @@ export function getImageCategoryLabel(
 ): string {
   if (isImageCategoryUndefined(imageTypeId)) return IMAGE_CATEGORY_UNDEFINED_LABEL;
   const type = imageTypes.find((t) => String(t._id) === String(imageTypeId));
-  if (!type) return IMAGE_CATEGORY_UNDEFINED_LABEL;
+  if (!type) return IMAGE_CATEGORY_LEGACY_LABEL;
   return getImageTypeDisplayName(type);
 }

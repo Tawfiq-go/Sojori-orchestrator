@@ -53,8 +53,10 @@ import {
 moment.locale('fr');
 import { AddTaskModal } from '../components/tasks/AddTaskModal';
 import AssignStaffDialog from '../features/tasksNew/components/AssignStaffDialog.jsx';
+import { ModalPortal } from '../components/ModalPortal';
+import { createFulltaskFromFormData } from '../services/createFulltaskFromModal';
 import { useAuth } from '../hooks/useAuth';
-import tasksService, { resolveTasksUserScope } from '../services/tasksService';
+import tasksService, { resolveTasksUserScope } from '../services/fulltaskTasksService';
 import type {
   TaskEmergency,
   TaskListItem,
@@ -68,22 +70,25 @@ import {
   getNextTaskStatus,
   normalizeTaskStatus,
 } from '../types/tasks.types';
+import {
+  FULLTASK_TASK_TYPES,
+  FULLTASK_TASK_TYPE_EMOJI,
+  labelForTaskTypeId,
+} from '../features/taskHub/staff-design/fulltaskTaskTypes';
 
-/** Colonnes compactes — tableau ~100% viewport sans scroll horizontal (colonnes optionnelles via menu) */
+/** Colonnes compactes — liste fulltask (optionnelles via menu colonnes) */
 const COLUMN_WIDTHS = {
+  itemNumber: '84px',
+  category: '132px',
+  listing: '112px',
+  voyageur: '108px',
+  executionDate: '88px',
+  urgence: '58px',
+  source: '56px',
+  status: '96px',
+  assignedStaff: '96px',
+  description: '120px',
   createdAt: '72px',
-  urgence: '64px',
-  listing: '108px',
-  itemNumber: '78px',
-  reservationSource: '74px',
-  category: '116px',
-  voyageur: '96px',
-  executionDate: '72px',
-  taskHours: '76px',
-  description: '88px',
-  status: '82px',
-  assignedStaff: '92px',
-  paymentPrice: '48px',
 } as const;
 
 const toolbarSelectSx = { minWidth: 0, '& .MuiSelect-select': { py: 0.875 } } as const;
@@ -478,13 +483,91 @@ function formatTimeValue(timeInput: string | number | null | undefined): string 
 }
 
 function firstDescriptionLine(task: TaskListItem): string {
+  if (task.comment?.trim()) return task.comment.trim();
   const descriptions = task.descriptions || [];
   const first = descriptions[0];
   if (typeof first === 'string') return first;
   if (first && typeof first === 'object' && 'description' in first && first.description) {
     return String(first.description);
   }
-  return task.type || 'Sans description';
+  return '';
+}
+
+function formatPlannedParts(task: TaskListItem): { date: string; time?: string } | null {
+  const dayOnlyTypes = new Set([
+    'registration',
+    'arrival_choose',
+    'arrival_declare',
+    'departure_choose',
+    'departure_declare',
+    'cleaning_free',
+  ]);
+  const taskType = String(task.type || task.subType || '');
+
+  let startIso = task.startDate;
+  if (!startIso && dayOnlyTypes.has(taskType)) {
+    if (
+      taskType === 'departure_choose' ||
+      taskType === 'departure_declare'
+    ) {
+      startIso = task.reservationCheckOut
+        ? `${String(task.reservationCheckOut).slice(0, 10)}T00:00:00.000Z`
+        : undefined;
+    } else if (task.reservationCheckIn) {
+      startIso = `${String(task.reservationCheckIn).slice(0, 10)}T00:00:00.000Z`;
+    }
+  }
+  if (!startIso) return null;
+
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return null;
+  const date = start.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
+
+  if (dayOnlyTypes.has(taskType)) {
+    return { date };
+  }
+
+  const tStart = start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  if (task.endDate) {
+    const end = new Date(task.endDate);
+    if (!Number.isNaN(end.getTime()) && end.getTime() !== start.getTime()) {
+      const tEnd = end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      return { date, time: `${tStart} → ${tEnd}` };
+    }
+  }
+  return { date, time: tStart };
+}
+
+function sourceChipMeta(source?: string | null): { label: string; bg: string; color: string } {
+  const s = String(source || '').toLowerCase();
+  if (s === 'orchestrator' || s === 'orchestration') {
+    return { label: 'Orch.', bg: 'rgba(59,130,246,0.12)', color: '#1d4ed8' };
+  }
+  return { label: 'Manuel', bg: 'rgba(20,17,10,0.06)', color: T.text2 };
+}
+
+function taskTypeSubline(task: TaskListItem): ReactNode {
+  const note = firstDescriptionLine(task);
+  if (note) {
+    return (
+      <Typography
+        sx={{ fontSize: 10, color: T.text3, lineHeight: 1.2, mt: 0.25 }}
+        noWrap
+        title={note}
+      >
+        {note}
+      </Typography>
+    );
+  }
+  const res = task.reservationNumber || task.reservationId;
+  if (res) {
+    return (
+      <Typography sx={{ fontSize: 10, color: T.text3, lineHeight: 1.2, mt: 0.25 }} noWrap>
+        Rés. {res}
+      </Typography>
+    );
+  }
+  return null;
 }
 
 function categoryLabel(task: TaskListItem): string {
@@ -517,6 +600,12 @@ function categoryLabel(task: TaskListItem): string {
     Concierge: '🛎️ Conciergerie',
     Support: '🆘 Support',
   };
+
+  const ft = task.subType || task.type || '';
+  if (ft && labelForTaskTypeId(ft) !== ft) {
+    const em = FULLTASK_TASK_TYPE_EMOJI[ft as keyof typeof FULLTASK_TASK_TYPE_EMOJI] || '';
+    return `${em ? `${em} ` : ''}${labelForTaskTypeId(ft)}`;
+  }
 
   const n = task.name || '';
   const st = task.subType || '';
@@ -569,24 +658,14 @@ const STATUS_MULTI_OPTIONS: { id: string; label: string }[] = [
   { id: 'ARCHIVED', label: 'Archivé' },
 ];
 
-const CATEGORY_MULTI_OPTIONS: { id: string; label: string }[] = [
-  { id: 'arrival', label: '🛬 Arrivée' },
-  { id: 'departure', label: '🛫 Départ' },
-  { id: 'cleaning', label: '🧹 Ménage' },
-  { id: 'registration', label: '📋 Enregistrement' },
-  { id: 'transport', label: '🚗 Transport' },
-  { id: 'grocery', label: '🛒 Courses' },
-  { id: 'custom', label: '✨ Demande personnalisée' },
-  { id: 'support', label: '🆘 Support' },
-  { id: 'maintenance', label: '🔧 Maintenance' },
-];
+const CATEGORY_MULTI_OPTIONS: { id: string; label: string }[] = FULLTASK_TASK_TYPES.map((id) => ({
+  id,
+  label: `${FULLTASK_TASK_TYPE_EMOJI[id] || '📋'} ${labelForTaskTypeId(id)}`,
+}));
 
 const SOURCE_MULTI_OPTIONS: { id: string; label: string }[] = [
-  { id: 'MANUAL', label: 'Manuel' },
-  { id: 'TIMESLOT', label: 'Timeslot' },
-  { id: 'SUPPORT_REQUEST', label: 'Support' },
-  { id: 'CONCIERGE_FLOW', label: 'Concierge' },
-  { id: 'ORCHESTRATION', label: 'Orchestration' },
+  { id: 'manual', label: '✋ Manuel' },
+  { id: 'orchestrator', label: '⚙️ Orchestration' },
 ];
 
 function detailsTimeslotSummary(task: TaskListItem): string {
@@ -788,6 +867,7 @@ export function TasksListPage() {
   const [tempSources, setTempSources] = useState<string[]>([]);
 
   const [showDescription, setShowDescription] = useState(false);
+  const [showCreatedAt, setShowCreatedAt] = useState(false);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
 
   const loadStaffAndListings = useCallback(async () => {
@@ -1045,7 +1125,7 @@ export function TasksListPage() {
 
     try {
       setStatusUpdating(task._id);
-      await tasksService.deleteTask(task.itemNumber);
+      await tasksService.deleteTask(String(task._id));
       toast.success('Tâche supprimée');
       closeActionsMenu();
       await fetchTasks();
@@ -1095,28 +1175,123 @@ export function TasksListPage() {
 
   const columns = [
     {
-      key: 'createdAt',
-      label: 'Créé le',
-      width: COLUMN_WIDTHS.createdAt,
+      key: 'name',
+      label: 'Code',
+      width: COLUMN_WIDTHS.itemNumber,
+      render: (row: TaskRow) => (
+        <Typography
+          sx={{
+            fontFamily: '"Geist Mono", monospace',
+            fontSize: 11,
+            fontWeight: 700,
+            color: T.primaryDeep,
+          }}
+          noWrap
+          title={row.itemNumber || ''}
+        >
+          {row.itemNumber || '—'}
+        </Typography>
+      ),
+    },
+    {
+      key: 'category',
+      label: 'Type',
+      width: COLUMN_WIDTHS.category,
+      render: (row: TaskRow) => {
+        const label = categoryLabel(row);
+        return (
+          <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
+            <Tooltip title={label} arrow placement="top">
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: T.text,
+                  lineHeight: 1.2,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {label}
+              </Typography>
+            </Tooltip>
+            {taskTypeSubline(row)}
+          </Box>
+        );
+      },
+    },
+    {
+      key: 'listingName',
+      label: 'Logement',
+      width: COLUMN_WIDTHS.listing,
+      align: 'left' as const,
+      render: (row: TaskRow) => (
+        <Typography sx={{ fontSize: 12, fontWeight: 600 }} noWrap title={row.listingName || ''}>
+          {row.listingName || '—'}
+        </Typography>
+      ),
+    },
+    {
+      key: 'voyageur',
+      label: 'Invité',
+      width: COLUMN_WIDTHS.voyageur,
+      align: 'left' as const,
+      render: (row: TaskRow) => {
+        if (!row.guestName) {
+          return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
+        }
+        const tip = [row.guestName, row.guestPhone, row.reservationNumber]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <Tooltip title={tip} arrow>
+            <Stack spacing={0.15} sx={{ minWidth: 0 }}>
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: T.text,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {row.guestName}
+              </Typography>
+              {row.guestPhone ? (
+                <Typography sx={{ fontSize: 10, color: T.text3 }} noWrap>
+                  {row.guestPhone}
+                </Typography>
+              ) : null}
+            </Stack>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      key: 'executionDate',
+      label: 'Prévu',
+      width: COLUMN_WIDTHS.executionDate,
       align: 'center' as const,
       render: (row: TaskRow) => {
-        const parts = formatCreatedAtParts(row.createdAt);
+        const parts = formatPlannedParts(row);
         if (!parts) {
-          return (
-            <Typography sx={{ fontSize: 12, color: T.text3, textAlign: 'center' }}>—</Typography>
-          );
+          return <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center' }}>—</Typography>;
         }
         return (
           <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
-            <Typography sx={{ fontSize: 11, color: T.text2 }}>{parts.date}</Typography>
-            <Typography sx={{ fontSize: 10, color: T.text3, fontWeight: 600 }}>{parts.time}</Typography>
+            <Typography sx={{ fontSize: 11, fontWeight: 600 }}>{parts.date}</Typography>
+            {parts.time ? (
+              <Typography sx={{ fontSize: 10, color: T.text3 }}>{parts.time}</Typography>
+            ) : null}
           </Stack>
         );
       },
     },
     {
       key: 'urgence',
-      label: 'Urgence',
+      label: 'Priorité',
       width: COLUMN_WIDTHS.urgence,
       align: 'center' as const,
       render: (row: TaskRow) => {
@@ -1140,168 +1315,27 @@ export function TasksListPage() {
       },
     },
     {
-      key: 'listingName',
-      label: 'Listing',
-      width: COLUMN_WIDTHS.listing,
-      align: 'left' as const,
-      render: (row: TaskRow) => (
-        <Typography sx={{ fontSize: 12, fontWeight: 600 }} noWrap title={row.listingName || ''}>
-          {row.listingName || '—'}
-        </Typography>
-      ),
-    },
-    {
-      key: 'name',
-      label: 'Code tâche',
-      width: COLUMN_WIDTHS.itemNumber,
-      render: (row: TaskRow) => (
-        <Typography
-          sx={{
-            fontFamily: '"Geist Mono", monospace',
-            fontSize: 12,
-            fontWeight: 700,
-            color: T.primaryDeep,
-          }}
-          noWrap
-        >
-          {row.itemNumber || '—'}
-        </Typography>
-      ),
-    },
-    {
-      key: 'reservationSource',
-      label: 'Réservation',
-      width: COLUMN_WIDTHS.reservationSource,
+      key: 'source',
+      label: 'Origine',
+      width: COLUMN_WIDTHS.source,
       align: 'center' as const,
-      render: (row: TaskRow) => (
-        <Stack spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
-          <Typography
+      render: (row: TaskRow) => {
+        const meta = sourceChipMeta(row.source);
+        return (
+          <Chip
+            label={meta.label}
+            size="small"
             sx={{
-              fontFamily: '"Geist Mono", monospace',
-              fontSize: 11,
+              height: 20,
+              fontSize: 10,
               fontWeight: 700,
-              color: T.primaryDeep,
-              lineHeight: 1.2,
+              bgcolor: meta.bg,
+              color: meta.color,
+              '& .MuiChip-label': { px: 0.75 },
             }}
-            noWrap
-            title={row.reservationNumber || ''}
-          >
-            {row.reservationNumber || '—'}
-          </Typography>
-          <OTABadge channel={otaChannelForRow(row)} />
-        </Stack>
-      ),
-    },
-    {
-      key: 'category',
-      label: 'Catégorie',
-      width: COLUMN_WIDTHS.category,
-      render: (row: TaskRow) => {
-        const label = categoryLabel(row);
-        const sub = categorySubline(row);
-        return (
-          <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
-            <Tooltip title={label} arrow placement="top">
-              <Typography
-                sx={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: T.text,
-                  lineHeight: 1.2,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {label}
-              </Typography>
-            </Tooltip>
-            {sub}
-          </Box>
+          />
         );
       },
-    },
-    {
-      key: 'voyageur',
-      label: 'Voyageur',
-      width: COLUMN_WIDTHS.voyageur,
-      align: 'left' as const,
-      render: (row: TaskRow) => {
-        if (!row.guestName) {
-          return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
-        }
-        const tip = [row.guestName, row.guestCountry].filter(Boolean).join(' · ');
-        return (
-          <Tooltip title={tip} arrow>
-            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
-              <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{flagFor(row.guestCountry)}</span>
-              <Typography
-                sx={{
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  color: T.text,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {row.guestName}
-              </Typography>
-            </Stack>
-          </Tooltip>
-        );
-      },
-    },
-    {
-      key: 'executionDate',
-      label: 'Prévu',
-      width: COLUMN_WIDTHS.executionDate,
-      align: 'center' as const,
-      render: (row: TaskRow) => (
-        <Stack spacing={0.35} sx={{ alignItems: 'center' }}>
-          <Typography sx={{ fontSize: 12, fontWeight: 600 }}>
-            {row.startDate
-              ? new Date(row.startDate).toLocaleDateString('fr-FR', {
-                  day: '2-digit',
-                  month: 'short',
-                  year: '2-digit',
-                })
-              : '—'}
-          </Typography>
-          {row.execution_hours?.start !== undefined &&
-            row.execution_hours?.end !== undefined && (
-              <Typography sx={{ fontSize: 11, color: T.text3 }}>
-                {formatTimeValue(row.execution_hours.start)}–
-                {formatTimeValue(row.execution_hours.end)}
-              </Typography>
-            )}
-        </Stack>
-      ),
-    },
-    {
-      key: 'taskHours',
-      label: 'Heure tâche',
-      width: COLUMN_WIDTHS.taskHours,
-      align: 'center' as const,
-      render: (row: TaskRow) => (
-        <Stack spacing={0.35} sx={{ alignItems: 'center', minWidth: 0 }}>
-          {renderHeureTaskTop(row)}
-          {renderTimeslotClientBottom(row)}
-        </Stack>
-      ),
-    },
-    {
-      key: 'description',
-      label: 'Description',
-      width: COLUMN_WIDTHS.description,
-      align: 'center' as const,
-      render: (row: TaskRow) => (
-        <Tooltip title={firstDescriptionLine(row)}>
-          <Typography sx={{ fontSize: 12, maxWidth: 150 }} noWrap>
-            {firstDescriptionLine(row)}
-          </Typography>
-        </Tooltip>
-      ),
     },
     {
       key: 'status',
@@ -1310,14 +1344,12 @@ export function TasksListPage() {
       align: 'center' as const,
       render: (row: TaskRow) => {
         const status = normalizeTaskStatus(row.taskStatus);
+        const waitingGuest = row.isClientRequest && status === 'CREATED';
+        const statusLabel = waitingGuest ? 'Attente invité' : TASK_STATUS_LABELS[status];
+        const statusVariant = waitingGuest ? 'warning' : TASK_STATUS_VARIANTS[status];
         return (
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
-            <Badge variant={TASK_STATUS_VARIANTS[status]}>{TASK_STATUS_LABELS[status]}</Badge>
-            {status === 'CREATED' && row.isClientConfirmed === false && (
-              <Typography component="span" sx={{ fontSize: 14 }} title="En attente de sélection client">
-                ⏳
-              </Typography>
-            )}
+            <Badge variant={statusVariant}>{statusLabel}</Badge>
             <IconButton
               size="small"
               disabled={statusUpdating === row._id}
@@ -1337,61 +1369,54 @@ export function TasksListPage() {
       key: 'staffName',
       label: 'Staff',
       width: COLUMN_WIDTHS.assignedStaff,
-      render: (row: TaskRow) => (
-        <StaffAssignCell task={row} onAssign={openAssignStaff} />
-      ),
+      render: (row: TaskRow) => <StaffAssignCell task={row} onAssign={openAssignStaff} />,
     },
     {
-      key: 'paymentPrice',
-      label: 'Paiement',
-      width: COLUMN_WIDTHS.paymentPrice,
+      key: 'description',
+      label: 'Note',
+      width: COLUMN_WIDTHS.description,
+      align: 'left' as const,
+      render: (row: TaskRow) => {
+        const line = firstDescriptionLine(row);
+        if (!line) {
+          return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
+        }
+        return (
+          <Tooltip title={line} arrow>
+            <Typography sx={{ fontSize: 11, color: T.text2, maxWidth: 160 }} noWrap>
+              {line}
+            </Typography>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      key: 'createdAt',
+      label: 'Créé',
+      width: COLUMN_WIDTHS.createdAt,
       align: 'center' as const,
       render: (row: TaskRow) => {
-        if (!row.price || row.price <= 0) {
-          return (
-            <Typography
-              sx={{
-                fontSize: 9.5,
-                fontWeight: 600,
-                color: T.text3,
-                textAlign: 'center',
-                letterSpacing: '0.02em',
-              }}
-            >
-              N/A
-            </Typography>
-          );
+        const parts = formatCreatedAtParts(row.createdAt);
+        if (!parts) {
+          return <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center' }}>—</Typography>;
         }
-        const payMeta = paymentChipMeta(row.paymentStatus);
-        const payLabel = (row.paymentStatus || 'NOT_PAID').replace(/_/g, ' ');
         return (
-          <Tooltip title={`${row.price} MAD · ${payLabel}`} arrow placement="top">
-            <Chip
-              size="small"
-              label={row.paid ? '✓' : '·'}
-              sx={{
-                height: 20,
-                minWidth: 28,
-                fontSize: 11,
-                fontWeight: 700,
-                bgcolor: payMeta.bg,
-                color: payMeta.color,
-                '& .MuiChip-label': { px: 0.75 },
-              }}
-            />
-          </Tooltip>
+          <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
+            <Typography sx={{ fontSize: 10, color: T.text2 }}>{parts.date}</Typography>
+            <Typography sx={{ fontSize: 10, color: T.text3 }}>{parts.time}</Typography>
+          </Stack>
         );
       },
     },
   ];
 
-  // Filter columns based on visibility toggles
   const visibleColumns = columns.filter((col) => {
     if (col.key === 'description' && !showDescription) return false;
+    if (col.key === 'createdAt' && !showCreatedAt) return false;
     return true;
   });
 
-  const optionalColumnsOn = showDescription ? 1 : 0;
+  const optionalColumnsOn = (showDescription ? 1 : 0) + (showCreatedAt ? 1 : 0);
 
   return (
     <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
@@ -1400,7 +1425,7 @@ export function TasksListPage() {
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
             <TextField
               size="small"
-              placeholder="Résa, propriété, code tâche…"
+              placeholder="Code, invité, logement, type…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               slotProps={{
@@ -1417,7 +1442,10 @@ export function TasksListPage() {
             <Button
               variant="contained"
               size="small"
-              onClick={() => setAddTaskOpen(true)}
+              onClick={(e) => {
+                (e.currentTarget as HTMLElement).blur();
+                setAddTaskOpen(true);
+              }}
               sx={{
                 textTransform: 'none',
                 bgcolor: T.primary,
@@ -1458,7 +1486,7 @@ export function TasksListPage() {
                   setListFilters((p) => ({ ...p, subTypes: e.target.value as string[] }));
                   setPage(0);
                 }}
-                renderValue={(s) => `Catégorie · ${(s as string[]).length || 'toutes'}`}
+                renderValue={(s) => `Type · ${(s as string[]).length || 'tous'}`}
               >
                 {CATEGORY_MULTI_OPTIONS.map((c) => (
                   <MenuItem key={c.id} value={c.id}>
@@ -1785,34 +1813,41 @@ export function TasksListPage() {
               </Button>
             </DialogActions>
           </Dialog>
-
       </Box>
 
-      {assignStaffOpen && taskToAssign ? (
-        <AssignStaffDialog
-          open={assignStaffOpen}
-          onClose={() => {
-            setAssignStaffOpen(false);
-            setTaskToAssign(null);
-          }}
-          task={taskToAssign}
-          ownerId={assignOwnerId}
+      <ModalPortal>
+          {assignStaffOpen && taskToAssign ? (
+            <AssignStaffDialog
+              useFulltaskApi
+              open={assignStaffOpen}
+              onClose={() => {
+                setAssignStaffOpen(false);
+                setTaskToAssign(null);
+              }}
+              task={taskToAssign}
+              ownerId={assignOwnerId}
+              onSuccess={() => {
+                toast.success('Staff assigné');
+                void fetchTasks();
+              }}
+            />
+          ) : null}
+        </ModalPortal>
+
+      {addTaskOpen ? (
+        <AddTaskModal
+          useFulltaskApi
+          createTaskFn={createFulltaskFromFormData}
+          open
+          onClose={() => setAddTaskOpen(false)}
+          ownerId={scope.ownerId}
+          isAdminUser={scope.canAccessAllOwners}
           onSuccess={() => {
+            toast.success('Tâche créée');
             void fetchTasks();
           }}
         />
       ) : null}
-
-      <AddTaskModal
-        open={addTaskOpen}
-        onClose={() => setAddTaskOpen(false)}
-        ownerId={scope.ownerId}
-        isAdminUser={scope.canAccessAllOwners}
-        onSuccess={() => {
-          toast.success('Tâche créée');
-          void fetchTasks();
-        }}
-      />
 
       <Menu
         anchorEl={actionsMenu?.anchor ?? null}
@@ -1877,7 +1912,7 @@ export function TasksListPage() {
             Colonnes optionnelles
           </Typography>
           <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.5 }}>
-            Heure tâche et détails catégorie sont toujours visibles
+            Colonnes de base : code, type, logement, invité, prévu, priorité, origine, statut, staff
           </Typography>
         </Box>
         <MenuItem onClick={() => setShowDescription(!showDescription)} sx={{ fontSize: 13, py: 1.25 }}>
@@ -1891,7 +1926,21 @@ export function TasksListPage() {
             }}>
               {showDescription && '✓'}
             </Box>
-            <Typography sx={{ fontSize: 13, color: T.text2 }}>Description</Typography>
+            <Typography sx={{ fontSize: 13, color: T.text2 }}>Note / demande</Typography>
+          </Box>
+        </MenuItem>
+        <MenuItem onClick={() => setShowCreatedAt(!showCreatedAt)} sx={{ fontSize: 13, py: 1.25 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+            <Box sx={{
+              width: 18, height: 18, borderRadius: '4px',
+              border: `2px solid ${showCreatedAt ? T.primary : T.border}`,
+              bgcolor: showCreatedAt ? T.primary : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 10, fontWeight: 700,
+            }}>
+              {showCreatedAt && '✓'}
+            </Box>
+            <Typography sx={{ fontSize: 13, color: T.text2 }}>Date de création</Typography>
           </Box>
         </MenuItem>
         <Box sx={{ px: 2, py: 1.5, borderTop: `1px solid ${T.border}`, bgcolor: T.bg2 }}>

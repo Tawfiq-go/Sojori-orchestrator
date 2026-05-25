@@ -8,6 +8,7 @@ import SimpleView from './SimpleView';
 import ColumnFilters from './ColumnFilters';
 import UpdateInventoryModal from './UpdateInventoryModal';
 import CalendarDatePicker from './CalendarDatePicker';
+import DpSyncAuditStrip from './DpSyncAuditStrip';
 import {
   MULTI_VISIBLE_DAYS,
   INVENTORY_PAST_RETENTION_DAYS,
@@ -39,6 +40,9 @@ export default function CalendarInventoryPage({
   onUpdateInventory,
   onDateChange,
   defaultView = 'multi',
+  dpSyncSummary = null,
+  dpSyncLoading = false,
+  listingNameById = {},
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsProp || [];
 
@@ -344,7 +348,12 @@ export default function CalendarInventoryPage({
           Historique gris · hors fenêtre : — (pas de 0)
         </span>
 
-        <div style={{ flex: 1 }} />
+        <DpSyncAuditStrip
+          summary={dpSyncSummary}
+          listingNameById={listingNameById}
+          selectedListingId={view === 'simple' ? selectedListingId : null}
+          loading={dpSyncLoading}
+        />
 
         {view === 'multi' && (
           <ColumnFilters selectedColumns={selectedColumns} onChange={setSelectedColumns} />
@@ -411,6 +420,7 @@ export default function CalendarInventoryPage({
         selectedCells={modalCells || []}
         currency={selectedListing?.currencyCode || 'EUR'}
         inventoryData={inventoryData}
+        listings={listings}
         onClose={() => setModalCells(null)}
         onSave={async (payloads) => {
           await onUpdateInventory?.(payloads);

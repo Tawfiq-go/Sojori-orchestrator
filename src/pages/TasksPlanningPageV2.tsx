@@ -3,13 +3,14 @@
 // Remplace TasksPlanningPage.tsx avec le nouveau StayView
 // Intègre: sidebar, filtres actifs, scope user, owner selection
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Box, CircularProgress, Alert } from '@mui/material';
-import { format, addDays } from 'date-fns';
+import { format, addDays, subDays } from 'date-fns';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import StayView from '../components/calendar-views/StayView';
 import type { ListingRow, TimelineItem } from '../components/calendar-views/_shared';
-import tasksService, { resolveTasksUserScope } from '../services/tasksService';
+import { resolveTasksUserScope } from '../services/fulltaskTasksService';
+import { fetchTaskNewPlanning } from '../services/planningFulltaskMerge';
 import listingsService from '../services/listingsService';
 import cleanlinessService from '../services/cleanlinessService';
 import type { DisplayCleanliness } from '../utils/cleanlinessDisplay';
@@ -18,11 +19,15 @@ import { useAuth } from '../hooks/useAuth';
 import { getStoredOwners } from '../data/catalogueMock';
 
 /**
- * ✅ IMPORTANT: Utilise la MÊME API que /reservations/planning
- * - listingsService.getListings() pour récupérer TOUS les listings actifs
- * - tasksService.getReservationPlanning() pour récupérer réservations + tâches
- * Pattern identique à ReservationsPlanningPage
+ * TaskNew planning :
+ * - listingsService.getListings() — listings actifs (srv-listing)
+ * - fetchTaskNewPlanning() — réservations srv-reservations + tâches srv-fulltask (admin BFF)
+ * Pas d’appel srv-task / reservation/planning legacy.
  */
+
+/** Jours passés / futurs visibles (aligné /reservations/planning) */
+const PLANNING_LOOKBACK_DAYS = 30;
+const PLANNING_FORWARD_DAYS = 45;
 
 export default function TasksPlanningPageV2() {
   const navigate = useNavigate();
@@ -30,14 +35,18 @@ export default function TasksPlanningPageV2() {
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false); // Pour navigation sans bloquer l'UI
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [calendarReady, setCalendarReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const windowRequestIdRef = useRef(0);
+  const skipNextWindowOnlyFetchRef = useRef(false);
   const [startDate, setStartDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - PLANNING_LOOKBACK_DAYS);
     return d;
   });
-  const [daysCount] = useState(30); // Mini-map 30 jours
+  const [daysCount] = useState(PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS);
 
   // ✅ CHANGEMENT: Stocker listings et rawData séparément (comme ReservationsPlanningPage)
   const [activeListings, setActiveListings] = useState<any[]>([]);
@@ -61,75 +70,97 @@ export default function TasksPlanningPageV2() {
     return scope.ownerId;
   }, [scope.canAccessAllOwners, scope.ownerId, adminOwnerId]);
 
-  // ✅ CHANGEMENT: Fetch data from listingsService + tasksService (comme ReservationsPlanningPage)
-  useEffect(() => {
-    const fetchPlanning = async () => {
-      // Premier chargement = loading complet, navigation = refreshing discret
-      const isFirstLoad = activeListings.length === 0 && rawData === null;
-      if (isFirstLoad) {
-        setIsLoading(true);
-      } else {
-        setIsRefreshing(true);
+  const fetchListings = useCallback(async () => {
+    const listingsResponse = await listingsService.getListings({
+      useActiveFilter: true,
+      active: true,
+      limit: 1000,
+    });
+    setActiveListings(listingsResponse.data.items);
+  }, []);
+
+  const fetchWindowData = useCallback(async () => {
+    const requestId = ++windowRequestIdRef.current;
+    setIsRefreshing(true);
+    setError(null);
+
+    try {
+      if (!scope.canAccessAllOwners && !scope.ownerId) {
+        throw new Error('Impossible de déterminer le ownerId de la session.');
       }
-      setError(null);
 
-      try {
-        if (!scope.canAccessAllOwners && !scope.ownerId) {
-          throw new Error('Impossible de déterminer le ownerId de la session.');
-        }
+      const endDateStr = format(addDays(startDate, daysCount), 'yyyy-MM-dd');
+      const startDateStr = format(startDate, 'yyyy-MM-dd');
 
-        const endDateStr = format(addDays(startDate, daysCount), 'yyyy-MM-dd');
-        const startDateStr = format(startDate, 'yyyy-MM-dd');
+      const result = await fetchTaskNewPlanning({
+        startDate: startDateStr,
+        endDate: endDateStr,
+        ownerId: planningOwnerId,
+      });
 
-        // ✅ ÉTAPE 1: Récupérer TOUS les listings actifs depuis listingsService
-        console.log('[TasksPlanningPageV2] 🔄 Fetching active listings from listingsService...');
-        const listingsResponse = await listingsService.getListings({
-          useActiveFilter: true,
-          active: true,
-          limit: 1000,
-        });
+      if (requestId !== windowRequestIdRef.current) return;
 
-        console.log('[TasksPlanningPageV2] ✅ Active listings:', listingsResponse.data.items.length);
-        console.log('[TasksPlanningPageV2] ✅ Listings:', listingsResponse.data.items.map((l: any) => ({
-          id: l.id,
-          name: l.name,
-          city: l.city
-        })));
-        setActiveListings(listingsResponse.data.items);
-
-        // ✅ ÉTAPE 2: Récupérer réservations + tâches depuis tasksService
-        console.log('[TasksPlanningPageV2] 🔄 Fetching reservations + tasks from tasksService...');
-        const result = await tasksService.getReservationPlanning({
-          startDate: startDateStr,
-          endDate: endDateStr,
-          ownerId: planningOwnerId,
-        });
-
-        if (result.success && result.data) {
-          console.log('[TasksPlanningPageV2] ✅ Planning data received');
-          setRawData(result.data);
-        } else {
-          setError(result.message || 'Erreur lors du chargement du planning');
-        }
-      } catch (err: any) {
-        console.error('[TasksPlanningPageV2] Error fetching planning:', err);
-        setError(err?.message || 'Erreur réseau');
-      } finally {
-        setIsLoading(false);
+      if (result.success && result.data) {
+        setRawData(result.data);
+      } else {
+        setError(result.message || 'Erreur lors du chargement du planning');
+      }
+    } catch (err: unknown) {
+      if (requestId !== windowRequestIdRef.current) return;
+      setError(err instanceof Error ? err.message : 'Erreur réseau');
+    } finally {
+      if (requestId === windowRequestIdRef.current) {
         setIsRefreshing(false);
       }
-    };
+    }
+  }, [startDate, daysCount, planningOwnerId, scope.canAccessAllOwners, scope.ownerId]);
 
+  useEffect(() => {
     if (authLoading) return;
-    fetchPlanning();
-  }, [startDate, daysCount, planningOwnerId, scope.canAccessAllOwners, scope.ownerId, authLoading, refreshKey]);
+
+    let cancelled = false;
+    const isBootstrap = !calendarReady;
+
+    void (async () => {
+      if (isBootstrap) setIsLoading(true);
+      setError(null);
+      try {
+        await fetchListings();
+        if (cancelled) return;
+        skipNextWindowOnlyFetchRef.current = true;
+        await fetchWindowData();
+        if (cancelled) return;
+        setCalendarReady(true);
+      } catch (err: unknown) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Erreur réseau');
+        if (isBootstrap) {
+          setActiveListings([]);
+          setRawData(null);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, refreshKey, fetchListings, fetchWindowData]);
+
+  useEffect(() => {
+    if (authLoading || !calendarReady) return;
+    if (skipNextWindowOnlyFetchRef.current) {
+      skipNextWindowOnlyFetchRef.current = false;
+      return;
+    }
+    void fetchWindowData();
+  }, [startDate, authLoading, calendarReady, fetchWindowData, planningOwnerId]);
 
   // ✅ CHANGEMENT: Transform en itérant sur activeListings (comme ReservationsPlanningPage)
   // Afficher TOUS les listings actifs, même sans réservations
   const listings: ListingRow[] = useMemo(() => {
     if (activeListings.length === 0) return [];
-
-    console.log('[TasksPlanningPageV2] 🔨 Building listing rows from', activeListings.length, 'active listings');
 
     // Map réservations + statuts opérationnels (srv-task planning = source of truth propreté)
     const reservationsByListing = new Map<string, any[]>();
@@ -186,13 +217,8 @@ export default function TasksPlanningPageV2() {
     // ✅ IMPORTANT: Afficher TOUS les listings actifs, même sans réservations
   }, [activeListings, rawData]);
 
-  const isPageLoading = isLoading;
-
-  // Handlers
-  const handleTaskClick = (item: TimelineItem) => {
-    console.log('[TasksPlanningPageV2] Task clicked:', item);
+  const handleTaskClick = (_item: TimelineItem) => {
     // TODO: Ouvrir drawer détail tâche
-    // navigate(`/tasks/${item.data?.taskId}`);
   };
 
   const handleReservationClick = (routeId: string) => {
@@ -202,21 +228,24 @@ export default function TasksPlanningPageV2() {
 
   // Navigation temporelle
   const goToday = () => {
-    const d = new Date();
+    const d = subDays(new Date(), PLANNING_LOOKBACK_DAYS);
     d.setHours(0, 0, 0, 0);
     setStartDate(d);
   };
 
-  const shiftDays = (delta: number) => {
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + delta);
-    setStartDate(d);
-  };
+  const shiftDays = useCallback((delta: number) => {
+    setStartDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + delta);
+      return d;
+    });
+  }, []);
 
-  const handleDateChange = (newDate: Date) => {
-    newDate.setHours(0, 0, 0, 0);
-    setStartDate(newDate);
-  };
+  const handleDateChange = useCallback((newDate: Date) => {
+    const d = new Date(newDate);
+    d.setHours(0, 0, 0, 0);
+    setStartDate(d);
+  }, []);
 
   const handleCleanlinessChange = useCallback(async (listingId: string, status: DisplayCleanliness) => {
     try {
@@ -235,43 +264,52 @@ export default function TasksPlanningPageV2() {
   return (
     <DashboardWrapper breadcrumb={[]}>
       <Box sx={{ bgcolor: '#f6f5f1', minHeight: '100vh' }}>
-        {isPageLoading && (
+        {isLoading && !calendarReady && (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
             <CircularProgress />
           </Box>
         )}
 
-        {!isPageLoading && error && (
-          <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, p: 3 }}>
+        {calendarReady && error && (
+          <Box sx={{ maxWidth: 800, mx: 'auto', mt: 2, px: 2 }}>
             <Alert severity="error" onClose={() => setError(null)}>
               {error}
             </Alert>
           </Box>
         )}
 
-        {!isPageLoading && !error && (
-          <Box sx={{ position: 'relative' }}>
-            {/* Indicateur de chargement discret pendant navigation */}
+        {calendarReady && (
+          <Box
+            sx={{
+              position: 'relative',
+              opacity: isRefreshing ? 0.72 : 1,
+              transition: 'opacity 0.2s ease',
+              pointerEvents: isRefreshing ? 'none' : 'auto',
+            }}
+          >
             {isRefreshing && (
-              <Box sx={{
-                position: 'absolute',
-                top: 10,
-                right: 10,
-                zIndex: 100,
-                bgcolor: 'rgba(184,133,26,0.9)',
-                color: '#fff',
-                px: 2,
-                py: 1,
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                boxShadow: '0 4px 12px rgba(20,17,10,0.15)',
-              }}>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 10,
+                  right: 10,
+                  zIndex: 100,
+                  bgcolor: 'rgba(184,133,26,0.9)',
+                  color: '#fff',
+                  px: 2,
+                  py: 1,
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  boxShadow: '0 4px 12px rgba(20,17,10,0.15)',
+                  pointerEvents: 'none',
+                }}
+              >
                 <CircularProgress size={14} sx={{ color: '#fff' }} />
-                Chargement...
+                Mise à jour…
               </Box>
             )}
 
@@ -290,6 +328,12 @@ export default function TasksPlanningPageV2() {
               onDateChange={handleDateChange}
               onCleanlinessChange={handleCleanlinessChange}
             />
+          </Box>
+        )}
+
+        {!isLoading && !calendarReady && error && (
+          <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, p: 3 }}>
+            <Alert severity="error">{error}</Alert>
           </Box>
         )}
       </Box>

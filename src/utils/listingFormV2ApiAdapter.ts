@@ -2,6 +2,12 @@
  * Pont entre document GET /listings/by-id (legacy) et état plat ListingFormV2.
  */
 
+import {
+  hourNumberToTimeInput,
+  resolveCheckInTimeEnd,
+  timeInputToHourNumber,
+} from './listingTimeHelpers';
+
 type UnknownRecord = Record<string, unknown>;
 
 const DESC_LANG_UI = ['🇫🇷 FR', '🇬🇧 EN', '🇪🇸 ES', '🇮🇹 IT'] as const;
@@ -155,6 +161,12 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     place: asString(raw.place),
     country: asString(raw.country),
     countryCode: asString(raw.countryCode),
+    checkInTime: hourNumberToTimeInput(
+      asNumber(raw.checkInTimeStart) ?? asNumber(raw.checkInTime),
+    ),
+    checkOutTime: hourNumberToTimeInput(asNumber(raw.checkOutTime)),
+    checkInTimeStart: asNumber(raw.checkInTimeStart),
+    checkInTimeEnd: asNumber(raw.checkInTimeEnd),
   };
 }
 
@@ -255,6 +267,45 @@ export function mergeFormV2ToUpdatePropertyPayload(
 
   if (Array.isArray(values.listingImages)) {
     payload.listingImages = cleanListingImagesForPayload(values.listingImages);
+  }
+
+  const orchKeys = [
+    'orchestrationEnabled',
+    'orchestration_choose_arrival',
+    'orchestration_choose_departure',
+    'orchestration_declare_arrival',
+    'orchestration_declare_departure',
+    'orchestration_registration',
+    'orchestration_cleaning_free',
+    'orchestration_cleaning_paid',
+    'orchestration_cleaning_sojori',
+    'orchestration_transport',
+    'orchestration_grocery',
+    'orchestration_custom',
+    'orchestration_support',
+    'orchestration_service_client',
+  ] as const;
+  for (const k of orchKeys) {
+    if (values[k] !== undefined) payload[k] = values[k];
+  }
+  if (values.cleaningOrchestration !== undefined) {
+    payload.cleaningOrchestration = values.cleaningOrchestration;
+  }
+
+  const checkInHour =
+    timeInputToHourNumber(values.checkInTime) ?? asNumber(values.checkInTimeStart);
+  if (checkInHour != null) {
+    payload.checkInTimeStart = checkInHour;
+    payload.checkInTimeEnd = resolveCheckInTimeEnd(
+      checkInHour,
+      asNumber(values.checkInTimeEnd),
+    );
+  }
+
+  const checkOutHour =
+    timeInputToHourNumber(values.checkOutTime) ?? asNumber(values.checkOutTime);
+  if (checkOutHour != null) {
+    payload.checkOutTime = checkOutHour;
   }
 
   return payload;

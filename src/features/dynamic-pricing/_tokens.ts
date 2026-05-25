@@ -31,9 +31,14 @@ export interface Listing {
   /** Libellé district marché résolu (vue bien). */
   airroiZone?: string;
   bedrooms: number;
+  bathrooms?: number;
   guests: number;
-  /** Alias affiché bandeau bien (souvent = guests). */
+  /** personCapacityMax → bandeau + API AirROI */
   maxGuests?: number;
+  /** personCapacity — tarif / occupancy de base (hors AirROI) */
+  personCapacityPricing?: number;
+  /** Ligne compacte profil envoyé à AirROI (sans adresse / GPS) */
+  airroiApiProfile?: string;
   amenities: string[];
   position?: { lat: number; lng: number };
   /** ID RU (legacy dashboard) — ex. 4021713 */
@@ -134,6 +139,22 @@ export interface PortfolioRow {
   perf?: ListingPerformance;
   airroiRaw?: AirroiRawFields | null;
   hasAirroiSnapshot?: boolean;
+  hasRevenueEstimate?: boolean;
+  estimateSummary?: {
+    revenueP25Mad: number;
+    revenueP50Mad: number;
+    revenueP75Mad: number;
+    adrP50Mad: number;
+    occupancyP50: number;
+  } | null;
+  airroiGeoUsed?: {
+    source: 'sojori_listing_mongo' | 'airroi_listing_snapshot';
+    lat: number;
+    lng: number;
+    bedrooms: number;
+    baths: number;
+    guests: number;
+  } | null;
   airroiSnapshotAt?: string | null;
   airroiSnapshotCostUsd?: number | null;
   airroiComps?: Array<{

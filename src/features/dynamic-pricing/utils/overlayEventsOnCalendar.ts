@@ -25,9 +25,14 @@ export function overlayEventsOnCalendarDays(
       const existing = byDate.get(cursor);
       // Ne pas inventer de jours : overlay uniquement sur dates déjà dans le snapshot
       if (existing && existing.status !== 'blocked') {
+        const base = existing.recommendedPrice;
+        const price =
+          ev.kind === 'market_percent'
+            ? Math.round((base * (ev.marketPercent / 100)) / 10) * 10
+            : ev.fixedPrice;
         byDate.set(cursor, {
           ...existing,
-          recommendedPrice: ev.fixedPrice,
+          recommendedPrice: price,
           status: 'override',
           priceTier: undefined,
         });

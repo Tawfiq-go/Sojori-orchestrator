@@ -25,6 +25,7 @@ import { reservationsService } from '../../services/reservationsService';
 import { listingsService } from '../../services/listingsService';
 import { ReservationAvailabilityCalendar } from './ReservationAvailabilityCalendar';
 import { ModalScrollColumn } from '../common/ModalScrollColumn';
+import { blurActiveElement } from '../../utils/domFocus';
 
 // Liste complète des pays avec drapeaux
 const COUNTRIES = [
@@ -307,12 +308,21 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
           onSuccess();
         }
       } else {
-        setError(result.error || 'Erreur lors de la création de la réservation');
-        toast.error(result.error || 'Erreur lors de la création');
+        let errorMsg = result.error || 'Erreur lors de la création de la réservation';
+        if (/no inventory|inventory found/i.test(errorMsg)) {
+          errorMsg +=
+            ' — Utilisez le mode « Prix par jour » ou « Prix total » si le calendrier n\'a pas d\'inventaire.';
+        }
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (err: any) {
       console.error('Error creating reservation:', err);
-      const errorMsg = err?.response?.data?.error || err?.message || 'Erreur lors de la création';
+      let errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Erreur lors de la création';
+      if (/no inventory|inventory found/i.test(errorMsg)) {
+        errorMsg +=
+          ' — Utilisez le mode « Prix par jour » ou « Prix total » si le calendrier n\'a pas d\'inventaire.';
+      }
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -346,6 +356,11 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
     setError(null);
   };
 
+  const handleClose = () => {
+    blurActiveElement();
+    onClose();
+  };
+
   // ─── Render ──────────────────────────────────────────
   const modalWidth = 1220;
   const modalHeight = 'min(84vh, 740px)';
@@ -354,10 +369,12 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       maxWidth={false}
       disableScrollLock
+      disableRestoreFocus
       slotProps={{
+        backdrop: { sx: { backgroundColor: 'rgba(20,17,10,0.42)' } },
         paper: {
           sx: {
             width: modalWidth,
@@ -429,7 +446,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
             création manuelle
           </Typography>
         </Box>
-        <IconButton onClick={onClose} sx={{ ml: 'auto' }}>
+        <IconButton onClick={handleClose} sx={{ ml: 'auto' }}>
           <CloseIcon />
         </IconButton>
       </Box>
@@ -1298,7 +1315,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
         </Typography>
         <Box sx={{ display: 'flex', gap: 1.25, justifyContent: 'flex-end', flexShrink: 0 }}>
           <Button
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isSubmitting}
             sx={{
               textTransform: 'none',

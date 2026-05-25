@@ -1,13 +1,11 @@
-import React, { useCallback, useState, useEffect, useRef, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useRef, useMemo, startTransition } from 'react';
 import {
   Box,
   Typography,
   Button,
-  IconButton,
   CircularProgress,
   Tabs,
   Tab,
-  Checkbox,
   Stack,
   Dialog,
   DialogTitle,
@@ -24,8 +22,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'react-toastify';
 import DeleteIcon from '@mui/icons-material/Delete';
-import StarIcon from '@mui/icons-material/Star';
-import StarBorderIcon from '@mui/icons-material/StarBorder';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { uploadImageResetAction } from '../../../redux/slices/UploadSlice';
@@ -43,6 +39,8 @@ import listingsService from '../../../services/listingsService';
 import { cleanListingImagesForPayload } from '../../../utils/listingFormV2ApiAdapter';
 import UploadDialog from './UploadDialog';
 import ImageTypeSelector from './ImageTypeSelector';
+import MediaGridPhotoCard from './MediaGridPhotoCard';
+import { MEDIA_GRID_THEME as T, PHOTO_GRADIENTS } from './mediaGridConstants';
 import {
   getImageCategoryLabel,
   getImageTypeDisplayName,
@@ -52,19 +50,6 @@ import type { RootState } from '../../../redux/store';
 
 const GALLERY_TAB_ALL = 'all';
 const GALLERY_TAB_NONE = '__none__';
-
-const T = {
-  primary: '#b8851a',
-  primaryDeep: '#876119',
-  primaryTint: 'rgba(184,133,26,0.10)',
-  bg1: '#fff',
-  bg2: '#fafaf7',
-  text: '#14110a',
-  text2: '#55504a',
-  text3: '#7a756c',
-  border: 'rgba(20,17,10,0.07)',
-  borderStrong: 'rgba(20,17,10,0.14)',
-};
 
 interface ListingImage {
   fileName?: string;
@@ -92,8 +77,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
   defaultUploadExpanded = false,
 }) => {
   const dispatch = useDispatch();
-  const upload = useSelector((state: RootState) => state.uploadData);
-  const { loading } = upload;
+  const uploadLoading = useSelector((state: RootState) => state.uploadData.loading);
 
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [imageTypes, setImageTypes] = useState<ImageType[]>([]);
@@ -107,6 +91,8 @@ const MediaGrid: React.FC<MediaGridProps> = ({
   const [bulkCategoryId, setBulkCategoryId] = useState<string>('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [uploadExpanded, setUploadExpanded] = useState(defaultUploadExpanded);
+  /** Un seul Select MUI monté à la fois (perf galerie). */
+  const [typeEditIndex, setTypeEditIndex] = useState<number | null>(null);
 
   const onImagesPersistedRef = useRef(onImagesPersisted);
   onImagesPersistedRef.current = onImagesPersisted;
@@ -225,13 +211,32 @@ const MediaGrid: React.FC<MediaGridProps> = ({
 
   useEffect(() => {
     setSelectedIndices(new Set());
+    setTypeEditIndex(null);
   }, [galleryTab]);
+
+  const mainImageTypeId = useMemo(() => {
+    if (!imageTypes.length) return null;
+    let mainType = imageTypes.find((type) => type.sojoriName?.en === 'Main Image');
+    if (!mainType) {
+      mainType = imageTypes.find((type) => type.rentalAmenityIds?.includes(1));
+    }
+    return mainType?._id ?? null;
+  }, [imageTypes]);
+
+  const isMainImage = useCallback(
+    (imageTypeId?: string): boolean => {
+      if (!imageTypeId || !mainImageTypeId) return false;
+      return imageTypeId === mainImageTypeId;
+    },
+    [mainImageTypeId],
+  );
 
   const exitSelectionMode = () => {
     setSelectionMode(false);
     setSelectedIndices(new Set());
     setBulkCategoryId('');
     setImageToMove(null);
+    setTypeEditIndex(null);
   };
 
   const toggleSelectionMode = () => {
@@ -244,14 +249,16 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     setSelectedIndices(new Set());
   };
 
-  const toggleSelectIndex = (index: number) => {
-    setSelectedIndices((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
+  const toggleSelectIndex = useCallback((index: number) => {
+    startTransition(() => {
+      setSelectedIndices((prev) => {
+        const next = new Set(prev);
+        if (next.has(index)) next.delete(index);
+        else next.add(index);
+        return next;
+      });
     });
-  };
+  }, []);
 
   const visibleOriginalIndices = useMemo(
     () => visibleImages.map(({ originalIndex }) => originalIndex),
@@ -330,24 +337,6 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     } catch {
       // toast déjà affiché
     }
-  };
-
-  const handleCardClick = (idx: number) => {
-    if (selectionMode) {
-      toggleSelectIndex(idx);
-      return;
-    }
-    void handleImageClick(idx);
-  };
-
-  const isMainImage = (imageTypeId?: string): boolean => {
-    if (!imageTypeId) return false;
-    const imageType = imageTypes.find((type) => type._id === imageTypeId);
-    return (
-      imageType?.sojoriName?.en === 'Main Image' ||
-      (imageType?.rentalAmenityIds && imageType.rentalAmenityIds.includes(1)) ||
-      false
-    );
   };
 
   const normalizeUrl = (url: string): string => {
@@ -487,22 +476,26 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     }
   };
 
-  const handleChangeImageType = async (index: number, typeId: string | null) => {
-    const selectedType = imageTypes.find((t) => t._id === typeId);
-    const updatedImages = [...listingImages];
-    updatedImages[index] = {
-      ...updatedImages[index],
-      imageTypeId: typeId || '',
-      imageTypeRuId: selectedType?.rentalAmenityIds || [],
-    };
-    try {
-      await persistListingImages(updatedImages, 'grid.typeChange', 'Catégorie mise à jour');
-    } catch {
-      // toast déjà affiché
-    }
-  };
+  const handleChangeImageType = useCallback(
+    async (index: number, typeId: string | null) => {
+      const selectedType = imageTypes.find((t) => t._id === typeId);
+      const updatedImages = [...listingImages];
+      updatedImages[index] = {
+        ...updatedImages[index],
+        imageTypeId: typeId || '',
+        imageTypeRuId: selectedType?.rentalAmenityIds || [],
+      };
+      try {
+        await persistListingImages(updatedImages, 'grid.typeChange', 'Catégorie mise à jour');
+        setTypeEditIndex(null);
+      } catch {
+        // toast déjà affiché
+      }
+    },
+    [imageTypes, listingImages, persistListingImages],
+  );
 
-  const handleRemove = async (index: number) => {
+  const handleRemove = useCallback(async (index: number) => {
     const removed = listingImages[index];
     logListingMedia('grid.remove.request', {
       index,
@@ -519,9 +512,9 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     } catch {
       // toast déjà affiché
     }
-  };
+  }, [listingImages, persistListingImages]);
 
-  const handleSetMainImage = async (index: number) => {
+  const handleSetMainImage = useCallback(async (index: number) => {
     const updatedImages = [...listingImages];
     const mainImageType = getMainImageType();
 
@@ -552,44 +545,88 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     } catch {
       // toast déjà affiché
     }
-  };
+  }, [listingImages, imageTypes, persistListingImages, isMainImage, getMainImageType]);
 
-  const handleImageClick = async (index: number) => {
-    if (imageToMove === null) {
-      setImageToMove(index);
-      toast.info('Image sélectionnée. Cliquez sur une autre pour la déplacer.');
-    } else if (imageToMove === index) {
-      setImageToMove(null);
-      toast.info('Déplacement annulé.');
-    } else {
-      const updatedImages = [...listingImages];
-      const draggedImage = updatedImages[imageToMove];
-      updatedImages.splice(imageToMove, 1);
-      updatedImages.splice(index, 0, draggedImage);
-
-      updatedImages.forEach((img, i) => {
-        img.sortOrder = i + 1;
-      });
-
-      try {
-        await persistListingImages(updatedImages, 'grid.reorder', 'Ordre des photos enregistré');
+  const handleImageClick = useCallback(
+    async (index: number) => {
+      if (imageToMove === null) {
+        setImageToMove(index);
+        toast.info('Image sélectionnée. Cliquez sur une autre pour la déplacer.');
+      } else if (imageToMove === index) {
         setImageToMove(null);
-      } catch {
-        // toast déjà affiché
-      }
-    }
-  };
+        toast.info('Déplacement annulé.');
+      } else {
+        const updatedImages = [...listingImages];
+        const draggedImage = updatedImages[imageToMove];
+        updatedImages.splice(imageToMove, 1);
+        updatedImages.splice(index, 0, draggedImage);
 
-  const PHOTO_GRADIENTS = [
-    'linear-gradient(135deg,#fde68a,#d97706)',
-    'linear-gradient(135deg,#a5f3fc,#0e7490)',
-    'linear-gradient(135deg,#86efac,#16a34a)',
-    'linear-gradient(135deg,#f9a8d4,#ec4899)',
-    'linear-gradient(135deg,#fcd34d,#b45309)',
-    'linear-gradient(135deg,#bef264,#65a30d)',
-    'linear-gradient(135deg,#ddd6fe,#7c3aed)',
-    'linear-gradient(135deg,#fed7aa,#9a3412)',
-  ];
+        updatedImages.forEach((img, i) => {
+          img.sortOrder = i + 1;
+        });
+
+        try {
+          await persistListingImages(updatedImages, 'grid.reorder', 'Ordre des photos enregistré');
+          setImageToMove(null);
+        } catch {
+          // toast déjà affiché
+        }
+      }
+    },
+    [imageToMove, listingImages, persistListingImages],
+  );
+
+  const handleStartTypeEdit = useCallback((idx: number) => {
+    setTypeEditIndex((prev) => (prev === idx ? null : idx));
+  }, []);
+
+  const visibleCardRows = useMemo(
+    () =>
+      visibleImages.map(({ img, originalIndex }) => ({
+        img,
+        originalIndex,
+        categoryLabel: getImageCategoryLabel(img.imageTypeId, imageTypes),
+        undefinedCategory: isImageCategoryUndefined(img.imageTypeId),
+        isMain: isMainImage(img.imageTypeId),
+        placeholderGradient: PHOTO_GRADIENTS[originalIndex % PHOTO_GRADIENTS.length],
+        showTypeSelector: typeEditIndex === originalIndex,
+      })),
+    [visibleImages, imageTypes, isMainImage, typeEditIndex],
+  );
+
+  const selectorDisabled = loadingTypes || persisting || uploadLoading;
+
+  const onCardClickStable = useCallback(
+    (idx: number) => {
+      if (selectionMode) {
+        toggleSelectIndex(idx);
+        return;
+      }
+      void handleImageClick(idx);
+    },
+    [selectionMode, toggleSelectIndex, handleImageClick],
+  );
+
+  const onSetMainStable = useCallback(
+    (idx: number) => {
+      void handleSetMainImage(idx);
+    },
+    [handleSetMainImage],
+  );
+
+  const onRemoveStable = useCallback(
+    (idx: number) => {
+      void handleRemove(idx);
+    },
+    [handleRemove],
+  );
+
+  const onTypeChangeStable = useCallback(
+    (idx: number, typeId: string | null) => {
+      void handleChangeImageType(idx, typeId);
+    },
+    [handleChangeImageType],
+  );
 
   const openUploadDialog = () => {
     setUploadDialogOpen(true);
@@ -669,10 +706,12 @@ const MediaGrid: React.FC<MediaGridProps> = ({
       {listingImages.length > 0 && (
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          alignItems={{ xs: 'stretch', sm: 'center' }}
-          justifyContent="space-between"
-          gap={1}
-          sx={{ mb: 1 }}
+          sx={{
+            alignItems: { xs: 'stretch', sm: 'center' },
+            justifyContent: 'space-between',
+            gap: 1,
+            mb: 1,
+          }}
         >
           <Button
             size="small"
@@ -789,178 +828,30 @@ const MediaGrid: React.FC<MediaGridProps> = ({
             gap: 1.25,
           }}
         >
-          {visibleImages.map(({ img, originalIndex: idx }) => {
-            const categoryLabel = getImageCategoryLabel(img.imageTypeId, imageTypes);
-            const undefinedCategory = isImageCategoryUndefined(img.imageTypeId);
-            const isSelected = selectedIndices.has(idx);
-            return (
-              <Box
-                key={`${idx}-${img.url}`}
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  borderRadius: 1.125,
-                  overflow: 'hidden',
-                  border: `2px solid ${
-                    isSelected ? T.primary : imageToMove === idx ? T.primary : T.border
-                  }`,
-                  bgcolor: T.bg1,
-                  boxShadow: isSelected ? `0 0 0 2px ${T.primaryTint}` : 'none',
-                  opacity: selectionMode && selectedIndices.size > 0 && !isSelected ? 0.85 : 1,
-                }}
-              >
-                <Box
-                  onClick={() => handleCardClick(idx)}
-                  sx={{
-                    position: 'relative',
-                    aspectRatio: '4/3',
-                    background: img.url
-                      ? `url(${img.url}) center/cover`
-                      : PHOTO_GRADIENTS[idx % PHOTO_GRADIENTS.length],
-                    cursor: selectionMode ? 'pointer' : imageToMove === null ? 'pointer' : imageToMove === idx ? 'grab' : 'copy',
-                    opacity: !selectionMode && imageToMove !== null && imageToMove !== idx ? 0.6 : 1,
-                    transition: 'opacity 0.2s',
-                    '&:hover .photo-actions': { opacity: selectionMode ? 0 : 1 },
-                  }}
-                >
-                  {selectionMode && (
-                    <Checkbox
-                      checked={isSelected}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        toggleSelectIndex(idx);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      icon={<CheckBoxOutlineBlankIcon sx={{ bgcolor: '#fff', borderRadius: 0.5 }} />}
-                      checkedIcon={<CheckBoxIcon sx={{ color: T.primary }} />}
-                      sx={{
-                        position: 'absolute',
-                        top: 4,
-                        left: 4,
-                        zIndex: 2,
-                        p: 0.25,
-                        bgcolor: 'rgba(255,255,255,0.92)',
-                        borderRadius: 0.5,
-                      }}
-                    />
-                  )}
-
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: 6,
-                      left: selectionMode ? 36 : 6,
-                      bgcolor: 'rgba(0,0,0,0.6)',
-                      color: '#fff',
-                      width: 20,
-                      height: 20,
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 10,
-                      fontWeight: 800,
-                      fontFamily: '"Geist Mono", monospace',
-                    }}
-                  >
-                    {idx + 1}
-                  </Box>
-
-                  {isMainImage(img.imageTypeId) && (
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        top: 6,
-                        right: 6,
-                        bgcolor: T.primary,
-                        color: T.text,
-                        px: 0.875,
-                        py: 0.25,
-                        borderRadius: 0.625,
-                        fontSize: 9.5,
-                        fontWeight: 800,
-                      }}
-                    >
-                      COVER
-                    </Box>
-                  )}
-
-                  <Box
-                    className="photo-actions"
-                    sx={{
-                      position: 'absolute',
-                      top: 6,
-                      right: isMainImage(img.imageTypeId) ? 52 : 6,
-                      display: 'flex',
-                      gap: 0.5,
-                      opacity: 0,
-                      transition: 'opacity 0.15s',
-                    }}
-                  >
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleSetMainImage(idx);
-                      }}
-                      sx={{ width: 22, height: 22, bgcolor: 'rgba(255,255,255,0.95)' }}
-                    >
-                      {isMainImage(img.imageTypeId) ? (
-                        <StarIcon sx={{ fontSize: 14 }} />
-                      ) : (
-                        <StarBorderIcon sx={{ fontSize: 14 }} />
-                      )}
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleRemove(idx);
-                      }}
-                      sx={{ width: 22, height: 22, bgcolor: 'rgba(255,255,255,0.95)' }}
-                    >
-                      <DeleteIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                  </Box>
-                </Box>
-
-                <Box
-                  sx={{
-                    px: 1,
-                    py: 0.625,
-                    bgcolor: undefinedCategory ? 'rgba(220,38,38,0.10)' : 'rgba(20,17,10,0.88)',
-                    borderTop: `1px solid ${undefinedCategory ? 'rgba(220,38,38,0.35)' : T.border}`,
-                  }}
-                  title={categoryLabel}
-                >
-                  <Typography
-                    noWrap
-                    sx={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: undefinedCategory ? '#dc2626' : '#fff',
-                      lineHeight: 1.3,
-                    }}
-                  >
-                    {categoryLabel}
-                  </Typography>
-                </Box>
-
-                <Box
-                  sx={{ px: 0.5, py: 0.5, bgcolor: T.bg2 }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ImageTypeSelector
-                    value={img.imageTypeId || ''}
-                    onChange={(typeId) => void handleChangeImageType(idx, typeId)}
-                    imageTypes={imageTypes}
-                    disabled={loadingTypes || persisting}
-                    existingImages={listingImages}
-                  />
-                </Box>
-              </Box>
-            );
-          })}
+          {visibleCardRows.map((row) => (
+            <MediaGridPhotoCard
+              key={`${row.originalIndex}-${row.img.url}`}
+              originalIndex={row.originalIndex}
+              img={row.img}
+              categoryLabel={row.categoryLabel}
+              undefinedCategory={row.undefinedCategory}
+              isMain={row.isMain}
+              placeholderGradient={row.placeholderGradient}
+              selectionMode={selectionMode}
+              isSelected={selectedIndices.has(row.originalIndex)}
+              imageToMove={imageToMove}
+              showTypeSelector={row.showTypeSelector}
+              imageTypes={imageTypes}
+              existingImages={listingImages}
+              selectorDisabled={selectorDisabled}
+              onCardClick={onCardClickStable}
+              onToggleSelect={toggleSelectIndex}
+              onSetMain={onSetMainStable}
+              onRemove={onRemoveStable}
+              onTypeChange={onTypeChangeStable}
+              onStartTypeEdit={handleStartTypeEdit}
+            />
+          ))}
         </Box>
       )}
 

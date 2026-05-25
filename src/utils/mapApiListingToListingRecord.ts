@@ -355,6 +355,7 @@ export function mapApiListingToListingRecord(
       grocery: rawListing.orchestration_grocery === true,
       custom: rawListing.orchestration_custom === true,
       support: rawListing.orchestration_support === true,
+      serviceClient: rawListing.orchestration_service_client === true,
       cleaningFree: rawListing.orchestration_cleaning_free === true,
       cleaningPaid: rawListing.orchestration_cleaning_paid === true,
     },

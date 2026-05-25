@@ -63,10 +63,12 @@ export function DtRow({
   return (
     <Stack
       direction="row"
-      justifyContent="space-between"
-      alignItems="flex-start"
-      gap={1}
-      sx={{ py: 0.375 }}
+      sx={{
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: 1,
+        py: 0.375,
+      }}
     >
       <Typography
         sx={{

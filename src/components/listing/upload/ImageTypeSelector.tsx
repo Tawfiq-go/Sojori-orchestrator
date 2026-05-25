@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { FormControl, Select, MenuItem, type SelectChangeEvent } from '@mui/material';
 import { type ImageType } from '../../../services/imageTypesService';
 
@@ -26,22 +26,42 @@ const ImageTypeSelector: React.FC<ImageTypeSelectorProps> = ({
     onChange(newValue === '' ? null : newValue);
   };
 
-  const isMainImage = (imageTypeId: string): boolean => {
-    const imageType = imageTypes.find((type) => type._id === imageTypeId);
-    return (
-      imageType?.sojoriName?.en === 'Main Image' ||
-      (imageType?.rentalAmenityIds && imageType.rentalAmenityIds.includes(1)) ||
-      false
-    );
-  };
+  const mainImageTypeId = useMemo(() => {
+    let mainType = imageTypes.find((type) => type.sojoriName?.en === 'Main Image');
+    if (!mainType) {
+      mainType = imageTypes.find((type) => type.rentalAmenityIds?.includes(1));
+    }
+    return mainType?._id ?? null;
+  }, [imageTypes]);
 
-  const hasExistingMainImage = () => {
-    return existingImages.some((img) => img.url && img.url.trim() !== '' && img.imageTypeId && isMainImage(img.imageTypeId));
-  };
+  const hasExistingMainImage = useMemo(
+    () =>
+      Boolean(
+        mainImageTypeId &&
+          existingImages.some(
+            (img) =>
+              img.url &&
+              img.url.trim() !== '' &&
+              img.imageTypeId &&
+              img.imageTypeId === mainImageTypeId,
+          ),
+      ),
+    [existingImages, mainImageTypeId],
+  );
 
-  const isImageTypeAlreadySelected = (typeId: string): boolean => {
-    return selectedFiles.some((f) => f.id !== currentFileId && f.imageTypeId === typeId);
-  };
+  const isImageTypeAlreadySelected = (typeId: string): boolean =>
+    selectedFiles.some((f) => f.id !== currentFileId && f.imageTypeId === typeId);
+
+  const disabledTypeIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!mainImageTypeId) return ids;
+    for (const type of imageTypes) {
+      if (type._id !== mainImageTypeId) continue;
+      if (hasExistingMainImage) ids.add(type._id);
+      if (isImageTypeAlreadySelected(type._id)) ids.add(type._id);
+    }
+    return ids;
+  }, [imageTypes, mainImageTypeId, hasExistingMainImage, selectedFiles, currentFileId]);
 
   const getDisplayName = (imageType: ImageType): string => {
     if (!imageType) return '';
@@ -54,11 +74,12 @@ const ImageTypeSelector: React.FC<ImageTypeSelectorProps> = ({
     return imageType.airbnbCategory || imageType.bookingCategory || 'Unknown';
   };
 
-  const isTypeDisabled = (type: ImageType): boolean => {
-    if (isMainImage(type._id) && hasExistingMainImage()) return true;
-    if (isMainImage(type._id) && isImageTypeAlreadySelected(type._id)) return true;
-    return false;
-  };
+  const isTypeDisabled = (type: ImageType): boolean => disabledTypeIds.has(type._id);
+
+  const isKnownTypeId = (typeId: string) => imageTypes.some((t) => t._id === typeId);
+  const legacyTypeId =
+    value && String(value).trim() !== '' && !isKnownTypeId(String(value)) ? String(value) : null;
+  const selectValue = legacyTypeId ? legacyTypeId : value || '';
 
   if (!imageTypes || imageTypes.length === 0) {
     return (
@@ -75,7 +96,7 @@ const ImageTypeSelector: React.FC<ImageTypeSelectorProps> = ({
   return (
     <FormControl fullWidth size="small" disabled={disabled}>
       <Select
-        value={value}
+        value={selectValue}
         onChange={handleChange}
         displayEmpty
         sx={{
@@ -93,10 +114,15 @@ const ImageTypeSelector: React.FC<ImageTypeSelectorProps> = ({
         <MenuItem value="">
           <em>Sélectionner un type</em>
         </MenuItem>
+        {legacyTypeId && (
+          <MenuItem value={legacyTypeId} disabled>
+            <em>Type hors catalogue</em>
+          </MenuItem>
+        )}
         {imageTypes.map((type) => (
           <MenuItem key={type._id} value={type._id} disabled={isTypeDisabled(type)}>
             {getDisplayName(type)}
-            {isMainImage(type._id) && ' ⭐'}
+            {type._id === mainImageTypeId && ' ⭐'}
             {isTypeDisabled(type) && ' (déjà utilisé)'}
           </MenuItem>
         ))}

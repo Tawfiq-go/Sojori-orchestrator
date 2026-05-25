@@ -12,6 +12,7 @@ export { default as MarketCityBand } from './MarketCityBand';
 export { default as PortfolioMap } from './PortfolioMap';
 export type { PortfolioMapPin } from './PortfolioMap';
 export { default as BienView } from './BienView';
+export { PricingAuditView } from './PricingAuditView';
 export { default as BienAirroiView } from './BienAirroiView';
 export { default as JustificationModalG7 } from './JustificationModalG7';
 

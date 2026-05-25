@@ -11,7 +11,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { fr } from 'date-fns/locale';
 
 export default function UpdateInventoryModal({
-  open, onClose, selectedCells = [], currency = 'EUR', inventoryData = {}, onSave,
+  open, onClose, selectedCells = [], currency = 'EUR', inventoryData = {}, listings = [], onSave,
 }) {
   const [step, setStep] = useState('form'); // 'form' | 'confirm'
   const [error, setError] = useState(null);
@@ -39,7 +39,10 @@ export default function UpdateInventoryModal({
   /* ─── Analyze current values from selected cells ─── */
   const cellsAnalysis = useMemo(() => {
     if (selectedCells.length === 0 || !inventoryData) {
-      return { prices: [], availabilities: [], stopSells: [], dynamicPrices: [], minStays: [], maxStays: [] };
+      return {
+        prices: [], availabilities: [], stopSells: [], dynamicPrices: [], minStays: [], maxStays: [],
+        isSingleListing: false,
+      };
     }
 
     const prices = [], availabilities = [], stopSells = [], dynamicPrices = [], minStays = [], maxStays = [];
@@ -56,6 +59,10 @@ export default function UpdateInventoryModal({
       }
     });
 
+    const firstCell = selectedCells[0];
+    const listing = listings.find((l) => (l._id || l.id) === firstCell?.listingId);
+    const isSingleListing = listing?.propertyUnit === 'Single';
+
     const getCommonOrMinMax = (arr) => {
       if (arr.length === 0) return { common: null, min: null, max: null };
       const allSame = arr.every(v => v === arr[0]);
@@ -66,22 +73,37 @@ export default function UpdateInventoryModal({
       };
     };
 
+    const stopSellCommon = stopSells.length > 0 && stopSells.every(v => v === stopSells[0]) ? stopSells[0] : null;
+    const availabilityStats = getCommonOrMinMax(availabilities);
+
+    /** Single : dispo si chambres > 0 et pas d’arrêt des ventes */
+    let singleDispoCurrent = null;
+    if (isSingleListing) {
+      if (stopSellCommon === true) singleDispoCurrent = false;
+      else if (availabilityStats.common != null) singleDispoCurrent = availabilityStats.common > 0;
+      else if (availabilityStats.min != null) {
+        singleDispoCurrent = availabilityStats.min > 0 && availabilityStats.max > 0;
+      }
+    }
+
     return {
       prices, availabilities, stopSells, dynamicPrices, minStays, maxStays,
+      isSingleListing,
+      singleDispoCurrent,
       price: getCommonOrMinMax(prices),
-      availability: getCommonOrMinMax(availabilities),
-      stopSell: stopSells.length > 0 && stopSells.every(v => v === stopSells[0]) ? stopSells[0] : null,
+      availability: availabilityStats,
+      stopSell: stopSellCommon,
       dynamicPrice: dynamicPrices.length > 0 && dynamicPrices.every(v => v === dynamicPrices[0]) ? dynamicPrices[0] : null,
       minStay: getCommonOrMinMax(minStays),
       maxStay: getCommonOrMinMax(maxStays),
     };
-  }, [selectedCells, inventoryData]);
+  }, [selectedCells, inventoryData, listings]);
 
   /* ─── Form state ─── */
   const [form, setForm] = useState({
     manualPrice: '', availability: '', stopSell: null,
     minStay: '', maxStay: '', closedArrival: false, closedDeparture: false,
-    useDynamicPrice: null, dynamicBasePrice: '',
+    useDynamicPrice: null,
   });
   // Dates toujours éditables (Date objects for MUI DatePicker)
   const [editableStartDate, setEditableStartDate] = useState(null);
@@ -116,7 +138,7 @@ export default function UpdateInventoryModal({
       setForm({
         manualPrice: '', availability: '', stopSell: null,
         minStay: '', maxStay: '', closedArrival: false, closedDeparture: false,
-        useDynamicPrice: null, dynamicBasePrice: '',
+        useDynamicPrice: null,
       });
       setEditableStartDate(null);
       setEditableEndDate(null);
@@ -159,15 +181,23 @@ export default function UpdateInventoryModal({
   const changesSummary = useMemo(() => {
     const out = [];
     if (form.manualPrice !== '') out.push(`Prix manuel: ${form.manualPrice} ${currency}`);
-    if (form.availability !== '') out.push(`Disponibilité: ${form.availability}`);
-    if (form.stopSell !== null) out.push(`Stop Sell: ${form.stopSell ? 'Oui 🚫' : 'Non ✅'}`);
+    if (form.availability !== '') {
+      if (cellsAnalysis.isSingleListing) {
+        out.push(`Disponibilité: ${form.availability === '1' ? 'Dispo ✅' : 'Pas dispo 🚫'}`);
+      } else {
+        out.push(`Disponibilité: ${form.availability} chambre(s)`);
+      }
+    }
+    if (!cellsAnalysis.isSingleListing && form.stopSell !== null) {
+      out.push(`Arrêt des ventes: ${form.stopSell ? 'Oui 🚫' : 'Non ✅'}`);
+    }
     if (form.minStay !== '') out.push(`Min Stay: ${form.minStay} nuit(s)`);
     if (form.maxStay !== '') out.push(`Max Stay: ${form.maxStay} nuit(s)`);
     if (form.closedArrival) out.push('Arrivée fermée ⛔');
     if (form.closedDeparture) out.push('Départ fermé ⛔');
     if (form.useDynamicPrice !== null) out.push(`Dynamique: ${form.useDynamicPrice ? 'Activer ⚡' : 'Désactiver'}`);
     return out;
-  }, [form, currency]);
+  }, [form, currency, cellsAnalysis.isSingleListing]);
 
   const handleSubmit = () => {
     if (changesSummary.length === 0) { setError('Veuillez modifier au moins un champ'); return; }
@@ -189,13 +219,32 @@ export default function UpdateInventoryModal({
       const dateTo = editableEndDate ? toIso(editableEndDate) : g.dates[g.dates.length - 1];
       const base = { roomTypeId: g.roomTypeId, date_from: dateFrom, date_to: dateTo };
       if (form.manualPrice !== '')   payloads.push({ type: 'manualPrice',         ...base, price: +form.manualPrice });
-      if (form.availability !== '')  payloads.push({ type: 'availability',        ...base, availableRoom: +form.availability });
-      if (form.stopSell !== null)    payloads.push({ type: 'stopSell',            ...base, stopSell: form.stopSell });
+      if (form.availability !== '') {
+        const rooms = +form.availability;
+        payloads.push({ type: 'availability', ...base, availableRoom: rooms });
+        // Single : synchroniser arrêt des ventes avec dispo / pas dispo
+        const listing = listings.find((l) => (l._id || l.id) === g.listingId);
+        if (listing?.propertyUnit === 'Single') {
+          payloads.push({ type: 'stopSell', ...base, stopSell: rooms < 1 });
+        }
+      }
+      if (form.stopSell !== null) {
+        const listing = listings.find((l) => (l._id || l.id) === g.listingId);
+        if (listing?.propertyUnit !== 'Single') {
+          payloads.push({ type: 'stopSell', ...base, stopSell: form.stopSell });
+        }
+      }
       if (form.minStay !== '')       payloads.push({ type: 'min_stay_arrival',    ...base, min_stay_arrival: +form.minStay });
       if (form.maxStay !== '')       payloads.push({ type: 'max_stay',            ...base, max_stay: +form.maxStay });
       if (form.closedArrival)        payloads.push({ type: 'closed_to_arrival',   ...base, closed_to_arrival: true });
       if (form.closedDeparture)      payloads.push({ type: 'closed_to_departure', ...base, closed_to_departure: true });
-      if (form.useDynamicPrice !== null) payloads.push({ type: 'setUseDynamicPriceManual', ...base, setUseDynamicPriceManual: form.useDynamicPrice, price: form.dynamicBasePrice !== '' ? +form.dynamicBasePrice : undefined });
+      if (form.useDynamicPrice !== null) {
+        payloads.push({
+          type: 'setUseDynamicPriceManual',
+          ...base,
+          setUseDynamicPriceManual: form.useDynamicPrice,
+        });
+      }
     });
     return payloads;
   };
@@ -371,33 +420,61 @@ export default function UpdateInventoryModal({
               </Section>
 
               <Section label="Disponibilité">
-                {cellsAnalysis.availability.common !== null && (
-                  <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
-                    Actuel: <b>{cellsAnalysis.availability.common}</b>
-                  </div>
+                {cellsAnalysis.isSingleListing ? (
+                  <>
+                    {cellsAnalysis.singleDispoCurrent !== null && (
+                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                        Actuel: <b>{cellsAnalysis.singleDispoCurrent ? 'Dispo ✅' : 'Pas dispo 🚫'}</b>
+                      </div>
+                    )}
+                    {cellsAnalysis.singleDispoCurrent === null && cellsAnalysis.availability.min !== null && (
+                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                        Valeurs mixtes sur la sélection
+                      </div>
+                    )}
+                    <ToggleGroup
+                      value={form.availability === '' ? null : form.availability === '1'}
+                      onChange={(v) => upd('availability', v === null ? '' : (v ? '1' : '0'))}
+                      options={[
+                        { value: true, label: 'Dispo ✅' },
+                        { value: false, label: 'Pas dispo 🚫' },
+                        { value: null, label: 'Aucun changement' },
+                      ]}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {cellsAnalysis.availability.common !== null && (
+                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                        Actuel: <b>{cellsAnalysis.availability.common}</b>
+                      </div>
+                    )}
+                    {cellsAnalysis.availability.common === null && cellsAnalysis.availability.min !== null && (
+                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                        Min: <b>{cellsAnalysis.availability.min}</b> • Max: <b>{cellsAnalysis.availability.max}</b>
+                      </div>
+                    )}
+                    <FieldBox>
+                      <input type="number"
+                        placeholder={cellsAnalysis.availability.common !== null ? `Actuel: ${cellsAnalysis.availability.common}` : "Laisser vide pour ne pas modifier"}
+                        value={form.availability}
+                        onChange={e => upd('availability', e.target.value)} />
+                      <span style={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>chambres</span>
+                    </FieldBox>
+                  </>
                 )}
-                {cellsAnalysis.availability.common === null && cellsAnalysis.availability.min !== null && (
-                  <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
-                    Min: <b>{cellsAnalysis.availability.min}</b> • Max: <b>{cellsAnalysis.availability.max}</b>
-                  </div>
-                )}
-                <FieldBox>
-                  <input type="number"
-                    placeholder={cellsAnalysis.availability.common !== null ? `Actuel: ${cellsAnalysis.availability.common}` : "Laisser vide pour ne pas modifier"}
-                    value={form.availability}
-                    onChange={e => upd('availability', e.target.value)} />
-                  <span style={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>chambres</span>
-                </FieldBox>
               </Section>
 
-              <Section label="Arrêt des ventes">
-                <ToggleGroup value={form.stopSell} onChange={v => upd('stopSell', v)}
-                  options={[
-                    { value: true, label: 'Oui 🚫' },
-                    { value: false, label: 'Non ✅' },
-                    { value: null, label: 'Aucun changement' },
-                  ]} />
-              </Section>
+              {!cellsAnalysis.isSingleListing && (
+                <Section label="Arrêt des ventes">
+                  <ToggleGroup value={form.stopSell} onChange={v => upd('stopSell', v)}
+                    options={[
+                      { value: true, label: 'Oui 🚫' },
+                      { value: false, label: 'Non ✅' },
+                      { value: null, label: 'Aucun changement' },
+                    ]} />
+                </Section>
+              )}
 
               <details style={{ marginTop: 10, borderTop: `1px dashed ${T.border}`, paddingTop: 10 }}>
                 <summary style={{
@@ -438,15 +515,10 @@ export default function UpdateInventoryModal({
                       { value: false, label: 'Désactiver' },
                       { value: null, label: 'Aucun changement' },
                     ]} />
-                  {form.useDynamicPrice === true && (
-                    <Section label="Prix de base dynamique">
-                      <FieldBox>
-                        <input type="number" placeholder="Ex: 220" value={form.dynamicBasePrice}
-                          onChange={e => upd('dynamicBasePrice', e.target.value)} />
-                        <span style={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>{currency}</span>
-                      </FieldBox>
-                    </Section>
-                  )}
+                  <p style={{ fontSize: 11, color: T.text3, margin: '8px 0 0', lineHeight: 1.45 }}>
+                    Les tarifs journaliers sont calculés par le service Dynamic Pricing (pilot G7). Ici vous
+                    activez ou désactivez uniquement le mode dynamique sur la période.
+                  </p>
                 </div>
               </details>
             </>

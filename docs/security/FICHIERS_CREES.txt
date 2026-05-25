@@ -1,0 +1,144 @@
+═══════════════════════════════════════════════════════════════════
+📦 RÉCAPITULATIF : FICHIERS CRÉÉS - ISOLATION MULTI-TENANT
+═══════════════════════════════════════════════════════════════════
+
+Date: 22 Mai 2026
+Criticité: 🔴 URGENT
+
+───────────────────────────────────────────────────────────────────
+✅ DOCUMENTATION (6 fichiers)
+───────────────────────────────────────────────────────────────────
+
+1. docs/security/AUDIT_OWNER_ISOLATION_MULTI_TENANT.md
+   📄 Audit complet : 5 failles + 5 recommandations + 4 scénarios
+   📏 450 lignes
+   ✅ Créé
+
+2. docs/security/RESUME_PROTECTION_FRONTEND_BACKEND.md
+   📄 Résumé logiques protection + données à chiffrer
+   📏 350 lignes
+   ✅ Créé
+
+3. docs/security/PLAN_ACTION_SECURITE_SIMPLE.md
+   📄 Plan step-by-step auth + RBAC + session timeout
+   📏 470 lignes
+   ✅ Créé
+
+4. docs/security/AUDIT_SECURITE_FRONTEND_SOJORI.md
+   📄 Audit frontend complet (10 vulnérabilités)
+   📏 470 lignes
+   ✅ Créé
+
+5. docs/security/README.md
+   📄 Index avec Phase 0 URGENTE isolation multi-tenant
+   📏 150 lignes
+   ✅ Mis à jour
+
+6. docs/security/IMPLEMENTATION_CHECKLIST.md
+   📄 Checklist implémentation complète (4 phases, 9h)
+   📏 400 lignes
+   ✅ Créé
+
+───────────────────────────────────────────────────────────────────
+✅ CODE BACKEND (3 fichiers)
+───────────────────────────────────────────────────────────────────
+
+7. apps/srv-listing/src/middleware/enforceOwnerIsolation.ts
+   📄 Middleware qui FORCE ownerId pour Owner/Worker
+   📏 100 lignes
+   ✅ Créé
+   🎯 Prêt à l'emploi
+
+8. apps/srv-listing/src/middleware/verifyListingOwnership.ts
+   📄 Middleware qui vérifie listing.ownerId = user._id
+   📏 120 lignes
+   ✅ Créé
+   🎯 Prêt à l'emploi
+
+9. apps/srv-listing/src/routes/__tests__/owner-isolation.test.ts
+   📄 Tests automatisés (5 scénarios d'attaque)
+   📏 250 lignes
+   ✅ Créé
+   ⚠️  Nécessite configuration (voir checklist)
+
+───────────────────────────────────────────────────────────────────
+✅ SCRIPTS AUDIT (1 fichier)
+───────────────────────────────────────────────────────────────────
+
+10. scripts/audit-owner-isolation.sh
+    📄 Script bash audit automatique
+    📏 350 lignes
+    ✅ Créé
+    🎯 Prêt à lancer : ./scripts/audit-owner-isolation.sh
+
+───────────────────────────────────────────────────────────────────
+📊 RÉSUMÉ
+───────────────────────────────────────────────────────────────────
+
+TOTAL FICHIERS : 10
+TOTAL LIGNES : ~2500 lignes
+
+Documentation : 6 fichiers ✅
+Code backend : 3 fichiers ✅
+Scripts audit : 1 fichier ✅
+
+───────────────────────────────────────────────────────────────────
+🚀 PROCHAINES ÉTAPES
+───────────────────────────────────────────────────────────────────
+
+1. LIRE L'AUDIT COMPLET (20 min)
+   → cat docs/security/AUDIT_OWNER_ISOLATION_MULTI_TENANT.md
+
+2. LANCER AUDIT AUTOMATIQUE (2 min)
+   → cd /Users/gouacht/sojori-production
+   → ./scripts/audit-owner-isolation.sh
+
+3. APPLIQUER LES MIDDLEWARES (3h)
+   → Suivre : docs/security/IMPLEMENTATION_CHECKLIST.md
+   → Phase 1 : Ajouter middlewares sur 15+ routes
+
+4. LANCER LES TESTS (2h)
+   → cd apps/srv-listing
+   → pnpm test owner-isolation.test.ts
+
+5. FRONTEND (1h)
+   → Supprimer envoi ownerId pour Owner role
+   → src/features/*/services/*.js
+
+───────────────────────────────────────────────────────────────────
+📖 FICHIERS IMPORTANTS À LIRE
+───────────────────────────────────────────────────────────────────
+
+🔴 PRIORITÉ 1 (LIRE EN PREMIER) :
+docs/security/AUDIT_OWNER_ISOLATION_MULTI_TENANT.md
+
+📋 PRIORITÉ 2 (GUIDE IMPLÉMENTATION) :
+docs/security/IMPLEMENTATION_CHECKLIST.md
+
+📚 PRIORITÉ 3 (COMPRENDRE LES BASES) :
+docs/security/RESUME_PROTECTION_FRONTEND_BACKEND.md
+
+───────────────────────────────────────────────────────────────────
+⏱️  ESTIMATION TEMPS TOTAL
+───────────────────────────────────────────────────────────────────
+
+Lecture audit : 20 min
+Appliquer middlewares : 3h
+Tests automatisés : 2h
+Audit + corrections : 1h
+Frontend : 1h
+Tests manuels : 1h
+Déploiement : 1h
+
+TOTAL : 9h (~2 jours)
+
+───────────────────────────────────────────────────────────────────
+⚠️  RAPPEL CRITIQUE
+───────────────────────────────────────────────────────────────────
+
+"Ce serait une CATASTROPHE si un property manager pouvait voir
+les données d'un autre."
+
+→ Implémenter MAINTENANT (2 jours max)
+
+═══════════════════════════════════════════════════════════════════

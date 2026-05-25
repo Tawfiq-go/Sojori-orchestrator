@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -13,39 +12,9 @@ const listingPinIcon = new L.DivIcon({
   popupAnchor: [0, -38],
 });
 
-function MapClickHandler({ onCoordsChange }) {
-  useMapEvents({
-    click(e) {
-      onCoordsChange?.({ lat: e.latlng.lat, lng: e.latlng.lng });
-    },
-  });
-  return null;
-}
-
-function MapViewSync({ lat, lng, zoom }) {
-  const map = useMap();
-  useEffect(() => {
-    if (lat == null || lng == null || Number.isNaN(Number(lat)) || Number.isNaN(Number(lng))) {
-      return undefined;
-    }
-    let cancelled = false;
-    const run = () => {
-      if (cancelled) return;
-      try {
-        map.invalidateSize({ animate: false });
-        map.setView([Number(lat), Number(lng)], zoom ?? 14, { animate: false });
-      } catch {
-        /* carte pas prête */
-      }
-    };
-    const id = window.requestAnimationFrame(() => window.requestAnimationFrame(run));
-    return () => {
-      cancelled = true;
-      window.cancelAnimationFrame(id);
-    };
-  }, [lat, lng, zoom, map]);
-  return null;
-}
+const DEFAULT_CENTER = [33.5731, -7.5898];
+const DEFAULT_ZOOM = 6;
+const PIN_ZOOM = 14;
 
 function hasValidCoords(lat, lng) {
   return (
@@ -58,58 +27,126 @@ function hasValidCoords(lat, lng) {
   );
 }
 
+function scheduleMapResize(map) {
+  const run = () => {
+    try {
+      map.invalidateSize({ animate: false });
+    } catch {
+      /* carte pas prête */
+    }
+  };
+  window.requestAnimationFrame(() => window.requestAnimationFrame(run));
+}
+
 /**
- * Carte interactive (legacy dashboard Address.jsx) — OpenStreetMap + clic / drag pin.
+ * Carte interactive — Leaflet impératif (évite react-leaflet + StrictMode « already initialized »).
  */
 export default function ListingLocationMap({ lat, lng, onCoordsChange, height = 300 }) {
+  const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
+  const onCoordsChangeRef = useRef(onCoordsChange);
+  onCoordsChangeRef.current = onCoordsChange;
+
   const ok = hasValidCoords(lat, lng);
 
-  const centerLat = ok ? Number(lat) : 33.5731;
-  const centerLng = ok ? Number(lng) : -7.5898;
-  const zoom = ok ? 14 : 6;
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || el.offsetHeight < 8) return undefined;
+
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    }
+
+    const startLat = ok ? Number(lat) : DEFAULT_CENTER[0];
+    const startLng = ok ? Number(lng) : DEFAULT_CENTER[1];
+    const startZoom = ok ? PIN_ZOOM : DEFAULT_ZOOM;
+
+    const map = L.map(el, { scrollWheelZoom: true }).setView([startLat, startLng], startZoom);
+    mapRef.current = map;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+
+    map.on('click', (e) => {
+      onCoordsChangeRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng });
+    });
+
+    if (ok) {
+      const marker = L.marker([Number(lat), Number(lng)], {
+        icon: listingPinIcon,
+        draggable: true,
+      }).addTo(map);
+      marker.bindPopup('Emplacement du logement');
+      marker.on('dragend', () => {
+        const pos = marker.getLatLng();
+        onCoordsChangeRef.current?.({ lat: pos.lat, lng: pos.lng });
+      });
+      markerRef.current = marker;
+    }
+
+    scheduleMapResize(map);
+
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => scheduleMapResize(map))
+        : null;
+    ro?.observe(el);
+
+    return () => {
+      ro?.disconnect();
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+    // Init unique par montage du conteneur (parent peut forcer via key={mapKey})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    if (!ok || !mapRef.current || !markerRef.current) return;
-    try {
-      mapRef.current.setView([Number(lat), Number(lng)], 14);
-      markerRef.current.setLatLng([Number(lat), Number(lng)]);
-    } catch {
-      /* ignore */
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (ok) {
+      const latN = Number(lat);
+      const lngN = Number(lng);
+
+      if (markerRef.current) {
+        markerRef.current.setLatLng([latN, lngN]);
+      } else {
+        const marker = L.marker([latN, lngN], {
+          icon: listingPinIcon,
+          draggable: true,
+        }).addTo(map);
+        marker.bindPopup('Emplacement du logement');
+        marker.on('dragend', () => {
+          const pos = marker.getLatLng();
+          onCoordsChangeRef.current?.({ lat: pos.lat, lng: pos.lng });
+        });
+        markerRef.current = marker;
+      }
+
+      try {
+        map.setView([latN, lngN], PIN_ZOOM, { animate: false });
+      } catch {
+        /* ignore */
+      }
+    } else if (markerRef.current) {
+      map.removeLayer(markerRef.current);
+      markerRef.current = null;
+      try {
+        map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: false });
+      } catch {
+        /* ignore */
+      }
     }
+
+    scheduleMapResize(map);
   }, [lat, lng, ok]);
 
-  return (
-    <MapContainer
-      ref={mapRef}
-      center={[centerLat, centerLng]}
-      zoom={zoom}
-      style={{ height, width: '100%' }}
-      scrollWheelZoom
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      <MapClickHandler onCoordsChange={onCoordsChange} />
-      <MapViewSync lat={ok ? lat : null} lng={ok ? lng : null} zoom={zoom} />
-      {ok ? (
-        <Marker
-          position={[Number(lat), Number(lng)]}
-          icon={listingPinIcon}
-          ref={markerRef}
-          draggable
-          eventHandlers={{
-            dragend(e) {
-              const pos = e.target.getLatLng();
-              onCoordsChange?.({ lat: pos.lat, lng: pos.lng });
-            },
-          }}
-        >
-          <Popup>Emplacement du logement</Popup>
-        </Marker>
-      ) : null}
-    </MapContainer>
-  );
+  return <div ref={containerRef} style={{ height, width: '100%' }} />;
 }

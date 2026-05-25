@@ -139,6 +139,7 @@ export function buildListingTabLivePayload(
         'orchestration_grocery',
         'orchestration_custom',
         'orchestration_support',
+        'orchestration_service_client',
         'orchestration_cleaning_free',
         'orchestration_cleaning_paid',
       ]);
@@ -151,7 +152,12 @@ export function buildListingTabLivePayload(
     case 'concierge':
       return pick(raw, ['orchestration_transport', 'orchestration_grocery', 'orchestration_custom']);
     case 'support':
-      return pick(raw, ['arrivalPhone', 'arrivalEmail', 'orchestration_support']);
+      return pick(raw, [
+        'arrivalPhone',
+        'arrivalEmail',
+        'orchestration_support',
+        'orchestration_service_client',
+      ]);
     case 'rules':
       return pick(raw, ['description', 'rulesAndInfo', 'houseRules']);
     case 'services':

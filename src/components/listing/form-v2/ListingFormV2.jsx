@@ -17,9 +17,11 @@ import { AccessTab, WhatsAppTab, ConciergeTab, SupportTab, RulesTab } from './ta
 import SupportConfigTabContainer from '../../../features/listing/components/ConfigOrchestration/SupportConfigTabContainer';
 import ConciergeConfigTab from '../../../features/listing/components/ConfigOrchestration/ConciergeConfigTab';
 import CleaningConfigTab from '../../../features/listing/components/ConfigOrchestration/CleaningConfigTab';
+import CleaningSojoriConfigTab from '../../../features/listing/components/ConfigOrchestration/CleaningSojoriConfigTab';
 import TransportConfigTab from '../../../features/listing/components/ConfigOrchestration/TransportConfigTab';
 import GroceryConfigTab from '../../../features/listing/components/ConfigOrchestration/GroceryConfigTab';
 import ServiceClientConfigTab from '../../../features/listing/components/ConfigOrchestration/ServiceClientConfigTab';
+import AccessConfigTab from '../../../features/listing/components/ConfigOrchestration/AccessConfigTab';
 import MessagesConfigTab from '../../../features/listing/components/ConfigOrchestration/MessagesConfigTab';
 import OrchestrationConfigTab from '../../../features/listing/components/ConfigOrchestration/OrchestrationConfigTab';
 import PmConfigTabFrame from '../../../features/listing/components/ConfigOrchestration/PmConfigTabFrame';
@@ -29,6 +31,8 @@ export default function ListingFormV2({
   initialValues = {},
   defaultLevel = 'detail',
   defaultTab,
+  lockLevel,
+  embedded = false,
   onSave,
   onImagesPersisted,
   onVerifyRuChannels,
@@ -94,15 +98,17 @@ export default function ListingFormV2({
       const wrap = (tabId, node) => (
         <PmConfigTabFrame tabKey={tabId}>{node}</PmConfigTabFrame>
       );
+      if (tabKey === 'access-config')         return wrap('access-config', <AccessConfigTab listingId={listingId} listingName={values.name} ownerId={values.ownerId} />);
       if (tabKey === 'support-config')        return wrap('support-config', <SupportConfigTabContainer listingId={listingId} ownerId={values.ownerId} />);
       if (tabKey === 'concierge-config')      return wrap('concierge-config', <ConciergeConfigTab listingId={listingId} ownerId={values.ownerId} />);
       if (tabKey === 'cleaning-config')       return wrap('cleaning-config', <CleaningConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} onListingPatch={patch => setValues(v => ({ ...v, ...patch }))} />);
+      if (tabKey === 'cleaning-sojori-config') return wrap('cleaning-sojori-config', <CleaningSojoriConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} onListingPatch={patch => setValues(v => ({ ...v, ...patch }))} />);
       if (tabKey === 'transport-config')      return wrap('transport-config', <TransportConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} />);
       if (tabKey === 'grocery-config')        return wrap('grocery-config', <GroceryConfigTab listingId={listingId} ownerId={values.ownerId} />);
       if (tabKey === 'service-client-config') return wrap('service-client-config', <ServiceClientConfigTab listingId={listingId} ownerId={values.ownerId} />);
-      if (tabKey === 'messages-config')       return wrap('messages-config', <MessagesConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} />);
-      if (tabKey === 'orchestration-config')  return wrap('orchestration-config', <OrchestrationConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} />);
-      // Menu WhatsApp : même UI que Config orchestration (7 onglets) — sans cadre schéma/mockup
+      if (tabKey === 'messages-config')       return wrap('messages-config', <MessagesConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} onListingPatch={patch => setValues(v => ({ ...v, ...patch }))} />);
+      if (tabKey === 'orchestration-config')  return wrap('orchestration-config', <OrchestrationConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} onListingPatch={patch => setValues(v => ({ ...v, ...patch }))} />);
+      // Menu WhatsApp : UI dédiée (hors cadre Config Orch. simplifié)
       if (tabKey === 'whatsapp-config') {
         return <WhatsAppTab {...common} listingId={listingId} listingName={values.name} />;
       }
@@ -137,23 +143,16 @@ export default function ListingFormV2({
         concierge:     { tone: 'success', label: '5/5' },
         support:       { tone: 'success', label: '5/5' },
         rules:         { tone: 'neutral', label: '3' },
-        // Config NEW tabs
-        'support-config':        { tone: 'neutral', label: '3' },
-        'concierge-config':      { tone: 'neutral', label: '6' },
-        'cleaning-config':       { tone: 'neutral', label: '7' },
-        'transport-config':      { tone: 'neutral', label: '9' },
-        'grocery-config':        { tone: 'neutral', label: '1' },
-        'service-client-config': { tone: 'neutral', label: '4' },
-        'messages-config':       { tone: 'neutral', label: '2' },
-        'orchestration-config':  { tone: 'neutral', label: '3' },
         'whatsapp-config':       { tone: 'success', label: '✓' },
       }}
       defaultLevel={defaultLevel}
       defaultTab={defaultTab || (defaultLevel === 'config-new' ? 'support-config' : defaultLevel === 'config' ? 'orchestration' : 'general')}
+      lockLevel={lockLevel}
+      embedded={embedded}
       onSave={() => onSave?.(values)}
       onPublish={() => onSave?.({ ...values, status: 'published' })}
       onPreview={() => window.open(`/listings/${listingId}/preview`)}
-      onAiAssist={() => console.log('AI assist · à brancher')}
+      onAiAssist={() => {}}
       renderTab={renderTab}
     />
     </ListingFormStructureContext.Provider>

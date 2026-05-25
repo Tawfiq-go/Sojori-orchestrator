@@ -7,6 +7,7 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -20,6 +21,10 @@ import {
   buildRollingHeatmapMonths,
   filterCalendarYear,
   filterRolling365,
+  filterRolling12Months,
+  buildRolling12MonthsHeatmapMonths,
+  lastDayInSeries,
+  rolling12mDisplayEnd,
   formatFrShort,
   todayIsoLocal,
   type DayPhase,
@@ -46,12 +51,13 @@ export interface CalendarDay {
   priceTier?: PriceTier;
 }
 
-export type CalendarWindowMode = 'rolling365' | 'calendarYear';
+export type CalendarWindowMode = 'rolling365' | 'rolling12m' | 'calendarYear';
 
+/** Bas → Moyen → Haut (lisible sur la grille) */
 const TIER_BG: Record<PriceTier, string> = {
-  low: '#9ec5e8',
-  mid: '#6fbf63',
-  high: '#2a6b2a',
+  low: '#7dd3fc',
+  mid: '#4ade80',
+  high: '#ea580c',
 };
 
 export interface YearlyCalendarProps {
@@ -109,7 +115,9 @@ function sliceVisibleDays(
   const slice =
     windowMode === 'calendarYear'
       ? filterCalendarYear(source, year)
-      : filterRolling365(source, today);
+      : windowMode === 'rolling12m'
+        ? filterRolling12Months(source, today)
+        : filterRolling365(source, today);
   return enrichTiers ? enrichDaysWithPriceTiers(slice) : slice;
 }
 
@@ -133,16 +141,30 @@ export default function YearlyCalendar({
   minStaySyncActive = true,
 }: YearlyCalendarProps) {
   const today = todayIsoLocal();
-  const windowEnd = addDaysIso(today, 365);
+  const windowEnd =
+    windowMode === 'rolling12m'
+      ? rolling12mDisplayEnd(today, lastDayInSeries(days))
+      : addDaysIso(today, 365);
   const helpLinkLabel =
     sourceLinkLabel ??
-    (pricingSource === 'airroi' ? 'Source marché (AirROI) ⓘ' : 'Source pilote Sojori ⓘ');
+    pricingSource === 'estimate'
+      ? 'Preview estimate (Sojori) ⓘ'
+      : pricingSource === 'airroi'
+        ? 'Comparaison OTA (future/rates) ⓘ'
+        : 'Source pilote Sojori ⓘ';
 
-  const dualCurve = Boolean(compareMarketDays?.length && windowMode === 'rolling365');
+  /** Pas de courbe future/rates OTA — estimate / pilote uniquement */
+  const isRollingWindow = windowMode === 'rolling365' || windowMode === 'rolling12m';
+
+  const dualCurve =
+    (pricingSource === 'estimate' ||
+      pricingSource === 'sojori' ||
+      pricingSource === 'airroi') &&
+    Boolean(compareMarketDays?.length && isRollingWindow);
 
   const visibleDays = useMemo(
-    () => sliceVisibleDays(days, windowMode, year, today, pricingSource === 'airroi' && !dualCurve),
-    [days, windowMode, year, today, pricingSource, dualCurve],
+    () => sliceVisibleDays(days, windowMode, year, today, true),
+    [days, windowMode, year, today],
   );
 
   const visibleMarketDays = useMemo(() => {
@@ -151,8 +173,8 @@ export default function YearlyCalendar({
   }, [compareMarketDays, windowMode, year, today]);
 
   const coverage = useMemo(() => {
-    if (windowMode !== 'rolling365') return null;
-    const expected = countExpectedDaysInWindow(today, windowEnd);
+    if (windowMode !== 'rolling365' && windowMode !== 'rolling12m') return null;
+    const expected = countExpectedDaysInWindow(today, addDaysIso(windowEnd, 1));
     const withPrice = visibleDays.filter(
       (d) => d.status !== 'blocked' && d.recommendedPrice > 0,
     ).length;
@@ -221,16 +243,90 @@ export default function YearlyCalendar({
       .map((date) => {
         const pilot = pilotByDate.get(date);
         const market = marketByDate.get(date);
+        const m = market?.price ?? null;
+        const p = pilot?.price ?? null;
+        const deltaMad =
+          m != null && p != null && m > 0 && p > 0 ? p - m : null;
         return {
           date,
-          marketPrice: market?.price ?? null,
-          pilotPrice: pilot?.price ?? null,
-          price: pilot?.price ?? market?.price ?? null,
+          marketPrice: m,
+          pilotPrice: p,
+          deltaMad,
+          price: p ?? m ?? null,
           status: pilot?.status,
           tierLabel: market?.tierLabel,
         };
       });
   }, [dualCurve, visibleDays, visibleMarketDays]);
+
+  const dualCompareStats = useMemo(() => {
+    if (!dualCurve) return null;
+    const priced = chartData.filter(
+      (r) =>
+        r.marketPrice != null &&
+        r.pilotPrice != null &&
+        r.marketPrice > 0 &&
+        r.pilotPrice > 0,
+    );
+    let identical = 0;
+    let different = 0;
+    let maxAbsDelta = 0;
+    for (const r of priced) {
+      const d = Math.abs((r.pilotPrice ?? 0) - (r.marketPrice ?? 0));
+      if (d <= 5) identical += 1;
+      else {
+        different += 1;
+        maxAbsDelta = Math.max(maxAbsDelta, d);
+      }
+    }
+    const marketPriced = visibleMarketDays
+      .filter((d) => d.status !== 'blocked' && d.recommendedPrice > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const marketDates = marketPriced.map((d) => d.date);
+    let flatStreakLen = 0;
+    let flatStreakPrice = 0;
+    if (marketPriced.length >= 2) {
+      let run = 1;
+      let runPrice = marketPriced[0].recommendedPrice;
+      for (let i = 1; i < marketPriced.length; i += 1) {
+        if (marketPriced[i].recommendedPrice === marketPriced[i - 1].recommendedPrice) {
+          run += 1;
+        } else {
+          if (run > flatStreakLen) {
+            flatStreakLen = run;
+            flatStreakPrice = runPrice;
+          }
+          run = 1;
+          runPrice = marketPriced[i].recommendedPrice;
+        }
+      }
+      if (run > flatStreakLen) {
+        flatStreakLen = run;
+        flatStreakPrice = runPrice;
+      }
+    }
+    const expected =
+      isRollingWindow ? countExpectedDaysInWindow(today, addDaysIso(windowEnd, 1)) : 0;
+    const missingInWindow = Math.max(0, expected - visibleMarketDays.length);
+    const blockedInWindow = visibleMarketDays.filter((d) => d.status === 'blocked').length;
+    return {
+      identical,
+      different,
+      maxAbsDelta,
+      compared: priced.length,
+      rangeStart: marketDates[0] ?? null,
+      rangeEnd: marketDates[marketDates.length - 1] ?? null,
+      flatStreakLen,
+      flatStreakPrice,
+      missingInWindow,
+      blockedInWindow,
+    };
+  }, [dualCurve, chartData, visibleMarketDays, windowMode, today, windowEnd]);
+
+  React.useEffect(() => {
+    if (!import.meta.env.DEV || !dualCompareStats) return;
+    console.info('[DP] compare AirROI vs Pilote', dualCompareStats);
+  }, [dualCompareStats]);
 
   const priceExtent = useMemo(() => {
     const prices: number[] = [];
@@ -257,8 +353,8 @@ export default function YearlyCalendar({
   }, [chartData, dualCurve]);
 
   const dualCoverage = useMemo(() => {
-    if (!dualCurve || windowMode !== 'rolling365') return null;
-    const expected = countExpectedDaysInWindow(today, windowEnd);
+    if (!dualCurve || !isRollingWindow) return null;
+    const expected = countExpectedDaysInWindow(today, addDaysIso(windowEnd, 1));
     const marketWith = visibleMarketDays.filter(
       (d) => d.status !== 'blocked' && d.recommendedPrice > 0,
     ).length;
@@ -272,22 +368,31 @@ export default function YearlyCalendar({
     if (windowMode === 'calendarYear') {
       return buildCalendarYearHeatmapMonths(visibleDays, year, today);
     }
+    if (windowMode === 'rolling12m') {
+      return buildRolling12MonthsHeatmapMonths(visibleDays, today);
+    }
     return buildRollingHeatmapMonths(visibleDays, today);
   }, [visibleDays, windowMode, year, today]);
 
+  const monthAxisLabels = useMemo(
+    () => (isRollingWindow ? monthGrids.map((m) => ({ label: m.label, sortKey: m.sortKey })) : []),
+    [isRollingWindow, monthGrids],
+  );
+
   const title =
     pricingSource === 'airroi'
-      ? windowMode === 'rolling365'
-        ? 'Suggestion de prix marché · 365 j à venir'
-        : `Suggestion marché ${year}`
-      : windowMode === 'rolling365'
-        ? 'Prix recommandés Sojori · 365 j à venir'
-        : `Prix recommandés Sojori ${year}`;
+      ? isRollingWindow
+        ? 'Comparaison OTA (future/rates)'
+        : `Comparaison OTA ${year}`
+      : pricingSource === 'estimate'
+        ? 'Prix estimés (calculator/estimate) · 12 mois'
+        : isRollingWindow
+          ? 'Prix recommandés Sojori · 12 mois'
+          : `Prix recommandés Sojori ${year}`;
 
-  const rangeLabel =
-    windowMode === 'rolling365'
-      ? `${formatFrShort(today)} → ${formatFrShort(addDaysIso(today, 364))}`
-      : undefined;
+  const rangeLabel = isRollingWindow
+    ? `${formatFrShort(today)} → ${formatFrShort(windowEnd)}`
+    : undefined;
 
   if (days.length === 0) {
     return (
@@ -295,7 +400,7 @@ export default function YearlyCalendar({
         title="Calendrier vide"
         hint={
           emptyHint ??
-          'Relancez ⟳ Envoyer · récupérer (future/rates) ou Recalculer 365 j dans la modal données'
+          'Modal ⟳ · GET /calculator/estimate puis preview ici (12 mois)'
         }
       />
     );
@@ -306,8 +411,8 @@ export default function YearlyCalendar({
       <DataEmptyPlaceholder
         title="Aucun jour dans la fenêtre"
         hint={
-          windowMode === 'rolling365'
-            ? `Les tarifs en base commencent peut‑être avant aujourd’hui ou après le ${formatFrShort(windowEnd)}. Relancez ⟳ pour actualiser future/rates.`
+          isRollingWindow
+            ? `Aucun jour entre aujourd’hui et le ${formatFrShort(windowEnd)}. Relancez ⟳ calculator/estimate.`
             : `Aucune date en ${year} — essayez l’autre année.`
         }
       />
@@ -526,7 +631,7 @@ export default function YearlyCalendar({
       </Stack>
 
       {/* Courbe prix/jour — fenêtre glissante depuis aujourd'hui */}
-      {windowMode === 'rolling365' && chartData.length > 0 && (
+      {isRollingWindow && chartData.length > 0 && (
         <Box sx={{ mb: 2.5 }}>
           <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 0.75 }}>
             <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text2 }}>
@@ -567,17 +672,112 @@ export default function YearlyCalendar({
               ) : null}
             </Typography>
           </Stack>
-          {dualCurve ? (
-            <Stack direction="row" sx={{ gap: 1.5, mb: 1, flexWrap: 'wrap' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontSize: 10.5, color: T.text2 }}>
-                <Box sx={{ width: 22, height: 0, borderTop: '2px dashed #4a7fb8' }} />
-                <b>AirROI brut</b> (snapshot future/rates)
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontSize: 10.5, color: T.text2 }}>
-                <Box sx={{ width: 22, height: 3, bgcolor: T.goldDeep, borderRadius: 0.5 }} />
-                <b>Pilote Sojori</b> (modes + bornes + events)
-              </Box>
-            </Stack>
+          {dualCurve && dualCompareStats ? (
+            <Box sx={{ mb: 1 }}>
+              <Stack direction="row" sx={{ gap: 1, mb: 0.75, flexWrap: 'wrap' }}>
+                <Box
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    px: 1.125,
+                    py: 0.5,
+                    borderRadius: 1,
+                    bgcolor: 'rgba(37,99,235,0.10)',
+                    border: '1px solid rgba(37,99,235,0.35)',
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    color: '#1d4ed8',
+                  }}
+                >
+                  <Box sx={{ width: 14, height: 3, bgcolor: '#2563eb', borderRadius: 0.5 }} />
+                  {pricingSource === 'estimate' ? 'Marché estimate (brut)' : 'Marché AirROI (brut)'}
+                </Box>
+                <Box
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    px: 1.125,
+                    py: 0.5,
+                    borderRadius: 1,
+                    bgcolor: T.goldTint,
+                    border: `1px solid ${T.gold}`,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    color: T.goldDeep,
+                  }}
+                >
+                  <Box sx={{ width: 14, height: 3, bgcolor: T.goldDeep, borderRadius: 0.5 }} />
+                  Prix calendrier Sojori
+                </Box>
+              </Stack>
+              <Typography sx={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', lineHeight: 1.45 }}>
+                {dualCompareStats.rangeStart && dualCompareStats.rangeEnd ? (
+                  <>
+                    Données AirROI du {formatFrShort(dualCompareStats.rangeStart)} au{' '}
+                    {formatFrShort(dualCompareStats.rangeEnd)}
+                    {' · '}
+                  </>
+                ) : null}
+                {dualCompareStats.different > 0 ? (
+                  <Box component="span" sx={{ color: T.goldDeep, fontWeight: 800 }}>
+                    {dualCompareStats.different} j avec écart
+                    {dualCompareStats.maxAbsDelta > 0
+                      ? ` (max Δ ${dualCompareStats.maxAbsDelta.toLocaleString('fr-FR')} MAD)`
+                      : ''}
+                  </Box>
+                ) : (
+                  <Box component="span" sx={{ color: '#1d4ed8', fontWeight: 800 }}>
+                    Courbes quasi identiques sur {dualCompareStats.compared} j
+                  </Box>
+                )}
+                {dualCompareStats.identical > 0 ? (
+                  <>
+                    {' · '}
+                    {dualCompareStats.identical} j superposés (mode ×1, bornes non touchées)
+                  </>
+                ) : null}
+              </Typography>
+              {(dualCompareStats.missingInWindow > 0 ||
+                dualCompareStats.blockedInWindow > 0 ||
+                dualCompareStats.flatStreakLen >= 14) && (
+                <Box
+                  sx={{
+                    mt: 0.75,
+                    p: 1,
+                    borderRadius: 1,
+                    bgcolor: T.bg2,
+                    border: `1px solid ${T.border}`,
+                    fontSize: 10.5,
+                    color: T.text2,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {dualCompareStats.missingInWindow > 0 ? (
+                    <Box>
+                      <b>Trous dans la courbe (vides)</b> : {dualCompareStats.missingInWindow} j
+                      sans ligne dans le snapshot AirROI (API n’a pas envoyé de tarif pour ces dates).
+                      Cases grises dans la grille = même chose.
+                    </Box>
+                  ) : null}
+                  {dualCompareStats.blockedInWindow > 0 ? (
+                    <Box sx={{ mt: dualCompareStats.missingInWindow > 0 ? 0.5 : 0 }}>
+                      <b>Indisponible</b> : {dualCompareStats.blockedInWindow} j marqués{' '}
+                      <code>available=false</code> chez AirROI (pas de prix marché).
+                    </Box>
+                  ) : null}
+                  {dualCompareStats.flatStreakLen >= 14 ? (
+                    <Box sx={{ mt: 0.5 }}>
+                      <b>Plat en fin de période</b> : AirROI renvoie le même tarif (
+                      {dualCompareStats.flatStreakPrice.toLocaleString('fr-FR')} MAD) sur{' '}
+                      {dualCompareStats.flatStreakLen} jours consécutifs — comportement fournisseur
+                      fréquent loin dans le futur, pas un calcul Sojori.
+                    </Box>
+                  ) : null}
+                </Box>
+              )}
+            </Box>
           ) : null}
           <Box
             sx={{
@@ -621,38 +821,68 @@ export default function YearlyCalendar({
                   domain={['auto', 'auto']}
                 />
                 <RechartsTooltip
-                  contentStyle={chartTooltipStyle}
-                  labelFormatter={(l) => formatFrShort(String(l))}
-                  formatter={(v: number, name: string, item) => {
-                    const p = item?.payload as { tierLabel?: string; status?: DayStatus };
-                    if (name === 'Pilote Sojori' && p?.status === 'override') {
-                      return [`${Math.round(v).toLocaleString('fr-FR')} MAD`, 'Pilote · event forcé'];
-                    }
-                    if (name === 'Marché AirROI') {
-                      const tier = p?.tierLabel;
-                      return [
-                        `${Math.round(v).toLocaleString('fr-FR')} MAD`,
-                        tier ? `AirROI · ${tier}` : 'AirROI brut',
-                      ];
-                    }
-                    const tier = p?.tierLabel;
-                    return [
-                      `${Math.round(v).toLocaleString('fr-FR')} MAD`,
-                      tier ? `marché · ${tier}` : String(name || 'Prix'),
-                    ];
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    const row = payload[0]?.payload as {
+                      marketPrice?: number | null;
+                      pilotPrice?: number | null;
+                      deltaMad?: number | null;
+                      status?: DayStatus;
+                      tierLabel?: string;
+                    };
+                    const m = row.marketPrice;
+                    const p = row.pilotPrice;
+                    const delta = row.deltaMad;
+                    return (
+                      <Box sx={{ ...chartTooltipStyle, p: 1.25, minWidth: 200 }}>
+                        <Typography sx={{ fontSize: 11, fontWeight: 800, mb: 0.75 }}>
+                          {formatFrShort(String(label))}
+                        </Typography>
+                        {m != null && m > 0 ? (
+                          <Typography sx={{ fontSize: 11, color: '#1d4ed8', fontFamily: '"Geist Mono", monospace' }}>
+                            {pricingSource === 'estimate' ? 'Marché estimate' : 'Marché AirROI'} :{' '}
+                            <b>{Math.round(m).toLocaleString('fr-FR')} MAD</b>
+                            {row.tierLabel ? ` · ${row.tierLabel}` : ''}
+                          </Typography>
+                        ) : (
+                          <Typography sx={{ fontSize: 10.5, color: T.text3 }}>AirROI : —</Typography>
+                        )}
+                        {p != null && p > 0 ? (
+                          <Typography sx={{ fontSize: 11, color: T.goldDeep, fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
+                            Calendrier Sojori : <b>{Math.round(p).toLocaleString('fr-FR')} MAD</b>
+                            {row.status === 'override' ? ' · event' : ''}
+                          </Typography>
+                        ) : (
+                          <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 0.25 }}>Pilote : —</Typography>
+                        )}
+                        {delta != null ? (
+                          <Typography
+                            sx={{
+                              fontSize: 10.5,
+                              mt: 0.5,
+                              fontWeight: 800,
+                              color: Math.abs(delta) <= 5 ? T.text3 : delta > 0 ? T.goldDeep : T.error,
+                              fontFamily: '"Geist Mono", monospace',
+                            }}
+                          >
+                            Δ pilote − AirROI : {delta > 0 ? '+' : ''}
+                            {Math.round(delta).toLocaleString('fr-FR')} MAD
+                          </Typography>
+                        ) : null}
+                      </Box>
+                    );
                   }}
                 />
                 {dualCurve ? (
                   <>
-                    <Area
+                    <Line
                       type="monotone"
                       name="Marché AirROI"
                       dataKey="marketPrice"
                       connectNulls={false}
-                      stroke="#4a7fb8"
-                      strokeWidth={1.75}
-                      strokeDasharray="5 4"
-                      fill="url(#dpMarketGrad)"
+                      stroke="#2563eb"
+                      strokeWidth={2.5}
+                      strokeDasharray="6 4"
                       dot={false}
                       isAnimationActive={false}
                     />
@@ -662,8 +892,9 @@ export default function YearlyCalendar({
                       dataKey="pilotPrice"
                       connectNulls={false}
                       stroke={T.goldDeep}
-                      strokeWidth={2}
+                      strokeWidth={2.25}
                       fill="url(#dpPriceGrad)"
+                      fillOpacity={0.35}
                       dot={ChartEventDot}
                       activeDot={(props: {
                         cx?: number;
@@ -722,7 +953,7 @@ export default function YearlyCalendar({
           gridTemplateColumns: {
             xs: 'repeat(3, minmax(52px, 1fr))',
             sm: 'repeat(4, minmax(52px, 1fr))',
-            md: `repeat(${Math.min(monthGrids.length, 12)}, minmax(52px, 1fr))`,
+            md: `repeat(${Math.max(monthGrids.length, 1)}, minmax(52px, 1fr))`,
           },
           gap: 1.25,
         }}
@@ -757,6 +988,40 @@ export default function YearlyCalendar({
         ))}
       </Box>
 
+      {monthAxisLabels.length > 0 && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: 'repeat(3, minmax(52px, 1fr))',
+              sm: 'repeat(4, minmax(52px, 1fr))',
+              md: `repeat(${monthAxisLabels.length}, minmax(52px, 1fr))`,
+            },
+            gap: 1.25,
+            mt: 1,
+            pt: 0.75,
+            borderTop: `1px solid ${T.border}`,
+          }}
+        >
+          {monthAxisLabels.map((m) => (
+            <Typography
+              key={m.sortKey}
+              sx={{
+                fontSize: 10.5,
+                fontFamily: '"Geist Mono", monospace',
+                fontWeight: 800,
+                color: T.text2,
+                textAlign: 'center',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {m.label}
+            </Typography>
+          ))}
+        </Box>
+      )}
+
       <Stack
         direction="row"
         sx={{ alignItems: 'center', gap: 1.125, 
@@ -770,20 +1035,19 @@ export default function YearlyCalendar({
       >
         <Box>💡</Box>
         <Box>
-          {windowMode === 'rolling365' && pricingSource === 'airroi' ? (
+          {isRollingWindow && pricingSource === 'estimate' ? (
             <>
-              <b>Suggestion marché</b> (pas votre calendrier ops) : un seul prix/nuit par
-              jour reçu. Cases pointillées = jour absent de l’API. Couleurs = bas / moyen / haut
-              (tertiles). Clic jour = détail.
+              <b>Prix pilote</b> dérivés de <b>calculator/estimate</b> (12 mois) — pas les tarifs
+              Airbnb future/rates. Vérifiez ici avant « Appliquer » vers le calendrier ops.
             </>
-          ) : windowMode === 'rolling365' && eventDayCount > 0 ? (
+          ) : isRollingWindow && eventDayCount > 0 ? (
             <>
               Courbe pilote · <b style={{ color: STATUS_BG.override }}>points orange = event</b>{' '}
-              (prix forcé MAD/nuit). Reste = marché + modes + bornes. Clic jour = justification G7.
+              (prix forcé MAD/nuit). Clic jour = justification G7.
             </>
-          ) : windowMode === 'rolling365' ? (
+          ) : isRollingWindow ? (
             <>
-              Calendrier prospectif Sojori · <b>aujourd’hui</b> en or. Clic = justification.
+              Calendrier prospectif · <b>aujourd’hui</b> en or · 12 mois. Clic = justification.
             </>
           ) : (
             <>
@@ -871,7 +1135,6 @@ function HeatmapCellView({
     <DayCell
       day={cell.day}
       phase={cell.phase}
-      pricingSource={pricingSource}
       onClick={() => onDayClick(cell.day)}
     />
   );
@@ -880,12 +1143,10 @@ function HeatmapCellView({
 function DayCell({
   day,
   phase,
-  pricingSource,
   onClick,
 }: {
   day: CalendarDay;
   phase: DayPhase;
-  pricingSource: CalendarPricingSource;
   onClick: () => void;
 }) {
   const [hover, setHover] = useState(false);
@@ -902,7 +1163,7 @@ function DayCell({
           ? 'Moyen'
           : '';
   const tierBg =
-    pricingSource === 'airroi' && day.priceTier && day.status !== 'blocked'
+    day.priceTier && day.status !== 'blocked' && day.status !== 'override'
       ? TIER_BG[day.priceTier]
       : null;
 
@@ -975,7 +1236,7 @@ function CalendarLegendBar({
         '&::-webkit-scrollbar-thumb': { bgcolor: T.borderStrong, borderRadius: 99 },
       }}
     >
-      {pricingSource === 'airroi' ? (
+      {pricingSource === 'airroi' || pricingSource === 'estimate' ? (
         <>
           <LegendItem color={TIER_BG.low}>Bas</LegendItem>
           <Sep />
@@ -1008,7 +1269,7 @@ function CalendarLegendBar({
           </LegendItem>
         </>
       )}
-      {windowMode === 'rolling365' && (
+      {(windowMode === 'rolling365' || windowMode === 'rolling12m') && (
         <>
           <Sep />
           <LegendItem color={T.gold}>Aujourd’hui</LegendItem>

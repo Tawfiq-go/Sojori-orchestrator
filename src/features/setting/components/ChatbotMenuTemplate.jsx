@@ -10,7 +10,7 @@ const formatDate = value => value ? new Date(value).toLocaleString('fr-FR', {
 }) : '—';
 
 /** Ordre strict : A, B, C, D, D1, D2, D3, D4, E, F, G, H, I, J, J1, J2, J3, K */
-const MENU_DISPLAY_ORDER = ['A', 'B', 'C', 'D', 'D1', 'D2', 'D3', 'D4', 'E', 'F', 'G', 'H', 'I', 'J', 'J1', 'J2', 'J3', 'K'];
+const MENU_DISPLAY_ORDER = ['A', 'B', 'C', 'D', 'D1', 'D2', 'D3', 'D4', 'E', 'F', 'G', 'H', 'I', 'J', 'J1', 'J2', 'J3', 'K', 'L'];
 const MENU_SECTIONS_FALLBACK = [{
   id: 'D',
   title: '🕐 Gestion Arrivée & Départ',
@@ -22,7 +22,7 @@ const MENU_SECTIONS_FALLBACK = [{
 }, {
   id: 'general',
   title: '📋 Options Générales',
-  codes: ['A', 'B', 'C', 'E', 'F', 'G', 'H', 'I', 'K']
+  codes: ['A', 'B', 'C', 'E', 'F', 'G', 'H', 'I', 'K', 'L']
 }];
 const SOJORI_COLORS = {
   primary: '#FF6B35',

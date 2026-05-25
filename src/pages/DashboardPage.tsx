@@ -38,11 +38,8 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { dashboardPeriods } from '../data/mockDashboard';
-import {
-  fetchDashboardV1Core,
-  fetchDashboardV1Extras,
-  mergeDashboardSnapshots,
-} from '../services/dashboardV1Service';
+import { EMPTY_DASHBOARD_SNAPSHOT, ensureDashboardSnapshot } from '../services/dashboardV1Service';
+import { dashboardService } from '../services/dashboardService';
 import {
   readDashboardSnapshotCache,
   writeDashboardSnapshotCache,
@@ -51,45 +48,11 @@ import { useAuth } from '../hooks/useAuth';
 import { dashboardDebugEnabled, logDashboard } from '../utils/dashboardDebug';
 import { getToken } from '../utils/authUtils';
 import type {
-  DashboardCheckFlowItem,
   DashboardPeriod,
   DashboardPropertyOption,
   DashboardSnapshot,
 } from '../types/dashboard.types';
 
-const EMPTY_CHECK_FLOW: DashboardCheckFlowItem[] = [
-  { label: "Aujourd'hui", checkIns: 0, checkOuts: 0 },
-  { label: 'Demain', checkIns: 0, checkOuts: 0 },
-  { label: 'J+2', checkIns: 0, checkOuts: 0 },
-  { label: 'J+3', checkIns: 0, checkOuts: 0 },
-];
-
-const z = (value = 0, trend = '—') => ({ value, trend });
-
-const fallbackSnapshot: DashboardSnapshot = {
-  properties: [],
-  kpis: {
-    totalReservations: z(),
-    monthlyRevenue: z(),
-    occupancyRate: z(),
-    adr: z(),
-    revpar: z(),
-    guestsThisMonth: z(),
-    activeProperties: z(),
-    averageRating: z(),
-  },
-  revenueChart: [],
-  sourceDistribution: [],
-  occupancyByProperty: [],
-  alerts: [],
-  checkFlow: EMPTY_CHECK_FLOW,
-  upcomingCheckIns: [],
-  upcomingCheckOuts: [],
-  recentBookings: [],
-  urgentTasks: [],
-  unreadMessages: [],
-  recentReviews: [],
-};
 
 const chartColors = ['#e6b022', '#8b5cf6', '#10b981', '#06b6d4'];
 
@@ -104,8 +67,8 @@ export function DashboardPage() {
   const [period, setPeriod] = useState<DashboardPeriod>('Mois');
   const [properties, setProperties] = useState<DashboardPropertyOption[]>([]);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
-  const [snapshot, setSnapshot] = useState<DashboardSnapshot>(fallbackSnapshot);
-  /** false tant que core + extras ne sont pas fusionnés (pas de KPI/graphiques à 0). */
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot>(EMPTY_DASHBOARD_SNAPSHOT);
+  /** false tant que l’agrégation multi-API n’est pas terminée (évite flash KPI à 0). */
   const [dashboardReady, setDashboardReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -119,8 +82,7 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const coreAbort = new AbortController();
-    const extrasAbort = new AbortController();
+    const abort = new AbortController();
     let cancelled = false;
 
     const loadDashboard = async () => {
@@ -138,7 +100,7 @@ export function DashboardPage() {
 
       const cached = readDashboardSnapshotCache(period, selectedPropertyIds);
       if (cached && !cancelled) {
-        setSnapshot(cached);
+        setSnapshot(ensureDashboardSnapshot(cached));
         setProperties(cached.properties);
         setDashboardReady(true);
         setError(null);
@@ -160,51 +122,28 @@ export function DashboardPage() {
       });
 
       try {
-        const core = await fetchDashboardV1Core({
-          period,
-          listingIds: selectedPropertyIds,
-          signal: coreAbort.signal,
-        });
+        const loaded = ensureDashboardSnapshot(
+          await dashboardService.getSnapshot({
+            period,
+            listingIds: selectedPropertyIds,
+            signal: abort.signal,
+          }),
+        );
 
         if (cancelled) {
           return;
         }
 
-        const listingIdsForExtras =
-          selectedPropertyIds.length > 0
-            ? selectedPropertyIds
-            : (core.listingIdsHint?.length
-                ? core.listingIdsHint
-                : core.properties.map((property) => property.id).filter(Boolean));
-
-        logDashboard('extras listingIds', {
-          selected: selectedPropertyIds.length,
-          fromHint: core.listingIdsHint?.length ?? 0,
-          fromProperties: core.properties.length,
-          sent: listingIdsForExtras.length,
-        });
-
-        const extras = await fetchDashboardV1Extras({
-          period,
-          listingIds: listingIdsForExtras,
-          signal: extrasAbort.signal,
-        });
-
-        if (cancelled) {
-          return;
-        }
-
-        const merged = mergeDashboardSnapshots(core, extras);
-        setSnapshot(merged);
-        setProperties(merged.properties.length > 0 ? merged.properties : core.properties);
+        setSnapshot(loaded);
+        setProperties(loaded.properties);
         setError(null);
         setDashboardReady(true);
-        writeDashboardSnapshotCache(period, selectedPropertyIds, merged);
-        logDashboard('DashboardPage données prêtes (core + extras)', {
-          properties: merged.properties.length,
-          listingIdsHint: core.listingIdsHint?.length ?? 0,
-          occupancyByProperty: merged.occupancyByProperty.length,
-          sourceDistribution: merged.sourceDistribution.length,
+        writeDashboardSnapshotCache(period, selectedPropertyIds, loaded);
+        logDashboard('DashboardPage données prêtes (agrégation multi-API)', {
+          properties: loaded.properties.length,
+          occupancyByProperty: loaded.occupancyByProperty.length,
+          sourceDistribution: loaded.sourceDistribution.length,
+          monthlyRevenue: loaded.kpis.monthlyRevenue.value,
         });
       } catch (fetchError) {
         if (cancelled || (fetchError as { code?: string })?.code === 'ERR_CANCELED') {
@@ -217,7 +156,7 @@ export function DashboardPage() {
         setError(
           serverMsg
             ? `Dashboard : ${serverMsg}${serverHint ? ` — ${serverHint}` : ''}`
-            : 'Impossible de charger le dashboard (snapshot v1).',
+            : 'Impossible de charger le dashboard.',
         );
         setDashboardReady(false);
       }
@@ -227,8 +166,7 @@ export function DashboardPage() {
 
     return () => {
       cancelled = true;
-      coreAbort.abort();
-      extrasAbort.abort();
+      abort.abort();
     };
   }, [period, refreshKey, selectedPropertyIds, authLoading, isAuthenticated]);
 

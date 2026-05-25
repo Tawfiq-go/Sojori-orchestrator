@@ -13,6 +13,7 @@ export type ListingFieldCoverage = {
 export function buildListingDataCoverage(input: {
   listingHasAirbnb: boolean;
   hasAirroiSnapshot: boolean;
+  hasRevenueEstimate?: boolean;
   hasTtm: boolean;
   hasL90d: boolean;
   hasMarketProd: boolean;
@@ -40,13 +41,12 @@ export function buildListingDataCoverage(input: {
     },
     {
       section: '02 · Potentiel annuel',
-      status: input.airroiCompsCount > 0 ? 'partial' : 'empty',
-      api: input.airroiCompsCount > 0 ? 'Dérivé comps (médiane TTM)' : 'POST /listings/revenue-estimate (non branché)',
-      fills: 'P50 annuel estimé',
-      note:
-        input.airroiCompsCount > 0
-          ? 'Approximation à partir des comps du snapshot — pas revenue-estimate officiel'
-          : 'Besoin comps ou revenue-estimate',
+      status: input.hasRevenueEstimate ? 'prod' : input.airroiCompsCount > 0 ? 'partial' : 'empty',
+      api: 'GET /calculator/estimate',
+      fills: 'revenue, ADR, occupation, percentiles p25–p90',
+      note: input.hasRevenueEstimate
+        ? 'Estimate en snapshot — date en barre snapshot §02/§04'
+        : 'Modal ⟳ → Envoyer calculator/estimate (GPS ou adresse + chambres)',
     },
     {
       section: '03 · Bornes & mode',
@@ -58,13 +58,11 @@ export function buildListingDataCoverage(input: {
     {
       section: '04 · Calendrier prix / jour',
       status: input.hasCalendarProd ? 'prod' : input.hasAirroiSnapshot ? 'partial' : 'empty',
-      api: input.hasCalendarProd
-        ? 'future/rates + ou recompute Sojori'
-        : 'GET /listings/future/rates',
+      api: 'GET /calculator/estimate + recompute Sojori',
       fills: 'Prix MAD par date (grille §04)',
       note: input.hasCalendarProd
-        ? 'marché future/rates dans le snapshot — ou cache après Recalculer 365 j'
-        : 'Relancer ⟳ Envoyer · récupérer puis Recharger la fiche',
+        ? 'Estimate obligatoire (modal ⟳) — pas de fallback future/rates'
+        : 'Lancer estimate puis Recalculer 365 j — prix manuels dans srv-calendar',
     },
     {
       section: '05 · Graphiques marché',

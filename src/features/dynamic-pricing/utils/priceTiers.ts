@@ -2,7 +2,7 @@ import type { CalendarDay } from '../bien/YearlyCalendar';
 
 export type PriceTier = 'low' | 'mid' | 'high';
 
-export type CalendarPricingSource = 'airroi' | 'sojori';
+export type CalendarPricingSource = 'airroi' | 'sojori' | 'estimate';
 
 /** Tiers relatifs sur la fenêtre affichée (tertiles des prix > 0). */
 export function computePriceTierThresholds(prices: number[]): { lowMax: number; midMax: number } | null {

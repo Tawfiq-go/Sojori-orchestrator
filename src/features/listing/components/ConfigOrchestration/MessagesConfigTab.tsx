@@ -1,61 +1,125 @@
-import React, { useState, useEffect } from 'react';
+// Instructions départ + taxe de séjour (montant, devise, calcul) — un seul onglet Config Orch. NEW
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
+import { listingsService } from '../../../../services/listingsService';
 import { SOJORI_TOKENS as T } from './types';
-import { SectionHeader, Card, FormRow, TextArea, WhenOffNote } from './SHARED';
+import { Card, FormRow, TextArea, ConfigIntroBar, TYPO } from './SHARED';
+import CityTaxConfigPanel, { type CityTaxSaveState } from './CityTaxConfigPanel';
 
 interface Props {
   listingId: string;
   ownerId?: string;
   listingValues?: Record<string, unknown>;
+  onListingPatch?: (patch: Record<string, unknown>) => void;
 }
 
-export default function MessagesConfigTab({ listingValues = {} }: Props) {
-  const messageCheckout = (listingValues.messageCheckout as string[]) || ['', ''];
-  const [messageFr, setMessageFr] = useState(messageCheckout[0] || messageCheckout[1] || '');
+function mergeSaveState(
+  a: 'idle' | 'saving' | 'saved',
+  b: CityTaxSaveState,
+): 'idle' | 'saving' | 'saved' {
+  if (a === 'saving' || b === 'saving') return 'saving';
+  if (a === 'saved' || b === 'saved') return 'saved';
+  return 'idle';
+}
+
+export default function MessagesConfigTab({
+  listingId,
+  listingValues = {},
+  onListingPatch,
+}: Props) {
+  const [messageFr, setMessageFr] = useState('');
+  const [msgSave, setMsgSave] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [taxSave, setTaxSave] = useState<CityTaxSaveState>('idle');
+  const saveState = useMemo(() => mergeSaveState(msgSave, taxSave), [msgSave, taxSave]);
+
+  const messageRef = useRef('');
+  const hydratedRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const mc = (listingValues.messageCheckout as string[]) || ['', ''];
-    setMessageFr(mc[0] || mc[1] || '');
-  }, [listingValues.messageCheckout]);
+    hydratedRef.current = false;
+    dirtyRef.current = false;
+  }, [listingId]);
 
-  if (!listingValues || Object.keys(listingValues).length === 0) {
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    const mc = (listingValues.messageCheckout as string[]) || ['', ''];
+    const fr = mc[0] || mc[1] || '';
+    setMessageFr(fr);
+    messageRef.current = fr;
+    hydratedRef.current = true;
+  }, [listingValues.messageCheckout, listingId]);
+
+  const persist = useCallback(async () => {
+    if (!listingId) return;
+    const fr = messageRef.current;
+    const payload = { messageCheckout: [fr, fr] };
+    setMsgSave('saving');
+    try {
+      await listingsService.updateListingProperty(listingId, payload);
+      onListingPatch?.(payload);
+      setMsgSave('saved');
+    } catch {
+      setMsgSave('idle');
+      dirtyRef.current = true;
+    }
+  }, [listingId, onListingPatch]);
+
+  useEffect(() => {
+    if (!hydratedRef.current || !dirtyRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      persist().finally(() => {
+        dirtyRef.current = false;
+      });
+    }, 800);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [messageFr, persist]);
+
+  if (!listingValues || !Object.keys(listingValues).length) {
     return (
       <Box sx={{ p: 4, textAlign: 'center', color: T.text3 }}>
         <CircularProgress size={24} sx={{ color: T.primary, mb: 2 }} />
-        <Typography>Chargement des instructions départ depuis le listing…</Typography>
+        <Typography>Chargement des instructions départ…</Typography>
       </Box>
     );
   }
 
   return (
     <Box>
-      <SectionHeader
-        icon="📜"
-        title="Instructions départ"
-        badge="WA · OUI"
-        badgeKind="wa-yes"
-        subtitle={
-          <>
-            Message envoyé au voyageur avant le départ. Persisté via <b>messageCheckout</b> sur le document listing (onglet Détail → sauvegarde globale).
-          </>
-        }
-      />
+      <ConfigIntroBar saveState={saveState}>
+        Consignes avant départ et taxe de séjour — envoyées ensemble au voyageur.
+      </ConfigIntroBar>
 
-      <Card icon="📝" title="Message check-out" subtitle="Français uniquement · EN = copie FR à la sauvegarde listing" meta="messageCheckout[0]">
-        <FormRow label="Instructions départ" schemaPath="messageCheckout[0]" inSchema>
+      <Card
+        icon="🚪"
+        title="Instructions départ"
+        subtitle="Reçues avec le rappel taxe de séjour · FR uniquement · EN = copie FR"
+
+      >
+        <FormRow label="Instructions départ">
           <TextArea
-            rows={5}
+            rows={8}
             value={messageFr}
-            onChange={e => setMessageFr(e.target.value)}
-            placeholder="Consignes de départ, clés, poubelles…"
+            onChange={e => {
+              dirtyRef.current = true;
+              setMessageFr(e.target.value);
+              messageRef.current = e.target.value;
+            }}
+            placeholder="Avant votre départ, merci de : vider le réfrigérateur, fermer les fenêtres, déposer les clés…"
           />
         </FormRow>
       </Card>
 
-      <WhenOffNote>
-        <b style={{ color: T.text }}>Sauvegarde</b> · utilisez « Sauvegarder » en bas du formulaire listing (onglet Détail) pour persister{' '}
-        <code>messageCheckout</code>. Collection dédiée messages-config : à créer côté srv-listing.
-      </WhenOffNote>
+      <CityTaxConfigPanel
+        listingId={listingId}
+        listingValues={listingValues}
+        onListingPatch={onListingPatch}
+        onSaveStateChange={setTaxSave}
+      />
     </Box>
   );
 }

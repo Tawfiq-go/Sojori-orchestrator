@@ -1,4 +1,4 @@
-// Priorités support — alignées MongoDB + flow WhatsApp (srv-chatbot PRIORITY_MAPPING)
+// Priorités support — alignées flow voyageur (srv-chatbot)
 
 export type SupportPriority = 'normal' | 'high' | 'urgent';
 

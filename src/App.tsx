@@ -96,6 +96,30 @@ const TasksTeamPageV2 = lazy(() =>
 const TasksKanbanPage = lazy(() =>
   import('./pages/TasksKanbanPage').then((module) => ({ default: module.default }))
 );
+const TasksStaffFulltaskPage = lazy(() =>
+  import('./pages/TasksStaffFulltaskPage').then((module) => ({ default: module.default }))
+);
+const TasksConfigFulltaskPage = lazy(() =>
+  import('./pages/TasksConfigFulltaskPage').then((module) => ({ default: module.default }))
+);
+const TasksOrchestrationFulltaskPage = lazy(() =>
+  import('./pages/TasksOrchestrationFulltaskPage').then((module) => ({ default: module.default }))
+)
+const TasksWhatsAppMessagesPage = lazy(() =>
+  import('./pages/TasksWhatsAppMessagesPage').then((module) => ({ default: module.default }))
+);
+const ChatbotWhitelistPage = lazy(() =>
+  import('./pages/ChatbotWhitelistPage').then((module) => ({ default: module.default }))
+);
+const ChatbotWhitelistDetailPage = lazy(() =>
+  import('./pages/ChatbotWhitelistDetailPage').then((module) => ({ default: module.default }))
+);
+const ChatbotListingSnapshotPage = lazy(() =>
+  import('./pages/ChatbotListingSnapshotPage').then((module) => ({ default: module.default }))
+);
+const PlansReservationPage = lazy(() =>
+  import('./pages/PlansReservationPage').then((module) => ({ default: module.default }))
+);
 const StaffWhatsAppPage = lazy(() =>
   import('./pages/StaffWhatsAppPage').then((module) => ({ default: module.StaffWhatsAppPage }))
 );
@@ -107,6 +131,11 @@ const PricingPage = lazy(() =>
 );
 const DynamicPricingPage = lazy(() =>
   import('./pages/DynamicPricingPage').then((module) => ({ default: module.DynamicPricingPage }))
+);
+const PricingAuditPage = lazy(() =>
+  import('./features/dynamic-pricing/PricingAuditView').then((module) => ({
+    default: module.PricingAuditView,
+  }))
 );
 const ChannelsPage = lazy(() =>
   import('./pages/ChannelsPage').then((module) => ({ default: module.ChannelsPage }))
@@ -233,15 +262,27 @@ function App() {
               <Route path="/tasks/list" element={<LazyRoute><TasksListPage /></LazyRoute>} />
 
               {/* Claude Design V2 - Remplace les anciennes vues */}
-              <Route path="/tasks/team" element={<LazyRoute><TasksTeamPageV2 /></LazyRoute>} />
+              <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
               <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPageV2 /></LazyRoute>} />
               <Route path="/tasks/kanban" element={<LazyRoute><TasksKanbanPage /></LazyRoute>} />
+              <Route path="/tasks/config" element={<LazyRoute><TasksConfigFulltaskPage /></LazyRoute>} />
+              <Route
+                path="/tasks/orchestration-config"
+                element={<LazyRoute><TasksOrchestrationFulltaskPage /></LazyRoute>}
+              />
+              <Route
+                path="/tasks/whatsapp-messages"
+                element={<LazyRoute><TasksWhatsAppMessagesPage /></LazyRoute>}
+              />
+              <Route path="/tasks/plans" element={<LazyRoute><PlansReservationPage /></LazyRoute>} />
+
+              <Route path="/chatbot/whitelist/:reservationId" element={<LazyRoute><ChatbotWhitelistDetailPage /></LazyRoute>} />
+              <Route path="/chatbot/whitelist" element={<LazyRoute><ChatbotWhitelistPage /></LazyRoute>} />
+              <Route path="/chatbot/listing" element={<LazyRoute><ChatbotListingSnapshotPage /></LazyRoute>} />
 
               {/* Anciennes vues (backup) */}
               <Route path="/tasks/team-legacy" element={<LazyRoute><TasksTeamPage /></LazyRoute>} />
               <Route path="/tasks/planning-legacy" element={<LazyRoute><TasksPlanningPage /></LazyRoute>} />
-
-              <Route path="/tasks/staff-whatsapp" element={<LazyRoute><StaffWhatsAppPage /></LazyRoute>} />
 
               {/* Communications Hub - Page principale avec onglets */}
               <Route path="/communications" element={<LazyRoute><CommunicationsHubPage /></LazyRoute>} />
@@ -269,10 +310,12 @@ function App() {
               <Route path="/dynamic-pricing/portefeuille" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
               <Route path="/dynamic-pricing/bien" element={<Navigate to="/dynamic-pricing/portefeuille" replace />} />
               <Route path="/dynamic-pricing/bien/:listingId" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
+              <Route path="/dynamic-pricing/audit" element={<LazyRoute><PricingAuditPage /></LazyRoute>} />
               <Route path="/catalogue/dynamic-pricing" element={<Navigate to="/dynamic-pricing/portefeuille" replace />} />
               <Route path="/catalogue/dynamic-pricing/portefeuille" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
               <Route path="/catalogue/dynamic-pricing/bien" element={<Navigate to="/dynamic-pricing/portefeuille" replace />} />
               <Route path="/catalogue/dynamic-pricing/bien/:listingId" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
+              <Route path="/catalogue/dynamic-pricing/audit" element={<LazyRoute><PricingAuditPage /></LazyRoute>} />
               <Route path="/channels" element={<LazyRoute><ChannelsAdminPage /></LazyRoute>} />
               <Route path="/catalogue/listings" element={<LazyRoute><ListingsPage /></LazyRoute>} />
               <Route path="/catalogue/listings/new" element={<LazyRoute><ListingCreatePage /></LazyRoute>} />
@@ -315,6 +358,7 @@ function App() {
           draggable
           pauseOnHover
           theme="light"
+          limit={4}
         />
       </BrowserRouter>
     </AuthProvider>

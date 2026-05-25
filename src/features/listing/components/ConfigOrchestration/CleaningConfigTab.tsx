@@ -21,7 +21,6 @@ import {
   TimeslotChip,
 } from '../../../../components/listing/form-v2/components/cleaning/CleaningSlotDialogs';
 import AddIncludedExtraDialog from './AddIncludedExtraDialog';
-import CleaningPaidWhatsAppPreview from './CleaningPaidWhatsAppPreview';
 import {
   PAID_CLEANING_CATALOG,
   mapCleaningConfigToListingPatch,
@@ -133,10 +132,10 @@ export default function CleaningConfigTab({
   return (
     <Box>
       <ConfigIntroBar saveState={savingState}>
-        Inclus + payant · <b>activation</b> Menu WhatsApp & Orchestration
+        Ménage inclus et payant pour ce logement.
       </ConfigIntroBar>
 
-      <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mb: 1.5 }}>
+      <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap', mb: 1.5 }}>
         {SUB_TABS.map(t => (
           <Box
             key={t.id}
@@ -168,8 +167,8 @@ export default function CleaningConfigTab({
 
       {sub === 'included' && (
         <>
-          <Card compact icon="🎁" title="Inclus" meta="frequency[] · TS_CLEAN[]">
-            <FormRow compact label="Description" schemaPath="includedCleaningDescription.fr" inSchema>
+          <Card compact icon="🎁" title="Inclus">
+            <FormRow compact label="Description">
               <TextArea
                 rows={2}
                 value={config.includedDescriptionFr}
@@ -178,8 +177,8 @@ export default function CleaningConfigTab({
               />
             </FormRow>
 
-            <FormRow compact label="Paliers durée" schemaPath="frequency[]" inSchema>
-              <Stack direction="row" gap={1} flexWrap="wrap" useFlexGap>
+            <FormRow compact label="Paliers durée">
+              <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap' }}>
                 {config.frequency.map((tier, i) => (
                   <FrequencyChip
                     key={`${tier.startDay}-${tier.endDay}-${i}`}
@@ -196,8 +195,8 @@ export default function CleaningConfigTab({
               </Stack>
             </FormRow>
 
-            <FormRow compact label="Créneaux" schemaPath="TS_CLEAN[]" inSchema>
-              <Stack direction="row" gap={0.75} flexWrap="wrap" useFlexGap>
+            <FormRow compact label="Créneaux">
+              <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap' }}>
                 {config.TS_CLEAN.map((ts, i) => (
                   <TimeslotChip
                     key={`${ts.start}-${ts.end}-${i}`}
@@ -215,8 +214,8 @@ export default function CleaningConfigTab({
             </FormRow>
           </Card>
 
-          <Card compact icon="➕" title="Extras payants" meta="includedCleaningExtras[]">
-            <Stack gap={1}>
+          <Card compact icon="➕" title="Extras payants">
+            <Stack sx={{ gap: 1 }}>
               {config.includedExtras.filter(e => e.enabled).length === 0 && (
                 <Typography sx={{ ...TYPO.caption }}>
                   Aucun extra — ajoutez depuis la bibliothèque ou créez le vôtre.
@@ -253,9 +252,9 @@ export default function CleaningConfigTab({
       {sub === 'paid' && (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 300px' }, gap: 2, alignItems: 'start' }}>
           <Box>
-          <Card compact icon="💰" title="Payant — règles" meta="paidCleaningConfig">
-            <FormRow compact label="Fréquence" schemaPath="paidCleaningConfig.frequency" inSchema>
-              <Stack direction="row" gap={0.75} flexWrap="wrap">
+          <Card compact icon="💰" title="Payant — règles">
+            <FormRow compact label="Fréquence">
+              <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
                 <PillButton
                   active={paid.frequency === 'all_days'}
                   onClick={() =>
@@ -282,8 +281,8 @@ export default function CleaningConfigTab({
             </FormRow>
 
             {paid.frequency === 'per_week' && (
-              <FormRow compact label="Max / semaine" schemaPath="paidCleaningConfig.perWeekCount" inSchema>
-                <Stack direction="row" gap={0.5} alignItems="center">
+              <FormRow compact label="Max / semaine">
+                <Stack direction="row" sx={{ gap: 0.5, alignItems: 'center' }}>
                   {[1, 2, 3].map(n => (
                     <PillButton
                       key={n}
@@ -302,7 +301,7 @@ export default function CleaningConfigTab({
               </FormRow>
             )}
 
-            <FormRow compact label="Jours" schemaPath="paidCleaningConfig.availableWeekdays">
+            <FormRow compact label="Jours">
               <DayPills
                 value={paid.availableWeekdays}
                 onChange={days =>
@@ -315,8 +314,8 @@ export default function CleaningConfigTab({
             </FormRow>
           </Card>
 
-          <Card compact icon="🧽" title="Types & créneaux" meta="serviceTypes[]">
-            <Stack gap={1}>
+          <Card compact icon="🧽" title="Types & créneaux">
+            <Stack sx={{ gap: 1 }}>
               {paid.serviceTypes.map(svc => (
                 <PaidServiceRow
                   key={svc.id}
@@ -349,7 +348,7 @@ export default function CleaningConfigTab({
                 />
               ))}
             </Stack>
-            <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mt: 1 }}>
+            <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
               {PAID_CLEANING_CATALOG.filter(
                 cat => !paid.serviceTypes.some(s => s.id === cat.id),
               ).map(cat => (
@@ -386,7 +385,6 @@ export default function CleaningConfigTab({
           </Card>
           </Box>
 
-          <CleaningPaidWhatsAppPreview serviceTypes={paid.serviceTypes} />
         </Box>
       )}
 
@@ -465,7 +463,7 @@ function IncludedExtraRow({
         bgcolor: T.bg2,
       }}
     >
-      <Stack direction="row" alignItems="flex-start" gap={1}>
+      <Stack direction="row" sx={{ alignItems: 'flex-start', gap: 1 }}>
         <Typography sx={{ fontSize: 20, lineHeight: 1, pt: 0.25 }}>{extra.icon}</Typography>
         <Box sx={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
           <TextInput value={extra.labelFr} onChange={e => onUpdate({ labelFr: e.target.value })} />
@@ -552,7 +550,7 @@ function PaidServiceRow({
         bgcolor: service.enabled ? T.primaryTint : T.bg2,
       }}
     >
-      <Stack direction="row" alignItems="center" gap={1}>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
         <Typography sx={{ fontSize: 18 }}>{service.icon}</Typography>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ ...TYPO.bodyBold, fontSize: 12.5 }} noWrap>{service.labelFr}</Typography>
@@ -575,13 +573,13 @@ function PaidServiceRow({
           {service.enabled ? 'ON' : 'OFF'}
         </Box>
       </Stack>
-      <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ mt: 1 }}>
+      <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap', mt: 1 }}>
         {service.timeslots.map((ts, i) => (
           <TimeslotChip key={i} slot={ts} onRemove={() => onRemoveSlot(i)} />
         ))}
         <DashedAddButton label="+ Créneau" onClick={onAddSlot} />
       </Stack>
-      <Stack direction="row" gap={1} sx={{ mt: 1 }}>
+      <Stack direction="row" sx={{ gap: 1, mt: 1 }}>
         <TextInput
           type="number"
           value={service.price}

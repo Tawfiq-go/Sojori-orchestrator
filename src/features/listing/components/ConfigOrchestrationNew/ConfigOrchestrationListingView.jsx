@@ -40,7 +40,7 @@ const CATEGORY_LABELS = {
   grocery: '🛒 Courses',
   'service-client': '💌 Service Client',
   messages: '📜 Messages',
-  orchestration: '🧼 Automatisations'
+  orchestration: '⚡ Orchestration'
 };
 
 const ConfigOrchestrationListingView = ({ listingId, ownerId }) => {

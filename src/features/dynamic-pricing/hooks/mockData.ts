@@ -400,7 +400,9 @@ export function defaultEvents(): PricingEvent[] {
       emoji: '🎭',
       name: 'Marrakech du Rire',
       dateRange: '14-18 mars 2027',
+      kind: 'fixed',
       fixedPrice: 3500,
+      marketPercent: 100,
       minNights: 3,
     },
     {
@@ -408,7 +410,9 @@ export function defaultEvents(): PricingEvent[] {
       emoji: '🎄',
       name: 'Nouvel An',
       dateRange: '28 déc 2026 – 2 jan 2027',
+      kind: 'fixed',
       fixedPrice: 2800,
+      marketPercent: 100,
       minNights: 4,
     },
   ];

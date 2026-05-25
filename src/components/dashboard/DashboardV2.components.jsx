@@ -45,6 +45,7 @@ import PersonSearchOutlined from '@mui/icons-material/PersonSearchOutlined';
 import Search from '@mui/icons-material/Search';
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
 import ShowChartOutlined from '@mui/icons-material/ShowChartOutlined';
+import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined';
 import StarBorderOutlined from '@mui/icons-material/StarBorderOutlined';
 import SupportAgentOutlined from '@mui/icons-material/SupportAgentOutlined';
 import TodayOutlined from '@mui/icons-material/TodayOutlined';
@@ -52,6 +53,7 @@ import GroupsOutlined from '@mui/icons-material/GroupsOutlined';
 import InboxOutlined from '@mui/icons-material/InboxOutlined';
 import AutoGraphOutlined from '@mui/icons-material/AutoGraphOutlined';
 import InsightsOutlined from '@mui/icons-material/InsightsOutlined';
+import HistoryOutlined from '@mui/icons-material/HistoryOutlined';
 import VillaOutlined from '@mui/icons-material/VillaOutlined';
 export const tokens = {
   // ── Brand · ambre dignifié (WCAG AA contrast on bg0) ──
@@ -168,11 +170,36 @@ export const NAV = [
   // ✅ TÂCHES
   // ═══════════════════════════════════════════════════════
   { group: 'Tâches', items: [
-    { id: 'tasks/list', label: 'Liste', icon: '✅', badge: '7' },
+    { id: 'tasks/list', label: 'Liste', icon: '✅' },
     { id: 'tasks/planning', label: 'Planning', icon: '📆' },
     { id: 'tasks/kanban', label: 'Kanban', icon: '📋' },
-    { id: 'tasks/team', label: 'Équipe Staff', icon: '👥' },
-    { id: 'tasks/staff-wa', label: 'WhatsApp Staff', icon: '💬' },
+    { id: 'tasks/team', label: 'Équipe Staff', icon: '👷' },
+    { id: 'tasks/config', label: 'Task config', icon: '⚙️' },
+    {
+      id: 'tasks/orchestration',
+      label: 'Orchestration',
+      icon: '🔀',
+      sub: [
+        { id: 'tasks/plans', label: 'Plan réservation' },
+        { id: 'tasks/orchestration-config', label: 'Config orchestration' },
+        { id: 'tasks/whatsapp-messages', label: 'Config WA' },
+      ],
+    },
+  ]},
+
+  // ═══════════════════════════════════════════════════════
+  // 💬 CHATBOT (srv-fullchatbot)
+  // ═══════════════════════════════════════════════════════
+  { group: 'Chatbot', items: [
+    {
+      id: 'chatbot',
+      label: 'Chatbot',
+      icon: '🤖',
+      sub: [
+        { id: 'chatbot/whitelist', label: 'Whitelist' },
+        { id: 'chatbot/listing', label: 'Listing sync' },
+      ],
+    },
   ]},
 
   // ═══════════════════════════════════════════════════════
@@ -199,7 +226,8 @@ export const NAV = [
   // ⚡ DYNAMIC PRICING
   // ═══════════════════════════════════════════════════════
   { group: 'Dynamic Pricing', items: [
-    { id: 'dynamic-pricing/portefeuille', label: 'Portefeuille', icon: '⚡', description: 'Marché marché' },
+    { id: 'dynamic-pricing/portefeuille', label: 'Portefeuille', icon: '⚡', description: 'Marché & pilotage' },
+    { id: 'dynamic-pricing/audit', label: 'Audit synchro', icon: '📋', description: 'Dernières mises à jour calendrier' },
   ]},
 
   // ═══════════════════════════════════════════════════════
@@ -262,7 +290,14 @@ const NAV_ICON_BY_ID = {
   'tasks/planning': TodayOutlined,
   'tasks/kanban': DashboardOutlined,
   'tasks/team': GroupsOutlined,
-  'tasks/staff-wa': SupportAgentOutlined,
+  'tasks/config': SettingsOutlined,
+  'tasks/orchestration': HubOutlined,
+  'tasks/plans': AutoAwesomeOutlined,
+  'tasks/orchestration-config': SettingsOutlined,
+  'tasks/whatsapp-messages': ForumOutlined,
+  chatbot: SmartToyOutlined,
+  'chatbot/whitelist': ForumOutlined,
+  'chatbot/listing': HomeWorkOutlined,
   'comms': ForumOutlined,
   'comms/guests': ForumOutlined,
   'comms/staff': SupportAgentOutlined,
@@ -275,6 +310,7 @@ const NAV_ICON_BY_ID = {
   listings: HomeWorkOutlined,
   'dynamic-pricing': AutoGraphOutlined,
   'dynamic-pricing/portefeuille': InsightsOutlined,
+  'dynamic-pricing/audit': HistoryOutlined,
   pricing: ShowChartOutlined,
   channels: HubOutlined,
   clients: PeopleOutlined,
@@ -352,6 +388,7 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
     'Calendrier': false,
     'Réservations': false,
     'Tâches': false,
+    'Chatbot': false,
     'Communications': true,
     'Catalogue': false,
     'Dynamic Pricing': true,

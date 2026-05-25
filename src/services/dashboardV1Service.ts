@@ -1,7 +1,102 @@
 import apiClient from './apiClient';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
-import type { DashboardKpis, DashboardPeriod, DashboardSnapshot } from '../types/dashboard.types';
+import type {
+  DashboardCheckFlowItem,
+  DashboardKpiValue,
+  DashboardKpis,
+  DashboardPeriod,
+  DashboardSnapshot,
+} from '../types/dashboard.types';
 import { logDashboard } from '../utils/dashboardDebug';
+
+const DEFAULT_CHECK_FLOW: DashboardCheckFlowItem[] = [
+  { label: "Aujourd'hui", checkIns: 0, checkOuts: 0 },
+  { label: 'Demain', checkIns: 0, checkOuts: 0 },
+  { label: 'J+2', checkIns: 0, checkOuts: 0 },
+  { label: 'J+3', checkIns: 0, checkOuts: 0 },
+];
+
+function kpiValue(raw: unknown, fallback = 0): DashboardKpiValue {
+  if (raw != null && typeof raw === 'object') {
+    const o = raw as Record<string, unknown>;
+    if ('value' in o || 'trend' in o) {
+      const n = Number(o.value);
+      return {
+        value: Number.isFinite(n) ? n : fallback,
+        trend: typeof o.trend === 'string' && o.trend.length > 0 ? o.trend : '—',
+      };
+    }
+  }
+  const n = Number(raw);
+  if (Number.isFinite(n)) {
+    return { value: n, trend: '—' };
+  }
+  return { value: fallback, trend: '—' };
+}
+
+/** KPIs complets — évite crash si l’API / le cache renvoie un objet partiel. */
+export function normalizeDashboardKpis(raw: unknown): DashboardKpis {
+  const k = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return {
+    totalReservations: kpiValue(k.totalReservations),
+    monthlyRevenue: kpiValue(k.monthlyRevenue),
+    occupancyRate: kpiValue(k.occupancyRate),
+    adr: kpiValue(k.adr),
+    revpar: kpiValue(k.revpar),
+    guestsThisMonth: kpiValue(k.guestsThisMonth),
+    activeProperties: kpiValue(k.activeProperties),
+    averageRating: kpiValue(k.averageRating),
+  };
+}
+
+export const EMPTY_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
+  listingIdsHint: [],
+  properties: [],
+  kpis: normalizeDashboardKpis(null),
+  revenueChart: [],
+  sourceDistribution: [],
+  occupancyByProperty: [],
+  alerts: [],
+  checkFlow: DEFAULT_CHECK_FLOW,
+  upcomingCheckIns: [],
+  upcomingCheckOuts: [],
+  recentBookings: [],
+  urgentTasks: [],
+  unreadMessages: [],
+  recentReviews: [],
+};
+
+export function ensureDashboardSnapshot(
+  input: Partial<DashboardSnapshot> | null | undefined,
+): DashboardSnapshot {
+  const s = input ?? {};
+  return {
+    listingIdsHint: Array.isArray(s.listingIdsHint) ? s.listingIdsHint : [],
+    properties: Array.isArray(s.properties) ? s.properties : [],
+    kpis: normalizeDashboardKpis(s.kpis),
+    revenueChart: Array.isArray(s.revenueChart) ? s.revenueChart : [],
+    sourceDistribution: Array.isArray(s.sourceDistribution) ? s.sourceDistribution : [],
+    occupancyByProperty: Array.isArray(s.occupancyByProperty) ? s.occupancyByProperty : [],
+    alerts: Array.isArray(s.alerts) ? s.alerts : [],
+    checkFlow:
+      Array.isArray(s.checkFlow) && s.checkFlow.length > 0 ? s.checkFlow : DEFAULT_CHECK_FLOW,
+    upcomingCheckIns: Array.isArray(s.upcomingCheckIns) ? s.upcomingCheckIns : [],
+    upcomingCheckOuts: Array.isArray(s.upcomingCheckOuts) ? s.upcomingCheckOuts : [],
+    recentBookings: Array.isArray(s.recentBookings) ? s.recentBookings : [],
+    urgentTasks: Array.isArray(s.urgentTasks) ? s.urgentTasks : [],
+    unreadMessages: Array.isArray(s.unreadMessages) ? s.unreadMessages : [],
+    recentReviews: Array.isArray(s.recentReviews) ? s.recentReviews : [],
+  };
+}
+
+function pickDefinedKpis(kpis?: Partial<DashboardKpis>): Partial<DashboardKpis> {
+  if (!kpis) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(kpis).filter(([, v]) => v != null),
+  ) as Partial<DashboardKpis>;
+}
 
 export interface DashboardV1Query {
   period: DashboardPeriod;
@@ -16,6 +111,11 @@ function extractData<T>(payload: unknown, label: string): T {
   const record = payload as Record<string, unknown>;
   if (record.success === false) {
     throw new Error(String(record.error || `Échec ${label}`));
+  }
+  if (record.message === 'Service OK' && !('data' in record) && !('kpis' in record)) {
+    throw new Error(
+      `Endpoint ${label} indisponible (srv-admin renvoie health check). Utiliser dashboardService.getSnapshot.`,
+    );
   }
   const data = ('data' in record ? record.data : record) as T | undefined;
   if (data == null || typeof data !== 'object') {
@@ -33,23 +133,22 @@ function snapshotParams(period: DashboardPeriod, listingIds: string[]) {
 }
 
 function normalizeSnapshot(data: Record<string, unknown>): DashboardSnapshot {
-  const kpis = data.kpis as DashboardSnapshot['kpis'];
-  return {
-    listingIdsHint: (data.listingIdsHint as string[] | undefined) ?? [],
-    properties: (data.properties as DashboardSnapshot['properties']) ?? [],
-    kpis,
-    revenueChart: (data.revenueChart as DashboardSnapshot['revenueChart']) ?? [],
-    sourceDistribution: (data.sourceDistribution as DashboardSnapshot['sourceDistribution']) ?? [],
-    occupancyByProperty: (data.occupancyByProperty as DashboardSnapshot['occupancyByProperty']) ?? [],
-    alerts: (data.alerts as DashboardSnapshot['alerts']) ?? [],
-    checkFlow: (data.checkFlow as DashboardSnapshot['checkFlow']) ?? [],
-    upcomingCheckIns: (data.upcomingCheckIns as DashboardSnapshot['upcomingCheckIns']) ?? [],
-    upcomingCheckOuts: (data.upcomingCheckOuts as DashboardSnapshot['upcomingCheckOuts']) ?? [],
-    recentBookings: (data.recentBookings as DashboardSnapshot['recentBookings']) ?? [],
-    urgentTasks: (data.urgentTasks as DashboardSnapshot['urgentTasks']) ?? [],
-    unreadMessages: (data.unreadMessages as DashboardSnapshot['unreadMessages']) ?? [],
-    recentReviews: (data.recentReviews as DashboardSnapshot['recentReviews']) ?? [],
-  };
+  return ensureDashboardSnapshot({
+    listingIdsHint: data.listingIdsHint as string[] | undefined,
+    properties: data.properties as DashboardSnapshot['properties'],
+    kpis: data.kpis as DashboardKpis,
+    revenueChart: data.revenueChart as DashboardSnapshot['revenueChart'],
+    sourceDistribution: data.sourceDistribution as DashboardSnapshot['sourceDistribution'],
+    occupancyByProperty: data.occupancyByProperty as DashboardSnapshot['occupancyByProperty'],
+    alerts: data.alerts as DashboardSnapshot['alerts'],
+    checkFlow: data.checkFlow as DashboardSnapshot['checkFlow'],
+    upcomingCheckIns: data.upcomingCheckIns as DashboardSnapshot['upcomingCheckIns'],
+    upcomingCheckOuts: data.upcomingCheckOuts as DashboardSnapshot['upcomingCheckOuts'],
+    recentBookings: data.recentBookings as DashboardSnapshot['recentBookings'],
+    urgentTasks: data.urgentTasks as DashboardSnapshot['urgentTasks'],
+    unreadMessages: data.unreadMessages as DashboardSnapshot['unreadMessages'],
+    recentReviews: data.recentReviews as DashboardSnapshot['recentReviews'],
+  });
 }
 
 function preferNonEmpty<T>(next: T[] | undefined, prev: T[]): T[] {
@@ -60,9 +159,10 @@ export function mergeDashboardSnapshots(
   base: DashboardSnapshot,
   patch: Partial<DashboardSnapshot> & { kpis?: Partial<DashboardKpis> },
 ): DashboardSnapshot {
-  return {
+  return ensureDashboardSnapshot({
     ...base,
-    kpis: patch.kpis ? { ...base.kpis, ...patch.kpis } : base.kpis,
+    ...patch,
+    kpis: patch.kpis ? { ...base.kpis, ...pickDefinedKpis(patch.kpis) } : base.kpis,
     revenueChart: preferNonEmpty(patch.revenueChart, base.revenueChart),
     sourceDistribution: preferNonEmpty(patch.sourceDistribution, base.sourceDistribution),
     occupancyByProperty: preferNonEmpty(patch.occupancyByProperty, base.occupancyByProperty),
@@ -72,7 +172,7 @@ export function mergeDashboardSnapshots(
     alerts: [...base.alerts, ...(patch.alerts ?? [])].filter(
       (alert, index, list) => list.findIndex((item) => item.id === alert.id) === index,
     ),
-  };
+  });
 }
 
 /** Premier paint — KPI + listes (~6s max côté serveur). */

@@ -14,6 +14,8 @@ interface Step3Props {
   onChange: (taskInfo: TaskInfoData) => void;
   ownerId?: string;
   error: string | null;
+  useFulltaskApi?: boolean;
+  listingId?: string;
 }
 interface Staff {
   _id: string;
@@ -26,7 +28,9 @@ export function Step3TaskInfo({
   formData,
   onChange,
   ownerId,
-  error
+  error,
+  useFulltaskApi = false,
+  listingId,
 }: Step3Props) {
   const {
     taskType,
@@ -37,26 +41,69 @@ export function Step3TaskInfo({
   } = formData;
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
-  const [assignmentMode, setAssignmentMode] = useState<'auto' | 'manual'>('auto');
+  const [assignmentMode, setAssignmentMode] = useState<'auto' | 'manual'>(
+    useFulltaskApi ? 'manual' : 'auto',
+  );
   const [smartSelectorOpen, setSmartSelectorOpen] = useState(false);
+
+  const taskTypeForStaff = formData.fulltaskTypeId || taskType;
+
+  // Fulltask : dates depuis la réservation si pas encore renseignées
+  useEffect(() => {
+    if (!useFulltaskApi || !reservation) return;
+    if (taskInfo.startDate && taskInfo.endDate) return;
+    const startRaw = reservation.checkIn || reservation.arrivalDate;
+    const endRaw = reservation.checkOut || reservation.departureDate;
+    if (!startRaw || !endRaw) return;
+    const startDate = new Date(startRaw);
+    const endDate = new Date(endRaw);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return;
+    const durationHours = Math.max(
+      0.5,
+      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60),
+    );
+    onChange({
+      ...taskInfo,
+      startDate,
+      endDate,
+      duration: durationHours,
+    });
+  }, [useFulltaskApi, reservation?._id, reservation?.id]);
 
   // Load staff list
   useEffect(() => {
     const loadStaff = async () => {
       try {
         setLoadingStaff(true);
-        const staffData = await fetchStaffSimplified(ownerId);
-        setStaffList(staffData);
+        if (useFulltaskApi) {
+          const { listStaff } = await import('../../../services/fulltaskApi');
+          const res = await listStaff(listingId ? { listingId: String(listingId) } : {});
+          const rows = (res?.data || [])
+            .filter((s: { taskTypes?: string[] }) => {
+              if (!taskTypeForStaff || !s.taskTypes?.length) return true;
+              return s.taskTypes.includes(String(taskTypeForStaff));
+            })
+            .map((s: { _id: string; name: string; phone?: string }) => ({
+              _id: s._id,
+              staffCode: s._id,
+              username: s.name,
+              whatsappPhone: s.phone,
+            }));
+          setStaffList(rows);
+        } else {
+          const staffData = await fetchStaffSimplified(ownerId);
+          setStaffList(staffData);
+        }
       } catch {
         setStaffList([]);
       } finally {
         setLoadingStaff(false);
       }
     };
-    if (ownerId) {
+    if (useFulltaskApi || ownerId) {
       void loadStaff();
     }
-  }, [ownerId]);
+  }, [ownerId, useFulltaskApi, listingId, taskTypeForStaff]);
 
   // Auto-fill dates from clientRequest
   useEffect(() => {
@@ -212,81 +259,147 @@ export function Step3TaskInfo({
           </Typography>
         </Grid>
 
-        <Grid item xs={12}>
-          <FormControl component="fieldset">
-            <FormLabel component="legend" sx={{
-            fontSize: '0.875rem',
-            mb: 1
-          }}>
-              Mode d&apos;assignation
-            </FormLabel>
-            <RadioGroup row value={assignmentMode} onChange={e => handleAssignmentModeChange(e.target.value as 'auto' | 'manual')}>
-              <FormControlLabel value="auto" control={<Radio />} label="🤖 Automatique (système choisit le staff disponible)" />
-              <FormControlLabel value="manual" control={<Radio />} label="👤 Manuel (assigner à un staff précis)" />
-            </RadioGroup>
-          </FormControl>
-        </Grid>
+        {!useFulltaskApi && (
+          <Grid item xs={12}>
+            <FormControl component="fieldset">
+              <FormLabel component="legend" sx={{ fontSize: '0.875rem', mb: 1 }}>
+                Mode d&apos;assignation
+              </FormLabel>
+              <RadioGroup
+                row
+                value={assignmentMode}
+                onChange={(e) => handleAssignmentModeChange(e.target.value as 'auto' | 'manual')}
+              >
+                <FormControlLabel
+                  value="auto"
+                  control={<Radio />}
+                  label="🤖 Automatique (système choisit le staff disponible)"
+                />
+                <FormControlLabel
+                  value="manual"
+                  control={<Radio />}
+                  label="👤 Manuel (assigner à un staff précis)"
+                />
+              </RadioGroup>
+            </FormControl>
+          </Grid>
+        )}
 
-        {assignmentMode === 'manual' && <>
+        {(useFulltaskApi || assignmentMode === 'manual') && (
+          <>
             <Grid item xs={12}>
-              <Box sx={{
-            display: 'flex',
-            gap: 2,
-            alignItems: 'flex-start'
-          }}>
-                <Autocomplete sx={{
-              flex: 1
-            }} options={Array.isArray(staffList) ? staffList : []} loading={loadingStaff} value={selectedStaff || null} onChange={(_, newValue) => handleStaffChange(newValue)} getOptionLabel={option => `${option.username}`} renderInput={params => <TextField {...params} label="Staff assigné" placeholder="Rechercher un staff..." helperText={taskInfo.staffId ? '✅ La tâche sera assignée au staff sélectionné' : 'Sélectionnez un staff pour assignation manuelle'} InputProps={{
-              ...params.InputProps,
-              endAdornment: <>
-                            {loadingStaff && <CircularProgress color="inherit" size={20} />}
-                            {params.InputProps.endAdornment}
-                          </>
-            }} />} isOptionEqualToValue={(option, value) => option._id === value._id} />
-                <Button variant="outlined" onClick={() => setSmartSelectorOpen(true)} startIcon={<SmartIcon />} sx={{
-              height: '56px',
-              minWidth: '180px',
-              borderColor: '#FF6B35',
-              color: '#FF6B35',
-              textTransform: 'none',
-              fontWeight: 600,
-              '&:hover': {
-                borderColor: '#E55A2B',
-                bgcolor: '#FFF3E0'
-              }
-            }}>
-                  Filtres Intelligents
-                </Button>
-              </Box>
+              {useFulltaskApi ? (
+                <Autocomplete
+                  options={Array.isArray(staffList) ? staffList : []}
+                  loading={loadingStaff}
+                  value={selectedStaff || null}
+                  onChange={(_, newValue) => handleStaffChange(newValue)}
+                  getOptionLabel={(option) => option.username}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Staff (optionnel)"
+                      placeholder="Filtré par type de tâche et logement"
+                      helperText={
+                        taskInfo.staffId
+                          ? 'Assigné à la création'
+                          : 'Laisser vide pour assigner plus tard'
+                      }
+                    />
+                  )}
+                  isOptionEqualToValue={(option, value) => option._id === value._id}
+                />
+              ) : (
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  <Autocomplete
+                    sx={{ flex: 1 }}
+                    options={Array.isArray(staffList) ? staffList : []}
+                    loading={loadingStaff}
+                    value={selectedStaff || null}
+                    onChange={(_, newValue) => handleStaffChange(newValue)}
+                    getOptionLabel={(option) => `${option.username}`}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Staff assigné"
+                        placeholder="Rechercher un staff..."
+                        helperText={
+                          taskInfo.staffId
+                            ? '✅ La tâche sera assignée au staff sélectionné'
+                            : 'Sélectionnez un staff pour assignation manuelle'
+                        }
+                      />
+                    )}
+                    isOptionEqualToValue={(option, value) => option._id === value._id}
+                  />
+                  <Button
+                    variant="outlined"
+                    onClick={() => setSmartSelectorOpen(true)}
+                    startIcon={<SmartIcon />}
+                    sx={{
+                      height: '56px',
+                      minWidth: '180px',
+                      borderColor: '#FF6B35',
+                      color: '#FF6B35',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      '&:hover': { borderColor: '#E55A2B', bgcolor: '#FFF3E0' },
+                    }}
+                  >
+                    Filtres Intelligents
+                  </Button>
+                </Box>
+              )}
             </Grid>
 
-            {taskInfo.staffId && <Grid item xs={12} md={6}>
-                <TextField select label="Status initial" value={taskInfo.initialStatus || 'ASSIGNED'} onChange={e => handleChange('initialStatus', e.target.value)} fullWidth helperText="Définir le statut initial de la tâche">
+            {!useFulltaskApi && taskInfo.staffId && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  select
+                  label="Status initial"
+                  value={taskInfo.initialStatus || 'ASSIGNED'}
+                  onChange={(e) => handleChange('initialStatus', e.target.value)}
+                  fullWidth
+                  helperText="Définir le statut initial de la tâche"
+                >
                   <MenuItem value="ASSIGNED">🟡 ASSIGNED - En attente d&apos;acceptation</MenuItem>
                   <MenuItem value="ACCEPTED">🟢 ACCEPTED - Déjà accepté par le staff</MenuItem>
                 </TextField>
-              </Grid>}
+              </Grid>
+            )}
 
-            {/* Smart Staff Selector Dialog */}
-            <SmartStaffSelector open={smartSelectorOpen} onClose={() => setSmartSelectorOpen(false)} onSelect={handleSmartStaffSelect} taskData={{
-          listingId: listing?._id || listing?.id,
-          listingName: listing?.name || listing?.title,
-          taskType: taskType || undefined,
-          taskCategory: taskType || undefined,
-          ownerId,
-          startDate: taskInfo.startDate ? new Date(taskInfo.startDate) : undefined,
-          startTime: taskInfo.startDate ? new Date(taskInfo.startDate).toTimeString().substring(0, 5) : undefined,
-          endTime: taskInfo.endDate ? new Date(taskInfo.endDate).toTimeString().substring(0, 5) : undefined
-        }} />
-          </>}
+            {!useFulltaskApi && (
+              <SmartStaffSelector
+                open={smartSelectorOpen}
+                onClose={() => setSmartSelectorOpen(false)}
+                onSelect={handleSmartStaffSelect}
+                taskData={{
+                  listingId: listing?._id || listing?.id,
+                  listingName: listing?.name || listing?.title,
+                  taskType: taskType || undefined,
+                  taskCategory: taskType || undefined,
+                  ownerId,
+                  startDate: taskInfo.startDate ? new Date(taskInfo.startDate) : undefined,
+                  startTime: taskInfo.startDate
+                    ? new Date(taskInfo.startDate).toTimeString().substring(0, 5)
+                    : undefined,
+                  endTime: taskInfo.endDate
+                    ? new Date(taskInfo.endDate).toTimeString().substring(0, 5)
+                    : undefined,
+                }}
+              />
+            )}
+          </>
+        )}
 
-        {assignmentMode === 'auto' && <Grid item xs={12}>
-            <Alert severity="info" sx={{
-          mt: 1
-        }}>
-              🤖 Le système assignera automatiquement cette tâche au staff disponible avec la charge de travail la plus faible
+        {!useFulltaskApi && assignmentMode === 'auto' && (
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              🤖 Le système assignera automatiquement cette tâche au staff disponible avec la charge
+              de travail la plus faible
             </Alert>
-          </Grid>}
+          </Grid>
+        )}
 
         <Grid item xs={12}>
           <Divider sx={{
