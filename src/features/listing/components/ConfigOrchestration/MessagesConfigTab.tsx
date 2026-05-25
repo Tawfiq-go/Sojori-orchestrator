@@ -11,6 +11,7 @@ interface Props {
   ownerId?: string;
   listingValues?: Record<string, unknown>;
   onListingPatch?: (patch: Record<string, unknown>) => void;
+  templateMode?: boolean;
 }
 
 function mergeSaveState(
@@ -26,6 +27,7 @@ export default function MessagesConfigTab({
   listingId,
   listingValues = {},
   onListingPatch,
+  templateMode = false,
 }: Props) {
   const [messageFr, setMessageFr] = useState('');
   const [msgSave, setMsgSave] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -52,19 +54,21 @@ export default function MessagesConfigTab({
   }, [listingValues.messageCheckout, listingId]);
 
   const persist = useCallback(async () => {
-    if (!listingId) return;
+    if (!templateMode && !listingId) return;
     const fr = messageRef.current;
     const payload = { messageCheckout: [fr, fr] };
     setMsgSave('saving');
     try {
-      await listingsService.updateListingProperty(listingId, payload);
-      onListingPatch?.(payload);
+      if (!templateMode && listingId) {
+        await listingsService.updateListingProperty(listingId, payload);
+      }
+      await onListingPatch?.(payload);
       setMsgSave('saved');
     } catch {
       setMsgSave('idle');
       dirtyRef.current = true;
     }
-  }, [listingId, onListingPatch]);
+  }, [listingId, onListingPatch, templateMode]);
 
   useEffect(() => {
     if (!hydratedRef.current || !dirtyRef.current) return;
@@ -116,6 +120,7 @@ export default function MessagesConfigTab({
 
       <CityTaxConfigPanel
         listingId={listingId}
+        templateMode={templateMode}
         listingValues={listingValues}
         onListingPatch={onListingPatch}
         onSaveStateChange={setTaxSave}

@@ -46,8 +46,9 @@ import {
 export type { ServiceClientSubject };
 
 interface Props {
-  listingId: string;
+  listingId?: string;
   ownerId?: string;
+  templateOwnerKey?: string;
 }
 
 function SortableSubjectRow({
@@ -155,7 +156,8 @@ function SortableSubjectRow({
   );
 }
 
-export default function ServiceClientConfigTab({ listingId, ownerId }: Props) {
+export default function ServiceClientConfigTab({ listingId, ownerId, templateOwnerKey }: Props) {
+  const isOwnerTemplate = Boolean(templateOwnerKey);
   const [enabled, setEnabled] = useState(true);
   const [slaHours, setSlaHours] = useState(DEFAULT_SLA_HOURS);
   const [slaMessageFr, setSlaMessageFr] = useState(DEFAULT_SLA_MESSAGE_FR);
@@ -178,7 +180,7 @@ export default function ServiceClientConfigTab({ listingId, ownerId }: Props) {
       slaGuestMessage?: { fr: string; en?: string; ar?: string };
       subjects?: ServiceClientSubject[];
     }) => {
-      if (!listingId) return;
+      if (!isOwnerTemplate && !listingId) return;
       setSavingState('saving');
       try {
         const body: Record<string, unknown> = {};
@@ -187,8 +189,16 @@ export default function ServiceClientConfigTab({ listingId, ownerId }: Props) {
         if (patch.slaGuestMessage !== undefined) body.slaGuestMessage = patch.slaGuestMessage;
         if (patch.subjects !== undefined) body.subjects = mapUiSubjectsToApi(patch.subjects);
 
-        const res = await listingsService.updateListingServiceClientConfig(listingId, body, ownerId);
-        if (res.error) throw new Error(res.error);
+        if (isOwnerTemplate && templateOwnerKey) {
+          await listingsService.putListingOwnerConfigTemplateSection(
+            templateOwnerKey,
+            'serviceClient',
+            body,
+          );
+        } else if (listingId) {
+          const res = await listingsService.updateListingServiceClientConfig(listingId, body, ownerId);
+          if (res.error) throw new Error(res.error);
+        }
         setSavingState('saved');
         window.setTimeout(() => setSavingState('idle'), 2200);
       } catch (e: unknown) {
@@ -197,7 +207,7 @@ export default function ServiceClientConfigTab({ listingId, ownerId }: Props) {
         toast.error(msg);
       }
     },
-    [listingId, ownerId],
+    [listingId, ownerId, isOwnerTemplate, templateOwnerKey],
   );
 
   const scheduleSave = useCallback(
@@ -212,20 +222,27 @@ export default function ServiceClientConfigTab({ listingId, ownerId }: Props) {
   );
 
   const fetchConfig = useCallback(async () => {
-    if (!listingId) return;
+    if (!isOwnerTemplate && !listingId) return;
     setLoading(true);
     setLoadError(null);
     skipSaveRef.current = true;
     try {
-      let res = await listingsService.getListingServiceClientConfig(listingId, ownerId);
-      if (res.notFound || (res.error && !res.data)) {
-        await listingsService.createListingServiceClientConfig(listingId, ownerId);
-        res = await listingsService.getListingServiceClientConfig(listingId, ownerId);
+      let doc: Record<string, unknown> | null = null;
+      if (isOwnerTemplate && templateOwnerKey) {
+        const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+        const payload = (res as { data?: { serviceClient?: Record<string, unknown> } })?.data ?? res;
+        doc = (payload as { serviceClient?: Record<string, unknown> })?.serviceClient ?? null;
+      } else if (listingId) {
+        let res = await listingsService.getListingServiceClientConfig(listingId, ownerId);
+        if (res.notFound || (res.error && !res.data)) {
+          await listingsService.createListingServiceClientConfig(listingId, ownerId);
+          res = await listingsService.getListingServiceClientConfig(listingId, ownerId);
+        }
+        if (res.error && !res.data) {
+          throw new Error(res.error);
+        }
+        doc = res.data as Record<string, unknown> | null;
       }
-      if (res.error && !res.data) {
-        throw new Error(res.error);
-      }
-      const doc = res.data as Record<string, unknown> | null;
       if (doc) {
         setEnabled(doc.enabled !== false);
         setSlaHours(typeof doc.responseSlaHours === 'number' ? doc.responseSlaHours : DEFAULT_SLA_HOURS);
@@ -242,7 +259,7 @@ export default function ServiceClientConfigTab({ listingId, ownerId }: Props) {
         skipSaveRef.current = false;
       }, 100);
     }
-  }, [listingId, ownerId]);
+  }, [listingId, ownerId, isOwnerTemplate, templateOwnerKey]);
 
   useEffect(() => {
     void fetchConfig();

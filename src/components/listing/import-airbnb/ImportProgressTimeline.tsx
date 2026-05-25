@@ -165,6 +165,7 @@ function stepIconFor(key: StepState['key']) {
     pull_spec: '📄', pull_prices: '💰', pull_calendar: '📅', pull_external: '✨',
     build_payload: '⚙', reupload_images: '🖼', create_listing: '🏠',
     wait_inventory: '⏳', apply_inventory: '✅', post_import_sync: '🔄',
+    apply_orchestration: '⚡',
   } as const)[key];
 }
 

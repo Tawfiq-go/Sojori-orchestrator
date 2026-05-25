@@ -82,11 +82,13 @@ function mapDesignToApi(config: SupportConfig) {
 }
 
 interface Props {
-  listingId: string;
+  listingId?: string;
   ownerId?: string;
+  templateOwnerKey?: string;
 }
 
-export default function SupportConfigTabContainer({ listingId }: Props) {
+export default function SupportConfigTabContainer({ listingId, templateOwnerKey }: Props) {
+  const isOwnerTemplate = Boolean(templateOwnerKey);
   const [config, setConfig] = useState<SupportConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +97,23 @@ export default function SupportConfigTabContainer({ listingId }: Props) {
   const fetchConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
+    if (isOwnerTemplate && templateOwnerKey) {
+      try {
+        const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+        const payload = (res as { data?: { support?: { categories?: unknown[] } } })?.data ?? res;
+        const cats = (payload as { support?: { categories?: unknown[] } })?.support?.categories;
+        setConfig(mapApiToDesign({ categories: cats }));
+      } catch (e: unknown) {
+        setConfig({ enabled: true, categories: DEFAULT_CATEGORIES });
+        setError(e instanceof Error ? e.message : 'Chargement impossible');
+      }
+      setLoading(false);
+      return;
+    }
+    if (!listingId) {
+      setLoading(false);
+      return;
+    }
     let res = await listingsService.getListingSupportCategoriesConfig(listingId);
     if (res.error?.includes('404') || (!res.data && res.error)) {
       setProvisionLoading(true);
@@ -109,7 +128,7 @@ export default function SupportConfigTabContainer({ listingId }: Props) {
       setConfig(mapApiToDesign(res.data as { categories?: unknown[] }));
     }
     setLoading(false);
-  }, [listingId]);
+  }, [listingId, isOwnerTemplate, templateOwnerKey]);
 
   useEffect(() => {
     fetchConfig();
@@ -117,6 +136,14 @@ export default function SupportConfigTabContainer({ listingId }: Props) {
 
   const handleSave = async (updatedConfig: SupportConfig) => {
     const categories = mapDesignToApi(updatedConfig);
+    if (isOwnerTemplate && templateOwnerKey) {
+      await listingsService.putListingOwnerConfigTemplateSection(templateOwnerKey, 'support', {
+        categories,
+      });
+      setConfig(updatedConfig);
+      return;
+    }
+    if (!listingId) return;
     const res = await listingsService.updateListingSupportCategories(listingId, categories);
     if (res.error) throw new Error(res.error);
     setConfig(updatedConfig);
@@ -141,5 +168,11 @@ export default function SupportConfigTabContainer({ listingId }: Props) {
     );
   }
 
-  return <SupportConfigTab listingId={listingId} initial={config} onSave={handleSave} />;
+  return (
+    <SupportConfigTab
+      listingId={listingId || templateOwnerKey || ''}
+      initial={config}
+      onSave={handleSave}
+    />
+  );
 }

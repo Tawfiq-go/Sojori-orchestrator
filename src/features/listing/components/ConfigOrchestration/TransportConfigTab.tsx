@@ -145,12 +145,18 @@ function routeToApi(r: TransportRouteItem, i: number, property: ListingPropertyP
 }
 
 interface Props {
-  listingId: string;
+  listingId?: string;
   ownerId?: string;
   listingValues?: Record<string, unknown>;
+  templateOwnerKey?: string;
 }
 
-export default function TransportConfigTab({ listingId, listingValues = {} }: Props) {
+export default function TransportConfigTab({
+  listingId = '',
+  listingValues = {},
+  templateOwnerKey,
+}: Props) {
+  const isOwnerTemplate = Boolean(templateOwnerKey);
   const listingProperty = listingPropertyFromValues(listingValues);
 
   const defaultRoutes = () =>
@@ -180,9 +186,17 @@ export default function TransportConfigTab({ listingId, listingValues = {} }: Pr
     (async () => {
       setLoading(true);
       try {
-        const res = await listingsService.getListingConciergeConfig(listingId);
-        const transport = (res.data as { transportServices?: Array<Record<string, unknown>> } | null)
-          ?.transportServices;
+        let transport: Array<Record<string, unknown>> | undefined;
+        if (isOwnerTemplate && templateOwnerKey) {
+          const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+          const payload = (res as { data?: { concierge?: { transportServices?: unknown[] } } })?.data ?? res;
+          transport = (payload as { concierge?: { transportServices?: unknown[] } })?.concierge
+            ?.transportServices as Array<Record<string, unknown>> | undefined;
+        } else if (listingId) {
+          const res = await listingsService.getListingConciergeConfig(listingId);
+          transport = (res.data as { transportServices?: Array<Record<string, unknown>> } | null)
+            ?.transportServices;
+        }
         if (Array.isArray(transport) && transport.length > 0) {
           setRoutes(transport.map((t, i) => mapApiRoute(t, i, listingProperty)));
         } else {
@@ -196,24 +210,36 @@ export default function TransportConfigTab({ listingId, listingValues = {} }: Pr
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-fetch si autre listing
-  }, [listingId]);
+  }, [listingId, isOwnerTemplate, templateOwnerKey]);
 
   const persist = useCallback(async () => {
     setSavingState('saving');
     try {
-      const existing = await listingsService.getListingConciergeConfig(listingId);
-      const doc = (existing.data || {}) as { groceryServices?: unknown[]; customServices?: unknown[] };
-      await listingsService.updateListingConciergeServices(listingId, {
-        transportServices: routesRef.current.map((r, i) => routeToApi(r, i, listingProperty)),
-        groceryServices: doc.groceryServices || [],
-        customServices: doc.customServices || [],
-      });
+      const transportServices = routesRef.current.map((r, i) => routeToApi(r, i, listingProperty));
+      if (isOwnerTemplate && templateOwnerKey) {
+        const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+        const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
+        const prev = (payload as { concierge?: Record<string, unknown> })?.concierge || {};
+        await listingsService.putListingOwnerConfigTemplateSection(templateOwnerKey, 'concierge', {
+          transportServices,
+          groceryServices: prev.groceryServices || [],
+          customServices: prev.customServices || [],
+        });
+      } else if (listingId) {
+        const existing = await listingsService.getListingConciergeConfig(listingId);
+        const doc = (existing.data || {}) as { groceryServices?: unknown[]; customServices?: unknown[] };
+        await listingsService.updateListingConciergeServices(listingId, {
+          transportServices,
+          groceryServices: doc.groceryServices || [],
+          customServices: doc.customServices || [],
+        });
+      }
       setSavingState('saved');
     } catch {
       setSavingState('idle');
       dirtyRef.current = true;
     }
-  }, [listingId, listingProperty]);
+  }, [listingId, listingProperty, isOwnerTemplate, templateOwnerKey]);
 
   useEffect(() => {
     if (loading || !hydratedRef.current || !dirtyRef.current) return;

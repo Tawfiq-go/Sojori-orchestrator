@@ -176,11 +176,13 @@ function buildPricingPayload(s: ConciergeService) {
 }
 
 interface Props {
-  listingId: string;
+  listingId?: string;
   ownerId?: string;
+  templateOwnerKey?: string;
 }
 
-export default function ConciergeConfigTab({ listingId }: Props) {
+export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Props) {
+  const isOwnerTemplate = Boolean(templateOwnerKey);
   const [config, setConfig] = useState<ConciergeConfig>({ enabled: true, services: DEFAULT_SERVICES });
   const [loading, setLoading] = useState(true);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -195,17 +197,24 @@ export default function ConciergeConfigTab({ listingId }: Props) {
 
   useEffect(() => {
     fetchConfig();
-  }, [listingId]);
+  }, [listingId, templateOwnerKey, isOwnerTemplate]);
 
   const fetchConfig = async () => {
     try {
       setLoading(true);
-      let res = await listingsService.getListingConciergeConfig(listingId);
-      if (res.error && !res.data) {
-        await listingsService.createListingConciergeConfig(listingId);
-        res = await listingsService.getListingConciergeConfig(listingId);
+      let data: { customServices?: Array<Record<string, unknown>> } | null = null;
+      if (isOwnerTemplate && templateOwnerKey) {
+        const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+        const payload = (res as { data?: { concierge?: { customServices?: unknown[] } } })?.data ?? res;
+        data = (payload as { concierge?: { customServices?: unknown[] } })?.concierge ?? null;
+      } else if (listingId) {
+        let res = await listingsService.getListingConciergeConfig(listingId);
+        if (res.error && !res.data) {
+          await listingsService.createListingConciergeConfig(listingId);
+          res = await listingsService.getListingConciergeConfig(listingId);
+        }
+        data = res.data as { customServices?: Array<Record<string, unknown>> } | null;
       }
-      const data = res.data as { customServices?: Array<Record<string, unknown>> } | null;
       const custom = data?.customServices;
       if (Array.isArray(custom) && custom.length > 0) {
         setConfig({
@@ -223,12 +232,7 @@ export default function ConciergeConfigTab({ listingId }: Props) {
   };
 
   const persistConfig = useCallback(async (cfg: ConciergeConfig) => {
-    const existing = await listingsService.getListingConciergeConfig(listingId);
-    const doc = (existing.data || {}) as { transportServices?: unknown[]; groceryServices?: unknown[] };
-    await listingsService.updateListingConciergeServices(listingId, {
-      transportServices: doc.transportServices || [],
-      groceryServices: doc.groceryServices || [],
-      customServices: cfg.services.map((s, i) => ({
+    const customServices = cfg.services.map((s, i) => ({
         id: s.id,
         enabled: s.enabled,
         icon: s.icon,
@@ -252,9 +256,29 @@ export default function ConciergeConfigTab({ listingId }: Props) {
         requiresPMValidation: true,
         images: [],
         order: i,
-      })),
+      }));
+
+    if (isOwnerTemplate && templateOwnerKey) {
+      const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+      const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
+      const prev = (payload as { concierge?: Record<string, unknown> })?.concierge || {};
+      await listingsService.putListingOwnerConfigTemplateSection(templateOwnerKey, 'concierge', {
+        transportServices: prev.transportServices || [],
+        groceryServices: prev.groceryServices || [],
+        customServices,
+      });
+      return;
+    }
+
+    if (!listingId) return;
+    const existing = await listingsService.getListingConciergeConfig(listingId);
+    const doc = (existing.data || {}) as { transportServices?: unknown[]; groceryServices?: unknown[] };
+    await listingsService.updateListingConciergeServices(listingId, {
+      transportServices: doc.transportServices || [],
+      groceryServices: doc.groceryServices || [],
+      customServices,
     });
-  }, [listingId]);
+  }, [listingId, isOwnerTemplate, templateOwnerKey]);
 
   const debouncedSave = useCallback(() => {
     setSavingState('saving');

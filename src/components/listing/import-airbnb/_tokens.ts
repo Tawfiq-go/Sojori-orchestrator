@@ -64,7 +64,8 @@ export interface SojoriCity {
 export type StepKey =
   | 'pull_spec' | 'pull_prices' | 'pull_calendar' | 'pull_external'
   | 'build_payload' | 'reupload_images' | 'create_listing'
-  | 'wait_inventory' | 'apply_inventory' | 'post_import_sync';
+  | 'wait_inventory' | 'apply_inventory' | 'post_import_sync'
+  | 'apply_orchestration';
 
 export type StepStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -79,7 +80,7 @@ export interface ImportProgress {
   currentBatchIndex: number;     // 0-based
   totalBatch: number;            // ex: 5 annonces
   currentPropertyName?: string;
-  steps: StepState[];            // 10 entrées dans l'ordre canonique
+  steps: StepState[];            // 11 entrées dans l'ordre canonique
   completed: boolean;
   hasError: boolean;
 }
@@ -97,6 +98,7 @@ export const STEPS_ORDER: StepKey[] = [
   'pull_spec', 'pull_prices', 'pull_calendar', 'pull_external',
   'build_payload', 'reupload_images', 'create_listing',
   'wait_inventory', 'apply_inventory', 'post_import_sync',
+  'apply_orchestration',
 ];
 
 export const STEPS_LABELS: Record<StepKey, { label: string; sub: string }> = {
@@ -110,6 +112,7 @@ export const STEPS_LABELS: Record<StepKey, { label: string; sub: string }> = {
   wait_inventory:   { label: 'Préparation du calendrier',    sub: 'Création de l\'inventaire calendrier.' },
   apply_inventory:  { label: 'Mise à jour calendrier',       sub: 'Prix et disponibilités injectés.' },
   post_import_sync: { label: 'Synchronisation',              sub: 'Réservations, messages et avis liés.' },
+  apply_orchestration: { label: 'Config orchestration',       sub: 'Application du template propriétaire sur le listing.' },
 };
 
 /* ─── Helper : initiales staff/owner ─────────────────────────────── */

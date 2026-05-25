@@ -1535,6 +1535,95 @@ export const listingsService = {
     return body;
   },
 
+  /** GET template orchestration (global ou owner). */
+  async getListingOrchestrationTemplate(ownerKey: string) {
+    const { data } = await apiClient.get(
+      `${LISTING_API_BASE_URL}/listing-orchestration-template/${encodeURIComponent(ownerKey)}`,
+    );
+    return data;
+  },
+
+  async putListingOrchestrationTemplate(ownerKey: string, flags: Record<string, boolean>) {
+    const { data } = await apiClient.put(
+      `${LISTING_API_BASE_URL}/listing-orchestration-template/${encodeURIComponent(ownerKey)}`,
+      flags,
+    );
+    return data;
+  },
+
+  /** Flags effectifs + overrides pour un listing. */
+  async getListingOrchestrationEffective(listingId: string) {
+    const { data } = await apiClient.get(
+      `${LISTING_API_BASE_URL}/listing-orchestration-template/by-listing/${listingId}/effective`,
+    );
+    return data;
+  },
+
+  async applyListingOrchestrationFromOwner(listingId: string) {
+    const { data } = await apiClient.post(
+      `${LISTING_API_BASE_URL}/listing-orchestration-template/by-listing/${listingId}/apply-owner-template`,
+      {},
+    );
+    return data;
+  },
+
+  async syncOrchestrationTemplateToOwner(ownerId: string) {
+    const url = `${LISTING_API_BASE_URL}/listing-orchestration-template/global/sync-owner/${ownerId}`;
+    console.log('[listingsService] POST', url);
+    try {
+      const { data } = await apiClient.post(url, {});
+      console.log('[listingsService] sync-owner response', data);
+      return data;
+    } catch (e) {
+      console.error('[listingsService] sync-owner failed', ownerId, e);
+      throw e;
+    }
+  },
+
+  async syncOrchestrationTemplateToAllOwners() {
+    const { data } = await apiClient.post(
+      `${LISTING_API_BASE_URL}/listing-orchestration-template/global/sync-all-owners`,
+      {},
+    );
+    return data;
+  },
+
+  /** Copie la config d’un listing (ex. Harcay) vers template Admin global. */
+  async syncOrchestrationTemplateToOwnerListings(ownerId: string) {
+    const { data } = await apiClient.post(
+      `${LISTING_API_BASE_URL}/listing-orchestration-template/${ownerId}/sync-listings`,
+      {},
+    );
+    return data;
+  },
+
+  async getListingOwnerConfigTemplate(ownerKey: string) {
+    const { data } = await apiClient.get(
+      `${LISTING_API_BASE_URL}/listing-owner-config-template/${encodeURIComponent(ownerKey)}`,
+    );
+    return data;
+  },
+
+  async putListingOwnerConfigTemplateSection(
+    ownerKey: string,
+    section: 'access' | 'support' | 'concierge' | 'listing' | 'serviceClient' | 'chatbot',
+    payload: Record<string, unknown>,
+  ) {
+    const { data } = await apiClient.put(
+      `${LISTING_API_BASE_URL}/listing-owner-config-template/${encodeURIComponent(ownerKey)}/${section}`,
+      payload,
+    );
+    return data;
+  },
+
+  async applyListingOwnerConfigFromOwner(listingId: string) {
+    const { data } = await apiClient.post(
+      `${LISTING_API_BASE_URL}/listing-owner-config-template/by-listing/${listingId}/apply-owner-template`,
+      {},
+    );
+    return data;
+  },
+
   async deleteListing(listingId: string): Promise<void> {
     await apiClient.delete(`${LISTING_API_BASE_URL}/listings/delete-listing/${listingId}`);
   },

@@ -218,6 +218,7 @@ export const NAV = [
   // ═══════════════════════════════════════════════════════
   { group: 'Catalogue', items: [
     { id: 'listings', label: 'Annonces', icon: '🏠', badge: '42' },
+    { id: 'listing-orchestration', label: 'Template', icon: '✨' },
     { id: 'pricing', label: 'Tarifs calendrier', icon: '📈' },
     { id: 'channels', label: 'Canaux', icon: '🔗' },
   ]},
