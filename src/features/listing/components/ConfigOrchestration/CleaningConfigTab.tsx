@@ -44,12 +44,15 @@ interface Props {
   ownerId?: string;
   listingValues?: Record<string, unknown>;
   onListingPatch?: (patch: Record<string, unknown>) => void;
+  /** Template owner : persistance via onListingPatch uniquement. */
+  templateMode?: boolean;
 }
 
 export default function CleaningConfigTab({
   listingId,
   listingValues = {},
   onListingPatch,
+  templateMode = false,
 }: Props) {
   const [sub, setSub] = useState<SubTab>('included');
   const [config, setConfig] = useState<CleaningListingConfig | null>(null);
@@ -96,14 +99,16 @@ export default function CleaningConfigTab({
     });
     setSavingState('saving');
     try {
-      await listingsService.updateListingProperty(listingId, payload);
-      onListingPatch?.(payload);
+      if (!templateMode && listingId) {
+        await listingsService.updateListingProperty(listingId, payload);
+      }
+      await onListingPatch?.(payload);
       setSavingState('saved');
     } catch {
       setSavingState('idle');
       dirtyRef.current = true;
     }
-  }, [listingId, onListingPatch, listingValues]);
+  }, [listingId, onListingPatch, listingValues, templateMode]);
 
   useEffect(() => {
     if (!config || !dirtyRef.current) return;

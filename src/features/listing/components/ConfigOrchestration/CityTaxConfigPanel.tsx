@@ -25,6 +25,7 @@ interface Props {
   listingValues: Record<string, unknown>;
   onListingPatch?: (patch: Record<string, unknown>) => void;
   onSaveStateChange?: (state: CityTaxSaveState) => void;
+  templateMode?: boolean;
 }
 
 export default function CityTaxConfigPanel({
@@ -32,6 +33,7 @@ export default function CityTaxConfigPanel({
   listingValues,
   onListingPatch,
   onSaveStateChange,
+  templateMode = false,
 }: Props) {
   const [config, setConfig] = useState<CityTaxConfig | null>(null);
   const configRef = useRef<CityTaxConfig | null>(null);
@@ -82,18 +84,20 @@ export default function CityTaxConfigPanel({
 
   const persist = useCallback(async () => {
     const cfg = configRef.current;
-    if (!cfg || !listingId) return;
+    if (!cfg || (!templateMode && !listingId)) return;
     const payload = mapCityTaxToListingPatch(cfg);
     setSavingState('saving');
     try {
-      await listingsService.updateListingProperty(listingId, payload);
-      onListingPatch?.(payload);
+      if (!templateMode && listingId) {
+        await listingsService.updateListingProperty(listingId, payload);
+      }
+      await onListingPatch?.(payload);
       setSavingState('saved');
     } catch {
       setSavingState('idle');
       dirtyRef.current = true;
     }
-  }, [listingId, onListingPatch, setSavingState]);
+  }, [listingId, onListingPatch, setSavingState, templateMode]);
 
   useEffect(() => {
     if (!config || !dirtyRef.current) return;

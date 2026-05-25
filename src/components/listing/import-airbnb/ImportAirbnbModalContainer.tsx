@@ -136,6 +136,24 @@ export function ImportAirbnbModalContainer({
     );
   }, []);
 
+  const applyOrchestrationForResults = useCallback(async (results: ImportResultItem[]) => {
+    const ok = results.filter((r) => r.success && r.listingId);
+    if (ok.length === 0) return;
+    let failed = 0;
+    for (const r of ok) {
+      try {
+        await listingsService.applyListingOrchestrationFromOwner(r.listingId!);
+      } catch {
+        failed += 1;
+      }
+    }
+    if (failed > 0) {
+      toast.warn(
+        `Import OK mais config orchestration en échec sur ${failed}/${ok.length} listing(s)`,
+      );
+    }
+  }, []);
+
   const startImport = useCallback(
     async ({
       ownerId,
@@ -163,7 +181,7 @@ export function ImportAirbnbModalContainer({
               }),
           });
           const ok = response.data?.success;
-          setImportResults([
+          const singleResults: ImportResultItem[] = [
             {
               ruPropertyId: String(ids[0]),
               propertyName: `Annonce #${ids[0]}`,
@@ -171,9 +189,12 @@ export function ImportAirbnbModalContainer({
               listingId: response.data?.listingId,
               errorMessage: ok ? undefined : response.data?.errors?.join('; ') || response.data?.error,
             },
-          ]);
-          if (ok) toast.success('Annonce importée avec succès');
-          else toast.error("Échec de l'import");
+          ];
+          setImportResults(singleResults);
+          if (ok) {
+            await applyOrchestrationForResults(singleResults);
+            toast.success('Annonce importée avec succès');
+          } else toast.error("Échec de l'import");
         } else {
           const { response } = await runTrackedImport({
             prefix: 'orchestrator-batch',
@@ -201,7 +222,10 @@ export function ImportAirbnbModalContainer({
             }),
           );
           setImportResults(results);
-          if (data?.succeeded > 0) toast.success(`${data.succeeded} annonce(s) importée(s)`);
+          if (data?.succeeded > 0) {
+            await applyOrchestrationForResults(results);
+            toast.success(`${data.succeeded} annonce(s) importée(s)`);
+          }
           if (data?.failed > 0) toast.error(`${data.failed} annonce(s) en échec`);
         }
       } catch (e: unknown) {
@@ -210,7 +234,7 @@ export function ImportAirbnbModalContainer({
         throw e;
       }
     },
-    [runTrackedImport],
+    [runTrackedImport, applyOrchestrationForResults],
   );
 
   const handleClose = useCallback(() => {

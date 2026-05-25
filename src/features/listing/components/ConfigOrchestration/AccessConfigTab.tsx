@@ -24,9 +24,11 @@ import {
 } from './accessConfigDefaults';
 
 interface Props {
-  listingId: string;
+  listingId?: string;
   listingName?: string;
   ownerId?: string;
+  /** Template owner srv-listing : `global` ou id PM (sans listingId). */
+  templateOwnerKey?: string;
 }
 
 function InstructionBlock({
@@ -79,8 +81,16 @@ function InstructionBlock({
   );
 }
 
-export default function AccessConfigTab({ listingId, listingName = '', ownerId }: Props) {
-  const [form, setForm] = useState<AccessFormState>(() => defaultAccessForm(listingId, listingName));
+export default function AccessConfigTab({
+  listingId = '',
+  listingName = '',
+  ownerId,
+  templateOwnerKey,
+}: Props) {
+  const isOwnerTemplate = Boolean(templateOwnerKey);
+  const [form, setForm] = useState<AccessFormState>(() =>
+    defaultAccessForm(listingId || templateOwnerKey || '', listingName || 'Template'),
+  );
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -89,12 +99,11 @@ export default function AccessConfigTab({ listingId, listingName = '', ownerId }
 
   const persist = useCallback(
     async (payload: AccessFormState) => {
-      if (!listingId) return;
+      if (!isOwnerTemplate && !listingId) return;
+      if (isOwnerTemplate && !templateOwnerKey) return;
       setSavingState('saving');
       try {
-        const body = {
-          listingId: payload.listingId,
-          listingName: payload.listingName || listingName,
+        const sectionBody = {
           receptionMode: {
             type: payload.receptionMode.type,
             assistedGuestMessage: payload.receptionMode.assistedGuestMessage,
@@ -102,11 +111,24 @@ export default function AccessConfigTab({ listingId, listingName = '', ownerId }
           },
           instructions: payload.instructions,
         };
-        let res = await listingsService.updateListingAccess(listingId, body);
-        if (res.notFound || (res.error && !res.data)) {
-          res = await listingsService.createListingAccess(body);
+        if (isOwnerTemplate && templateOwnerKey) {
+          await listingsService.putListingOwnerConfigTemplateSection(
+            templateOwnerKey,
+            'access',
+            sectionBody,
+          );
+        } else {
+          const body = {
+            listingId: payload.listingId,
+            listingName: payload.listingName || listingName,
+            ...sectionBody,
+          };
+          let res = await listingsService.updateListingAccess(listingId!, body);
+          if (res.notFound || (res.error && !res.data)) {
+            res = await listingsService.createListingAccess(body);
+          }
+          if (res.error) throw new Error(res.error);
         }
-        if (res.error) throw new Error(res.error);
         setSavingState('saved');
         window.setTimeout(() => setSavingState('idle'), 2200);
       } catch (e: unknown) {
@@ -114,7 +136,7 @@ export default function AccessConfigTab({ listingId, listingName = '', ownerId }
         toast.error(e instanceof Error ? e.message : 'Erreur enregistrement');
       }
     },
-    [listingId, listingName],
+    [listingId, listingName, isOwnerTemplate, templateOwnerKey],
   );
 
   const scheduleSave = useCallback(
@@ -138,24 +160,33 @@ export default function AccessConfigTab({ listingId, listingName = '', ownerId }
   );
 
   useEffect(() => {
-    if (!listingId) return;
+    if (!isOwnerTemplate && !listingId) return;
+    if (isOwnerTemplate && !templateOwnerKey) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
       setLoadError(null);
       skipSave.current = true;
       try {
-        const res = await listingsService.getListingAccessConfig(listingId);
-        if (cancelled) return;
-        if (res.error && !res.data && !res.notFound) {
-          throw new Error(res.error);
+        let doc: Record<string, unknown> | null = null;
+        if (isOwnerTemplate && templateOwnerKey) {
+          const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+          const payload = (res as { data?: { access?: Record<string, unknown> } })?.data ?? res;
+          doc = (payload as { access?: Record<string, unknown> })?.access ?? null;
+        } else {
+          const res = await listingsService.getListingAccessConfig(listingId!);
+          if (res.error && !res.data && !res.notFound) {
+            throw new Error(res.error);
+          }
+          doc = (res.data || null) as Record<string, unknown> | null;
         }
-        const doc = (res.data || null) as Record<string, unknown> | null;
-        setForm(normalizeAccessFromApi(doc, listingId, listingName));
+        if (cancelled) return;
+        const id = listingId || templateOwnerKey || '';
+        setForm(normalizeAccessFromApi(doc, id, listingName || 'Template'));
       } catch (e: unknown) {
         if (!cancelled) {
           setLoadError(e instanceof Error ? e.message : 'Chargement impossible');
-          setForm(defaultAccessForm(listingId, listingName));
+          setForm(defaultAccessForm(listingId || templateOwnerKey || '', listingName));
         }
       } finally {
         if (!cancelled) {
@@ -169,7 +200,7 @@ export default function AccessConfigTab({ listingId, listingName = '', ownerId }
     return () => {
       cancelled = true;
     };
-  }, [listingId, listingName, ownerId]);
+  }, [listingId, listingName, ownerId, isOwnerTemplate, templateOwnerKey]);
 
   const mode = form.receptionMode.type;
   const sched = form.receptionMode.codeSendSchedule;
@@ -185,7 +216,8 @@ export default function AccessConfigTab({ listingId, listingName = '', ownerId }
   return (
     <Box>
       <ConfigIntroBar saveState={savingState === 'error' ? 'idle' : savingState}>
-        Instructions d&apos;accès · collection listing_access (srv-listing)
+        Instructions d&apos;accès ·{' '}
+        {isOwnerTemplate ? 'template owner (listing_owner_config_templates)' : 'listing_access'}
       </ConfigIntroBar>
 
       {loadError && (

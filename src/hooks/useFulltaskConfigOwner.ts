@@ -30,25 +30,29 @@ export function useFulltaskConfigOwner(): FulltaskConfigOwnerScope {
   } = useAdminOwnerFilter();
 
   const ownerKey = useMemo(() => {
-    if (scope.canAccessAllOwners) {
-      const sel = selectedOwnerId?.trim();
-      // ✅ Utilise l'ID admin template au lieu de 'global'
-      return sel || ORCHESTRATION_ADMIN_OWNER_ID;
-    }
-    return scope.ownerId || ORCHESTRATION_ADMIN_OWNER_ID;
-  }, [scope.canAccessAllOwners, scope.ownerId, selectedOwnerId]);
+    const sel = selectedOwnerId?.trim();
 
-  const isAdminTemplate = ownerKey === ORCHESTRATION_ADMIN_OWNER_ID;
+    if (sel && sel !== ORCHESTRATION_ADMIN_OWNER_ID) {
+      return sel;
+    }
+
+    return 'global';
+  }, [selectedOwnerId]);
+
+  const isAdminTemplate = ownerKey === 'global';
 
   const ownerDisplayName = useMemo(() => {
     if (scope.canAccessAllOwners) {
-      if (!selectedOwnerId?.trim()) {
-        return 'Config Admin globale';
+      const sel = selectedOwnerId?.trim();
+      // Template Admin
+      if (!sel || sel === ORCHESTRATION_ADMIN_OWNER_ID) {
+        return 'Template Admin';
       }
+      // PM spécifique
       const row = (owners || []).find(
-        (o) => String(o?._id ?? o?.id) === String(selectedOwnerId),
+        (o) => String(o?._id ?? o?.id) === String(sel),
       );
-      return getOwnerListLabel(row) || selectedOwnerId;
+      return getOwnerListLabel(row) || sel;
     }
     if (legacyUser) {
       const label = getOwnerListLabel(legacyUser as Record<string, unknown>);

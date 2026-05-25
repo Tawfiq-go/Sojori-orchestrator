@@ -51,6 +51,7 @@ interface Props {
   ownerId?: string;
   listingValues?: Record<string, unknown>;
   onListingPatch?: (patch: Record<string, unknown>) => void;
+  templateMode?: boolean;
 }
 
 function SortableChecklistRow({
@@ -122,6 +123,7 @@ export default function CleaningSojoriConfigTab({
   listingId,
   listingValues = {},
   onListingPatch,
+  templateMode = false,
 }: Props) {
   const [config, setConfig] = useState<CleaningSojoriConfig | null>(null);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -165,8 +167,10 @@ export default function CleaningSojoriConfigTab({
     const payload = mapCleaningSojoriToListingPatch(cfg);
     setSavingState('saving');
     try {
-      await listingsService.updateListingProperty(listingId, payload);
-      onListingPatch?.(payload);
+      if (!templateMode && listingId) {
+        await listingsService.updateListingProperty(listingId, payload);
+      }
+      await onListingPatch?.(payload);
       setSavingState('saved');
     } catch {
       setSavingState('idle');

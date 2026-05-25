@@ -104,7 +104,12 @@ const TasksConfigFulltaskPage = lazy(() =>
 );
 const TasksOrchestrationFulltaskPage = lazy(() =>
   import('./pages/TasksOrchestrationFulltaskPage').then((module) => ({ default: module.default }))
-)
+);
+const ListingOrchestrationTemplatePage = lazy(() =>
+  import('./pages/ListingOrchestrationTemplatePage').then((module) => ({
+    default: module.default,
+  }))
+);
 const TasksWhatsAppMessagesPage = lazy(() =>
   import('./pages/TasksWhatsAppMessagesPage').then((module) => ({ default: module.default }))
 );
@@ -322,6 +327,10 @@ function App() {
               <Route path="/catalogue/listings/:id" element={<LazyRoute><ListingDetailPage /></LazyRoute>} />
               <Route path="/catalogue/channels" element={<LazyRoute><ChannelsPage /></LazyRoute>} />
               <Route path="/catalogue/pricing" element={<LazyRoute><PricingPage /></LazyRoute>} />
+              <Route
+                path="/catalogue/listing-orchestration"
+                element={<LazyRoute><ListingOrchestrationTemplatePage /></LazyRoute>}
+              />
               <Route path="/clients" element={<LazyRoute><ClientsPage /></LazyRoute>} />
               <Route path="/clients/contacts" element={<LazyRoute><WhatsAppContactsPage /></LazyRoute>} />
               <Route path="/crm" element={<LazyRoute><CRMPage /></LazyRoute>} />

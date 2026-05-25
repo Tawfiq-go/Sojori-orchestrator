@@ -152,6 +152,7 @@ export default function ListingFormShell({
   defaultTab = 'photos',
   lockLevel,                  // masque le toggle et fige le niveau (ex. embed chatbot)
   embedded = false,           // rendu dans un panneau (pas pleine page)
+  configNewBadgeLabel = 'Config Orch. NEW', // ex. « Template » sur page catalogue/template
   onSave,
   onPublish,
   onPreview,
@@ -175,6 +176,7 @@ export default function ListingFormShell({
   const activeTabMeta = tabsConfig.flatMap(g => g.items).find(t => t.id === activeTab) || tabsConfig[0].items[0];
   const listingDisplayName = (listing?.name && String(listing.name).trim()) || 'Listing sans nom';
   const locationLine = (listing?.location && String(listing.location).trim()) || '';
+  const showListingTitle = Boolean(listing?.name && String(listing.name).trim());
 
   const lockedConfigNew = lockLevel === 'config-new';
 
@@ -266,7 +268,7 @@ export default function ListingFormShell({
           </Box>
           )}
           <Box sx={{ flex: 1, minWidth: 0, pt: { xs: 0, sm: 0.25 } }}>
-            {lockedConfigNew && (
+            {lockedConfigNew && configNewBadgeLabel ? (
               <Box
                 sx={{
                   display: 'inline-flex',
@@ -284,7 +286,7 @@ export default function ListingFormShell({
                 }}
               >
                 <span>✨</span>
-                Config Orch. NEW
+                {configNewBadgeLabel}
                 <Box
                   component="span"
                   sx={{
@@ -300,24 +302,28 @@ export default function ListingFormShell({
                   {CONFIG_NEW_TAB_COUNT} onglets
                 </Box>
               </Box>
-            )}
-            <Typography
-              component="h1"
-              sx={{
-                fontSize: embedded ? { xs: 17, sm: 18 } : { xs: 20, sm: 22 },
-                fontWeight: 800,
-                letterSpacing: '-0.03em',
-                color: T.text,
-                lineHeight: 1.15,
-                m: 0,
-              }}
-            >
-              {listingDisplayName}
-            </Typography>
-            {locationLine ? (
-              <Typography sx={{ fontSize: 13, color: T.text2, fontWeight: 500, mt: 0.25 }}>
-                {locationLine}
-              </Typography>
+            ) : null}
+            {showListingTitle ? (
+              <>
+                <Typography
+                  component="h1"
+                  sx={{
+                    fontSize: embedded ? { xs: 17, sm: 18 } : { xs: 20, sm: 22 },
+                    fontWeight: 800,
+                    letterSpacing: '-0.03em',
+                    color: T.text,
+                    lineHeight: 1.15,
+                    m: 0,
+                  }}
+                >
+                  {listingDisplayName}
+                </Typography>
+                {locationLine ? (
+                  <Typography sx={{ fontSize: 13, color: T.text2, fontWeight: 500, mt: 0.25 }}>
+                    {locationLine}
+                  </Typography>
+                ) : null}
+              </>
             ) : null}
           </Box>
         </Box>

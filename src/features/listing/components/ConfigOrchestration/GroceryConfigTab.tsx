@@ -85,11 +85,13 @@ function mapToConciergeGrocery(config, existingDoc) {
 }
 
 interface Props {
-  listingId: string;
+  listingId?: string;
   ownerId?: string;
+  templateOwnerKey?: string;
 }
 
-export default function GroceryConfigTab({ listingId }: Props) {
+export default function GroceryConfigTab({ listingId, templateOwnerKey }: Props) {
+  const isOwnerTemplate = Boolean(templateOwnerKey);
   const [config, setConfig] = useState(DEFAULT_GROCERY);
   const [rawDoc, setRawDoc] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -105,22 +107,46 @@ export default function GroceryConfigTab({ listingId }: Props) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const res = await listingsService.getListingConciergeConfig(listingId);
-      if (cancelled) return;
-      if (res.data) {
-        setRawDoc(res.data);
-        setConfig(mapFromConciergeDoc(res.data));
+      if (isOwnerTemplate && templateOwnerKey) {
+        const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+        if (cancelled) return;
+        const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
+        const concierge = (payload as { concierge?: Record<string, unknown> })?.concierge || {};
+        setRawDoc({ groceryServices: concierge.groceryServices, transportServices: concierge.transportServices });
+        setConfig(mapFromConciergeDoc({ groceryServices: concierge.groceryServices }));
+      } else if (listingId) {
+        const res = await listingsService.getListingConciergeConfig(listingId);
+        if (cancelled) return;
+        if (res.data) {
+          setRawDoc(res.data);
+          setConfig(mapFromConciergeDoc(res.data));
+        }
       }
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [listingId]);
+  }, [listingId, isOwnerTemplate, templateOwnerKey]);
 
   const save = useCallback(async () => {
     setSavingState('saving');
     const body = mapToConciergeGrocery(config, rawDoc);
+    if (isOwnerTemplate && templateOwnerKey) {
+      const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+      const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
+      const prev = (payload as { concierge?: Record<string, unknown> })?.concierge || {};
+      await listingsService.putListingOwnerConfigTemplateSection(templateOwnerKey, 'concierge', {
+        transportServices: prev.transportServices || [],
+        groceryServices: body.groceryServices,
+        customServices: prev.customServices || [],
+      });
+      setRawDoc(prev => ({ ...(prev || {}), groceryServices: body.groceryServices }));
+      setSavingState('saved');
+      setTimeout(() => setSavingState('idle'), 2000);
+      return;
+    }
+    if (!listingId) return;
     const res = await listingsService.updateListingConciergeServices(listingId, body);
     if (!res.error) {
       setRawDoc(prev => ({ ...(prev || {}), ...body }));
@@ -129,7 +155,7 @@ export default function GroceryConfigTab({ listingId }: Props) {
     } else {
       setSavingState('idle');
     }
-  }, [config, listingId, rawDoc]);
+  }, [config, listingId, rawDoc, isOwnerTemplate, templateOwnerKey]);
 
   useEffect(() => {
     if (loading) return;

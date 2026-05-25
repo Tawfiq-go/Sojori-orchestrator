@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography, Button, Chip } from '@mui/material';
 import { toast } from 'react-toastify';
 import listingsService from '../../../../services/listingsService';
 import { SOJORI_TOKENS as T } from './types';
@@ -22,6 +22,11 @@ const ORCH_FLAGS = [
   { key: 'orchestration_service_client', label: 'Service client' },
 ] as const;
 
+type EffectivePayload = {
+  flags?: Record<string, boolean>;
+  overrides?: Record<string, boolean>;
+};
+
 interface Props {
   listingId: string;
   ownerId?: string;
@@ -36,19 +41,47 @@ export default function OrchestrationConfigTab({
 }: Props) {
   const [globalOn, setGlobalOn] = useState(true);
   const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
   const [savingField, setSavingField] = useState<string | null>(null);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   const cleaningOrch = (listingValues.cleaningOrchestration as { enabled?: boolean }) || {};
 
-  useEffect(() => {
-    setGlobalOn(listingValues.orchestrationEnabled !== false);
+  const applyEffective = useCallback((data: EffectivePayload | null) => {
+    const f = data?.flags ?? {};
+    setGlobalOn(f.orchestrationEnabled !== false);
     const next: Record<string, boolean> = {};
     ORCH_FLAGS.forEach(({ key }) => {
-      next[key] = listingValues[key] !== false;
+      next[key] = f[key] !== false;
     });
     setFlags(next);
-  }, [listingValues]);
+    setOverrides((data?.overrides as Record<string, boolean>) ?? {});
+  }, []);
+
+  const loadEffective = useCallback(async () => {
+    if (!listingId) return;
+    setLoading(true);
+    try {
+      const res = await listingsService.getListingOrchestrationEffective(listingId);
+      const body = res as { success?: boolean; data?: EffectivePayload };
+      applyEffective(body?.data ?? null);
+    } catch {
+      setGlobalOn(listingValues.orchestrationEnabled !== false);
+      const next: Record<string, boolean> = {};
+      ORCH_FLAGS.forEach(({ key }) => {
+        next[key] = listingValues[key] !== false;
+      });
+      setFlags(next);
+      setOverrides({});
+    } finally {
+      setLoading(false);
+    }
+  }, [listingId, listingValues, applyEffective]);
+
+  useEffect(() => {
+    void loadEffective();
+  }, [loadEffective]);
 
   const persistField = useCallback(
     async (field: string, checked: boolean) => {
@@ -59,6 +92,7 @@ export default function OrchestrationConfigTab({
         const payload = { [field]: checked };
         await listingsService.updateListingProperty(listingId, payload);
         onListingPatch?.(payload);
+        setOverrides((prev) => ({ ...prev, [field]: checked }));
         setSavingState('saved');
         toast.success(checked ? 'Activé' : 'Désactivé', { autoClose: 2000 });
       } catch (e: unknown) {
@@ -72,6 +106,22 @@ export default function OrchestrationConfigTab({
     },
     [listingId, onListingPatch],
   );
+
+  const handleResetFromOwner = async () => {
+    try {
+      setSavingState('saving');
+      const res = await listingsService.applyListingOrchestrationFromOwner(listingId);
+      const body = res as { success?: boolean; data?: EffectivePayload };
+      applyEffective(body?.data ?? null);
+      const patch = body?.data?.flags ?? {};
+      onListingPatch?.(patch);
+      setSavingState('saved');
+      toast.success('Config réinitialisée depuis le template propriétaire');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur');
+      setSavingState('idle');
+    }
+  };
 
   const handleGlobalToggle = async () => {
     const next = !globalOn;
@@ -109,6 +159,7 @@ export default function OrchestrationConfigTab({
       };
       await listingsService.updateListingProperty(listingId, payload);
       onListingPatch?.(payload);
+      setOverrides((prev) => ({ ...prev, orchestration_cleaning_sojori: next }));
       setSavingState('saved');
       toast.success(next ? 'Ménage Sojori activé' : 'Ménage Sojori désactivé', { autoClose: 2000 });
     } catch (e: unknown) {
@@ -119,27 +170,38 @@ export default function OrchestrationConfigTab({
     }
   };
 
+  if (loading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography color="text.secondary">Chargement config orchestration…</Typography>
+      </Box>
+    );
+  }
+
   return (
     <Box>
       <ConfigIntroBar saveState={savingState}>
-        Orchestration enregistrée sur ce logement (srv-listing). Si tout est OFF ou orchestration
-        globale désactivée, aucun plan n’est créé à la réservation.
-        <Box sx={{ mt: 1.25, display: 'flex', justifyContent: 'flex-end' }}>
+        Valeurs effectives : template admin → template propriétaire → ce logement. Chaque toggle
+        enregistre <b>un seul champ</b> sur ce listing (override).
+        <Stack direction="row" sx={{ mt: 1.25, gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <Button size="small" variant="outlined" onClick={() => void handleResetFromOwner()}>
+            Réinitialiser depuis template PM
+          </Button>
           <FullChatbotSyncButton listingId={listingId} variant="listing" />
-        </Box>
+        </Stack>
       </ConfigIntroBar>
 
       <SectionHeader
         icon="⚡"
         title="Orchestration"
-        badge="OPS · PART"
+        badge="LISTING"
         badgeKind="wa-partial"
-        subtitle="Activez ou désactivez l’orchestration pour ce logement."
+        subtitle="Héritage owner + overrides locaux."
       />
 
       <Card icon="⚡" title="Orchestration globale" subtitle="Coupe tout le plan auto (relances incluses)">
         <FormRow label="Orchestration active sur ce listing">
-          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             <Toggle
               on={globalOn}
               onChange={() => void handleGlobalToggle()}
@@ -148,6 +210,9 @@ export default function OrchestrationConfigTab({
             <Typography sx={{ fontSize: 12, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
               {globalOn ? 'Oui — plan auto possible' : 'Non — aucun plan à la résa'}
             </Typography>
+            {overrides.orchestrationEnabled !== undefined && (
+              <Chip size="small" label="override listing" color="warning" variant="outlined" />
+            )}
           </Stack>
         </FormRow>
       </Card>
@@ -156,7 +221,7 @@ export default function OrchestrationConfigTab({
         <Stack sx={{ gap: 0, opacity: globalOn ? 1 : 0.45, pointerEvents: globalOn ? 'auto' : 'none' }}>
           {ORCH_FLAGS.map(({ key, label }) => (
             <FormRow key={key} label={label}>
-              <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+              <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Toggle
                   on={!!flags[key]}
                   onChange={() => void handleCategoryToggle(key)}
@@ -165,6 +230,9 @@ export default function OrchestrationConfigTab({
                 <Typography sx={{ fontSize: 12, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
                   {flags[key] ? 'ON' : 'OFF'}
                 </Typography>
+                {overrides[key] !== undefined && (
+                  <Chip size="small" label="override" color="warning" variant="outlined" />
+                )}
               </Stack>
             </FormRow>
           ))}
@@ -184,14 +252,11 @@ export default function OrchestrationConfigTab({
             </Typography>
           </Stack>
         </FormRow>
-        <Typography sx={{ fontSize: 11, color: T.text3, mt: 1 }}>
-          Checklist et J+ : onglet <b>Ménage Sojori</b>.
-        </Typography>
       </Card>
 
       <WhenOffNote>
-        Créneaux arrivée/départ et messages détaillés : onglet <b>Ménage &amp; Service</b> (config
-        classique) ou onglets Services ci-dessus.
+        Template propriétaire : menu Catalogue → Template. Import Airbnb applique aussi ce
+        template à la fin de la création.
       </WhenOffNote>
     </Box>
   );
