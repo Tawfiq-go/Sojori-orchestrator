@@ -180,10 +180,20 @@ export function buildAvailabilityMonthCellsFromInventory(
     dayMap.set(parseApiDateKey(d.date), d);
   });
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = toLocalDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+
   return buildMonthGrid(year, month, (dateStr, inMonth) => {
     if (!inMonth) {
       return { status: 'nodata', price: 0, hasInventoryData: false };
     }
+
+    // Marquer les jours passés comme "closed"
+    if (dateStr < todayKey) {
+      return { status: 'closed', price: 0, hasInventoryData: true };
+    }
+
     const row = dayMap.get(dateStr);
     if (!row) {
       return { status: 'nodata', price: 0, hasInventoryData: false };
@@ -219,10 +229,20 @@ export function buildAvailabilityMonthCells(
     dayMap.set(parseApiDateKey(d.date), d);
   });
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = toLocalDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+
   return buildMonthGrid(year, month, (dateStr, inMonth) => {
     if (!inMonth) {
       return { status: 'nodata', price: 0, hasInventoryData: false };
     }
+
+    // Marquer les jours passés comme "closed"
+    if (dateStr < todayKey) {
+      return { status: 'closed', price: 0, hasInventoryData: true };
+    }
+
     const apiDay = dayMap.get(dateStr);
     if (!apiDay) {
       return { status: 'nodata', price: 0, hasInventoryData: false };
@@ -248,7 +268,14 @@ export function buildAvailabilityMonthCells(
 }
 
 export function isDateSelectableForCheckIn(cell: AvailabilityDayCell): boolean {
-  return cell.inMonth && cell.status === 'available';
+  if (!cell.inMonth || cell.status !== 'available') return false;
+
+  // Bloquer les jours passés
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = toLocalDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+
+  return cell.date >= todayKey;
 }
 
 export function isStayRangeValid(
@@ -257,6 +284,13 @@ export function isStayRangeValid(
   cells: AvailabilityDayCell[],
 ): boolean {
   if (!checkIn || !checkOut || checkOut <= checkIn) return false;
+
+  // Vérifier que le check-in n'est pas dans le passé
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = toLocalDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+  if (checkIn < todayKey) return false;
+
   const byDate = new Map(cells.filter(c => c.inMonth).map(c => [c.date, c]));
   let cursor = checkIn;
   while (cursor < checkOut) {
