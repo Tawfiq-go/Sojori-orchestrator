@@ -23,12 +23,16 @@ import { ListingQuickEditDialog } from '../components/listing/ListingQuickEditDi
 
 const PAGE_SIZE = 20;
 
-const STATUS_FILTERS: Array<{ key: 'all' | ListingStatus; label: string }> = [
-  { key: 'all', label: 'Tous' },
+type ListingsTab = 'active' | 'inactive';
+
+const STATUS_FILTERS: Array<{ key: ListingsTab; label: string }> = [
   { key: 'active', label: 'Actives' },
   { key: 'inactive', label: 'Inactives' },
-  { key: 'draft', label: 'Brouillons' },
 ];
+
+function parseListingsTab(raw: string | null): ListingsTab {
+  return raw === 'inactive' ? 'inactive' : 'active';
+}
 
 const CARD_GRADIENTS = [
   'linear-gradient(135deg, #fde68a, #d97706)',
@@ -102,25 +106,25 @@ export function ListingsOverviewPage() {
   const [cities, setCities] = useState<Array<{ _id: string; name?: string }>>([]);
   const [otaAuditListingId, setOtaAuditListingId] = useState<string | null>(null);
 
-  // Initialize statusFilter from URL param ?tab=active/inactive/draft
-  const tabParam = searchParams.get('tab') as 'all' | ListingStatus | null;
-  const initialStatusFilter = tabParam && ['all', 'active', 'inactive', 'draft'].includes(tabParam) ? tabParam : 'all';
-  const [statusFilter, setStatusFilter] = useState<'all' | ListingStatus>(initialStatusFilter);
+  // ?tab=active|inactive — défaut actives (jamais « tous »)
+  const [statusFilter, setStatusFilter] = useState<ListingsTab>(() =>
+    parseListingsTab(searchParams.get('tab')),
+  );
 
   const [page, setPage] = useState(0);
   const [totalListings, setTotalListings] = useState(0);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  const listingsQueryOptions = useMemo(() => {
-    const useActiveFilter = statusFilter === 'active' || statusFilter === 'inactive';
-    return {
+  const listingsQueryOptions = useMemo(
+    () => ({
       page,
       limit: PAGE_SIZE,
       staging: false,
-      useActiveFilter,
+      useActiveFilter: true,
       active: statusFilter === 'active',
-    };
-  }, [page, statusFilter]);
+    }),
+    [page, statusFilter],
+  );
 
   const loadStats = async () => {
     setStatsLoading(true);
@@ -174,15 +178,15 @@ export function ListingsOverviewPage() {
     });
   }, []);
 
-  // Sync statusFilter with URL param ?tab=
+  // URL : toujours ?tab=active ou ?tab=inactive
   useEffect(() => {
-    const tabParam = searchParams.get('tab') as 'all' | ListingStatus | null;
-    if (tabParam && ['all', 'active', 'inactive', 'draft'].includes(tabParam)) {
-      setStatusFilter(tabParam);
-    } else if (!tabParam) {
-      setStatusFilter('all');
+    const tab = parseListingsTab(searchParams.get('tab'));
+    if (searchParams.get('tab') !== tab) {
+      setSearchParams({ tab }, { replace: true });
+      return;
     }
-  }, [searchParams]);
+    setStatusFilter(tab);
+  }, [searchParams, setSearchParams]);
 
   const filteredListings = useMemo(() => {
     return listings.filter((listing) => {
@@ -197,7 +201,7 @@ export function ListingsOverviewPage() {
         .toLowerCase();
 
       if (search.trim() && !haystack.includes(search.trim().toLowerCase())) return false;
-      if (statusFilter !== 'all' && listing.status !== statusFilter) return false;
+      if (listing.status !== statusFilter) return false;
       return true;
     });
   }, [listings, search, statusFilter]);
@@ -303,11 +307,7 @@ export function ListingsOverviewPage() {
                 onClick={() => {
                   setStatusFilter(filter.key);
                   setPage(0);
-                  if (filter.key === 'all') {
-                    searchParams.delete('tab');
-                  } else {
-                    searchParams.set('tab', filter.key);
-                  }
+                  searchParams.set('tab', filter.key);
                   setSearchParams(searchParams);
                 }}
               >
@@ -326,17 +326,8 @@ export function ListingsOverviewPage() {
             <Typography sx={{ color: t.text3 }}>
               {listings.length === 0
                 ? 'Aucune annonce retournée par l’API.'
-                : `Aucune annonce pour le filtre « ${statusFilter} » (${listings.length} au total).`}
+                : `Aucune annonce ${statusFilter === 'active' ? 'active' : 'inactive'}.`}
             </Typography>
-            {listings.length > 0 && statusFilter !== 'all' && (
-              <Button sx={{ ...btnGhostSx, mt: 2 }} onClick={() => {
-                setStatusFilter('all');
-                searchParams.delete('tab');
-                setSearchParams(searchParams);
-              }}>
-                Voir toutes les annonces
-              </Button>
-            )}
           </Box>
         ) : (
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 2 }}>

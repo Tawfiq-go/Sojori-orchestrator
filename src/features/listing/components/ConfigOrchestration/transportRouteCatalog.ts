@@ -95,7 +95,7 @@ export const TRANSPORT_ROUTE_PRESETS: Omit<TransportRouteItem, 'enabled' | 'orde
 export const TRANSPORT_JOURNEY_OPTIONS: TransportJourneyTag[] = ['arrival', 'departure', 'other'];
 
 export function journeyLabel(tag: TransportJourneyTag): string {
-  if (tag === 'arrival') return 'Vers le logement';
-  if (tag === 'departure') return 'Depuis le logement';
+  if (tag === 'arrival') return 'Arrivée';
+  if (tag === 'departure') return 'Départ';
   return 'Autre';
 }

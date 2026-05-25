@@ -4,6 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { Box, Stack, Typography, TextField, Button, IconButton } from '@mui/material';
+import { hourNumberToTimeInput } from '../../../../utils/listingTimeHelpers';
 import { T, sxInput, Field, Card, SectionH, ToggleRow, Counter, ChipsRow, NumberInput, MoneyInput, SelectField, AiBanner, RuFormLegend } from './_shared';
 
 /* ════════════════════ Pricing ════════════════════ */
@@ -51,17 +52,32 @@ export function AvailabilityTab({ values = {}, onChange }) {
   return (
     <Box>
       <RuFormLegend />
-      <Card title="🚪 Check-in / Check-out" meta="checkInTime · checkOutTime">
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1.5 }}>
-          <Field label="Plage check-in" ruField="checkInTimeStart" hint="checkInTimeStart → checkInTimeEnd">
-            <Stack direction="row" gap={1}>
-              <TextField size="small" type="time" value={values.checkInTimeStart || '14:00'} onChange={e => upd('checkInTimeStart', e.target.value)} sx={sxInput} />
-              <Typography sx={{ alignSelf: 'center', color: T.text3 }}>→</Typography>
-              <TextField size="small" type="time" value={values.checkInTimeEnd || '20:00'} onChange={e => upd('checkInTimeEnd', e.target.value)} sx={sxInput} />
-            </Stack>
+      <Card title="🚪 Check-in / Check-out" meta="checkInTimeStart · checkOutTime">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 1.5 }}>
+          <Field
+            label="Heure check-in"
+            required
+            ruField="checkInTimeStart"
+            hint="Heure d’arrivée (RU CheckInFrom). Fin de plage auto +2h si besoin."
+          >
+            <TextField
+              size="small"
+              type="time"
+              value={hourNumberToTimeInput(values.checkInTime ?? values.checkInTimeStart)}
+              onChange={(e) => upd('checkInTime', e.target.value)}
+              sx={sxInput}
+              inputProps={{ step: 3600 }}
+            />
           </Field>
-          <Field label="Heure check-out" required ruField="checkOutTime">
-            <TextField size="small" type="time" value={values.checkOutTime || '11:00'} onChange={e => upd('checkOutTime', e.target.value)} sx={sxInput} />
+          <Field label="Heure check-out" required ruField="checkOutTime" hint="Heure de départ (RU CheckOutUntil)">
+            <TextField
+              size="small"
+              type="time"
+              value={hourNumberToTimeInput(values.checkOutTime)}
+              onChange={(e) => upd('checkOutTime', e.target.value)}
+              sx={sxInput}
+              inputProps={{ step: 3600 }}
+            />
           </Field>
         </Box>
       </Card>

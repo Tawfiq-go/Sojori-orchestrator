@@ -16,7 +16,11 @@ export type PortfolioListingDto = {
   lat?: number;
   lng?: number;
   bedrooms?: number | null;
+  bathrooms?: number | null;
+  /** personCapacityMax — envoyé à AirROI comme `guests` */
   guests?: number | null;
+  /** personCapacity — tarif base (affichage uniquement) */
+  personCapacityPricing?: number | null;
   useDynamicPrice: boolean;
   active?: boolean;
   ruPropertyKey?: string | null;
@@ -29,6 +33,23 @@ export type PortfolioListingDto = {
   otaChannelCount?: number;
   thumbColor: 1 | 2 | 3 | 4 | 5 | 6;
   hasAirroiSnapshot?: boolean;
+  hasRevenueEstimate?: boolean;
+  estimateSummary?: {
+    revenueP25Mad: number;
+    revenueP50Mad: number;
+    revenueP75Mad: number;
+    adrP50Mad: number;
+    occupancyP50: number;
+  } | null;
+  /** Dernier refresh AirROI : coordonnées réellement envoyées (estimate / comparables) */
+  airroiGeoUsed?: {
+    source: 'sojori_listing_mongo' | 'airroi_listing_snapshot';
+    lat: number;
+    lng: number;
+    bedrooms: number;
+    baths: number;
+    guests: number;
+  } | null;
   airroiSnapshotAt?: string | null;
   airroiSnapshotCostUsd?: number | null;
   airroiRaw?: AirroiRawFields | null;
@@ -137,6 +158,11 @@ export type PortfolioApiResponse = {
     seasonality: Array<{ month: string; occupancy: number; adr: number }>;
     pacing: Array<{ month: string; fillRate: number }>;
     supplyGrowth: Array<{ label: string; listingCount: number }>;
+  };
+  /** Payload brut cache marché (repli graphiques côté front) */
+  market?: {
+    cityKpisRaw?: Record<string, unknown> | null;
+    zoneStatsRaw?: Record<string, unknown>;
   };
 };
 
@@ -247,6 +273,33 @@ export async function refreshOneListingPerformanceAirroi(listingId: string) {
   );
 }
 
+export type AirroiListingRefreshPart =
+  | 'listing'
+  | 'metrics'
+  | 'future-rates'
+  | 'comparables'
+  | 'estimate';
+
+export type OneListingAirroiPartResult = {
+  success: boolean;
+  listingId: string;
+  part: string;
+  ok: boolean;
+  costUsd?: number;
+  error?: string;
+};
+
+export async function refreshListingAirroiPart(
+  listingId: string,
+  part: AirroiListingRefreshPart,
+) {
+  return apiClient.post<OneListingAirroiPartResult>(
+    `${BASE}/listings/${encodeURIComponent(listingId)}/airroi/${encodeURIComponent(part)}`,
+    {},
+    { timeout: 120_000 },
+  );
+}
+
 /* ─── Pilote auto v2 ─────────────────────────────────────────── */
 
 export type PilotMode = 'prudent' | 'equilibre' | 'agressif';
@@ -285,13 +338,17 @@ export interface G7Breakdown {
   mixEngineVersion: string;
 }
 
+export type PilotEventKindDto = 'fixed' | 'market_percent';
+
 export interface PilotPricingEventDto {
   _id: string;
   label: string;
   emoji?: string;
   startDate: string;
   endDate: string;
+  eventKind?: PilotEventKindDto;
   eventFloorMad: number;
+  eventMarketPercent?: number;
   minNightsOverride?: number;
 }
 
@@ -319,6 +376,8 @@ export interface PilotPricingConfigDto {
   lastMinuteWindowDays?: number;
   minStayDelta: number;
   minStayPlancher?: number;
+  gapBlockEnabled?: boolean;
+  gapBlockMinNights?: number;
   events: PilotPricingEventDto[];
   fxUsdMad?: number;
   lastAppliedAt?: string;
@@ -328,6 +387,7 @@ export interface PilotPricingConfigDto {
 export interface PilotPreviewDay {
   date: string;
   price: number;
+  marketPriceMad?: number;
   finalPriceMad: number;
   minStay: number;
   status: string;
@@ -365,6 +425,65 @@ export async function previewPilotPricing(
   }>(`${BASE}/listings/${encodeURIComponent(listingId)}/preview`, config ? { config } : {});
 }
 
+export type PilotApplyReportDto = {
+  mixEngineVersion: string;
+  pricingSource: 'calculator_estimate';
+  hasEstimate: boolean;
+  estimateSnapshotAt: string | null;
+  activeModeLabel: string;
+  modeMultiplier: number;
+  floorNormal: number;
+  ceiling: number;
+  gapBlockEnabled: boolean;
+  gapBlockMinNights: number;
+  eventsCount: number;
+  applyPrice: boolean;
+  applyMinStay: boolean;
+  daysComputed: number;
+  daysPricePushed: number;
+  daysMinStayPushed: number;
+  daysGapStopSell: number;
+  daysGapMinStayAdjusted?: number;
+  daysGapSignaled?: number;
+  daysGapMinStayReleased?: number;
+  gapsFilled: number;
+  gapRanges: Array<{
+    startDate: string;
+    endDate: string;
+    nights: number;
+    minNightsRequired: number;
+    suggestedMinStay?: number;
+    signalOnly?: boolean;
+  }>;
+  gapSignalRanges?: Array<{
+    startDate: string;
+    endDate: string;
+    nights: number;
+    minNightsRequired: number;
+    signalOnly?: boolean;
+  }>;
+  daysSkippedTotal: number;
+  daysSkippedManual: number;
+  daysSkippedReserved: number;
+  daysSkippedUnavailable: number;
+  daysSkippedOther: number;
+  daysAtFloor: number;
+  daysAtCeiling: number;
+  daysWithEvent: number;
+  daysLastMinute: number;
+  avgPriceMad: number;
+  minPriceMad: number;
+  maxPriceMad: number;
+  daysChanged: number;
+  daysCalendarDatesUpdated?: number;
+  daysPayloadPriceDays?: number;
+  daysSkippedInCalendar?: number;
+  daysPayloadMissingInventory?: number;
+  roomTypesTouched?: number;
+  ruPublishQueued: boolean;
+  legacyEngineDisabled: boolean;
+};
+
 export async function applyPilotPricing(
   listingId: string,
   body?: { config?: Partial<PilotPricingConfigDto>; triggerSource?: string },
@@ -377,9 +496,106 @@ export async function applyPilotPricing(
     daysSkipped: number;
     ruPublishQueued: boolean;
     recommendedPriceCacheId: string;
+    applyReport: PilotApplyReportDto;
   }>(`${BASE}/listings/${encodeURIComponent(listingId)}/apply`, body ?? {}, {
     timeout: 180_000,
   });
+}
+
+export type ApplyReportSummaryDto = {
+  mixEngineVersion: string;
+  daysPayloadPriceDays: number;
+  daysCalendarDatesUpdated: number;
+  daysChanged: number;
+  daysGapMinStayAdjusted: number;
+  daysGapMinStayReleased: number;
+  daysGapSignaled: number;
+  daysSkippedReserved: number;
+  daysPayloadMissingInventory: number;
+  ruPublishQueued: boolean;
+};
+
+export type ListingApplySyncDto = {
+  listingId: string;
+  auditId: string;
+  appliedAt: string;
+  appliedBy: string;
+  triggerSource: string;
+  summary: ApplyReportSummaryDto | null;
+  daysChanged: number;
+};
+
+export type PortfolioApplySyncSummaryDto = {
+  success: boolean;
+  fleetLast: ListingApplySyncDto | null;
+  byListing: ListingApplySyncDto[];
+  aggregates: {
+    listingsWithApply: number;
+    totalDaysCalendarUpdated: number;
+    totalDaysPayloadPrice: number;
+  };
+};
+
+export async function fetchApplySyncSummary(listingIds: string[]) {
+  const qs =
+    listingIds.length > 0
+      ? `?listingIds=${listingIds.map((id) => encodeURIComponent(id)).join(',')}`
+      : '';
+  return apiClient.get<PortfolioApplySyncSummaryDto>(
+    `${BASE}/portfolio/apply-sync-summary${qs}`,
+  );
+}
+
+export type EstimateDayChangeDto = {
+  date: string;
+  previousMad: number | null;
+  currentMad: number;
+  deltaMad: number;
+  marketPreviousMad?: number | null;
+  marketCurrentMad?: number | null;
+};
+
+export type ListingEstimateDiffDto = {
+  listingId: string;
+  hasPrevious: boolean;
+  currentComputedAt: string | null;
+  previousComputedAt: string | null;
+  changedDays: EstimateDayChangeDto[];
+  totalChanged: number;
+};
+
+export type PortfolioEstimateDiffDto = {
+  success: boolean;
+  year: number;
+  byListing: ListingEstimateDiffDto[];
+};
+
+export async function fetchPortfolioEstimateDiff(listingIds: string[]) {
+  const qs =
+    listingIds.length > 0
+      ? `?listingIds=${listingIds.map((id) => encodeURIComponent(id)).join(',')}`
+      : '';
+  return apiClient.get<PortfolioEstimateDiffDto>(
+    `${BASE}/portfolio/estimate-diff${qs}`,
+  );
+}
+
+export type PricingAuditRowDto = {
+  _id: string;
+  appliedAt: string;
+  appliedBy: string;
+  triggerSource: string;
+  daysChanged: number;
+  ruPublishStatus: string;
+  applyReportSummary?: ApplyReportSummaryDto;
+};
+
+export async function fetchListingPricingAudits(listingId: string, limit = 15) {
+  return apiClient.get<{
+    success: boolean;
+    listingId: string;
+    audits: PricingAuditRowDto[];
+  }>(`${BASE}/listings/${encodeURIComponent(listingId)}/audits?limit=${limit}`);
 }
 
 export async function fetchDayBreakdown(

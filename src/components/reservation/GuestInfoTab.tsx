@@ -8,12 +8,16 @@ import { Box, Stack, Typography, Paper, Chip, Button, Divider, Table, TableBody,
 import moment from 'moment';
 import 'moment/locale/fr';
 import { formatPrice, formatPriceWithCurrency, formatPriceOrPlaceholder } from '../../utils/formatPrice';
+import * as fulltaskApi from '../../services/fulltaskApi';
+import { toast } from 'react-toastify';
 
 moment.locale('fr');
 
 interface GuestInfoTabProps {
   reservationDetails: any;
   isEditMode: boolean;
+  reservationId?: string;
+  onRefresh?: () => void;
 }
 
 const T = {
@@ -76,7 +80,7 @@ const OTAHeaderBadge = ({ channel }: { channel: string }) => {
 };
 
 // ─── Composant principal ───────────────────────────────────────────
-export function GuestInfoTab({ reservationDetails }: GuestInfoTabProps) {
+export function GuestInfoTab({ reservationDetails, reservationId, onRefresh }: GuestInfoTabProps) {
   if (!reservationDetails) {
     return (
       <Box sx={{ p: 3 }}>
@@ -86,6 +90,31 @@ export function GuestInfoTab({ reservationDetails }: GuestInfoTabProps) {
   }
   const r = reservationDetails;
   const isBooking = (r.channelName || '').toLowerCase().includes('booking');
+  const resaId = reservationId || r._id;
+
+  const handleDeclareArrival = async () => {
+    if (!resaId) return;
+    try {
+      await fulltaskApi.declareGuestArrival(String(resaId));
+      toast.success('Arrivée déclarée');
+      onRefresh?.();
+    } catch {
+      toast.error('Erreur déclaration arrivée');
+    }
+  };
+
+  const handleDeclareDeparture = async () => {
+    if (!resaId) return;
+    try {
+      await fulltaskApi.declareGuestDeparture(String(resaId));
+      toast.success('Départ déclaré');
+      onRefresh?.();
+    } catch {
+      toast.error('Erreur déclaration départ');
+    }
+  };
+
+  const members = Array.isArray(r.guestRegistration?.members) ? r.guestRegistration.members : [];
 
   return (
     <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
@@ -134,28 +163,63 @@ export function GuestInfoTab({ reservationDetails }: GuestInfoTabProps) {
             <Row label="Téléphone"  value={r.phone} mono />
             <Row label="Pays"       value={r.guestCountry} />
             <Row label="Voyageurs"  value={`${r.adults || 0}A · ${r.children || 0}E · ${r.infants || 0}B`} bold mono />
-            {r.guestRegistration && (
+            {(r.guestRegistration || r.adults) && (
               <>
                 <Divider sx={{ my: 1.5 }} />
-                <Stack direction="row" sx={{ justifyContent: 'space-around', gap: 1 }}>
-                  <RegStat label="Enregistrés" value={r.guestRegistration.nbre_guest_registered || 0} accent={T.success} />
-                  <RegStat label="Brouillons" value={r.guestRegistration.nbre_guest_draft || 0} accent={T.warning} />
-                  <RegStat label="À faire" value={r.guestRegistration.nbre_guest_to_register || 0} accent={T.text3} />
-                  <RegStat label="Complets" value={r.guestRegistration.nbre_guest_complete || 0} accent={T.info} />
+                <Stack direction="row" sx={{ justifyContent: 'center', gap: 2, alignItems: 'baseline' }}>
+                  <Typography sx={{ fontSize: 22, fontWeight: 700, color: T.success, fontFamily: '"Geist Mono", monospace' }}>
+                    {r.guestRegistration?.nbre_guest_registered ?? 0}
+                  </Typography>
+                  <Typography sx={{ fontSize: 14, color: T.text3, fontWeight: 600 }}>/</Typography>
+                  <Typography sx={{ fontSize: 22, fontWeight: 700, color: T.text, fontFamily: '"Geist Mono", monospace' }}>
+                    {r.guestRegistration?.nbre_guest_to_register ?? r.adults ?? 0}
+                  </Typography>
+                  <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    enregistrés
+                  </Typography>
                 </Stack>
+              </>
+            )}
+            {members.length > 0 && (
+              <>
+                <Divider sx={{ my: 1.5 }} />
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontSize: 10, fontWeight: 700 }}>Prénom</TableCell>
+                        <TableCell sx={{ fontSize: 10, fontWeight: 700 }}>Nom</TableCell>
+                        <TableCell sx={{ fontSize: 10, fontWeight: 700 }}>Nationalité</TableCell>
+                        <TableCell sx={{ fontSize: 10, fontWeight: 700 }}>Passeport</TableCell>
+                        <TableCell sx={{ fontSize: 10, fontWeight: 700 }}>Genre</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {members.map((m: any, i: number) => (
+                        <TableRow key={i}>
+                          <TableCell sx={{ fontSize: 12 }}>{m.first_name || m.firstName || '—'}</TableCell>
+                          <TableCell sx={{ fontSize: 12 }}>{m.last_name || m.lastName || '—'}</TableCell>
+                          <TableCell sx={{ fontSize: 12 }}>{m.nationality || '—'}</TableCell>
+                          <TableCell sx={{ fontSize: 12, fontFamily: '"Geist Mono", monospace' }}>{m.document_number || m.passport || '—'}</TableCell>
+                          <TableCell sx={{ fontSize: 12 }}>{m.gender || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </>
             )}
           </SectionCard>
 
           <SectionCard title="⚡ Actions rapides">
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-              <Button fullWidth variant="contained" size="small" sx={{
+              <Button fullWidth variant="contained" size="small" onClick={handleDeclareArrival} sx={{
                 textTransform: 'none', fontWeight: 600,
                 background: `linear-gradient(180deg, #cb9b2c 0%, ${T.primary} 100%)`,
                 color: T.text, boxShadow: '0 1px 2px rgba(135,97,25,0.30)',
                 '&:hover': { background: `linear-gradient(180deg, #d4a432 0%, ${T.primary} 100%)` },
               }}>✓ Déclarer arrivé</Button>
-              <Button fullWidth variant="outlined" size="small" sx={{
+              <Button fullWidth variant="outlined" size="small" onClick={handleDeclareDeparture} sx={{
                 textTransform: 'none', fontWeight: 600,
                 borderColor: 'rgba(20,17,10,0.14)', color: T.text2,
                 '&:hover': { bgcolor: T.bg2 },
@@ -182,7 +246,9 @@ export function GuestInfoTab({ reservationDetails }: GuestInfoTabProps) {
             <Divider sx={{ my: 1.25 }} />
             <Row label="Check-in" value={formatDate(r.arrivalDate)} bold />
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', py: 0.5, pl: 1.5 }}>
-              <Typography sx={{ fontSize: 11.5, color: T.text3 }}>Prévue / Effective</Typography>
+              <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
+                {r.confirmedCheckInTime ? 'Choisie guest' : 'Prévue OTA'} / Déclarée
+              </Typography>
               <Typography sx={{ fontSize: 11.5, color: T.text2, fontFamily: '"Geist Mono", monospace' }}>
                 {formatTime(r.checkInTime)} · {r.actualArrivalTime ? (
                   <Box component="span" sx={{ color: T.success, fontWeight: 700 }}>✓ {formatTime(r.actualArrivalTime)}</Box>
@@ -191,7 +257,9 @@ export function GuestInfoTab({ reservationDetails }: GuestInfoTabProps) {
             </Stack>
             <Row label="Check-out" value={formatDate(r.departureDate)} bold />
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', py: 0.5, pl: 1.5 }}>
-              <Typography sx={{ fontSize: 11.5, color: T.text3 }}>Prévue / Effective</Typography>
+              <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
+                {r.confirmedCheckOutTime ? 'Choisie guest' : 'Prévue OTA'} / Déclarée
+              </Typography>
               <Typography sx={{ fontSize: 11.5, color: T.text2, fontFamily: '"Geist Mono", monospace' }}>
                 {formatTime(r.checkOutTime)} · {r.actualDepartureTime ? (
                   <Box component="span" sx={{ color: T.warning, fontWeight: 700 }}>✓ {formatTime(r.actualDepartureTime)}</Box>
@@ -331,13 +399,6 @@ export function GuestInfoTab({ reservationDetails }: GuestInfoTabProps) {
 }
 
 // ─── Sub-composants ────────────────────────────────────────────────
-const RegStat = ({ label, value, accent }: { label: string; value: number; accent: string }) => (
-  <Box sx={{ textAlign: 'center', flex: 1 }}>
-    <Typography sx={{ fontSize: 22, fontWeight: 700, color: accent, fontFamily: '"Geist Mono", monospace', lineHeight: 1 }}>{value}</Typography>
-    <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</Typography>
-  </Box>
-);
-
 const FinancialRow = ({ label, value, accent, bold }: { label: string; value: any; accent?: string; bold?: boolean }) => (
   <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
     <Typography sx={{ fontSize: 12.5, color: T.text2 }}>{label}</Typography>

@@ -76,24 +76,35 @@ class ReservationsService {
    */
   async getList(params: {
     filter?: ReservationFilter;
+    page?: number;
     limit?: number;
-    status?: string; // Ex: 'Confirmed,Pending' pour filtrer côté backend
-  }): Promise<{ success: boolean; data: Reservation[]; count: number }> {
+    status?: string; // Ex: 'Confirmed,Pending' ou 'CancelledByAdmin,cancelled'
+    /** Fenêtre calendrier explicite (prioritaire sur filter) */
+    dateType?: 'arrival' | 'departure' | 'arrival_or_departure' | 'creation';
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{ success: boolean; data: Reservation[]; count: number; total: number }> {
     try {
       const queryParams = new URLSearchParams();
 
-      // Convertir le filter en dateType + dates
-      if (params.filter) {
+      if (params.dateType && params.startDate && params.endDate) {
+        queryParams.append('dateType', params.dateType);
+        queryParams.append('startDate', params.startDate);
+        queryParams.append('endDate', params.endDate);
+      } else if (params.filter) {
         const { dateType, startDate, endDate } = this.filterToDateRange(params.filter);
         queryParams.append('dateType', dateType);
         queryParams.append('startDate', startDate);
         queryParams.append('endDate', endDate);
       }
 
-      // Ajouter limit
-      if (params.limit) {
-        queryParams.append('limit', params.limit.toString());
+      if (params.page != null) {
+        queryParams.append('page', String(params.page));
       }
+
+      // Backend cap à 100 — défaut liste = 100
+      const limit = Math.min(params.limit ?? 100, 100);
+      queryParams.append('limit', String(limit));
 
       // Ajouter status (filtrage backend comme legacy)
       if (params.status) {
@@ -138,7 +149,10 @@ class ReservationsService {
       // ⚠️ Backend retourne { success, data[], unmappedReservation[] }
       // Pas un array direct
       // Note: Backend returns 404 with success: false when no data found
-      const reservations = response.data.data || [];
+      const reservations = (response.data.data || []).map((r: Record<string, unknown>) => ({
+        ...r,
+        id: (r.id as string) || (r._id as string),
+      })) as Reservation[];
 
       // Logs désactivés pour nettoyer la console
       // console.log('✅ [ReservationsService] Returning:', {
@@ -154,6 +168,7 @@ class ReservationsService {
         success: true,
         data: reservations,
         count: reservations.length,
+        total: response.data.total ?? reservations.length,
       };
     } catch (error) {
       console.error('Error fetching reservations:', error);
@@ -434,16 +449,20 @@ class ReservationsService {
 
   /**
    * PUT /api/v1/reservations/cancel/:id
-   * Annule une réservation (status = CancelledByAdmin)
+   * Annule une réservation (status = CancelledByAdmin).
+   * :id = ObjectId Mongo ou reservationNumber (SJ-…)
    */
-  async cancel(reservationId: string, data: any = {}): Promise<{ success: boolean; data?: any; message?: string }> {
+  async cancel(
+    reservationId: string,
+    data: Record<string, unknown> = {},
+  ): Promise<{ success: boolean; data?: unknown; message?: string }> {
     try {
       const payload = {
         status: 'CancelledByAdmin',
         ...data,
       };
 
-      const url = `${BASE_URL}/api/v1/reservations/cancel/${reservationId}`;
+      const url = `${BASE_URL}/api/v1/reservations/cancel/${encodeURIComponent(reservationId)}`;
 
       const response = await apiClient.put(url, payload);
 

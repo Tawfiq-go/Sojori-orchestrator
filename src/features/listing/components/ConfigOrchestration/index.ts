@@ -8,7 +8,6 @@ export { SOJORI_TOKENS, URGENCY_COLORS, DEFAULT_CATEGORIES } from './types';
 
 // Components
 export { default as SupportConfigTab } from './SupportConfigTab';
-export { default as WhatsAppPreview } from './WhatsAppPreview';
 export { default as SupportConfigTabContainer } from './SupportConfigTabContainer';
 export { default as TransportConfigTab } from './TransportConfigTab';
 export { default as ConciergeConfigTab } from './ConciergeConfigTab';

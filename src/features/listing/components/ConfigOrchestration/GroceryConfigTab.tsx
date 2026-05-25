@@ -1,4 +1,4 @@
-// Section 10 · Courses — design Claude (texte libre, pas de catalogue)
+// Courses — liste libre + frais de service
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import { listingsService } from '../../../../services/listingsService';
@@ -168,18 +168,18 @@ export default function GroceryConfigTab({ listingId }: Props) {
         badgeKind="wa-yes"
         subtitle={
           <>
-            Liste libre + frais de service. <b>Activation</b> : onglet <b>Menu WhatsApp</b>.
+            Liste libre + frais de service pour ce logement.
           </>
         }
       />
 
-      <Card icon="💰" title="Frais de service" subtitle="Facturés en plus du coût réel des courses" meta="groceryServices[].pricing.serviceFee">
+      <Card icon="💰" title="Frais de service" subtitle="Facturés en plus du coût réel des courses">
         <FormRow
           label="Frais de service"
           required
           help="Forfait facturé au voyageur"
-          schemaPath="groceryServices[].pricing.serviceFee"
-          inSchema
+
+
         >
           <Box sx={{ maxWidth: 200 }}>
             <NumInput
@@ -190,25 +190,25 @@ export default function GroceryConfigTab({ listingId }: Props) {
             />
           </Box>
         </FormRow>
-        <FormRow label="Devise" schemaPath="groceryServices[].pricing.currency" inSchema>
+        <FormRow label="Devise">
           <Box sx={{ maxWidth: 120 }}>
             <TextInput value={config.currency} onChange={e => patch({ currency: e.target.value })} />
           </Box>
         </FormRow>
       </Card>
 
-      <Card icon="📅" title="Disponibilités · estimation" subtitle="Design Claude — à mapper sur availability BD" meta="availability">
-        <FormRow label="Jours disponibles" schemaPath={null} inSchema={false} help="Mockup · BD = ServiceAvailability type/time_window">
+      <Card icon="📅" title="Disponibilités" subtitle="Estimation pour le voyageur (enregistrement à venir)">
+        <FormRow label="Jours disponibles" help="Jours où les courses sont possibles">
           <DayPills value={config.availability.daysOfWeek} onChange={v => patchAvail({ daysOfWeek: v })} />
         </FormRow>
-        <FormRow label="Créneaux horaires" schemaPath={null} inSchema={false}>
+        <FormRow label="Créneaux horaires">
           <SlotPills
             value={config.availability.timeSlots}
             options={DEFAULT_SLOT_OPTIONS}
             onChange={v => patchAvail({ timeSlots: v })}
           />
         </FormRow>
-        <FormRow label="Délai minimum" help="Heures entre commande et livraison estimée" schemaPath={null} inSchema={false}>
+        <FormRow label="Délai minimum" help="Heures entre commande et livraison estimée">
           <Box sx={{ maxWidth: 160 }}>
             <NumInput
               value={config.deliveryLeadTimeHours}
@@ -220,8 +220,8 @@ export default function GroceryConfigTab({ listingId }: Props) {
         </FormRow>
       </Card>
 
-      <Card icon="📝" title="Note voyageur" subtitle="Affichée dans le flow WhatsApp">
-        <FormRow label="Note" schemaPath="groceryServices[].description.fr" inSchema>
+      <Card icon="📝" title="Note voyageur" subtitle="Texte affiché au voyageur">
+        <FormRow label="Note">
           <TextArea
             rows={3}
             value={config.noteToGuest}
@@ -232,8 +232,8 @@ export default function GroceryConfigTab({ listingId }: Props) {
       </Card>
 
       <WhenOffNote>
-        <b style={{ color: T.text }}>Quand courses OFF</b> · le bouton Courses est masqué du menu WhatsApp.
-        Pas de catalogue ni catégories — demande en texte libre + frais de service.
+        <b style={{ color: T.text }}>Quand courses est désactivé</b>, le service n’est plus proposé au voyageur.
+        Pas de catalogue produits — demande en texte libre + frais de service.
       </WhenOffNote>
     </Box>
   );

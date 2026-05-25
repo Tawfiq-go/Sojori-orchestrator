@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Box, Typography, IconButton, Skeleton, Tooltip } from '@mui/material';
 import type { ColumnId } from './ColumnFilters';
 import { ReservationDayPopover } from './ReservationDayPopover';
+import PilotPriceTooltipTable from './PilotPriceTooltipTable';
 
 // Tokens Atelier 2026 (gold/beige design system)
 const COLORS = {
@@ -684,12 +685,24 @@ export function InventoryGridV2({
                           </Box>
                         );
 
-                        // Tooltip breakdown (fallback simple comme Legacy lignes 962-1017)
+                        const pilotHistory = inv?.calculatedPriceHistory as
+                          | { source?: string; pilotFactors?: unknown[] }
+                          | undefined;
+                        const hasPilotTooltip =
+                          pilotHistory?.source === 'pilot-v2' ||
+                          (Array.isArray(pilotHistory?.pilotFactors) && pilotHistory.pilotFactors.length > 0);
+
                         return (
                           <Tooltip
                             key={`${listing._id}-${colId}-${day.dateStr}`}
                             title={
-                              inv ? (
+                              inv && hasPilotTooltip ? (
+                                <PilotPriceTooltipTable
+                                  history={inv.calculatedPriceHistory as Record<string, unknown>}
+                                  inv={inv}
+                                  currency={currency}
+                                />
+                              ) : inv ? (
                                 <Box sx={{ p: 1.5, minWidth: 200, maxWidth: 250 }}>
                                   {/* Header */}
                                   <Box sx={{ mb: 1, pb: 0.5, borderBottom: '1px solid rgba(255,255,255,0.3)' }}>

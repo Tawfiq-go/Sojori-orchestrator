@@ -41,6 +41,10 @@ export interface Reservation {
   sojoriId?: string
   status: string
   checkinStatus?: string
+  guestPhone?: string
+  phone?: string
+  customerName?: string
+  ownerId?: string
 }
 
 export interface ClientRequestData {
@@ -134,6 +138,8 @@ export interface ListingClientServices {
 
 export interface TaskFormData {
   // Étape 1
+  /** srv-fulltask (ex: arrival_choose) — prioritaire à la création */
+  fulltaskTypeId?: string | null
   taskType: TaskType | null
   listing: Listing | null
   reservation: Reservation | null

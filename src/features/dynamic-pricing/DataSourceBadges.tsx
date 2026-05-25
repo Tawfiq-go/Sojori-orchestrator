@@ -5,7 +5,7 @@ import React from 'react';
 import { Box, Stack, Tooltip, Typography } from '@mui/material';
 import { T } from './_tokens';
 
-export type DataSourceKind = 'prod' | 'calc' | 'empty' | 'mix';
+export type DataSourceKind = 'prod' | 'calc' | 'empty' | 'mix' | 'partial';
 
 export type DataSourceItem = {
   kind: DataSourceKind;
@@ -41,6 +41,12 @@ const KIND_STYLE: Record<
     color: T.goldDeep,
     border: 'rgba(199,155,34,0.4)',
   },
+  partial: {
+    short: 'PARTIEL',
+    bg: T.goldTint,
+    color: T.goldDeep,
+    border: 'rgba(199,155,34,0.45)',
+  },
 };
 
 export function formatSnapshotLabel(iso: string | null | undefined): string | null {
@@ -59,7 +65,7 @@ export function DataSourceBadge({
   label?: string;
   tooltip?: string;
 }) {
-  const s = KIND_STYLE[kind];
+  const s = KIND_STYLE[kind] ?? KIND_STYLE.empty;
   const text = label ?? s.short;
   const chip = (
     <Box
@@ -191,6 +197,7 @@ export function DataSourceLegend({ sx }: { sx?: object }) {
       <DataSourceBadge kind="calc" tooltip="Dérivé côté front ou agrégat à partir de données prod" />
       <DataSourceBadge kind="empty" tooltip="Pas de donnée en base — affiché comme —" />
       <DataSourceBadge kind="mix" tooltip="Prod + champs vides ou calculés" />
+      <DataSourceBadge kind="partial" tooltip="Donnée partielle (ex. estimate sans calendrier OTA)" />
     </Stack>
   );
 }

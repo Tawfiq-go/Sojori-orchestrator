@@ -58,13 +58,37 @@ Ces classes forcent une scrollbar visible (`scrollbar-width: thin`, couleurs Soj
 |--------|---------|------------|
 | Nouvelle réservation | `src/components/modals/CreateReservationModal.tsx` | `create-reservation-form-scroll`, `create-reservation-summary-scroll` |
 | Upload images (listing) | `src/components/listing/upload/UploadDialog.tsx` | `upload-images-modal-scroll` |
+| Message orchestration (Email/OTA) | `src/features/taskHub/staff-design/MessageBodyModal.tsx` | `orch-message-vars-scroll` |
+
+### Cas particulier : modale hors layout (portal)
+
+`MessageBodyModal` est rendue avec **`createPortal(..., document.body)`** :
+
+- Évite qu’un parent (`DashboardWrapper`, `.so-orch-root`, `transform` MUI) décale le `position: fixed` et empêche le centrage viewport.
+- **Important** : redéclarer les variables CSS Sojori (`--bg1`, `--t`, …) sur `.orch-msg-overlay` — elles vivent sinon sous `.so-orch-root` et la modale devient transparente.
+- Overlay : `display: flex; align-items: center; justify-content: center`.
+- Shell : `height: min(720px, calc(100vh - 48px))`, `overflow: hidden`, grille header / corps / footer.
+- **Seule** la colonne variables utilise `ModalScrollColumn` — pas `overflow: auto` sur tout le corps (sinon le trackpad scroll la page modale au lieu de la liste).
+
+```tsx
+createPortal(
+  <div className="orch-msg-overlay">…</div>,
+  document.body,
+);
+```
+
+```tsx
+<ModalScrollColumn active={open} className="orch-message-vars-scroll" wrapperSx={{ flex: 1, minHeight: 0 }}>
+  {/* boutons {firstName}, {listingName}, … */}
+</ModalScrollColumn>
+```
 
 ## Checklist nouvelle modale
 
-1. [ ] `Dialog` avec `disableScrollLock` et paper `overflow: hidden` + hauteur max explicite.
-2. [ ] Shell interne `display: grid`, `gridTemplateRows: 'auto 1fr auto'`, `height: '100%'`, `minHeight: 0`.
+1. [ ] `Dialog` avec `disableScrollLock` et paper `overflow: hidden` + hauteur max explicite — **ou** modale custom avec `createPortal(..., document.body)` si le layout parent casse le centrage.
+2. [ ] Shell interne `display: grid` ou `flex` colonne, `gridTemplateRows: 'auto 1fr auto'` / header+body+footer, `height: '100%'`, `minHeight: 0`.
 3. [ ] Header et footer en `flexShrink: 0` (hors de la zone scroll).
-4. [ ] Corps dans `<ModalScrollColumn active={open} className="…">`.
+4. [ ] **Une seule** zone scroll par colonne — `<ModalScrollColumn active={open} className="…">`, pas `overflow: auto` sur tout le corps.
 5. [ ] Nouvelle classe dans `index.css` (copier le bloc `.create-reservation-form-scroll`).
 6. [ ] Tester : trackpad + molette, contenu plus haut que la modale, champs / menus déroulants dans la zone scroll.
 
@@ -77,4 +101,5 @@ Ces classes forcent une scrollbar visible (`scrollbar-width: thin`, couleurs Soj
 
 ## Historique
 
+- **2026-05-21** — `MessageBodyModal` (orchestration config) : portal `document.body`, centrage viewport, scroll variables via `orch-message-vars-scroll` + `ModalScrollColumn`.
 - **2026-05-18** — Pattern extrait de `CreateReservationModal`, appliqué à `UploadDialog` (upload photos listing, lots 5 fichiers, barre de progression). Composant partagé `ModalScrollColumn`.

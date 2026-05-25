@@ -21,12 +21,18 @@ export const DEFAULT_PRICING_MODES: PricingModeDef[] = [
   { id: 'agressif', label: 'Agressif', multiplier: 1.1, kind: 'preset', enabled: true },
 ];
 
+export type PricingEventKind = 'fixed' | 'market_percent';
+
 export interface PricingEvent {
   id: string;
   emoji: string;
   name: string;
   dateRange: string;
+  kind: PricingEventKind;
+  /** MAD/nuit si kind=fixed */
   fixedPrice: number;
+  /** % du marché × occupation si kind=market_percent (ex. 115 = 115 %) */
+  marketPercent: number;
   minNights: number;
 }
 
@@ -48,15 +54,13 @@ export interface PricingControlsProps {
   activeModeId: string;
   events: PricingEvent[];
   suggestions: PricingSuggestion[];
-  minStayDelta: number;
-  minStayPlancher: number;
+  gapBlockEnabled: boolean;
+  gapBlockMinNights: number;
   modeEnabled: boolean;
-  /** false = réglages min stay visibles mais non synchronisés (rouge) */
-  minStaySyncActive?: boolean;
   onFloorChange: (v: number) => void;
   onCeilingChange: (v: number) => void;
-  onMinStayDeltaChange: (v: number) => void;
-  onMinStayPlancherChange: (v: number) => void;
+  onGapBlockEnabledChange: (on: boolean) => void;
+  onGapBlockMinNightsChange: (v: number) => void;
   onModeEnabledChange: (enabled: boolean) => void;
   onApplyRecoBounds: () => void;
   onActiveModeChange: (modeId: string) => void;
@@ -71,6 +75,8 @@ export interface PricingControlsProps {
   estimatedRevenue?: number;
   estimatedRevenueLiftPct?: number;
   hasBoundsProd?: boolean;
+  /** Comps vs estimate — évite la confusion 500–800 MAD */
+  boundsContextHint?: string;
 }
 
 const PRESET_META: Record<
@@ -95,13 +101,13 @@ const PRESET_META: Record<
 export default function PricingControls(props: PricingControlsProps) {
   const {
     floor, ceiling, floorRange, ceilingRange, recoFloor, recoCeiling,
-    pricingModes, activeModeId, events, suggestions, minStayDelta, minStayPlancher, modeEnabled,
-    minStaySyncActive = true,
-    onFloorChange, onCeilingChange, onMinStayDeltaChange, onMinStayPlancherChange, onModeEnabledChange,
+    pricingModes, activeModeId, events, suggestions, gapBlockEnabled, gapBlockMinNights, modeEnabled,
+    onGapBlockEnabledChange, onGapBlockMinNightsChange,
+    onFloorChange, onCeilingChange, onModeEnabledChange,
     onApplyRecoBounds,
     onActiveModeChange, onModeToggle, onAddCustomMode, onUpdateCustomMode, onDeleteCustomMode,
     onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
-    estimatedRevenue, estimatedRevenueLiftPct, hasBoundsProd = false,
+    estimatedRevenue, estimatedRevenueLiftPct, hasBoundsProd = false, boundsContextHint,
   } = props;
 
   const dash = '—';
@@ -119,6 +125,11 @@ export default function PricingControls(props: PricingControlsProps) {
       mx: 'auto',
     }}>
       <CtrlBlock title="💰 Bornes de prix">
+        {boundsContextHint ? (
+          <Typography sx={{ fontSize: 10.5, color: T.text2, lineHeight: 1.45, mb: 1.5 }}>
+            {boundsContextHint}
+          </Typography>
+        ) : null}
         {hasBoundsProd ? <DistributionMini /> : null}
         <Box sx={{ mb: 2.25 }}>
           <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between',  mb: 0.75 }}>
@@ -127,47 +138,64 @@ export default function PricingControls(props: PricingControlsProps) {
           </Stack>
           <GoldSlider value={floor} min={floorRange[0]} max={floorRange[1]} step={50} onChange={onFloorChange} />
         </Box>
-        <Box sx={{
-          mb: 2.25,
-          p: 1.5,
-          borderRadius: 1.25,
-          bgcolor: minStaySyncActive ? T.bg2 : 'rgba(211,47,47,0.04)',
-          border: `1px solid ${minStaySyncActive ? T.border : '#d32f2f'}`,
-          opacity: minStaySyncActive ? 1 : 0.92,
-        }}>
-          <Typography sx={{ fontSize: 12, fontWeight: 800, mb: 0.5, color: minStaySyncActive ? T.text : '#b71c1c' }}>
-            🌙 Séjour minimum
-            {!minStaySyncActive ? (
-              <Box component="span" sx={{ fontSize: 10, ml: 0.75, fontWeight: 800 }}>
-                · non synchronisé
-              </Box>
-            ) : null}
-          </Typography>
-          {!minStaySyncActive ? (
-            <Typography sx={{ fontSize: 11, color: '#c62828', fontWeight: 700, mb: 1 }}>
-              Modifiable ici mais non envoyé au calendrier — activez « Min stay » dans Sojori AI (modal).
+        <Box
+          sx={{
+            mb: 2.25,
+            p: 1.5,
+            borderRadius: 1.25,
+            bgcolor: gapBlockEnabled ? T.bg2 : 'rgba(211,47,47,0.04)',
+            border: `1px solid ${gapBlockEnabled ? T.border : '#d32f2f'}`,
+          }}
+        >
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text }}>
+              Combler trous (min stay)
             </Typography>
+            <Box
+              component="button"
+              type="button"
+              onClick={() => onGapBlockEnabledChange(!gapBlockEnabled)}
+              sx={{
+                all: 'unset',
+                cursor: 'pointer',
+                fontSize: 10,
+                fontWeight: 800,
+                fontFamily: '"Geist Mono", monospace',
+                px: 1,
+                py: 0.35,
+                borderRadius: 999,
+                bgcolor: gapBlockEnabled ? T.successTint : T.bg3,
+                color: gapBlockEnabled ? T.success : T.text3,
+              }}
+            >
+              {gapBlockEnabled ? 'ON' : 'OFF'}
+            </Box>
+          </Stack>
+          <Typography sx={{ fontSize: 11, color: T.text2, lineHeight: 1.45, mb: 1.25 }}>
+            Entre deux réservations : trou de <b>2 nuits</b> avec min stay client <b>3</b> → on écrit <b>min stay 2</b>{' '}
+            sur ces jours seulement (valeur d&apos;origine sauvegardée). Trou <b>1 nuit</b> : signalé, pas modifié. Pas de
+            gestion résa annulée ici — autre flux calendrier ; au prochain apply, si le trou disparaît, min stay remis
+            depuis la sauvegarde.
+          </Typography>
+          {gapBlockEnabled ? (
+            <Box>
+              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography sx={lblSx}>Min stay client (référence)</Typography>
+                <Typography sx={{ ...valSx, fontSize: 12 }}>{gapBlockMinNights} nuit(s)</Typography>
+              </Stack>
+              <GoldSlider
+                value={gapBlockMinNights}
+                min={2}
+                max={14}
+                step={1}
+                onChange={onGapBlockMinNightsChange}
+              />
+            </Box>
           ) : (
-            <Typography sx={{ fontSize: 11, color: T.text3, mb: 1.25 }}>
-              Base = marché (snapshot/jour) · poussé au calendrier si sync min stay ON
+            <Typography sx={{ fontSize: 11, color: T.text3, fontStyle: 'italic' }}>
+              Désactivé — aucun ajustement min stay automatique sur les trous.
             </Typography>
           )}
-          <Box sx={{ mb: 1.5 }}>
-            <Stack direction="row" sx={{ justifyContent: 'space-between',  mb: 0.5 }}>
-              <Typography sx={lblSx}>Ajustement</Typography>
-              <Typography sx={{ ...valSx, fontSize: 12 }}>
-                {minStayDelta >= 0 ? `+${minStayDelta}` : minStayDelta} nuit(s)
-              </Typography>
-            </Stack>
-            <GoldSlider value={minStayDelta} min={-2} max={5} step={1} onChange={onMinStayDeltaChange} />
-          </Box>
-          <Box>
-            <Stack direction="row" sx={{ justifyContent: 'space-between',  mb: 0.5 }}>
-              <Typography sx={lblSx}>Plancher absolu</Typography>
-              <Typography sx={{ ...valSx, fontSize: 12 }}>{minStayPlancher} nuit(s)</Typography>
-            </Stack>
-            <GoldSlider value={minStayPlancher} min={1} max={14} step={1} onChange={onMinStayPlancherChange} />
-          </Box>
         </Box>
         <Box sx={{ mb: 2.25 }}>
           <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between',  mb: 0.75 }}>
@@ -197,9 +225,10 @@ export default function PricingControls(props: PricingControlsProps) {
         </Box>
       </CtrlBlock>
 
-      <CtrlBlock title="🎯 Modes de tarification">
+      <CtrlBlock title="🎯 Coefficient occupation (modes)">
         <Typography sx={{ fontSize: 11, color: T.text3, mb: 1.25 }}>
-          Marché = base (toujours active) · occupation = recalcul batch ~3h (srv-calendar), pas de réglage ici.
+          Cascade envoyée au calendrier : <b>marché estimate (courbe bleue)</b> →{' '}
+          <b>bornes min/max</b> → <b>× occupation</b> → <b>event</b> (fixe ou % marché×occupation).
         </Typography>
         <FormControlLabel
           sx={{ mb: 1.25, ml: 0 }}
@@ -304,9 +333,9 @@ export default function PricingControls(props: PricingControlsProps) {
       </CtrlBlock>
 
       <Box sx={{ gridColumn: { md: '1 / -1' } }}>
-      <CtrlBlock title="📅 Événements · prix fixe forcé">
+      <CtrlBlock title="📅 Événements">
         <Typography sx={{ fontSize: 11.5, color: T.text2, mb: 1.5 }}>
-          Ex. GITEX · dates début/fin · 2 000 MAD/nuit → prix <b>forcé</b> (ignore marché, mode, occupation).
+          Après min/max : <b>prix fixe MAD</b> ou <b>% du marché × occupation</b> (ex. GITEX 115 %).
         </Typography>
         <Button fullWidth onClick={onAddEvent} sx={{
           py: 1.125, mb: 1.5, bgcolor: T.bg2, border: `1.5px dashed ${T.borderStrong}`,
@@ -325,7 +354,12 @@ export default function PricingControls(props: PricingControlsProps) {
               <Typography sx={{
                 fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', mt: 0.25,
               }}>
-                {ev.dateRange} · <b style={{ color: T.goldDeep }}>{ev.fixedPrice.toLocaleString('fr-FR')} MAD/nuit forcé</b>
+                {ev.dateRange} ·{' '}
+                <b style={{ color: T.goldDeep }}>
+                  {ev.kind === 'market_percent'
+                    ? `${ev.marketPercent} % marché×occupation`
+                    : `${ev.fixedPrice.toLocaleString('fr-FR')} MAD/nuit fixe`}
+                </b>
                 {' '}· min {ev.minNights} nuits
               </Typography>
             </Box>

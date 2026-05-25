@@ -19,7 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { listingsService } from '../../../../services/listingsService';
-import { SOJORI_TOKENS as T, CONFIG_ORCH_FONT } from './types';
+import { SOJORI_TOKENS as T } from './types';
 import {
   Card,
   FormRow,
@@ -43,7 +43,7 @@ import {
   type TransportRouteItem,
 } from './transportRouteCatalog';
 import { listingPropertyFromValues, type ListingPropertyPlace } from './transportListingProperty';
-import { syncRouteEndpoints, TRANSPORT_V1_NOTE } from './transportRouteRules';
+import { migrateJourneyTag, syncRouteEndpoints, TRANSPORT_V1_NOTE } from './transportRouteRules';
 
 const MAX_ROUTES = 10;
 
@@ -70,27 +70,23 @@ function mapApiRoute(t: Record<string, unknown>, i: number, fallbackProperty: Li
     pricePerPerson?: number;
   }) || {};
   const capacity = (t.capacity as { maxPassengers?: number }) || {};
-  const journeyTag = route.journeyTag || 'other';
   const propertyPlace: ListingPropertyPlace = {
     name: route.propertyName || fallbackProperty.name,
     address: route.propertyAddress || fallbackProperty.address,
     lat: route.propertyLat ?? fallbackProperty.lat,
     lng: route.propertyLng ?? fallbackProperty.lng,
   };
-  const externalLabel =
-    route.externalLabel ||
-    (journeyTag === 'arrival' ? route.from : journeyTag === 'departure' ? route.to : route.from) ||
-    '';
   const draft: TransportRouteItem = {
     id: String(t.id || `route_${i}`),
     labelFr: name.fr || 'Route',
     descriptionFr: desc.fr || '',
     from: route.from || '',
     to: route.to || '',
-    journeyTag,
-    departureType: route.departureType as TransportRouteItem['departureType'],
-    arrivalType: route.arrivalType as TransportRouteItem['arrivalType'],
-    externalLabel,
+    journeyTag: (route.journeyTag as TransportJourneyTag) || 'other',
+    externalLabel:
+      route.externalLabel ||
+      (route.journeyTag === 'departure' ? route.to : route.from) ||
+      '',
     externalKind: route.externalKind || 'other',
     propertyPlace,
     priceType: pricing.type === 'per_person' ? 'per_person' : 'total',
@@ -265,18 +261,19 @@ export default function TransportConfigTab({ listingId, listingValues = {} }: Pr
   return (
     <Box>
       <ConfigIntroBar saveState={savingState}>
-        Arrivée / départ · logement = <b>{listingProperty.name}</b> (adresse & GPS listing). {TRANSPORT_V1_NOTE}
+        <b>Arrivée</b> : navette → logement <b>{listingProperty.name}</b> (fixe). <b>Départ</b> : logement → navette.
+        Plusieurs routes possibles (RAK, CMN, gare…). {TRANSPORT_V1_NOTE}
       </ConfigIntroBar>
 
-      <Card compact icon="📍" title={`Routes · ${routes.length}/${MAX_ROUTES}`} meta="transportServices[]">
-        <Stack direction="row" alignItems="center" flexWrap="wrap" gap={0.75} sx={{ mb: catalogOpen ? 1 : 0 }}>
+      <Card compact icon="📍" title={`Routes · ${routes.length}/${MAX_ROUTES}`}>
+        <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.75, mb: catalogOpen ? 1 : 0 }}>
           <DashedAddButton
             label={catalogOpen ? '▲ Masquer modèles' : '▼ Modèles (aéroport, gare…)'}
             onClick={() => setCatalogOpen(o => !o)}
           />
         </Stack>
         <Collapse in={catalogOpen}>
-          <Stack direction="row" gap={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+          <Stack direction="row" useFlexGap sx={{ gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
             {presetsAvailable.length === 0 ? (
               <Typography sx={{ ...TYPO.caption }}>Tous les modèles sont déjà ajoutés.</Typography>
             ) : (
@@ -307,7 +304,7 @@ export default function TransportConfigTab({ listingId, listingValues = {} }: Pr
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={routes.map(r => r.id)} strategy={verticalListSortingStrategy}>
-            <Stack gap={1}>
+            <Stack sx={{ gap: 1 }}>
               {routes.map(route => (
                 <SortableRoute
                   key={route.id}
@@ -331,8 +328,8 @@ export default function TransportConfigTab({ listingId, listingValues = {} }: Pr
                   syncRouteEndpoints(
                     {
                       id: `route_${Date.now()}`,
-                      labelFr: 'Arrivée — nouveau point',
-                      descriptionFr: 'Transfert vers le logement',
+                      labelFr: 'Navette arrivée',
+                      descriptionFr: '',
                       from: '',
                       to: '',
                       journeyTag: 'arrival',
@@ -357,33 +354,26 @@ export default function TransportConfigTab({ listingId, listingValues = {} }: Pr
   );
 }
 
-type RouteEndpointMode = 'locked' | 'external' | 'free';
-
-function RouteEndpointColumn({
-  title,
-  mode,
+function RoutePlaceCell({
+  label,
+  locked,
   place,
   value,
   onChange,
   placeholder,
 }: {
-  title: string;
-  mode: RouteEndpointMode;
+  label: string;
+  locked: boolean;
   place: ListingPropertyPlace;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (v: string) => void;
   placeholder: string;
 }) {
-  if (mode === 'locked') {
-    return (
-      <Box>
-        <Typography sx={{ ...TYPO.caps, color: T.text4, mb: 0.5 }}>{title}</Typography>
-        <LockedPropertyBox name={place.name} address={place.address} />
-      </Box>
-    );
+  if (locked) {
+    return <LockedPropertyBox name={place.name} address={place.address} label={label} />;
   }
   return (
-    <PlaceEndpointField label={title} value={value} onChange={onChange} placeholder={placeholder} />
+    <PlaceEndpointField label={label} value={value} onChange={onChange} placeholder={placeholder} />
   );
 }
 
@@ -408,8 +398,7 @@ function SortableRoute({
   const isDeparture = route.journeyTag === 'departure';
   const isOther = route.journeyTag === 'other';
   const place = route.propertyPlace || listingProperty;
-  const depuisMode: RouteEndpointMode = isDeparture ? 'locked' : isOther ? 'free' : 'external';
-  const versMode: RouteEndpointMode = isArrival ? 'locked' : isOther ? 'free' : 'external';
+  const externalValue = route.externalLabel || '';
 
   return (
     <Box
@@ -422,7 +411,7 @@ function SortableRoute({
         overflow: 'hidden',
       }}
     >
-      <Stack direction="row" alignItems="center" gap={1} sx={{ p: '8px 10px', bgcolor: T.bg2 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1, p: '8px 10px', bgcolor: T.bg2 }}>
         <Box {...attributes} {...listeners} sx={{ cursor: 'grab', color: T.text3, fontSize: 14 }}>⠿</Box>
         <Box
           component="button"
@@ -453,7 +442,7 @@ function SortableRoute({
         <Box sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setExpanded(e => !e)}>
           <Typography sx={{ ...TYPO.bodyBold, fontSize: 12.5 }} noWrap>{route.labelFr}</Typography>
           <Typography sx={{ ...TYPO.monoHelp, fontSize: 10.5 }} noWrap>
-            {route.from} → {route.to} · {journeyLabel(route.journeyTag)} · {priceLabel}
+            {route.from || '…'} → {route.to || '…'} · {journeyLabel(route.journeyTag)} · {priceLabel}
           </Typography>
         </Box>
         <IconButton size="small" onClick={() => setExpanded(e => !e)} sx={{ p: 0.25 }}>
@@ -464,10 +453,16 @@ function SortableRoute({
 
       <Collapse in={expanded}>
         <Box sx={{ p: 1.25 }}>
-          <FormRow compact label="Type de trajet" schemaPath="transportServices[].route.journeyTag" inSchema>
-            <Stack direction="row" gap={0.5} flexWrap="wrap">
+          <FormRow compact label="Type">
+            <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
               {TRANSPORT_JOURNEY_OPTIONS.map(tag => (
-                <PillButton key={tag} active={route.journeyTag === tag} onClick={() => onUpdate({ journeyTag: tag })}>
+                <PillButton
+                  key={tag}
+                  active={route.journeyTag === tag}
+                  onClick={() =>
+                    onUpdate(migrateJourneyTag(route, place, tag))
+                  }
+                >
                   {journeyLabel(tag)}
                 </PillButton>
               ))}
@@ -477,83 +472,49 @@ function SortableRoute({
           <Box
             sx={{
               mb: 1.25,
-              p: 1.25,
-              borderRadius: 1,
-              border: `1px solid ${T.border}`,
-              bgcolor: T.bg2,
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+              gap: 1.25,
             }}
           >
-            <Typography sx={{ ...TYPO.caps, mb: 1 }}>Itinéraire</Typography>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: '1fr auto 1fr' },
-                gap: { xs: 1, md: 1.25 },
-                alignItems: 'stretch',
-              }}
-            >
-              <RouteEndpointColumn
-                title="Depuis"
-                mode={depuisMode}
-                place={place}
-                value={isOther ? route.from : route.externalLabel}
-                onChange={v =>
-                  isOther ? onUpdate({ from: v }) : onUpdate({ externalLabel: v })
-                }
-                placeholder="Lieu de départ"
-              />
-              <Typography
-                sx={{
-                  display: { xs: 'none', md: 'flex' },
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 16,
-                  fontWeight: 800,
-                  color: T.text4,
-                  fontFamily: CONFIG_ORCH_FONT.mono,
-                  pt: 2,
-                }}
-              >
-                →
-              </Typography>
-              <RouteEndpointColumn
-                title="Vers"
-                mode={versMode}
-                place={place}
-                value={isOther ? route.to : route.externalLabel}
-                onChange={v =>
-                  isOther ? onUpdate({ to: v }) : onUpdate({ externalLabel: v })
-                }
-                placeholder="Lieu d'arrivée"
-              />
-            </Box>
-            {isOther && (
-              <Typography sx={{ ...TYPO.caption, mt: 0.75, color: T.text3 }}>
-                Saisissez librement les deux extrémités (ex. Gare Gueliz → Aéroport Marrakech).
-              </Typography>
-            )}
+            <RoutePlaceCell
+              label="Provenance"
+              locked={isDeparture}
+              place={place}
+              value={isOther ? route.from : externalValue}
+              onChange={v =>
+                onUpdate(isOther ? { from: v, externalLabel: v } : { externalLabel: v })
+              }
+              placeholder="Ex. Aéroport Marrakech, Gare Casa-Voyageurs…"
+            />
+            <RoutePlaceCell
+              label="Destination"
+              locked={isArrival}
+              place={place}
+              value={isOther ? route.to : externalValue}
+              onChange={v => onUpdate(isOther ? { to: v } : { externalLabel: v })}
+              placeholder="Ex. Aéroport Mohammed V, Marina…"
+            />
           </Box>
+          <Typography sx={{ ...TYPO.caption, color: T.text3, mb: 1.25 }}>
+            {isArrival &&
+              'Arrivée : provenance modifiable (navette) · destination = votre logement (fixe).'}
+            {isDeparture &&
+              'Départ : provenance = logement (fixe) · destination modifiable (navette).'}
+            {isOther && 'Autre : provenance et destination libres.'}
+          </Typography>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 0 }}>
-            <FormRow compact label="Nom affiché" schemaPath="transportServices[].name.fr" inSchema>
+            <FormRow compact label="Nom affiché">
               <TextInput value={route.labelFr} onChange={e => onUpdate({ labelFr: e.target.value })} />
             </FormRow>
-            <FormRow compact label="Tarif" schemaPath="transportServices[].pricing.type" inSchema>
-              <Stack direction="row" gap={0.5}>
+            <FormRow compact label="Tarif">
+              <Stack direction="row" sx={{ gap: 0.5 }}>
                 <PillButton active={route.priceType === 'total'} onClick={() => onUpdate({ priceType: 'total' })}>Fixe</PillButton>
                 <PillButton active={route.priceType === 'per_person'} onClick={() => onUpdate({ priceType: 'per_person' })}>/pers.</PillButton>
               </Stack>
             </FormRow>
-            <FormRow
-              compact
-              label={route.priceType === 'per_person' ? 'MAD/pers.' : 'MAD total'}
-              schemaPath={
-                route.priceType === 'per_person'
-                  ? 'transportServices[].pricing.pricePerPerson'
-                  : 'transportServices[].pricing.amount'
-              }
-              inSchema
-            >
+            <FormRow compact label={route.priceType === 'per_person' ? 'MAD/pers.' : 'MAD total'}>
               <TextInput
                 type="number"
                 value={route.priceType === 'per_person' ? route.pricePerPerson ?? route.price : route.price}
@@ -563,13 +524,13 @@ function SortableRoute({
                 }}
               />
             </FormRow>
-            <FormRow compact label="Durée" schemaPath="transportServices[].route.estimatedDuration" inSchema>
+            <FormRow compact label="Durée">
               <TextInput value={route.estimatedDuration} onChange={e => onUpdate({ estimatedDuration: e.target.value })} placeholder="45 min" />
             </FormRow>
-            <FormRow compact label="Max pers." schemaPath="transportServices[].capacity.maxPassengers" inSchema>
+            <FormRow compact label="Max pers.">
               <TextInput type="number" value={route.maxPassengers} onChange={e => onUpdate({ maxPassengers: Math.max(1, Number(e.target.value) || 1) })} />
             </FormRow>
-            <FormRow compact label="Description" optional schemaPath="transportServices[].description.fr" inSchema>
+            <FormRow compact label="Description" optional>
               <TextArea rows={1} value={route.descriptionFr} onChange={e => onUpdate({ descriptionFr: e.target.value })} />
             </FormRow>
           </Box>

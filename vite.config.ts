@@ -5,9 +5,24 @@ import path from 'path'
 import { devSecurityHeaders, previewSecurityHeaders } from './security/csp'
 
 const devProxyTarget = process.env.VITE_DEV_PROXY_TARGET || 'https://dev.sojori.com'
+const fulltaskLocalTarget = process.env.VITE_FULLTASK_URL || 'http://127.0.0.1:4015'
+const fullchatbotLocalTarget = process.env.VITE_FULLCHATBOT_URL || 'http://127.0.0.1:4016'
 
 /** Proxy API dev — évite les appels relatifs vers 127.0.0.1:4174 (404 Not Found App). */
 const apiDevProxy = {
+  /** srv-fulltask direct en local (avant le catch-all /api → dev.sojori.com). */
+  '/api/v1/admin/fulltask': {
+    target: fulltaskLocalTarget,
+    changeOrigin: true,
+    secure: false,
+    rewrite: (path: string) => path.replace(/^\/api\/v1\/admin\/fulltask/, '/api'),
+  },
+  '/api/v1/admin/fullchatbot': {
+    target: fullchatbotLocalTarget,
+    changeOrigin: true,
+    secure: false,
+    rewrite: (path: string) => path.replace(/^\/api\/v1\/admin\/fullchatbot/, '/api'),
+  },
   '/api': {
     target: devProxyTarget,
     changeOrigin: true,

@@ -43,14 +43,7 @@ export default function DynamicPriceScopeModal({
   onClose,
   onConfirm,
 }: DynamicPriceScopeModalProps) {
-  const [applyMinStay, setApplyMinStay] = useState(true);
-
-  useEffect(() => {
-    if (!open) return;
-    setApplyMinStay(initialApplyMinStay !== false);
-  }, [open, initialApplyMinStay]);
-
-  const confirmLabel = applyMinStay ? 'Prix + min stay' : 'Prix seul';
+  const confirmLabel = 'Prix + min stay trous';
 
   return (
     <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="sm" fullWidth>
@@ -112,36 +105,17 @@ export default function DynamicPriceScopeModal({
             sx={{
               p: 1.5,
               borderRadius: 1.25,
-              border: `2px solid ${applyMinStay ? T.gold : '#d32f2f'}`,
-              bgcolor: applyMinStay ? T.bg1 : 'rgba(211,47,47,0.04)',
+              border: `1px solid ${T.info}`,
+              bgcolor: T.infoTint,
             }}
           >
-            <FormControlLabel
-              sx={{ m: 0, alignItems: 'flex-start', width: '100%' }}
-              control={
-                <Switch
-                  checked={applyMinStay}
-                  onChange={(_, v) => setApplyMinStay(v)}
-                  sx={{ '& .Mui-checked': { color: T.goldDeep }, pt: 0.25 }}
-                />
-              }
-              label={
-                <Box>
-                  <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>🌙 Séjour minimum</Typography>
-                  <Typography sx={{ fontSize: 11.5, color: T.text2, mt: 0.5 }}>
-                    {applyMinStay
-                      ? 'Min. nuits/jour (AirROI + plancher) → calendrier'
-                      : 'Désactivé : le calendrier garde les min stay actuels'}
-                  </Typography>
-                </Box>
-              }
-            />
+            <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>🔒 Trous entre réservations</Typography>
+            <Typography sx={{ fontSize: 11.5, color: T.text2, mt: 0.5 }}>
+              Stop-sell automatique sur les plages libres trop courtes (entre deux résas) par rapport au séjour min.
+              marché — sans modifier le min stay du calendrier.
+            </Typography>
           </Box>
         </Stack>
-
-        <Typography sx={{ fontSize: 11, color: T.text3, mt: 2 }}>
-          Min stay seul sans prix n’est pas possible. Les réglages §03 restent modifiables même si min stay sync est OFF.
-        </Typography>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} disabled={saving} sx={{ textTransform: 'none' }}>
@@ -150,7 +124,7 @@ export default function DynamicPriceScopeModal({
         <Button
           variant="contained"
           disabled={saving}
-          onClick={() => onConfirm({ applyPrice: true, applyMinStay })}
+          onClick={() => onConfirm({ applyPrice: true, applyMinStay: false })}
           sx={{
             textTransform: 'none',
             fontWeight: 800,

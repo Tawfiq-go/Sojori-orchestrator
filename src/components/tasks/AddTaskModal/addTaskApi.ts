@@ -4,6 +4,9 @@
 
 import apiClient from '../../../services/apiClient';
 import { MICROSERVICE_BASE_URL } from '../../../config/authConfig';
+import listingsService from '../../../services/listingsService';
+import reservationsService from '../../../services/reservationsService';
+import type { Reservation as ApiReservation } from '../../../types/reservations.types';
 import type { Listing, ListingClientServices, Reservation, TaskFormData } from './types';
 
 const SRV_TASK = MICROSERVICE_BASE_URL.SRV_TASK;
@@ -14,6 +17,101 @@ export async function fetchTaskListings(ownerId?: string): Promise<Listing[]> {
     params: ownerId ? { ownerId } : {},
   });
   return response.data || [];
+}
+
+/** Logements srv-listing (même source que la liste tâches fulltask). */
+export async function fetchFulltaskListings(): Promise<Listing[]> {
+  const res = await listingsService.getListings({
+    useActiveFilter: true,
+    active: true,
+    limit: 1000,
+    page: 0,
+  });
+  const items = res.data?.items ?? [];
+  return items.map((l) => ({
+    _id: String(l.id),
+    id: String(l.id),
+    name: l.name || 'Sans nom',
+    title: l.name,
+    address: l.city || undefined,
+    city: l.city,
+    ownerId: l.ownerId ? String(l.ownerId) : '',
+  }));
+}
+
+function mapApiReservation(r: ApiReservation): Reservation {
+  const listingId = String(r.sojoriId || r.listingMapId || '');
+  return {
+    _id: String(r.id),
+    id: String(r.id),
+    number: r.reservationNumber || r.id,
+    reservationNumber: r.reservationNumber || r.id,
+    guestName: r.guestName || 'Invité',
+    checkIn: r.arrivalDate,
+    checkOut: r.departureDate,
+    arrivalDate: r.arrivalDate,
+    departureDate: r.departureDate,
+    adults: r.adults ?? 1,
+    children: r.children ?? 0,
+    listingId,
+    sojoriId: listingId,
+    status: r.status || '',
+    guestPhone: r.phone,
+    phone: r.phone,
+  };
+}
+
+function isActiveReservationStatus(status: string): boolean {
+  const s = (status || '').toLowerCase();
+  return !s.includes('cancel');
+}
+
+function findCurrentReservationForListing(
+  rows: ApiReservation[],
+  listingId: string,
+): Reservation | null {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (const r of rows) {
+    const lid = String(r.sojoriId || r.listingMapId || '');
+    if (lid !== listingId || !isActiveReservationStatus(r.status)) continue;
+    const start = new Date(r.arrivalDate);
+    const end = new Date(r.departureDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    if (today >= start && today <= end) return mapApiReservation(r);
+  }
+  return null;
+}
+
+async function fetchReservationsWindow(): Promise<ApiReservation[]> {
+  const status = 'Confirmed,Pending,Checked_in,Accepted';
+  const [checkIn, checkOut] = await Promise.all([
+    reservationsService.getList({ filter: 'CHECKIN_7DAYS', limit: 400, status }),
+    reservationsService.getList({ filter: 'CHECKOUT_7DAYS', limit: 400, status }),
+  ]);
+  const byId = new Map<string, ApiReservation>();
+  for (const r of [...(checkIn.data || []), ...(checkOut.data || [])]) {
+    byId.set(r.id, r);
+  }
+  return [...byId.values()];
+}
+
+export async function fetchFulltaskReservationsForListing(
+  listingId: string,
+): Promise<Reservation[]> {
+  const all = (await fetchReservationsWindow()).map(mapApiReservation);
+  return all.filter((r) => {
+    const lid = r.listingId || r.sojoriId;
+    return lid === listingId && isActiveReservationStatus(r.status);
+  });
+}
+
+export async function fetchFulltaskCurrentReservation(
+  listingId: string,
+): Promise<Reservation | null> {
+  return findCurrentReservationForListing(await fetchReservationsWindow(), listingId);
 }
 
 export async function fetchCurrentReservation(

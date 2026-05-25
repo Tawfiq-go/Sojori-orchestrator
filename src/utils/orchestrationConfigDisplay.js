@@ -64,6 +64,7 @@ const LISTING_ORCH_LABELS = {
   orchestration_grocery: 'Courses',
   orchestration_custom: 'Personnalisé',
   orchestration_support: 'Support',
+  orchestration_service_client: 'Service client',
 };
 
 const CR_GROUPING_KEY_TO_CONFIG_KEY = {

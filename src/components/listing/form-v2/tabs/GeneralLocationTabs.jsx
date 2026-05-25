@@ -373,7 +373,7 @@ export function GeneralTab({
               value={values.floor ?? ''}
               onChange={(e) => upd('floor', e.target.value === '' ? undefined : +e.target.value)}
               sx={sxInput}
-              inputProps={{ min: 0 }}
+              slotProps={{ htmlInput: { min: 0 } }}
             />
           </Field>
 
@@ -389,7 +389,7 @@ export function GeneralTab({
               value={values.totalFloor ?? ''}
               onChange={(e) => upd('totalFloor', e.target.value === '' ? undefined : +e.target.value)}
               sx={sxInput}
-              inputProps={{ min: 1 }}
+              slotProps={{ htmlInput: { min: 1 } }}
             />
           </Field>
 
@@ -409,7 +409,7 @@ export function GeneralTab({
                 upd('personCapacity', n);
               }}
               sx={sxInput}
-              inputProps={{ min: 0 }}
+              slotProps={{ htmlInput: { min: 0 } }}
             />
           </Field>
 
@@ -428,7 +428,7 @@ export function GeneralTab({
                 onChange?.({ ...values, personCapacityMax: n, guests: n });
               }}
               sx={sxInput}
-              inputProps={{ min: 0 }}
+              slotProps={{ htmlInput: { min: 0 } }}
             />
           </Field>
 
@@ -445,7 +445,7 @@ export function GeneralTab({
               value={values.sqm ?? ''}
               onChange={(e) => upd('sqm', e.target.value === '' ? undefined : +e.target.value)}
               sx={isAI('sqm') ? sxInputAI : sxInput}
-              inputProps={{ min: 0 }}
+              slotProps={{ htmlInput: { min: 0 } }}
             />
           </Field>
         </Box>
@@ -735,7 +735,7 @@ export function LocationTab({ values, onChange }) {
             <TextField
               size="small"
               type="number"
-              inputProps={{ step: 0.0001 }}
+              slotProps={{ htmlInput: { step: 0.0001 } }}
               value={values.lat ?? ''}
               onChange={(e) => {
                 const n = parseCoord(e.target.value);
@@ -748,7 +748,7 @@ export function LocationTab({ values, onChange }) {
             <TextField
               size="small"
               type="number"
-              inputProps={{ step: 0.0001 }}
+              slotProps={{ htmlInput: { step: 0.0001 } }}
               value={values.lng ?? ''}
               onChange={(e) => {
                 const n = parseCoord(e.target.value);

@@ -3,9 +3,10 @@
  * • 30 jours mini-map, 14 jours visibles
  * • Filtres réservation (Confirmées / En attente) + légende canaux
  * • Barres Gantt : arrivée 40%, départ 40% (computeReservationBarLayout)
+ * • Navigation flèches : rechargement données uniquement (pas de spinner pleine page)
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, format } from 'date-fns';
 import { Box, CircularProgress, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
@@ -21,9 +22,36 @@ import { useAuth } from '../hooks/useAuth';
 import type { Reservation } from '../types/reservations.types';
 import type { ListingSummary } from '../types/listings.types';
 
+/** Jours passés / futurs visibles dans le planning (évite de masquer les séjours récents) */
+const PLANNING_LOOKBACK_DAYS = 30;
+const PLANNING_FORWARD_DAYS = 45;
+
+function normalizeMongoId(value: unknown): string | undefined {
+  if (value == null || value === '') return undefined;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') {
+    const o = value as { _id?: unknown; toString?: () => string };
+    if (o._id != null) return String(o._id);
+    if (typeof o.toString === 'function') {
+      const s = o.toString();
+      if (/^[a-f0-9]{24}$/i.test(s)) return s;
+    }
+  }
+  const s = String(value);
+  return s && s !== '[object Object]' ? s : undefined;
+}
+
 function resolveListingId(res: Reservation): string | undefined {
-  const anyRes = res as Reservation & { listing?: { _id?: string }; listingId?: string; _id?: string };
-  return anyRes.sojoriId || anyRes.listingMapId || anyRes.listingId || anyRes.listing?._id;
+  const anyRes = res as Reservation & {
+    listing?: { _id?: unknown };
+    listingId?: unknown;
+  };
+  return (
+    normalizeMongoId(anyRes.sojoriId) ||
+    normalizeMongoId(anyRes.listingMapId) ||
+    normalizeMongoId(anyRes.listingId) ||
+    normalizeMongoId(anyRes.listing?._id)
+  );
 }
 
 function mapReservationStatus(status?: string): 'confirmed' | 'pending' {
@@ -45,49 +73,61 @@ export function ReservationsPlanningPage() {
   const [startDate, setStartDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - PLANNING_LOOKBACK_DAYS);
     return d;
   });
-  const [daysCount] = useState(30);
+  const [daysCount] = useState(PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS);
 
   const [listings, setListings] = useState<ListingSummary[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [calendarReady, setCalendarReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [operationalByListing, setOperationalByListing] = useState<Map<string, any>>(new Map());
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const load = useCallback(async (refresh = false) => {
-    if (!refresh) {
-      setIsLoading(true);
-    } else {
-      setIsRefreshing(true);
-    }
+  const windowRequestIdRef = useRef(0);
+  /** Évite un double fetch fenêtre juste après le chargement initial / refreshKey */
+  const skipNextWindowOnlyFetchRef = useRef(false);
+
+  const fetchListings = useCallback(async () => {
+    const listingsResponse = await listingsService.getListings({
+      useActiveFilter: true,
+      active: true,
+      limit: 1000,
+    });
+    setListings(listingsResponse.data.items);
+  }, []);
+
+  const fetchWindowData = useCallback(async () => {
+    const requestId = ++windowRequestIdRef.current;
+    setIsRefreshing(true);
     setError(null);
 
     try {
-      const listingsResponse = await listingsService.getListings({
-        useActiveFilter: true,
-        active: true,
-        limit: 1000,
-      });
-      setListings(listingsResponse.data.items);
+      const apiStart = format(startDate, 'yyyy-MM-dd');
+      const apiEnd = format(addDays(startDate, daysCount), 'yyyy-MM-dd');
 
       const reservationsResponse = await reservationsService.getList({
         limit: 1000,
-        status: 'Confirmed,Pending',
+        status: 'Confirmed,Pending,Inside',
+        dateType: 'arrival_or_departure',
+        startDate: apiStart,
+        endDate: apiEnd,
       });
+
+      if (requestId !== windowRequestIdRef.current) return;
       setReservations(reservationsResponse.data);
 
-      const endDateStr = format(addDays(startDate, daysCount), 'yyyy-MM-dd');
-      const startDateStr = format(startDate, 'yyyy-MM-dd');
       const ownerId = scope.canAccessAllOwners ? undefined : scope.ownerId;
       if (ownerId || scope.canAccessAllOwners) {
         const planning = await tasksService.getReservationPlanning({
-          startDate: startDateStr,
-          endDate: endDateStr,
+          startDate: apiStart,
+          endDate: apiEnd,
           ownerId,
         });
+        if (requestId !== windowRequestIdRef.current) return;
         const map = new Map<string, any>();
         planning.data?.listings?.forEach((l: any) => {
           const id = String(l.listingId || l._id || '');
@@ -96,19 +136,59 @@ export function ReservationsPlanningPage() {
         setOperationalByListing(map);
       }
     } catch (e) {
+      if (requestId !== windowRequestIdRef.current) return;
       setError(e instanceof Error ? e.message : 'Erreur chargement données');
-      setListings([]);
-      setReservations([]);
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      if (requestId === windowRequestIdRef.current) {
+        setIsRefreshing(false);
+      }
     }
   }, [startDate, daysCount, scope.canAccessAllOwners, scope.ownerId]);
 
+  /** Premier chargement ou refresh propreté : listings + fenêtre */
   useEffect(() => {
     if (authLoading) return;
-    void load();
-  }, [load, authLoading, refreshKey]);
+
+    let cancelled = false;
+    const isBootstrap = !calendarReady;
+
+    void (async () => {
+      if (isBootstrap) setIsLoading(true);
+      setError(null);
+      try {
+        await fetchListings();
+        if (cancelled) return;
+        skipNextWindowOnlyFetchRef.current = true;
+        await fetchWindowData();
+        if (cancelled) return;
+        setCalendarReady(true);
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : 'Erreur chargement données');
+        if (isBootstrap) {
+          setListings([]);
+          setReservations([]);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarReady lu une fois au mount du cycle
+  }, [authLoading, refreshKey, fetchListings, fetchWindowData]);
+
+  /** Flèches / date picker : réservations + statuts opérationnels uniquement */
+  useEffect(() => {
+    if (authLoading || !calendarReady) return;
+    if (skipNextWindowOnlyFetchRef.current) {
+      skipNextWindowOnlyFetchRef.current = false;
+      return;
+    }
+    void fetchWindowData();
+  }, [startDate, authLoading, calendarReady, fetchWindowData]);
 
   const listingRows: ListingRow[] = useMemo(() => {
     if (listings.length === 0) return [];
@@ -154,7 +234,7 @@ export function ReservationsPlanningPage() {
         occupancyStatus: op?.occupancyStatus || (raw?.occupancyStatus as string) || 'vacant',
         cleanlinessEmergency: Boolean(op?.cleanlinessEmergency || raw?.cleanlinessEmergency),
         reservations: resas.map((r) => ({
-          reservationId: r.id || (r as { _id?: string })._id || '',
+          reservationId: String(r.id || (r as { _id?: string })._id || r.reservationNumber || ''),
           guestName: r.guestName || 'Guest',
           arrivalDate: toIsoDate(r.arrivalDate),
           departureDate: toIsoDate(r.departureDate),
@@ -176,67 +256,84 @@ export function ReservationsPlanningPage() {
     setRefreshKey((k) => k + 1);
   }, []);
 
-  const goToday = () => {
+  const goToday = useCallback(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - 14);
     setStartDate(d);
-  };
+  }, []);
 
-  const shiftDays = (delta: number) => {
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + delta);
+  const shiftDays = useCallback((delta: number) => {
+    setStartDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + delta);
+      return d;
+    });
+  }, []);
+
+  const handleDateChange = useCallback((newDate: Date) => {
+    const d = new Date(newDate);
+    d.setHours(0, 0, 0, 0);
     setStartDate(d);
-  };
+  }, []);
 
-  const handleDateChange = (newDate: Date) => {
-    newDate.setHours(0, 0, 0, 0);
-    setStartDate(newDate);
-  };
-
-  const handleReservationClick = (routeId: string) => {
-    if (!routeId) return;
-    navigate(`/reservations/${encodeURIComponent(routeId)}`);
-  };
+  const handleReservationClick = useCallback(
+    (routeId: string) => {
+      if (!routeId) return;
+      navigate(`/reservations/${encodeURIComponent(routeId)}`);
+    },
+    [navigate],
+  );
 
   return (
     <DashboardWrapper breadcrumb={['Réservations', 'Planning']}>
       <Box sx={{ bgcolor: '#f6f5f1', minHeight: '100vh' }}>
-        {isLoading && (
+        {isLoading && !calendarReady && (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
             <CircularProgress />
           </Box>
         )}
 
-        {!isLoading && error && (
-          <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, p: 3 }}>
+        {calendarReady && error && (
+          <Box sx={{ maxWidth: 800, mx: 'auto', mt: 2, px: 2 }}>
             <Alert severity="error" onClose={() => setError(null)}>
               {error}
             </Alert>
           </Box>
         )}
 
-        {!isLoading && !error && (
-          <Box sx={{ position: 'relative' }}>
+        {calendarReady && (
+          <Box
+            sx={{
+              position: 'relative',
+              opacity: isRefreshing ? 0.72 : 1,
+              transition: 'opacity 0.2s ease',
+              pointerEvents: isRefreshing ? 'none' : 'auto',
+            }}
+          >
             {isRefreshing && (
-              <Box sx={{
-                position: 'absolute',
-                top: 10,
-                right: 10,
-                zIndex: 100,
-                bgcolor: 'rgba(184,133,26,0.9)',
-                color: '#fff',
-                px: 2,
-                py: 1,
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                boxShadow: '0 4px 12px rgba(20,17,10,0.15)',
-              }}>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 10,
+                  right: 10,
+                  zIndex: 100,
+                  bgcolor: 'rgba(184,133,26,0.9)',
+                  color: '#fff',
+                  px: 2,
+                  py: 1,
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  boxShadow: '0 4px 12px rgba(20,17,10,0.15)',
+                  pointerEvents: 'none',
+                }}
+              >
                 <CircularProgress size={14} sx={{ color: '#fff' }} />
-                Chargement...
+                Mise à jour…
               </Box>
             )}
 
@@ -254,6 +351,12 @@ export function ReservationsPlanningPage() {
               onDateChange={handleDateChange}
               onCleanlinessChange={handleCleanlinessChange}
             />
+          </Box>
+        )}
+
+        {!isLoading && !calendarReady && error && (
+          <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, p: 3 }}>
+            <Alert severity="error">{error}</Alert>
           </Box>
         )}
       </Box>

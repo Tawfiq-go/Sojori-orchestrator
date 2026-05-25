@@ -1,18 +1,10 @@
-import apiClient from './apiClient';
 import axios from 'axios';
-import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 import { runtimeLog } from '../utils/runtimeLog';
 import type { AnalyticsQuery, AnalyticsSnapshot } from '../types/analytics.types';
+import { buildAnalyticsSnapshotClient, snapshotToCsv } from './analyticsSnapshotBuilder';
 
 export type AnalyticsSnapshotRequestOptions = {
   signal?: AbortSignal;
-};
-
-type AnalyticsEnvelope = {
-  success: boolean;
-  data?: AnalyticsSnapshot;
-  error?: string;
-  message?: string;
 };
 
 type AnalyticsExportFormat = 'csv' | 'pdf';
@@ -26,12 +18,6 @@ const buildParams = (query: AnalyticsQuery) => ({
   ...(query.customEndDate ? { customEndDate: query.customEndDate } : {}),
   ...(query.staging !== undefined ? { staging: query.staging } : {}),
 });
-
-const parseFilename = (contentDisposition?: string): string | null => {
-  if (!contentDisposition) return null;
-  const match = /filename="?([^"]+)"?/i.exec(contentDisposition);
-  return match?.[1] ?? null;
-};
 
 /** Same query in flight → one HTTP call (React Strict Mode double-mount). */
 const snapshotInflightByKey = new Map<string, Promise<AnalyticsSnapshot>>();
@@ -74,35 +60,15 @@ class AnalyticsService {
     query: AnalyticsQuery,
     options?: AnalyticsSnapshotRequestOptions,
   ): Promise<AnalyticsSnapshot> {
-    const url = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/analytics/snapshot`;
-    runtimeLog('info', 'AnalyticsAPI', 'GET snapshot start', { url, params: buildParams(query) });
+    runtimeLog('info', 'AnalyticsAPI', 'build snapshot (multi-API)', { params: buildParams(query) });
 
     try {
-      const response = await apiClient.get<AnalyticsEnvelope>(url, {
-        params: buildParams(query),
-        timeout: 120_000,
-        signal: options?.signal,
-      });
-
-      runtimeLog('info', 'AnalyticsAPI', 'GET snapshot response', {
-        httpStatus: response.status,
-        success: response.data?.success,
-        hasData: Boolean(response.data?.data),
-        error: response.data?.error,
-        message: response.data?.message,
-      });
-
-      if (!response.data?.success || !response.data.data) {
-        const msg = response.data?.error || response.data?.message || 'Analytics snapshot unavailable';
-        runtimeLog('error', 'AnalyticsAPI', 'Snapshot payload invalide', { msg, raw: response.data });
-        throw new Error(msg);
-      }
-
-      const data = response.data.data;
+      const data = await buildAnalyticsSnapshotClient(query, { signal: options?.signal });
       runtimeLog('info', 'AnalyticsAPI', 'Snapshot OK', {
         periodLabel: data.periodLabel,
         properties: data.properties?.length,
         revenuePoints: data.revenueEvolution?.length,
+        channelShare: data.channelShare.length,
       });
       return data;
     } catch (err) {
@@ -123,39 +89,25 @@ class AnalyticsService {
     query: AnalyticsQuery,
     format: AnalyticsExportFormat,
   ): Promise<void> {
-    runtimeLog('info', 'AnalyticsAPI', `GET export (${format}) start`, {
+    runtimeLog('info', 'AnalyticsAPI', `export (${format}) client-side`, {
       params: { ...buildParams(query), format },
     });
-    try {
-      const response = await apiClient.get<Blob>(
-        `${MICROSERVICE_BASE_URL.SRV_ADMIN}/analytics/export`,
-        {
-          params: { ...buildParams(query), format },
-          responseType: 'blob',
-        },
+    if (format === 'pdf') {
+      throw new Error(
+        'Export PDF serveur indisponible — endpoint /admin/analytics/export non déployé.',
       );
-
-      const blob = new Blob([response.data], {
-        type: format === 'pdf' ? 'application/pdf' : 'text/csv;charset=utf-8;',
-      });
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download =
-        parseFilename(response.headers['content-disposition']) ??
-        `analytics-export.${format}`;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(blobUrl);
-      runtimeLog('info', 'AnalyticsAPI', `GET export (${format}) OK`, { httpStatus: response.status });
-    } catch (err) {
-      runtimeLog('error', 'AnalyticsAPI', `GET export (${format}) failed`, {
-        message: err instanceof Error ? err.message : String(err),
-        axiosStatus: axios.isAxiosError(err) ? err.response?.status : undefined,
-      });
-      throw err;
     }
+    const snapshot = await buildAnalyticsSnapshotClient(query);
+    const blob = new Blob([snapshotToCsv(snapshot)], { type: 'text/csv;charset=utf-8;' });
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = `analytics-performance-${query.period}.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(blobUrl);
+    runtimeLog('info', 'AnalyticsAPI', 'export CSV OK', { rows: snapshot.propertyPerformance.length });
   }
 
   async downloadPerformanceCsv(query: AnalyticsQuery): Promise<void> {

@@ -60,7 +60,17 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'tasks/list': '/tasks',
     'tasks/team': '/tasks/team',
     'tasks/planning': '/tasks/planning',
-    'tasks/staff-wa': '/tasks/staff-whatsapp',
+    'tasks/kanban': '/tasks/kanban',
+    'tasks/config': '/tasks/config',
+    'tasks/orchestration': '/tasks/plans',
+    'tasks/plans': '/tasks/plans',
+    'tasks/orchestration-config': '/tasks/orchestration-config',
+    'tasks/whatsapp-messages': '/tasks/orchestration-config?tab=config',
+
+    // Chatbot (srv-fullchatbot)
+    'chatbot': '/chatbot/whitelist',
+    'chatbot/whitelist': '/chatbot/whitelist',
+    'chatbot/listing': '/chatbot/listing',
 
     // Communications Hub - Navigation principale
     'comms': '/communications',
@@ -79,6 +89,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'listings': '/listings',
     'dynamic-pricing': '/dynamic-pricing/portefeuille',
     'dynamic-pricing/portefeuille': '/dynamic-pricing/portefeuille',
+    'dynamic-pricing/audit': '/dynamic-pricing/audit',
     'dynamic-pricing/bien': '/dynamic-pricing/portefeuille',
     'pricing': '/pricing',
     'channels': '/catalogue/channels',
@@ -140,10 +151,14 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     if (path.startsWith('/dynamic-pricing/bien/')) {
       return 'dynamic-pricing/portefeuille';
     }
+    if (path.startsWith('/dynamic-pricing/audit')) {
+      return 'dynamic-pricing/audit';
+    }
     if (path.startsWith('/dynamic-pricing/portefeuille') || path === '/dynamic-pricing') {
       return 'dynamic-pricing/portefeuille';
     }
     if (path.startsWith('/catalogue/dynamic-pricing')) {
+      if (path.includes('/audit')) return 'dynamic-pricing/audit';
       if (path.includes('/bien/')) return 'dynamic-pricing/bien';
       if (path.includes('/bien')) return 'dynamic-pricing/bien';
       return 'dynamic-pricing/portefeuille';
@@ -203,6 +218,14 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     if (path.startsWith('/admin/equipe/owners')) {
       return 'admin/equipe/owners';
     }
+
+    if (path.startsWith('/chatbot/listing')) {
+      return 'chatbot/listing';
+    }
+    if (path.startsWith('/chatbot/whitelist') || path.startsWith('/chatbot')) {
+      return 'chatbot/whitelist';
+    }
+
     if (path.startsWith('/admin/equipe')) {
       const tab = new URLSearchParams(location.search).get('tab') || 'staff-dashboard';
       const map: Record<string, string> = {

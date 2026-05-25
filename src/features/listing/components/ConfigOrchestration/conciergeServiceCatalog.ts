@@ -1,4 +1,4 @@
-// Catalogue conciergerie — services & icônes préconfigurés (FR)
+// Catalogue conciergerie — modèles UI (FR) · chaque ajout est persisté dans ListingConciergeServices.customServices[]
 
 export type ConciergePriceType =
   | 'ON_QUOTE'

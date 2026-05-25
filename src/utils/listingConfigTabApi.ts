@@ -66,7 +66,7 @@ export function buildListingConfigPutBody(
       if (isRecord(r.receptionMode)) {
         const t = r.receptionMode.type;
         if (t === 'automatic' || t === 'assisted') {
-          body.receptionMode = { type: t };
+          body.receptionMode = { ...r.receptionMode, type: t };
         }
       }
       if (Array.isArray(r.instructions)) {
@@ -113,7 +113,7 @@ export function buildListingAccessCreateBody(
     body: {
       listingId: lid,
       listingName: name,
-      receptionMode: { type: t },
+      receptionMode: isRecord(r.receptionMode) ? { ...r.receptionMode, type: t } : { type: t },
       instructions: r.instructions,
     },
   };

@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import MenuOptionCard from './MenuOptionCard';
 import { T, menuBtnPrimary, menuBtnOutlined } from './menuTheme';
-
-const MENU_DISPLAY_ORDER = ['A', 'B', 'C', 'D', 'D1', 'D2', 'D3', 'D4', 'E', 'F', 'G', 'H', 'I', 'J', 'J1', 'J2', 'J3', 'K'];
+import { MENU_DISPLAY_ORDER, ensureMenuOptionsComplete } from './menuDefaults';
 
 const EditableOptionsList = ({
   menuOptions = [],
@@ -13,10 +12,12 @@ const EditableOptionsList = ({
 }) => {
   const [localOptions, setLocalOptions] = useState(menuOptions);
   const [isDirty, setIsDirty] = useState(false);
-  const baseOptions = inheritedMenuOptions.length > 0 ? inheritedMenuOptions : menuOptions;
+  const baseOptions = ensureMenuOptionsComplete(
+    inheritedMenuOptions.length > 0 ? inheritedMenuOptions : menuOptions,
+  );
 
   useEffect(() => {
-    setLocalOptions(menuOptions);
+    setLocalOptions(ensureMenuOptionsComplete(menuOptions));
     setIsDirty(false);
   }, [menuOptions]);
 

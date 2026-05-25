@@ -36,7 +36,6 @@ import { listingsService } from '../../../../services/listingsService';
 import { SOJORI_TOKENS } from './types';
 import {
   ConfigIntroBar,
-  MockupChip,
   SectionCaps,
   chipActionSx,
   TYPO,
@@ -344,22 +343,21 @@ export default function ConciergeConfigTab({ listingId }: Props) {
   return (
     <Box>
       <ConfigIntroBar saveState={savingState}>
-        Flow WhatsApp · <b>activation</b> via Menu WhatsApp
+        Services sur mesure pour ce logement : ajoutez des modèles depuis la bibliothèque ou créez les vôtres.
       </ConfigIntroBar>
 
-      {/* Bibliothèque — 2 colonnes, hauteur fixe (pas de scroll page pour choisir) */}
+      {/* Bibliothèque — modèles → ajout dans customServices[] (persisté) */}
       <Box sx={{
         mb: 2,
-        border: `1px solid ${T.error}`,
+        border: `1px solid ${T.border}`,
         borderRadius: 1.25,
         overflow: 'hidden',
         bgcolor: T.bg1,
       }}>
-        <Stack direction="row" alignItems="center" gap={0.75} sx={{ px: 1.25, py: 0.75, bgcolor: T.errorTint, borderBottom: `1px solid ${T.border}` }}>
-          <MockupChip />
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, px: 1.25, py: 0.75, bgcolor: T.bg2, borderBottom: `1px solid ${T.border}` }}>
           <Typography sx={{ ...TYPO.bodyBold, fontSize: 12.5 }}>📚 Bibliothèque</Typography>
           <Typography sx={{ ...TYPO.monoHelp }}>
-            {CONCIERGE_SERVICE_CATALOG.length} cat. · {catalogServiceCount} modèles — hors Mongo
+            {CONCIERGE_SERVICE_CATALOG.length} catégories · {catalogServiceCount} modèles
           </Typography>
         </Stack>
         <Box
@@ -420,10 +418,10 @@ export default function ConciergeConfigTab({ listingId }: Props) {
           </Stack>
 
           <Box sx={{ p: 1, overflowY: 'auto', maxHeight: { sm: 280 } }}>
-            <Stack direction="row" alignItems="center" gap={0.75} sx={{ mb: 0.75 }}>
+            <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, mb: 0.75 }}>
               <Typography sx={{ fontSize: 18, lineHeight: 1 }}>{activeCat.icon}</Typography>
               <Typography sx={{ ...TYPO.bodyBold, fontSize: 12.5, flex: 1 }}>{activeCat.labelFr}</Typography>
-              <MockupChip />
+              <Typography sx={{ ...TYPO.monoHelp }}>Ajouter au listing</Typography>
             </Stack>
             <Box
               sx={{
@@ -475,12 +473,12 @@ export default function ConciergeConfigTab({ listingId }: Props) {
       </Box>
 
       <SectionCaps>
-        🎯 Vos services · customServices[] ({config.services.length}/{MAX_SERVICES})
+        Vos services ({config.services.length}/{MAX_SERVICES})
       </SectionCaps>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={config.services.map(s => s.id)} strategy={verticalListSortingStrategy}>
-          <Stack spacing={1}>
+          <Stack sx={{ gap: 1 }}>
             {config.services.map(service => (
               <SortableService
                 key={service.id}
@@ -517,7 +515,7 @@ function IconPicker({
 }) {
   const icons = compact ? CONCIERGE_ICON_PICKER.slice(0, 18) : CONCIERGE_ICON_PICKER;
   return (
-    <Stack direction="row" alignItems="center" gap={0.75} flexWrap="wrap">
+    <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
       <Typography sx={{ ...TYPO.caps, mb: 0, mr: 0.5 }}>Icône</Typography>
       <Typography sx={{ fontSize: compact ? 20 : 28, lineHeight: 1 }}>{value || '✨'}</Typography>
       <TextField
@@ -587,7 +585,7 @@ function SortableService({
         boxShadow: isDragging ? '0 4px 16px rgba(0,0,0,0.1)' : 'none',
       }}
     >
-      <Stack direction="row" alignItems="center" gap={1}>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
         <Box {...attributes} {...listeners} sx={{ cursor: 'grab', color: T.text3, fontSize: 16, '&:active': { cursor: 'grabbing' } }}>
           ⠿
         </Box>
@@ -632,7 +630,7 @@ function SortableService({
               value={service.labelFr}
               onChange={e => onUpdate({ labelFr: e.target.value })}
               fullWidth
-              inputProps={{ maxLength: 60 }}
+              slotProps={{ htmlInput: { maxLength: 60 } }}
             />
             <FormControl size="small" fullWidth>
               <InputLabel>Tarification</InputLabel>
@@ -667,7 +665,7 @@ function SortableService({
               fullWidth
               multiline
               minRows={1}
-              inputProps={{ maxLength: 120 }}
+              slotProps={{ htmlInput: { maxLength: 120 } }}
               sx={{ gridColumn: { md: '1 / -1' } }}
             />
             {(service.priceType === 'PER_PERSON' || service.priceType === 'PER_PERSON_HOUR') && (
@@ -708,7 +706,7 @@ function SortableService({
               value={service.maxPersons > 0 ? service.maxPersons : ''}
               onChange={e => onUpdate({ maxPersons: Math.max(0, Number(e.target.value) || 0) })}
               fullWidth
-              inputProps={{ min: 0, max: 99 }}
+              slotProps={{ htmlInput: { min: 0, max: 99 } }}
             />
           </Box>
           <Box sx={{ mt: 1 }}>

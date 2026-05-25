@@ -443,6 +443,9 @@ function ListingRow({
 
             {days.map(d => {
               const inv = getInv(d.iso);
+              const cellState = resolveInventoryCellState(d.iso, inv, {
+                futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS,
+              });
               const cellMeta = {
                 listingId: listing._id,
                 roomTypeId: listing.roomTypeId || 'default',
@@ -455,7 +458,7 @@ function ListingRow({
                 <CollapseCell
                   key={d.iso} col={col} day={d} inv={inv} listing={listing}
                   selected={sel} draggable={draggable}
-                  onMouseDown={draggable && state !== 'archive' && state !== 'out_of_window' && state !== 'missing' ? () => onMouseDown(cellMeta) : undefined}
+                  onMouseDown={draggable && cellState === 'data' ? () => onMouseDown(cellMeta) : undefined}
                   onMouseEnter={draggable ? () => onMouseEnter(cellMeta) : undefined}
                   onReservationClick={(rect) => {
                     if (colId === 'reservations' && (inv.reservations?.length ?? 0) >= 2) {

@@ -1,9 +1,9 @@
-// Composants réutilisables — design Claude Atelier 2026 (Sojori zip 38/39)
+// Composants réutilisables — Config orchestration listing
 import React from 'react';
 import { Box, Stack, Typography } from '@mui/material';
 import { SOJORI_TOKENS as T, CONFIG_ORCH_FONT } from './types';
 
-/** Styles typo réutilisables (design Claude zip 38/39) */
+/** Styles typo réutilisables */
 export const TYPO = {
   intro: { fontSize: 13, color: T.text2, lineHeight: 1.5, letterSpacing: '-0.005em' },
   body: { fontSize: 13, fontWeight: 500, color: T.text, letterSpacing: '-0.005em' },
@@ -89,7 +89,7 @@ export function ConfigIntroBar({ children, saveState = 'idle' }) {
         : { bg: T.bg2, border: T.border, color: T.text3 };
   const saveLabel = saveState === 'saving' ? '⏳ …' : saveState === 'saved' ? '✓ OK' : '—';
   return (
-    <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 1.25 }}>
+    <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.25 }}>
       <Typography sx={{ ...TYPO.intro, flex: 1, minWidth: 200 }}>{children}</Typography>
       <Box
         sx={{
@@ -129,35 +129,11 @@ export function PillButton({ children, active, onClick, disabled, compact }) {
   );
 }
 
-export function MockupChip({ label = 'mockup' }) {
-  return (
-    <Box
-      component="span"
-      sx={{
-        fontSize: 9.5,
-        fontFamily: CONFIG_ORCH_FONT.mono,
-        fontWeight: 800,
-        px: 0.6,
-        py: 0.15,
-        borderRadius: 0.5,
-        border: `1px solid ${T.error}`,
-        color: T.error,
-        bgcolor: T.errorTint,
-        flexShrink: 0,
-        letterSpacing: '0.04em',
-        textTransform: 'uppercase',
-      }}
-    >
-      {label}
-    </Box>
-  );
-}
-
 export function SectionCaps({ children }) {
   return <Typography sx={{ ...TYPO.caps, mb: 0.75 }}>{children}</Typography>;
 }
 
-/** Champ lieu éditable — même famille visuelle que LockedPropertyBox (design Claude). */
+/** Champ lieu éditable — même famille visuelle que LockedPropertyBox. */
 export function PlaceEndpointField({ label, value, onChange, placeholder }) {
   return (
     <Box
@@ -203,8 +179,9 @@ export function PlaceEndpointField({ label, value, onChange, placeholder }) {
   );
 }
 
-export function LockedPropertyBox({ name, address }) {
+export function LockedPropertyBox({ name, address, label }) {
   const addr = (address && String(address).trim()) || 'Adresse non renseignée';
+  const caps = label ? `${label} · logement` : 'Logement · non modifiable';
   return (
     <Box
       sx={{
@@ -217,7 +194,7 @@ export function LockedPropertyBox({ name, address }) {
         userSelect: 'none',
       }}
     >
-      <Typography sx={{ ...TYPO.caps, color: T.text4, mb: 0.5 }}>Logement · non modifiable</Typography>
+      <Typography sx={{ ...TYPO.caps, color: T.text4, mb: 0.5 }}>{caps}</Typography>
       <Typography sx={{ ...TYPO.bodyBold, fontSize: 12.5, color: T.text2 }}>{name}</Typography>
       <Typography sx={{ ...TYPO.caps, color: T.text4, mt: 0.75, mb: 0.25 }}>Adresse listing</Typography>
       <Typography sx={{ ...TYPO.caption, lineHeight: 1.45 }}>{addr}</Typography>
@@ -225,20 +202,21 @@ export function LockedPropertyBox({ name, address }) {
   );
 }
 
-export function Toggle({ on, sm, onChange }) {
+export function Toggle({ on, sm, onChange, disabled = false }) {
   const w = sm ? 28 : 36;
   const h = sm ? 16 : 20;
   const knob = sm ? 12 : 16;
   return (
     <Box
-      onClick={onChange}
+      onClick={disabled ? undefined : onChange}
       sx={{
         width: w,
         height: h,
         borderRadius: '99px',
         position: 'relative',
         flexShrink: 0,
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
         background: on ? `linear-gradient(135deg, #cb9b2c, ${T.primary})` : T.borderStrong,
         transition: 'background 0.2s',
         '&::after': {
@@ -273,9 +251,9 @@ export function Card({ icon, title, subtitle, meta, children, toggle, onToggleCh
     >
       <Stack
         direction="row"
-        alignItems="center"
-        gap={compact ? 0.75 : 1.25}
         sx={{
+          alignItems: 'center',
+          gap: compact ? 0.75 : 1.25,
           p: compact ? '8px 12px' : '14px 16px',
           bgcolor: T.bg2,
           borderBottom: children ? `1px solid ${T.border}` : 0,
@@ -326,17 +304,13 @@ export function Card({ icon, title, subtitle, meta, children, toggle, onToggleCh
   );
 }
 
-export function FormRow({ label, required, help, children, optional, schemaPath, inSchema = true, compact = false }) {
-  const borderColor = inSchema ? T.border : T.error;
-  const bgTint = inSchema ? 'transparent' : T.errorTint;
+export function FormRow({ label, required, help, children, optional, compact = false }) {
   return (
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: compact
-          ? { xs: '1fr', md: '120px 1fr' }
-          : { xs: '1fr', md: '160px 1fr 200px' },
-        gap: compact ? 1 : 1.75,
+        gridTemplateColumns: compact ? { xs: '1fr', md: '120px 1fr' } : { xs: '1fr', md: '160px 1fr' },
+        gap: compact ? 1 : 1.25,
         alignItems: 'flex-start',
         py: compact ? 0.75 : 1.25,
         borderBottom: `1px solid ${T.border}`,
@@ -358,62 +332,20 @@ export function FormRow({ label, required, help, children, optional, schemaPath,
           )}
         </Typography>
         {help && (
-          <Typography
-            sx={{
-              fontSize: 10.5,
-              color: T.text4,
-              fontFamily: CONFIG_ORCH_FONT.mono,
-              fontWeight: 600,
-              mt: 0.375,
-              letterSpacing: '0.02em',
-              lineHeight: 1.4,
-            }}
-          >
+          <Typography sx={{ fontSize: 10.5, color: T.text4, fontWeight: 500, mt: 0.375, lineHeight: 1.4 }}>
             {help}
           </Typography>
         )}
       </Box>
-      <Box
-        sx={{
-          p: 0.5,
-          borderRadius: 1,
-          border: `1px solid ${borderColor}`,
-          bgcolor: bgTint,
-          boxShadow: inSchema ? 'none' : `0 0 0 2px ${T.errorTint}`,
-        }}
-      >
-        {children}
-      </Box>
-      <Box sx={{ pt: 0.5, display: { xs: 'none', md: 'block' } }}>
-        {schemaPath != null && (
-          <Box
-            sx={{
-              fontFamily: CONFIG_ORCH_FONT.mono,
-              fontSize: 9.5,
-              fontWeight: 700,
-              letterSpacing: '0.04em',
-              px: 0.875,
-              py: 0.5,
-              borderRadius: 0.625,
-              border: `1px solid ${inSchema ? T.border : T.error}`,
-              color: inSchema ? T.success : T.error,
-              bgcolor: inSchema ? T.successTint : T.errorTint,
-            }}
-          >
-            {inSchema ? '✓ schéma' : '⚠ mockup'}
-            <Box component="div" sx={{ color: T.text3, fontWeight: 600, mt: 0.25, wordBreak: 'break-all' }}>
-              {schemaPath || '—'}
-            </Box>
-          </Box>
-        )}
-      </Box>
+      <Box sx={{ p: 0.5, borderRadius: 1, border: `1px solid ${T.border}` }}>{children}</Box>
     </Box>
   );
 }
 
-export function TextInput(props) {
+export function TextInput({ style, inputProps, ...props }) {
   return (
     <input
+      {...inputProps}
       {...props}
       style={{
         width: '100%',
@@ -425,15 +357,16 @@ export function TextInput(props) {
         color: T.text,
         fontFamily: 'inherit',
         boxSizing: 'border-box',
-        ...props.style,
+        ...style,
       }}
     />
   );
 }
 
-export function TextArea(props) {
+export function TextArea({ style, inputProps, ...props }) {
   return (
     <textarea
+      {...inputProps}
       {...props}
       style={{
         width: '100%',
@@ -447,16 +380,17 @@ export function TextArea(props) {
         boxSizing: 'border-box',
         resize: 'vertical',
         minHeight: 80,
-        ...props.style,
+        ...style,
       }}
     />
   );
 }
 
-export function NumInput({ suffix, style, ...rest }) {
+export function NumInput({ suffix, style, inputProps, ...rest }) {
   return (
     <Box sx={{ position: 'relative', display: 'inline-block', width: '100%' }}>
       <input
+        {...inputProps}
         {...rest}
         type="number"
         style={{
@@ -480,7 +414,7 @@ export function NumInput({ suffix, style, ...rest }) {
             top: '50%',
             transform: 'translateY(-50%)',
             fontSize: 11,
-            color: SOJORI_TOKENS.text3,
+            color: T.text3,
             fontFamily: '"Geist Mono", monospace',
             fontWeight: 700,
             pointerEvents: 'none',
@@ -529,7 +463,7 @@ export function AddRowBtn({ onClick, children, disabled }) {
 export function DayPills({ value, onChange }) {
   const days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
   return (
-    <Stack direction="row" gap={0.5} flexWrap="wrap">
+    <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
       {days.map((d, i) => {
         const on = value.includes(i);
         return (
@@ -561,7 +495,7 @@ export function DayPills({ value, onChange }) {
 
 export function SlotPills({ value, options, onChange }) {
   return (
-    <Stack direction="row" gap={0.5} flexWrap="wrap">
+    <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
       {options.map(slot => {
         const on = value.includes(slot);
         return (
@@ -591,7 +525,16 @@ export function SlotPills({ value, options, onChange }) {
   );
 }
 
-export function SectionHeader({ icon, title, badge, badgeKind, subtitle, toggle, onToggleChange }) {
+export function SectionHeader({
+  icon,
+  title,
+  badge,
+  badgeKind,
+  subtitle,
+  toggle,
+  onToggleChange,
+  toggleLabel = 'Activer',
+}) {
   const badgeStyles = {
     'wa-yes': { bg: 'rgba(10,143,94,0.10)', fg: T.success },
     'wa-no': { bg: T.bg3, fg: T.text3 },
@@ -600,7 +543,7 @@ export function SectionHeader({ icon, title, badge, badgeKind, subtitle, toggle,
   const bs = badge && badgeKind ? badgeStyles[badgeKind] : null;
 
   return (
-    <Stack direction="row" alignItems="flex-start" gap={1.75} sx={{ mb: 3 }}>
+    <Stack direction="row" sx={{ alignItems: 'flex-start', gap: 1.75, mb: 3 }}>
       <Box
         sx={{
           width: 48,
@@ -619,7 +562,7 @@ export function SectionHeader({ icon, title, badge, badgeKind, subtitle, toggle,
         {icon}
       </Box>
       <Box sx={{ flex: 1 }}>
-        <Stack direction="row" alignItems="center" gap={1.25}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25 }}>
           <Typography sx={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.025em' }}>{title}</Typography>
           {badge && bs && (
             <Box
@@ -646,11 +589,16 @@ export function SectionHeader({ icon, title, badge, badgeKind, subtitle, toggle,
       {toggle !== undefined && onToggleChange && (
         <Stack
           direction="row"
-          alignItems="center"
-          gap={1.125}
-          sx={{ p: '6px 11px', bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.125 }}
+          sx={{
+            alignItems: 'center',
+            gap: 1.125,
+            p: '6px 11px',
+            bgcolor: T.bg1,
+            border: `1px solid ${T.border}`,
+            borderRadius: 1.125,
+          }}
         >
-          <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: T.text2 }}>Activer</Typography>
+          <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: T.text2 }}>{toggleLabel}</Typography>
           <Toggle on={toggle} onChange={onToggleChange} />
         </Stack>
       )}

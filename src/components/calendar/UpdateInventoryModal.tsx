@@ -87,7 +87,6 @@ export function UpdateInventoryModal({
 
   // Dynamic Price
   const [useDynamicPrice, setUseDynamicPrice] = useState<boolean | null>(null);
-  const [dynamicBasePrice, setDynamicBasePrice] = useState('');
 
   // Confirmation popup
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -175,7 +174,6 @@ export function UpdateInventoryModal({
     setClosedArrival(null);
     setClosedDeparture(null);
     setUseDynamicPrice(null);
-    setDynamicBasePrice('');
     setError(null);
     setShowConfirmation(false);
   };
@@ -280,7 +278,6 @@ export function UpdateInventoryModal({
             roomTypeId: group.roomTypeId,
             date_from,
             date_to,
-            price: dynamicBasePrice ? parseFloat(dynamicBasePrice) : 0,
             setUseDynamicPriceManual: useDynamicPrice,
           });
         }
@@ -701,25 +698,10 @@ export function UpdateInventoryModal({
                 <ToggleButton value={null}>Aucun changement</ToggleButton>
               </ToggleButtonGroup>
 
-              {useDynamicPrice === true && (
-                <TextField
-                  type="number"
-                  label="Prix de base dynamique"
-                  placeholder="Ex: 120"
-                  value={dynamicBasePrice}
-                  onChange={(e) => setDynamicBasePrice(e.target.value)}
-                  size="small"
-                  fullWidth
-                  InputProps={{
-                    endAdornment: <Typography sx={{ fontSize: 13 }}>MAD</Typography>,
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: '10px',
-                    },
-                  }}
-                />
-              )}
+              <Typography sx={{ fontSize: 12, color: COLORS.gray[600], mt: 1, lineHeight: 1.45 }}>
+                Les tarifs journaliers viennent du service Dynamic Pricing (pilot G7). Activez ou
+                désactivez le mode dynamique sur la période — sans saisie de prix de base.
+              </Typography>
             </AccordionDetails>
           </Accordion>
         </DialogContent>

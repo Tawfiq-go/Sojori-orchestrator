@@ -61,9 +61,9 @@ export function Label({
   return (
     <Stack
       direction="row"
-      alignItems="center"
-      spacing={0.75}
       sx={{
+        alignItems: 'center',
+        gap: 0.75,
         flexWrap: 'wrap',
         fontSize: 10.5,
         color: T.text3,
@@ -148,7 +148,7 @@ export function Card({ title, meta, children, accent }) {
       bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5, p: 2, mb: 1.75,
       ...(accent === 'primary' ? { background: `linear-gradient(180deg, ${T.primaryTint}, ${T.bg1} 70%)`, borderColor: T.primary } : {}),
     }}>
-      <Stack direction="row" alignItems="center" sx={{ mb: 1.5 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', mb: 1.5 }}>
         <Typography sx={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>{titleText}</Typography>
         {meta && <Typography sx={{ ml: 'auto', fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>{meta}</Typography>}
       </Stack>
@@ -180,7 +180,9 @@ export function ToggleRow({
   const titleText = typeof title === 'string' || typeof title === 'number' ? title : localizeField(title, '');
   const descText = desc == null ? '' : typeof desc === 'string' ? desc : localizeField(desc, '');
   return (
-    <Stack direction="row" alignItems="center" gap={1.75} sx={{
+    <Stack direction="row" sx={{
+      alignItems: 'center',
+      gap: 1.75,
       p: '10px 12px', border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1, mb: 0.75,
       opacity: disabled ? 0.5 : 1,
     }}>
@@ -211,7 +213,7 @@ export function ToggleRow({
 
 export function Counter({ value, onChange, min = 0, max = 99 }) {
   return (
-    <Stack direction="row" alignItems="center" sx={{ border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1, width: 'fit-content' }}>
+    <Stack direction="row" sx={{ alignItems: 'center', border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1, width: 'fit-content' }}>
       <IconButton size="small" onClick={() => onChange?.(Math.max(min, value - 1))} sx={{ width: 32, height: 32, color: T.text2 }}>−</IconButton>
       <Box sx={{ px: 1.75, fontFamily: '"Geist Mono", monospace', fontWeight: 700, fontSize: 13, minWidth: 50, textAlign: 'center' }}>{value}</Box>
       <IconButton size="small" onClick={() => onChange?.(Math.min(max, value + 1))} sx={{ width: 32, height: 32, color: T.text2 }}>+</IconButton>
@@ -221,7 +223,7 @@ export function Counter({ value, onChange, min = 0, max = 99 }) {
 
 export function ChipsRow({ items, value = [], onToggle, single = false }) {
   return (
-    <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap' }} useFlexGap>
+    <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap' }}>
       {items.map(item => {
         const active = single ? value === item.id : value.includes(item.id);
         return (
@@ -240,7 +242,7 @@ export function ChipsRow({ items, value = [], onToggle, single = false }) {
 
 export function LangSwitcher({ value, onChange, languages = ['🇫🇷 FR', '🇬🇧 EN', '🇸🇦 AR'] }) {
   return (
-    <Stack direction="row" gap={0.625} sx={{ mb: 1.25 }}>
+    <Stack direction="row" sx={{ gap: 0.625, mb: 1.25 }}>
       {languages.map(l => (
         <Box key={l} component="button" onClick={() => onChange?.(l)} sx={{
           all: 'unset', cursor: 'pointer', px: 1.25, py: 0.625, borderRadius: 0.75,
@@ -255,7 +257,9 @@ export function LangSwitcher({ value, onChange, languages = ['🇫🇷 FR', '�
 
 export function AiBanner({ title, body, ctaLabel = 'Appliquer', onCta }) {
   return (
-    <Stack direction="row" alignItems="center" gap={1.5} sx={{
+    <Stack direction="row" sx={{
+      alignItems: 'center',
+      gap: 1.5,
       background: 'linear-gradient(135deg, rgba(124,58,237,0.06), rgba(184,133,26,0.04))',
       border: `1px solid ${T.aiBorder}`, borderRadius: 1.5, p: '12px 14px', mb: 1.75,
     }}>
@@ -279,7 +283,9 @@ export function AiBanner({ title, body, ctaLabel = 'Appliquer', onCta }) {
 
 export function GlobalBanner({ children }) {
   return (
-    <Stack direction="row" alignItems="flex-start" gap={1.5} sx={{
+    <Stack direction="row" sx={{
+      alignItems: 'flex-start',
+      gap: 1.5,
       background: 'linear-gradient(135deg, rgba(6,115,179,0.06), rgba(184,133,26,0.04))',
       border: `1px solid rgba(6,115,179,0.20)`, borderRadius: 1.25, p: '12px 14px', mb: 1.75,
     }}>
@@ -289,12 +295,25 @@ export function GlobalBanner({ children }) {
   );
 }
 
-export function NumberInput({ value, onChange, suffix, prefix, ...rest }) {
+export function NumberInput({ value, onChange, suffix, prefix, inputProps, slotProps, ...rest }) {
   return (
-    <TextField size="small" type="number" value={value ?? ''} onChange={e => onChange?.(+e.target.value)}
-      InputProps={{ startAdornment: prefix && <Box sx={{ color: T.text3, mr: 0.5, fontSize: 12 }}>{prefix}</Box>,
-                    endAdornment: suffix && <Box sx={{ color: T.text3, ml: 0.5, fontSize: 12 }}>{suffix}</Box> }}
-      sx={sxInput} {...rest} />
+    <TextField
+      size="small"
+      type="number"
+      value={value ?? ''}
+      onChange={e => onChange?.(+e.target.value)}
+      slotProps={{
+        ...slotProps,
+        htmlInput: { ...inputProps, ...slotProps?.htmlInput },
+        input: {
+          startAdornment: prefix && <Box sx={{ color: T.text3, mr: 0.5, fontSize: 12 }}>{prefix}</Box>,
+          endAdornment: suffix && <Box sx={{ color: T.text3, ml: 0.5, fontSize: 12 }}>{suffix}</Box>,
+          ...slotProps?.input,
+        },
+      }}
+      sx={sxInput}
+      {...rest}
+    />
   );
 }
 

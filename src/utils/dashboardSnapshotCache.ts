@@ -1,6 +1,8 @@
+import { ensureDashboardSnapshot } from '../services/dashboardV1Service';
 import type { DashboardPeriod, DashboardSnapshot } from '../types/dashboard.types';
 
-const PREFIX = 'sojori-dashboard-v1:';
+/** v2 : invalidation cache rempli par l’ancien endpoint /dashboard/v1/snapshot (réponse « Service OK »). */
+const PREFIX = 'sojori-dashboard-v2:';
 
 function cacheKey(period: DashboardPeriod, listingIds: string[]) {
   const ids = [...listingIds].sort().join(',');
@@ -29,7 +31,7 @@ export function readDashboardSnapshotCache(
     if (!parsed.hydrated) {
       return null;
     }
-    return parsed.snapshot;
+    return ensureDashboardSnapshot(parsed.snapshot);
   } catch {
     return null;
   }
@@ -43,7 +45,7 @@ export function writeDashboardSnapshotCache(
   try {
     sessionStorage.setItem(
       cacheKey(period, listingIds),
-      JSON.stringify({ savedAt: Date.now(), snapshot, hydrated: true }),
+      JSON.stringify({ savedAt: Date.now(), snapshot: ensureDashboardSnapshot(snapshot), hydrated: true }),
     );
   } catch {
     // quota / private mode

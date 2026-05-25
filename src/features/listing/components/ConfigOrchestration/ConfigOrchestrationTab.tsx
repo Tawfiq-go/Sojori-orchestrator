@@ -32,7 +32,7 @@ export default function ConfigOrchestrationTab({ listingId, ownerId }: ConfigOrc
           <Tab label="🛒 Courses" />
           <Tab label="💌 Service Client" />
           <Tab label="📜 Messages" />
-          <Tab label="🧼 Automatisations" />
+          <Tab label="⚡ Orchestration" />
           <Tab label="📱 WhatsApp Config" />
         </Tabs>
       </Paper>

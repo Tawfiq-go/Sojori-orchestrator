@@ -15,6 +15,8 @@ import {
   fetchDynamicPricingPortfolio,
   fetchPilotConfig,
   refreshOneListingPerformanceAirroi,
+  refreshListingAirroiPart,
+  type AirroiListingRefreshPart,
   savePilotConfig,
   type PilotPricingEventDto,
 } from '../../../services/dynamicPricingApi';
@@ -36,13 +38,16 @@ const USD_TO_MAD = 10;
 function mapUiEventsToDto(events: PricingEvent[]): PilotPricingEventDto[] {
   return events.map((e) => {
     const parts = e.dateRange.split('→').map((s) => s.trim());
+    const isPercent = e.kind === 'market_percent';
     return {
       _id: e.id,
       label: e.name,
       emoji: e.emoji,
       startDate: (parts[0] ?? '').slice(0, 10),
       endDate: (parts[1] ?? parts[0] ?? '').slice(0, 10),
-      eventFloorMad: e.fixedPrice,
+      eventKind: e.kind,
+      eventFloorMad: isPercent ? 0 : e.fixedPrice,
+      eventMarketPercent: isPercent ? e.marketPercent : undefined,
       minNightsOverride: e.minNights > 0 ? e.minNights : undefined,
     };
   });
@@ -125,10 +130,11 @@ function buildPerformanceFromAirroi(row: PortfolioRow): {
   };
 }
 
+/** GPS affiché / distances comps : listing Mongo en priorité (règle #1). */
 function resolveBienLatLng(row: PortfolioRow): { lat: number; lng: number } | null {
-  const ar = row.airroiRaw;
-  const lat = ar?.latitude ?? row.listing.position?.lat;
-  const lng = ar?.longitude ?? row.listing.position?.lng;
+  const pos = row.listing.position;
+  const lat = pos?.lat ?? row.airroiRaw?.latitude;
+  const lng = pos?.lng ?? row.airroiRaw?.longitude;
   if (lat == null || lng == null || Number(lat) === 0 || Number(lng) === 0) {
     return null;
   }
@@ -199,8 +205,28 @@ export type BienDetailResult = {
   hasTtm: boolean;
   hasL90d: boolean;
   applyToOps: () => Promise<void>;
+  runCalendarUpdate: () => Promise<import('../../../services/dynamicPricingApi').PilotApplyReportDto>;
   refetch: () => Promise<void>;
   refreshAirroi: () => Promise<{ costUsd?: number } | void>;
+  refreshAirroiPart: (part: AirroiListingRefreshPart) => Promise<{ costUsd?: number } | void>;
+  listingEstimateInputs: {
+    listingId: string;
+    name: string;
+    lat: number | null;
+    lng: number | null;
+    addressLine: string | null;
+    bedrooms: number;
+    baths: number;
+    guests: number;
+    personCapacityPricing?: number | null;
+    airbnbListingId: string | null;
+    coordsSource?: string;
+    airroiListingLat?: number | null;
+    airroiListingLng?: number | null;
+    gpsDeltaMeters?: number | null;
+    lastAirroiGeoSource?: string | null;
+    lastAirroiGeoSent?: string | null;
+  } | null;
   view: BienViewProps | null;
 };
 
@@ -211,8 +237,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const [mode, setMode] = useState<PricingMode>('equilibre');
   const [activeModeId, setActiveModeId] = useState('equilibre');
   const [pricingModes, setPricingModes] = useState<PricingModeDef[]>(DEFAULT_PRICING_MODES);
-  const [minStayDelta, setMinStayDelta] = useState(0);
-  const [minStayPlancher, setMinStayPlancher] = useState(1);
+  const [gapBlockEnabled, setGapBlockEnabled] = useState(true);
+  const [gapBlockMinNights, setGapBlockMinNights] = useState(2);
   const [modeEnabled, setModeEnabled] = useState(true);
   const [applyPrice, setApplyPrice] = useState(true);
   const [applyMinStay, setApplyMinStay] = useState(true);
@@ -255,8 +281,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     ceiling,
     aiEnabled,
     events,
-    minStayDelta,
-    minStayPlancher,
+    gapBlockEnabled,
+    gapBlockMinNights,
     modeEnabled,
     applyPrice,
     applyMinStay,
@@ -297,19 +323,27 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   }, [listingId, persistPilotConfig]);
 
   const mapPilotEventsToUi = useCallback((evs: PilotPricingEventDto[]): PricingEvent[] => {
-    return evs.map((e) => ({
-      id: e._id,
-      emoji: e.emoji ?? '📅',
-      name: e.label,
-      dateRange: `${e.startDate.slice(0, 10)} → ${e.endDate.slice(0, 10)}`,
-      fixedPrice: e.eventFloorMad,
-      minNights: e.minNightsOverride ?? 0,
-    }));
+    return evs.map((e) => {
+      const kind =
+        e.eventKind === 'market_percent' || (e.eventMarketPercent != null && e.eventMarketPercent > 0)
+          ? 'market_percent'
+          : 'fixed';
+      return {
+        id: e._id,
+        emoji: e.emoji ?? '📅',
+        name: e.label,
+        dateRange: `${e.startDate.slice(0, 10)} → ${e.endDate.slice(0, 10)}`,
+        kind,
+        fixedPrice: e.eventFloorMad,
+        marketPercent: e.eventMarketPercent ?? 100,
+        minNights: e.minNightsOverride ?? 0,
+      };
+    });
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { background?: boolean }) => {
     if (!listingId) return;
-    setLoading(true);
+    if (!opts?.background) setLoading(true);
     setError(null);
     try {
       const portfolioRes = await fetchDynamicPricingPortfolio({ year: calendarYear });
@@ -360,7 +394,9 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       const adrMad =
         row.airroiRaw?.ttm_avg_rate != null
           ? Math.round(row.airroiRaw.ttm_avg_rate * USD_TO_MAD)
-          : null;
+          : row.estimateSummary?.adrP50Mad != null && row.estimateSummary.adrP50Mad > 0
+            ? row.estimateSummary.adrP50Mad
+            : null;
       setFloor(row.bounds?.floor ?? (adrMad != null ? Math.round(adrMad * 0.65) : null));
       setCeiling(row.bounds?.ceiling ?? (adrMad != null ? Math.round(adrMad * 1.35) : null));
 
@@ -378,8 +414,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
           setFloor(c.floorNormal);
           setCeiling(c.ceiling);
           setAiEnabled(c.enabled);
-          setMinStayDelta(c.minStayDelta ?? 0);
-          setMinStayPlancher(c.minStayPlancher ?? 1);
+          setGapBlockEnabled(c.gapBlockEnabled !== false);
+          setGapBlockMinNights(Math.max(2, Math.min(14, c.gapBlockMinNights ?? 2)));
           setModeEnabled(c.modeEnabled !== false);
           setApplyPrice(c.applyPrice !== false);
           setApplyMinStay(c.applyMinStay !== false && c.applyPrice !== false);
@@ -394,7 +430,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       let days: CalendarDay[] = [];
       let fromCache = false;
       let fromAirroi = false;
-      if (!fromCache && row.hasAirroiSnapshot) {
+      if (!fromCache && row.hasAirroiSnapshot && !row.hasRevenueEstimate) {
         const allAirroi = mapAirroiCalendarDays(row);
         if (allAirroi.length > 0) {
           days = allAirroi;
@@ -432,11 +468,22 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     setApplyError(null);
     try {
       await pilot.applyToCalendar();
-      await load();
+      await load({ background: true });
     } catch (e) {
       setApplyError(e instanceof Error ? e.message : String(e));
       throw e;
     }
+  }, [listingId, pilot, load]);
+
+  const runCalendarUpdate = useCallback(async () => {
+    if (!listingId) throw new Error('Listing manquant');
+    setApplyError(null);
+    const data = await pilot.applyToCalendar();
+    if (!data?.applyReport) {
+      throw new Error('Rapport apply manquant dans la réponse API');
+    }
+    void load({ background: true });
+    return data.applyReport;
   }, [listingId, pilot, load]);
 
   const refreshAirroi = useCallback(async () => {
@@ -448,6 +495,79 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     await load();
     return { costUsd: res.data.costUsd };
   }, [listingId, load]);
+
+  const refreshAirroiPart = useCallback(
+    async (part: AirroiListingRefreshPart) => {
+      if (!listingId) return;
+      const res = await refreshListingAirroiPart(listingId, part);
+      if (!res.data?.ok) {
+        throw new Error(res.data?.error ?? `Appel ${part} échoué`);
+      }
+      await load();
+      if (part === 'estimate') {
+        await pilot.runPreview().catch(() => undefined);
+      }
+      return { costUsd: res.data.costUsd };
+    },
+    [listingId, load, pilot],
+  );
+
+  const listingEstimateInputs = useMemo(() => {
+    if (!listingId || !portfolioRow) return null;
+    const l = portfolioRow.listing;
+    const ar = portfolioRow.airroiRaw;
+    const pos = l.position;
+    const latListing =
+      pos?.lat != null && Number.isFinite(pos.lat) && Number(pos.lat) !== 0
+        ? Number(pos.lat)
+        : null;
+    const lngListing =
+      pos?.lng != null && Number.isFinite(pos.lng) && Number(pos.lng) !== 0
+        ? Number(pos.lng)
+        : null;
+    const airroiLat =
+      ar?.latitude != null && ar.latitude !== 0 ? Number(ar.latitude) : null;
+    const airroiLng =
+      ar?.longitude != null && ar.longitude !== 0 ? Number(ar.longitude) : null;
+    const gpsDeltaMeters =
+      latListing != null &&
+      lngListing != null &&
+      airroiLat != null &&
+      airroiLng != null
+        ? Math.round(haversineMeters(latListing, lngListing, airroiLat, airroiLng))
+        : null;
+    const district =
+      l.district && l.district !== '—' ? l.district : ar?.district ?? l.district;
+    const parts = [l.name, district, l.city].filter(Boolean);
+    const bedrooms = Math.max(0, Number(l.bedrooms ?? ar?.bedrooms ?? 1));
+    const baths = Math.max(
+      1,
+      Number(l.bathrooms ?? portfolioRow.airroiGeoUsed?.baths ?? bedrooms),
+    );
+    const guestsMax = Math.max(1, Number(l.guests ?? 0));
+    const geoUsed = portfolioRow.airroiGeoUsed;
+    return {
+      listingId,
+      name: l.name ?? 'Bien',
+      lat: latListing,
+      lng: lngListing,
+      airroiListingLat: airroiLat,
+      airroiListingLng: airroiLng,
+      gpsDeltaMeters,
+      addressLine: parts.length ? parts.join(', ') : null,
+      coordsSource: latListing != null ? 'listing Mongo (lat/lng)' : 'GPS manquant — renseigner sur la fiche listing',
+      lastAirroiGeoSource: geoUsed?.source ?? null,
+      lastAirroiGeoSent:
+        geoUsed?.lat != null && geoUsed?.lng != null
+          ? `${geoUsed.lat.toFixed(5)}, ${geoUsed.lng.toFixed(5)}`
+          : null,
+      bedrooms,
+      baths,
+      guests: guestsMax,
+      personCapacityPricing: l.personCapacityPricing ?? null,
+      airbnbListingId: l.airbnbListingId ?? null,
+    };
+  }, [listingId, portfolioRow]);
 
   const compRows = useMemo(() => {
     if (!portfolioRow) return [];
@@ -476,13 +596,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         bienMapPosition: null as { lat: number; lng: number } | null,
       };
     }
-    const ar = portfolioRow.airroiRaw;
-    const lat = ar?.latitude ?? portfolioRow.listing.position?.lat;
-    const lng = ar?.longitude ?? portfolioRow.listing.position?.lng;
-    const bienMapPosition =
-      lat != null && lng != null && Number(lat) !== 0 && Number(lng) !== 0
-        ? { lat: Number(lat), lng: Number(lng) }
-        : null;
+    const pos = resolveBienLatLng(portfolioRow);
+    const bienMapPosition = pos;
 
     const pins: CompMapPin[] = (portfolioRow.airroiComps ?? [])
       .filter(
@@ -506,26 +621,45 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     return { compMapPins: pins, bienMapPosition };
   }, [portfolioRow]);
 
-  /** Snapshot marché brut (future/rates) */
-  const showAirroiCalendar = calendarFromAirroi && calendarDays.length > 0;
-  /** Preview mixEngine uniquement si pilote actif — sinon courbe = snapshot AirROI brut */
-  const usesPilotPreview =
-    aiEnabled && pilot.hasSojoriPreview && pilot.previewDays.length > 0;
-  const marketBaseDays = showAirroiCalendar ? calendarDays : calendarDays;
+  const hasRevenueEstimate = Boolean(portfolioRow?.hasRevenueEstimate);
+  /** Snapshot future/rates (comparaison OTA — pas le moteur de prix) */
+  const showAirroiOtaCalendar = calendarFromAirroi && calendarDays.length > 0;
+  /** Preview pilote (estimate + bornes) — affiché avant envoi calendrier */
+  const usesPilotPreview = pilot.hasSojoriPreview && pilot.previewDays.length > 0;
   const displayCalendarDays = usesPilotPreview
     ? pilot.previewDays
     : events.length > 0
-      ? overlayEventsOnCalendarDays(marketBaseDays, events)
-      : pilot.previewDays.length > 0 && pilot.previewLoading
+      ? overlayEventsOnCalendarDays(calendarDays, events)
+      : pilot.previewLoading
         ? pilot.previewDays
-        : marketBaseDays;
+        : calendarDays;
+  /** Courbe bleue = marché estimate brut (avant corrections Sojori) */
+  const calendarMarketDays =
+    usesPilotPreview && pilot.previewMarketDays.length > 0
+      ? pilot.previewMarketDays
+      : undefined;
   const calendarHasEventOverlay = !usesPilotPreview && events.length > 0;
   const displayHasCalendarProd =
-    showAirroiCalendar || pilot.hasSojoriPreview || pilot.previewLoading || calendarFromCache || calendarFromAirroi;
-  const displayCalendarFromAirroi = !usesPilotPreview && !calendarHasEventOverlay && showAirroiCalendar;
+    usesPilotPreview ||
+    pilot.previewLoading ||
+    showAirroiOtaCalendar ||
+    hasRevenueEstimate ||
+    calendarFromCache;
+  const displayCalendarFromAirroi =
+    !usesPilotPreview && !calendarHasEventOverlay && showAirroiOtaCalendar;
   const displayCalendarFromCache =
-    usesPilotPreview || (!showAirroiCalendar && (pilot.hasSojoriPreview || calendarFromCache));
-  const displayUsesRolling365 = displayCalendarFromAirroi || usesPilotPreview || calendarHasEventOverlay;
+    usesPilotPreview || (!showAirroiOtaCalendar && (pilot.hasSojoriPreview || calendarFromCache));
+  const calendarWindowMode: 'rolling12m' | 'calendarYear' =
+    calendarFromCache && !usesPilotPreview && !hasRevenueEstimate
+      ? 'calendarYear'
+      : 'rolling12m';
+  const calendarPricingSource: 'estimate' | 'sojori' | 'airroi' = usesPilotPreview
+    ? hasRevenueEstimate
+      ? 'estimate'
+      : 'sojori'
+    : displayCalendarFromAirroi
+      ? 'airroi'
+      : 'sojori';
 
   const onExpandDay = pilot.expandDay;
 
@@ -542,8 +676,11 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       hasTtm: false,
       hasL90d: false,
       applyToOps,
+      runCalendarUpdate,
       refetch: load,
       refreshAirroi,
+      refreshAirroiPart,
+      listingEstimateInputs,
       view: null,
     };
   }
@@ -553,10 +690,33 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   let { performance, hasTtm, hasL90d } = buildPerformanceFromAirroi(portfolioRow);
   performance.pacing.compsCount = airroiCompsCount;
 
+  const est = portfolioRow.estimateSummary;
   const compRevenues = compRows.filter((r) => !r.isSelf).map((r) => r.revenueTtm);
   const p50Comps = medianPositive(compRevenues);
   let hasPotentialProd = false;
-  if (p50Comps > 0) {
+  let potentialHint: string | undefined;
+  if (est && est.revenueP50Mad > 0) {
+    hasPotentialProd = true;
+    performance = {
+      ...performance,
+      potentialAnnual: {
+        p25: est.revenueP25Mad,
+        p50: est.revenueP50Mad,
+        p75: est.revenueP75Mad,
+        currency: 'MAD',
+      },
+      potentialUsd: Math.round(est.revenueP50Mad / USD_TO_MAD),
+    };
+    const snap = portfolioRow.airroiSnapshotAt
+      ? new Date(portfolioRow.airroiSnapshotAt).toLocaleString('fr-FR', {
+          dateStyle: 'short',
+          timeStyle: 'short',
+        })
+      : null;
+    potentialHint = snap
+      ? `GET /calculator/estimate · snapshot ${snap}`
+      : 'GET /calculator/estimate (AirROI)';
+  } else if (p50Comps > 0) {
     hasPotentialProd = true;
     performance = {
       ...performance,
@@ -568,21 +728,47 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       },
       potentialUsd: Math.round(p50Comps / USD_TO_MAD),
     };
+    potentialHint = `Médiane revenus TTM des ${compRevenues.length} comps marché`;
   }
 
+  const estimatedRevenueMad =
+    est?.revenueP50Mad && est.revenueP50Mad > 0 ? est.revenueP50Mad : undefined;
+
+  const compsAdrValues = compRows.map((r) => r.adrTtm).filter((n) => n > 0);
+  const compsMedianAdr = medianPositive(compsAdrValues);
+  const selfCompAdr = compRows.find((r) => r.isSelf)?.adrTtm ?? 0;
+  const boundsContextHint =
+    compsMedianAdr > 0 || est?.adrP50Mad
+      ? [
+          compsMedianAdr > 0
+            ? `Comps directs (§07) : ADR médiane ≈ ${compsMedianAdr.toLocaleString('fr-FR')} MAD/nuit`
+            : null,
+          selfCompAdr > 0
+            ? `Votre annonce Airbnb (TTM snapshot) : ≈ ${selfCompAdr.toLocaleString('fr-FR')} MAD`
+            : null,
+          est?.adrP50Mad
+            ? `Calculator/estimate (modèle AirROI) : ADR P50 ≈ ${est.adrP50Mad.toLocaleString('fr-FR')} MAD — peut être plus bas que les comps luxe`
+            : null,
+          'Les curseurs §03 (500 min) = bornes du slider UI, pas un prix imposé par AirROI.',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : undefined;
+
+  const airroiBedrooms = Math.max(0, Number(portfolioRow.listing.bedrooms ?? 0));
+  const airroiBaths = Math.max(
+    1,
+    Number(portfolioRow.listing.bathrooms ?? portfolioRow.airroiGeoUsed?.baths ?? airroiBedrooms),
+  );
+  const airroiGuestsMax = Math.max(1, Number(portfolioRow.listing.guests ?? 0));
   const listing = {
     ...portfolioRow.listing,
     district: portfolioRow.airroiRaw?.district ?? portfolioRow.listing.district ?? '—',
     airroiZone: portfolioRow.airroiRaw?.district ?? undefined,
-    maxGuests: portfolioRow.listing.guests,
+    maxGuests: airroiGuestsMax,
+    airroiApiProfile: `API AirROI · ${airroiBedrooms} ch. · ${airroiBaths} sdb. · ${airroiGuestsMax} pers. max`,
     amenities: portfolioRow.listing.amenities ?? [],
-    position:
-      portfolioRow.airroiRaw?.latitude != null && portfolioRow.airroiRaw?.longitude != null
-        ? {
-            lat: portfolioRow.airroiRaw.latitude,
-            lng: portfolioRow.airroiRaw.longitude,
-          }
-        : portfolioRow.listing.position,
+    position: resolveBienLatLng(portfolioRow) ?? portfolioRow.listing.position,
   };
 
   const marketKpis: MarketKpis | undefined =
@@ -635,8 +821,11 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     hasTtm,
     hasL90d,
     applyToOps,
+    runCalendarUpdate,
     refetch: load,
     refreshAirroi,
+    refreshAirroiPart,
+    listingEstimateInputs,
     view: {
       listing,
       provenance: {
@@ -644,6 +833,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         ttmPeriodLabel: portfolioRow.perfMeta?.ttmPeriodLabel ?? null,
         calendarFromCache,
         hasAirroiSnapshot: Boolean(portfolioRow.hasAirroiSnapshot),
+        hasRevenueEstimate,
+        perfSource: portfolioRow.perfMeta?.source ?? null,
       },
       hasTtm,
       hasL90d,
@@ -653,17 +844,16 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       calendarFromAirroi: displayCalendarFromAirroi,
       calendarFromCache: displayCalendarFromCache,
       calendarUsesPilotPreview: usesPilotPreview,
+      calendarPricingSource,
       calendarHasEventOverlay,
-      calendarUsesRolling365: displayUsesRolling365,
+      calendarWindowMode,
       eventsCount: events.length,
       pilotPreviewLoading: pilot.previewLoading,
       pilotApplyLoading: pilot.applyLoading,
       pilotApplySummary: pilot.lastApplySummary,
       pilotApplyError: applyError,
-      potentialHint:
-        hasPotentialProd && p50Comps > 0
-          ? `Estimation P50 · médiane revenus TTM des ${compRevenues.length} comps marché`
-          : undefined,
+      potentialHint,
+      calendarPricingSource,
       hasCompsProd: compRows.length > 1 || airroiCompsCount > 0,
       performance,
       market,
@@ -674,8 +864,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       mode,
       activeModeId,
       pricingModes,
-      minStayDelta,
-      minStayPlancher,
+      gapBlockEnabled,
+      gapBlockMinNights,
       modeEnabled,
       applyPrice: aiEnabled && applyPrice,
       applyMinStay: aiEnabled && applyMinStay,
@@ -690,8 +880,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       suggestions: [],
       calendarYear,
       calendarDays: displayCalendarDays,
-      calendarMarketDays:
-        usesPilotPreview && showAirroiCalendar ? calendarDays : undefined,
+      calendarMarketDays,
       calendarYearOptions: [calendarYear, calendarYear + 1],
       compsMarketStats,
       selfVsComps,
@@ -704,8 +893,11 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       calendarAirroiError,
       airroiCalendarDaysCount: portfolioRow.airroiCalendarDaysCount ?? calendarDays.length,
       compRows,
-      estimatedRevenueMad: undefined,
+      estimatedRevenueMad,
       estimatedRevenueLiftPct: undefined,
+      boundsContextHint,
+      compsMedianAdr: compsMedianAdr > 0 ? compsMedianAdr : undefined,
+      estimateAdrMad: est?.adrP50Mad,
       onToggleAi: async (enabled: boolean) => {
         if (!listingId) return;
         if (enabled) {
@@ -769,11 +961,23 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         scheduleConfigSave();
       },
       onApplyRecoBounds: () => {
-        const adr = portfolioRow.airroiRaw?.ttm_avg_rate;
-        if (adr == null) return;
-        const m = Math.round(adr * USD_TO_MAD);
-        setFloor(Math.round(m * 0.65));
-        setCeiling(Math.round(m * 1.35));
+        const adrs = compRows.map((r) => r.adrTtm).filter((n) => n > 0);
+        const compsMed = medianPositive(adrs);
+        const selfAdr = compRows.find((r) => r.isSelf)?.adrTtm ?? 0;
+        const estimateAdr = portfolioRow.estimateSummary?.adrP50Mad ?? 0;
+        const ref =
+          compsMed > 0
+            ? compsMed
+            : selfAdr > 0
+              ? selfAdr
+              : estimateAdr > 0
+                ? estimateAdr
+                : portfolioRow.airroiRaw?.ttm_avg_rate != null
+                  ? Math.round(portfolioRow.airroiRaw.ttm_avg_rate * USD_TO_MAD)
+                  : 0;
+        if (ref <= 0) return;
+        setFloor(Math.round(ref * 0.65));
+        setCeiling(Math.round(ref * 1.35));
         scheduleConfigSave();
       },
       onActiveModeChange: (id: string) => {
@@ -826,12 +1030,12 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         });
         scheduleConfigSave();
       },
-      onMinStayDeltaChange: (v) => {
-        setMinStayDelta(v);
+      onGapBlockEnabledChange: (on) => {
+        setGapBlockEnabled(on);
         scheduleConfigSave();
       },
-      onMinStayPlancherChange: (v) => {
-        setMinStayPlancher(v);
+      onGapBlockMinNightsChange: (v) => {
+        setGapBlockMinNights(Math.max(2, Math.min(14, Math.round(v))));
         scheduleConfigSave();
       },
       onModeEnabledChange: (v) => {
@@ -873,6 +1077,14 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       onAcceptSuggestion: () => {},
       onYearChange: setCalendarYear,
       onApplyToOps: applyToOps,
+      onRunCalendarUpdate: runCalendarUpdate,
+      activeModeLabel:
+        pricingModes.find((m) => m.id === activeModeId)?.label ??
+        (activeModeId === 'prudent'
+          ? 'Prudent'
+          : activeModeId === 'agressif'
+            ? 'Agressif'
+            : 'Équilibré'),
       onExpandDay,
     },
   };

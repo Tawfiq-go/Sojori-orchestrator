@@ -1,0 +1,1074 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sojori · Staff & Orchestration</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --p:#b8851a;--pd:#876119;--ps:#e6c46a;--pt:rgba(184,133,26,0.10);--pt2:rgba(184,133,26,0.22);
+  --bg0:#f6f5f1;--bg1:#fff;--bg2:#fafaf7;--bg3:#f0eee8;
+  --t:#14110a;--t2:#55504a;--t3:#7a756c;--t4:#a8a299;
+  --b:rgba(20,17,10,0.07);--bs:rgba(20,17,10,0.14);
+  --su:#0a8f5e;--sut:rgba(10,143,94,0.10);--sus:#86efac;
+  --er:#c81e1e;--ert:rgba(200,30,30,0.10);
+  --in:#0673b3;--int:rgba(6,115,179,0.10);
+  --ai:#7c3aed;--ait:rgba(124,58,237,0.10);
+  --wa:#25D366;
+  --sans:Geist,system-ui,sans-serif;--mono:'Geist Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg0);font-family:var(--sans);color:var(--t);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit;padding:0}
+input,textarea,select{font:inherit;color:inherit}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes pulseGold{0%,100%{box-shadow:0 0 0 0 rgba(184,133,26,0.45)}50%{box-shadow:0 0 0 6px rgba(184,133,26,0)}}
+@keyframes pulseGreen{0%,100%{box-shadow:0 0 0 0 rgba(10,143,94,0.45)}50%{box-shadow:0 0 0 5px rgba(10,143,94,0)}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+
+/* ─── TOP BAR ─── */
+.topbar{position:sticky;top:0;z-index:30;background:rgba(255,255,255,0.85);backdrop-filter:blur(16px) saturate(180%);border-bottom:1px solid var(--b);padding:11px 24px;display:flex;align-items:center;gap:16px;height:60px}
+.brand{display:flex;align-items:center;gap:9px;padding-right:14px;border-right:1px solid var(--b)}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--ps),var(--pd));color:#1a1408;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(184,133,26,0.30)}
+.brand-name{font-weight:700;font-size:15px;letter-spacing:-0.02em}
+.brand-name span{font-family:var(--mono);font-size:9.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-left:4px}
+.crumb{font-size:11px;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.08em;font-weight:700}
+.crumb b{color:var(--t)}
+.top-meta{margin-left:auto;display:flex;align-items:center;gap:12px}
+.version-chip{display:inline-flex;align-items:center;gap:7px;padding:4px 9px;font-size:10.5px;color:var(--t2);background:var(--bg2);border:1px solid var(--b);border-radius:99px;font-family:var(--mono);font-weight:700;letter-spacing:0.04em}
+.version-chip .v{color:var(--pd)}
+.save-inline{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-family:var(--mono);color:var(--su);font-weight:700;letter-spacing:0.04em}
+.save-inline::before{content:'✓';font-weight:800}
+.btn{padding:8px 14px;border-radius:9px;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;gap:6px;letter-spacing:-0.005em}
+.btn-ghost{background:var(--bg1);color:var(--t);border:1px solid var(--b)}
+.btn-prim{background:linear-gradient(180deg,#cb9b2c,var(--p));color:#1a1408;box-shadow:0 1px 2px rgba(135,97,25,0.30),inset 0 1px 0 rgba(255,255,255,0.30)}
+
+/* ─── LAYOUT ─── */
+.split{display:grid;grid-template-columns:228px 1fr 380px;max-width:1500px;margin:0 auto;min-height:calc(100vh - 60px)}
+
+/* ─── RAIL ─── */
+.rail{padding:22px 0;border-right:1px solid var(--b);position:sticky;top:60px;align-self:start;max-height:calc(100vh - 60px);overflow-y:auto}
+.rail-h{margin:0 16px 14px;font-size:10.5px;font-weight:800;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.08em}
+.rail-tab{display:flex;align-items:center;gap:11px;padding:11px 16px;font-size:13px;font-weight:600;color:var(--t3);cursor:pointer;border-left:3px solid transparent;width:100%;text-align:left;transition:all .15s}
+.rail-tab:hover{color:var(--t);background:var(--bg2)}
+.rail-tab.on{color:var(--p);background:var(--pt);border-left-color:var(--p);font-weight:700}
+.rail-tab .em{font-size:16px}
+.rail-tab .info{flex:1;min-width:0;line-height:1.3}
+.rail-tab .info .ds{font-size:10.5px;color:var(--t4);font-family:var(--mono);font-weight:600;letter-spacing:0.02em;margin-top:1px;text-transform:uppercase}
+.rail-tab.on .info .ds{color:var(--p)}
+.rail-tab .wa-impact{font-size:9px;font-family:var(--mono);font-weight:800;padding:2px 6px;border-radius:4px;letter-spacing:0.04em}
+.wa-impact.yes{background:var(--sut);color:var(--su)}
+.wa-impact.no{background:var(--bg3);color:var(--t4)}
+.wa-impact.part{background:var(--int);color:var(--in)}
+.wa-impact.ops{background:var(--ait);color:var(--ai)}
+
+/* ─── MAIN ─── */
+.main{padding:28px 28px 60px;min-width:0;overflow-y:auto;max-height:calc(100vh - 60px)}
+.section-hero{display:flex;align-items:flex-start;gap:14px;margin-bottom:22px}
+.section-hero .em{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--ps),var(--pd));color:#1a1408;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 6px 16px rgba(184,133,26,0.25)}
+.section-hero h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-0.03em;display:flex;align-items:center;gap:10px}
+.section-hero h1 .badge{font-size:9.5px;font-family:var(--mono);font-weight:800;padding:2px 7px;border-radius:5px;letter-spacing:0.06em;background:var(--ait);color:var(--ai)}
+.section-hero .sub{font-size:13px;color:var(--t3);margin-top:5px;line-height:1.55;max-width:680px}
+
+/* ── README banner ── */
+.readme{margin-bottom:22px;background:linear-gradient(135deg,#fff,#fff8eb 80%);border:1px solid var(--pt2);border-radius:14px;padding:18px 20px;display:flex;gap:14px;align-items:flex-start;animation:fadeIn .4s}
+.readme .ic{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--ps),var(--pd));color:#1a1408;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.readme .body{flex:1}
+.readme h3{margin:0 0 4px;font-size:14px;font-weight:800;letter-spacing:-0.015em}
+.readme h3 .pill{font-size:9.5px;font-family:var(--mono);font-weight:800;background:var(--p);color:#1a1408;padding:2px 7px;border-radius:5px;margin-left:6px;letter-spacing:0.06em}
+.readme .desc{font-size:12.5px;color:var(--t2);line-height:1.55;margin-bottom:10px}
+.readme ul{margin:0;padding-left:18px;font-size:12px;color:var(--t2);line-height:1.65}
+.readme ul li b{color:var(--t);font-weight:700}
+.readme .close{margin-left:auto;align-self:flex-start;color:var(--t3);font-size:13px;cursor:pointer;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px}
+.readme .close:hover{background:var(--bg2);color:var(--t)}
+
+/* ─── STAFF · LIST ─── */
+.list-h{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.list-h h2{margin:0;font-size:14px;font-weight:800;letter-spacing:-0.015em;display:flex;align-items:center;gap:8px}
+.list-h .ct{font-family:var(--mono);font-size:10px;background:var(--bg2);color:var(--t3);padding:2px 8px;border-radius:99px;font-weight:700;letter-spacing:0.04em}
+.list-h .filters{display:flex;gap:5px;margin-left:auto}
+.filter-pill{padding:5px 10px;font-size:11px;font-family:var(--mono);font-weight:700;background:var(--bg1);border:1px solid var(--b);color:var(--t3);border-radius:7px;cursor:pointer;letter-spacing:0.04em}
+.filter-pill.on{background:var(--pt);color:var(--pd);border-color:var(--p)}
+
+.staff-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.staff-card{background:var(--bg1);border:1px solid var(--b);border-radius:14px;padding:16px;cursor:pointer;transition:all .15s;position:relative;box-shadow:0 1px 2px rgba(20,17,10,0.04)}
+.staff-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px -8px rgba(20,17,10,0.10);border-color:var(--bs)}
+.staff-card.on{border-color:var(--p);box-shadow:0 0 0 2px var(--pt),0 8px 24px -8px rgba(184,133,26,0.20)}
+.staff-card.off{opacity:0.5}
+.staff-card .row1{display:flex;align-items:center;gap:11px;margin-bottom:11px}
+.staff-card .av{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#fde68a,#d97706);color:#1a1408;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;letter-spacing:-0.01em;flex-shrink:0;position:relative}
+.staff-card .av.c2{background:linear-gradient(135deg,#a5f3fc,#0e7490);color:#fff}
+.staff-card .av.c3{background:linear-gradient(135deg,#86efac,#16a34a);color:#fff}
+.staff-card .av.c4{background:linear-gradient(135deg,#fda4af,#ec4899);color:#fff}
+.staff-card .av .dot{position:absolute;bottom:-2px;right:-2px;width:11px;height:11px;border-radius:50%;border:2px solid #fff}
+.staff-card .av .dot.green{background:var(--su)}
+.staff-card .av .dot.red{background:var(--er)}
+.staff-card .av .dot.away{background:var(--t4)}
+.staff-card .info{flex:1;min-width:0}
+.staff-card .nm{font-size:14px;font-weight:800;letter-spacing:-0.005em;display:flex;align-items:center;gap:6px}
+.staff-card .nm .admin{font-size:11px;color:var(--pd);background:var(--pt);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-weight:800;letter-spacing:0.04em;display:inline-flex;align-items:center;gap:3px}
+.staff-card .role{font-size:11px;color:var(--t3);margin-top:2px;font-family:var(--mono);font-weight:600;letter-spacing:0.02em}
+.staff-card .actions{display:flex;gap:3px}
+.staff-card .actions button{width:26px;height:26px;border-radius:6px;background:var(--bg2);color:var(--t3);font-size:12px}
+.staff-card .actions button:hover{background:var(--pt);color:var(--pd)}
+.staff-card .tasks{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+.task-chip{font-size:10px;font-family:var(--mono);font-weight:700;padding:3px 7px;border-radius:5px;background:var(--bg2);color:var(--t2);letter-spacing:0.04em;border:1px solid var(--b)}
+.task-chip.active{background:var(--sut);color:var(--su);border-color:transparent}
+.staff-card .meta-line{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--t3);padding:7px 0;border-top:1px dashed var(--b);font-family:var(--mono)}
+.staff-card .meta-line .l{text-transform:uppercase;letter-spacing:0.04em;font-weight:700;font-size:9.5px}
+.staff-card .meta-line .v{color:var(--t);font-weight:700}
+.staff-card .schedule{margin-top:8px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t3)}
+.staff-card .schedule .days{display:inline-flex;gap:2px}
+.staff-card .schedule .day{width:14px;height:14px;border-radius:3px;background:var(--bg3);font-size:8.5px;font-family:var(--mono);font-weight:800;color:var(--t4);display:inline-flex;align-items:center;justify-content:center}
+.staff-card .schedule .day.on{background:var(--p);color:#1a1408}
+.staff-card .schedule .h{font-family:var(--mono);color:var(--t2);font-weight:700}
+
+.add-staff-card{background:var(--bg1);border:1.5px dashed var(--bs);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:6px;cursor:pointer;transition:all .15s;min-height:170px;color:var(--t3)}
+.add-staff-card:hover{border-color:var(--p);background:var(--pt);color:var(--pd)}
+.add-staff-card .em{font-size:28px}
+.add-staff-card .lbl{font-size:13px;font-weight:700}
+
+/* ── Form drawer ── */
+.drawer{margin-top:22px;background:var(--bg1);border:1px solid var(--p);border-radius:14px;overflow:hidden;animation:fadeIn .3s;box-shadow:0 8px 24px -8px rgba(184,133,26,0.15)}
+.drawer-h{padding:14px 18px;background:linear-gradient(180deg,var(--pt),transparent 80%);border-bottom:1px solid var(--b);display:flex;align-items:center;gap:12px}
+.drawer-h h3{margin:0;font-size:15px;font-weight:800;letter-spacing:-0.015em}
+.drawer-h .close{margin-left:auto;color:var(--t3);width:28px;height:28px;border-radius:7px;background:var(--bg2);font-size:14px;display:flex;align-items:center;justify-content:center}
+
+.form-grid{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.form-grid .full{grid-column:1/-1}
+.form-section{display:flex;flex-direction:column;gap:10px}
+.form-section-h{font-size:10px;font-weight:800;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.08em;display:flex;align-items:center;gap:6px}
+.form-section-h::before{content:'';width:14px;height:1px;background:var(--bs)}
+.form-section-h::after{content:'';flex:1;height:1px;background:var(--bs)}
+
+.field{display:flex;flex-direction:column;gap:5px}
+.field-label{font-size:11px;font-weight:700;color:var(--t2);letter-spacing:-0.005em}
+.field-label .req{color:var(--er)}
+.field-label .hint{display:block;font-size:10px;color:var(--t4);font-family:var(--mono);font-weight:600;margin-top:2px;letter-spacing:0.02em}
+.input{width:100%;padding:9px 11px;border:1px solid var(--b);border-radius:8px;background:var(--bg2);font-size:13px;transition:all .12s}
+.input:focus{outline:0;border-color:var(--p);background:#fff;box-shadow:0 0 0 3px var(--pt)}
+.input-num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* Seg */
+.seg{display:inline-flex;background:var(--bg2);border:1px solid var(--b);border-radius:8px;padding:3px;gap:1px}
+.seg button{padding:6px 12px;border-radius:6px;font-size:11.5px;font-weight:700;color:var(--t3);font-family:var(--mono);letter-spacing:0.02em}
+.seg button.on{background:#fff;color:var(--t);box-shadow:0 1px 2px rgba(20,17,10,0.06)}
+
+/* Pill toggle */
+.pill-group{display:flex;flex-wrap:wrap;gap:5px}
+.pill-toggle{padding:6px 11px;border-radius:7px;font-size:11.5px;font-weight:700;background:var(--bg1);border:1px solid var(--b);color:var(--t3);cursor:pointer;font-family:var(--mono);letter-spacing:0.02em}
+.pill-toggle.on{background:var(--pt);border-color:var(--p);color:var(--pd)}
+.pill-toggle .em{margin-right:3px;font-size:13px;vertical-align:-1px}
+
+/* Day pills */
+.day-pills{display:flex;flex-wrap:wrap;gap:4px}
+.day-pill{width:32px;height:32px;border-radius:8px;font-size:11px;font-weight:800;border:1px solid var(--b);background:#fff;color:var(--t3);cursor:pointer;font-family:var(--mono)}
+.day-pill.on{background:var(--p);border-color:var(--pd);color:#1a1408}
+
+/* Pricing grid */
+.pricing-grid{display:flex;flex-direction:column;gap:6px}
+.price-row{display:grid;grid-template-columns:1fr 110px 30px;gap:8px;align-items:center;padding:7px 10px;background:var(--bg2);border:1px solid var(--b);border-radius:8px}
+.price-row .nm{font-size:12.5px;font-weight:600}
+.price-row .input{padding:6px 9px;font-size:12px}
+.price-row .x{color:var(--t3);font-size:12px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:pointer}
+.price-row .x:hover{background:var(--ert);color:var(--er)}
+.add-btn{padding:9px;background:#fff;border:1.5px dashed var(--bs);border-radius:8px;font-size:12px;font-weight:700;color:var(--t3);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;width:100%;transition:all .15s}
+.add-btn:hover{border-color:var(--p);background:var(--pt);color:var(--pd)}
+
+.drawer-foot{padding:14px 18px;border-top:1px solid var(--b);background:var(--bg2);display:flex;gap:8px;justify-content:flex-end}
+
+/* Admin toggle row */
+.admin-row{padding:11px 13px;background:linear-gradient(135deg,var(--pt),transparent);border:1px solid var(--pt2);border-radius:9px;display:flex;align-items:center;gap:10px}
+.admin-row .ic{font-size:18px}
+.admin-row .info{flex:1}
+.admin-row .nm{font-size:12.5px;font-weight:700}
+.admin-row .ds{font-size:11px;color:var(--t3);margin-top:1px}
+
+/* Toggle */
+.toggle{width:34px;height:20px;border-radius:99px;background:var(--bs);position:relative;cursor:pointer;flex-shrink:0;transition:background .2s}
+.toggle.on{background:linear-gradient(135deg,#cb9b2c,var(--p))}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.20);transition:transform .2s}
+.toggle.on::after{transform:translateX(14px)}
+.toggle.sm{width:28px;height:16px}
+.toggle.sm::after{width:12px;height:12px}
+.toggle.sm.on::after{transform:translateX(12px)}
+
+/* ─── ORCHESTRATION ─── */
+.workflow-card{background:var(--bg1);border:1px solid var(--b);border-radius:14px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 2px rgba(20,17,10,0.04)}
+.workflow-card.open{border-color:var(--pt2);box-shadow:0 4px 16px -6px rgba(184,133,26,0.15)}
+.wf-h{padding:14px 16px;display:flex;align-items:center;gap:11px;cursor:pointer;background:var(--bg1)}
+.workflow-card.open .wf-h{background:linear-gradient(180deg,var(--pt),transparent 90%);border-bottom:1px solid var(--b)}
+.wf-h .em{width:34px;height:34px;border-radius:9px;background:var(--pt);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.wf-h .info{flex:1}
+.wf-h .nm{font-size:13.5px;font-weight:800;letter-spacing:-0.005em}
+.wf-h .ds{font-size:11px;color:var(--t3);margin-top:2px;font-family:var(--mono)}
+.wf-h .stats{display:flex;gap:6px}
+.wf-stat{padding:3px 8px;font-size:10px;font-family:var(--mono);font-weight:800;background:var(--bg2);border-radius:5px;color:var(--t3);letter-spacing:0.04em}
+.wf-stat.rel{background:var(--ait);color:var(--ai)}
+.wf-stat.ass{background:var(--int);color:var(--in)}
+.wf-stat.esc{background:var(--ert);color:var(--er)}
+.wf-h .arr{color:var(--t3);font-size:11px;transition:transform .2s}
+.workflow-card.open .wf-h .arr{transform:rotate(90deg)}
+
+.wf-body{padding:18px}
+
+.wf-block{margin-bottom:18px}
+.wf-block:last-child{margin-bottom:0}
+.wf-block-h{font-size:10.5px;font-weight:800;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.wf-block-h .em{font-size:14px}
+.wf-block-h .ct{margin-left:auto;font-size:9.5px;background:var(--bg2);padding:1px 7px;border-radius:99px;font-weight:700}
+
+/* Relances table */
+.rel-table{background:var(--bg2);border:1px solid var(--b);border-radius:9px;overflow:hidden}
+.rel-table-h{padding:8px 10px;background:#fff;border-bottom:1px solid var(--b);display:grid;grid-template-columns:1.4fr 100px 100px 24px;gap:8px;font-size:9.5px;font-family:var(--mono);font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em}
+.rel-row{padding:8px 10px;display:grid;grid-template-columns:1.4fr 100px 100px 24px;gap:8px;align-items:center;border-bottom:1px solid var(--b)}
+.rel-row:last-child{border-bottom:0}
+.rel-row select{padding:6px 9px;font-size:12px;background:#fff;border:1px solid var(--b);border-radius:6px;font-family:var(--mono);font-weight:700}
+.rel-row input{padding:6px 9px;font-size:12px;background:#fff;border:1px solid var(--b);border-radius:6px;font-family:var(--mono);font-weight:700;text-align:center}
+.rel-row .x{color:var(--t3);font-size:12px;width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.rel-row .x:hover{background:var(--ert);color:var(--er)}
+
+/* Assign block */
+.assign-grid{padding:14px;background:var(--bg2);border:1px solid var(--b);border-radius:9px;display:grid;grid-template-columns:1fr 2fr;gap:14px;align-items:flex-start}
+.assign-grid .lbl{font-size:11px;font-weight:700;color:var(--t2);padding-top:5px}
+.assign-grid .lbl .hint{display:block;font-size:10px;color:var(--t4);font-family:var(--mono);font-weight:600;margin-top:2px}
+
+.from-trigger{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.from-trigger select,.from-trigger input{padding:6px 10px;font-size:12px;background:#fff;border:1px solid var(--b);border-radius:6px;font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums}
+.from-trigger input{width:60px;text-align:center}
+.from-trigger .sep{color:var(--t4);font-family:var(--mono);font-size:11px;font-weight:700}
+
+/* Windows pills */
+.window-pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.win-pill{padding:7px 13px;border-radius:8px;font-size:12px;font-weight:700;background:#fff;border:1.5px solid var(--b);color:var(--t3);cursor:pointer;font-family:var(--mono);font-variant-numeric:tabular-nums;transition:all .12s}
+.win-pill.on{background:var(--in);color:#fff;border-color:var(--in);box-shadow:0 2px 8px rgba(6,115,179,0.25)}
+
+/* Deadline block */
+.deadline-block{padding:12px 14px;background:linear-gradient(135deg,var(--ert),transparent 80%);border:1px solid rgba(200,30,30,0.20);border-radius:9px;display:flex;align-items:center;gap:14px}
+.deadline-block .em{font-size:18px}
+.deadline-block .info{flex:1}
+.deadline-block .nm{font-size:12.5px;font-weight:700}
+.deadline-block .ds{font-size:11px;color:var(--t3);margin-top:1px}
+
+/* Messages simples */
+.msg-list{display:flex;flex-direction:column;gap:8px}
+.msg-card{background:var(--bg1);border:1px solid var(--b);border-radius:11px;padding:13px 15px;display:flex;align-items:center;gap:12px;transition:all .15s}
+.msg-card:hover{border-color:var(--bs);transform:translateY(-1px)}
+.msg-card .grip{color:var(--t3);cursor:grab;font-size:14px;flex-shrink:0}
+.msg-card .em{width:32px;height:32px;border-radius:8px;background:var(--ait);color:var(--ai);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.msg-card .info{flex:1;min-width:0}
+.msg-card .nm{font-size:13px;font-weight:800;letter-spacing:-0.005em}
+.msg-card .meta{font-size:10.5px;color:var(--t3);margin-top:3px;font-family:var(--mono);display:flex;gap:6px;flex-wrap:wrap;letter-spacing:0.02em}
+.msg-card .meta b{color:var(--t2)}
+.msg-card .meta .chip{padding:1px 6px;border-radius:4px;font-weight:700}
+.msg-card .meta .chip.trig{background:var(--ait);color:var(--ai)}
+.msg-card .meta .chip.chan{background:var(--sut);color:var(--su)}
+.msg-card .meta .chip.tmpl{background:var(--int);color:var(--in)}
+.msg-card .actions{display:flex;gap:3px}
+.msg-card .actions button{width:26px;height:26px;border-radius:6px;background:var(--bg2);color:var(--t3);font-size:12px}
+.msg-card .actions button:hover{background:var(--pt);color:var(--pd)}
+
+/* Message form inline */
+.msg-form{margin-top:10px;padding:16px;background:linear-gradient(135deg,var(--ait),transparent 80%);border:1px solid rgba(124,58,237,0.25);border-radius:11px;animation:fadeIn .25s}
+.msg-form .row{display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:center;margin-bottom:10px}
+.msg-form .row.full{grid-template-columns:1fr}
+.msg-form .lbl{font-size:11px;font-weight:700;color:var(--t2)}
+.msg-form .input,.msg-form select{padding:7px 10px;font-size:12.5px}
+.msg-form .trigger-row{display:flex;align-items:center;gap:6px}
+.msg-form .trigger-row select{flex:1}
+.msg-form .trigger-row input{width:50px;text-align:center}
+.msg-form .actions{display:flex;gap:7px;justify-content:flex-end;margin-top:10px}
+
+/* ─── RIGHT PANEL ─── */
+.preview{padding:24px 22px 60px;background:linear-gradient(180deg,#f0eee8,#e7e1d2);border-left:1px solid var(--b);overflow-y:auto;max-height:calc(100vh - 60px);position:sticky;top:60px}
+.preview-h{display:flex;align-items:center;gap:9px;margin-bottom:16px}
+.preview-h h3{margin:0;font-size:13px;font-weight:800;letter-spacing:-0.015em}
+.preview-h .live{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-family:var(--mono);font-weight:800;color:var(--su);background:var(--sut);padding:3px 8px;border-radius:99px;letter-spacing:0.04em}
+.preview-h .live::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--su);animation:pulseGreen 2s infinite}
+
+/* Staff details panel */
+.staff-detail{background:var(--bg1);border:1px solid var(--b);border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(20,17,10,0.04)}
+.staff-detail-h{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.staff-detail-h .av{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#fde68a,#d97706);color:#1a1408;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;position:relative}
+.staff-detail-h .av .dot{position:absolute;bottom:-2px;right:-2px;width:12px;height:12px;border-radius:50%;border:2px solid #fff;background:var(--su);animation:pulseGreen 2.4s infinite}
+.staff-detail-h .info{flex:1}
+.staff-detail-h .nm{font-size:14px;font-weight:800;letter-spacing:-0.005em}
+.staff-detail-h .status{font-size:11px;color:var(--su);font-weight:700;font-family:var(--mono);margin-top:2px;letter-spacing:0.04em}
+
+.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px}
+.kpi-mini{background:var(--bg2);border-radius:8px;padding:8px 6px;text-align:center}
+.kpi-mini .v{font-family:var(--mono);font-size:16px;font-weight:800;color:var(--t);letter-spacing:-0.02em}
+.kpi-mini .l{font-size:9px;color:var(--t3);font-family:var(--mono);font-weight:700;letter-spacing:0.04em;text-transform:uppercase;margin-top:2px}
+
+.day-header{font-size:10px;font-weight:800;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.08em;margin:14px 0 8px;display:flex;align-items:center;gap:6px}
+.day-header .ct{margin-left:auto;background:var(--bg2);padding:1px 7px;border-radius:99px;font-size:9px;color:var(--t3)}
+
+.task-line{display:flex;align-items:center;gap:9px;padding:8px 10px;background:var(--bg2);border:1px solid var(--b);border-radius:8px;margin-bottom:5px;transition:all .12s}
+.task-line:hover{border-color:var(--bs)}
+.task-line .h{font-family:var(--mono);font-size:11px;font-weight:800;color:var(--pd);width:42px;text-align:center;letter-spacing:0.02em}
+.task-line .ic{width:24px;height:24px;border-radius:6px;background:var(--pt);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.task-line .nm{flex:1;font-size:12px;font-weight:600;line-height:1.3}
+.task-line .nm small{display:block;font-size:10px;color:var(--t3);margin-top:1px;font-family:var(--mono)}
+.task-line .badge{font-size:9px;font-family:var(--mono);font-weight:800;padding:1px 5px;border-radius:4px;background:var(--sut);color:var(--su);letter-spacing:0.04em}
+
+/* ─── TIMELINE (orchestration preview) ─── */
+.timeline-card{background:var(--bg1);border:1px solid var(--b);border-radius:14px;padding:18px 16px;box-shadow:0 1px 2px rgba(20,17,10,0.04)}
+.timeline-h{font-size:12px;font-weight:800;letter-spacing:-0.005em;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.timeline-h .em{font-size:14px}
+.timeline-sub{font-size:10.5px;color:var(--t3);font-family:var(--mono);margin-bottom:18px;letter-spacing:0.02em;font-weight:700;text-transform:uppercase}
+
+.tl{position:relative;padding-left:22px}
+.tl::before{content:'';position:absolute;left:6px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,var(--p) 0%,var(--in) 30%,var(--ai) 60%,var(--er) 80%,var(--su) 100%);border-radius:99px}
+
+.tl-event{position:relative;margin-bottom:13px;padding-left:4px}
+.tl-event::before{content:'';position:absolute;left:-22px;top:4px;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--bs);box-shadow:0 0 0 3px var(--bg0)}
+.tl-event.start::before{border-color:var(--p);background:linear-gradient(135deg,var(--ps),var(--p))}
+.tl-event.assign::before{border-color:var(--in);background:var(--int)}
+.tl-event.relance::before{border-color:var(--ai);background:var(--ait)}
+.tl-event.deadline::before{border-color:var(--er);background:var(--er);animation:pulseGreen 2s infinite}
+.tl-event.end::before{border-color:var(--su);background:linear-gradient(135deg,var(--sus),var(--su));width:18px;height:18px;left:-24px;top:2px}
+
+.tl-event .when{font-family:var(--mono);font-size:10px;font-weight:800;color:var(--t3);letter-spacing:0.04em;text-transform:uppercase}
+.tl-event .what{font-size:12.5px;font-weight:700;margin-top:2px;letter-spacing:-0.005em}
+.tl-event .det{font-size:10.5px;color:var(--t3);margin-top:2px;font-family:var(--mono)}
+.tl-event.start .what{color:var(--pd)}
+.tl-event.assign .what{color:var(--in)}
+.tl-event.relance .what{color:var(--ai)}
+.tl-event.deadline .what{color:var(--er)}
+.tl-event.end .what{color:var(--su);font-size:13.5px;font-weight:800}
+
+.tl-windows{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px}
+.tl-windows .w{font-family:var(--mono);font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:3px;background:var(--int);color:var(--in);letter-spacing:0.04em}
+
+/* Section visibility */
+.section{display:none;animation:fadeIn .3s}
+.section.on{display:block}
+.preview-pane{display:none}
+.preview-pane.on{display:block;animation:fadeIn .3s}
+
+/* Sub-tabs orchestration */
+.sub-tabs{display:flex;background:var(--bg2);border:1px solid var(--b);border-radius:10px;padding:3px;margin-bottom:18px;width:fit-content}
+.sub-tab{padding:7px 14px;border-radius:7px;font-size:12px;font-weight:700;color:var(--t3);display:inline-flex;align-items:center;gap:6px;letter-spacing:-0.005em}
+.sub-tab.on{background:#fff;color:var(--t);box-shadow:0 1px 2px rgba(20,17,10,0.06)}
+.sub-tab .ct{font-size:9.5px;font-family:var(--mono);background:var(--bg2);padding:1px 6px;border-radius:99px;font-weight:700;margin-left:2px}
+.sub-tab.on .ct{background:var(--pt);color:var(--pd)}
+
+.sub-section{display:none}
+.sub-section.on{display:block}
+</style></head><body>
+
+<!-- ═══════════ TOP BAR ═══════════ -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">S</div>
+    <div class="brand-name">Sojori<span>Atelier · 2026</span></div>
+  </div>
+  <div class="crumb"><b>Sojori Majorelle</b> · Guéliz</div>
+  <div class="top-meta">
+    <span class="version-chip">VERSION · <span class="v">v3.2</span></span>
+    <span class="save-inline">Sauvegardé · il y a 2s</span>
+    <button class="btn btn-ghost">👁 Aperçu</button>
+    <button class="btn btn-prim">⚡ Publier</button>
+  </div>
+</div>
+
+<!-- ═══════════ LAYOUT ═══════════ -->
+<div class="split">
+
+  <!-- ─── RAIL ─── -->
+  <aside class="rail">
+    <div class="rail-h">Configuration · 13 sections</div>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">🆘</span><div class="info">Support<span class="ds">3 catégories</span></div><span class="wa-impact yes">WA</span></button>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">🛎</span><div class="info">Conciergerie<span class="ds">5 services</span></div><span class="wa-impact yes">WA</span></button>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">🧼</span><div class="info">Ménage auto<span class="ds">orchestration</span></div><span class="wa-impact ops">OPS</span></button>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">🏠</span><div class="info">Ménage guest<span class="ds">inclus + payant</span></div><span class="wa-impact yes">WA</span></button>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">✈️</span><div class="info">Créneaux<span class="ds">arrivée/départ</span></div><span class="wa-impact part">PART</span></button>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">📜</span><div class="info">Instructions départ<span class="ds">FR</span></div><span class="wa-impact yes">WA</span></button>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">📋</span><div class="info">Règles & infos<span class="ds">v3 · 4 + 6</span></div><span class="wa-impact yes">WA</span></button>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">💶</span><div class="info">Taxe séjour<span class="ds">15 MAD/ad/nuit</span></div><span class="wa-impact no">INFO</span></button>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">🚗</span><div class="info">Transport<span class="ds">2 routes</span></div><span class="wa-impact yes">WA</span></button>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">🛒</span><div class="info">Courses<span class="ds">texte libre</span></div><span class="wa-impact yes">WA</span></button>
+    <button class="rail-tab" disabled style="opacity:0.55"><span class="em">💌</span><div class="info">Service client<span class="ds">4 objets · 24h</span></div><span class="wa-impact yes">WA</span></button>
+
+    <div class="rail-h" style="margin-top:14px;color:var(--pd)">⚡ NOUVEAU · LIVRAISON C</div>
+    <button class="rail-tab on" data-tab="staff"><span class="em">👷</span><div class="info">Staff<span class="ds">3 membres</span></div><span class="wa-impact ops">OPS</span></button>
+    <button class="rail-tab" data-tab="orch"><span class="em">⚙️</span><div class="info">Orchestration<span class="ds">workflows + msg</span></div><span class="wa-impact ops">OPS</span></button>
+  </aside>
+
+  <!-- ─── MAIN ─── -->
+  <main class="main">
+
+    <!-- ═══════ STAFF ═══════ -->
+    <section class="section on" id="sec-staff">
+      <div class="section-hero">
+        <div class="em">👷</div>
+        <div style="flex:1">
+          <h1>Staff <span class="badge">OPS · pas de WA</span></h1>
+          <div class="sub">Membres de votre équipe et leurs compétences. Chaque staff a un contrat, des types de tâches autorisées, des listings rattachés et un planning. <b style="color:var(--t)">Quand désactivé</b> : le staff ne reçoit plus de nouvelles assignations mais conserve ses tâches en cours.</div>
+        </div>
+      </div>
+
+      <!-- README banner pour agents -->
+      <div class="readme">
+        <div class="ic">📖</div>
+        <div class="body">
+          <h3>Pour mes agents · contenu de cette section <span class="pill">LISEZ-MOI</span></h3>
+          <div class="desc">Cette page configure <b>QUI</b> peut faire <b>QUOI</b>. Aucun impact WhatsApp voyageur · purement opérationnel pour orchestrer le travail terrain.</div>
+          <ul>
+            <li><b>Contrat</b> · Salarié = pas de prix par tâche · Freelance = tarifs par type de tâche obligatoires</li>
+            <li><b>Tâches autorisées</b> · ce que le staff peut prendre en charge (multi-sélection)</li>
+            <li><b>Listings rattachés</b> · sur quels biens le staff peut intervenir</li>
+            <li><b>Max tâches/jour</b> · limite quotidienne · le système n'assignera pas au-delà</li>
+            <li><b>Admin</b> · reçoit les escalades automatiques + auto-accept des tâches non prises</li>
+            <li><b>Planning</b> · jours et plage horaire de disponibilité par défaut</li>
+          </ul>
+        </div>
+        <span class="close" onclick="this.parentElement.style.display='none'">✕</span>
+      </div>
+
+      <div class="list-h">
+        <h2>Équipe · <span class="ct">3 actifs</span></h2>
+        <div class="filters">
+          <button class="filter-pill on">TOUS · 3</button>
+          <button class="filter-pill">ACTIFS · 2</button>
+          <button class="filter-pill">ADMIN · 1</button>
+          <button class="filter-pill">FREELANCE · 2</button>
+        </div>
+      </div>
+
+      <div class="staff-grid">
+
+        <!-- Ahmed -->
+        <div class="staff-card on" onclick="document.querySelectorAll('.staff-card').forEach(c=>c.classList.remove('on'));this.classList.add('on')">
+          <div class="row1">
+            <div class="av">AB<span class="dot green"></span></div>
+            <div class="info">
+              <div class="nm">Ahmed Benali</div>
+              <div class="role">SALARIÉ · 5 TÂCHES/J</div>
+            </div>
+            <div class="actions">
+              <button onclick="event.stopPropagation();document.getElementById('drawer').style.display='block'">✏</button>
+              <button onclick="event.stopPropagation()">🗑</button>
+            </div>
+          </div>
+          <div class="tasks">
+            <span class="task-chip active">🧹 MÉNAGE</span>
+            <span class="task-chip active">🛬 ARRIVÉE</span>
+            <span class="task-chip active">🛫 DÉPART</span>
+          </div>
+          <div class="meta-line"><span class="l">WhatsApp</span><span class="v" style="font-family:var(--mono)">+212 6 12 34 56 78</span></div>
+          <div class="schedule">
+            <div class="days">
+              <span class="day on">L</span><span class="day on">M</span><span class="day on">M</span><span class="day on">J</span><span class="day on">V</span><span class="day">S</span><span class="day">D</span>
+            </div>
+            <span class="h">08:00 → 17:00</span>
+          </div>
+        </div>
+
+        <!-- Sara M. -->
+        <div class="staff-card" onclick="document.querySelectorAll('.staff-card').forEach(c=>c.classList.remove('on'));this.classList.add('on')">
+          <div class="row1">
+            <div class="av c3">SM<span class="dot green"></span></div>
+            <div class="info">
+              <div class="nm">Sara Moutahir <span class="admin">👑 ADMIN</span></div>
+              <div class="role">FREELANCE · ESCALADES AUTO</div>
+            </div>
+            <div class="actions">
+              <button onclick="event.stopPropagation()">✏</button>
+              <button onclick="event.stopPropagation()">🗑</button>
+            </div>
+          </div>
+          <div class="tasks">
+            <span class="task-chip active">🧹 MÉNAGE</span>
+            <span class="task-chip active">🛬 ARRIVÉE</span>
+            <span class="task-chip active">🛫 DÉPART</span>
+            <span class="task-chip active">🛎 CONCIERGERIE</span>
+            <span class="task-chip active">🚗 TRANSPORT</span>
+            <span class="task-chip active">🆘 SUPPORT</span>
+          </div>
+          <div class="meta-line"><span class="l">Tarif ménage</span><span class="v" style="color:var(--pd);font-family:var(--mono)">150 MAD/ménage</span></div>
+          <div class="schedule">
+            <div class="days">
+              <span class="day on">L</span><span class="day on">M</span><span class="day on">M</span><span class="day on">J</span><span class="day on">V</span><span class="day on">S</span><span class="day on">D</span>
+            </div>
+            <span class="h">24/7</span>
+          </div>
+        </div>
+
+        <!-- Karim D. -->
+        <div class="staff-card off">
+          <div class="row1">
+            <div class="av c2">KD<span class="dot red"></span></div>
+            <div class="info">
+              <div class="nm">Karim Daoudi</div>
+              <div class="role">FREELANCE · DÉSACTIVÉ</div>
+            </div>
+            <div class="actions">
+              <button>✏</button>
+              <button>🗑</button>
+            </div>
+          </div>
+          <div class="tasks">
+            <span class="task-chip active">🚗 TRANSPORT</span>
+          </div>
+          <div class="meta-line"><span class="l">Tarif</span><span class="v" style="color:var(--pd);font-family:var(--mono)">80 MAD/trajet</span></div>
+          <div class="schedule">
+            <div class="days">
+              <span class="day">L</span><span class="day">M</span><span class="day">M</span><span class="day">J</span><span class="day on">V</span><span class="day on">S</span><span class="day on">D</span>
+            </div>
+            <span class="h">Sur demande</span>
+          </div>
+        </div>
+
+        <!-- Add new -->
+        <div class="add-staff-card" onclick="document.getElementById('drawer').style.display='block'">
+          <div class="em">➕</div>
+          <div class="lbl">Ajouter un membre</div>
+        </div>
+      </div>
+
+      <!-- ─── Drawer édition staff ─── -->
+      <div class="drawer" id="drawer" style="display:none">
+        <div class="drawer-h">
+          <div style="width:34px;height:34px;border-radius:9px;background:var(--pt);color:var(--pd);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800">AB</div>
+          <h3>Modifier · Ahmed Benali</h3>
+          <span class="close" onclick="document.getElementById('drawer').style.display='none'">✕</span>
+        </div>
+        <div class="form-grid">
+
+          <!-- Identité -->
+          <div class="form-section">
+            <div class="form-section-h">Identité</div>
+            <div class="field"><div class="field-label">Nom complet<span class="req">*</span></div><input class="input" value="Ahmed Benali"></div>
+            <div class="field"><div class="field-label">Téléphone WhatsApp<span class="req">*</span><span class="hint">Format E.164 · ex : +212 6XX XXX XXX</span></div><input class="input input-num" value="+212 6 12 34 56 78"></div>
+            <div class="field"><div class="field-label">Langue de travail</div>
+              <div class="pill-group">
+                <button class="pill-toggle on">FR</button>
+                <button class="pill-toggle">EN</button>
+                <button class="pill-toggle">AR</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Contrat -->
+          <div class="form-section">
+            <div class="form-section-h">Contrat & rémunération</div>
+            <div class="field"><div class="field-label">Type de contrat<span class="req">*</span></div>
+              <div class="seg">
+                <button class="on">💼 Salarié</button>
+                <button>🎯 Freelance</button>
+              </div>
+            </div>
+            <div class="field" style="opacity:0.5"><div class="field-label">Tarifs freelance<span class="hint">Activé si Freelance · prix par type de tâche</span></div>
+              <div class="pricing-grid">
+                <div class="price-row"><span class="nm">🧹 Ménage inclus</span><input class="input" value="150"><span class="x">✕</span></div>
+                <div class="price-row"><span class="nm">✨ Ménage payant</span><input class="input" value="200"><span class="x">✕</span></div>
+              </div>
+              <button class="add-btn" style="margin-top:6px">+ Ajouter un type</button>
+            </div>
+          </div>
+
+          <!-- Compétences -->
+          <div class="form-section full">
+            <div class="form-section-h">Tâches autorisées · multi-sélection</div>
+            <div class="pill-group">
+              <button class="pill-toggle on"><span class="em">🧹</span>Ménage inclus</button>
+              <button class="pill-toggle on"><span class="em">✨</span>Ménage payant</button>
+              <button class="pill-toggle on"><span class="em">🛬</span>Arrivée</button>
+              <button class="pill-toggle on"><span class="em">🛫</span>Départ</button>
+              <button class="pill-toggle"><span class="em">🚗</span>Transport</button>
+              <button class="pill-toggle"><span class="em">🆘</span>Support</button>
+              <button class="pill-toggle"><span class="em">🛎</span>Conciergerie</button>
+              <button class="pill-toggle"><span class="em">🛒</span>Courses</button>
+            </div>
+          </div>
+
+          <!-- Listings -->
+          <div class="form-section full">
+            <div class="form-section-h">Listings rattachés · multi-sélection</div>
+            <div class="pill-group">
+              <button class="pill-toggle on"><span class="em">🏠</span>Villa Majorelle</button>
+              <button class="pill-toggle on"><span class="em">🏠</span>Riad Atlas</button>
+              <button class="pill-toggle"><span class="em">🏠</span>Appart Guéliz</button>
+              <button class="pill-toggle"><span class="em">🏠</span>Maison Hivernage</button>
+            </div>
+          </div>
+
+          <!-- Limite -->
+          <div class="form-section">
+            <div class="form-section-h">Limite quotidienne</div>
+            <div class="field"><div class="field-label">Max tâches/jour<span class="hint">Le système n'assignera pas au-delà</span></div><input class="input input-num" type="number" value="5" min="1" max="20"></div>
+          </div>
+
+          <!-- Admin -->
+          <div class="form-section">
+            <div class="form-section-h">Statut admin</div>
+            <div class="admin-row">
+              <div class="ic">👑</div>
+              <div class="info">
+                <div class="nm">Admin · escalades + auto-accept</div>
+                <div class="ds">Reçoit les tâches escaladées si personne ne les prend</div>
+              </div>
+              <div class="toggle"></div>
+            </div>
+          </div>
+
+          <!-- Planning -->
+          <div class="form-section full">
+            <div class="form-section-h">Planning de travail</div>
+            <div style="display:grid;grid-template-columns:1fr 100px 100px;gap:12px;align-items:flex-end">
+              <div class="field"><div class="field-label">Jours actifs</div>
+                <div class="day-pills">
+                  <button class="day-pill on">L</button>
+                  <button class="day-pill on">M</button>
+                  <button class="day-pill on">M</button>
+                  <button class="day-pill on">J</button>
+                  <button class="day-pill on">V</button>
+                  <button class="day-pill">S</button>
+                  <button class="day-pill">D</button>
+                </div>
+              </div>
+              <div class="field"><div class="field-label">Début</div><input class="input input-num" value="08:00"></div>
+              <div class="field"><div class="field-label">Fin</div><input class="input input-num" value="17:00"></div>
+            </div>
+          </div>
+        </div>
+        <div class="drawer-foot">
+          <button class="btn btn-ghost" onclick="document.getElementById('drawer').style.display='none'">Annuler</button>
+          <button class="btn btn-prim">Enregistrer ⚡</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ ORCHESTRATION ═══════ -->
+    <section class="section" id="sec-orch">
+      <div class="section-hero">
+        <div class="em">⚙️</div>
+        <div style="flex:1">
+          <h1>Orchestration <span class="badge">OPS · cœur du système</span></h1>
+          <div class="sub">Configurez les workflows par type de tâche (relances client, assignation staff, deadlines d'escalade) et les messages automatiques planifiés.</div>
+        </div>
+      </div>
+
+      <!-- README -->
+      <div class="readme">
+        <div class="ic">📖</div>
+        <div class="body">
+          <h3>Pour mes agents · comment ça marche <span class="pill">LISEZ-MOI</span></h3>
+          <div class="desc">L'orchestration définit la <b>chorégraphie</b> de chaque type de tâche : quand relancer le voyageur, quand tenter d'assigner le staff, et quand escalader si rien ne s'est passé.</div>
+          <ul>
+            <li><b>Workflows</b> · 1 par type de tâche · pilote les relances voyageur et l'assignation staff</li>
+            <li><b>Référence temporelle</b> · point d'ancrage : <code style="font-family:var(--mono);background:var(--bg2);padding:1px 5px;border-radius:3px">booking_created</code> · <code style="font-family:var(--mono);background:var(--bg2);padding:1px 5px;border-radius:3px">checkin</code> · <code style="font-family:var(--mono);background:var(--bg2);padding:1px 5px;border-radius:3px">checkout</code> · <code style="font-family:var(--mono);background:var(--bg2);padding:1px 5px;border-radius:3px">task_created</code> · <code style="font-family:var(--mono);background:var(--bg2);padding:1px 5px;border-radius:3px">scheduledDate</code></li>
+            <li><b>Délai</b> · soit en <b>jours</b> (J-7, J+1…) à heure fixe · soit en <b>heures</b> (+4h, -2h)</li>
+            <li><b>Fenêtres d'assignation</b> · heures auxquelles le système tente d'assigner un staff (séquentiel)</li>
+            <li><b>Deadline d'escalade</b> · si rien n'a été pris à cette heure → escalade auto à l'admin</li>
+            <li><b>Messages simples</b> · communications planifiées (welcome, feedback…) sans cycle de relance</li>
+          </ul>
+        </div>
+        <span class="close" onclick="this.parentElement.style.display='none'">✕</span>
+      </div>
+
+      <!-- Sub tabs -->
+      <div class="sub-tabs">
+        <button class="sub-tab on" data-sub="workflows"><span>🔀</span>Workflows<span class="ct">3</span></button>
+        <button class="sub-tab" data-sub="messages"><span>💬</span>Messages simples<span class="ct">3</span></button>
+      </div>
+
+      <!-- ─── Sub: Workflows ─── -->
+      <div class="sub-section on" id="sub-workflows">
+
+        <!-- WF: Choisir arrivée (open) -->
+        <div class="workflow-card open">
+          <div class="wf-h">
+            <div class="em">🛬</div>
+            <div class="info">
+              <div class="nm">Choisir arrivée</div>
+              <div class="ds">choose_checkin · workflow voyageur + staff</div>
+            </div>
+            <div class="stats">
+              <span class="wf-stat rel">3 RELANCES</span>
+              <span class="wf-stat ass">4 FENÊTRES</span>
+              <span class="wf-stat esc">J-1 14:00</span>
+            </div>
+            <span class="arr">▶</span>
+          </div>
+          <div class="wf-body">
+
+            <!-- Relances -->
+            <div class="wf-block">
+              <div class="wf-block-h"><span class="em">📨</span>RELANCES VOYAGEUR <span class="ct">3 actives</span></div>
+              <div class="rel-table">
+                <div class="rel-table-h"><span>RÉFÉRENCE</span><span>JOUR</span><span>HEURE</span><span></span></div>
+                <div class="rel-row">
+                  <select><option>booking_created</option><option selected>checkin</option><option>checkout</option><option>task_created</option><option>scheduledDate</option></select>
+                  <input value="J-3"><input value="09:00"><span class="x">✕</span>
+                </div>
+                <div class="rel-row">
+                  <select><option>booking_created</option><option selected>checkin</option><option>checkout</option></select>
+                  <input value="J-2"><input value="09:00"><span class="x">✕</span>
+                </div>
+                <div class="rel-row">
+                  <select><option>booking_created</option><option selected>checkin</option><option>checkout</option></select>
+                  <input value="J-1"><input value="09:00"><span class="x">✕</span>
+                </div>
+              </div>
+              <button class="add-btn" style="margin-top:8px">+ Ajouter une relance</button>
+            </div>
+
+            <!-- Assignation -->
+            <div class="wf-block">
+              <div class="wf-block-h"><span class="em">🎯</span>ASSIGNATION STAFF</div>
+              <div class="assign-grid">
+                <div class="lbl">Début<span class="hint">Quand le système commence à tenter</span></div>
+                <div class="from-trigger">
+                  <select><option>booking_created</option><option selected>checkin</option><option>checkout</option></select>
+                  <span class="sep">+</span>
+                  <input value="-7"><span class="sep">jours</span>
+                  <span class="sep">·</span>
+                  <input value="09:00">
+                </div>
+
+                <div class="lbl">Fin<span class="hint">Dernière tentative avant escalade</span></div>
+                <div class="from-trigger">
+                  <select disabled title="Même référence que le début"><option selected>checkin</option></select>
+                  <span class="sep">+</span>
+                  <input value="0"><span class="sep">jours</span>
+                  <span class="sep">·</span>
+                  <input value="23:59">
+                </div>
+
+                <div class="lbl">Fenêtres horaires<span class="hint">Tentatives d'assignation séquentielles</span></div>
+                <div>
+                  <div class="window-pills">
+                    <button class="win-pill on">09:00</button>
+                    <button class="win-pill on">11:00</button>
+                    <button class="win-pill on">15:00</button>
+                    <button class="win-pill on">19:00</button>
+                    <button class="win-pill">21:00</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Deadline -->
+            <div class="wf-block">
+              <div class="wf-block-h"><span class="em">⏰</span>DEADLINE D'ESCALADE</div>
+              <div class="deadline-block">
+                <div class="em">🚨</div>
+                <div class="info">
+                  <div class="nm">Si non traité avant cette deadline → escalade auto admin</div>
+                  <div class="ds">Notification immédiate + assignation forcée à un admin</div>
+                </div>
+                <div class="from-trigger">
+                  <select><option selected>checkin</option><option>checkout</option></select>
+                  <span class="sep">+</span>
+                  <input value="-1"><span class="sep">jours</span>
+                  <span class="sep">·</span>
+                  <input value="14:00">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- WF: Support (closed) -->
+        <div class="workflow-card">
+          <div class="wf-h">
+            <div class="em">🆘</div>
+            <div class="info">
+              <div class="nm">Support</div>
+              <div class="ds">support_request · workflow réactif</div>
+            </div>
+            <div class="stats">
+              <span class="wf-stat ass">3 FENÊTRES</span>
+              <span class="wf-stat esc">+2h</span>
+            </div>
+            <span class="arr">▶</span>
+          </div>
+        </div>
+
+        <!-- WF: Service client -->
+        <div class="workflow-card">
+          <div class="wf-h">
+            <div class="em">💌</div>
+            <div class="info">
+              <div class="nm">Service client</div>
+              <div class="ds">customer_service · SLA 24h</div>
+            </div>
+            <div class="stats">
+              <span class="wf-stat ass">2 FENÊTRES</span>
+              <span class="wf-stat esc">+24h</span>
+            </div>
+            <span class="arr">▶</span>
+          </div>
+        </div>
+
+        <button class="add-btn" style="margin-top:14px">+ Ajouter un workflow</button>
+      </div>
+
+      <!-- ─── Sub: Messages simples ─── -->
+      <div class="sub-section" id="sub-messages">
+
+        <div class="list-h">
+          <h2>💬 Messages automatiques · <span class="ct">3 actifs</span></h2>
+          <button class="btn btn-prim" style="margin-left:auto;font-size:12px;padding:7px 12px" onclick="document.getElementById('msg-form').style.display='block'">+ Ajouter</button>
+        </div>
+
+        <div class="msg-list">
+          <div class="msg-card">
+            <span class="grip">⠿</span>
+            <div class="em">👋</div>
+            <div class="info">
+              <div class="nm">Bienvenue</div>
+              <div class="meta">
+                <span class="chip trig">booking_created + 1h</span>
+                <span class="chip chan">OTA → Email</span>
+                <span class="chip tmpl">tmpl: welcome</span>
+              </div>
+            </div>
+            <div class="actions"><button>✏</button><button>🗑</button></div>
+          </div>
+
+          <div class="msg-card">
+            <span class="grip">⠿</span>
+            <div class="em">☺</div>
+            <div class="info">
+              <div class="nm">Comment ça va ?</div>
+              <div class="meta">
+                <span class="chip trig">checkin J+1 · 10:00</span>
+                <span class="chip chan">WhatsApp → OTA</span>
+                <span class="chip tmpl">tmpl: checkin_feedback</span>
+              </div>
+            </div>
+            <div class="actions"><button>✏</button><button>🗑</button></div>
+          </div>
+
+          <div class="msg-card">
+            <span class="grip">⠿</span>
+            <div class="em">⭐</div>
+            <div class="info">
+              <div class="nm">Nouvelles après départ</div>
+              <div class="meta">
+                <span class="chip trig">checkout J+1 · 10:00</span>
+                <span class="chip chan">WhatsApp → OTA</span>
+                <span class="chip tmpl">tmpl: checkout_feedback</span>
+              </div>
+            </div>
+            <div class="actions"><button>✏</button><button>🗑</button></div>
+          </div>
+        </div>
+
+        <!-- Form inline -->
+        <div class="msg-form" id="msg-form" style="display:none">
+          <div class="row"><div class="lbl">Nom<span style="color:var(--er)">*</span></div><input class="input" placeholder="ex: Bienvenue"></div>
+          <div class="row"><div class="lbl">Déclencheur<span style="color:var(--er)">*</span></div>
+            <div class="trigger-row">
+              <select class="input"><option>booking_created</option><option>checkin</option><option>checkout</option><option>task_created</option></select>
+              <span style="color:var(--t3)">+</span>
+              <input class="input" value="1">
+              <select class="input"><option>heures</option><option>jours</option></select>
+            </div>
+          </div>
+          <div class="row"><div class="lbl">Canal principal</div>
+            <div class="trigger-row">
+              <select class="input"><option>WhatsApp</option><option>OTA</option><option>Email</option><option>SMS</option></select>
+              <span style="color:var(--t3)">→ Fallback</span>
+              <select class="input"><option>OTA</option><option>Email</option><option>SMS</option></select>
+            </div>
+          </div>
+          <div class="row"><div class="lbl">Template<span style="color:var(--er)">*</span></div><input class="input" placeholder="ex: welcome"></div>
+          <div class="actions">
+            <button class="btn btn-ghost" onclick="document.getElementById('msg-form').style.display='none'">Annuler</button>
+            <button class="btn btn-prim">Ajouter ⚡</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ─── PREVIEW ─── -->
+  <aside class="preview">
+    <div class="preview-h">
+      <h3 id="prev-title">👷 Détail staff</h3>
+      <span class="live">LIVE</span>
+    </div>
+
+    <!-- Staff preview -->
+    <div class="preview-pane on" id="prev-staff">
+      <div class="staff-detail">
+        <div class="staff-detail-h">
+          <div class="av">AB<span class="dot"></span></div>
+          <div class="info">
+            <div class="nm">Ahmed Benali</div>
+            <div class="status">DISPONIBLE AUJOURD'HUI</div>
+          </div>
+        </div>
+
+        <div class="kpi-row">
+          <div class="kpi-mini"><div class="v">3</div><div class="l">AUJOURD'HUI</div></div>
+          <div class="kpi-mini"><div class="v">12</div><div class="l">CETTE SEM.</div></div>
+          <div class="kpi-mini"><div class="v">98%</div><div class="l">COMPLÉTUDE</div></div>
+        </div>
+
+        <div class="day-header">📅 Aujourd'hui · jeu 22 mai<span class="ct">3 tâches</span></div>
+        <div class="task-line">
+          <span class="h">10:00</span>
+          <div class="ic">🧹</div>
+          <div class="nm">Ménage inclus<small>Villa Majorelle · 45 min</small></div>
+          <span class="badge">CONFIRMÉE</span>
+        </div>
+        <div class="task-line">
+          <span class="h">14:00</span>
+          <div class="ic">🛬</div>
+          <div class="nm">Arrivée voyageur<small>Riad Atlas · code 4521</small></div>
+          <span class="badge">EN ROUTE</span>
+        </div>
+        <div class="task-line">
+          <span class="h">16:00</span>
+          <div class="ic">✨</div>
+          <div class="nm">Ménage payant<small>Appart Guéliz · 30 min</small></div>
+          <span class="badge">PROCHAIN</span>
+        </div>
+
+        <div class="day-header">📊 Cette semaine<span class="ct">12 tâches</span></div>
+        <div style="background:var(--bg2);border:1px solid var(--b);border-radius:9px;padding:10px;display:flex;align-items:center;gap:11px">
+          <div style="display:flex;gap:3px;flex:1">
+            <div style="flex:1;background:var(--p);border-radius:3px;height:36px;position:relative" title="Lundi · 3 tâches"></div>
+            <div style="flex:1;background:var(--p);border-radius:3px;height:28px;align-self:flex-end" title="Mardi · 2"></div>
+            <div style="flex:1;background:var(--p);border-radius:3px;height:32px;align-self:flex-end" title="Merc · 2"></div>
+            <div style="flex:1;background:var(--ps);border-radius:3px;height:42px;align-self:flex-end" title="Jeu · 3 (auj)"></div>
+            <div style="flex:1;background:var(--bg3);border-radius:3px;height:20px;align-self:flex-end" title="Ven · 1"></div>
+            <div style="flex:1;background:var(--bg3);border-radius:3px;height:14px;align-self:flex-end" title="Sam · 1"></div>
+            <div style="flex:1;background:var(--bg3);border-radius:3px;height:10px;align-self:flex-end" title="Dim · 0"></div>
+          </div>
+          <div style="font-family:var(--mono);text-align:right">
+            <div style="font-size:18px;font-weight:800;color:var(--pd);letter-spacing:-0.02em">12</div>
+            <div style="font-size:9.5px;color:var(--t3);font-weight:700;letter-spacing:0.04em">TÂCHES</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Orchestration preview -->
+    <div class="preview-pane" id="prev-orch">
+      <div class="timeline-card">
+        <div class="timeline-h"><span class="em">📅</span>Timeline simulation</div>
+        <div class="timeline-sub">Choisir arrivée · vue voyageur + staff</div>
+
+        <div class="tl">
+          <div class="tl-event start">
+            <div class="when">J-30 · CHECKIN -30</div>
+            <div class="what">Réservation créée</div>
+            <div class="det">Point d'ancrage initial</div>
+          </div>
+
+          <div class="tl-event assign">
+            <div class="when">J-7 · CHECKIN -7 · 09:00</div>
+            <div class="what">Assignation staff · début</div>
+            <div class="det">Le système commence à tenter d'assigner aux fenêtres :</div>
+            <div class="tl-windows">
+              <span class="w">09:00</span>
+              <span class="w">11:00</span>
+              <span class="w">15:00</span>
+              <span class="w">19:00</span>
+            </div>
+          </div>
+
+          <div class="tl-event assign" style="opacity:.88">
+            <div class="when">J · CHECKIN 0 · 23:59</div>
+            <div class="what">Assignation staff · fin</div>
+            <div class="det">Dernière fenêtre de recherche staff (avant escalade)</div>
+          </div>
+
+          <div class="tl-event relance">
+            <div class="when">J-3 · CHECKIN -3 · 09:00</div>
+            <div class="what">Relance voyageur #1</div>
+            <div class="det">"Bonjour, à quelle heure souhaitez-vous arriver ?"</div>
+          </div>
+
+          <div class="tl-event relance">
+            <div class="when">J-2 · CHECKIN -2 · 09:00</div>
+            <div class="what">Relance voyageur #2</div>
+          </div>
+
+          <div class="tl-event relance">
+            <div class="when">J-1 · CHECKIN -1 · 09:00</div>
+            <div class="what">Relance voyageur #3 · dernière</div>
+          </div>
+
+          <div class="tl-event deadline">
+            <div class="when">J-1 · CHECKIN -1 · 14:00</div>
+            <div class="what">DEADLINE · escalade admin</div>
+            <div class="det">Notification immédiate Sara Moutahir (admin)</div>
+          </div>
+
+          <div class="tl-event end">
+            <div class="when">J · CHECKIN</div>
+            <div class="what">Arrivée voyageur ⭐</div>
+            <div class="det">Tâche complétée si tout s'est bien passé</div>
+          </div>
+        </div>
+
+        <div style="margin-top:18px;padding:11px 13px;background:var(--bg2);border:1px solid var(--b);border-radius:9px;font-size:11px;color:var(--t3);line-height:1.5">
+          <b style="color:var(--t)">💡 Lecture</b> · les points colorés représentent les événements du workflow.<br>
+          🟡 Ancrage · 🔵 Assignation début/fin · 🟣 Relance · 🔴 Deadline · 🟢 Complétion
+        </div>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+// Tab switching
+document.querySelectorAll('.rail-tab[data-tab]').forEach(t=>{
+  t.addEventListener('click',()=>{
+    const tab=t.dataset.tab;
+    document.querySelectorAll('.rail-tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('on'));
+    document.getElementById('sec-'+tab).classList.add('on');
+    document.querySelectorAll('.preview-pane').forEach(p=>p.classList.remove('on'));
+    const pp=document.getElementById('prev-'+tab);
+    if(pp){pp.classList.add('on')}
+    const tt=document.getElementById('prev-title');
+    if(tab==='staff'){tt.textContent='👷 Détail staff'}
+    else if(tab==='orch'){tt.textContent='📅 Timeline simulation'}
+  });
+});
+
+// Sub-tabs
+document.querySelectorAll('.sub-tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    const sub=t.dataset.sub;
+    document.querySelectorAll('.sub-tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    document.querySelectorAll('.sub-section').forEach(s=>s.classList.remove('on'));
+    document.getElementById('sub-'+sub).classList.add('on');
+  });
+});
+
+// Workflow expand/collapse
+document.querySelectorAll('.workflow-card .wf-h').forEach(h=>{
+  h.addEventListener('click',()=>h.parentElement.classList.toggle('open'));
+});
+
+// Toggles
+document.querySelectorAll('.toggle, .toggle.sm').forEach(tg=>{
+  tg.addEventListener('click',e=>{e.stopPropagation();tg.classList.toggle('on')});
+});
+
+// Pill toggles
+document.querySelectorAll('.pill-toggle, .day-pill, .filter-pill, .win-pill').forEach(p=>{
+  p.addEventListener('click',e=>{e.stopPropagation();p.classList.toggle('on')});
+});
+
+// Seg
+document.querySelectorAll('.seg').forEach(seg=>{
+  seg.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click',()=>{
+      seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+    });
+  });
+});
+</script>
+</body></html>

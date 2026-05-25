@@ -5,6 +5,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../../../config/backendServer.config';
 import { getToken as getAuthToken } from '../../../utils/auth.utils';
 import { useAuth } from '../../../hooks/useAuth';
+import { labelForTaskTypeId } from '../../taskHub/staff-design/fulltaskTaskTypes';
 
 /**
  * 🛡️ STRATÉGIE ROBUSTE - Récupération OwnerId avec fallbacks multiples
@@ -87,7 +88,8 @@ const AssignStaffDialog = ({
   onClose,
   task,
   onSuccess,
-  ownerId: ownerIdProp
+  ownerId: ownerIdProp,
+  useFulltaskApi = false,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md')) || useMediaQuery('(max-width: 900px)');
@@ -105,11 +107,13 @@ const AssignStaffDialog = ({
   const [checkTaskType, setCheckTaskType] = useState(true);
   const [checkPlanning, setCheckPlanning] = useState(true);
   const [showUnavailable, setShowUnavailable] = useState(false);
+  const [panelError, setPanelError] = useState('');
   useEffect(() => {
     if (!open) {
       setSearchTerm('');
       setSelectedStaff(null);
       setShowUnavailable(false);
+      setPanelError('');
     }
   }, [open]);
   useEffect(() => {
@@ -121,13 +125,42 @@ const AssignStaffDialog = ({
     setLoading(true);
     setListingTaskLine('');
     setStaffSummary('');
+    setPanelError('');
     try {
       const token = getAuthToken();
       if (!token) {
         setAvailableStaff([]);
         setUnavailableStaff([]);
+        setPanelError('Session expirée — reconnectez-vous.');
         return;
       }
+
+      if (useFulltaskApi) {
+        const { listStaff } = await import('../../../services/fulltaskApi');
+        const listingId = resolveListingIdForStaffApi(task);
+        const res = await listStaff(listingId ? { listingId } : {});
+        const taskTypeId = task?.subType || task?.type;
+        const rows = (res?.data || [])
+          .filter((s) => {
+            if (!taskTypeId || !Array.isArray(s.taskTypes) || s.taskTypes.length === 0) return true;
+            return s.taskTypes.includes(String(taskTypeId));
+          })
+          .map((s) => ({
+            _id: s._id,
+            staffCode: String(s._id),
+            staffName: s.name,
+            staffPhone: s.phone,
+          }));
+        setAvailableStaff(rows);
+        setUnavailableStaff([]);
+        const typeLabel = taskTypeId ? labelForTaskTypeId(String(taskTypeId)) : '';
+        setListingTaskLine(
+          [task?.listingName, typeLabel || taskTypeId].filter(Boolean).join(' · ') || '',
+        );
+        setStaffSummary(`${rows.length} membre(s) éligible(s)`);
+        return;
+      }
+
       const params = new URLSearchParams({
         checkListing: checkListing.toString(),
         checkTaskType: checkTaskType.toString(),
@@ -182,6 +215,12 @@ const AssignStaffDialog = ({
     } catch (error) {
       setAvailableStaff([]);
       setUnavailableStaff([]);
+      setPanelError(
+        error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          error?.message ||
+          'Impossible de charger le staff',
+      );
     } finally {
       setLoading(false);
     }
@@ -190,11 +229,24 @@ const AssignStaffDialog = ({
     if (!selectedStaff) return;
     const token = getAuthToken();
     if (!token) {
-      alert('Session expirée. Reconnectez-vous pour assigner un staff.');
+      setPanelError('Session expirée. Reconnectez-vous pour assigner un staff.');
       return;
     }
     setAssigning(true);
+    setPanelError('');
     try {
+      if (useFulltaskApi) {
+        const taskId = task._id;
+        if (!taskId) throw new Error('Identifiant tâche manquant');
+        const { assignTask } = await import('../../../services/fulltaskApi');
+        const staffId = selectedStaff._id || selectedStaff.staffCode;
+        const res = await assignTask(taskId, staffId);
+        if (res?.success === false) throw new Error(res?.error || 'Assignation refusée');
+        onSuccess();
+        onClose();
+        return;
+      }
+
       const assignId = resolveTaskIdForStaffApi(task) || task.itemNumber || task.taskCode || task._id;
       const response = await axios.put(`${API_BASE_URL}/api/v1/task/tasks/${assignId}/assign`, {
         staffCode: selectedStaff.staffCode,
@@ -207,9 +259,16 @@ const AssignStaffDialog = ({
       if (response.data.success) {
         onSuccess();
         onClose();
+      } else {
+        setPanelError(response.data?.message || 'Assignation refusée');
       }
     } catch (error) {
-      alert('Erreur lors de l\'assignation de la tâche');
+      setPanelError(
+        error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          error?.message ||
+          'Erreur lors de l\'assignation de la tâche',
+      );
     } finally {
       setAssigning(false);
     }
@@ -228,7 +287,7 @@ const AssignStaffDialog = ({
     }} style={{
       position: 'fixed',
       inset: 0,
-      zIndex: 8020,
+      zIndex: 15020,
       background: 'rgba(15, 23, 42, 0.35)'
     }} />
 
@@ -240,7 +299,7 @@ const AssignStaffDialog = ({
       bottom: 0,
       width: isMobile ? '100%' : 440,
       maxWidth: '100%',
-      zIndex: 8021,
+      zIndex: 15021,
       background: '#fff',
       boxShadow: isMobile ? 'none' : '-4px 0 32px rgba(0,0,0,0.14)',
       display: 'flex',
@@ -322,75 +381,79 @@ const AssignStaffDialog = ({
         WebkitOverflowScrolling: 'touch',
         padding: isMobile ? '12px 14px' : '14px 16px'
       }}>
-          <Box sx={{
-          mb: 1.5,
-          p: 1.25,
-          bgcolor: SOJORI_COLORS.primaryPale,
-          borderRadius: 2
-        }}>
-            <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            mb: 0.5
-          }}>
-              <FilterListIcon sx={{
-              color: SOJORI_COLORS.primary,
-              fontSize: 18,
-              mr: 0.5
-            }} />
-              <Typography variant="caption" sx={{
-              fontWeight: 600,
-              color: SOJORI_COLORS.primary
-            }}>
-                Filtres intelligents
-              </Typography>
+          {panelError ? (
+            <Box sx={{ mb: 1.5, p: 1.25, bgcolor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 1.5, fontSize: 12, color: '#b91c1c' }}>
+              {panelError}
             </Box>
-            <Box sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 0.5
-          }}>
-              <FormControlLabel control={<Checkbox size="small" checked={checkListing} onChange={e => setCheckListing(e.target.checked)} sx={{
-              color: SOJORI_COLORS.primary,
-              '&.Mui-checked': {
-                color: SOJORI_COLORS.primary
-              },
-              padding: '4px'
-            }} />} label={<Typography variant="caption" sx={{
-              fontSize: '11px'
-            }}>Listing</Typography>} sx={{
-              mr: 0.5
-            }} />
-              <FormControlLabel control={<Checkbox size="small" checked={checkTaskType} onChange={e => setCheckTaskType(e.target.checked)} sx={{
-              color: SOJORI_COLORS.primary,
-              '&.Mui-checked': {
-                color: SOJORI_COLORS.primary
-              },
-              padding: '4px'
-            }} />} label={<Typography variant="caption" sx={{
-              fontSize: '11px'
-            }}>Type tâche</Typography>} sx={{
-              mr: 0.5
-            }} />
-              <FormControlLabel control={<Checkbox size="small" checked={checkPlanning} onChange={e => setCheckPlanning(e.target.checked)} sx={{
-              color: SOJORI_COLORS.primary,
-              '&.Mui-checked': {
-                color: SOJORI_COLORS.primary
-              },
-              padding: '4px'
-            }} />} label={<Typography variant="caption" sx={{
-              fontSize: '11px'
-            }}>Planning</Typography>} />
+          ) : null}
+          {!useFulltaskApi ? (
+            <Box sx={{ mb: 1.5, p: 1.25, bgcolor: SOJORI_COLORS.primaryPale, borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <FilterListIcon sx={{ color: SOJORI_COLORS.primary, fontSize: 18, mr: 0.5 }} />
+                <Typography variant="caption" sx={{ fontWeight: 600, color: SOJORI_COLORS.primary }}>
+                  Filtres intelligents
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={checkListing}
+                      onChange={(e) => setCheckListing(e.target.checked)}
+                      sx={{
+                        color: SOJORI_COLORS.primary,
+                        '&.Mui-checked': { color: SOJORI_COLORS.primary },
+                        padding: '4px',
+                      }}
+                    />
+                  }
+                  label={<Typography variant="caption" sx={{ fontSize: '11px' }}>Listing</Typography>}
+                  sx={{ mr: 0.5 }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={checkTaskType}
+                      onChange={(e) => setCheckTaskType(e.target.checked)}
+                      sx={{
+                        color: SOJORI_COLORS.primary,
+                        '&.Mui-checked': { color: SOJORI_COLORS.primary },
+                        padding: '4px',
+                      }}
+                    />
+                  }
+                  label={<Typography variant="caption" sx={{ fontSize: '11px' }}>Type tâche</Typography>}
+                  sx={{ mr: 0.5 }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={checkPlanning}
+                      onChange={(e) => setCheckPlanning(e.target.checked)}
+                      sx={{
+                        color: SOJORI_COLORS.primary,
+                        '&.Mui-checked': { color: SOJORI_COLORS.primary },
+                        padding: '4px',
+                      }}
+                    />
+                  }
+                  label={<Typography variant="caption" sx={{ fontSize: '11px' }}>Planning</Typography>}
+                />
+              </Box>
+              {staffSummary ? (
+                <Typography variant="caption" sx={{ color: '#0f766e', fontSize: '10px', display: 'block', mt: 0.75 }}>
+                  {staffSummary}
+                </Typography>
+              ) : null}
             </Box>
-            {staffSummary ? <Typography variant="caption" sx={{
-            color: '#0f766e',
-            fontSize: '10px',
-            display: 'block',
-            mt: 0.75
-          }}>
-                {staffSummary}
-              </Typography> : null}
-          </Box>
+          ) : staffSummary ? (
+            <Typography variant="caption" sx={{ color: '#0f766e', fontSize: '11px', display: 'block', mb: 1 }}>
+              {staffSummary}
+            </Typography>
+          ) : null}
 
           <TextField fullWidth size="small" placeholder="Rechercher un staff..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} InputProps={{
           startAdornment: <InputAdornment position="start">

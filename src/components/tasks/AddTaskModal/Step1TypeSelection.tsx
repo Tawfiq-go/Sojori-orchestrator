@@ -7,6 +7,9 @@ import { Box, FormControl, InputLabel, Select, MenuItem, Autocomplete, TextField
 import { FlightLand, FlightTakeoff, CleaningServices, Assignment, Support, DirectionsCar, ShoppingCart, Star } from '@mui/icons-material';
 import {
   fetchCurrentReservation,
+  fetchFulltaskCurrentReservation,
+  fetchFulltaskListings,
+  fetchFulltaskReservationsForListing,
   fetchListingClientServices,
   fetchTaskListings,
   fetchTaskReservations,
@@ -18,6 +21,11 @@ import type {
   Reservation,
   ListingClientServices,
 } from './types';
+import {
+  FULLTASK_TO_LEGACY_TASK_TYPE,
+  FULLTASK_TYPE_SELECT_OPTIONS,
+} from '../../../utils/fulltaskAddTaskHelpers';
+import type { FulltaskTaskTypeId } from '../../../features/taskHub/staff-design/fulltaskTaskTypes';
 
 // Client task types that require listing-specific service config
 const CLIENT_TASK_TYPES: TaskType[] = ['TRANSPORT', 'GROCERIES', 'CUSTOM', 'SUPPORT'];
@@ -68,12 +76,15 @@ interface Step1Props {
   ownerId?: string;
   /** Platform admin: load listings/reservations without requiring ownerId (JWT role on server). */
   isAdminUser?: boolean;
+  /** Types srv-fulltask (13) + création fulltask */
+  useFulltaskApi?: boolean;
 }
 export function Step1TypeSelection({
   formData,
   onChange,
   ownerId,
-  isAdminUser = false
+  isAdminUser = false,
+  useFulltaskApi = false,
 }: Step1Props) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loadingListings, setLoadingListings] = useState(false);
@@ -83,14 +94,20 @@ export function Step1TypeSelection({
   const [loadingAllReservations, setLoadingAllReservations] = useState(false);
   const [loadingServices, setLoadingServices] = useState(false);
 
-  // Charger listings quand type sélectionné (owners need ownerId; admins rely on JWT-only scope)
+  const typeSelected = useFulltaskApi
+    ? Boolean(formData.fulltaskTypeId)
+    : Boolean(formData.taskType);
+
+  // Charger listings quand type sélectionné (fulltask: scope JWT ; legacy: ownerId ou admin)
   useEffect(() => {
-    if (!formData.taskType) return;
-    if (!isAdminUser && !ownerId) return;
+    if (!typeSelected) return;
+    if (!useFulltaskApi && !isAdminUser && !ownerId) return;
     const loadListings = async () => {
       try {
         setLoadingListings(true);
-        const data = await fetchTaskListings(ownerId);
+        const data = useFulltaskApi
+          ? await fetchFulltaskListings()
+          : await fetchTaskListings(ownerId);
         setListings(data);
       } catch {
         setListings([]);
@@ -99,7 +116,7 @@ export function Step1TypeSelection({
       }
     };
     void loadListings();
-  }, [formData.taskType, ownerId, isAdminUser]);
+  }, [formData.taskType, formData.fulltaskTypeId, ownerId, isAdminUser, useFulltaskApi]);
 
   // Charger réservation en cours quand listing sélectionné
   useEffect(() => {
@@ -112,7 +129,9 @@ export function Step1TypeSelection({
         setLoadingCurrentReservation(true);
         const listingId = formData.listing?._id || formData.listing?.id;
         if (!listingId) return;
-        const current = await fetchCurrentReservation(listingId);
+        const current = useFulltaskApi
+          ? await fetchFulltaskCurrentReservation(String(listingId))
+          : await fetchCurrentReservation(listingId);
         setCurrentReservation(current);
 
         // Auto-sélectionner si disponible
@@ -132,7 +151,7 @@ export function Step1TypeSelection({
       }
     };
     void loadCurrent();
-  }, [formData.listing]);
+  }, [formData.listing, useFulltaskApi]);
 
   // Charger les réservations pour le listing sélectionné
   useEffect(() => {
@@ -143,8 +162,10 @@ export function Step1TypeSelection({
     const loadReservations = async () => {
       try {
         setLoadingAllReservations(true);
-        const listingId = formData.listing._id || formData.listing.id;
-        const filtered = await fetchTaskReservations(ownerId, listingId);
+        const listingId = String(formData.listing._id || formData.listing.id);
+        const filtered = useFulltaskApi
+          ? await fetchFulltaskReservationsForListing(listingId)
+          : await fetchTaskReservations(ownerId, listingId);
         setAllReservations(filtered);
       } catch {
         setAllReservations([]);
@@ -153,7 +174,7 @@ export function Step1TypeSelection({
       }
     };
     void loadReservations();
-  }, [formData.listing, ownerId, isAdminUser]);
+  }, [formData.listing, ownerId, isAdminUser, useFulltaskApi]);
 
   // Load listing client services when listing + client-type task is selected
   useEffect(() => {
@@ -181,9 +202,21 @@ export function Step1TypeSelection({
   const handleTypeChange = (type: TaskType) => {
     onChange({
       taskType: type,
+      fulltaskTypeId: null,
       listing: null,
       reservation: null,
-      listingServices: null
+      listingServices: null,
+    });
+  };
+
+  const handleFulltaskTypeChange = (id: FulltaskTaskTypeId) => {
+    const legacy = FULLTASK_TO_LEGACY_TASK_TYPE[id];
+    onChange({
+      fulltaskTypeId: id,
+      taskType: legacy,
+      listing: null,
+      reservation: null,
+      listingServices: null,
     });
   };
   const handleListingChange = (listing: Listing | null) => {
@@ -216,8 +249,10 @@ export function Step1TypeSelection({
       }
     }
   };
-  const selectedType = TASK_TYPES.find(t => t.value === formData.taskType);
-  const canProceed = formData.taskType && formData.listing && formData.reservation;
+  const selectedType = useFulltaskApi
+    ? FULLTASK_TYPE_SELECT_OPTIONS.find((t) => t.id === formData.fulltaskTypeId)
+    : TASK_TYPES.find((t) => t.value === formData.taskType);
+  const canProceed = typeSelected && formData.listing && formData.reservation;
   return <Box sx={{
     mt: 2
   }}>
@@ -225,42 +260,92 @@ export function Step1TypeSelection({
       <FormControl fullWidth sx={{
       mb: 3
     }}>
-        <InputLabel>1️⃣ Type de Tâche *</InputLabel>
-        <Select value={formData.taskType || ''} onChange={e => handleTypeChange(e.target.value as TaskType)} label="1️⃣ Type de Tâche *">
-          {TASK_TYPES.map(type => <MenuItem key={type.value} value={type.value}>
-              <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1
-          }}>
-                {type.icon}
-                <Typography>{type.label}</Typography>
-              </Box>
-            </MenuItem>)}
-        </Select>
+        <InputLabel>1️⃣ Type de tâche *</InputLabel>
+        {useFulltaskApi ? (
+          <Select
+            value={formData.fulltaskTypeId || ''}
+            onChange={(e) => handleFulltaskTypeChange(e.target.value as FulltaskTaskTypeId)}
+            label="1️⃣ Type de tâche *"
+          >
+            {FULLTASK_TYPE_SELECT_OPTIONS.map((type) => (
+              <MenuItem key={type.id} value={type.id}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <span>{type.emoji}</span>
+                  <Typography>{type.label}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                    {type.id}
+                  </Typography>
+                </Box>
+              </MenuItem>
+            ))}
+          </Select>
+        ) : (
+          <Select value={formData.taskType || ''} onChange={e => handleTypeChange(e.target.value as TaskType)} label="1️⃣ Type de tâche *">
+            {TASK_TYPES.map(type => <MenuItem key={type.value} value={type.value}>
+                <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+                  {type.icon}
+                  <Typography>{type.label}</Typography>
+                </Box>
+              </MenuItem>)}
+          </Select>
+        )}
       </FormControl>
 
-      {formData.taskType && <Divider sx={{
+      {typeSelected && <Divider sx={{
       my: 3
     }} />}
 
       {/* 2️⃣ Logement */}
-      {formData.taskType && <Autocomplete options={listings} value={formData.listing} onChange={(_, newValue) => handleListingChange(newValue)} getOptionLabel={option => option.name || option.title || 'Sans nom'} loading={loadingListings} renderInput={params => <TextField {...params} label="2️⃣ Logement *" placeholder="Rechercher un logement..." helperText={isAdminUser ? '💡 Tous les logements (admin)' : '💡 Liste filtrée par owner (vos logements)'} InputProps={{
-      ...params.InputProps,
-      endAdornment: <>
-                    {loadingListings && <CircularProgress color="inherit" size={20} />}
-                    {params.InputProps?.endAdornment}
-                  </>
-    }} />} renderOption={(props, option) => <li {...props} key={option._id || option.id}>
-              <Box>
-                <Typography variant="body1">🏠 {option.name || option.title}</Typography>
-                {option.address && <Typography variant="caption" color="text.secondary">
-                    {option.address}
-                  </Typography>}
-              </Box>
-            </li>} isOptionEqualToValue={(option, value) => option._id === value._id || option.id === value.id} sx={{
-      mb: 3
-    }} />}
+      {typeSelected && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+            2️⃣ Logement *
+          </Typography>
+          <Autocomplete
+            options={listings}
+            value={formData.listing}
+            onChange={(_, newValue) => handleListingChange(newValue)}
+            getOptionLabel={(option) => option.name || option.title || 'Sans nom'}
+            loading={loadingListings}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                placeholder="Rechercher un logement..."
+                helperText={
+                  loadingListings
+                    ? 'Chargement des logements…'
+                    : listings.length > 0
+                      ? isAdminUser
+                        ? `💡 ${listings.length} logement(s) actif(s) (admin)`
+                        : `💡 ${listings.length} logement(s) actif(s)`
+                      : '⚠️ Aucun logement trouvé — vérifiez votre périmètre'
+                }
+              />
+            )}
+            renderOption={(props, option) => (
+              <li {...props} key={option._id || option.id}>
+                <Box>
+                  <Typography variant="body1">
+                    🏠 {option.name || option.title}
+                  </Typography>
+                  {(option.city || option.address) && (
+                    <Typography variant="caption" color="text.secondary">
+                      {option.city || option.address}
+                    </Typography>
+                  )}
+                </Box>
+              </li>
+            )}
+            isOptionEqualToValue={(option, value) =>
+              option._id === value._id || option.id === value.id
+            }
+          />
+        </Box>
+      )}
 
       {formData.listing && <Divider sx={{
       my: 3
@@ -305,7 +390,7 @@ export function Step1TypeSelection({
           mb: 1
         }}>
                 <Chip label={currentReservation.number || currentReservation.reservationNumber} color="primary" size="small" />
-                <Typography variant="body1" fontWeight="bold">
+                <Typography variant="body1" sx={{ fontWeight: 700 }}>
                   {currentReservation.guestName}
                 </Typography>
               </Box>
@@ -325,20 +410,40 @@ export function Step1TypeSelection({
             </Alert>}
 
           {/* Recherche autre réservation */}
-          <Typography variant="body2" sx={{
-        mb: 1,
-        mt: 2
-      }}>
-            OU
+          <Typography variant="body2" sx={{ mb: 1, mt: 2, fontWeight: 600 }}>
+            OU — autre réservation
           </Typography>
 
-          <Autocomplete options={allReservations} value={formData.reservation && (!currentReservation || formData.reservation._id !== currentReservation._id && formData.reservation.id !== currentReservation._id) ? formData.reservation : null} onChange={(_, newValue) => handleReservationSearch(newValue)} getOptionLabel={option => `${option.number || option.reservationNumber} - ${option.guestName}`} loading={loadingAllReservations} renderInput={params => <TextField {...params} label="🔍 Rechercher une autre réservation" placeholder="N° résa (SJ-XXX) ou Nom client..." helperText={loadingAllReservations ? 'Chargement...' : allReservations.length > 0 ? `💡 ${allReservations.length} réservation(s) disponible(s) pour ce logement` : '⚠️ Aucune réservation trouvée pour ce logement (pending/confirmed)'} InputProps={{
-        ...params.InputProps,
-        endAdornment: <>
-                      {loadingAllReservations && <CircularProgress color="inherit" size={20} />}
-                      {params.InputProps.endAdornment}
-                    </>
-      }} />} renderOption={(props, option) => <li {...props} key={option._id || option.id}>
+          <Autocomplete
+            options={allReservations}
+            value={
+              formData.reservation &&
+              (!currentReservation ||
+                (formData.reservation._id !== currentReservation._id &&
+                  formData.reservation.id !== currentReservation.id))
+                ? formData.reservation
+                : null
+            }
+            onChange={(_, newValue) => handleReservationSearch(newValue)}
+            getOptionLabel={(option) =>
+              `${option.number || option.reservationNumber} - ${option.guestName}`
+            }
+            loading={loadingAllReservations}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                placeholder="N° résa (SJ-XXX) ou nom client..."
+                helperText={
+                  loadingAllReservations
+                    ? 'Chargement…'
+                    : allReservations.length > 0
+                      ? `💡 ${allReservations.length} réservation(s) pour ce logement`
+                      : '⚠️ Aucune réservation trouvée (confirmed / pending)'
+                }
+              />
+            )}
+            renderOption={(props, option) => (
+              <li {...props} key={option._id || option.id}>
                 <Box>
                   <Box sx={{
             display: 'flex',
@@ -347,7 +452,7 @@ export function Step1TypeSelection({
             mb: 0.5
           }}>
                     <Chip label={option.number || option.reservationNumber} size="small" />
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
                       {option.guestName}
                     </Typography>
                   </Box>
@@ -357,12 +462,22 @@ export function Step1TypeSelection({
                     {new Date(option.checkOut || option.departureDate || '').toLocaleDateString()}
                   </Typography>
                 </Box>
-              </li>} filterOptions={(options, {
-        inputValue
-      }) => {
-        const input = inputValue.toLowerCase();
-        return options.filter(option => option.number && option.number.toLowerCase().includes(input) || option.reservationNumber && option.reservationNumber.toLowerCase().includes(input) || option.guestName.toLowerCase().includes(input));
-      }} isOptionEqualToValue={(option, value) => option._id === value._id || option.id === value.id} />
+              </li>
+            )}
+            filterOptions={(options, { inputValue }) => {
+              const input = inputValue.toLowerCase();
+              return options.filter(
+                (option) =>
+                  (option.number && option.number.toLowerCase().includes(input)) ||
+                  (option.reservationNumber &&
+                    option.reservationNumber.toLowerCase().includes(input)) ||
+                  option.guestName.toLowerCase().includes(input),
+              );
+            }}
+            isOptionEqualToValue={(option, value) =>
+              option._id === value._id || option.id === value.id
+            }
+          />
         </>}
 
       {canProceed && <Divider sx={{
@@ -380,7 +495,10 @@ export function Step1TypeSelection({
           </Typography>
           <Box>
             <Typography variant="body2">
-              Type: {selectedType?.icon} {selectedType?.label}
+              Type:{' '}
+              {useFulltaskApi
+                ? `${(selectedType as { emoji?: string })?.emoji || ''} ${(selectedType as { label?: string })?.label}`
+                : `${(selectedType as { icon?: React.ReactNode })?.icon} ${(selectedType as { label?: string })?.label}`}
             </Typography>
             <Typography variant="body2">
               Logement: 🏠 {formData.listing?.name || formData.listing?.title}

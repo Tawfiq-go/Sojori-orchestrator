@@ -9,7 +9,7 @@ import { Box, CircularProgress, Alert } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import KanbanView from '../components/calendar-views/KanbanView';
 import type { TaskItem, TaskStatus } from '../components/calendar-views/_shared';
-import tasksService, { resolveTasksUserScope } from '../services/tasksService';
+import tasksService, { resolveTasksUserScope } from '../services/fulltaskTasksService';
 import { toast } from 'react-toastify';
 import { useAuth } from '../hooks/useAuth';
 import { getStoredOwners } from '../data/catalogueMock';
@@ -101,18 +101,11 @@ export default function TasksKanbanPage() {
 
     try {
       // Appeler l'API pour mettre à jour le statut
-      const result = await tasksService.updateTaskStatus(taskId, newStatus);
-
-      if (result.success) {
-        toast.success(`✅ Tâche déplacée vers "${newStatus}"`);
-
-        // Update local state
-        setRawTasks(prev => prev.map(t =>
-          t._id === taskId ? { ...t, taskStatus: newStatus } : t
-        ));
-      } else {
-        toast.error(result.message || 'Erreur lors du déplacement');
-      }
+      await tasksService.updateTaskStatus(taskId, newStatus);
+      toast.success(`Tâche déplacée vers "${newStatus}"`);
+      setRawTasks((prev) =>
+        prev.map((t) => (t._id === taskId ? { ...t, taskStatus: newStatus } : t)),
+      );
     } catch (err: any) {
       console.error('[TasksKanbanPage] Error updating task status:', err);
       toast.error(err?.message || 'Erreur lors du déplacement');

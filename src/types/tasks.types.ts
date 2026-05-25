@@ -54,6 +54,7 @@ export interface TaskListItem {
   tags?: string[];
   timeslot?: TaskTimeSlot | null;
   reservationNumber?: string;
+  reservationId?: string;
   guestName?: string;
   guestCountry?: string | null;
   /** Canal OTA (airbnb, booking…) — pour affichage, distinct de `source` interne */

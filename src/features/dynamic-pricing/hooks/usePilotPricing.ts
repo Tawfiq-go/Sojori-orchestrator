@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { isAxiosError } from 'axios';
 import type { PricingEvent, PricingMode, PricingModeDef } from '../bien/PricingControls';
 import type { CalendarDay } from '../bien/YearlyCalendar';
 import type { PriceFactor } from '../_tokens';
@@ -8,6 +9,7 @@ import {
   fetchPilotConfig,
   previewPilotPricing,
   savePilotConfig,
+  type PilotApplyReportDto,
   type PilotPricingConfigDto,
   type PilotPreviewDay,
 } from '../../../services/dynamicPricingApi';
@@ -34,8 +36,8 @@ function buildConfigPayload(
   ceiling: number,
   enabled: boolean,
   events: PricingEvent[],
-  minStayDelta: number,
-  minStayPlancher: number,
+  gapBlockEnabled: boolean,
+  gapBlockMinNights: number,
   modeEnabled: boolean,
   applyPrice: boolean,
   applyMinStay: boolean,
@@ -43,7 +45,7 @@ function buildConfigPayload(
   return {
     enabled,
     applyPrice,
-    applyMinStay: applyPrice ? applyMinStay : false,
+    applyMinStay,
     modeEnabled,
     mode: legacyModeFromActive(activeModeId, legacyMode),
     activeModeId,
@@ -53,19 +55,24 @@ function buildConfigPayload(
     floorAggressive: Math.round(floor * 0.7),
     lastMinuteEnabled: true,
     lastMinuteWindowDays: 7,
-    minStayDelta,
-    minStayPlancher,
+    minStayDelta: 0,
+    minStayPlancher: 1,
+    gapBlockEnabled,
+    gapBlockMinNights,
     events: events.map((e) => {
       const parts = e.dateRange.split('→').map((s) => s.trim());
       const startDate = (parts[0] ?? e.dateRange).slice(0, 10);
       const endDate = (parts[1] ?? parts[0] ?? e.dateRange).slice(0, 10);
+      const isPercent = e.kind === 'market_percent';
       return {
         _id: e.id,
         label: e.name,
         emoji: e.emoji,
         startDate,
         endDate,
-        eventFloorMad: e.fixedPrice,
+        eventKind: e.kind,
+        eventFloorMad: isPercent ? 0 : e.fixedPrice,
+        eventMarketPercent: isPercent ? e.marketPercent : undefined,
         minNightsOverride: e.minNights > 0 ? e.minNights : undefined,
       };
     }),
@@ -74,6 +81,7 @@ function buildConfigPayload(
 
 export function usePilotPricing(options: {
   listingId: string | undefined;
+  /** Snapshot avec estimate et/ou listing AirROI — requis pour preview/apply */
   hasAirroiSnapshot: boolean;
   activeModeId: string;
   pricingModes: PricingModeDef[];
@@ -82,8 +90,8 @@ export function usePilotPricing(options: {
   ceiling: number | null;
   aiEnabled: boolean;
   events: PricingEvent[];
-  minStayDelta: number;
-  minStayPlancher: number;
+  gapBlockEnabled: boolean;
+  gapBlockMinNights: number;
   modeEnabled: boolean;
   applyPrice: boolean;
   applyMinStay: boolean;
@@ -99,8 +107,8 @@ export function usePilotPricing(options: {
     ceiling,
     aiEnabled,
     events,
-    minStayDelta,
-    minStayPlancher,
+    gapBlockEnabled,
+    gapBlockMinNights,
     modeEnabled,
     applyPrice,
     applyMinStay,
@@ -111,6 +119,7 @@ export function usePilotPricing(options: {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
   const [previewDays, setPreviewDays] = useState<CalendarDay[]>([]);
+  const [previewMarketDays, setPreviewMarketDays] = useState<CalendarDay[]>([]);
   const [hasSojoriPreview, setHasSojoriPreview] = useState(false);
   const [lastApplySummary, setLastApplySummary] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,8 +134,8 @@ export function usePilotPricing(options: {
       ceiling,
       aiEnabled,
       events,
-      minStayDelta,
-      minStayPlancher,
+      gapBlockEnabled,
+      gapBlockMinNights,
       modeEnabled,
       applyPrice,
       applyMinStay,
@@ -139,8 +148,8 @@ export function usePilotPricing(options: {
     ceiling,
     aiEnabled,
     events,
-    minStayDelta,
-    minStayPlancher,
+    gapBlockEnabled,
+    gapBlockMinNights,
     modeEnabled,
     applyPrice,
     applyMinStay,
@@ -162,8 +171,9 @@ export function usePilotPricing(options: {
 
   const runPreview = useCallback(async () => {
     const payload = configPayload();
-    if (!listingId || !hasAirroiSnapshot || !aiEnabled || !payload) {
+    if (!listingId || !hasAirroiSnapshot || !payload) {
       setPreviewDays([]);
+      setPreviewMarketDays([]);
       setHasSojoriPreview(false);
       return;
     }
@@ -171,20 +181,31 @@ export function usePilotPricing(options: {
     try {
       const res = await previewPilotPricing(listingId, payload);
       if (res.data?.success && res.data.days?.length) {
-        const days = res.data.days
+        const raw = res.data.days as PilotPreviewDay[];
+        const market = raw
+          .filter((d) => (d.marketPriceMad ?? 0) > 0)
+          .map((d) => ({
+            date: d.date,
+            recommendedPrice: d.marketPriceMad ?? 0,
+            status: 'std' as const,
+          }));
+        const days = raw
           .filter((d) => d.finalPriceMad > 0 || d.status === 'blocked')
-          .map((d) => mapPilotDayToCalendar(d as PilotPreviewDay));
+          .map((d) => mapPilotDayToCalendar(d));
+        setPreviewMarketDays(market);
         setPreviewDays(days);
         setHasSojoriPreview(true);
       } else {
+        setPreviewMarketDays([]);
         setHasSojoriPreview(false);
       }
     } catch {
+      setPreviewMarketDays([]);
       setHasSojoriPreview(false);
     } finally {
       setPreviewLoading(false);
     }
-  }, [listingId, hasAirroiSnapshot, aiEnabled, configPayload]);
+  }, [listingId, hasAirroiSnapshot, configPayload]);
 
   useEffect(() => {
     if (!listingId) return;
@@ -193,8 +214,9 @@ export function usePilotPricing(options: {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!aiEnabled || !listingId || !hasAirroiSnapshot || floor == null || ceiling == null) {
+    if (!listingId || !hasAirroiSnapshot || floor == null || ceiling == null) {
       setPreviewDays([]);
+      setPreviewMarketDays([]);
       setHasSojoriPreview(false);
       return;
     }
@@ -204,7 +226,7 @@ export function usePilotPricing(options: {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [aiEnabled, listingId, hasAirroiSnapshot, configPayload, runPreview]);
+  }, [listingId, hasAirroiSnapshot, configPayload, runPreview, floor, ceiling]);
 
   const applyToCalendar = useCallback(async () => {
     const payload = configPayload();
@@ -212,20 +234,33 @@ export function usePilotPricing(options: {
       throw new Error('Bornes prix requises');
     }
     if (!hasAirroiSnapshot) {
-      throw new Error('Snapshot marché requis — lancer ⟳ sur ce bien');
+      throw new Error(
+        'Estimate requis — modal ⟳ · GET /calculator/estimate puis vérifier la courbe avant d’appliquer',
+      );
     }
     setApplyLoading(true);
     try {
       await savePilotConfig(listingId, { ...payload, enabled: true });
-      const res = await applyPilotPricing(listingId, {
-        config: { ...payload, enabled: true },
-        triggerSource: 'orchestrator-ui',
-      });
-      if (!res.data?.success) {
-        throw new Error('Apply pilote échoué');
+      let res;
+      try {
+        res = await applyPilotPricing(listingId, {
+          config: { ...payload, enabled: true },
+          triggerSource: 'orchestrator-ui',
+        });
+      } catch (e) {
+        if (isAxiosError(e)) {
+          const data = e.response?.data as { error?: string } | undefined;
+          throw new Error(data?.error ?? e.message);
+        }
+        throw e;
       }
+      if (!res.data?.success) {
+        const errBody = res.data as { error?: string };
+        throw new Error(errBody?.error ?? 'Apply pilote échoué');
+      }
+      const r = res.data.applyReport;
       setLastApplySummary(
-        `${res.data.daysChanged} jours modifiés · ${res.data.daysSkipped} ignorés · RU ${res.data.ruPublishQueued ? 'OK' : '—'}`,
+        `${res.data.daysChanged} j modifiés · prix ${r?.daysPricePushed ?? 0} · min stay trous ${r?.daysGapMinStayAdjusted ?? 0} · RU ${res.data.ruPublishQueued ? 'OK' : '—'}`,
       );
       await runPreview();
       return res.data;
@@ -317,6 +352,7 @@ export function usePilotPricing(options: {
     previewLoading,
     applyLoading,
     previewDays,
+    previewMarketDays,
     hasSojoriPreview,
     lastApplySummary,
     runPreview,

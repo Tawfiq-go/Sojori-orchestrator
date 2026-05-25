@@ -67,7 +67,7 @@ export default function AddIncludedExtraDialog({ open, onClose, onAdd, existingI
         Ajouter un extra payant
       </DialogTitle>
       <DialogContent>
-        <Stack direction="row" gap={0.5} sx={{ mb: 1.5, mt: 0.5 }}>
+        <Stack direction="row" sx={{ gap: 0.5, mb: 1.5, mt: 0.5 }}>
           {(
             [
               { id: 'library' as const, label: '📚 Bibliothèque' },
@@ -88,7 +88,7 @@ export default function AddIncludedExtraDialog({ open, onClose, onAdd, existingI
                 Tous les modèles sont déjà ajoutés. Utilisez l’onglet <b>Nouveau</b>.
               </Typography>
             ) : (
-              <Stack gap={0.75}>
+              <Stack sx={{ gap: 0.75 }}>
                 {libraryAvailable.map(cat => (
                   <Box
                     key={cat.id}
@@ -125,9 +125,9 @@ export default function AddIncludedExtraDialog({ open, onClose, onAdd, existingI
             )}
           </>
         ) : (
-          <Stack spacing={1.25} sx={{ pt: 0.5 }}>
+          <Stack sx={{ gap: 1.25, pt: 0.5 }}>
             <Typography sx={{ ...TYPO.caption }}>Extra personnalisé (hors bibliothèque)</Typography>
-            <Stack direction="row" flexWrap="wrap" gap={0.5} alignItems="center">
+            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
               <TextField
                 size="small"
                 label="Icône"
@@ -163,7 +163,7 @@ export default function AddIncludedExtraDialog({ open, onClose, onAdd, existingI
               fullWidth
               value={custom.labelFr}
               onChange={e => setCustom(c => ({ ...c, labelFr: e.target.value }))}
-              inputProps={{ maxLength: 60 }}
+              slotProps={{ htmlInput: { maxLength: 60 } }}
               sx={sxInput}
             />
             <TextField
@@ -174,7 +174,7 @@ export default function AddIncludedExtraDialog({ open, onClose, onAdd, existingI
               minRows={2}
               value={custom.descriptionFr}
               onChange={e => setCustom(c => ({ ...c, descriptionFr: e.target.value }))}
-              inputProps={{ maxLength: 200 }}
+              slotProps={{ htmlInput: { maxLength: 200 } }}
               sx={sxInput}
             />
             <TextField
@@ -184,7 +184,7 @@ export default function AddIncludedExtraDialog({ open, onClose, onAdd, existingI
               fullWidth
               value={custom.price || ''}
               onChange={e => setCustom(c => ({ ...c, price: Number(e.target.value) || 0 }))}
-              inputProps={{ min: 0 }}
+              slotProps={{ htmlInput: { min: 0 } }}
               sx={sxInput}
             />
           </Stack>

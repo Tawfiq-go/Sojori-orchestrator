@@ -83,11 +83,15 @@ export function ReservationSejourPage() {
 
   // Handler: Annuler la réservation
   const handleCancelReservation = async () => {
-    if (!id) return;
+    const cancelId =
+      reservationDetails?._id ||
+      reservationDetails?.id ||
+      id;
+    if (!cancelId) return;
 
     setIsCancelling(true);
     try {
-      const result = await reservationsService.cancel(id);
+      const result = await reservationsService.cancel(String(cancelId));
 
       if (result.success) {
         toast.success('Réservation annulée avec succès');
@@ -307,7 +311,17 @@ export function ReservationSejourPage() {
 
       {/* ─── Content ──────────────────────────────────────────── */}
       <Box sx={{ bgcolor: T.bg0 }}>
-        {tab === 0 && <GuestInfoTab reservationDetails={reservationDetails} isEditMode={isEditMode} />}
+        {tab === 0 && (
+          <GuestInfoTab
+            reservationDetails={reservationDetails}
+            isEditMode={isEditMode}
+            reservationId={reservationDetails?._id}
+            onRefresh={() => {
+              if (!id) return;
+              reservationsService.getByRouteParam(id).then(setReservationDetails).catch(() => undefined);
+            }}
+          />
+        )}
         {tab === 1 && <SejourTab reservationDetails={reservationDetails} />}
         {tab === 2 && (
           <Box sx={{ p: { xs: 2, sm: 3 } }}>

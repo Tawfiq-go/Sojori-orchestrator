@@ -27,6 +27,8 @@ import type { CompRow } from './bien/CompsTable';
 import JustificationModalG7 from './JustificationModalG7';
 import EventEditorModal from './bien/EventEditorModal';
 import DynamicPriceScopeModal from './bien/DynamicPriceScopeModal';
+import CalendarUpdateModal from './bien/CalendarUpdateModal';
+import type { PilotApplyReportDto } from '../../services/dynamicPricingApi';
 import { SectionSourceBar, type DataSourceItem } from './DataSourceBadges';
 import DataEmptyPlaceholder from './DataEmptyPlaceholder';
 import { normalizeCityKey } from './cityScope';
@@ -36,6 +38,8 @@ export type BienViewProvenance = {
   ttmPeriodLabel?: string | null;
   calendarFromCache: boolean;
   hasAirroiSnapshot: boolean;
+  hasRevenueEstimate?: boolean;
+  perfSource?: 'airroi_snapshot' | 'estimate' | null;
 };
 
 export interface BienViewProps {
@@ -50,7 +54,8 @@ export interface BienViewProps {
   calendarFromCache?: boolean;
   calendarUsesPilotPreview?: boolean;
   calendarHasEventOverlay?: boolean;
-  calendarUsesRolling365?: boolean;
+  calendarWindowMode?: 'rolling12m' | 'rolling365' | 'calendarYear';
+  calendarPricingSource?: 'estimate' | 'sojori' | 'airroi';
   eventsCount?: number;
   calendarAirroiError?: string | null;
   airroiCalendarDaysCount?: number;
@@ -66,8 +71,8 @@ export interface BienViewProps {
   mode: PricingMode;
   activeModeId: string;
   pricingModes: PricingModeDef[];
-  minStayDelta: number;
-  minStayPlancher: number;
+  gapBlockEnabled: boolean;
+  gapBlockMinNights: number;
   modeEnabled: boolean;
   applyPrice: boolean;
   applyMinStay: boolean;
@@ -101,6 +106,9 @@ export interface BienViewProps {
 
   estimatedRevenueMad?: number;
   estimatedRevenueLiftPct?: number;
+  boundsContextHint?: string;
+  compsMedianAdr?: number;
+  estimateAdrMad?: number;
 
   // Callbacks
   onToggleAi: (enabled: boolean) => void;
@@ -115,8 +123,8 @@ export interface BienViewProps {
   onAddCustomMode: () => void;
   onUpdateCustomMode: (modeId: string, patch: Partial<Pick<PricingModeDef, 'label' | 'multiplier'>>) => void;
   onDeleteCustomMode: (modeId: string) => void;
-  onMinStayDeltaChange: (v: number) => void;
-  onMinStayPlancherChange: (v: number) => void;
+  onGapBlockEnabledChange: (on: boolean) => void;
+  onGapBlockMinNightsChange: (v: number) => void;
   onModeEnabledChange: (enabled: boolean) => void;
   onAddEvent: () => void;
   onEventModalClose?: () => void;
@@ -126,6 +134,8 @@ export interface BienViewProps {
   onAcceptSuggestion: (id: string) => void;
   onYearChange?: (year: number) => void;
   onApplyToOps: () => void | Promise<void>;
+  onRunCalendarUpdate?: () => Promise<PilotApplyReportDto>;
+  activeModeLabel?: string;
   onExpandDay: (date: string) => Promise<{
     factors: PriceFactor[];
     finalPrice: number;
@@ -144,10 +154,10 @@ export default function BienView(props: BienViewProps) {
   const {
     listing, provenance, hasTtm, hasL90d, hasPotentialProd, hasMarketProd, hasCalendarProd,
     calendarFromAirroi, calendarFromCache, calendarUsesPilotPreview, calendarHasEventOverlay,
-    calendarUsesRolling365, eventsCount, calendarAirroiError, airroiCalendarDaysCount,
+    calendarWindowMode, calendarPricingSource, eventsCount, calendarAirroiError, airroiCalendarDaysCount,
     potentialHint, hasCompsProd,
     performance, market, aiEnabled,
-    floor, ceiling, mode, activeModeId, pricingModes, minStayDelta, minStayPlancher, modeEnabled,
+    floor, ceiling, mode, activeModeId, pricingModes, gapBlockEnabled, gapBlockMinNights, modeEnabled,
     applyPrice, applyMinStay, scopeModalOpen, scopeModalEdit, scopeSaving, scopeSaveError,
     configSaveStatus, events, suggestions,
     eventModalOpen, editingEventId,
@@ -155,16 +165,22 @@ export default function BienView(props: BienViewProps) {
     compsMarketStats, selfVsComps, hasCompsMarket,
     seasonality, pacing, supplyGrowth,
     compMapPins, bienMapPosition, compRows,
-    estimatedRevenueMad, estimatedRevenueLiftPct,
+    estimatedRevenueMad, estimatedRevenueLiftPct, boundsContextHint, compsMedianAdr, estimateAdrMad,
     onToggleAi, onScopeModalClose, onScopeModalConfirm, onEditSyncScope,
     onFloorChange, onCeilingChange, onApplyRecoBounds,
     onActiveModeChange, onModeToggle, onAddCustomMode, onUpdateCustomMode, onDeleteCustomMode,
-    onMinStayDeltaChange, onMinStayPlancherChange, onModeEnabledChange,
+    onGapBlockEnabledChange, onGapBlockMinNightsChange, onModeEnabledChange,
     onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
     onEventModalClose, onEventSave,
-    onYearChange, onApplyToOps, onExpandDay,
+    onYearChange, onApplyToOps, onRunCalendarUpdate, activeModeLabel, onExpandDay,
     pilotPreviewLoading, pilotApplyLoading, pilotApplySummary, pilotApplyError,
   } = props;
+
+  const [calendarUpdateOpen, setCalendarUpdateOpen] = useState(false);
+  const modeLabel =
+    activeModeLabel ??
+    pricingModes.find((m) => m.id === activeModeId)?.label ??
+    mode;
 
   const cityLabel = normalizeCityKey(listing.city);
 
@@ -248,9 +264,26 @@ export default function BienView(props: BienViewProps) {
           </Stack>
           <Stack direction="row" sx={{ gap: 1.5, 
             mt: 0.625, fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace',
+            flexWrap: 'wrap',
           }}>
             <span>🛏 {listing.bedrooms} chambres</span>
-            <span>👥 {listing.maxGuests} voyageurs</span>
+            <span>👥 {listing.maxGuests} voyageurs max</span>
+            {listing.personCapacityPricing != null &&
+            listing.personCapacityPricing > 0 &&
+            listing.personCapacityPricing !== listing.maxGuests ? (
+              <span title="personCapacity — tarif / occupancy de base, non envoyé à AirROI">
+                (tarif base {listing.personCapacityPricing} pers.)
+              </span>
+            ) : null}
+            {listing.airroiApiProfile ? (
+              <Box
+                component="span"
+                title="Profil envoyé à calculator/estimate et listings/comparables (sans adresse ni GPS)"
+                sx={{ color: T.text2, fontWeight: 600 }}
+              >
+                {listing.airroiApiProfile}
+              </Box>
+            ) : null}
             {listing.amenities.slice(0, 3).map((a, i) => <span key={i}>{a}</span>)}
           </Stack>
         </Box>
@@ -297,7 +330,6 @@ export default function BienView(props: BienViewProps) {
             {aiEnabled ? (
               <Stack direction="row" sx={{ gap: 0.75,  mt: 0.5, flexWrap: 'wrap' }}>
                 <SyncScopeChip label="Prix" active={applyPrice} />
-                <SyncScopeChip label="Min stay" active={applyMinStay} inactiveColor="#d32f2f" />
                 {onEditSyncScope ? (
                   <Typography
                     component="span"
@@ -320,6 +352,29 @@ export default function BienView(props: BienViewProps) {
             ) : null}
           </Box>
         </Box>
+        <Button
+          variant="outlined"
+          size="small"
+          disabled={!onRunCalendarUpdate || !provenance.hasRevenueEstimate || pilotApplyLoading}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!onRunCalendarUpdate) return;
+            setCalendarUpdateOpen(true);
+          }}
+          sx={{
+            flex: '0 0 auto',
+            textTransform: 'none',
+            fontWeight: 800,
+            fontSize: 12,
+            borderColor: T.gold,
+            color: T.goldDeep,
+            bgcolor: T.goldTint,
+            '&:hover': { borderColor: T.goldDeep, bgcolor: T.goldTint2 },
+            '&.Mui-disabled': { opacity: 0.55 },
+          }}
+        >
+          {pilotApplyLoading ? 'Mise à jour…' : 'Mettre à jour calendrier'}
+        </Button>
         <Box sx={{
           flex: '0 0 auto',
           fontSize: 10.5, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
@@ -338,7 +393,9 @@ export default function BienView(props: BienViewProps) {
             },
           ]}
           snapshotAt={provenance.snapshotAt}
-          snapshotLabel="Snapshot marché"
+          snapshotLabel={
+            provenance.hasRevenueEstimate ? 'Snapshot estimate' : 'Snapshot marché'
+          }
         />
       </Box>
 
@@ -352,11 +409,17 @@ export default function BienView(props: BienViewProps) {
           { kind: hasL90d ? 'prod' : 'empty', label: hasL90d ? 'L90D PROD' : 'L90D VIDE' },
           {
             kind: hasPotentialProd ? 'prod' : 'empty',
-            label: hasPotentialProd ? 'Potentiel comps' : 'Potentiel VIDE',
+            label: hasPotentialProd
+              ? provenance.hasRevenueEstimate
+                ? 'Estimate PROD'
+                : 'Potentiel comps'
+              : 'Potentiel VIDE',
           },
         ]}
         snapshotAt={provenance.snapshotAt}
-        snapshotLabel="Snapshot marché"
+        snapshotLabel={
+          provenance.hasRevenueEstimate ? 'Snapshot estimate' : 'Snapshot marché'
+        }
         sourceNote={provenance.ttmPeriodLabel ?? undefined}
       >
         <StatsCards
@@ -382,7 +445,7 @@ export default function BienView(props: BienViewProps) {
               ? 'Modifications enregistrées (auto-save ~1s)'
               : configSaveStatus === 'error'
                 ? 'Erreur enregistrement — réessayez ou activez Sojori AI'
-                : 'Bornes, modes, min stay, events — sauvegarde auto après chaque réglage'
+                : 'Bornes, modes, events — sauvegarde auto après chaque réglage'
         }
         sources={[
           { kind: floor > 0 ? 'prod' : 'empty', label: 'Bornes' },
@@ -396,16 +459,15 @@ export default function BienView(props: BienViewProps) {
           pricingModes={pricingModes}
           activeModeId={activeModeId}
           modeEnabled={modeEnabled}
-          minStaySyncActive={aiEnabled && applyMinStay}
-          minStayDelta={minStayDelta}
-          minStayPlancher={minStayPlancher}
+          gapBlockEnabled={gapBlockEnabled}
+          gapBlockMinNights={gapBlockMinNights}
           events={events} suggestions={suggestions}
           hasBoundsProd={floor > 0 && ceiling > 0}
           estimatedRevenue={estimatedRevenueMad}
           estimatedRevenueLiftPct={estimatedRevenueLiftPct}
           onFloorChange={onFloorChange} onCeilingChange={onCeilingChange}
-          onMinStayDeltaChange={onMinStayDeltaChange}
-          onMinStayPlancherChange={onMinStayPlancherChange}
+          onGapBlockEnabledChange={onGapBlockEnabledChange}
+          onGapBlockMinNightsChange={onGapBlockMinNightsChange}
           onModeEnabledChange={onModeEnabledChange}
           onApplyRecoBounds={onApplyRecoBounds}
           onActiveModeChange={onActiveModeChange}
@@ -414,7 +476,8 @@ export default function BienView(props: BienViewProps) {
           onUpdateCustomMode={onUpdateCustomMode}
           onDeleteCustomMode={onDeleteCustomMode}
           onAddEvent={onAddEvent} onEditEvent={onEditEvent}
-          onDeleteEvent={onDeleteEvent} onAcceptSuggestion={onAcceptSuggestion}
+          onDeleteEvent={onDeleteEvent}           onAcceptSuggestion={onAcceptSuggestion}
+          boundsContextHint={boundsContextHint}
         />
       </Section>
 
@@ -424,41 +487,65 @@ export default function BienView(props: BienViewProps) {
           num="04"
           title={
             calendarUsesPilotPreview
-              ? 'Calendrier pilote Sojori'
+              ? calendarPricingSource === 'estimate'
+                ? 'Prévisualisation prix (estimate)'
+                : 'Calendrier pilote Sojori'
               : calendarHasEventOverlay
                 ? 'Marché + events (aperçu)'
                 : calendarFromAirroi
-                  ? 'Suggestion de prix marché'
+                  ? 'Comparaison OTA (future/rates)'
                   : 'Calendrier de recommandations'
           }
           sub={
             calendarUsesPilotPreview
-              ? `${calendarDays.length} jours · pilote v2 (modes, bornes${(eventsCount ?? 0) > 0 ? ', events' : ''}) · courbe 365j`
+              ? calendarPricingSource === 'estimate'
+                ? `${calendarDays.length} j · 2 courbes (estimate brut + prix calendrier) · vérifiez avant « Appliquer »`
+                : `${calendarDays.length} jours · pilote v2 (modes, bornes${(eventsCount ?? 0) > 0 ? ', events' : ''}) · courbe 365j`
               : calendarHasEventOverlay
                 ? `${calendarDays.length} j · events en orange sur la courbe · preview pilote en cours…`
                 : calendarFromAirroi
-              ? `${calendarDays.length} jours · courbe + grille à partir du mois courant (365 j futurs)`
+              ? `${calendarDays.length} jours · lecture seule OTA · pas le moteur Sojori`
               : pilotPreviewLoading
-                ? 'Simulation pilote v2…'
-                : calendarFromCache
+                ? 'Calcul preview depuis estimate…'
+                : provenance.hasRevenueEstimate
+                  ? 'Estimate enregistré — ajustez §03 puis attendez la courbe preview'
+                  : calendarFromCache
                   ? `Prix/jour · pilote Sojori (mixEngine v2 + audit G7)${pilotApplySummary ? ` · ${pilotApplySummary}` : ''}`
-                  : aiEnabled
-                    ? 'Activez le pilote §03 ou lancez ⟳ snapshot pour les tarifs/jour'
-                    : '365 jours · snapshot marché requis (⟳ sur cette fiche)'
+                  : 'Modal ⟳ · GET /calculator/estimate puis preview ici avant envoi calendrier'
           }
           sources={[
             calendarUsesPilotPreview || calendarHasEventOverlay
               ? {
                   kind: 'prod',
-                  label: (eventsCount ?? 0) > 0 ? 'Pilote + events' : 'Pilote v2',
-                  tooltip: 'Preview mixEngine · jours event = prix forcé (orange)',
+                  label:
+                    calendarPricingSource === 'estimate'
+                      ? 'Preview estimate'
+                      : (eventsCount ?? 0) > 0
+                        ? 'Pilote + events'
+                        : 'Pilote v2',
+                  tooltip:
+                    calendarPricingSource === 'estimate'
+                      ? 'Bleu = marché estimate brut · Or = prix après bornes, occupation, events'
+                      : 'Preview mixEngine v2.4 · orange = jour event',
                 }
               : calendarFromAirroi
-              ? { kind: 'prod', label: 'Prix/jour', tooltip: 'future/rates snapshot · fenêtre glissante 365j' }
+              ? {
+                  kind: 'partial',
+                  label: 'OTA only',
+                  tooltip: 'future/rates — comparaison uniquement, pas le prix pilote',
+                }
               : calendarFromCache || pilotPreviewLoading
                 ? { kind: 'prod', label: 'Pilote v2', tooltip: 'POST preview / apply' }
-                : { kind: 'empty', label: 'VIDE' },
+                : provenance.hasRevenueEstimate
+                  ? { kind: 'partial', label: 'Estimate OK', tooltip: 'Preview en cours ou bornes §03 manquantes' }
+                  : { kind: 'empty', label: 'VIDE' },
           ]}
+          snapshotAt={provenance.snapshotAt}
+          snapshotLabel={
+            calendarPricingSource === 'estimate' || provenance.hasRevenueEstimate
+              ? 'Snapshot estimate'
+              : 'Snapshot marché'
+          }
         >
           {pilotApplyError ? (
             <Typography sx={{ fontSize: 12, color: T.error, fontWeight: 600, mb: 1 }}>
@@ -470,15 +557,18 @@ export default function BienView(props: BienViewProps) {
             compareMarketDays={calendarMarketDays}
             compactHeader
             pricingSource={
-              calendarUsesPilotPreview || calendarHasEventOverlay ? 'sojori' : calendarFromAirroi ? 'airroi' : 'sojori'
+              calendarPricingSource ??
+              (calendarUsesPilotPreview || calendarHasEventOverlay
+                ? 'sojori'
+                : calendarFromAirroi
+                  ? 'airroi'
+                  : 'sojori')
             }
             applyLoading={pilotApplyLoading}
-            windowMode={
-              (calendarUsesRolling365 ? 'rolling365' : 'calendarYear') as CalendarWindowMode
-            }
+            windowMode={(calendarWindowMode ?? 'rolling12m') as CalendarWindowMode}
             year={calendarYear}
             yearOptions={calendarFromCache && !calendarFromAirroi ? calendarYearOptions : undefined}
-            showApplyButton={!calendarFromAirroi}
+            showApplyButton={calendarUsesPilotPreview && aiEnabled && applyPrice}
             priceSyncActive={aiEnabled && applyPrice}
             minStaySyncActive={aiEnabled && applyMinStay}
             sourceHint={(() => {
@@ -490,14 +580,14 @@ export default function BienView(props: BienViewProps) {
                 : null;
               const snapDays = airroiCalendarDaysCount ?? 0;
               if (calendarUsesPilotPreview) {
-                return [
-                  'Deux courbes : bleu pointillé = AirROI brut (snapshot), or = pilote Sojori (preview live).',
-                  snap ? `Snapshot du ${snap}.` : '',
-                  snapDays ? `${snapDays} j avec tarif marché dans future/rates.` : '',
-                  'Pilote = modes + bornes + events — non écrit au calendrier ops sans « Appliquer ».',
-                ]
-                  .filter(Boolean)
-                  .join(' ');
+                const lines = [
+                  calendarPricingSource === 'estimate'
+                    ? 'Courbe or = prix pilote dérivés de GET /calculator/estimate (modes + bornes §03).'
+                    : 'Courbe or = pilote Sojori (preview live).',
+                  snap ? `Snapshot estimate du ${snap}.` : '',
+                  'Non synchronisé vers le calendrier ops tant que vous n’avez pas activé Sojori AI et cliqué « Appliquer ».',
+                ];
+                return lines.filter(Boolean).join(' ');
               }
               if (calendarHasEventOverlay) {
                 return `Snapshot marché${snap ? ` (${snap})` : ''} + events en orange (aperçu local, pas encore appliqué).`;
@@ -517,18 +607,24 @@ export default function BienView(props: BienViewProps) {
               return undefined;
             })()}
             sourceLinkLabel={
-              calendarUsesPilotPreview || (calendarHasEventOverlay && aiEnabled)
-                ? 'Source pilote Sojori ⓘ'
+              calendarUsesPilotPreview
+                ? calendarPricingSource === 'estimate'
+                  ? 'Preview estimate (Sojori) ⓘ'
+                  : 'Source pilote Sojori ⓘ'
                 : calendarFromAirroi
-                  ? 'Source marché (AirROI) ⓘ'
-                  : undefined
+                  ? 'Comparaison OTA (future/rates) ⓘ'
+                  : provenance.hasRevenueEstimate
+                    ? 'Estimate enregistré ⓘ'
+                    : undefined
             }
             emptyHint={
               calendarAirroiError
                 ? `Les tarifs journaliers n’ont pas été renvoyés : ${calendarAirroiError}. Relancez ⟳ ou contactez le support si l’erreur persiste (HTTP 400 connu sur certaines annonces).`
-                : provenance.hasAirroiSnapshot
-                  ? 'Aucun jour future/rates dans le snapshot — relancez ⟳ Envoyer · récupérer'
-                  : undefined
+                : provenance.hasRevenueEstimate && !calendarUsesPilotPreview
+                  ? 'Estimate OK — vérifiez plancher/plafond §03 puis attendez la courbe preview (~1 s).'
+                  : provenance.hasAirroiSnapshot
+                  ? 'Aucun jour future/rates dans le snapshot — optionnel (comparaison OTA). Lancez estimate si besoin.'
+                  : 'Modal ⟳ · GET /calculator/estimate'
             }
             onYearChange={calendarFromCache && !calendarFromAirroi ? onYearChange : undefined}
             onDayClick={handleDayClick}
@@ -571,7 +667,7 @@ export default function BienView(props: BienViewProps) {
       <Section
         num="06"
         title={`Carte ${listing.city} · positionnement`}
-        sub={`Votre bien · zones ADR · ${compMapPins.length} concurrents`}
+        sub={`GPS = fiche listing Sojori (priorité) · ${compMapPins.length} concurrents autour de ce point`}
         sources={[
           bienMapPosition
             ? { kind: 'prod', label: 'Carte OSM', tooltip: 'Leaflet · OpenStreetMap — pas de token' }
@@ -626,6 +722,25 @@ export default function BienView(props: BienViewProps) {
         initialApplyMinStay={applyMinStay}
         onClose={() => onScopeModalClose?.()}
         onConfirm={(c) => void onScopeModalConfirm?.(c)}
+      />
+
+      <CalendarUpdateModal
+        open={calendarUpdateOpen && Boolean(onRunCalendarUpdate)}
+        listingName={listing.name}
+        hasEstimate={Boolean(provenance.hasRevenueEstimate)}
+        estimateSnapshotAt={provenance.snapshotAt}
+        applyPrice={applyPrice}
+        applyMinStay={applyMinStay}
+        floor={floor}
+        ceiling={ceiling}
+        gapBlockEnabled={gapBlockEnabled}
+        gapBlockMinNights={gapBlockMinNights}
+        eventsCount={eventsCount ?? events.length}
+        activeModeLabel={modeLabel}
+        onClose={() => setCalendarUpdateOpen(false)}
+        onRun={onRunCalendarUpdate ?? (async () => {
+          throw new Error('Mise à jour calendrier indisponible');
+        })}
       />
 
       <JustificationModalG7

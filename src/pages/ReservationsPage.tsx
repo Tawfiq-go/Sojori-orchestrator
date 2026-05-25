@@ -7,7 +7,7 @@
 // Tous les champs / handlers / appels API du fichier original sont conservés.
 // ════════════════════════════════════════════════════════════════════
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, startTransition } from 'react';
 import {
   Box, Stack, Typography, Paper, Chip, IconButton, Tooltip, Button,
   TextField, InputAdornment, FormControl, Select, MenuItem, Checkbox,
@@ -31,6 +31,7 @@ import 'moment/locale/fr';
 import reservationsService from '../services/reservationsService';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CreateReservationModal } from '../components/modals/CreateReservationModal';
+import { blurActiveElement } from '../utils/domFocus';
 
 moment.locale('fr');
 
@@ -83,6 +84,9 @@ const isReservationCancelled = (status: string) => {
   const s = status?.toLowerCase() || '';
   return s.includes('cancel') || s === 'rejected';
 };
+
+const isCancelledStatusFilter = (statuses: string[]) =>
+  statuses.some((s) => s.toLowerCase() === 'cancelled' || isReservationCancelled(s));
 
 const formatTime = (timeInput: any): string | null => {
   if (timeInput === undefined || timeInput === null || timeInput === '') return null;
@@ -250,7 +254,8 @@ export function ReservationsPage() {
   });
 
   const [page, setPage] = useState(0);
-  const limit = 50;
+  const [totalReservations, setTotalReservations] = useState(0);
+  const limit = 100;
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -279,6 +284,12 @@ export function ReservationsPage() {
 
       if (result.success) {
         toast.success('Annulation acquittée');
+        if (!isCancelledStatusFilter(selectedStatuses)) {
+          setReservations(prev =>
+            prev.filter(r => r._id !== reservationId || !isReservationCancelled(r.status)),
+          );
+          setTotalReservations(prev => Math.max(0, prev - 1));
+        }
       } else {
         // Rollback on error
         setReservations(prev =>
@@ -296,49 +307,31 @@ export function ReservationsPage() {
   };
 
   // ─── Fetch (logique métier inchangée) ────────────────────────────
-  const fetchReservations = async () => {
+  const fetchReservations = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      console.log('🔍 [ReservationsPage] Fetching reservations...');
-
-      // ✅ Backend filtre automatiquement les cancelled (sauf dernières 24h)
-      // Pas besoin de passer status ici, contrairement au planning
-      const response = await reservationsService.getList({ limit: 1000 });
-
-      console.log('📦 [ReservationsPage] Response received:', {
-        success: response.success,
-        count: response.count,
-        dataLength: response.data?.length,
-        firstReservation: response.data?.[0],
+      const response = await reservationsService.getList({
+        page,
+        limit,
+        status: selectedStatuses.join(','),
       });
 
-      // ⚠️ FIX: Tri prioritaire des annulations non acquittées (comme legacy)
-      const sorted = sortReservationsList(response.data as any[]);
-
-      console.log('🔀 [ReservationsPage] After sorting:', {
-        totalCount: sorted.length,
-        first5: sorted.slice(0, 5).map(r => ({
-          number: r.reservationNumber,
-          status: r.status,
-          cancellationAcknowledged: r.cancellationAcknowledged,
-          isCancelled: isReservationCancelled(r.status),
-          unacknowledged: isReservationCancelled(r.status) && r.cancellationAcknowledged !== true,
-        })),
-      });
-
+      const sorted = sortReservationsList(response.data as Reservation[]);
       setReservations(sorted);
-
-      toast.success(`${response.data.length} réservation(s) chargée(s)`);
+      setTotalReservations(response.total ?? sorted.length);
     } catch (err: any) {
       console.error('❌ [ReservationsPage] Error fetching:', err);
       setError(err.message || 'Erreur');
+      setReservations([]);
+      setTotalReservations(0);
       toast.error('Erreur lors du chargement');
     } finally {
       setIsLoading(false);
     }
-  };
-  useEffect(() => { fetchReservations(); }, []);
+  }, [page, limit, selectedStatuses]);
+
+  useEffect(() => { fetchReservations(); }, [fetchReservations]);
 
   // ─── Liste listings disponibles ────────────────────────────────────
   const availableListings = useMemo(() => {
@@ -364,19 +357,6 @@ export function ReservationsPage() {
         r.listing?.name?.toLowerCase().includes(s)
       );
     }
-    // ⚠️ FIX: Toujours inclure les annulations non acquittées (comme legacy)
-    // même si "CancelledByAdmin" n'est pas dans selectedStatuses
-    if (selectedStatuses.length > 0) {
-      f = f.filter(r => {
-        // Si la réservation match le filtre de statut, OK
-        if (selectedStatuses.includes(r.status)) return true;
-
-        // Sinon, si c'est une annulation non acquittée, on l'inclut quand même
-        const isCancelled = isReservationCancelled(r.status);
-        const unacknowledged = isCancelled && r.cancellationAcknowledged !== true;
-        return unacknowledged;
-      });
-    }
     if (selectedChannels.length > 0) {
       f = f.filter(r => {
         const c = r.channelName?.toLowerCase() || '';
@@ -397,7 +377,7 @@ export function ReservationsPage() {
     if (quickFilters.arr7days)    f = f.filter(r => moment(r.arrivalDate).isBetween(today, next7, 'day', '[]'));
     if (quickFilters.dep7days)    f = f.filter(r => moment(r.departureDate).isBetween(today, next7, 'day', '[]'));
     return f;
-  }, [reservations, globalFilter, selectedStatuses, selectedChannels, selectedListings, quickFilters]);
+  }, [reservations, globalFilter, selectedChannels, selectedListings, quickFilters]);
 
   // ─── KPIs ──────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -449,9 +429,14 @@ export function ReservationsPage() {
     setQuickFilters({ arrToday: false, depToday: false, arrTomorrow: false, depTomorrow: false, arr7days: false, dep7days: false });
     setPage(0);
   };
+  const openCreateModal = useCallback(() => {
+    blurActiveElement();
+    startTransition(() => setIsModalOpen(true));
+  }, []);
+
   const handleViewDetails = (r: Reservation) => navigate(`/reservations/${r._id}`);
 
-  const paged = filteredReservations.slice(page * limit, (page + 1) * limit);
+  const visibleRows = filteredReservations;
 
   return (
     <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
@@ -462,15 +447,17 @@ export function ReservationsPage() {
             <TextField
               size="small" placeholder="Rechercher voyageur, propriété, n° de réservation…"
               value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)}
-              InputProps={{
-                startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: T.text3 }} /></InputAdornment>,
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: T.text3 }} /></InputAdornment>,
+                },
               }}
               sx={{ flex: 1, minWidth: 180, maxWidth: 320 }}
             />
             <Button
               variant="contained"
               size="small"
-              onClick={() => setIsModalOpen(true)}
+              onClick={openCreateModal}
               sx={{
                 textTransform: 'none',
                 bgcolor: T.primary,
@@ -497,7 +484,7 @@ export function ReservationsPage() {
             </FormControl>
             <FormControl size="small" sx={{ minWidth: 160 }}>
               <Select multiple displayEmpty value={selectedStatuses}
-                onChange={(e) => setSelectedStatuses(e.target.value as string[])}
+                onChange={(e) => { setSelectedStatuses(e.target.value as string[]); setPage(0); }}
                 renderValue={(s) => `État · ${(s as string[]).length || 'tous'}`}>
                 {[
                   { val: 'Pending', label: '📋 En attente' },
@@ -625,12 +612,12 @@ export function ReservationsPage() {
         )}
 
         {/* MOBILE : cards · DESKTOP : table */}
-        {!isLoading && !isMobile && paged.length > 0 && (
-          <DesktopTable rows={paged} onRowClick={handleViewDetails} onNavigate={navigate} onAcknowledge={handleAcknowledgeCancellation} />
+        {!isLoading && !isMobile && visibleRows.length > 0 && (
+          <DesktopTable rows={visibleRows} onRowClick={handleViewDetails} onNavigate={navigate} onAcknowledge={handleAcknowledgeCancellation} />
         )}
-        {!isLoading && isMobile && paged.length > 0 && (
+        {!isLoading && isMobile && visibleRows.length > 0 && (
           <Stack spacing={1.25}>
-            {paged.map((r) => <MobileCard key={r._id} r={r} onClick={() => handleViewDetails(r)} onAcknowledge={handleAcknowledgeCancellation} />)}
+            {visibleRows.map((r) => <MobileCard key={r._id} r={r} onClick={() => handleViewDetails(r)} onAcknowledge={handleAcknowledgeCancellation} />)}
           </Stack>
         )}
 
@@ -644,14 +631,14 @@ export function ReservationsPage() {
         )}
 
         {/* Pagination */}
-        {!isLoading && filteredReservations.length > 0 && (
+        {!isLoading && totalReservations > 0 && (
           <Stack direction="row" sx={{ mt: 2, alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
-              {page * limit + 1}–{Math.min((page + 1) * limit, filteredReservations.length)} sur {filteredReservations.length}
+              {page * limit + 1}–{Math.min((page + 1) * limit, totalReservations)} sur {totalReservations}
             </Typography>
             <Stack direction="row" spacing={1}>
               <Button size="small" disabled={page === 0} onClick={() => setPage(page - 1)} sx={{ textTransform: 'none' }}>← Précédent</Button>
-              <Button size="small" disabled={(page + 1) * limit >= filteredReservations.length} onClick={() => setPage(page + 1)} sx={{ textTransform: 'none' }}>Suivant →</Button>
+              <Button size="small" disabled={(page + 1) * limit >= totalReservations} onClick={() => setPage(page + 1)} sx={{ textTransform: 'none' }}>Suivant →</Button>
             </Stack>
           </Stack>
         )}
@@ -850,7 +837,7 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge }: {
                     }} />
                   </Box>
                   <Box component="td">
-                    <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                       <Chip label={s.label} size="small" sx={{
                         bgcolor: s.bg, color: s.color, fontWeight: 600, fontSize: 11, height: 22,
                       }} />
@@ -911,7 +898,7 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge }: {
                         Acquitter
                       </Button>
                     ) : (
-                      <Stack direction="row" spacing={0.25} justifyContent="center">
+                      <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center' }}>
                         <Tooltip title="Voir détails">
                           <IconButton size="small" onClick={() => onRowClick(r)}>
                             <VisibilityIcon sx={{ fontSize: 16 }} />

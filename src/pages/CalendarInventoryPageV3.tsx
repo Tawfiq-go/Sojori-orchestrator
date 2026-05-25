@@ -13,6 +13,10 @@ import {
   clampPivotDate,
 } from '../components/calendar-v3/inventoryCalendarConstants';
 import { processInventoryResponse } from '../components/calendar-v3/processInventoryResponse';
+import {
+  fetchApplySyncSummary,
+  type PortfolioApplySyncSummaryDto,
+} from '../services/dynamicPricingApi';
 
 export function CalendarInventoryPageV3() {
   const staging = JSON.parse(localStorage.getItem('isStaging') || 'false');
@@ -25,6 +29,8 @@ export function CalendarInventoryPageV3() {
   const [roomTypeByListing, setRoomTypeByListing] = useState<Record<string, string>>({});
   const listingsReadyRef = useRef(false);
   const inventorySeqRef = useRef(0);
+  const [dpSyncSummary, setDpSyncSummary] = useState<PortfolioApplySyncSummaryDto | null>(null);
+  const [dpSyncLoading, setDpSyncLoading] = useState(false);
 
   /** Listings : une seule fois (ou si staging change) — colonne gauche stable */
   useEffect(() => {
@@ -60,6 +66,34 @@ export function CalendarInventoryPageV3() {
       cancelled = true;
     };
   }, [staging]);
+
+  useEffect(() => {
+    if (listings.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      setDpSyncLoading(true);
+      try {
+        const res = await fetchApplySyncSummary(listings.map((l) => l._id));
+        if (!cancelled && res.data?.success) setDpSyncSummary(res.data);
+      } catch (e) {
+        console.error('[CalendarV3] DP sync summary:', e);
+        if (!cancelled) setDpSyncSummary(null);
+      } finally {
+        if (!cancelled) setDpSyncLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listings]);
+
+  const listingNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    listings.forEach((l) => {
+      m[l._id] = l.name;
+    });
+    return m;
+  }, [listings]);
 
   /** Inventaire : uniquement quand la date change — pas de rechargement page entière */
   useEffect(() => {
@@ -116,6 +150,7 @@ export function CalendarInventoryPageV3() {
       listings.map((listing) => ({
         _id: listing._id,
         name: listing.name,
+        propertyUnit: listing.propertyUnit || 'Multi',
         currencyCode: listing.currencyCode || 'MAD',
         photoColor: listing.photoColor || '#fde68a',
         photoColorDeep: listing.photoColorDeep || '#d97706',
@@ -169,6 +204,9 @@ export function CalendarInventoryPageV3() {
         defaultView="multi"
         onUpdateInventory={handleUpdateInventory}
         onDateChange={handleDateChange}
+        dpSyncSummary={dpSyncSummary}
+        dpSyncLoading={dpSyncLoading}
+        listingNameById={listingNameById}
       />
     </DashboardWrapper>
   );

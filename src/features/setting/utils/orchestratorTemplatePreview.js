@@ -36,7 +36,12 @@ export function buildCityTaxFromListingReservation(listing, reservation) {
   const rate = Number(listing.cityTaxPerAdultPerNight) || 0;
   const adults = Number(reservation?.adults ?? reservation?.numberOfGuests) || 1;
   const nights = Number(reservation?.nights) || 1;
-  return `${rate * adults * nights} MAD`;
+  const cur = listing.cityTaxCurrency === 'EUR' ? 'EUR' : 'MAD';
+  const mode = listing.cityTaxCalculationMode || 'per_person_per_night';
+  let total = rate;
+  if (mode === 'per_night') total = rate * nights;
+  else if (mode === 'per_person_per_night') total = rate * adults * nights;
+  return `${total} ${cur}`;
 }
 
 export function buildWhatsappLinkFromReservationNumber(reservationNumber, language = 'fr') {

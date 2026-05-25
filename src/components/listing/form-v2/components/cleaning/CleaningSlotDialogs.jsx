@@ -54,9 +54,9 @@ export function AddTimeslotDialog({ open, onClose, onAdd, title = 'Ajouter un cr
         <Stack spacing={1.5} sx={{ pt: 1 }}>
           <Stack direction="row" spacing={1}>
             <TextField label="Heure début" type="number" size="small" fullWidth value={form.start}
-              onChange={(e) => setForm((f) => ({ ...f, start: Number(e.target.value) }))} sx={sxInput} inputProps={{ min: 0, max: 23 }} />
+              onChange={(e) => setForm((f) => ({ ...f, start: Number(e.target.value) }))} sx={sxInput} slotProps={{ htmlInput: { min: 0, max: 23 } }} />
             <TextField label="Heure fin" type="number" size="small" fullWidth value={form.end}
-              onChange={(e) => setForm((f) => ({ ...f, end: Number(e.target.value) }))} sx={sxInput} inputProps={{ min: 1, max: 24 }} />
+              onChange={(e) => setForm((f) => ({ ...f, end: Number(e.target.value) }))} sx={sxInput} slotProps={{ htmlInput: { min: 1, max: 24 } }} />
           </Stack>
           <FormControl size="small" fullWidth>
             <InputLabel>Type</InputLabel>

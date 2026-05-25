@@ -12,9 +12,9 @@ export function generateRandomString(length: number): string {
 }
 
 /**
- * Logger simple pour les uploads media (peut être étendu plus tard)
+ * Logger optionnel uploads media — actif seulement si VITE_DEBUG_MEDIA_UPLOAD=true
  */
 export function logListingMedia(phase: string, data?: Record<string, any>): void {
-  // TOUJOURS logger pour debug
+  if (import.meta.env.VITE_DEBUG_MEDIA_UPLOAD !== 'true') return;
   console.log(`[MediaUpload] ${phase}`, data);
 }

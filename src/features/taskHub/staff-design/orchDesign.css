@@ -1,0 +1,1992 @@
+/* Orchestration — styles from preview HTML */
+.so-orch-root {
+  --p: #b8851a;
+  --pd: #876119;
+  --ps: #e6c46a;
+  --pt: rgba(184, 133, 26, 0.1);
+  --pt2: rgba(184, 133, 26, 0.22);
+  --bg0: #f6f5f1;
+  --bg1: #fff;
+  --bg2: #fafaf7;
+  --bg3: #f0eee8;
+  --t: #14110a;
+  --t2: #55504a;
+  --t3: #7a756c;
+  --t4: #a8a299;
+  --b: rgba(20, 17, 10, 0.07);
+  --bs: rgba(20, 17, 10, 0.14);
+  --su: #0a8f5e;
+  --sut: rgba(10, 143, 94, 0.1);
+  --er: #c81e1e;
+  --ert: rgba(200, 30, 30, 0.1);
+  --in: #0673b3;
+  --int: rgba(6, 115, 179, 0.1);
+  --ai: #7c3aed;
+  --ait: rgba(124, 58, 237, 0.1);
+  --sans: Geist, system-ui, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, monospace;
+  font-family: var(--sans);
+  color: var(--t);
+  font-size: 13.5px;
+  line-height: 1.5;
+  background: var(--bg0);
+  padding: 28px 28px 60px;
+  min-height: calc(100vh - 60px);
+}
+
+.so-orch-root .section-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.so-orch-root .section-hero .em {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--ps), var(--pd));
+  color: #1a1408;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+  box-shadow: 0 6px 16px rgba(184, 133, 26, 0.25);
+}
+.so-orch-root .section-hero h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+}
+.so-orch-root .section-hero .badge {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--ait);
+  color: var(--ai);
+  margin-left: 8px;
+}
+.so-orch-root .section-hero .sub {
+  font-size: 13px;
+  color: var(--t3);
+  margin-top: 5px;
+  max-width: 680px;
+}
+
+.so-orch-root .readme {
+  margin-bottom: 22px;
+  background: linear-gradient(135deg, #fff, #fff8eb 80%);
+  border: 1px solid var(--pt2);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  gap: 14px;
+}
+.so-orch-root .readme .ic {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--ps), var(--pd));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.so-orch-root .readme h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 800;
+}
+.so-orch-root .readme .pill {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  background: var(--p);
+  color: #1a1408;
+  padding: 2px 7px;
+  border-radius: 5px;
+  margin-left: 6px;
+}
+.so-orch-root .readme ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--t2);
+}
+
+.so-orch-root .sub-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--b);
+  padding-bottom: 0;
+}
+.so-orch-root .sub-tab {
+  padding: 10px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--t3);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  background: transparent;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.so-orch-root .sub-tab.on {
+  color: var(--pd);
+  border-bottom-color: var(--p);
+}
+/* ── Options assignation staff (workflow config) ── */
+.so-orch-root .orch-assign-options {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--bd, #e5e2d9);
+}
+.so-orch-root .orch-assign-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px 14px;
+  margin-top: 8px;
+}
+.so-orch-root .orch-assign-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t2, #555);
+}
+.so-orch-root .orch-assign-opt select,
+.so-orch-root .orch-assign-opt input[type='number'] {
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--bd, #ddd);
+}
+.so-orch-root .orch-assign-opt--disabled {
+  opacity: 0.55;
+}
+.so-orch-root .orch-assign-opt--disabled select {
+  cursor: not-allowed;
+  background: var(--bg2, #f5f4f0);
+}
+.so-orch-root .orch-cron-windows {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--bd, #e5e2d9);
+}
+.so-orch-root .orch-cron-windows-row {
+  padding: 8px 0 4px;
+  background: transparent;
+}
+.so-orch-root .orch-cron-chips-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.so-orch-root .orch-cron-windows-hint {
+  margin: 0 0 0 2px;
+  padding-bottom: 4px;
+  font-size: 11px;
+  color: var(--t3, #888);
+  font-weight: 500;
+}
+.so-orch-root .orch-cron-win-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 6px 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bd, #ddd);
+  background: var(--bg2, #faf9f6);
+}
+.so-orch-root .orch-cron-win-chip input {
+  width: 52px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: ui-monospace, monospace;
+  border: none;
+  background: transparent;
+  padding: 0;
+  outline: none;
+}
+.so-orch-root .orch-cron-win-chip-x {
+  border: none;
+  background: transparent;
+  color: var(--t3, #999);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.so-orch-root .orch-cron-win-chip-x:hover {
+  color: var(--er, #c62828);
+  background: #ffebee;
+}
+.so-orch-root .orch-cron-win-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: 1.5px dashed var(--bs, #ccc);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--t2, #555);
+  cursor: pointer;
+}
+.so-orch-root .orch-cron-win-add:hover {
+  background: var(--bg2, #faf9f6);
+  border-color: var(--p, #2e7d32);
+  color: var(--p, #2e7d32);
+}
+
+/* ── Onglet Config WhatsApp (Meta) ── */
+.so-orch-root .orch-wa-tab {
+  margin-top: 4px;
+}
+.so-orch-root .orch-wa-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.so-orch-root .orch-wa-meta-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg3, #f0efe9);
+  color: var(--t2, #666);
+}
+.so-orch-root .orch-wa-meta-pill.ok {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.so-orch-root .orch-wa-meta-pill.warn {
+  background: #fff3e0;
+  color: #e65100;
+}
+.so-orch-root .orch-wa-account-pill {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--int);
+  color: var(--in);
+  vertical-align: middle;
+}
+.so-orch-root .orch-wa-account-pill.staff {
+  background: var(--ait);
+  color: var(--ai);
+}
+.so-orch-root .orch-wa-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--bd, #e5e2d9);
+  border-radius: 10px;
+  background: #fff;
+}
+.so-orch-root .orch-wa-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.so-orch-root .orch-wa-table th,
+.so-orch-root .orch-wa-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--bd, #eee);
+}
+.so-orch-root .orch-wa-table th {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--t3, #888);
+  background: var(--bg2, #faf9f6);
+}
+.so-orch-root .orch-wa-table code {
+  font-size: 11px;
+}
+.so-orch-root .orch-wa-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eee;
+}
+.so-orch-root .orch-wa-status.wa-st-pending {
+  background: #fff3e0;
+  color: #e65100;
+}
+.so-orch-root .orch-wa-status.wa-st-approved {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.so-orch-root .orch-wa-status.wa-st-rejected {
+  background: #ffebee;
+  color: #c62828;
+}
+.so-orch-root .orch-wa-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.so-orch-root .orch-wa-actions .btn-ghost,
+.so-orch-root .orch-wa-actions .btn-prim {
+  margin-left: 4px;
+}
+.so-orch-root .orch-wa-err {
+  font-size: 10px;
+  color: #c62828;
+  margin-top: 4px;
+}
+.so-orch-root .orch-wa-preview {
+  max-width: 220px;
+  font-size: 11px;
+  color: var(--muted, #64748b);
+  line-height: 1.35;
+}
+.so-orch-root .orch-wa-row-editing td {
+  background: rgba(99, 102, 241, 0.06);
+}
+.so-orch-root .orch-wa-env-hint {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+}
+.so-orch-root .orch-wa-editor--open {
+  margin-bottom: 14px;
+}
+.so-orch-root .orch-wa-editor {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--bd, #e5e2d9);
+  border-radius: 10px;
+  background: #fff;
+}
+.so-orch-root .orch-wa-textarea {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  min-height: 160px;
+  margin-top: 8px;
+}
+.so-orch-root .orch-wa-editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.so-orch-root .sub-tab .ct {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  background: var(--bg2);
+  padding: 1px 6px;
+  border-radius: 99px;
+}
+
+.so-orch-root .orch-concept-callout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--b);
+  background: var(--bg1);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--t2);
+}
+.so-orch-root .orch-concept-callout--workflow {
+  border-color: rgba(6, 115, 179, 0.25);
+  background: rgba(6, 115, 179, 0.06);
+}
+.so-orch-root .orch-concept-callout--message {
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.06);
+}
+.so-orch-root .orch-concept-callout strong {
+  display: block;
+  font-size: 12.5px;
+  color: var(--t1);
+  margin-bottom: 4px;
+}
+.so-orch-root .orch-concept-callout p {
+  margin: 0;
+  color: var(--t3);
+}
+.so-orch-root .orch-concept-ic {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.so-orch-root .orch-msg-select {
+  width: 100%;
+  min-width: 0;
+  font-size: 11.5px;
+  padding: 6px 8px;
+}
+.so-orch-root .orch-msg-pick-empty {
+  font-size: 10.5px;
+  color: var(--t3);
+}
+.so-orch-root .orch-msg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.so-orch-root .orch-msg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--b);
+  border-radius: 99px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--bg1);
+  color: var(--t2);
+  white-space: nowrap;
+}
+.so-orch-root .orch-msg-chip.on {
+  border-color: var(--p);
+  background: var(--pt2);
+  color: var(--pd);
+}
+.so-orch-root .orch-msg-chip input {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  accent-color: var(--p);
+  flex-shrink: 0;
+}
+.so-orch-root .orch-msg-chip-lbl {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.so-orch-root .rel-relance-block {
+  border-bottom: 1px solid var(--b);
+}
+.so-orch-root .rel-relance-block:last-child {
+  border-bottom: none;
+}
+.so-orch-root .rel-msg-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  background: #fff;
+}
+.so-orch-root .rel-msg-chips-row .orch-msg-chips {
+  flex: 1;
+  min-width: 0;
+}
+.so-orch-root .rel-msg-chips-lbl {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  font-weight: 800;
+  color: var(--t3);
+  flex-shrink: 0;
+}
+.so-orch-root .orch-resa-messages {
+  margin-bottom: 20px;
+  padding: 14px;
+  background: var(--bg1);
+  border: 1px solid var(--pt2);
+  border-radius: 12px;
+}
+.so-orch-root .orch-resa-messages-h {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--t1);
+}
+.so-orch-root .orch-resa-messages-h span {
+  font-weight: 600;
+  color: var(--t3);
+  font-size: 11px;
+}
+.so-orch-root .orch-resa-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--b);
+  border-radius: 11px;
+}
+.so-orch-root .orch-resa-card .em {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--ait);
+  color: var(--ai);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.so-orch-root .orch-resa-name-inp {
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  max-width: 280px;
+}
+.so-orch-root .orch-resa-edit {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--b);
+}
+.so-orch-root .orch-resa-edit .row {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.so-orch-root .orch-resa-edit .row.full {
+  grid-template-columns: 1fr;
+}
+.so-orch-root .orch-resa-edit .lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t2);
+}
+.so-orch-root .orch-resa-edit .trigger-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.so-orch-root .orch-resa-del {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg2);
+  color: var(--t3);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.so-orch-root .orch-resa-del:hover {
+  background: var(--ert);
+  color: var(--er);
+}
+.so-orch-root .wf-block--msg-plan {
+  margin-bottom: 0;
+}
+.so-orch-root .wf-block--msg-plan .wf-block-h {
+  margin-bottom: 4px;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+.so-orch-root .wf-block-h-ic {
+  flex-shrink: 0;
+  line-height: 1;
+}
+.so-orch-root .wf-block-h-txt {
+  flex: 1;
+  min-width: 0;
+}
+.so-orch-root .wf-block-h-id {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--t3);
+  background: var(--bg1);
+  border: 1px solid var(--b);
+  padding: 2px 7px;
+  border-radius: 5px;
+  letter-spacing: 0.02em;
+}
+.so-orch-root .wf-block-h-ct {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--t3);
+  background: var(--bg2);
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+.so-orch-root .rel-table-h--timing {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 9px;
+}
+.so-orch-root .rel-table--scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.so-orch-root .rel-table-h--sched,
+.so-orch-root .rel-row--sched {
+  grid-template-columns: minmax(200px, 1.4fr) 48px 48px 70px 85px 100px;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 16px;
+}
+.so-orch-root .wf-block--msg-plan .rel-table-h--sched,
+.so-orch-root .wf-block--msg-plan .rel-row--sched {
+  min-width: 0;
+  max-width: 100%;
+}
+.so-orch-root .wf-block--msg-plan .orch-ref-select {
+  font-size: 11px;
+  padding: 5px 8px;
+  max-width: none;
+  min-width: 200px;
+}
+.so-orch-root .wf-block--msg-plan .orch-sched-delay input {
+  max-width: 40px;
+}
+.so-orch-root .wf-block--msg-plan .rel-row--sched input[type='text'],
+.so-orch-root .wf-block--msg-plan .rel-row--sched input:not([type='number']) {
+  padding: 5px 6px;
+  font-size: 11px;
+}
+.so-orch-root .orch-send-mode-select {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 0;
+}
+.so-orch-root .rel-row--timing:last-child,
+.so-orch-root .rel-row--sched:last-child {
+  border-bottom: 0;
+}
+/* Fenêtre assignation — même grille compacte que relances / rappels staff */
+.so-orch-root .rel-table--assign {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.so-orch-root .rel-table--assign .rel-row--assign-window:last-child {
+  border-bottom: 0;
+}
+.so-orch-root .rel-row--assign-window input[type='number'] {
+  width: 100%;
+  text-align: center;
+  padding: 6px 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.so-orch-root .rel-row--assign-window select {
+  font-size: 11px;
+  padding: 5px 4px;
+}
+.so-orch-root .assign-row-lbl {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--t2);
+  line-height: 1.15;
+  min-width: 0;
+  max-width: 52px;
+}
+.so-orch-root .assign-row-lbl .assign-hint {
+  font-size: 8.5px;
+  line-height: 1.1;
+  word-break: break-word;
+}
+.so-orch-root .rel-row--sched input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.so-orch-root .orch-config-card-subtitle {
+  max-width: 100%;
+}
+.so-orch-root .orch-plan-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.so-orch-root .orch-plan-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--t3);
+}
+.so-orch-root .orch-add-plan-panel {
+  margin-bottom: 16px;
+  padding: 14px;
+  background: var(--bg1);
+  border: 1px solid var(--pt2);
+  border-radius: 12px;
+}
+.so-orch-root .orch-add-plan-h {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--t2);
+  margin-bottom: 10px;
+  font-family: var(--mono);
+}
+.so-orch-root .orch-type-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+.so-orch-root .orch-type-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--b);
+  border-radius: 10px;
+  background: var(--bg2);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.so-orch-root .orch-type-pick:hover {
+  border-color: var(--p);
+  background: var(--pt);
+}
+.so-orch-root .orch-type-pick .em {
+  font-size: 18px;
+}
+.so-orch-root .orch-type-pick .lbl {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--t);
+}
+.so-orch-root .orch-type-pick .tid {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--t3);
+  background: var(--bg3);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.so-orch-root .orch-type-catalog {
+  margin-bottom: 18px;
+  background: var(--bg1);
+  border: 1px solid var(--b);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.so-orch-root .orch-type-catalog .orch-add-plan-h {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--b);
+  margin-bottom: 0;
+}
+.so-orch-root .orch-type-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.so-orch-root .orch-type-table th {
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 10px;
+  font-weight: 800;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  color: var(--t3);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--b);
+}
+.so-orch-root .orch-type-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--b);
+  vertical-align: middle;
+}
+.so-orch-root .orch-type-table tr:last-child td {
+  border-bottom: none;
+}
+.so-orch-root .orch-type-table tr.has-plan {
+  background: linear-gradient(90deg, var(--pt), transparent 55%);
+}
+.so-orch-root .orch-type-label {
+  font-weight: 700;
+  color: var(--t);
+}
+.so-orch-root .orch-type-label .em {
+  margin-right: 8px;
+}
+.so-orch-root .orch-type-id-cell {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--t3);
+  background: var(--bg3);
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+.so-orch-root .orch-plan-badge {
+  font-size: 10px;
+  font-weight: 800;
+  font-family: var(--mono);
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+.so-orch-root .orch-plan-badge.on {
+  background: var(--sut);
+  color: var(--su);
+}
+.so-orch-root .orch-plan-badge.off {
+  background: var(--bg3);
+  color: var(--t4);
+}
+.so-orch-root .orch-type-action {
+  text-align: right;
+  white-space: nowrap;
+}
+.so-orch-root .orch-type-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.so-orch-root .orch-config-list {
+  margin-top: 4px;
+}
+
+/* Workflow ouvert : config à gauche, simulation à droite */
+.so-orch-root .wf-card-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(248px, 300px);
+  gap: 14px;
+  align-items: start;
+}
+.so-orch-root .wf-card-layout--msg-plan {
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 252px);
+  gap: 24px;
+  column-gap: 28px;
+}
+.so-orch-root .wf-card-layout--msg-plan .wf-card-sim {
+  padding-left: 4px;
+  border-left: 1px solid var(--b);
+  margin-left: 4px;
+  padding-top: 2px;
+}
+.so-orch-root .wf-card-main {
+  min-width: 0;
+}
+.so-orch-root .wf-card-sim {
+  position: sticky;
+  top: 72px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  padding-left: 2px;
+}
+.so-orch-root .wf-card-sim .so-orch-timeline-wrap {
+  margin-top: 0;
+}
+@media (max-width: 1100px) {
+  .so-orch-root .wf-card-layout {
+    grid-template-columns: 1fr;
+  }
+  .so-orch-root .wf-card-sim {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+.so-orch-root .orch-config-list .wf-body,
+.so-orch-root .orch-config-list .msg-form {
+  margin: 0;
+}
+.so-orch-root .orch-plans-list-h {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 18px 0 10px;
+  flex-wrap: wrap;
+}
+.so-orch-root .orch-plans-list-h h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+}
+.so-orch-root .orch-plans-list-sub {
+  font-size: 11px;
+  color: var(--t3);
+  font-family: var(--mono);
+}
+.so-orch-root .wf-order-num {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--mono);
+  color: var(--t3);
+  min-width: 22px;
+  text-align: center;
+}
+.so-orch-root .wf-order-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-right: 4px;
+}
+.so-orch-root .wf-h-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+}
+.so-orch-root .orch-icon-btn {
+  width: 28px;
+  height: 26px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  background: var(--bg1);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--t2);
+  padding: 0;
+}
+.so-orch-root .orch-icon-btn:hover:not(:disabled) {
+  background: var(--pt);
+  border-color: var(--p);
+}
+.so-orch-root .orch-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.so-orch-root .orch-icon-btn.danger:hover:not(:disabled) {
+  background: var(--ert);
+  border-color: rgba(200, 30, 30, 0.35);
+  color: var(--er);
+}
+.so-orch-root .wf-order-btns .orch-icon-btn {
+  width: 26px;
+  height: 22px;
+  font-size: 11px;
+}
+.so-orch-root .wf-task-type-id {
+  margin-left: 8px;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--ai);
+  background: var(--ait);
+  padding: 2px 7px;
+  border-radius: 5px;
+  vertical-align: middle;
+}
+.so-orch-root .wf-type-id-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--bg2);
+  border: 1px dashed var(--bs);
+  border-radius: 8px;
+}
+.so-orch-root .wf-type-id-row .lbl {
+  font-size: 10px;
+  font-weight: 800;
+  font-family: var(--mono);
+  color: var(--t3);
+  text-transform: uppercase;
+}
+.so-orch-root .wf-task-type-id-lg {
+  font-size: 12px;
+  font-family: var(--mono);
+  font-weight: 800;
+  color: var(--pd);
+  background: var(--pt);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+.so-orch-root .wf-delete-plan {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--er);
+  background: transparent;
+  border: 1px solid rgba(200, 30, 30, 0.35);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.so-orch-root .workflow-card {
+  background: var(--bg1);
+  border: 1px solid var(--b);
+  border-radius: 14px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.so-orch-root .workflow-card.open {
+  border-color: var(--pt2);
+  box-shadow: 0 4px 16px -6px rgba(184, 133, 26, 0.15);
+}
+.so-orch-root .wf-h {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  cursor: pointer;
+}
+.so-orch-root .workflow-card.open .wf-h {
+  background: linear-gradient(180deg, var(--pt), transparent 90%);
+  border-bottom: 1px solid var(--b);
+}
+.so-orch-root .wf-h .em {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--pt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.so-orch-root .wf-h .nm {
+  font-size: 13.5px;
+  font-weight: 800;
+}
+.so-orch-root .wf-h .ds {
+  font-size: 11px;
+  color: var(--t3);
+  font-family: var(--mono);
+}
+.so-orch-root .wf-h .stats {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.so-orch-root .wf-stat {
+  padding: 3px 8px;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 800;
+  background: var(--bg2);
+  border-radius: 5px;
+  color: var(--t3);
+}
+.so-orch-root .wf-stat.rel {
+  background: var(--ait);
+  color: var(--ai);
+}
+.so-orch-root .wf-stat.ass {
+  background: var(--int);
+  color: var(--in);
+}
+.so-orch-root .wf-stat.esc {
+  background: var(--ert);
+  color: var(--er);
+}
+.so-orch-root .wf-body {
+  padding: 18px;
+}
+.so-orch-root .wf-block {
+  margin-bottom: 18px;
+}
+.so-orch-root .wf-block-h {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--t3);
+  font-family: var(--mono);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.so-orch-root .wf-block-hint {
+  font-size: 11.5px;
+  color: var(--t3);
+  margin: -4px 0 10px;
+  line-height: 1.45;
+}
+.so-orch-root .rel-row-x {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--t3);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  padding: 0;
+}
+.so-orch-root .rel-row-x:hover {
+  background: var(--ert);
+  color: var(--er);
+}
+.so-orch-root .rel-table {
+  background: var(--bg2);
+  border: 1px solid var(--b);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.so-orch-root .rel-table-h {
+  padding: 8px 10px;
+  background: #fff;
+  border-bottom: 1px solid var(--b);
+  display: grid;
+  grid-template-columns: 1.4fr 100px 100px 24px;
+  gap: 8px;
+  font-size: 9.5px;
+  font-family: var(--mono);
+  font-weight: 800;
+  color: var(--t3);
+}
+.so-orch-root .rel-row {
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 1.4fr 100px 100px 24px;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid var(--b);
+}
+.so-orch-root .rel-row select,
+.so-orch-root .rel-row input {
+  padding: 6px 9px;
+  font-size: 12px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  font-family: var(--mono);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.so-orch-root .rel-row select:first-child {
+  font-size: 10px;
+  padding: 6px 4px;
+}
+.so-orch-root .rel-row input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Timing-specific grid layouts (must come after .rel-row to override) */
+/* Colonne RÉF : libellés longs (booking_created, scheduledDate, …) */
+.so-orch-root {
+  --orch-ref-col: minmax(240px, 1.55fr);
+}
+
+.so-orch-root .rel-table-h--timing,
+.so-orch-root .rel-row--timing {
+  grid-template-columns: var(--orch-ref-col) 40px 40px 60px 80px 95px;
+  gap: 6px;
+  padding-right: 16px;
+}
+.so-orch-root .rel-table-h--timing.compact,
+.so-orch-root .rel-row--timing.compact {
+  grid-template-columns: var(--orch-ref-col) 40px 40px 60px 95px;
+}
+/* Message en fin de ligne (avant ✕) — relances voyageur + rappels staff */
+.so-orch-root .rel-table-h--with-msg,
+.so-orch-root .rel-row--with-msg {
+  grid-template-columns: var(--orch-ref-col) 40px 40px 52px 72px minmax(160px, 1.6fr) 32px;
+  align-items: center;
+}
+.so-orch-root .rel-table-h--with-msg.compact,
+.so-orch-root .rel-row--with-msg.compact {
+  grid-template-columns: var(--orch-ref-col) 40px 40px 52px minmax(160px, 1.6fr) 32px;
+}
+.so-orch-root .rel-table-h--staff.rel-table-h--with-msg,
+.so-orch-root .rel-row--staff.rel-row--with-msg {
+  grid-template-columns: var(--orch-ref-col) 40px 40px 52px 72px minmax(160px, 1.6fr) 32px;
+}
+.so-orch-root .rel-row--staff.rel-row--with-msg.compact {
+  grid-template-columns: var(--orch-ref-col) 40px 40px 52px minmax(160px, 1.6fr) 32px;
+}
+.so-orch-root .rel-row--timing > select:first-child,
+.so-orch-root .rel-row--with-msg > select:first-child,
+.so-orch-root .rel-row--deadline > select:first-child {
+  font-size: 11px;
+  padding: 5px 8px;
+  min-width: 0;
+  width: 100%;
+}
+/* Fenêtre assignation — grille dédiée (sans rel-row--timing qui décale les colonnes) */
+.so-orch-root .rel-table-h--assign-window,
+.so-orch-root .rel-row--assign-window {
+  grid-template-columns: minmax(40px, 48px) minmax(280px, 3.5fr) 40px 40px 52px 72px;
+  gap: 6px;
+  padding-right: 10px;
+  align-items: center;
+  min-width: 540px;
+}
+.so-orch-root .rel-table-h--assign-window.compact,
+.so-orch-root .rel-row--assign-window.compact {
+  grid-template-columns: minmax(40px, 48px) minmax(280px, 3.5fr) 40px 40px 52px;
+}
+/* Assignation : 2e cellule = RÉF */
+.so-orch-root .rel-row--assign-window > select:nth-child(2) {
+  font-size: 11px;
+  padding: 5px 8px;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+}
+.so-orch-root .rel-row-msg-cell {
+  min-width: 0;
+}
+.so-orch-root .rel-row-msg-cell .orch-msg-select,
+.so-orch-root .rel-row-msg-cell select {
+  width: 100%;
+  font-size: 11px;
+  padding: 5px 6px;
+}
+.so-orch-root .rel-row--timing input[type="number"] {
+  width: 100%;
+  text-align: center;
+  padding: 6px 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.so-orch-root .rel-row--timing select {
+  font-size: 11px;
+  padding: 5px 4px;
+}
+
+.so-orch-root .assign-grid {
+  padding: 14px;
+  background: var(--bg2);
+  border: 1px solid var(--b);
+  border-radius: 9px;
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 14px;
+}
+.so-orch-root .assign-grid--range {
+  grid-template-columns: minmax(88px, 1fr) minmax(200px, 2fr);
+}
+.so-orch-root .assign-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t2);
+  padding-top: 5px;
+}
+.so-orch-root .assign-hint {
+  display: block;
+  font-size: 10px;
+  color: var(--t4);
+  font-family: var(--mono);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.so-orch-tl-dot--assignment_end {
+  background: var(--in);
+  opacity: 0.72;
+  border-style: dashed;
+}
+.so-orch-root .from-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.so-orch-root .from-trigger select,
+.so-orch-root .from-trigger input {
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  font-family: var(--mono);
+}
+.so-orch-root .win-pill {
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #fff;
+  border: 1.5px solid var(--b);
+  margin: 4px;
+  cursor: pointer;
+  font-family: var(--mono);
+}
+.so-orch-root .win-pill.on {
+  background: var(--in);
+  color: #fff;
+  border-color: var(--in);
+}
+.so-orch-root .deadline-block {
+  padding: 12px 14px;
+  background: linear-gradient(135deg, var(--ert), transparent 80%);
+  border: 1px solid rgba(200, 30, 30, 0.2);
+  border-radius: 9px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.so-orch-root .deadline-block-body {
+  flex: 1;
+  min-width: 0;
+}
+.so-orch-root .rel-table--deadline {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 8px;
+}
+.so-orch-root .rel-table-h--deadline,
+.so-orch-root .rel-row--deadline {
+  grid-template-columns: var(--orch-ref-col) 40px 40px 52px 72px;
+  gap: 6px;
+  padding-right: 10px;
+  align-items: center;
+  min-width: 520px;
+}
+.so-orch-root .rel-table-h--deadline.compact,
+.so-orch-root .rel-row--deadline.compact {
+  grid-template-columns: var(--orch-ref-col) 40px 40px 52px;
+}
+.so-orch-root .rel-row--deadline input[type='number'] {
+  width: 100%;
+  text-align: center;
+  padding: 6px 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.so-orch-root .rel-row--deadline select {
+  font-size: 11px;
+  padding: 5px 4px;
+}
+.so-orch-root .add-btn {
+  padding: 9px;
+  background: #fff;
+  border: 1.5px dashed var(--bs);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  width: 100%;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.so-orch-root .msg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.so-orch-root .msg-card {
+  background: var(--bg1);
+  border: 1px solid var(--b);
+  border-radius: 11px;
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.so-orch-root .msg-card .nm {
+  font-size: 13px;
+  font-weight: 800;
+}
+.so-orch-root .msg-card .meta {
+  font-size: 10.5px;
+  color: var(--t3);
+  font-family: var(--mono);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+.so-orch-root .msg-card .chip {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.so-orch-root .msg-card .chip.trig {
+  background: var(--ait);
+  color: var(--ai);
+}
+.so-orch-root .msg-card .chip.chan {
+  background: var(--sut);
+  color: var(--su);
+}
+.so-orch-root .msg-card .chip.tmpl {
+  background: var(--int);
+  color: var(--in);
+}
+.so-orch-root .wf-arr {
+  color: var(--t3);
+  font-size: 11px;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.so-orch-root .from-trigger .sep {
+  color: var(--t4);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+.so-orch-root .msg-form {
+  margin-top: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--ait), transparent 80%);
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  border-radius: 11px;
+}
+.so-orch-root .msg-form .row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+.so-orch-root .msg-form .row.full {
+  grid-template-columns: 1fr;
+}
+.so-orch-root .msg-form .lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t2);
+  padding-top: 8px;
+}
+.so-orch-root .msg-form .input,
+.so-orch-root .msg-form select,
+.so-orch-root .msg-form textarea {
+  padding: 7px 10px;
+  font-size: 12.5px;
+  border: 1px solid var(--b);
+  border-radius: 8px;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+}
+.so-orch-root .msg-form .trigger-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.so-orch-root .msg-form .actions {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+.so-orch-root .btn-ghost {
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: var(--bg1);
+  border: 1px solid var(--b);
+  cursor: pointer;
+}
+.so-orch-root .msg-card button {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--bg2);
+  border: none;
+  cursor: pointer;
+}
+.so-orch-root .msg-card button:hover {
+  background: var(--pt);
+  color: var(--pd);
+}
+
+.so-orch-root .orch-channel-seg {
+  display: inline-flex;
+  background: var(--bg2);
+  border: 1px solid var(--b);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 4px;
+}
+.so-orch-root .orch-channel-seg button {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--t3);
+  cursor: pointer;
+}
+.so-orch-root .orch-channel-seg button.on {
+  background: #fff;
+  color: var(--t);
+  box-shadow: 0 1px 2px rgba(20, 17, 10, 0.08);
+}
+.so-orch-root .orch-msg-preview-snippet {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--b);
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--t2);
+  max-height: 120px;
+  overflow: hidden;
+}
+
+/* Modale message — portal document.body : tokens Sojori sur l’overlay (hors .so-orch-root) */
+.orch-msg-overlay {
+  --p: #b8851a;
+  --pd: #876119;
+  --ps: #e6c46a;
+  --pt: rgba(184, 133, 26, 0.1);
+  --pt2: rgba(184, 133, 26, 0.22);
+  --bg0: #f6f5f1;
+  --bg1: #fff;
+  --bg2: #fafaf7;
+  --bg3: #f0eee8;
+  --t: #14110a;
+  --t2: #55504a;
+  --t3: #7a756c;
+  --t4: #a8a299;
+  --b: rgba(20, 17, 10, 0.07);
+  --bs: rgba(20, 17, 10, 0.14);
+  --er: #c81e1e;
+  --sans: Geist, system-ui, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, monospace;
+  position: fixed;
+  inset: 0;
+  z-index: 15000;
+  background: rgba(20, 17, 10, 0.52);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, 3vh);
+  box-sizing: border-box;
+  font-family: var(--sans);
+  color: var(--t);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.orch-msg-modal {
+  background: #fff;
+  background: var(--bg1);
+  border-radius: 14px;
+  width: min(960px, calc(100vw - 32px));
+  height: min(720px, calc(100vh - 48px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 48px rgba(20, 17, 10, 0.28);
+  border: 1px solid var(--bs);
+  margin: auto;
+  color: var(--t);
+}
+.orch-msg-modal-h {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--b);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  background: linear-gradient(180deg, var(--pt), transparent);
+  flex-shrink: 0;
+}
+.orch-msg-modal-h h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+.orch-msg-modal-sub {
+  font-size: 11px;
+  color: var(--t3);
+  font-family: var(--mono);
+}
+.orch-msg-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: var(--bg2);
+  cursor: pointer;
+}
+.orch-msg-modal-body {
+  display: grid;
+  grid-template-columns: 1fr min(300px, 34%);
+  gap: 16px;
+  padding: 16px 20px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.orch-msg-editor-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.orch-msg-vars-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.orch-msg-textarea {
+  width: 100%;
+  flex: 1;
+  min-height: 200px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 12px;
+  border: 1px solid var(--b);
+  border-radius: 8px;
+  resize: none;
+  box-sizing: border-box;
+  background: #fff;
+  color: var(--t);
+}
+@media (max-width: 768px) {
+  .orch-msg-modal {
+    height: min(92vh, 100%);
+    width: calc(100vw - 24px);
+  }
+  .orch-msg-modal-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr minmax(180px, 40%);
+  }
+}
+.orch-msg-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t2);
+  margin-bottom: 6px;
+  display: block;
+}
+.orch-msg-vars-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--bg2);
+  border: 1px solid var(--b);
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.orch-msg-vars-col .orch-message-vars-scroll {
+  border: 1px solid var(--b);
+  border-radius: 8px;
+  background: var(--bg2);
+}
+.orch-msg-var-group-h {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--t3);
+  text-transform: uppercase;
+  margin: 8px 0 4px;
+  font-family: var(--mono);
+}
+.orch-msg-var-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.orch-msg-var-btn:hover {
+  background: var(--pt);
+}
+.orch-msg-var-btn code {
+  font-size: 10px;
+  color: var(--pd);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.orch-msg-var-btn span {
+  color: var(--t2);
+}
+.orch-msg-modal-foot {
+  padding: 12px 20px;
+  border-top: 1px solid var(--b);
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  background: #fff;
+}
+.orch-msg-overlay .btn-ghost {
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: var(--bg1);
+  border: 1px solid var(--b);
+  color: var(--t);
+  cursor: pointer;
+  font-family: var(--sans);
+}
+.orch-msg-overlay .btn-ghost:hover {
+  background: var(--bg2);
+}
+
+.so-orch-root .drawer-foot,
+.so-orch-root .orch-plan-save-row {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--b);
+  display: flex;
+  justify-content: flex-end;
+}
+.so-orch-root .orch-plan-save-btn {
+  font-size: 11.5px;
+  padding: 6px 12px;
+}
+.so-orch-root .orch-foot {
+  margin-top: 22px;
+  padding: 14px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.so-orch-root .orch-foot-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--t3);
+  text-align: right;
+}
+@media (min-width: 720px) {
+  .so-orch-root .orch-foot-hint {
+    flex: 1 1 auto;
+    text-align: left;
+    margin-right: auto;
+  }
+}
+.so-orch-root .btn-prim {
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: linear-gradient(180deg, #cb9b2c, var(--p));
+  color: #1a1408;
+  border: none;
+  cursor: pointer;
+}
+
+/* ── Simulation timeline (task config + plans orchestration) ── */
+.so-orch-timeline-wrap {
+  margin-top: 12px;
+  padding: 16px 18px;
+  background: var(--bg1);
+  border: 1px solid var(--b);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(20, 17, 10, 0.04);
+}
+
+.so-orch-timeline-head {
+  margin-bottom: 14px;
+}
+
+.so-orch-timeline-title {
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+  color: var(--t);
+}
+
+.so-orch-timeline-sub {
+  margin: 4px 0 0 !important;
+  font-size: 11.5px !important;
+  color: var(--t3) !important;
+  font-weight: 600;
+}
+
+.so-orch-timeline-empty {
+  font-size: 12px;
+  color: var(--t3);
+  margin: 8px 0 0;
+}
+
+.so-orch-timeline {
+  position: relative;
+  padding-left: 28px;
+}
+
+.so-orch-timeline::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: linear-gradient(180deg, var(--ps), var(--b) 40%, var(--su) 100%);
+  border-radius: 2px;
+}
+
+.so-orch-tl-item {
+  position: relative;
+  padding: 0 0 18px 12px;
+}
+
+.so-orch-tl-item:last-child {
+  padding-bottom: 4px;
+}
+
+.so-orch-tl-dot {
+  position: absolute;
+  left: -28px;
+  top: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(20, 17, 10, 0.12);
+  z-index: 1;
+}
+
+.so-orch-tl-dot--anchor {
+  background: linear-gradient(135deg, var(--ps), var(--p));
+}
+
+.so-orch-tl-dot--assignment {
+  background: var(--in);
+}
+
+.so-orch-tl-dot--reminder {
+  background: var(--ai);
+}
+
+.so-orch-tl-dot--planned_message {
+  background: var(--p);
+  box-shadow: 0 0 0 3px var(--pt2);
+}
+
+.so-orch-tl-dot--deadline {
+  background: var(--er);
+}
+
+.so-orch-tl-dot--completion {
+  background: var(--su);
+}
+
+.so-orch-tl-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--t3);
+  letter-spacing: 0.02em;
+  margin-bottom: 3px;
+}
+
+.so-orch-tl-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--t);
+  line-height: 1.25;
+}
+
+.so-orch-tl-desc {
+  font-size: 11.5px;
+  color: var(--t2);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.so-orch-tl-windows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.so-orch-tl-win {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--int);
+  color: var(--in);
+  border: 1px solid rgba(6, 115, 179, 0.15);
+}
+
+.so-orch-timeline-legend {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--bg2);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--t2);
+  line-height: 1.45;
+}
+
+.so-orch-timeline-legend-ic {
+  margin-right: 6px;
+}
+
+.so-orch-timeline-legend-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--t3);
+}
+
+.so-orch-timeline-legend-keys .k {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.so-orch-timeline-legend-keys .k.anchor {
+  background: var(--p);
+}
+
+.so-orch-timeline-legend-keys .k.assignment {
+  background: var(--in);
+}
+
+.so-orch-timeline-legend-keys .k.reminder {
+  background: var(--ai);
+}
+
+.so-orch-timeline-legend-keys .k.planned_message {
+  background: var(--p);
+}
+
+.so-orch-timeline-legend-keys .k.deadline {
+  background: var(--er);
+}
+
+.so-orch-timeline-legend-keys .k.completion {
+  background: var(--su);
+}
