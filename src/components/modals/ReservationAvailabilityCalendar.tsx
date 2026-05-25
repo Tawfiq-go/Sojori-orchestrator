@@ -192,6 +192,7 @@ export function ReservationAvailabilityCalendar({
       return;
     }
 
+    // Si on clique avant ou égal au check-in, on recommence la sélection
     if (cell.date <= checkInDate) {
       if (!isDateSelectableForCheckIn(cell)) return;
       onDatesChange(cell.date, '');
@@ -199,8 +200,22 @@ export function ReservationAvailabilityCalendar({
       return;
     }
 
+    // Validation du check-out
     const proposedCheckOut = cell.date;
-    if (!isStayRangeValid(checkInDate, proposedCheckOut, days)) return;
+
+    // Pour les sélections inter-mois, on vérifie seulement que:
+    // 1. Le check-out est après le check-in
+    // 2. Le jour sélectionné est disponible
+    // Note: La validation complète de la plage sera faite par l'API lors de la création
+    if (proposedCheckOut <= checkInDate) return;
+    if (cell.status !== 'available') return;
+
+    // Si les deux dates sont dans le mois affiché, on peut valider la plage complète
+    const checkInCell = days.find(d => d.date === checkInDate);
+    if (checkInCell) {
+      if (!isStayRangeValid(checkInDate, proposedCheckOut, days)) return;
+    }
+
     onDatesChange(checkInDate, proposedCheckOut);
     setPickPhase('checkIn');
   };
