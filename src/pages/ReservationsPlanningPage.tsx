@@ -25,6 +25,9 @@ import type { ListingSummary } from '../types/listings.types';
 /** Jours passés / futurs visibles dans le planning (évite de masquer les séjours récents) */
 const PLANNING_LOOKBACK_DAYS = 30;
 const PLANNING_FORWARD_DAYS = 45;
+/** Décalage initial du curseur : on cadre J-2 → J+11 (14j visibles dont aujourd'hui en 3e position),
+ *  l'utilisateur peut ensuite naviguer dans la fenêtre 75j. */
+const PLANNING_INITIAL_BACK_DAYS = 2;
 
 function normalizeMongoId(value: unknown): string | undefined {
   if (value == null || value === '') return undefined;
@@ -73,7 +76,7 @@ export function ReservationsPlanningPage() {
   const [startDate, setStartDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - PLANNING_LOOKBACK_DAYS);
+    d.setDate(d.getDate() - PLANNING_INITIAL_BACK_DAYS);
     return d;
   });
   const [daysCount] = useState(PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS);
@@ -259,7 +262,7 @@ export function ReservationsPlanningPage() {
   const goToday = useCallback(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - 14);
+    d.setDate(d.getDate() - PLANNING_INITIAL_BACK_DAYS);
     setStartDate(d);
   }, []);
 

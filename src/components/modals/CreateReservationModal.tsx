@@ -308,23 +308,16 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
           onSuccess();
         }
       } else {
-        let errorMsg = result.error || 'Erreur lors de la création de la réservation';
-        if (/no inventory|inventory found/i.test(errorMsg)) {
-          errorMsg +=
-            ' — Utilisez le mode « Prix par jour » ou « Prix total » si le calendrier n\'a pas d\'inventaire.';
-        }
+        const errorMsg = humanizeReservationError(result.error || 'Erreur lors de la création de la réservation');
         setError(errorMsg);
-        toast.error(errorMsg);
+        toast.error(errorMsg, { autoClose: 8000 });
       }
     } catch (err: any) {
       console.error('Error creating reservation:', err);
-      let errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Erreur lors de la création';
-      if (/no inventory|inventory found/i.test(errorMsg)) {
-        errorMsg +=
-          ' — Utilisez le mode « Prix par jour » ou « Prix total » si le calendrier n\'a pas d\'inventaire.';
-      }
+      const rawMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Erreur lors de la création';
+      const errorMsg = humanizeReservationError(rawMsg);
       setError(errorMsg);
-      toast.error(errorMsg);
+      toast.error(errorMsg, { autoClose: 8000 });
     } finally {
       setIsSubmitting(false);
     }
@@ -451,6 +444,26 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
         </IconButton>
       </Box>
 
+      {/* Sticky error banner — always visible above the scrollable form so a backend error
+          (e.g. "Minimum stay is 5") is never hidden when the user is at the bottom of the form. */}
+      {error && (
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => setError(null)}
+          sx={{
+            mx: 3,
+            mt: 1.5,
+            mb: 0,
+            borderRadius: 1.25,
+            fontWeight: 600,
+            boxShadow: '0 4px 12px rgba(211,47,47,0.25)',
+          }}
+        >
+          {error}
+        </Alert>
+      )}
+
       {/* ─── Body : 2 colonnes scrollables ─── */}
       <Box
         sx={{
@@ -467,12 +480,6 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
           wrapperSx={{ flex: { xs: '1 1 55%', md: '1 1 0' } }}
           innerSx={{ p: '22px 26px' }}
         >
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
-
           {/* Section 1: Voyageur */}
           <Section num="1" title="👤 Voyageur" badge="Requis">
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 1.5 }}>
@@ -1358,6 +1365,54 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
       </Box>
     </Dialog>
   );
+}
+
+/* ─── Helpers ───────────────────────────────────────────────── */
+
+/**
+ * Translates backend reservation errors into user-friendly French messages
+ * with actionable hints. Falls back to the original message if no rule matches.
+ *
+ * Common backend errors observed:
+ * - "Minimum stay is N" → too few nights for that listing's restriction
+ * - "no inventory found" / "inventory not found" → no calendar inventory for these dates
+ * - "Room not available" / "Not available" → dates conflict with existing booking
+ */
+function humanizeReservationError(raw: string): string {
+  if (!raw) return 'Erreur lors de la création de la réservation';
+  const msg = String(raw);
+
+  const minStay = msg.match(/minimum\s*stay\s*(?:is|:)?\s*(\d+)/i);
+  if (minStay) {
+    const n = Number(minStay[1]);
+    return `⚠️ Séjour minimum requis : ${n} nuit${n > 1 ? 's' : ''}. Augmentez la durée du séjour ou choisissez une autre propriété.`;
+  }
+
+  if (/no\s+inventory|inventory\s+(not\s+)?found/i.test(msg)) {
+    return `${msg} — Utilisez le mode « Prix par jour » ou « Prix total » si le calendrier n'a pas d'inventaire.`;
+  }
+
+  if (/room\s+not\s+available|not\s+available|already\s+(booked|reserved)|date.*conflict/i.test(msg)) {
+    return `⚠️ Ces dates ne sont pas disponibles (réservation existante ou bloquées). Choisissez d'autres dates ou un autre type de chambre.`;
+  }
+
+  if (/max(imum)?\s*stay\s*(?:is|:)?\s*(\d+)/i.test(msg)) {
+    const m = msg.match(/max(?:imum)?\s*stay\s*(?:is|:)?\s*(\d+)/i);
+    const n = m ? Number(m[1]) : null;
+    return n
+      ? `⚠️ Séjour maximum autorisé : ${n} nuit${n > 1 ? 's' : ''}. Réduisez la durée du séjour.`
+      : msg;
+  }
+
+  if (/closed\s+(to\s+)?arrival|no\s+arrival/i.test(msg)) {
+    return `⚠️ Arrivée non autorisée à cette date par la propriété. Choisissez un autre jour d'arrivée.`;
+  }
+
+  if (/closed\s+(to\s+)?departure|no\s+departure/i.test(msg)) {
+    return `⚠️ Départ non autorisé à cette date par la propriété. Choisissez un autre jour de départ.`;
+  }
+
+  return msg;
 }
 
 /* ─── Helper Components ─────────────────────────────────────── */
