@@ -348,8 +348,8 @@ function App() {
         </AppErrorBoundary>
         <DevRuntimeLogPanel />
         <ToastContainer
-          position="bottom-right"
-          autoClose={3000}
+          position="top-right"
+          autoClose={6000}
           hideProgressBar={false}
           newestOnTop
           closeOnClick
@@ -357,8 +357,10 @@ function App() {
           pauseOnFocusLoss
           draggable
           pauseOnHover
-          theme="light"
+          theme="colored"
           limit={4}
+          // Explicit z-index above MUI Dialog (1300) and Tooltip (1500) so toasts surface over modals.
+          style={{ zIndex: 99999 }}
         />
       </BrowserRouter>
     </AuthProvider>

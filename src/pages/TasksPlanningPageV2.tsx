@@ -28,6 +28,9 @@ import { getStoredOwners } from '../data/catalogueMock';
 /** Jours passés / futurs visibles (aligné /reservations/planning) */
 const PLANNING_LOOKBACK_DAYS = 30;
 const PLANNING_FORWARD_DAYS = 45;
+/** Décalage initial du curseur : on cadre J-2 → J+11 (14j visibles dont aujourd'hui en 3e position),
+ *  l'utilisateur peut ensuite naviguer dans la fenêtre 75j. */
+const PLANNING_INITIAL_BACK_DAYS = 2;
 
 export default function TasksPlanningPageV2() {
   const navigate = useNavigate();
@@ -43,7 +46,7 @@ export default function TasksPlanningPageV2() {
   const [startDate, setStartDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - PLANNING_LOOKBACK_DAYS);
+    d.setDate(d.getDate() - PLANNING_INITIAL_BACK_DAYS);
     return d;
   });
   const [daysCount] = useState(PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS);
@@ -228,7 +231,7 @@ export default function TasksPlanningPageV2() {
 
   // Navigation temporelle
   const goToday = () => {
-    const d = subDays(new Date(), PLANNING_LOOKBACK_DAYS);
+    const d = subDays(new Date(), PLANNING_INITIAL_BACK_DAYS);
     d.setHours(0, 0, 0, 0);
     setStartDate(d);
   };
