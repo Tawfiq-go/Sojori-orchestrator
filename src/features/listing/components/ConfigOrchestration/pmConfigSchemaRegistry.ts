@@ -140,7 +140,7 @@ export const PM_CONFIG_SCHEMA_FIELDS: Record<PmConfigTabKey, SchemaFieldDef[]> =
   'orchestration-config': [
     { id: 'flags', label: 'Flags orchestration', designPath: 'orchestration_*', schemaPath: 'listing.orchestration_*', inSchema: true },
     { id: 'auto-clean', label: 'Ménage auto checkout', designPath: 'autoCleaningAfterCheckout', schemaPath: 'cleaningOrchestration.enabled', inSchema: true },
-    { id: 'slots-in', label: 'Créneaux arrivée', designPath: 'checkInSlots[]', schemaPath: 'timeslot / listing', inSchema: true, note: 'Partiel · voir onglet Ménage legacy' },
+    { id: 'slots-in', label: 'Créneaux arrivée', designPath: 'checkInSlots[]', schemaPath: 'TS_CHECKIN[]', inSchema: true, note: 'Onglet Créneaux A/D · template admin' },
   ],
 };
 

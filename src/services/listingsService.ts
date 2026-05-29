@@ -1606,7 +1606,7 @@ export const listingsService = {
 
   async putListingOwnerConfigTemplateSection(
     ownerKey: string,
-    section: 'access' | 'support' | 'concierge' | 'listing' | 'serviceClient' | 'chatbot',
+    section: 'access' | 'support' | 'concierge' | 'listing' | 'serviceClient' | 'chatbot' | 'rulesAndInfo',
     payload: Record<string, unknown>,
   ) {
     const { data } = await apiClient.put(

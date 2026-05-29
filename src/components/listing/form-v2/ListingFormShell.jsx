@@ -67,10 +67,12 @@ export const CONFIG_NEW_TABS = [
     { id: 'support-config',           icon: '🆘', label: 'Support' },
     { id: 'concierge-config',         icon: '🛎️', label: 'Conciergerie' },
     { id: 'cleaning-config',          icon: '🏠', label: 'Ménage' },
+    { id: 'timeslots-config',         icon: '🛬', label: 'Créneaux A/D' },
     { id: 'cleaning-sojori-config',   icon: '🧼', label: 'Ménage Sojori' },
     { id: 'transport-config',         icon: '🚗', label: 'Transport' },
     { id: 'grocery-config',           icon: '🛒', label: 'Courses' },
     { id: 'messages-config',          icon: '🚪', label: 'Instructions départ' },
+    { id: 'rules-config',             icon: '📋', label: 'Règles propriété' },
   ]},
   { group: 'Communication', items: [
     { id: 'service-client-config', icon: '💌', label: 'Service Client' },

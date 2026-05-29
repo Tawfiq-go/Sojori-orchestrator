@@ -5,6 +5,7 @@ import { ListingFormStructureContext } from '../../../components/listing/form-v2
 import SupportConfigTabContainer from './ConfigOrchestration/SupportConfigTabContainer';
 import ConciergeConfigTab from './ConfigOrchestration/ConciergeConfigTab';
 import CleaningConfigTab from './ConfigOrchestration/CleaningConfigTab';
+import ArrivalDepartureConfigTab from './ConfigOrchestration/ArrivalDepartureConfigTab';
 import CleaningSojoriConfigTab from './ConfigOrchestration/CleaningSojoriConfigTab';
 import TransportConfigTab from './ConfigOrchestration/TransportConfigTab';
 import GroceryConfigTab from './ConfigOrchestration/GroceryConfigTab';
@@ -13,6 +14,7 @@ import AccessConfigTab from './ConfigOrchestration/AccessConfigTab';
 import MessagesConfigTab from './ConfigOrchestration/MessagesConfigTab';
 import OwnerOrchestrationFlagsTab from './ConfigOrchestration/OwnerOrchestrationFlagsTab';
 import OwnerTemplateWhatsAppTab from './ConfigOrchestration/OwnerTemplateWhatsAppTab';
+import RulesConfigTab from './ConfigOrchestration/RulesConfigTab';
 import PmConfigTabFrame from './ConfigOrchestration/PmConfigTabFrame';
 import listingsService from '../../../services/listingsService';
 
@@ -47,6 +49,7 @@ function TemplateTabPlaceholder({ title, hint }: { title: string; hint: string }
 type OwnerCfgPayload = {
   listing?: Record<string, unknown>;
   chatbot?: { menuOptions?: unknown[] };
+  rulesAndInfo?: { Rules?: string[]; InfoUtils?: string[] };
 };
 
 export default function ListingTemplateForm({
@@ -148,6 +151,18 @@ export default function ListingTemplateForm({
         />,
       );
     }
+    if (tabKey === 'timeslots-config') {
+      return wrap(
+        tabKey,
+        <ArrivalDepartureConfigTab
+          listingId=""
+          templateMode
+          ownerId={ownerId}
+          listingValues={templateListingValues}
+          onListingPatch={persistListingSection}
+        />,
+      );
+    }
     if (tabKey === 'cleaning-sojori-config') {
       return wrap(
         tabKey,
@@ -191,6 +206,12 @@ export default function ListingTemplateForm({
         />,
       );
     }
+    if (tabKey === 'rules-config') {
+      return wrap(
+        tabKey,
+        <RulesConfigTab templateOwnerKey={templateOwnerKey} listingName={referenceListingName} ownerId={ownerId} />,
+      );
+    }
     if (tabKey === 'whatsapp-config') {
       return wrap(tabKey, <OwnerTemplateWhatsAppTab templateOwnerKey={templateOwnerKey} />);
     }
@@ -201,7 +222,11 @@ export default function ListingTemplateForm({
   const hasTemplateData = Boolean(
     ownerCfg?.listing ||
       ownerCfg?.chatbot?.menuOptions?.length ||
-      templateListingValues.paidCleaningConfig,
+      (ownerCfg?.rulesAndInfo?.Rules?.length ?? 0) > 0 ||
+      (ownerCfg?.rulesAndInfo?.InfoUtils?.length ?? 0) > 0 ||
+      templateListingValues.paidCleaningConfig ||
+      (Array.isArray(templateListingValues.TS_CHECKIN) &&
+        (templateListingValues.TS_CHECKIN as unknown[]).length > 0),
   );
 
   return (
@@ -222,7 +247,23 @@ export default function ListingTemplateForm({
         }}
         tabsStatus={{
           'orchestration-config': { tone: 'success', label: 'TPL' },
+          'whatsapp-config': {
+            tone: ownerCfg?.chatbot?.menuOptions?.length ? 'success' : 'neutral',
+            label: ownerCfg?.chatbot?.menuOptions?.length ? 'TPL' : '—',
+          },
           'access-config': { tone: hasTemplateData ? 'success' : 'neutral', label: hasTemplateData ? 'TPL' : '—' },
+          'rules-config': {
+            tone:
+              (ownerCfg?.rulesAndInfo?.Rules?.length ?? 0) > 0 ||
+              (ownerCfg?.rulesAndInfo?.InfoUtils?.length ?? 0) > 0
+                ? 'success'
+                : 'neutral',
+            label:
+              (ownerCfg?.rulesAndInfo?.Rules?.length ?? 0) > 0 ||
+              (ownerCfg?.rulesAndInfo?.InfoUtils?.length ?? 0) > 0
+                ? 'TPL'
+                : '—',
+          },
         }}
         defaultLevel="config-new"
         defaultTab={defaultTab}
