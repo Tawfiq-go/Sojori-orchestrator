@@ -9,6 +9,9 @@ export type AccessInstructionStep = {
 export type AccessFormState = {
   listingId: string;
   listingName: string;
+  /** Champs listing racine — affichés WhatsApp menu G (Propriété & WiFi). */
+  wifiUsername: string;
+  wifiPassword: string;
   receptionMode: {
     type: 'automatic' | 'assisted';
     assistedGuestMessage: string;
@@ -33,6 +36,8 @@ export function defaultAccessForm(listingId: string, listingName: string): Acces
   return {
     listingId,
     listingName: listingName || '',
+    wifiUsername: '',
+    wifiPassword: '',
     receptionMode: {
       type: 'automatic',
       assistedGuestMessage: '',

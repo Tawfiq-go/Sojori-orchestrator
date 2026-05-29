@@ -15,6 +15,10 @@ function formatSyncReport(data: unknown): string[] {
         access?: { ok?: boolean; hasData?: boolean; error?: string };
         support?: { ok?: boolean; categoriesCount?: number; error?: string };
         concierge?: { ok?: boolean; error?: string };
+        chatbot?: { ok?: boolean; menuOptionsCount?: number; error?: string };
+        listingApplied?: number;
+        listings?: number;
+        chatbotApplied?: number;
       };
     };
   };
@@ -46,6 +50,14 @@ function formatSyncReport(data: unknown): string[] {
     lines.push('Conciergerie → PM OK');
   } else if (cfg?.concierge) {
     lines.push(`Conciergerie: ${cfg.concierge.error || 'vide'}`);
+  }
+  if (cfg?.chatbot?.ok) {
+    lines.push(`Menu WhatsApp → PM OK (${cfg.chatbot.menuOptionsCount ?? 0} options)`);
+  } else if (cfg?.chatbot) {
+    lines.push(`Menu WhatsApp: ${cfg.chatbot.error || 'vide'}`);
+  }
+  if (cfg?.access?.ok || cfg?.support?.ok || cfg?.concierge?.ok || cfg?.chatbot?.ok) {
+    lines.push('Template PM (accès, support, conciergerie, menu WhatsApp, ménage, créneaux) copié');
   }
 
   return lines;

@@ -41,7 +41,7 @@ function InstructionBlock({
   return (
     <Card icon="📍" title={step.title} compact>
       <FormRow label="Description activée">
-        <Stack direction="row" alignItems="center" gap={1}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
           <Toggle
             on={step.description.enabled}
             onChange={() =>
@@ -128,6 +128,11 @@ export default function AccessConfigTab({
             res = await listingsService.createListingAccess(body);
           }
           if (res.error) throw new Error(res.error);
+
+          await listingsService.updateListingProperty(listingId!, {
+            wifiUsername: payload.wifiUsername ?? '',
+            wifiPassword: payload.wifiPassword ?? '',
+          });
         }
         setSavingState('saved');
         window.setTimeout(() => setSavingState('idle'), 2200);
@@ -174,11 +179,23 @@ export default function AccessConfigTab({
           const payload = (res as { data?: { access?: Record<string, unknown> } })?.data ?? res;
           doc = (payload as { access?: Record<string, unknown> })?.access ?? null;
         } else {
-          const res = await listingsService.getListingAccessConfig(listingId!);
-          if (res.error && !res.data && !res.notFound) {
-            throw new Error(res.error);
+          const [accessRes, listingDoc] = await Promise.all([
+            listingsService.getListingAccessConfig(listingId!),
+            listingsService.getListingDocument(listingId!),
+          ]);
+          if (accessRes.error && !accessRes.data && !accessRes.notFound) {
+            throw new Error(accessRes.error);
           }
-          doc = (res.data || null) as Record<string, unknown> | null;
+          doc = (accessRes.data || null) as Record<string, unknown> | null;
+          if (cancelled) return;
+          const id = listingId || templateOwnerKey || '';
+          const base = normalizeAccessFromApi(doc, id, listingName || 'Template');
+          const wifiUsername =
+            typeof listingDoc?.wifiUsername === 'string' ? listingDoc.wifiUsername : '';
+          const wifiPassword =
+            typeof listingDoc?.wifiPassword === 'string' ? listingDoc.wifiPassword : '';
+          setForm({ ...base, wifiUsername, wifiPassword });
+          return;
         }
         if (cancelled) return;
         const id = listingId || templateOwnerKey || '';
@@ -233,15 +250,45 @@ export default function AccessConfigTab({
         badgeKind="wa-yes"
         subtitle={
           <>
-            Mode d&apos;accueil et zones Parking / Immeuble / Appartement — envoyés au voyageur via
-            WhatsApp (menu Accès).
+            Codes et instructions d&apos;accès (menu WhatsApp <strong>F</strong>) · WiFi ci-dessous
+            (menu WhatsApp <strong>G</strong> — Propriété &amp; WiFi).
           </>
         }
       />
 
+      {!isOwnerTemplate && (
+        <Card
+          icon="📶"
+          title="WiFi"
+          subtitle="wifiUsername · wifiPassword — listing racine"
+        >
+          <FormRow
+            label="Nom du réseau (SSID)"
+            help="Affiché au voyageur via le menu WhatsApp G"
+          >
+            <TextInput
+              value={form.wifiUsername}
+              onChange={(e) =>
+                patch((f) => ({ ...f, wifiUsername: e.target.value }))
+              }
+              placeholder="Ex. Sojori_Guest"
+            />
+          </FormRow>
+          <FormRow label="Mot de passe WiFi" help="Menu WhatsApp G uniquement">
+            <TextInput
+              value={form.wifiPassword}
+              onChange={(e) =>
+                patch((f) => ({ ...f, wifiPassword: e.target.value }))
+              }
+              placeholder="Mot de passe"
+            />
+          </FormRow>
+        </Card>
+      )}
+
       <Card icon="🚪" title="Mode d'accueil" subtitle="receptionMode">
         <FormRow label="Type">
-          <Stack direction="row" gap={1} flexWrap="wrap">
+          <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
             <PillButton
               active={mode === 'automatic'}
               onClick={() =>
@@ -285,7 +332,7 @@ export default function AccessConfigTab({
             label="Envoi des codes au client"
             help="Ex. check-in J-2 à 11h → 2 jours avant arrivée, 11:00"
           >
-            <Stack direction="row" alignItems="center" gap={1.5} flexWrap="wrap">
+            <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
               <Typography sx={{ fontSize: 12, color: T.text2 }}>J −</Typography>
               <Box sx={{ width: 72 }}>
                 <NumInput
