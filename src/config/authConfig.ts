@@ -65,6 +65,10 @@ export const MICROSERVICE_BASE_URL = {
   SRV_TASK: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4003/api/v1/task`
     : `${API_BASE_URL}/api/v1/task`,
+  /** Équipe : admin-whatsapp, staff-simplified (migration srv-task → srv-fulltask) */
+  SRV_FULLTASK: useLocalMicroservicePorts
+    ? `${API_BASE_URL}:4015/api/v1/fulltask`
+    : `${API_BASE_URL}/api/v1/fulltask`,
   SRV_ORCHESTRATOR: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4010/api/v1/orchestrator`
     : `${API_BASE_URL}/api/v1/orchestrator`,

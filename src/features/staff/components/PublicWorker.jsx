@@ -16,6 +16,9 @@ import WorkerFilters from './WorkerFilters';
 import { can } from '../../../utils/permissions';
 import { useAdminOwnerFilter } from 'context/AdminOwnerFilterContext';
 import { teamRolesContentPaperSx, teamRolesTableHeaderCellSx, teamRolesTableHeaderCellSxCenter } from '../teamRolesLayout';
+import { useTeamViewMode } from '../../../context/TeamViewContext';
+import { WorkersHubView } from '../../../components/team/WorkersHubView';
+import { TEAM_T } from '../../../components/team/teamHubTokens';
 const SOJORI_COLORS = {
   primary: '#FF6B35',
   primaryDark: '#E55A2B',
@@ -31,6 +34,7 @@ const SOJORI_COLORS = {
 const PublicWorker = ({
   workerTypeOwner = false,
   hidePageHeader = false,
+  embedded = false,
   onWorkersTotalChange
 }) => {
   const {
@@ -66,6 +70,13 @@ const PublicWorker = ({
   useEffect(() => {
     onWorkersTotalChange?.(totalCount);
   }, [totalCount, onWorkersTotalChange]);
+  const { setTeamStats } = useTeamViewMode();
+  useEffect(() => {
+    if (!embedded) return;
+    setTeamStats([
+      { icon: '🔐', label: 'Workers', value: String(totalCount), iconColor: TEAM_T.primaryDeep },
+    ]);
+  }, [embedded, totalCount, setTeamStats]);
   const fetchWorkers = async () => {
     setLoading(true);
     try {
@@ -135,15 +146,42 @@ const PublicWorker = ({
   };
   return <Box sx={{
     width: '100%',
-    px: {
-      xs: 0,
-      sm: 0.5
-    },
-    pt: hidePageHeader ? 0 : 1,
-    pb: 1
+    px: embedded ? 0 : { xs: 0, sm: 0.5 },
+    pt: hidePageHeader || embedded ? 0 : 1,
+    pb: embedded ? 0 : 1
   }}>
       <ToastContainer position="top-right" autoClose={3000} />
 
+      {embedded ? (
+        <WorkersHubView
+          t={t}
+          workers={workers}
+          loading={loading}
+          totalCount={totalCount}
+          page={page}
+          limit={limit}
+          setPage={setPage}
+          setLimit={setLimit}
+          searchText={searchText}
+          setSearchText={setSearchText}
+          listings={listings}
+          selectedListings={selectedListings}
+          setSelectedListings={setSelectedListings}
+          deletedFilter={deletedFilter}
+          bannedFilter={bannedFilter}
+          onDeletedChange={setDeletedFilter}
+          onBannedChange={setBannedFilter}
+          onSearch={handleSearch}
+          onReset={handleReset}
+          onFilterChange={handleFilterChange}
+          onCreate={() => setOpenCreateDialog(true)}
+          onEdit={handleUpdate}
+          canCreate={canCreate}
+          canUpdate={canUpdate}
+          isAdmin={isAdmin}
+        />
+      ) : (
+      <>
       {!hidePageHeader && <Box sx={{
       mb: 2,
       display: 'flex',
@@ -357,6 +395,8 @@ const PublicWorker = ({
             </TableBody>
           </Table>}
       </TableContainer>
+      </>
+      )}
 
       {/* Create Worker Sidebar */}
       <CreateWorkerSidebar open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} onWorkerCreated={onWorkerCreated} />

@@ -30,9 +30,8 @@ import {
 } from '../utils/fulltaskMappers';
 import { unwrapFulltaskData } from '../utils/unwrapFulltaskResponse';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
-import OwnerConfigScopeBar from '../features/taskHub/components/OwnerConfigScopeBar';
+import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
 import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
-import ApplyAdminConfigToOwnersButton from '../components/ApplyAdminConfigToOwnersButton';
 import { ORCHESTRATION_ADMIN_OWNER_ID } from '../constants/orchestrationAdmin';
 
 function newCatalogId(): string {
@@ -44,11 +43,14 @@ function parseOrchestrationSubTab(raw: string | null): OrchestrationSubTab {
   return 'workflows';
 }
 
-export default function TasksOrchestrationFulltaskPage() {
+function TasksOrchestrationFulltaskPageInner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const subTab = parseOrchestrationSubTab(searchParams.get('tab'));
+
   const ownerScope = useFulltaskConfigOwner();
   const { ownerKey, ownerDisplayName, ownerKeyDetail, isAdminTemplate, showOwnerPicker } = ownerScope;
+
+  console.log('[TasksOrchestrationFulltaskPageInner] RENDER - ownerKey:', ownerKey);
 
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [catalog, setCatalog] = useState<CatalogMessage[]>([]);
@@ -79,15 +81,9 @@ export default function TasksOrchestrationFulltaskPage() {
     async (options?: { background?: boolean }) => {
       const background = options?.background === true;
       if (!background) setLoading(true);
-      console.log('[orch-config] GET orchestration', { ownerKey, background });
       try {
         const raw = await fulltaskApi.getOrchestrationConfig(ownerKey);
         const doc = unwrapFulltaskData<Record<string, unknown>>(raw);
-        console.log('[orch-config] GET doc', {
-          workflows: (doc?.workflows as unknown[] | undefined)?.length ?? 0,
-          messageCatalog: (doc?.messageCatalog as unknown[] | undefined)?.length ?? 0,
-          scheduledMessages: (doc?.scheduledMessages as unknown[] | undefined)?.length ?? 0,
-        });
         if (!doc) {
           if (!background) {
             setWorkflows([]);
@@ -98,10 +94,10 @@ export default function TasksOrchestrationFulltaskPage() {
             setLoadError(null);
           }
         } else {
-          applyDocToState(doc);
           const wfN = (doc.workflows as unknown[] | undefined)?.length ?? 0;
           const catN = (doc.messageCatalog as unknown[] | undefined)?.length ?? 0;
           const schedN = (doc.scheduledMessages as unknown[] | undefined)?.length ?? 0;
+          applyDocToState(doc);
           setLoadState(wfN === 0 && catN === 0 && schedN === 0 ? 'empty' : 'ok');
           setLoadError(null);
         }
@@ -143,13 +139,14 @@ export default function TasksOrchestrationFulltaskPage() {
   );
 
   useEffect(() => {
+    console.log('[TasksOrchestrationFulltaskPageInner] useEffect triggered - ownerKey:', ownerKey);
     void load();
-  }, [load]);
+  }, [load, ownerKey]);
 
   const persist = async () => {
     if (workflows.length === 0 && scheduledRules.length === 0) {
       toast.error(
-        'Config vide : utilisez « Charger le seed complet ». N'enregistrez pas un état vide (cela effacerait MongoDB).',
+        'Config vide : utilisez "Charger le seed complet". N\'enregistrez pas un état vide (cela effacerait MongoDB).',
       );
       return;
     }
@@ -162,11 +159,6 @@ export default function TasksOrchestrationFulltaskPage() {
         ordered.scheduledRules as Record<string, unknown>[],
         listOrder,
       );
-      console.log('[orch-config] PUT save', {
-        workflows: (body.workflows as unknown[])?.length ?? 0,
-        messageCatalog: (body.messageCatalog as unknown[])?.length ?? 0,
-        scheduledMessages: (body.scheduledMessages as unknown[])?.length ?? 0,
-      });
       const raw = await fulltaskApi.upsertOrchestrationConfig(ownerKey, body);
       const saved = unwrapFulltaskData<Record<string, unknown>>(raw);
       const savedWf = (saved?.workflows as unknown[] | undefined)?.length ?? 0;
@@ -189,52 +181,48 @@ export default function TasksOrchestrationFulltaskPage() {
     }
   };
 
-  const handleApplyAdminToOwners = async (
-    mode: 'current' | 'all',
-    targetOwnerId?: string,
-  ) => {
-    // Charger la config Admin
-    const raw = await fulltaskApi.getOrchestrationConfig(ORCHESTRATION_ADMIN_OWNER_ID);
-    const adminConfig = unwrapFulltaskData<Record<string, unknown>>(raw);
-
-    if (mode === 'current' && targetOwnerId) {
-      // Appliquer à l'Owner sélectionné
-      await fulltaskApi.copyOrchestrationConfigToOwner(ORCHESTRATION_ADMIN_OWNER_ID, targetOwnerId);
-    } else if (mode === 'all') {
-      // Appliquer à tous les Owners
-      await fulltaskApi.copyOrchestrationConfigToAllOwners(ORCHESTRATION_ADMIN_OWNER_ID);
+  const handleSyncToOwner = async (targetOwnerId: string, targetOwnerName: string) => {
+    try {
+      // Copy API : 'global' ou ID admin legacy → template (ownerId null). Les deux sont acceptés.
+      await fulltaskApi.copyOrchestrationConfigToOwner(
+        ORCHESTRATION_ADMIN_OWNER_ID,
+        targetOwnerId,
+      );
+      toast.success(`Orchestration synchronisée vers ${targetOwnerName}`);
+      await load();
+    } catch (e: unknown) {
+      const err = e as { message?: string; response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || err.message || 'Erreur synchronisation');
     }
+  };
 
-    // Recharger pour afficher les changements
-    await load();
+  const handleSyncToAllOwners = async () => {
+    try {
+      await fulltaskApi.copyOrchestrationConfigToAllOwners(ORCHESTRATION_ADMIN_OWNER_ID);
+      toast.success('Orchestration synchronisée vers tous les PMs');
+      await load();
+    } catch (e: unknown) {
+      const err = e as { message?: string; response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || err.message || 'Erreur synchronisation');
+    }
   };
 
   if (loading) {
     return (
-      <AdminOwnerScopeLayout showTopBar={false}>
-        <DashboardWrapper breadcrumb={['Tâches', 'Orchestration', 'Config']}>
-          <p style={{ padding: 24 }}>Chargement…</p>
-        </DashboardWrapper>
-      </AdminOwnerScopeLayout>
+      <DashboardWrapper breadcrumb={['Tâches', 'Orchestration', 'Config']}>
+        <p style={{ padding: 24 }}>Chargement…</p>
+      </DashboardWrapper>
     );
   }
 
   return (
-    <AdminOwnerScopeLayout showTopBar={false}>
     <DashboardWrapper breadcrumb={['Tâches', 'Orchestration', 'Config']}>
-      <OwnerConfigScopeBar {...ownerScope} />
-      {showOwnerPicker && (
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
-          <ApplyAdminConfigToOwnersButton
-            currentOwnerId={isAdminTemplate ? null : ownerKey}
-            currentOwnerName={isAdminTemplate ? undefined : ownerDisplayName}
-            isAdminTemplate={isAdminTemplate}
-            onApply={handleApplyAdminToOwners}
-            disabled={loading || saving}
-            buttonText="Appliquer cette orchestration aux Owners"
-          />
-        </div>
-      )}
+      <OwnerConfigScopeBarWithSync
+        {...ownerScope}
+        compact
+        onSyncToOwner={handleSyncToOwner}
+        onSyncToAllOwners={handleSyncToAllOwners}
+      />
       {loadError ? (
         <div
           className="orch-load-banner orch-load-banner--error"
@@ -284,12 +272,8 @@ export default function TasksOrchestrationFulltaskPage() {
                     }
                   }
                   setSeeding(true);
-                  console.log('[orch-config] POST seed-complete', { force: !isEmpty });
                   try {
-                    const raw = await fulltaskApi.seedOrchestrationComplete(!isEmpty);
-                    console.log('[orch-config] seed-complete raw', raw);
-                    const seeded = unwrapFulltaskData<Record<string, unknown>>(raw);
-                    console.log('[orch-config] seed-complete data', seeded);
+                    await fulltaskApi.seedOrchestrationComplete(!isEmpty);
                     toast.success(
                       'Seed chargé : 12 workflows, messages catalogue/plan + templates WhatsApp',
                     );
@@ -335,6 +319,7 @@ export default function TasksOrchestrationFulltaskPage() {
                   {
                     id: `rel-${Date.now()}`,
                     channel: 'whatsapp',
+                    deliveryChannel: 'whatsapp',
                     reference: 'check_in',
                     delay: { value: -1, unit: 'days' },
                     time: '09:00',
@@ -446,6 +431,13 @@ export default function TasksOrchestrationFulltaskPage() {
         }
       />
     </DashboardWrapper>
+  );
+}
+
+export default function TasksOrchestrationFulltaskPage() {
+  return (
+    <AdminOwnerScopeLayout showTopBar={false}>
+      <TasksOrchestrationFulltaskPageInner />
     </AdminOwnerScopeLayout>
   );
 }

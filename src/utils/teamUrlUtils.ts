@@ -1,30 +1,28 @@
 /** URL Équipe & Rôles — aligné legacy sojori-dashboard */
 
-export type TeamSection =
-  | 'property-manager'
-  | 'staff-dashboard'
-  | 'admin-whatsapp'
-  | 'worker'
-  | 'groups';
+export type TeamSection = 'property-manager' | 'worker' | 'groups';
 
 export const TEAM_SECTION_TABS: Record<TeamSection, string> = {
   'property-manager': 'list',
-  'staff-dashboard': 'staff-dashboard',
-  'admin-whatsapp': 'admin-whatsapp',
   worker: 'worker',
   groups: 'groups',
 };
+
+/** Admin WhatsApp → /tasks/team */
+export const ADMIN_WHATSAPP_LEGACY_TAB = 'admin-whatsapp';
+
+/** @deprecated Dashboard Staff migré vers /tasks/team */
+export const STAFF_DASHBOARD_LEGACY_TAB = 'staff-dashboard';
 
 export function teamSectionFromPath(pathname: string, tabParam: string | null): TeamSection {
   if (pathname.includes('/admin/User/owner') || pathname.includes('/admin/equipe/owners')) {
     return 'property-manager';
   }
   const tab = (tabParam || '').toLowerCase();
-  if (tab === 'admin-whatsapp') return 'admin-whatsapp';
+  if (tab === ADMIN_WHATSAPP_LEGACY_TAB) return 'property-manager';
   if (tab === 'worker') return 'worker';
   if (tab === 'groups') return 'groups';
-  if (tab === 'staff-dashboard' || tab === 'owners') return 'staff-dashboard';
-  return 'staff-dashboard';
+  return 'property-manager';
 }
 
 export function teamSectionToPath(section: TeamSection): string {
@@ -37,12 +35,14 @@ export function migrateLegacyTeamSearchParams(pathname: string, sp: URLSearchPar
   if (pathname.includes('/admin/User/owner')) {
     const next = new URLSearchParams(sp);
     if (!next.get('tab')) next.set('tab', 'list');
-    return next; // redirect handler maps path
+    return next;
   }
   if (pathname.includes('/admin/User/team')) {
     const next = new URLSearchParams(sp);
-    const tab = next.get('tab') || 'staff-dashboard';
-    next.set('tab', tab);
+    const tab = next.get('tab');
+    if (tab === STAFF_DASHBOARD_LEGACY_TAB || tab === 'owners' || !tab) {
+      next.delete('tab');
+    }
     return next;
   }
   return null;

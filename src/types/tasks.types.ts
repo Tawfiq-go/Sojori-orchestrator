@@ -68,7 +68,16 @@ export interface TaskListItem {
   /** Fenêtre d’exécution (API récente). */
   execution_hours?: { start: number; end: number } | null;
   hourSource?: 'default' | 'client' | 'admin' | string;
+  /** Heure arrivée/départ (payload) pour colonne Prévu */
+  plannedTime?: string | null;
+  /** Demande client (WhatsApp) — champ srv-fulltask `requestedAt` */
+  requestedAt?: string | null;
+  /** Créneau confirmé / dispo Sojori — champ srv-fulltask `scheduledAt` */
+  scheduledAt?: string | null;
   isArchived?: boolean;
+  /** Support — libellé catégorie listing (ex. WiFi / Internet ne fonctionne pas) */
+  supportCategoryLabel?: string;
+  supportCategoryIcon?: string;
   conciergeGroupingKey?: string;
   reservationCheckIn?: string;
   reservationCheckOut?: string;
@@ -115,7 +124,7 @@ export interface TasksSearchParams {
   dateStart?: string;
   dateEnd?: string;
   searchTerm?: string;
-  sortField?: 'startDate' | 'createdAt' | 'itemType' | 'name' | 'source';
+  sortField?: 'createdAt' | 'startDate' | 'reservationNumber';
   sortDirection?: 'asc' | 'desc';
   /** Aligné TasksNew : `false` exclut archivés ; `true` uniquement archivés ; `'all'` les deux. */
   isArchived?: boolean | 'all';
@@ -155,6 +164,17 @@ export interface TaskUpdateFieldsPayload {
   startHour?: number;
   endHour?: number;
   price?: number;
+}
+
+/** PATCH /api/v1/admin/fulltask/tasks/:id */
+export interface TaskFulltaskUpdatePayload {
+  status?: string;
+  priority?: 'normal' | 'urgent' | 'critical';
+  requestedAt?: string | null;
+  scheduledAt?: string | null;
+  scheduledDate?: string | null;
+  requestNote?: string | null;
+  executionNote?: string | null;
 }
 
 export interface TaskAssignPayload {

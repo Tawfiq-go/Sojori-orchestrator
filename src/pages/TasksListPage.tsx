@@ -53,6 +53,7 @@ import {
 moment.locale('fr');
 import { AddTaskModal } from '../components/tasks/AddTaskModal';
 import AssignStaffDialog from '../features/tasksNew/components/AssignStaffDialog.jsx';
+import TaskDetailDrawer from '../features/tasksNew/components/TaskDetailDrawer';
 import { ModalPortal } from '../components/ModalPortal';
 import { createFulltaskFromFormData } from '../services/createFulltaskFromModal';
 import { useAuth } from '../hooks/useAuth';
@@ -79,26 +80,28 @@ import {
 /** Colonnes compactes — liste fulltask (optionnelles via menu colonnes) */
 const COLUMN_WIDTHS = {
   itemNumber: '84px',
-  category: '132px',
+  category: '128px',
+  reservation: '92px',
   listing: '112px',
-  voyageur: '108px',
-  executionDate: '88px',
+  voyageur: '116px',
+  executionDate: '96px',
   urgence: '58px',
   source: '56px',
   status: '96px',
   assignedStaff: '96px',
   description: '120px',
-  createdAt: '72px',
+  createdAt: '92px',
 } as const;
 
 const toolbarSelectSx = { minWidth: 0, '& .MuiSelect-select': { py: 0.875 } } as const;
 
 const SORT_FIELD_LABELS: Record<string, string> = {
+  createdAt: 'Date création',
   startDate: 'Date prévue',
-  createdAt: 'Création',
-  name: 'Code',
-  itemType: 'Type',
+  reservationNumber: 'Réservation',
 };
+
+export type TaskListSortField = 'createdAt' | 'startDate' | 'reservationNumber';
 
 function urgencyShortLabel(em: string): string {
   if (em === 'Critical') return 'Crit.';
@@ -493,6 +496,41 @@ function firstDescriptionLine(task: TaskListItem): string {
   return '';
 }
 
+function hourSourceColor(source?: string | null): string {
+  const s = String(source || 'default').toLowerCase();
+  if (s === 'client' || s === 'guest' || s === 'whatsapp') return T.success;
+  if (s === 'admin') return '#ca8a04';
+  return T.text3;
+}
+
+function hourSourceLabel(source?: string | null): string {
+  const s = String(source || 'default').toLowerCase();
+  if (s === 'client' || s === 'guest' || s === 'whatsapp') return 'Client (WhatsApp)';
+  if (s === 'admin') return 'Admin';
+  return 'Par défaut (listing)';
+}
+
+function renderPlannedHourLine(task: TaskListItem): ReactNode {
+  const typ = String(task.type || '').toLowerCase();
+  const showsHour =
+    typ === 'arrival_choose' ||
+    typ === 'departure_choose' ||
+    typ === 'cleaning_free' ||
+    typ === 'cleaning_paid';
+  if (!showsHour) return null;
+  const time = task.plannedTime;
+  if (!time) return null;
+  const src = task.hourSource || 'default';
+  const color = hourSourceColor(src);
+  return (
+    <Tooltip title={hourSourceLabel(src)} arrow placement="top">
+      <Typography sx={{ fontSize: 10, fontWeight: 700, color, lineHeight: 1.2 }}>
+        {time}
+      </Typography>
+    </Tooltip>
+  );
+}
+
 function formatPlannedParts(task: TaskListItem): { date: string; time?: string } | null {
   const dayOnlyTypes = new Set([
     'registration',
@@ -501,6 +539,7 @@ function formatPlannedParts(task: TaskListItem): { date: string; time?: string }
     'departure_choose',
     'departure_declare',
     'cleaning_free',
+    'cleaning_paid',
   ]);
   const taskType = String(task.type || task.subType || '');
 
@@ -524,6 +563,12 @@ function formatPlannedParts(task: TaskListItem): { date: string; time?: string }
   const date = start.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
 
   if (dayOnlyTypes.has(taskType)) {
+    if (
+      (taskType === 'arrival_choose' || taskType === 'departure_choose') &&
+      task.plannedTime
+    ) {
+      return { date };
+    }
     return { date };
   }
 
@@ -548,26 +593,30 @@ function sourceChipMeta(source?: string | null): { label: string; bg: string; co
 
 function taskTypeSubline(task: TaskListItem): ReactNode {
   const note = firstDescriptionLine(task);
-  if (note) {
-    return (
-      <Typography
-        sx={{ fontSize: 10, color: T.text3, lineHeight: 1.2, mt: 0.25 }}
-        noWrap
-        title={note}
-      >
-        {note}
-      </Typography>
-    );
-  }
-  const res = task.reservationNumber || task.reservationId;
-  if (res) {
-    return (
-      <Typography sx={{ fontSize: 10, color: T.text3, lineHeight: 1.2, mt: 0.25 }} noWrap>
-        Rés. {res}
-      </Typography>
-    );
-  }
-  return null;
+  if (!note) return null;
+  return (
+    <Typography
+      sx={{ fontSize: 10, color: T.text3, lineHeight: 1.2, mt: 0.25 }}
+      noWrap
+      title={note}
+    >
+      {note}
+    </Typography>
+  );
+}
+
+function reservationDisplayCode(task: TaskListItem): string {
+  const n = String(task.reservationNumber || '').trim();
+  if (n && !n.startsWith('…')) return n;
+  const id = task.reservationId ? String(task.reservationId) : '';
+  if (!id) return '—';
+  return id.length > 10 ? `…${id.slice(-8)}` : id;
+}
+
+/** Nom pays sans répéter le drapeau (ex. « 🇲🇦 Maroc » → « Maroc »). */
+function countryNameWithoutFlag(country?: string | null): string {
+  if (!country) return '';
+  return country.replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, '').trim() || country.trim();
 }
 
 function categoryLabel(task: TaskListItem): string {
@@ -602,6 +651,11 @@ function categoryLabel(task: TaskListItem): string {
   };
 
   const ft = task.subType || task.type || '';
+  if (ft === 'support' || String(task.type || '').toLowerCase() === 'support') {
+    const icon = task.supportCategoryIcon?.trim() || '🆘';
+    const lab = task.supportCategoryLabel?.trim();
+    if (lab) return `${icon} ${lab}`;
+  }
   if (ft && labelForTaskTypeId(ft) !== ft) {
     const em = FULLTASK_TASK_TYPE_EMOJI[ft as keyof typeof FULLTASK_TASK_TYPE_EMOJI] || '';
     return `${em ? `${em} ` : ''}${labelForTaskTypeId(ft)}`;
@@ -745,7 +799,9 @@ function categorySubline(task: TaskListItem): ReactNode {
     typ === 'registration' &&
     (task.adults != null || task.nbreGuestValidated != null)
   ) {
-    const tip = `Adultes: ${task.adults ?? 0} · Validés: ${task.nbreGuestValidated ?? 0} · Brouillons: ${task.nbreGuestDraft ?? 0} · Non enregistrés: ${task.nbreGuestNotRegistered ?? 0}`;
+    const total = task.adults ?? 0;
+    const done = task.nbreGuestValidated ?? 0;
+    const tip = `${done}/${total} enregistrés · Brouillons: ${task.nbreGuestDraft ?? 0} · Reste: ${task.nbreGuestNotRegistered ?? 0}`;
     return (
       <Tooltip title={tip} arrow placement="top">
         <Typography
@@ -753,13 +809,10 @@ function categorySubline(task: TaskListItem): ReactNode {
           sx={{ fontSize: 10, lineHeight: 1.2, display: 'block', mt: 0.25 }}
           noWrap
         >
-          <Box component="span" sx={{ color: T.text2, fontWeight: 600 }}>{task.adults ?? 0}A</Box>
-          {' '}
-          <Box component="span" sx={{ color: T.success, fontWeight: 700 }}>{task.nbreGuestValidated ?? 0}V</Box>
+          <Box component="span" sx={{ color: T.success, fontWeight: 700 }}>{done}</Box>
           <Box component="span" sx={{ color: T.text4 }}>/</Box>
-          <Box component="span" sx={{ color: T.warning, fontWeight: 600 }}>{task.nbreGuestDraft ?? 0}D</Box>
-          <Box component="span" sx={{ color: T.text4 }}>/</Box>
-          <Box component="span" sx={{ color: T.error, fontWeight: 600 }}>{task.nbreGuestNotRegistered ?? 0}N</Box>
+          <Box component="span" sx={{ color: T.text2, fontWeight: 600 }}>{total}</Box>
+          <Box component="span" sx={{ color: T.text3, ml: 0.5 }}> enreg.</Box>
         </Typography>
       </Tooltip>
     );
@@ -831,15 +884,14 @@ export function TasksListPage() {
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [assignStaffOpen, setAssignStaffOpen] = useState(false);
   const [taskToAssign, setTaskToAssign] = useState<TaskListItem | null>(null);
+  const [selectedTaskDetail, setSelectedTaskDetail] = useState<TaskListItem | null>(null);
 
   const [searchInput, setSearchInput] = useState('');
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
-  const [sortField, setSortField] = useState<'startDate' | 'createdAt' | 'itemType' | 'name' | 'source'>(
-    'startDate',
-  );
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortField, setSortField] = useState<TaskListSortField>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const [listFilters, setListFilters] = useState({
     origin: 'all' as 'all' | 'task' | 'client',
@@ -867,7 +919,6 @@ export function TasksListPage() {
   const [tempSources, setTempSources] = useState<string[]>([]);
 
   const [showDescription, setShowDescription] = useState(false);
-  const [showCreatedAt, setShowCreatedAt] = useState(false);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
 
   const loadStaffAndListings = useCallback(async () => {
@@ -1143,7 +1194,7 @@ export function TasksListPage() {
   const handleStatusChange = async (task: TaskListItem, status: TaskStatus) => {
     try {
       setStatusUpdating(task._id);
-      await tasksService.updateTaskStatus(task.itemNumber, status);
+      await tasksService.updateTaskStatus(String(task._id), status);
       toast.success(`Statut mis à jour: ${TASK_STATUS_LABELS[status]}`);
       closeActionsMenu();
       await fetchTasks();
@@ -1163,6 +1214,10 @@ export function TasksListPage() {
     setAssignStaffOpen(true);
   }, []);
 
+  const openTaskDetail = useCallback((task: TaskListItem) => {
+    setSelectedTaskDetail(task);
+  }, []);
+
   const assignOwnerId = useMemo(() => {
     if (!taskToAssign) return scope.canAccessAllOwners ? undefined : scope.ownerId;
     if (scope.canAccessAllOwners) {
@@ -1180,11 +1235,25 @@ export function TasksListPage() {
       width: COLUMN_WIDTHS.itemNumber,
       render: (row: TaskRow) => (
         <Typography
+          component="button"
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openTaskDetail(row);
+          }}
           sx={{
             fontFamily: '"Geist Mono", monospace',
             fontSize: 11,
             fontWeight: 700,
             color: T.primaryDeep,
+            border: 'none',
+            bgcolor: 'transparent',
+            p: 0,
+            cursor: 'pointer',
+            textAlign: 'left',
+            textDecoration: 'underline',
+            textUnderlineOffset: 2,
+            '&:hover': { color: T.primary },
           }}
           noWrap
           title={row.itemNumber || ''}
@@ -1192,6 +1261,24 @@ export function TasksListPage() {
           {row.itemNumber || '—'}
         </Typography>
       ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Date création',
+      width: COLUMN_WIDTHS.createdAt,
+      align: 'center' as const,
+      render: (row: TaskRow) => {
+        const parts = formatCreatedAtParts(row.createdAt);
+        if (!parts) {
+          return <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center' }}>—</Typography>;
+        }
+        return (
+          <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 600 }}>{parts.date}</Typography>
+            <Typography sx={{ fontSize: 10, color: T.text3 }}>{parts.time}</Typography>
+          </Stack>
+        );
+      },
     },
     {
       key: 'category',
@@ -1217,7 +1304,38 @@ export function TasksListPage() {
               </Typography>
             </Tooltip>
             {taskTypeSubline(row)}
+            {categorySubline(row)}
           </Box>
+        );
+      },
+    },
+    {
+      key: 'reservation',
+      label: 'Résa',
+      width: COLUMN_WIDTHS.reservation,
+      align: 'left' as const,
+      render: (row: TaskRow) => {
+        const code = reservationDisplayCode(row);
+        const tip = row.reservationId
+          ? `${code} · ${row.reservationId}`
+          : code;
+        return (
+          <Tooltip title={tip} arrow>
+            <Typography
+              sx={{
+                fontFamily: '"Geist Mono", monospace',
+                fontSize: 10.5,
+                fontWeight: 700,
+                color: T.primaryDeep,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              noWrap
+            >
+              {code}
+            </Typography>
+          </Tooltip>
         );
       },
     },
@@ -1238,15 +1356,17 @@ export function TasksListPage() {
       width: COLUMN_WIDTHS.voyageur,
       align: 'left' as const,
       render: (row: TaskRow) => {
-        if (!row.guestName) {
+        if (!row.guestName && !row.channelName && !row.guestCountry) {
           return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
         }
-        const tip = [row.guestName, row.guestPhone, row.reservationNumber]
+        const channel = otaChannelForRow(row);
+        const countryLabel = countryNameWithoutFlag(row.guestCountry);
+        const tip = [row.guestName, countryLabel, channel, row.guestPhone, row.reservationNumber]
           .filter(Boolean)
           .join(' · ');
         return (
           <Tooltip title={tip} arrow>
-            <Stack spacing={0.15} sx={{ minWidth: 0 }}>
+            <Stack spacing={0.25} sx={{ minWidth: 0 }}>
               <Typography
                 sx={{
                   fontSize: 11.5,
@@ -1257,13 +1377,14 @@ export function TasksListPage() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {row.guestName}
+                {row.guestName || '—'}
               </Typography>
-              {row.guestPhone ? (
-                <Typography sx={{ fontSize: 10, color: T.text3 }} noWrap>
-                  {row.guestPhone}
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <OTABadge channel={channel} />
+                <Typography sx={{ fontSize: 14, lineHeight: 1 }} aria-label={countryLabel || 'Pays'}>
+                  {flagFor(row.guestCountry)}
                 </Typography>
-              ) : null}
+              </Stack>
             </Stack>
           </Tooltip>
         );
@@ -1279,10 +1400,12 @@ export function TasksListPage() {
         if (!parts) {
           return <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center' }}>—</Typography>;
         }
+        const hourLine = renderPlannedHourLine(row);
         return (
           <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
             <Typography sx={{ fontSize: 11, fontWeight: 600 }}>{parts.date}</Typography>
-            {parts.time ? (
+            {hourLine}
+            {!hourLine && parts.time ? (
               <Typography sx={{ fontSize: 10, color: T.text3 }}>{parts.time}</Typography>
             ) : null}
           </Stack>
@@ -1390,33 +1513,14 @@ export function TasksListPage() {
         );
       },
     },
-    {
-      key: 'createdAt',
-      label: 'Créé',
-      width: COLUMN_WIDTHS.createdAt,
-      align: 'center' as const,
-      render: (row: TaskRow) => {
-        const parts = formatCreatedAtParts(row.createdAt);
-        if (!parts) {
-          return <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center' }}>—</Typography>;
-        }
-        return (
-          <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
-            <Typography sx={{ fontSize: 10, color: T.text2 }}>{parts.date}</Typography>
-            <Typography sx={{ fontSize: 10, color: T.text3 }}>{parts.time}</Typography>
-          </Stack>
-        );
-      },
-    },
   ];
 
   const visibleColumns = columns.filter((col) => {
     if (col.key === 'description' && !showDescription) return false;
-    if (col.key === 'createdAt' && !showCreatedAt) return false;
     return true;
   });
 
-  const optionalColumnsOn = (showDescription ? 1 : 0) + (showCreatedAt ? 1 : 0);
+  const optionalColumnsOn = showDescription ? 1 : 0;
 
   return (
     <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
@@ -1558,15 +1662,14 @@ export function TasksListPage() {
               <Select
                 value={sortField}
                 onChange={(e) => {
-                  setSortField(e.target.value as typeof sortField);
+                  setSortField(e.target.value as TaskListSortField);
                   setPage(0);
                 }}
                 renderValue={(v) => `Tri · ${SORT_FIELD_LABELS[String(v)] || 'Date prévue'}`}
               >
+                <MenuItem value="createdAt">Date création</MenuItem>
                 <MenuItem value="startDate">Date prévue</MenuItem>
-                <MenuItem value="createdAt">Création</MenuItem>
-                <MenuItem value="name">Code</MenuItem>
-                <MenuItem value="itemType">Type</MenuItem>
+                <MenuItem value="reservationNumber">Réservation</MenuItem>
               </Select>
             </FormControl>
             <Tooltip title={sortDirection === 'asc' ? 'Ordre croissant' : 'Ordre décroissant'}>
@@ -1666,6 +1769,7 @@ export function TasksListPage() {
               hideRowActions
               compact
               headerTextTransform="none"
+              onRowClick={(row) => openTaskDetail(row as TaskListItem)}
             />
             <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
               <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
@@ -1815,6 +1919,16 @@ export function TasksListPage() {
           </Dialog>
       </Box>
 
+      <TaskDetailDrawer
+        task={selectedTaskDetail}
+        onClose={() => setSelectedTaskDetail(null)}
+        onSuccess={() => void fetchTasks()}
+        onAssignStaff={(t) => {
+          setSelectedTaskDetail(null);
+          openAssignStaff(t);
+        }}
+      />
+
       <ModalPortal>
           {assignStaffOpen && taskToAssign ? (
             <AssignStaffDialog
@@ -1912,7 +2026,7 @@ export function TasksListPage() {
             Colonnes optionnelles
           </Typography>
           <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.5 }}>
-            Colonnes de base : code, type, logement, invité, prévu, priorité, origine, statut, staff
+            Colonnes de base : code, date création, type, résa, logement, invité, prévu, priorité, origine, statut, staff
           </Typography>
         </Box>
         <MenuItem onClick={() => setShowDescription(!showDescription)} sx={{ fontSize: 13, py: 1.25 }}>
@@ -1927,20 +2041,6 @@ export function TasksListPage() {
               {showDescription && '✓'}
             </Box>
             <Typography sx={{ fontSize: 13, color: T.text2 }}>Note / demande</Typography>
-          </Box>
-        </MenuItem>
-        <MenuItem onClick={() => setShowCreatedAt(!showCreatedAt)} sx={{ fontSize: 13, py: 1.25 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-            <Box sx={{
-              width: 18, height: 18, borderRadius: '4px',
-              border: `2px solid ${showCreatedAt ? T.primary : T.border}`,
-              bgcolor: showCreatedAt ? T.primary : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 10, fontWeight: 700,
-            }}>
-              {showCreatedAt && '✓'}
-            </Box>
-            <Typography sx={{ fontSize: 13, color: T.text2 }}>Date de création</Typography>
           </Box>
         </MenuItem>
         <Box sx={{ px: 2, py: 1.5, borderTop: `1px solid ${T.border}`, bgcolor: T.bg2 }}>

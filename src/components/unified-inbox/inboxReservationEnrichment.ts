@@ -4,6 +4,7 @@ import type { InboxReservationData } from '../../types/inboxReservation.types';
 import {
   checkInDaysLabel,
   flagFromPhone,
+  formatReservationCreatedDisplay,
   formatStayDateShort,
   nightsBetween,
   normalizeBookingSource,
@@ -77,6 +78,7 @@ export function mapReservationToInboxData(
     total != null ? Math.round(total * 0.1) : undefined;
   const netHost = total != null && commission != null ? total - commission : undefined;
   const source = normalizeBookingSource(r.channelName || conv?.channel_name);
+  const createdRaw = r.createdAt ?? r.reservationDate;
 
   return {
     reservationNumber: r.reservationNumber || getConversationReservationNumber(conv!),
@@ -85,6 +87,8 @@ export function mapReservationToInboxData(
     messagingChannel: 'WhatsApp',
     reservationStatus: mapReservationStatus(r.status),
     guestRating: undefined,
+    reservationCreatedAt: createdRaw ? String(createdRaw) : undefined,
+    reservationCreatedDisplay: formatReservationCreatedDisplay(createdRaw),
     checkInDate: checkIn,
     checkOutDate: checkOut,
     checkInDisplay: formatCheckWithTime(checkIn, r.checkInTime),

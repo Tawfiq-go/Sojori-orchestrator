@@ -3,8 +3,8 @@ import * as fulltaskApi from './fulltaskApi';
 import reservationsService from './reservationsService';
 import { labelForTaskTypeId } from '../features/taskHub/staff-design/fulltaskTaskTypes';
 import { LEGACY_TO_FULLTASK_STATUS, fullTaskToListItem } from '../utils/fulltaskMappers';
-import type { ReservationDatesLike } from '../utils/inferTaskPlannedDate';
-import type { TasksSearchParams } from '../types/tasks.types';
+import type { ReservationMetaLike } from '../utils/fulltaskMappers';
+import type { TaskFulltaskUpdatePayload, TasksSearchParams } from '../types/tasks.types';
 
 export interface TasksAuthLikeUser {
   id?: string;
@@ -51,21 +51,21 @@ class FulltaskTasksService {
     );
 
     const rawTasks = (tasksRes?.data || []) as Record<string, unknown>[];
-    const reservationDatesById = await this.loadReservationDatesForTasks(rawTasks);
+    const reservationMetaById = await this.loadReservationMetaForTasks(rawTasks);
 
     let rows = rawTasks.map((t: Record<string, unknown>) => {
       const resId = t.reservationId ? String(t.reservationId) : '';
       const payload = (t.payload || {}) as Record<string, unknown>;
-      const fromPayload: ReservationDatesLike | undefined =
+      const fromPayload: ReservationMetaLike | undefined =
         payload.arrivalDate || payload.checkIn
           ? {
               arrivalDate: String(payload.arrivalDate || payload.checkIn),
               departureDate: String(payload.departureDate || payload.checkOut || ''),
             }
           : undefined;
-      const reservationDates =
-        (resId ? reservationDatesById.get(resId) : undefined) || fromPayload;
-      return fullTaskToListItem(t, staffById, listingById, reservationDates);
+      const reservationMeta =
+        (resId ? reservationMetaById.get(resId) : undefined) || fromPayload;
+      return fullTaskToListItem(t, staffById, listingById, reservationMeta);
     });
 
     if (params.ownerId) {
@@ -106,11 +106,19 @@ class FulltaskTasksService {
       });
     }
 
-    const sortField = params.sortField || 'startDate';
+    const sortField = params.sortField || 'createdAt';
     const dir = params.sortDirection === 'desc' ? -1 : 1;
     rows.sort((a, b) => {
-      const av = (a as Record<string, unknown>)[sortField] || '';
-      const bv = (b as Record<string, unknown>)[sortField] || '';
+      const rowA = a as Record<string, unknown>;
+      const rowB = b as Record<string, unknown>;
+      if (sortField === 'createdAt' || sortField === 'startDate') {
+        const at = rowA[sortField] ? new Date(String(rowA[sortField])).getTime() : 0;
+        const bt = rowB[sortField] ? new Date(String(rowB[sortField])).getTime() : 0;
+        if (at !== bt) return (at < bt ? -1 : 1) * dir;
+        return 0;
+      }
+      const av = String(rowA[sortField] ?? '').toLowerCase();
+      const bv = String(rowB[sortField] ?? '').toLowerCase();
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
       return 0;
@@ -132,6 +140,22 @@ class FulltaskTasksService {
         totalPages: Math.max(1, Math.ceil(rows.length / limit)),
       },
     };
+  }
+
+  async getTaskById(taskId: string) {
+    const res = await fulltaskApi.getTask(taskId);
+    if (res?.success === false) throw new Error(res?.error || 'Tâche introuvable');
+    return res?.data as Record<string, unknown>;
+  }
+
+  async updateTask(taskId: string, body: TaskFulltaskUpdatePayload) {
+    const patch: Record<string, unknown> = { ...body };
+    if (body.status) {
+      patch.status = LEGACY_TO_FULLTASK_STATUS[body.status] || body.status;
+    }
+    const res = await fulltaskApi.patchTask(taskId, patch);
+    if (res?.success === false) throw new Error(res?.error || 'Mise à jour refusée');
+    return res?.data;
   }
 
   async updateTaskStatus(taskId: string, legacyStatus: string) {
@@ -175,6 +199,7 @@ class FulltaskTasksService {
     return items.map((l) => {
       const id = (l as { id?: string; _id?: string }).id || (l as { _id?: string })._id;
       return {
+        id: String(id),
         _id: String(id),
         name: (l as { name?: string }).name || 'Sans nom',
         city: (l as { city?: string }).city,
@@ -183,29 +208,31 @@ class FulltaskTasksService {
   }
 
   /** Dates séjour pour afficher le jour prévu quand scheduledDate n’est pas encore fixé. */
-  private async loadReservationDatesForTasks(
+  private async loadReservationMetaForTasks(
     tasks: Record<string, unknown>[],
-  ): Promise<Map<string, ReservationDatesLike>> {
-    const map = new Map<string, ReservationDatesLike>();
+  ): Promise<Map<string, ReservationMetaLike>> {
+    const map = new Map<string, ReservationMetaLike>();
     const ids = [
       ...new Set(
-        tasks
-          .filter((t) => !t.scheduledDate && t.reservationId)
-          .map((t) => String(t.reservationId)),
+        tasks.filter((t) => t.reservationId).map((t) => String(t.reservationId)),
       ),
     ];
     if (ids.length === 0) return map;
 
     await Promise.all(
-      ids.slice(0, 40).map(async (id) => {
+      ids.slice(0, 60).map(async (id) => {
         try {
           const res = await reservationsService.getById(id);
           map.set(id, {
             arrivalDate: res.arrivalDate,
             departureDate: res.departureDate,
+            guestCountry: res.guestCountry ?? null,
+            channelName: res.channelName ?? res.otaCode ?? null,
+            reservationNumber: res.reservationNumber ?? null,
+            adults: res.adults,
           });
         } catch {
-          /* réservation introuvable — affichage sans jour prévu */
+          /* réservation introuvable */
         }
       }),
     );

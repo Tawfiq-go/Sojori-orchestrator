@@ -14,6 +14,8 @@ import {
 } from '@mui/material';
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import SmartAvailabilitySelector from './SmartAvailabilitySelector';
+import RequiresConditionsSelector from './RequiresConditionsSelector';
+import { resolveAvailabilityType, normalizeMenuOptionAvailability } from './menuAvailabilityNormalize';
 import { T, codeChipSx, isSubOption, menuCardSx, sxInput } from './menuTheme';
 
 const MenuOptionCard = ({ option, onChange }) => {
@@ -24,6 +26,7 @@ const MenuOptionCard = ({ option, onChange }) => {
   const isDeclarationOption = option.code === 'D3' || option.code === 'D4';
   const isParentOnly = ['C', 'D', 'J'].includes(option.code);
   const sub = isSubOption(option.code);
+  const availType = resolveAvailabilityType(option.availability);
 
   return (
     <Box
@@ -84,31 +87,26 @@ const MenuOptionCard = ({ option, onChange }) => {
           <Box sx={{ px: 1.5, pb: 1.5, pt: 0, borderTop: `1px solid ${T.border}`, bgcolor: sub ? 'rgba(255,255,255,0.55)' : T.bg2 }}>
             <SmartAvailabilitySelector
               value={option.availability}
-              onChange={(availability) => onChange({ ...option, availability })}
+              onChange={(availability) =>
+                onChange({
+                  ...option,
+                  availability: normalizeMenuOptionAvailability(availability),
+                })
+              }
             />
-            {option.availability?.type === 'conditional_and_time' && (
-              <FormControl size="small" fullWidth sx={{ mt: 1.5 }}>
-                <InputLabel id={`requires-label-${option.code}`}>Condition requise</InputLabel>
-                <Select
-                  labelId={`requires-label-${option.code}`}
-                  value={option.availability?.requires || ''}
-                  onChange={(e) =>
-                    onChange({
-                      ...option,
-                      availability: { ...(option.availability || {}), requires: e.target.value },
-                    })
-                  }
-                  label="Condition requise"
-                  sx={sxInput}
-                >
-                  <MenuItem value=""><em>Aucune</em></MenuItem>
-                  <MenuItem value="D1_completed">D1 - Heure d&apos;arrivée choisie</MenuItem>
-                  <MenuItem value="D2_completed">D2 - Heure de départ choisie</MenuItem>
-                  <MenuItem value="D3_completed">D3 - Heure d&apos;arrivée déclarée</MenuItem>
-                  <MenuItem value="D4_completed">D4 - Heure de départ déclarée</MenuItem>
-                  <MenuItem value="E_completed">E - Enregistrement voyageurs</MenuItem>
-                </Select>
-              </FormControl>
+            {availType === 'conditional_and_time' && (
+              <RequiresConditionsSelector
+                value={option.availability?.requires || ''}
+                onChange={(requires) =>
+                  onChange({
+                    ...option,
+                    availability: normalizeMenuOptionAvailability({
+                      ...(option.availability || {}),
+                      requires,
+                    }),
+                  })
+                }
+              />
             )}
             {option.action && (
               <Typography

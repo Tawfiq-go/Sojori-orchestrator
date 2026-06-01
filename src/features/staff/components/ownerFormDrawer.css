@@ -1,0 +1,49 @@
+.owner-drawer-host {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: rgba(20, 17, 10, 0.42);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px 48px;
+  overflow-y: auto;
+}
+
+.owner-drawer-host .owner-drawer-panel {
+  width: min(720px, 100%);
+  margin-top: 0;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+}
+
+.owner-drawer-host select.input {
+  appearance: auto;
+  cursor: pointer;
+}
+
+.owner-form-hint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--t2);
+  padding: 10px 12px;
+  background: var(--bg2);
+  border-radius: 9px;
+  border: 1px solid var(--b);
+}
+
+.owner-form-alert {
+  font-size: 12px;
+  color: #c81e1e;
+  padding: 10px 12px;
+  background: #fff5f5;
+  border-radius: 9px;
+  border: 1px solid rgba(200, 30, 30, 0.25);
+}
+
+.owner-field-err {
+  display: block;
+  font-size: 11px;
+  color: #c81e1e;
+  margin-top: 4px;
+}

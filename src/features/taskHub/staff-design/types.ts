@@ -39,7 +39,10 @@ export interface Staff {
 
 export interface WorkflowRelance {
   id: string;
+  /** @deprecated — préférer deliveryChannel (aligné messages planifiés) */
   channel: ChannelKind;
+  /** Message (OTA/email) ou WhatsApp */
+  deliveryChannel: MessageDeliveryChannel;
   reference: ReferencePoint;
   /** Jour relatif (ex: -3 = J-3) */
   delay: { value: number; unit: WindowUnit };

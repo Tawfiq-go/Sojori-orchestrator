@@ -11,6 +11,7 @@ import {
   DayPills,
   ConfigIntroBar,
   PillButton,
+  Toggle,
   chipActionSx,
   TYPO,
 } from './SHARED';
@@ -35,6 +36,7 @@ import {
 const SUB_TABS = [
   { id: 'included', label: 'Ménage inclus', icon: '🎁' },
   { id: 'paid', label: 'Ménage payant', icon: '💰' },
+  { id: 'timeslots', label: 'Créneaux A/D', icon: '🛬' },
 ] as const;
 
 type SubTab = (typeof SUB_TABS)[number]['id'];
@@ -60,6 +62,8 @@ export default function CleaningConfigTab({
   const [freqDialog, setFreqDialog] = useState(false);
   const [cleanDialog, setCleanDialog] = useState(false);
   const [paidSlotDialog, setPaidSlotDialog] = useState<string | null>(null);
+  const [checkinDialog, setCheckinDialog] = useState(false);
+  const [checkoutDialog, setCheckoutDialog] = useState(false);
   const [extraDialogOpen, setExtraDialogOpen] = useState(false);
   const configRef = useRef<CleaningListingConfig | null>(null);
   const hydratedRef = useRef(false);
@@ -393,6 +397,69 @@ export default function CleaningConfigTab({
         </Box>
       )}
 
+      {sub === 'timeslots' && (
+        <Stack sx={{ gap: 1.5 }}>
+          <Card compact icon="🛬" title="Créneaux d'arrivée" meta="TS_CHECKIN[]">
+            <FormRow compact label="Activer">
+              <Toggle
+                on={config.checkinTimeslotsEnabled}
+                sm
+                onChange={() =>
+                  patch(c => ({ ...c, checkinTimeslotsEnabled: !c.checkinTimeslotsEnabled }))
+                }
+              />
+            </FormRow>
+            <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap', mt: 1 }}>
+              {config.TS_CHECKIN.map((ts, i) => (
+                <TimeslotChip
+                  key={`in-${ts.start}-${ts.end}-${i}`}
+                  slot={ts}
+                  onRemove={() =>
+                    patch(c => ({
+                      ...c,
+                      TS_CHECKIN: c.TS_CHECKIN.filter((_, j) => j !== i),
+                    }))
+                  }
+                />
+              ))}
+              <DashedAddButton label="+ Ajouter créneau" onClick={() => setCheckinDialog(true)} />
+            </Stack>
+          </Card>
+
+          <Card compact icon="🛫" title="Créneaux de départ" meta="TS_CHECKOUT[]">
+            <FormRow compact label="Activer">
+              <Toggle
+                on={config.checkoutTimeslotsEnabled}
+                sm
+                onChange={() =>
+                  patch(c => ({ ...c, checkoutTimeslotsEnabled: !c.checkoutTimeslotsEnabled }))
+                }
+              />
+            </FormRow>
+            <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap', mt: 1 }}>
+              {config.TS_CHECKOUT.map((ts, i) => (
+                <TimeslotChip
+                  key={`out-${ts.start}-${ts.end}-${i}`}
+                  slot={ts}
+                  onRemove={() =>
+                    patch(c => ({
+                      ...c,
+                      TS_CHECKOUT: c.TS_CHECKOUT.filter((_, j) => j !== i),
+                    }))
+                  }
+                />
+              ))}
+              <DashedAddButton label="+ Ajouter créneau" onClick={() => setCheckoutDialog(true)} />
+            </Stack>
+          </Card>
+
+          <Typography sx={{ ...TYPO.monoHelp, px: 0.5 }}>
+            Fenêtre check-in {config.checkInTimeStart}h–{config.checkInTimeEnd}h · départ défaut{' '}
+            {config.checkOutTime}h · sync WhatsApp via listing_snapshot après sauvegarde.
+          </Typography>
+        </Stack>
+      )}
+
       <AddIncludedExtraDialog
         open={extraDialogOpen}
         onClose={() => setExtraDialogOpen(false)}
@@ -446,6 +513,18 @@ export default function CleaningConfigTab({
           }}
         />
       )}
+      <AddTimeslotDialog
+        open={checkinDialog}
+        onClose={() => setCheckinDialog(false)}
+        title="Créneau d'arrivée"
+        onAdd={(slot: TimeSlot) => patch(c => ({ ...c, TS_CHECKIN: [...c.TS_CHECKIN, slot] }))}
+      />
+      <AddTimeslotDialog
+        open={checkoutDialog}
+        onClose={() => setCheckoutDialog(false)}
+        title="Créneau de départ"
+        onAdd={(slot: TimeSlot) => patch(c => ({ ...c, TS_CHECKOUT: [...c.TS_CHECKOUT, slot] }))}
+      />
     </Box>
   );
 }

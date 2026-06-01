@@ -144,7 +144,7 @@ const SmartAvailabilitySelector = ({ value = { type: 'always' }, onChange }) => 
       case 'conditional_and_time':
         onChange({
           type: 'conditional_and_time',
-          requires: value.requires || 'E_completed',
+          requires: value.requires || 'E_completed,D1_completed',
           from: { ...fromBoundary, reference: buildReference(fromBoundary.moment, fromBoundary.event) },
           to: { ...toBoundary, reference: buildReference(toBoundary.moment, toBoundary.event) },
         })

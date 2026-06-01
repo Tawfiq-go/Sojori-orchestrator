@@ -10,6 +10,9 @@ export interface InboxReservationData {
   reservationStatus?: string;
   /** Note voyageur OTA ex. "4.92 · 12 séj." */
   guestRating?: string;
+  /** Date création en base (createdAt) ou date réservation OTA (reservationDate) */
+  reservationCreatedAt?: string;
+  reservationCreatedDisplay?: string;
   checkInDate?: string;
   checkOutDate?: string;
   checkInDisplay?: string;

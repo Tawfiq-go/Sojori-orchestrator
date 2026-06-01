@@ -772,6 +772,7 @@ export default function OrchestrationPageView({
                           <span>+/−</span>
                           <span>DÉLAI</span>
                           <span>HEURE</span>
+                          <span>CANAL</span>
                           <span>MESSAGE</span>
                           <span />
                         </div>
@@ -855,6 +856,26 @@ export default function OrchestrationPageView({
                                   })}
                                 </select>
                               )}
+                              <select
+                                value={toUiSendMode(
+                                  r.deliveryChannel ??
+                                    (r.channel === 'whatsapp' ? 'whatsapp' : 'ota'),
+                                )}
+                                title="Message : OTA ou email selon la source de la réservation. WhatsApp : template Meta."
+                                onChange={(e) => {
+                                  const deliveryChannel = fromUiSendMode(
+                                    e.target.value as 'message' | 'whatsapp',
+                                  );
+                                  patchRelance(w, r.id, {
+                                    deliveryChannel,
+                                    channel:
+                                      deliveryChannel === 'whatsapp' ? 'whatsapp' : 'email',
+                                  });
+                                }}
+                              >
+                                <option value="message">Message</option>
+                                <option value="whatsapp">WhatsApp</option>
+                              </select>
                               <div className="rel-row-msg-cell">
                                 <MessageCatalogPicker
                                   catalog={catalog}

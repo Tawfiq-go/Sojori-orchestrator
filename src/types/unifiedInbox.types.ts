@@ -28,6 +28,8 @@ export interface Thread {
   active?: boolean;
   listingName?: string;
   reservationNumber?: string;
+  /** Ex. « 26 mai 2025 » — création résa (header OTA) */
+  reservationCreatedDisplay?: string;
   checkInDate?: string;
   checkOutDate?: string;
   /** Présence guest (WhatsApp header) ex. En ligne */

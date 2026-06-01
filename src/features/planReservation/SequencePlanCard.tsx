@@ -9,6 +9,9 @@ import type {
   RelanceStatus,
   StaffAssignmentPlan,
 } from './types';
+import DispatchLastSendLine from './DispatchLastSendLine';
+import PlanAssignButtons from './PlanAssignButtons';
+import PlanDispatchButton from './PlanDispatchButton';
 import {
   aggregateAssignGroupStatus,
   aggregateRelancesGroupStatus,
@@ -19,8 +22,8 @@ import {
   showRelanceConfigHint,
 } from './planGroupStatus';
 
-function defaultOpenForStatus(status: EventStatus): boolean {
-  return status === 'now' || status === 'pending' || status === 'blocked';
+function defaultOpenForStatus(_status: EventStatus): boolean {
+  return false;
 }
 
 function GroupStatusBadge({ status }: { status: EventStatus }) {
@@ -50,7 +53,7 @@ function CollapseBlock({
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen ?? defaultOpenForStatus(groupStatus));
+  const [open, setOpen] = useState(defaultOpen ?? false);
   return (
     <div className={`l2-block${open ? ' open' : ''}`}>
       <button type="button" className="l2-block-h" onClick={() => setOpen((o) => !o)}>
@@ -70,16 +73,73 @@ function RelanceStatusBadge({ status }: { status: PlanGuestRelanceItem['executio
   return <span className={`st-badge sm rel-exec ${ev}`}>{relanceExecutionLabel(status)}</span>;
 }
 
-function RelanceRows({ items, showWa }: { items: PlanGuestRelanceItem[]; showWa?: boolean }) {
+function RelanceRows({
+  items,
+  showWa,
+  reservationId,
+  taskId,
+  onDispatched,
+}: {
+  items: PlanGuestRelanceItem[];
+  showWa?: boolean;
+  reservationId: string;
+  taskId: string;
+  onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
+}) {
   return (
     <div className="l3-list">
       {items.map((r) => (
-        <div key={r.id} className={`rel-row rel-row--${r.executionStatus}`}>
+        <RelanceDispatchRow
+          key={r.id}
+          r={r}
+          showWa={showWa}
+          reservationId={reservationId}
+          taskId={taskId}
+          onDispatched={onDispatched}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RelanceDispatchRow({
+  r,
+  showWa,
+  reservationId,
+  taskId,
+  onDispatched,
+}: {
+  r: PlanGuestRelanceItem;
+  showWa?: boolean;
+  reservationId: string;
+  taskId: string;
+  onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
+}) {
+  const [rowLoading, setRowLoading] = useState(false);
+  const wasSent = r.rawStatus === 'envoyee';
+
+  return (
+        <div
+          className={`rel-row rel-row--${r.executionStatus}${rowLoading ? ' rel-row--dispatching' : ''}`}
+        >
+          <PlanDispatchButton
+            reservationId={reservationId}
+            kind="relance"
+            taskId={taskId}
+            itemIndex={r.relanceIndex}
+            wasSent={wasSent}
+            disabled={false}
+            onLoadingChange={setRowLoading}
+            onDone={onDispatched}
+          />
           <span
             className={`dot ${r.status === 'sent' ? 'sent' : r.status === 'skipped' ? 'skipped' : 'scheduled'}`}
           />
           <div className="rel-row-main">
             <div className="rel-row-top">
+              {r.scheduleOffsetLabel ? (
+                <span className="rel-offset">{r.scheduleOffsetLabel}</span>
+              ) : null}
               <span className="when">{r.dueAt}</span>
               <span className="nm">
                 #{r.step} · {r.label}
@@ -93,10 +153,9 @@ function RelanceRows({ items, showWa }: { items: PlanGuestRelanceItem[]; showWa?
                 {r.channel ? ` · ${r.channel.toUpperCase()}` : ''}
               </div>
             ) : null}
+            <DispatchLastSendLine last={r.lastDispatch} attempt={r.lastDispatchAttempt} />
           </div>
         </div>
-      ))}
-    </div>
   );
 }
 
@@ -112,13 +171,42 @@ function assignExecutionLine(assign: StaffAssignmentPlan): string {
 function AssignBlockBody({
   assign,
   attempts,
+  reservationId,
+  taskId,
+  onDispatched,
 }: {
   assign: StaffAssignmentPlan;
   attempts?: AssignAttempt[];
+  reservationId: string;
+  taskId: string;
+  onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
 }) {
+  const [rowLoading, setRowLoading] = useState(false);
+  const wasAssigned = assign.status === 'found' && Boolean(assign.staffName);
   const showConfig = !assign.windowPast || assign.status === 'searching';
   return (
     <>
+      <div
+        className={`rel-row rel-row--assign${rowLoading ? ' rel-row--dispatching' : ''}`}
+        style={{ borderBottom: '1px dashed var(--b)', paddingBottom: 8, marginBottom: 8 }}
+      >
+        <PlanAssignButtons
+          reservationId={reservationId}
+          taskId={taskId}
+          wasAssigned={wasAssigned}
+          disabled={false}
+          onLoadingChange={setRowLoading}
+          onDone={onDispatched}
+        />
+        <div className="rel-row-main">
+          <div className="rel-row-top">
+            <span className="nm">Assignation staff</span>
+            <span className="when" style={{ minWidth: 'auto', fontWeight: 600 }}>
+              {wasAssigned ? 'Staff déjà retenu — relancer possible' : 'Auto ou choix manuel'}
+            </span>
+          </div>
+        </div>
+      </div>
       <div className={`assign-exec-line${assign.windowPast ? ' past' : ''}`}>
         {assignExecutionLine(assign)}
       </div>
@@ -184,16 +272,69 @@ function AssignBlockBody({
   );
 }
 
-function StaffReminderRows({ items }: { items: PlanStaffReminderItem[] }) {
+function StaffReminderRows({
+  items,
+  reservationId,
+  taskId,
+  onDispatched,
+}: {
+  items: PlanStaffReminderItem[];
+  reservationId: string;
+  taskId: string;
+  onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
+}) {
   return (
     <div className="l3-list">
       {items.map((r) => (
-        <div key={r.id} className={`rel-row rel-row--${r.executionStatus}`}>
+        <StaffReminderDispatchRow
+          key={r.id}
+          r={r}
+          reservationId={reservationId}
+          taskId={taskId}
+          onDispatched={onDispatched}
+        />
+      ))}
+    </div>
+  );
+}
+
+function StaffReminderDispatchRow({
+  r,
+  reservationId,
+  taskId,
+  onDispatched,
+}: {
+  r: PlanStaffReminderItem;
+  reservationId: string;
+  taskId: string;
+  onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
+}) {
+  const [rowLoading, setRowLoading] = useState(false);
+  const wasSent = r.rawStatus === 'envoyee';
+
+  return (
+        <div
+          key={r.id}
+          className={`rel-row rel-row--${r.executionStatus}${rowLoading ? ' rel-row--dispatching' : ''}`}
+        >
+          <PlanDispatchButton
+            reservationId={reservationId}
+            kind="staff_reminder"
+            taskId={taskId}
+            itemIndex={r.reminderIndex}
+            wasSent={wasSent}
+            disabled={false}
+            onLoadingChange={setRowLoading}
+            onDone={onDispatched}
+          />
           <span
             className={`dot ${r.status === 'sent' ? 'sent' : r.status === 'skipped' ? 'skipped' : 'scheduled'}`}
           />
           <div className="rel-row-main">
             <div className="rel-row-top">
+              {r.scheduleOffsetLabel ? (
+                <span className="rel-offset">{r.scheduleOffsetLabel}</span>
+              ) : null}
               <span className="when">{r.dueAt}</span>
               <span className="nm">{r.label}</span>
               <RelanceStatusBadge status={r.executionStatus} />
@@ -203,10 +344,9 @@ function StaffReminderRows({ items }: { items: PlanStaffReminderItem[] }) {
             ) : r.executionStatus === 'envoyee' && r.whatsappTemplateId ? (
               <div className="rel-row-config muted">Template · {r.whatsappTemplateId}</div>
             ) : null}
+            <DispatchLastSendLine last={r.lastDispatch} attempt={r.lastDispatchAttempt} />
           </div>
         </div>
-      ))}
-    </div>
   );
 }
 
@@ -215,6 +355,20 @@ function resultLabel(r: AssignAttempt['result']): string {
   if (r === 'declined') return 'ÉCHEC';
   if (r === 'timeout') return 'TIMEOUT';
   return 'PRÉVU';
+}
+
+/** Résumé ligne (comme cartes orchestration-config). */
+function sequenceConfigSubtitle(seq: PlanSequenceView): string {
+  const rel = seq.relances?.length ?? 0;
+  const staffRel = seq.staffReminders?.length ?? 0;
+  const parts: string[] = [];
+  parts.push(`${rel} relance${rel !== 1 ? 's' : ''}`);
+  if (staffRel > 0) parts.push(`${staffRel} rappel staff`);
+  if (!seq.hasEscalade) parts.push('escalade off');
+  else if (seq.escalade?.scheduleOffsetLabel) {
+    parts.push(`escalade ${seq.escalade.scheduleOffsetLabel}`);
+  } else parts.push('escalade');
+  return parts.join(' · ');
 }
 
 function relanceCountSummary(
@@ -235,7 +389,16 @@ function relanceCountSummary(
   return parts.join(' · ');
 }
 
-export default function SequencePlanCard({ seq }: { seq: PlanSequenceView }) {
+export default function SequencePlanCard({
+  seq,
+  reservationId,
+  onDispatched,
+}: {
+  seq: PlanSequenceView;
+  reservationId: string;
+  onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
+}) {
+  const taskId = seq.taskId || seq.id;
   const [open, setOpen] = useState(defaultOpenForStatus(seq.status));
 
   const relGroup = aggregateRelancesGroupStatus(seq.relances);
@@ -259,6 +422,7 @@ export default function SequencePlanCard({ seq }: { seq: PlanSequenceView }) {
             <span className="kind-badge sequence-kind">Séquence</span>
             <GroupStatusBadge status={seq.status} />
           </div>
+          <div className="ds">{sequenceConfigSubtitle(seq)}</div>
           <span className="when">{seq.range || seq.atDisplay}</span>
         </div>
         <span className="arr">▶</span>
@@ -274,7 +438,12 @@ export default function SequencePlanCard({ seq }: { seq: PlanSequenceView }) {
               countLabel={relanceCountSummary(seq.relances)}
               defaultOpen={defaultOpenForStatus(relGroup)}
             >
-              <RelanceRows items={seq.relances} />
+              <RelanceRows
+                items={seq.relances}
+                reservationId={reservationId}
+                taskId={taskId}
+                onDispatched={onDispatched}
+              />
             </CollapseBlock>
           ) : null}
 
@@ -290,7 +459,13 @@ export default function SequencePlanCard({ seq }: { seq: PlanSequenceView }) {
               }
               defaultOpen={defaultOpenForStatus(assignGroup)}
             >
-              <AssignBlockBody assign={seq.staffAssignment} attempts={seq.attempts} />
+              <AssignBlockBody
+                assign={seq.staffAssignment}
+                attempts={seq.attempts}
+                reservationId={reservationId}
+                taskId={taskId}
+                onDispatched={onDispatched}
+              />
             </CollapseBlock>
           ) : null}
 
@@ -302,32 +477,39 @@ export default function SequencePlanCard({ seq }: { seq: PlanSequenceView }) {
               countLabel={relanceCountSummary(seq.staffReminders)}
               defaultOpen={defaultOpenForStatus(staffGroup)}
             >
-              <StaffReminderRows items={seq.staffReminders} />
+              <StaffReminderRows
+                items={seq.staffReminders}
+                reservationId={reservationId}
+                taskId={taskId}
+                onDispatched={onDispatched}
+              />
             </CollapseBlock>
           ) : null}
 
           {seq.hasEscalade && seq.escalade ? (
-            <div className="l2-block open l2-block--static">
-              <div className="l2-block-h">
-                <span className="l2-em">🛡</span>
-                <span className="l2-title">Escalade PM</span>
-                <GroupStatusBadge status={seq.escalade.scheduled ? 'future' : 'done'} />
-              </div>
-              <div className="l2-block-body">
-                <div className={`escalade-row${seq.escalade.scheduled ? ' scheduled' : ''}`}>
-                  <div className="em">{seq.escalade.scheduled ? '🛡' : '🚨'}</div>
-                  <div className="info">
-                    <b>
-                      {seq.escalade.scheduled
-                        ? 'Escalade prévue si non confirmé'
-                        : 'Escalade déclenchée'}
-                    </b>
-                    <div className="ds">{seq.escalade.description}</div>
-                  </div>
-                  <div className="when">{seq.escalade.dueAt}</div>
+            <CollapseBlock
+              icon="🛡"
+              title="Escalade PM"
+              groupStatus={seq.escalade.scheduled ? 'future' : 'done'}
+              countLabel={
+                seq.escalade.scheduleOffsetLabel ||
+                (seq.escalade.scheduled ? 'Prévue si non confirmé' : 'Déclenchée')
+              }
+              defaultOpen={defaultOpenForStatus(seq.escalade.scheduled ? 'future' : 'done')}
+            >
+              <div className={`escalade-row${seq.escalade.scheduled ? ' scheduled' : ''}`}>
+                <div className="em">{seq.escalade.scheduled ? '🛡' : '🚨'}</div>
+                <div className="info">
+                  <b>
+                    {seq.escalade.scheduled
+                      ? 'Escalade prévue si non confirmé'
+                      : 'Escalade déclenchée'}
+                  </b>
+                  <div className="ds">{seq.escalade.description}</div>
                 </div>
+                <div className="when">{seq.escalade.dueAt}</div>
               </div>
-            </div>
+            </CollapseBlock>
           ) : null}
 
           {!seq.hasRelances && !seq.hasAssignation && !seq.hasStaffReminders && !seq.hasEscalade ? (

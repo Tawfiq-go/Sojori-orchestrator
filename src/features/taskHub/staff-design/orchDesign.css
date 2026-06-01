@@ -360,6 +360,12 @@
   color: #c62828;
   margin-top: 4px;
 }
+.so-orch-root code.orch-wa-name-mismatch {
+  color: #b45309;
+  background: #fff8e6;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
 .so-orch-root .orch-wa-preview {
   max-width: 220px;
   font-size: 11px;
@@ -1208,12 +1214,12 @@
 /* Message en fin de ligne (avant ✕) — relances voyageur + rappels staff */
 .so-orch-root .rel-table-h--with-msg,
 .so-orch-root .rel-row--with-msg {
-  grid-template-columns: var(--orch-ref-col) 40px 40px 52px 72px minmax(160px, 1.6fr) 32px;
+  grid-template-columns: var(--orch-ref-col) 40px 40px 52px 72px 95px minmax(160px, 1.6fr) 32px;
   align-items: center;
 }
 .so-orch-root .rel-table-h--with-msg.compact,
 .so-orch-root .rel-row--with-msg.compact {
-  grid-template-columns: var(--orch-ref-col) 40px 40px 52px minmax(160px, 1.6fr) 32px;
+  grid-template-columns: var(--orch-ref-col) 40px 40px 52px 95px minmax(160px, 1.6fr) 32px;
 }
 .so-orch-root .rel-table-h--staff.rel-table-h--with-msg,
 .so-orch-root .rel-row--staff.rel-row--with-msg {

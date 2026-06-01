@@ -4,12 +4,14 @@ import type { Thread } from '../../types/unifiedInbox.types';
 import {
   checkInDaysLabel,
   formatInboxDaySeparator,
+  formatReservationCreatedDisplay,
   formatStayDateShort,
   nightsBetween,
   normalizeBookingSource,
   stayStatusLabel,
 } from './inboxFormat';
 import { otaChannelColor, otaChannelFromName } from './inboxMappers';
+import { formatInboxMessageText, inboxMessagePreview } from './formatInboxMessageText';
 
 export interface OtaThreadRow {
   id: string;
@@ -27,6 +29,7 @@ export interface OtaThreadRow {
   totalPrice?: number;
   currency?: string;
   status?: string;
+  reservationCreatedAt?: string;
   preloadedMessages?: any[];
 }
 
@@ -81,6 +84,7 @@ export function mapApiItemToOtaThread(item: any): OtaThreadRow {
     totalPrice: reservation.totalPrice,
     currency: reservation.currency || 'EUR',
     status: reservation.status || threadData.status,
+    reservationCreatedAt: reservation.createdAt || reservation.reservationDate,
     preloadedMessages: item.messages || [],
   };
 }
@@ -93,7 +97,7 @@ export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread
     name: row.guestName,
     channel: ch,
     channelColor: otaChannelColor(ch),
-    preview: row.lastMessage || 'Aucun message',
+    preview: inboxMessagePreview(row.lastMessage) || 'Aucun message',
     time: '',
     unread: row.unreadCount,
     avatarColor: '',
@@ -105,6 +109,7 @@ export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread
     stayBadge: stayStatusLabel(row.checkInDate, row.checkOutDate, 'ota'),
     guestsLabel: row.numberOfGuests ? `${row.numberOfGuests} voyageurs` : undefined,
     nightsCount: nightsBetween(row.checkInDate, row.checkOutDate),
+    reservationCreatedDisplay: formatReservationCreatedDisplay(row.reservationCreatedAt),
     taskCount,
   };
 }
@@ -132,7 +137,50 @@ export function mapOtaRowToReservation(row: OtaThreadRow): InboxReservationData 
     currency: row.currency,
     netHost: total != null && commission != null ? total - commission : undefined,
     commission,
+    reservationCreatedAt: row.reservationCreatedAt,
+    reservationCreatedDisplay: formatReservationCreatedDisplay(row.reservationCreatedAt),
   };
+}
+
+/** Extrait le tableau messages depuis les réponses API srv-reservations (formes variables). */
+export function extractOtaMessagesFromApiResponse(payload: unknown): any[] {
+  if (!payload || typeof payload !== 'object') return [];
+  const p = payload as Record<string, unknown>;
+  if (Array.isArray(p.messages)) return p.messages;
+  const data = p.data;
+  if (data && typeof data === 'object' && Array.isArray((data as Record<string, unknown>).messages)) {
+    return (data as Record<string, unknown>).messages as any[];
+  }
+  return [];
+}
+
+/**
+ * Thread en tête de liste (preview / lastMessageAt RU) mais 0 message en base → afficher au moins l’aperçu.
+ */
+export function buildOtaPreviewFallbackMessages(row: OtaThreadRow): Message[] {
+  const preview = formatInboxMessageText(row.lastMessage);
+  if (!preview) return [];
+  const ts = row.lastMessageTime;
+  const out: Message[] = [];
+  if (ts) {
+    out.push({
+      id: 'day-preview',
+      from: 'guest',
+      text: formatInboxDaySeparator(ts),
+      time: '',
+      type: 'day-separator',
+    });
+  }
+  out.push({
+    id: 'preview-fallback',
+    from: 'guest',
+    text: preview,
+    time: ts
+      ? new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      : '',
+    status: undefined,
+  });
+  return out;
 }
 
 export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Message[] {
@@ -152,7 +200,10 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
         type: 'day-separator',
       });
     }
-    const body = (msg.body || msg.message || '').trim();
+    const rawBody = (msg.body || msg.message || '').trim();
+    if (!rawBody) return out;
+
+    const body = formatInboxMessageText(rawBody);
     if (!body) return out;
 
     if (body.startsWith('[Auto]')) {

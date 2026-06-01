@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ChatbotHubShell from './ChatbotHubShell';
 import * as fullchatbotApi from '../../services/fullchatbotApi';
 import FullChatbotSyncButton from '../../components/listing/FullChatbotSyncButton';
@@ -30,6 +31,7 @@ function avatarColor(seed: string): number {
 }
 
 export default function ChatbotListingSnapshotView() {
+  const [searchParams] = useSearchParams();
   const [rows, setRows] = useState<SnapshotRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +56,14 @@ export default function ChatbotListingSnapshotView() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const fromUrl = searchParams.get('listingId')?.trim();
+    if (!fromUrl || rows.length === 0) return;
+    if (rows.some((r) => r.listingId === fromUrl)) {
+      setSelectedId(fromUrl);
+    }
+  }, [searchParams, rows]);
 
   useEffect(() => {
     if (!selectedId) {

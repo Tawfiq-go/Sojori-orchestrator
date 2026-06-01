@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Box,
   Stack,
   Typography,
   IconButton,
-  Tabs,
-  Tab,
   CircularProgress,
   Alert,
   Chip,
@@ -18,12 +16,13 @@ import '../planReservation/planReservation.css';
 import './chatbotHub.css';
 import * as fullchatbotApi from '../../services/fullchatbotApi';
 import { CHATBOT_T as T } from './chatbotTokens';
-import WhatsappMenuInterpretationPanel from './WhatsappMenuInterpretationPanel';
+import { ChatbotCleaningSchedulePanel } from './ChatbotCleaningSchedulePanel';
+import WhitelistLanguageCell from './WhitelistLanguageCell';
 import {
-  interpretMenuOptionsForStay,
-  type GuestContextLike,
-  type MenuOptionLike,
-} from './whatsappMenuAvailability';
+  GuestJourneyDetailPanel,
+  type GuestContextDetail,
+  type ListingSnapshotDetail,
+} from './ChatbotWhitelistStayPanels';
 
 moment.locale('fr');
 
@@ -33,76 +32,9 @@ function initials(name: string): string {
   return (parts[0]?.slice(0, 2) || '?').toUpperCase();
 }
 
-function GuestJourneyPanel({ gc }: { gc: GuestContextLike | null | undefined }) {
-  if (!gc) {
-    return (
-      <Typography sx={{ fontSize: 13, color: T.text3, py: 2 }}>
-        Parcours séjour pas encore synchronisé (fulltask).
-      </Typography>
-    );
-  }
-
-  const rows = [
-    {
-      icon: '👥',
-      label: 'Enregistrement',
-      value: `${gc.registration?.registered ?? 0} / ${gc.registration?.total ?? '?'}`,
-      ok: Boolean(gc.registration?.complete),
-    },
-    {
-      icon: '🕐',
-      label: 'Heure arrivée',
-      value: gc.arrival?.choose?.chosen ? 'Choisie' : 'Non choisie',
-      ok: Boolean(gc.arrival?.choose?.chosen),
-    },
-    {
-      icon: '🕐',
-      label: 'Heure départ',
-      value: gc.departure?.choose?.chosen ? 'Confirmée' : 'Non confirmée',
-      ok: Boolean(gc.departure?.choose?.chosen),
-    },
-  ];
-
-  return (
-    <Stack spacing={1}>
-      {rows.map((r) => (
-        <Box
-          key={r.label}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.25,
-            p: 1.25,
-            borderRadius: 1.25,
-            border: `1px solid ${T.border}`,
-            bgcolor: r.ok ? 'rgba(10,143,94,0.08)' : 'rgba(196,101,6,0.08)',
-          }}
-        >
-          <Typography sx={{ fontSize: 20 }}>{r.icon}</Typography>
-          <Box sx={{ flex: 1 }}>
-            <Typography sx={{ fontSize: 12, color: T.text3, fontWeight: 600 }}>{r.label}</Typography>
-            <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.text }}>{r.value}</Typography>
-          </Box>
-          <Chip
-            size="small"
-            label={r.ok ? 'OK' : 'En attente'}
-            sx={{
-              fontWeight: 700,
-              fontSize: 10.5,
-              bgcolor: r.ok ? 'rgba(10,143,94,0.12)' : 'rgba(196,101,6,0.12)',
-              color: r.ok ? T.success : T.warning,
-            }}
-          />
-        </Box>
-      ))}
-    </Stack>
-  );
-}
-
 export default function ChatbotWhitelistDetailView() {
   const { reservationId } = useParams<{ reservationId: string }>();
   const navigate = useNavigate();
-  const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
@@ -128,26 +60,13 @@ export default function ChatbotWhitelistDetailView() {
   }, [reservationId]);
 
   const wl = detail?.whitelist as Record<string, unknown> | undefined;
-  const guestContext = detail?.guestContext as GuestContextLike | null | undefined;
-  const listingSnapshot = detail?.listingSnapshot;
+  const guestContext = detail?.guestContext as GuestContextDetail | null | undefined;
+  const listingSnapshot = detail?.listingSnapshot as ListingSnapshotDetail | null | undefined;
   const registration = guestContext?.registration;
-  const openTasks = Array.isArray((guestContext as Record<string, unknown> | null)?.openTasks)
-    ? ((guestContext as Record<string, unknown>).openTasks as unknown[])
-    : [];
+  const listingId = wl?.listingId ? String(wl.listingId) : '';
+  const listingName = listingSnapshot?.name || '';
 
   const guestName = String(wl?.guestName ?? 'Voyageur');
-  const listingSnap = listingSnapshot as { name?: string; menu?: { menuOptions?: MenuOptionLike[] } } | null;
-  const waInterpret = useMemo(
-    () =>
-      interpretMenuOptionsForStay(
-        listingSnap?.menu?.menuOptions || [],
-        wl?.checkIn as string | Date | undefined,
-        wl?.checkOut as string | Date | undefined,
-        guestContext,
-      ),
-    [listingSnap, wl?.checkIn, wl?.checkOut, guestContext],
-  );
-
   const checkInLabel = wl?.checkIn ? moment(String(wl.checkIn)).format('DD MMM YYYY') : undefined;
   const checkOutLabel = wl?.checkOut ? moment(String(wl.checkOut)).format('DD MMM YYYY') : undefined;
 
@@ -190,21 +109,21 @@ export default function ChatbotWhitelistDetailView() {
                       </span>
                     </div>
                     <div className="meta">
-                      <b>{String(wl.reservationCode ?? '—')}</b> · {String(wl.guestLanguage ?? 'fr').toUpperCase()} ·{' '}
-                      {String(wl.phoneOta ?? '—')}
+                      <b>{String(wl.reservationCode ?? '—')}</b> · {String(wl.phoneOta ?? '—')}
                     </div>
-                    {listingSnap?.name && (
+                    <Box sx={{ mt: 0.75 }}>
+                      <WhitelistLanguageCell
+                        guestLanguage={wl.guestLanguage as string | undefined}
+                        whatsappSelectedLanguage={wl.whatsappSelectedLanguage as string | null | undefined}
+                      />
+                    </Box>
+                    {listingName ? (
                       <Typography sx={{ fontSize: 13, fontWeight: 600, color: T.text2, mt: 0.5 }}>
-                        {listingSnap.name}
+                        {listingName}
                       </Typography>
-                    )}
+                    ) : null}
                   </div>
                 </div>
-                {Boolean(wl.listingId) && (
-                  <Link to={`/listings/${wl.listingId}?level=config-new`} className="cb-link">
-                    Config Orch. ↗
-                  </Link>
-                )}
               </div>
             </div>
 
@@ -217,60 +136,78 @@ export default function ChatbotWhitelistDetailView() {
                 <div className="l">Enregistrement</div>
               </div>
               <div className="synth-cell">
-                <span className="em">📋</span>
-                <div className="v">{openTasks.length}</div>
-                <div className="l">Tasks ouvertes</div>
-              </div>
-              <div className="synth-cell">
-                <span className="em">🏠</span>
-                <div className={`v ${listingSnapshot ? 'green' : 'muted'}`}>{listingSnapshot ? 'OK' : '—'}</div>
-                <div className="l">Listing sync</div>
-              </div>
-              <div className="synth-cell">
                 <span className="em">📅</span>
                 <div className="v muted">{checkInLabel ?? '—'}</div>
                 <div className="l">Arrivée</div>
               </div>
+              <div className="synth-cell">
+                <span className="em">🛬</span>
+                <div
+                  className={`v ${guestContext?.arrival?.choose?.chosen ? 'green' : 'amber'}`}
+                  style={{ fontSize: guestContext?.arrival?.choose?.time ? 15 : undefined }}
+                >
+                  {guestContext?.arrival?.choose?.time ?? '—'}
+                </div>
+                <div className="l">
+                  Heure arrivée
+                  {guestContext?.arrival?.choose?.chosen ? ' · choisie' : ''}
+                </div>
+              </div>
+              <div className="synth-cell">
+                <span className="em">📅</span>
+                <div className="v muted">{checkOutLabel ?? '—'}</div>
+                <div className="l">Départ</div>
+              </div>
+              <div className="synth-cell">
+                <span className="em">🏠</span>
+                <div className="v muted" style={{ fontSize: 11, fontFamily: 'Geist Mono, monospace' }}>
+                  {listingId ? listingId.slice(-8) : '—'}
+                </div>
+                <div className="l">Listing ID</div>
+              </div>
             </div>
           </div>
 
-          <Tabs
-            value={tab}
-            onChange={(_, v) => setTab(v)}
-            sx={{ mb: 2, borderBottom: `1px solid ${T.border}`, '& .MuiTab-root': { textTransform: 'none', fontWeight: 600 } }}
-          >
-            <Tab label="Menu WhatsApp (A → L)" />
-            <Tab label="Parcours séjour" />
-          </Tabs>
+          {listingId ? (
+            <Stack direction="row" sx={{ mb: 2, gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Typography sx={{ fontSize: 12, color: T.text3 }}>Listing</Typography>
+              <Typography
+                sx={{ fontFamily: 'Geist Mono, monospace', fontSize: 12, fontWeight: 600, color: T.text2 }}
+              >
+                {listingId}
+              </Typography>
+              <Link to={`/chatbot/listing?listingId=${encodeURIComponent(listingId)}`} className="cb-link">
+                Infos logement ↗
+              </Link>
+            </Stack>
+          ) : null}
 
-          {tab === 0 && (
-            <div className="prog-card">
-              <div className="prog-h">
-                <h3>Options menu — interprétation fullchatbot</h3>
-              </div>
-              <Box sx={{ p: 1.5 }}>
-                <WhatsappMenuInterpretationPanel
-                  options={waInterpret.options}
-                  listingName={listingSnap?.name}
-                  guestLabel={guestName}
-                  checkInLabel={checkInLabel}
-                  checkOutLabel={checkOutLabel}
-                />
-              </Box>
+          <div className="prog-card">
+            <div className="prog-h">
+              <h3>🧹 Plan ménage · config listing</h3>
+              <Chip size="small" label="frequency + payant" sx={{ ml: 'auto', fontSize: 10 }} />
             </div>
-          )}
+            <Box sx={{ p: 1.5 }}>
+              <ChatbotCleaningSchedulePanel
+                checkIn={wl.checkIn as string | Date | undefined}
+                checkOut={wl.checkOut as string | Date | undefined}
+                cleaning={listingSnapshot?.cleaning}
+                guestCleaningFree={guestContext?.cleaningFree}
+                freeCleaningEnabled={listingSnapshot?.flags?.orchestration_cleaning_free !== false}
+                paidCleaningEnabled={listingSnapshot?.flags?.orchestration_cleaning_paid !== false}
+              />
+            </Box>
+          </div>
 
-          {tab === 1 && (
-            <div className="prog-card">
-              <div className="prog-h">
-                <h3>État du parcours voyageur</h3>
-                <Chip size="small" label="guest_context" sx={{ ml: 'auto', fontSize: 10 }} />
-              </div>
-              <Box sx={{ p: 1.5 }}>
-                <GuestJourneyPanel gc={guestContext} />
-              </Box>
+          <div className="prog-card">
+            <div className="prog-h">
+              <h3>Guest context — parcours séjour</h3>
+              <Chip size="small" label="guest_context" sx={{ ml: 'auto', fontSize: 10 }} />
             </div>
-          )}
+            <Box sx={{ p: 1.5 }}>
+              <GuestJourneyDetailPanel gc={guestContext} listingSnapshot={listingSnapshot} />
+            </Box>
+          </div>
         </Box>
       )}
     </div>

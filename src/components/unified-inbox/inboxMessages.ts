@@ -1,6 +1,7 @@
 import type { MessageExchange } from '../../types/messages.types';
 import type { Message, QuickTemplate } from '../../types/unifiedInbox.types';
 import { formatInboxDaySeparator } from './inboxFormat';
+import { formatInboxMessageText } from './formatInboxMessageText';
 
 export function buildInboxMessages(exchanges: MessageExchange[], isOta = false): Message[] {
   return exchanges.flatMap((exchange, index) => {
@@ -15,7 +16,7 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
       });
     }
 
-    const userText = exchange.user_message?.trim();
+    const userText = formatInboxMessageText(exchange.user_message?.trim());
     if (userText) {
       if (isOta && userText.startsWith('[Auto]')) {
         msgs.push({
@@ -36,7 +37,8 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
       }
     }
 
-    if (exchange.ai_response?.trim()) {
+    const aiText = formatInboxMessageText(exchange.ai_response?.trim());
+    if (aiText) {
       const isAutoTemplate =
         isOta &&
         (exchange.ai_response_message_source === 'orchestrator' ||
@@ -45,7 +47,7 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
         msgs.push({
           id: `sys-ai-${index}`,
           from: 'sojori',
-          text: `⚙ Auto · ${exchange.ai_response.slice(0, 80)}`,
+          text: `⚙ Auto · ${aiText.slice(0, 80)}`,
           time: '',
           type: 'system-note',
         });
@@ -53,7 +55,7 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
         msgs.push({
           id: `ai-${index}`,
           from: exchange.sent_by_admin ? 'you' : 'sojori',
-          text: exchange.ai_response,
+          text: aiText,
           time: formatTime(exchange.timestamp),
           isAI: !exchange.sent_by_admin,
           status: 'sent',

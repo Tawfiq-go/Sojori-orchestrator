@@ -75,6 +75,8 @@ export interface Escalade {
   scheduled: boolean;              // false = déjà déclenchée
   dueAt: string;
   description: string;
+  /** Ex. J-1 · check-in · 23:00 */
+  scheduleOffsetLabel?: string;
 }
 
 export type PlanEventKind = 'message' | 'sequence';
@@ -102,8 +104,16 @@ export interface PlanEvent {
   channel?: Channel;
   channels?: Channel[];            // multi (ex Bienvenue OTA + Email)
   template?: string;
+  /** Corps catalogue (non affiché sur /tasks/plans — statut envoi seulement). */
   messagePreviewFr?: string;
-  channelMeta?: string;            // "Vu · 14:08"
+  /** Statut Mongo plan.messages (envoye, en_attente, saute, echec). */
+  messageSendStatus?: 'en_attente' | 'envoye' | 'saute' | 'echec';
+  /** Index dans plan.messages (srv-fulltask) pour envoi manuel. */
+  messageIndex?: number;
+  channelMeta?: string;            // "Envoyé · 14:08"
+  lastDispatch?: import('./planDispatchDisplay').PlanLastDispatchView;
+  lastDispatchAttempt?: import('./planDispatchDisplay').PlanLastDispatchView;
+  dispatchLog?: import('./planDispatchDisplay').PlanDispatchLogEntryView[];
 
   /* Sequence-only */
   relances?: Relance[];
@@ -167,8 +177,15 @@ export interface PlanGuestRelanceItem {
   status: RelanceStatus;
   channel?: Channel;
   catalogTemplate?: string;
+  /** Ex. J-3 · check-in · 09:00 (config, pas la date seule). */
+  scheduleOffsetLabel?: string;
   executionStatus: RelanceExecutionStatus;
   rawStatus: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+  relanceIndex: number;
+  /** Dernier envoi (manuel ou scheduler) pour audit UI. */
+  lastDispatch?: import('./planDispatchDisplay').PlanLastDispatchView;
+  lastDispatchAttempt?: import('./planDispatchDisplay').PlanLastDispatchView;
+  dispatchLog?: import('./planDispatchDisplay').PlanDispatchLogEntryView[];
 }
 
 /** Rappel staff (niveau 3). */
@@ -180,12 +197,18 @@ export interface PlanStaffReminderItem {
   status: RelanceStatus;
   whatsappTemplateId?: string;
   executionStatus: RelanceExecutionStatus;
-  rawStatus: 'en_attente' | 'envoyee' | 'saute';
+  rawStatus: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+  scheduleOffsetLabel?: string;
+  reminderIndex: number;
+  lastDispatch?: import('./planDispatchDisplay').PlanLastDispatchView;
+  lastDispatchAttempt?: import('./planDispatchDisplay').PlanLastDispatchView;
+  dispatchLog?: import('./planDispatchDisplay').PlanDispatchLogEntryView[];
 }
 
 /** Séquence tâche = niveau 1 (Choisir arrivée, Enregistrement, …). */
 export interface PlanSequenceView {
   id: string;
+  taskId: string;
   taskType: string;
   title: string;
   icon: string;
@@ -206,6 +229,11 @@ export interface PlanSequenceView {
 
 export interface ReservationPlan {
   reservationId: string;
+  /** Propriétaire du listing — config orchestration / task-config à charger pour ce plan. */
+  ownerId?: string;
+  listingId?: string;
+  /** owner = config PM dédiée ; global_template = repli template admin (ownerId null). */
+  orchestrationConfigSource?: 'owner' | 'global_template';
   /** Tous les événements (progression globale, filtres legacy). */
   events: PlanEvent[];
   /** Séquences tâches — affichage 3 niveaux. */
