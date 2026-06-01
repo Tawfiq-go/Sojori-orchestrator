@@ -56,10 +56,32 @@ export type CleaningListingConfig = {
   freeCleaningEnabled: boolean;
   frequency: FrequencyTier[];
   TS_CLEAN: TimeSlot[];
+  checkinTimeslotsEnabled: boolean;
+  checkoutTimeslotsEnabled: boolean;
+  TS_CHECKIN: TimeSlot[];
+  TS_CHECKOUT: TimeSlot[];
+  checkInTimeStart: number;
+  checkInTimeEnd: number;
+  checkOutTime: number;
   includedDescriptionFr: string;
   includedExtras: IncludedCleaningExtra[];
   paidCleaningConfig: PaidCleaningConfig;
 };
+
+/** Pilote Harcay / template global admin */
+export const DEFAULT_TS_CHECKIN: TimeSlot[] = [
+  { start: 12, end: 14, type: 'Early', price: 200, default: false },
+  { start: 15, end: 17, type: 'Normal', price: 0, default: true },
+  { start: 17, end: 19, type: 'Normal', price: 0, default: false },
+  { start: 19, end: 21, type: 'Normal', price: 0, default: false },
+  { start: 21, end: 24, type: 'Late', price: 100, default: false },
+];
+
+export const DEFAULT_TS_CHECKOUT: TimeSlot[] = [
+  { start: 8, end: 10, type: 'Early', price: 0, default: false },
+  { start: 10, end: 12, type: 'Normal', price: 0, default: true },
+  { start: 12, end: 14, type: 'Late', price: 200, default: false },
+];
 
 export const DEFAULT_FREQUENCY: FrequencyTier[] = [
   { startDay: 1, endDay: 7, numberOfCleaning: 2 },
@@ -191,6 +213,13 @@ export function mapListingToCleaningConfig(raw: Record<string, unknown>): Cleani
 
   const desc = raw.includedCleaningDescription as { fr?: string } | undefined;
 
+  const tsCheckin = Array.isArray(raw.TS_CHECKIN) && raw.TS_CHECKIN.length > 0
+    ? (raw.TS_CHECKIN as TimeSlot[])
+    : DEFAULT_TS_CHECKIN;
+  const tsCheckout = Array.isArray(raw.TS_CHECKOUT) && raw.TS_CHECKOUT.length > 0
+    ? (raw.TS_CHECKOUT as TimeSlot[])
+    : DEFAULT_TS_CHECKOUT;
+
   return {
     freeCleaningEnabled: raw.orchestration_cleaning_free !== false,
     frequency:
@@ -201,6 +230,13 @@ export function mapListingToCleaningConfig(raw: Record<string, unknown>): Cleani
       Array.isArray(raw.TS_CLEAN) && raw.TS_CLEAN.length > 0
         ? (raw.TS_CLEAN as TimeSlot[])
         : DEFAULT_TS_CLEAN,
+    checkinTimeslotsEnabled: raw.checkinTimeslotsEnabled !== false,
+    checkoutTimeslotsEnabled: raw.checkoutTimeslotsEnabled !== false,
+    TS_CHECKIN: tsCheckin,
+    TS_CHECKOUT: tsCheckout,
+    checkInTimeStart: Number(raw.checkInTimeStart ?? 15),
+    checkInTimeEnd: Number(raw.checkInTimeEnd ?? 21),
+    checkOutTime: Number(raw.checkOutTime ?? 11),
     includedDescriptionFr:
       desc?.fr ||
       'Ménage inclus pendant votre séjour selon la durée de votre réservation.',
@@ -223,6 +259,15 @@ export function mapCleaningConfigToListingPatch(
   return {
     frequency: cfg.frequency,
     TS_CLEAN: cfg.TS_CLEAN,
+    TS_CHECKIN: cfg.TS_CHECKIN,
+    TS_CHECKOUT: cfg.TS_CHECKOUT,
+    checkInTimeStart: cfg.checkInTimeStart,
+    checkInTimeEnd: cfg.checkInTimeEnd,
+    checkOutTime: cfg.checkOutTime,
+    checkinTimeslotsEnabled: cfg.checkinTimeslotsEnabled,
+    checkoutTimeslotsEnabled: cfg.checkoutTimeslotsEnabled,
+    orchestration_choose_arrival: true,
+    orchestration_choose_departure: true,
     includedCleaningDescription: { fr: cfg.includedDescriptionFr, en: cfg.includedDescriptionFr, ar: '' },
     includedCleaningExtras: cfg.includedExtras,
     paidCleaningConfig: {

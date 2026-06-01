@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ReservationsSidebar from './ReservationsSidebar';
 import PlanDetail from './PlanDetail';
 import type { Reservation, ReservationPlan } from './types';
@@ -8,7 +8,14 @@ interface Props {
   reservations: Reservation[];
   plans: Record<string, ReservationPlan>;
   initialId?: string;
+  /** Chargement du plan complet (GET /plans/:id). */
+  planLoadingId?: string | null;
+  /** Admin plateforme : bandeau si config = template global. */
+  showAdminConfigSource?: boolean;
+  resolveOwnerDisplayName?: (ownerId?: string) => string;
   onSelect?: (reservationId: string) => void;
+  /** Met à jour le plan affiché sans recharger la liste (réponse POST envoi manuel). */
+  onPlanUpdated?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
   onPlanRefetch?: () => void;
   onPlanArchived?: (reservationId: string) => void;
   listTitle?: string;
@@ -18,27 +25,20 @@ export default function PlanReservationPage({
   reservations,
   plans,
   initialId,
+  planLoadingId = null,
   onSelect,
+  showAdminConfigSource = false,
+  resolveOwnerDisplayName,
+  onPlanUpdated,
   onPlanRefetch,
   onPlanArchived,
   listTitle,
 }: Props) {
-  const defaultId = useMemo(() => {
-    if (initialId && plans[initialId]) return initialId;
-    const blocked = reservations.find((r) => r.status === 'blocked');
-    if (blocked) return blocked.id;
-    const now = reservations.find((r) => r.status === 'now');
-    if (now) return now.id;
-    return reservations[0]?.id || null;
-  }, [reservations, plans, initialId]);
-
-  const [activeId, setActiveId] = useState<string | null>(defaultId);
+  const [activeId, setActiveId] = useState<string | null>(initialId ?? null);
 
   useEffect(() => {
-    if (initialId && plans[initialId]) {
-      setActiveId(initialId);
-    }
-  }, [initialId, plans]);
+    if (initialId) setActiveId(initialId);
+  }, [initialId]);
 
   const handleSelect = (id: string) => {
     setActiveId(id);
@@ -47,6 +47,7 @@ export default function PlanReservationPage({
 
   const activeResa = activeId ? reservations.find((r) => r.id === activeId) : null;
   const activePlan = activeId ? plans[activeId] : null;
+  const loadingDetail = Boolean(activeId && planLoadingId === activeId && !activePlan);
 
   return (
     <div className="so-plan-res">
@@ -61,14 +62,35 @@ export default function PlanReservationPage({
           <PlanDetail
             reservation={activeResa}
             plan={activePlan}
+            showAdminConfigSource={showAdminConfigSource}
+            ownerDisplayName={
+              activePlan.ownerId && resolveOwnerDisplayName
+                ? resolveOwnerDisplayName(activePlan.ownerId)
+                : undefined
+            }
+            onPlanUpdated={onPlanUpdated}
             onPlanRefetch={onPlanRefetch}
             onPlanArchived={onPlanArchived}
           />
         ) : (
-          <div className="wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t3)' }}>
-            {initialId && !plans[initialId]
-              ? "Aucun plan pour cette réservation — vérifiez l'URL ou créez le plan via orchestration."
-              : 'Sélectionnez un plan dans la liste.'}
+          <div
+            className="wrap"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--t3)',
+              padding: 24,
+              textAlign: 'center',
+            }}
+          >
+            {loadingDetail
+              ? 'Chargement du plan…'
+              : activeResa && !activePlan
+                ? 'Plan introuvable ou erreur de chargement.'
+                : initialId && !activeResa
+                  ? "Aucun plan pour cette réservation — vérifiez l'URL ou créez le plan via orchestration."
+                  : 'Sélectionnez un plan dans la liste.'}
           </div>
         )}
       </div>

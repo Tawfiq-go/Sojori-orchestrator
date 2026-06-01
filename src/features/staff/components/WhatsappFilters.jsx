@@ -1,72 +1,28 @@
-import React, { useState } from 'react';
-import { Button, IconButton, TextField, Tooltip } from '@mui/material';
-import { styled } from '@mui/material/styles';
-import { useTranslation } from 'react-i18next';
+import React from 'react';
+import {
+  Paper,
+  Stack,
+  TextField,
+  InputAdornment,
+  FormControl,
+  Select,
+  MenuItem,
+  Checkbox,
+  ListItemText,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import GlobalFilter from 'components/GlobalFilter/GlobalFilter';
-import ListingGlobalFilter from 'features/listing/components/ListingGlobalFilter';
-import ChipMultiSelect from 'components/ChipMultiSelect/ChipMultiSelect';
-import GlobalPaginationCompact from 'components/GlobalPaginationCompact/GlobalPaginationCompact';
-import { TEAM_ROLES_FILTER_WRAP_CLASS_COMPACT, TEAM_ROLES_FILTER_WRAP_CLASS_DEFAULT } from '../teamRolesLayout';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import { useTranslation } from 'react-i18next';
+import { TEAM_T } from '../../../components/team/teamHubTokens';
 
-const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
-  primaryPale: '#FFF3E0',
-  gray: {
-    300: '#E0E0E0',
-    500: '#9E9E9E',
-    700: '#616161',
-  },
+const selectSx = {
+  fontSize: 12.5,
+  bgcolor: TEAM_T.bg1,
+  '& .MuiOutlinedInput-notchedOutline': { borderColor: TEAM_T.border },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: TEAM_T.borderStrong },
 };
-
-const StyledTextField = styled(TextField)({
-  '& .MuiOutlinedInput-root': {
-    height: '40px',
-    borderRadius: '4px 0 0 4px',
-    backgroundColor: 'white',
-    '& fieldset': {
-      border: `1px solid ${SOJORI_COLORS.gray[300]}`,
-      borderRight: 'none',
-    },
-    '&:hover fieldset': {
-      borderColor: SOJORI_COLORS.gray[500],
-      borderRight: 'none',
-    },
-    '&.Mui-focused fieldset': {
-      borderColor: SOJORI_COLORS.primary,
-      borderRight: 'none',
-      borderWidth: '2px',
-    },
-  },
-  '& .MuiInputBase-input': {
-    padding: '9px 14px',
-    height: '22px',
-    color: SOJORI_COLORS.gray[700],
-    '&::placeholder': {
-      color: SOJORI_COLORS.gray[500],
-      opacity: 1,
-    },
-  },
-});
-
-const SearchButton = styled(IconButton)({
-  height: '40px',
-  width: '40px',
-  borderRadius: '0 4px 4px 0',
-  backgroundColor: SOJORI_COLORS.primary,
-  border: `1px solid ${SOJORI_COLORS.primary}`,
-  transition: 'all 0.2s ease',
-  '&:hover': {
-    backgroundColor: SOJORI_COLORS.primaryDark,
-    transform: 'translateY(-1px)',
-    boxShadow: '0 4px 12px rgba(255, 107, 53, 0.3)',
-  },
-  '& .MuiSvgIcon-root': {
-    color: 'white',
-  },
-});
 
 const WhatsappFilters = ({
   searchText,
@@ -82,182 +38,184 @@ const WhatsappFilters = ({
   setSelectedLanguages,
   types = [],
   languages = [],
-  onSearch,
   onReset,
-  showFilters = true,
-  onOpenSidebar,
   onFilterChange,
-  canCreate = true,
-  page,
-  setPage,
-  limit,
-  setLimit,
-  totalItems = 0,
-  rowsPerPageOptions = [5, 10, 25, 50],
-  loading = false,
-  /** Même espacement que les autres pages Équipe & Rôles (sous bandeau orange). */
-  compact = false,
+  showFilters = true,
+  addButton = null,
 }) => {
   const { t } = useTranslation('common');
-  const [searchInput, setSearchInput] = useState(searchText || '');
 
-  // Static options for access
+  if (!showFilters) return null;
+
+  const listingOptions = (listings || []).map((l) => ({
+    id: l.id || l._id || l.name,
+    name: l.name,
+  }));
+  const typeOptions = (types || []).map((tItem) => ({ id: tItem.task, name: tItem.task }));
   const accessOptions = [
     { id: 'Read', name: 'Read' },
     { id: 'Write', name: 'Write' },
   ];
-
-  const handleListingsChange = (newListings) => {
-    setSelectedListings(newListings);
-    if (onFilterChange) onFilterChange('listings', newListings);
-  };
-
-  const handleTypesChange = (newTypes) => {
-    setSelectedTypes(newTypes);
-    if (onFilterChange) onFilterChange('types', newTypes);
-  };
-
-  const handleAccessChange = (newAccess) => {
-    setSelectedAccess(newAccess);
-    if (onFilterChange) onFilterChange('access', newAccess);
-  };
-
-  const handleLanguagesChange = (newLanguages) => {
-    setSelectedLanguages(newLanguages);
-    if (onFilterChange) onFilterChange('languages', newLanguages);
-  };
-
-  const handleReservationNumberChange = (newNumber) => {
-    setSearchText(newNumber);
-    if (onFilterChange) onFilterChange('search', newNumber);
-  };
-
-  const handleResetWithSync = () => {
-    onReset();
-    if (onFilterChange) onFilterChange('reset', null);
-    setSearchInput('');
-  };
-
-  if (!showFilters) return null;
-
-  const resetEnabled = Boolean(
-    (searchInput && searchInput.trim() !== '') ||
-    (selectedListings && selectedListings.length > 0) ||
-    (selectedTypes && selectedTypes.length > 0) ||
-    (selectedAccess && selectedAccess.length > 0) ||
-    (selectedLanguages && selectedLanguages.length > 0)
-  );
-
-  const listingOptions = (listings || []).map((l) => ({ id: l.id || l._id || l.name, name: l.name }));
-  const typeOptions = (types || []).map((tItem) => ({ id: tItem.task, name: tItem.task }));
   const languageOptions = (Array.isArray(languages) ? languages : []).map((l) => ({
     id: l?.name ?? l,
     name: l?.name ?? String(l ?? ''),
   }));
 
-  const handleSearchInputChange = (e) => setSearchInput(e.target.value);
-  const handleSearchClick = () => { handleReservationNumberChange(searchInput); if (onSearch) onSearch(); };
+  const bumpPage = () => {
+    if (onFilterChange) onFilterChange();
+  };
+
+  const handleReset = () => {
+    onReset();
+    if (onFilterChange) onFilterChange('reset', null);
+  };
+
+  const hasActiveFilters =
+    Boolean(searchText?.trim()) ||
+    selectedListings?.length > 0 ||
+    selectedTypes?.length > 0 ||
+    selectedAccess?.length > 0 ||
+    selectedLanguages?.length > 0;
 
   return (
-    <div className={compact ? TEAM_ROLES_FILTER_WRAP_CLASS_COMPACT : TEAM_ROLES_FILTER_WRAP_CLASS_DEFAULT}>
-      <GlobalFilter
-        filterContent={
-          <ListingGlobalFilter
-            searchFilter={
-              <div className="flex items-center">
-                <StyledTextField
-                  placeholder={t('Quick Search')}
-                  value={searchInput}
-                  onChange={handleSearchInputChange}
-                  variant="outlined"
-                  size="small"
-                  sx={{ width: '200px' }}
-                  slotProps={{ input: { style: { paddingRight: 0 } } }}
-                />
-                <SearchButton onClick={handleSearchClick} className="!text-white">
-                  <SearchIcon className="!text-white" />
-                </SearchButton>
-                <Tooltip
-                  title={<span style={{ whiteSpace: 'pre-line', fontSize: 15 }}>{t('Search by username or phone')}</span>}
-                  arrow
-                  placement="bottom"
-                >
-                  <IconButton
-                    size="small"
-                    sx={{
-                      marginLeft: '4px', background: '#fff', height: '40px', width: '40px', borderRadius: '4px',
-                      transition: 'all 0.2s ease', '&:hover': { backgroundColor: SOJORI_COLORS.primaryPale },
-                    }}
-                  >
-                    <InfoOutlinedIcon sx={{ color: SOJORI_COLORS.primary }} />
-                  </IconButton>
-                </Tooltip>
-              </div>
-            }
-            countryFilter={
-              <ChipMultiSelect
-                options={listingOptions}
-                selected={selectedListings}
-                onChange={handleListingsChange}
-                placeholder={t('Select Listings')}
-                width={'97px'}
-                t={t}
-              />
-            }
-            cityFilter={
-              <ChipMultiSelect
-                options={typeOptions}
-                selected={selectedTypes}
-                onChange={handleTypesChange}
-                placeholder={t('All Types')}
-                width={'97px'}
-                t={t}
-              />
-            }
-            unitTypeFilter={
-              <div style={{ display: 'flex', gap: 6 }}>
-                <ChipMultiSelect
-                  options={accessOptions}
-                  selected={selectedAccess}
-                  onChange={handleAccessChange}
-                  placeholder={t('All Access')}
-                  width={'97px'}
-                  t={t}
-                />
-                <ChipMultiSelect
-                  options={languageOptions}
-                  selected={selectedLanguages}
-                  onChange={handleLanguagesChange}
-                  placeholder={t('All Languages')}
-                  width={'97px'}
-                  t={t}
-                />
-              </div>
-            }
-            onReset={handleResetWithSync}
-            resetEnabled={resetEnabled}
-            showAddButton={Boolean(canCreate && onOpenSidebar)}
-            onAddClick={onOpenSidebar}
-            canCreate={canCreate}
-            addButtonLabel={t('Add')}
-          />
-        }
-        paginationContent={
-          totalItems > 0 ? (
-            <GlobalPaginationCompact
-              currentPage={page}
-              totalItems={totalItems}
-              itemsPerPage={limit}
-              onPageChange={setPage}
-              onItemsPerPageChange={setLimit}
-              itemsPerPageOptions={rowsPerPageOptions}
-              loading={loading}
-              itemType="staff"
-            />
-          ) : null
-        }
-      />
-    </div>
+    <Paper
+      sx={{
+        p: 1.5,
+        mb: 1.5,
+        border: `1px solid ${TEAM_T.border}`,
+        borderRadius: 1.5,
+        bgcolor: TEAM_T.bg1,
+      }}
+    >
+      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+        <TextField
+          size="small"
+          placeholder={t('Rechercher username, téléphone…', { defaultValue: 'Rechercher username, téléphone…' })}
+          value={searchText || ''}
+          onChange={(e) => {
+            setSearchText(e.target.value);
+            bumpPage();
+          }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: 18, color: TEAM_T.text3 }} />
+                </InputAdornment>
+              ),
+            },
+          }}
+          sx={{
+            flex: 1,
+            minWidth: 180,
+            maxWidth: 320,
+            '& .MuiOutlinedInput-root': {
+              bgcolor: TEAM_T.bg1,
+              '& fieldset': { borderColor: TEAM_T.border },
+            },
+          }}
+        />
+
+        {addButton}
+
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <Select
+            multiple
+            displayEmpty
+            value={selectedListings || []}
+            onChange={(e) => {
+              setSelectedListings(e.target.value);
+              bumpPage();
+            }}
+            renderValue={(s) => `Annonces · ${(s).length || 'toutes'}`}
+            sx={selectSx}
+          >
+            {listingOptions.map((lst) => (
+              <MenuItem key={lst.id} value={lst.id}>
+                <Checkbox checked={(selectedListings || []).indexOf(lst.id) > -1} size="small" />
+                <ListItemText primary={lst.name} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <Select
+            multiple
+            displayEmpty
+            value={selectedTypes || []}
+            onChange={(e) => {
+              setSelectedTypes(e.target.value);
+              bumpPage();
+            }}
+            renderValue={(s) => `Types · ${(s).length || 'tous'}`}
+            sx={selectSx}
+          >
+            {typeOptions.map((tp) => (
+              <MenuItem key={tp.id} value={tp.id}>
+                <Checkbox checked={(selectedTypes || []).indexOf(tp.id) > -1} size="small" />
+                <ListItemText primary={tp.name} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControl size="small" sx={{ minWidth: 130 }}>
+          <Select
+            multiple
+            displayEmpty
+            value={selectedAccess || []}
+            onChange={(e) => {
+              setSelectedAccess(e.target.value);
+              bumpPage();
+            }}
+            renderValue={(s) => `Accès · ${(s).length || 'tous'}`}
+            sx={selectSx}
+          >
+            {accessOptions.map((acc) => (
+              <MenuItem key={acc.id} value={acc.id}>
+                <Checkbox checked={(selectedAccess || []).indexOf(acc.id) > -1} size="small" />
+                <ListItemText primary={acc.name} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControl size="small" sx={{ minWidth: 150 }}>
+          <Select
+            multiple
+            displayEmpty
+            value={selectedLanguages || []}
+            onChange={(e) => {
+              setSelectedLanguages(e.target.value);
+              bumpPage();
+            }}
+            renderValue={(s) => `Langue · ${(s).length || 'toutes'}`}
+            sx={selectSx}
+          >
+            {languageOptions.map((lang) => (
+              <MenuItem key={lang.id} value={lang.id}>
+                <Checkbox checked={(selectedLanguages || []).indexOf(lang.id) > -1} size="small" />
+                <ListItemText primary={lang.name} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <Tooltip title="Réinitialiser tous les filtres">
+          <span>
+            <IconButton
+              size="small"
+              onClick={handleReset}
+              disabled={!hasActiveFilters}
+              sx={{ color: TEAM_T.text3 }}
+            >
+              <RefreshIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Stack>
+    </Paper>
   );
 };
 

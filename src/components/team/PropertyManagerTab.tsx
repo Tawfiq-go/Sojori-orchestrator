@@ -1,6 +1,6 @@
-/** Property manager — legacy PublicOwner + sidebars */
-import OwnerPage from '../../features/staff/Owner.page';
+/** Property manager — sans double shell legacy */
+import PublicOwner from '../../features/staff/components/PublicOwner';
 
 export function PropertyManagerTab() {
-  return <OwnerPage />;
+  return <PublicOwner insidePageShell />;
 }

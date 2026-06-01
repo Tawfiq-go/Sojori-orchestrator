@@ -63,6 +63,7 @@ export interface Reservation {
   phone?: string;
 
   // Dates
+  createdAt?: Date | string;
   reservationDate?: Date | string;
   arrivalDate: Date | string;
   departureDate: Date | string;

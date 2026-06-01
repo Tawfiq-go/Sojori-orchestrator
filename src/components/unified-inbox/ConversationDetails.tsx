@@ -157,6 +157,9 @@ export default function ConversationDetails({
               <DtRow label="Statut">
                 <StatusPill label={resaStatus} />
               </DtRow>
+              {r.reservationCreatedDisplay && (
+                <DtRow label="Créée le">{r.reservationCreatedDisplay}</DtRow>
+              )}
               {(r.guestRating || r.reviewRating != null) && (
                 <DtRow label={isReviews ? 'Note' : 'Voyageur ★'}>
                   <Typography component="span">
@@ -173,11 +176,14 @@ export default function ConversationDetails({
               )}
             </DtCard>
 
-            {(r.checkInDisplay || r.checkOutDisplay || r.guestsLabel) && (
+            {(r.reservationCreatedDisplay || r.checkInDisplay || r.checkOutDisplay || r.guestsLabel) && (
               <DtCard
                 title={r.nightsCount ? `Séjour · ${r.nightsCount}n` : 'Séjour'}
                 emoji="📅"
               >
+                {r.reservationCreatedDisplay && (
+                  <DtRow label="Créée le">{r.reservationCreatedDisplay}</DtRow>
+                )}
                 {r.checkInDisplay && <DtRow label="Check-in">{r.checkInDisplay}</DtRow>}
                 {r.checkOutDisplay && <DtRow label="Check-out">{r.checkOutDisplay}</DtRow>}
                 {r.guestsLabel && <DtRow label="Voyageurs">{r.guestsLabel}</DtRow>}

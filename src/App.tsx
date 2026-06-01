@@ -122,6 +122,9 @@ const ChatbotWhitelistDetailPage = lazy(() =>
 const ChatbotListingSnapshotPage = lazy(() =>
   import('./pages/ChatbotListingSnapshotPage').then((module) => ({ default: module.default }))
 );
+const ChatbotWhatsAppFlowsPilotePage = lazy(() =>
+  import('./pages/ChatbotWhatsAppFlowsPilotePage').then((module) => ({ default: module.default }))
+);
 const PlansReservationPage = lazy(() =>
   import('./pages/PlansReservationPage').then((module) => ({ default: module.default }))
 );
@@ -284,6 +287,7 @@ function App() {
               <Route path="/chatbot/whitelist/:reservationId" element={<LazyRoute><ChatbotWhitelistDetailPage /></LazyRoute>} />
               <Route path="/chatbot/whitelist" element={<LazyRoute><ChatbotWhitelistPage /></LazyRoute>} />
               <Route path="/chatbot/listing" element={<LazyRoute><ChatbotListingSnapshotPage /></LazyRoute>} />
+              <Route path="/chatbot/flows-pilote" element={<LazyRoute><ChatbotWhatsAppFlowsPilotePage /></LazyRoute>} />
 
               {/* Anciennes vues (backup) */}
               <Route path="/tasks/team-legacy" element={<LazyRoute><TasksTeamPage /></LazyRoute>} />

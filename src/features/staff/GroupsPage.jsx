@@ -1,29 +1,45 @@
 // pages/admin/groups/GroupsPage.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { Button, Typography, CircularProgress, IconButton, Popover, Chip, Stack, Box, Paper, TextField, Tooltip } from '@mui/material';
+import {
+  Button,
+  Typography,
+  CircularProgress,
+  IconButton,
+  Popover,
+  Chip,
+  Stack,
+  Box,
+  Paper,
+  TextField,
+  Tooltip,
+  InputAdornment,
+} from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { toast, ToastContainer } from 'react-toastify';
 import SearchIcon from '@mui/icons-material/Search';
-import RemoveRedEye from '@mui/icons-material/RemoveRedEye';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import EditOffIcon from '@mui/icons-material/EditOff';
-import DeleteOutline from '@mui/icons-material/Delete';
 import GroupsIcon from '@mui/icons-material/Groups';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import GlobalTable from 'components/GlobalTable/GlobalTable';
-import GlobalFilter from 'components/GlobalFilter/GlobalFilter';
-import ListingGlobalFilter from 'features/listing/components/ListingGlobalFilter';
-import GlobalPaginationCompact from 'components/GlobalPaginationCompact/GlobalPaginationCompact';
 import CreateGroupDialog from './components/CreateGroupDialog';
 import UpdateGroupDialog from './components/UpdateGroupDialog';
 import { getGroups, createGroup, updateGroup, deleteGroup } from './services/serverApi.task';
 import { useAdminOwnerFilter } from 'context/AdminOwnerFilterContext';
 import { getOwnerListLabel } from 'utils/ownerDisplay.utils';
 import { canSelectOwnerInAdminFilter } from 'utils/taskScope.utils';
-import { Roles } from '../../constants/roles';
 import { can } from '../../utils/permissions';
-import { styled } from '@mui/material/styles';
+import { useTeamViewMode } from '../../context/TeamViewContext';
+import { TeamHubMemberCard, TeamHubCardGrid } from '../../components/team/TeamHubMemberCard';
+import { TeamHubListTable } from '../../components/team/TeamHubListTable';
+import { TeamHubPagination } from '../../components/team/TeamHubPagination';
+import { TEAM_T } from '../../components/team/teamHubTokens';
 import TeamRolesPageShell, { TeamRolesSectionHeader, teamRolesContentPaperSx, TEAM_ROLES_FILTER_WRAP_CLASS_COMPACT } from './teamRolesLayout';
+import GlobalFilter from 'components/GlobalFilter/GlobalFilter';
+import ListingGlobalFilter from 'features/listing/components/ListingGlobalFilter';
+import GlobalPaginationCompact from 'components/GlobalPaginationCompact/GlobalPaginationCompact';
+import GlobalTable from 'components/GlobalTable/GlobalTable';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { styled } from '@mui/material/styles';
 const SOJORI_COLORS = {
   primary: '#FF6B35',
   primaryDark: '#E55A2B',
@@ -79,7 +95,7 @@ const SearchButton = styled(IconButton)({
     color: 'white'
   }
 });
-export default function GroupsPage() {
+export default function GroupsPage({ embedded = false } = {}) {
   const {
     t
   } = useTranslation('common');
@@ -98,6 +114,7 @@ export default function GroupsPage() {
   const [openEdit, setOpenEdit] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const { requestOwnerId, owners: ownerRows, ownersLoading } = useAdminOwnerFilter();
+  const { viewMode, setTeamStats } = useTeamViewMode();
   const canUseCrossOwnerUi = canSelectOwnerInAdminFilter(user);
   const ownerLabelById = useMemo(() => {
     const m = new Map();
@@ -130,6 +147,12 @@ export default function GroupsPage() {
   useEffect(() => {
     fetchGroups();
   }, [page, limit, searchText, user, canUseCrossOwnerUi, requestOwnerId]);
+
+  useEffect(() => {
+    if (embedded) {
+      setTeamStats([{ icon: '👨‍👩‍👧‍👦', label: 'Groupes', value: String(totalCount) }]);
+    }
+  }, [totalCount, setTeamStats, embedded]);
   async function fetchGroups() {
     setLoading(true);
     try {
@@ -253,6 +276,271 @@ export default function GroupsPage() {
                 </button>
               </div>
   }] : [])];
+
+  const visibleGroups = useMemo(() => {
+    if (!searchText.trim()) return groups;
+    const s = searchText.toLowerCase();
+    return groups.filter(
+      (g) =>
+        g.name?.toLowerCase().includes(s) ||
+        g.description?.toLowerCase().includes(s),
+    );
+  }, [groups, searchText]);
+
+  const pagedGroups = useMemo(() => {
+    const start = page * limit;
+    return visibleGroups.slice(start, start + limit);
+  }, [visibleGroups, page, limit]);
+
+  const hubColumns = useMemo(
+    () => [
+      ...(canUseCrossOwnerUi
+        ? [
+            {
+              key: 'owner',
+              label: t('Owner'),
+              render: (row) =>
+                ownerLabelById.get(String(row.ownerId)) || String(row.ownerId || '—'),
+            },
+          ]
+        : []),
+      {
+        key: 'name',
+        label: t('Name'),
+        render: (row) => (
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: TEAM_T.text }}>{row.name}</Typography>
+        ),
+      },
+      {
+        key: 'description',
+        label: t('Description'),
+        render: (row) => row.description || '—',
+      },
+      ...(canUpdate
+        ? [
+            {
+              key: 'actions',
+              label: t('Action'),
+              align: 'center',
+              render: (row) => (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedGroup(row);
+                    setOpenEdit(true);
+                  }}
+                  sx={{
+                    bgcolor: TEAM_T.primary,
+                    color: '#fff',
+                    width: 28,
+                    height: 28,
+                    '&:hover': { bgcolor: TEAM_T.primaryDeep },
+                  }}
+                >
+                  <EditOffIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+              ),
+            },
+          ]
+        : []),
+    ],
+    [canUseCrossOwnerUi, canUpdate, ownerLabelById, t],
+  );
+
+  const dialogs = (
+    <>
+      <CreateGroupDialog
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        onSubmit={onCreate}
+        ownerPicker={
+          canUseCrossOwnerUi ? { loading: ownersLoading, options: ownerRows } : null
+        }
+      />
+      {selectedGroup && (
+        <UpdateGroupDialog
+          open={openEdit}
+          onClose={() => setOpenEdit(false)}
+          group={selectedGroup}
+          onSubmit={(payload) => onUpdate(selectedGroup._id, payload)}
+        />
+      )}
+      <Popover
+        open={Boolean(permAnchorEl)}
+        anchorEl={permAnchorEl}
+        onClose={() => {
+          setPermAnchorEl(null);
+          setPermRow(null);
+        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        PaperProps={{
+          sx: {
+            p: 2,
+            minWidth: 280,
+            maxWidth: 360,
+            borderRadius: 2,
+            border: `1px solid ${TEAM_T.border}`,
+          },
+        }}
+      >
+        {permRow ? (
+          <Box>
+            <Typography sx={{ mb: 1, fontWeight: 700, fontSize: 13 }}>
+              {permRow.name} — {t('Permissions')}
+            </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              {(permRow.featureGrants || []).map((g, idx) => (
+                <Chip key={idx} size="small" variant="outlined" label={g.feature} />
+              ))}
+            </Stack>
+          </Box>
+        ) : null}
+      </Popover>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <Box>
+        <ToastContainer position="top-right" autoClose={3000} />
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <GroupsIcon sx={{ fontSize: 20, color: TEAM_T.primary }} />
+          <Typography sx={{ fontWeight: 800, fontSize: 16, color: TEAM_T.text }}>
+            {t('Groups')}
+          </Typography>
+          <Chip
+            label={t('groups_header_count', { count: visibleGroups.length })}
+            size="small"
+            sx={{
+              bgcolor: TEAM_T.primaryTint,
+              color: TEAM_T.primaryDeep,
+              fontWeight: 700,
+              fontSize: 11,
+              height: 22,
+            }}
+          />
+        </Box>
+
+        <Paper
+          sx={{
+            p: 1.5,
+            mb: 1.5,
+            border: `1px solid ${TEAM_T.border}`,
+            borderRadius: 1.5,
+            bgcolor: TEAM_T.bg1,
+          }}
+        >
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+            <TextField
+              size="small"
+              placeholder={t('Search by name...')}
+              value={inputValue}
+              onChange={handleSearchInputChange}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 18, color: TEAM_T.text3 }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{ flex: 1, minWidth: 180, maxWidth: 320 }}
+            />
+            {canCreate ? (
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => setOpenCreate(true)}
+                sx={{
+                  bgcolor: TEAM_T.primary,
+                  color: '#fff !important',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 2,
+                  '&:hover': { bgcolor: TEAM_T.primaryDeep },
+                }}
+              >
+                {t('New Group')}
+              </Button>
+            ) : null}
+            <Tooltip title="Réinitialiser la recherche">
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={!inputValue?.trim()}
+                  onClick={handleClearFilters}
+                  sx={{ color: TEAM_T.text3 }}
+                >
+                  <RefreshIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
+        </Paper>
+
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+            <CircularProgress sx={{ color: TEAM_T.primary }} />
+          </Box>
+        ) : visibleGroups.length === 0 ? (
+          <Paper sx={{ textAlign: 'center', py: 6, border: `1px solid ${TEAM_T.border}`, bgcolor: TEAM_T.bg1 }}>
+            <Typography sx={{ color: TEAM_T.text3 }}>{t('No groups found')}</Typography>
+          </Paper>
+        ) : viewMode === 'cards' ? (
+          <TeamHubCardGrid>
+            {pagedGroups.map((row) => (
+              <TeamHubMemberCard
+                key={row._id}
+                initials={(row.name || '?').slice(0, 2).toUpperCase()}
+                title={row.name}
+                subtitle={row.description || '—'}
+                chips={
+                  canUseCrossOwnerUi
+                    ? [ownerLabelById.get(String(row.ownerId)) || '—']
+                    : []
+                }
+                onEdit={
+                  canUpdate
+                    ? () => {
+                        setSelectedGroup(row);
+                        setOpenEdit(true);
+                      }
+                    : undefined
+                }
+              />
+            ))}
+          </TeamHubCardGrid>
+        ) : (
+          <TeamHubListTable
+            rows={pagedGroups}
+            columns={hubColumns}
+            rowKey={(row) => row._id}
+            emptyLabel={t('No groups found')}
+          />
+        )}
+
+        <TeamHubPagination
+          page={page}
+          limit={limit}
+          total={visibleGroups.length}
+          onPageChange={setPage}
+          onLimitChange={(n) => {
+            setLimit(n);
+            setPage(0);
+          }}
+          limitOptions={[5, 10, 20, 50]}
+          itemLabel="groupes"
+        />
+
+        {dialogs}
+      </Box>
+    );
+  }
+
   return <TeamRolesPageShell>
       <ToastContainer position="top-right" autoClose={3000} />
 

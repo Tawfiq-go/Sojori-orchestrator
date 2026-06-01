@@ -39,28 +39,24 @@ function TemplatePageInner() {
   const [listingsLoading, setListingsLoading] = useState(false);
   const [ownerListings, setOwnerListings] = useState<ListingPick[]>([]);
   const [referenceListingId, setReferenceListingId] = useState<string | null>(null);
+  const [selectedListingIds, setSelectedListingIds] = useState<string[]>([]);
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
   const [docLoading, setDocLoading] = useState(false);
   const [templateRefreshKey, setTemplateRefreshKey] = useState(0);
 
   const ownerIdForTabs = ownerKey === 'global' ? undefined : ownerKey;
 
-  /** Admin : filtre PM + sync owners. Owner PM : filtre annonces + sync listings. */
-  const syncMode = isAdmin ? 'owners' : 'listings';
+  /** Admin global → sync PMs. Admin + PM → sync PM + annonces. PM → sync annonces. */
+  const syncMode = isAdminTemplate ? 'owners' : isAdmin ? 'admin-pm' : 'listings';
   const adminViewingPm = isAdmin && !isAdminTemplate;
 
   const loadOwnerListings = useCallback(async () => {
-    if (adminViewingPm || (isAdminTemplate && isAdmin)) {
-      setOwnerListings([]);
-      setReferenceListingId(null);
-      setListingValues({});
-      setListingsLoading(false);
-      return;
-    }
     if (isAdminTemplate) {
       setOwnerListings([]);
       setReferenceListingId(null);
+      setSelectedListingIds([]);
       setListingValues({});
+      setListingsLoading(false);
       return;
     }
     setListingsLoading(true);
@@ -81,19 +77,26 @@ function TemplatePageInner() {
         location: [l.city, l.country].filter(Boolean).join(' · '),
       }));
       setOwnerListings(picks);
-      setReferenceListingId((prev) => {
-        if (picks.length === 0) return null;
-        if (prev && picks.some((p) => p.id === prev)) return prev;
-        return picks[0].id;
-      });
+      setSelectedListingIds((prev) => prev.filter((id) => picks.some((p) => p.id === id)));
+      if (adminViewingPm) {
+        setReferenceListingId(null);
+        setListingValues({});
+      } else {
+        setReferenceListingId((prev) => {
+          if (picks.length === 0) return null;
+          if (prev && picks.some((p) => p.id === prev)) return prev;
+          return picks[0].id;
+        });
+      }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Impossible de charger les annonces');
       setOwnerListings([]);
       setReferenceListingId(null);
+      setSelectedListingIds([]);
     } finally {
       setListingsLoading(false);
     }
-  }, [isAdminTemplate, isAdmin, ownerKey, adminViewingPm]);
+  }, [isAdminTemplate, ownerKey, adminViewingPm]);
 
   useEffect(() => {
     void loadOwnerListings();
@@ -119,9 +122,9 @@ function TemplatePageInner() {
   }, [ownerKey]);
 
   useEffect(() => {
-    if (!referenceListingId) return;
+    if (!referenceListingId || adminViewingPm) return;
     void loadReferenceDoc(referenceListingId);
-  }, [referenceListingId, loadReferenceDoc]);
+  }, [referenceListingId, loadReferenceDoc, adminViewingPm]);
 
   const referenceMeta = useMemo(
     () => ownerListings.find((l) => l.id === referenceListingId) ?? null,
@@ -169,14 +172,65 @@ function TemplatePageInner() {
         success?: boolean;
         data?: {
           orchestration?: { modified?: number };
-          ownerConfig?: { listings?: number; accessApplied?: number };
+          ownerConfig?: {
+            listings?: number;
+            listingApplied?: number;
+            chatbotApplied?: number;
+            failedListings?: Array<{ listingId: string; name: string; error: string }>;
+          };
         };
       };
       const n = body?.data?.orchestration?.modified ?? 0;
-      toast.success(`${n} annonce(s) synchronisée(s)`);
+      const listingN = body?.data?.ownerConfig?.listingApplied ?? 0;
+      const chatbotN = body?.data?.ownerConfig?.chatbotApplied ?? 0;
+      const failed = body?.data?.ownerConfig?.failedListings ?? [];
+      if (failed.length > 0) {
+        toast.warn(
+          `Orchestration ${n} annonce(s) · menu WhatsApp ${chatbotN}/${n} · ${failed.length} annonce(s) partielle(s)`,
+          { autoClose: 12000 },
+        );
+      } else {
+        toast.success(
+          `${n} annonce(s) — config listing sur ${listingN} annonce(s) · menu WhatsApp sur ${chatbotN} annonce(s)`,
+        );
+      }
     } catch (e: unknown) {
       toast.error(apiErrorMessage(e));
-      throw e;
+    }
+  };
+
+  const handleSyncSelectedListings = async (listingIds: string[]) => {
+    if (ownerKey === 'global' || listingIds.length === 0) return;
+    const allowed = new Set(ownerListings.map((l) => l.id));
+    const targets = listingIds.filter((id) => allowed.has(id));
+    if (targets.length === 0) {
+      toast.error('Aucune annonce valide sélectionnée pour ce PM');
+      return;
+    }
+    if (targets.length !== listingIds.length) {
+      toast.warn('Certaines annonces ignorées (hors périmètre du PM sélectionné)');
+    }
+    let ok = 0;
+    let fail = 0;
+    for (const listingId of targets) {
+      const name = ownerListings.find((l) => l.id === listingId)?.name ?? listingId;
+      try {
+        await Promise.all([
+          listingsService.applyListingOrchestrationFromOwner(listingId),
+          listingsService.applyListingOwnerConfigFromOwner(listingId),
+        ]);
+        ok += 1;
+      } catch (e: unknown) {
+        fail += 1;
+        console.error(`[sync listing] ${name}`, e);
+      }
+    }
+    if (ok > 0) {
+      toast.success(
+        `${ok} annonce(s) de ce PM synchronisée(s)${fail > 0 ? ` · ${fail} échec(s)` : ''}`,
+      );
+    } else {
+      toast.error(`Échec sync annonces (${fail})`);
     }
   };
 
@@ -210,13 +264,16 @@ function TemplatePageInner() {
         compact
         syncMode={syncMode}
         onSyncToOwner={isAdmin ? handleSyncToOwner : undefined}
-        onSyncToAllOwners={isAdmin ? handleSyncToAllOwners : undefined}
-        onSyncAllListings={!isAdmin ? handleSyncAllListings : undefined}
+        onSyncToAllOwners={isAdmin && isAdminTemplate ? handleSyncToAllOwners : undefined}
+        onSyncAllListings={!isAdminTemplate && !adminViewingPm ? handleSyncAllListings : undefined}
+        onSyncSelectedListings={adminViewingPm ? handleSyncSelectedListings : undefined}
         onSyncOneListing={!isAdmin ? handleSyncOneListing : undefined}
-        listingOptions={!isAdmin ? ownerListings : undefined}
+        listingOptions={!isAdminTemplate ? ownerListings : undefined}
         selectedListingId={!isAdmin ? referenceListingId : undefined}
         onListingChange={!isAdmin ? setReferenceListingId : undefined}
-        listingsLoading={!isAdmin ? listingsLoading : undefined}
+        selectedListingIds={adminViewingPm ? selectedListingIds : undefined}
+        onListingSelectionChange={adminViewingPm ? setSelectedListingIds : undefined}
+        listingsLoading={!isAdminTemplate ? listingsLoading : undefined}
       />
 
       {docLoading ? (
@@ -237,7 +294,9 @@ function TemplatePageInner() {
           listingCount={isAdmin ? 0 : ownerListings.length}
           isAdminTemplate={isAdminTemplate}
           adminViewingPm={adminViewingPm}
-          defaultTab={adminViewingPm ? 'orchestration-config' : undefined}
+          defaultTab={
+            isAdminTemplate ? 'whatsapp-config' : adminViewingPm ? 'orchestration-config' : undefined
+          }
         />
       )}
     </Box>

@@ -31,23 +31,115 @@ export function fullTaskPriorityToEmergency(priority?: string): string {
   return 'Normal';
 }
 
+export interface ReservationMetaLike extends ReservationDatesLike {
+  guestCountry?: string | null;
+  channelName?: string | null;
+  reservationNumber?: string | null;
+  adults?: number;
+}
+
+function slotIdToTimeLabel(slotId: unknown): string | undefined {
+  const m = /^(\d{1,2})-(\d{1,2})$/.exec(String(slotId ?? '').trim());
+  if (!m) return undefined;
+  return `${m[1]}h-${m[2]}h`;
+}
+
+function formatPayloadTime(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const s = String(value).trim();
+  if (!s) return undefined;
+  if (s.includes('T')) {
+    const m = s.match(/T(\d{2}):(\d{2})/);
+    if (m) return `${m[1]}:${m[2]}`;
+  }
+  if (s.includes(':')) return s.slice(0, 5);
+  const n = Number(s);
+  if (Number.isFinite(n) && n >= 0 && n < 24) {
+    return `${String(Math.floor(n)).padStart(2, '0')}:00`;
+  }
+  return s;
+}
+
+function mapPayloadHourSource(
+  payload: Record<string, unknown>,
+): 'default' | 'client' | 'admin' {
+  if (payload.selectedByGuest === true) return 'client';
+  const s = String(payload.source || 'default').toLowerCase();
+  if (s === 'guest' || s === 'whatsapp' || s === 'client') return 'client';
+  if (s === 'admin') return 'admin';
+  return 'default';
+}
+
+function mapRegistrationCounts(
+  payload: Record<string, unknown>,
+  reservationAdults?: number,
+) {
+  const guests = Array.isArray(payload.guests) ? payload.guests : [];
+  const total = Math.max(
+    0,
+    Number(payload.totalToRegister ?? reservationAdults ?? guests.length ?? 0),
+  );
+  const validated = guests.filter(
+    (g) => (g as { done?: boolean }).done === true,
+  ).length;
+  const draft = guests.filter((g) => {
+    const x = g as { done?: boolean; draft?: boolean };
+    return x.done !== true && x.draft === true;
+  }).length;
+  const notRegistered = Math.max(0, total - validated - draft);
+  return {
+    adults: total || reservationAdults,
+    nbreGuestValidated: validated,
+    nbreGuestDraft: draft,
+    nbreGuestNotRegistered: notRegistered,
+  };
+}
+
 export function fullTaskToListItem(
   task: Record<string, unknown>,
   staffById: Record<string, Record<string, unknown>> = {},
   listingById: Record<string, string> = {},
-  reservationDates?: ReservationDatesLike,
+  reservationMeta?: ReservationMetaLike,
 ) {
   const legacyStatus = FULLTASK_TO_LEGACY_STATUS[String(task.status)] || 'CREATED';
   const assignedTo = task.assignedTo ? String(task.assignedTo) : '';
   const staff = assignedTo ? staffById[assignedTo] : null;
   const listingId = task.listingId ? String(task.listingId) : '';
-  const startIso = inferTaskPlannedIso(task, reservationDates);
+  const startIso = inferTaskPlannedIso(task, reservationMeta);
   const endIso = task.dueAt
     ? new Date(String(task.dueAt)).toISOString()
     : startIso;
   const payload = (task.payload || {}) as Record<string, unknown>;
+  const taskType = String(task.type || '');
+  const regCounts =
+    taskType === 'registration'
+      ? mapRegistrationCounts(payload, reservationMeta?.adults)
+      : null;
+  const isCleaningType =
+    taskType === 'cleaning_free' || taskType === 'cleaning_paid';
+  const plannedTime =
+    taskType === 'arrival_choose' || taskType === 'departure_choose' || isCleaningType
+      ? formatPayloadTime(
+          payload.time ?? payload.selectedTime ?? payload.defaultTime,
+        ) ?? slotIdToTimeLabel(payload.slotId)
+      : undefined;
+  const hourSource =
+    taskType === 'arrival_choose' ||
+    taskType === 'departure_choose' ||
+    isCleaningType
+      ? mapPayloadHourSource(payload)
+      : undefined;
+  const requestedAtRaw = task.requestedAt
+    ? String(task.requestedAt)
+    : hourSource === 'client'
+      ? formatPayloadTime(payload.time ?? payload.requestedTime)
+      : formatPayloadTime(payload.requestedTime);
+  const scheduledAtRaw = task.scheduledAt
+    ? String(task.scheduledAt)
+    : formatPayloadTime(payload.scheduledTime ?? payload.defaultTime);
   const reservationId = task.reservationId ? String(task.reservationId) : '';
   const reservationNumber =
+    reservationMeta?.reservationNumber ||
     (payload.reservationNumber as string) ||
     (payload.reservationCode as string) ||
     (reservationId.length > 8 ? `…${reservationId.slice(-8)}` : reservationId) ||
@@ -74,19 +166,36 @@ export function fullTaskToListItem(
     reservationId,
     reservationNumber,
     reservationCheckIn:
-      reservationDates?.arrivalDate != null
-        ? String(reservationDates.arrivalDate).slice(0, 10)
+      reservationMeta?.arrivalDate != null
+        ? String(reservationMeta.arrivalDate).slice(0, 10)
         : undefined,
     reservationCheckOut:
-      reservationDates?.departureDate != null
-        ? String(reservationDates.departureDate).slice(0, 10)
+      reservationMeta?.departureDate != null
+        ? String(reservationMeta.departureDate).slice(0, 10)
         : undefined,
+    guestCountry: reservationMeta?.guestCountry ?? null,
+    channelName: reservationMeta?.channelName ?? null,
+    reservationAdults: reservationMeta?.adults,
+    plannedTime,
+    hourSource,
+    requestedAt: requestedAtRaw || null,
+    scheduledAt: scheduledAtRaw || null,
+    adults: regCounts?.adults,
+    nbreGuestValidated: regCounts?.nbreGuestValidated,
+    nbreGuestDraft: regCounts?.nbreGuestDraft,
+    nbreGuestNotRegistered: regCounts?.nbreGuestNotRegistered,
     ownerId: task.ownerId,
     staffId: staff?._id || task.assignedTo,
     staffCode: staff?._id ? String(staff._id) : undefined,
     staffName: staff?.name || null,
     staffPhone: staff?.phone || null,
     descriptions: task.requestNote ? [{ description: String(task.requestNote) }] : [],
+    supportCategoryLabel:
+      taskType === 'support'
+        ? String(payload.categoryLabel ?? payload.categoryTitle ?? '').trim() || undefined
+        : undefined,
+    supportCategoryIcon:
+      taskType === 'support' ? String(payload.categoryIcon ?? '').trim() || undefined : undefined,
     comment: task.executionNote ? String(task.executionNote) : '',
     isArchived: false,
     isClientRequest: task.status === 'waiting_guest',
@@ -124,11 +233,22 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
   };
 }
 
-export function designStaffToApi(staff: Record<string, unknown>) {
+export function designStaffToApi(
+  staff: Record<string, unknown>,
+  opts?: { isCreate?: boolean },
+) {
   const sched = staff.schedule as { daysOfWeek?: number[]; timeWindows?: { start: string; end: string }[] };
   const schedule: { dayOfWeek: number; start: string; end: string }[] = [];
-  const days = sched?.daysOfWeek || [];
-  const windows = sched?.timeWindows || [{ start: '09:00', end: '18:00' }];
+  const days = Array.isArray(sched?.daysOfWeek)
+    ? sched.daysOfWeek
+    : opts?.isCreate
+      ? [0, 1, 2, 3, 4]
+      : [];
+  const windows = sched?.timeWindows?.length
+    ? sched.timeWindows
+    : opts?.isCreate
+      ? [{ start: '09:00', end: '18:00' }]
+      : [];
   days.forEach((dayOfWeek) => {
     windows.forEach((w) => schedule.push({ dayOfWeek, start: w.start, end: w.end }));
   });
@@ -214,9 +334,12 @@ export function apiOrchestrationToDesign(doc: Record<string, unknown> | null) {
     relances: ((w.reminders as Record<string, unknown>[]) || []).map((r, j) => {
       const hours = r.hours as number | undefined;
       const useHours = hours !== undefined && hours !== null;
+      const ch = r.channel as { primary?: string; fallback?: string };
+      const deliveryChannel = normDeliveryChannel(ch?.primary ?? 'whatsapp');
       return {
       id: `rel-${i}-${j}`,
-      channel: 'whatsapp' as const,
+      channel: (deliveryChannel === 'whatsapp' ? 'whatsapp' : deliveryChannel === 'email' ? 'email' : 'sms') as const,
+      deliveryChannel,
       reference: mapRefFromApi(String(r.ref || 'checkin')) as 'check_in',
       delay: {
         value: useHours ? Number(hours) : Number(r.day ?? 0),
@@ -504,10 +627,19 @@ export function designOrchestrationToApi(
           : (r as { template?: string }).template
             ? { messageId: (r as { template: string }).template }
             : {};
+        const deliveryChannel = normDeliveryChannel(
+          (r as { deliveryChannel?: string }).deliveryChannel ??
+            (r as { channel?: string }).channel,
+        );
+        const channel = {
+          primary: deliveryChannelToApi(deliveryChannel),
+          fallback: deliveryChannel === 'whatsapp' ? 'OTA' : 'email',
+        };
         if (delay?.unit === 'hours') {
           return {
             ref: mapRefToApi((r as { reference?: string }).reference),
             hours: delay.value ?? 0,
+            channel,
             ...messageId,
           };
         }
@@ -515,6 +647,7 @@ export function designOrchestrationToApi(
           ref: mapRefToApi((r as { reference?: string }).reference),
           day: delay?.value ?? 0,
           time: (r as { time?: string }).time || '09:00',
+          channel,
           ...messageId,
         };
       }),

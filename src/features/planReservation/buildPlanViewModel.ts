@@ -3,6 +3,7 @@ import {
   FULLTASK_TASK_TYPE_EMOJI,
   labelForTaskTypeId,
 } from '../taskHub/staff-design/fulltaskTaskTypes';
+import { mapDispatchDisplay } from './planDispatchDisplay';
 import type {
   Channel,
   EventStatus,
@@ -27,6 +28,12 @@ import {
   sequencePlanOrderKey,
   sortPlanEventsByListOrder,
 } from './planEventOrder';
+import {
+  anchorDateForScheduleRef,
+  formatScheduleOffset,
+  inferScheduleOffsetFromDates,
+  normalizeScheduleRef,
+} from './planScheduleLabel';
 
 export interface FulltaskPlanDoc {
   reservationId: string;
@@ -37,6 +44,7 @@ export interface FulltaskPlanDoc {
   status: 'en_cours' | 'termine' | 'bloque' | 'annule' | 'archive';
   sequences: Array<{
     taskId: string;
+    taskScheduledDate?: string | Date;
     taskType: string;
     status: 'en_attente' | 'en_cours' | 'termine' | 'saute';
     relances: Array<{
@@ -44,12 +52,29 @@ export interface FulltaskPlanDoc {
       scheduledAt: string | Date;
       sentAt?: string | Date | null;
       status: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+      dispatchLog?: Array<{
+        at: string | Date;
+        ok: boolean;
+        channel?: string;
+        source?: 'manual' | 'scheduler';
+        error?: string;
+      }>;
+      scheduleRef?: string;
+      scheduleDay?: number;
+      scheduleTime?: string;
     }>;
     staffReminders?: Array<{
       label: string;
       scheduledAt: string | Date;
       sentAt?: string | Date | null;
-      status: 'en_attente' | 'envoyee' | 'saute';
+      status: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+      dispatchLog?: Array<{
+        at: string | Date;
+        ok: boolean;
+        channel?: string;
+        source?: 'manual' | 'scheduler';
+        error?: string;
+      }>;
     }>;
     assignation?: {
       status: 'en_recherche' | 'trouvee' | 'echec';
@@ -69,6 +94,9 @@ export interface FulltaskPlanDoc {
       scheduledAt: string | Date;
       status: 'en_attente' | 'declenchee' | 'resolue';
       triggeredAt?: string | Date | null;
+      scheduleRef?: string;
+      scheduleDay?: number;
+      scheduleTime?: string;
     } | null;
   }>;
   messages: Array<{
@@ -80,12 +108,22 @@ export interface FulltaskPlanDoc {
       template?: string;
       messageFr?: string;
       messageId?: string;
+      dispatchLog?: Array<{
+        at: string | Date;
+        ok: boolean;
+        channel?: string;
+        source?: 'manual' | 'scheduler';
+        error?: string;
+      }>;
     }>;
   uiPlanListOrder?: string[];
+  /** Origine config utilisée pour ce plan (API srv-fulltask). */
+  orchestrationConfigSource?: 'owner' | 'global_template';
   guestPhone?: string;
   guestName?: string;
   checkIn?: string | Date;
   checkOut?: string | Date;
+  bookingCreatedAt?: string | Date;
 }
 
 const MONTHS_SHORT = ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUL', 'AOÛ', 'SEP', 'OCT', 'NOV', 'DÉC'];
@@ -181,6 +219,76 @@ function countSteps(plan: FulltaskPlanDoc) {
   return { done, inProgress, upcoming, blocked, progress: done / total };
 }
 
+export interface PlanListSummaryDoc {
+  reservationId: string;
+  planCode?: string;
+  reservationCode?: string;
+  listingId: string;
+  ownerId?: string;
+  status?: string;
+  guestName?: string;
+  checkIn?: string | Date;
+  checkOut?: string | Date;
+}
+
+export function deriveReservationStatusFromSummary(
+  checkIn: Date | null,
+  checkOut: Date | null,
+  planStatus?: string,
+  now = new Date(),
+): PlanStatus {
+  if (planStatus === 'annule' || planStatus === 'bloque') return 'blocked';
+  if (planStatus === 'termine') return 'done';
+  if (checkOut && checkOut < now) return 'done';
+  if (checkIn && checkIn > now) return 'future';
+  if (checkIn && checkOut && checkIn <= now && checkOut >= now) return 'now';
+  if (planStatus === 'en_cours') return 'now';
+  return 'pending';
+}
+
+/** Vue sidebar à partir de la liste légère API (sans plan complet). */
+export function buildReservationViewFromSummary(
+  summary: PlanListSummaryDoc,
+  listingName?: string,
+): Reservation {
+  const guestName = summary.guestName || 'Invité';
+  const checkIn = toDate(summary.checkIn)?.toISOString() || new Date().toISOString();
+  const checkOut = toDate(summary.checkOut)?.toISOString() || checkIn;
+  const reference = summary.reservationCode?.trim() || summary.reservationId.slice(-8).toUpperCase();
+  const planCode = summary.planCode?.trim() || '—';
+  const status = deriveReservationStatusFromSummary(
+    toDate(summary.checkIn),
+    toDate(summary.checkOut),
+    summary.status,
+  );
+
+  return {
+    id: summary.reservationId,
+    planCode,
+    reference,
+    guest: {
+      id: summary.reservationId,
+      name: guestName,
+      initials: initials(guestName),
+      avatarColor: avatarColorFromId(summary.reservationId),
+    },
+    listing: {
+      id: summary.listingId,
+      name: listingName || 'Logement',
+    },
+    source: 'Direct',
+    guestsCount: 1,
+    checkIn,
+    checkOut,
+    status,
+    progress: status === 'done' ? 1 : 0,
+    done: status === 'done' ? 1 : 0,
+    inProgress: status === 'now' || status === 'pending' ? 1 : 0,
+    upcoming: status === 'future' ? 1 : 0,
+    blocked: status === 'blocked' ? 1 : 0,
+  };
+}
+
 export function deriveReservationStatus(
   resa: ApiReservation,
   plan: FulltaskPlanDoc | null,
@@ -273,15 +381,58 @@ function countryFlagEmoji(country?: string | null): string | undefined {
   return undefined;
 }
 
+function mapDispatchLog(
+  log?: Array<{
+    at: string | Date;
+    ok: boolean;
+    channel?: string;
+    source?: 'manual' | 'scheduler';
+    error?: string;
+  }>,
+  options?: { itemDelivered?: boolean },
+) {
+  if (!log?.length) return { lastDispatch: undefined, lastDispatchAttempt: undefined, dispatchLog: undefined };
+  const dispatchLog = log.map((e) => ({
+    at: typeof e.at === 'string' ? e.at : new Date(e.at).toISOString(),
+    ok: e.ok,
+    channel: e.channel,
+    source: e.source,
+    error: e.error,
+  }));
+  const { lastDispatch, lastAttempt } = mapDispatchDisplay(dispatchLog, options);
+  return { lastDispatch, lastDispatchAttempt: lastAttempt, dispatchLog };
+}
+
 function mapRelanceExecution(
-  r: { label: string; scheduledAt: string | Date; status: string },
+  r: {
+    label: string;
+    scheduledAt: string | Date;
+    status: string;
+    dispatchLog?: Array<{
+      at: string | Date;
+      ok: boolean;
+      channel?: string;
+      source?: 'manual' | 'scheduler';
+      error?: string;
+    }>;
+  },
   i: number,
   channel: Relance['channel'] = 'wa',
   idPrefix = 'rel',
   now = new Date(),
 ): Pick<
   PlanGuestRelanceItem,
-  'id' | 'step' | 'label' | 'dueAt' | 'status' | 'channel' | 'executionStatus' | 'rawStatus'
+  | 'id'
+  | 'step'
+  | 'label'
+  | 'dueAt'
+  | 'status'
+  | 'channel'
+  | 'executionStatus'
+  | 'rawStatus'
+  | 'lastDispatch'
+  | 'lastDispatchAttempt'
+  | 'dispatchLog'
 > {
   const due = toDate(r.scheduledAt) || now;
   const raw = r.status as PlanGuestRelanceItem['rawStatus'];
@@ -298,6 +449,10 @@ function mapRelanceExecution(
   if (executionStatus === 'envoyee') status = 'sent';
   else if (executionStatus === 'sautee' || executionStatus === 'echec') status = 'skipped';
 
+  const { lastDispatch, lastDispatchAttempt, dispatchLog } = mapDispatchLog(r.dispatchLog, {
+    itemDelivered: raw === 'envoyee',
+  });
+
   return {
     id: `${idPrefix}-${i}`,
     step: i + 1,
@@ -307,6 +462,9 @@ function mapRelanceExecution(
     channel,
     executionStatus,
     rawStatus: raw,
+    lastDispatch,
+    lastDispatchAttempt,
+    dispatchLog,
   };
 }
 
@@ -619,6 +777,8 @@ function buildSequenceView(
   planStep: number | undefined,
   plan: FulltaskPlanDoc,
   now = new Date(),
+  cleaningFreeCount = 1,
+  sequenceId = '',
 ): PlanSequenceView {
   const start = toDate(seq.assignation?.startAt) || toDate(seq.relances[0]?.scheduledAt) || now;
   const end = toDate(seq.assignation?.endAt);
@@ -626,32 +786,100 @@ function buildSequenceView(
   const icon =
     FULLTASK_TASK_TYPE_EMOJI[seq.taskType as keyof typeof FULLTASK_TASK_TYPE_EMOJI] || '⚙️';
 
+  const taskAnchorDate = toDate(seq.taskScheduledDate) ?? undefined;
   const relances: PlanGuestRelanceItem[] = (seq.relances ?? []).map((r, i) => {
     const at = toDate(r.scheduledAt) || now;
     const m = mapRelanceExecution(r, i, 'wa', 'rel', now);
     const meta = catalogMetaForSequenceRelance(plan, seq, at, r.label);
+    const scheduleRef = normalizeScheduleRef(r.scheduleRef, seq.taskType);
+    const anchor =
+      anchorDateForScheduleRef(plan, scheduleRef, taskAnchorDate) ||
+      toDate(
+        scheduleRef === 'checkout'
+          ? plan.checkOut
+          : scheduleRef === 'scheduledDate'
+            ? taskAnchorDate
+            : plan.checkIn,
+      ) ||
+      at;
     return {
       ...m,
+      relanceIndex: i,
       channel: meta.catalogChannel ?? m.channel,
       catalogTemplate: meta.catalogTemplate,
+      scheduleOffsetLabel:
+        formatScheduleOffset(r.scheduleDay, scheduleRef, r.scheduleTime, seq.taskType) ??
+        inferScheduleOffsetFromDates(
+          at,
+          anchor,
+          scheduleRef,
+          r.scheduleTime,
+          seq.taskType,
+        ),
     };
   });
 
   const staffReminders: PlanStaffReminderItem[] = (seq.staffReminders ?? []).map((r, i) => {
+    const at = toDate(r.scheduledAt) || now;
     const m = mapRelanceExecution(r, i, 'sms', 'staff', now);
+    const srRef = normalizeScheduleRef(
+      (r as { scheduleRef?: string }).scheduleRef,
+      seq.taskType,
+    );
+    const srAnchor =
+      anchorDateForScheduleRef(plan, srRef, taskAnchorDate) ||
+      toDate(
+        srRef === 'checkout'
+          ? plan.checkOut
+          : srRef === 'scheduledDate'
+            ? taskAnchorDate
+            : plan.checkIn,
+      ) ||
+      at;
+    const scheduleDay = (r as { scheduleDay?: number }).scheduleDay;
+    const scheduleTime = (r as { scheduleTime?: string }).scheduleTime;
     return {
       ...m,
+      reminderIndex: i,
       whatsappTemplateId: r.messageId?.trim() || undefined,
       rawStatus: r.status as PlanStaffReminderItem['rawStatus'],
+      scheduleOffsetLabel:
+        formatScheduleOffset(scheduleDay, srRef, scheduleTime, seq.taskType) ??
+        inferScheduleOffsetFromDates(at, srAnchor, srRef, scheduleTime, seq.taskType),
     };
   });
 
   const staffAssignment = mapStaffAssignment(seq, staffNames, now);
   const attempts = mapAttempts(seq, staffNames);
+  const escRef = normalizeScheduleRef(seq.escalade?.scheduleRef, seq.taskType);
+  const escAnchor =
+    anchorDateForScheduleRef(plan, escRef, taskAnchorDate) ||
+    toDate(
+      escRef === 'checkout'
+        ? plan.checkOut
+        : escRef === 'scheduledDate'
+          ? taskAnchorDate
+          : plan.checkIn,
+    ) ||
+    now;
   const escalade = seq.escalade
     ? {
         scheduled: seq.escalade.status === 'en_attente',
         dueAt: formatWhen(toDate(seq.escalade.scheduledAt) || now),
+        scheduleOffsetLabel:
+          formatScheduleOffset(
+            seq.escalade.scheduleDay,
+            escRef,
+            seq.escalade.scheduleTime,
+            seq.taskType,
+          ) ??
+          inferScheduleOffsetFromDates(
+            toDate(seq.escalade.scheduledAt) || now,
+            escAnchor,
+            escRef,
+            seq.escalade.scheduleTime,
+            seq.taskType,
+          ),
         description:
           seq.escalade.status === 'declenchee'
             ? 'Escalade PM déclenchée'
@@ -659,10 +887,17 @@ function buildSequenceView(
       }
     : undefined;
 
+  const baseTitle = labelForTaskTypeId(seq.taskType);
+  const title =
+    seq.taskType === 'cleaning_free' && cleaningFreeCount > 1
+      ? `${baseTitle} · ${formatWhen(start)}`
+      : baseTitle;
+
   return {
-    id: String(seq.taskId),
+    id: sequenceId || String(seq.taskId || seq.taskType),
+    taskId: String(seq.taskId || ''),
     taskType: seq.taskType,
-    title: labelForTaskTypeId(seq.taskType),
+    title,
     icon: String(icon),
     status,
     atDisplay: formatWhen(start),
@@ -689,7 +924,8 @@ export function buildPlanViewModel(
   const now = new Date();
   const listOrder = uiPlanListOrder?.length ? uiPlanListOrder : plan.uiPlanListOrder;
 
-  for (const m of plan.messages) {
+  for (let messageIndex = 0; messageIndex < plan.messages.length; messageIndex++) {
+    const m = plan.messages[messageIndex];
     if (isWorkflowRelanceMessage(m.label)) continue;
 
     const at = toDate(m.scheduledAt) || now;
@@ -700,34 +936,49 @@ export function buildPlanViewModel(
       messageCategory === 'simple'
         ? messagePlanOrderKey(m.messageId, m.template)
         : inferWorkflowKeyFromRelanceLabel(m.label);
+    const delivered = m.status === 'envoye';
+    const { lastDispatch, lastDispatchAttempt, dispatchLog } = mapDispatchLog(m.dispatchLog, {
+      itemDelivered: delivered,
+    });
     events.push({
       id: `msg-${m.label}-${at.getTime()}`,
       kind: 'message' as PlanEventKind,
       status,
       title: m.label,
       description:
-        messageCategory === 'simple'
-          ? `Message simple${m.template ? ` · ${m.template}` : ''}`
-          : m.template
+        messageCategory === 'relance'
+          ? m.template
             ? `Relance liée · ${m.template}`
-            : 'Relance liée à une séquence',
+            : 'Relance liée à une séquence'
+          : undefined,
       icon: ch === 'ota' ? '📧' : ch === 'email' ? '✉️' : '💬',
       at: at.toISOString(),
       atDisplay: formatWhen(at),
       channel: ch,
       template: m.template,
-      messagePreviewFr: m.messageFr,
+      messageSendStatus: m.status as PlanEvent['messageSendStatus'],
       channelMeta: m.sentAt ? `Envoyé · ${formatWhen(toDate(m.sentAt) || at)}` : undefined,
       planOrderKey,
       messageCategory,
+      messageIndex,
+      lastDispatch,
+      lastDispatchAttempt,
+      dispatchLog,
     });
   }
+
+  const cleaningFreeCount = plan.sequences.filter((s) => s.taskType === 'cleaning_free').length;
 
   for (const seq of plan.sequences) {
     const start = toDate(seq.assignation?.startAt) || toDate(seq.relances[0]?.scheduledAt) || now;
     const end = toDate(seq.assignation?.endAt);
     const status = eventStatusAt(start, seq.status, now);
     const icon = FULLTASK_TASK_TYPE_EMOJI[seq.taskType as keyof typeof FULLTASK_TASK_TYPE_EMOJI] || '⚙️';
+    const baseTitle = labelForTaskTypeId(seq.taskType);
+    const seqTitle =
+      seq.taskType === 'cleaning_free' && cleaningFreeCount > 1
+        ? `${baseTitle} · ${formatWhen(start)}`
+        : baseTitle;
     const relances = seq.relances?.length
       ? seq.relances.map((r, i) => mapRelance(r, i, 'wa', 'rel'))
       : undefined;
@@ -754,12 +1005,16 @@ export function buildPlanViewModel(
     if (staffReminders?.length) futureParts.push(`${staffReminders.length} rappel(s) staff`);
     if (escalade) futureParts.push('escalade');
 
+    const seqEventKey = seq.taskId
+      ? String(seq.taskId)
+      : `${seq.taskType}-${start.getTime()}`;
+
     events.push({
-      id: `seq-${seq.taskId}`,
+      id: `seq-${seqEventKey}`,
       kind: 'sequence',
       status,
       planOrderKey: sequencePlanOrderKey(seq.taskType),
-      title: labelForTaskTypeId(seq.taskType),
+      title: seqTitle,
       description: staffAssignment
         ? staffAssignment.status === 'found'
           ? `Staff · ${staffAssignment.staffName || 'assigné'}${staffAssignment.autoAssign ? ' · auto-accept' : ''}`
@@ -789,12 +1044,30 @@ export function buildPlanViewModel(
     }
   }
 
-  const sequences = plan.sequences.map((seq) =>
-    buildSequenceView(seq, staffNames, stepByTaskId.get(String(seq.taskId)), plan, now),
-  );
+  const sequences = plan.sequences.map((seq, idx) => {
+    const start =
+      toDate(seq.assignation?.startAt) ||
+      toDate(seq.relances[0]?.scheduledAt) ||
+      now;
+    const seqEventKey = seq.taskId
+      ? String(seq.taskId)
+      : `${seq.taskType}-${start.getTime()}-${idx}`;
+    return buildSequenceView(
+      seq,
+      staffNames,
+      stepByTaskId.get(seqEventKey),
+      plan,
+      now,
+      cleaningFreeCount,
+      seqEventKey,
+    );
+  });
 
   return {
     reservationId: plan.reservationId,
+    ownerId: plan.ownerId,
+    listingId: plan.listingId,
+    orchestrationConfigSource: plan.orchestrationConfigSource,
     events: ordered,
     sequences,
     messages: ordered.filter((e) => e.kind === 'message'),

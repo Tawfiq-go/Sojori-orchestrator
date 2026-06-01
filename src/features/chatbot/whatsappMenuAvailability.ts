@@ -160,8 +160,14 @@ function checkTimeWindow(
 const EVENT_ALIASES: Record<string, string> = {
   E_completed: 'online_checkin_completed',
   E: 'online_checkin_completed',
+  D1_completed: 'arrival_time_selected',
   D1: 'arrival_time_selected',
-  D2: 'checkout_time_confirmed',
+  D2_completed: 'departure_time_selected',
+  D2: 'departure_time_selected',
+  D3_completed: 'arrival_declared',
+  D3: 'arrival_declared',
+  D4_completed: 'departure_declared',
+  D4: 'departure_declared',
 };
 
 function normalizeEventKey(key: string): string {
@@ -210,7 +216,10 @@ export function deriveEventsFromGuestContext(gc: GuestContextLike | null | undef
   return {
     online_checkin_completed: Boolean(gc.registration?.complete),
     arrival_time_selected: Boolean(gc.arrival?.choose?.chosen),
+    departure_time_selected: Boolean(gc.departure?.choose?.chosen),
     checkout_time_confirmed: Boolean(gc.departure?.choose?.chosen),
+    arrival_declared: Boolean(gc.arrival?.declare?.yes),
+    departure_declared: Boolean(gc.departure?.declare?.yes),
   };
 }
 
