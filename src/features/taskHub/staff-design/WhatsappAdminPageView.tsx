@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react';
 import './staffDesign.css';
 import {
+  WA_ADMIN_NOTIFICATION_GROUPS,
   WA_ADMIN_TYPES,
   WA_LANGUAGES,
+  WA_TASK_NOTIFY_CANCELLED,
+  WA_TASK_NOTIFY_CREATED,
   cyclePermissionAccess,
+  defaultAdminNotifications,
   emptyWhatsappAdmin,
   type WhatsappAdminDesign,
 } from './whatsappAdminTypes';
@@ -42,7 +46,12 @@ export default function WhatsappAdminPageView({
 
   const openEdit = (a: WhatsappAdminDesign) => {
     setEditingId(a._id);
-    setForm({ ...a, permissions: a.permissions.map((p) => ({ ...p })), listingIds: [...a.listingIds] });
+    setForm({
+      ...a,
+      permissions: a.permissions.map((p) => ({ ...p })),
+      listingIds: [...a.listingIds],
+      notifications: { ...defaultAdminNotifications(), ...a.notifications },
+    });
     setDrawerOpen(true);
   };
 
@@ -101,6 +110,24 @@ export default function WhatsappAdminPageView({
     return 'N';
   };
 
+  const toggleNotification = (key: string) => {
+    patchForm({
+      notifications: {
+        ...form.notifications,
+        [key]: form.notifications[key] === false,
+      },
+    });
+  };
+
+  const setAllTaskNotify = (event: 'created' | 'cancelled', on: boolean) => {
+    const items = event === 'created' ? WA_TASK_NOTIFY_CREATED : WA_TASK_NOTIFY_CANCELLED;
+    const patch: Record<string, boolean> = { ...form.notifications };
+    for (const item of items) {
+      patch[item.key] = on;
+    }
+    patchForm({ notifications: patch });
+  };
+
   return (
     <div className="so-staff-root" style={{ padding: 0, minHeight: 0 }}>
       <div className="section-hero">
@@ -156,7 +183,7 @@ export default function WhatsappAdminPageView({
                     const meta = WA_ADMIN_TYPES.find((t) => t.type === p.type);
                     return (
                       <span key={p.type} className="task-chip active">
-                        {meta?.abbr}:{permLabel(p.access)}
+                        {meta?.menuLetter}:{permLabel(p.access)}
                       </span>
                     );
                   })}
@@ -269,7 +296,13 @@ export default function WhatsappAdminPageView({
             </div>
 
             <div className="form-section full">
-              <div className="form-section-h">Permissions · clic pour N → R → W</div>
+              <div className="form-section-h">
+                Menus WhatsApp · lettre · N → R → W
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 8 }}>
+                Contrôle l&apos;ouverture des flows (M messages, V avis, L leads, R résa, D arr/dép., T
+                tâches). Indépendant des notifications push ci-dessous.
+              </div>
               <div className="pill-group">
                 {form.permissions.map((p, idx) => {
                   const meta = WA_ADMIN_TYPES.find((t) => t.type === p.type);
@@ -287,10 +320,125 @@ export default function WhatsappAdminPageView({
                         patchForm({ permissions: next });
                       }}
                     >
-                      {meta?.abbr}:{permLabel(p.access)} {meta?.label}
+                      <strong>{meta?.menuLetter}</strong> · {meta?.label}{' '}
+                      <span style={{ opacity: 0.85 }}>({permLabel(p.access)})</span>
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            <div className="form-section full">
+              <div className="form-section-h">Notifications push WhatsApp</div>
+              <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 10 }}>
+                Messages automatiques reçus sur ce numéro (sans taper une lettre). Désactivé si banni.
+              </div>
+              {WA_ADMIN_NOTIFICATION_GROUPS.map((group) => (
+                <div key={group.title} style={{ marginBottom: 12 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      color: 'var(--t2)',
+                      marginBottom: 4,
+                    }}
+                  >
+                    {group.title}
+                  </div>
+                  {group.hint ? (
+                    <div style={{ fontSize: 10, color: 'var(--t3)', marginBottom: 6 }}>{group.hint}</div>
+                  ) : null}
+                  <div className="pill-group">
+                    {group.items.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className={`pill-toggle${form.notifications[item.key] !== false ? ' on' : ''}`}
+                        onClick={() => toggleNotification(item.key)}
+                      >
+                        {form.notifications[item.key] !== false ? '🔔' : '🔕'} {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div style={{ marginBottom: 12 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    color: 'var(--t2)',
+                    marginBottom: 4,
+                  }}
+                >
+                  Tâches · création
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--t3)', marginBottom: 6 }}>
+                  Push à la création (status new). Par défaut : OFF pour déclarer / choisir créneau /
+                  enregistrement / ménage plan — ON pour transport, courses, conciergerie, etc.
+                </div>
+                <div className="pill-group" style={{ marginBottom: 6 }}>
+                  <button type="button" className="pill-toggle" onClick={() => setAllTaskNotify('created', true)}>
+                    Tout 🔔
+                  </button>
+                  <button type="button" className="pill-toggle" onClick={() => setAllTaskNotify('created', false)}>
+                    Tout 🔕
+                  </button>
+                </div>
+                <div className="pill-group">
+                  {WA_TASK_NOTIFY_CREATED.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`pill-toggle${form.notifications[item.key] !== false ? ' on' : ''}`}
+                      onClick={() => toggleNotification(item.key)}
+                    >
+                      {form.notifications[item.key] !== false ? '🔔' : '🔕'} {item.emoji} {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    color: 'var(--t2)',
+                    marginBottom: 4,
+                  }}
+                >
+                  Tâches · annulation
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--t3)', marginBottom: 6 }}>
+                  Push quand une tâche est annulée manuellement. Si la réservation est annulée : une
+                  seule notif « Réservation annulée » (section Réservation) — pas de push par tâche
+                  pour l&apos;admin ; le staff assigné reçoit quand même sa notif.
+                </div>
+                <div className="pill-group" style={{ marginBottom: 6 }}>
+                  <button type="button" className="pill-toggle" onClick={() => setAllTaskNotify('cancelled', true)}>
+                    Tout 🔔
+                  </button>
+                  <button type="button" className="pill-toggle" onClick={() => setAllTaskNotify('cancelled', false)}>
+                    Tout 🔕
+                  </button>
+                </div>
+                <div className="pill-group">
+                  {WA_TASK_NOTIFY_CANCELLED.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`pill-toggle${form.notifications[item.key] !== false ? ' on' : ''}`}
+                      onClick={() => toggleNotification(item.key)}
+                    >
+                      {form.notifications[item.key] !== false ? '🔔' : '🔕'} {item.emoji} {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
