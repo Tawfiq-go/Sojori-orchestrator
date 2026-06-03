@@ -49,10 +49,11 @@ export function inferTaskPlannedDay(
   if (type === 'departure_choose' || type === 'departure_declare') {
     return checkOut;
   }
-  if (type === 'cleaning_free') {
+  if (type === 'cleaning_free' || type === 'cleaning_paid') {
+    const payloadDate = payload.date ? toDayIso(String(payload.date)) : undefined;
     const slots = payload.slots as { date?: string }[] | undefined;
     const slotDay = slots?.[0]?.date ? toDayIso(slots[0].date) : undefined;
-    return slotDay || checkIn;
+    return payloadDate || slotDay || checkIn;
   }
 
   return checkIn || checkOut;

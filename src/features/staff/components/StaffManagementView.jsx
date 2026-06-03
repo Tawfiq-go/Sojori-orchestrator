@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
-import { Box, Card, CardContent, Typography, Button, TextField, InputAdornment, Tabs, Tab, IconButton, Chip, Avatar, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Select, MenuItem, FormControl, InputLabel, Checkbox, ListItemText, Accordion, AccordionSummary, AccordionDetails, Collapse } from '@mui/material';
+import { Box, Card, CardContent, Typography, Button, TextField, InputAdornment, Tabs, Tab, IconButton, Chip, Avatar, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Select, MenuItem, FormControl, InputLabel, Checkbox, ListItemText, Accordion, AccordionSummary, AccordionDetails, Collapse, CircularProgress, Paper, Stack, Tooltip } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { Users, UserPlus, Search, Filter, Edit2, Trash2, Calendar, TrendingUp, Settings, CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
@@ -15,7 +17,12 @@ import { getStaffSimplified, createStaffSimplified, updateStaffSimplified, delet
 import { getListingsTa } from '../../tasks/services/serverApi.task';
 import { getcities, getcountries } from '../../setting/services/serverApi.adminConfig';
 import { useAdminOwnerFilter } from 'context/AdminOwnerFilterContext';
+import { useTeamViewMode } from '../../../context/TeamViewContext';
 import { canSelectOwnerInAdminFilter, getPropertyOwnerScopeId } from 'utils/taskScope.utils';
+import { TeamHubMemberCard, TeamHubCardGrid } from '../../../components/team/TeamHubMemberCard';
+import { TeamHubListTable } from '../../../components/team/TeamHubListTable';
+import { TeamHubPagination } from '../../../components/team/TeamHubPagination';
+import { TEAM_T } from '../../../components/team/teamHubTokens';
 const SOJORI_COLORS = {
   primary: '#FF6B35',
   primaryDark: '#E55A2B',
@@ -108,6 +115,7 @@ const StaffManagementView = ({
 }) => {
   const user = useSelector(state => state.auth.user);
   const { requestOwnerId } = useAdminOwnerFilter();
+  const { viewMode: teamViewMode, setTeamStats } = useTeamViewMode();
   const [staff, setStaff] = useState([]);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [selectedTab, setSelectedTab] = useState(0);
@@ -134,6 +142,14 @@ const StaffManagementView = ({
     }
     loadFilterData();
   }, [page, limit, searchText, mode, requestOwnerId]);
+
+  useEffect(() => {
+    const active = staffList.filter((s) => s.isActive !== false).length;
+    setTeamStats([
+      { icon: '👥', label: 'Staff terrain', value: String(totalCount) },
+      { icon: '⚡', label: 'Actifs', value: String(active) },
+    ]);
+  }, [staffList, totalCount, setTeamStats]);
   const loadStaff = async () => {
     setLoading(true);
     try {
@@ -654,6 +670,98 @@ const StaffManagementView = ({
       }} />}
       </Box>;
   }
+
+  const staffColumns = useMemo(
+    () => [
+      {
+        key: 'name',
+        label: 'Nom',
+        render: (row) => (
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: TEAM_T.text }}>{row.username}</Typography>
+        ),
+      },
+      {
+        key: 'code',
+        label: 'Code',
+        render: (row) => (
+          <Typography sx={{ fontFamily: 'monospace', fontSize: 11.5, color: TEAM_T.text2 }}>{row.staffCode}</Typography>
+        ),
+      },
+      {
+        key: 'whatsapp',
+        label: 'WhatsApp',
+        render: (row) => row.whatsappPhone || '—',
+      },
+      {
+        key: 'categories',
+        label: 'Catégories',
+        render: (row) => (
+          <Box sx={{ display: 'flex', gap: 0.25, flexWrap: 'wrap' }}>
+            {(row.categories || []).map((catId) => {
+              const cat = TASK_CATEGORIES.find((c) => c.id === catId);
+              return cat ? (
+                <Chip
+                  key={catId}
+                  label={`${cat.icon} ${cat.label}`}
+                  size="small"
+                  sx={{ fontSize: 10, height: 20, bgcolor: TEAM_T.bg2 }}
+                />
+              ) : null;
+            })}
+          </Box>
+        ),
+      },
+      {
+        key: 'status',
+        label: 'Statut',
+        align: 'center',
+        render: (row) => (
+          <Chip
+            size="small"
+            label={row.isActive === false ? 'Inactif' : 'Actif'}
+            sx={{
+              height: 20,
+              fontSize: 10,
+              fontWeight: 700,
+              ...(row.isActive === false
+                ? { bgcolor: TEAM_T.bg3, color: TEAM_T.text3 }
+                : { bgcolor: '#e6f6ef', color: TEAM_T.success }),
+            }}
+          />
+        ),
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        align: 'center',
+        render: (row) => (
+          <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedStaff(row);
+                setOpenEditDialog(true);
+              }}
+            >
+              <Edit2 size={16} />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteStaff(row.staffCode);
+              }}
+            >
+              <Trash2 size={16} color={TEAM_T.error} />
+            </IconButton>
+          </Box>
+        ),
+      },
+    ],
+    [],
+  );
+
   return <Box sx={{
     p: isEmbedded ? 0 : 3
   }}>
@@ -691,283 +799,192 @@ const StaffManagementView = ({
           </Button>
         </Box>}
 
-      {/* Add Staff Button - Show when embedded */}
-      {isEmbedded && <Box sx={{
-      display: 'flex',
-      justifyContent: 'flex-end',
-      mb: 1
-    }}>
-          <Button variant="contained" size="small" startIcon={<UserPlus size={16} />} onClick={() => setOpenCreateDialog(true)} sx={{
-        bgcolor: SOJORI_COLORS.primary,
-        color: 'white !important',
-        fontWeight: 600,
-        fontSize: '12px',
-        height: '32px',
-        px: 1.5,
-        textTransform: 'none',
-        borderRadius: '8px',
-        '&:hover': {
-          bgcolor: SOJORI_COLORS.primaryDark
-        }
-      }}>
-            Ajouter Staff
-          </Button>
-        </Box>}
+      {/* Add Staff Button - Show when embedded (toolbar filter) */}
+      {isEmbedded && null}
 
-      {/* Search & Filters */}
-      <Box sx={{
-      mb: isEmbedded ? 1.5 : 3
-    }}>
-        <TextField fullWidth size={isEmbedded ? 'small' : 'medium'} placeholder="Rechercher par nom, email, ou code staff..." value={searchText} onChange={e => setSearchText(e.target.value)} InputProps={{
-        startAdornment: <InputAdornment position="start">
-                <Search size={20} />
-              </InputAdornment>
-      }} />
-      </Box>
+      <Paper
+        sx={{
+          p: 1.5,
+          mb: 1.5,
+          border: `1px solid ${TEAM_T.border}`,
+          borderRadius: 1.5,
+          bgcolor: TEAM_T.bg1,
+        }}
+      >
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+          <TextField
+            size="small"
+            placeholder="Rechercher nom, email, code staff…"
+            value={searchText}
+            onChange={(e) => {
+              setSearchText(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: 18, color: TEAM_T.text3 }} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{
+              flex: 1,
+              minWidth: 180,
+              maxWidth: 360,
+              '& .MuiOutlinedInput-root': {
+                bgcolor: TEAM_T.bg1,
+                '& fieldset': { borderColor: TEAM_T.border },
+              },
+            }}
+          />
+          {isEmbedded ? (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<UserPlus size={16} />}
+              onClick={() => setOpenCreateDialog(true)}
+              sx={{
+                bgcolor: TEAM_T.primary,
+                color: '#fff !important',
+                fontWeight: 600,
+                textTransform: 'none',
+                px: 2,
+                whiteSpace: 'nowrap',
+                '&:hover': { bgcolor: TEAM_T.primaryDeep },
+              }}
+            >
+              Ajouter Staff
+            </Button>
+          ) : null}
+          <Tooltip title="Réinitialiser la recherche">
+            <span>
+              <IconButton
+                size="small"
+                disabled={!searchText?.trim()}
+                onClick={() => {
+                  setSearchText('');
+                  setPage(0);
+                }}
+                sx={{ color: TEAM_T.text3 }}
+              >
+                <RefreshIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
+      </Paper>
 
       {/* Staff List */}
-      <Grid container spacing={isEmbedded ? 2 : 3}>
-        {staff.map(staffMember => <Grid item xs={12} key={staffMember.staffCode}>
-            <Card sx={{
-          transition: 'all 0.2s',
-          border: selectedStaff?.staffCode === staffMember.staffCode ? `2px solid ${SOJORI_COLORS.primary}` : '1px solid #E5E7EB',
-          '&:hover': {
-            boxShadow: 2
-          }
-        }}>
-              <CardContent sx={{
-            p: 1.5,
-            '&:last-child': {
-              pb: 1.5
-            }
-          }}>
-                {/* Compact Header - Always Visible */}
-                <Box sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              cursor: 'pointer'
-            }} onClick={() => handleStaffClick(staffMember)}>
-                  <Box sx={{
-                display: 'flex',
-                gap: 1.5,
-                flex: 1,
-                alignItems: 'center'
-              }}>
-                    <Avatar sx={{
-                  width: 40,
-                  height: 40,
-                  bgcolor: SOJORI_COLORS.primary,
-                  fontSize: '14px',
-                  fontWeight: 700
-                }}>
-                      {staffMember.username.charAt(0).toUpperCase()}
-                    </Avatar>
-                    <Box sx={{
-                  flex: 1
-                }}>
-                      <Box sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.75,
-                    mb: 0.25
-                  }}>
-                        <Typography sx={{
-                      fontSize: '14px',
-                      fontWeight: 700
-                    }}>
-                          {staffMember.username}
-                        </Typography>
-                        <Chip label={staffMember.staffCode} size="small" sx={{
-                      bgcolor: SOJORI_COLORS.gray[100],
-                      fontSize: '9px',
-                      height: '18px'
-                    }} />
-                        {staffMember.isActive ? <CheckCircle size={14} color={SOJORI_COLORS.success} /> : <XCircle size={14} color={SOJORI_COLORS.error} />}
-                      </Box>
-                      <Typography sx={{
-                    fontSize: '11px',
-                    color: 'text.secondary',
-                    mb: 0.5
-                  }}>
-                        {staffMember.email} • {staffMember.callPhone}
-                      </Typography>
-                      {/* Categories & Propriétés - Grid Layout */}
-                      <Box sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: 1,
-                    mt: 0.5
-                  }}>
-                        {/* Column 1: Categories */}
-                        <Box>
-                          <Typography sx={{
-                        fontSize: '9px',
-                        color: 'text.secondary',
-                        fontWeight: 600,
-                        mb: 0.3,
-                        textTransform: 'uppercase'
-                      }}>
-                            Catégories
-                          </Typography>
-                          <Box sx={{
-                        display: 'flex',
-                        gap: 0.4,
-                        flexWrap: 'wrap'
-                      }}>
-                            {staffMember.categories.map(catId => {
-                          const cat = TASK_CATEGORIES.find(c => c.id === catId);
-                          return cat ? <span key={catId} style={{
-                            fontSize: '13px',
-                            opacity: 0.85
-                          }} title={cat.label}>
-                                  {cat.icon}
-                                </span> : null;
-                        })}
-                          </Box>
-                        </Box>
-
-                        {/* Column 2: Propriétés */}
-                        <Box>
-                          <Typography sx={{
-                        fontSize: '9px',
-                        color: 'text.secondary',
-                        fontWeight: 600,
-                        mb: 0.3,
-                        textTransform: 'uppercase'
-                      }}>
-                            Propriétés
-                          </Typography>
-                          <Box sx={{
-                        display: 'flex',
-                        gap: 0.4,
-                        flexWrap: 'wrap',
-                        alignItems: 'center'
-                      }}>
-                            {staffMember.listingIds && staffMember.listingIds.length > 0 ? staffMember.listingIds.includes('All') ? <Chip label="Tous" size="small" sx={{
-                          height: '16px',
-                          fontSize: '9px',
-                          bgcolor: SOJORI_COLORS.primary,
-                          color: 'white',
-                          fontWeight: 600
-                        }} /> : <>
-                                  {staffMember.listingIds.slice(0, 1).map(listingId => {
-                            const listing = listings.find(l => (l._id || l.id) === listingId);
-                            return listing ? <Chip key={listingId} label={listing.name} size="small" sx={{
-                              height: '16px',
-                              fontSize: '9px',
-                              bgcolor: SOJORI_COLORS.gray[100],
-                              color: SOJORI_COLORS.gray[600]
-                            }} /> : null;
-                          })}
-                                  {staffMember.listingIds.length > 1 && <Chip label={`+${staffMember.listingIds.length - 1}`} size="small" sx={{
-                            height: '16px',
-                            fontSize: '9px',
-                            bgcolor: SOJORI_COLORS.gray[200],
-                            color: SOJORI_COLORS.gray[600],
-                            fontWeight: 600
-                          }} />}
-                                </> : <Typography sx={{
-                          fontSize: '9px',
-                          color: 'text.secondary',
-                          fontStyle: 'italic'
-                        }}>
-                                Aucune
-                              </Typography>}
-                          </Box>
-                        </Box>
-                      </Box>
-                    </Box>
-                  </Box>
-                  <Box sx={{
-                display: 'flex',
-                gap: 0.5,
-                alignItems: 'center'
-              }}>
-                    <IconButton size="small" onClick={e => {
-                  e.stopPropagation();
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress sx={{ color: TEAM_T.primary }} />
+        </Box>
+      ) : staffList.length === 0 ? (
+        <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+          <Typography>Aucun staff trouvé</Typography>
+        </Box>
+      ) : teamViewMode === 'cards' ? (
+        <TeamHubCardGrid>
+          {staffList.map((staffMember) => {
+            const initials = (staffMember.username || '?').slice(0, 2).toUpperCase();
+            const isSelected = selectedStaff?.staffCode === staffMember.staffCode;
+            const chips = (staffMember.categories || [])
+              .slice(0, 5)
+              .map((catId) => {
+                const cat = TASK_CATEGORIES.find((c) => c.id === catId);
+                return cat ? `${cat.icon} ${cat.label}` : catId;
+              });
+            return (
+              <TeamHubMemberCard
+                key={staffMember.staffCode}
+                initials={initials}
+                title={staffMember.username}
+                subtitle={staffMember.staffCode}
+                badge={staffMember.isActive === false ? 'Inactif' : 'Actif'}
+                chips={chips}
+                metaLines={[
+                  {
+                    label: 'WhatsApp',
+                    value: staffMember.whatsappPhone || staffMember.callPhone || '—',
+                  },
+                ]}
+                active={isSelected}
+                inactive={staffMember.isActive === false}
+                onClick={() => handleStaffClick(staffMember)}
+                onEdit={() => {
                   setSelectedStaff(staffMember);
                   setOpenEditDialog(true);
-                }}>
-                      <Edit2 size={16} />
-                    </IconButton>
-                    <IconButton size="small" onClick={e => {
-                  e.stopPropagation();
-                  handleDeleteStaff(staffMember.staffCode);
-                }}>
-                      <Trash2 size={16} color={SOJORI_COLORS.error} />
-                    </IconButton>
-                    <IconButton size="small">
-                      {selectedStaff?.staffCode === staffMember.staffCode ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </IconButton>
-                  </Box>
-                </Box>
+                }}
+                onDelete={() => handleDeleteStaff(staffMember.staffCode)}
+              />
+            );
+          })}
+        </TeamHubCardGrid>
+      ) : (
+        <TeamHubListTable
+          rows={staffList}
+          columns={staffColumns}
+          rowKey={(row) => row.staffCode}
+          onRowClick={handleStaffClick}
+          emptyLabel="Aucun staff trouvé"
+        />
+      )}
 
-                {/* Collapsible Tabs Section */}
-                <Collapse in={selectedStaff?.staffCode === staffMember.staffCode} timeout="auto">
-                  <Box sx={{
-                mt: 2,
-                borderTop: '1px solid #E5E7EB',
-                pt: 2
-              }} onClick={e => e.stopPropagation()}>
-                    <Tabs value={selectedTab} onChange={(e, newValue) => setSelectedTab(newValue)} sx={{
-                  mb: 2,
-                  minHeight: '40px',
-                  '& .MuiTab-root': {
-                    minHeight: '40px',
-                    fontSize: '12px',
-                    px: 1.5,
-                    textTransform: 'none'
-                  },
-                  '& .Mui-selected': {
-                    color: SOJORI_COLORS.primary + ' !important'
-                  },
-                  '& .MuiTabs-indicator': {
-                    bgcolor: SOJORI_COLORS.primary
-                  }
-                }}>
-                      <Tab icon={<Settings size={14} />} label="Configuration" iconPosition="start" />
-                      <Tab icon={<Calendar size={14} />} label="Planning" iconPosition="start" />
-                      <Tab icon={<TrendingUp size={14} />} label="Workload" iconPosition="start" />
-                      <Tab icon={<CheckCircle size={14} />} label="Assignments" iconPosition="start" />
-                      <Tab icon={<Calendar size={14} />} label="Congés" iconPosition="start" />
-                    </Tabs>
+      {staffFromParent == null && (
+        <TeamHubPagination
+          page={page}
+          limit={limit}
+          total={totalCount}
+          onPageChange={setPage}
+          onLimitChange={setLimit}
+          limitOptions={[10, 25, 50, 100]}
+          itemLabel="staff"
+        />
+      )}
 
-                    {selectedTab === 0 && <StaffConfigTab staff={selectedStaff} />}
-                    {selectedTab === 1 && <StaffPlanningTab staff={selectedStaff} onScheduleSaved={loadStaff} />}
-                    {selectedTab === 2 && <StaffWorkloadTab staff={selectedStaff} />}
-                    {selectedTab === 3 && <StaffAssignmentsTab staff={selectedStaff} />}
-                    {selectedTab === 4 && <Box>
-                        <Box sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    mb: 2
-                  }}>
-                          <Typography sx={{
-                      fontSize: '13px',
-                      fontWeight: 700
-                    }}>Congés & Exceptions</Typography>
-                          <Button variant="contained" size="small" onClick={() => setOpenExceptionDialog(true)} sx={{
-                      bgcolor: SOJORI_COLORS.primary,
-                      color: 'white !important',
-                      fontSize: '11px',
-                      height: '28px',
-                      '&:hover': {
-                        bgcolor: SOJORI_COLORS.primaryDark
-                      }
-                    }}>
-                            + Exception
-                          </Button>
-                        </Box>
-                        <StaffExceptionsList staffCode={selectedStaff.staffCode} refreshTrigger={exceptionRefreshTrigger} />
-                      </Box>}
-                  </Box>
-                </Collapse>
-              </CardContent>
-            </Card>
-          </Grid>)}
-      </Grid>
+      {selectedStaff && (
+        <Box sx={{ mt: 2, borderTop: '1px solid #E5E7EB', pt: 2 }}>
+          <Tabs
+            value={selectedTab}
+            onChange={(e, newValue) => setSelectedTab(newValue)}
+            sx={{
+              mb: 2,
+              minHeight: '40px',
+              '& .MuiTab-root': { minHeight: '40px', fontSize: '12px', px: 1.5, textTransform: 'none' },
+              '& .Mui-selected': { color: `${TEAM_T.primary} !important` },
+              '& .MuiTabs-indicator': { bgcolor: TEAM_T.primary },
+            }}
+          >
+            <Tab icon={<Settings size={14} />} label="Configuration" iconPosition="start" />
+            <Tab icon={<Calendar size={14} />} label="Planning" iconPosition="start" />
+            <Tab icon={<TrendingUp size={14} />} label="Workload" iconPosition="start" />
+            <Tab icon={<CheckCircle size={14} />} label="Assignments" iconPosition="start" />
+            <Tab icon={<Calendar size={14} />} label="Congés" iconPosition="start" />
+          </Tabs>
+          {selectedTab === 0 && <StaffConfigTab staff={selectedStaff} />}
+          {selectedTab === 1 && <StaffPlanningTab staff={selectedStaff} onScheduleSaved={loadStaff} />}
+          {selectedTab === 2 && <StaffWorkloadTab staff={selectedStaff} />}
+          {selectedTab === 3 && <StaffAssignmentsTab staff={selectedStaff} />}
+          {selectedTab === 4 && (
+            <Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography sx={{ fontSize: '13px', fontWeight: 700 }}>Congés & Exceptions</Typography>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => setOpenExceptionDialog(true)}
+                  sx={{ bgcolor: SOJORI_COLORS.primary, color: 'white !important', fontSize: '11px', height: '28px' }}
+                >
+                  + Exception
+                </Button>
+              </Box>
+              <StaffExceptionsList staffCode={selectedStaff.staffCode} refreshTrigger={exceptionRefreshTrigger} />
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* Create Dialog */}
       <Dialog open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} maxWidth="md" fullWidth PaperProps={{

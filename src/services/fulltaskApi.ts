@@ -2,9 +2,9 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/backendServer.config';
 import { getToken } from '../utils/authUtils';
 
-/** En dev sans VITE_API_URL : proxy Vite → srv-fulltask local. Sinon → admin sur API_BASE_URL. */
+/** En dev : proxy Vite relatif (évite CORS). Avec VITE_API_URL → API distante via srv-admin. */
 function resolveFulltaskBase(): string {
-  if (import.meta.env.DEV && typeof window !== 'undefined' && !import.meta.env.VITE_API_URL) {
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
     return '/api/v1/admin/fulltask';
   }
   return `${API_BASE_URL}/api/v1/admin/fulltask`;
@@ -42,6 +42,16 @@ export async function createTask(body: Record<string, unknown>) {
   return data;
 }
 
+export async function getTask(id: string) {
+  const { data } = await axios.get(`${BASE}/tasks/${id}`, authHeaders());
+  return data;
+}
+
+export async function patchTask(id: string, body: Record<string, unknown>) {
+  const { data } = await axios.patch(`${BASE}/tasks/${id}`, body, authHeaders());
+  return data;
+}
+
 export async function patchTaskStatus(id: string, status: string) {
   const { data } = await axios.patch(`${BASE}/tasks/${id}/status`, { status }, authHeaders());
   return data;
@@ -69,6 +79,31 @@ export async function createStaff(body: Record<string, unknown>) {
 
 export async function updateStaff(id: string, body: Record<string, unknown>) {
   const { data } = await axios.patch(`${BASE}/staff/${id}`, body, authHeaders());
+  return data;
+}
+
+export async function deleteStaff(id: string) {
+  const { data } = await axios.delete(`${BASE}/staff/${id}`, authHeaders());
+  return data;
+}
+
+export async function listWhatsappAdmins(params: Record<string, unknown> = {}) {
+  const { data } = await axios.get(`${BASE}/whatsapp-admins`, { ...authHeaders(), params });
+  return data;
+}
+
+export async function createWhatsappAdmin(body: Record<string, unknown>) {
+  const { data } = await axios.post(`${BASE}/whatsapp-admins`, body, authHeaders());
+  return data;
+}
+
+export async function updateWhatsappAdmin(id: string, body: Record<string, unknown>) {
+  const { data } = await axios.patch(`${BASE}/whatsapp-admins/${id}`, body, authHeaders());
+  return data;
+}
+
+export async function deleteWhatsappAdmin(id: string) {
+  const { data } = await axios.delete(`${BASE}/whatsapp-admins/${id}`, authHeaders());
   return data;
 }
 
@@ -133,6 +168,16 @@ export async function listWhatsAppMessages() {
 /** Insère / met à jour les corps templates voyageur depuis le seed srv-fulltask. */
 export async function mergeGuestWhatsAppSeeds() {
   const { data } = await axios.post(`${BASE}/whatsapp-messages/merge-guest-seeds`, {}, authHeaders());
+  return data;
+}
+
+/** messageCatalog → whatsapp_messages (noms Meta + corps seed). */
+export async function syncWhatsAppFromCatalog(ownerId = 'global') {
+  const { data } = await axios.post(
+    `${BASE}/orchestration/sync-whatsapp-from-catalog`,
+    { ownerId },
+    authHeaders(),
+  );
   return data;
 }
 
@@ -201,6 +246,95 @@ export async function runPlanScheduler(reservationId: string) {
   return data;
 }
 
+export type PlanDispatchApiResponse = {
+  success: boolean;
+  error?: string;
+  data?: unknown;
+  dispatch?: { stubOnly?: boolean; channel?: string };
+};
+
+async function postPlanDispatch(
+  url: string,
+  body: Record<string, unknown> = {},
+): Promise<PlanDispatchApiResponse> {
+  const { data } = await axios.post(url, body, {
+    ...authHeaders(),
+    validateStatus: (status) => status >= 200 && status < 500,
+  });
+  return data as PlanDispatchApiResponse;
+}
+
+export async function sendPlanMessage(reservationId: string, messageIndex: number) {
+  return postPlanDispatch(
+    `${BASE}/plans/${encodeURIComponent(reservationId)}/messages/${messageIndex}/send`,
+  );
+}
+
+export async function sendPlanRelance(
+  reservationId: string,
+  taskId: string,
+  relanceIndex: number,
+) {
+  return postPlanDispatch(
+    `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/relances/${relanceIndex}/send`,
+  );
+}
+
+export type AssignationCandidate = {
+  staffId: string;
+  name: string;
+  phone: string;
+  contractType: string;
+  load: number;
+  maxTasksPerDay: number;
+  planningOk: boolean;
+  atMaxCapacity: boolean;
+};
+
+export async function listAssignationCandidates(reservationId: string, taskId: string) {
+  const { data, status } = await axios.get(
+    `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/assignation/candidates`,
+    {
+      ...authHeaders(),
+      validateStatus: (s) => (s >= 200 && s < 300) || s === 404,
+    },
+  );
+  if (status === 404) {
+    const body = data as { success?: boolean; error?: string; data?: AssignationCandidate[] };
+    if (body?.error) {
+      return { success: false, data: body.data ?? [], error: body.error };
+    }
+    return {
+      success: false,
+      data: [] as AssignationCandidate[],
+      error: 'Endpoint assignation non déployé — redéployer srv-fulltask',
+    };
+  }
+  return data as { success: boolean; data: AssignationCandidate[]; error?: string };
+}
+
+export async function runPlanAssignation(
+  reservationId: string,
+  taskId: string,
+  staffId?: string,
+) {
+  const body = staffId ? { staffId } : {};
+  return postPlanDispatch(
+    `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/assignation/run`,
+    body,
+  );
+}
+
+export async function sendPlanStaffReminder(
+  reservationId: string,
+  taskId: string,
+  reminderIndex: number,
+) {
+  return postPlanDispatch(
+    `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/staff-reminders/${reminderIndex}/send`,
+  );
+}
+
 export async function listPlans(params: Record<string, unknown> = {}) {
   const { data, status } = await axios.get(`${BASE}/plans`, {
     ...authHeaders(),
@@ -211,6 +345,11 @@ export async function listPlans(params: Record<string, unknown> = {}) {
     return { success: true, data: [] as unknown[] };
   }
   return data;
+}
+
+/** Sidebar plans : métadonnées uniquement (pas sequences/messages). */
+export async function listPlansSummary(params: Record<string, unknown> = {}) {
+  return listPlans({ ...params, summary: 'true' });
 }
 
 export async function declareGuestArrival(reservationId: string, time?: string) {

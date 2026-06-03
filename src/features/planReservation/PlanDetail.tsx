@@ -1,27 +1,55 @@
-import React, { useMemo, useState, type ReactNode } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ArchivePlanModal from './ArchivePlanModal';
 import ForcePlanSchedulerModal from './ForcePlanSchedulerModal';
 import {
   buildProgressSegments,
-  formatDayLabel,
   isLegacyPlanOnlyRef,
   planCodeDisplay,
   reservationRefDisplay,
 } from './buildPlanViewModel';
+import DispatchLastSendLine from './DispatchLastSendLine';
+import { formatDispatchHistoryError, formatDispatchWhen } from './planDispatchDisplay';
+import PlanDispatchButton from './PlanDispatchButton';
+import {
+  relanceExecutionEventStatus,
+  relanceExecutionLabel,
+  showRelanceConfigHint,
+} from './planGroupStatus';
 import SequencePlanCard from './SequencePlanCard';
-import type { Channel, EventStatus, PlanEvent, Reservation, ReservationPlan } from './types';
+import type { FulltaskPlanDoc } from './buildPlanViewModel';
+import type {
+  Channel,
+  EventStatus,
+  PlanEvent,
+  RelanceExecutionStatus,
+  Reservation,
+  ReservationPlan,
+} from './types';
 
 type TlFilter = 'all' | 'sequences' | 'messages';
 
 interface Props {
   reservation: Reservation;
   plan: ReservationPlan;
+  /** Admin / staff plateforme : afficher si le plan utilise le template global. */
+  showAdminConfigSource?: boolean;
+  /** Nom affiché du propriétaire (listing), pas l’id Mongo. */
+  ownerDisplayName?: string;
+  onPlanUpdated?: (planDoc?: FulltaskPlanDoc) => void;
   onPlanRefetch?: () => void;
   onPlanArchived?: (reservationId: string) => void;
 }
 
-export default function PlanDetail({ reservation: r, plan, onPlanRefetch, onPlanArchived }: Props) {
+export default function PlanDetail({
+  reservation: r,
+  plan,
+  showAdminConfigSource = false,
+  ownerDisplayName,
+  onPlanUpdated,
+  onPlanRefetch,
+  onPlanArchived,
+}: Props) {
   const [tlFilter, setTlFilter] = useState<TlFilter>('all');
   const [forceModalOpen, setForceModalOpen] = useState(false);
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
@@ -48,34 +76,55 @@ export default function PlanDetail({ reservation: r, plan, onPlanRefetch, onPlan
   const segments = buildProgressSegments(plan.events);
   const totalSteps = r.done + r.inProgress + r.upcoming + r.blocked;
 
-  const timelineNodes = useMemo(() => {
-    const sorted = [...filteredEvents].sort(
-      (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
+  const planMessageCount = useMemo(
+    () =>
+      plan.events.filter(
+        (e) => e.kind === 'message' && e.messageCategory !== 'relance',
+      ).length,
+    [plan.events],
+  );
+  const planWorkflowCount = useMemo(
+    () => plan.events.filter((e) => e.kind === 'sequence').length,
+    [plan.events],
+  );
+
+  /** Même ordre que orchestration-config (`uiPlanListOrder`), pas le tri chronologique. */
+  const orderedTimelineEvents = useMemo(() => {
+    const rank = new Map(plan.events.map((e, i) => [e.id, i]));
+    return [...filteredEvents].sort(
+      (a, b) =>
+        (a.planStep ?? rank.get(a.id) ?? 9999) - (b.planStep ?? rank.get(b.id) ?? 9999),
     );
+  }, [filteredEvents, plan.events]);
+
+  const timelineNodes = useMemo(() => {
     const nodes: React.ReactNode[] = [];
-    let lastDay = '';
-    let daySepIndex = 0;
-    for (const ev of sorted) {
-      const dayKey = ev.at.slice(0, 10);
-      if (dayKey !== lastDay) {
-        lastDay = dayKey;
-        const { label, rel, today } = formatDayLabel(ev.at);
-        nodes.push(
-          <div key={`day-sep-${dayKey}-${daySepIndex++}`} className="day-sep">
-            <span className={`lbl${today ? ' today' : ''}`}>{label}</span>
-            <span className="rel">{rel}</span>
-          </div>,
-        );
-      }
+    for (const ev of orderedTimelineEvents) {
       if (ev.kind === 'message') {
-        nodes.push(<MessagePlanCard key={ev.id} event={ev} />);
+        nodes.push(
+          <MessagePlanCard
+            key={ev.id}
+            event={ev}
+            reservationId={r.id}
+            onDispatched={onPlanUpdated}
+          />,
+        );
       } else {
         const seq = sequenceByEventId.get(ev.id);
-        if (seq) nodes.push(<SequencePlanCard key={ev.id} seq={seq} />);
+        if (seq) {
+          nodes.push(
+            <SequencePlanCard
+              key={ev.id}
+              seq={seq}
+              reservationId={r.id}
+              onDispatched={onPlanUpdated}
+            />,
+          );
+        }
       }
     }
     return nodes;
-  }, [filteredEvents, sequenceByEventId]);
+  }, [orderedTimelineEvents, sequenceByEventId, r.id, onPlanUpdated]);
 
   return (
     <div className="wrap">
@@ -218,17 +267,22 @@ export default function PlanDetail({ reservation: r, plan, onPlanRefetch, onPlan
         </div>
       </div>
 
-      <div className="tl-head">
-        <div className="tl-head-titles">
-          <h2>Plan d&apos;orchestration</h2>
-          <span className="count">
-            · {sequences.length} séq. · {(plan.messages ?? []).length} msg.
-          </span>
-          <p className="tl-stay-hint">
-            Dates calées sur le séjour ({formatStayRange(r.checkIn, r.checkOut)}). Les relances
-            passées affichent leur état réel (sautée, échec…) — pas seulement la config prévue.
-          </p>
+      {showAdminConfigSource && plan.orchestrationConfigSource === 'global_template' ? (
+        <div className="plan-config-source-banner plan-config-source-banner--template" role="status">
+          <strong>Template Admin (global)</strong> —{' '}
+          <b>{ownerDisplayName || 'ce propriétaire'}</b> n&apos;a pas encore de config
+          orchestration dédiée. Le plan utilise la config <code>ownerId: null</code> (template par
+          défaut). Pensez à synchroniser depuis Admin sur{' '}
+          <Link to="/tasks/orchestration-config">orchestration-config</Link>.
         </div>
+      ) : null}
+
+      <div className="plan-orch-toolbar">
+        <p className="plan-orch-hint">
+          {planMessageCount} message(s) plan · {planWorkflowCount} workflow(s) · glisser ⠿ pour
+          réordonner sur{' '}
+          <Link to="/tasks/orchestration-config">orchestration-config</Link> · simulation à droite
+        </p>
         <div className="filters">
           <button
             type="button"
@@ -254,7 +308,24 @@ export default function PlanDetail({ reservation: r, plan, onPlanRefetch, onPlan
         </div>
       </div>
 
-      <div className="timeline">{timelineNodes}</div>
+      <p className="tl-stay-hint tl-stay-hint--below-toolbar">
+        Dates calées sur le séjour ({formatStayRange(r.checkIn, r.checkOut)}). Ordre = config
+        orchestration
+        {plan.orchestrationConfigSource === 'owner' ? (
+          <> du propriétaire</>
+        ) : plan.orchestrationConfigSource === 'global_template' && showAdminConfigSource ? (
+          <> (repli template Admin)</>
+        ) : null}
+        {ownerDisplayName ? (
+          <>
+            {' '}
+            · <b>{ownerDisplayName}</b>
+          </>
+        ) : null}
+        . Relances passées = état réel (sautée, échec…).
+      </p>
+
+      <div className="timeline timeline--config-order">{timelineNodes}</div>
 
       <div
         className="read-only-note"
@@ -328,19 +399,49 @@ function DateBlock({ label, iso, right }: { label: string; iso: string; right?: 
   );
 }
 
-function MessagePlanCard({ event: ev }: { event: PlanEvent }) {
-  const [open, setOpen] = useState(ev.status === 'now' || ev.status === 'done');
-  const expandable = Boolean(ev.messagePreviewFr);
+function messageExecutionStatus(ev: PlanEvent): RelanceExecutionStatus {
+  const raw = ev.messageSendStatus;
+  if (raw === 'envoye') return 'envoyee';
+  if (raw === 'saute') return 'sautee';
+  if (raw === 'echec') return 'echec';
+  if (ev.status === 'done' && raw !== 'echec') return 'envoyee';
+  if (ev.lastDispatch && !ev.lastDispatch.ok && raw !== 'envoye') return 'echec';
+  if (ev.status === 'future') return 'prevision';
+  return 'en_attente';
+}
+
+function formatDispatchHistWhen(iso: string): string {
+  return formatDispatchWhen(iso);
+}
+
+function MessageExecBadge({ status }: { status: RelanceExecutionStatus }) {
+  const ev = relanceExecutionEventStatus(status);
+  return <span className={`st-badge sm rel-exec ${ev}`}>{relanceExecutionLabel(status)}</span>;
+}
+
+function MessagePlanCard({
+  event: ev,
+  reservationId,
+  onDispatched,
+}: {
+  event: PlanEvent;
+  reservationId: string;
+  onDispatched?: (planDoc?: FulltaskPlanDoc) => void;
+}) {
+  const exec = messageExecutionStatus(ev);
+  const wasSent = ev.messageSendStatus === 'envoye';
+  const [histOpen, setHistOpen] = useState(false);
+  const [rowLoading, setRowLoading] = useState(false);
+  const canManualSend = ev.messageIndex != null && ev.messageCategory === 'simple';
+  const channel = ev.channel || 'ota';
+  const histCount = ev.dispatchLog?.length ?? 0;
+  const histNewestFirst = histCount
+    ? [...(ev.dispatchLog ?? [])].reverse()
+    : [];
 
   return (
-    <div className={`ev msg-l1 ${ev.status}${open ? ' open' : ''}`}>
-      <div
-        className="ev-h"
-        onClick={() => expandable && setOpen((o) => !o)}
-        onKeyDown={() => {}}
-        role={expandable ? 'button' : undefined}
-        tabIndex={expandable ? 0 : undefined}
-      >
+    <div className={`ev msg-l1 ${ev.status}${histOpen ? ' hist-open' : ''}${rowLoading ? ' msg-l1--dispatching' : ''}`}>
+      <div className="ev-h msg-l1-h">
         <div className="em">{ev.icon}</div>
         <div className="info">
           <div className="top-line">
@@ -352,78 +453,85 @@ function MessagePlanCard({ event: ev }: { event: PlanEvent }) {
             {ev.messageCategory === 'relance' && (
               <span className="kind-badge message-relance">Relance</span>
             )}
-            <StatusBadge status={ev.status} kind="message" />
+            <MessageExecBadge status={exec} />
             {ev.channel && <ChannelChip channel={ev.channel} />}
-            {ev.channels?.map((c) => (
-              <ChannelChip key={c} channel={c} />
-            ))}
           </div>
-          {ev.description && <div className="ds">{ev.description}</div>}
-          <span className="when">{ev.atDisplay || ev.at}</span>
+          <span className="when">Prévu · {ev.atDisplay || '—'}</span>
+
+          <div className="msg-last-send-row">
+            <div className="msg-last-send-main">
+              {ev.lastDispatch || ev.lastDispatchAttempt ? (
+                <DispatchLastSendLine
+                  last={ev.lastDispatch}
+                  attempt={ev.lastDispatchAttempt}
+                  inline
+                />
+              ) : (
+                <span className="msg-last-send-pending">Pas encore envoyé</span>
+              )}
+            </div>
+            {canManualSend ? (
+              <PlanDispatchButton
+                reservationId={reservationId}
+                kind="message"
+                messageIndex={ev.messageIndex}
+                wasSent={wasSent}
+                disabled={false}
+                onLoadingChange={setRowLoading}
+                onDone={onDispatched}
+              />
+            ) : null}
+          </div>
+
+          {histCount > 0 ? (
+            <button
+              type="button"
+              className="msg-hist-toggle"
+              onClick={() => setHistOpen((o) => !o)}
+              aria-expanded={histOpen}
+            >
+              <span className="msg-hist-toggle-label">
+                Historique envois ({histCount})
+              </span>
+              <span className="msg-hist-toggle-arr" aria-hidden>
+                {histOpen ? '▾' : '▸'}
+              </span>
+            </button>
+          ) : null}
         </div>
-        {expandable && <span className="arr">▶</span>}
       </div>
 
-      {open && ev.messagePreviewFr ? (
-        <div className="ev-body">
-          <CollapseBlock
-            icon="📨"
-            title="Envoi message"
-            groupStatus={ev.status}
-            countLabel={ev.channelMeta || ev.template || '—'}
-            defaultOpen
-          >
-            <div className="msg-preview">
-              <div className="meta">
-                <span>
-                  Canal · <b>{(ev.channel || 'wa').toUpperCase()}</b>
+      {histOpen && histCount > 0 ? (
+        <div className="msg-dispatch-history">
+          {histNewestFirst.map((entry, i) => (
+            <div
+              key={`${entry.at}-${i}`}
+              className={`msg-dispatch-hist-row ${entry.ok ? 'ok' : 'fail'}`}
+            >
+              <span>{entry.ok ? '✓' : '✗'}</span>
+              <span>{formatDispatchHistWhen(entry.at)}</span>
+              {entry.channel ? <span>{entry.channel.toUpperCase()}</span> : null}
+              {entry.source ? (
+                <span className="msg-dispatch-hist-src">
+                  {entry.source === 'manual' ? 'Manuel' : 'Auto'}
                 </span>
-                {ev.template ? <span>Template · {ev.template}</span> : null}
-                {ev.channelMeta ? <span>{ev.channelMeta}</span> : null}
-              </div>
-              {ev.messagePreviewFr}
+              ) : null}
+              {!entry.ok && entry.error ? (
+                <span className="msg-dispatch-hist-err">
+                  {formatDispatchHistoryError(entry.error, wasSent)}
+                </span>
+              ) : null}
             </div>
-          </CollapseBlock>
+          ))}
         </div>
       ) : null}
-    </div>
-  );
-}
 
-/** Bloc niveau 2 pour message simple (même chrome que séquence). */
-function CollapseBlock({
-  icon,
-  title,
-  groupStatus,
-  countLabel,
-  defaultOpen,
-  children,
-}: {
-  icon: string;
-  title: string;
-  groupStatus: EventStatus;
-  countLabel: string;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen ?? true);
-  const labels: Record<EventStatus, string> = {
-    done: 'Terminé',
-    now: 'En cours',
-    pending: 'En attente',
-    blocked: 'Bloqué',
-    future: 'À venir',
-  };
-  return (
-    <div className={`l2-block${open ? ' open' : ''}`}>
-      <button type="button" className="l2-block-h" onClick={() => setOpen((o) => !o)}>
-        <span className="l2-em">{icon}</span>
-        <span className="l2-title">{title}</span>
-        <span className={`st-badge group-st ${groupStatus}`}>{labels[groupStatus]}</span>
-        <span className="l2-ct">{countLabel}</span>
-        <span className="l2-arr">▶</span>
-      </button>
-      {open ? <div className="l2-block-body">{children}</div> : null}
+      {ev.messageCategory === 'simple' && (ev.template || channel) ? (
+        <div className="rel-row-config msg-l1-config">
+          Config · {ev.template || '—'}
+          {channel ? ` · ${channel.toUpperCase()}` : ''}
+        </div>
+      ) : null}
     </div>
   );
 }

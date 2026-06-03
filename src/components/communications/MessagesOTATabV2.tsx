@@ -77,11 +77,13 @@ export default function MessagesOTATabV2() {
 
   const activeThread: Thread | null = useMemo(() => {
     if (!inbox.activeRow) return null;
+    const base = mapOtaRowToThread(inbox.activeRow, inbox.tasks.length);
     return {
-      ...mapOtaRowToThread(inbox.activeRow, inbox.tasks.length),
-      preview: '',
-      unread: 0,
-      guestsLabel: inbox.reservation?.guestsLabel,
+      ...base,
+      unread: inbox.activeRow.unreadCount ?? 0,
+      guestsLabel: inbox.reservation?.guestsLabel ?? base.guestsLabel,
+      reservationCreatedDisplay:
+        inbox.reservation?.reservationCreatedDisplay ?? base.reservationCreatedDisplay,
       taskCount: inbox.tasks.length,
       tasks: inbox.tasks,
       tasksLoading: inbox.loadingTasks,
@@ -150,7 +152,10 @@ export default function MessagesOTATabV2() {
           <>
             <ConversationThread
               thread={activeThread}
-              messages={inbox.loadingMessages ? [] : inbox.messages}
+              messages={inbox.messages}
+              loadingMessages={inbox.loadingMessages}
+              messagesLoadError={inbox.messagesLoadError}
+              messagesTotal={inbox.messagesTotal}
               quickTemplates={OTA_QUICK_TEMPLATES}
               quickReplies={OTA_QUICK_REPLIES}
               otaPlatform={otaPlatform}

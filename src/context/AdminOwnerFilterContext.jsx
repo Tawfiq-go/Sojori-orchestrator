@@ -76,7 +76,16 @@ export function AdminOwnerFilterProvider({ children }) {
       owners,
       ownersLoading,
     }),
-    [showOwnerFilter, selectedOwnerId, selectedOwnerIds, setSelectedOwnerIds, clearSelection, requestOwnerId, owners, ownersLoading],
+    [
+      showOwnerFilter,
+      selectedOwnerId,
+      selectedOwnerIds,
+      setSelectedOwnerIds,
+      clearSelection,
+      requestOwnerId,
+      owners,
+      ownersLoading,
+    ],
   );
 
   return <AdminOwnerFilterContext.Provider value={value}>{children}</AdminOwnerFilterContext.Provider>;

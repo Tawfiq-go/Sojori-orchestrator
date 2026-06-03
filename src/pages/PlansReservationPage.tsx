@@ -1,135 +1,150 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import { useAuth } from '../hooks/useAuth';
+import { canSelectOwnerInAdminFilter } from '../utils/taskScope.utils';
 import PlanReservationPage from '../features/planReservation/PlanReservationPage';
 import {
   buildPlanViewModel,
-  buildReservationView,
+  buildReservationViewFromSummary,
   type FulltaskPlanDoc,
+  type PlanListSummaryDoc,
 } from '../features/planReservation/buildPlanViewModel';
 import type { Reservation, ReservationPlan } from '../features/planReservation/types';
-import type { Reservation as ApiReservation } from '../types/reservations.types';
 import * as fulltaskApi from '../services/fulltaskApi';
 import tasksService from '../services/fulltaskTasksService';
-import reservationsService from '../services/reservationsService';
-
-function planToApiReservation(plan: FulltaskPlanDoc): ApiReservation {
-  return {
-    id: plan.reservationId,
-    guestName: plan.guestName || 'Invité',
-    arrivalDate: plan.checkIn,
-    departureDate: plan.checkOut,
-    reservationNumber: plan.reservationCode,
-    sojoriId: plan.listingId,
-    numberOfGuests: 1,
-    adults: 1,
-  } as ApiReservation;
-}
+import {
+  loadUiPlanListOrdersByOwner,
+  uiPlanListOrderForPlan,
+  type UiPlanListOrderCache,
+} from '../utils/uiPlanListOrderByOwner';
+import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
+import { ownerDisplayNameFromId } from '../utils/ownerDisplay.utils';
+import { getOwnersAllPages } from '../features/staff/services/serverApi.task';
 
 export default function PlansReservationPage() {
+  const { user } = useAuth();
+  const showAdminConfigSource = useMemo(
+    () => canSelectOwnerInAdminFilter(user),
+    [user],
+  );
+  const { owners: adminOwners } = useAdminOwnerFilter();
+  const { ownerKey: scopedOwnerKey, ownerDisplayName: scopedOwnerName } = useFulltaskConfigOwner();
+  const [ownerRows, setOwnerRows] = useState<Array<Record<string, unknown>>>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getOwnersAllPages({ search_text: '' })
+      .then((rows) => {
+        if (!cancelled) setOwnerRows(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setOwnerRows([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const ownersForLabels = adminOwners.length > 0 ? adminOwners : ownerRows;
+
+  const resolveOwnerDisplayName = useCallback(
+    (ownerId?: string) => {
+      const id = String(ownerId ?? '').trim();
+      if (!id) return '—';
+      const fromList = ownerDisplayNameFromId(id, ownersForLabels);
+      if (fromList && fromList !== '—' && fromList !== id) return fromList;
+      if (scopedOwnerKey === id && scopedOwnerName) return scopedOwnerName;
+      return fromList;
+    },
+    [ownersForLabels, scopedOwnerKey, scopedOwnerName],
+  );
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [summariesById, setSummariesById] = useState<Record<string, PlanListSummaryDoc>>({});
   const [plans, setPlans] = useState<Record<string, ReservationPlan>>({});
   const [staffNames, setStaffNames] = useState<Record<string, string>>({});
-  const [uiPlanListOrder, setUiPlanListOrder] = useState<string[]>([]);
+  const [orderByOwner, setOrderByOwner] = useState<UiPlanListOrderCache>({});
   const [loading, setLoading] = useState(true);
+  const [planLoadingId, setPlanLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selectedId = searchParams.get('reservationId') || undefined;
 
-  const mergeDeepLink = useCallback(
+  const loadPlanDetail = useCallback(
     async (
-      resaList: Reservation[],
-      planRecord: Record<string, ReservationPlan>,
-      planMap: Record<string, FulltaskPlanDoc>,
-      listingNames: Record<string, string>,
+      reservationId: string,
       names: Record<string, string>,
-      deepId: string,
-    ): Promise<{ reservations: Reservation[]; plans: Record<string, ReservationPlan> }> => {
-      if (resaList.some((r) => r.id === deepId) && planRecord[deepId]) {
-        return { reservations: resaList, plans: planRecord };
-      }
-
-      let planDoc: FulltaskPlanDoc | null = planMap[deepId] ?? null;
-      if (!planDoc) {
-        try {
-          const planRes = await fulltaskApi.getPlan(deepId);
-          const raw = planRes?.data ?? planRes;
-          if (raw && typeof raw === 'object' && (raw as FulltaskPlanDoc).reservationId) {
-            planDoc = raw as FulltaskPlanDoc;
-          }
-        } catch {
-          planDoc = null;
-        }
-      }
-
-      if (!planDoc) {
-        return { reservations: resaList, plans: planRecord };
-      }
-
-      let apiResa: ApiReservation | null = null;
+      ownerCache: UiPlanListOrderCache,
+      ownerId?: string,
+    ) => {
+      setPlanLoadingId(reservationId);
       try {
-        apiResa = await reservationsService.getById(deepId);
-      } catch {
-        apiResa = null;
-      }
-      if (!apiResa) apiResa = planToApiReservation(planDoc);
+        const ownerKeys = ownerId ? [ownerId] : [];
+        const mergedCache =
+          ownerKeys.length > 0
+            ? { ...ownerCache, ...(await loadUiPlanListOrdersByOwner(ownerKeys)) }
+            : ownerCache;
 
-      const listingName = listingNames[planDoc.listingId] || listingNames[String(apiResa.sojoriId)] || 'Logement';
-      const viewResa = buildReservationView(apiResa, planDoc, listingName);
-      let deepOrder: string[] = [];
-      try {
-        const orchRaw = await fulltaskApi.getOrchestrationConfig('global');
-        const doc = (orchRaw as { data?: { uiPlanListOrder?: string[] } })?.data ?? orchRaw;
-        if (Array.isArray((doc as { uiPlanListOrder?: string[] })?.uiPlanListOrder)) {
-          deepOrder = (doc as { uiPlanListOrder: string[] }).uiPlanListOrder;
+        const planRes = await fulltaskApi.getPlan(reservationId);
+        const raw = planRes?.data ?? planRes;
+        if (!raw || typeof raw !== 'object' || !(raw as FulltaskPlanDoc).reservationId) {
+          return;
         }
+        const planDoc = raw as FulltaskPlanDoc;
+        if (planDoc.status === 'annule' || planDoc.status === 'archive') {
+          setReservations((prev) => prev.filter((r) => r.id !== reservationId));
+          setPlans((prev) => {
+            const next = { ...prev };
+            delete next[reservationId];
+            return next;
+          });
+          setSummariesById((prev) => {
+            const next = { ...prev };
+            delete next[reservationId];
+            return next;
+          });
+          return;
+        }
+        if (ownerKeys.length > 0) {
+          setOrderByOwner((prev) => ({ ...prev, ...mergedCache }));
+        }
+        setPlans((prev) => ({
+          ...prev,
+          [reservationId]: buildPlanViewModel(
+            planDoc,
+            names,
+            uiPlanListOrderForPlan(planDoc, mergedCache),
+          ),
+        }));
       } catch {
-        deepOrder = [];
+        /* garde liste si GET échoue */
+      } finally {
+        setPlanLoadingId((cur) => (cur === reservationId ? null : cur));
       }
-      const nextPlans = {
-        ...planRecord,
-        [deepId]: buildPlanViewModel(
-          planDoc,
-          names,
-          deepOrder.length ? deepOrder : planDoc.uiPlanListOrder,
-        ),
-      };
-      const without = resaList.filter((r) => r.id !== deepId);
-      return {
-        reservations: [viewResa, ...without],
-        plans: nextPlans,
-      };
     },
     [],
   );
 
-  const load = useCallback(async () => {
+  const loadList = useCallback(async (): Promise<Record<string, PlanListSummaryDoc>> => {
     setLoading(true);
     setError(null);
     try {
-      const [plansRes, staffRes, listingRows, orchRes] = await Promise.all([
-        fulltaskApi.listPlans({ limit: 300 }),
+      const [plansRes, staffRes, listingRows] = await Promise.all([
+        fulltaskApi.listPlansSummary({ limit: 300 }),
         fulltaskApi.listStaff(),
         (tasksService as { getListings: () => Promise<{ _id: string; name: string }[]> }).getListings(),
-        fulltaskApi.getOrchestrationConfig('global').catch(() => null),
       ]);
 
-      const orchDoc = (orchRes as { data?: { uiPlanListOrder?: string[] } } | null)?.data ?? orchRes;
-      const planListOrder = Array.isArray(
-        (orchDoc as { uiPlanListOrder?: string[] } | null)?.uiPlanListOrder,
-      )
-        ? (orchDoc as { uiPlanListOrder: string[] }).uiPlanListOrder
-        : [];
-      setUiPlanListOrder(planListOrder);
-
-      const planDocs: FulltaskPlanDoc[] = [];
+      const summaries: PlanListSummaryDoc[] = [];
       const plansPayload = plansRes?.data ?? plansRes;
-      if (Array.isArray(plansPayload)) planDocs.push(...plansPayload);
+      if (Array.isArray(plansPayload)) summaries.push(...(plansPayload as PlanListSummaryDoc[]));
 
-      const listingNames: Record<string, string> = {};
+      const namesMap: Record<string, string> = {};
       for (const l of listingRows || []) {
-        if (l._id) listingNames[l._id] = l.name || 'Logement';
+        if (l._id) namesMap[l._id] = l.name || 'Logement';
       }
 
       const names: Record<string, string> = {};
@@ -143,87 +158,57 @@ export default function PlansReservationPage() {
       }
       setStaffNames(names);
 
-      const viewPlans: Record<string, ReservationPlan> = {};
+      const byId: Record<string, PlanListSummaryDoc> = {};
       const viewResa: Reservation[] = [];
-
-      const enrichedResas = await Promise.all(
-        planDocs.map(async (planDoc) => {
-          const rid = planDoc?.reservationId;
-          if (!rid || planDoc.status === 'annule' || planDoc.status === 'archive') return null;
-          let apiResa = planToApiReservation(planDoc);
-          try {
-            const full = await reservationsService.getById(rid);
-            if (full) {
-              apiResa = {
-                ...apiResa,
-                ...full,
-                id: rid,
-                reservationNumber:
-                  full.reservationNumber?.trim() ||
-                  planDoc.reservationCode?.trim() ||
-                  apiResa.reservationNumber,
-                guestName: full.guestName || planDoc.guestName || apiResa.guestName,
-              };
-            }
-          } catch {
-            /* plan seul si srv-reservations indisponible */
-          }
-          return { planDoc, apiResa };
-        }),
-      );
-
-      for (const row of enrichedResas) {
-        if (!row) continue;
-        const { planDoc, apiResa } = row;
-        const rid = planDoc.reservationId;
-        const listingName = listingNames[planDoc.listingId] || 'Logement';
-        viewPlans[rid] = buildPlanViewModel(
-          planDoc,
-          names,
-          planListOrder.length ? planListOrder : planDoc.uiPlanListOrder,
+      for (const s of summaries) {
+        if (!s.reservationId || s.status === 'annule' || s.status === 'archive') continue;
+        byId[s.reservationId] = s;
+        viewResa.push(
+          buildReservationViewFromSummary(s, namesMap[s.listingId] || 'Logement'),
         );
-        viewResa.push(buildReservationView(apiResa, planDoc, listingName));
       }
-
       viewResa.sort((a, b) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime());
 
-      let finalResa = viewResa;
-      let finalPlans = viewPlans;
-      if (selectedId) {
-        const planMap: Record<string, FulltaskPlanDoc> = {};
-        for (const p of planDocs) {
-          if (p.reservationId) planMap[p.reservationId] = p;
-        }
-        const merged = await mergeDeepLink(
-          viewResa,
-          viewPlans,
-          planMap,
-          listingNames,
-          names,
-          selectedId,
-        );
-        finalResa = merged.reservations;
-        finalPlans = merged.plans;
-      }
-
-      setReservations(finalResa);
-      setPlans(finalPlans);
+      setSummariesById(byId);
+      setReservations(viewResa);
+      setPlans({});
+      return byId;
     } catch (e) {
       setReservations([]);
+      setSummariesById({});
       setPlans({});
       setError(e instanceof Error ? e.message : 'Erreur chargement');
+      return {};
     } finally {
       setLoading(false);
     }
-  }, [selectedId, mergeDeepLink]);
+  }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadList();
+  }, [loadList]);
+
+  useEffect(() => {
+    if (!selectedId || plans[selectedId] || planLoadingId === selectedId) return;
+    const summary = summariesById[selectedId];
+    let cancelled = false;
+    (async () => {
+      await loadPlanDetail(selectedId, staffNames, orderByOwner, summary?.ownerId);
+      if (cancelled) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, plans, planLoadingId, staffNames, orderByOwner, summariesById, loadPlanDetail]);
 
   const handlePlanArchived = useCallback(
     (id: string) => {
       setPlans((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setSummariesById((prev) => {
         const next = { ...prev };
         delete next[id];
         return next;
@@ -237,34 +222,43 @@ export default function PlansReservationPage() {
   const handleSelect = useCallback(
     async (id: string) => {
       setSearchParams({ reservationId: id });
-      try {
-        const planRes = await fulltaskApi.getPlan(id);
-        const raw = planRes?.data ?? planRes;
-          if (raw && typeof raw === 'object' && (raw as FulltaskPlanDoc).reservationId) {
-            const planDoc = raw as FulltaskPlanDoc;
-            if (planDoc.status === 'annule' || planDoc.status === 'archive') {
-              setPlans((prev) => {
-                const next = { ...prev };
-                delete next[id];
-                return next;
-              });
-              setReservations((prev) => prev.filter((r) => r.id !== id));
-              return;
-            }
-            const order = uiPlanListOrder.length ? uiPlanListOrder : planDoc.uiPlanListOrder;
-            setPlans((prev) => ({
-              ...prev,
-              [id]: buildPlanViewModel(planDoc, staffNames, order),
-            }));
-          }
-      } catch {
-        /* garde le plan liste si GET échoue */
-      }
+      if (plans[id]) return;
+      const summary = summariesById[id];
+      await loadPlanDetail(id, staffNames, orderByOwner, summary?.ownerId);
     },
-    [setSearchParams, staffNames, uiPlanListOrder],
+    [setSearchParams, plans, staffNames, orderByOwner, summariesById, loadPlanDetail],
   );
 
-  const planCount = Object.keys(plans).length;
+  const applyPlanDoc = useCallback(
+    (planDoc: FulltaskPlanDoc) => {
+      const reservationId = planDoc.reservationId;
+      setPlans((prev) => ({
+        ...prev,
+        [reservationId]: buildPlanViewModel(
+          planDoc,
+          staffNames,
+          uiPlanListOrderForPlan(planDoc, orderByOwner),
+        ),
+      }));
+    },
+    [staffNames, orderByOwner],
+  );
+
+  const handlePlanUpdated = useCallback(
+    (planDoc?: FulltaskPlanDoc) => {
+      if (planDoc?.reservationId) applyPlanDoc(planDoc);
+    },
+    [applyPlanDoc],
+  );
+
+  const handlePlanRefetch = useCallback(async () => {
+    const byId = await loadList();
+    if (selectedId) {
+      await loadPlanDetail(selectedId, staffNames, orderByOwner, byId[selectedId]?.ownerId);
+    }
+  }, [loadList, selectedId, staffNames, orderByOwner, loadPlanDetail]);
+
+  const planCount = reservations.length;
 
   return (
     <DashboardWrapper breadcrumb={['Tâches', 'Orchestration', 'Plans réservation']} compactMain>
@@ -285,9 +279,7 @@ export default function PlansReservationPage() {
           }}
         >
           <span>
-            <b>Plans</b> : uniquement les réservations avec un plan srv-fulltask ({planCount}). Filtre par
-            résa :{' '}
-            <code style={{ fontFamily: 'Geist Mono, monospace' }}>?reservationId=…</code>
+            <b>Plans</b> : liste légère ({planCount}) · détail chargé au clic
           </span>
           <Link
             to="/tasks/orchestration-config"
@@ -315,8 +307,12 @@ export default function PlansReservationPage() {
           reservations={reservations}
           plans={plans}
           initialId={selectedId}
+          planLoadingId={planLoadingId}
+          showAdminConfigSource={showAdminConfigSource}
+          resolveOwnerDisplayName={resolveOwnerDisplayName}
           onSelect={handleSelect}
-          onPlanRefetch={load}
+          onPlanUpdated={handlePlanUpdated}
+          onPlanRefetch={handlePlanRefetch}
           onPlanArchived={handlePlanArchived}
           listTitle="Plans"
         />

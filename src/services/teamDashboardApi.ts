@@ -5,10 +5,10 @@ import apiClient from './apiClient';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 
 const SRV_USER = MICROSERVICE_BASE_URL.SRV_USER;
-const SRV_TASK = MICROSERVICE_BASE_URL.SRV_TASK;
+const SRV_FULLTASK = MICROSERVICE_BASE_URL.SRV_FULLTASK;
 const SRV_ADMIN = MICROSERVICE_BASE_URL.SRV_ADMIN;
 const CITY = MICROSERVICE_BASE_URL.CITY;
-const STAFF_SIMPLIFIED = `${SRV_TASK}/staff-simplified`;
+const STAFF_SIMPLIFIED = `${SRV_FULLTASK}/staff-simplified`;
 
 // ─── Staff simplified (srv-task) ───────────────────────────────────────────
 
@@ -119,22 +119,22 @@ export async function getAdminWhatsapp(params: Record<string, unknown> = {}) {
     search_text: String(params.search_text ?? ''),
   });
   if (params.owner_id) q.set('owner_id', String(params.owner_id));
-  const { data } = await apiClient.get(`${SRV_TASK}/admin-whatsapp/get?${q}`);
+  const { data } = await apiClient.get(`${SRV_FULLTASK}/admin-whatsapp/get?${q}`);
   return data;
 }
 
 export async function createAdminWhatsapp(body: Record<string, unknown>) {
-  const { data } = await apiClient.post(`${SRV_TASK}/admin-whatsapp/create`, body);
+  const { data } = await apiClient.post(`${SRV_FULLTASK}/admin-whatsapp/create`, body);
   return data;
 }
 
 export async function updateAdminWhatsapp(id: string, body: Record<string, unknown>) {
-  const { data } = await apiClient.put(`${SRV_TASK}/admin-whatsapp/update/${encodeURIComponent(id)}`, body);
+  const { data } = await apiClient.put(`${SRV_FULLTASK}/admin-whatsapp/update/${encodeURIComponent(id)}`, body);
   return data;
 }
 
 export async function deleteAdminWhatsapp(id: string) {
-  const { data } = await apiClient.delete(`${SRV_TASK}/admin-whatsapp/delete/${encodeURIComponent(id)}`);
+  const { data } = await apiClient.delete(`${SRV_FULLTASK}/admin-whatsapp/delete/${encodeURIComponent(id)}`);
   return data;
 }
 
@@ -160,6 +160,6 @@ export async function getCities(params: Record<string, unknown> = {}) {
 }
 
 export async function getNotificationEvent() {
-  const { data } = await apiClient.get(`${SRV_TASK}/notification/notification-events`);
+  const { data } = await apiClient.get(`${SRV_FULLTASK}/notification/notification-events`);
   return data;
 }

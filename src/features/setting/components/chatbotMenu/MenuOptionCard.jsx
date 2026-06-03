@@ -11,6 +11,7 @@ import {
 } from '@mui/material'
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
 import SmartAvailabilitySelector from './SmartAvailabilitySelector'
+import RequiresConditionsSelector from './RequiresConditionsSelector'
 
 const MenuOptionCard = ({ option, onChange }) => {
   const [expanded, setExpanded] = useState(false)
@@ -29,14 +30,6 @@ const MenuOptionCard = ({ option, onChange }) => {
 
   const handleAvailabilityChange = (availability) => {
     onChange({ ...option, availability })
-  }
-
-  const handleRequiresChange = (event) => {
-    const nextAvailability = {
-      ...(option.availability || {}),
-      requires: event.target.value,
-    }
-    onChange({ ...option, availability: nextAvailability })
   }
 
   const isDeclarationOption = option.code === 'D3' || option.code === 'D4'
@@ -130,13 +123,14 @@ const MenuOptionCard = ({ option, onChange }) => {
                 onChange={handleAvailabilityChange}
               />
               {option.availability?.type === 'conditional_and_time' && (
-                <TextField
-                  label="Condition requise"
+                <RequiresConditionsSelector
                   value={option.availability?.requires || ''}
-                  onChange={handleRequiresChange}
-                  placeholder="Ex: E_completed"
-                  size="small"
-                  fullWidth
+                  onChange={(requires) =>
+                    onChange({
+                      ...option,
+                      availability: { ...(option.availability || {}), requires },
+                    })
+                  }
                 />
               )}
               <Stack direction="row" spacing={1} flexWrap="wrap">

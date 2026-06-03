@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sojori · WhatsApp Flows · Pilote</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --gold:#b8851a;--goldD:#876119;--goldS:#e6c46a;--gold-light:#f5e6c8;
+  --wa-green:#075E54;--wa-light:#25D366;--wa-bg:#ECE5DD;--wa-bub:#dcf8c6;
+  --bg:#fafaf7;--card:#fff;--alt:#f3eee2;
+  --t:#14110a;--t2:#3a3a3c;--t3:#6e6e73;--t4:#a09890;
+  --b:#e9e6dd;--bs:#d4cfc2;
+  --er:#dc2626;--erT:rgba(220,38,38,0.10);
+  --wa:#f59e0b;--waT:rgba(245,158,11,0.10);
+  --su:#0a8f5e;--suT:rgba(10,143,94,0.10);
+  --sans:Geist,system-ui,sans-serif;--mono:'Geist Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);font-family:var(--sans);color:var(--t);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit;padding:0}
+a{color:inherit;text-decoration:none}
+pre{margin:0;font-family:var(--mono);font-size:11px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(184,133,26,0.45)}50%{box-shadow:0 0 0 6px rgba(184,133,26,0)}}
+
+/* ─── TOP BAR ─── */
+.topbar{position:sticky;top:0;z-index:30;background:rgba(255,255,255,0.85);backdrop-filter:blur(16px) saturate(180%);border-bottom:1px solid var(--b);padding:11px 24px;display:flex;align-items:center;gap:14px;height:60px}
+.brand{display:flex;align-items:center;gap:9px}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--goldS),var(--goldD));color:#1a1408;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(184,133,26,0.30)}
+.brand-name{font-weight:700;font-size:15px;letter-spacing:-0.02em;display:flex;align-items:center;gap:6px}
+.brand-name::after{content:'◆';color:var(--gold);font-size:10px}
+.crumb{font-size:11px;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.08em;font-weight:700}
+.crumb b{color:var(--t)}
+.pilote-chip{font-family:var(--mono);font-size:10px;font-weight:800;color:var(--goldD);background:var(--gold-light);padding:4px 10px;border-radius:99px;letter-spacing:0.06em;border:1px solid var(--goldS)}
+.tabs{margin-left:auto;display:inline-flex;background:var(--card);border:1px solid var(--b);border-radius:10px;padding:3px;gap:1px}
+.tab{padding:8px 14px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--t3);display:inline-flex;align-items:center;gap:7px}
+.tab:hover{color:var(--t)}
+.tab.on{background:linear-gradient(135deg,#1a1408,#332b1c);color:var(--goldS);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,0.20)}
+.tab .em{font-size:14px}
+
+/* ─── PAGES ─── */
+.flow-section{display:none;animation:fadeIn .3s}
+.flow-section.on{display:block}
+
+.flow-h{max-width:1480px;margin:28px auto 18px;padding:0 24px;display:flex;align-items:flex-start;gap:14px}
+.flow-h .em{width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,var(--goldS),var(--goldD));color:#1a1408;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 6px 16px rgba(184,133,26,0.25)}
+.flow-h h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-0.025em}
+.flow-h .sub{font-size:13px;color:var(--t3);margin-top:4px;line-height:1.55;max-width:680px}
+.flow-h .sub b{color:var(--t)}
+.flow-h .sub code{font-family:var(--mono);background:var(--alt);padding:1px 6px;border-radius:4px;color:var(--goldD);font-size:11px;font-weight:700}
+
+/* Scenarios chooser */
+.scenarios{max-width:1480px;margin:18px auto;padding:0 24px;display:flex;gap:6px;flex-wrap:wrap}
+.scen-pill{padding:7px 13px;font-size:12px;font-weight:600;background:var(--card);border:1px solid var(--b);border-radius:99px;color:var(--t3);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.scen-pill .em{font-size:13px}
+.scen-pill.on{background:var(--gold-light);border-color:var(--gold);color:var(--goldD);font-weight:700;box-shadow:0 0 0 2px rgba(184,133,26,0.10)}
+.scen-pill:hover{border-color:var(--bs)}
+
+/* ─── LAYOUT 3 cols ─── */
+.layout{max-width:1480px;margin:0 auto;padding:14px 24px 60px;display:grid;grid-template-columns:280px 1fr 460px;gap:18px;align-items:start}
+
+/* PHONE column */
+.phone-col{display:flex;flex-direction:column;align-items:center;gap:14px;position:sticky;top:80px}
+.phone-label{font-family:var(--mono);font-size:10px;font-weight:800;color:var(--t3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px}
+.phone{width:260px;background:#1a1a1a;border-radius:28px;padding:8px;box-shadow:0 24px 48px rgba(0,0,0,0.18),0 8px 16px rgba(0,0,0,0.08);position:relative}
+.phone::before{content:'';position:absolute;top:8px;left:50%;transform:translateX(-50%);width:50px;height:5px;background:#000;border-radius:99px;z-index:2}
+.phone-screen{background:var(--wa-bg);border-radius:22px;overflow:hidden;padding-top:18px}
+.wa-head{background:var(--wa-green);color:#fff;padding:8px 11px;display:flex;align-items:center;gap:8px}
+.wa-head .back{font-size:14px;opacity:0.9}
+.wa-head .av{width:24px;height:24px;border-radius:50%;background:#fff;color:var(--wa-green);font-weight:800;font-size:10px;display:flex;align-items:center;justify-content:center}
+.wa-head .info{flex:1;min-width:0}
+.wa-head .nm{font-size:11.5px;font-weight:700;letter-spacing:-0.005em}
+.wa-head .st{font-size:9px;opacity:0.85;font-family:var(--mono);letter-spacing:0.02em}
+.wa-head .icons{display:flex;gap:9px;font-size:11px;opacity:0.85}
+
+/* Flow screen body */
+.flow-arrow{font-family:var(--mono);color:var(--t3);font-size:18px;font-weight:800}
+.flow-screen{background:#fff;padding:12px 12px 14px}
+.fs-num{position:absolute;top:6px;right:10px;font-family:var(--mono);font-size:9.5px;color:var(--t4);font-weight:700;letter-spacing:0.04em}
+.flow-screen-wrap{position:relative;background:#fff}
+.fs-title{font-size:11.5px;font-weight:800;letter-spacing:-0.005em;margin-bottom:3px;padding-right:30px}
+.fs-caption{font-size:10px;color:var(--t3);font-family:var(--mono);font-weight:600;letter-spacing:0.02em;margin-bottom:8px}
+
+.kv-grid{display:flex;flex-direction:column;gap:5px;padding:7px 8px;background:var(--alt);border-radius:7px;margin-bottom:8px}
+.kv{display:flex;flex-direction:column;gap:0}
+.kv .l{font-size:8.5px;font-family:var(--mono);font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em}
+.kv .v{font-size:11px;font-weight:700;color:var(--t);margin-top:1px;letter-spacing:-0.005em}
+.kv .v .pill-now{display:inline-block;font-family:var(--mono);font-size:8.5px;background:var(--gold-light);color:var(--goldD);padding:1px 5px;border-radius:4px;font-weight:800;letter-spacing:0.04em;margin-left:4px;vertical-align:middle}
+
+.opt-list{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.opt{display:flex;align-items:flex-start;gap:7px;padding:7px 8px;border:1px solid var(--b);border-radius:7px;font-size:11px;background:#fff;cursor:pointer}
+.opt.on{border-color:var(--gold);background:var(--gold-light);box-shadow:0 0 0 2px rgba(184,133,26,0.10)}
+.opt .r{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--bs);flex-shrink:0;margin-top:1px}
+.opt.on .r{border-color:var(--goldD);background:radial-gradient(circle at center,var(--goldD) 0 3px,transparent 3px)}
+.opt .body{flex:1;min-width:0}
+.opt .ti{font-weight:700;letter-spacing:-0.005em;line-height:1.2;font-size:11px}
+.opt .ds{font-size:9.5px;color:var(--t3);margin-top:1px;font-family:var(--mono);font-weight:600;letter-spacing:0.02em}
+.opt .em{font-size:13px;flex-shrink:0;margin-top:-1px}
+
+.txt-area{width:100%;min-height:48px;padding:7px 9px;border:1px solid var(--b);border-radius:7px;font:inherit;font-size:11px;background:var(--alt);color:var(--t);resize:none;margin-bottom:8px;font-family:var(--sans)}
+
+.priority-pills{display:flex;gap:4px;margin-bottom:9px;flex-wrap:wrap}
+.p-pill{padding:5px 9px;font-size:10px;border:1px solid var(--b);border-radius:99px;background:#fff;color:var(--t3);cursor:pointer;font-family:var(--mono);font-weight:700;letter-spacing:0.02em}
+.p-pill.on.normal{background:var(--suT);color:var(--su);border-color:transparent;font-weight:800}
+.p-pill.on.urgent{background:var(--waT);color:var(--wa);border-color:transparent;font-weight:800}
+.p-pill.on.critical{background:var(--erT);color:var(--er);border-color:transparent;font-weight:800}
+
+.summary-card{padding:7px 9px;background:var(--alt);border-radius:7px;font-size:10.5px;color:var(--t2);margin-bottom:8px;line-height:1.5}
+.summary-card .h{font-size:9px;font-family:var(--mono);font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px}
+.summary-card .line{display:flex;justify-content:space-between;padding:1px 0}
+.summary-card .line .v{font-weight:700;color:var(--t);font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+.support-code{margin-top:8px;text-align:center;font-family:var(--mono);font-size:9px;color:var(--t4);font-weight:600;letter-spacing:0.04em;line-height:1.5}
+
+.terminal-banner{background:linear-gradient(135deg,#dcf8c6,#bbe7a0);border:1px solid #86c878;border-radius:8px;padding:9px 10px;text-align:center;margin-bottom:9px}
+.terminal-banner .em{font-size:20px;display:block;margin-bottom:3px}
+.terminal-banner .t{font-size:11px;font-weight:800;letter-spacing:-0.005em;color:#0a4019;line-height:1.3}
+.terminal-banner .ref{margin-top:4px;font-family:var(--mono);font-size:9.5px;color:#1a5b34;font-weight:700;letter-spacing:0.02em}
+
+.task-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--gold-light);color:var(--goldD);border:1px solid var(--goldS);border-radius:99px;font-family:var(--mono);font-size:9px;font-weight:800;letter-spacing:0.04em;margin-top:5px}
+
+.btn-row{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+.btn-prim{background:var(--wa-green);color:#fff;font-size:11px;font-weight:700;padding:9px;border-radius:6px;text-align:center}
+.btn-sec{background:#fff;color:var(--wa-green);font-size:11px;font-weight:700;padding:9px;border-radius:6px;text-align:center;border:1px solid var(--wa-green)}
+.btn-danger{background:#fff;color:var(--er);font-size:11px;font-weight:700;padding:9px;border-radius:6px;text-align:center;border:1px solid var(--er)}
+
+.hint-foot{font-size:9px;color:var(--t4);font-family:var(--mono);text-align:center;margin-top:5px;font-weight:600;letter-spacing:0.02em}
+
+/* Bubble post-flow */
+.post-flow-bubble{background:var(--wa-bg);padding:12px 11px;display:flex;flex-direction:column;gap:6px;border-top:1px solid rgba(0,0,0,0.06)}
+.bubble{background:#fff;border-radius:8px;border-top-left-radius:2px;padding:8px 11px;font-size:11px;line-height:1.5;color:var(--t);max-width:88%;align-self:flex-start;box-shadow:0 1px 1px rgba(0,0,0,0.06)}
+.bubble .h{font-size:10px;font-weight:800;color:var(--goldD);margin-bottom:4px;display:flex;align-items:center;gap:5px}
+.bubble .line{display:flex;justify-content:space-between;padding:2px 0;font-family:var(--mono);font-size:10px;color:var(--t2)}
+.bubble .line .v{color:var(--t);font-weight:700}
+.bubble .menu{margin-top:5px;font-size:10.5px;color:var(--t2);line-height:1.6}
+.bubble .menu b{color:var(--wa-green);font-family:var(--mono);font-weight:800}
+.bubble .time{font-size:8.5px;color:var(--t4);text-align:right;margin-top:3px;font-family:var(--mono);letter-spacing:0.02em}
+
+/* CENTER · steps + payloads */
+.center-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+.card{background:var(--card);border:1px solid var(--b);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,17,10,0.04)}
+.card-h{padding:11px 14px;display:flex;align-items:center;gap:9px;background:var(--alt);border-bottom:1px solid var(--b)}
+.card-h .em{width:30px;height:30px;border-radius:8px;background:#fff;border:1px solid var(--b);display:flex;align-items:center;justify-content:center;font-size:14px}
+.card-h .info{flex:1}
+.card-h .nm{font-size:12.5px;font-weight:800;letter-spacing:-0.005em}
+.card-h .ds{font-size:10.5px;color:var(--t3);font-family:var(--mono);font-weight:600;letter-spacing:0.02em;margin-top:1px}
+.card-h .badge{font-family:var(--mono);font-size:9.5px;font-weight:800;padding:3px 7px;border-radius:5px;letter-spacing:0.04em;background:var(--gold-light);color:var(--goldD)}
+.card-body{padding:12px 14px}
+
+/* Steps list */
+.steps{display:flex;flex-direction:column;gap:6px}
+.step{display:flex;gap:11px;padding:10px;background:var(--alt);border:1px solid var(--b);border-radius:9px;align-items:flex-start}
+.step .n{width:24px;height:24px;border-radius:7px;background:var(--wa-green);color:#fff;font-family:var(--mono);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step.api .n{background:var(--gold);color:#1a1408}
+.step.term .n{background:var(--su)}
+.step .body{flex:1;min-width:0}
+.step .ti{font-size:12px;font-weight:700;letter-spacing:-0.005em;line-height:1.3}
+.step .ds{font-size:11px;color:var(--t2);margin-top:3px;line-height:1.5}
+.step .api-chip{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 7px;background:#fff;border:1px solid var(--b);border-radius:5px;color:var(--t2);margin-top:5px;letter-spacing:0.02em}
+.step .api-chip .v{color:var(--gold);font-weight:800}
+.step .api-chip.post{border-color:var(--gold);background:var(--gold-light)}
+.step .api-chip.post .v{color:var(--goldD)}
+
+/* JSON panes */
+.json-pane{padding:11px 14px;background:#1a1a1a;color:#e6e3d8;border-radius:0 0 14px 14px;max-height:340px;overflow:auto}
+.json-pane pre{color:#e6e3d8;font-size:10.5px;line-height:1.6}
+.json-pane .k{color:#a0c8ff}
+.json-pane .s{color:#86efac}
+.json-pane .n{color:#fcd34d}
+.json-pane .c{color:#7a756c;font-style:italic}
+.json-pane .b{color:#f87171}
+
+.collapsible summary{cursor:pointer;list-style:none;padding:9px 14px;background:#0a0a0a;color:var(--goldS);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.06em;display:flex;align-items:center;gap:7px;border-radius:0 0 14px 14px}
+.collapsible[open] summary{border-radius:0}
+.collapsible summary::before{content:'▸';transition:transform .2s}
+.collapsible[open] summary::before{transform:rotate(90deg)}
+
+/* RIGHT · meta rules */
+.rules-col{position:sticky;top:80px;display:flex;flex-direction:column;gap:14px;align-self:start}
+.rule-card{background:var(--card);border:1px solid var(--b);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,17,10,0.04)}
+.rule-card .h{padding:11px 13px;background:linear-gradient(135deg,var(--gold-light),transparent);border-bottom:1px solid var(--b);font-size:11px;font-weight:800;color:var(--goldD);font-family:var(--mono);letter-spacing:0.08em;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.rule-card .b{padding:11px 13px;font-size:12px;color:var(--t2);line-height:1.55}
+.rule-card .b ul{margin:0;padding-left:18px}
+.rule-card .b ul li{margin-bottom:6px}
+.rule-card .b code{font-family:var(--mono);background:var(--alt);padding:1px 5px;border-radius:3px;color:var(--goldD);font-size:11px;font-weight:700}
+.rule-card .b b{color:var(--t);font-weight:700}
+
+.legend-card{background:var(--alt);border:1px dashed var(--bs);border-radius:13px;padding:11px 13px}
+.legend-card .h{font-size:10.5px;font-weight:800;color:var(--t3);font-family:var(--mono);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px}
+.legend-row{display:flex;align-items:center;gap:7px;padding:3px 0;font-size:11.5px}
+.legend-row .dot{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+
+/* Out of scope */
+.oos{background:#fff8eb;border:1px solid var(--goldS);border-radius:11px;padding:11px 13px;font-size:11px;color:var(--t2);line-height:1.55}
+.oos .h{font-size:10.5px;font-weight:800;color:var(--goldD);font-family:var(--mono);letter-spacing:0.08em;margin-bottom:5px;text-transform:uppercase}
+</style></head><body>
+
+<!-- TOP -->
+<div class="topbar">
+  <div class="brand"><div class="brand-mark">S</div><div class="brand-name">Sojori</div></div>
+  <div class="crumb"><b>Harcay CFC</b> · Casablanca</div>
+  <span class="pilote-chip">PILOTE FLOWS WA</span>
+  <div class="tabs">
+    <button class="tab on" data-flow="arrival"><span class="em">🛬</span>Choisir arrivée</button>
+    <button class="tab" data-flow="support"><span class="em">🆘</span>Support</button>
+  </div>
+</div>
+
+<!-- ════════ FLOW 1 · CHOISIR ARRIVÉE ════════ -->
+<section class="flow-section on" id="flow-arrival">
+  <div class="flow-h">
+    <div class="em">🛬</div>
+    <div>
+      <h1>Flow · Choisir l'heure d'arrivée</h1>
+      <div class="sub">Token <code>arrival_choose</code> · entrée menu WhatsApp <b>lettre D</b> · données injectées via <code>flow_action_data</code> dans le bouton template <b>(écran 1 = 100% JSON, pas d'appel INIT)</b>.</div>
+    </div>
+  </div>
+
+  <div class="scenarios">
+    <button class="scen-pill on" data-scen="A"><span class="em">📅</span>A · Première visite (défaut 15:00)</button>
+    <button class="scen-pill" data-scen="B"><span class="em">✏</span>B · Modification 15:00 → 18:00</button>
+    <button class="scen-pill" data-scen="C"><span class="em">🗑</span>C · Annulation du choix</button>
+  </div>
+
+  <div class="layout">
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <span class="phone-label">📱 Aperçu WhatsApp · 4 écrans</span>
+      <div class="phone"><div class="phone-screen">
+        <div class="wa-head">
+          <span class="back">‹</span>
+          <div class="av">S</div>
+          <div class="info"><div class="nm">Sojori · Concierge</div><div class="st">en ligne</div></div>
+          <div class="icons"><span>📞</span><span>⋮</span></div>
+        </div>
+
+        <!-- Screen 1 · CHOIX_HEURE -->
+        <div class="flow-screen-wrap">
+          <span class="fs-num">1/3</span>
+          <div class="flow-screen">
+            <div class="fs-title">Choisir l'heure d'arrivée</div>
+            <div class="fs-caption">Confirmez ou modifiez votre heure</div>
+
+            <div class="kv-grid">
+              <div class="kv"><span class="l">Logement</span><span class="v">Harcay CFC</span></div>
+              <div class="kv"><span class="l">Séjour</span><span class="v">27 mai → 05 juin 2026</span></div>
+              <div class="kv"><span class="l">Heure actuelle</span><span class="v">15:00 <span class="pill-now">DÉFAUT</span></span></div>
+              <div class="kv"><span class="l">Fenêtre check-in</span><span class="v">14:00 → 20:00</span></div>
+            </div>
+
+            <div class="opt-list">
+              <label class="opt"><span class="r"></span><span class="em">🌅</span><div class="body"><div class="ti">Early · 08:00</div><div class="ds">Arrivée matinale</div></div></label>
+              <label class="opt on"><span class="r"></span><span class="em">⭐</span><div class="body"><div class="ti">Standard · 15:00 ●</div><div class="ds">Heure par défaut — actuelle</div></div></label>
+              <label class="opt"><span class="r"></span><span class="em">🌙</span><div class="body"><div class="ti">Late · 18:00</div><div class="ds">Arrivée tardive</div></div></label>
+            </div>
+
+            <div class="btn-row">
+              <div class="btn-prim">Confirmer</div>
+              <div class="btn-sec">↩ Menu principal</div>
+            </div>
+            <div class="hint-foot">Vous pouvez modifier ou annuler à tout moment</div>
+          </div>
+        </div>
+      </div></div>
+
+      <span class="flow-arrow">↓</span>
+
+      <div class="phone"><div class="phone-screen">
+        <div class="wa-head"><span class="back">‹</span><div class="av">S</div><div class="info"><div class="nm">Sojori · Concierge</div><div class="st">en ligne</div></div></div>
+
+        <!-- Screen 2a · CONFIRMATION -->
+        <div class="flow-screen-wrap">
+          <span class="fs-num">2/3</span>
+          <div class="flow-screen">
+            <div class="fs-title">Confirmation</div>
+            <div class="fs-caption">Vérifiez votre choix avant de valider</div>
+
+            <div class="summary-card">
+              <div class="h">RÉCAPITULATIF</div>
+              <div class="line"><span>Date</span><span class="v">27 mai 2026</span></div>
+              <div class="line"><span>Heure</span><span class="v">18:00</span></div>
+              <div class="line"><span>Type</span><span class="v">Late · arrivée tardive</span></div>
+            </div>
+
+            <div style="font-size:11px;color:var(--t2);line-height:1.5;margin-bottom:9px">
+              ⚠ Le staff sera notifié de votre arrivée à <b>18:00</b>. L'accès sera préparé en conséquence.
+            </div>
+
+            <div class="btn-row">
+              <div class="btn-prim">✓ Confirmer 18:00</div>
+              <div class="btn-sec">← Modifier</div>
+              <div class="btn-danger">🗑 Annuler le choix</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+
+      <span class="flow-arrow">↓</span>
+
+      <div class="phone"><div class="phone-screen">
+        <div class="wa-head"><span class="back">‹</span><div class="av">S</div><div class="info"><div class="nm">Sojori · Concierge</div><div class="st">en ligne</div></div></div>
+
+        <!-- Screen 3 · TERMINAL -->
+        <div class="flow-screen-wrap">
+          <span class="fs-num">3/3</span>
+          <div class="flow-screen">
+            <div class="terminal-banner">
+              <span class="em">✅</span>
+              <div class="t">Heure d'arrivée enregistrée<br><b>18:00</b> · 27 mai 2026</div>
+              <div class="ref">REF · ARR-SJ-YDHM9988</div>
+            </div>
+
+            <div style="font-size:11px;color:var(--t2);line-height:1.5;margin-bottom:9px">
+              Votre concierge a été notifié. Vous recevrez les instructions d'accès <b>2h avant votre arrivée</b>.
+            </div>
+
+            <div class="btn-row">
+              <div class="btn-prim">↩ Retour au menu principal</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Post-flow bubble -->
+        <div class="post-flow-bubble">
+          <div class="bubble">
+            <div class="h">✅ Parcours mis à jour</div>
+            <div class="line"><span>🕐 Arrivée</span><span class="v">18:00</span></div>
+            <div class="line"><span>📝 Enregistrement</span><span class="v">0 / 4</span></div>
+            <div class="line"><span>🧹 Ménage gratuit</span><span class="v">0 / 3 utilisés</span></div>
+            <div class="menu" style="margin-top:8px;padding-top:7px;border-top:1px dashed var(--b)">
+              <div style="font-weight:700;color:var(--t);margin-bottom:3px">Menu principal</div>
+              <b>A</b> Infos séjour · <b>B</b> WiFi · <b>C</b> Accès<br>
+              <b>D</b> ✓ Heure d'arrivée · <b>E</b> Enregistrement<br>
+              <b>F</b> Départ · <b>G</b> Infos logement · <b>I</b> Ménage<br>
+              <b>J</b> Conciergerie · <b>K</b> Support
+            </div>
+            <div class="time">15:32</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- CENTER · steps + payload -->
+    <div class="center-col">
+
+      <div class="card">
+        <div class="card-h">
+          <div class="em">⚡</div>
+          <div class="info"><div class="nm">Flow steps · arrival_choose</div><div class="ds">3 écrans · 1 endpoint backend</div></div>
+          <span class="badge">META v7.2</span>
+        </div>
+        <div class="card-body">
+          <div class="steps">
+            <div class="step">
+              <div class="n">1</div>
+              <div class="body">
+                <div class="ti">📱 Écran 1 · CHOIX_HEURE</div>
+                <div class="ds">Affichage instantané depuis <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">flow_action_data</code> du template button. <b>Aucun appel API à ce stade.</b> Variables : <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">${'$'}{data.slots}</code>, <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">${'$'}{data.current_time}</code></div>
+              </div>
+            </div>
+            <div class="step">
+              <div class="n">2</div>
+              <div class="body">
+                <div class="ti">📲 Sélection radio + Confirmer → data_exchange</div>
+                <div class="ds">Le client envoie <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">{ screen:"CHOIX_HEURE", action:"navigate", data:{ chosen_slot:"18:00" } }</code> chiffré AES-GCM vers le webhook.</div>
+                <div class="api-chip post"><span>POST</span><span class="v">/webhook/flow</span></div>
+              </div>
+            </div>
+            <div class="step api">
+              <div class="n">3</div>
+              <div class="body">
+                <div class="ti">⚙ Backend valide + persiste</div>
+                <div class="ds">srv-fullchatbot → vérifie le slot dans <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">listing_snapshot.TS_CHECKIN</code> · met à jour <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">guest_context.arrival</code>.</div>
+                <div class="api-chip post"><span>PATCH</span><span class="v">/api/guest-actions/choose-arrival</span></div>
+                <div class="api-chip"><span>BODY</span><span class="v">{ reservationId, time:"18:00" }</span></div>
+              </div>
+            </div>
+            <div class="step">
+              <div class="n">4</div>
+              <div class="body">
+                <div class="ti">📱 Écran 2 · CONFIRMATION (statique)</div>
+                <div class="ds">Affiché si data_exchange OK · contient le récap pour validation finale ou annulation.</div>
+              </div>
+            </div>
+            <div class="step term">
+              <div class="n">5</div>
+              <div class="body">
+                <div class="ti">✅ Écran 3 · TERMINAL (complete)</div>
+                <div class="ds">Action Meta <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">complete</code> · terminal:true · le bot reçoit <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">flow_response_message</code> et déclenche le push fulltask → cache guest_context refresh.</div>
+              </div>
+            </div>
+            <div class="step api">
+              <div class="n">6</div>
+              <div class="body">
+                <div class="ti">💬 Bot post-flow (hors flow Meta)</div>
+                <div class="ds">srv-fullchatbot envoie une bubble texte de récap + réaffiche le menu A→L (lettres cliquables texte, pas un flow).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payload écran 1 -->
+      <div class="card">
+        <div class="card-h">
+          <div class="em">📦</div>
+          <div class="info"><div class="nm">Payload écran 1 · flow_action_data</div><div class="ds">Tout est injecté ici · ZÉRO appel INIT côté Meta</div></div>
+          <span class="badge" style="background:#dcf8c6;color:#0a4019;border:1px solid #86c878">TEMPLATE BUTTON</span>
+        </div>
+        <div class="json-pane">
+<pre>{
+  <span class="k">"flow_token"</span>: <span class="s">"arrival_choose_+212662113193_6a14bca628a2089518055585"</span>,
+  <span class="k">"reservation_code"</span>: <span class="s">"SJ-YDHM9988"</span>,
+  <span class="k">"property_display"</span>: <span class="s">"Harcay CFC"</span>,
+  <span class="k">"stay_display"</span>: <span class="s">"27 mai 2026 → 05 juin 2026"</span>,
+  <span class="k">"guest_language"</span>: <span class="s">"fr"</span>,
+  <span class="k">"current_time"</span>: <span class="s">"15:00"</span>,
+  <span class="k">"current_source"</span>: <span class="s">"default"</span>,
+  <span class="k">"current_chosen"</span>: <span class="b">false</span>,
+  <span class="k">"checkin_window"</span>: <span class="s">"14:00 → 20:00"</span>,
+  <span class="k">"slots"</span>: [
+    { <span class="k">"id"</span>: <span class="s">"08:00"</span>, <span class="k">"title"</span>: <span class="s">"Early · 08:00"</span>, <span class="k">"description"</span>: <span class="s">"Arrivée matinale"</span> },
+    { <span class="k">"id"</span>: <span class="s">"15:00"</span>, <span class="k">"title"</span>: <span class="s">"Standard · 15:00 ●"</span>, <span class="k">"description"</span>: <span class="s">"Heure par défaut — actuelle"</span> },
+    { <span class="k">"id"</span>: <span class="s">"18:00"</span>, <span class="k">"title"</span>: <span class="s">"Late · 18:00"</span>, <span class="k">"description"</span>: <span class="s">"Arrivée tardive"</span> }
+  ],
+  <span class="k">"can_modify"</span>: <span class="b">true</span>,
+  <span class="k">"can_cancel"</span>: <span class="b">true</span>,
+  <span class="k">"continue_label"</span>: <span class="s">"Confirmer"</span>,
+  <span class="k">"back_label"</span>: <span class="s">"↩ Menu principal"</span>,
+  <span class="k">"footer_hint"</span>: <span class="s">"Vous pouvez modifier ou annuler votre choix actuel"</span>
+}</pre>
+        </div>
+      </div>
+
+      <!-- data_exchange payload -->
+      <div class="card">
+        <div class="card-h">
+          <div class="em">🔁</div>
+          <div class="info"><div class="nm">data_exchange · écrans 2+ · /webhook/flow</div><div class="ds">Chiffré AES-GCM (Meta) · décodé côté srv-fullchatbot</div></div>
+          <span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d">CHIFFRÉ</span>
+        </div>
+        <div class="json-pane">
+<pre><span class="c">// Client → Backend · sortie écran 1</span>
+{
+  <span class="k">"version"</span>: <span class="s">"7.2"</span>,
+  <span class="k">"action"</span>: <span class="s">"data_exchange"</span>,
+  <span class="k">"screen"</span>: <span class="s">"CHOIX_HEURE"</span>,
+  <span class="k">"flow_token"</span>: <span class="s">"arrival_choose_..."</span>,
+  <span class="k">"data"</span>: {
+    <span class="k">"chosen_slot"</span>: <span class="s">"18:00"</span>,
+    <span class="k">"chosen_title"</span>: <span class="s">"Late · 18:00"</span>
+  }
+}
+
+<span class="c">// Backend → Client · réponse pour rendre écran 2</span>
+{
+  <span class="k">"version"</span>: <span class="s">"7.2"</span>,
+  <span class="k">"screen"</span>: <span class="s">"CONFIRMATION"</span>,
+  <span class="k">"data"</span>: {
+    <span class="k">"date_display"</span>: <span class="s">"27 mai 2026"</span>,
+    <span class="k">"time_display"</span>: <span class="s">"18:00"</span>,
+    <span class="k">"type_display"</span>: <span class="s">"Late · arrivée tardive"</span>,
+    <span class="k">"warning"</span>: <span class="s">"Le staff sera notifié pour 18:00..."</span>
+  }
+}
+
+<span class="c">// Écran final · complete</span>
+{
+  <span class="k">"action"</span>: <span class="s">"complete"</span>,
+  <span class="k">"data"</span>: {
+    <span class="k">"chosen_slot"</span>: <span class="s">"18:00"</span>,
+    <span class="k">"confirmed_at"</span>: <span class="s">"2026-05-25T15:32:11Z"</span>
+  }
+}</pre>
+        </div>
+      </div>
+
+      <!-- Routing model -->
+      <details class="card collapsible">
+        <summary>📐 Flow Meta v7.2 simplifié · screens + routing_model</summary>
+        <div class="json-pane">
+<pre>{
+  <span class="k">"version"</span>: <span class="s">"7.2"</span>,
+  <span class="k">"data_api_version"</span>: <span class="s">"3.0"</span>,
+  <span class="k">"routing_model"</span>: {
+    <span class="k">"CHOIX_HEURE"</span>: [<span class="s">"CONFIRMATION"</span>],
+    <span class="k">"CONFIRMATION"</span>: [<span class="s">"TERMINAL"</span>]
+  },
+  <span class="k">"screens"</span>: [
+    {
+      <span class="k">"id"</span>: <span class="s">"CHOIX_HEURE"</span>,
+      <span class="k">"title"</span>: <span class="s">"Choisir l'heure d'arrivée"</span>,
+      <span class="k">"data"</span>: { <span class="c">/* injecté via flow_action_data */</span> },
+      <span class="k">"layout"</span>: { <span class="k">"type"</span>: <span class="s">"SingleColumnLayout"</span>, <span class="k">"children"</span>: [
+        { <span class="k">"type"</span>: <span class="s">"TextCaption"</span>, <span class="k">"text"</span>: <span class="s">"Logement"</span> },
+        { <span class="k">"type"</span>: <span class="s">"TextBody"</span>, <span class="k">"text"</span>: <span class="s">"${data.property_display}"</span> },
+        { <span class="k">"type"</span>: <span class="s">"TextCaption"</span>, <span class="k">"text"</span>: <span class="s">"Séjour"</span> },
+        { <span class="k">"type"</span>: <span class="s">"TextBody"</span>, <span class="k">"text"</span>: <span class="s">"${data.stay_display}"</span> },
+        { <span class="k">"type"</span>: <span class="s">"RadioButtonsGroup"</span>, <span class="k">"name"</span>: <span class="s">"chosen_slot"</span>, <span class="k">"data-source"</span>: <span class="s">"${data.slots}"</span>, <span class="k">"init-value"</span>: <span class="s">"${data.current_time}"</span> },
+        { <span class="k">"type"</span>: <span class="s">"Footer"</span>, <span class="k">"label"</span>: <span class="s">"${data.continue_label}"</span>, <span class="k">"on-click-action"</span>: { <span class="k">"name"</span>: <span class="s">"data_exchange"</span> } }
+      ]}
+    },
+    { <span class="k">"id"</span>: <span class="s">"CONFIRMATION"</span>, <span class="c">/* idem · uniquement data inputs */</span> },
+    {
+      <span class="k">"id"</span>: <span class="s">"TERMINAL"</span>,
+      <span class="k">"terminal"</span>: <span class="b">true</span>,
+      <span class="k">"layout"</span>: { <span class="k">"children"</span>: [
+        { <span class="k">"type"</span>: <span class="s">"Image"</span>, <span class="k">"src"</span>: <span class="s">"check"</span> },
+        { <span class="k">"type"</span>: <span class="s">"Footer"</span>, <span class="k">"label"</span>: <span class="s">"↩ Retour au menu"</span>, <span class="k">"on-click-action"</span>: { <span class="k">"name"</span>: <span class="s">"complete"</span> } }
+      ]}
+    }
+  ]
+}</pre>
+        </div>
+      </details>
+    </div>
+
+    <!-- RIGHT · meta rules -->
+    <div class="rules-col">
+      <div class="rule-card">
+        <div class="h">⚠ Règles Meta critiques</div>
+        <div class="b">
+          <ul>
+            <li><b>Écran 1 = JSON only</b> · tout vient de <code>flow_action_data</code></li>
+            <li><b>Pas de INIT call</b> côté Meta · le bouton template envoie tout</li>
+            <li>Variables <code>${'$'}{data.x}</code> seules · <b>TextCaption + TextBody</b> sur 2 lignes</li>
+            <li>Max <b>5-8 écrans</b> par flow · routing_model statique OK</li>
+            <li>Dernier écran <code>terminal: true</code> + action <code>complete</code></li>
+            <li>Chiffrement AES-GCM côté webhook · noté en annotation, pas dans le design</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="rule-card">
+        <div class="h">🎨 Style guide</div>
+        <div class="b">
+          <ul>
+            <li>Phone fond <code>#1a1a1a</code> · screen <code>#ECE5DD</code></li>
+            <li>Header WA vert <code>#075E54</code></li>
+            <li>Sélection radio : fond <code>#f5e6c8</code> + bordure <code>#b8851a</code></li>
+            <li>Bouton primaire vert WA · secondaire outline</li>
+            <li>Numéro écran <b>X/Y</b> en gris top-right</li>
+            <li>Typo flow : 11-12px, titres 11.5px bold</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="oos">
+        <div class="h">🚫 Hors scope pilote</div>
+        Enregistrement voyageurs (E) · Ménage gratuit/payant (I) · Conciergerie (J) · Infos logement détaillées (G · déjà sur /chatbot/listing).
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ FLOW 2 · SUPPORT ════════ -->
+<section class="flow-section" id="flow-support">
+  <div class="flow-h">
+    <div class="em">🆘</div>
+    <div>
+      <h1>Flow · Support</h1>
+      <div class="sub">Token <code>support</code> · entrée menu WhatsApp <b>lettre K</b> · 4 écrans inspirés du legacy <code>flow_support.json</code> · code support discret obligatoire en bas des écrans 3 et 4.</div>
+    </div>
+  </div>
+
+  <div class="scenarios">
+    <button class="scen-pill on" data-scen="A"><span class="em">📶</span>A · WiFi · code ST-WIFI</button>
+    <button class="scen-pill" data-scen="B"><span class="em">🚿</span>B · Eau chaude · urgent</button>
+    <button class="scen-pill" data-scen="C"><span class="em">🔑</span>C · 2 codes (WiFi + accès)</button>
+  </div>
+
+  <div class="layout">
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <span class="phone-label">📱 Aperçu WhatsApp · 4 écrans</span>
+
+      <div class="phone"><div class="phone-screen">
+        <div class="wa-head"><span class="back">‹</span><div class="av">S</div><div class="info"><div class="nm">Sojori · Concierge</div><div class="st">en ligne</div></div></div>
+
+        <!-- Screen 1 · SELECT_CATEGORY -->
+        <div class="flow-screen-wrap">
+          <span class="fs-num">1/4</span>
+          <div class="flow-screen">
+            <div class="fs-title">Catégorie de support</div>
+            <div class="fs-caption">Sélectionnez le type de problème</div>
+
+            <div class="opt-list">
+              <label class="opt on"><span class="r"></span><div class="body"><div class="ti">📶 WiFi / Internet</div><div class="ds">CODE · ST-WIFI</div></div></label>
+              <label class="opt"><span class="r"></span><div class="body"><div class="ti">🚿 Eau chaude</div><div class="ds">CODE · ST-EAU</div></div></label>
+              <label class="opt"><span class="r"></span><div class="body"><div class="ti">🌡️ Confort</div><div class="ds">CODE · ST-CONF</div></div></label>
+              <label class="opt"><span class="r"></span><div class="body"><div class="ti">💬 Autre</div><div class="ds">CODE · ST-GEN</div></div></label>
+            </div>
+
+            <div class="btn-row">
+              <div class="btn-prim">Continuer</div>
+              <div class="btn-sec">↩ Menu principal</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+
+      <span class="flow-arrow">↓</span>
+
+      <div class="phone"><div class="phone-screen">
+        <div class="wa-head"><span class="back">‹</span><div class="av">S</div><div class="info"><div class="nm">Sojori · Concierge</div><div class="st">en ligne</div></div></div>
+
+        <!-- Screen 2 · SUPPORT_FORM -->
+        <div class="flow-screen-wrap">
+          <span class="fs-num">2/4</span>
+          <div class="flow-screen">
+            <div class="fs-title">WiFi / Internet</div>
+            <div class="fs-caption">Décrivez le problème · urgence</div>
+
+            <div class="kv-grid">
+              <div class="kv"><span class="l">Catégorie</span><span class="v">📶 WiFi / Internet</span></div>
+            </div>
+
+            <textarea class="txt-area" placeholder="Décrivez le problème…">Wi-Fi déconnecte toutes les 5 min, surtout dans la chambre du fond.</textarea>
+
+            <div style="font-size:9.5px;font-family:var(--mono);font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px">Urgence</div>
+            <div class="priority-pills">
+              <button class="p-pill normal">🟢 Normal</button>
+              <button class="p-pill on urgent">🟡 Urgent</button>
+              <button class="p-pill critical">🔴 Critique</button>
+            </div>
+
+            <div class="btn-row">
+              <div class="btn-prim">Continuer</div>
+              <div class="btn-sec">← Modifier catégorie</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+
+      <span class="flow-arrow">↓</span>
+
+      <div class="phone"><div class="phone-screen">
+        <div class="wa-head"><span class="back">‹</span><div class="av">S</div><div class="info"><div class="nm">Sojori · Concierge</div><div class="st">en ligne</div></div></div>
+
+        <!-- Screen 3 · RECAP -->
+        <div class="flow-screen-wrap">
+          <span class="fs-num">3/4</span>
+          <div class="flow-screen">
+            <div class="fs-title">Récapitulatif</div>
+            <div class="fs-caption">Vérifiez avant d'envoyer</div>
+
+            <div class="summary-card">
+              <div class="h">SIGNALEMENT</div>
+              <div class="line"><span>Catégorie</span><span class="v">WiFi / Internet</span></div>
+              <div class="line"><span>Urgence</span><span class="v">🟡 Urgent</span></div>
+              <div class="line"><span>Logement</span><span class="v">Harcay CFC</span></div>
+              <div class="line"><span>Réservation</span><span class="v">SJ-YDHM9988</span></div>
+            </div>
+
+            <div style="font-size:10.5px;color:var(--t2);line-height:1.5;background:var(--alt);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+              <i>« Wi-Fi déconnecte toutes les 5 min, surtout dans la chambre du fond. »</i>
+            </div>
+
+            <div class="btn-row">
+              <div class="btn-prim">✓ Envoyer</div>
+              <div class="btn-sec">← Modifier</div>
+            </div>
+
+            <div class="support-code">
+              ST-WIFI · SJ-YDHM9988 · 25Mai-15h32
+            </div>
+          </div>
+        </div>
+      </div></div>
+
+      <span class="flow-arrow">↓</span>
+
+      <div class="phone"><div class="phone-screen">
+        <div class="wa-head"><span class="back">‹</span><div class="av">S</div><div class="info"><div class="nm">Sojori · Concierge</div><div class="st">en ligne</div></div></div>
+
+        <!-- Screen 4 · TERMINAL -->
+        <div class="flow-screen-wrap">
+          <span class="fs-num">4/4</span>
+          <div class="flow-screen">
+            <div class="terminal-banner">
+              <span class="em">✅</span>
+              <div class="t">Signalement reçu</div>
+              <div class="ref">REF · #SUP-2024-0142</div>
+            </div>
+
+            <div style="font-size:11px;color:var(--t2);line-height:1.5;margin-bottom:6px">
+              Notre équipe est notifiée. Vous recevrez une mise à jour <b>sous 30 minutes</b>.
+            </div>
+
+            <div style="text-align:center;margin-bottom:9px">
+              <span class="task-badge">🎫 TÂCHE OUVERTE · #SUP-2024-0142</span>
+            </div>
+
+            <div class="btn-row">
+              <div class="btn-prim">↩ Retour au menu principal</div>
+            </div>
+
+            <div class="support-code">
+              ST-WIFI · SJ-YDHM9988 · 25Mai-15h32
+            </div>
+          </div>
+        </div>
+
+        <!-- Post-flow bubble -->
+        <div class="post-flow-bubble">
+          <div class="bubble">
+            <div class="h">✅ Parcours mis à jour</div>
+            <div class="line"><span>🎫 Tickets ouverts</span><span class="v">1</span></div>
+            <div class="line"><span>🕐 Arrivée</span><span class="v">18:00</span></div>
+            <div class="line"><span>🧹 Ménage gratuit</span><span class="v">0 / 3 utilisés</span></div>
+            <div class="menu" style="margin-top:8px;padding-top:7px;border-top:1px dashed var(--b)">
+              <div style="font-weight:700;color:var(--t);margin-bottom:3px">Menu principal</div>
+              <b>A</b> Infos séjour · <b>B</b> WiFi · <b>C</b> Accès<br>
+              <b>D</b> Heure d'arrivée · <b>E</b> Enregistrement<br>
+              <b>K</b> ✓ Support (1 ticket ouvert)
+            </div>
+            <div class="time">15:36</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- CENTER · steps + payload -->
+    <div class="center-col">
+
+      <div class="card">
+        <div class="card-h">
+          <div class="em">⚡</div>
+          <div class="info"><div class="nm">Flow steps · support</div><div class="ds">4 écrans · création tâche backend</div></div>
+          <span class="badge">META v7.2</span>
+        </div>
+        <div class="card-body">
+          <div class="steps">
+            <div class="step">
+              <div class="n">1</div>
+              <div class="body">
+                <div class="ti">📱 Écran 1 · SELECT_CATEGORY</div>
+                <div class="ds">Catégories injectées via <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">${'$'}{data.categories}</code> · provient de <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">listing_snapshot.support.categories</code>.</div>
+              </div>
+            </div>
+            <div class="step">
+              <div class="n">2</div>
+              <div class="body">
+                <div class="ti">📲 Sélection → data_exchange</div>
+                <div class="ds">data_exchange retourne dynamiquement les codes (ex: ST-WIFI vs ST-EAU) pour afficher dans le récap.</div>
+                <div class="api-chip post"><span>POST</span><span class="v">/webhook/flow</span></div>
+              </div>
+            </div>
+            <div class="step">
+              <div class="n">3</div>
+              <div class="body">
+                <div class="ti">📱 Écran 2 · SUPPORT_FORM</div>
+                <div class="ds">Textarea libre + RadioButtonsGroup priorité (Normal / Urgent / Critique).</div>
+              </div>
+            </div>
+            <div class="step">
+              <div class="n">4</div>
+              <div class="body">
+                <div class="ti">📱 Écran 3 · RECAP</div>
+                <div class="ds">Affichage statique des données saisies + <b>code support discret</b> en bas.</div>
+              </div>
+            </div>
+            <div class="step api">
+              <div class="n">5</div>
+              <div class="body">
+                <div class="ti">⚙ Backend crée la tâche</div>
+                <div class="ds">srv-fullchatbot crée l'entrée dans <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">tasks</code> + ajoute à <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">guest_context.openTasks[]</code>.</div>
+                <div class="api-chip post"><span>POST</span><span class="v">/api/tasks</span></div>
+                <div class="api-chip"><span>BODY</span><span class="v">{ type:"support", category, message, priority, reservationId, listingId }</span></div>
+              </div>
+            </div>
+            <div class="step term">
+              <div class="n">6</div>
+              <div class="body">
+                <div class="ti">✅ Écran 4 · TERMINAL</div>
+                <div class="ds">Action <code style="font-family:var(--mono);background:var(--alt);padding:1px 4px;border-radius:3px">complete</code> avec référence task ID en retour.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payload écran 1 -->
+      <div class="card">
+        <div class="card-h">
+          <div class="em">📦</div>
+          <div class="info"><div class="nm">Payload écran 1 · flow_action_data</div><div class="ds">Catégories support · injection complète</div></div>
+          <span class="badge" style="background:#dcf8c6;color:#0a4019;border:1px solid #86c878">TEMPLATE BUTTON</span>
+        </div>
+        <div class="json-pane">
+<pre>{
+  <span class="k">"flow_token"</span>: <span class="s">"support_+212662113193_6a14bca628a2089518055585"</span>,
+  <span class="k">"property_display"</span>: <span class="s">"Harcay CFC"</span>,
+  <span class="k">"reservation_code"</span>: <span class="s">"SJ-YDHM9988"</span>,
+  <span class="k">"categories"</span>: [
+    { <span class="k">"id"</span>: <span class="s">"wifi"</span>, <span class="k">"title"</span>: <span class="s">"📶 WiFi / Internet"</span>, <span class="k">"code"</span>: <span class="s">"ST-WIFI"</span> },
+    { <span class="k">"id"</span>: <span class="s">"water"</span>, <span class="k">"title"</span>: <span class="s">"🚿 Eau chaude"</span>, <span class="k">"code"</span>: <span class="s">"ST-EAU"</span> },
+    { <span class="k">"id"</span>: <span class="s">"comfort"</span>, <span class="k">"title"</span>: <span class="s">"🌡️ Confort"</span>, <span class="k">"code"</span>: <span class="s">"ST-CONF"</span> },
+    { <span class="k">"id"</span>: <span class="s">"other"</span>, <span class="k">"title"</span>: <span class="s">"💬 Autre"</span>, <span class="k">"code"</span>: <span class="s">"ST-GEN"</span> }
+  ],
+  <span class="k">"guest_can_choose_priority"</span>: <span class="b">true</span>,
+  <span class="k">"default_priority"</span>: <span class="s">"normal"</span>,
+  <span class="k">"back_label"</span>: <span class="s">"↩ Menu principal"</span>
+}</pre>
+        </div>
+      </div>
+
+      <!-- data_exchange + complete -->
+      <div class="card">
+        <div class="card-h">
+          <div class="em">🔁</div>
+          <div class="info"><div class="nm">data_exchange · /webhook/flow + complete</div><div class="ds">3 round-trips · création tâche</div></div>
+          <span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d">CHIFFRÉ</span>
+        </div>
+        <div class="json-pane">
+<pre><span class="c">// 1) Écran 1 → 2 · choix catégorie</span>
+{
+  <span class="k">"action"</span>: <span class="s">"data_exchange"</span>,
+  <span class="k">"screen"</span>: <span class="s">"SELECT_CATEGORY"</span>,
+  <span class="k">"data"</span>: { <span class="k">"category_id"</span>: <span class="s">"wifi"</span> }
+}
+
+<span class="c">// Backend response → screen 2</span>
+{
+  <span class="k">"screen"</span>: <span class="s">"SUPPORT_FORM"</span>,
+  <span class="k">"data"</span>: {
+    <span class="k">"category_title"</span>: <span class="s">"📶 WiFi / Internet"</span>,
+    <span class="k">"category_code"</span>: <span class="s">"ST-WIFI"</span>,
+    <span class="k">"priority_options"</span>: [
+      { <span class="k">"id"</span>: <span class="s">"normal"</span>, <span class="k">"title"</span>: <span class="s">"🟢 Normal"</span> },
+      { <span class="k">"id"</span>: <span class="s">"urgent"</span>, <span class="k">"title"</span>: <span class="s">"🟡 Urgent"</span> },
+      { <span class="k">"id"</span>: <span class="s">"critical"</span>, <span class="k">"title"</span>: <span class="s">"🔴 Critique"</span> }
+    ]
+  }
+}
+
+<span class="c">// 2) Écran 2 → 3 · soumission form</span>
+{
+  <span class="k">"action"</span>: <span class="s">"data_exchange"</span>,
+  <span class="k">"screen"</span>: <span class="s">"SUPPORT_FORM"</span>,
+  <span class="k">"data"</span>: {
+    <span class="k">"message"</span>: <span class="s">"Wi-Fi déconnecte toutes les 5 min..."</span>,
+    <span class="k">"priority"</span>: <span class="s">"urgent"</span>
+  }
+}
+
+<span class="c">// 3) TERMINAL · création task</span>
+{
+  <span class="k">"action"</span>: <span class="s">"complete"</span>,
+  <span class="k">"data"</span>: {
+    <span class="k">"task_ref"</span>: <span class="s">"#SUP-2024-0142"</span>,
+    <span class="k">"task_code"</span>: <span class="s">"ST-WIFI · SJ-YDHM9988 · 25Mai-15h32"</span>,
+    <span class="k">"sla_minutes"</span>: <span class="n">30</span>
+  }
+}</pre>
+        </div>
+      </div>
+
+      <details class="card collapsible">
+        <summary>📐 Flow Meta v7.2 · routing_model support</summary>
+        <div class="json-pane">
+<pre>{
+  <span class="k">"version"</span>: <span class="s">"7.2"</span>,
+  <span class="k">"routing_model"</span>: {
+    <span class="k">"SELECT_CATEGORY"</span>: [<span class="s">"SUPPORT_FORM"</span>],
+    <span class="k">"SUPPORT_FORM"</span>: [<span class="s">"RECAP"</span>],
+    <span class="k">"RECAP"</span>: [<span class="s">"TERMINAL"</span>]
+  },
+  <span class="k">"screens"</span>: [
+    {
+      <span class="k">"id"</span>: <span class="s">"SELECT_CATEGORY"</span>,
+      <span class="k">"title"</span>: <span class="s">"Catégorie de support"</span>,
+      <span class="k">"layout"</span>: { <span class="k">"children"</span>: [
+        { <span class="k">"type"</span>: <span class="s">"RadioButtonsGroup"</span>, <span class="k">"name"</span>: <span class="s">"category_id"</span>, <span class="k">"data-source"</span>: <span class="s">"${data.categories}"</span> },
+        { <span class="k">"type"</span>: <span class="s">"Footer"</span>, <span class="k">"on-click-action"</span>: { <span class="k">"name"</span>: <span class="s">"data_exchange"</span> } }
+      ]}
+    },
+    { <span class="k">"id"</span>: <span class="s">"SUPPORT_FORM"</span>, <span class="c">/* TextArea + RadioPriorityGroup */</span> },
+    { <span class="k">"id"</span>: <span class="s">"RECAP"</span>, <span class="c">/* TextCaption + TextBody en lecture seule */</span> },
+    { <span class="k">"id"</span>: <span class="s">"TERMINAL"</span>, <span class="k">"terminal"</span>: <span class="b">true</span> }
+  ]
+}</pre>
+        </div>
+      </details>
+    </div>
+
+    <!-- RIGHT · meta rules -->
+    <div class="rules-col">
+      <div class="rule-card">
+        <div class="h">🔑 Code support discret</div>
+        <div class="b">
+          Format obligatoire <code>{CODE}-{RESERVATION}-{DATE}-{HEURE}</code><br><br>
+          <b>1 code</b> :<br>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--t4)">ST-WIFI · SJ-YDHM9988 · 25Mai-14h</span><br><br>
+          <b>Plusieurs codes</b> · empilés colonne, même style :<br>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--t4)">ST-WIFI · SJ-YDHM9988 · 25Mai-14h<br>ST-ACC · SJ-YDHM9988 · 25Mai-14h</span><br><br>
+          Style : gris <code>#a09890</code> · 9px · centré sous bouton dans écrans 3 et 4.
+        </div>
+      </div>
+
+      <div class="legend-card">
+        <div class="h">Couleurs pills urgence</div>
+        <div class="legend-row"><div class="dot" style="background:var(--su)"></div><span>🟢 Normal · SLA standard 24h</span></div>
+        <div class="legend-row"><div class="dot" style="background:var(--wa)"></div><span>🟡 Urgent · SLA 30 min</span></div>
+        <div class="legend-row"><div class="dot" style="background:var(--er)"></div><span>🔴 Critique · escalade immédiate</span></div>
+      </div>
+
+      <div class="rule-card">
+        <div class="h">📚 Inspirations code</div>
+        <div class="b">
+          <code>support_flow_handler.py</code><br>
+          <code>flow_support.json</code> (4 écrans legacy)<br>
+          Preview <code>#preview-support</code> du HTML reference<br><br>
+          → Reproduire la nav, pas repartir de zéro.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ FOOT NOTE ════════ -->
+<div style="max-width:1480px;margin:0 auto 40px;padding:0 24px">
+  <div class="rule-card" style="border-color:var(--goldS)">
+    <div class="h" style="background:linear-gradient(135deg,var(--gold-light),transparent)">🧹 Ménage gratuit · contexte (hors scope pilote)</div>
+    <div class="b" style="font-size:12px">
+      Pour flows futurs : <code>nights = checkOut - checkIn (UTC)</code> · palier = <code>listing.frequency[]</code> où <code>startDay ≤ nights ≤ endDay</code> · <code>offered = palier.numberOfCleaning</code>.<br>
+      <code>guest_context.cleaningFree</code> = <code>{ offered, used, remaining }</code> — le flow doit griser les dates déjà choisies + slots strictement entre arrivée et départ (excl.), répartis uniformément.
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  const f=t.dataset.flow;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
+  document.querySelectorAll('.flow-section').forEach(s=>s.classList.remove('on'));
+  document.getElementById('flow-'+f).classList.add('on');
+  window.scrollTo({top:0,behavior:'smooth'});
+}));
+document.querySelectorAll('.scen-pill').forEach(p=>p.addEventListener('click',()=>{
+  const section=p.closest('.flow-section');
+  section.querySelectorAll('.scen-pill').forEach(x=>x.classList.remove('on'));
+  p.classList.add('on');
+}));
+</script>
+</body></html>

@@ -20,8 +20,12 @@ import { ToastContainer } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import OwnerFilter from './OwnerFilter';
+import { useSelector } from 'react-redux';
 import { can } from '../../../utils/permissions';
 import { Users, Milestone } from 'lucide-react';
+import { useTeamViewMode } from '../../../context/TeamViewContext';
+import { PropertyManagerHubView } from '../../../components/team/PropertyManagerHubView';
+import { TEAM_T } from '../../../components/team/teamHubTokens';
 const SOJORI = {
   orange: '#FF6B35',
   orangeDark: '#E55A2B',
@@ -89,10 +93,10 @@ const PublicOwner = ({
   const [xmlPreviewLoading, setXmlPreviewLoading] = useState(false);
   const [pendingArchiveOwner, setPendingArchiveOwner] = useState(null);
 
-  // Permission checks
-  const [canCreate, setCanCreate] = useState(can('create'));
-  const [canUpdate, setCanUpdate] = useState(can('update'));
-  const [canDelete, setCanDelete] = useState(can('delete'));
+  const authUser = useSelector((state) => state.auth?.user);
+  const canCreate = useMemo(() => can('create'), [authUser]);
+  const canUpdate = useMemo(() => can('update'), [authUser]);
+  const canDelete = useMemo(() => can('delete'), [authUser]);
   useEffect(() => {
     fetchOwners();
     fetchCities();
@@ -509,6 +513,19 @@ const PublicOwner = ({
       cxOwnersOnPage: owners.filter(o => o.channelManager === 'Channex').length
     };
   }, [listings, owners]);
+  const { setTeamStats } = useTeamViewMode();
+  useEffect(() => {
+    if (!insidePageShell) return;
+    setTeamStats([
+      { icon: '🏢', label: 'PM', value: String(totalCount), iconColor: TEAM_T.primaryDeep },
+      {
+        icon: '🏠',
+        label: 'Annonces',
+        value: String(portfolioKpis.listingsTotal),
+        iconColor: TEAM_T.info,
+      },
+    ]);
+  }, [insidePageShell, totalCount, portfolioKpis.listingsTotal, setTeamStats]);
   const cellSx = {
     fontFamily: FONT,
     fontSize: 12
@@ -928,8 +945,41 @@ const PublicOwner = ({
       minHeight: '100%'
     })
   };
-  return <Box sx={outerShellSx}>
+  return <Box sx={insidePageShell ? { width: '100%' } : outerShellSx}>
             <ToastContainer position="top-right" autoClose={3000} />
+            {insidePageShell ? (
+              <PropertyManagerHubView
+                t={t}
+                owners={owners}
+                loading={loading}
+                totalCount={totalCount}
+                page={page}
+                limit={limit}
+                setPage={setPage}
+                setLimit={setLimit}
+                searchText={searchText}
+                setSearchText={setSearchText}
+                listings={listings}
+                selectedListings={selectedListings}
+                setSelectedListings={setSelectedListings}
+                deletedFilter={deletedFilter}
+                bannedFilter={bannedFilter}
+                onDeletedChange={setDeletedFilter}
+                onBannedChange={setBannedFilter}
+                onSearch={handleSearch}
+                onReset={handleReset}
+                onFilterChange={handleFilterChange}
+                onCreate={() => setOpenCreateDialog(true)}
+                onEdit={handleUpdate}
+                onSync={handleSyncOwners}
+                syncLoading={syncLoading}
+                canCreate={canCreate}
+                canUpdate={canUpdate}
+                listingStatsByOwner={listingStatsByOwner}
+                portfolioKpis={portfolioKpis}
+              />
+            ) : (
+            <>
             <Box sx={{
       mb: 1,
       px: 1.25,
@@ -1043,6 +1093,8 @@ const PublicOwner = ({
                     </Box> : <GlobalTable dense data={owners} columns={columns} page={page} hasPagination={false} onPageChange={handlePageChange} isNextDisabled={isNextDisabled} limit={limit} onLimitChange={handleLimitChange} rowsPerPageOptions={[5, 10, 20, 50]} totalCount={totalCount} />}
             </Box>
             </Paper>
+            </>
+            )}
 
             <CreateOwnerSidebar open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} onOwnerCreated={onOwnerCreated} />
 

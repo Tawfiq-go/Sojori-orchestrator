@@ -14,3 +14,18 @@ export function getOwnerListLabel(o) {
   if (o.companyName) return o.companyName;
   return '—';
 }
+
+/**
+ * Libellé propriétaire à partir de son Mongo id et de la liste getOwners.
+ * @param {string | undefined} ownerId
+ * @param {object[]} owners
+ * @param {string} [fallback]
+ */
+export function ownerDisplayNameFromId(ownerId, owners = [], fallback = '') {
+  const id = String(ownerId ?? '').trim();
+  if (!id) return fallback || '—';
+  const row = owners.find((o) => String(o?._id ?? o?.id ?? '') === id);
+  const label = getOwnerListLabel(row);
+  if (label && label !== '—') return label;
+  return fallback || id;
+}

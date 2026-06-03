@@ -16,6 +16,24 @@ export function nightsBetween(checkIn?: string, checkOut?: string): number | und
   return days > 0 ? days : undefined;
 }
 
+/** Date de création résa (createdAt ou reservationDate) — jour + heure + minute. */
+export function formatReservationCreatedDisplay(raw?: string | Date): string | undefined {
+  if (raw == null || raw === '') return undefined;
+  const d = raw instanceof Date ? raw : new Date(raw);
+  if (Number.isNaN(d.getTime())) return undefined;
+  const datePart = d.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  const timePart = d.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return `${datePart} · ${timePart}`;
+}
+
 export function formatStayDateShort(dateStr?: string, withTime?: string): string {
   if (!dateStr) return '—';
   const d = new Date(dateStr);

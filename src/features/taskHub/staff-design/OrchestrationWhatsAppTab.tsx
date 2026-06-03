@@ -12,6 +12,13 @@ type WaRow = {
   metaTemplateId: string | null;
   bodyText: string;
   lastGraphError?: string | null;
+  metaRejectedReason?: string | null;
+};
+
+type CatalogEntry = {
+  id: string;
+  label?: string;
+  whatsappTemplateId?: string;
 };
 
 type WaAccountFilter = 'all' | 'guest' | 'staff';
@@ -21,6 +28,8 @@ const STATUS_CLASS: Record<string, string> = {
   pending: 'wa-st-pending',
   approved: 'wa-st-approved',
   rejected: 'wa-st-rejected',
+  paused: 'wa-st-pending',
+  disabled: 'wa-st-rejected',
 };
 
 function rowAccount(row: WaRow): 'guest' | 'staff' {
@@ -33,22 +42,38 @@ function bodyPreview(text: string, max = 72): string {
   return t.length <= max ? t : `${t.slice(0, max)}…`;
 }
 
+function statusLabel(status: string): string {
+  const s = (status || 'draft').toLowerCase();
+  if (s === 'approved') return 'APPROVED';
+  if (s === 'pending') return 'PENDING';
+  if (s === 'rejected') return 'REJECTED';
+  return s.toUpperCase();
+}
+
 export default function OrchestrationWhatsAppTab() {
   const [rows, setRows] = useState<WaRow[]>([]);
+  const [catalogBySlug, setCatalogBySlug] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [metaGuestReady, setMetaGuestReady] = useState(false);
   const [metaStaffReady, setMetaStaffReady] = useState(false);
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [editSlug, setEditSlug] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
+  const [editName, setEditName] = useState('');
   const [editLoading, setEditLoading] = useState(false);
   const [accountFilter, setAccountFilter] = useState<WaAccountFilter>('all');
   const [mergingStaff, setMergingStaff] = useState(false);
   const [mergingGuest, setMergingGuest] = useState(false);
+  const [syncingCatalog, setSyncingCatalog] = useState(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
 
   const staffRowCount = useMemo(
     () => rows.filter((r) => rowAccount(r) === 'staff').length,
+    [rows],
+  );
+
+  const guestRowCount = useMemo(
+    () => rows.filter((r) => rowAccount(r) === 'guest').length,
     [rows],
   );
 
@@ -57,12 +82,37 @@ export default function OrchestrationWhatsAppTab() {
     [rows],
   );
 
+  const mismatchCount = useMemo(
+    () =>
+      rows.filter((r) => {
+        const expected = catalogBySlug[r.slug];
+        return expected && expected !== r.name;
+      }).length,
+    [rows, catalogBySlug],
+  );
+
+  const loadCatalog = useCallback(async () => {
+    try {
+      const raw = await fulltaskApi.getOrchestrationConfig('global');
+      const doc = unwrapFulltaskData<{ messageCatalog?: CatalogEntry[] }>(raw);
+      const catalog = doc?.messageCatalog ?? (raw as { data?: { messageCatalog?: CatalogEntry[] } })?.data?.messageCatalog ?? [];
+      const map: Record<string, string> = {};
+      for (const c of catalog) {
+        if (c.id && c.whatsappTemplateId) map[c.id] = c.whatsappTemplateId;
+      }
+      setCatalogBySlug(map);
+    } catch {
+      setCatalogBySlug({});
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [listRes, statusRes] = await Promise.all([
         fulltaskApi.listWhatsAppMessages(),
         fulltaskApi.getWhatsAppMessagesConfigStatus(),
+        loadCatalog(),
       ]);
       const list =
         unwrapFulltaskData<WaRow[]>(listRes) ||
@@ -84,7 +134,7 @@ export default function OrchestrationWhatsAppTab() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadCatalog]);
 
   useEffect(() => {
     void load();
@@ -95,11 +145,13 @@ export default function OrchestrationWhatsAppTab() {
   const openEditor = async (row: WaRow) => {
     setEditSlug(row.slug);
     setEditBody(row.bodyText || '');
+    setEditName(row.name || row.slug);
     setEditLoading(true);
     try {
       const raw = await fulltaskApi.getWhatsAppMessage(row.slug);
       const doc = unwrapFulltaskData<WaRow>(raw);
       if (doc?.bodyText != null) setEditBody(doc.bodyText);
+      if (doc?.name) setEditName(doc.name);
     } catch {
       /* garde le corps déjà listé */
     } finally {
@@ -131,8 +183,17 @@ export default function OrchestrationWhatsAppTab() {
   const syncMeta = async (slug: string) => {
     setBusySlug(slug);
     try {
-      await fulltaskApi.syncWhatsAppMessageFromMeta(slug);
+      const res = await fulltaskApi.syncWhatsAppMessageFromMeta(slug);
+      const data = unwrapFulltaskData<{ metaStatus?: string; found?: boolean }>(res);
+      if (data?.found === false) {
+        toast.info('Template pas encore visible sur Meta (PENDING ou jamais soumis)');
+      } else {
+        toast.success(`Sync OK — ${data?.metaStatus || 'statut mis à jour'}`);
+      }
       await load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      toast.error(err.response?.data?.error || err.message);
     } finally {
       setBusySlug(null);
     }
@@ -141,10 +202,30 @@ export default function OrchestrationWhatsAppTab() {
   const syncAll = async () => {
     setBusySlug('__all__');
     try {
-      await fulltaskApi.syncAllWhatsAppMessagesFromMeta('guest');
+      if (metaGuestReady) await fulltaskApi.syncAllWhatsAppMessagesFromMeta('guest');
+      if (metaStaffReady) await fulltaskApi.syncAllWhatsAppMessagesFromMeta('staff');
+      toast.success('Sync Meta terminé');
       await load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      toast.error(err.response?.data?.error || err.message);
     } finally {
       setBusySlug(null);
+    }
+  };
+
+  const syncFromCatalog = async () => {
+    setSyncingCatalog(true);
+    try {
+      const raw = await fulltaskApi.syncWhatsAppFromCatalog('global');
+      const data = unwrapFulltaskData<{ synced?: number; slugs?: string[] }>(raw);
+      toast.success(`Catalogue → WA : ${data?.synced ?? '?'} ligne(s)`);
+      await load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      toast.error(err.response?.data?.error || err.message);
+    } finally {
+      setSyncingCatalog(false);
     }
   };
 
@@ -170,13 +251,12 @@ export default function OrchestrationWhatsAppTab() {
       const raw = await fulltaskApi.mergeGuestWhatsAppSeeds();
       const data = unwrapFulltaskData<{ merged?: number }>(raw);
       toast.success(`Corps voyageur rechargés (${data?.merged ?? '?'})`);
-      await load();
-      setAccountFilter('guest');
+      await syncFromCatalog();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } }; message?: string };
       const msg = err.response?.data?.error || err.message || '';
       if (msg.includes('404') || msg.includes('Not Found')) {
-        toast.error('API merge-guest-seeds absente — redéployer srv-fulltask ou mettre à jour le service local.');
+        toast.error('API merge-guest-seeds absente — redémarrer srv-fulltask à jour.');
       } else {
         toast.error(msg);
       }
@@ -188,8 +268,11 @@ export default function OrchestrationWhatsAppTab() {
   const saveBody = async (slug: string) => {
     setBusySlug(slug);
     try {
-      await fulltaskApi.updateWhatsAppMessage(slug, { bodyText: editBody });
-      toast.success('Corps enregistré');
+      await fulltaskApi.updateWhatsAppMessage(slug, {
+        bodyText: editBody,
+        name: editName.trim() || slug,
+      });
+      toast.success('Template enregistré');
       setEditSlug(null);
       await load();
     } finally {
@@ -221,7 +304,7 @@ export default function OrchestrationWhatsAppTab() {
           className={`sub-tab${accountFilter === 'guest' ? ' on' : ''}`}
           onClick={() => setAccountFilter('guest')}
         >
-          Voyageur
+          Voyageur <span className="ct">{guestRowCount}</span>
         </button>
         <button
           type="button"
@@ -231,10 +314,11 @@ export default function OrchestrationWhatsAppTab() {
           Staff · rappels <span className="ct">{staffRowCount}</span>
         </button>
       </div>
+
       {staffRowCount === 0 ? (
         <div className="orch-wa-empty-staff" style={{ marginBottom: 12 }}>
           <p className="orch-plan-hint" style={{ margin: '0 0 8px' }}>
-            Aucun template staff en base. Chargez les rappels staff (transport, courses, ménage, …).
+            Aucun template staff en base. Chargez les 9 rappels staff.
           </p>
           <button
             type="button"
@@ -247,11 +331,11 @@ export default function OrchestrationWhatsAppTab() {
           </button>
         </div>
       ) : null}
+
       {emptyBodyCount > 0 ? (
         <div className="orch-wa-empty-bodies" style={{ marginBottom: 12 }}>
           <p className="orch-plan-hint" style={{ margin: '0 0 8px' }}>
-            {emptyBodyCount} template(s) sans corps en base — l’éditeur sera vide jusqu’au rechargement
-            des seeds voyageur.
+            {emptyBodyCount} template(s) sans corps — recharger le seed voyageur.
           </p>
           <button
             type="button"
@@ -260,20 +344,22 @@ export default function OrchestrationWhatsAppTab() {
             disabled={mergingGuest || busySlug !== null}
             onClick={() => void mergeGuestSeeds()}
           >
-            {mergingGuest ? 'Chargement…' : 'Recharger corps voyageur (seed)'}
+            {mergingGuest ? 'Chargement…' : 'Recharger corps + noms catalogue'}
           </button>
         </div>
       ) : null}
+
+      {mismatchCount > 0 ? (
+        <p className="orch-plan-hint" style={{ marginBottom: 10, color: 'var(--warn, #b45309)' }}>
+          {mismatchCount} nom(s) Meta différent(s) du catalogue — utiliser « Sync catalogue → WA » ou
+          onglet Messages puis Enregistrer.
+        </p>
+      ) : null}
+
       <div className="orch-plan-toolbar">
         <p className="orch-plan-hint">
-          {filteredRows.length} template(s) · <code>whatsapp_messages</code> · voyageur ={' '}
-          <code>messageCatalog.id</code> · staff = <code>staff_reminder_*</code>
-          {editSlug ? (
-            <>
-              {' '}
-              · édition : <code>{editSlug}</code>
-            </>
-          ) : null}
+          Templates Meta · <code>whatsapp_messages</code> · slug = <code>messageCatalog.id</code> · nom
+          Meta = <code>whatsappTemplateId</code>
         </p>
         <div className="orch-wa-toolbar-actions">
           <span className={`orch-wa-meta-pill${metaGuestReady ? ' ok' : ' warn'}`}>
@@ -286,9 +372,18 @@ export default function OrchestrationWhatsAppTab() {
             type="button"
             className="btn-ghost"
             style={{ fontSize: 12 }}
+            disabled={syncingCatalog || busySlug !== null}
+            onClick={() => void syncFromCatalog()}
+            title="Applique messageCatalog → noms et corps whatsapp_messages"
+          >
+            {syncingCatalog ? 'Sync…' : 'Sync catalogue → WA'}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ fontSize: 12 }}
             disabled={mergingGuest || busySlug !== null}
             onClick={() => void mergeGuestSeeds()}
-            title="Réinjecte bodyText depuis le seed srv-fulltask"
           >
             + Corps voyageur
           </button>
@@ -305,41 +400,58 @@ export default function OrchestrationWhatsAppTab() {
             type="button"
             className="btn-ghost"
             style={{ fontSize: 12 }}
-            disabled={!metaGuestReady || busySlug !== null}
+            disabled={(!metaGuestReady && !metaStaffReady) || busySlug !== null}
             onClick={() => void syncAll()}
           >
-            Sync tous
+            Sync tous Meta
           </button>
           <button type="button" className="btn-ghost" style={{ fontSize: 12 }} onClick={() => void load()}>
             Rafraîchir
           </button>
         </div>
       </div>
+
       {!metaGuestReady && !metaStaffReady ? (
         <p className="orch-plan-hint orch-wa-env-hint">
-          Publier / Sync Meta nécessite <code>WHATSAPP_ACCESS_TOKEN</code> + <code>WHATSAPP_WABA_ID</code>{' '}
-          (voyageur) et éventuellement <code>WHATSAPP_STAFF_*</code> sur <strong>srv-fulltask</strong>. En
-          local : variables dans <code>apps/srv-fulltask/.env</code> ou secrets cluster (
-          <code>scripts/create-srv-fulltask-secrets.sh</code>). L’édition du corps fonctionne sans Meta.
+          Publier / Sync Meta nécessite <code>WHATSAPP_ACCESS_TOKEN</code> +{' '}
+          <code>WHATSAPP_WABA_ID</code> (voyageur) et éventuellement <code>WHATSAPP_STAFF_*</code> sur{' '}
+          <strong>srv-fulltask</strong>. En local : <code>apps/srv-fulltask/.env</code> ou secrets
+          cluster (<code>scripts/create-srv-fulltask-secrets.sh</code>). L’édition du corps fonctionne
+          sans Meta.
         </p>
       ) : null}
 
       {editSlug ? (
         <div className="orch-wa-editor orch-wa-editor--open" ref={editorRef}>
           <div className="wf-block-h">
-            <span className="wf-block-h-txt">Corps template — {editSlug}</span>
+            <span className="wf-block-h-txt">Template — {editSlug}</span>
           </div>
           <p className="wf-block-hint">
-            Variables Meta : {'{{1}}'}, {'{{2}}'}, … — faites défiler si le tableau est long ; l’éditeur est
-            au-dessus de la liste.
+            Nom Meta (soumission) · corps avec {'{{1}}'}, {'{{2}}'}, …
+            {catalogBySlug[editSlug] ? (
+              <>
+                {' '}
+                · catalogue attend : <code>{catalogBySlug[editSlug]}</code>
+              </>
+            ) : null}
           </p>
-          {editLoading ? <p className="orch-plan-hint">Chargement du corps…</p> : null}
+          {editLoading ? <p className="orch-plan-hint">Chargement…</p> : null}
+          <label className="orch-plan-hint" style={{ display: 'block', marginBottom: 4 }}>
+            Nom Meta
+          </label>
+          <input
+            className="input"
+            style={{ width: '100%', marginBottom: 10, fontFamily: 'monospace', fontSize: 13 }}
+            value={editName}
+            disabled={editLoading}
+            onChange={(e) => setEditName(e.target.value)}
+          />
           <textarea
             className="input orch-wa-textarea"
             rows={10}
             value={editBody}
             disabled={editLoading}
-            placeholder="Corps vide — utilisez « + Corps voyageur » ou saisissez le texte ici."
+            placeholder="Corps vide — recharger le seed ou saisir le texte."
             onChange={(e) => setEditBody(e.target.value)}
           />
           <div className="orch-wa-editor-actions">
@@ -364,9 +476,10 @@ export default function OrchestrationWhatsAppTab() {
             <tr>
               <th>Message</th>
               <th>Aperçu corps</th>
-              <th>Slug Meta</th>
+              <th>Slug (catalogue)</th>
+              <th>Nom Meta</th>
               <th>Statut</th>
-              <th>ID template</th>
+              <th>ID template Meta</th>
               <th />
             </tr>
           </thead>
@@ -375,6 +488,8 @@ export default function OrchestrationWhatsAppTab() {
               const acc = rowAccount(row);
               const metaOk = metaReadyFor(row);
               const isEditing = editSlug === row.slug;
+              const catalogName = catalogBySlug[row.slug];
+              const nameMismatch = Boolean(catalogName && catalogName !== row.name);
               return (
                 <tr key={row.slug} className={isEditing ? 'orch-wa-row-editing' : undefined}>
                   <td>
@@ -390,14 +505,27 @@ export default function OrchestrationWhatsAppTab() {
                     <code>{row.slug}</code>
                   </td>
                   <td>
-                    <span className={`orch-wa-status ${STATUS_CLASS[row.metaStatus] || ''}`}>
-                      {row.metaStatus || 'draft'}
+                    <code className={nameMismatch ? 'orch-wa-name-mismatch' : ''}>{row.name}</code>
+                    {nameMismatch ? (
+                      <div className="orch-wa-err" title="Attendu depuis messageCatalog">
+                        catalogue : {catalogName}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td>
+                    <span
+                      className={`orch-wa-status ${STATUS_CLASS[row.metaStatus] || ''}`}
+                      title={row.metaRejectedReason || undefined}
+                    >
+                      {statusLabel(row.metaStatus)}
                     </span>
                   </td>
                   <td>
                     <code className="orch-wa-tid">{row.metaTemplateId || '—'}</code>
                     {row.lastGraphError ? (
-                      <div className="orch-wa-err">{row.lastGraphError.slice(0, 100)}</div>
+                      <div className="orch-wa-err" title={row.lastGraphError}>
+                        {row.lastGraphError.slice(0, 80)}
+                      </div>
                     ) : null}
                   </td>
                   <td className="orch-wa-actions">

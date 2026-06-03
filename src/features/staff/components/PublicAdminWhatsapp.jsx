@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { CircularProgress, Button, Typography, Box, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
+import React, { useState, useEffect, useMemo } from 'react';
+import { CircularProgress, Button, Typography, Box, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Paper } from '@mui/material';
 import { getAdminWhatsapp, deleteAdminWhatsapp } from '../services/serverApi.task';
 import ModifyAdminWhatsapp from './ModifyAdminWhatsapp';
 import { toast } from 'react-toastify';
@@ -20,22 +20,59 @@ import { useTranslation } from 'react-i18next';
 import WhatsappFilters from './WhatsappFilters';
 import { can } from '../../../utils/permissions';
 import { useAdminOwnerFilter } from 'context/AdminOwnerFilterContext';
-import { TeamRolesSectionHeader, teamRolesContentPaperSx, teamRolesTableHeaderCellSx, teamRolesTableHeaderCellSxCenter } from '../teamRolesLayout';
-const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
-  success: '#4CAF50',
-  error: '#F44336',
-  gray: {
-    50: '#FAFAFA',
-    100: '#F5F5F5',
-    200: '#EEEEEE',
-    300: '#E0E0E0',
-    600: '#757575',
-    700: '#616161',
-    800: '#424242'
-  }
+import { useTeamViewMode } from '../../../context/TeamViewContext';
+import { TeamHubMemberCard, TeamHubCardGrid } from '../../../components/team/TeamHubMemberCard';
+import { TeamHubListTable } from '../../../components/team/TeamHubListTable';
+import { TeamHubPagination } from '../../../components/team/TeamHubPagination';
+import { TEAM_T } from '../../../components/team/teamHubTokens';
+
+const TYPE_ABBR = {
+  Reservation: 'RS',
+  Réservation: 'RS',
+  Task: 'TS',
+  Tâche: 'TS',
+  Message: 'MS',
+  Reviews: 'AV',
+  Avis: 'AV',
+  ArrivalDeparture: 'DC',
+  'Arrivée/Départ': 'DC',
 };
+const ACCESS_ABBR = { write: 'W', read: 'R', none: 'N' };
+
+function buildPermMap(perms) {
+  const permMap = {};
+  (perms || []).forEach((p) => {
+    const abbr = TYPE_ABBR[p.type] || p.type.substring(0, 2).toUpperCase();
+    const access = ACCESS_ABBR[p.access] || 'N';
+    permMap[abbr] = access;
+  });
+  return permMap;
+}
+
+function PermChips({ permMap }) {
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+      {Object.entries(permMap).map(([type, access]) => {
+        const color = access === 'W' ? TEAM_T.success : access === 'R' ? TEAM_T.info : TEAM_T.text4;
+        return (
+          <Chip
+            key={type}
+            label={`${type}:${access}`}
+            size="small"
+            sx={{
+              fontSize: 10,
+              height: 18,
+              bgcolor: `${color}18`,
+              color,
+              fontWeight: 700,
+              fontFamily: 'monospace',
+            }}
+          />
+        );
+      })}
+    </Box>
+  );
+}
 const PublicAdminWhatsapp = () => {
   const {
     t
@@ -92,6 +129,7 @@ const PublicAdminWhatsapp = () => {
   const [canUpdate] = useState(can('update'));
   const [canDelete] = useState(can('delete'));
   const { requestOwnerId } = useAdminOwnerFilter();
+  const { viewMode, setTeamStats } = useTeamViewMode();
   const fetchLanguages = async () => {
     try {
       const response = await getLanguage();
@@ -134,6 +172,14 @@ const PublicAdminWhatsapp = () => {
   useEffect(() => {
     fetchStaff();
   }, [page, limit, searchText, selectedListings, selectedTypes, selectedAccess, selectedLanguages, requestOwnerId]);
+
+  useEffect(() => {
+    const active = staff.filter((s) => !s.banned).length;
+    setTeamStats([
+      { icon: '📱', label: 'Admins WA', value: String(totalCount) },
+      { icon: '✅', label: 'Actifs', value: String(active) },
+    ]);
+  }, [staff, totalCount, setTeamStats]);
   const fetchStaff = async () => {
     setIsLoading(true);
     try {
@@ -196,6 +242,142 @@ const PublicAdminWhatsapp = () => {
     user
   } = useSelector(state => state.auth);
   const isAdmin = user && hasAdminAccess(user.role);
+
+  const adminColumns = useMemo(
+    () => [
+      {
+        key: 'username',
+        label: 'Username',
+        render: (row) => (
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: TEAM_T.text }}>{row.username}</Typography>
+        ),
+      },
+      ...(isAdmin
+        ? [
+            {
+              key: 'owner',
+              label: 'Owner',
+              render: (row) =>
+                row.owner ? `${row.owner.firstName} ${row.owner.lastName}` : '—',
+            },
+          ]
+        : []),
+      {
+        key: 'whatsapp',
+        label: 'WhatsApp',
+        render: (row) => (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontFamily: 'monospace', fontSize: 11.5 }}>
+            <WhatsAppIcon sx={{ fontSize: 14, color: TEAM_T.success }} />
+            {row.whatsappPhone}
+          </Box>
+        ),
+      },
+      {
+        key: 'permissions',
+        label: 'Permissions',
+        render: (row) => <PermChips permMap={buildPermMap(row.permissions)} />,
+      },
+      {
+        key: 'language',
+        label: 'Langue',
+        render: (row) => row.language || '—',
+      },
+      {
+        key: 'listings',
+        label: 'Annonces',
+        align: 'center',
+        render: (row) => {
+          const listingCount = row.listingIds?.includes('All') ? 'Tous' : row.listingIds?.length || 0;
+          return (
+            <Chip
+              label={listingCount}
+              size="small"
+              sx={{
+                fontSize: 10,
+                height: 18,
+                bgcolor: `${TEAM_T.success}18`,
+                color: TEAM_T.success,
+                fontWeight: 700,
+              }}
+            />
+          );
+        },
+      },
+      {
+        key: 'status',
+        label: 'Statut',
+        align: 'center',
+        render: (row) => (
+          <Chip
+            icon={
+              row.banned ? (
+                <BlockIcon style={{ fontSize: 12 }} />
+              ) : (
+                <CheckCircleIcon style={{ fontSize: 12 }} />
+              )
+            }
+            label={row.banned ? 'Banni' : 'Actif'}
+            size="small"
+            sx={{
+              fontSize: 10,
+              height: 20,
+              fontWeight: 700,
+              ...(row.banned
+                ? { bgcolor: '#fde8e8', color: TEAM_T.error }
+                : { bgcolor: '#e6f6ef', color: TEAM_T.success }),
+            }}
+          />
+        ),
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        align: 'center',
+        render: (row) => (
+          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+            {canUpdate && (
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleUpdate(row);
+                }}
+                size="small"
+                sx={{
+                  width: 28,
+                  height: 28,
+                  bgcolor: TEAM_T.primary,
+                  color: '#fff',
+                  '&:hover': { bgcolor: TEAM_T.primaryDeep },
+                }}
+              >
+                <EditIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            )}
+            {canDelete && (
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(row);
+                }}
+                size="small"
+                sx={{
+                  width: 28,
+                  height: 28,
+                  bgcolor: TEAM_T.error,
+                  color: '#fff',
+                  '&:hover': { bgcolor: '#a01818' },
+                }}
+              >
+                <DeleteIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            )}
+          </Box>
+        ),
+      },
+    ],
+    [isAdmin, canUpdate, canDelete],
+  );
+
   return <Box sx={{
     width: '100%',
     minHeight: 0,
@@ -204,72 +386,72 @@ const PublicAdminWhatsapp = () => {
     flexDirection: 'column',
     bgcolor: 'transparent'
   }}>
-      <TeamRolesSectionHeader titleKey="WhatsApp Admin" icon={<WhatsAppIcon sx={{
-      fontSize: 18,
-      color: '#fff'
-    }} />} chip={<Chip label={`${totalCount} membres`} size="small" sx={{
-      bgcolor: SOJORI_COLORS.primary,
-      color: 'white !important',
-      fontWeight: 700,
-      fontSize: '11px',
-      height: '22px'
-    }} />} actions={canCreate ? <Button onClick={() => setOpenCreateDialog(true)} variant="contained" startIcon={<AddIcon />} sx={{
-      bgcolor: SOJORI_COLORS.primary,
-      color: 'white !important',
-      '&:hover': {
-        bgcolor: SOJORI_COLORS.primaryDark
-      },
-      textTransform: 'none',
-      fontWeight: 700,
-      fontSize: '12px'
-    }}>
-              Nouveau
-            </Button> : null} />
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <WhatsAppIcon sx={{ fontSize: 20, color: TEAM_T.primary }} />
+        <Typography sx={{ fontWeight: 800, fontSize: 16, color: TEAM_T.text }}>WhatsApp Admin</Typography>
+        <Chip
+          label={`${totalCount} membres`}
+          size="small"
+          sx={{
+            bgcolor: TEAM_T.primaryTint,
+            color: TEAM_T.primaryDeep,
+            fontWeight: 700,
+            fontSize: 11,
+            height: 22,
+          }}
+        />
+      </Box>
 
-      <Paper elevation={0} sx={{
-      ...teamRolesContentPaperSx,
-      px: {
-        xs: 0.5,
-        sm: 1
-      },
-      pt: 1,
-      pb: 1.5,
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      minHeight: 0,
-      width: '100%'
-    }}>
-      {/* Filters */}
-      <Box sx={{
-        px: {
-          xs: 0,
-          sm: 0
-        },
-        pt: 0,
-        pb: 0
-      }}>
-        <WhatsappFilters compact searchText={searchText} setSearchText={setSearchText} listings={listings} selectedListings={selectedListings} setSelectedListings={setSelectedListings} selectedTypes={selectedTypes} setSelectedTypes={setSelectedTypes} selectedAccess={selectedAccess} setSelectedAccess={setSelectedAccess} selectedLanguages={selectedLanguages} setSelectedLanguages={setSelectedLanguages} types={types} languages={languages} onSearch={() => {
-          setPage(0);
-          fetchStaff();
-        }} onReset={() => {
+      <WhatsappFilters
+        searchText={searchText}
+        setSearchText={setSearchText}
+        listings={listings}
+        selectedListings={selectedListings}
+        setSelectedListings={setSelectedListings}
+        selectedTypes={selectedTypes}
+        setSelectedTypes={setSelectedTypes}
+        selectedAccess={selectedAccess}
+        setSelectedAccess={setSelectedAccess}
+        selectedLanguages={selectedLanguages}
+        setSelectedLanguages={setSelectedLanguages}
+        types={types}
+        languages={languages}
+        onReset={() => {
           setSearchText('');
           setSelectedListings([]);
           setSelectedTypes([]);
           setSelectedAccess([]);
           setSelectedLanguages([]);
           setPage(0);
-        }} onFilterChange={() => setPage(0)} canCreate={canCreate} page={page} setPage={setPage} limit={limit} setLimit={setLimit} totalItems={totalCount} rowsPerPageOptions={[5, 10, 25, 50, 100]} loading={isLoading} />
-      </Box>
+        }}
+        onFilterChange={() => setPage(0)}
+        addButton={
+          canCreate ? (
+            <Button
+              onClick={() => setOpenCreateDialog(true)}
+              variant="contained"
+              size="small"
+              startIcon={<AddIcon />}
+              sx={{
+                bgcolor: TEAM_T.primary,
+                color: '#fff !important',
+                '&:hover': { bgcolor: TEAM_T.primaryDeep },
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 2,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Nouveau
+            </Button>
+          ) : null
+        }
+      />
 
-      {/* Table */}
       <Box sx={{
         flex: 1,
         overflow: 'auto',
-        px: {
-          xs: 0,
-          sm: 0.5
-        }
+        minHeight: 0,
       }}>
         {isLoading ? <Box sx={{
           display: 'flex',
@@ -278,7 +460,7 @@ const PublicAdminWhatsapp = () => {
           height: '100%'
         }}>
             <CircularProgress sx={{
-            color: SOJORI_COLORS.primary
+            color: TEAM_T.primary
           }} />
           </Box> : staff.length === 0 ? <Box sx={{
           textAlign: 'center',
@@ -286,202 +468,60 @@ const PublicAdminWhatsapp = () => {
         }}>
             <WhatsAppIcon sx={{
             fontSize: '48px',
-            color: SOJORI_COLORS.gray[300],
+            color: TEAM_T.text4,
             mb: 1
           }} />
             <Typography sx={{
-            color: SOJORI_COLORS.gray[600]
+            color: TEAM_T.text3
           }}>Aucun admin trouvé</Typography>
-          </Box> : <TableContainer component={Paper} elevation={0} sx={{
-          mt: 0.75,
-          overflow: 'auto',
-          borderRadius: 1,
-          border: '1px solid rgba(15,23,42,0.06)',
-          boxShadow: '0 1px 0 rgba(15,23,42,0.04)'
-        }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={teamRolesTableHeaderCellSx}>USERNAME</TableCell>
-                  {isAdmin && <TableCell sx={teamRolesTableHeaderCellSx}>OWNER</TableCell>}
-                  <TableCell sx={teamRolesTableHeaderCellSx}>WHATSAPP</TableCell>
-                  <TableCell sx={teamRolesTableHeaderCellSx}>PERMISSIONS</TableCell>
-                  <TableCell sx={teamRolesTableHeaderCellSx}>LANGUE</TableCell>
-                  <TableCell sx={teamRolesTableHeaderCellSx}>ANNONCES</TableCell>
-                  <TableCell sx={teamRolesTableHeaderCellSxCenter}>STATUT</TableCell>
-                  <TableCell sx={teamRolesTableHeaderCellSxCenter}>ACTIONS</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {staff.map(row => {
-                const perms = row.permissions || [];
-
-                // Mapping des types vers les abréviations
-                const TYPE_ABBR = {
-                  'Reservation': 'RS',
-                  'Réservation': 'RS',
-                  'Task': 'TS',
-                  'Tâche': 'TS',
-                  'Message': 'MS',
-                  'Reviews': 'AV',
-                  'Avis': 'AV',
-                  'ArrivalDeparture': 'DC',
-                  'Arrivée/Départ': 'DC'
-                };
-
-                // Mapping des access vers les abréviations
-                const ACCESS_ABBR = {
-                  'write': 'W',
-                  'read': 'R',
-                  'none': 'N'
-                };
-
-                // Créer une map des permissions pour affichage
-                const permMap = {};
-                perms.forEach(p => {
-                  const abbr = TYPE_ABBR[p.type] || p.type.substring(0, 2).toUpperCase();
-                  const access = ACCESS_ABBR[p.access] || 'N';
-                  permMap[abbr] = access;
-                });
-                const listingCount = row.listingIds?.includes('All') ? 'Tous' : row.listingIds?.length || 0;
-                return <TableRow key={row._id} hover sx={{
-                  '&:hover': {
-                    bgcolor: '#FFF8F5'
+          </Box> : viewMode === 'cards' ? (
+          <TeamHubCardGrid>
+            {staff.map((row) => {
+              const listingCount = row.listingIds?.includes('All') ? 'Tous' : row.listingIds?.length || 0;
+              const initials = (row.username || '?').slice(0, 2).toUpperCase();
+              const permChips = Object.entries(buildPermMap(row.permissions)).map(
+                ([type, access]) => `${type}:${access}`,
+              );
+              return (
+                <TeamHubMemberCard
+                  key={row._id}
+                  initials={initials}
+                  title={row.username}
+                  subtitle={row.whatsappPhone}
+                  badge={row.banned ? 'Banni' : 'Actif'}
+                  chips={[row.language || '—', `Annonces: ${listingCount}`, ...permChips.slice(0, 4)]}
+                  metaLines={
+                    isAdmin && row.owner
+                      ? [{ label: 'Owner', value: `${row.owner.firstName} ${row.owner.lastName}` }]
+                      : []
                   }
-                }}>
-                      <TableCell sx={{
-                    p: 1,
-                    fontSize: '12px',
-                    fontWeight: 600
-                  }}>{row.username}</TableCell>
-                      {isAdmin && <TableCell sx={{
-                    p: 1,
-                    fontSize: '11px'
-                  }}>
-                          {row.owner ? `${row.owner.firstName} ${row.owner.lastName}` : '-'}
-                        </TableCell>}
-                      <TableCell sx={{
-                    p: 1,
-                    fontSize: '11px',
-                    fontFamily: 'monospace',
-                    fontWeight: 500
-                  }}>
-                        <Box sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 0.5
-                    }}>
-                          <WhatsAppIcon sx={{
-                        fontSize: '14px',
-                        color: SOJORI_COLORS.success
-                      }} />
-                          {row.whatsappPhone}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{
-                    p: 1
-                  }}>
-                        <Box sx={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 0.4
-                    }}>
-                          {Object.entries(permMap).map(([type, access]) => {
-                        const color = access === 'W' ? SOJORI_COLORS.success : access === 'R' ? '#2196F3' : SOJORI_COLORS.gray[400];
-                        return <Chip key={type} label={`${type}:${access}`} size="small" sx={{
-                          fontSize: '10px',
-                          height: '18px',
-                          bgcolor: `${color}15`,
-                          color: color,
-                          fontWeight: 700,
-                          fontFamily: 'monospace'
-                        }} />;
-                      })}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{
-                    p: 1,
-                    fontSize: '11px'
-                  }}>{row.language}</TableCell>
-                      <TableCell sx={{
-                    p: 1,
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    textAlign: 'center'
-                  }}>
-                        <Chip label={listingCount} size="small" sx={{
-                      fontSize: '10px',
-                      height: '18px',
-                      bgcolor: `${SOJORI_COLORS.success}15`,
-                      color: SOJORI_COLORS.success,
-                      fontWeight: 700
-                    }} />
-                      </TableCell>
-                      <TableCell sx={{
-                    p: 1,
-                    textAlign: 'center'
-                  }}>
-                        <Chip icon={row.banned ? <BlockIcon style={{
-                      fontSize: '12px'
-                    }} /> : <CheckCircleIcon style={{
-                      fontSize: '12px'
-                    }} />} label={row.banned ? 'Banned' : 'Actif'} size="small" sx={{
-                      fontSize: '10px',
-                      height: '20px',
-                      fontWeight: 700,
-                      ...(row.banned ? {
-                        bgcolor: '#FFEBEE',
-                        color: SOJORI_COLORS.error
-                      } : {
-                        bgcolor: '#E8F5E9',
-                        color: SOJORI_COLORS.success
-                      })
-                    }} />
-                      </TableCell>
-                      <TableCell sx={{
-                    p: 0.5,
-                    textAlign: 'center'
-                  }}>
-                        <Box sx={{
-                      display: 'flex',
-                      gap: 0.5,
-                      justifyContent: 'center'
-                    }}>
-                          {canUpdate && <IconButton onClick={() => handleUpdate(row)} size="small" sx={{
-                        width: 28,
-                        height: 28,
-                        bgcolor: SOJORI_COLORS.primary,
-                        color: 'white',
-                        '&:hover': {
-                          bgcolor: SOJORI_COLORS.primaryDark
-                        }
-                      }}>
-                              <EditIcon sx={{
-                          fontSize: '14px'
-                        }} />
-                            </IconButton>}
-                          {canDelete && <IconButton onClick={() => handleDelete(row)} size="small" sx={{
-                        width: 28,
-                        height: 28,
-                        bgcolor: SOJORI_COLORS.error,
-                        color: 'white',
-                        '&:hover': {
-                          bgcolor: '#D32F2F'
-                        }
-                      }}>
-                              <DeleteIcon sx={{
-                          fontSize: '14px'
-                        }} />
-                            </IconButton>}
-                        </Box>
-                      </TableCell>
-                    </TableRow>;
-              })}
-              </TableBody>
-            </Table>
-          </TableContainer>}
+                  active={!row.banned}
+                  inactive={row.banned}
+                  onEdit={canUpdate ? () => handleUpdate(row) : undefined}
+                  onDelete={canDelete ? () => handleDelete(row) : undefined}
+                />
+              );
+            })}
+          </TeamHubCardGrid>
+        ) : (
+          <TeamHubListTable
+            rows={staff}
+            columns={adminColumns}
+            rowKey={(row) => row._id}
+            emptyLabel="Aucun admin trouvé"
+          />
+        )}
       </Box>
-      </Paper>
+
+      <TeamHubPagination
+        page={page}
+        limit={limit}
+        total={totalCount}
+        onPageChange={setPage}
+        onLimitChange={setLimit}
+        limitOptions={[5, 10, 25, 50, 100]}
+        itemLabel="admins"
+      />
 
       {/* Modals */}
       <ModifyAdminWhatsapp open={openModal} handleClose={handleCloseModal} staff={selectedStaff} onStaffUpdate={handleStaffUpdate} cities={cities} countries={countries} listings={listings} taskTypes={types} languages={languages} />
@@ -525,11 +565,11 @@ const PublicAdminWhatsapp = () => {
             Annuler
           </Button>
           <Button onClick={confirmDelete} variant="contained" sx={{
-          bgcolor: SOJORI_COLORS.error,
+          bgcolor: TEAM_T.error,
           color: 'white !important',
           textTransform: 'none',
           '&:hover': {
-            bgcolor: '#D32F2F'
+            bgcolor: '#a01818'
           }
         }}>
             Supprimer

@@ -2,8 +2,9 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/backendServer.config';
 import { getToken } from '../utils/authUtils';
 
+/** En dev : proxy Vite relatif (évite CORS). Prod : API via srv-admin. */
 function resolveFullchatbotBase(): string {
-  if (import.meta.env.DEV && typeof window !== 'undefined' && !import.meta.env.VITE_API_URL) {
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
     return '/api/v1/admin/fullchatbot';
   }
   return `${API_BASE_URL}/api/v1/admin/fullchatbot`;
