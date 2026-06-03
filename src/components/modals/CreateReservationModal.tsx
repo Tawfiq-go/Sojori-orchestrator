@@ -296,6 +296,21 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
         data.manualPricing = true;
         data.manualTotalPrice = totalPrice;
         data.manualDays = days;
+      } else if (
+        pricingMode === 'calendar' &&
+        calendarPriceEstimate != null &&
+        calendarPriceEstimate > 0 &&
+        nights > 0
+      ) {
+        // Déjà validé via le calendrier UI — évite un 2e appel srv-calendar (souvent >25s en dev).
+        const pricePerDay = calendarPriceEstimate / nights;
+        const days: Record<string, string> = {};
+        dailyDates.forEach(dateKey => {
+          days[dateKey] = pricePerDay.toFixed(2);
+        });
+        data.manualPricing = true;
+        data.manualTotalPrice = calendarPriceEstimate;
+        data.manualDays = days;
       }
 
       const result = await reservationsService.create(data);
@@ -1381,6 +1396,10 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
 function humanizeReservationError(raw: string): string {
   if (!raw) return 'Erreur lors de la création de la réservation';
   const msg = String(raw);
+
+  if (/timeout/i.test(msg) || msg.includes('ECONNABORTED')) {
+    return 'Le serveur met trop de temps à répondre (calendrier ou paiement). Réessayez dans un instant, ou passez en mode « Prix par jour » / « Prix total ».';
+  }
 
   const minStay = msg.match(/minimum\s*stay\s*(?:is|:)?\s*(\d+)/i);
   if (minStay) {

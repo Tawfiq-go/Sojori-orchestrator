@@ -36,7 +36,10 @@ export function useInboxConversation() {
 
     try {
       const [messagesResponse, tasksResponse, reservationRow] = await Promise.all([
-        messagesService.getConversationMessages(conv.phone, { limit: 50 }),
+        messagesService.getConversationMessages(conv.phone, {
+          limit: 50,
+          reservationId: conv.reservation_mongo_id ?? undefined,
+        }),
         resaNum
           ? tasksService.getTasksByReservation(resaNum, false)
           : Promise.resolve({ success: false, data: { reservationId: '', total: 0, tasks: [] } }),

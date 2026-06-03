@@ -12,4 +12,5 @@ export { default as SupportConfigTabContainer } from './SupportConfigTabContaine
 export { default as TransportConfigTab } from './TransportConfigTab';
 export { default as ConciergeConfigTab } from './ConciergeConfigTab';
 export { default as CleaningConfigTab } from './CleaningConfigTab';
+export { default as ArrivalDepartureConfigTab } from './ArrivalDepartureConfigTab';
 export { default as GroceryConfigTab } from './GroceryConfigTab';

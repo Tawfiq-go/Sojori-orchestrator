@@ -32,7 +32,7 @@ export default function CommunicationsHubPage() {
     (async () => {
       try {
         const [guestRes, staffRes, otaRes, leadsRes, reviewsRes] = await Promise.all([
-          messagesService.getConversations({ filter: 'smart', hasReservation: true, limit: 80 }),
+          messagesService.getConversations({ filter: 'smart', hasReservation: true, limit: 100 }),
           messagesService.getConversations({ filter: 'smart', hasReservation: false, limit: 50 }),
           messagesService.getOTAThreads({ page: 0, limit: 50 }).catch(() => ({ threads: [] })),
           messagesService.getLeads({ limit: 50 }).catch(() => ({ threads: [] })),

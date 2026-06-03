@@ -28,7 +28,7 @@ export function useInboxStaffConversation() {
 
     try {
       const [messagesResponse, staffResult] = await Promise.all([
-        messagesService.getConversationMessages(conv.phone, { limit: 50 }),
+        messagesService.getConversationMessages(conv.phone, { limit: 50, inbox: 'staff' }),
         tasksService.getStaff({ limit: 500 }),
       ]);
 

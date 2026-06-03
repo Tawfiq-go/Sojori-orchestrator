@@ -373,7 +373,9 @@ class ReservationsService {
       // Logs désactivés pour nettoyer la console
       // console.log('[ReservationsService] 📤 Creating reservation:', payload);
 
-      const response = await apiClient.post(url, payload);
+      const response = await apiClient.post(url, payload, {
+        timeout: 90_000,
+      });
 
       // Logs désactivés pour nettoyer la console
       // console.log('[ReservationsService] 📥 Response:', response.data);

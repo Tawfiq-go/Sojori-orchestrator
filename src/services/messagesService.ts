@@ -11,17 +11,26 @@ import type {
 } from '../types/messages.types';
 
 /**
- * Service de gestion de la messagerie WhatsApp et OTA
- * Backend: srv-chatbot (port 4000)
- *
- * Exactement comme sojori-dashboard/src/features/communications/services/communicationsApi.js
- *
- * URLs utilisées:
- * - GET ${SRV_CHATBOT}/debug/conversations
- * - GET ${SRV_CHATBOT}/debug/messages/:phone (raw messages)
- * - GET ${SRV_CHATBOT}/debug/conversations/:phone (exchanges)
- * - POST ${SRV_CHATBOT}/debug/send-message
+ * Guest WhatsApp → srv-fullchatbot `conversation_messages`
+ * Staff WhatsApp → srv-chatbot (unchanged)
  */
+function resolveGuestWhatsappDebugBase(): string {
+  if (import.meta.env.DEV && typeof window !== 'undefined' && !import.meta.env.VITE_API_URL) {
+    return '/api/v1/admin/fullchatbot/debug';
+  }
+  return `${MICROSERVICE_BASE_URL.SRV_ADMIN}/fullchatbot/debug`;
+}
+
+function resolveStaffWhatsappDebugBase(): string {
+  return `${MICROSERVICE_BASE_URL.SRV_CHATBOT}/debug`;
+}
+
+type WhatsappInboxKind = 'guest' | 'staff';
+
+function resolveWhatsappDebugBase(kind: WhatsappInboxKind): string {
+  return kind === 'staff' ? resolveStaffWhatsappDebugBase() : resolveGuestWhatsappDebugBase();
+}
+
 class MessagesService {
   /**
    * Récupérer toutes les conversations groupées par téléphone
@@ -62,8 +71,9 @@ class MessagesService {
       // X-Dev-Token is automatically added by apiClient interceptor (line 86)
       // No need to add it manually here
 
+      const kind: WhatsappInboxKind = params?.hasReservation === false ? 'staff' : 'guest';
       const response = await apiClient.get<ConversationsResponse>(
-        `${MICROSERVICE_BASE_URL.SRV_CHATBOT}/debug/conversations`,
+        `${resolveWhatsappDebugBase(kind)}/conversations`,
         { params: requestParams }
       );
 
@@ -90,6 +100,7 @@ class MessagesService {
       limit?: number;
       before?: string;
       before_message_id?: string;
+      inbox?: WhatsappInboxKind;
     }
   ): Promise<any> {
     try {
@@ -98,8 +109,9 @@ class MessagesService {
       if (options?.before) params.before = options.before;
       if (options?.before_message_id) params.before_message_id = options.before_message_id;
 
+      const base = resolveWhatsappDebugBase(options?.inbox ?? 'guest');
       const response = await apiClient.get(
-        `${MICROSERVICE_BASE_URL.SRV_CHATBOT}/debug/messages/${encodeURIComponent(phone)}`,
+        `${base}/messages/${encodeURIComponent(phone)}`,
         {
           params: Object.keys(params).length ? params : undefined,
           timeout: 60000,
@@ -126,26 +138,50 @@ class MessagesService {
       skip?: number;
       before?: string;
       before_message_id?: string;
+      /** staff = srv-chatbot, guest = srv-fullchatbot (+ legacy fallback) */
+      inbox?: WhatsappInboxKind;
+      /** Mongo reservationId — loads thread if phone variants miss */
+      reservationId?: string;
     }
   ): Promise<ConversationDetailResponse> {
     try {
-      const params: any = {};
+      const params: Record<string, string | number> = {};
       if (options?.skip) params.skip = options.skip;
       if (options?.limit) params.limit = options.limit;
-      if (options?.before) params.before = options.before;
+      if (options?.before) params.before = String(options.before);
       if (options?.before_message_id) params.before_message_id = options.before_message_id;
+      if (options?.reservationId) params.reservationId = options.reservationId;
 
-      // X-Dev-Token is automatically added by apiClient interceptor
-      // No need to add it manually here
+      const inbox = options?.inbox ?? 'guest';
+      const base = resolveWhatsappDebugBase(inbox);
 
       const response = await apiClient.get<ConversationDetailResponse>(
-        `${MICROSERVICE_BASE_URL.SRV_CHATBOT}/debug/conversations/${encodeURIComponent(phone)}`,
+        `${base}/conversations/${encodeURIComponent(phone)}`,
         {
           params: Object.keys(params).length ? params : undefined,
         }
       );
 
-      return response.data;
+      const data = response.data;
+      if (
+        inbox === 'guest' &&
+        data.status === 'success' &&
+        (!data.data?.exchanges?.length)
+      ) {
+        try {
+          const legacy = await apiClient.get<ConversationDetailResponse>(
+            `${resolveStaffWhatsappDebugBase()}/conversations/${encodeURIComponent(phone)}`,
+            { params: Object.keys(params).length ? params : undefined },
+          );
+          if (legacy.data?.data?.exchanges?.length) {
+            return legacy.data;
+          }
+        } catch {
+          /* fullchatbot-only thread */
+        }
+      }
+
+      return data;
     } catch (error: any) {
       console.error(`❌ Erreur récupération messages pour ${phone}:`, error);
       throw new Error(
@@ -162,13 +198,13 @@ class MessagesService {
    *
    * Comme sojori-dashboard: whatsappApi.sendMessage()
    */
-  async sendMessage(data: SendMessageRequest): Promise<SendMessageResponse> {
+  async sendMessage(
+    data: SendMessageRequest,
+    inbox: WhatsappInboxKind = 'guest',
+  ): Promise<SendMessageResponse> {
     try {
-      // X-Dev-Token is automatically added by apiClient interceptor
-      // No need to add it manually here
-
       const response = await apiClient.post<SendMessageResponse>(
-        `${MICROSERVICE_BASE_URL.SRV_CHATBOT}/debug/send-message`,
+        `${resolveWhatsappDebugBase(inbox)}/send-message`,
         {
           phone: data.phone,
           message: data.message,
@@ -196,7 +232,7 @@ class MessagesService {
   async getByReservation(reservationNumber: string): Promise<ConversationsResponse> {
     try {
       const response = await apiClient.get<ConversationsResponse>(
-        `${MICROSERVICE_BASE_URL.SRV_CHATBOT}/debug/conversations`,
+        `${resolveGuestWhatsappDebugBase()}/conversations`,
         {
           params: {
             limit: 25,
@@ -265,7 +301,7 @@ class MessagesService {
   async getLastClientMessage(phone: string): Promise<LastClientMessageResponse> {
     try {
       const response = await apiClient.get<LastClientMessageResponse>(
-        `${MICROSERVICE_BASE_URL.SRV_CHATBOT.replace('/debug', '')}/whatsapp/last-client-message`,
+        `${resolveGuestWhatsappDebugBase()}/last-client-message`,
         { params: { phone: phone } }
       );
 
@@ -287,7 +323,7 @@ class MessagesService {
   async getStorageStats(): Promise<StorageStatsResponse> {
     try {
       const response = await apiClient.get<StorageStatsResponse>(
-        `${MICROSERVICE_BASE_URL.SRV_CHATBOT}/debug/storage-stats`
+        `${resolveGuestWhatsappDebugBase()}/storage-stats`
       );
 
       return response.data;
