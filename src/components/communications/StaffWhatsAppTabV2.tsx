@@ -163,19 +163,25 @@ export default function StaffWhatsAppTabV2() {
               quickTemplates={STAFF_TEMPLATES}
               onSendMessage={async (text) => {
                 if (!inbox.activeConversation) return;
-                await messagesService.sendMessage({
-                  phone: inbox.activeConversation.phone,
-                  message: text.trim(),
-                });
+                await messagesService.sendMessage(
+                  {
+                    phone: inbox.activeConversation.phone,
+                    message: text.trim(),
+                  },
+                  'staff',
+                );
                 await handleSelect(inbox.activeConversation);
               }}
               onSelectTemplate={(tpl) =>
                 tpl.text &&
                 inbox.activeConversation &&
-                void messagesService.sendMessage({
-                  phone: inbox.activeConversation.phone,
-                  message: tpl.text,
-                })
+                void messagesService.sendMessage(
+                  {
+                    phone: inbox.activeConversation.phone,
+                    message: tpl.text,
+                  },
+                  'staff',
+                )
               }
               onAISuggestion={() => setShowAIModal(true)}
             />
@@ -206,10 +212,13 @@ export default function StaffWhatsAppTabV2() {
         onClose={() => setShowAIModal(false)}
         onUseSuggestion={(text) => {
           if (inbox.activeConversation) {
-            void messagesService.sendMessage({
-              phone: inbox.activeConversation.phone,
-              message: text,
-            });
+            void messagesService.sendMessage(
+              {
+                phone: inbox.activeConversation.phone,
+                message: text,
+              },
+              'staff',
+            );
           }
         }}
         context={{

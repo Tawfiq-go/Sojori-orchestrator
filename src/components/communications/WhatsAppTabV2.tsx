@@ -37,7 +37,7 @@ export default function WhatsAppTabV2() {
         const response = await messagesService.getConversations({
           filter: 'smart',
           hasReservation: true,
-          limit: 50,
+          limit: 100,
         });
         if (response.status === 'success') {
           setConversations(

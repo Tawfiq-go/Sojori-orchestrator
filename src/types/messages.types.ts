@@ -99,6 +99,8 @@ export interface Conversation {
   name?: string;
   /** Champ API chatbot (contient souvent le n° SJ-xxx) */
   reservation_id?: string;
+  /** srv-fullchatbot — ObjectId réservation pour charger le fil */
+  reservation_mongo_id?: string | null;
   reservation_number?: string;
   listing_id?: string;
   listing_name?: string;
