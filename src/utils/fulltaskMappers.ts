@@ -70,6 +70,59 @@ function mapPayloadHourSource(
   return 'default';
 }
 
+const CONCIERGE_TASK_TYPES = new Set(['concierge', 'transport', 'groceries'])
+
+function formatConciergeDateLabel(value: unknown): string {
+  if (!value) return ''
+  try {
+    const d = new Date(String(value))
+    if (Number.isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('fr-FR', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    })
+  } catch {
+    return ''
+  }
+}
+
+function mapConciergeGroupingKey(payload: Record<string, unknown>): string | undefined {
+  const kind = String(payload.conciergeKind ?? '').toLowerCase()
+  if (kind === 'transport') return 'TRANSPORT'
+  if (kind === 'grocery') return 'GROCERIES'
+  if (kind === 'custom') return 'CUSTOM'
+  return undefined
+}
+
+/** Ligne liste + drawer : service, date, heure, passagers (payload + requestNote). */
+function buildConciergeDetailLine(
+  payload: Record<string, unknown>,
+  requestNote?: unknown,
+): string {
+  const service = String(payload.serviceName ?? '').trim()
+  const route = String(payload.routeLabel ?? '').trim()
+  const date =
+    formatConciergeDateLabel(payload.scheduledDate) ||
+    formatConciergeDateLabel(payload.scheduled_date)
+  const time = formatPayloadTime(payload.scheduledTime ?? payload.scheduled_time)
+  const people = payload.customPeople ?? payload.passengers
+  const peopleLabel =
+    people != null && String(people).trim() !== ''
+      ? `${people} pers.`
+      : ''
+  const list = payload.shoppingList ?? payload.shopping_list
+  const fromPayload = [service || route, date, time, peopleLabel, list ? String(list).slice(0, 80) : '']
+    .filter(Boolean)
+    .join(' · ')
+  const note = String(requestNote ?? '').trim().replace(/\s+/g, ' ')
+  if (!note) return fromPayload
+  if (service && !note.toLowerCase().includes(service.toLowerCase())) {
+    return `${service} · ${note}`
+  }
+  return note
+}
+
 function mapRegistrationCounts(
   payload: Record<string, unknown>,
   reservationAdults?: number,
@@ -145,6 +198,15 @@ export function fullTaskToListItem(
     (reservationId.length > 8 ? `…${reservationId.slice(-8)}` : reservationId) ||
     undefined;
 
+  const isConciergeType = CONCIERGE_TASK_TYPES.has(taskType)
+  const conciergeDetailLine = isConciergeType
+    ? buildConciergeDetailLine(payload, task.requestNote)
+    : undefined
+  const conciergeGroupingKey = isConciergeType ? mapConciergeGroupingKey(payload) : undefined
+  const descriptionLine =
+    conciergeDetailLine ||
+    (task.requestNote ? String(task.requestNote) : '')
+
   return {
     _id: task._id,
     itemType: 'Task',
@@ -152,7 +214,12 @@ export function fullTaskToListItem(
     name: task.taskCode || task._id,
     type: task.type,
     subType: task.type,
-    createdAt: task.createdAt,
+    createdAt:
+      task.createdAt != null
+        ? String(task.createdAt)
+        : task.updatedAt != null
+          ? String(task.updatedAt)
+          : undefined,
     startDate: startIso,
     endDate: endIso,
     taskStatus: legacyStatus,
@@ -189,7 +256,9 @@ export function fullTaskToListItem(
     staffCode: staff?._id ? String(staff._id) : undefined,
     staffName: staff?.name || null,
     staffPhone: staff?.phone || null,
-    descriptions: task.requestNote ? [{ description: String(task.requestNote) }] : [],
+    descriptions: descriptionLine ? [{ description: descriptionLine }] : [],
+    conciergeDetailLine,
+    conciergeGroupingKey,
     supportCategoryLabel:
       taskType === 'support'
         ? String(payload.categoryLabel ?? payload.categoryTitle ?? '').trim() || undefined

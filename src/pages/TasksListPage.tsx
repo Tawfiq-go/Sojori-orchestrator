@@ -486,6 +486,7 @@ function formatTimeValue(timeInput: string | number | null | undefined): string 
 }
 
 function firstDescriptionLine(task: TaskListItem): string {
+  if (task.conciergeDetailLine?.trim()) return task.conciergeDetailLine.trim();
   if (task.comment?.trim()) return task.comment.trim();
   const descriptions = task.descriptions || [];
   const first = descriptions[0];
@@ -1272,11 +1273,23 @@ export function TasksListPage() {
         if (!parts) {
           return <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center' }}>—</Typography>;
         }
+        const fullLabel = row.createdAt
+          ? new Date(row.createdAt).toLocaleString('fr-FR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '';
         return (
-          <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
-            <Typography sx={{ fontSize: 11, fontWeight: 600 }}>{parts.date}</Typography>
-            <Typography sx={{ fontSize: 10, color: T.text3 }}>{parts.time}</Typography>
-          </Stack>
+          <Tooltip title={fullLabel ? `Créée le ${fullLabel}` : ''} arrow placement="top">
+            <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 600 }}>{parts.date}</Typography>
+              <Typography sx={{ fontSize: 10, color: T.text3 }}>{parts.time}</Typography>
+            </Stack>
+          </Tooltip>
         );
       },
     },

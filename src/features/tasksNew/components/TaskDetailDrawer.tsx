@@ -401,6 +401,11 @@ export default function TaskDetailDrawer({
             >
               {[task.listingName, task.reservationNumber].filter(Boolean).join(' · ')}
             </Typography>
+            {task.createdAt ? (
+              <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.5, fontFamily: '"Geist Mono", monospace' }}>
+                Créée le {fmtDateTimeFr(task.createdAt)}
+              </Typography>
+            ) : null}
           </Box>
           <Box
             component="button"
