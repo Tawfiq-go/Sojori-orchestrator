@@ -10,6 +10,7 @@ import type { Reservation as ApiReservation } from '../../../types/reservations.
 import type { Listing, ListingClientServices, Reservation, TaskFormData } from './types';
 
 const SRV_TASK = MICROSERVICE_BASE_URL.SRV_TASK;
+const SRV_FULLTASK = MICROSERVICE_BASE_URL.SRV_FULLTASK;
 const SRV_LISTING = MICROSERVICE_BASE_URL.SRV_LISTING;
 
 export async function fetchTaskListings(ownerId?: string): Promise<Listing[]> {
@@ -152,7 +153,7 @@ export async function fetchListingClientServices(
 }
 
 export async function fetchStaffSimplified(ownerId: string) {
-  const response = await apiClient.get(`${SRV_TASK}/staff-simplified`, {
+  const response = await apiClient.get(`${SRV_FULLTASK}/staff-simplified`, {
     params: { ownerId, isActive: true, limit: 100 },
   });
   const staffData = response.data?.staff || [];
@@ -194,7 +195,7 @@ export async function fetchAvailableStaffForTask(
   if (query.endTime) params.endTime = query.endTime;
 
   const response = await apiClient.get(
-    `${SRV_TASK}/staff-simplified/available-for-task`,
+    `${SRV_FULLTASK}/staff-simplified/available-for-task`,
     { params },
   );
   if (!response.data?.success) {

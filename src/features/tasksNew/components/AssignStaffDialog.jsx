@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CircularProgress, List, ListItem, ListItemButton, ListItemText, ListItemAvatar, Avatar, TextField, InputAdornment, Typography, Chip, FormControlLabel, Checkbox, Box, Collapse, Button, useMediaQuery, useTheme } from '@mui/material';
 import { Search as SearchIcon, Person as PersonIcon, Check as CheckIcon, FilterList as FilterListIcon } from '@mui/icons-material';
 import axios from 'axios';
-import { API_BASE_URL } from '../../../config/backendServer.config';
+import { API_BASE_URL, MICROSERVICE_BASE_URL } from '../../../config/backendServer.config';
 import { getToken as getAuthToken } from '../../../utils/auth.utils';
 import { useAuth } from '../../../hooks/useAuth';
 import { labelForTaskTypeId } from '../../taskHub/staff-design/fulltaskTaskTypes';
@@ -194,7 +194,7 @@ const AssignStaffDialog = ({
       if (taskIdForApi && /^[0-9a-fA-F]{24}$/.test(taskIdForApi)) {
         params.set('taskId', taskIdForApi);
       } else if (taskIdForApi) {}
-      const fullUrl = `${API_BASE_URL}/api/v1/task/staff-simplified/available-for-task?${params}`;
+      const fullUrl = `${MICROSERVICE_BASE_URL.SRV_FULLTASK}/staff-simplified/available-for-task?${params}`;
       const response = await axios.get(fullUrl, {
         headers: {
           Authorization: `Bearer ${token}`

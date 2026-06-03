@@ -5,24 +5,49 @@ import path from 'path'
 import { devSecurityHeaders, previewSecurityHeaders } from './security/csp'
 
 const devProxyTarget = process.env.VITE_DEV_PROXY_TARGET || 'https://dev.sojori.com'
-const fulltaskLocalTarget = process.env.VITE_FULLTASK_URL || 'http://127.0.0.1:4015'
-const fullchatbotLocalTarget = process.env.VITE_FULLCHATBOT_URL || 'http://127.0.0.1:4016'
+
+/**
+ * Pattern dev (comme réservations / listing) :
+ * - Par défaut → dev.sojori.com (srv-admin reverse-proxy vers K8s prod).
+ * - Port-forward local uniquement si VITE_FULLTASK_URL / VITE_FULLCHATBOT_URL explicites
+ *   (ex. http://127.0.0.1:4015 après kubectl port-forward).
+ */
+const fulltaskTarget = process.env.VITE_FULLTASK_URL || devProxyTarget
+const fullchatbotTarget = process.env.VITE_FULLCHATBOT_URL || devProxyTarget
+
+function isDirectLocalService(url: string, port: number): boolean {
+  try {
+    const u = new URL(url)
+    return ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname) && u.port === String(port)
+  } catch {
+    return false
+  }
+}
+
+function adminServiceProxy(
+  service: 'fulltask' | 'fullchatbot',
+  target: string,
+  port: '4015' | '4016',
+) {
+  const prefix = `/api/v1/admin/${service}`
+  const directLocal = isDirectLocalService(target, Number(port))
+  return {
+    [prefix]: {
+      target,
+      changeOrigin: true,
+      secure: false,
+      /** srv-fulltask/chatbot en local exposent /api/*, pas /api/v1/admin/… */
+      ...(directLocal
+        ? { rewrite: (path: string) => path.replace(new RegExp(`^${prefix}`), '/api') }
+        : {}),
+    },
+  }
+}
 
 /** Proxy API dev — évite les appels relatifs vers 127.0.0.1:4174 (404 Not Found App). */
 const apiDevProxy = {
-  /** srv-fulltask direct en local (avant le catch-all /api → dev.sojori.com). */
-  '/api/v1/admin/fulltask': {
-    target: fulltaskLocalTarget,
-    changeOrigin: true,
-    secure: false,
-    rewrite: (path: string) => path.replace(/^\/api\/v1\/admin\/fulltask/, '/api'),
-  },
-  '/api/v1/admin/fullchatbot': {
-    target: fullchatbotLocalTarget,
-    changeOrigin: true,
-    secure: false,
-    rewrite: (path: string) => path.replace(/^\/api\/v1\/admin\/fullchatbot/, '/api'),
-  },
+  ...adminServiceProxy('fulltask', fulltaskTarget, '4015'),
+  ...adminServiceProxy('fullchatbot', fullchatbotTarget, '4016'),
   '/api': {
     target: devProxyTarget,
     changeOrigin: true,

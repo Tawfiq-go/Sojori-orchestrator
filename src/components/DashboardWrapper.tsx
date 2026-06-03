@@ -71,6 +71,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'chatbot': '/chatbot/whitelist',
     'chatbot/whitelist': '/chatbot/whitelist',
     'chatbot/listing': '/chatbot/listing',
+    'chatbot/flows-pilote': '/chatbot/flows-pilote',
 
     // Communications Hub - Navigation principale
     'comms': '/communications',
@@ -87,6 +88,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
 
     // Catalogue
     'listings': '/listings',
+    'listing-orchestration': '/catalogue/listing-orchestration',
     'dynamic-pricing': '/dynamic-pricing/portefeuille',
     'dynamic-pricing/portefeuille': '/dynamic-pricing/portefeuille',
     'dynamic-pricing/audit': '/dynamic-pricing/audit',
@@ -120,8 +122,8 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
 
     // Équipe & Rôles
     'admin/equipe/owners': '/admin/equipe/owners?tab=list',
-    'admin/equipe/staff': '/admin/equipe?tab=staff-dashboard',
-    'admin/equipe/whatsapp': '/admin/equipe?tab=admin-whatsapp',
+    'admin/equipe/staff': '/tasks/team',
+    'admin/equipe/whatsapp': '/tasks/team',
     'admin/equipe/roles': '/admin/equipe?tab=worker',
     'admin/equipe/groups': '/admin/equipe?tab=groups',
 
@@ -222,19 +224,21 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     if (path.startsWith('/chatbot/listing')) {
       return 'chatbot/listing';
     }
+    if (path.startsWith('/chatbot/flows-pilote')) {
+      return 'chatbot/flows-pilote';
+    }
     if (path.startsWith('/chatbot/whitelist') || path.startsWith('/chatbot')) {
       return 'chatbot/whitelist';
     }
 
     if (path.startsWith('/admin/equipe')) {
-      const tab = new URLSearchParams(location.search).get('tab') || 'staff-dashboard';
+      const tab = new URLSearchParams(location.search).get('tab') || 'list';
+      if (tab === 'admin-whatsapp') return 'tasks/team';
       const map: Record<string, string> = {
-        'staff-dashboard': 'admin/equipe/staff',
-        'admin-whatsapp': 'admin/equipe/whatsapp',
         worker: 'admin/equipe/roles',
         groups: 'admin/equipe/groups',
       };
-      return map[tab] || 'admin/equipe/staff';
+      return map[tab] || 'admin/equipe/owners';
     }
 
     const entries = Object.entries(navToRoute).sort((a, b) => b[1].length - a[1].length);

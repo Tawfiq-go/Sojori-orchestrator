@@ -1,23 +1,24 @@
 import type { PlanEvent } from './types';
 
-/** Ordre par défaut (seed orchestration complète). */
+/** Ordre par défaut = parcours voyageur (`ORCHESTRATION_JOURNEY_SLOTS`). */
 export const DEFAULT_UI_PLAN_LIST_ORDER: string[] = [
   'sched:welcome_sojori_v2',
   'wf:arrival_choose',
-  'wf:arrival_declare',
   'wf:registration',
+  'wf:arrival_declare',
   'sched:checkin_feedback',
+  'wf:departure_choose',
+  'sched:departure_instructions',
+  'wf:departure_declare',
   'wf:cleaning_free',
   'wf:cleaning_paid',
+  'wf:checkout_cleaning',
   'wf:transport',
   'wf:groceries',
   'wf:concierge',
-  'sched:departure_instructions',
-  'wf:departure_choose',
-  'wf:departure_declare',
-  'sched:checkout_feedback',
   'wf:support',
   'wf:service_client',
+  'sched:checkout_feedback',
 ];
 
 export function messagePlanOrderKey(messageId?: string, template?: string): string | undefined {

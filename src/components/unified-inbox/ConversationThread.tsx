@@ -1,5 +1,5 @@
 import { useRef, useLayoutEffect } from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography, CircularProgress } from '@mui/material';
 import { DoneAll } from '@mui/icons-material';
 import { T } from './_tokens';
 import { flagFromPhone } from './inboxFormat';
@@ -18,6 +18,9 @@ interface ConversationThreadProps {
   onAISuggestion?: () => void;
   otaPlatform?: string;
   whatsappBusinessLine?: string;
+  loadingMessages?: boolean;
+  messagesLoadError?: string | null;
+  messagesTotal?: number;
 }
 
 export default function ConversationThread({
@@ -31,6 +34,9 @@ export default function ConversationThread({
   otaPlatform = 'Airbnb',
   quickReplies = [],
   whatsappBusinessLine = import.meta.env.VITE_WHATSAPP_BUSINESS_DISPLAY || '+33 7 56 84 21 09',
+  loadingMessages = false,
+  messagesLoadError = null,
+  messagesTotal = 0,
 }: ConversationThreadProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -267,6 +273,12 @@ export default function ConversationThread({
             {isOta ? (
               <>
                 {thread.reservationNumber && <span>{thread.reservationNumber}</span>}
+                {thread.reservationCreatedDisplay && (
+                  <>
+                    <span style={{ color: T.text4 }}>·</span>
+                    <span>Créée {thread.reservationCreatedDisplay}</span>
+                  </>
+                )}
                 {checkInSub && (
                   <>
                     <span style={{ color: T.text4 }}>·</span>
@@ -325,7 +337,65 @@ export default function ConversationThread({
             : `linear-gradient(180deg, ${T.bg2} 0%, ${T.bg0} 100%)`,
         }}
       >
-        {messages.map((message) => {
+        {loadingMessages && (
+          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={28} sx={{ color: isOta ? otaTheme.primary : T.primary }} />
+          </Box>
+        )}
+
+        {!loadingMessages && messagesLoadError && (
+          <Box
+            sx={{
+              alignSelf: 'center',
+              maxWidth: '90%',
+              px: 1.5,
+              py: 1,
+              mb: 1,
+              borderRadius: 1,
+              bgcolor: 'rgba(245,158,11,0.12)',
+              border: '1px solid rgba(245,158,11,0.35)',
+              fontSize: 11,
+              color: '#92400e',
+              lineHeight: 1.45,
+            }}
+          >
+            {messagesLoadError}
+          </Box>
+        )}
+
+        {!loadingMessages &&
+          messages.filter((m) => m.type !== 'day-separator').length === 0 && (
+            <Box
+              sx={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 1,
+                py: 4,
+                color: T.text3,
+                textAlign: 'center',
+                px: 3,
+              }}
+            >
+              <Typography sx={{ fontSize: 32 }}>📭</Typography>
+              <Typography sx={{ fontSize: 13, fontWeight: 600, color: T.text2 }}>
+                Aucun message dans la base Sojori
+              </Typography>
+              <Typography sx={{ fontSize: 11.5, lineHeight: 1.5, maxWidth: 320 }}>
+                {thread.preview
+                  ? `Aperçu Rental United : « ${thread.preview} »`
+                  : 'Le fil peut apparaître en tête à cause de lastMessageAt (sync RU) sans messages importés.'}
+                {messagesTotal > 0
+                  ? ` (${messagesTotal} en base — vérifie le mapping)`
+                  : ' Lance une sync messages RU pour ce compte.'}
+              </Typography>
+            </Box>
+          )}
+
+        {!loadingMessages &&
+          messages.map((message) => {
           if (message.type === 'system-note') {
             return (
               <Box
@@ -348,7 +418,17 @@ export default function ConversationThread({
                   my: 0.75,
                 }}
               >
-                {message.text}
+                <Typography
+                  component="div"
+                  sx={{
+                    fontSize: 'inherit',
+                    color: 'inherit',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {message.text}
+                </Typography>
               </Box>
             );
           }
@@ -431,7 +511,18 @@ export default function ConversationThread({
                     ✨ SOJORI AI
                   </Typography>
                 )}
-                {message.text}
+                <Typography
+                  component="div"
+                  sx={{
+                    fontSize: 'inherit',
+                    color: 'inherit',
+                    lineHeight: 'inherit',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {message.text}
+                </Typography>
               </Box>
               <Stack
                 direction="row"

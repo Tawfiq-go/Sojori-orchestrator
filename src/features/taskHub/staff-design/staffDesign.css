@@ -263,14 +263,27 @@
   display: flex;
   gap: 3px;
   margin-left: auto;
+  flex-shrink: 0;
 }
 .so-staff-root .staff-card .actions button {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  background: var(--bg2);
-  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--pt2);
+  border: 1px solid var(--pt2);
+  color: var(--pd);
   cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.so-staff-root .staff-card .actions button.edit-btn:hover {
+  background: var(--p);
+  border-color: var(--p);
+  color: #fff;
 }
 .so-staff-root .staff-card .tasks {
   display: flex;
@@ -597,7 +610,20 @@
   background: var(--bg2);
   display: flex;
   gap: 8px;
+  align-items: center;
   justify-content: flex-end;
+}
+.so-staff-root .drawer-foot-start {
+  margin-right: auto;
+}
+.so-staff-root .btn-danger {
+  background: #fff5f5;
+  border: 1px solid rgba(200, 30, 30, 0.35);
+  color: #c81e1e;
+}
+.so-staff-root .btn-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .so-staff-root .btn {
   padding: 8px 14px;

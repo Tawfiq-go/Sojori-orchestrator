@@ -1,6 +1,8 @@
-/** Rôles & permissions — legacy PublicWorker */
-import WorkerPage from '../../features/staff/Worker.page';
+/** Rôles & permissions — Workers dashboard (accès modules) */
+import PublicWorker from '../../features/staff/components/PublicWorker';
 
 export function RolesPermissionsTab() {
-  return <WorkerPage />;
+  return <PublicWorker hidePageHeader embedded />;
 }
+
+export default RolesPermissionsTab;

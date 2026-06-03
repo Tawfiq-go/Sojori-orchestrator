@@ -27,11 +27,10 @@ import { OrchestrationTimelineSimulation } from '../features/taskHub/taskConfig/
 import '../features/taskHub/staff-design/orchDesign.css';
 import * as fulltaskApi from '../services/fulltaskApi';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
-import OwnerConfigScopeBar from '../features/taskHub/components/OwnerConfigScopeBar';
+import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
 import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
 import tasksService from '../services/fulltaskTasksService';
 import { orchestrationSummary } from '../utils/fulltaskMappers';
-import ApplyAdminConfigToOwnersButton from '../components/ApplyAdminConfigToOwnersButton';
 import { ORCHESTRATION_ADMIN_OWNER_ID } from '../constants/orchestrationAdmin';
 
 import {
@@ -60,45 +59,33 @@ function normalizeRows(apiRows: Record<string, unknown>[]): TaskConfigRow[] {
   });
 }
 
-export default function TasksConfigFulltaskPage() {
+function TasksConfigFulltaskPageInner() {
   const ownerScope = useFulltaskConfigOwner();
   const { ownerKey, ownerDisplayName, ownerKeyDetail, isAdminTemplate, showOwnerPicker } = ownerScope;
 
-  const [listingId, setListingId] = useState('');
-  const [listings, setListings] = useState<{ _id: string; name: string }[]>([]);
   const [rows, setRows] = useState<TaskConfigRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingType, setSavingType] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<string | null>(null);
 
-  const loadListings = useCallback(async () => {
-    try {
-      const svc = tasksService as { getListings: () => Promise<{ _id: string; name: string }[]> };
-      const list = await svc.getListings();
-      setListings(list);
-    } catch {
-      setListings([]);
-    }
-  }, []);
-
   const load = useCallback(async () => {
     setLoading(true);
+    console.log('LOAD START - ownerKey:', ownerKey);
     try {
-      const params = listingId ? { listingId } : {};
-      const cfgRes = await fulltaskApi.getTaskConfigs(ownerKey, params);
-      setRows(normalizeRows((cfgRes?.data as Record<string, unknown>[]) || []));
+      const cfgRes = await fulltaskApi.getTaskConfigs(ownerKey, {});
+      console.log('LOAD RESPONSE:', cfgRes);
+      const normalized = normalizeRows((cfgRes?.data as Record<string, unknown>[]) || []);
+      console.log('NORMALIZED ROWS:', normalized);
+      setRows(normalized);
     } catch (e: unknown) {
       const err = e as { message?: string };
+      console.error('LOAD ERROR:', err);
       toast.error(err.message || 'Erreur config');
       setRows(normalizeRows([]));
     } finally {
       setLoading(false);
     }
-  }, [ownerKey, listingId]);
-
-  useEffect(() => {
-    void loadListings();
-  }, [loadListings]);
+  }, [ownerKey]);
 
   useEffect(() => {
     void load();
@@ -111,96 +98,84 @@ export default function TasksConfigFulltaskPage() {
     try {
       const row = prev.find((r) => r.type === type);
       if (!row) return;
-      await fulltaskApi.upsertTaskTypeConfig(
+
+      console.log('=== TOGGLE START ===');
+      console.log('ownerKey:', ownerKey);
+      console.log('type:', type);
+      console.log('field:', field);
+      console.log('new value:', value);
+
+      const result = await fulltaskApi.upsertTaskTypeConfig(
         ownerKey,
         type,
         { type, requiresClientAction: value },
-        listingId || undefined,
+        undefined,
       );
+
+      console.log('SAVE RESULT:', result);
+
       toast.success('Config mise à jour');
+
+      console.log('RELOADING...');
       await load();
+      console.log('=== TOGGLE END ===');
     } catch (e: unknown) {
       setRows(prev);
       const err = e as { response?: { data?: { error?: string } }; message?: string };
+      console.error('TOGGLE ERROR:', err);
       toast.error(err.response?.data?.error || err.message || 'Erreur enregistrement');
     } finally {
       setSavingType(null);
     }
   };
 
-  const handleApplyAdminToOwners = async (
-    mode: 'current' | 'all',
-    targetOwnerId?: string,
-  ) => {
-    // Charger la config Admin
-    const adminConfig = await fulltaskApi.getTaskConfigs(ORCHESTRATION_ADMIN_OWNER_ID, {});
-
-    if (mode === 'current' && targetOwnerId) {
-      // Appliquer à l'Owner sélectionné
-      await fulltaskApi.copyTaskConfigToOwner(ORCHESTRATION_ADMIN_OWNER_ID, targetOwnerId);
-    } else if (mode === 'all') {
-      // Appliquer à tous les Owners
-      await fulltaskApi.copyTaskConfigToAllOwners(ORCHESTRATION_ADMIN_OWNER_ID);
+  const handleSyncToOwner = async (targetOwnerId: string, targetOwnerName: string) => {
+    console.log('=== SYNC TO OWNER START ===');
+    console.log('sourceOwnerId (ADMIN):', ORCHESTRATION_ADMIN_OWNER_ID);
+    console.log('targetOwnerId:', targetOwnerId);
+    console.log('targetOwnerName:', targetOwnerName);
+    try {
+      const result = await fulltaskApi.copyTaskConfigToOwner(ORCHESTRATION_ADMIN_OWNER_ID, targetOwnerId);
+      console.log('SYNC RESULT:', result);
+      toast.success(`Config synchronisée vers ${targetOwnerName}`);
+      await load();
+      console.log('=== SYNC TO OWNER END ===');
+    } catch (e: unknown) {
+      const err = e as { message?: string; response?: { data?: { error?: string } } };
+      console.error('SYNC ERROR:', err);
+      toast.error(err.response?.data?.error || err.message || 'Erreur synchronisation');
     }
+  };
 
-    // Recharger pour afficher les changements
-    await load();
+  const handleSyncToAllOwners = async () => {
+    console.log('=== SYNC TO ALL START ===');
+    console.log('sourceOwnerId (ADMIN):', ORCHESTRATION_ADMIN_OWNER_ID);
+    try {
+      const result = await fulltaskApi.copyTaskConfigToAllOwners(ORCHESTRATION_ADMIN_OWNER_ID);
+      console.log('SYNC ALL RESULT:', result);
+      toast.success('Config synchronisée vers tous les PMs');
+      await load();
+      console.log('=== SYNC TO ALL END ===');
+    } catch (e: unknown) {
+      const err = e as { message?: string; response?: { data?: { error?: string } } };
+      console.error('SYNC ALL ERROR:', err);
+      toast.error(err.response?.data?.error || err.message || 'Erreur synchronisation');
+    }
   };
 
   return (
-    <AdminOwnerScopeLayout showTopBar={false}>
     <DashboardWrapper breadcrumb={['taskNew', 'Task config']}>
       <Box sx={{ p: 3, bgcolor: '#f6f5f1', minHeight: 'calc(100vh - 60px)' }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
           <Typography variant="h5" fontWeight={800} sx={{ letterSpacing: '-0.02em' }}>
             Task config
           </Typography>
-          {showOwnerPicker && (
-            <ApplyAdminConfigToOwnersButton
-              currentOwnerId={isAdminTemplate ? null : ownerKey}
-              currentOwnerName={isAdminTemplate ? undefined : ownerDisplayName}
-              isAdminTemplate={isAdminTemplate}
-              onApply={handleApplyAdminToOwners}
-              disabled={loading}
-            />
-          )}
         </Stack>
-        <OwnerConfigScopeBar {...ownerScope} />
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          <strong>Action client</strong> : pas de tâche dans /tasks à la création résa — créée à la
-          première action voyageur. <strong>Support / conciergerie / transport</strong> : jamais auto,
-          uniquement demande explicite. Relances et staff :{' '}
-          <Link component={RouterLink} to="/tasks/orchestration-config" fontWeight={700}>
-            Orchestration config
-          </Link>
-          {' '}
-          pour <strong>{ownerDisplayName}</strong>
-          {listingId ? ` · listing ${listingId}` : ' · portée globale PM'}
-          <Typography
-            component="span"
-            variant="caption"
-            display="block"
-            sx={{ mt: 0.5, fontFamily: 'Geist Mono, ui-monospace, monospace', color: 'text.secondary' }}
-          >
-            Clé API : {ownerKeyDetail}
-          </Typography>
-        </Typography>
-
-        <FormControl size="small" sx={{ minWidth: 220, mb: 2 }}>
-          <InputLabel>Portée</InputLabel>
-          <Select
-            label="Portée"
-            value={listingId}
-            onChange={(e) => setListingId(e.target.value)}
-          >
-            <MenuItem value="">Globale (PM)</MenuItem>
-            {listings.map((l) => (
-              <MenuItem key={l._id} value={l._id}>
-                {l.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <OwnerConfigScopeBarWithSync
+          {...ownerScope}
+          onSyncToOwner={handleSyncToOwner}
+          onSyncToAllOwners={handleSyncToAllOwners}
+        />
 
         {loading ? (
           <CircularProgress />
@@ -308,6 +283,13 @@ export default function TasksConfigFulltaskPage() {
         )}
       </Box>
     </DashboardWrapper>
+  );
+}
+
+export default function TasksConfigFulltaskPage() {
+  return (
+    <AdminOwnerScopeLayout showTopBar={false}>
+      <TasksConfigFulltaskPageInner />
     </AdminOwnerScopeLayout>
   );
 }

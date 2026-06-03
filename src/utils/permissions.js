@@ -29,6 +29,20 @@ const isPathMatch = (tpl, path) => {
 };
 const findRouteByPath = (path) => {
     const normalized = normalize(path);
+    // Hub Équipe (URLs migrées) → routes legacy permissions
+    if (normalized === 'admin/equipe/owners' || normalized.startsWith('admin/equipe/owners/')) {
+        return ROUTE_INDEX.find((r) => r.route === 'admin/User/owner');
+    }
+    if (normalized === 'admin/equipe') {
+        const tab = new URLSearchParams(window.location.search || '').get('tab') || 'worker';
+        const keyByTab = {
+            list: 'admin/User/register-owner',
+            worker: 'admin/User/worker',
+            groups: 'admin/User/groups',
+        };
+        const key = keyByTab[String(tab).toLowerCase()] || 'admin/User/worker';
+        return ROUTE_INDEX.find((r) => r.key === key) || ROUTE_INDEX.find((r) => r.route === 'admin/User/team');
+    }
     // Hub CRM : une seule route pathname, droits selon ?tab=
     if (normalized === 'admin/crm') {
         const tab = new URLSearchParams(window.location.search || '').get('tab') || 'demandes';

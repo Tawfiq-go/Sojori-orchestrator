@@ -14,6 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import { T, sxInput } from './menuTheme';
+import { resolveAvailabilityType } from './menuAvailabilityNormalize';
 
 const defaultFrom = { unit: 'days', value: 7, moment: 'before', event: 'checkin' };
 const defaultTo = { unit: 'days', value: 1, moment: 'before', event: 'checkin' };
@@ -105,7 +106,7 @@ function BoundaryRow({ title, boundary, onUnit, onMoment, onEvent, onValue, mome
 }
 
 const SmartAvailabilitySelector = ({ value = { type: 'always' }, onChange }) => {
-  const type = value?.type || 'always';
+  const type = resolveAvailabilityType(value);
   const requiresWindow = type === 'time_window' || type === 'conditional_and_time';
   const fromBoundary = useMemo(() => ensureBoundary(value.from, defaultFrom), [value.from]);
   const toBoundary = useMemo(() => ensureBoundary(value.to, defaultTo), [value.to]);
@@ -139,7 +140,7 @@ const SmartAvailabilitySelector = ({ value = { type: 'always' }, onChange }) => 
     } else if (nextType === 'conditional_and_time') {
       onChange({
         type: 'conditional_and_time',
-        requires: value.requires || 'E_completed',
+        requires: value.requires || 'E_completed,D1_completed',
         from: { ...fromBoundary, reference: buildReference(fromBoundary.moment, fromBoundary.event) },
         to: { ...toBoundary, reference: buildReference(toBoundary.moment, toBoundary.event) },
       });

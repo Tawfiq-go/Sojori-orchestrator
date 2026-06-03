@@ -2,12 +2,14 @@ import axios from 'axios';
 import { AUTH_CONFIG } from 'config/auth.config';
 import { MICROSERVICE_BASE_URL } from 'config/backendServer.config';
 
+const TEAM_API = MICROSERVICE_BASE_URL.SRV_FULLTASK;
+
 /** Sans intercepteurs : login + register avec le JWT du compte élevé uniquement (ne touche pas à la session courante). */
 const ownerCreateAuthClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 export function CreateStaff(data) {
-  return axios.post(`${MICROSERVICE_BASE_URL.SRV_TASK}/staff-simplified`, data);
+  return axios.post(`${TEAM_API}/staff-simplified`, data);
 }
 // export function deleteStaff(clerkId) {
 //     return axios.delete(`${MICROSERVICE_BASE_URL.SRV_TASK}/user/delete-user/${clerkId}`);
@@ -18,7 +20,7 @@ export function updateStaff(id, data) {
 }
 export function deleteStaff(staffCode) {
   // Use staff-simplified endpoint with staffCode
-  return axios.delete(`${MICROSERVICE_BASE_URL.SRV_TASK}/staff-simplified/${staffCode}`);
+  return axios.delete(`${TEAM_API}/staff-simplified/${staffCode}`);
 }
 export function getCurrencies() {
   return axios.get(`${MICROSERVICE_BASE_URL.SRV_ADMIN}/currency?page=0&limit=20&paged=false&search_text=&forTranslate=false`);
@@ -296,7 +298,7 @@ export function getAdminWhatsapp(params = {}) {
   if (access && Array.isArray(access) && access.length > 0) {
     access.forEach(accessType => queryParams.append('access[]', accessType));
   }
-  return axios.get(`${MICROSERVICE_BASE_URL.SRV_TASK}/admin-whatsapp/get?${queryParams.toString()}`).then(response => {
+  return axios.get(`${TEAM_API}/admin-whatsapp/get?${queryParams.toString()}`).then(response => {
     if (!response.data) {
       throw new Error('No data received from server');
     }
@@ -306,14 +308,14 @@ export function getAdminWhatsapp(params = {}) {
   });
 }
 export function CreateAdminWhatsapp(data) {
-  return axios.post(`${MICROSERVICE_BASE_URL.SRV_TASK}/admin-whatsapp/create`, data);
+  return axios.post(`${TEAM_API}/admin-whatsapp/create`, data);
 }
 export function updateAdminWhatsapp(id, data) {
-  return axios.put(`${MICROSERVICE_BASE_URL.SRV_TASK}/admin-whatsapp/update/${id}`, data);
+  return axios.put(`${TEAM_API}/admin-whatsapp/update/${id}`, data);
 }
 /** Récupère un admin WhatsApp par id (pour afficher les permissions à jour dans le modal). */
 export function getAdminWhatsappById(id) {
-  return axios.get(`${MICROSERVICE_BASE_URL.SRV_TASK}/admin-whatsapp/get`, {
+  return axios.get(`${TEAM_API}/admin-whatsapp/get`, {
     params: {
       id,
       paged: true,
@@ -323,7 +325,7 @@ export function getAdminWhatsappById(id) {
   }).then(res => res.data?.data?.[0] ?? null);
 }
 export function deleteAdminWhatsapp(id) {
-  return axios.delete(`${MICROSERVICE_BASE_URL.SRV_TASK}/admin-whatsapp/delete/${id}`);
+  return axios.delete(`${TEAM_API}/admin-whatsapp/delete/${id}`);
 }
 // -------------------------- end admin Whatsapp
 // -------------------------- start staff Planning
@@ -358,7 +360,7 @@ export function getStaffPlannig(params = {}) {
   if (cityIds && Array.isArray(cityIds) && cityIds.length > 0) {
     cityIds.forEach(cid => queryParams.append('cityIds', cid));
   }
-  return axios.get(`${MICROSERVICE_BASE_URL.SRV_TASK}/staff-simplified?${queryParams.toString()}`);
+  return axios.get(`${TEAM_API}/staff-simplified?${queryParams.toString()}`);
 }
 export function updateStaffPlannig(payload) {
   return axios.put(`${MICROSERVICE_BASE_URL.SRV_TASK}/staff/update-staff-planning`, payload);
@@ -806,7 +808,7 @@ export function getAccounById(id) {
   return axios.get(`${MICROSERVICE_BASE_URL.SRV_USER}/user/get-account-by-id/${id}`);
 }
 export function getNotificationEvent() {
-  return axios.get(`${MICROSERVICE_BASE_URL.SRV_TASK}/notification/notification-events`);
+  return axios.get(`${TEAM_API}/notification/notification-events`);
 }
 export function getGroups(ownerId) {
   const qs = ownerId != null && ownerId !== '' ? `?ownerId=${encodeURIComponent(ownerId)}` : '';

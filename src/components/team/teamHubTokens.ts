@@ -1,0 +1,21 @@
+/** Tokens « Atelier 2026 » — alignés ReservationsPage + StaffPageView */
+export const TEAM_T = {
+  primary: '#b8851a',
+  primaryDeep: '#876119',
+  primarySoft: '#e6c46a',
+  primaryTint: 'rgba(184,133,26,0.10)',
+  bg0: '#f6f5f1',
+  bg1: '#ffffff',
+  bg2: '#fafaf7',
+  bg3: '#f0eee8',
+  text: '#14110a',
+  text2: '#55504a',
+  text3: '#7a756c',
+  text4: '#a8a299',
+  border: 'rgba(20,17,10,0.07)',
+  borderStrong: 'rgba(20,17,10,0.14)',
+  success: '#0a8f5e',
+  warning: '#c46506',
+  error: '#c81e1e',
+  info: '#0673b3',
+} as const;

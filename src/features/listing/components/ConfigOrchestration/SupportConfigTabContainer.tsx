@@ -63,9 +63,16 @@ function mapDesignToApi(config: SupportConfig) {
         en: cat.label.en || cat.label.fr,
         ar: cat.label.ar || '',
       },
-      description: cat.description
-        ? { fr: cat.description.fr, en: cat.description.en || cat.description.fr, ar: '' }
-        : undefined,
+      description: (() => {
+        const descFr = (cat.description?.fr ?? '').trim();
+        const descEn = (cat.description?.en ?? cat.label.en ?? cat.label.fr ?? '').trim();
+        if (!descFr && !descEn) return undefined;
+        return {
+          fr: descFr || cat.label.fr,
+          en: descEn || cat.label.fr,
+          ar: cat.label.ar || '',
+        };
+      })(),
       icon: cat.icon,
       displayOrder: cat.order ?? i,
       priority: cat.defaultUrgency as SP,

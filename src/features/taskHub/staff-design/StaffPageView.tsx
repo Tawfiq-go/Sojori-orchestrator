@@ -75,8 +75,8 @@ export default function StaffPageView({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Staff>(emptyStaff());
-  const [readmeOpen, setReadmeOpen] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const staff = useMemo(() => {
     if (staffProp.length > 0) return staffProp;
@@ -156,6 +156,21 @@ export default function StaffPageView({
     }
   };
 
+  const handleDelete = async () => {
+    if (!editingId || !onDelete) return;
+    const label = form.fullName?.trim() || 'ce membre';
+    if (!window.confirm(`Supprimer ${label} ? Cette action est irréversible.`)) return;
+    setDeleting(true);
+    try {
+      await onDelete(editingId);
+      setDrawerOpen(false);
+      setEditingId(null);
+      setSelectedId(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   useEffect(() => {
     if (!drawerOpen && selectedId) {
       const still = staff.find((s) => s._id === selectedId);
@@ -183,41 +198,6 @@ export default function StaffPageView({
           </div>
         </div>
       </div>
-
-      {readmeOpen && (
-        <div className="readme">
-          <div className="ic">📖</div>
-          <div className="body" style={{ flex: 1 }}>
-            <h3>
-              Pour mes agents · contenu de cette section <span className="pill">LISEZ-MOI</span>
-            </h3>
-            <div className="desc">
-              Cette page configure <b>QUI</b> peut faire <b>QUOI</b>. Aucun impact WhatsApp voyageur
-              · purement opérationnel.
-            </div>
-            <ul>
-              <li>
-                <b>Contrat</b> · Salarié = pas de prix · Freelance = tarifs par type
-              </li>
-              <li>
-                <b>Tâches autorisées</b> · multi-sélection
-              </li>
-              <li>
-                <b>Listings rattachés</b> · biens couverts
-              </li>
-              <li>
-                <b>Max tâches/jour</b> · limite quotidienne
-              </li>
-              <li>
-                <b>Admin</b> · escalades + auto-accept
-              </li>
-            </ul>
-          </div>
-          <button type="button" className="close" onClick={() => setReadmeOpen(false)}>
-            ✕
-          </button>
-        </div>
-      )}
 
       <div className="list-h">
         <h2>
@@ -284,17 +264,6 @@ export default function StaffPageView({
                     >
                       ✏
                     </button>
-                    {onDelete && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void onDelete(s._id);
-                        }}
-                      >
-                        🗑
-                      </button>
-                    )}
                   </div>
                 </div>
                 <div className="tasks">
@@ -524,9 +493,9 @@ export default function StaffPageView({
             <div className="form-section full">
               <div className="form-section-h">Listings rattachés · multi-sélection</div>
               <div className="pill-group">
-                {listings.map((l) => (
+                {listings.map((l, idx) => (
                   <button
-                    key={l.id}
+                    key={l.id || `listing-${idx}`}
                     type="button"
                     className={`pill-toggle${
                       form.allowedListingIds.includes(l.id) ? ' on' : ''
@@ -646,10 +615,27 @@ export default function StaffPageView({
           </div>
 
           <div className="drawer-foot">
-            <button type="button" className="btn btn-ghost" onClick={() => setDrawerOpen(false)}>
+            <div className="drawer-foot-start">
+              {editingId && onDelete ? (
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={saving || deleting}
+                  onClick={() => void handleDelete()}
+                >
+                  {deleting ? 'Suppression…' : 'Supprimer'}
+                </button>
+              ) : null}
+            </div>
+            <button type="button" className="btn btn-ghost" disabled={deleting} onClick={() => setDrawerOpen(false)}>
               Annuler
             </button>
-            <button type="button" className="btn btn-prim" disabled={saving} onClick={() => void handleSave()}>
+            <button
+              type="button"
+              className="btn btn-prim"
+              disabled={saving || deleting}
+              onClick={() => void handleSave()}
+            >
               Enregistrer ⚡
             </button>
           </div>

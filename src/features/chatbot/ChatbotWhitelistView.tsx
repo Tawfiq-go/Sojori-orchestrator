@@ -31,6 +31,7 @@ import * as fullchatbotApi from '../../services/fullchatbotApi';
 import listingsService from '../../services/listingsService';
 import { CHATBOT_T as T } from './chatbotTokens';
 import WhatsappConfigCell from './WhatsappConfigCell';
+import WhitelistLanguageCell from './WhitelistLanguageCell';
 import {
   interpretMenuOptionsForStay,
   type GuestContextLike,
@@ -47,11 +48,13 @@ export type WhitelistRow = {
   guestName?: string;
   phoneOta?: string;
   guestLanguage?: string;
+  whatsappSelectedLanguage?: string | null;
   status?: string;
   hasCommunicated?: boolean;
   checkIn?: string;
   checkOut?: Date | string;
   adults?: number;
+  createdAt?: string | Date;
 };
 
 type QuickFilter = 'contacted' | 'pending' | 'cancelled' | 'arr7' | null;
@@ -68,6 +71,12 @@ function waMeta(row: WhitelistRow) {
     return { label: 'Contacté', bg: 'rgba(10,143,94,0.12)', color: T.success };
   }
   return { label: 'En attente', bg: 'rgba(196,101,6,0.12)', color: T.warning };
+}
+
+function formatCreatedAt(value?: string | Date | null) {
+  if (!value) return '—';
+  const m = moment(value);
+  return m.isValid() ? m.format('DD MMM YY HH:mm:ss') : '—';
 }
 
 function statusMeta(status?: string) {
@@ -265,12 +274,14 @@ export default function ChatbotWhitelistView() {
             placeholder="Rechercher voyageur, SJ, téléphone…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ fontSize: 18, color: T.text3 }} />
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: 18, color: T.text3 }} />
+                  </InputAdornment>
+                ),
+              },
             }}
             sx={{ flex: 1, minWidth: 180, maxWidth: 360 }}
           />
@@ -471,6 +482,7 @@ function WhitelistTable({
 }) {
   const headers = [
     'Réservation',
+    'Création',
     'Voyageur',
     'Téléphone',
     'Langue',
@@ -486,7 +498,7 @@ function WhitelistTable({
   return (
     <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
       <Box sx={{ overflowX: 'auto' }}>
-        <Box component="table" sx={{ width: '100%', minWidth: 1280, borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <Box component="table" sx={{ width: '100%', minWidth: 1380, borderCollapse: 'collapse', fontSize: 12.5 }}>
           <Box component="thead">
             <Box component="tr" sx={{ bgcolor: T.bg2 }}>
               {headers.map((h) => (
@@ -541,6 +553,11 @@ function WhitelistTable({
                     </Typography>
                   </Box>
                   <Box component="td">
+                    <Typography sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 11.5, color: T.text2, whiteSpace: 'nowrap' }}>
+                      {formatCreatedAt(r.createdAt)}
+                    </Typography>
+                  </Box>
+                  <Box component="td">
                     <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{r.guestName || '—'}</Typography>
                   </Box>
                   <Box component="td">
@@ -549,9 +566,10 @@ function WhitelistTable({
                     </Typography>
                   </Box>
                   <Box component="td">
-                    <Typography sx={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase' }}>
-                      {String(r.guestLanguage ?? 'fr').slice(0, 2)}
-                    </Typography>
+                    <WhitelistLanguageCell
+                      guestLanguage={r.guestLanguage}
+                      whatsappSelectedLanguage={r.whatsappSelectedLanguage}
+                    />
                   </Box>
                   <Box component="td">
                     <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text }} noWrap>
@@ -602,7 +620,7 @@ function WhitelistTable({
 function WhitelistMobileCard({
   row,
   listingName,
-  waSummary,
+  waInterpret,
   waLoading,
   onOpen,
 }: {
@@ -632,10 +650,20 @@ function WhitelistMobileCard({
           <Chip label={wa.label} size="small" sx={{ bgcolor: wa.bg, color: wa.color, fontWeight: 600, fontSize: 10.5, height: 20 }} />
         </Stack>
         <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 0.5 }}>{row.guestName || 'Voyageur'}</Typography>
+        <Typography sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 11, color: T.text3, mb: 0.5 }}>
+          Créé {formatCreatedAt(row.createdAt)}
+        </Typography>
         {listingName && (
           <Typography sx={{ fontSize: 12, fontWeight: 600, color: T.text2, mb: 0.5 }}>{listingName}</Typography>
         )}
-        <Typography sx={{ fontSize: 12, color: T.text2, mb: 1 }}>{row.phoneOta}</Typography>
+        <Typography sx={{ fontSize: 12, color: T.text2, mb: 0.75 }}>{row.phoneOta}</Typography>
+        <Box sx={{ mb: 1 }}>
+          <WhitelistLanguageCell
+            guestLanguage={row.guestLanguage}
+            whatsappSelectedLanguage={row.whatsappSelectedLanguage}
+            compact
+          />
+        </Box>
         <Box sx={{ mb: 1 }} onClick={(e) => e.stopPropagation()}>
           <WhatsappConfigCell
             options={waInterpret?.options ?? []}
