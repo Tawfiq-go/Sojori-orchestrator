@@ -3,6 +3,7 @@ import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useSelector } from 'react-redux';
 import { updateOwner, updateOwnerWhatsappAiTier, getCities, getCurrencies } from '../services/serverApi.task';
+import * as fullchatbotApi from '../../../services/fullchatbotApi';
 import { useTranslation } from 'react-i18next';
 import { hasAdminAccess } from '../../../utils/rbac.utils';
 import { WHATSAPP_AI_TIER_OPTIONS, tierOptionDropdownLabel } from '../../../constants/whatsappAiTier';
@@ -132,10 +133,16 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
         let updatedAccount = response.data.account;
         if (isPlatformAdmin && values.whatsappConversationalTier) {
           try {
-            await updateOwnerWhatsappAiTier(owner._id, values.whatsappConversationalTier);
+            const tier = Number(values.whatsappConversationalTier);
+            await updateOwnerWhatsappAiTier(owner._id, tier);
+            try {
+              await fullchatbotApi.syncOwnerModelToWhitelist(owner._id, tier);
+            } catch (syncErr) {
+              console.warn('[UpdateOwner] whitelist model sync', syncErr);
+            }
             updatedAccount = {
               ...updatedAccount,
-              whatsappConversationalTier: Number(values.whatsappConversationalTier),
+              whatsappConversationalTier: tier,
             };
           } catch (tierErr) {
             setErrors({
@@ -401,8 +408,8 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
                     <div className="form-section-h">IA WhatsApp invités</div>
                     <div className="owner-form-hint" style={{ marginBottom: 10 }}>
                       Modèle Claude pour les réponses automatiques aux voyageurs (du moins cher au plus
-                      capable). S&apos;applique aux <b>nouveaux</b> séjours whitelist ; les séjours en cours
-                      gardent le tier déjà enregistré.
+                      capable). Met à jour tous les séjours whitelist de ce propriétaire (sauf override par
+                      séjour dans Mémoire bot).
                     </div>
                     <div className="field">
                       <div className="field-label">Modèle Claude</div>

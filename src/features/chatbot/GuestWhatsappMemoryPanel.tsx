@@ -1,8 +1,28 @@
-import { Box, Chip, Stack, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
+import {
+  Box,
+  Button,
+  Chip,
+  FormControl,
+  MenuItem,
+  Select,
+  Stack,
+  Tooltip,
+  Typography,
+  type SelectChangeEvent,
+} from '@mui/material';
+import * as fullchatbotApi from '../../services/fullchatbotApi';
+import { WHATSAPP_AI_TIER_OPTIONS, shortLabelForWhatsappAiTier } from '../../constants/whatsappAiTier';
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import { CHATBOT_T as T } from './chatbotTokens';
 import {
+  type ConversationExchangeLike,
   type ConversationPreviewLike,
   type GuestContextWhatsappLike,
+  resolveMessageOrigin,
   type GuestWhatsappFlowEntry,
   type GuestWhatsappRequestEntry,
   flowDisplayLabel,
@@ -10,6 +30,121 @@ import {
   formatRelativeTimeFr,
   requestDisplayLabel,
 } from './guestWhatsappMemory';
+
+export type WhitelistAiModelLike = {
+  effectiveTier: number;
+  effectiveModelId: string;
+  source: 'whitelist' | 'whitelist_override' | 'owner';
+  ownerTier: number;
+  whitelistOverride: boolean;
+  whitelistStoredTier: number | null;
+};
+
+function WhitelistAiModelControl({
+  reservationId,
+  aiModel,
+  onUpdated,
+}: {
+  reservationId: string;
+  aiModel?: WhitelistAiModelLike | null;
+  onUpdated?: () => void;
+}) {
+  const [tier, setTier] = useState<number>(aiModel?.effectiveTier ?? 2);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (aiModel?.effectiveTier) setTier(aiModel.effectiveTier);
+  }, [aiModel?.effectiveTier, aiModel?.source]);
+
+  const effectiveTier = aiModel?.effectiveTier ?? tier;
+  const sourceLabel =
+    aiModel?.source === 'whitelist_override'
+      ? 'Override séjour (whitelist)'
+      : aiModel?.source === 'whitelist'
+        ? 'Whitelist (aligné propriétaire ou snapshot)'
+        : `Propriétaire direct (niveau ${aiModel?.ownerTier ?? '—'})`;
+
+  const saveOverride = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await fullchatbotApi.patchWhitelistClaudeModelTier(reservationId, { tier });
+      onUpdated?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetToOwner = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await fullchatbotApi.patchWhitelistClaudeModelTier(reservationId, { useOwnerDefault: true });
+      onUpdated?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Box
+      sx={{
+        mt: 1.5,
+        p: 1.25,
+        borderRadius: 1.25,
+        border: `1px solid ${T.border}`,
+        bgcolor: T.bg1,
+      }}
+    >
+      <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        Modèle IA (ce voyageur)
+      </Typography>
+      <Typography sx={{ fontSize: 12, color: T.text2, mt: 0.5, lineHeight: 1.45 }}>
+        Actif : <b>{aiModel?.effectiveModelId ?? '—'}</b> · {shortLabelForWhatsappAiTier(effectiveTier)} · {sourceLabel}
+      </Typography>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1, alignItems: { sm: 'center' } }}>
+        <FormControl size="small" sx={{ minWidth: 200, flex: 1 }}>
+          <Select
+            value={tier}
+            onChange={(e: SelectChangeEvent<number>) => setTier(Number(e.target.value))}
+            disabled={saving}
+          >
+            {WHATSAPP_AI_TIER_OPTIONS.map((o) => (
+              <MenuItem key={o.tier} value={o.tier}>
+                {o.tier}. {o.label} — {o.modelId}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Button size="small" variant="contained" disabled={saving} onClick={() => void saveOverride()}>
+          Appliquer au séjour
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={saving || !aiModel?.whitelistOverride}
+          onClick={() => void resetToOwner()}
+        >
+          Reprendre niveau propriétaire
+        </Button>
+      </Stack>
+      {error && (
+        <Typography sx={{ fontSize: 11, color: T.error, mt: 0.75 }}>
+          {error}
+        </Typography>
+      )}
+      <Typography sx={{ fontSize: 10, color: T.text4, mt: 0.75, lineHeight: 1.35 }}>
+        Ordre WhatsApp : modèle sur la whitelist (ce séjour) si présent → sinon propriétaire (PM).
+        « Appliquer au séjour » force un override ; « Reprendre niveau propriétaire » resynchronise depuis le PM.
+      </Typography>
+    </Box>
+  );
+}
 
 const OUTCOME_COLOR: Record<string, { bg: string; color: string }> = {
   completed: { bg: 'rgba(10,143,94,0.12)', color: T.success },
@@ -20,7 +155,7 @@ const OUTCOME_COLOR: Record<string, { bg: string; color: string }> = {
 
 function SectionTitle({ children, badge }: { children: string; badge?: string }) {
   return (
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1, mt: 2.5 }}>
+    <Stack direction="row" spacing={1} sx={{ mb: 1, mt: 2.5, alignItems: 'center' }}>
       <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: T.text3, textTransform: 'uppercase' }}>
         {children}
       </Typography>
@@ -174,9 +309,64 @@ function RequestRow({ entry }: { entry: GuestWhatsappRequestEntry }) {
   );
 }
 
-function ChatBubble({ role, content }: { role: 'user' | 'assistant' | 'system'; content: string }) {
-  if (role === 'system') return null;
-  const isUser = role === 'user';
+const ORIGIN_ICON_COLOR: Record<string, string> = {
+  ai_reply: T.primary,
+  ai_routing: T.info,
+  backend: T.text3,
+  menu: T.warning,
+  unknown: T.text4,
+};
+
+function MessageOriginBadge({ exchange }: { exchange: ConversationExchangeLike }) {
+  const origin = resolveMessageOrigin(exchange);
+  if (exchange.role !== 'assistant' || !origin.tooltip) return null;
+
+  const Icon =
+    origin.kind === 'ai_reply'
+      ? SmartToyOutlinedIcon
+      : origin.kind === 'ai_routing'
+        ? AutoAwesomeOutlinedIcon
+        : origin.kind === 'menu'
+          ? MenuBookOutlinedIcon
+          : SettingsOutlinedIcon;
+
+  return (
+    <Tooltip
+      title={
+        <Typography component="span" sx={{ fontSize: 11, whiteSpace: 'pre-line' }}>
+          {origin.tooltip}
+        </Typography>
+      }
+      arrow
+      placement="top"
+    >
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.35,
+          ml: 0.5,
+          px: 0.5,
+          py: 0.15,
+          borderRadius: 0.75,
+          bgcolor: 'rgba(0,0,0,0.04)',
+          cursor: 'help',
+          verticalAlign: 'middle',
+        }}
+      >
+        <Icon sx={{ fontSize: 14, color: ORIGIN_ICON_COLOR[origin.kind] ?? T.text4 }} />
+        <Typography component="span" sx={{ fontSize: 9, fontWeight: 800, color: ORIGIN_ICON_COLOR[origin.kind] }}>
+          {origin.shortLabel}
+        </Typography>
+      </Box>
+    </Tooltip>
+  );
+}
+
+function ChatBubble({ exchange }: { exchange: ConversationExchangeLike }) {
+  if (exchange.role === 'system') return null;
+  const isUser = exchange.role === 'user';
   return (
     <Box sx={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', mb: 0.75 }}>
       <Box
@@ -189,11 +379,14 @@ function ChatBubble({ role, content }: { role: 'user' | 'assistant' | 'system'; 
           border: `1px solid ${T.border}`,
         }}
       >
-        <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: T.text4, textTransform: 'uppercase', mb: 0.25 }}>
-          {isUser ? 'Voyageur' : 'Sojori'}
-        </Typography>
+        <Stack direction="row" sx={{ mb: 0.25, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: T.text4, textTransform: 'uppercase' }}>
+            {isUser ? 'Voyageur' : 'Sojori'}
+          </Typography>
+          {!isUser && <MessageOriginBadge exchange={exchange} />}
+        </Stack>
         <Typography sx={{ fontSize: 12.5, color: T.text, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-          {content.length > 500 ? `${content.slice(0, 500)}…` : content}
+          {exchange.content.length > 500 ? `${exchange.content.slice(0, 500)}…` : exchange.content}
         </Typography>
       </Box>
     </Box>
@@ -204,17 +397,22 @@ export default function GuestWhatsappMemoryPanel({
   whatsapp,
   conversationPreview,
   hasCommunicated,
+  reservationId,
+  aiModel,
+  onAiModelUpdated,
 }: {
   whatsapp?: GuestContextWhatsappLike | null;
   conversationPreview?: ConversationPreviewLike | null;
   hasCommunicated?: boolean;
+  reservationId?: string;
+  aiModel?: WhitelistAiModelLike | null;
+  onAiModelUpdated?: () => void;
 }) {
   const flows = [...(whatsapp?.flowsSent ?? [])].reverse();
   const requests = [...(whatsapp?.requests ?? [])].reverse();
   const topics = whatsapp?.recentIntents ?? [];
   const exchanges = conversationPreview?.recentExchanges ?? [];
   const totalMessages = conversationPreview?.totalMessages ?? 0;
-  const pairCount = conversationPreview?.exchangePairCount ?? 10;
 
   const hasMemory =
     Boolean(whatsapp?.lastUserNeed) ||
@@ -251,6 +449,14 @@ export default function GuestWhatsappMemoryPanel({
         <MemoryStat label="Dernière action OK" value={whatsapp?.lastSuccessfulAction} />
         <MemoryStat label="Dernier échec / abandon" value={whatsapp?.lastFailedAction} empty="Aucun" />
       </Box>
+
+      {reservationId ? (
+        <WhitelistAiModelControl
+          reservationId={reservationId}
+          aiModel={aiModel}
+          onUpdated={onAiModelUpdated}
+        />
+      ) : null}
 
       <SectionTitle badge={flows.length ? String(flows.length) : undefined}>
         Formulaires & flows WhatsApp
@@ -322,10 +528,13 @@ export default function GuestWhatsappMemoryPanel({
           </Typography>
           {exchanges
             .filter((m) => m.role === 'user' || m.role === 'assistant')
-            .slice(-4)
+            .slice(-6)
             .map((m, i) => (
-              <ChatBubble key={i} role={m.role} content={m.content} />
+              <ChatBubble key={`${m.role}-${m.createdAt ?? i}-${i}`} exchange={m} />
             ))}
+          <Typography sx={{ fontSize: 10, color: T.text4, mt: 1, lineHeight: 1.35 }}>
+            Survoler l&apos;icône à côté de Sojori : IA (texte généré), IA→menu (routage seulement), Menu, Backend.
+          </Typography>
         </Box>
       )}
 

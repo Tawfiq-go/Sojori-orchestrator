@@ -39,10 +39,92 @@ export type GuestContextWhatsappLike = {
   updatedAt?: string;
 };
 
+export type ConversationMessageSourceLike = 'ai' | 'orchestrator' | 'backend' | 'menu';
+
 export type ConversationExchangeLike = {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  messageSource?: ConversationMessageSourceLike;
+  llmModel?: string;
+  provider?: 'claude' | 'openai' | 'gemini' | null;
+  aiIntent?: {
+    type?: string;
+    categories?: string[];
+    triggerFlows?: string[];
+  } | null;
+  createdAt?: string;
 };
+
+export type MessageOriginKind = 'ai_reply' | 'ai_routing' | 'backend' | 'menu' | 'unknown';
+
+/** How this assistant line was produced (for admin monitoring). */
+export function resolveMessageOrigin(exchange: ConversationExchangeLike): {
+  kind: MessageOriginKind;
+  tooltip: string;
+  shortLabel: string;
+} {
+  if (exchange.role !== 'assistant') {
+    return { kind: 'unknown', tooltip: '', shortLabel: '' };
+  }
+
+  const model = exchange.llmModel?.trim() || '';
+  const provider = exchange.provider ? String(exchange.provider) : '';
+  const modelLine = model ? (provider ? `${provider} · ${model}` : model) : '';
+
+  if (exchange.messageSource === 'ai' && model) {
+    return {
+      kind: 'ai_reply',
+      tooltip: modelLine
+        ? `Réponse générée par IA\nModèle : ${modelLine}`
+        : 'Réponse générée par IA',
+      shortLabel: 'IA',
+    };
+  }
+
+  if (exchange.messageSource === 'ai' && !model) {
+    return {
+      kind: 'backend',
+      tooltip:
+        'Réponse automatique (template backend, ex. accueil). Pas de modèle LLM — enregistré avant le suivi ou mauvais tag.',
+      shortLabel: 'Backend',
+    };
+  }
+
+  if (model && (exchange.messageSource === 'menu' || exchange.messageSource === 'orchestrator')) {
+    const cats = exchange.aiIntent?.categories?.join(', ');
+    return {
+      kind: 'ai_routing',
+      tooltip: `Catégorisation / routage IA (réponse menu ou flow)${modelLine ? `\nModèle : ${modelLine}` : ''}${cats ? `\nCatégories : ${cats}` : ''}`,
+      shortLabel: 'IA→menu',
+    };
+  }
+
+  if (exchange.messageSource === 'menu') {
+    return {
+      kind: 'menu',
+      tooltip: 'Envoi automatique (menu, flow ou carte) sans texte IA',
+      shortLabel: 'Menu',
+    };
+  }
+
+  if (exchange.messageSource === 'backend' || exchange.messageSource === 'orchestrator') {
+    return {
+      kind: 'backend',
+      tooltip: 'Réponse backend (règles, mot-clé, fallback)',
+      shortLabel: 'Backend',
+    };
+  }
+
+  if (model) {
+    return {
+      kind: 'ai_reply',
+      tooltip: `IA (modèle enregistré)${modelLine ? `\n${modelLine}` : ''}`,
+      shortLabel: 'IA',
+    };
+  }
+
+  return { kind: 'unknown', tooltip: 'Origine non enregistrée (message ancien)', shortLabel: '?' };
+}
 
 export type ConversationPreviewLike = {
   totalMessages: number;
