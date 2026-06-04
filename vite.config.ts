@@ -44,14 +44,35 @@ function adminServiceProxy(
   }
 }
 
+/** Proxy monitoring sans Origin (srv-logs-proxy CORS strict) — doit être avant le catch-all /api */
+const monitoringDevProxy = {
+  '/api/monitoring': {
+    target: devProxyTarget,
+    changeOrigin: true,
+    secure: false,
+    timeout: 180_000,
+    proxyTimeout: 180_000,
+    configure: (proxy: import('http-proxy').ProxyServer) => {
+      proxy.on('proxyReq', (proxyReq) => {
+        proxyReq.removeHeader('origin')
+        proxyReq.removeHeader('referer')
+      })
+    },
+  },
+} as const
+
 /** Proxy API dev — évite les appels relatifs vers 127.0.0.1:4174 (404 Not Found App). */
 const apiDevProxy = {
   ...adminServiceProxy('fulltask', fulltaskTarget, '4015'),
   ...adminServiceProxy('fullchatbot', fullchatbotTarget, '4016'),
+  ...monitoringDevProxy,
   '/api': {
     target: devProxyTarget,
     changeOrigin: true,
     secure: false,
+    /** create résa + calendrier peuvent dépasser 60s (ingress dev) */
+    timeout: 180_000,
+    proxyTimeout: 180_000,
   },
 } as const
 

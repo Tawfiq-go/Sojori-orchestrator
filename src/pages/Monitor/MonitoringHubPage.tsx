@@ -10,6 +10,7 @@ import RabbitMQPage from './RabbitMQPage';
 import WhatsAppMonitoringPage from './WhatsAppMonitoringPage';
 import AIMonitoringPage from './AIMonitoringPage';
 import InfrastructureMonitoringPage from './InfrastructureMonitoringPage';
+import ReservationSyncMonitorTab from './ReservationSyncMonitorTab';
 
 const TAB_OPTIONS = [
   { value: 'Summary', label: '📊 Summary' },
@@ -19,6 +20,7 @@ const TAB_OPTIONS = [
   { value: 'WhatsApp', label: '💬 WhatsApp' },
   { value: 'AI', label: '🤖 IA' },
   { value: 'Infrastructure', label: '🏗️ Infra' },
+  { value: 'ReservationSync', label: '🔄 Sync résa' },
 ] as const;
 
 type MonitorTab = (typeof TAB_OPTIONS)[number]['value'];
@@ -34,6 +36,7 @@ const TAB_BY_LOWER: Record<string, MonitorTab> = {
   whatsapp: 'WhatsApp',
   ai: 'AI',
   infrastructure: 'Infrastructure',
+  'reservation-sync': 'ReservationSync',
 };
 
 function canonicalTab(tabParam: string | null): MonitorTab {
@@ -97,6 +100,7 @@ export default function MonitoringHubPage() {
           {tab === 'WhatsApp' && <WhatsAppMonitoringPage />}
           {tab === 'AI' && <AIMonitoringPage />}
           {tab === 'Infrastructure' && <InfrastructureMonitoringPage />}
+          {tab === 'ReservationSync' && <ReservationSyncMonitorTab />}
         </Box>
       </Box>
     </DashboardWrapper>
