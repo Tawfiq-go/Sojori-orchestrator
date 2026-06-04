@@ -38,6 +38,28 @@ export async function getWhitelistDetail(reservationId: string) {
   return data;
 }
 
+export async function patchWhitelistClaudeModelTier(
+  reservationId: string,
+  body: { tier?: number; useOwnerDefault?: boolean },
+) {
+  const { data } = await axios.patch(
+    `${BASE}/whitelist/${encodeURIComponent(reservationId)}/claude-model-tier`,
+    body,
+    authHeaders(),
+  );
+  return data;
+}
+
+/** After PM changes owner Claude tier — push to all whitelist rows for that owner. */
+export async function syncOwnerModelToWhitelist(ownerId: string, tier: number) {
+  const { data } = await axios.post(
+    `${BASE}/whitelist/sync-owner-model/${encodeURIComponent(String(ownerId))}`,
+    { tier: Number(tier) },
+    authHeaders(),
+  );
+  return data;
+}
+
 export async function listListingSnapshots(params: Record<string, unknown> = {}) {
   const { data } = await axios.get(`${BASE}/listing-snapshots`, { ...authHeaders(), params });
   return data;

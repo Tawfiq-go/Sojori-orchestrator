@@ -360,7 +360,7 @@ const CreateOwnerSidebar = ({
                                         </Select>
                                       </FormControl>
                                       <Typography sx={{ fontSize: 12, color: SOJORI_COLORS.gray[600], mt: 0.75 }}>
-                                        Du moins cher au plus capable — défaut pour les nouveaux séjours
+                                        Du moins cher au plus capable — défaut propriétaire pour la whitelist
                                         whitelist.
                                       </Typography>
                                     </Box>

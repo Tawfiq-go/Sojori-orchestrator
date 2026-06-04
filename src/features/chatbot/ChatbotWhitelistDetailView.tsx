@@ -21,7 +21,7 @@ import { CHATBOT_T as T } from './chatbotTokens';
 import { ChatbotCleaningSchedulePanel } from './ChatbotCleaningSchedulePanel';
 import WhitelistLanguageCell from './WhitelistLanguageCell';
 import WhatsappMenuInterpretationPanel from './WhatsappMenuInterpretationPanel';
-import GuestWhatsappMemoryPanel from './GuestWhatsappMemoryPanel';
+import GuestWhatsappMemoryPanel, { type WhitelistAiModelLike } from './GuestWhatsappMemoryPanel';
 import type { ConversationPreviewLike, GuestContextWhatsappLike } from './guestWhatsappMemory';
 import {
   interpretMenuOptionsForStay,
@@ -77,6 +77,15 @@ export default function ChatbotWhitelistDetailView() {
     | undefined;
   const listingSnapshot = detail?.listingSnapshot as ListingSnapshotDetail | null | undefined;
   const conversationPreview = detail?.conversationPreview as ConversationPreviewLike | null | undefined;
+  const aiModel = detail?.aiModel as WhitelistAiModelLike | null | undefined;
+
+  const reloadDetail = () => {
+    if (!reservationId) return;
+    fullchatbotApi
+      .getWhitelistDetail(reservationId)
+      .then((res) => setDetail(res?.data ?? null))
+      .catch(() => {});
+  };
   const whatsappMemory = guestContext?.whatsapp;
   const registration = guestContext?.registration;
   const listingId = wl?.listingId ? String(wl.listingId) : '';
@@ -101,7 +110,7 @@ export default function ChatbotWhitelistDetailView() {
   return (
     <div className="so-plan-res so-chatbot-hub">
       <Box sx={{ px: { xs: 2, md: 3 }, pt: 2, pb: 1 }}>
-        <Stack direction="row" alignItems="center" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <IconButton size="small" onClick={() => navigate('/chatbot/whitelist')} sx={{ color: T.primaryDeep }}>
             <ArrowBack />
           </IconButton>
@@ -145,7 +154,19 @@ export default function ChatbotWhitelistDetailView() {
                         whatsappSelectedLanguage={wl.whatsappSelectedLanguage as string | null | undefined}
                       />
                     </Box>
-                    {wl.claudeModelTier != null ? (
+                    {aiModel ? (
+                      <Chip
+                        size="small"
+                        label={`IA : ${shortLabelForWhatsappAiTier(aiModel.effectiveTier)}${
+                          aiModel.source === 'whitelist_override'
+                            ? ' (override)'
+                            : aiModel.source === 'whitelist'
+                              ? ' (whitelist)'
+                              : ' (propriétaire)'
+                        }`}
+                        sx={{ mt: 0.75, fontSize: 11, height: 22 }}
+                      />
+                    ) : wl.claudeModelTier != null ? (
                       <Chip
                         size="small"
                         label={`IA séjour : ${shortLabelForWhatsappAiTier(wl.claudeModelTier)}`}
@@ -291,6 +312,9 @@ export default function ChatbotWhitelistDetailView() {
                   whatsapp={whatsappMemory}
                   conversationPreview={conversationPreview}
                   hasCommunicated={Boolean(wl.hasCommunicated)}
+                  reservationId={reservationId}
+                  aiModel={aiModel}
+                  onAiModelUpdated={reloadDetail}
                 />
               </Box>
             </div>
