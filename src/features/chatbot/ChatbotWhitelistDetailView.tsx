@@ -32,6 +32,7 @@ import {
   type GuestContextDetail,
   type ListingSnapshotDetail,
 } from './ChatbotWhitelistStayPanels';
+import { shortLabelForWhatsappAiTier } from '../../constants/whatsappAiTier';
 
 moment.locale('fr');
 
@@ -144,6 +145,13 @@ export default function ChatbotWhitelistDetailView() {
                         whatsappSelectedLanguage={wl.whatsappSelectedLanguage as string | null | undefined}
                       />
                     </Box>
+                    {wl.claudeModelTier != null ? (
+                      <Chip
+                        size="small"
+                        label={`IA séjour : ${shortLabelForWhatsappAiTier(wl.claudeModelTier)}`}
+                        sx={{ mt: 0.75, fontSize: 11, height: 22 }}
+                      />
+                    ) : null}
                     {listingName ? (
                       <Typography sx={{ fontSize: 13, fontWeight: 600, color: T.text2, mt: 0.5 }}>
                         {listingName}

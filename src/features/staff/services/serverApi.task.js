@@ -524,6 +524,14 @@ export async function updateOwner(id, data, elevatedAuth) {
 }
 
 /** Admin : email + mot de passe R.U. (extranet Rentals United), distinct du mot de passe Sojori. */
+/** Admin only — default Claude tier (1–4) for new guest WhatsApp whitelist rows. */
+export function updateOwnerWhatsappAiTier(ownerId, tier) {
+  return axios.put(
+    `${MICROSERVICE_BASE_URL.SRV_USER}/user/owner/${encodeURIComponent(String(ownerId))}/whatsapp-ai-tier`,
+    { tier: Number(tier) },
+  );
+}
+
 export function getOwnerRuLoginCredentials(ownerId) {
   return axios
     .get(`${MICROSERVICE_BASE_URL.SRV_USER}/user/owner/${encodeURIComponent(String(ownerId))}/ru-login-credentials`)

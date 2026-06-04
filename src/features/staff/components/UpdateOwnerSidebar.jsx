@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
-import { updateOwner, getCities, getCurrencies } from '../services/serverApi.task';
+import { useSelector } from 'react-redux';
+import { updateOwner, updateOwnerWhatsappAiTier, getCities, getCurrencies } from '../services/serverApi.task';
 import { useTranslation } from 'react-i18next';
+import { hasAdminAccess } from '../../../utils/rbac.utils';
+import { WHATSAPP_AI_TIER_OPTIONS, tierOptionDropdownLabel } from '../../../constants/whatsappAiTier';
 import SearchableSelect from './SearchableSelect';
 import { useChannelsFillCompanyPickers } from '../hooks/useChannelsFillCompanyPickers';
 import { sortCurrenciesByOrderedCodes } from '../utils/currencySort';
@@ -49,6 +52,8 @@ const buildValidationSchema = (t, owner) =>
 
 const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
   const { t } = useTranslation('common');
+  const authRole = useSelector((state) => state.auth?.user?.role);
+  const isPlatformAdmin = hasAdminAccess(authRole);
   const [cities, setCities] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [currencies, setCurrencies] = useState([]);
@@ -124,7 +129,25 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
         ...(ruPwd.length >= 6 ? { ruExtranetPassword: ruPwd } : {}),
       });
       if (response.data?.account) {
-        onOwnerUpdated(response.data.account);
+        let updatedAccount = response.data.account;
+        if (isPlatformAdmin && values.whatsappConversationalTier) {
+          try {
+            await updateOwnerWhatsappAiTier(owner._id, values.whatsappConversationalTier);
+            updatedAccount = {
+              ...updatedAccount,
+              whatsappConversationalTier: Number(values.whatsappConversationalTier),
+            };
+          } catch (tierErr) {
+            setErrors({
+              submit:
+                tierErr?.response?.data?.error ||
+                tierErr?.message ||
+                t('Failed to update owner'),
+            });
+            return;
+          }
+        }
+        onOwnerUpdated(updatedAccount);
         const sync = response.data.ruOwnerSync;
         if (sync?.attempted && sync.ok === false) {
           setErrors({ submit: sync.message || t('Failed to update owner') });
@@ -160,6 +183,7 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
     ruExtranetPassword: '',
     elevatedAuthEmail: '',
     elevatedAuthPassword: '',
+    whatsappConversationalTier: owner.whatsappConversationalTier || 2,
   };
 
   return (
@@ -368,6 +392,34 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
                       {touched.ruExtranetPassword && errors.ruExtranetPassword ? (
                         <span className="owner-field-err">{errors.ruExtranetPassword}</span>
                       ) : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {isPlatformAdmin ? (
+                  <div className="form-section full">
+                    <div className="form-section-h">IA WhatsApp invités</div>
+                    <div className="owner-form-hint" style={{ marginBottom: 10 }}>
+                      Modèle Claude pour les réponses automatiques aux voyageurs (du moins cher au plus
+                      capable). S&apos;applique aux <b>nouveaux</b> séjours whitelist ; les séjours en cours
+                      gardent le tier déjà enregistré.
+                    </div>
+                    <div className="field">
+                      <div className="field-label">Modèle Claude</div>
+                      <select
+                        className="input"
+                        name="whatsappConversationalTier"
+                        value={Number(values.whatsappConversationalTier) || 2}
+                        onChange={(e) =>
+                          setFieldValue('whatsappConversationalTier', Number(e.target.value))
+                        }
+                      >
+                        {WHATSAPP_AI_TIER_OPTIONS.map((opt) => (
+                          <option key={opt.tier} value={opt.tier}>
+                            {tierOptionDropdownLabel(opt)}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 ) : null}
