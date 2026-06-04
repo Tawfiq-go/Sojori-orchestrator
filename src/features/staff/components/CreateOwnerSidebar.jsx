@@ -6,6 +6,7 @@ import * as Yup from 'yup';
 import { User, Users } from 'lucide-react';
 import { createOwner, getCities } from '../services/serverApi.task';
 import { useTranslation } from 'react-i18next';
+import { WHATSAPP_AI_TIER_OPTIONS, tierOptionDropdownLabel } from '../../../constants/whatsappAiTier';
 import SidePanel from './SidePanel';
 const SOJORI_COLORS = {
   primary: '#FF6B35',
@@ -106,6 +107,7 @@ const CreateOwnerSidebar = ({
         channelManager: values.channelManager,
         cityId: values.cityId,
         rentalCityId: selectedCity?.rentalCityId?.toString(),
+        whatsappConversationalTier: Number(values.whatsappConversationalTier) || 2,
         role: 'Owner'
       });
       if (response.data) {
@@ -129,7 +131,8 @@ const CreateOwnerSidebar = ({
     phone: '',
     whatsapp: '',
     channelManager: '',
-    cityId: ''
+    cityId: '',
+    whatsappConversationalTier: 2,
   }} validationSchema={validationSchema(t)} onSubmit={handleSubmit}>
             {({
       isSubmitting,
@@ -138,6 +141,7 @@ const CreateOwnerSidebar = ({
       touched,
       handleChange,
       handleBlur,
+      setFieldValue,
       submitForm
     }) => <SidePanel open={open} onClose={onClose} title={t('Create Owner')} width={600} headerIcon={<Users size={24} color="white" strokeWidth={2.2} />} footer={<>
                             <ResetButton onClick={onClose} disabled={isSubmitting} sx={{
@@ -324,6 +328,42 @@ const CreateOwnerSidebar = ({
                                             </FormControl>
                                         </div>
                                     </div>
+
+                                    <Box sx={{ mb: 2 }}>
+                                      <label
+                                        style={{
+                                          display: 'block',
+                                          fontSize: '14px',
+                                          fontWeight: '500',
+                                          marginBottom: '8px',
+                                        }}
+                                      >
+                                        IA WhatsApp invités :
+                                      </label>
+                                      <FormControl fullWidth size="small">
+                                        <Select
+                                          id="whatsapp-ai-tier-select"
+                                          name="whatsappConversationalTier"
+                                          value={Number(values.whatsappConversationalTier) || 2}
+                                          onChange={(e) =>
+                                            setFieldValue(
+                                              'whatsappConversationalTier',
+                                              Number(e.target.value),
+                                            )
+                                          }
+                                        >
+                                          {WHATSAPP_AI_TIER_OPTIONS.map((opt) => (
+                                            <MenuItem key={opt.tier} value={opt.tier}>
+                                              {tierOptionDropdownLabel(opt)}
+                                            </MenuItem>
+                                          ))}
+                                        </Select>
+                                      </FormControl>
+                                      <Typography sx={{ fontSize: 12, color: SOJORI_COLORS.gray[600], mt: 0.75 }}>
+                                        Du moins cher au plus capable — défaut pour les nouveaux séjours
+                                        whitelist.
+                                      </Typography>
+                                    </Box>
                         </Form>
                     </Box>
                 </SidePanel>}
