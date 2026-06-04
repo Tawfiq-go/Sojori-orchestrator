@@ -16,7 +16,10 @@
 // ════════════════════════════════════════════════════════════════════
 
 import React from 'react';
+import { NAV_DEFAULT_COLLAPSED, NAV_GROUPS as NAV } from '../../config/navConfig';
+import { useSidebarNav } from '../../hooks/useSidebarNav';
 import { LISTING_LAYOUT } from '../../constants/listingLayout';
+import { IconColored } from './IconColored';
 import {
   Box, Stack, Typography, Button, IconButton, Avatar, Chip, Switch,
   TextField, InputAdornment, Divider, Tooltip,
@@ -40,6 +43,7 @@ import HubOutlined from '@mui/icons-material/HubOutlined';
 import MailOutlined from '@mui/icons-material/MailOutlined';
 import NotificationsNoneOutlined from '@mui/icons-material/NotificationsNoneOutlined';
 import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
+import ShoppingBagOutlined from '@mui/icons-material/ShoppingBagOutlined';
 import PublicOutlined from '@mui/icons-material/PublicOutlined';
 import PersonSearchOutlined from '@mui/icons-material/PersonSearchOutlined';
 import Search from '@mui/icons-material/Search';
@@ -140,143 +144,8 @@ export function DashboardLayout({ user, activePath, onNavigate, onLogout, childr
 // 2. AppSidebar
 // ════════════════════════════════════════════════════════════════════
 
-export const NAV = [
-  // ═══════════════════════════════════════════════════════
-  // 📊 DASHBOARD
-  // ═══════════════════════════════════════════════════════
-  { group: 'Dashboard', items: [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊', badge: 'Live' },
-    { id: 'analytics', label: 'Analytics', icon: '📈' },
-    { id: 'reports', label: 'Reports', icon: '🧾' },
-    { id: 'orchestrator', label: 'Orchestration', icon: '✨', badge: 'AI' },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // 📅 CALENDRIER
-  // ═══════════════════════════════════════════════════════
-  { group: 'Calendrier', items: [
-    { id: 'calendar', label: 'Calendrier', icon: '📅' },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // 🎫 RÉSERVATIONS
-  // ═══════════════════════════════════════════════════════
-  { group: 'Réservations', items: [
-    { id: 'reservations/list', label: 'Liste', icon: '🎫', badge: '23' },
-    { id: 'reservations/planning', label: 'Planning', icon: '📆' },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // ✅ TÂCHES
-  // ═══════════════════════════════════════════════════════
-  { group: 'Tâches', items: [
-    { id: 'tasks/list', label: 'Liste', icon: '✅' },
-    { id: 'tasks/planning', label: 'Planning', icon: '📆' },
-    { id: 'tasks/kanban', label: 'Kanban', icon: '📋' },
-    { id: 'tasks/team', label: 'Équipe Staff', icon: '👷' },
-    { id: 'tasks/config', label: 'Task config', icon: '⚙️' },
-    {
-      id: 'tasks/orchestration',
-      label: 'Orchestration',
-      icon: '🔀',
-      sub: [
-        { id: 'tasks/plans', label: 'Plan réservation' },
-        { id: 'tasks/orchestration-config', label: 'Config orchestration' },
-        { id: 'tasks/whatsapp-messages', label: 'Config WA' },
-      ],
-    },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // 💬 CHATBOT (srv-fullchatbot)
-  // ═══════════════════════════════════════════════════════
-  { group: 'Chatbot', items: [
-    {
-      id: 'chatbot',
-      label: 'Chatbot',
-      icon: '🤖',
-      sub: [
-        { id: 'chatbot/whitelist', label: 'Whitelist' },
-        { id: 'chatbot/listing', label: 'Listing sync' },
-        { id: 'chatbot/flows-pilote', label: 'Flows pilote' },
-      ],
-    },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // 💬 COMMUNICATIONS
-  // ═══════════════════════════════════════════════════════
-  { group: 'Communications', items: [
-    { id: 'comms', label: 'Unified Inbox', icon: '📬', badge: '3', badgeRed: true },
-    { id: 'comms/guests', label: 'WhatsApp Guests', icon: '💬' },
-    { id: 'comms/staff', label: 'WhatsApp Staff', icon: '💬' },
-    { id: 'comms/ota', label: 'Messages OTA', icon: '📧' },
-    { id: 'comms/templates', label: 'Templates', icon: '📄' },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // 🏠 CATALOGUE
-  // ═══════════════════════════════════════════════════════
-  { group: 'Catalogue', items: [
-    { id: 'listings', label: 'Annonces', icon: '🏠', badge: '42' },
-    { id: 'listing-orchestration', label: 'Template', icon: '✨' },
-    { id: 'pricing', label: 'Tarifs calendrier', icon: '📈' },
-    { id: 'channels', label: 'Canaux', icon: '🔗' },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // ⚡ DYNAMIC PRICING
-  // ═══════════════════════════════════════════════════════
-  { group: 'Dynamic Pricing', items: [
-    { id: 'dynamic-pricing/portefeuille', label: 'Portefeuille', icon: '⚡', description: 'Marché & pilotage' },
-    { id: 'dynamic-pricing/audit', label: 'Audit synchro', icon: '📋', description: 'Dernières mises à jour calendrier' },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // 👥 CRM & CLIENTS
-  // ═══════════════════════════════════════════════════════
-  { group: 'CRM & Clients', items: [
-    { id: 'clients', label: 'Clients', icon: '👤' },
-    { id: 'requests', label: 'Demandes', icon: '🎫' },
-    { id: 'crm/leads', label: 'Leads & Fiches', icon: '🔍' },
-    { id: 'reviews', label: 'Avis', icon: '⭐' },
-    { id: 'crm/support', label: 'Support', icon: '🎧' },
-    { id: 'crm/onboarding', label: 'Onboarding', icon: '🚀' },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // 📊 MONITOR & INFRA
-  // ═══════════════════════════════════════════════════════
-  { group: 'Monitor & Infra', items: [
-    { id: 'admin/monitor/summary', label: 'Live', icon: '📊', badge: 'Live' },
-    { id: 'admin/monitor/logs', label: 'Logs', icon: '📄' },
-    { id: 'admin/monitor/metrics', label: 'Metrics', icon: '📈' },
-    { id: 'admin/monitor/rabbitmq', label: 'RabbitMQ', icon: '🔗' },
-    { id: 'admin/monitor/whatsapp', label: 'WhatsApp', icon: '💬' },
-    { id: 'admin/monitor/ai', label: 'IA', icon: '✨' },
-    { id: 'admin/monitor/infrastructure', label: 'Infrastructure', icon: '🌐' },
-    { id: 'admin/sojori-logs', label: 'Logs Sojori', icon: '📝' },
-  ]},
-
-  // ═══════════════════════════════════════════════════════
-  // ⚙️ ADMIN
-  // ═══════════════════════════════════════════════════════
-  { group: 'Admin', items: [
-    { id: 'admin/channels', label: 'Channels', icon: '🔌', sub: [
-      { id: 'admin/ChannelManager/channel-manager', label: 'Manager' },
-      { id: 'admin/ChannelManager/distribution', label: 'Distribution' },
-    ]},
-    { id: 'admin/equipe/owners', label: 'Property Manager', icon: '🏢' },
-    { id: 'admin/equipe/roles', label: 'Rôles & Permissions', icon: '🔐' },
-    { id: 'admin/equipe/groups', label: 'Groupes', icon: '👨‍👩‍👧‍👦' },
-    { id: 'admin/settings/template', label: 'Paramètres', icon: '⚙️', sub: [
-      { id: 'admin/settings/template', label: 'Templates' },
-      { id: 'admin/settings/host-profile', label: 'Profil hôte' },
-      { id: 'admin/settings/admin-config', label: 'Pays & Villes' },
-      { id: 'admin/setting/currency', label: 'Devises' },
-    ]},
-  ]},
-];
+// NAV config is now imported from navConfig.ts with colored icons
+export { NAV };
 
 /** Icônes MUI alignées brief Claude Design (modules) — emoji en secours si id absent */
 const NAV_ICON_BY_ID = {
@@ -317,6 +186,7 @@ const NAV_ICON_BY_ID = {
   pricing: ShowChartOutlined,
   channels: HubOutlined,
   clients: PeopleOutlined,
+  'temp/booking-clients': ShoppingBagOutlined,
   crm: PersonSearchOutlined,
   'crm/requests': InboxOutlined,
   'crm/leads': PersonSearchOutlined,
@@ -361,6 +231,17 @@ function NavItemIcon({ item, active, sub }) {
       />
     );
   }
+
+  // Priority 1: use iconType with colored SVG if available
+  if (item.iconType) {
+    return (
+      <Box sx={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <IconColored type={item.iconType} color={item.iconColor || '#666666'} size={18} />
+      </Box>
+    );
+  }
+
+  // Priority 2: fallback to MUI icon
   const Cmp = NAV_ICON_BY_ID[item.id];
   if (Cmp) {
     return (
@@ -377,6 +258,8 @@ function NavItemIcon({ item, active, sub }) {
       />
     );
   }
+
+  // Priority 3: last fallback to emoji
   return (
     <Box sx={{ width: 18, display: 'flex', justifyContent: 'center', opacity: active ? 1 : 0.75, fontSize: 13 }}>
       {item.icon}
@@ -586,7 +469,11 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
                       activePath === item.id ||
                       Boolean(item.sub?.some((s) => activePath === s.id || activePath.startsWith(`${s.id}/`)))
                     }
-                    onClick={() => onNavigate?.(item.id)}
+                    onClick={() => {
+                      console.log('🔵 CLICK menu parent:', item.id, item.label);
+                      console.log('   onNavigate exists?', !!onNavigate);
+                      onNavigate?.(item.id);
+                    }}
                   />
                   {item.sub?.map((s) => (
                     <SideLink
@@ -594,7 +481,11 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
                       item={s}
                       sub
                       active={activePath === s.id}
-                      onClick={() => onNavigate?.(s.id)}
+                      onClick={() => {
+                        console.log('🟢 CLICK sous-menu:', s.id, s.label);
+                        console.log('   onNavigate exists?', !!onNavigate);
+                        onNavigate?.(s.id);
+                      }}
                     />
                   ))}
                 </React.Fragment>
@@ -676,8 +567,17 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
 }
 
 function SideLink({ item, active, sub, onClick }) {
+  const handleClick = (e) => {
+    console.log('🟡 SideLink clicked:', item.id, item.label, 'onClick exists?', !!onClick);
+    if (onClick) {
+      onClick(e);
+    } else {
+      console.warn('⚠️ NO onClick handler for', item.id);
+    }
+  };
+
   return (
-    <Box component="button" onClick={onClick} sx={{
+    <Box component="button" onClick={handleClick} sx={{
       all: 'unset', cursor: 'pointer', width: '100%', textAlign: 'left',
       display: 'flex', alignItems: 'center', gap: sub ? 1.2 : 1.3,
       p: sub ? '7px 12px 7px 16px' : '9px 12px',

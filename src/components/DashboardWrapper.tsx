@@ -96,6 +96,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'pricing': '/pricing',
     'channels': '/catalogue/channels',
     'clients': '/clients',
+    'temp/booking-clients': '/temp/booking-clients',
 
     // CRM
     'crm': '/crm',
@@ -121,6 +122,9 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'admin/ChannelManager/distribution': '/admin/ChannelManager?tab=distribution',
 
     // Équipe & Rôles
+    'staff': '/tasks/team',
+    'my-tasks': '/tasks',
+    'my-sched': '/tasks/planning',
     'admin/equipe/owners': '/admin/equipe/owners?tab=list',
     'admin/equipe/staff': '/tasks/team',
     'admin/equipe/whatsapp': '/tasks/team',
@@ -251,8 +255,15 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
   };
 
   const handleNavigate = (navId: string) => {
+    console.log('🔴 handleNavigate called with navId:', navId);
     const route = navToRoute[navId];
-    if (route) navigate(route);
+    console.log('   → Found route:', route);
+    if (route) {
+      console.log('   ✅ Navigating to:', route);
+      navigate(route);
+    } else {
+      console.warn('   ⚠️ NO ROUTE found for navId:', navId);
+    }
   };
 
   const handleLogout = () => {
