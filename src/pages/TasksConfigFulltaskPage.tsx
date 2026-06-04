@@ -37,12 +37,20 @@ import {
   FULLTASK_TASK_TYPES,
   FULLTASK_TASK_TYPE_LABELS,
 } from '../features/taskHub/staff-design/fulltaskTaskTypes';
+import {
+  AUTO_COMPLETION_TRIGGER_LABELS,
+  TASK_AUTO_COMPLETION_TRIGGERS,
+  hintForAutoCompletion,
+  normalizeCompletionTrigger,
+  type TaskAutoCompletionTrigger,
+} from '../features/taskHub/taskConfig/taskCompletionLabels';
 
-type ConfigField = 'requiresClientAction';
+type ConfigField = 'requiresClientAction' | 'autoCompletionTrigger';
 
 export interface TaskConfigRow {
   type: string;
   requiresClientAction: boolean;
+  autoCompletionTrigger: TaskAutoCompletionTrigger | null;
   orchestration: Record<string, unknown> | null;
 }
 
@@ -51,9 +59,13 @@ function normalizeRows(apiRows: Record<string, unknown>[]): TaskConfigRow[] {
 
   return FULLTASK_TASK_TYPES.map((type) => {
     const row = byType.get(type);
+    const autoCompletionTrigger = normalizeCompletionTrigger(
+      row?.autoCompletionTrigger != null ? String(row.autoCompletionTrigger) : null,
+    );
     return {
       type,
       requiresClientAction: Boolean(row?.requiresClientAction),
+      autoCompletionTrigger,
       orchestration: (row?.orchestration as Record<string, unknown> | null) ?? null,
     };
   });
@@ -91,26 +103,31 @@ function TasksConfigFulltaskPageInner() {
     void load();
   }, [load]);
 
-  const toggle = async (type: string, field: ConfigField, value: boolean) => {
+  const saveRow = async (
+    type: string,
+    patch: Partial<Pick<TaskConfigRow, 'requiresClientAction' | 'autoCompletionTrigger'>>,
+  ) => {
     const prev = rows;
-    setRows((r) => r.map((row) => (row.type === type ? { ...row, [field]: value } : row)));
+    setRows((r) => r.map((row) => (row.type === type ? { ...row, ...patch } : row)));
     setSavingType(type);
     try {
       const row = prev.find((r) => r.type === type);
       if (!row) return;
 
-      console.log('=== TOGGLE START ===');
-      console.log('ownerKey:', ownerKey);
-      console.log('type:', type);
-      console.log('field:', field);
-      console.log('new value:', value);
-
-      const result = await fulltaskApi.upsertTaskTypeConfig(
-        ownerKey,
+      const nextTrigger = patch.autoCompletionTrigger ?? row.autoCompletionTrigger;
+      if (!nextTrigger) {
+        toast.error('Choisir un mode de complétion avant enregistrement');
+        setRows(prev);
+        setSavingType(null);
+        return;
+      }
+      const body = {
         type,
-        { type, requiresClientAction: value },
-        undefined,
-      );
+        requiresClientAction: patch.requiresClientAction ?? row.requiresClientAction,
+        autoCompletionTrigger: nextTrigger,
+      };
+
+      const result = await fulltaskApi.upsertTaskTypeConfig(ownerKey, type, body, undefined);
 
       console.log('SAVE RESULT:', result);
 
@@ -118,16 +135,18 @@ function TasksConfigFulltaskPageInner() {
 
       console.log('RELOADING...');
       await load();
-      console.log('=== TOGGLE END ===');
     } catch (e: unknown) {
       setRows(prev);
       const err = e as { response?: { data?: { error?: string } }; message?: string };
-      console.error('TOGGLE ERROR:', err);
+      console.error('SAVE CONFIG ERROR:', err);
       toast.error(err.response?.data?.error || err.message || 'Erreur enregistrement');
     } finally {
       setSavingType(null);
     }
   };
+
+  const toggle = (type: string, field: 'requiresClientAction', value: boolean) =>
+    void saveRow(type, { [field]: value });
 
   const handleSyncToOwner = async (targetOwnerId: string, targetOwnerName: string) => {
     console.log('=== SYNC TO OWNER START ===');
@@ -186,6 +205,7 @@ function TasksConfigFulltaskPageInner() {
                 <TableRow>
                   <TableCell sx={{ fontWeight: 800 }}>Type</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Action client</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Auto-complétion</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Plan orchestration</TableCell>
                 </TableRow>
               </TableHead>
@@ -214,6 +234,33 @@ function TasksConfigFulltaskPageInner() {
                           }
                           color="warning"
                         />
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 280 }}>
+                        <FormControl size="small" fullWidth disabled={savingType === row.type}>
+                          <Select
+                            value={row.autoCompletionTrigger ?? ''}
+                            displayEmpty
+                            onChange={(e) =>
+                              void saveRow(row.type, {
+                                autoCompletionTrigger: e.target
+                                  .value as TaskAutoCompletionTrigger,
+                              })
+                            }
+                            sx={{ fontSize: 13, bgcolor: 'white' }}
+                          >
+                            <MenuItem value="" disabled sx={{ fontSize: 13 }}>
+                              — Non configuré —
+                            </MenuItem>
+                            {TASK_AUTO_COMPLETION_TRIGGERS.map((key) => (
+                              <MenuItem key={key} value={key} sx={{ fontSize: 13 }}>
+                                {AUTO_COMPLETION_TRIGGER_LABELS[key]}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                          {hintForAutoCompletion(row.type, row.autoCompletionTrigger)}
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
@@ -252,7 +299,7 @@ function TasksConfigFulltaskPageInner() {
                     </TableRow>
                     <TableRow key={`${row.type}-tl`}>
                       <TableCell
-                        colSpan={3}
+                        colSpan={4}
                         sx={{ py: 0, borderBottom: previewType === row.type ? undefined : 0 }}
                       >
                         <Collapse in={previewType === row.type}>

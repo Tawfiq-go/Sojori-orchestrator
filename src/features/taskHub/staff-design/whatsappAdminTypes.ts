@@ -1,3 +1,9 @@
+import {
+  FULLTASK_TASK_TYPES,
+  FULLTASK_TASK_TYPE_EMOJI,
+  labelForTaskTypeId,
+} from './fulltaskTaskTypes';
+
 export type WhatsappAdminPermission = {
   type: string;
   access: 'read' | 'write' | 'none';
@@ -11,18 +17,118 @@ export type WhatsappAdminDesign = {
   listingIds: string[];
   banned: boolean;
   permissions: WhatsappAdminPermission[];
+  /** Clés srv-fulltask — false = ne pas envoyer (opt-out si absent en base). */
+  notifications: Record<string, boolean>;
   ownerId?: string;
 };
 
+/** Menus WhatsApp (lettre tapée) ↔ permission stockée en base. */
 export const WA_ADMIN_TYPES = [
-  { type: 'Reservation', label: 'Réservation', abbr: 'RS' },
-  { type: 'Task', label: 'Tâche', abbr: 'TS' },
-  { type: 'Message', label: 'Message', abbr: 'MS' },
-  { type: 'Reviews', label: 'Avis', abbr: 'AV' },
-  { type: 'ArrivalDeparture', label: 'Arrivée/Départ', abbr: 'DC' },
+  { type: 'Message', label: 'Messages', menuLetter: 'M', abbr: 'MS' },
+  { type: 'Reviews', label: 'Avis', menuLetter: 'V', abbr: 'AV' },
+  { type: 'Lead', label: 'Leads', menuLetter: 'L', abbr: 'LD' },
+  { type: 'Reservation', label: 'Réservations', menuLetter: 'R', abbr: 'RS' },
+  { type: 'ArrivalDeparture', label: 'Arr. / dép.', menuLetter: 'D', abbr: 'DC' },
+  { type: 'Task', label: 'Supervision tâches', menuLetter: 'T', abbr: 'TS' },
 ] as const;
 
 export const WA_LANGUAGES = ['French', 'English', 'Francais', 'Arabic'] as const;
+
+export type TaskNotifyEvent = 'created' | 'cancelled';
+
+export function taskNotifyKey(type: string, event: TaskNotifyEvent): string {
+  return event === 'created' ? `task_notify_${type}` : `task_cancel_notify_${type}`;
+}
+
+/** Aligné apps/srv-fulltask/src/utils/adminTaskNotifications.ts */
+export const DEFAULT_TASK_NOTIFY_ENABLED: Record<(typeof FULLTASK_TASK_TYPES)[number], boolean> = {
+  arrival_choose: false,
+  departure_choose: false,
+  arrival_declare: false,
+  departure_declare: false,
+  registration: false,
+  cleaning_free: false,
+  cleaning_paid: true,
+  checkout_cleaning: true,
+  transport: true,
+  groceries: true,
+  concierge: true,
+  support: true,
+  service_client: true,
+};
+
+export function defaultTaskNotifyFlags(): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const t of FULLTASK_TASK_TYPES) {
+    const on = DEFAULT_TASK_NOTIFY_ENABLED[t];
+    out[taskNotifyKey(t, 'created')] = on;
+    out[taskNotifyKey(t, 'cancelled')] = on;
+  }
+  return out;
+}
+
+export const WA_TASK_NOTIFY_CREATED = FULLTASK_TASK_TYPES.map((t) => ({
+  key: taskNotifyKey(t, 'created'),
+  taskType: t,
+  label: labelForTaskTypeId(t),
+  emoji: FULLTASK_TASK_TYPE_EMOJI[t] || '📋',
+}));
+
+export const WA_TASK_NOTIFY_CANCELLED = FULLTASK_TASK_TYPES.map((t) => ({
+  key: taskNotifyKey(t, 'cancelled'),
+  taskType: t,
+  label: labelForTaskTypeId(t),
+  emoji: FULLTASK_TASK_TYPE_EMOJI[t] || '📋',
+}));
+
+/** Aligné apps/srv-fulltask/src/routes/adminWhatsapp/getNotificationTypes.ts */
+export const WA_ADMIN_NOTIFICATION_GROUPS: {
+  title: string;
+  hint?: string;
+  items: { key: string; label: string }[];
+}[] = [
+  {
+    title: 'Réservation',
+    items: [
+      { key: 'reservation_new', label: 'Nouvelle réservation' },
+      { key: 'airbnb_new_request', label: 'Demande Airbnb (pending)' },
+      { key: 'reservation_cancelled', label: 'Réservation annulée' },
+      { key: 'reservation_modified', label: 'Réservation modifiée' },
+    ],
+  },
+  {
+    title: 'Inbox OTA',
+    hint: 'Lié aux menus M · V · L',
+    items: [
+      { key: 'message_received', label: 'Message reçu' },
+      { key: 'review_new', label: 'Nouvel avis' },
+      { key: 'lead_new', label: 'Nouveau lead' },
+      { key: 'message_automated_sent', label: 'Message auto envoyé (peu utilisé)' },
+    ],
+  },
+  {
+    title: 'Divers',
+    items: [{ key: 'registration_started', label: 'Enregistrement démarré (bientôt)' }],
+  },
+];
+
+export const WA_ADMIN_NOTIFICATION_KEYS = [
+  ...WA_ADMIN_NOTIFICATION_GROUPS.flatMap((g) => g.items.map((i) => i.key)),
+  ...Object.keys(defaultTaskNotifyFlags()),
+];
+
+export function defaultAdminNotifications(): Record<string, boolean> {
+  return {
+    ...Object.fromEntries(
+      WA_ADMIN_NOTIFICATION_GROUPS.flatMap((g) => g.items).map((i) => [i.key, true]),
+    ),
+    ...defaultTaskNotifyFlags(),
+  };
+}
+
+function isTaskNotifyKey(k: string): boolean {
+  return k.startsWith('task_notify_') || k.startsWith('task_cancel_notify_');
+}
 
 /** Normalise un id listing (string, ObjectId, legacy). */
 export function normalizeListingId(id: unknown): string {
@@ -51,11 +157,49 @@ const TYPE_TO_CANONICAL: Record<string, string> = {
   Tâche: 'Task',
   Task: 'Task',
   Message: 'Message',
+  Messages: 'Message',
   Avis: 'Reviews',
   Reviews: 'Reviews',
+  Lead: 'Lead',
+  Leads: 'Lead',
   'Arrivée/Départ': 'ArrivalDeparture',
   ArrivalDeparture: 'ArrivalDeparture',
 };
+
+function notificationsFromApi(raw: unknown): Record<string, boolean> {
+  const base = defaultAdminNotifications();
+  if (raw == null) return base;
+
+  const rec: Record<string, unknown> = {};
+  if (raw instanceof Map) {
+    raw.forEach((v, k) => {
+      rec[String(k)] = v;
+    });
+  } else if (typeof raw === 'object') {
+    Object.assign(rec, raw as Record<string, unknown>);
+  }
+
+  for (const [k, v] of Object.entries(rec)) {
+    if (WA_ADMIN_NOTIFICATION_KEYS.includes(k) || isTaskNotifyKey(k)) {
+      base[k] = Boolean(v);
+    }
+  }
+
+  const legacyCreateOff = rec.task_createdByCustomer === false;
+  const legacyCancelOff = rec.task_cancelled === false;
+  for (const t of FULLTASK_TASK_TYPES) {
+    const ck = taskNotifyKey(t, 'created');
+    const xk = taskNotifyKey(t, 'cancelled');
+    if (!Object.prototype.hasOwnProperty.call(rec, ck) && legacyCreateOff) {
+      base[ck] = false;
+    }
+    if (!Object.prototype.hasOwnProperty.call(rec, xk) && legacyCancelOff) {
+      base[xk] = false;
+    }
+  }
+
+  return base;
+}
 
 export function emptyWhatsappAdmin(): WhatsappAdminDesign {
   return {
@@ -66,6 +210,7 @@ export function emptyWhatsappAdmin(): WhatsappAdminDesign {
     listingIds: [],
     banned: false,
     permissions: WA_ADMIN_TYPES.map((t) => ({ type: t.type, access: 'write' as const })),
+    notifications: defaultAdminNotifications(),
   };
 }
 
@@ -97,6 +242,7 @@ export function apiWhatsappAdminToDesign(row: Record<string, unknown>): Whatsapp
       type: t.type,
       access: permMap.get(t.type) || 'none',
     })),
+    notifications: notificationsFromApi(row.notifications),
     ownerId: row.ownerId ? String(row.ownerId) : undefined,
   };
 }
@@ -105,6 +251,15 @@ export function designWhatsappAdminToApi(
   form: WhatsappAdminDesign,
   ownerId?: string,
 ): Record<string, unknown> {
+  const notifications: Record<string, boolean> = {};
+  const keys = new Set([
+    ...WA_ADMIN_NOTIFICATION_KEYS,
+    ...Object.keys(form.notifications).filter(isTaskNotifyKey),
+  ]);
+  for (const key of keys) {
+    notifications[key] = form.notifications[key] !== false;
+  }
+
   return {
     username: form.username.trim(),
     whatsappPhone: form.whatsappPhone.trim(),
@@ -118,7 +273,7 @@ export function designWhatsappAdminToApi(
       read: p.access === 'read' || p.access === 'write',
       write: p.access === 'write',
     })),
-    notifications: {},
+    notifications,
   };
 }
 
