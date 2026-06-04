@@ -151,6 +151,9 @@ const ChannelsPage = lazy(() =>
 const ClientsPage = lazy(() =>
   import('./pages/ClientsPage').then((module) => ({ default: module.ClientsPage }))
 );
+const BookingClientsPage = lazy(() =>
+  import('./pages/BookingClientsPage').then((module) => ({ default: module.BookingClientsPage }))
+);
 const WhatsAppContactsPage = lazy(() =>
   import('./pages/WhatsAppContactsPage').then((module) => ({ default: module.WhatsAppContactsPage }))
 );
@@ -337,6 +340,11 @@ function App() {
               />
               <Route path="/clients" element={<LazyRoute><ClientsPage /></LazyRoute>} />
               <Route path="/clients/contacts" element={<LazyRoute><WhatsAppContactsPage /></LazyRoute>} />
+              <Route path="/temp/booking-clients" element={<LazyRoute><BookingClientsPage /></LazyRoute>} />
+              <Route
+                path="/admin/User/clients"
+                element={<Navigate to="/temp/booking-clients" replace />}
+              />
               <Route path="/crm" element={<LazyRoute><CRMPage /></LazyRoute>} />
               <Route path="/monitor" element={<LazyRoute><MonitoringHubPage /></LazyRoute>} />
               <Route path="/admin/monitor" element={<LazyRoute><MonitoringHubPage /></LazyRoute>} />
