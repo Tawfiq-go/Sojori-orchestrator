@@ -57,45 +57,50 @@ export function groupStatusLabel(status: EventStatus): string {
   return GROUP_LABELS[status] ?? status;
 }
 
+/** Bloc relances voyageur — terminé si et seulement si le client a complété l'action. */
 export function aggregateRelancesGroupStatus(
   relances: Pick<PlanGuestRelanceItem, 'status' | 'executionStatus'>[],
   actionCompleted: boolean = false,
 ): EventStatus {
   if (relances.length === 0) return 'future';
 
-  // ✅ Client a complété l'action → terminé (plus besoin de relances)
   if (actionCompleted) return 'done';
 
-  if (relances.every((r) => r.executionStatus === 'envoyee')) return 'done';
+  if (relances.some((r) => r.executionStatus === 'echec')) return 'blocked';
 
-  // ✅ BUG FIX #1: Seul 'echec' bloque, 'sautee' est neutre (date passée à la création)
-  if (relances.some((r) => r.executionStatus === 'echec')) {
-    return 'blocked';
-  }
-
-  // En cours si au moins 1 envoyée
-  if (relances.some((r) => r.executionStatus === 'envoyee')) return 'now';
-
-  // En cours si au moins 1 en retard ET au moins 1 future
-  const hasEnRetard = relances.some((r) => r.executionStatus === 'en_retard');
   const hasFuture = relances.some((r) => r.executionStatus === 'prevision');
-  if (hasEnRetard && hasFuture) return 'now';
+  const hasEnRetard = relances.some((r) => r.executionStatus === 'en_retard');
+  const hasActive = relances.some(
+    (r) =>
+      r.executionStatus === 'prevision' ||
+      r.executionStatus === 'en_attente' ||
+      r.executionStatus === 'en_retard',
+  );
 
-  // En retard si tout passé (sautée/en_retard) et rien à venir
-  if (!hasFuture && !relances.some((r) => r.executionStatus === 'envoyee')) {
-    return 'pending';
+  if (hasActive) {
+    if (hasEnRetard && hasFuture) return 'now';
+    if (hasFuture) return 'future';
+    return 'now';
   }
 
-  // Tout futur
-  if (relances.every((r) => r.executionStatus === 'prevision')) return 'future';
-
+  // Plus de relance à venir (envoyées / sautées / épuisées) sans action client
   return 'pending';
 }
 
 export function aggregateStaffRemindersGroupStatus(
   reminders: Pick<PlanStaffReminderItem, 'status' | 'executionStatus'>[],
 ): EventStatus {
-  return aggregateRelancesGroupStatus(reminders);
+  if (reminders.length === 0) return 'future';
+  if (reminders.every((r) => r.executionStatus === 'envoyee')) return 'done';
+  if (reminders.some((r) => r.executionStatus === 'echec')) return 'blocked';
+  if (reminders.some((r) => r.executionStatus === 'envoyee')) return 'now';
+
+  const hasFuture = reminders.some((r) => r.executionStatus === 'prevision');
+  const hasEnRetard = reminders.some((r) => r.executionStatus === 'en_retard');
+  if (hasEnRetard && hasFuture) return 'now';
+  if (!hasFuture && hasEnRetard) return 'pending';
+  if (hasFuture) return 'future';
+  return 'future';
 }
 
 export function aggregateAssignGroupStatus(
@@ -106,11 +111,78 @@ export function aggregateAssignGroupStatus(
   if (assign.status === 'found') return 'done';
   if (assign.status === 'failed') return 'blocked';
 
-  // ⚠️ Fenêtre passée sans assignation = En retard
   if (assign.windowPast && assign.status !== 'found') return 'pending';
+  if (assign.windowFuture) return 'future';
+  if (assign.windowOpen) return 'now';
 
   if (attempts?.some((a) => a.result === 'declined')) return 'now';
   if (attempts?.some((a) => a.result === 'accepted')) return 'done';
   if (attempts?.some((a) => a.result === 'pending')) return 'now';
-  return 'now';
+  return 'future';
+}
+
+export function aggregateEscaladeGroupStatus(
+  escalade?: { scheduled: boolean; status?: string },
+  scheduledAt?: Date | null,
+  now = new Date(),
+): EventStatus {
+  if (!escalade) return 'future';
+  const st = escalade.status;
+  if (st === 'saute' || st === 'fait') return 'done';
+  if (st === 'active') return 'now';
+  if (!escalade.scheduled) return 'now';
+  if (scheduledAt && scheduledAt.getTime() < now.getTime()) return 'pending';
+  return 'future';
+}
+
+/**
+ * Séquence workflow — miroir exclusif de task.status (config auto-complétion côté backend).
+ * Ne pas utiliser clientActionCompleted ni les blocs pour le badge L1.
+ */
+export function deriveSequenceDisplayStatus(input: {
+  taskStatus?: string | null;
+  seqStatus?: string;
+}): EventStatus {
+  const st = String(input.taskStatus || '').trim();
+
+  if (st === 'done') return 'done';
+  if (st === 'cancelled' || st === 'rejected') return 'blocked';
+  if (['waiting_guest', 'new', 'pending_partner', 'confirmed', 'doing'].includes(st)) {
+    return 'now';
+  }
+
+  if (input.seqStatus === 'termine') return 'done';
+  if (input.seqStatus === 'annule' || input.seqStatus === 'saute') return 'blocked';
+  if (input.seqStatus === 'en_cours') return 'now';
+  return 'future';
+}
+
+/** @deprecated utiliser deriveSequenceDisplayStatus */
+export function deriveSequenceDisplayStatusFromTask(
+  input: Parameters<typeof deriveSequenceDisplayStatus>[0],
+): EventStatus {
+  return deriveSequenceDisplayStatus(input);
+}
+
+export function relancesGroupStatusLabel(
+  status: EventStatus,
+  relances: Pick<PlanGuestRelanceItem, 'executionStatus'>[],
+  actionCompleted: boolean,
+): string {
+  if (status === 'pending' && !actionCompleted) {
+    const stillActive = relances.some(
+      (r) =>
+        r.executionStatus === 'prevision' ||
+        r.executionStatus === 'en_attente' ||
+        r.executionStatus === 'en_retard',
+    );
+    if (!stillActive) return 'Expiré';
+  }
+  return groupStatusLabel(status);
+}
+
+export function sequenceStatusLabel(status: EventStatus, taskStatus?: string | null): string {
+  const st = String(taskStatus || '').trim();
+  if (status === 'blocked' && (st === 'cancelled' || st === 'rejected')) return 'Annulé';
+  return groupStatusLabel(status);
 }

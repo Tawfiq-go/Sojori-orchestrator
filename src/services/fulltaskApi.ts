@@ -57,6 +57,13 @@ export async function patchTaskStatus(id: string, status: string) {
   return data;
 }
 
+/** Acceptation staff / admin (pending_partner → confirmed + sync plan). */
+export async function acceptTask(id: string, staffId?: string) {
+  const body = staffId ? { staffId } : {};
+  const { data } = await axios.patch(`${BASE}/tasks/${id}/accept`, body, authHeaders());
+  return data;
+}
+
 export async function assignTask(id: string, staffId: string) {
   const { data } = await axios.patch(`${BASE}/tasks/${id}/assign`, { staffId }, authHeaders());
   return data;
@@ -332,6 +339,17 @@ export async function sendPlanStaffReminder(
 ) {
   return postPlanDispatch(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/staff-reminders/${reminderIndex}/send`,
+  );
+}
+
+export async function forcePlanGuestSlot(
+  reservationId: string,
+  taskId: string,
+  time: string,
+) {
+  return postPlanDispatch(
+    `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/escalade/force-slot`,
+    { time },
   );
 }
 

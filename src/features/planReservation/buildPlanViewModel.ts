@@ -34,6 +34,8 @@ import {
   inferScheduleOffsetFromDates,
   normalizeScheduleRef,
 } from './planScheduleLabel';
+import { registrationCountsFromPayload } from '../../utils/fulltaskMappers';
+import { deriveSequenceDisplayStatus } from './planGroupStatus';
 
 export interface FulltaskPlanDoc {
   reservationId: string;
@@ -47,6 +49,18 @@ export interface FulltaskPlanDoc {
     taskScheduledDate?: string | Date;
     taskType: string;
     status: 'en_attente' | 'en_cours' | 'termine' | 'saute';
+    clientActionCompleted?: boolean;
+    clientActionCompletedAt?: string | Date;
+    task?: {
+      status?: string;
+      payload?: {
+        time?: string;
+        selectedTime?: string;
+        declaredTime?: string;
+        totalToRegister?: number;
+        guests?: Array<{ done?: boolean; draft?: boolean }>;
+      };
+    } | null;
     relances: Array<{
       label: string;
       scheduledAt: string | Date;
@@ -92,7 +106,7 @@ export interface FulltaskPlanDoc {
     } | null;
     escalade?: {
       scheduledAt: string | Date;
-      status: 'en_attente' | 'declenchee' | 'resolue';
+      status: 'en_attente' | 'active' | 'fait' | 'saute' | 'declenchee' | 'resolue';
       triggeredAt?: string | Date | null;
       scheduleRef?: string;
       scheduleDay?: number;
@@ -174,13 +188,86 @@ function formatRange(start: Date, end?: Date | null): string {
   return `${s} → ${end.getDate()} ${MONTHS_SHORT[end.getMonth()]}`;
 }
 
+function isAtomeSentStatus(raw: string): boolean {
+  return raw === 'fait' || raw === 'envoyee' || raw === 'envoye';
+}
+
+function isAssignationFoundStatus(raw: string): boolean {
+  return raw === 'trouvee' || raw === 'attente_acceptation' || raw === 'termine';
+}
+
 function eventStatusAt(scheduled: Date, raw: string, now = new Date()): EventStatus {
-  if (raw === 'termine' || raw === 'envoye') return 'done';
+  if (raw === 'termine' || isAtomeSentStatus(raw)) return 'done';
   if (raw === 'saute' || raw === 'echec' || raw === 'bloque') return 'blocked';
   if (raw === 'en_cours' || raw === 'declenchee') return 'now';
   if (scheduled.getTime() > now.getTime()) return 'future';
   if (scheduled.getTime() < now.getTime() - 3600000) return 'pending';
   return 'now';
+}
+
+type EscaladeViewStatus = 'en_attente' | 'active' | 'saute' | 'fait';
+
+function normalizeEscaladeStatus(raw: string): EscaladeViewStatus {
+  if (raw === 'declenchee' || raw === 'active') return 'active';
+  if (raw === 'resolue' || raw === 'fait') return 'fait';
+  if (raw === 'saute') return 'saute';
+  return 'en_attente';
+}
+
+function escaladeDescription(status: EscaladeViewStatus): string {
+  switch (status) {
+    case 'active':
+      return 'Escalade active — intervention admin';
+    case 'saute':
+      return 'Non nécessaire (gates OK)';
+    case 'fait':
+      return 'Escalade traitée';
+    default:
+      return 'Escalade PM si non confirmé avant deadline';
+  }
+}
+
+function mapEscaladeAtomRaw(status: EscaladeViewStatus): string {
+  if (status === 'active') return 'declenchee';
+  if (status === 'saute') return 'saute';
+  if (status === 'fait') return 'fait';
+  return 'en_attente';
+}
+
+function mapEscaladeView(
+  esc: NonNullable<FulltaskPlanDoc['sequences'][0]['escalade']>,
+  plan: FulltaskPlanDoc,
+  taskType: string,
+  taskAnchorDate: Date,
+  now: Date,
+) {
+  const status = normalizeEscaladeStatus(esc.status);
+  const escRef = normalizeScheduleRef(esc.scheduleRef, taskType);
+  const escAnchor =
+    anchorDateForScheduleRef(plan, escRef, taskAnchorDate) ||
+    toDate(
+      escRef === 'checkout'
+        ? plan.checkOut
+        : escRef === 'scheduledDate'
+          ? taskAnchorDate
+          : plan.checkIn,
+    ) ||
+    now;
+  return {
+    scheduled: status === 'en_attente',
+    status,
+    dueAt: formatWhen(toDate(esc.scheduledAt) || now),
+    scheduleOffsetLabel:
+      formatScheduleOffset(esc.scheduleDay, escRef, esc.scheduleTime, taskType) ??
+      inferScheduleOffsetFromDates(
+        toDate(esc.scheduledAt) || now,
+        escAnchor,
+        escRef,
+        esc.scheduleTime,
+        taskType,
+      ),
+    description: escaladeDescription(status),
+  };
 }
 
 function countSteps(plan: FulltaskPlanDoc) {
@@ -439,11 +526,11 @@ function mapRelanceExecution(
   | 'dispatchLog'
 > {
   const due = toDate(r.scheduledAt) || now;
-  const raw = r.status as PlanGuestRelanceItem['rawStatus'];
+  const raw = String(r.status);
   const isFuture = due.getTime() > now.getTime();
 
   let executionStatus: RelanceExecutionStatus;
-  if (raw === 'envoyee') executionStatus = 'envoyee';
+  if (isAtomeSentStatus(raw)) executionStatus = 'envoyee';
   else if (raw === 'echec') executionStatus = 'echec';
   else if (raw === 'saute') executionStatus = 'sautee';
   else if (isFuture) executionStatus = 'prevision';
@@ -455,8 +542,12 @@ function mapRelanceExecution(
   else if (executionStatus === 'sautee' || executionStatus === 'echec') status = 'skipped';
 
   const { lastDispatch, lastDispatchAttempt, dispatchLog } = mapDispatchLog(r.dispatchLog, {
-    itemDelivered: raw === 'envoyee',
+    itemDelivered: isAtomeSentStatus(raw),
   });
+
+  const rawStatus: PlanGuestRelanceItem['rawStatus'] = isAtomeSentStatus(raw)
+    ? 'envoyee'
+    : (raw as PlanGuestRelanceItem['rawStatus']);
 
   return {
     id: `${idPrefix}-${i}`,
@@ -466,7 +557,7 @@ function mapRelanceExecution(
     label: r.label,
     channel,
     executionStatus,
-    rawStatus: raw,
+    rawStatus,
     lastDispatch,
     lastDispatchAttempt,
     dispatchLog,
@@ -491,17 +582,17 @@ function mapRelance(
 }
 
 function mapRelanceStatus(scheduled: Date, raw: string, now = new Date()): EventStatus {
-  if (raw === 'envoyee' || raw === 'envoye') return eventStatusAt(scheduled, 'envoye', now);
+  if (isAtomeSentStatus(raw)) return eventStatusAt(scheduled, 'envoye', now);
   if (raw === 'saute' || raw === 'echec') return 'blocked';
   return eventStatusAt(scheduled, 'en_attente', now);
 }
 
 function mapAssignStatus(
   scheduled: Date,
-  raw: 'en_recherche' | 'trouvee' | 'echec',
+  raw: string,
   now = new Date(),
 ): EventStatus {
-  if (raw === 'trouvee') return 'done';
+  if (isAssignationFoundStatus(raw)) return 'done';
   if (raw === 'echec') return 'blocked';
   return eventStatusAt(scheduled, 'en_attente', now);
 }
@@ -545,6 +636,56 @@ function computeNextAssignmentLabel(
   return 'Prochaine assignation · après clôture fenêtre';
 }
 
+function iterAssignmentSlots(
+  start: Date,
+  end: Date,
+  releaseWindows: string[],
+): Date[] {
+  const slots: Date[] = [];
+  const dayStart = new Date(start);
+  dayStart.setHours(0, 0, 0, 0);
+  const endDay = new Date(end);
+  endDay.setHours(23, 59, 59, 999);
+
+  for (
+    let day = new Date(dayStart);
+    day.getTime() <= endDay.getTime();
+    day.setDate(day.getDate() + 1)
+  ) {
+    for (const w of releaseWindows) {
+      const [hh, mm] = w.split(':').map((x) => Number(x));
+      const slot = new Date(day);
+      slot.setHours(hh || 0, mm || 0, 0, 0);
+      if (slot.getTime() < start.getTime() || slot.getTime() > end.getTime()) continue;
+      slots.push(slot);
+    }
+  }
+  return slots;
+}
+
+function computeLastAssignmentLabel(
+  start: Date,
+  end: Date,
+  releaseWindows: string[],
+  status: 'searching' | 'found' | 'failed',
+  foundAt?: Date | null,
+  staffName?: string,
+): string {
+  if (status === 'found' && foundAt) {
+    return `Dernière assignation · ${formatWhen(foundAt)}${staffName ? ` · ${staffName}` : ''}`;
+  }
+  if (status === 'failed') {
+    return `Fin assignations · ${formatWhen(end)} · échec`;
+  }
+
+  const slots = iterAssignmentSlots(start, end, releaseWindows);
+  if (slots.length === 0) {
+    return `Fin assignations · ${formatWhen(end)}`;
+  }
+  const lastSlot = slots[slots.length - 1];
+  return `Dernière assignation · ${formatWhen(lastSlot)}`;
+}
+
 function mapStaffAssignment(
   seq: FulltaskPlanDoc['sequences'][0],
   staffNames: Record<string, string>,
@@ -561,7 +702,11 @@ function mapStaffAssignment(
   const releaseWindows = a.releaseWindows?.length ? a.releaseWindows : ['11:00', '16:00'];
   const autoAssign = Boolean(a.autoAssign);
   const status =
-    a.status === 'trouvee' ? 'found' : a.status === 'echec' ? 'failed' : 'searching';
+    isAssignationFoundStatus(a.status) ? 'found' : a.status === 'echec' ? 'failed' : 'searching';
+  const windowPast = end.getTime() <= now.getTime();
+  const windowOpen = start.getTime() <= now.getTime() && end.getTime() > now.getTime();
+  const windowFuture = start.getTime() > now.getTime();
+  const foundAt = toDate(a.foundAt);
 
   return {
     status,
@@ -584,8 +729,18 @@ function mapStaffAssignment(
       status,
       staffName,
     ),
+    lastAssignmentLabel: computeLastAssignmentLabel(
+      start,
+      end,
+      releaseWindows,
+      status,
+      foundAt,
+      staffName,
+    ),
     staffName,
-    windowPast: end.getTime() <= now.getTime(),
+    windowPast,
+    windowOpen,
+    windowFuture,
   };
 }
 
@@ -657,7 +812,11 @@ function buildSequenceFlow(
       sortAt: end.toISOString(),
       title: 'Assignation staff — clôture fenêtre',
       when: formatWhen(end),
-      status: mapRelanceStatus(end, a.status === 'trouvee' ? 'envoyee' : 'en_attente', now),
+      status: mapRelanceStatus(
+        end,
+        isAssignationFoundStatus(a.status) ? 'envoyee' : 'en_attente',
+        now,
+      ),
       detail: a.autoAssign
         ? 'Auto-accept actif'
         : `Acceptation sous ${a.acceptToleranceHours ?? 3} h si staff proposé`,
@@ -680,21 +839,16 @@ function buildSequenceFlow(
 
   if (seq.escalade) {
     const at = toDate(seq.escalade.scheduledAt) || now;
+    const escStatus = normalizeEscaladeStatus(seq.escalade.status);
+    const escRaw = mapEscaladeAtomRaw(escStatus);
     items.push({
       id: 'escalade',
       phase: 'escalade',
       sortAt: at.toISOString(),
       title: 'Escalade PM',
       when: formatWhen(at),
-      status: mapRelanceStatus(
-        at,
-        seq.escalade.status === 'declenchee' ? 'envoyee' : 'en_attente',
-        now,
-      ),
-      detail:
-        seq.escalade.status === 'declenchee'
-          ? 'Escalade déclenchée'
-          : 'Si tâche non confirmée avant deadline',
+      status: mapRelanceStatus(at, escRaw, now),
+      detail: escaladeDescription(escStatus),
     });
   }
 
@@ -787,7 +941,6 @@ function buildSequenceView(
 ): PlanSequenceView {
   const start = toDate(seq.assignation?.startAt) || toDate(seq.relances[0]?.scheduledAt) || now;
   const end = toDate(seq.assignation?.endAt);
-  const status = eventStatusAt(start, seq.status, now);
   const icon =
     FULLTASK_TASK_TYPE_EMOJI[seq.taskType as keyof typeof FULLTASK_TASK_TYPE_EMOJI] || '⚙️';
 
@@ -856,40 +1009,8 @@ function buildSequenceView(
 
   const staffAssignment = mapStaffAssignment(seq, staffNames, now);
   const attempts = mapAttempts(seq, staffNames);
-  const escRef = normalizeScheduleRef(seq.escalade?.scheduleRef, seq.taskType);
-  const escAnchor =
-    anchorDateForScheduleRef(plan, escRef, taskAnchorDate) ||
-    toDate(
-      escRef === 'checkout'
-        ? plan.checkOut
-        : escRef === 'scheduledDate'
-          ? taskAnchorDate
-          : plan.checkIn,
-    ) ||
-    now;
   const escalade = seq.escalade
-    ? {
-        scheduled: seq.escalade.status === 'en_attente',
-        dueAt: formatWhen(toDate(seq.escalade.scheduledAt) || now),
-        scheduleOffsetLabel:
-          formatScheduleOffset(
-            seq.escalade.scheduleDay,
-            escRef,
-            seq.escalade.scheduleTime,
-            seq.taskType,
-          ) ??
-          inferScheduleOffsetFromDates(
-            toDate(seq.escalade.scheduledAt) || now,
-            escAnchor,
-            escRef,
-            seq.escalade.scheduleTime,
-            seq.taskType,
-          ),
-        description:
-          seq.escalade.status === 'declenchee'
-            ? 'Escalade PM déclenchée'
-            : 'Escalade PM si non confirmé avant deadline',
-      }
+    ? mapEscaladeView(seq.escalade, plan, seq.taskType, taskAnchorDate, now)
     : undefined;
 
   const baseTitle = labelForTaskTypeId(seq.taskType);
@@ -897,6 +1018,30 @@ function buildSequenceView(
     seq.taskType === 'cleaning_free' && cleaningFreeCount > 1
       ? `${baseTitle} · ${formatWhen(start)}`
       : baseTitle;
+
+  const clientActionCompleted = Boolean(seq.clientActionCompleted);
+  const clientChosenTime =
+    seq.task?.payload?.selectedTime?.trim() ||
+    seq.task?.payload?.time?.trim() ||
+    seq.task?.payload?.declaredTime?.trim() ||
+    undefined;
+
+  const taskStatus = seq.task?.status;
+  const registrationProgress =
+    seq.taskType === 'registration' && seq.task?.payload
+      ? (() => {
+          const counts = registrationCountsFromPayload(
+            seq.task.payload as Record<string, unknown>,
+          );
+          const total = counts.adults ?? 0;
+          if (total <= 0) return undefined;
+          return { registered: counts.nbreGuestValidated, total };
+        })()
+      : undefined;
+  const status = deriveSequenceDisplayStatus({
+    taskStatus,
+    seqStatus: seq.status,
+  });
 
   return {
     id: sequenceId || String(seq.taskId || seq.taskType),
@@ -917,6 +1062,10 @@ function buildSequenceView(
     hasAssignation: Boolean(seq.assignation),
     hasStaffReminders: staffReminders.length > 0,
     hasEscalade: Boolean(escalade),
+    clientActionCompleted,
+    clientChosenTime,
+    taskStatus,
+    registrationProgress,
   };
 }
 
@@ -941,7 +1090,7 @@ export function buildPlanViewModel(
       messageCategory === 'simple'
         ? messagePlanOrderKey(m.messageId, m.template)
         : inferWorkflowKeyFromRelanceLabel(m.label);
-    const delivered = m.status === 'envoye';
+    const delivered = isAtomeSentStatus(m.status);
     const { lastDispatch, lastDispatchAttempt, dispatchLog } = mapDispatchLog(m.dispatchLog, {
       itemDelivered: delivered,
     });
@@ -994,14 +1143,7 @@ export function buildPlanViewModel(
     const staffAssignment = mapStaffAssignment(seq, staffNames, now);
     const sequenceFlow = buildSequenceFlow(seq, staffNames, now);
     const escalade = seq.escalade
-      ? {
-          scheduled: seq.escalade.status === 'en_attente',
-          dueAt: formatWhen(toDate(seq.escalade.scheduledAt) || now),
-          description:
-            seq.escalade.status === 'declenchee'
-              ? 'Escalade PM déclenchée'
-              : 'Escalade PM si non confirmé avant deadline',
-        }
+      ? mapEscaladeView(seq.escalade, plan, seq.taskType, start, now)
       : undefined;
 
     const futureParts: string[] = [];
@@ -1073,6 +1215,8 @@ export function buildPlanViewModel(
     ownerId: plan.ownerId,
     listingId: plan.listingId,
     orchestrationConfigSource: plan.orchestrationConfigSource,
+    guestPhone: plan.guestPhone,
+    guestName: plan.guestName,
     events: ordered,
     sequences,
     messages: ordered.filter((e) => e.kind === 'message'),

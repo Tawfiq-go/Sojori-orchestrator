@@ -73,7 +73,8 @@ export interface AssignAttempt {
 }
 
 export interface Escalade {
-  scheduled: boolean;              // false = déjà déclenchée
+  scheduled: boolean;              // true = en_attente (pas encore due ou active)
+  status: 'en_attente' | 'active' | 'saute' | 'fait';
   dueAt: string;
   description: string;
   /** Ex. J-1 · check-in · 23:00 */
@@ -107,8 +108,8 @@ export interface PlanEvent {
   template?: string;
   /** Corps catalogue (non affiché sur /tasks/plans — statut envoi seulement). */
   messagePreviewFr?: string;
-  /** Statut Mongo plan.messages (envoye, en_attente, saute, echec). */
-  messageSendStatus?: 'en_attente' | 'envoye' | 'saute' | 'echec';
+  /** Statut Mongo plan.messages (fait = envoyé, legacy envoye). */
+  messageSendStatus?: 'en_attente' | 'fait' | 'envoye' | 'saute' | 'echec';
   /** Index dans plan.messages (srv-fulltask) pour envoi manuel. */
   messageIndex?: number;
   channelMeta?: string;            // "Envoyé · 14:08"
@@ -164,9 +165,15 @@ export interface StaffAssignmentPlan {
   slotsLabel: string;
   /** Prochaine assignation · date/heure ou staff retenu */
   nextAssignmentLabel: string;
+  /** Dernier créneau d'assignation dans la fenêtre (fin opérationnelle). */
+  lastAssignmentLabel: string;
   staffName?: string;
   /** Fenêtre assignation déjà passée (dates du plan = séjour). */
   windowPast?: boolean;
+  /** Fenêtre ouverte maintenant (start ≤ now < end). */
+  windowOpen?: boolean;
+  /** Fenêtre pas encore ouverte (now < start). */
+  windowFuture?: boolean;
 }
 
 /** Relance voyageur dans une séquence (niveau 3). */
@@ -226,6 +233,14 @@ export interface PlanSequenceView {
   hasAssignation: boolean;
   hasStaffReminders: boolean;
   hasEscalade: boolean;
+  /** Client a choisi heure arrivée/départ — bloc relances terminé. */
+  clientActionCompleted?: boolean;
+  /** Heure choisie par le client (depuis payload tâche). */
+  clientChosenTime?: string;
+  /** Statut tâche fulltask (waiting_guest, done, cancelled…). */
+  taskStatus?: string;
+  /** Enregistrement voyageurs : validés / total attendus. */
+  registrationProgress?: { registered: number; total: number };
 }
 
 export interface ReservationPlan {
@@ -233,6 +248,8 @@ export interface ReservationPlan {
   /** Propriétaire du listing — config orchestration / task-config à charger pour ce plan. */
   ownerId?: string;
   listingId?: string;
+  guestPhone?: string;
+  guestName?: string;
   /** owner = config PM dédiée ; global_template = repli template admin (ownerId null). */
   orchestrationConfigSource?: 'owner' | 'global_template';
   /** Tous les événements (progression globale, filtres legacy). */
