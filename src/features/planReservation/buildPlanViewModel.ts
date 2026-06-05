@@ -154,14 +154,18 @@ function mapCanal(canal: string): Channel {
 }
 
 function formatWhen(d: Date): string {
+  // ⚠️ Utiliser timezone Casablanca pour l'affichage (UTC+1)
+  const casablanca = new Date(d.toLocaleString('en-US', { timeZone: 'Africa/Casablanca' }));
   const now = new Date();
+  const nowCasablanca = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Casablanca' }));
+
   const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    casablanca.getFullYear() === nowCasablanca.getFullYear() &&
+    casablanca.getMonth() === nowCasablanca.getMonth() &&
+    casablanca.getDate() === nowCasablanca.getDate();
+  const time = `${String(casablanca.getHours()).padStart(2, '0')}:${String(casablanca.getMinutes()).padStart(2, '0')}`;
   if (sameDay) return `Aujourd'hui · ${time}`;
-  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} · ${time}`;
+  return `${casablanca.getDate()} ${MONTHS_SHORT[casablanca.getMonth()]} · ${time}`;
 }
 
 function formatRange(start: Date, end?: Date | null): string {
@@ -443,6 +447,7 @@ function mapRelanceExecution(
   else if (raw === 'echec') executionStatus = 'echec';
   else if (raw === 'saute') executionStatus = 'sautee';
   else if (isFuture) executionStatus = 'prevision';
+  else if (raw === 'en_attente' && !isFuture) executionStatus = 'en_retard';  // ✅ BUG FIX #2
   else executionStatus = 'en_attente';
 
   let status: RelanceStatus = 'scheduled';
