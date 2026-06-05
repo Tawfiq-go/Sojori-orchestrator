@@ -59,17 +59,36 @@ export function groupStatusLabel(status: EventStatus): string {
 
 export function aggregateRelancesGroupStatus(
   relances: Pick<PlanGuestRelanceItem, 'status' | 'executionStatus'>[],
+  actionCompleted: boolean = false,
 ): EventStatus {
   if (relances.length === 0) return 'future';
+
+  // ✅ Client a complété l'action → terminé (plus besoin de relances)
+  if (actionCompleted) return 'done';
+
   if (relances.every((r) => r.executionStatus === 'envoyee')) return 'done';
 
-  // ✅ BUG FIX: Seul 'echec' bloque, 'sautee' est neutre (date passée à la création)
+  // ✅ BUG FIX #1: Seul 'echec' bloque, 'sautee' est neutre (date passée à la création)
   if (relances.some((r) => r.executionStatus === 'echec')) {
     return 'blocked';
   }
 
+  // En cours si au moins 1 envoyée
   if (relances.some((r) => r.executionStatus === 'envoyee')) return 'now';
+
+  // En cours si au moins 1 en retard ET au moins 1 future
+  const hasEnRetard = relances.some((r) => r.executionStatus === 'en_retard');
+  const hasFuture = relances.some((r) => r.executionStatus === 'prevision');
+  if (hasEnRetard && hasFuture) return 'now';
+
+  // En retard si tout passé (sautée/en_retard) et rien à venir
+  if (!hasFuture && !relances.some((r) => r.executionStatus === 'envoyee')) {
+    return 'pending';
+  }
+
+  // Tout futur
   if (relances.every((r) => r.executionStatus === 'prevision')) return 'future';
+
   return 'pending';
 }
 
