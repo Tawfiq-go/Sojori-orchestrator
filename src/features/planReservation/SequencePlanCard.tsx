@@ -401,7 +401,7 @@ export default function SequencePlanCard({
   const taskId = seq.taskId || seq.id;
   const [open, setOpen] = useState(defaultOpenForStatus(seq.status));
 
-  const relGroup = aggregateRelancesGroupStatus(seq.relances);
+  const relGroup = aggregateRelancesGroupStatus(seq.relances, seq.clientActionCompleted);
   const staffGroup = aggregateStaffRemindersGroupStatus(seq.staffReminders);
   const assignGroup = aggregateAssignGroupStatus(seq.staffAssignment, seq.attempts);
 
