@@ -18,6 +18,8 @@ export interface Staff {
   fullName: string;
   phoneE164: string;
   whatsappE164: string;
+  /** Property manager — aligné plans / admins WA */
+  ownerId?: string;
   email?: string;
   /** Langue de travail — FR / EN / AR */
   lang?: 'fr' | 'en' | 'ar';

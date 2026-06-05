@@ -298,6 +298,7 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .ev-h .when{font-family:var(--mono);font-size:10.5px;color:var(--t3);font-weight:700;letter-spacing:0.04em;margin-left:auto;flex-shrink:0}
 .ev-h .when b{color:var(--t)}
 .ev-h .ds{font-size:11.5px;color:var(--t3);font-weight:500;margin-top:1px;line-height:1.4}
+.ev-h .ds .client-chosen-time{color:var(--su);font-weight:800;font-family:var(--mono);letter-spacing:0.02em}
 
 /* Status badge */
 .st-badge{font-family:var(--mono);font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;letter-spacing:0.06em;display:inline-flex;align-items:center;gap:4px}
@@ -346,6 +347,9 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .cfg-lbl{display:block;font-size:9px;font-family:var(--mono);font-weight:800;color:var(--t4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px}
 .cfg-val{font-size:11.5px;font-weight:700;color:var(--t2);line-height:1.3}
 .assign-next{font-size:11.5px;font-weight:700;color:var(--wa);margin-bottom:8px;line-height:1.35}
+.assign-next--last{color:var(--t3);font-weight:600;font-family:var(--mono);font-size:11px}
+.seq-l1 .when .registration-progress{font-weight:800;color:var(--su);font-family:var(--mono);letter-spacing:0.03em}
+.seq-l1 .when .registration-progress-label{color:var(--t3);font-weight:600;font-family:var(--sans);font-size:11px}
 .assign-winner{font-size:12px;color:var(--su);padding:8px 10px;background:var(--sut);border-radius:7px;margin-bottom:8px}
 .wa-slug{font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--in);background:var(--int);padding:2px 7px;border-radius:4px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
 
@@ -460,6 +464,25 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .escalade-row .info .ds{font-size:11px;color:var(--t3);margin-top:2px;font-family:var(--mono);letter-spacing:0.02em}
 .escalade-row .when{font-family:var(--mono);font-size:11px;color:var(--er);font-weight:800;letter-spacing:0.04em;text-align:right;flex-shrink:0}
 .escalade-row.scheduled .when{color:var(--t3)}
+.escalade-row.active{background:linear-gradient(135deg,var(--ert),rgba(200,30,30,0.08) 80%);border-color:rgba(200,30,30,0.35)}
+.escalade-row.active .when{color:var(--er)}
+
+/* Escalade — boutons admin (toujours actifs) */
+.escalade-actions-hint{margin:10px 0 6px;font-size:11px;color:var(--t3);line-height:1.45}
+.escalade-actions-hint--active{color:var(--er);font-weight:700}
+.escalade-actions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--b)}
+.escalade-action-btn{display:flex;align-items:center;gap:6px;min-height:34px;padding:6px 10px;border-radius:8px;border:1px solid var(--b);background:var(--bg1);font-size:11px;font-weight:700;color:var(--t2);cursor:pointer;text-align:left;line-height:1.25;transition:all .12s}
+.escalade-action-btn:hover:not(:disabled){border-color:var(--p);background:var(--pt);color:var(--pd)}
+.escalade-action-btn:disabled{opacity:0.42;cursor:not-allowed}
+.escalade-action-btn--danger{border-color:rgba(200,30,30,0.35);color:var(--er)}
+.escalade-action-btn--danger:hover:not(:disabled){background:var(--ert);border-color:var(--er)}
+.escalade-action-btn--primary{background:var(--pt);border-color:var(--p);color:var(--pd)}
+.escalade-action-btn-icon{font-size:14px;flex-shrink:0}
+.escalade-force-slot-label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--t2);margin:8px 0 12px}
+.escalade-force-slot-select{padding:8px 10px;border-radius:8px;border:1px solid var(--b);font-size:13px}
+.escalade-force-slot-actions{display:flex;justify-content:flex-end;gap:8px}
+.escalade-staff-highlight{border-color:var(--p)!important;background:var(--pt)!important}
+.plan-assign-pick-btn.disabled{pointer-events:none;opacity:0.45}
 
 /* Message preview body */
 .msg-template-id{font-size:10.5px;color:var(--t4);font-family:var(--mono)}

@@ -12,13 +12,16 @@ import type {
 import DispatchLastSendLine from './DispatchLastSendLine';
 import PlanAssignButtons from './PlanAssignButtons';
 import PlanDispatchButton from './PlanDispatchButton';
+import EscaladeActionsPanel from './EscaladeActionsPanel';
 import {
   aggregateAssignGroupStatus,
   aggregateRelancesGroupStatus,
   aggregateStaffRemindersGroupStatus,
   groupStatusLabel,
+  relancesGroupStatusLabel,
   relanceExecutionEventStatus,
   relanceExecutionLabel,
+  sequenceStatusLabel,
   showRelanceConfigHint,
 } from './planGroupStatus';
 
@@ -26,8 +29,10 @@ function defaultOpenForStatus(_status: EventStatus): boolean {
   return false;
 }
 
-function GroupStatusBadge({ status }: { status: EventStatus }) {
-  return <span className={`st-badge group-st ${status}`}>{groupStatusLabel(status)}</span>;
+function GroupStatusBadge({ status, label }: { status: EventStatus; label?: string }) {
+  return (
+    <span className={`st-badge group-st ${status}`}>{label ?? groupStatusLabel(status)}</span>
+  );
 }
 
 function ChannelChip({ channel }: { channel: Channel }) {
@@ -42,6 +47,7 @@ function CollapseBlock({
   icon,
   title,
   groupStatus,
+  groupStatusLabel: statusLabel,
   countLabel,
   defaultOpen,
   children,
@@ -49,6 +55,7 @@ function CollapseBlock({
   icon: string;
   title: string;
   groupStatus: EventStatus;
+  groupStatusLabel?: string;
   countLabel: string;
   defaultOpen?: boolean;
   children: ReactNode;
@@ -59,7 +66,7 @@ function CollapseBlock({
       <button type="button" className="l2-block-h" onClick={() => setOpen((o) => !o)}>
         <span className="l2-em">{icon}</span>
         <span className="l2-title">{title}</span>
-        <GroupStatusBadge status={groupStatus} />
+        <GroupStatusBadge status={groupStatus} label={statusLabel} />
         <span className="l2-ct">{countLabel}</span>
         <span className="l2-arr">▶</span>
       </button>
@@ -116,7 +123,7 @@ function RelanceDispatchRow({
   onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
 }) {
   const [rowLoading, setRowLoading] = useState(false);
-  const wasSent = r.rawStatus === 'envoyee';
+  const wasSent = r.rawStatus === 'envoyee' || r.rawStatus === 'fait';
 
   return (
         <div
@@ -165,7 +172,9 @@ function assignExecutionLine(assign: StaffAssignmentPlan): string {
   }
   if (assign.status === 'failed') return 'Exécution · échec assignation';
   if (assign.windowPast) return 'Exécution · fenêtre passée sans assignation confirmée';
-  return 'Prévu · fenêtre à venir';
+  if (assign.windowOpen) return 'Exécution · fenêtre ouverte';
+  if (assign.windowFuture) return 'Prévu · fenêtre à venir';
+  return 'Exécution · assignation en cours';
 }
 
 function AssignBlockBody({
@@ -244,7 +253,12 @@ function AssignBlockBody({
         ) : null}
       </div>
       ) : null}
-      {showConfig ? <div className="assign-next">{assign.nextAssignmentLabel}</div> : null}
+      {showConfig ? (
+        <>
+          <div className="assign-next">{assign.nextAssignmentLabel}</div>
+          <div className="assign-next assign-next--last">{assign.lastAssignmentLabel}</div>
+        </>
+      ) : null}
       {assign.staffName && assign.status === 'found' ? (
         <div className="assign-winner">
           ✓ Staff retenu · <b>{assign.staffName}</b>
@@ -310,7 +324,7 @@ function StaffReminderDispatchRow({
   onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
 }) {
   const [rowLoading, setRowLoading] = useState(false);
-  const wasSent = r.rawStatus === 'envoyee';
+  const wasSent = r.rawStatus === 'envoyee' || r.rawStatus === 'fait';
 
   return (
         <div
@@ -364,7 +378,13 @@ function sequenceConfigSubtitle(seq: PlanSequenceView): string {
   const parts: string[] = [];
   parts.push(`${rel} relance${rel !== 1 ? 's' : ''}`);
   if (staffRel > 0) parts.push(`${staffRel} rappel staff`);
-  if (!seq.hasEscalade) parts.push('escalade off');
+  if (seq.clientActionCompleted && seq.clientChosenTime && seq.taskType !== 'registration') {
+    parts.push(
+      seq.taskType === 'departure_choose' || seq.taskType === 'departure_declare'
+        ? `départ · ${seq.clientChosenTime}`
+        : `arrivée · ${seq.clientChosenTime}`,
+    );
+  } else if (!seq.hasEscalade) parts.push('escalade off');
   else if (seq.escalade?.scheduleOffsetLabel) {
     parts.push(`escalade ${seq.escalade.scheduleOffsetLabel}`);
   } else parts.push('escalade');
@@ -373,7 +393,9 @@ function sequenceConfigSubtitle(seq: PlanSequenceView): string {
 
 function relanceCountSummary(
   items: { executionStatus: PlanGuestRelanceItem['executionStatus'] }[],
+  actionCompleted = false,
 ): string {
+  if (actionCompleted) return 'action client complétée';
   const envoyee = items.filter((r) => r.executionStatus === 'envoyee').length;
   const sautee = items.filter((r) => r.executionStatus === 'sautee').length;
   const echec = items.filter((r) => r.executionStatus === 'echec').length;
@@ -392,10 +414,16 @@ function relanceCountSummary(
 export default function SequencePlanCard({
   seq,
   reservationId,
+  guestPhone,
+  guestName,
+  reservationRef,
   onDispatched,
 }: {
   seq: PlanSequenceView;
   reservationId: string;
+  guestPhone?: string;
+  guestName?: string;
+  reservationRef?: string;
   onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
 }) {
   const taskId = seq.taskId || seq.id;
@@ -420,10 +448,41 @@ export default function SequencePlanCard({
             {seq.planStep != null && <span className="plan-step-num">#{seq.planStep}</span>}
             <span className="nm">{seq.title}</span>
             <span className="kind-badge sequence-kind">Séquence</span>
-            <GroupStatusBadge status={seq.status} />
+            <GroupStatusBadge
+              status={seq.status}
+              label={sequenceStatusLabel(seq.status, seq.taskStatus)}
+            />
           </div>
-          <div className="ds">{sequenceConfigSubtitle(seq)}</div>
-          <span className="when">{seq.range || seq.atDisplay}</span>
+          <div className="ds">
+            {sequenceConfigSubtitle(seq)
+              .split(' · ')
+              .map((part, i, arr) => {
+                const chosen =
+                  seq.clientActionCompleted &&
+                  seq.clientChosenTime &&
+                  (part === `arrivée · ${seq.clientChosenTime}` ||
+                    part === `départ · ${seq.clientChosenTime}` ||
+                    part === `enregistré · ${seq.clientChosenTime}`);
+                return (
+                  <span key={part}>
+                    {chosen ? <span className="client-chosen-time">{part}</span> : part}
+                    {i < arr.length - 1 ? ' · ' : null}
+                  </span>
+                );
+              })}
+          </div>
+          <span className="when">
+            {seq.taskType === 'registration' && seq.registrationProgress ? (
+              <>
+                <span className="registration-progress">
+                  {seq.registrationProgress.registered}/{seq.registrationProgress.total}
+                </span>
+                <span className="registration-progress-label"> enregistrés</span>
+              </>
+            ) : (
+              seq.range || seq.atDisplay
+            )}
+          </span>
         </div>
         <span className="arr">▶</span>
       </div>
@@ -435,7 +494,12 @@ export default function SequencePlanCard({
               icon="📨"
               title="Relances voyageur"
               groupStatus={relGroup}
-              countLabel={relanceCountSummary(seq.relances)}
+              groupStatusLabel={relancesGroupStatusLabel(
+                relGroup,
+                seq.relances,
+                Boolean(seq.clientActionCompleted),
+              )}
+              countLabel={relanceCountSummary(seq.relances, seq.clientActionCompleted)}
               defaultOpen={defaultOpenForStatus(relGroup)}
             >
               <RelanceRows
@@ -488,27 +552,74 @@ export default function SequencePlanCard({
 
           {seq.hasEscalade && seq.escalade ? (
             <CollapseBlock
-              icon="🛡"
+              icon={seq.escalade.status === 'active' ? '🚨' : '🛡'}
               title="Escalade PM"
-              groupStatus={seq.escalade.scheduled ? 'future' : 'done'}
+              groupStatus={
+                seq.escalade.status === 'active'
+                  ? 'now'
+                  : seq.escalade.status === 'saute' || seq.escalade.status === 'fait'
+                    ? 'done'
+                    : seq.escalade.scheduled
+                      ? 'future'
+                      : 'now'
+              }
               countLabel={
                 seq.escalade.scheduleOffsetLabel ||
-                (seq.escalade.scheduled ? 'Prévue si non confirmé' : 'Déclenchée')
+                (seq.escalade.status === 'active'
+                  ? 'Active · intervention'
+                  : seq.escalade.status === 'saute'
+                    ? 'Non nécessaire'
+                    : seq.escalade.scheduled
+                      ? 'Prévue si non confirmé'
+                      : 'Active · intervention')
               }
-              defaultOpen={defaultOpenForStatus(seq.escalade.scheduled ? 'future' : 'done')}
+              defaultOpen={defaultOpenForStatus(
+                seq.escalade.status === 'active'
+                  ? 'now'
+                  : seq.escalade.status === 'saute' || seq.escalade.status === 'fait'
+                    ? 'done'
+                    : seq.escalade.scheduled
+                      ? 'future'
+                      : 'now',
+              )}
             >
-              <div className={`escalade-row${seq.escalade.scheduled ? ' scheduled' : ''}`}>
-                <div className="em">{seq.escalade.scheduled ? '🛡' : '🚨'}</div>
+              <div
+                className={`escalade-row${
+                  seq.escalade.status === 'active'
+                    ? ' active'
+                    : seq.escalade.status === 'saute' || seq.escalade.status === 'fait'
+                      ? ' skipped'
+                      : seq.escalade.scheduled
+                        ? ' scheduled'
+                        : ' active'
+                }`}
+              >
+                <div className="em">
+                  {seq.escalade.status === 'active'
+                    ? '🚨'
+                    : seq.escalade.status === 'saute' || seq.escalade.status === 'fait'
+                      ? '✓'
+                      : seq.escalade.scheduled
+                        ? '🛡'
+                        : '🚨'}
+                </div>
                 <div className="info">
-                  <b>
-                    {seq.escalade.scheduled
-                      ? 'Escalade prévue si non confirmé'
-                      : 'Escalade déclenchée'}
-                  </b>
-                  <div className="ds">{seq.escalade.description}</div>
+                  <b>{seq.escalade.description}</b>
+                  <div className="ds">{seq.escalade.dueAt}</div>
                 </div>
                 <div className="when">{seq.escalade.dueAt}</div>
               </div>
+              <EscaladeActionsPanel
+                reservationId={reservationId}
+                taskId={taskId}
+                taskType={seq.taskType}
+                escalade={seq.escalade}
+                guestPhone={guestPhone}
+                guestName={guestName}
+                reservationRef={reservationRef}
+                staffAssignment={seq.staffAssignment}
+                onDispatched={onDispatched}
+              />
             </CollapseBlock>
           ) : null}
 

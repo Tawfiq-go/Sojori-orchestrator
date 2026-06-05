@@ -20,6 +20,25 @@ import './tasksTeamPage.css';
 
 type HubTab = 'equipe' | 'admin';
 
+function resolveStaffOwnerIdForSave(
+  sessionOwnerId: string | undefined,
+  form: Staff,
+  listings: { id: string; name: string; ownerId?: string }[],
+): string | undefined {
+  if (sessionOwnerId) return sessionOwnerId;
+  if (form.ownerId) return form.ownerId;
+  const allowed = form.allowedListingIds || [];
+  for (const lid of allowed) {
+    const listing = listings.find((l) => l.id === lid);
+    if (listing?.ownerId) return listing.ownerId;
+  }
+  const owners = [
+    ...new Set(listings.map((l) => l.ownerId).filter(Boolean) as string[]),
+  ];
+  if (owners.length === 1) return owners[0];
+  return undefined;
+}
+
 export default function TasksStaffFulltaskPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -80,13 +99,10 @@ export default function TasksStaffFulltaskPage() {
   const loadStaff = useCallback(async () => {
     setLoadingStaff(true);
     try {
-      const staffRes = await fulltaskApi.listStaff();
-      let rows = staffRes?.data || [];
-      if (ownerId) {
-        rows = rows.filter(
-          (s: Record<string, unknown>) => !s.ownerId || String(s.ownerId) === String(ownerId),
-        );
-      }
+      const params: Record<string, unknown> = {};
+      if (ownerId) params.owner_id = ownerId;
+      const staffRes = await fulltaskApi.listStaff(params);
+      const rows = staffRes?.data || [];
       setStaff(rows.map((r: Record<string, unknown>) => apiStaffToDesign(r) as Staff));
     } catch (e: unknown) {
       const err = e as { message?: string };
@@ -159,8 +175,10 @@ export default function TasksStaffFulltaskPage() {
             useMockFallback={false}
             onSave={async (form, editingId) => {
               try {
+                const resolvedOwnerId = resolveStaffOwnerIdForSave(ownerId, form, listings);
                 const body = designStaffToApi(form as Record<string, unknown>, {
                   isCreate: !editingId,
+                  ownerId: resolvedOwnerId,
                 });
                 if (editingId) await fulltaskApi.updateStaff(editingId, body);
                 else await fulltaskApi.createStaff(body);

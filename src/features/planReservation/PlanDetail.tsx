@@ -117,6 +117,9 @@ export default function PlanDetail({
               key={ev.id}
               seq={seq}
               reservationId={r.id}
+              guestPhone={plan.guestPhone}
+              guestName={plan.guestName ?? r.guest.name}
+              reservationRef={r.reference}
               onDispatched={onPlanUpdated}
             />,
           );
@@ -124,7 +127,7 @@ export default function PlanDetail({
       }
     }
     return nodes;
-  }, [orderedTimelineEvents, sequenceByEventId, r.id, onPlanUpdated]);
+  }, [orderedTimelineEvents, sequenceByEventId, r.id, r.guest.name, r.reference, plan.guestPhone, plan.guestName, onPlanUpdated]);
 
   return (
     <div className="wrap">
@@ -401,11 +404,11 @@ function DateBlock({ label, iso, right }: { label: string; iso: string; right?: 
 
 function messageExecutionStatus(ev: PlanEvent): RelanceExecutionStatus {
   const raw = ev.messageSendStatus;
-  if (raw === 'envoye') return 'envoyee';
+  if (raw === 'envoye' || raw === 'fait') return 'envoyee';
   if (raw === 'saute') return 'sautee';
   if (raw === 'echec') return 'echec';
   if (ev.status === 'done' && raw !== 'echec') return 'envoyee';
-  if (ev.lastDispatch && !ev.lastDispatch.ok && raw !== 'envoye') return 'echec';
+  if (ev.lastDispatch && !ev.lastDispatch.ok && raw !== 'envoye' && raw !== 'fait') return 'echec';
   if (ev.status === 'future') return 'prevision';
   return 'en_attente';
 }
@@ -429,7 +432,7 @@ function MessagePlanCard({
   onDispatched?: (planDoc?: FulltaskPlanDoc) => void;
 }) {
   const exec = messageExecutionStatus(ev);
-  const wasSent = ev.messageSendStatus === 'envoye';
+  const wasSent = ev.messageSendStatus === 'envoye' || ev.messageSendStatus === 'fait';
   const [histOpen, setHistOpen] = useState(false);
   const [rowLoading, setRowLoading] = useState(false);
   const canManualSend = ev.messageIndex != null && ev.messageCategory === 'simple';

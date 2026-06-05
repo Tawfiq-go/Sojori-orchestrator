@@ -8,10 +8,12 @@ import {
 export const FULLTASK_TO_LEGACY_STATUS: Record<string, string> = {
   waiting_guest: 'CREATED',
   new: 'CREATED',
-  confirmed: 'ASSIGNED',
+  pending_partner: 'ASSIGNED',
+  confirmed: 'ACCEPTED',
   doing: 'IN_PROGRESS',
   done: 'COMPLETED',
   cancelled: 'CANCELLED_ADMIN',
+  rejected: 'CANCELLED_ADMIN',
 };
 
 export const LEGACY_TO_FULLTASK_STATUS: Record<string, string> = {
@@ -123,7 +125,7 @@ function buildConciergeDetailLine(
   return note
 }
 
-function mapRegistrationCounts(
+export function registrationCountsFromPayload(
   payload: Record<string, unknown>,
   reservationAdults?: number,
 ) {
@@ -166,22 +168,25 @@ export function fullTaskToListItem(
   const taskType = String(task.type || '');
   const regCounts =
     taskType === 'registration'
-      ? mapRegistrationCounts(payload, reservationMeta?.adults)
+      ? registrationCountsFromPayload(payload, reservationMeta?.adults)
       : null;
   const isCleaningType =
     taskType === 'cleaning_free' || taskType === 'cleaning_paid';
-  const plannedTime =
-    taskType === 'arrival_choose' || taskType === 'departure_choose' || isCleaningType
-      ? formatPayloadTime(
-          payload.time ?? payload.selectedTime ?? payload.defaultTime,
-        ) ?? slotIdToTimeLabel(payload.slotId)
-      : undefined;
-  const hourSource =
+  const showsGuestHour =
     taskType === 'arrival_choose' ||
     taskType === 'departure_choose' ||
-    isCleaningType
-      ? mapPayloadHourSource(payload)
+    taskType === 'arrival_declare' ||
+    taskType === 'departure_declare' ||
+    isCleaningType;
+  const plannedTime = showsGuestHour
+      ? formatPayloadTime(
+          payload.time ??
+            payload.selectedTime ??
+            payload.declaredTime ??
+            payload.defaultTime,
+        ) ?? slotIdToTimeLabel(payload.slotId)
       : undefined;
+  const hourSource = showsGuestHour ? mapPayloadHourSource(payload) : undefined;
   const requestedAtRaw = task.requestedAt
     ? String(task.requestedAt)
     : hourSource === 'client'
@@ -289,6 +294,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     fullName: String(row.name),
     phoneE164: String(row.phone),
     whatsappE164: String(row.phone),
+    ownerId: row.ownerId ? String(row.ownerId) : undefined,
     status: 'active' as const,
     isAdmin: Boolean(row.isAdmin),
     contractType: row.contractType === 'salaried' ? ('employee' as const) : ('freelance' as const),
@@ -304,7 +310,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
 
 export function designStaffToApi(
   staff: Record<string, unknown>,
-  opts?: { isCreate?: boolean },
+  opts?: { isCreate?: boolean; ownerId?: string },
 ) {
   const sched = staff.schedule as { daysOfWeek?: number[]; timeWindows?: { start: string; end: string }[] };
   const schedule: { dayOfWeek: number; start: string; end: string }[] = [];
@@ -332,6 +338,7 @@ export function designStaffToApi(
   return {
     name: staff.fullName,
     phone: staff.whatsappE164 || staff.phoneE164,
+    ownerId: opts?.ownerId || staff.ownerId || null,
     lang: staff.lang || 'fr',
     contractType: staff.contractType === 'employee' ? 'salaried' : 'freelance',
     taskTypes: staff.allowedTaskTypes || [],
