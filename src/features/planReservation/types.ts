@@ -11,6 +11,7 @@ export type RelanceStatus = 'sent' | 'scheduled' | 'skipped';
 export type RelanceExecutionStatus =
   | 'prevision'
   | 'en_attente'
+  | 'en_retard'  // ✅ BUG FIX #2: état manquant pour date passée
   | 'envoyee'
   | 'sautee'
   | 'echec';
