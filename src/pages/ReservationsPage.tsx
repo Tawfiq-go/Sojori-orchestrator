@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState, startTransition } from 'reac
 import {
   Box, Stack, Typography, Paper, Chip, IconButton, Tooltip, Button,
   TextField, InputAdornment, FormControl, Select, MenuItem, Checkbox,
-  ListItemText, CircularProgress, Alert, Avatar, useMediaQuery, useTheme,
+  ListItemText, CircularProgress, Alert, useMediaQuery, useTheme,
   Card, CardContent, Divider,
 } from '@mui/material';
 import {
@@ -31,7 +31,10 @@ import 'moment/locale/fr';
 import reservationsService from '../services/reservationsService';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CreateReservationModal } from '../components/modals/CreateReservationModal';
+import { ReservationSourceIcon } from '../components/reservations/ReservationSourceIcon';
 import { blurActiveElement } from '../utils/domFocus';
+import { formatGuestCountryDisplay } from '../utils/guestCountryDisplay';
+import { ReservationStayActions, type StayFieldPatch } from '../components/reservations/ReservationStayActions';
 
 moment.locale('fr');
 
@@ -41,11 +44,14 @@ interface Reservation {
   reservationNumber: string;
   rentalsReservationId?: string;
   channelName: string;
+  source?: string;
+  byRentals?: boolean;
   listing: { name: string; _id: string };
   guestName: string;
   guestFirstName?: string;
   guestLastName?: string;
   guestCountry?: string;
+  guestCountryCode?: string;
   guestLanguage?: string;
   createdAt: string;
   arrivalDate: string;
@@ -132,84 +138,29 @@ const presenceMeta = (r: Reservation): { label: string; bg: string; color: strin
   return { label: 'En cours', bg: 'rgba(6,115,179,0.10)', color: T.info };
 };
 
-const OTABadge = ({ channel }: { channel: string }) => {
-  const c = (channel || '').toLowerCase();
-  const meta =
-    c.includes('airbnb')  ? { label: 'Airbnb',  bg: '#FF5A5F', initial: 'A' } :
-    c.includes('booking') ? { label: 'Booking', bg: '#003580', initial: 'B' } :
-    c.includes('expedia') ? { label: 'Expedia', bg: '#FECC00', initial: 'E' } :
-    c.includes('vrbo')    ? { label: 'Vrbo',    bg: '#0E6CB0', initial: 'V' } :
-                            { label: 'Direct',  bg: T.primary, initial: 'S' };
+const GuestCountryCell = ({
+  guestCountry,
+  guestCountryCode,
+  guestLanguage,
+}: {
+  guestCountry?: string;
+  guestCountryCode?: string;
+  guestLanguage?: string;
+}) => {
+  const { flag, label } = formatGuestCountryDisplay(guestCountry, guestCountryCode);
   return (
-    <Tooltip title={meta.label} arrow>
-      <Avatar sx={{
-        width: 26, height: 26, bgcolor: meta.bg, color: '#fff',
-        fontSize: 11, fontWeight: 700, letterSpacing: '0.02em',
-      }}>{meta.initial}</Avatar>
-    </Tooltip>
+    <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
+        {flag ? <span style={{ fontSize: 18, lineHeight: 1 }}>{flag}</span> : null}
+        <Typography sx={{ fontSize: 12.5, fontWeight: 500, color: T.text2 }} title={label}>
+          {label}
+        </Typography>
+      </Stack>
+      {guestLanguage ? (
+        <Typography sx={{ fontSize: 10.5, color: T.text4 }}>{guestLanguage}</Typography>
+      ) : null}
+    </Stack>
   );
-};
-
-const flagFor = (country?: string): string => {
-  if (!country) return '🌐';
-
-  // Map exhaustif de noms de pays vers codes ISO
-  const countryNameToCode: Record<string, string> = {
-    // Europe
-    'france': 'FR', 'germany': 'DE', 'spain': 'ES', 'italy': 'IT',
-    'united kingdom': 'GB', 'belgium': 'BE', 'netherlands': 'NL',
-    'switzerland': 'CH', 'portugal': 'PT', 'austria': 'AT', 'sweden': 'SE',
-    'norway': 'NO', 'denmark': 'DK', 'finland': 'FI', 'ireland': 'IE',
-    'poland': 'PL', 'greece': 'GR', 'czech republic': 'CZ', 'hungary': 'HU',
-    'romania': 'RO', 'bulgaria': 'BG', 'croatia': 'HR', 'slovakia': 'SK',
-    'slovenia': 'SI', 'lithuania': 'LT', 'latvia': 'LV', 'estonia': 'EE',
-    'luxembourg': 'LU', 'malta': 'MT', 'cyprus': 'CY', 'iceland': 'IS',
-
-    // Amériques
-    'united states': 'US', 'canada': 'CA', 'mexico': 'MX', 'brazil': 'BR',
-    'argentina': 'AR', 'chile': 'CL', 'colombia': 'CO', 'peru': 'PE',
-    'venezuela': 'VE', 'ecuador': 'EC', 'bolivia': 'BO', 'paraguay': 'PY',
-    'uruguay': 'UY', 'costa rica': 'CR', 'panama': 'PA', 'jamaica': 'JM',
-
-    // Moyen-Orient & Afrique du Nord
-    'morocco': 'MA', 'saudi arabia': 'SA', 'united arab emirates': 'AE',
-    'algeria': 'DZ', 'tunisia': 'TN', 'egypt': 'EG', 'qatar': 'QA',
-    'kuwait': 'KW', 'bahrain': 'BH', 'oman': 'OM', 'jordan': 'JO',
-    'lebanon': 'LB', 'israel': 'IL', 'palestine': 'PS', 'syria': 'SY',
-    'iraq': 'IQ', 'iran': 'IR', 'yemen': 'YE', 'libya': 'LY',
-
-    // Asie
-    'china': 'CN', 'japan': 'JP', 'india': 'IN', 'south korea': 'KR',
-    'singapore': 'SG', 'malaysia': 'MY', 'thailand': 'TH', 'vietnam': 'VN',
-    'indonesia': 'ID', 'philippines': 'PH', 'pakistan': 'PK', 'bangladesh': 'BD',
-    'hong kong': 'HK', 'taiwan': 'TW', 'myanmar': 'MM', 'cambodia': 'KH',
-    'laos': 'LA', 'nepal': 'NP', 'sri lanka': 'LK', 'maldives': 'MV',
-    'brunei': 'BN', 'mongolia': 'MN', 'kazakhstan': 'KZ', 'uzbekistan': 'UZ',
-
-    // Afrique
-    'south africa': 'ZA', 'nigeria': 'NG', 'kenya': 'KE', 'ethiopia': 'ET',
-    'ghana': 'GH', 'tanzania': 'TZ', 'uganda': 'UG', 'senegal': 'SN',
-    'ivory coast': 'CI', 'cameroon': 'CM', 'mali': 'ML', 'rwanda': 'RW',
-
-    // Océanie
-    'australia': 'AU', 'new zealand': 'NZ', 'fiji': 'FJ', 'papua new guinea': 'PG',
-
-    // Autres
-    'russia': 'RU', 'turkey': 'TR', 'ukraine': 'UA', 'belarus': 'BY',
-  };
-
-  // Si c'est déjà un code ISO à 2 lettres, l'utiliser directement
-  let code = country.length === 2 ? country.toUpperCase() : countryNameToCode[country.toLowerCase()];
-
-  // Support pour UK -> GB
-  if (code === 'UK') code = 'GB';
-
-  // Si pas de code trouvé, retourner globe
-  if (!code) return '🌐';
-
-  // Convertir le code ISO en drapeau emoji (Regional Indicator Symbols)
-  const codePoints = code.split('').map(char => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
 };
 
 // ─── Tri intelligent (comme legacy) ─────────────────────────────────
@@ -306,15 +257,25 @@ export function ReservationsPage() {
     }
   };
 
+  const handleStayFieldUpdate = useCallback((reservationId: string, patch: StayFieldPatch) => {
+    setReservations(prev =>
+      prev.map(r => (r._id === reservationId ? { ...r, ...patch } : r)),
+    );
+  }, []);
+
   // ─── Fetch (logique métier inchangée) ────────────────────────────
   const fetchReservations = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
+      const sjSearch = globalFilter.trim().match(/^SJ-/i) ? globalFilter.trim() : undefined;
       const response = await reservationsService.getList({
         page,
         limit,
         status: selectedStatuses.join(','),
+        reservationNumber: sjSearch,
+        sortField: 'createdAt',
+        sortOrder: 'desc',
       });
 
       const sorted = sortReservationsList(response.data as Reservation[]);
@@ -329,7 +290,7 @@ export function ReservationsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, limit, selectedStatuses]);
+  }, [page, limit, selectedStatuses, globalFilter]);
 
   useEffect(() => { fetchReservations(); }, [fetchReservations]);
 
@@ -613,11 +574,13 @@ export function ReservationsPage() {
 
         {/* MOBILE : cards · DESKTOP : table */}
         {!isLoading && !isMobile && visibleRows.length > 0 && (
-          <DesktopTable rows={visibleRows} onRowClick={handleViewDetails} onNavigate={navigate} onAcknowledge={handleAcknowledgeCancellation} />
+          <DesktopTable rows={visibleRows} onRowClick={handleViewDetails} onNavigate={navigate} onAcknowledge={handleAcknowledgeCancellation} onStayUpdate={handleStayFieldUpdate} />
         )}
         {!isLoading && isMobile && visibleRows.length > 0 && (
           <Stack spacing={1.25}>
-            {visibleRows.map((r) => <MobileCard key={r._id} r={r} onClick={() => handleViewDetails(r)} onAcknowledge={handleAcknowledgeCancellation} />)}
+            {visibleRows.map((r) => (
+              <MobileCard key={r._id} r={r} onClick={() => handleViewDetails(r)} onAcknowledge={handleAcknowledgeCancellation} onStayUpdate={handleStayFieldUpdate} />
+            ))}
           </Stack>
         )}
 
@@ -726,16 +689,17 @@ const Pill = ({ label, count, active, onClick, color }: { label: string; count: 
 );
 
 // ─── Desktop table ─────────────────────────────────────────────────
-function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge }: {
+function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdate }: {
   rows: Reservation[];
   onRowClick: (r: Reservation) => void;
   onNavigate: (path: string) => void;
   onAcknowledge?: (r: Reservation) => void;
+  onStayUpdate?: (reservationId: string, patch: StayFieldPatch) => void;
 }) {
   return (
     <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
       <Box sx={{ overflowX: 'auto' }}>
-        <Box component="table" sx={{ width: '100%', minWidth: 1500, borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <Box component="table" sx={{ width: '100%', minWidth: 1520, borderCollapse: 'collapse', fontSize: 12.5 }}>
           <Box component="thead">
             <Box component="tr" sx={{ bgcolor: T.bg2 }}>
               {['Réservation', 'Source', 'Propriété', 'Voyageur', 'Pays', 'Créé', 'Check-in', 'Check-out', 'Nuits', 'Présence', 'Statut', 'Prix', 'Voyageurs', 'Paiement', 'Actions'].map((h) => (
@@ -783,7 +747,9 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge }: {
                       )}
                     </Box>
                   </Box>
-                  <Box component="td"><OTABadge channel={r.channelName} /></Box>
+                  <Box component="td" sx={{ textAlign: 'center' }}>
+                    <ReservationSourceIcon reservation={r} />
+                  </Box>
                   <Box component="td">
                     <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text }}>
                       {r.listing?.name || '—'}
@@ -793,12 +759,11 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge }: {
                     <Typography sx={{ fontSize: 12.5, fontWeight: 500, color: T.text }}>{r.guestName || '—'}</Typography>
                   </Box>
                   <Box component="td">
-                    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-                      <span style={{ fontSize: 18 }}>{flagFor(r.guestCountry)}</span>
-                      <Typography sx={{ fontSize: 12.5, fontWeight: 500, color: T.text2 }}>
-                        {r.guestCountry || '—'}
-                      </Typography>
-                    </Stack>
+                    <GuestCountryCell
+                      guestCountry={r.guestCountry}
+                      guestCountryCode={r.guestCountryCode}
+                      guestLanguage={r.guestLanguage}
+                    />
                   </Box>
                   <Box component="td">
                     <Typography sx={{ fontSize: 12, color: T.text2 }}>
@@ -807,22 +772,28 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge }: {
                     <Typography sx={{ fontSize: 10.5, color: T.text4 }}>{moment(r.createdAt).format('HH:mm')}</Typography>
                   </Box>
                   <Box component="td">
-                    <Typography sx={{ fontSize: 12, color: T.text }}>{moment(r.arrivalDate).format('DD MMM YY')}</Typography>
-                    <Typography sx={{ fontSize: 10.5, color: r.confirmedCheckInTime ? T.success : T.text4 }}>
-                      {formatTime(r.checkInTime) || '15:00'}
-                    </Typography>
-                    {r.actualArrivalTime && (
-                      <Typography sx={{ fontSize: 10.5, color: T.success, fontWeight: 600 }}>✓ {formatTime(r.actualArrivalTime)}</Typography>
-                    )}
+                    <ReservationStayActions
+                      reservationId={r._id}
+                      kind="arrival"
+                      dateLabel={moment(r.arrivalDate).format('DD MMM YY')}
+                      chosenTime={r.checkInTime}
+                      chosenConfirmed={r.confirmedCheckInTime}
+                      declaredTime={r.actualArrivalTime}
+                      disabled={isCancelled}
+                      onStayUpdated={(patch) => onStayUpdate?.(r._id, patch)}
+                    />
                   </Box>
                   <Box component="td">
-                    <Typography sx={{ fontSize: 12, color: T.text }}>{moment(r.departureDate).format('DD MMM YY')}</Typography>
-                    <Typography sx={{ fontSize: 10.5, color: r.confirmedCheckOutTime ? T.success : T.text4 }}>
-                      {formatTime(r.checkOutTime) || '11:00'}
-                    </Typography>
-                    {r.actualDepartureTime && (
-                      <Typography sx={{ fontSize: 10.5, color: T.warning, fontWeight: 600 }}>✓ {formatTime(r.actualDepartureTime)}</Typography>
-                    )}
+                    <ReservationStayActions
+                      reservationId={r._id}
+                      kind="departure"
+                      dateLabel={moment(r.departureDate).format('DD MMM YY')}
+                      chosenTime={r.checkOutTime}
+                      chosenConfirmed={r.confirmedCheckOutTime}
+                      declaredTime={r.actualDepartureTime}
+                      disabled={isCancelled}
+                      onStayUpdated={(patch) => onStayUpdate?.(r._id, patch)}
+                    />
                   </Box>
                   <Box component="td" sx={{ textAlign: 'center' }}>
                     <Box sx={{
@@ -926,7 +897,7 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge }: {
 }
 
 // ─── Mobile card ───────────────────────────────────────────────────
-function MobileCard({ r, onClick, onAcknowledge }: { r: Reservation; onClick: () => void; onAcknowledge?: (r: Reservation) => void }) {
+function MobileCard({ r, onClick, onAcknowledge, onStayUpdate }: { r: Reservation; onClick: () => void; onAcknowledge?: (r: Reservation) => void; onStayUpdate?: (reservationId: string, patch: StayFieldPatch) => void }) {
   const s = statusMeta(r.status);
   const p = presenceMeta(r);
 
@@ -945,7 +916,7 @@ function MobileCard({ r, onClick, onAcknowledge }: { r: Reservation; onClick: ()
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
           <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
-            <OTABadge channel={r.channelName} />
+            <ReservationSourceIcon reservation={r} size={20} />
             <Typography sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 700, color: T.primaryDeep }}>
               {r.reservationNumber}
             </Typography>
@@ -986,21 +957,38 @@ function MobileCard({ r, onClick, onAcknowledge }: { r: Reservation; onClick: ()
 
         <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.text, mb: 0.5 }}>{r.listing?.name}</Typography>
         <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1.25 }}>
-          {flagFor(r.guestCountry)} {r.guestName}
+          {(() => {
+            const { flag, label } = formatGuestCountryDisplay(r.guestCountry, r.guestCountryCode);
+            return `${flag ? `${flag} ` : ''}${r.guestName}${label && label !== '—' ? ` · ${label}` : ''}`;
+          })()}
         </Typography>
         <Divider sx={{ my: 1.25 }} />
+        <Stack direction="row" spacing={1.5} sx={{ mb: 1 }} onClick={(e) => e.stopPropagation()}>
+          <ReservationStayActions
+            reservationId={r._id}
+            kind="arrival"
+            dateLabel={moment(r.arrivalDate).format('DD MMM YY')}
+            chosenTime={r.checkInTime}
+            chosenConfirmed={r.confirmedCheckInTime}
+            declaredTime={r.actualArrivalTime}
+            disabled={isCancelled}
+            onStayUpdated={(patch) => onStayUpdate?.(r._id, patch)}
+          />
+          <ReservationStayActions
+            reservationId={r._id}
+            kind="departure"
+            dateLabel={moment(r.departureDate).format('DD MMM YY')}
+            chosenTime={r.checkOutTime}
+            chosenConfirmed={r.confirmedCheckOutTime}
+            declaredTime={r.actualDepartureTime}
+            disabled={isCancelled}
+            onStayUpdated={(patch) => onStayUpdate?.(r._id, patch)}
+          />
+        </Stack>
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
           <Box>
-            <Typography sx={{ fontSize: 10.5, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Check-in</Typography>
-            <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{moment(r.arrivalDate).format('DD MMM')}</Typography>
-          </Box>
-          <Box sx={{ textAlign: 'center' }}>
             <Typography sx={{ fontSize: 10.5, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Nuits</Typography>
             <Typography sx={{ fontSize: 12.5, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}>{r.nights || 0}</Typography>
-          </Box>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography sx={{ fontSize: 10.5, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Check-out</Typography>
-            <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{moment(r.departureDate).format('DD MMM')}</Typography>
           </Box>
         </Stack>
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 1.25 }}>
