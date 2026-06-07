@@ -28,6 +28,9 @@ export default function PlanManualAssignModal({
   const [loading, setLoading] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<fulltaskApi.AssignationCandidate[]>([]);
+  const [assignmentContext, setAssignmentContext] = useState<
+    fulltaskApi.AssignationContext | undefined
+  >(undefined);
 
   const loadCandidates = useCallback(async () => {
     setLoading(true);
@@ -36,9 +39,11 @@ export default function PlanManualAssignModal({
       if (!res?.success) {
         toast.error(res?.error || 'Impossible de charger la liste staff');
         setCandidates([]);
+        setAssignmentContext(undefined);
         return;
       }
       setCandidates(res.data || []);
+      setAssignmentContext(res.assignmentContext);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur chargement staff');
       setCandidates([]);
@@ -89,8 +94,26 @@ export default function PlanManualAssignModal({
             ×
           </button>
         </div>
+        {assignmentContext ? (
+          <div className="plan-assign-modal-context" role="status">
+            <span className="plan-assign-modal-context-label">Créneau de la tâche</span>
+            <strong className="plan-assign-modal-context-value">
+              {assignmentContext.dayLabel} {assignmentContext.dateLabel}
+              {' · '}
+              {assignmentContext.timeLabel}
+              {assignmentContext.endTimeLabel &&
+              assignmentContext.endTimeLabel !== assignmentContext.timeLabel
+                ? ` – ${assignmentContext.endTimeLabel}`
+                : ''}
+            </strong>
+            <span className="plan-assign-modal-context-note">
+              Vérifiez cette date/heure avant de choisir un staff.
+            </span>
+          </div>
+        ) : null}
         <p className="plan-assign-modal-hint">
-          Filtre : accès listing → types de tâche. Planning OK en premier.
+          Filtre : accès listing → types de tâche. Disponibles en premier ; assignation forcée
+          possible (hors planning, quota ou conflit).
         </p>
         {loading ? (
           <p className="plan-assign-modal-empty">Chargement…</p>
@@ -100,7 +123,15 @@ export default function PlanManualAssignModal({
           <ul className="plan-assign-candidate-list">
             {candidates.map((c) => {
               const busy = assigningId === c.staffId;
-              const warn = !c.planningOk || c.atMaxCapacity;
+              const available =
+                c.availableForTask ??
+                (c.planningOk && !c.atMaxCapacity && !c.timeConflict);
+              const warn = !available;
+              const badges: string[] = [];
+              if (available) badges.push('disponible');
+              if (!c.planningOk) badges.push('hors planning');
+              if (c.timeConflict) badges.push('conflit horaire');
+              if (c.atMaxCapacity) badges.push('quota jour');
               return (
                 <li key={c.staffId} className={`plan-assign-candidate${warn ? ' warn' : ''}`}>
                   <div className="plan-assign-candidate-main">
@@ -109,8 +140,7 @@ export default function PlanManualAssignModal({
                       {c.contractType === 'salaried' ? 'Salarié' : 'Freelance'}
                       {' · '}
                       {c.load}/{c.maxTasksPerDay} tâches
-                      {!c.planningOk ? ' · hors planning' : ''}
-                      {c.atMaxCapacity ? ' · quota jour' : ''}
+                      {badges.length ? ` · ${badges.join(' · ')}` : ''}
                     </span>
                   </div>
                   <button

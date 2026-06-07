@@ -53,10 +53,20 @@ export interface FulltaskPlanDoc {
     clientActionCompletedAt?: string | Date;
     task?: {
       status?: string;
+      scheduledDate?: string | Date;
+      createdAt?: string | Date;
       payload?: {
         time?: string;
         selectedTime?: string;
         declaredTime?: string;
+        scheduledDate?: string | Date;
+        scheduled_date?: string;
+        scheduledTime?: string;
+        scheduled_time?: string;
+        serviceName?: string;
+        service_name?: string;
+        routeLabel?: string;
+        route_label?: string;
         totalToRegister?: number;
         guests?: Array<{ done?: boolean; draft?: boolean }>;
       };
@@ -97,12 +107,27 @@ export interface FulltaskPlanDoc {
       foundAt?: string | Date | null;
       staffId?: string | null;
       staffAcceptedAt?: string | Date | null;
-      attempts: Array<{ window: string; tried: boolean; found: boolean }>;
+      attempts: Array<{
+        window: string;
+        tried: boolean;
+        found: boolean;
+        failureReason?: string;
+        failureLabel?: string;
+      }>;
       autoAssign?: boolean;
       assignmentHoursMode?: 'planning' | 'always';
       findAnotherStaff?: boolean;
       acceptToleranceHours?: number;
       releaseWindows?: string[];
+      lmAttempts?: Array<{
+        label: string;
+        scheduledAt: string | Date;
+        status: string;
+        lm?: boolean;
+        triedAt?: string | Date | null;
+        failureReason?: string;
+        failureLabel?: string;
+      }>;
     } | null;
     escalade?: {
       scheduledAt: string | Date;
@@ -138,6 +163,15 @@ export interface FulltaskPlanDoc {
   checkIn?: string | Date;
   checkOut?: string | Date;
   bookingCreatedAt?: string | Date;
+  auditLog?: Array<{
+    at: string | Date;
+    type: string;
+    target: string;
+    from?: string;
+    to?: string;
+    reason?: string;
+    meta?: Record<string, unknown>;
+  }>;
 }
 
 const MONTHS_SHORT = ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUL', 'AOÛ', 'SEP', 'OCT', 'NOV', 'DÉC'];
@@ -186,6 +220,151 @@ function formatRange(start: Date, end?: Date | null): string {
   const s = `${start.getDate()} ${MONTHS_SHORT[start.getMonth()]}`;
   if (!end) return `${s} → en cours`;
   return `${s} → ${end.getDate()} ${MONTHS_SHORT[end.getMonth()]}`;
+}
+
+function isTaskScheduledDateAnchored(taskType: string): boolean {
+  const t = taskType.toLowerCase();
+  return (
+    t === 'cleaning_free' ||
+    t === 'cleaning_paid' ||
+    t === 'checkout_cleaning' ||
+    t === 'transport' ||
+    t === 'groceries' ||
+    t === 'concierge'
+  );
+}
+
+const TASK_TYPES_SHOW_CREATED_DAY = new Set(['support', 'service_client']);
+
+function taskPayloadRecord(
+  seq: FulltaskPlanDoc['sequences'][0],
+): Record<string, unknown> | undefined {
+  const p = seq.task?.payload;
+  return p && typeof p === 'object' ? (p as Record<string, unknown>) : undefined;
+}
+
+function resolveTaskDisplayDate(
+  seq: FulltaskPlanDoc['sequences'][0],
+  plan: FulltaskPlanDoc,
+  taskAnchorDate: Date | undefined,
+): Date | undefined {
+  const t = seq.taskType.toLowerCase();
+  const payload = taskPayloadRecord(seq);
+
+  if (isTaskScheduledDateAnchored(t)) {
+    return (
+      taskAnchorDate ??
+      toDate(seq.task?.scheduledDate) ??
+      toDate(payload?.scheduledDate) ??
+      toDate(payload?.scheduled_date) ??
+      undefined
+    );
+  }
+
+  if (TASK_TYPES_SHOW_CREATED_DAY.has(t)) {
+    return (
+      toDate(seq.task?.createdAt) ??
+      toDate(seq.assignation?.startAt) ??
+      toDate(plan.bookingCreatedAt) ??
+      undefined
+    );
+  }
+
+  return undefined;
+}
+
+function sequenceServiceLabel(seq: FulltaskPlanDoc['sequences'][0]): string | undefined {
+  const payload = taskPayloadRecord(seq);
+  if (!payload) return undefined;
+  const service = String(payload.serviceName ?? payload.service_name ?? '').trim();
+  if (service) return service;
+  const route = String(payload.routeLabel ?? payload.route_label ?? '').trim();
+  return route || undefined;
+}
+
+function buildSequenceTitle(
+  seq: FulltaskPlanDoc['sequences'][0],
+  baseTitle: string,
+  atDisplay: string,
+  typeCounts: Record<string, number>,
+): string {
+  const t = seq.taskType;
+  const service = sequenceServiceLabel(seq);
+  const showService =
+    service && (t === 'concierge' || t === 'transport' || t === 'groceries');
+  const showDate =
+    (t === 'cleaning_free' && (typeCounts.cleaning_free ?? 0) > 1) ||
+    isTaskScheduledDateAnchored(t) ||
+    TASK_TYPES_SHOW_CREATED_DAY.has(t);
+
+  if (!showService && !showDate) return baseTitle;
+
+  const parts = [baseTitle];
+  if (showService) parts.push(service!);
+  if (showDate) parts.push(atDisplay);
+  return parts.join(' · ');
+}
+
+function countSequencesByType(
+  sequences: FulltaskPlanDoc['sequences'],
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const s of sequences) {
+    counts[s.taskType] = (counts[s.taskType] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function casablancaLocalDate(d: Date): Date {
+  return new Date(d.toLocaleString('en-US', { timeZone: 'Africa/Casablanca' }));
+}
+
+/** Jour de la tâche (ex. date ménage) — pas la 1re relance ni la fenêtre assignation. */
+function formatTaskDayLabel(d: Date): string {
+  const casablanca = casablancaLocalDate(d);
+  const nowCasablanca = casablancaLocalDate(new Date());
+  const sameDay =
+    casablanca.getFullYear() === nowCasablanca.getFullYear() &&
+    casablanca.getMonth() === nowCasablanca.getMonth() &&
+    casablanca.getDate() === nowCasablanca.getDate();
+  if (sameDay) return "Aujourd'hui";
+  return `${casablanca.getDate()} ${MONTHS_SHORT[casablanca.getMonth()]}`;
+}
+
+function formatTaskDayWhen(d: Date): string {
+  const casablanca = casablancaLocalDate(d);
+  const dayLabel = formatTaskDayLabel(d);
+  const h = casablanca.getHours();
+  const m = casablanca.getMinutes();
+  if (h === 0 && m === 0) return dayLabel;
+  const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return `${dayLabel} · ${time}`;
+}
+
+function resolveSequenceTimelineDisplay(
+  seq: FulltaskPlanDoc['sequences'][0],
+  plan: FulltaskPlanDoc,
+  taskAnchorDate: Date | undefined,
+  now: Date,
+): { start: Date; end: Date | null; atDisplay: string; range: string } {
+  const displayDate = resolveTaskDisplayDate(seq, plan, taskAnchorDate);
+  if (displayDate) {
+    return {
+      start: displayDate,
+      end: null,
+      atDisplay: formatTaskDayWhen(displayDate),
+      range: formatTaskDayLabel(displayDate),
+    };
+  }
+  const start =
+    toDate(seq.assignation?.startAt) || toDate(seq.relances[0]?.scheduledAt) || now;
+  const end = toDate(seq.assignation?.endAt);
+  return {
+    start,
+    end,
+    atDisplay: formatWhen(start),
+    range: formatRange(start, end),
+  };
 }
 
 function isAtomeSentStatus(raw: string): boolean {
@@ -480,8 +659,28 @@ function mapDispatchLog(
     source?: 'manual' | 'scheduler';
     error?: string;
   }>,
-  options?: { itemDelivered?: boolean },
+  options?: {
+    itemDelivered?: boolean;
+    sentAt?: string | Date | null;
+    fallbackChannel?: string;
+  },
 ) {
+  if (!log?.length && options?.itemDelivered && options?.sentAt) {
+    const sent = toDate(options.sentAt);
+    if (sent) {
+      const iso = sent.toISOString();
+      const synthetic = [
+        {
+          at: iso,
+          ok: true,
+          channel: options.fallbackChannel,
+          source: 'scheduler' as const,
+        },
+      ];
+      const { lastDispatch, lastAttempt } = mapDispatchDisplay(synthetic, { itemDelivered: true });
+      return { lastDispatch, lastDispatchAttempt: lastAttempt, dispatchLog: synthetic };
+    }
+  }
   if (!log?.length) return { lastDispatch: undefined, lastDispatchAttempt: undefined, dispatchLog: undefined };
   const dispatchLog = log.map((e) => ({
     at: typeof e.at === 'string' ? e.at : new Date(e.at).toISOString(),
@@ -604,11 +803,33 @@ function computeNextAssignmentLabel(
   now: Date,
   status: 'searching' | 'found' | 'failed',
   staffName?: string,
+  lmAttempts?: Array<{
+    scheduledAt: string | Date;
+    status: string;
+    failureLabel?: string;
+  }>,
+  assignationExhausted?: boolean,
+  lmFailureLabel?: string,
 ): string {
   if (status === 'found' && staffName) {
     return `Staff assigné · ${staffName}`;
   }
+  if (assignationExhausted && lmFailureLabel) {
+    return `Assignation LM échouée · ${lmFailureLabel} · plus de relance`;
+  }
+  if (assignationExhausted) {
+    return 'Assignation terminée · échec · plus de relance';
+  }
   if (status === 'failed' || now.getTime() >= end.getTime()) {
+    const pendingLm = lmAttempts?.find((lm) => lm.status === 'en_attente');
+    if (pendingLm) {
+      const at = toDate(pendingLm.scheduledAt);
+      if (at) return `Prochaine assignation LM · ${formatWhen(at)}`;
+    }
+    const failedLm = lmAttempts?.find((lm) => lm.status === 'echec');
+    if (failedLm?.failureLabel) {
+      return `Assignation LM échouée · ${failedLm.failureLabel}`;
+    }
     return 'Fenêtre assignation terminée';
   }
 
@@ -707,6 +928,12 @@ function mapStaffAssignment(
   const windowOpen = start.getTime() <= now.getTime() && end.getTime() > now.getTime();
   const windowFuture = start.getTime() > now.getTime();
   const foundAt = toDate(a.foundAt);
+  const lmAttempts = a.lmAttempts ?? [];
+  const hasPendingLmAssign = lmAttempts.some((lm) => lm.status === 'en_attente');
+  const failedLm = lmAttempts.find((lm) => lm.status === 'echec');
+  const assignationExhausted =
+    status === 'failed' && Boolean(failedLm) && !hasPendingLmAssign;
+  const lmFailureLabel = failedLm?.failureLabel;
 
   return {
     status,
@@ -719,8 +946,11 @@ function mapStaffAssignment(
     acceptToleranceHours: a.acceptToleranceHours ?? 3,
     releaseWindows,
     modeLabel: autoAssign ? 'Auto-accept' : 'Manuel',
-    toleranceLabel: autoAssign ? undefined : `${a.acceptToleranceHours ?? 3} h`,
-    slotsLabel: releaseWindows.join(' / '),
+    toleranceLabel:
+      autoAssign || a.releaseMode === 'windows'
+        ? undefined
+        : `${a.acceptToleranceHours ?? 3} h`,
+    slotsLabel: a.releaseMode === 'tolerance' ? undefined : releaseWindows.join(' / '),
     nextAssignmentLabel: computeNextAssignmentLabel(
       start,
       end,
@@ -728,6 +958,9 @@ function mapStaffAssignment(
       now,
       status,
       staffName,
+      lmAttempts,
+      assignationExhausted,
+      lmFailureLabel,
     ),
     lastAssignmentLabel: computeLastAssignmentLabel(
       start,
@@ -741,7 +974,29 @@ function mapStaffAssignment(
     windowPast,
     windowOpen,
     windowFuture,
+    hasPendingLmAssign,
+    assignationExhausted,
+    lmFailureLabel,
   };
+}
+
+function mapLmAssignSlots(
+  seq: FulltaskPlanDoc['sequences'][0],
+  now = new Date(),
+): import('./types').PlanAssignLmItem[] {
+  const slots = seq.assignation?.lmAttempts ?? [];
+  return slots.map((lm, i) => {
+    const m = mapRelanceExecution(lm, i, 'wa', 'lm-assign', now);
+    const failureNote =
+      lm.status === 'echec' && lm.failureLabel ? lm.failureLabel : undefined;
+    return {
+      ...m,
+      relanceIndex: i,
+      scheduleOffsetLabel: failureNote
+        ? `LM · échec · ${failureNote}`
+        : 'LM · hors fenêtre',
+    };
+  });
 }
 
 function buildSequenceFlow(
@@ -821,6 +1076,25 @@ function buildSequenceFlow(
         ? 'Auto-accept actif'
         : `Acceptation sous ${a.acceptToleranceHours ?? 3} h si staff proposé`,
     });
+
+    for (let i = 0; i < (a.lmAttempts?.length ?? 0); i++) {
+      const lm = a.lmAttempts![i];
+      const at = toDate(lm.scheduledAt) || now;
+      items.push({
+        id: `assign-lm-${i}`,
+        phase: 'assign',
+        sortAt: at.toISOString(),
+        title: lm.label || `Assignation LM ${i + 1}`,
+        when: formatWhen(at),
+        status: mapAssignStatus(
+          at,
+          lm.status === 'fait' ? 'termine' : lm.status,
+          now,
+        ),
+        detail: 'Hors fenêtre config · prochain tick cron',
+        contextNote: 'Last-minute · après clôture fenêtre',
+      });
+    }
   }
 
   for (let i = 0; i < (seq.staffReminders?.length ?? 0); i++) {
@@ -875,18 +1149,35 @@ function mapAttempts(
   staffNames: Record<string, string>,
 ): AssignAttempt[] | undefined {
   if (!seq.assignation?.attempts?.length) return undefined;
+  const staffId = seq.assignation?.staffId ? String(seq.assignation.staffId) : '';
+  const assignedName = staffNames[staffId] || (staffId ? `Staff ${staffId.slice(-4)}` : undefined);
+
   return seq.assignation.attempts.map((a, i) => {
+    const isLm = a.window.startsWith('LM:');
     let result: AttemptResult = 'pending';
     if (a.found) result = 'accepted';
     else if (a.tried && !a.found) result = 'declined';
-    const staffId = seq.assignation?.staffId ? String(seq.assignation.staffId) : '';
+
+    let staffName = '—';
+    let staffRole = isLm ? 'LM assignation' : 'Staff';
+    if (a.found && assignedName) {
+      staffName = assignedName;
+    } else if (a.tried && !a.found && a.failureLabel) {
+      staffName = a.failureLabel;
+      staffRole = isLm ? 'LM · échec' : 'Échec';
+    } else if (a.tried && !a.found) {
+      staffName = isLm ? 'Aucun staff disponible' : 'Aucun staff';
+    }
+
     return {
       id: `att-${i}`,
       step: i + 1,
       triedAt: a.window,
-      staffName: staffNames[staffId] || (staffId ? `Staff ${staffId.slice(-4)}` : '—'),
-      staffRole: 'Staff',
+      staffName,
+      staffRole,
       result,
+      failureLabel: a.failureLabel,
+      isLm,
     };
   });
 }
@@ -936,20 +1227,26 @@ function buildSequenceView(
   planStep: number | undefined,
   plan: FulltaskPlanDoc,
   now = new Date(),
-  cleaningFreeCount = 1,
+  typeCounts: Record<string, number> = {},
   sequenceId = '',
 ): PlanSequenceView {
-  const start = toDate(seq.assignation?.startAt) || toDate(seq.relances[0]?.scheduledAt) || now;
-  const end = toDate(seq.assignation?.endAt);
   const icon =
     FULLTASK_TASK_TYPE_EMOJI[seq.taskType as keyof typeof FULLTASK_TASK_TYPE_EMOJI] || '⚙️';
 
-  const taskAnchorDate = toDate(seq.taskScheduledDate) ?? undefined;
+  const taskAnchorDate =
+    toDate(seq.taskScheduledDate) ?? toDate(seq.task?.scheduledDate) ?? undefined;
+  const { start, atDisplay, range } = resolveSequenceTimelineDisplay(
+    seq,
+    plan,
+    taskAnchorDate,
+    now,
+  );
   const relances: PlanGuestRelanceItem[] = (seq.relances ?? []).map((r, i) => {
     const at = toDate(r.scheduledAt) || now;
     const m = mapRelanceExecution(r, i, 'wa', 'rel', now);
     const meta = catalogMetaForSequenceRelance(plan, seq, at, r.label);
     const scheduleRef = normalizeScheduleRef(r.scheduleRef, seq.taskType);
+    const isLm = Boolean((r as { lm?: boolean }).lm);
     const anchor =
       anchorDateForScheduleRef(plan, scheduleRef, taskAnchorDate) ||
       toDate(
@@ -965,15 +1262,16 @@ function buildSequenceView(
       relanceIndex: i,
       channel: meta.catalogChannel ?? m.channel,
       catalogTemplate: meta.catalogTemplate,
-      scheduleOffsetLabel:
-        formatScheduleOffset(r.scheduleDay, scheduleRef, r.scheduleTime, seq.taskType) ??
-        inferScheduleOffsetFromDates(
-          at,
-          anchor,
-          scheduleRef,
-          r.scheduleTime,
-          seq.taskType,
-        ),
+      scheduleOffsetLabel: isLm
+        ? 'LM · prochaine heure'
+        : formatScheduleOffset(r.scheduleDay, scheduleRef, r.scheduleTime, seq.taskType) ??
+          inferScheduleOffsetFromDates(
+            at,
+            anchor,
+            scheduleRef,
+            r.scheduleTime,
+            seq.taskType,
+          ),
     };
   });
 
@@ -1009,15 +1307,13 @@ function buildSequenceView(
 
   const staffAssignment = mapStaffAssignment(seq, staffNames, now);
   const attempts = mapAttempts(seq, staffNames);
+  const lmAssignSlots = mapLmAssignSlots(seq, now);
   const escalade = seq.escalade
     ? mapEscaladeView(seq.escalade, plan, seq.taskType, taskAnchorDate, now)
     : undefined;
 
   const baseTitle = labelForTaskTypeId(seq.taskType);
-  const title =
-    seq.taskType === 'cleaning_free' && cleaningFreeCount > 1
-      ? `${baseTitle} · ${formatWhen(start)}`
-      : baseTitle;
+  const title = buildSequenceTitle(seq, baseTitle, atDisplay, typeCounts);
 
   const clientActionCompleted = Boolean(seq.clientActionCompleted);
   const clientChosenTime =
@@ -1050,16 +1346,18 @@ function buildSequenceView(
     title,
     icon: String(icon),
     status,
-    atDisplay: formatWhen(start),
-    range: formatRange(start, end),
+    atDisplay,
+    range,
     planStep,
     relances,
     staffReminders,
     staffAssignment,
     attempts,
+    lmAssignSlots,
     escalade,
     hasRelances: relances.length > 0,
     hasAssignation: Boolean(seq.assignation),
+    hasLmAssignSlots: lmAssignSlots.length > 0,
     hasStaffReminders: staffReminders.length > 0,
     hasEscalade: Boolean(escalade),
     clientActionCompleted,
@@ -1093,6 +1391,8 @@ export function buildPlanViewModel(
     const delivered = isAtomeSentStatus(m.status);
     const { lastDispatch, lastDispatchAttempt, dispatchLog } = mapDispatchLog(m.dispatchLog, {
       itemDelivered: delivered,
+      sentAt: m.sentAt,
+      fallbackChannel: ch === 'ota' ? 'OTA' : ch === 'email' ? 'email' : 'whatsapp',
     });
     events.push({
       id: `msg-${m.label}-${at.getTime()}`,
@@ -1121,18 +1421,21 @@ export function buildPlanViewModel(
     });
   }
 
-  const cleaningFreeCount = plan.sequences.filter((s) => s.taskType === 'cleaning_free').length;
+  const typeCounts = countSequencesByType(plan.sequences);
 
   for (const seq of plan.sequences) {
-    const start = toDate(seq.assignation?.startAt) || toDate(seq.relances[0]?.scheduledAt) || now;
-    const end = toDate(seq.assignation?.endAt);
+    const taskAnchorDate =
+      toDate(seq.taskScheduledDate) ?? toDate(seq.task?.scheduledDate) ?? undefined;
+    const { start, atDisplay, range } = resolveSequenceTimelineDisplay(
+      seq,
+      plan,
+      taskAnchorDate,
+      now,
+    );
     const status = eventStatusAt(start, seq.status, now);
     const icon = FULLTASK_TASK_TYPE_EMOJI[seq.taskType as keyof typeof FULLTASK_TASK_TYPE_EMOJI] || '⚙️';
     const baseTitle = labelForTaskTypeId(seq.taskType);
-    const seqTitle =
-      seq.taskType === 'cleaning_free' && cleaningFreeCount > 1
-        ? `${baseTitle} · ${formatWhen(start)}`
-        : baseTitle;
+    const seqTitle = buildSequenceTitle(seq, baseTitle, atDisplay, typeCounts);
     const relances = seq.relances?.length
       ? seq.relances.map((r, i) => mapRelance(r, i, 'wa', 'rel'))
       : undefined;
@@ -1143,7 +1446,7 @@ export function buildPlanViewModel(
     const staffAssignment = mapStaffAssignment(seq, staffNames, now);
     const sequenceFlow = buildSequenceFlow(seq, staffNames, now);
     const escalade = seq.escalade
-      ? mapEscaladeView(seq.escalade, plan, seq.taskType, start, now)
+      ? mapEscaladeView(seq.escalade, plan, seq.taskType, taskAnchorDate ?? start, now)
       : undefined;
 
     const futureParts: string[] = [];
@@ -1171,8 +1474,8 @@ export function buildPlanViewModel(
         : undefined,
       icon: String(icon),
       at: start.toISOString(),
-      atDisplay: formatWhen(start),
-      range: formatRange(start, end),
+      atDisplay,
+      range,
       relances,
       staffReminders,
       attempts,
@@ -1205,7 +1508,7 @@ export function buildPlanViewModel(
       stepByTaskId.get(seqEventKey),
       plan,
       now,
-      cleaningFreeCount,
+      typeCounts,
       seqEventKey,
     );
   });
@@ -1220,6 +1523,7 @@ export function buildPlanViewModel(
     events: ordered,
     sequences,
     messages: ordered.filter((e) => e.kind === 'message'),
+    auditLog: plan.auditLog ?? [],
   };
 }
 

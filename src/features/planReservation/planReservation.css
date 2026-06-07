@@ -112,7 +112,7 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 }
 .hero--dense .hero-identity{display:contents}
 .hero--dense .hero-guest{grid-area:identity;gap:8px}
-.hero--dense .force-plan-trigger{
+.hero--dense .cron-now-trigger{
   grid-area:btn;
   align-self:center;
   padding:5px 10px;
@@ -151,10 +151,11 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .prog-card--dense .prog-meta .d{width:7px;height:7px}
 .hero-identity{min-width:0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;width:100%}
 .hero-plan-actions{display:flex;flex-wrap:wrap;gap:8px;flex-shrink:0;align-items:flex-start}
-.force-plan-trigger{font-size:11px;font-weight:700;padding:8px 12px;border-radius:8px;background:var(--pt);border:1px solid var(--pt2);color:var(--pd);white-space:nowrap;flex-shrink:0;font-family:var(--mono)}
-.force-plan-trigger:hover{background:var(--pt2)}
-.plan-archive-trigger{font-size:11px;font-weight:700;padding:8px 12px;border-radius:8px;background:var(--bg2);border:1px solid var(--b);color:var(--t2);white-space:nowrap;font-family:var(--mono)}
-.plan-archive-trigger:hover{border-color:var(--wa);color:var(--wa)}
+.cron-now-trigger{font-size:11px;font-weight:700;padding:8px 12px;border-radius:8px;background:var(--pt);border:1px solid var(--pt2);color:var(--pd);white-space:nowrap;flex-shrink:0;font-family:var(--mono)}
+.cron-now-trigger:hover:not(:disabled){background:var(--pt2)}
+.cron-now-trigger:disabled{opacity:.65;cursor:wait}
+.cron-now-error{font-size:11px;color:var(--er);max-width:220px;line-height:1.3}
+.cron-now-summary{font-size:10.5px;color:var(--t2);font-family:var(--mono);max-width:280px;line-height:1.35}
 .archive-plan-hard{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t2);margin:0 0 12px;cursor:pointer}
 .archive-plan-hard input{accent-color:var(--wa)}
 .force-plan-btn.danger{background:var(--ert);color:var(--er);border:1px solid rgba(200,30,30,0.25)}
@@ -411,9 +412,19 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .ev-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .ev-actions .arr{font-size:11px;color:var(--t3);padding:4px 2px}
 .msg-l1-body{padding-top:4px}
+.msg-l1:not(.open){padding:10px 12px;margin-bottom:8px}
+.msg-l1:not(.open) .ev-h{align-items:center}
 .msg-l1--dispatching{opacity:0.92}
-.msg-l1-h{cursor:default}
-.msg-l1-config{padding:6px 12px 10px 52px;margin:0;font-size:10px;border-top:1px dashed var(--b)}
+.msg-l1-h{cursor:pointer}
+.msg-l1 .msg-when-open{display:block;margin-left:0;margin-top:2px}
+.msg-summary{font-size:11px;line-height:1.35;color:var(--t3);margin-top:2px;font-weight:500}
+.msg-summary-pre{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:0.02em}
+.msg-summary-sep{opacity:0.55}
+.msg-summary-sent{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:0.02em}
+.msg-summary-sent.ok{color:var(--su)}
+.msg-summary-sent.fail{color:var(--er)}
+.msg-summary-sent.pending{color:var(--t3)}
+.msg-l1-config{padding:6px 12px 2px 0;margin:8px 0 0;font-size:10px;border-top:1px dashed var(--b)}
 .msg-last-send-row{display:flex;align-items:flex-start;gap:8px;margin-top:6px}
 .msg-last-send-main{flex:1;min-width:0}
 .msg-last-send-pending{font-size:10px;font-family:var(--mono);font-weight:600;color:var(--t3)}
@@ -421,7 +432,7 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .msg-hist-toggle:hover{color:var(--pd)}
 .msg-hist-toggle-label{text-decoration:underline;text-underline-offset:2px}
 .msg-hist-toggle-arr{font-size:11px;color:var(--t3)}
-.msg-dispatch-history{margin:0 12px 10px 52px;padding:8px 10px;background:var(--bg2);border:1px solid var(--b);border-radius:8px}
+.msg-dispatch-history{margin:8px 0 0;padding:8px 10px;background:var(--bg2);border:1px solid var(--b);border-radius:8px}
 .msg-dispatch-hist-src{font-size:9px;font-weight:700;text-transform:uppercase;color:var(--t3);letter-spacing:0.04em}
 .msg-dispatch-hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:11px;font-family:var(--mono);padding:4px 0;color:var(--t2)}
 .msg-dispatch-hist-row.ok{color:var(--su)}
@@ -435,6 +446,10 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .plan-dispatch-last--fail .plan-dispatch-last-label{color:var(--er)}
 .plan-dispatch-last--retry .plan-dispatch-last-label{color:var(--wa);font-weight:600}
 .plan-dispatch-last-err{color:var(--er);opacity:0.92;font-weight:500;word-break:break-word}
+.plan-audit-panel{margin-top:20px;padding:0 4px}
+.plan-audit-toggle{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:var(--bg2);border:1px solid var(--b);border-radius:10px;font-size:12px;font-weight:700;color:var(--t2);cursor:pointer}
+.plan-audit-toggle:hover{border-color:var(--pd);color:var(--t1)}
+.plan-audit-body{margin-top:10px}
 .rel-row-config{font-size:10px;color:var(--t3);font-family:var(--mono);letter-spacing:0.02em;padding-left:98px}
 .rel-row-config.muted{opacity:0.85}
 .rel-row .ch-chip{flex-shrink:0}
@@ -576,6 +591,10 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .plan-assign-modal-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .plan-assign-modal-head h3{margin:0;font-size:15px;font-weight:800;color:var(--pd)}
 .plan-assign-modal-close{border:0;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:var(--t3);padding:0 4px}
+.plan-assign-modal-context{margin:0 0 10px;padding:10px 12px;border-radius:8px;border:1px solid rgba(59,130,246,0.35);background:rgba(59,130,246,0.08);display:flex;flex-direction:column;gap:4px}
+.plan-assign-modal-context-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--t3)}
+.plan-assign-modal-context-value{font-size:14px;font-weight:800;color:var(--pd);line-height:1.35}
+.plan-assign-modal-context-note{font-size:10px;color:var(--t3);line-height:1.35}
 .plan-assign-modal-hint{margin:0 0 12px;font-size:11px;color:var(--t3);line-height:1.4}
 .plan-assign-modal-empty{margin:12px 0;font-size:12px;color:var(--t3)}
 .plan-assign-candidate-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}

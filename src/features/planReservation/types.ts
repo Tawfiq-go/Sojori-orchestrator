@@ -70,6 +70,9 @@ export interface AssignAttempt {
   staffName: string;
   staffRole?: string;
   result: AttemptResult;
+  /** Résumé échec (ex. « Aucun staff au planning »). */
+  failureLabel?: string;
+  isLm?: boolean;
 }
 
 export interface Escalade {
@@ -122,6 +125,8 @@ export interface PlanEvent {
   /** Rappels au staff assigné (depuis config orchestration) */
   staffReminders?: Relance[];
   attempts?: AssignAttempt[];
+  /** Créneaux assignation LM (hors fenêtre config). */
+  lmAssignSlots?: PlanAssignLmItem[];
   escalade?: Escalade;
   /** Parcours chronologique lisible (relances → assignation → rappels staff → escalade) */
   sequenceFlow?: SequenceFlowItem[];
@@ -174,7 +179,16 @@ export interface StaffAssignmentPlan {
   windowOpen?: boolean;
   /** Fenêtre pas encore ouverte (now < start). */
   windowFuture?: boolean;
+  /** Slot assignation LM (hors fenêtre config). */
+  hasPendingLmAssign?: boolean;
+  /** Fenêtre + LM assignation épuisés — plus de relance guest ni assignation. */
+  assignationExhausted?: boolean;
+  /** Dernier libellé d’échec LM assignation. */
+  lmFailureLabel?: string;
 }
+
+/** Slot assignation LM (affiché comme une relance dans le bloc assignation). */
+export type PlanAssignLmItem = PlanGuestRelanceItem;
 
 /** Relance voyageur dans une séquence (niveau 3). */
 export interface PlanGuestRelanceItem {
@@ -228,9 +242,11 @@ export interface PlanSequenceView {
   staffReminders: PlanStaffReminderItem[];
   staffAssignment?: StaffAssignmentPlan;
   attempts?: AssignAttempt[];
+  lmAssignSlots?: PlanAssignLmItem[];
   escalade?: Escalade;
   hasRelances: boolean;
   hasAssignation: boolean;
+  hasLmAssignSlots?: boolean;
   hasStaffReminders: boolean;
   hasEscalade: boolean;
   /** Client a choisi heure arrivée/départ — bloc relances terminé. */
@@ -258,6 +274,16 @@ export interface ReservationPlan {
   sequences: PlanSequenceView[];
   /** Messages planifiés (simples + relances catalogue). */
   messages: PlanEvent[];
+  /** Journal audit plan (envois, assignations, LM…). */
+  auditLog?: Array<{
+    at: string | Date;
+    type: string;
+    target: string;
+    from?: string;
+    to?: string;
+    reason?: string;
+    meta?: Record<string, unknown>;
+  }>;
 }
 
 /* ─── Filter & sort ─── */
