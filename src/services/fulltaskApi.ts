@@ -244,6 +244,7 @@ export async function deletePlan(reservationId: string) {
   return data;
 }
 
+/** Tick cron horaire (`processPlanCronTick`) filtré sur une réservation. */
 export async function runPlanScheduler(reservationId: string) {
   const { data } = await axios.post(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/run-scheduler`,
@@ -287,6 +288,13 @@ export async function sendPlanRelance(
   );
 }
 
+export type AssignationContext = {
+  dateLabel: string;
+  timeLabel: string;
+  endTimeLabel: string;
+  dayLabel: string;
+};
+
 export type AssignationCandidate = {
   staffId: string;
   name: string;
@@ -296,9 +304,21 @@ export type AssignationCandidate = {
   maxTasksPerDay: number;
   planningOk: boolean;
   atMaxCapacity: boolean;
+  timeConflict?: boolean;
+  availableForTask?: boolean;
 };
 
-export async function listAssignationCandidates(reservationId: string, taskId: string) {
+export type AssignationCandidatesResponse = {
+  success: boolean;
+  data: AssignationCandidate[];
+  assignmentContext?: AssignationContext;
+  error?: string;
+};
+
+export async function listAssignationCandidates(
+  reservationId: string,
+  taskId: string,
+): Promise<AssignationCandidatesResponse> {
   const { data, status } = await axios.get(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/assignation/candidates`,
     {
@@ -307,17 +327,17 @@ export async function listAssignationCandidates(reservationId: string, taskId: s
     },
   );
   if (status === 404) {
-    const body = data as { success?: boolean; error?: string; data?: AssignationCandidate[] };
+    const body = data as AssignationCandidatesResponse;
     if (body?.error) {
       return { success: false, data: body.data ?? [], error: body.error };
     }
     return {
       success: false,
-      data: [] as AssignationCandidate[],
+      data: [],
       error: 'Endpoint assignation non déployé — redéployer srv-fulltask',
     };
   }
-  return data as { success: boolean; data: AssignationCandidate[]; error?: string };
+  return data as AssignationCandidatesResponse;
 }
 
 export async function runPlanAssignation(

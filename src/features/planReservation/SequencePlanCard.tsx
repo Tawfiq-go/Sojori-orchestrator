@@ -19,6 +19,7 @@ import {
   aggregateStaffRemindersGroupStatus,
   groupStatusLabel,
   relancesGroupStatusLabel,
+  staffRemindersGroupStatusLabel,
   relanceExecutionEventStatus,
   relanceExecutionLabel,
   sequenceStatusLabel,
@@ -170,7 +171,17 @@ function assignExecutionLine(assign: StaffAssignmentPlan): string {
   if (assign.status === 'found' && assign.staffName) {
     return `Exécution · staff retenu · ${assign.staffName}`;
   }
+  if (assign.assignationExhausted) {
+    return assign.lmFailureLabel
+      ? `Exécution · LM échoué · ${assign.lmFailureLabel} · plus de relance`
+      : 'Exécution · échec assignation · plus de relance';
+  }
   if (assign.status === 'failed') return 'Exécution · échec assignation';
+  if (assign.hasPendingLmAssign) {
+    return assign.nextAssignmentLabel.startsWith('Prochaine assignation LM ·')
+      ? `Exécution · ${assign.nextAssignmentLabel}`
+      : 'Exécution · assignation LM prévue';
+  }
   if (assign.windowPast) return 'Exécution · fenêtre passée sans assignation confirmée';
   if (assign.windowOpen) return 'Exécution · fenêtre ouverte';
   if (assign.windowFuture) return 'Prévu · fenêtre à venir';
@@ -180,19 +191,25 @@ function assignExecutionLine(assign: StaffAssignmentPlan): string {
 function AssignBlockBody({
   assign,
   attempts,
+  lmAssignSlots,
   reservationId,
   taskId,
   onDispatched,
 }: {
   assign: StaffAssignmentPlan;
   attempts?: AssignAttempt[];
+  lmAssignSlots?: import('./types').PlanAssignLmItem[];
   reservationId: string;
   taskId: string;
   onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
 }) {
   const [rowLoading, setRowLoading] = useState(false);
   const wasAssigned = assign.status === 'found' && Boolean(assign.staffName);
-  const showConfig = !assign.windowPast || assign.status === 'searching';
+  const showConfig =
+    !assign.windowPast ||
+    assign.status === 'searching' ||
+    assign.hasPendingLmAssign ||
+    assign.assignationExhausted;
   return (
     <>
       <div
@@ -216,7 +233,9 @@ function AssignBlockBody({
           </div>
         </div>
       </div>
-      <div className={`assign-exec-line${assign.windowPast ? ' past' : ''}`}>
+      <div
+        className={`assign-exec-line${assign.windowPast && !assign.hasPendingLmAssign ? ' past' : ''}`}
+      >
         {assignExecutionLine(assign)}
       </div>
       {showConfig ? (
@@ -264,6 +283,30 @@ function AssignBlockBody({
           ✓ Staff retenu · <b>{assign.staffName}</b>
         </div>
       ) : null}
+      {lmAssignSlots && lmAssignSlots.length > 0 ? (
+        <div className="assign-track" style={{ marginTop: 10 }}>
+          <div className="l3-sub-h">Créneau assignation LM</div>
+          {lmAssignSlots.map((r) => (
+            <div key={r.id} className={`rel-row rel-row--${r.executionStatus}`}>
+              <span
+                className={`dot ${r.status === 'sent' ? 'sent' : r.status === 'skipped' ? 'skipped' : 'scheduled'}`}
+              />
+              <div className="rel-row-main">
+                <div className="rel-row-top">
+                  {r.scheduleOffsetLabel ? (
+                    <span className="rel-offset">{r.scheduleOffsetLabel}</span>
+                  ) : null}
+                  <span className="when">{r.dueAt}</span>
+                  <span className="nm">
+                    #{r.step} · {r.label}
+                  </span>
+                  <RelanceStatusBadge status={r.executionStatus} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {attempts && attempts.length > 0 ? (
         <div className="assign-track">
           <div className="l3-sub-h">Historique tentatives</div>
@@ -275,7 +318,9 @@ function AssignBlockBody({
                 {a.staffName}
                 {a.staffRole ? <small>{a.staffRole}</small> : null}
               </span>
-              <span className={`res ${a.result}`}>{resultLabel(a.result)}</span>
+              <span className={`res ${a.result}`} title={a.failureLabel}>
+                {resultLabel(a.result)}
+              </span>
             </div>
           ))}
         </div>
@@ -431,7 +476,11 @@ export default function SequencePlanCard({
 
   const relGroup = aggregateRelancesGroupStatus(seq.relances, seq.clientActionCompleted);
   const staffGroup = aggregateStaffRemindersGroupStatus(seq.staffReminders);
-  const assignGroup = aggregateAssignGroupStatus(seq.staffAssignment, seq.attempts);
+  const assignGroup = aggregateAssignGroupStatus(
+    seq.staffAssignment,
+    seq.attempts,
+    seq.lmAssignSlots,
+  );
 
   return (
     <div className={`ev seq-l1 ${seq.status}${open ? ' open' : ''}`}>
@@ -517,15 +566,18 @@ export default function SequencePlanCard({
               title="Assignation staff"
               groupStatus={assignGroup}
               countLabel={
-                seq.attempts?.length
-                  ? `${seq.attempts.length} tentative(s)`
-                  : seq.staffAssignment.modeLabel
+                seq.lmAssignSlots?.some((s) => s.executionStatus === 'prevision')
+                  ? seq.staffAssignment?.nextAssignmentLabel || 'Assignation LM'
+                  : seq.attempts?.length
+                    ? `${seq.attempts.length} tentative(s)`
+                    : seq.staffAssignment.modeLabel
               }
               defaultOpen={defaultOpenForStatus(assignGroup)}
             >
               <AssignBlockBody
                 assign={seq.staffAssignment}
                 attempts={seq.attempts}
+                lmAssignSlots={seq.lmAssignSlots}
                 reservationId={reservationId}
                 taskId={taskId}
                 onDispatched={onDispatched}
@@ -538,6 +590,7 @@ export default function SequencePlanCard({
               icon="🔔"
               title="Rappels staff"
               groupStatus={staffGroup}
+              groupStatusLabel={staffRemindersGroupStatusLabel(staffGroup, seq.staffReminders)}
               countLabel={relanceCountSummary(seq.staffReminders)}
               defaultOpen={defaultOpenForStatus(staffGroup)}
             >
