@@ -390,22 +390,43 @@ export async function listPlansSummary(params: Record<string, unknown> = {}) {
   return listPlans({ ...params, summary: 'true' });
 }
 
-export async function declareGuestArrival(reservationId: string, time?: string) {
+export async function chooseGuestArrival(reservationId: string, time: string) {
   const { data } = await axios.patch(
-    `${BASE}/guest-actions/declare-arrival`,
-    { reservationId, declared: true, time: time ?? null },
+    `${BASE}/guest-actions/choose-arrival`,
+    { reservationId, time },
     authHeaders(),
   );
-  return data;
+  return data as { success?: boolean; error?: string; data?: unknown };
 }
 
-export async function declareGuestDeparture(reservationId: string, time?: string) {
+export async function chooseGuestDeparture(reservationId: string, time: string) {
   const { data } = await axios.patch(
-    `${BASE}/guest-actions/declare-departure`,
-    { reservationId, declared: true, time: time ?? null },
+    `${BASE}/guest-actions/choose-departure`,
+    { reservationId, time },
     authHeaders(),
   );
-  return data;
+  return data as { success?: boolean; error?: string; data?: unknown };
+}
+
+/** Déclaration — heure entière (HH:00) ou null si non précisée. */
+export async function declareGuestArrival(reservationId: string, hour?: number) {
+  const time = hour != null ? `${String(hour).padStart(2, '0')}:00` : null;
+  const { data } = await axios.patch(
+    `${BASE}/guest-actions/declare-arrival`,
+    { reservationId, declared: true, time },
+    authHeaders(),
+  );
+  return data as { success?: boolean; error?: string; data?: unknown };
+}
+
+export async function declareGuestDeparture(reservationId: string, hour?: number) {
+  const time = hour != null ? `${String(hour).padStart(2, '0')}:00` : null;
+  const { data } = await axios.patch(
+    `${BASE}/guest-actions/declare-departure`,
+    { reservationId, declared: true, time },
+    authHeaders(),
+  );
+  return data as { success?: boolean; error?: string; data?: unknown };
 }
 
 // ========================================
