@@ -390,6 +390,60 @@ export async function listPlansSummary(params: Record<string, unknown> = {}) {
   return listPlans({ ...params, summary: 'true' });
 }
 
+export type OpsFeedItem = {
+  id: string;
+  priority: 'p1' | 'p2' | 'p3' | 'ok';
+  day: 'today' | 'tomorrow';
+  groupKey: string;
+  emoji: string;
+  title: string;
+  listingId: string;
+  listingName: string;
+  guestName: string;
+  reservationId: string;
+  reservationCode: string;
+  taskId?: string;
+  taskType?: string;
+  messageIndex?: number;
+  problem: string;
+  meta: string;
+  timeLabel?: string;
+  statusBadges: { code: string; label: string }[];
+  staffName?: string | null;
+  deadlineAt?: string;
+  deadlineLabel?: string;
+  actions: { kind: string; label: string; primary?: boolean; index?: number }[];
+  urgent: boolean;
+  urgencyFilter?: string;
+};
+
+export type OpsFeedResponse = {
+  success: boolean;
+  generatedAt: string;
+  horizonDays: number;
+  stats: {
+    critical: number;
+    important: number;
+    ok: number;
+    total: number;
+    checkInsToday: number;
+    checkOutsToday: number;
+    turnoversToday: number;
+    checkInsTomorrow: number;
+    checkOutsTomorrow: number;
+    turnoversTomorrow: number;
+  };
+  items: OpsFeedItem[];
+};
+
+export async function getOpsFeed(days = 2): Promise<OpsFeedResponse> {
+  const { data } = await axios.get(`${BASE}/plans/ops-feed`, {
+    ...authHeaders(),
+    params: { days },
+  });
+  return data as OpsFeedResponse;
+}
+
 export async function chooseGuestArrival(reservationId: string, time: string) {
   const { data } = await axios.patch(
     `${BASE}/guest-actions/choose-arrival`,
