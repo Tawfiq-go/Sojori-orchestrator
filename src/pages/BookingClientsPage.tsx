@@ -27,11 +27,17 @@ import { TeamHubPagination } from '../components/team/TeamHubPagination';
 import { TEAM_T } from '../components/team/teamHubTokens';
 import { useAuth } from '../hooks/useAuth';
 import bookingClientsService, {
+  bookingClientAuthMeta,
   bookingClientDisplayName,
   bookingClientEmail,
+  bookingClientEnvMeta,
   bookingClientPhone,
 } from '../services/bookingClientsService';
-import type { BookingClientRecord, BookingClientStatusFilter } from '../types/bookingClients.types';
+import type {
+  BookingClientEnvironmentFilter,
+  BookingClientRecord,
+  BookingClientStatusFilter,
+} from '../types/bookingClients.types';
 
 moment.locale('fr');
 
@@ -59,6 +65,7 @@ export function BookingClientsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<BookingClientStatusFilter>('active');
+  const [envFilter, setEnvFilter] = useState<BookingClientEnvironmentFilter>('all');
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(25);
   const [selected, setSelected] = useState<BookingClientRecord | null>(null);
@@ -77,6 +84,7 @@ export function BookingClientsPage() {
         username: search,
         deleted: statusFilter === 'all' ? false : deleted,
         banned: statusFilter === 'all' ? false : banned,
+        clerkEnvironment: envFilter,
       });
 
       let data = response.data;
@@ -85,7 +93,7 @@ export function BookingClientsPage() {
       }
 
       setRows(data);
-      setTotal(activeOnly ? data.length : response.total);
+      setTotal(response.total);
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
@@ -98,7 +106,7 @@ export function BookingClientsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, statusFilter]);
+  }, [page, limit, search, statusFilter, envFilter]);
 
   useEffect(() => {
     fetchRows();
@@ -152,9 +160,54 @@ export function BookingClientsPage() {
         ),
       },
       {
+        key: 'env',
+        label: 'Env',
+        render: (row: BookingClientRecord) => {
+          const meta = bookingClientEnvMeta(row);
+          return (
+            <Chip
+              label={meta.label}
+              size="small"
+              sx={{
+                bgcolor: meta.bg,
+                color: meta.color,
+                fontWeight: 700,
+                height: 22,
+                fontSize: 11,
+              }}
+            />
+          );
+        },
+      },
+      {
+        key: 'auth',
+        label: 'Connexion',
+        render: (row: BookingClientRecord) => {
+          const meta = bookingClientAuthMeta(row);
+          return (
+            <Chip
+              label={meta.label}
+              size="small"
+              sx={{
+                bgcolor: meta.bg,
+                color: meta.color,
+                fontWeight: 700,
+                height: 22,
+                fontSize: 11,
+              }}
+            />
+          );
+        },
+      },
+      {
         key: 'phone',
-        label: 'Téléphone',
-        render: (row: BookingClientRecord) => bookingClientPhone(row) || '—',
+        label: 'Mobile',
+        render: (row: BookingClientRecord) => {
+          const phone = bookingClientPhone(row);
+          if (!phone) return '—';
+          const cc = row.phoneCountryCode?.trim();
+          return cc && !phone.startsWith('+') ? `+${cc} ${phone}` : phone;
+        },
       },
       {
         key: 'role',
@@ -242,8 +295,8 @@ export function BookingClientsPage() {
               Comptes Sojori Booking
             </Typography>
             <Typography sx={{ fontSize: 12, color: TEAM_T.text3, mt: 0.25, maxWidth: 720 }}>
-              Voyageurs inscrits sur <b>sojori-vente</b> via Clerk. Distinct du CRM PMS (
-              <b>/clients</b>) et de la whitelist WhatsApp (<b>/chatbot/whitelist</b>).
+              Voyageurs Clerk (sojori-vente). <b>Prod</b> = sojori.com · <b>Dev</b> = localhost:6001.
+              Même email peut exister deux fois (clerkId différent).
             </Typography>
           </Box>
           <Stack direction="row" spacing={0.75}>
@@ -281,7 +334,7 @@ export function BookingClientsPage() {
             bgcolor: TEAM_T.bg1,
           }}
         >
-          <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" useFlexGap>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }} useFlexGap>
             <TextField
               size="small"
               placeholder="Rechercher nom, email, username…"
@@ -298,6 +351,19 @@ export function BookingClientsPage() {
               }}
               sx={{ flex: 1, minWidth: 200, maxWidth: 320 }}
             />
+            <Select
+              size="small"
+              value={envFilter}
+              onChange={(e) => {
+                setEnvFilter(e.target.value as BookingClientEnvironmentFilter);
+                setPage(0);
+              }}
+              sx={{ minWidth: 110, height: 36, fontSize: 12 }}
+            >
+              <MenuItem value="all">Tous env.</MenuItem>
+              <MenuItem value="production">Prod</MenuItem>
+              <MenuItem value="development">Dev</MenuItem>
+            </Select>
             <Select
               size="small"
               value={statusFilter}
@@ -362,7 +428,7 @@ export function BookingClientsPage() {
 
         {isAdmin ? (
           <Typography sx={{ fontSize: 11, color: TEAM_T.text4, mt: 1.5 }}>
-            API · GET /api/v1/reservations/client/get-clients
+            API · GET /api/v1/user/user/booking-clients/get-clients
           </Typography>
         ) : null}
       </Box>
@@ -376,7 +442,17 @@ export function BookingClientsPage() {
             <Stack spacing={1.25}>
               {[
                 ['Email', bookingClientEmail(selected) || '—'],
-                ['Téléphone', bookingClientPhone(selected) || '—'],
+                ['Connexion', bookingClientAuthMeta(selected).label],
+                ['Environnement', bookingClientEnvMeta(selected).label],
+                [
+                  'Mobile',
+                  (() => {
+                    const phone = bookingClientPhone(selected);
+                    if (!phone) return '—';
+                    const cc = selected.phoneCountryCode?.trim();
+                    return cc && !phone.startsWith('+') ? `+${cc} ${phone}` : phone;
+                  })(),
+                ],
                 ['Username', selected.username || '—'],
                 ['Clerk ID', selected.clerkId],
                 ['Rôle', String(selected.public_metadata?.role ?? 'guest')],

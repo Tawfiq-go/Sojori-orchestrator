@@ -12,8 +12,7 @@ import { PhotosTabReal }                                    from './tabs/PhotosT
 import AmenitiesTab                                         from './tabs/DetailTabsAmenities';
 import { PricingTab, AvailabilityTab, FeesTab }             from './tabs/DetailTabsCommercial';
 import { ChannelsTab, DirectBookingTab, RoomsTab, LicenseTab } from './tabs/DetailTabsDistribution';
-import { OrchestrationTab, CleaningTab }                    from './tabs/ConfigTabsWorkflow';
-import { AccessTab, WhatsAppTab, ConciergeTab, SupportTab, RulesTab } from './tabs/ConfigTabsCommunication';
+import { WhatsAppTab } from './tabs/ConfigTabsCommunication';
 import SupportConfigTabContainer from '../../../features/listing/components/ConfigOrchestration/SupportConfigTabContainer';
 import ConciergeConfigTab from '../../../features/listing/components/ConfigOrchestration/ConciergeConfigTab';
 import CleaningConfigTab from '../../../features/listing/components/ConfigOrchestration/CleaningConfigTab';
@@ -89,14 +88,6 @@ export default function ListingFormV2({
       if (tabKey === 'rooms')        return <RoomsTab       {...common} listingId={listingId} />;
       if (tabKey === 'license')      return <LicenseTab     {...common} />;
     } else if (level === 'config') {
-      if (tabKey === 'orchestration') return <OrchestrationTab {...common} listingId={listingId} />;
-      if (tabKey === 'menage')        return <CleaningTab      {...common} />;
-      if (tabKey === 'access')        return <AccessTab        listingId={listingId} listingName={values.name} />;
-      if (tabKey === 'whatsapp')      return <WhatsAppTab      {...common} listingId={listingId} listingName={values.name} />;
-      if (tabKey === 'concierge')     return <ConciergeTab     listingId={listingId} listingName={values.name} />;
-      if (tabKey === 'support')       return <SupportTab       listingId={listingId} listingName={values.name} />;
-      if (tabKey === 'rules')         return <RulesTab         listingId={listingId} listingName={values.name} />;
-    } else if (level === 'config-new') {
       const wrap = (tabId, node) => (
         <PmConfigTabFrame tabKey={tabId}>{node}</PmConfigTabFrame>
       );
@@ -140,17 +131,11 @@ export default function ListingFormV2({
         amenities:    { tone: 'success', label: '✓' },
         channels:     { tone: 'warning', label: '2/3' },
         license:      { tone: 'warning', label: '⚠' },
-        orchestration: { tone: 'warning', label: '11/12' },
-        menage:        { tone: 'warning', label: '3/6' },
-        access:        { tone: 'success', label: '✓' },
-        whatsapp:      { tone: 'success', label: '✓' },
-        concierge:     { tone: 'success', label: '5/5' },
-        support:       { tone: 'success', label: '5/5' },
-        rules:         { tone: 'neutral', label: '3' },
-        'whatsapp-config':       { tone: 'success', label: '✓' },
+        'whatsapp-config': { tone: 'success', label: '✓' },
+        'support-config': { tone: 'success', label: '✓' },
       }}
       defaultLevel={defaultLevel}
-      defaultTab={defaultTab || (defaultLevel === 'config-new' ? 'support-config' : defaultLevel === 'config' ? 'orchestration' : 'general')}
+      defaultTab={defaultTab || (defaultLevel === 'config' || defaultLevel === 'config-new' ? 'support-config' : 'general')}
       lockLevel={lockLevel}
       embedded={embedded}
       onSave={() => onSave?.(values)}

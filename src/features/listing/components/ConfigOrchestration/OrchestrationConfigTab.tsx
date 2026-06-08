@@ -255,8 +255,8 @@ export default function OrchestrationConfigTab({
       </Card>
 
       <WhenOffNote>
-        Template propriétaire : menu Catalogue → Template. Import Airbnb applique aussi ce
-        template à la fin de la création.
+        Template propriétaire : Catalogue → Template. Import Airbnb applique flags orchestration
+        + les 13 onglets Config orchestration (accès, support, ménage, menu WA, etc.) à la création.
       </WhenOffNote>
     </Box>
   );

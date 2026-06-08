@@ -20,9 +20,11 @@ export function ListingFormV2Page() {
   const tabParam =
     tabParamRaw === 'city-tax-config' ? 'messages-config' : tabParamRaw;
   const defaultLevel =
-    levelParam === 'config-new' || levelParam === 'config' || levelParam === 'detail'
-      ? levelParam
-      : 'detail';
+    levelParam === 'config-new' || levelParam === 'config'
+      ? 'config'
+      : levelParam === 'detail'
+        ? 'detail'
+        : 'detail';
   const queryClient = useQueryClient();
 
   // Fetch listing data

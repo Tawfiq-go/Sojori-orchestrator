@@ -12,6 +12,7 @@ import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 
 const CRM_BASE = MICROSERVICE_BASE_URL.SRV_CRM;
 const DEMO_BASE = MICROSERVICE_BASE_URL.SRV_CRM_DEMO;
+const BECOME_HOST_BASE = MICROSERVICE_BASE_URL.SRV_CRM_BECOME_HOST;
 
 // ════════════════════════════════════════════════════════════════════
 // TYPES
@@ -137,6 +138,7 @@ export async function getDemoRequests(params?: {
   limit?: number;
   status?: string;
   qualificationCompleted?: boolean;
+  search?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }): Promise<DemoRequestsResponse> {
@@ -152,7 +154,7 @@ export async function updateDemoRequestStatus(
   id: string,
   status: DemoRequest['status'],
 ): Promise<{ success: boolean; data: DemoRequest }> {
-  const { data } = await apiClient.patch(`${DEMO_BASE}/request/${id}/qualify`, { status });
+  const { data } = await apiClient.patch(`${DEMO_BASE}/request/${id}/status`, { status });
   return data;
 }
 
@@ -174,6 +176,90 @@ export async function updateDemoRequestQualification(
  */
 export async function deleteDemoRequest(id: string): Promise<{ success: boolean }> {
   const { data } = await apiClient.delete(`${DEMO_BASE}/request/${id}`);
+  return data;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// BECOME HOST (Site booking sojori-vente)
+// ════════════════════════════════════════════════════════════════════
+
+export type BecomeHostUserType = 'property_owner' | 'professional_pm';
+
+export type BecomeHostStatus =
+  | 'pending'
+  | 'contacted'
+  | 'qualified'
+  | 'matched'
+  | 'converted'
+  | 'rejected';
+
+export interface BecomeHostRequest {
+  id?: string;
+  _id?: string;
+  userType: BecomeHostUserType;
+  email: string;
+  phone: string;
+  countryCode?: string;
+  fullName: string;
+  company?: string;
+  numberOfPropertiesManaged?: string;
+  currentPMS?: string;
+  currentChannelManager?: string;
+  cityRegion?: string;
+  numberOfPropertiesOwned?: string;
+  propertyTypes?: string[];
+  propertyLocations?: string[];
+  currentManagementStatus?: string;
+  lookingFor?: string;
+  timeline?: string;
+  hearAboutUs?: string;
+  status: BecomeHostStatus;
+  qualificationCompleted?: boolean;
+  source?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface BecomeHostRequestsResponse {
+  success: boolean;
+  data: {
+    requests: BecomeHostRequest[];
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      pages: number;
+    };
+  };
+}
+
+/** GET /api/v1/become-host/requests */
+export async function getBecomeHostRequests(params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  userType?: string;
+}): Promise<BecomeHostRequestsResponse> {
+  const { data } = await apiClient.get(`${BECOME_HOST_BASE}/requests`, { params });
+  return data;
+}
+
+/** PATCH /api/v1/become-host/request/:id/status */
+export async function updateBecomeHostStatus(
+  id: string,
+  status: BecomeHostStatus,
+  notes?: string,
+): Promise<{ success: boolean; data: BecomeHostRequest }> {
+  const { data } = await apiClient.patch(`${BECOME_HOST_BASE}/request/${id}/status`, {
+    status,
+    notes,
+  });
+  return data;
+}
+
+/** DELETE /api/v1/become-host/request/:id */
+export async function deleteBecomeHostRequest(id: string): Promise<{ success: boolean }> {
+  const { data } = await apiClient.delete(`${BECOME_HOST_BASE}/request/${id}`);
   return data;
 }
 

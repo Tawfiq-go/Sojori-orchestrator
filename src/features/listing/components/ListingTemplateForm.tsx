@@ -265,9 +265,9 @@ export default function ListingTemplateForm({
                 : '—',
           },
         }}
-        defaultLevel="config-new"
+        defaultLevel="config"
         defaultTab={defaultTab}
-        lockLevel="config-new"
+        lockLevel="config"
         configNewBadgeLabel=""
         onSave={() => {}}
         renderTab={renderTab}

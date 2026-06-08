@@ -33,11 +33,24 @@ export function fullTaskPriorityToEmergency(priority?: string): string {
   return 'Normal';
 }
 
+export interface GuestRegistrationMetaLike {
+  nbre_guest_registered?: number;
+  nbre_guest_to_register?: number;
+  members?: Array<Record<string, unknown>>;
+}
+
 export interface ReservationMetaLike extends ReservationDatesLike {
   guestCountry?: string | null;
   channelName?: string | null;
   reservationNumber?: string | null;
   adults?: number;
+  checkInTime?: string | number | null;
+  checkOutTime?: string | number | null;
+  actualArrivalTime?: string | null;
+  actualDepartureTime?: string | null;
+  confirmedCheckInTime?: boolean;
+  confirmedCheckOutTime?: boolean;
+  guestRegistration?: GuestRegistrationMetaLike;
 }
 
 function slotIdToTimeLabel(slotId: unknown): string | undefined {
@@ -245,9 +258,16 @@ export function fullTaskToListItem(
       reservationMeta?.departureDate != null
         ? String(reservationMeta.departureDate).slice(0, 10)
         : undefined,
-    guestCountry: reservationMeta?.guestCountry ?? null,
-    channelName: reservationMeta?.channelName ?? null,
+    guestCountry: (task.guestCountry as string) ?? reservationMeta?.guestCountry ?? null, // ⚡ Priorité au champ task direct
+    channelName: (task.channelName as string) ?? reservationMeta?.channelName ?? null, // ⚡ Priorité au champ task direct
     reservationAdults: reservationMeta?.adults,
+    checkInTime: reservationMeta?.checkInTime ?? null,
+    checkOutTime: reservationMeta?.checkOutTime ?? null,
+    actualArrivalTime: reservationMeta?.actualArrivalTime ?? null,
+    actualDepartureTime: reservationMeta?.actualDepartureTime ?? null,
+    confirmedCheckInTime: reservationMeta?.confirmedCheckInTime,
+    confirmedCheckOutTime: reservationMeta?.confirmedCheckOutTime,
+    guestRegistration: reservationMeta?.guestRegistration,
     plannedTime,
     hourSource,
     requestedAt: requestedAtRaw || null,
@@ -479,6 +499,10 @@ export function apiOrchestrationToDesign(doc: Record<string, unknown> | null) {
             if (sa.autoAssign === true) return false
             return sa.findAnotherStaff !== false
           })(),
+          releaseMode:
+            ((w.staffAssignment as { releaseMode?: string }).releaseMode as
+              | 'tolerance'
+              | 'windows') || 'tolerance',
           acceptToleranceHours:
             Number((w.staffAssignment as { acceptToleranceHours?: number }).acceptToleranceHours) ||
             3,
@@ -529,6 +553,7 @@ export function apiOrchestrationToDesign(doc: Record<string, unknown> | null) {
     id: String(c.id || ''),
     label: String(c.label || ''),
     whatsappTemplateId: String(c.whatsappTemplateId || c.id || ''),
+    flowCategory: c.flowCategory ? String(c.flowCategory) : undefined,
     messageFrOta: String(c.messageFrOta || ''),
     messageFrEmail: String(c.messageFrEmail || ''),
   }));
@@ -689,6 +714,7 @@ export function designOrchestrationToApi(
       id: String(c.id || c.whatsappTemplateId || `msg-${Date.now()}`),
       label: String(c.label || ''),
       whatsappTemplateId: String(c.whatsappTemplateId || c.id || ''),
+      ...(c.flowCategory ? { flowCategory: String(c.flowCategory) } : {}),
       messageFrOta: String(c.messageFrOta || ''),
       messageFrEmail: String(c.messageFrEmail || ''),
     })),
@@ -775,6 +801,9 @@ export function designOrchestrationToApi(
               if (a.autoAssign === true) return false
               return a.findAnotherStaff !== false
             })(),
+            releaseMode:
+              (w.assignment as { releaseMode?: 'tolerance' | 'windows' }).releaseMode ??
+              'tolerance',
             acceptToleranceHours:
               Number((w.assignment as { acceptToleranceHours?: number }).acceptToleranceHours) ||
               3,
@@ -821,7 +850,7 @@ export function designOrchestrationToApi(
         },
         channel: {
           primary: deliveryChannelToApi(
-            (m.deliveryChannel as 'whatsapp' | 'email' | 'ota') || 'ota',
+            (m.deliveryChannel as 'whatsapp' | 'email' | 'ota') || 'whatsapp',
           ),
           fallback:
             (m.deliveryChannel as string) === 'whatsapp' ? 'OTA' : 'email',

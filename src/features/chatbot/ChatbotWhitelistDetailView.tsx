@@ -181,8 +181,8 @@ export default function ChatbotWhitelistDetailView() {
                   </div>
                 </div>
                 {Boolean(wl.listingId) && (
-                  <Link to={`/listings/${wl.listingId}?level=config-new`} className="cb-link">
-                    Config Orch. ↗
+                  <Link to={`/listings/${wl.listingId}?level=config`} className="cb-link">
+                    Config orchestration ↗
                   </Link>
                 )}
               </div>

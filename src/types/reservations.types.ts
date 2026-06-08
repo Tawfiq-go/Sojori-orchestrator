@@ -57,6 +57,8 @@ export interface Reservation {
   guestAddress?: string;
   guestCity?: string;
   guestCountry?: string;
+  guestCountryCode?: string;
+  source?: string;
   nationality?: string;
   guestEmail?: string;
   guestLanguage?: string | null;

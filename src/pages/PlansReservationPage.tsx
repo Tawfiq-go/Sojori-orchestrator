@@ -201,24 +201,6 @@ export default function PlansReservationPage() {
     };
   }, [selectedId, plans, planLoadingId, staffNames, orderByOwner, summariesById, loadPlanDetail]);
 
-  const handlePlanArchived = useCallback(
-    (id: string) => {
-      setPlans((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      setSummariesById((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      setReservations((prev) => prev.filter((r) => r.id !== id));
-      setSearchParams({});
-    },
-    [setSearchParams],
-  );
-
   const handleSelect = useCallback(
     async (id: string) => {
       setSearchParams({ reservationId: id });
@@ -313,7 +295,6 @@ export default function PlansReservationPage() {
           onSelect={handleSelect}
           onPlanUpdated={handlePlanUpdated}
           onPlanRefetch={handlePlanRefetch}
-          onPlanArchived={handlePlanArchived}
           listTitle="Plans"
         />
       )}

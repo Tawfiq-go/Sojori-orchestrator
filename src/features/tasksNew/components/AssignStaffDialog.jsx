@@ -242,7 +242,7 @@ const AssignStaffDialog = ({
         const staffId = selectedStaff._id || selectedStaff.staffCode;
         const res = await assignTask(taskId, staffId);
         if (res?.success === false) throw new Error(res?.error || 'Assignation refusée');
-        onSuccess();
+        onSuccess(selectedStaff);
         onClose();
         return;
       }
@@ -257,7 +257,7 @@ const AssignStaffDialog = ({
         }
       });
       if (response.data.success) {
-        onSuccess();
+        onSuccess(selectedStaff);
         onClose();
       } else {
         setPanelError(response.data?.message || 'Assignation refusée');

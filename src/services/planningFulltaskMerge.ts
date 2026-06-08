@@ -161,17 +161,37 @@ export async function fetchTaskNewPlanning(params: {
   endDate: string;
   ownerId?: string;
 }): Promise<{ success: boolean; data: { listings: PlanningListingRow[] }; message?: string }> {
+  console.log('🔍 [fetchTaskNewPlanning] START - Fetching reservations, tasks, and staff in parallel');
+  const startTime = performance.now();
+
+  const reservationsPromise = reservationsService.getList({
+    limit: 100,
+    status: 'Confirmed,Pending',
+    dateType: 'arrival_or_departure',
+    startDate: params.startDate,
+    endDate: params.endDate,
+  }).then(res => {
+    console.log(`✅ [fetchTaskNewPlanning] getList (reservations) completed in ${(performance.now() - startTime).toFixed(0)}ms - ${res?.data?.length || 0} items`);
+    return res;
+  });
+
+  const tasksPromise = fulltaskApi.listTasks({}).then(res => {
+    console.log(`✅ [fetchTaskNewPlanning] listTasks completed in ${(performance.now() - startTime).toFixed(0)}ms - ${res?.data?.length || 0} items`);
+    return res;
+  });
+
+  const staffPromise = fulltaskApi.listStaff().then(res => {
+    console.log(`✅ [fetchTaskNewPlanning] listStaff completed in ${(performance.now() - startTime).toFixed(0)}ms - ${res?.data?.length || 0} items`);
+    return res;
+  });
+
   const [reservationsRes, tasksRes, staffRes] = await Promise.all([
-    reservationsService.getList({
-      limit: 100,
-      status: 'Confirmed,Pending',
-      dateType: 'arrival_or_departure',
-      startDate: params.startDate,
-      endDate: params.endDate,
-    }),
-    fulltaskApi.listTasks({}),
-    fulltaskApi.listStaff(),
+    reservationsPromise,
+    tasksPromise,
+    staffPromise,
   ]);
+
+  console.log(`⏱️  [fetchTaskNewPlanning] All 3 API calls completed in ${(performance.now() - startTime).toFixed(0)}ms`);
 
   const staffRows = staffRes?.data || [];
   const staffById = Object.fromEntries(
@@ -252,6 +272,18 @@ export async function fetchTaskNewPlanning(params: {
   }
 
   // Réservations avec tâches mais hors filtre API initial (ex. pagination)
+  const missingReservationIds = [];
+  for (const [key, timeline] of tasksByReservation) {
+    if (reservationKeysSeen.has(key)) continue;
+    const [listingId, reservationId] = key.split('::');
+    if (!listingId || !reservationId) continue;
+    missingReservationIds.push(reservationId);
+  }
+
+  console.log(`⚠️  [fetchTaskNewPlanning] Found ${missingReservationIds.length} reservations with tasks but NOT in initial API response`);
+  console.log(`    ℹ️  This will trigger ${missingReservationIds.length} individual getById() API calls (SLOW!)`);
+
+  const individualFetchStart = performance.now();
   for (const [key, timeline] of tasksByReservation) {
     if (reservationKeysSeen.has(key)) continue;
     const [listingId, reservationId] = key.split('::');
@@ -265,7 +297,9 @@ export async function fetchTaskNewPlanning(params: {
     if (firstTask?.guestName) guestName = String(firstTask.guestName);
 
     try {
+      const singleStart = performance.now();
       const res = await reservationsService.getById(reservationId);
+      console.log(`    📞 [fetchTaskNewPlanning] getById(${reservationId}) took ${(performance.now() - singleStart).toFixed(0)}ms`);
       reservationsById.set(reservationId, res);
       arrivalDate = toIsoDate(res.arrivalDate) || arrivalDate;
       departureDate = toIsoDate(res.departureDate) || departureDate;
@@ -288,6 +322,10 @@ export async function fetchTaskNewPlanning(params: {
     list.push(row);
     reservationsByListing.set(listingId, list);
     reservationKeysSeen.add(key);
+  }
+
+  if (missingReservationIds.length > 0) {
+    console.log(`⏱️  [fetchTaskNewPlanning] All ${missingReservationIds.length} individual getById() calls completed in ${(performance.now() - individualFetchStart).toFixed(0)}ms`);
   }
 
   const listingIdsFromTasks = new Set<string>();

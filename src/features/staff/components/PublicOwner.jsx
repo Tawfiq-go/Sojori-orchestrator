@@ -948,6 +948,7 @@ const PublicOwner = ({
   return <Box sx={insidePageShell ? { width: '100%' } : outerShellSx}>
             <ToastContainer position="top-right" autoClose={3000} />
             {insidePageShell ? (
+              <div className="so-staff-root" style={{ padding: 0, minHeight: 0, background: 'transparent' }}>
               <PropertyManagerHubView
                 t={t}
                 owners={owners}
@@ -978,6 +979,14 @@ const PublicOwner = ({
                 listingStatsByOwner={listingStatsByOwner}
                 portfolioKpis={portfolioKpis}
               />
+              <UpdateOwnerSidebar
+                inline
+                open={openUpdateDialog}
+                onClose={() => setOpenUpdateDialog(false)}
+                owner={selectedOwner}
+                onOwnerUpdated={onOwnerUpdated}
+              />
+              </div>
             ) : (
             <>
             <Box sx={{
@@ -1098,12 +1107,15 @@ const PublicOwner = ({
 
             <CreateOwnerSidebar open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} onOwnerCreated={onOwnerCreated} />
 
+            {!insidePageShell ? (
             <UpdateOwnerSidebar
               open={openUpdateDialog}
               onClose={() => setOpenUpdateDialog(false)}
               owner={selectedOwner}
               onOwnerUpdated={onOwnerUpdated}
+              inline={false}
             />
+            ) : null}
 
             {/* Dialog Propriétaire - View Only */}
             <Dialog

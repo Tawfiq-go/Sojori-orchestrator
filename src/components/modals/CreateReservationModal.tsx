@@ -27,6 +27,12 @@ import { ReservationAvailabilityCalendar } from './ReservationAvailabilityCalend
 import { ModalScrollColumn } from '../common/ModalScrollColumn';
 import { blurActiveElement } from '../../utils/domFocus';
 
+const RESERVATION_CURRENCIES = ['MAD', 'EUR', 'USD'] as const;
+const DEFAULT_RESERVATION_CURRENCY = 'MAD';
+
+const currencyLabel = (code: string) =>
+  code === 'EUR' ? '€' : code === 'MAD' ? 'DH' : '$';
+
 // Liste complète des pays avec drapeaux
 const COUNTRIES = [
   '🇲🇦 Maroc', '🇫🇷 France', '🇪🇸 Espagne', '🇩🇪 Allemagne', '🇬🇧 Royaume-Uni',
@@ -87,7 +93,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
   const [children, setChildren] = useState(0);
   const [infants, setInfants] = useState(0);
 
-  const [currency, setCurrency] = useState('EUR');
+  const [currency, setCurrency] = useState(DEFAULT_RESERVATION_CURRENCY);
   const [pricingMode, setPricingMode] = useState<'calendar' | 'perDay' | 'total'>('calendar');
   const [uniformPrice, setUniformPrice] = useState('');
   const [dailyPrices, setDailyPrices] = useState<Record<string, number>>({});
@@ -355,7 +361,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
     setPricingMode('calendar');
     setTotalPrice(0);
     setCalendarPriceEstimate(null);
-    setCurrency('EUR');
+    setCurrency(DEFAULT_RESERVATION_CURRENCY);
     setDailyPrices({});
     setUniformPrice('');
     setStatus('Confirmed');
@@ -727,7 +733,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
                 Devise
               </Typography>
               <Box sx={{ display: 'flex', gap: 0.625, ml: 'auto' }}>
-                {['EUR', 'MAD', 'USD'].map(c => (
+                {RESERVATION_CURRENCIES.map(c => (
                   <Box
                     key={c}
                     component="button"
@@ -746,7 +752,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
                       border: `1px solid ${currency === c ? t.primaryDeep : t.border}`,
                     }}
                   >
-                    {c} {c === 'EUR' ? '€' : c === 'MAD' ? 'DH' : '$'}
+                    {c} {currencyLabel(c)}
                   </Box>
                 ))}
               </Box>

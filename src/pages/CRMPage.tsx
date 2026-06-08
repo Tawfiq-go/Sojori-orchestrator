@@ -2,27 +2,46 @@
 // CRMPage — Hub CRM avec 4 onglets
 // Migration depuis sojori-dashboard → sojori-orchestrator
 // ════════════════════════════════════════════════════════════════════
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Navigate } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { tokens as T } from '../components/dashboard/DashboardV2.components';
 import { RequestsTab } from '../components/crm/RequestsTab';
+import { HostsTab } from '../components/crm/HostsTab';
 import { LeadsTab } from '../components/crm/LeadsTab';
 import { SupportTab } from '../components/crm/SupportTab';
 import { OnboardingTab } from '../components/crm/OnboardingTab';
 
-type TabId = 'requests' | 'leads' | 'support' | 'onboarding';
+type TabId = 'requests' | 'hosts' | 'leads' | 'support' | 'onboarding';
 
 const TABS: Array<{ id: TabId; label: string; icon: string; count?: number }> = [
-  { id: 'requests', label: 'Demandes', icon: '📥' },
+  { id: 'requests', label: 'Demandes PMS', icon: '📥' },
+  { id: 'hosts', label: 'Demandes Host', icon: '🏠' },
   { id: 'leads', label: 'Leads & fiches', icon: '🧲' },
-  { id: 'support', label: 'Équipe support', icon: '👥' },
+  { id: 'support', label: 'Rendez-vous', icon: '📅' },
   { id: 'onboarding', label: 'Onboarding', icon: '🎯' },
 ];
 
+const TAB_ALIASES: Record<string, TabId> = {
+  demandes: 'requests',
+  staff: 'support',
+  rendezvous: 'support',
+  'rendez-vous': 'support',
+};
+
 export function CRMPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as TabId) || 'requests';
+  const rawTab = searchParams.get('tab');
+  if (!rawTab) {
+    return <Navigate to="/crm?tab=requests" replace />;
+  }
+  const normalized = String(rawTab).toLowerCase();
+  const activeTab = (TAB_ALIASES[normalized] || normalized) as TabId;
+  if (!TABS.some((t) => t.id === activeTab)) {
+    return <Navigate to="/crm?tab=requests" replace />;
+  }
+  if (normalized !== activeTab) {
+    return <Navigate to={`/crm?tab=${activeTab}`} replace />;
+  }
 
   const handleTabChange = (tabId: TabId) => {
     setSearchParams({ tab: tabId });
@@ -131,6 +150,7 @@ export function CRMPage() {
           minHeight: 500,
         }}>
           {activeTab === 'requests' && <RequestsTab />}
+          {activeTab === 'hosts' && <HostsTab />}
           {activeTab === 'leads' && <LeadsTab />}
           {activeTab === 'support' && <SupportTab />}
           {activeTab === 'onboarding' && <OnboardingTab />}

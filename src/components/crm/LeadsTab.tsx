@@ -16,6 +16,7 @@ import {
 } from '../../services/crmService';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { LeadDetailDialog } from './LeadDetailDialog';
 
 // ════════════════════════════════════════════════════════════════════
 // COMPONENT
@@ -36,6 +37,8 @@ export function LeadsTab() {
   const [selectedLead, setSelectedLead] = useState<LeadDetail | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  const [dialogLead, setDialogLead] = useState<Record<string, unknown> | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const fetchFilterLeadOptions = useCallback(async () => {
     try {
@@ -99,6 +102,18 @@ export function LeadsTab() {
   const handleCloseMenu = () => {
     setShowMenu(false);
     setSelectedLead(null);
+  };
+
+  const openDetail = (row: LeadDetail) => {
+    setDialogLead(row as unknown as Record<string, unknown>);
+    setDialogOpen(true);
+  };
+
+  const handleViewDetails = () => {
+    if (!selectedLead) return;
+    const row = selectedLead;
+    handleCloseMenu();
+    openDetail(row);
   };
 
   const handleDelete = async () => {
@@ -241,19 +256,23 @@ export function LeadsTab() {
         </div>
       </div>
 
-      {/* Info */}
+      {/* Funnel — étape 3 */}
       <div
         style={{
           marginBottom: 12,
-          padding: '8px 12px',
-          background: T.bg2,
-          borderRadius: 6,
-          fontSize: 11,
-          color: T.text3,
+          padding: '10px 14px',
+          background: '#E8F5E9',
+          border: `1px solid ${T.primary}33`,
+          borderRadius: 8,
+          fontSize: 12,
+          color: T.text2,
+          lineHeight: 1.55,
         }}
       >
-        Toutes les <strong>demandes</strong> (formulaire simple) et les <strong>fiches détaillées</strong> — tri par{' '}
-        <strong>Créé le</strong> (fiche si présente, sinon date du lead). Plus récent en premier.
+        <strong style={{ color: T.primaryDeep }}>Étape 3 du funnel CRM</strong> — après une{' '}
+        <strong>demande démo</strong> (onglet Demandes) et un <strong>rendez-vous</strong> (onglet Rendez-vous), le
+        prospect remplit ici sa <strong>fiche de qualification</strong> (PMS, solutions, croissance…). Les lignes sans
+        fiche détaillée = formulaire contact simple uniquement.
       </div>
 
       {/* Stats */}
@@ -455,6 +474,7 @@ export function LeadsTab() {
                       borderBottom: `1px solid ${T.border}`,
                       cursor: 'pointer',
                     }}
+                    onClick={() => openDetail(row)}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.background = T.bg2;
                     }}
@@ -645,6 +665,30 @@ export function LeadsTab() {
             }}
           >
             <button
+              onClick={handleViewDetails}
+              style={{
+                width: '100%',
+                padding: '10px 16px',
+                textAlign: 'left',
+                border: 0,
+                background: 'transparent',
+                color: T.text,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                borderRadius: '8px 8px 0 0',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = T.bg2;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              👁️ Voir détail
+            </button>
+            <button
               onClick={handleDelete}
               style={{
                 width: '100%',
@@ -671,6 +715,15 @@ export function LeadsTab() {
           </div>
         </>
       )}
+
+      <LeadDetailDialog
+        open={dialogOpen}
+        row={dialogLead}
+        onClose={() => {
+          setDialogOpen(false);
+          setDialogLead(null);
+        }}
+      />
     </div>
   );
 }

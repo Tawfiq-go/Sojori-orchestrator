@@ -60,6 +60,13 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         ],
       },
       {
+        id: 'payments',
+        label: 'Paiements',
+        iconType: 'chart',
+        iconColor: '#5B9BD5',
+        description: 'Audit NAPS · idDemande · token',
+      },
+      {
         id: 'tasks',
         label: 'Tâches',
         iconType: 'check',
@@ -89,9 +96,8 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         badge: 'CORE',
         sub: [
           { id: 'orch/plans', label: 'Plans par séjour' },
+          { id: 'orch/ops', label: 'Ops · J0/J+1' },
           { id: 'orch/workflows', label: 'Workflows · config' },
-          { id: 'orch/messages', label: 'Messages WhatsApp voyageur' },
-          { id: 'orch/rules', label: 'Règles & déclencheurs' },
         ],
       },
     ],
@@ -161,8 +167,8 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         sub: [
           { id: 'crm/clients', label: 'Clients' },
           { id: 'crm/requests', label: 'Demandes' },
-          { id: 'crm/leads', label: 'Leads' },
-          { id: 'crm/support', label: 'Support' },
+          { id: 'crm/leads', label: 'Leads & fiches' },
+          { id: 'crm/support', label: 'Rendez-vous' },
           { id: 'crm/onboarding', label: 'Onboarding' },
           { id: 'crm/reviews', label: 'Avis' },
         ],

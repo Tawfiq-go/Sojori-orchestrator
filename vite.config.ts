@@ -80,9 +80,52 @@ const apiDevProxy = {
 export default defineConfig({
   appType: 'spa',
   plugins: [react(), tailwindcss()],
+
+  // ⚡ OPTIMISATION PERFORMANCE - Pré-bundling agressif des dépendances
   optimizeDeps: {
-    include: ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+    include: [
+      // Core React
+      'react', 'react-dom', 'react-router-dom',
+      // MUI Components
+      '@mui/material', '@mui/icons-material', '@mui/lab',
+      '@mui/x-date-pickers', '@emotion/react', '@emotion/styled',
+      // Data Management
+      '@tanstack/react-query', 'axios', 'zustand',
+      // Drag & Drop
+      '@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities',
+      // Charts & Visualization
+      'recharts',
+      // Forms
+      'formik', 'yup',
+      // Date Libraries
+      'moment', 'date-fns', 'date-fns-tz',
+      // UI Libraries
+      'primereact', 'primeicons', 'react-toastify',
+      // Utilities
+      'lodash', 'js-cookie',
+      // Maps
+      'leaflet', 'react-leaflet',
+      // Internationalization
+      'i18next', 'react-i18next',
+      // Misc
+      'react-dropzone', 'styled-components',
+    ],
+    // Force immediate pre-bundling
+    force: false,
   },
+
+  // ⚡ BUILD OPTIMIZATIONS
+  build: {
+    // manualChunks objet retiré — incompatible Vite 8 / rolldown en prod build
+    // Optimiser la taille des chunks
+    chunkSizeWarningLimit: 600,
+    // Minification plus agressive en production
+    minify: 'esbuild', // plus rapide que terser, suffisant pour la plupart des cas
+    target: 'es2020',
+    // Sourcemaps en dev uniquement
+    sourcemap: process.env.NODE_ENV === 'development',
+  },
+
   resolve: {
     alias: [
       // Regex only matches `@/…` — bare `@` would shadow npm scopes like @dnd-kit, @mui
@@ -100,6 +143,7 @@ export default defineConfig({
       { find: 'constants', replacement: path.resolve(__dirname, './src/constants') },
     ],
   },
+
   server: {
     host: '127.0.0.1',
     port: 4174,
@@ -114,7 +158,18 @@ export default defineConfig({
       port: 4174,
       clientPort: 4174,
     },
+    // ⚡ Pré-réchauffer les modules les plus utilisés
+    warmup: {
+      clientFiles: [
+        './src/App.tsx',
+        './src/main.tsx',
+        './src/pages/DashboardPage.tsx',
+        './src/pages/TasksListPage.tsx',
+        './src/pages/ReservationsPage.tsx',
+      ],
+    },
   },
+
   preview: {
     host: '127.0.0.1',
     port: 4174,

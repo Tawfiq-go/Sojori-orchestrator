@@ -15,12 +15,20 @@ export function defaultScheduleRefForTaskType(taskType: string): string {
   const t = taskType.toLowerCase();
   if (t === 'cleaning_free' || t === 'cleaning_paid') return 'scheduledDate';
   if (
-    t === 'departure_choose' ||
-    t === 'departure_declare' ||
+    t === 'transport' ||
+    t === 'groceries' ||
+    t === 'concierge' ||
     t === 'checkout_cleaning'
+  ) {
+    return 'scheduledDate';
+  }
+  if (
+    t === 'departure_choose' ||
+    t === 'departure_declare'
   ) {
     return 'checkout';
   }
+  if (t === 'support' || t === 'service_client') return 'task_created';
   return 'checkin';
 }
 

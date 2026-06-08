@@ -10,6 +10,54 @@
   overflow-y: auto;
 }
 
+.owner-drawer-inline {
+  margin-top: 22px;
+}
+
+.owner-drawer-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 18px 14px;
+  border-bottom: 1px solid var(--b);
+  background: var(--bg1);
+}
+
+.owner-drawer-tab {
+  border: 1px solid var(--b);
+  background: var(--bg2);
+  color: var(--t2);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.owner-drawer-tab.on {
+  background: var(--pt);
+  border-color: var(--pt2);
+  color: var(--pd);
+}
+
+.owner-tab-panel {
+  padding-top: 4px;
+}
+
+.owner-tab-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.owner-tab-grid .full {
+  grid-column: 1 / -1;
+}
+
+.owner-tab-grid .form-section.full {
+  grid-column: 1 / -1;
+}
+
 .owner-drawer-host .owner-drawer-panel {
   width: min(720px, 100%);
   margin-top: 0;

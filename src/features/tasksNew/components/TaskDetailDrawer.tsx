@@ -23,7 +23,6 @@ import {
   FULLTASK_TASK_TYPE_EMOJI,
   labelForTaskTypeId,
 } from '../../taskHub/staff-design/fulltaskTaskTypes';
-import { LEGACY_TO_FULLTASK_STATUS } from '../../../utils/fulltaskMappers';
 
 /** 1040px − 25 % */
 const DRAWER_WIDTH = 780;
@@ -310,7 +309,7 @@ export default function TaskDetailDrawer({
     setSaving(true);
     try {
       await tasksService.updateTask(task._id, {
-        status: LEGACY_TO_FULLTASK_STATUS[form.status] || form.status,
+        status: form.status,
         requestedAt: form.requestedAt.trim() || null,
         scheduledAt: form.scheduledAt.trim() || null,
         scheduledDate: form.scheduledDate

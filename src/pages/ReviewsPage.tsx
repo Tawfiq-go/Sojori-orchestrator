@@ -1,28 +1,48 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ColumnSelector, { type ColumnDef } from '../components/filters/ColumnSelector';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
-  PageHeader, DataTable, StatCard, StatsRow, Badge, SourcePill, AIChip,
-  btnPrimarySx, btnGhostSx, btnSmSx,
+  PageHeader,
+  DataTable,
+  StatCard,
+  StatsRow,
+  Badge,
+  SourcePill,
+  AIChip,
+  btnPrimarySx,
+  btnGhostSx,
+  btnSmSx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import {
-  Alert, Box, Button, Snackbar, Stack, Typography, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, MenuItem, Rating,
+  Alert,
+  Box,
+  Button,
+  Snackbar,
+  Stack,
+  Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Rating,
+  CircularProgress,
 } from '@mui/material';
-
-// ═══════════════════════════════════════════════════════════════
-// MOCK DATA - Realistic Reviews
-// ═══════════════════════════════════════════════════════════════
+import messagesService from '../services/messagesService';
 
 type ReviewRow = {
   id: string;
+  threadId: string;
   date: string;
+  checkInDate: string;
+  checkOutDate: string;
   listingName: string;
   listingPhoto: string;
   guestName: string;
-  ota: 'Airbnb' | 'Booking.com' | 'Vrbo';
+  ota: string;
   rating: number;
   comment: string;
   replied: boolean;
@@ -32,50 +52,153 @@ type ReviewRow = {
   reservationNumber: string;
 };
 
-const MOCK_REVIEWS: ReviewRow[] = [
-  { id: 'rv1', date: '2026-05-13', listingName: 'Villa Belvédère', listingPhoto: '🏡', guestName: 'Sarah Johnson', ota: 'Airbnb', rating: 5, comment: 'Absolutely stunning property! The views are breathtaking and the villa exceeded all expectations. Perfect for a family vacation.', replied: false, urgent: true, response: '', flagged: false, reservationNumber: 'RES-2026-001' },
-  { id: 'rv2', date: '2026-05-12', listingName: 'Dar Sojori', listingPhoto: '🏘️', guestName: 'Marco Rossi', ota: 'Booking.com', rating: 4, comment: 'Great location and beautiful riad. Only minor issue was the wifi speed, but overall wonderful experience.', replied: true, urgent: false, response: 'Thank you Marco! We appreciate your feedback. We have upgraded our wifi since your stay. Hope to welcome you again soon!', flagged: false, reservationNumber: 'RES-2026-002' },
-  { id: 'rv3', date: '2026-05-11', listingName: 'Villa Atlas', listingPhoto: '⛰️', guestName: 'Aisha Khalil', ota: 'Airbnb', rating: 5, comment: 'Perfect mountain retreat. Clean, well-equipped, and the host was incredibly responsive. Highly recommend!', replied: true, urgent: false, response: 'Thank you Aisha! It was our pleasure to host you. Welcome back anytime!', flagged: false, reservationNumber: 'RES-2026-003' },
-  { id: 'rv4', date: '2026-05-10', listingName: 'Riad Jasmine', listingPhoto: '🌸', guestName: 'Pierre Dubois', ota: 'Vrbo', rating: 3, comment: 'Decent property but had some maintenance issues. Hot water was inconsistent and some lights were not working.', replied: false, urgent: true, response: '', flagged: false, reservationNumber: 'RES-2026-004' },
-  { id: 'rv5', date: '2026-05-09', listingName: 'Villa Belvédère', listingPhoto: '🏡', guestName: 'Emma Watson', ota: 'Airbnb', rating: 5, comment: 'Magical experience! The infinity pool at sunset is pure bliss. Communication was excellent throughout.', replied: true, urgent: false, response: 'Thank you Emma! Your kind words mean the world to us. We hope to host you again!', flagged: false, reservationNumber: 'RES-2026-005' },
-  { id: 'rv6', date: '2026-05-08', listingName: 'Dar Sojori', listingPhoto: '🏘️', guestName: 'Ahmed Hassan', ota: 'Booking.com', rating: 4, comment: 'Beautiful traditional riad in the medina. Some noise from the street but overall great stay.', replied: false, urgent: false, response: '', flagged: false, reservationNumber: 'RES-2026-006' },
-  { id: 'rv7', date: '2026-05-07', listingName: 'Villa Atlas', listingPhoto: '⛰️', guestName: 'Sophie Martin', ota: 'Airbnb', rating: 5, comment: 'Breathtaking views and pristine property. The concierge service was exceptional. Will definitely return!', replied: true, urgent: false, response: 'Merci Sophie! We loved hosting you and your family. À bientôt!', flagged: false, reservationNumber: 'RES-2026-007' },
-  { id: 'rv8', date: '2026-05-06', listingName: 'Riad Jasmine', listingPhoto: '🌸', guestName: 'Carlos Mendez', ota: 'Booking.com', rating: 2, comment: 'Property did not match photos. Several amenities were not available and cleanliness was subpar.', replied: false, urgent: true, response: '', flagged: false, reservationNumber: 'RES-2026-008' },
-  { id: 'rv9', date: '2026-05-05', listingName: 'Villa Belvédère', listingPhoto: '🏡', guestName: 'Lisa Anderson', ota: 'Vrbo', rating: 5, comment: 'Paradise! Everything was perfect from check-in to check-out. The staff went above and beyond.', replied: true, urgent: false, response: 'Thank you Lisa! Your satisfaction is our priority. Hope to welcome you back soon!', flagged: false, reservationNumber: 'RES-2026-009' },
-  { id: 'rv10', date: '2026-05-04', listingName: 'Dar Sojori', listingPhoto: '🏘️', guestName: 'Mohammed Aziz', ota: 'Airbnb', rating: 4, comment: 'Authentic Moroccan experience. Loved the rooftop terrace. Some minor wear and tear but overall great.', replied: false, urgent: false, response: '', flagged: false, reservationNumber: 'RES-2026-010' },
-];
+function formatStayDate(raw?: string | Date | null): string {
+  if (!raw) return '—';
+  try {
+    return new Date(raw).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return '—';
+  }
+}
 
-// Calculate stats from reviews
-const calculateStats = (reviews: typeof MOCK_REVIEWS) => {
+function resolveListingName(reservation: Record<string, unknown>, threadData: Record<string, unknown>): string {
+  const sojori = reservation.sojoriId;
+  if (sojori && typeof sojori === 'object' && sojori !== null && 'name' in sojori && sojori.name) {
+    return String(sojori.name);
+  }
+  if (typeof sojori === 'string' && sojori.trim()) return sojori;
+  const fromReservation =
+    reservation.listingName || reservation.listingTitle || reservation.propertyName;
+  if (fromReservation) return String(fromReservation);
+  if (threadData.listingName) return String(threadData.listingName);
+  return '—';
+}
+
+function parseReview(messages: unknown[]) {
+  let rating = 5;
+  let message = '';
+  let response = '';
+  for (const msg of messages || []) {
+    const parsed = (msg as { parsedReview?: Record<string, unknown> })?.parsedReview;
+    if (parsed) {
+      if (parsed.Rating != null && parsed.Rating !== '') rating = Number(parsed.Rating) || rating;
+      if (parsed.Message) message = message || String(parsed.Message);
+      if (parsed.Response) response = String(parsed.Response);
+      continue;
+    }
+    const body = (msg as { body?: unknown })?.body;
+    if (!body) continue;
+    if (typeof body === 'string' && body.trim().startsWith('<')) {
+      const plain = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (plain.length > 12) message = message || plain;
+      continue;
+    }
+    try {
+      const data = typeof body === 'string' ? JSON.parse(body) : (body as Record<string, unknown>);
+      if (data.Rating != null && data.Rating !== '') rating = Number(data.Rating) || rating;
+      if (data.Message) message = message || String(data.Message);
+      if (data.Response) response = String(data.Response);
+    } catch {
+      const plain = String(body)
+        .replace(/<[^>]+>/g, ' ')
+        .trim();
+      if (plain.length > 12) message = message || plain;
+    }
+  }
+  return { rating, message, response };
+}
+
+function normalizeOta(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.includes('booking')) return 'Booking.com';
+  if (lower.includes('vrbo')) return 'Vrbo';
+  if (lower.includes('airbnb')) return 'Airbnb';
+  return raw || 'Airbnb';
+}
+
+function listingEmoji(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('villa')) return '🏡';
+  if (n.includes('riad')) return '🌸';
+  if (n.includes('dar')) return '🏘️';
+  if (n.includes('atlas')) return '⛰️';
+  return '🏠';
+}
+
+function mapApiToRows(items: unknown[], flaggedIds: Set<string>): ReviewRow[] {
+  return items.map((item: any) => {
+    const threadData = item.thread || item;
+    const reservation = item.reservation || {};
+    const messages = item.messages || [];
+    const review = parseReview(messages);
+    const listingName = resolveListingName(reservation, threadData);
+    const reviewStatus = String(threadData.reviewStatus || '');
+    const replied =
+      reviewStatus === 'responded' ||
+      reviewStatus === 'replied' ||
+      !!review.response;
+    const rating = review.rating;
+    const id = String(threadData._id || threadData.threadId || threadData.id);
+    const threadId = String(threadData.threadId || threadData._id || id);
+    const dateRaw =
+      threadData.lastMessageAt || reservation.departureDate || reservation.arrivalDate || new Date().toISOString();
+    const checkIn = reservation.arrivalDate || reservation.checkInDate || null;
+    const checkOut = reservation.departureDate || reservation.checkOutDate || null;
+
+    return {
+      id,
+      threadId,
+      date: String(dateRaw).slice(0, 10),
+      checkInDate: checkIn ? String(checkIn) : '',
+      checkOutDate: checkOut ? String(checkOut) : '',
+      listingName,
+      listingPhoto: listingEmoji(listingName),
+      guestName: reservation.guestName || threadData.recipientName || 'Guest',
+      ota: normalizeOta(threadData.communicationChannel || reservation.channelName || 'Airbnb'),
+      rating,
+      comment: review.message || threadData.preview || '',
+      replied,
+      urgent: !replied && rating < 4,
+      response: review.response,
+      flagged: flaggedIds.has(id),
+      reservationNumber: reservation.reservationNumber || '—',
+    };
+  });
+}
+
+const calculateStats = (reviews: ReviewRow[]) => {
   const totalReviews = reviews.length;
-  const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews;
-  const repliedCount = reviews.filter(r => r.replied).length;
-  const replyRate = (repliedCount / totalReviews) * 100;
-  const urgentCount = reviews.filter(r => !r.replied && (r.rating < 4 || r.urgent)).length;
+  const avgRating = totalReviews ? reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews : 0;
+  const repliedCount = reviews.filter((r) => r.replied).length;
+  const replyRate = totalReviews ? (repliedCount / totalReviews) * 100 : 0;
+  const urgentCount = reviews.filter((r) => !r.replied && (r.rating < 4 || r.urgent)).length;
 
-  // By OTA
-  const byOTA = reviews.reduce((acc, r) => {
-    if (!acc[r.ota]) acc[r.ota] = { count: 0, totalRating: 0 };
-    acc[r.ota].count++;
-    acc[r.ota].totalRating += r.rating;
-    return acc;
-  }, {} as Record<string, { count: number; totalRating: number }>);
+  const byOTA = reviews.reduce(
+    (acc, r) => {
+      if (!acc[r.ota]) acc[r.ota] = { count: 0, totalRating: 0 };
+      acc[r.ota].count++;
+      acc[r.ota].totalRating += r.rating;
+      return acc;
+    },
+    {} as Record<string, { count: number; totalRating: number }>,
+  );
 
-  // By listing
-  const byListing = reviews.reduce((acc, r) => {
-    if (!acc[r.listingName]) acc[r.listingName] = { count: 0, totalRating: 0 };
-    acc[r.listingName].count++;
-    acc[r.listingName].totalRating += r.rating;
-    return acc;
-  }, {} as Record<string, { count: number; totalRating: 0 }>);
+  const byListing = reviews.reduce(
+    (acc, r) => {
+      if (!acc[r.listingName]) acc[r.listingName] = { count: 0, totalRating: 0 };
+      acc[r.listingName].count++;
+      acc[r.listingName].totalRating += r.rating;
+      return acc;
+    },
+    {} as Record<string, { count: number; totalRating: number }>,
+  );
 
   return { totalReviews, avgRating, replyRate, urgentCount, byOTA, byListing };
 };
 
-// AI suggestions for responses
 const AI_RESPONSE_TEMPLATES = [
   "Thank you for your wonderful feedback! We're delighted you enjoyed your stay. We hope to welcome you back soon!",
-  "We appreciate your review and are glad you had a great experience. Looking forward to hosting you again!",
+  'We appreciate your review and are glad you had a great experience. Looking forward to hosting you again!',
   "Thank you for sharing your experience. We're thrilled you loved the property and our service!",
   "We're sorry to hear about the issues you encountered. We take your feedback seriously and have addressed these concerns. We'd love the opportunity to host you again.",
   "Thank you for your honest feedback. We've made improvements based on your suggestions. Hope to see you again!",
@@ -83,30 +206,80 @@ const AI_RESPONSE_TEMPLATES = [
 
 export function ReviewsPage() {
   const navigate = useNavigate();
-  const [reviews, setReviews] = useState<ReviewRow[]>(MOCK_REVIEWS);
+  const [reviews, setReviews] = useState<ReviewRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedReview, setSelectedReview] = useState<ReviewRow | null>(null);
   const [replyModalOpen, setReplyModalOpen] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'info' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'info' | 'error' } | null>(
+    null,
+  );
   const [filters, setFilters] = useState({ ota: 'all', rating: 'all', listing: 'all', status: 'all' });
-  const [visibleColumns, setVisibleColumns] = useState(['date', 'listing', 'guest', 'ota', 'rating', 'comment', 'status', 'actions']);
-  const [columnOrder, setColumnOrder] = useState(['date', 'listing', 'guest', 'ota', 'rating', 'comment', 'status', 'actions']);
+  const [visibleColumns, setVisibleColumns] = useState([
+    'date',
+    'checkin',
+    'checkout',
+    'listing',
+    'guest',
+    'ota',
+    'rating',
+    'comment',
+    'status',
+    'actions',
+  ]);
+  const [columnOrder, setColumnOrder] = useState([
+    'date',
+    'checkin',
+    'checkout',
+    'listing',
+    'guest',
+    'ota',
+    'rating',
+    'comment',
+    'status',
+    'actions',
+  ]);
+
+  const loadReviews = useCallback(async () => {
+    try {
+      setLoading(true);
+      setLoadError(null);
+      const response = await messagesService.getReviews({ limit: 100, msgLimit: 30 });
+      const threadsData = response.threads || response.data || [];
+      setReviews((prev) => {
+        const flagged = new Set(prev.filter((r) => r.flagged).map((r) => r.id));
+        return mapApiToRows(threadsData, flagged);
+      });
+    } catch (err) {
+      console.error('[ReviewsPage] load error:', err);
+      setLoadError(err instanceof Error ? err.message : 'Erreur chargement avis');
+      setReviews([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadReviews();
+  }, [loadReviews]);
 
   const stats = useMemo(() => calculateStats(reviews), [reviews]);
 
-  // Filter reviews
   const filteredReviews = useMemo(() => {
-    return reviews.filter(r => {
+    return reviews.filter((r) => {
       const matchesSearch =
         !searchTerm ||
         r.guestName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         r.comment.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.listingName.toLowerCase().includes(searchTerm.toLowerCase());
+        r.listingName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.reservationNumber.toLowerCase().includes(searchTerm.toLowerCase());
 
       if (!matchesSearch) return false;
       if (filters.ota !== 'all' && r.ota !== filters.ota) return false;
-      if (filters.rating !== 'all' && r.rating !== Number(filters.rating)) return false;
+      if (filters.rating !== 'all' && Math.round(r.rating) !== Number(filters.rating)) return false;
       if (filters.listing !== 'all' && r.listingName !== filters.listing) return false;
       if (filters.status === 'replied' && !r.replied) return false;
       if (filters.status === 'pending' && r.replied) return false;
@@ -122,20 +295,32 @@ export function ReviewsPage() {
     setReplyModalOpen(true);
   };
 
-  const handleSubmitReply = () => {
-    if (!selectedReview) return;
+  const handleSubmitReply = async () => {
+    if (!selectedReview || !replyText.trim()) return;
 
-    setReviews((prev) =>
-      prev.map((review) =>
-        review.id === selectedReview.id
-          ? { ...review, replied: true, response: replyText.trim(), urgent: false }
-          : review,
-      ),
-    );
-    setReplyModalOpen(false);
-    setSelectedReview(null);
-    setReplyText('');
-    setToast({ message: 'Réponse publiée', severity: 'success' });
+    setSending(true);
+    try {
+      await messagesService.replyToReview(selectedReview.threadId, replyText.trim());
+      setReviews((prev) =>
+        prev.map((review) =>
+          review.id === selectedReview.id
+            ? { ...review, replied: true, response: replyText.trim(), urgent: false }
+            : review,
+        ),
+      );
+      setReplyModalOpen(false);
+      setSelectedReview(null);
+      setReplyText('');
+      setToast({ message: 'Réponse publiée', severity: 'success' });
+    } catch (err) {
+      console.error('[ReviewsPage] reply error:', err);
+      setToast({
+        message: err instanceof Error ? err.message : 'Erreur lors de la publication',
+        severity: 'error',
+      });
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleAISuggestion = (template: string) => {
@@ -168,21 +353,38 @@ export function ReviewsPage() {
 
   const handleFlag = (reviewId: string) => {
     setReviews((prev) => prev.map((review) => (review.id === reviewId ? { ...review, flagged: true } : review)));
-    setToast({ message: 'Avis signalé', severity: 'warning' });
+    setToast({ message: 'Avis signalé (local)', severity: 'warning' });
   };
 
   const handleNavigateCrossChannel = (review: ReviewRow) => {
-    navigate(`/communications/whatsapp?reservation=${review.reservationNumber}`);
+    navigate(`/communications?tab=messages&reservation=${encodeURIComponent(review.reservationNumber)}`);
   };
 
-  // DataTable columns
   const columns = [
     {
       key: 'date',
-      label: 'Date',
+      label: 'Date avis',
       render: (row: ReviewRow) => (
         <Typography sx={{ fontSize: 13, fontFamily: 'Geist Mono' }}>
           {new Date(row.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+        </Typography>
+      ),
+    },
+    {
+      key: 'checkin',
+      label: 'Check-in',
+      render: (row: ReviewRow) => (
+        <Typography sx={{ fontSize: 13, fontFamily: 'Geist Mono', whiteSpace: 'nowrap' }}>
+          {formatStayDate(row.checkInDate)}
+        </Typography>
+      ),
+    },
+    {
+      key: 'checkout',
+      label: 'Check-out',
+      render: (row: ReviewRow) => (
+        <Typography sx={{ fontSize: 13, fontFamily: 'Geist Mono', whiteSpace: 'nowrap' }}>
+          {formatStayDate(row.checkOutDate)}
         </Typography>
       ),
     },
@@ -199,9 +401,7 @@ export function ReviewsPage() {
     {
       key: 'guest',
       label: 'Guest',
-      render: (row: ReviewRow) => (
-        <Typography sx={{ fontSize: 13 }}>{row.guestName}</Typography>
-      ),
+      render: (row: ReviewRow) => <Typography sx={{ fontSize: 13 }}>{row.guestName}</Typography>,
     },
     {
       key: 'ota',
@@ -213,10 +413,8 @@ export function ReviewsPage() {
       label: 'Note',
       render: (row: ReviewRow) => (
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <Rating value={row.rating} readOnly size="small" />
-          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-            {row.rating}/5
-          </Typography>
+          <Rating value={row.rating} readOnly size="small" precision={0.5} />
+          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{row.rating}/5</Typography>
         </Stack>
       ),
     },
@@ -224,14 +422,16 @@ export function ReviewsPage() {
       key: 'comment',
       label: 'Commentaire',
       render: (row: ReviewRow) => (
-        <Typography sx={{
-          fontSize: 13,
-          color: t.text2,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          maxWidth: 300,
-        }}>
+        <Typography
+          sx={{
+            fontSize: 13,
+            color: t.text2,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 300,
+          }}
+        >
           {row.comment}
         </Typography>
       ),
@@ -241,9 +441,7 @@ export function ReviewsPage() {
       label: 'Statut',
       render: (row: ReviewRow) => (
         <Stack spacing={0.5}>
-          {row.flagged ? (
-            <Badge color="error" size="sm">⚑ Signalé</Badge>
-          ) : null}
+          {row.flagged ? <Badge color="error" size="sm">⚑ Signalé</Badge> : null}
           {row.replied ? (
             <Badge color="success" size="sm">✓ Répondu</Badge>
           ) : (
@@ -260,10 +458,7 @@ export function ReviewsPage() {
       render: (row: ReviewRow) => (
         <Stack direction="row" spacing={0.5}>
           {!row.replied && (
-            <Button
-              sx={{ ...btnSmSx, ...btnPrimarySx }}
-              onClick={() => handleReply(row)}
-            >
+            <Button sx={{ ...btnSmSx, ...btnPrimarySx }} onClick={() => handleReply(row)}>
               💬 Répondre
             </Button>
           )}
@@ -279,9 +474,12 @@ export function ReviewsPage() {
       ),
     },
   ];
+
   const columnDefs = useMemo<ColumnDef[]>(
     () => [
-      { id: 'date', label: 'Date' },
+      { id: 'date', label: 'Date avis' },
+      { id: 'checkin', label: 'Check-in' },
+      { id: 'checkout', label: 'Check-out' },
       { id: 'listing', label: 'Listing' },
       { id: 'guest', label: 'Guest', required: true },
       { id: 'ota', label: 'OTA' },
@@ -292,6 +490,7 @@ export function ReviewsPage() {
     ],
     [],
   );
+
   const visibleOrderedColumns = useMemo(
     () =>
       columnOrder
@@ -302,7 +501,7 @@ export function ReviewsPage() {
   );
 
   return (
-    <DashboardWrapper breadcrumb={['Service Client', 'Avis & Reviews']}>
+    <DashboardWrapper breadcrumb={['CRM', 'Avis & Reviews']}>
       <PageHeader title="Avis & Reviews" count={`${filteredReviews.length}`}>
         <ColumnSelector
           columns={columnDefs}
@@ -313,7 +512,12 @@ export function ReviewsPage() {
             setColumnOrder(nextOrder);
           }}
         />
-        <Button sx={btnGhostSx} onClick={handleExport}>📊 Export CSV</Button>
+        <Button sx={btnGhostSx} onClick={() => void loadReviews()} disabled={loading}>
+          🔄 Actualiser
+        </Button>
+        <Button sx={btnGhostSx} onClick={handleExport} disabled={!filteredReviews.length}>
+          📊 Export CSV
+        </Button>
         <Button
           sx={btnPrimarySx}
           onClick={() => {
@@ -325,7 +529,6 @@ export function ReviewsPage() {
         </Button>
       </PageHeader>
 
-      {/* Stats Row */}
       <StatsRow>
         <StatCard
           label="Moyenne globale"
@@ -340,28 +543,21 @@ export function ReviewsPage() {
           trend={`${stats.totalReviews - stats.urgentCount} répondus`}
           trendUp={stats.replyRate > 80}
         />
-        <StatCard
-          label="À répondre"
-          value={`${stats.urgentCount}`}
-          icon="🔥"
-          trend="Urgent"
-          color="error"
-        />
+        <StatCard label="À répondre" value={`${stats.urgentCount}`} icon="🔥" trend="Urgent" color="error" />
         <StatCard
           label="Airbnb"
-          value={`${(stats.byOTA['Airbnb']?.totalRating / stats.byOTA['Airbnb']?.count || 0).toFixed(1)}/5`}
+          value={`${stats.byOTA['Airbnb']?.count ? (stats.byOTA['Airbnb'].totalRating / stats.byOTA['Airbnb'].count).toFixed(1) : '—'}/5`}
           icon="🅰️"
           trend={`${stats.byOTA['Airbnb']?.count || 0} avis`}
         />
         <StatCard
           label="Booking.com"
-          value={`${(stats.byOTA['Booking.com']?.totalRating / stats.byOTA['Booking.com']?.count || 0).toFixed(1)}/5`}
+          value={`${stats.byOTA['Booking.com']?.count ? (stats.byOTA['Booking.com'].totalRating / stats.byOTA['Booking.com'].count).toFixed(1) : '—'}/5`}
           icon="🅱️"
           trend={`${stats.byOTA['Booking.com']?.count || 0} avis`}
         />
       </StatsRow>
 
-      {/* Filters */}
       <Stack
         direction="row"
         spacing={2}
@@ -422,8 +618,10 @@ export function ReviewsPage() {
           sx={{ minWidth: 180 }}
         >
           <MenuItem value="all">Tous</MenuItem>
-          {Object.keys(stats.byListing).map(listing => (
-            <MenuItem key={listing} value={listing}>{listing}</MenuItem>
+          {Object.keys(stats.byListing).map((listing) => (
+            <MenuItem key={listing} value={listing}>
+              {listing}
+            </MenuItem>
           ))}
         </TextField>
 
@@ -443,19 +641,21 @@ export function ReviewsPage() {
         </TextField>
       </Stack>
 
-      {/* DataTable */}
-      <DataTable
-        columns={visibleOrderedColumns}
-        rows={filteredReviews}
-      />
+      {loadError ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {loadError}
+        </Alert>
+      ) : null}
 
-      {/* Reply Modal */}
-      <Dialog
-        open={replyModalOpen}
-        onClose={() => setReplyModalOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress size={32} sx={{ color: t.primary }} />
+        </Box>
+      ) : (
+        <DataTable columns={visibleOrderedColumns} rows={filteredReviews} />
+      )}
+
+      <Dialog open={replyModalOpen} onClose={() => setReplyModalOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           <Stack spacing={1}>
             <Typography variant="h6">Répondre à l'avis</Typography>
@@ -465,17 +665,19 @@ export function ReviewsPage() {
                   <Typography sx={{ fontSize: 14, color: t.text2 }}>
                     {selectedReview.guestName} • {selectedReview.listingName}
                   </Typography>
-                  <Rating value={selectedReview.rating} readOnly size="small" />
+                  <Rating value={selectedReview.rating} readOnly size="small" precision={0.5} />
                 </Stack>
-                <Typography sx={{
-                  fontSize: 13,
-                  color: t.text3,
-                  fontStyle: 'italic',
-                  bgcolor: t.bg2,
-                  p: 1.5,
-                  borderRadius: '8px',
-                  borderLeft: `3px solid ${t.primary}`,
-                }}>
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    color: t.text3,
+                    fontStyle: 'italic',
+                    bgcolor: t.bg2,
+                    p: 1.5,
+                    borderRadius: '8px',
+                    borderLeft: `3px solid ${t.primary}`,
+                  }}
+                >
                   "{selectedReview.comment}"
                 </Typography>
               </Stack>
@@ -484,23 +686,17 @@ export function ReviewsPage() {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 2 }}>
-            {/* AI Suggestions */}
             <Box>
               <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 1, color: t.text2 }}>
                 ✨ Suggestions AI
               </Typography>
               <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
                 {AI_RESPONSE_TEMPLATES.map((template, idx) => (
-                  <AIChip
-                    key={idx}
-                    label={`Suggestion ${idx + 1}`}
-                    onClick={() => handleAISuggestion(template)}
-                  />
+                  <AIChip key={idx} label={`Suggestion ${idx + 1}`} onClick={() => handleAISuggestion(template)} />
                 ))}
               </Stack>
             </Box>
 
-            {/* Response textarea */}
             <TextField
               multiline
               rows={6}
@@ -514,15 +710,11 @@ export function ReviewsPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setReplyModalOpen(false)} sx={btnGhostSx}>
+          <Button onClick={() => setReplyModalOpen(false)} sx={btnGhostSx} disabled={sending}>
             Annuler
           </Button>
-          <Button
-            onClick={handleSubmitReply}
-            sx={btnPrimarySx}
-            disabled={!replyText.trim()}
-          >
-            📤 Publier la réponse
+          <Button onClick={() => void handleSubmitReply()} sx={btnPrimarySx} disabled={!replyText.trim() || sending}>
+            {sending ? 'Publication…' : '📤 Publier la réponse'}
           </Button>
         </DialogActions>
       </Dialog>

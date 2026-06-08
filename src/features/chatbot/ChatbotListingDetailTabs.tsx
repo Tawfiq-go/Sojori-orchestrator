@@ -4,7 +4,7 @@ import ListingFormV2 from '../../components/listing/form-v2/ListingFormV2';
 import ChatbotPropertyResumeTab from './ChatbotPropertyResumeTab';
 import { CONFIG_NEW_TAB_COUNT } from '../../components/listing/form-v2/ListingFormShell';
 
-type MainTab = 'resume' | 'config-new';
+type MainTab = 'resume' | 'config';
 
 type Props = {
   listingId: string;
@@ -23,7 +23,7 @@ type Props = {
 
 const MAIN_TABS: Array<{ id: MainTab; icon: string; label: string; pill?: string }> = [
   { id: 'resume', icon: '📋', label: 'Résumé propriété' },
-  { id: 'config-new', icon: '✨', label: 'Config Orch. NEW', pill: `${CONFIG_NEW_TAB_COUNT} onglets` },
+  { id: 'config', icon: '⚙️', label: 'Config orchestration', pill: `${CONFIG_NEW_TAB_COUNT} onglets` },
 ];
 
 export default function ChatbotListingDetailTabs({
@@ -71,13 +71,13 @@ export default function ChatbotListingDetailTabs({
             menuOptionsCount={menuOptionsCount}
           />
         )}
-        {mainTab === 'config-new' && (
+        {mainTab === 'config' && (
           <ListingFormV2
             listingId={listingId}
             initialValues={formValues}
-            defaultLevel="config-new"
+            defaultLevel="config"
             defaultTab={configDefaultTab}
-            lockLevel="config-new"
+            lockLevel="config"
             embedded
             onSave={onSave}
             onImagesPersisted={onImagesPersisted}

@@ -25,6 +25,9 @@ const ReservationSejourPage = lazy(() =>
 const ReservationsPlanningPage = lazy(() =>
   import('./pages/ReservationsPlanningPage').then((module) => ({ default: module.ReservationsPlanningPage }))
 );
+const PaymentsPage = lazy(() =>
+  import('./pages/PaymentsPage').then((module) => ({ default: module.PaymentsPage }))
+);
 const CalendarInventoryPage = lazy(() =>
   import('./pages/CalendarInventoryPageV2').then((module) => ({ default: module.CalendarInventoryPageV2 }))
 );
@@ -74,9 +77,6 @@ const ListingFormV2Page = lazy(() =>
 );
 const ListingCreatePage = lazy(() =>
   import('./pages/ListingCreatePage').then((module) => ({ default: module.ListingCreatePage }))
-);
-const RequestsPage = lazy(() =>
-  import('./pages/RequestsPage').then((module) => ({ default: module.RequestsPage }))
 );
 const ReviewsPage = lazy(() =>
   import('./pages/ReviewsPage').then((module) => ({ default: module.ReviewsPage }))
@@ -259,7 +259,8 @@ function App() {
               <Route path="/orchestration/mockup" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
               <Route path="/orchestration/timeline/:id" element={<LazyRoute><OrchestrationTimelinePageV2 /></LazyRoute>} />
               <Route path="/orchestration/events" element={<LazyRoute><OrchestrationEventsPage /></LazyRoute>} />
-              <Route path="/orchestration/daily-ops" element={<LazyRoute><OrchestrationDailyOpsPage /></LazyRoute>} />
+              <Route path="/tasks/ops" element={<LazyRoute><OrchestrationDailyOpsPage /></LazyRoute>} />
+              <Route path="/orchestration/daily-ops" element={<Navigate to="/tasks/ops" replace />} />
               <Route path="/orchestration/config" element={<LazyRoute><OrchestrationConfigPage /></LazyRoute>} />
 
               <Route path="/calendar" element={<LazyRoute><CalendarInventoryPageV3 /></LazyRoute>} />
@@ -267,6 +268,7 @@ function App() {
 
               <Route path="/reservations" element={<LazyRoute><ReservationsPage /></LazyRoute>} />
               <Route path="/reservations/planning" element={<LazyRoute><ReservationsPlanningPage /></LazyRoute>} />
+              <Route path="/paiements" element={<LazyRoute><PaymentsPage /></LazyRoute>} />
               <Route path="/reservations/:id" element={<LazyRoute><ReservationSejourPage /></LazyRoute>} />
 
               <Route path="/tasks" element={<LazyRoute><TasksListPage /></LazyRoute>} />
@@ -310,7 +312,7 @@ function App() {
               <Route path="/communications/staff" element={<LazyRoute><StaffWhatsAppPage /></LazyRoute>} />
               <Route path="/communications/ota" element={<LazyRoute><OTAMessagesPage /></LazyRoute>} />
 
-              <Route path="/requests" element={<LazyRoute><RequestsPage /></LazyRoute>} />
+              <Route path="/requests" element={<Navigate to="/crm?tab=requests" replace />} />
               <Route path="/reviews" element={<LazyRoute><ReviewsPage /></LazyRoute>} />
 
               <Route path="/listings" element={<LazyRoute><ListingsPage /></LazyRoute>} />

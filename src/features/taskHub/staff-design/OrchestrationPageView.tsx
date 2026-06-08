@@ -371,9 +371,20 @@ export default function OrchestrationPageView({
           onChange={(e) =>
             onUpdateCatalogEntry(entry.id, { whatsappTemplateId: e.target.value })
           }
-          placeholder="ex: welcome_sojori_v2"
+          placeholder="ex: reminder_arrival_choice_v1"
         />
       </div>
+      {(entry.id.startsWith('msg_relance') || entry.flowCategory) ? (
+        <div className="row">
+          <div className="lbl">Catégorie Flow (bouton WA)</div>
+          <input
+            className="input"
+            value={entry.flowCategory || ''}
+            onChange={(e) => onUpdateCatalogEntry(entry.id, { flowCategory: e.target.value })}
+            placeholder="ex: arrival_choose · registration · cleaning_free"
+          />
+        </div>
+      ) : null}
       <div className="row full">
         <div className="lbl">Message OTA (texte FR)</div>
         <textarea
@@ -1147,60 +1158,92 @@ export default function OrchestrationPageView({
                               <option value="no">Non</option>
                             </select>
                           </label>
-                          <label className="orch-assign-opt">
-                            <span>Tolérance acceptation (h)</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.5}
-                              value={w.assignment.acceptToleranceHours}
-                              onChange={(e) =>
-                                onUpdateWorkflow(w._id, {
-                                  assignment: {
-                                    ...w.assignment!,
-                                    acceptToleranceHours: Number(e.target.value),
-                                  },
-                                })
-                              }
-                            />
-                          </label>
-                        </div>
-                        <div className="orch-cron-windows">
-                          <div className="rel-msg-chips-row orch-cron-windows-row">
-                            <span className="rel-msg-chips-lbl">Find another</span>
-                            <div className="orch-cron-chips-group">
-                              {(w.assignment.attemptWindows || []).map((time, idx) => (
-                                <div key={`${w._id}-cron-${idx}`} className="orch-cron-win-chip">
+                          {!w.assignment.autoAssign && w.assignment.findAnotherStaff ? (
+                            <>
+                              <label className="orch-assign-opt">
+                                <span>Mode find another</span>
+                                <select
+                                  value={w.assignment.releaseMode ?? 'tolerance'}
+                                  onChange={(e) =>
+                                    onUpdateWorkflow(w._id, {
+                                      assignment: {
+                                        ...w.assignment!,
+                                        releaseMode: e.target.value as 'tolerance' | 'windows',
+                                      },
+                                    })
+                                  }
+                                >
+                                  <option value="tolerance">Tolérance (heures)</option>
+                                  <option value="windows">Créneaux horaires</option>
+                                </select>
+                              </label>
+                              {(w.assignment.releaseMode ?? 'tolerance') === 'tolerance' ? (
+                                <label className="orch-assign-opt">
+                                  <span>Tolérance acceptation (h)</span>
                                   <input
-                                    value={time}
-                                    placeholder="09:00"
-                                    aria-label={`Heure ${idx + 1}`}
-                                    onChange={(e) => patchAttemptWindow(w, idx, e.target.value)}
+                                    type="number"
+                                    min={0}
+                                    step={0.5}
+                                    value={w.assignment.acceptToleranceHours}
+                                    onChange={(e) =>
+                                      onUpdateWorkflow(w._id, {
+                                        assignment: {
+                                          ...w.assignment!,
+                                          acceptToleranceHours: Number(e.target.value),
+                                        },
+                                      })
+                                    }
                                   />
-                                  <button
-                                    type="button"
-                                    className="orch-cron-win-chip-x"
-                                    aria-label="Supprimer l'heure"
-                                    onClick={() => removeAttemptWindow(w, idx)}
-                                  >
-                                    ✕
-                                  </button>
+                                  <span className="orch-assign-opt-hint">
+                                    Relâcher le staff non accepté après ce délai (cron horaire).
+                                  </span>
+                                </label>
+                              ) : (
+                                <div className="orch-cron-windows orch-cron-windows--solo">
+                                  <div className="rel-msg-chips-row orch-cron-windows-row">
+                                    <span className="rel-msg-chips-lbl">Créneaux</span>
+                                    <div className="orch-cron-chips-group">
+                                      {(w.assignment.attemptWindows || []).map((time, idx) => (
+                                        <div
+                                          key={`${w._id}-cron-${idx}`}
+                                          className="orch-cron-win-chip"
+                                        >
+                                          <input
+                                            value={time}
+                                            placeholder="09:00"
+                                            aria-label={`Heure ${idx + 1}`}
+                                            onChange={(e) =>
+                                              patchAttemptWindow(w, idx, e.target.value)
+                                            }
+                                          />
+                                          <button
+                                            type="button"
+                                            className="orch-cron-win-chip-x"
+                                            aria-label="Supprimer l'heure"
+                                            onClick={() => removeAttemptWindow(w, idx)}
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      ))}
+                                      <button
+                                        type="button"
+                                        className="orch-cron-win-add"
+                                        aria-label="Ajouter une heure"
+                                        onClick={() => addAttemptWindow(w)}
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <p className="orch-cron-windows-hint">
+                                    À ces heures : si staff assigné mais non accepté (pending),
+                                    relâcher et chercher un autre.
+                                  </p>
                                 </div>
-                              ))}
-                              <button
-                                type="button"
-                                className="orch-cron-win-add"
-                                aria-label="Ajouter une heure"
-                                onClick={() => addAttemptWindow(w)}
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
-                          <p className="orch-cron-windows-hint">
-                            Si staff assigné mais non accepté (pending) : relâcher et chercher un
-                            autre à ces heures (+ tolérance h)
-                          </p>
+                              )}
+                            </>
+                          ) : null}
                         </div>
                       </div>
                       </>
@@ -1361,7 +1404,7 @@ export default function OrchestrationPageView({
                               onUpdateWorkflow(w._id, { escalationEnabled: e.target.checked })
                             }
                           />
-                          <span>Activée</span>
+                          <span>{w.escalationEnabled !== false ? 'Activée' : 'Désactivée'}</span>
                         </label>
                       </div>
                       {w.escalationEnabled === false ? (

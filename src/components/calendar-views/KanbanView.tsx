@@ -171,7 +171,7 @@ function TaskCard({ task, staffIndex, onDragStart, onClick }: {
   task: TaskItem; staffIndex: number; onDragStart: () => void; onClick?: () => void;
 }) {
   const type = task.type || 'task';
-  const style = TASK_CHIP_STYLES[type];
+  const style = TASK_CHIP_STYLES[type] || TASK_CHIP_STYLES.task;
   const isUnassigned = !task.staffId && task.taskStatus !== 'COMPLETED';
   const today = new Date().toISOString().slice(0, 10);
   const isLate = (task.startDate || '').slice(0, 10) < today && task.taskStatus !== 'COMPLETED';

@@ -155,7 +155,7 @@ export default function ChatbotListingSnapshotView() {
         {!selectedId && (
           <div className="cb-empty">
             <span className="em">👈</span>
-            Sélectionnez un listing — onglet Résumé propriété ou Config Orch. NEW (11 onglets).
+            Sélectionnez un listing — onglet Résumé propriété ou Config orchestration (13 onglets).
           </div>
         )}
 

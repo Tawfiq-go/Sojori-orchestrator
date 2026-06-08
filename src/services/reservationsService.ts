@@ -83,6 +83,9 @@ class ReservationsService {
     dateType?: 'arrival' | 'departure' | 'arrival_or_departure' | 'creation';
     startDate?: string;
     endDate?: string;
+    reservationNumber?: string;
+    sortField?: 'createdAt' | 'checkin' | 'checkout';
+    sortOrder?: 'asc' | 'desc';
   }): Promise<{ success: boolean; data: Reservation[]; count: number; total: number }> {
     try {
       const queryParams = new URLSearchParams();
@@ -110,6 +113,13 @@ class ReservationsService {
       if (params.status) {
         queryParams.append('status', params.status);
       }
+
+      if (params.reservationNumber?.trim()) {
+        queryParams.append('reservationNumber', params.reservationNumber.trim());
+      }
+
+      queryParams.append('sortField', params.sortField || 'createdAt');
+      queryParams.append('sortOrder', params.sortOrder || 'desc');
 
       // ⚠️ FIX: Utiliser /reservations/reservations (pas /reservations seul)
       const url = `${BASE_URL}/api/v1/reservations/reservations?${queryParams.toString()}`;

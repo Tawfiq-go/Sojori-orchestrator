@@ -31,7 +31,8 @@ const AUDIT_TYPE_LABELS: Record<string, string> = {
   reminder_sent: '⏰ Rappel staff envoyé',
   escalade_triggered: '🚨 Escalade déclenchée',
   lm_relance_created: '⚡ Relance LM créée',
-  lm_assignation_reopened: '⚡ Assignation LM ré-ouverte',
+  lm_assignation_created: '⚡ Slot assignation LM créé',
+  lm_assignation_reopened: '⚡ Assignation LM ré-ouverte (legacy)',
   status_change: '🔄 Changement statut',
 }
 
@@ -184,8 +185,39 @@ export default function AuditLogView({ auditLog, className = '' }: Props) {
                   </div>
                 )}
 
-                {/* Meta */}
-                {entry.meta && Object.keys(entry.meta).length > 0 && (
+                {/* Meta envoi / dispatch */}
+                {entry.meta && typeof entry.meta === 'object' && typeof entry.meta.label === 'string' ? (
+                  <div className="text-sm text-gray-600 mt-1 space-y-0.5">
+                    <div>
+                      <span className="font-medium">{String(entry.meta.label)}</span>
+                      {typeof entry.meta.channel === 'string' ? (
+                        <span> · {String(entry.meta.channel).toUpperCase()}</span>
+                      ) : null}
+                      {entry.meta.source === 'manual' ? (
+                        <span className="text-gray-500"> · Manuel</span>
+                      ) : entry.meta.source === 'scheduler' ? (
+                        <span className="text-gray-500"> · Auto</span>
+                      ) : null}
+                      {entry.meta.ok === false ? (
+                        <span className="text-red-600"> · Échec</span>
+                      ) : entry.meta.ok === true ? (
+                        <span className="text-green-700"> · OK</span>
+                      ) : null}
+                    </div>
+                    {typeof entry.meta.messageId === 'string' ? (
+                      <div className="text-xs text-gray-500 font-mono">{String(entry.meta.messageId)}</div>
+                    ) : null}
+                    {entry.meta.ok === false && typeof entry.meta.error === 'string' ? (
+                      <div className="text-xs text-red-600">{String(entry.meta.error)}</div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* Meta technique (reste) */}
+                {entry.meta &&
+                Object.keys(entry.meta).some(
+                  (k) => !['label', 'channel', 'source', 'ok', 'error', 'messageId', 'template'].includes(k),
+                ) ? (
                   <details className="mt-2">
                     <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
                       Détails techniques
@@ -194,7 +226,7 @@ export default function AuditLogView({ auditLog, className = '' }: Props) {
                       {JSON.stringify(entry.meta, null, 2)}
                     </pre>
                   </details>
-                )}
+                ) : null}
               </div>
             </div>
           )

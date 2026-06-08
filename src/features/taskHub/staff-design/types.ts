@@ -79,7 +79,9 @@ export interface WorkflowAssignment {
   assignmentHoursMode: 'planning' | 'always';
   /** Réassigner si pas accepté après une fenêtre cron. */
   findAnotherStaff: boolean;
-  /** Tolérance (h) après acceptation avant remplacement. */
+  /** tolerance = relâcher après X h sans acceptation · windows = relâcher aux créneaux cron. */
+  releaseMode: 'tolerance' | 'windows';
+  /** Tolérance (h) sans acceptation avant find-another (mode tolerance). */
   acceptToleranceHours: number;
   /** Créneaux find-another si staff pending (HH:mm) — ex. 11:00, 16:00. */
   attemptWindows: string[];
@@ -121,6 +123,8 @@ export interface CatalogMessage {
   id: string;
   label: string;
   whatsappTemplateId: string;
+  /** Catégorie bouton Flow (relances WA) — ex. arrival_choose, registration */
+  flowCategory?: string;
   messageFrOta: string;
   messageFrEmail: string;
 }
