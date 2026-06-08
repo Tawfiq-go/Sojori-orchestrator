@@ -1,0 +1,406 @@
+/* Spec: Sojori Ops Dashboard.html — tokens alignés plan reservation */
+.ops-root {
+  --p: #876119;
+  --pd: #5f4512;
+  --ps: #c89b3c;
+  --pt: rgba(135, 69, 25, 0.08);
+  --bg: #faf9f7;
+  --card: #fff;
+  --alt: #f5f2ec;
+  --rail: #fcfbf9;
+  --t: #1a1611;
+  --t2: #544e44;
+  --t3: #857e72;
+  --t4: #aaa498;
+  --b: rgba(26, 22, 17, 0.08);
+  --su: #0a8f5e;
+  --suT: rgba(10, 143, 94, 0.1);
+  --p1: #c81e1e;
+  --p1T: rgba(200, 30, 30, 0.09);
+  --p2: #c46506;
+  --p2T: rgba(196, 101, 6, 0.1);
+  --p3: #b8851a;
+  --p3T: rgba(184, 133, 26, 0.12);
+  --info: #0673b3;
+  --infoT: rgba(6, 115, 179, 0.1);
+  --mono: 'Geist Mono', ui-monospace, monospace;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--t);
+  font-size: 13px;
+}
+
+.ops-hdr {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--b);
+}
+
+.ops-hdr-top {
+  padding: 11px 26px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ops-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.ops-brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--ps), var(--pd));
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ops-tabs {
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--b);
+  border-radius: 11px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.ops-tab {
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--t3);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ops-tab.on {
+  background: var(--card);
+  color: var(--t);
+  box-shadow: 0 1px 3px rgba(26, 22, 17, 0.08);
+}
+
+.ops-tab-ct {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 99px;
+  margin-left: 6px;
+  background: var(--p1T);
+  color: var(--p1);
+}
+
+.ops-kpi-bar {
+  padding: 10px 26px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--b);
+  overflow-x: auto;
+}
+
+.ops-kpi {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  background: var(--card);
+  border: 1px solid var(--b);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.ops-kpi.c1 {
+  border-color: rgba(200, 30, 30, 0.18);
+  background: var(--p1T);
+}
+
+.ops-kpi.c1 .ops-kpi-v {
+  color: var(--p1);
+}
+
+.ops-kpi-v {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.ops-kpi-l {
+  font-size: 11px;
+  color: var(--t3);
+  font-weight: 600;
+}
+
+.ops-body {
+  padding: 20px 26px 60px;
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
+.ops-two-day {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+@media (max-width: 960px) {
+  .ops-two-day {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ops-day-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 16px;
+  background: var(--card);
+  border: 1px solid var(--b);
+  border-radius: 13px;
+  margin-bottom: 12px;
+}
+
+.ops-day-head.tomorrow {
+  background: var(--alt);
+}
+
+.ops-group {
+  margin-bottom: 10px;
+}
+
+.ops-group-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  background: var(--rail);
+  border: 1px solid var(--b);
+  border-radius: 11px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.ops-group-h.open {
+  border-radius: 11px 11px 0 0;
+  border-bottom-color: transparent;
+}
+
+.ops-group-body {
+  border: 1px solid var(--b);
+  border-top: 0;
+  border-radius: 0 0 11px 11px;
+  overflow: hidden;
+  display: none;
+}
+
+.ops-group-body.open {
+  display: block;
+}
+
+.ops-item {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--b);
+  background: var(--card);
+}
+
+.ops-item:last-child {
+  border-bottom: 0;
+}
+
+.ops-item:hover {
+  background: var(--alt);
+}
+
+.ops-prio-bar {
+  width: 4px;
+  flex-shrink: 0;
+}
+
+.ops-item.p1 .ops-prio-bar {
+  background: var(--p1);
+}
+
+.ops-item.p2 .ops-prio-bar {
+  background: var(--p2);
+}
+
+.ops-item.p3 .ops-prio-bar {
+  background: var(--p3);
+}
+
+.ops-item.ok .ops-prio-bar {
+  background: var(--su);
+}
+
+.ops-item-main {
+  flex: 1;
+  padding: 11px 14px;
+  min-width: 0;
+}
+
+.ops-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 11px 13px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.ops-act {
+  padding: 7px 11px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 0;
+  cursor: pointer;
+}
+
+.ops-act.primary {
+  background: var(--p);
+  color: #fff;
+}
+
+.ops-act.sec {
+  background: var(--card);
+  color: var(--t2);
+  border: 1px solid var(--b);
+}
+
+.ops-act.link {
+  background: transparent;
+  color: var(--t3);
+  font-weight: 600;
+}
+
+.ops-pchip {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+.ops-pchip.p1 {
+  background: var(--p1);
+  color: #fff;
+}
+
+.ops-pchip.p2 {
+  background: var(--p2);
+  color: #fff;
+}
+
+.ops-pchip.p3 {
+  background: var(--p3T);
+  color: var(--p3);
+}
+
+.ops-pchip.ok {
+  background: var(--suT);
+  color: var(--su);
+}
+
+.ops-status-badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.sb-late {
+  background: var(--p1T);
+  color: var(--p1);
+}
+
+.sb-progress {
+  background: var(--p2T);
+  color: var(--p2);
+}
+
+.sb-planned {
+  background: var(--infoT);
+  color: var(--info);
+}
+
+.sb-sent,
+.sb-ok {
+  background: var(--suT);
+  color: var(--su);
+}
+
+.sb-blocked {
+  background: var(--p1T);
+  color: var(--p1);
+}
+
+.ops-urg-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.ops-uchip {
+  padding: 7px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--b);
+  background: var(--card);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ops-uchip.on {
+  background: var(--pt);
+  border-color: rgba(135, 69, 25, 0.2);
+  color: var(--pd);
+}
+
+.ops-urg-table {
+  background: var(--card);
+  border: 1px solid var(--b);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.ops-ut-row {
+  display: grid;
+  grid-template-columns: 48px 100px 1.2fr 1fr 1.5fr 120px 100px 1.2fr;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--b);
+  align-items: center;
+  font-size: 12px;
+}
+
+.ops-ut-head {
+  font-weight: 800;
+  color: var(--t3);
+  font-size: 10px;
+  text-transform: uppercase;
+  background: var(--rail);
+}
+
+.ops-loading {
+  padding: 48px;
+  text-align: center;
+  color: var(--t3);
+}
