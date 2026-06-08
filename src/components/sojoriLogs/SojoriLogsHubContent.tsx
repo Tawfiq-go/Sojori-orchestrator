@@ -4,11 +4,15 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import type { MockUser } from '../../data/mockAuth';
 import { formatCasablancaDate } from '../../utils/dateFormatting';
-import {
-  fetchSojoriAirroiApis,
-  fetchSojoriAirroiCallDetail,
-} from '../../services/channelsDashboardApi';
 import { SOJORI_LOG_TAB_ALL } from '../../data/airroiLogTabs';
+
+// ⚠️ Stubs temporaires - À implémenter dans channelsDashboardApi
+const fetchSojoriAirroiApis = async (_params: unknown) => {
+  return { data: { success: false, error: 'API non implémentée', data: null } };
+};
+const fetchSojoriAirroiCallDetail = async (_id: string) => {
+  return { data: { success: false, error: 'API non implémentée', data: null } };
+};
 import { resolveAirroiRowRecap } from '../../utils/airroiCallRecap';
 import { SojoriLogsToolbar } from './SojoriLogsToolbar';
 import { SojoriLogsEndpointTabs } from './SojoriLogsEndpointTabs';

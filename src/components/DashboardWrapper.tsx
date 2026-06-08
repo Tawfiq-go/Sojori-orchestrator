@@ -41,22 +41,28 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'dashboard': '/dashboard',
     'analytics': '/analytics',
     'reports': '/reports',
-    'orchestrator': '/orchestration',
-    'orchestration/plans': '/orchestration/plans',
-    'orchestration/timeline': '/orchestration/timeline',
-    'orchestration/events': '/orchestration/events',
-    'orchestration/daily-ops': '/orchestration/daily-ops',
-    'orchestration/config': '/orchestration/config',
+
+    // Orchestration (routes réelles fulltask)
+    'orchestration': '/tasks/plans',
+    'orch/plans': '/tasks/plans',
+    'orch/ops': '/tasks/ops',
+    'orch/workflows': '/tasks/orchestration-config',
+    'orchestrator': '/tasks/plans',
+    'orchestration/plans': '/tasks/plans',
+    'orchestration/config': '/tasks/orchestration-config',
+    'orchestration/whatsapp-messages': '/tasks/orchestration-config?tab=config',
 
     // Calendrier
     'calendar': '/calendar',
 
     // Réservations
+    'reservations': '/reservations',
     'reservations/list': '/reservations',
     'reservations/planning': '/reservations/planning',
-    // Note: 'reservations/detail' removed - Séjour is a tab, not a separate page
+    'payments': '/paiements',
 
     // Tâches
+    'tasks': '/tasks',
     'tasks/list': '/tasks',
     'tasks/team': '/tasks/team',
     'tasks/planning': '/tasks/planning',
@@ -71,10 +77,12 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'chatbot': '/chatbot/whitelist',
     'chatbot/whitelist': '/chatbot/whitelist',
     'chatbot/listing': '/chatbot/listing',
+    'chatbot/flows': '/chatbot/flows-pilote',
     'chatbot/flows-pilote': '/chatbot/flows-pilote',
 
     // Communications Hub - Navigation principale
     'comms': '/communications',
+    'comms/inbox': '/communications',
     'comms/guests': '/communications?tab=whatsapp',
     'comms/staff': '/communications?tab=staff',
     'comms/templates': '/communications?tab=templates',
@@ -83,29 +91,53 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'comms/reviews': '/communications?tab=reviews',
 
     // Service Client
-    'requests': '/requests',
+    'requests': '/crm?tab=requests',
     'reviews': '/reviews',
 
-    // Catalogue
+    // Catalogue & revenue
     'listings': '/listings',
+    'listings/list': '/listings',
+    'listings/config': '/catalogue/listing-orchestration',
     'listing-orchestration': '/catalogue/listing-orchestration',
+    'pricing': '/dynamic-pricing/portefeuille',
+    'pricing/portfolio': '/dynamic-pricing/portefeuille',
+    'pricing/audit': '/dynamic-pricing/audit',
     'dynamic-pricing': '/dynamic-pricing/portefeuille',
     'dynamic-pricing/portefeuille': '/dynamic-pricing/portefeuille',
     'dynamic-pricing/audit': '/dynamic-pricing/audit',
     'dynamic-pricing/bien': '/dynamic-pricing/portefeuille',
-    'pricing': '/pricing',
     'channels': '/catalogue/channels',
-    'clients': '/clients',
-    'temp/booking-clients': '/temp/booking-clients',
 
     // CRM
     'crm': '/crm',
+    'crm/clients': '/clients',
     'crm/requests': '/crm?tab=requests',
     'crm/leads': '/crm?tab=leads',
     'crm/support': '/crm?tab=support',
     'crm/onboarding': '/crm?tab=onboarding',
+    'crm/reviews': '/reviews',
+    'clients': '/clients',
+    'temp/booking-clients': '/temp/booking-clients',
 
-    // Admin — Monitor
+    // Équipe
+    'staff': '/tasks/team',
+    'my-tasks': '/tasks',
+    'my-sched': '/tasks/planning',
+
+    // Finances
+    'revenue': '/reports',
+    'statements': '/reports',
+
+    // Monitor & infra
+    'monitor': '/monitor?tab=Summary',
+    'mon/summary': '/monitor?tab=Summary',
+    'mon/logs': '/monitor?tab=Logs',
+    'mon/metrics': '/monitor?tab=Metrics',
+    'mon/rabbit': '/monitor?tab=RabbitMQ',
+    'mon/wa': '/monitor?tab=WhatsApp',
+    'mon/ai': '/monitor?tab=AI',
+    'mon/infra': '/monitor?tab=Infrastructure',
+    'mon/res-sync': '/monitor?tab=ReservationSync',
     'admin/monitor': '/monitor?tab=Summary',
     'admin/monitor/summary': '/monitor?tab=Summary',
     'admin/monitor/logs': '/monitor?tab=Logs',
@@ -114,40 +146,65 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'admin/monitor/whatsapp': '/monitor?tab=WhatsApp',
     'admin/monitor/ai': '/monitor?tab=AI',
     'admin/monitor/infrastructure': '/monitor?tab=Infrastructure',
+    'admin/monitor/reservation-sync': '/monitor?tab=ReservationSync',
     'admin/sojori-logs': '/admin/sojori-logs',
 
-    // Admin
-    'admin/channels': '/channels',
+    // Administration
+    'admin/pms': '/admin/equipe/owners?tab=list',
+    'admin/roles': '/admin/equipe?tab=worker',
+    'admin/settings': '/admin/settings?tab=host-profile',
+    'admin/channels': '/admin/ChannelManager?tab=channel-manager',
     'admin/ChannelManager/channel-manager': '/admin/ChannelManager?tab=channel-manager',
     'admin/ChannelManager/distribution': '/admin/ChannelManager?tab=distribution',
-
-    // Équipe & Rôles
-    'staff': '/tasks/team',
-    'my-tasks': '/tasks',
-    'my-sched': '/tasks/planning',
     'admin/equipe/owners': '/admin/equipe/owners?tab=list',
     'admin/equipe/staff': '/tasks/team',
     'admin/equipe/whatsapp': '/tasks/team',
     'admin/equipe/roles': '/admin/equipe?tab=worker',
     'admin/equipe/groups': '/admin/equipe?tab=groups',
-
-    // Paramètres
     'admin/settings/template': '/admin/settings?tab=template',
     'admin/settings/host-profile': '/admin/settings?tab=host-profile',
     'admin/settings/admin-config': '/admin/settings?tab=admin-config',
     'admin/setting/currency': '/admin/setting/currency',
+
+    // Temp — pages legacy / placement à décider
+    'temp/pricing-calendar': '/pricing',
+    'temp/reservations-planning': '/reservations/planning',
+    'temp/orch-rules': '/tasks/orchestration-config',
+    'temp/sojori-logs': '/admin/sojori-logs',
+    'temp/channel-distribution': '/admin/ChannelManager?tab=distribution',
+    'temp/settings-template': '/admin/settings?tab=template',
+    'temp/settings-currency': '/admin/setting/currency',
+    'temp/settings-admin-config': '/admin/settings?tab=admin-config',
+    'temp/equipe-groups': '/admin/equipe?tab=groups',
+    'temp/tasks-team-legacy': '/tasks/team-legacy',
+    'temp/booking-clients': '/temp/booking-clients',
   };
 
   /** Détection robuste : on prend la route la plus longue qui matche (préfixes propres). */
   const getActivePathFromUrl = () => {
     const path = location.pathname;
 
-    if (
-      path.startsWith('/clients/contacts') ||
-      path.startsWith('/crm') ||
-      path.startsWith('/onboarding')
-    ) {
+    if (path.startsWith('/clients/contacts')) {
       return 'clients';
+    }
+
+    if (path.startsWith('/crm')) {
+      const tab = new URLSearchParams(location.search).get('tab') || 'requests';
+      const crmTabToNav: Record<string, string> = {
+        requests: 'crm/requests',
+        demandes: 'crm/requests',
+        leads: 'crm/leads',
+        support: 'crm/support',
+        staff: 'crm/support',
+        rendezvous: 'crm/support',
+        'rendez-vous': 'crm/support',
+        onboarding: 'crm/onboarding',
+      };
+      return crmTabToNav[tab] || 'crm/requests';
+    }
+
+    if (path.startsWith('/onboarding')) {
+      return 'crm/onboarding';
     }
 
     if (path.startsWith('/catalogue/channels')) {
@@ -233,6 +290,18 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     }
     if (path.startsWith('/chatbot/whitelist') || path.startsWith('/chatbot')) {
       return 'chatbot/whitelist';
+    }
+
+    if (path.startsWith('/tasks/ops') || path.startsWith('/orchestration/daily-ops')) {
+      return 'orch/ops';
+    }
+
+    if (path.startsWith('/tasks/orchestration-config')) {
+      return 'orch/workflows';
+    }
+
+    if (path.startsWith('/tasks/plans')) {
+      return 'orch/plans';
     }
 
     if (path.startsWith('/admin/equipe')) {

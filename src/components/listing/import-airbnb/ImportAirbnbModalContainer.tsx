@@ -143,13 +143,14 @@ export function ImportAirbnbModalContainer({
     for (const r of ok) {
       try {
         await listingsService.applyListingOrchestrationFromOwner(r.listingId!);
+        await listingsService.applyListingOwnerConfigFromOwner(r.listingId!);
       } catch {
         failed += 1;
       }
     }
     if (failed > 0) {
       toast.warn(
-        `Import OK mais config orchestration en échec sur ${failed}/${ok.length} listing(s)`,
+        `Import OK mais config orchestration (13 onglets) en échec sur ${failed}/${ok.length} listing(s)`,
       );
     }
   }, []);

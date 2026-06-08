@@ -41,7 +41,12 @@ export function formatDispatchWhen(iso: string | Date): string {
 
 function entryToLastView(entry: PlanDispatchLogEntryView): PlanLastDispatchView {
   const atDisplay = formatDispatchWhen(entry.at);
-  const label = entry.ok ? `Envoyé le ${atDisplay}` : `Échec le ${atDisplay}`;
+  const channelSuffix = entry.channel ? ` · ${entry.channel.toUpperCase()}` : '';
+  const sourceSuffix =
+    entry.source === 'manual' ? ' · Manuel' : entry.source === 'scheduler' ? ' · Auto' : '';
+  const label = entry.ok
+    ? `Envoyé le ${atDisplay}${channelSuffix}${sourceSuffix}`
+    : `Échec le ${atDisplay}${channelSuffix}${sourceSuffix}`;
   return {
     atDisplay,
     ok: entry.ok,

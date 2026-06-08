@@ -92,6 +92,8 @@ export function aggregateStaffRemindersGroupStatus(
 ): EventStatus {
   if (reminders.length === 0) return 'future';
   if (reminders.every((r) => r.executionStatus === 'envoyee')) return 'done';
+  /** Création last-minute : toutes les dates passées → atomes `saute`, bloc clos (pas « À venir »). */
+  if (reminders.every((r) => r.executionStatus === 'sautee')) return 'done';
   if (reminders.some((r) => r.executionStatus === 'echec')) return 'blocked';
   if (reminders.some((r) => r.executionStatus === 'envoyee')) return 'now';
 
@@ -103,13 +105,30 @@ export function aggregateStaffRemindersGroupStatus(
   return 'future';
 }
 
+export function staffRemindersGroupStatusLabel(
+  status: EventStatus,
+  reminders: Pick<PlanStaffReminderItem, 'executionStatus'>[],
+): string {
+  if (reminders.length > 0 && reminders.every((r) => r.executionStatus === 'sautee')) {
+    return 'Sauté';
+  }
+  return groupStatusLabel(status);
+}
+
 export function aggregateAssignGroupStatus(
   assign?: StaffAssignmentPlan,
   attempts?: AssignAttempt[],
+  lmAssignSlots?: import('./types').PlanAssignLmItem[],
 ): EventStatus {
   if (!assign) return 'future';
   if (assign.status === 'found') return 'done';
   if (assign.status === 'failed') return 'blocked';
+
+  if (assign.hasPendingLmAssign) {
+    const pendingFuture = lmAssignSlots?.some((s) => s.executionStatus === 'prevision');
+    if (pendingFuture) return 'future';
+    return 'now';
+  }
 
   if (assign.windowPast && assign.status !== 'found') return 'pending';
   if (assign.windowFuture) return 'future';

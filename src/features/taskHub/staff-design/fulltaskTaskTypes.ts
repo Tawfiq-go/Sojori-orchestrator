@@ -64,6 +64,7 @@ export function defaultWorkflowAssignment() {
     autoAssign: false,
     assignmentHoursMode: 'planning' as const,
     findAnotherStaff: true,
+    releaseMode: 'tolerance' as const,
     acceptToleranceHours: 3,
     attemptWindows: ['11:00', '16:00'],
   };

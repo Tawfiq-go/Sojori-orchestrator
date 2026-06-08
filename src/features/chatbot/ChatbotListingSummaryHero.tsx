@@ -108,8 +108,8 @@ export default function ChatbotListingSummaryHero({
           </div>
           <div className="cb-summary-actions">
             <FullChatbotSyncButton listingId={listingId} variant="listing" size="small" />
-            <Link to={`/listings/${listingId}?level=config-new`} className="cb-link">
-              Config Orch. NEW ↗
+            <Link to={`/listings/${listingId}?level=config`} className="cb-link">
+              Config orchestration ↗
             </Link>
             <Link to={`/listings/${listingId}?level=detail&tab=general`} className="cb-link cb-link--ghost">
               Détail listing ↗

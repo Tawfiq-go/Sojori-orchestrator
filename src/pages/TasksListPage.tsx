@@ -3,7 +3,7 @@
 // Route: /tasks — toolbar, pills échéances, KPI compacts, tableau premium.
 // ════════════════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense, memo, type ReactNode } from 'react';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -51,9 +51,13 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 
 moment.locale('fr');
-import { AddTaskModal } from '../components/tasks/AddTaskModal';
-import AssignStaffDialog from '../features/tasksNew/components/AssignStaffDialog.jsx';
-import TaskDetailDrawer from '../features/tasksNew/components/TaskDetailDrawer';
+// ⚡ PERFORMANCE: Lazy load des modals/drawers lourds (chargés uniquement quand ouverts)
+const AddTaskModal = lazy(() => import('../components/tasks/AddTaskModal').then(m => ({ default: m.AddTaskModal })));
+const AssignStaffDialog = lazy(() => import('../features/tasksNew/components/AssignStaffDialog.jsx'));
+const TaskDetailDrawer = lazy(() => import('../features/tasksNew/components/TaskDetailDrawer'));
+import { TaskPlannedCell } from '../components/tasks/TaskPlannedCell';
+import type { RegistrationFieldPatch } from '../components/reservations/ReservationRegistrationActions';
+import type { StayFieldPatch } from '../components/reservations/ReservationStayActions';
 import { ModalPortal } from '../components/ModalPortal';
 import { createFulltaskFromFormData } from '../services/createFulltaskFromModal';
 import { useAuth } from '../hooks/useAuth';
@@ -516,6 +520,8 @@ function renderPlannedHourLine(task: TaskListItem): ReactNode {
   const showsHour =
     typ === 'arrival_choose' ||
     typ === 'departure_choose' ||
+    typ === 'arrival_declare' ||
+    typ === 'departure_declare' ||
     typ === 'cleaning_free' ||
     typ === 'cleaning_paid';
   if (!showsHour) return null;
@@ -565,7 +571,10 @@ function formatPlannedParts(task: TaskListItem): { date: string; time?: string }
 
   if (dayOnlyTypes.has(taskType)) {
     if (
-      (taskType === 'arrival_choose' || taskType === 'departure_choose') &&
+      (taskType === 'arrival_choose' ||
+        taskType === 'departure_choose' ||
+        taskType === 'arrival_declare' ||
+        taskType === 'departure_declare') &&
       task.plannedTime
     ) {
       return { date };
@@ -590,20 +599,6 @@ function sourceChipMeta(source?: string | null): { label: string; bg: string; co
     return { label: 'Orch.', bg: 'rgba(59,130,246,0.12)', color: '#1d4ed8' };
   }
   return { label: 'Manuel', bg: 'rgba(20,17,10,0.06)', color: T.text2 };
-}
-
-function taskTypeSubline(task: TaskListItem): ReactNode {
-  const note = firstDescriptionLine(task);
-  if (!note) return null;
-  return (
-    <Typography
-      sx={{ fontSize: 10, color: T.text3, lineHeight: 1.2, mt: 0.25 }}
-      noWrap
-      title={note}
-    >
-      {note}
-    </Typography>
-  );
 }
 
 function reservationDisplayCode(task: TaskListItem): string {
@@ -922,27 +917,12 @@ export function TasksListPage() {
   const [showDescription, setShowDescription] = useState(false);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
 
-  const loadStaffAndListings = useCallback(async () => {
-    if (!scope.canAccessAllOwners && !scope.ownerId) return;
+  // ⚡ PERFORMANCE: Fusion du chargement staff/listings/tasks en parallèle
+  const fetchTasks = useCallback(async (opts?: { silent?: boolean; loadMetadata?: boolean }) => {
     try {
-      const [staffResult, listingResult] = await Promise.all([
-        tasksService.getStaff({ ownerId: scope.ownerId, limit: 200 }),
-        tasksService.getListings(),
-      ]);
-      setStaff(staffResult.staff);
-      setListings(listingResult);
-    } catch {
-      /* staff / listings : chargement best-effort */
-    }
-  }, [scope.ownerId, scope.canAccessAllOwners]);
-
-  useEffect(() => {
-    void loadStaffAndListings();
-  }, [loadStaffAndListings]);
-
-  const fetchTasks = useCallback(async () => {
-    try {
-      setLoading(true);
+      if (!opts?.silent) {
+        setLoading(true);
+      }
       setError(null);
 
       if (!scope.canAccessAllOwners && !scope.ownerId) {
@@ -981,38 +961,57 @@ export function TasksListPage() {
         emergency = 'Urgent';
       }
 
-      const tasksResult = await tasksService.getTasks({
-        ownerId: scope.ownerId,
-        page,
-        limit: rowsPerPage,
-        listingIds: listFilters.listingIds.length ? listFilters.listingIds : undefined,
-        subTypes: listFilters.subTypes.length ? listFilters.subTypes : undefined,
-        statuses: realStatuses.length ? realStatuses : undefined,
-        sources: listFilters.sources.length ? listFilters.sources : undefined,
-        staffCodes: listFilters.staffCodes.length ? listFilters.staffCodes : undefined,
-        paymentStatus:
-          listFilters.paymentStatus === 'all' ? undefined : listFilters.paymentStatus,
-        hasAssociation:
-          listFilters.hasAssociation === 'all' ? undefined : listFilters.hasAssociation,
-        emergency,
-        dateType,
-        dateStart,
-        dateEnd,
-        searchTerm: activeSearchTerm.trim() || undefined,
-        sortField,
-        sortDirection,
-        isArchived,
-      });
+      // ⚡ PERFORMANCE: Chargement parallèle tasks + staff + listings
+      const shouldLoadMetadata = opts?.loadMetadata !== false && (staff.length === 0 || listings.length === 0);
+
+      const promises: [
+        Promise<any>,
+        Promise<any> | null,
+        Promise<any> | null
+      ] = [
+        tasksService.getTasks({
+          ownerId: scope.ownerId,
+          page,
+          limit: rowsPerPage,
+          listingIds: listFilters.listingIds.length ? listFilters.listingIds : undefined,
+          subTypes: listFilters.subTypes.length ? listFilters.subTypes : undefined,
+          statuses: realStatuses.length ? realStatuses : undefined,
+          sources: listFilters.sources.length ? listFilters.sources : undefined,
+          staffCodes: listFilters.staffCodes.length ? listFilters.staffCodes : undefined,
+          paymentStatus:
+            listFilters.paymentStatus === 'all' ? undefined : listFilters.paymentStatus,
+          hasAssociation:
+            listFilters.hasAssociation === 'all' ? undefined : listFilters.hasAssociation,
+          emergency,
+          dateType,
+          dateStart,
+          dateEnd,
+          searchTerm: activeSearchTerm.trim() || undefined,
+          sortField,
+          sortDirection,
+          isArchived,
+        }),
+        shouldLoadMetadata ? tasksService.getStaff({ ownerId: scope.ownerId, limit: 200 }) : null,
+        shouldLoadMetadata ? tasksService.getListings() : null,
+      ];
+
+      const [tasksResult, staffResult, listingResult] = await Promise.all(promises);
 
       setTasks(tasksResult.tasks);
       setPagination(tasksResult.pagination);
+
+      // Mettre à jour staff et listings si chargés
+      if (staffResult) setStaff(staffResult.staff);
+      if (listingResult) setListings(listingResult);
 
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Erreur inconnue');
       setTasks([]);
       setPagination({ page: 0, limit: rowsPerPage, total: 0, totalPages: 0 });
     } finally {
-      setLoading(false);
+      if (!opts?.silent) {
+        setLoading(false);
+      }
     }
   }, [
     scope.canAccessAllOwners,
@@ -1040,6 +1039,45 @@ export function TasksListPage() {
     if (authLoading) return;
     void fetchTasks();
   }, [fetchTasks, authLoading]);
+
+  const listingById = useMemo(
+    () => Object.fromEntries(listings.map((l) => [String(l._id), l.name])),
+    [listings],
+  );
+
+  const staffById = useMemo(
+    () =>
+      Object.fromEntries(
+        staff.map((s) => [
+          String(s._id || s.staffCode),
+          { _id: s._id, name: s.name, phone: s.phone },
+        ]),
+      ),
+    [staff],
+  );
+
+  const taskMapCaches = useMemo(
+    () => ({ staffById, listingById }),
+    [staffById, listingById],
+  );
+
+  const applyTaskRowUpdate = useCallback((updated: TaskListItem) => {
+    setTasks((prev) => prev.map((t) => (t._id === updated._id ? updated : t)));
+    setSelectedTaskDetail((prev) => (prev?._id === updated._id ? updated : prev));
+  }, []);
+
+  const refreshTaskRow = useCallback(
+    async (taskId: string) => {
+      try {
+        const updated = await tasksService.fetchTaskListItem(String(taskId), taskMapCaches);
+        applyTaskRowUpdate(updated);
+        return updated;
+      } catch {
+        return null;
+      }
+    },
+    [applyTaskRowUpdate, taskMapCaches],
+  );
 
   const displayTasks = useMemo(() => {
     let list = tasks;
@@ -1180,7 +1218,11 @@ export function TasksListPage() {
       await tasksService.deleteTask(String(task._id));
       toast.success('Tâche supprimée');
       closeActionsMenu();
-      await fetchTasks();
+      setTasks((prev) => prev.filter((t) => t._id !== task._id));
+      setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
+      if (selectedTaskDetail?._id === task._id) {
+        setSelectedTaskDetail(null);
+      }
     } catch (deleteError) {
       toast.error(
         deleteError instanceof Error
@@ -1193,13 +1235,32 @@ export function TasksListPage() {
   };
 
   const handleStatusChange = async (task: TaskListItem, status: TaskStatus) => {
+    const previousStatus = task.taskStatus;
+    closeActionsMenu();
+    setTasks((prev) =>
+      prev.map((t) =>
+        t._id === task._id ? { ...t, taskStatus: status, status } : t,
+      ),
+    );
     try {
       setStatusUpdating(task._id);
-      await tasksService.updateTaskStatus(String(task._id), status);
+      const updated = await tasksService.updateTaskStatus(
+        String(task._id),
+        status,
+        taskMapCaches,
+      );
+      if (updated) {
+        applyTaskRowUpdate(updated);
+      }
       toast.success(`Statut mis à jour: ${TASK_STATUS_LABELS[status]}`);
-      closeActionsMenu();
-      await fetchTasks();
     } catch (updateError) {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t._id === task._id
+            ? { ...t, taskStatus: previousStatus, status: previousStatus }
+            : t,
+        ),
+      );
       toast.error(
         updateError instanceof Error
           ? updateError.message
@@ -1218,6 +1279,65 @@ export function TasksListPage() {
   const openTaskDetail = useCallback((task: TaskListItem) => {
     setSelectedTaskDetail(task);
   }, []);
+
+  const handleTaskStayUpdate = useCallback((reservationId: string, patch: StayFieldPatch) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (String(t.reservationId || '') !== reservationId) return t;
+        const next: TaskListItem = { ...t, ...patch };
+        if (patch.checkInTime != null) {
+          const typ = String(t.subType || t.type || '').toLowerCase();
+          if (typ === 'arrival_choose' || typ === 'arrival_declare') {
+            const time =
+              typeof patch.checkInTime === 'string'
+                ? patch.checkInTime.slice(0, 5)
+                : String(patch.checkInTime);
+            next.plannedTime = time;
+          }
+        }
+        if (patch.checkOutTime != null) {
+          const typ = String(t.subType || t.type || '').toLowerCase();
+          if (typ === 'departure_choose' || typ === 'departure_declare') {
+            const time =
+              typeof patch.checkOutTime === 'string'
+                ? patch.checkOutTime.slice(0, 5)
+                : String(patch.checkOutTime);
+            next.plannedTime = time;
+          }
+        }
+        return next;
+      }),
+    );
+  }, []);
+
+  const handleTaskRowUpdated = useCallback((updated: TaskListItem) => {
+    setTasks((prev) =>
+      prev.map((t) => (t._id === updated._id ? { ...t, ...updated } : t)),
+    );
+  }, []);
+
+  const handleTaskRegistrationUpdate = useCallback(
+    (reservationId: string, patch: RegistrationFieldPatch) => {
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (String(t.reservationId || '') !== reservationId) return t;
+          const reg = patch.guestRegistration;
+          if (!reg) return t;
+          return {
+            ...t,
+            guestRegistration: {
+              ...t.guestRegistration,
+              ...reg,
+              members: reg.members ?? t.guestRegistration?.members,
+            },
+            nbreGuestValidated: reg.nbre_guest_registered ?? t.nbreGuestValidated,
+            adults: reg.nbre_guest_to_register ?? t.adults,
+          };
+        }),
+      );
+    },
+    [],
+  );
 
   const assignOwnerId = useMemo(() => {
     if (!taskToAssign) return scope.canAccessAllOwners ? undefined : scope.ownerId;
@@ -1316,7 +1436,6 @@ export function TasksListPage() {
                 {label}
               </Typography>
             </Tooltip>
-            {taskTypeSubline(row)}
             {categorySubline(row)}
           </Box>
         );
@@ -1408,22 +1527,18 @@ export function TasksListPage() {
       label: 'Prévu',
       width: COLUMN_WIDTHS.executionDate,
       align: 'center' as const,
-      render: (row: TaskRow) => {
-        const parts = formatPlannedParts(row);
-        if (!parts) {
-          return <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center' }}>—</Typography>;
-        }
-        const hourLine = renderPlannedHourLine(row);
-        return (
-          <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
-            <Typography sx={{ fontSize: 11, fontWeight: 600 }}>{parts.date}</Typography>
-            {hourLine}
-            {!hourLine && parts.time ? (
-              <Typography sx={{ fontSize: 10, color: T.text3 }}>{parts.time}</Typography>
-            ) : null}
-          </Stack>
-        );
-      },
+      render: (row: TaskRow) => (
+        <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'flex', justifyContent: 'center' }}>
+          <TaskPlannedCell
+            task={row}
+            renderPlannedHourLine={renderPlannedHourLine}
+            formatPlannedParts={formatPlannedParts}
+            onStayUpdated={handleTaskStayUpdate}
+            onRegistrationUpdated={handleTaskRegistrationUpdate}
+            onTaskUpdated={handleTaskRowUpdated}
+          />
+        </Box>
+      ),
     },
     {
       key: 'urgence',
@@ -1534,6 +1649,59 @@ export function TasksListPage() {
   });
 
   const optionalColumnsOn = showDescription ? 1 : 0;
+
+  // ⚡ PERFORMANCE: Skeleton loading pour affichage immédiat
+  if (loading && tasks.length === 0) {
+    return (
+      <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
+        <Box sx={{ p: { xs: 2, md: 3 } }}>
+          {/* Header skeleton */}
+          <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5 }}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ width: 320, height: 40, bgcolor: T.bg2, borderRadius: 1 }} />
+              <Box sx={{ width: 100, height: 40, bgcolor: T.bg2, borderRadius: 1 }} />
+              <Box sx={{ width: 180, height: 40, bgcolor: T.bg2, borderRadius: 1 }} />
+              <Box sx={{ width: 180, height: 40, bgcolor: T.bg2, borderRadius: 1 }} />
+            </Stack>
+          </Paper>
+
+          {/* Filters skeleton */}
+          <Stack direction="row" gap={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+            {[1,2,3,4,5].map(i => (
+              <Box key={i} sx={{ width: 100, height: 32, bgcolor: T.bg2, borderRadius: '16px' }} />
+            ))}
+          </Stack>
+
+          {/* Table skeleton */}
+          <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5 }}>
+            {[1,2,3,4,5,6,7,8,9,10].map(i => (
+              <Box
+                key={i}
+                sx={{
+                  height: 56,
+                  borderBottom: i < 10 ? `1px solid ${T.border}` : 'none',
+                  p: 2,
+                  display: 'flex',
+                  gap: 2,
+                }}
+              >
+                <Box sx={{ width: '10%', height: 20, bgcolor: T.bg2, borderRadius: 0.5 }} />
+                <Box sx={{ width: '20%', height: 20, bgcolor: T.bg2, borderRadius: 0.5 }} />
+                <Box sx={{ width: '15%', height: 20, bgcolor: T.bg2, borderRadius: 0.5 }} />
+                <Box sx={{ width: '25%', height: 20, bgcolor: T.bg2, borderRadius: 0.5 }} />
+                <Box sx={{ width: '10%', height: 20, bgcolor: T.bg2, borderRadius: 0.5 }} />
+              </Box>
+            ))}
+          </Paper>
+
+          {/* Loading indicator */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+            <CircularProgress size={24} sx={{ color: T.primary }} />
+          </Box>
+        </Box>
+      </DashboardWrapper>
+    );
+  }
 
   return (
     <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
@@ -1932,19 +2100,28 @@ export function TasksListPage() {
           </Dialog>
       </Box>
 
-      <TaskDetailDrawer
-        task={selectedTaskDetail}
-        onClose={() => setSelectedTaskDetail(null)}
-        onSuccess={() => void fetchTasks()}
-        onAssignStaff={(t) => {
-          setSelectedTaskDetail(null);
-          openAssignStaff(t);
-        }}
-      />
+      {selectedTaskDetail && (
+        <Suspense fallback={<CircularProgress />}>
+          <TaskDetailDrawer
+            task={selectedTaskDetail}
+            onClose={() => setSelectedTaskDetail(null)}
+            onSuccess={() => {
+              if (selectedTaskDetail) {
+                void refreshTaskRow(String(selectedTaskDetail._id));
+              }
+            }}
+            onAssignStaff={(t) => {
+              setSelectedTaskDetail(null);
+              openAssignStaff(t);
+            }}
+          />
+        </Suspense>
+      )}
 
       <ModalPortal>
           {assignStaffOpen && taskToAssign ? (
-            <AssignStaffDialog
+            <Suspense fallback={<CircularProgress />}>
+              <AssignStaffDialog
               useFulltaskApi
               open={assignStaffOpen}
               onClose={() => {
@@ -1953,16 +2130,46 @@ export function TasksListPage() {
               }}
               task={taskToAssign}
               ownerId={assignOwnerId}
-              onSuccess={() => {
+              onSuccess={(assignedStaff: {
+                _id?: string;
+                staffCode?: string;
+                staffName?: string;
+                name?: string;
+                staffPhone?: string;
+                phone?: string;
+              }) => {
+                if (taskToAssign && assignedStaff) {
+                  const staffId = String(assignedStaff._id || assignedStaff.staffCode || '');
+                  setTasks((prev) =>
+                    prev.map((t) => {
+                      if (t._id !== taskToAssign._id) return t;
+                      const nextStatus =
+                        normalizeTaskStatus(t.taskStatus) === 'CREATED' ? 'ASSIGNED' : t.taskStatus;
+                      return {
+                        ...t,
+                        staffId,
+                        staffCode: staffId,
+                        staffName:
+                          assignedStaff.staffName || assignedStaff.name || t.staffName || null,
+                        staffPhone:
+                          assignedStaff.staffPhone || assignedStaff.phone || t.staffPhone || null,
+                        taskStatus: nextStatus,
+                        status: nextStatus,
+                      };
+                    }),
+                  );
+                  void refreshTaskRow(String(taskToAssign._id));
+                }
                 toast.success('Staff assigné');
-                void fetchTasks();
               }}
-            />
+              />
+            </Suspense>
           ) : null}
         </ModalPortal>
 
       {addTaskOpen ? (
-        <AddTaskModal
+        <Suspense fallback={<CircularProgress />}>
+          <AddTaskModal
           useFulltaskApi
           createTaskFn={createFulltaskFromFormData}
           open
@@ -1971,9 +2178,10 @@ export function TasksListPage() {
           isAdminUser={scope.canAccessAllOwners}
           onSuccess={() => {
             toast.success('Tâche créée');
-            void fetchTasks();
+            void fetchTasks({ silent: true });
           }}
-        />
+          />
+        </Suspense>
       ) : null}
 
       <Menu

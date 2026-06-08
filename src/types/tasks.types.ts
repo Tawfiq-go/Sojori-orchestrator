@@ -100,6 +100,18 @@ export interface TaskListItem {
   nbreGuestDraft?: number;
   nbreGuestNotRegistered?: number;
   checkinStatus?: string;
+  /** Champs séjour réservation (actions arrivée / départ comme page Réservations) */
+  checkInTime?: string | number | null;
+  checkOutTime?: string | number | null;
+  actualArrivalTime?: string | null;
+  actualDepartureTime?: string | null;
+  confirmedCheckInTime?: boolean;
+  confirmedCheckOutTime?: boolean;
+  guestRegistration?: {
+    nbre_guest_registered?: number;
+    nbre_guest_to_register?: number;
+    members?: Array<Record<string, unknown>>;
+  };
   ownerId?: string;
 }
 

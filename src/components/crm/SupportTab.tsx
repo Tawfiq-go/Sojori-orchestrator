@@ -1,7 +1,6 @@
 /**
  * SupportTab.tsx
- * Onglet "Équipe support" du CRM avec 3 sous-onglets
- * Migré depuis sojori-dashboard/src/features/support-team
+ * Onglet "Rendez-vous" du CRM — RDV démo avec agents support (étape 2 du funnel).
  */
 
 import { useState, useEffect } from 'react';
@@ -278,6 +277,23 @@ export function SupportTab() {
 
   return (
     <div>
+      <div
+        style={{
+          marginBottom: 16,
+          padding: '10px 14px',
+          background: '#E3F2FD',
+          border: '1px solid #90CAF9',
+          borderRadius: 8,
+          fontSize: 12,
+          color: T.text2,
+          lineHeight: 1.55,
+        }}
+      >
+        <strong style={{ color: '#1565C0' }}>Étape 2 du funnel CRM</strong> — rendez-vous de démo planifiés avec
+        l&apos;équipe support (Calendly / prise de RDV). Distinct des <strong>demandes contact</strong> (onglet Demandes)
+        et de la <strong>qualification</strong> (onglet Leads & fiches).
+      </div>
+
       {/* Sub-tabs */}
       <div
         style={{

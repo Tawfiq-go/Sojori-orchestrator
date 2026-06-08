@@ -404,7 +404,7 @@ function TasksOrchestrationFulltaskPageInner() {
                 delay: { value: 1, unit: 'hours' },
                 time: '10:00',
               },
-              deliveryChannel: 'ota',
+              deliveryChannel: 'whatsapp',
             },
           ]);
           setListOrder((prev) => [...prev, schedListKey(newId)]);

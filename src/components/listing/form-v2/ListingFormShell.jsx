@@ -2,7 +2,7 @@
 // Sojori · Listing Form — Atelier 2026
 // ListingFormShell.jsx — coquille 2-niveaux (Detail OTA / Config Orch.)
 //
-// • Toggle Detail (11 onglets) ↔ Config (7 onglets)
+// • Toggle Detail (11 onglets) ↔ Config orchestration (13 onglets)
 // • Tabs rail à gauche, content scrollable à droite
 // • Header listing résumé + save bar sticky
 // • Slot `renderTab(tabKey)` à brancher sur tes composants existants
@@ -45,22 +45,7 @@ export const DETAIL_TABS = [
   ]},
 ];
 
-export const CONFIG_TABS = [
-  { group: 'Workflow', items: [
-    { id: 'orchestration', icon: '🔀', label: 'Orchestration' },
-    { id: 'menage',        icon: '🧹', label: 'Ménage & Service' },
-  ]},
-  { group: 'Communication', items: [
-    { id: 'access',     icon: '🔐', label: 'Accès' },
-    { id: 'whatsapp',   icon: '📱', label: 'Menu WhatsApp' },
-    { id: 'concierge',  icon: '🛎️', label: 'Conciergerie' },
-    { id: 'support',    icon: '🎧', label: 'Support' },
-  ]},
-  { group: 'Métier', items: [
-    { id: 'rules',      icon: '📋', label: 'Règles' },
-  ]},
-];
-
+/** Onglets Config orchestration (ex-« Config Orch. NEW »). */
 export const CONFIG_NEW_TABS = [
   { group: 'Services', items: [
     { id: 'access-config',            icon: '🔐', label: 'Accès' },
@@ -83,12 +68,18 @@ export const CONFIG_NEW_TABS = [
   ]},
 ];
 
-/** Nombre d’onglets Config Orch. NEW (pill toggle + vérif rail). */
+/** Nombre d’onglets Config orchestration (pill toggle + vérif rail). */
 export const CONFIG_NEW_TAB_COUNT = CONFIG_NEW_TABS.reduce((n, g) => n + g.items.length, 0);
 
-const CONFIG_NEW_TAB_IDS = new Set(
+const CONFIG_TAB_IDS = new Set(
   CONFIG_NEW_TABS.flatMap(g => g.items.map(t => t.id)),
 );
+
+/** `config-new` (ancienne URL) → `config`. */
+export function normalizeListingFormLevel(level) {
+  if (level === 'config-new') return 'config';
+  return level === 'config' || level === 'detail' ? level : 'detail';
+}
 
 /* ─── Helpers UI ───────────────────────────────────────────── */
 function StatusChip({ tone, label, dot = true }) {
@@ -150,37 +141,39 @@ function TabButton({ tab, active, statusBadge, onClick }) {
 export default function ListingFormShell({
   listing,                    // { id, name, photoColor, bedrooms, bathrooms, guests, location, completionPct }
   tabsStatus = {},            // { [tabKey]: { tone, label } } — pour les badges
-  defaultLevel = 'detail',    // 'detail' | 'config' | 'config-new'
+  defaultLevel = 'detail',    // 'detail' | 'config' (alias legacy : config-new)
   defaultTab = 'photos',
   lockLevel,                  // masque le toggle et fige le niveau (ex. embed chatbot)
   embedded = false,           // rendu dans un panneau (pas pleine page)
-  configNewBadgeLabel = 'Config Orch. NEW', // ex. « Template » sur page catalogue/template
+  configNewBadgeLabel = '',   // badge optionnel (ex. « Template » sur page catalogue)
   onSave,
   onPublish,
   onPreview,
   onAiAssist,
   renderTab,                  // (tabKey, level) => ReactNode — branche tes vrais composants ici
 }) {
-  const [level, setLevel] = useState(lockLevel || defaultLevel);
+  const resolvedDefaultLevel = normalizeListingFormLevel(defaultLevel);
+  const resolvedLockLevel = lockLevel ? normalizeListingFormLevel(lockLevel) : null;
+  const [level, setLevel] = useState(resolvedLockLevel || resolvedDefaultLevel);
   const [activeTab, setActiveTab] = useState(defaultTab);
 
   useEffect(() => {
-    setLevel(lockLevel || defaultLevel);
-  }, [defaultLevel, lockLevel]);
+    setLevel(resolvedLockLevel || resolvedDefaultLevel);
+  }, [resolvedDefaultLevel, resolvedLockLevel]);
 
   useEffect(() => {
     if (!defaultTab) return;
-    if (defaultLevel === 'config-new' && !CONFIG_NEW_TAB_IDS.has(defaultTab)) return;
+    if (resolvedDefaultLevel === 'config' && !CONFIG_TAB_IDS.has(defaultTab)) return;
     setActiveTab(defaultTab);
-  }, [defaultTab, defaultLevel]);
+  }, [defaultTab, resolvedDefaultLevel]);
 
-  const tabsConfig = level === 'detail' ? DETAIL_TABS : level === 'config' ? CONFIG_TABS : CONFIG_NEW_TABS;
+  const tabsConfig = level === 'detail' ? DETAIL_TABS : CONFIG_NEW_TABS;
   const activeTabMeta = tabsConfig.flatMap(g => g.items).find(t => t.id === activeTab) || tabsConfig[0].items[0];
   const listingDisplayName = (listing?.name && String(listing.name).trim()) || 'Listing sans nom';
   const locationLine = (listing?.location && String(listing.location).trim()) || '';
   const showListingTitle = Boolean(listing?.name && String(listing.name).trim());
 
-  const lockedConfigNew = lockLevel === 'config-new';
+  const lockedConfig = Boolean(resolvedLockLevel === 'config');
 
   return (
     <Box sx={{ bgcolor: T.bg0, minHeight: embedded ? 0 : '100vh' }}>
@@ -218,8 +211,7 @@ export default function ListingFormShell({
           >
             {[
               { id: 'detail', icon: '🏠', label: 'Détail listing', pillLabel: '11 onglets', accent: T.primary, tint: T.primaryTint, tintColor: T.primaryDeep },
-              { id: 'config', icon: '⚙️', label: 'Config orchestration', pillLabel: '7 onglets', accent: T.ai, tint: T.aiTint, tintColor: T.ai },
-              { id: 'config-new', icon: '✨', label: 'Config Orch. NEW', pillLabel: `${CONFIG_NEW_TAB_COUNT} onglets`, accent: '#b8851a', tint: 'rgba(184,133,26,0.10)', tintColor: '#876119' },
+              { id: 'config', icon: '⚙️', label: 'Config orchestration', pillLabel: `${CONFIG_NEW_TAB_COUNT} onglets`, accent: '#b8851a', tint: 'rgba(184,133,26,0.10)', tintColor: '#876119' },
             ].map(opt => {
               const active = level === opt.id;
               return (
@@ -228,7 +220,7 @@ export default function ListingFormShell({
                   component="button"
                   onClick={() => {
                     setLevel(opt.id);
-                    const tabs = opt.id === 'detail' ? DETAIL_TABS : opt.id === 'config' ? CONFIG_TABS : CONFIG_NEW_TABS;
+                    const tabs = opt.id === 'detail' ? DETAIL_TABS : CONFIG_NEW_TABS;
                     setActiveTab(tabs[0].items[0].id);
                   }}
                   sx={{
@@ -270,7 +262,7 @@ export default function ListingFormShell({
           </Box>
           )}
           <Box sx={{ flex: 1, minWidth: 0, pt: { xs: 0, sm: 0.25 } }}>
-            {lockedConfigNew && configNewBadgeLabel ? (
+            {lockedConfig && configNewBadgeLabel ? (
               <Box
                 sx={{
                   display: 'inline-flex',
@@ -412,8 +404,8 @@ export default function ListingFormShell({
                   fontFamily: '"Geist Mono", monospace',
                 }}
               >
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: level === 'config-new' ? T.info : T.success, boxShadow: level === 'config-new' ? `0 0 6px ${T.info}` : `0 0 6px ${T.success}` }} />
-                {level === 'config-new'
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: level === 'config' ? T.info : T.success, boxShadow: level === 'config' ? `0 0 6px ${T.info}` : `0 0 6px ${T.success}` }} />
+                {level === 'config'
                   ? 'Autosave par onglet · barre globale = détail OTA'
                   : 'Sauvegarder pour enregistrer cet écran'}
               </Stack>

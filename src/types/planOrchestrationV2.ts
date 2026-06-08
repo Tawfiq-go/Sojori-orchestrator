@@ -81,6 +81,15 @@ export interface AssignationAttempt {
   found: boolean
 }
 
+/** Tentative assignation Last-Minute — cron ignore la fenêtre config. */
+export interface AssignationLmAttempt {
+  label: string
+  scheduledAt: Date | string
+  status: 'en_attente' | 'fait' | 'saute' | 'echec'
+  lm: true
+  triedAt?: Date | string | null
+}
+
 export interface AssignationDoc {
   status: AssignationStatus
   startAt: Date | string
@@ -89,9 +98,10 @@ export interface AssignationDoc {
   staffId: string | null
   /** Date acceptation staff (task confirmed). */
   staffAcceptedAt: Date | string | null
-  /** Flag Last-Minute (bloc ré-ouvert) */
+  /** @deprecated Legacy — LM staff via lmAttempts[] */
   lm: boolean
   attempts: AssignationAttempt[]
+  lmAttempts?: AssignationLmAttempt[]
   /** Copié depuis orchestration config au build du plan. */
   autoAssign?: boolean
   releaseMode?: 'tolerance' | 'windows'
@@ -155,6 +165,7 @@ export interface AuditEntry {
     | 'reminder_sent'
     | 'escalade_triggered'
     | 'lm_relance_created'
+    | 'lm_assignation_created'
     | 'lm_assignation_reopened'
     | 'status_change'
     | string

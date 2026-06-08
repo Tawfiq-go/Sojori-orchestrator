@@ -7,7 +7,7 @@
 // Tous les champs / handlers / appels API du fichier original sont conservés.
 // ════════════════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useMemo, useState, startTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, startTransition, memo } from 'react';
 import {
   Box, Stack, Typography, Paper, Chip, IconButton, Tooltip, Button,
   TextField, InputAdornment, FormControl, Select, MenuItem, Checkbox,
@@ -33,8 +33,13 @@ import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CreateReservationModal } from '../components/modals/CreateReservationModal';
 import { ReservationSourceIcon } from '../components/reservations/ReservationSourceIcon';
 import { blurActiveElement } from '../utils/domFocus';
+import { logResaGuest, reservationStaySummary } from '../utils/resaGuestActionDebug';
 import { formatGuestCountryDisplay } from '../utils/guestCountryDisplay';
 import { ReservationStayActions, type StayFieldPatch } from '../components/reservations/ReservationStayActions';
+import {
+  ReservationRegistrationActions,
+  type RegistrationFieldPatch,
+} from '../components/reservations/ReservationRegistrationActions';
 
 moment.locale('fr');
 
@@ -73,6 +78,21 @@ interface Reservation {
   alreadyPaid?: number;
   cancellationDate?: string | null;
   cancellationAcknowledged?: boolean;
+  guestRegistration?: {
+    nbre_guest_registered?: number;
+    nbre_guest_to_register?: number;
+    members?: Array<{
+      first_name?: string;
+      firstName?: string;
+      last_name?: string;
+      lastName?: string;
+      nationality?: string;
+      document_number?: string;
+      passport?: string;
+      gender?: string;
+      status?: string;
+    }>;
+  };
 }
 
 // ─── Palette « Atelier 2026 » ───────────────────────────────────────
@@ -258,8 +278,27 @@ export function ReservationsPage() {
   };
 
   const handleStayFieldUpdate = useCallback((reservationId: string, patch: StayFieldPatch) => {
+    logResaGuest('page:patchStay ligne', { reservationId, patch });
     setReservations(prev =>
       prev.map(r => (r._id === reservationId ? { ...r, ...patch } : r)),
+    );
+  }, []);
+
+  const handleRegistrationUpdate = useCallback((reservationId: string, patch: RegistrationFieldPatch) => {
+    logResaGuest('page:patchRegistration ligne', { reservationId, patch });
+    setReservations(prev =>
+      prev.map(r =>
+        r._id === reservationId
+          ? {
+              ...r,
+              guestRegistration: {
+                ...r.guestRegistration,
+                ...patch.guestRegistration,
+                members: patch.guestRegistration?.members ?? r.guestRegistration?.members,
+              },
+            }
+          : r,
+      ),
     );
   }, []);
 
@@ -279,10 +318,16 @@ export function ReservationsPage() {
       });
 
       const sorted = sortReservationsList(response.data as Reservation[]);
+      logResaGuest('page:fetchList ← srv-reservations', {
+        count: sorted.length,
+        total: response.total ?? sorted.length,
+        rows: sorted.slice(0, 8).map(reservationStaySummary),
+      });
       setReservations(sorted);
       setTotalReservations(response.total ?? sorted.length);
     } catch (err: any) {
       console.error('❌ [ReservationsPage] Error fetching:', err);
+      logResaGuest('page:fetchList ERROR', { message: err?.message || String(err) });
       setError(err.message || 'Erreur');
       setReservations([]);
       setTotalReservations(0);
@@ -398,6 +443,76 @@ export function ReservationsPage() {
   const handleViewDetails = (r: Reservation) => navigate(`/reservations/${r._id}`);
 
   const visibleRows = filteredReservations;
+
+  // Skeleton loading pendant le chargement initial
+  if (isLoading && reservations.length === 0) {
+    return (
+      <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
+        <Box sx={{ p: { xs: 2, md: 3 } }}>
+          {/* Header skeleton */}
+          <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ width: 320, height: 40, bgcolor: T.bg2, borderRadius: 1 }} />
+              <Box sx={{ width: 100, height: 40, bgcolor: T.bg2, borderRadius: 1 }} />
+              <Box sx={{ width: 180, height: 40, bgcolor: T.bg2, borderRadius: 1 }} />
+              <Box sx={{ width: 160, height: 40, bgcolor: T.bg2, borderRadius: 1 }} />
+              <Box sx={{ width: 140, height: 40, bgcolor: T.bg2, borderRadius: 1 }} />
+              <Box sx={{ width: 32, height: 40, bgcolor: T.bg2, borderRadius: 1 }} />
+            </Stack>
+            {/* Quick filters skeleton */}
+            <Stack direction="row" sx={{ mt: 1.5, gap: 0.75, flexWrap: 'wrap' }}>
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <Box key={i} sx={{ width: 100, height: 28, bgcolor: T.bg2, borderRadius: 2 }} />
+              ))}
+            </Stack>
+          </Paper>
+
+          {/* Table skeleton */}
+          <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
+            {/* Table header skeleton */}
+            <Box sx={{
+              display: 'flex',
+              gap: 2,
+              p: 2,
+              borderBottom: `2px solid ${T.border}`,
+              bgcolor: T.bg2
+            }}>
+              <Box sx={{ width: 120, height: 20, bgcolor: T.bg3, borderRadius: 0.5 }} />
+              <Box sx={{ flex: 1, height: 20, bgcolor: T.bg3, borderRadius: 0.5 }} />
+              <Box sx={{ width: 120, height: 20, bgcolor: T.bg3, borderRadius: 0.5 }} />
+              <Box sx={{ width: 100, height: 20, bgcolor: T.bg3, borderRadius: 0.5 }} />
+              <Box sx={{ width: 80, height: 20, bgcolor: T.bg3, borderRadius: 0.5 }} />
+            </Box>
+
+            {/* Table rows skeleton */}
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
+              <Box
+                key={i}
+                sx={{
+                  display: 'flex',
+                  gap: 2,
+                  p: 2,
+                  borderBottom: i < 10 ? `1px solid ${T.border}` : 'none',
+                  bgcolor: i % 2 === 0 ? T.bg1 : 'transparent'
+                }}
+              >
+                <Box sx={{ width: 120, height: 16, bgcolor: T.bg2, borderRadius: 0.5 }} />
+                <Box sx={{ flex: 1, height: 16, bgcolor: T.bg2, borderRadius: 0.5 }} />
+                <Box sx={{ width: 120, height: 16, bgcolor: T.bg2, borderRadius: 0.5 }} />
+                <Box sx={{ width: 100, height: 16, bgcolor: T.bg2, borderRadius: 0.5 }} />
+                <Box sx={{ width: 80, height: 16, bgcolor: T.bg2, borderRadius: 0.5 }} />
+              </Box>
+            ))}
+          </Paper>
+
+          {/* Loading indicator */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+            <CircularProgress size={24} sx={{ color: T.primary }} />
+          </Box>
+        </Box>
+      </DashboardWrapper>
+    );
+  }
 
   return (
     <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
@@ -574,12 +689,12 @@ export function ReservationsPage() {
 
         {/* MOBILE : cards · DESKTOP : table */}
         {!isLoading && !isMobile && visibleRows.length > 0 && (
-          <DesktopTable rows={visibleRows} onRowClick={handleViewDetails} onNavigate={navigate} onAcknowledge={handleAcknowledgeCancellation} onStayUpdate={handleStayFieldUpdate} />
+          <DesktopTable rows={visibleRows} onRowClick={handleViewDetails} onNavigate={navigate} onAcknowledge={handleAcknowledgeCancellation} onStayUpdate={handleStayFieldUpdate} onRegistrationUpdate={handleRegistrationUpdate} />
         )}
         {!isLoading && isMobile && visibleRows.length > 0 && (
           <Stack spacing={1.25}>
             {visibleRows.map((r) => (
-              <MobileCard key={r._id} r={r} onClick={() => handleViewDetails(r)} onAcknowledge={handleAcknowledgeCancellation} onStayUpdate={handleStayFieldUpdate} />
+              <MobileCard key={r._id} r={r} onClick={() => handleViewDetails(r)} onAcknowledge={handleAcknowledgeCancellation} onStayUpdate={handleStayFieldUpdate} onRegistrationUpdate={handleRegistrationUpdate} />
             ))}
           </Stack>
         )}
@@ -689,12 +804,13 @@ const Pill = ({ label, count, active, onClick, color }: { label: string; count: 
 );
 
 // ─── Desktop table ─────────────────────────────────────────────────
-function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdate }: {
+function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdate, onRegistrationUpdate }: {
   rows: Reservation[];
   onRowClick: (r: Reservation) => void;
   onNavigate: (path: string) => void;
   onAcknowledge?: (r: Reservation) => void;
   onStayUpdate?: (reservationId: string, patch: StayFieldPatch) => void;
+  onRegistrationUpdate?: (reservationId: string, patch: RegistrationFieldPatch) => void;
 }) {
   return (
     <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
@@ -835,12 +951,20 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                       </Typography>
                     ) : <Typography sx={{ fontSize: 12, color: T.text4 }}>—</Typography>}
                   </Box>
-                  <Box component="td" sx={{ textAlign: 'center' }}>
+                  <Box component="td" sx={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                     <Typography sx={{ fontSize: 11, color: T.text2 }}>
                       {r.adults || 0}A
                       {r.children ? ` · ${r.children}E` : ''}
                       {r.infants ? ` · ${r.infants}B` : ''}
                     </Typography>
+                    <ReservationRegistrationActions
+                      reservationId={r._id}
+                      registered={r.guestRegistration?.nbre_guest_registered}
+                      total={r.guestRegistration?.nbre_guest_to_register ?? r.adults}
+                      members={r.guestRegistration?.members}
+                      disabled={isCancelled}
+                      onRegistrationUpdated={(patch) => onRegistrationUpdate?.(r._id, patch)}
+                    />
                   </Box>
                   <Box component="td">
                     <Typography sx={{ fontSize: 11, fontWeight: 500, color: T.text2 }}>{r.paymentStatus || '—'}</Typography>
@@ -897,7 +1021,7 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
 }
 
 // ─── Mobile card ───────────────────────────────────────────────────
-function MobileCard({ r, onClick, onAcknowledge, onStayUpdate }: { r: Reservation; onClick: () => void; onAcknowledge?: (r: Reservation) => void; onStayUpdate?: (reservationId: string, patch: StayFieldPatch) => void }) {
+function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpdate }: { r: Reservation; onClick: () => void; onAcknowledge?: (r: Reservation) => void; onStayUpdate?: (reservationId: string, patch: StayFieldPatch) => void; onRegistrationUpdate?: (reservationId: string, patch: RegistrationFieldPatch) => void }) {
   const s = statusMeta(r.status);
   const p = presenceMeta(r);
 
@@ -992,7 +1116,17 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate }: { r: Reservatio
           </Box>
         </Stack>
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 1.25 }}>
-          <Chip label={p.label} size="small" sx={{ bgcolor: p.bg, color: p.color, fontWeight: 600, fontSize: 10.5, height: 20 }} />
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <Chip label={p.label} size="small" sx={{ bgcolor: p.bg, color: p.color, fontWeight: 600, fontSize: 10.5, height: 20 }} />
+            <ReservationRegistrationActions
+              reservationId={r._id}
+              registered={r.guestRegistration?.nbre_guest_registered}
+              total={r.guestRegistration?.nbre_guest_to_register ?? r.adults}
+              members={r.guestRegistration?.members}
+              disabled={isCancelled}
+              onRegistrationUpdated={(patch) => onRegistrationUpdate?.(r._id, patch)}
+            />
+          </Stack>
           {r.totalPrice != null && (
             <Typography sx={{ fontSize: 13, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}>
               {r.totalPrice.toFixed(0)} {r.currency || 'EUR'}

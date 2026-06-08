@@ -12,6 +12,7 @@ import {
   deleteDemoRequest,
   type DemoRequest,
 } from '../../services/crmService';
+import { DemoRequestDetailDialog } from './DemoRequestDetailDialog';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -52,18 +53,27 @@ const STATUS_CONFIG = {
   },
 };
 
+const REQUEST_TYPE_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
+  ticket: { label: 'Ticket', color: T.text3, bgColor: T.bg3 },
+  'rendez-vous_cree': { label: 'RDV créé', color: '#2563eb', bgColor: '#eff6ff' },
+  'rendez-vous_pris': { label: 'RDV pris', color: '#9C27B0', bgColor: '#F3E5F5' },
+  'rendez-vous_fait': { label: 'RDV fait', color: '#10B981', bgColor: '#E8F5E9' },
+  meeting: { label: 'Meeting', color: T.primaryDeep, bgColor: T.primaryTint },
+};
+
 const COLUMNS = [
-  { id: 'source', label: 'Source', width: '8%' },
-  { id: 'email', label: 'Email', width: '14%' },
-  { id: 'phone', label: 'Tél.', width: '10%' },
-  { id: 'fullName', label: 'Nom', width: '12%' },
-  { id: 'company', label: 'Entreprise', width: '12%' },
-  { id: 'numberOfProperties', label: 'Biens', width: '6%' },
-  { id: 'requestType', label: 'Type', width: '10%' },
+  { id: 'source', label: 'Source', width: '7%' },
+  { id: 'email', label: 'Email', width: '12%' },
+  { id: 'phone', label: 'Tél.', width: '8%' },
+  { id: 'fullName', label: 'Nom', width: '10%' },
+  { id: 'company', label: 'Entreprise', width: '10%' },
+  { id: 'numberOfProperties', label: 'Biens', width: '5%' },
+  { id: 'timeline', label: 'Timeline', width: '8%' },
+  { id: 'requestType', label: 'Type', width: '9%' },
   { id: 'status', label: 'Statut', width: '10%' },
-  { id: 'qualification', label: 'Qualif.', width: '8%' },
+  { id: 'qualification', label: 'Qualif.', width: '6%' },
   { id: 'createdAt', label: 'Créé le', width: '8%' },
-  { id: 'actions', label: '', width: '2%' },
+  { id: 'actions', label: '', width: '3%' },
 ];
 
 // ════════════════════════════════════════════════════════════════════
@@ -79,10 +89,15 @@ export function RequestsTab() {
 
   const [statusFilter, setStatusFilter] = useState('');
   const [qualificationFilter, setQualificationFilter] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [globalFilter, setGlobalFilter] = useState('');
 
   const [selectedRequest, setSelectedRequest] = useState<DemoRequest | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogRequest, setDialogRequest] = useState<DemoRequest | null>(null);
+  const [toast, setToast] = useState('');
 
   const loadRequests = async () => {
     setLoading(true);
@@ -99,6 +114,7 @@ export function RequestsTab() {
       if (qualificationFilter) {
         params.qualificationCompleted = qualificationFilter === 'true';
       }
+      if (globalFilter.trim()) params.search = globalFilter.trim();
 
       console.log('[RequestsTab] 📤 API params:', params);
       const response = await getDemoRequests(params);
@@ -120,7 +136,17 @@ export function RequestsTab() {
 
   useEffect(() => {
     loadRequests();
-  }, [page, rowsPerPage, statusFilter, qualificationFilter]);
+  }, [page, rowsPerPage, statusFilter, qualificationFilter, globalFilter]);
+
+  const openDetail = (request: DemoRequest) => {
+    setDialogRequest(request);
+    setDialogOpen(true);
+  };
+
+  const closeDetail = () => {
+    setDialogOpen(false);
+    setTimeout(() => setDialogRequest(null), 200);
+  };
 
   const handleActionsClick = (event: React.MouseEvent, request: DemoRequest) => {
     event.stopPropagation();
@@ -132,6 +158,11 @@ export function RequestsTab() {
   const handleCloseMenu = () => {
     setShowMenu(false);
     setSelectedRequest(null);
+  };
+
+  const handleViewDetails = () => {
+    if (selectedRequest) openDetail(selectedRequest);
+    handleCloseMenu();
   };
 
   const handleDelete = async () => {
@@ -207,8 +238,45 @@ export function RequestsTab() {
     }
   };
 
+  const renderRequestType = (requestType?: string) => {
+    if (!requestType) return '—';
+    const config = REQUEST_TYPE_CONFIG[requestType];
+    if (!config) return requestType;
+    return (
+      <span
+        style={{
+          padding: '2px 8px',
+          borderRadius: 99,
+          fontSize: 10,
+          fontWeight: 700,
+          background: config.bgColor,
+          color: config.color,
+        }}
+      >
+        {config.label}
+      </span>
+    );
+  };
+
   return (
     <div>
+      <div
+        style={{
+          marginBottom: 16,
+          padding: 12,
+          background: T.primaryTint,
+          borderRadius: 8,
+          border: `1px solid ${T.border}`,
+          fontSize: 12,
+          color: T.text2,
+          lineHeight: 1.55,
+        }}
+      >
+        <strong style={{ color: T.text }}>Funnel client :</strong> étape 1 — contact simple (email, téléphone, entreprise, nb biens)
+        → étape 2 — prise de rendez-vous (onglet Équipe support → Rendez-vous)
+        → étape 3 — formulaire qualification (PMS, channel, pricing, défis). Cliquez une ligne pour ouvrir le détail.
+      </div>
+
       {/* Filters */}
       <div
         style={{
@@ -218,8 +286,36 @@ export function RequestsTab() {
           padding: 12,
           background: T.bg2,
           borderRadius: 8,
+          flexWrap: 'wrap',
         }}
       >
+        <div style={{ flex: '1 1 200px' }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.text3, display: 'block', marginBottom: 6 }}>
+            Recherche
+          </label>
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setGlobalFilter(searchInput);
+                setPage(0);
+              }
+            }}
+            placeholder="Email, téléphone, entreprise…"
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              borderRadius: 6,
+              border: `1px solid ${T.border}`,
+              background: T.bg1,
+              color: T.text,
+              fontSize: 13,
+              fontFamily: 'inherit',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
         <div style={{ flex: 1 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: T.text3, display: 'block', marginBottom: 6 }}>
             Statut
@@ -271,12 +367,33 @@ export function RequestsTab() {
           </select>
         </div>
 
-        <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => {
+              setGlobalFilter(searchInput);
+              setPage(0);
+            }}
+            style={{
+              flex: 1,
+              padding: '8px 16px',
+              borderRadius: 6,
+              border: 0,
+              background: T.bg3,
+              color: T.text,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            🔍 Rechercher
+          </button>
           <button
             onClick={loadRequests}
             disabled={loading}
             style={{
-              width: '100%',
+              flex: 1,
               padding: '8px 16px',
               borderRadius: 6,
               border: 0,
@@ -293,6 +410,22 @@ export function RequestsTab() {
           </button>
         </div>
       </div>
+
+      {toast && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: '10px 12px',
+            background: T.success + '18',
+            border: `1px solid ${T.success}`,
+            borderRadius: 6,
+            fontSize: 12,
+            color: T.text,
+          }}
+        >
+          {toast}
+        </div>
+      )}
 
       {/* Stats */}
       <div
@@ -361,6 +494,7 @@ export function RequestsTab() {
               requests.map((request) => (
                 <tr
                   key={request.id || request._id}
+                  onClick={() => openDetail(request)}
                   style={{
                     borderBottom: `1px solid ${T.border}`,
                     cursor: 'pointer',
@@ -394,7 +528,12 @@ export function RequestsTab() {
                   <td style={{ padding: '10px 14px', fontSize: 12, color: T.text, textAlign: 'center' }}>
                     {request.numberOfProperties || '—'}
                   </td>
-                  <td style={{ padding: '10px 14px', fontSize: 12, color: T.text }}>{request.requestType || '—'}</td>
+                  <td style={{ padding: '10px 14px', fontSize: 12, color: T.text }}>
+                    {request.timeline || '—'}
+                  </td>
+                  <td style={{ padding: '10px 14px', fontSize: 12, color: T.text }}>
+                    {renderRequestType(request.requestType)}
+                  </td>
                   <td style={{ padding: '10px 14px' }}>
                     <div
                       onClick={(e) => {
@@ -548,6 +687,30 @@ export function RequestsTab() {
             }}
           >
             <button
+              onClick={handleViewDetails}
+              style={{
+                width: '100%',
+                padding: '10px 16px',
+                textAlign: 'left',
+                border: 0,
+                background: 'transparent',
+                color: T.text,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                borderRadius: '8px 8px 0 0',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = T.bg2;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              👁️ Voir le détail
+            </button>
+            <button
               onClick={handleDelete}
               style={{
                 width: '100%',
@@ -574,6 +737,37 @@ export function RequestsTab() {
           </div>
         </>
       )}
+
+      <DemoRequestDetailDialog
+        open={dialogOpen}
+        request={dialogRequest}
+        onClose={closeDetail}
+        onNotify={(msg) => setToast(msg)}
+        onStatusChange={(requestId, newStatus) => {
+          setRequests((prev) =>
+            prev.map((r) =>
+              String(r.id || r._id) === requestId ? { ...r, status: newStatus } : r,
+            ),
+          );
+          setDialogRequest((prev) => (prev ? { ...prev, status: newStatus } : prev));
+        }}
+        onAppointmentDeleted={(requestId) => {
+          setRequests((prev) =>
+            prev.map((r) =>
+              String(r.id || r._id) === requestId ? { ...r, linkedDemoAppointment: null } : r,
+            ),
+          );
+          setDialogRequest((prev) =>
+            prev && String(prev.id || prev._id) === requestId
+              ? { ...prev, linkedDemoAppointment: null }
+              : prev,
+          );
+        }}
+        onRequestDeleted={(requestId) => {
+          setRequests((prev) => prev.filter((r) => String(r.id || r._id) !== requestId));
+          closeDetail();
+        }}
+      />
     </div>
   );
 }

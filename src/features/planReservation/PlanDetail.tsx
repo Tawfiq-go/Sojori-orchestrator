@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import ArchivePlanModal from './ArchivePlanModal';
-import ForcePlanSchedulerModal from './ForcePlanSchedulerModal';
+import * as fulltaskApi from '../../services/fulltaskApi';
 import {
   buildProgressSegments,
   isLegacyPlanOnlyRef,
@@ -17,6 +16,7 @@ import {
   showRelanceConfigHint,
 } from './planGroupStatus';
 import SequencePlanCard from './SequencePlanCard';
+import AuditLogView from '../../components/plan/AuditLogView';
 import type { FulltaskPlanDoc } from './buildPlanViewModel';
 import type {
   Channel,
@@ -38,8 +38,15 @@ interface Props {
   ownerDisplayName?: string;
   onPlanUpdated?: (planDoc?: FulltaskPlanDoc) => void;
   onPlanRefetch?: () => void;
-  onPlanArchived?: (reservationId: string) => void;
 }
+
+type CronTickStats = {
+  remindersSent: number;
+  staffRemindersSent: number;
+  assignmentsDone: number;
+  escalations: number;
+  messagesSent: number;
+};
 
 export default function PlanDetail({
   reservation: r,
@@ -48,11 +55,12 @@ export default function PlanDetail({
   ownerDisplayName,
   onPlanUpdated,
   onPlanRefetch,
-  onPlanArchived,
 }: Props) {
   const [tlFilter, setTlFilter] = useState<TlFilter>('all');
-  const [forceModalOpen, setForceModalOpen] = useState(false);
-  const [archiveModalOpen, setArchiveModalOpen] = useState(false);
+  const [cronLoading, setCronLoading] = useState(false);
+  const [cronError, setCronError] = useState<string | null>(null);
+  const [cronStats, setCronStats] = useState<CronTickStats | null>(null);
+  const [auditOpen, setAuditOpen] = useState(false);
 
   const filteredEvents = useMemo(() => {
     const timeline = plan.events.filter(
@@ -129,24 +137,40 @@ export default function PlanDetail({
     return nodes;
   }, [orderedTimelineEvents, sequenceByEventId, r.id, r.guest.name, r.reference, plan.guestPhone, plan.guestName, onPlanUpdated]);
 
+  const runCronNow = async () => {
+    setCronLoading(true);
+    setCronError(null);
+    setCronStats(null);
+    try {
+      const res = await fulltaskApi.runPlanScheduler(r.id);
+      if (!res?.success) {
+        setCronError(res?.error || 'Échec exécution cron');
+        return;
+      }
+      setCronStats(res.scheduler as CronTickStats);
+      if (res.data) onPlanUpdated?.(res.data as FulltaskPlanDoc);
+      onPlanRefetch?.();
+    } catch (e) {
+      setCronError(e instanceof Error ? e.message : 'Erreur réseau');
+    } finally {
+      setCronLoading(false);
+    }
+  };
+
+  const cronSummary = cronStats
+    ? [
+        cronStats.remindersSent ? `${cronStats.remindersSent} relance(s)` : null,
+        cronStats.messagesSent ? `${cronStats.messagesSent} message(s)` : null,
+        cronStats.staffRemindersSent ? `${cronStats.staffRemindersSent} rappel(s) staff` : null,
+        cronStats.assignmentsDone ? `${cronStats.assignmentsDone} assignation(s)` : null,
+        cronStats.escalations ? `${cronStats.escalations} escalade(s)` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || 'Aucune action due à ce tick'
+    : null;
+
   return (
     <div className="wrap">
-      <ForcePlanSchedulerModal
-        open={forceModalOpen}
-        reservationId={r.id}
-        guestName={r.guest.name}
-        onClose={() => setForceModalOpen(false)}
-        onDone={() => onPlanRefetch?.()}
-      />
-      <ArchivePlanModal
-        open={archiveModalOpen}
-        reservationId={r.id}
-        guestName={r.guest.name}
-        planCode={planCodeDisplay(r.planCode)}
-        reservationRef={reservationRefDisplay(r.reference)}
-        onClose={() => setArchiveModalOpen(false)}
-        onDone={() => onPlanArchived?.(r.id)}
-      />
       <div className="hero hero--dense">
         <div className="hero-main hero-main--dense">
           <div className="hero-identity">
@@ -188,20 +212,15 @@ export default function PlanDetail({
             <div className="hero-plan-actions">
               <button
                 type="button"
-                className="force-plan-trigger"
-                onClick={() => setForceModalOpen(true)}
-                title="Cron désactivé — exécution manuelle pour tests"
+                className="cron-now-trigger"
+                onClick={runCronNow}
+                disabled={cronLoading}
+                title="Même logique que le cron horaire (0 * * * *), filtré sur cette réservation"
               >
-                ▶ Exécuter plan
+                {cronLoading ? 'Exécution…' : '⏱ Exécuter maintenant'}
               </button>
-              <button
-                type="button"
-                className="plan-archive-trigger"
-                onClick={() => setArchiveModalOpen(true)}
-                title="Masquer ce plan (corrompu) — nouvelle résa ou replay AMQP ensuite"
-              >
-                Archiver le plan
-              </button>
+              {cronError ? <span className="cron-now-error">{cronError}</span> : null}
+              {cronSummary ? <span className="cron-now-summary">{cronSummary}</span> : null}
             </div>
           </div>
 
@@ -328,7 +347,22 @@ export default function PlanDetail({
         . Relances passées = état réel (sautée, échec…).
       </p>
 
-      <div className="timeline timeline--config-order">{timelineNodes}</div>
+      <div className="timeline timeline--config-order">{timelineNodes}      </div>
+
+      {(plan.auditLog?.length ?? 0) > 0 ? (
+        <div className="plan-audit-panel">
+          <button
+            type="button"
+            className="plan-audit-toggle"
+            onClick={() => setAuditOpen((o) => !o)}
+            aria-expanded={auditOpen}
+          >
+            <span>📋 Journal audit ({plan.auditLog?.length ?? 0})</span>
+            <span aria-hidden>{auditOpen ? '▾' : '▸'}</span>
+          </button>
+          {auditOpen ? <AuditLogView auditLog={plan.auditLog ?? []} className="plan-audit-body" /> : null}
+        </div>
+      ) : null}
 
       <div
         className="read-only-note"
@@ -343,17 +377,14 @@ export default function PlanDetail({
           lineHeight: 1.55,
         }}
       >
-        🛡 Vue lecture seule · <b>Séquence</b> = relances + assign + rappels staff (config planifiée
-        ou statuts après <b>Exécuter plan</b>). Les relances workflow ne sont pas dupliquées en
-        message catalogue. <b>Messages</b> = Bienvenu, feedback, etc. uniquement.{' '}
+        🛡 Vue lecture seule · <b>Séquence</b> = relances + assign + rappels staff. Les relances
+        workflow ne sont pas dupliquées en message catalogue. <b>Messages</b> = Bienvenu, feedback,
+        etc.{' '}
         <Link to="/tasks/orchestration-config" style={{ color: 'var(--pd)', fontWeight: 700 }}>
-          workflows tâches
-        </Link>{' '}
-        et{' '}
-        <Link to="/tasks/orchestration-config" style={{ color: 'var(--pd)', fontWeight: 700 }}>
-          messages planifiés
+          Config orchestration
         </Link>
-        . <b style={{ color: 'var(--t2)' }}>Exécuter plan</b> relance le scheduler (test).
+        . <b style={{ color: 'var(--t2)' }}>Exécuter maintenant</b> = tick cron horaire sur cette
+        réservation uniquement (échéances passées, une fois par point).
       </div>
     </div>
   );
@@ -433,6 +464,7 @@ function MessagePlanCard({
 }) {
   const exec = messageExecutionStatus(ev);
   const wasSent = ev.messageSendStatus === 'envoye' || ev.messageSendStatus === 'fait';
+  const [open, setOpen] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [rowLoading, setRowLoading] = useState(false);
   const canManualSend = ev.messageIndex != null && ev.messageCategory === 'simple';
@@ -442,25 +474,69 @@ function MessagePlanCard({
     ? [...(ev.dispatchLog ?? [])].reverse()
     : [];
 
+  const sentSummary = ev.lastDispatch?.ok
+    ? ev.lastDispatch.label
+    : ev.lastDispatchAttempt && !ev.lastDispatch?.ok
+      ? ev.lastDispatchAttempt.label
+      : wasSent
+        ? 'Envoyé'
+        : 'Pas encore envoyé';
+
+  const sentSummaryClass =
+    ev.lastDispatch?.ok || wasSent
+      ? 'ok'
+      : ev.lastDispatchAttempt && !ev.lastDispatch?.ok
+        ? 'fail'
+        : 'pending';
+
   return (
-    <div className={`ev msg-l1 ${ev.status}${histOpen ? ' hist-open' : ''}${rowLoading ? ' msg-l1--dispatching' : ''}`}>
-      <div className="ev-h msg-l1-h">
+    <div
+      className={`ev msg-l1 ${ev.status}${open ? ' open' : ''}${histOpen ? ' hist-open' : ''}${rowLoading ? ' msg-l1--dispatching' : ''}`}
+    >
+      <div
+        className="ev-h msg-l1-h"
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen((o) => !o);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+      >
         <div className="em">{ev.icon}</div>
         <div className="info">
           <div className="top-line">
             {ev.planStep != null && <span className="plan-step-num">#{ev.planStep}</span>}
             <span className="nm">{ev.title}</span>
-            {ev.messageCategory === 'simple' && (
+            {open && ev.messageCategory === 'simple' ? (
               <span className="kind-badge message-simple">Message simple</span>
-            )}
-            {ev.messageCategory === 'relance' && (
+            ) : null}
+            {open && ev.messageCategory === 'relance' ? (
               <span className="kind-badge message-relance">Relance</span>
-            )}
+            ) : null}
             <MessageExecBadge status={exec} />
             {ev.channel && <ChannelChip channel={ev.channel} />}
           </div>
-          <span className="when">Prévu · {ev.atDisplay || '—'}</span>
+          {open ? (
+            <span className="when msg-when-open">Prévu · {ev.atDisplay || '—'}</span>
+          ) : (
+            <div className="msg-summary">
+              <span className="msg-summary-pre">Prévu · {ev.atDisplay || '—'}</span>
+              <span className="msg-summary-sep"> · </span>
+              <span className={`msg-summary-sent ${sentSummaryClass}`}>{sentSummary}</span>
+            </div>
+          )}
+        </div>
+        <span className="arr" aria-hidden>
+          ▶
+        </span>
+      </div>
 
+      {open ? (
+        <div className="ev-body msg-l1-body">
           <div className="msg-last-send-row">
             <div className="msg-last-send-main">
               {ev.lastDispatch || ev.lastDispatchAttempt ? (
@@ -490,49 +566,50 @@ function MessagePlanCard({
             <button
               type="button"
               className="msg-hist-toggle"
-              onClick={() => setHistOpen((o) => !o)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setHistOpen((o) => !o);
+              }}
               aria-expanded={histOpen}
             >
-              <span className="msg-hist-toggle-label">
-                Historique envois ({histCount})
-              </span>
+              <span className="msg-hist-toggle-label">Historique envois ({histCount})</span>
               <span className="msg-hist-toggle-arr" aria-hidden>
                 {histOpen ? '▾' : '▸'}
               </span>
             </button>
           ) : null}
-        </div>
-      </div>
 
-      {histOpen && histCount > 0 ? (
-        <div className="msg-dispatch-history">
-          {histNewestFirst.map((entry, i) => (
-            <div
-              key={`${entry.at}-${i}`}
-              className={`msg-dispatch-hist-row ${entry.ok ? 'ok' : 'fail'}`}
-            >
-              <span>{entry.ok ? '✓' : '✗'}</span>
-              <span>{formatDispatchHistWhen(entry.at)}</span>
-              {entry.channel ? <span>{entry.channel.toUpperCase()}</span> : null}
-              {entry.source ? (
-                <span className="msg-dispatch-hist-src">
-                  {entry.source === 'manual' ? 'Manuel' : 'Auto'}
-                </span>
-              ) : null}
-              {!entry.ok && entry.error ? (
-                <span className="msg-dispatch-hist-err">
-                  {formatDispatchHistoryError(entry.error, wasSent)}
-                </span>
-              ) : null}
+          {histOpen && histCount > 0 ? (
+            <div className="msg-dispatch-history">
+              {histNewestFirst.map((entry, i) => (
+                <div
+                  key={`${entry.at}-${i}`}
+                  className={`msg-dispatch-hist-row ${entry.ok ? 'ok' : 'fail'}`}
+                >
+                  <span>{entry.ok ? '✓' : '✗'}</span>
+                  <span>{formatDispatchHistWhen(entry.at)}</span>
+                  {entry.channel ? <span>{entry.channel.toUpperCase()}</span> : null}
+                  {entry.source ? (
+                    <span className="msg-dispatch-hist-src">
+                      {entry.source === 'manual' ? 'Manuel' : 'Auto'}
+                    </span>
+                  ) : null}
+                  {!entry.ok && entry.error ? (
+                    <span className="msg-dispatch-hist-err">
+                      {formatDispatchHistoryError(entry.error, wasSent)}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ) : null}
+          ) : null}
 
-      {ev.messageCategory === 'simple' && (ev.template || channel) ? (
-        <div className="rel-row-config msg-l1-config">
-          Config · {ev.template || '—'}
-          {channel ? ` · ${channel.toUpperCase()}` : ''}
+          {ev.messageCategory === 'simple' && (ev.template || channel) ? (
+            <div className="rel-row-config msg-l1-config">
+              Config · {ev.template || '—'}
+              {channel ? ` · ${channel.toUpperCase()}` : ''}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

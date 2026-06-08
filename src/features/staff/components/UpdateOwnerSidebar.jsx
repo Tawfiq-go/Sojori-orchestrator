@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-toastify';
 import { updateOwner, updateOwnerWhatsappAiTier, getCities, getCurrencies } from '../services/serverApi.task';
+import { uploadMultipleImagesToAPI } from '../../../redux/slices/UploadSlice';
 import * as fullchatbotApi from '../../../services/fullchatbotApi';
 import { useTranslation } from 'react-i18next';
 import { hasAdminAccess } from '../../../utils/rbac.utils';
@@ -51,10 +53,25 @@ const buildValidationSchema = (t, owner) =>
     elevatedAuthPassword: Yup.string().notRequired(),
   });
 
-const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
+const OWNER_TABS = [
+  { id: 'compte', label: 'Compte' },
+  { id: 'sojori-web', label: 'Sojori Web' },
+  { id: 'config-ia', label: 'Config IA' },
+];
+
+const TabPanel = ({ active, id, children }) =>
+  active === id ? <div className="form-section full owner-tab-panel">{children}</div> : null;
+
+const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = true }) => {
   const { t } = useTranslation('common');
+  const dispatch = useDispatch();
   const authRole = useSelector((state) => state.auth?.user?.role);
   const isPlatformAdmin = hasAdminAccess(authRole);
+  const visibleTabs = isPlatformAdmin
+    ? OWNER_TABS
+    : OWNER_TABS.filter((tab) => tab.id !== 'config-ia');
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [activeTab, setActiveTab] = useState('compte');
   const [cities, setCities] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [currencies, setCurrencies] = useState([]);
@@ -88,6 +105,14 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
   );
 
   useEffect(() => {
+    if (open) setActiveTab('compte');
+  }, [open, owner?._id]  );
+
+  useEffect(() => {
+    if (open) setActiveTab('compte');
+  }, [open, owner?._id]);
+
+  useEffect(() => {
     if (!open) return;
     const load = async () => {
       setLoadingCities(true);
@@ -112,6 +137,40 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
     void load();
   }, [open]);
 
+  const handlePmImageUpload = async (fileList, currentImages, setFieldValue) => {
+    const files = fileList ? Array.from(fileList) : [];
+    if (files.length === 0) return;
+    setUploadingImages(true);
+    try {
+      const result = await dispatch(uploadMultipleImagesToAPI({ files, folder: 'other' })).unwrap();
+      let urls = [];
+      if (Array.isArray(result?.files)) {
+        urls = result.files.map((f) => (typeof f === 'object' ? f.url : f)).filter(Boolean);
+      } else if (Array.isArray(result)) {
+        urls = result.filter(Boolean);
+      } else if (Array.isArray(result?.urls)) {
+        urls = result.urls.filter(Boolean);
+      }
+      if (urls.length === 0) {
+        toast.error('Échec upload (réponse inattendue)');
+        return;
+      }
+      setFieldValue('pmProfile.images', [...(currentImages || []), ...urls]);
+      toast.success(`${urls.length} photo(s) ajoutée(s)`);
+    } catch (err) {
+      toast.error(`Échec upload : ${err?.message || ''}`);
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const normalizePmSlug = (slug) =>
+    (slug || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
   const handleSubmit = async (values, { setSubmitting, setErrors }) => {
     try {
       const selectedCity = cities.find((city) => city._id === values.cityId);
@@ -127,6 +186,10 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
         settings: values.settings,
         banned: values.banned,
         deleted: values.deleted,
+        pmProfile: {
+          ...values.pmProfile,
+          slug: normalizePmSlug(values.pmProfile?.slug),
+        },
         ...(ruPwd.length >= 6 ? { ruExtranetPassword: ruPwd } : {}),
       });
       if (response.data?.account) {
@@ -191,75 +254,102 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
     elevatedAuthEmail: '',
     elevatedAuthPassword: '',
     whatsappConversationalTier: owner.whatsappConversationalTier || 2,
+    pmProfile: {
+      publicName: owner?.pmProfile?.publicName || '',
+      slug: owner?.pmProfile?.slug || '',
+      tagline: owner?.pmProfile?.tagline || '',
+      description: owner?.pmProfile?.description || '',
+      images: Array.isArray(owner?.pmProfile?.images) ? owner.pmProfile.images : [],
+      brandColor: {
+        from: owner?.pmProfile?.brandColor?.from || '',
+        to: owner?.pmProfile?.brandColor?.to || '',
+      },
+      verified: owner?.pmProfile?.verified || false,
+      published: owner?.pmProfile?.published || false,
+      responseTime: owner?.pmProfile?.responseTime || '',
+    },
   };
 
-  return (
+  const drawerPanel = (
     <div
-      className="so-staff-root owner-drawer-host"
-      role="presentation"
-      onClick={onClose}
-      onKeyDown={() => {}}
+      className={`drawer owner-drawer-panel${inline ? ' owner-drawer-inline' : ''}`}
+      role="dialog"
+      onClick={(e) => {
+        if (!inline) e.stopPropagation();
+      }}
     >
-      <div className="drawer owner-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
-        <Formik
-          initialValues={initialValues}
-          validationSchema={validationSchema}
-          onSubmit={handleSubmit}
-          enableReinitialize
-        >
-          {({
-            values,
-            errors,
-            touched,
-            handleChange,
-            handleBlur,
-            isSubmitting,
-            setFieldValue,
-            submitForm,
-          }) => (
-            <>
-              <div className="drawer-h">
-                <div
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 9,
-                    background: 'var(--pt)',
-                    color: 'var(--pd)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 13,
-                    fontWeight: 800,
-                  }}
-                >
-                  {ownerInitials(owner)}
-                </div>
-                <h3>
-                  Modifier · {values.firstName || values.lastName || 'Property manager'}
-                </h3>
-                <button type="button" className="close" onClick={onClose} aria-label="Fermer">
-                  ✕
-                </button>
+      <Formik
+        initialValues={initialValues}
+        validationSchema={validationSchema}
+        onSubmit={handleSubmit}
+        enableReinitialize
+      >
+        {({
+          values,
+          errors,
+          touched,
+          handleChange,
+          handleBlur,
+          isSubmitting,
+          setFieldValue,
+          submitForm,
+        }) => (
+          <>
+            <div className="drawer-h">
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 9,
+                  background: 'var(--pt)',
+                  color: 'var(--pd)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 13,
+                  fontWeight: 800,
+                }}
+              >
+                {ownerInitials(owner)}
               </div>
+              <h3>
+                Modifier · {values.firstName || values.lastName || 'Property manager'}
+              </h3>
+              <button type="button" className="close" onClick={onClose} aria-label="Fermer">
+                ✕
+              </button>
+            </div>
 
-              <div className="form-grid">
-                {errors.submit ? (
-                  <div className="form-section full owner-form-alert">{String(errors.submit)}</div>
-                ) : null}
+            <div className="owner-drawer-tabs">
+              {visibleTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`owner-drawer-tab${activeTab === tab.id ? ' on' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
+            <div className="form-grid">
+              {errors.submit ? (
+                <div className="form-section full owner-form-alert">{String(errors.submit)}</div>
+              ) : null}
+
+              <TabPanel active={activeTab} id="compte">
                 {(refPickersFallback || refPickersError) && (
-                  <div className="form-section full owner-form-hint">
+                  <div className="owner-form-hint" style={{ marginBottom: 12 }}>
                     {refPickersError ? `${refPickersError} — ` : ''}
                     Listes langue/devise réduites. Sync complète via Hub Channels si besoin.
                   </div>
                 )}
-
-                <div className="form-section full owner-form-hint">
+                <div className="owner-form-hint" style={{ marginBottom: 12 }}>
                   Compte <b>Owner</b> (property manager). Prénom, nom et téléphone sont recopiés vers
                   Rental United si channel = RU.
                 </div>
-
+                <div className="owner-tab-grid">
                 <div className="form-section">
                   <div className="form-section-h">Identité</div>
                   <div className="field">
@@ -403,34 +493,6 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
                   </div>
                 ) : null}
 
-                {isPlatformAdmin ? (
-                  <div className="form-section full">
-                    <div className="form-section-h">IA WhatsApp invités</div>
-                    <div className="owner-form-hint" style={{ marginBottom: 10 }}>
-                      Modèle Claude pour les réponses automatiques aux voyageurs (du moins cher au plus
-                      capable). Met à jour tous les séjours whitelist de ce propriétaire (sauf override par
-                      séjour dans Mémoire bot).
-                    </div>
-                    <div className="field">
-                      <div className="field-label">Modèle Claude</div>
-                      <select
-                        className="input"
-                        name="whatsappConversationalTier"
-                        value={Number(values.whatsappConversationalTier) || 2}
-                        onChange={(e) =>
-                          setFieldValue('whatsappConversationalTier', Number(e.target.value))
-                        }
-                      >
-                        {WHATSAPP_AI_TIER_OPTIONS.map((opt) => (
-                          <option key={opt.tier} value={opt.tier}>
-                            {tierOptionDropdownLabel(opt)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                ) : null}
-
                 <div className="form-section">
                   <div className="form-section-h">Préférences dashboard</div>
                   <div className="field">
@@ -498,7 +560,227 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
                     />
                   </div>
                 </div>
-              </div>
+                </div>
+              </TabPanel>
+
+              <TabPanel active={activeTab} id="sojori-web">
+                <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+                  Profil public sur sojori.com (page partenaires, bloc hôte). Activez « Publié » pour
+                  rendre visible sur le site.
+                </div>
+                <div className="admin-row" style={{ marginBottom: 14 }}>
+                  <span style={{ fontSize: 18 }}>🌐</span>
+                  <div style={{ flex: 1 }}>
+                    <div className="nm">Profil publié</div>
+                    <div className="ds">Visible sur sojori.com / marketplace</div>
+                  </div>
+                  <div
+                    className={`toggle${values.pmProfile.published ? ' on' : ''}`}
+                    onClick={() => setFieldValue('pmProfile.published', !values.pmProfile.published)}
+                    onKeyDown={() => {}}
+                    role="switch"
+                    aria-checked={values.pmProfile.published}
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="field">
+                    <div className="field-label">Nom public</div>
+                    <input
+                      className="input"
+                      name="pmProfile.publicName"
+                      value={values.pmProfile.publicName}
+                      onChange={handleChange}
+                      placeholder="Riad Luxe"
+                    />
+                  </div>
+                  <div className="field">
+                    <div className="field-label">Slug (URL)</div>
+                    <input
+                      className="input"
+                      name="pmProfile.slug"
+                      value={values.pmProfile.slug}
+                      onChange={handleChange}
+                      placeholder="riad-luxe"
+                    />
+                  </div>
+                </div>
+                <div className="field" style={{ marginTop: 12 }}>
+                  <div className="field-label">Accroche</div>
+                  <input
+                    className="input"
+                    name="pmProfile.tagline"
+                    value={values.pmProfile.tagline}
+                    onChange={handleChange}
+                    placeholder="Riads authentiques au cœur des médinas"
+                  />
+                </div>
+                <div className="field" style={{ marginTop: 12 }}>
+                  <div className="field-label">Description</div>
+                  <textarea
+                    className="input owner-textarea"
+                    name="pmProfile.description"
+                    value={values.pmProfile.description}
+                    onChange={handleChange}
+                    rows={3}
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr auto', gap: 12, marginTop: 12, alignItems: 'end' }}>
+                  <div>
+                    <div className="field-label">Logo</div>
+                    <div
+                      className="owner-pm-logo"
+                      style={{
+                        background: `linear-gradient(135deg, ${values.pmProfile.brandColor.from || '#e8c87a'}, ${values.pmProfile.brandColor.to || '#c89b3c'})`,
+                      }}
+                    >
+                      {(
+                        (values.pmProfile.publicName || `${values.firstName} ${values.lastName}`)
+                          .trim()
+                          .split(' ')
+                          .filter(Boolean)
+                          .map((w) => w[0])
+                          .join('')
+                          .slice(0, 2)
+                          .toUpperCase() || 'SJ'
+                      )}
+                    </div>
+                  </div>
+                  <div className="field">
+                    <div className="field-label">Couleur début</div>
+                    <input
+                      className="input"
+                      name="pmProfile.brandColor.from"
+                      value={values.pmProfile.brandColor.from}
+                      onChange={handleChange}
+                      placeholder="#e8c87a"
+                    />
+                  </div>
+                  <div className="field">
+                    <div className="field-label">Couleur fin</div>
+                    <input
+                      className="input"
+                      name="pmProfile.brandColor.to"
+                      value={values.pmProfile.brandColor.to}
+                      onChange={handleChange}
+                      placeholder="#c89b3c"
+                    />
+                  </div>
+                  <div className="field">
+                    <div className="field-label">Temps réponse</div>
+                    <input
+                      className="input"
+                      name="pmProfile.responseTime"
+                      value={values.pmProfile.responseTime}
+                      onChange={handleChange}
+                      placeholder="< 1h"
+                    />
+                  </div>
+                </div>
+                <div className="admin-row" style={{ marginTop: 12 }}>
+                  <span style={{ fontSize: 18 }}>✓</span>
+                  <div style={{ flex: 1 }}>
+                    <div className="nm">Partenaire vérifié</div>
+                    <div className="ds">Badge « vérifié » sur le profil public</div>
+                  </div>
+                  <div
+                    className={`toggle${values.pmProfile.verified ? ' on' : ''}`}
+                    onClick={() => setFieldValue('pmProfile.verified', !values.pmProfile.verified)}
+                    onKeyDown={() => {}}
+                    role="switch"
+                    aria-checked={values.pmProfile.verified}
+                  />
+                </div>
+                <div className="field" style={{ marginTop: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div className="field-label" style={{ margin: 0 }}>
+                      Photos du PM
+                    </div>
+                    <label className="btn btn-ghost owner-photo-btn">
+                      {uploadingImages ? 'Envoi…' : '+ Ajouter des photos'}
+                      <input
+                        hidden
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        disabled={uploadingImages}
+                        onChange={(e) => {
+                          handlePmImageUpload(e.target.files, values.pmProfile.images, setFieldValue);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <div className="owner-form-hint" style={{ marginBottom: 8 }}>
+                    La 1re photo est principale. Sans photo, fallback sur un logement du PM.
+                  </div>
+                  <div className="owner-pm-photos">
+                    {(values.pmProfile.images || []).length === 0 ? (
+                      <span className="owner-pm-empty">Aucune photo</span>
+                    ) : (
+                      (values.pmProfile.images || []).map((url, idx) => (
+                        <div key={`${url}-${idx}`} className={`owner-pm-thumb${idx === 0 ? ' main' : ''}`}>
+                          <img src={url} alt="" />
+                          {idx === 0 ? <span className="owner-pm-badge">Principale</span> : null}
+                          <div className="owner-pm-actions">
+                            {idx !== 0 ? (
+                              <button
+                                type="button"
+                                title="Définir principale"
+                                onClick={() => {
+                                  const arr = [...values.pmProfile.images];
+                                  const [m] = arr.splice(idx, 1);
+                                  arr.unshift(m);
+                                  setFieldValue('pmProfile.images', arr);
+                                }}
+                              >
+                                ★
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              title="Supprimer"
+                              onClick={() =>
+                                setFieldValue(
+                                  'pmProfile.images',
+                                  values.pmProfile.images.filter((_, i) => i !== idx),
+                                )
+                              }
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </TabPanel>
+
+              <TabPanel active={activeTab} id="config-ia">
+                <div className="owner-form-hint" style={{ marginBottom: 10 }}>
+                  Modèle Claude pour les réponses automatiques aux voyageurs (du moins cher au plus
+                  capable). Met à jour tous les séjours whitelist de ce propriétaire (sauf override par
+                  séjour dans Mémoire bot).
+                </div>
+                <div className="field">
+                  <div className="field-label">Modèle Claude</div>
+                  <select
+                    className="input"
+                    name="whatsappConversationalTier"
+                    value={Number(values.whatsappConversationalTier) || 2}
+                    onChange={(e) =>
+                      setFieldValue('whatsappConversationalTier', Number(e.target.value))
+                    }
+                  >
+                    {WHATSAPP_AI_TIER_OPTIONS.map((opt) => (
+                      <option key={opt.tier} value={opt.tier}>
+                        {tierOptionDropdownLabel(opt)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </TabPanel>
+            </div>
 
               <div className="drawer-foot">
                 <div className="drawer-foot-start" />
@@ -516,8 +798,20 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated }) => {
               </div>
             </>
           )}
-        </Formik>
-      </div>
+      </Formik>
+    </div>
+  );
+
+  if (inline) return drawerPanel;
+
+  return (
+    <div
+      className="so-staff-root owner-drawer-host"
+      role="presentation"
+      onClick={onClose}
+      onKeyDown={() => {}}
+    >
+      {drawerPanel}
     </div>
   );
 };

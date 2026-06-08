@@ -74,11 +74,15 @@ export default function TasksPlanningPageV2() {
   }, [scope.canAccessAllOwners, scope.ownerId, adminOwnerId]);
 
   const fetchListings = useCallback(async () => {
+    console.log('📋 [TasksPlanningPageV2] fetchListings START - limit=100, compact=true');
+    const startTime = performance.now();
     const listingsResponse = await listingsService.getListings({
       useActiveFilter: true,
       active: true,
-      limit: 1000,
+      limit: 100, // ⚡ Réduit de 1000 → 100 (optimisation performance)
+      compact: true, // ⚡ Mode compact: uniquement {_id, name, city}
     });
+    console.log(`✅ [TasksPlanningPageV2] fetchListings completed in ${(performance.now() - startTime).toFixed(0)}ms - ${listingsResponse.data.items.length} items`);
     setActiveListings(listingsResponse.data.items);
   }, []);
 

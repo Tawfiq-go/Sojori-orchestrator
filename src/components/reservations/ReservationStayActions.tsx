@@ -11,6 +11,9 @@ import {
 } from '@mui/material';
 import { toast } from 'react-toastify';
 import * as fulltaskApi from '../../services/fulltaskApi';
+import { blurActiveElement } from '../../utils/domFocus';
+import { stayPatchFromGuestContext } from '../../utils/guestContextReservationPatch';
+import { guestContextStaySummary, logResaGuest } from '../../utils/resaGuestActionDebug';
 
 const T = {
   success: '#0a8f5e',
@@ -48,6 +51,8 @@ export type StayFieldPatch = {
   actualDepartureTime?: string | null;
 };
 
+export type StayActionMode = 'both' | 'choose' | 'declare';
+
 type Props = {
   reservationId: string;
   kind: 'arrival' | 'departure';
@@ -56,6 +61,10 @@ type Props = {
   chosenConfirmed?: boolean;
   declaredTime?: string | null;
   disabled?: boolean;
+  /** Liste tâches : une action par ligne. Réservations : les deux (défaut). */
+  mode?: StayActionMode;
+  /** Si fourni (liste tâches), force-slot admin sur cette tâche précise. */
+  taskId?: string;
   onStayUpdated?: (patch: StayFieldPatch) => void;
 };
 
@@ -67,6 +76,8 @@ export function ReservationStayActions({
   chosenConfirmed,
   declaredTime,
   disabled,
+  mode = 'both',
+  taskId,
   onStayUpdated,
 }: Props) {
   const isArrival = kind === 'arrival';
@@ -95,21 +106,56 @@ export function ReservationStayActions({
   const xxLabel = useMemo(() => `${chosenHour}h`, [chosenHour]);
   const yyLabel = hasDeclared && declaredHour != null ? `${declaredHour}h` : 'ND';
 
+  const closeChoose = () => {
+    blurActiveElement();
+    setChooseAnchor(null);
+  };
+
+  const closeDeclare = () => {
+    blurActiveElement();
+    setDeclareAnchor(null);
+  };
+
   const runChoose = async () => {
     if (!reservationId) return;
     setBusy('choose');
     try {
-      const fn = isArrival ? fulltaskApi.chooseGuestArrival : fulltaskApi.chooseGuestDeparture;
-      const res = await fn(reservationId, hourToApi(pickChooseHour));
+      const time = hourToApi(pickChooseHour);
+      logResaGuest('ui:choose →', {
+        reservationId,
+        kind,
+        hour: pickChooseHour,
+        time,
+        taskId,
+      });
+      const res = taskId
+        ? await fulltaskApi.forcePlanGuestSlot(reservationId, taskId, time)
+        : await (isArrival
+            ? fulltaskApi.chooseGuestArrival(reservationId, time)
+            : fulltaskApi.chooseGuestDeparture(reservationId, time));
       if (res?.success === false) throw new Error(res?.error || 'Échec');
       toast.success(chooseTitle);
-      setChooseAnchor(null);
-      onStayUpdated?.(
-        isArrival
+      closeChoose();
+      const fromCtx = stayPatchFromGuestContext(res?.data);
+      const patch = {
+        ...(isArrival
           ? { checkInTime: hourToApi(pickChooseHour), confirmedCheckInTime: true }
-          : { checkOutTime: hourToApi(pickChooseHour), confirmedCheckOutTime: true },
-      );
+          : { checkOutTime: hourToApi(pickChooseHour), confirmedCheckOutTime: true }),
+        ...fromCtx,
+      };
+      logResaGuest('ui:choose patch ligne', {
+        reservationId,
+        optimistic: isArrival ? 'checkIn' : 'checkOut',
+        fromCtx,
+        patch,
+        rawGuestContext: guestContextStaySummary(res?.data),
+      });
+      onStayUpdated?.(patch);
     } catch (err) {
+      logResaGuest('ui:choose ERROR', {
+        reservationId,
+        message: err instanceof Error ? err.message : String(err),
+      });
       toast.error(err instanceof Error ? err.message : 'Erreur');
     } finally {
       setBusy(null);
@@ -120,17 +166,41 @@ export function ReservationStayActions({
     if (!reservationId) return;
     setBusy('declare');
     try {
-      const fn = isArrival ? fulltaskApi.declareGuestArrival : fulltaskApi.declareGuestDeparture;
-      const res = await fn(reservationId, pickDeclareHour);
+      const time = hourToApi(pickDeclareHour);
+      logResaGuest('ui:declare →', {
+        reservationId,
+        kind,
+        hour: pickDeclareHour,
+        time,
+        taskId,
+      });
+      const res = taskId
+        ? await fulltaskApi.forcePlanGuestSlot(reservationId, taskId, time)
+        : await (isArrival
+            ? fulltaskApi.declareGuestArrival(reservationId, pickDeclareHour)
+            : fulltaskApi.declareGuestDeparture(reservationId, pickDeclareHour));
       if (res?.success === false) throw new Error(res?.error || 'Échec');
       toast.success(declareTitle);
-      setDeclareAnchor(null);
-      onStayUpdated?.(
-        isArrival
+      closeDeclare();
+      const fromCtx = stayPatchFromGuestContext(res?.data);
+      const patch = {
+        ...(isArrival
           ? { actualArrivalTime: hourToApi(pickDeclareHour) }
-          : { actualDepartureTime: hourToApi(pickDeclareHour) },
-      );
+          : { actualDepartureTime: hourToApi(pickDeclareHour) }),
+        ...fromCtx,
+      };
+      logResaGuest('ui:declare patch ligne', {
+        reservationId,
+        fromCtx,
+        patch,
+        rawGuestContext: guestContextStaySummary(res?.data),
+      });
+      onStayUpdated?.(patch);
     } catch (err) {
+      logResaGuest('ui:declare ERROR', {
+        reservationId,
+        message: err instanceof Error ? err.message : String(err),
+      });
       toast.error(err instanceof Error ? err.message : 'Erreur');
     } finally {
       setBusy(null);
@@ -148,10 +218,13 @@ export function ReservationStayActions({
     '&:hover': disabled ? {} : { bgcolor: 'rgba(184,133,26,0.08)' },
   };
 
+  const showChoose = mode === 'both' || mode === 'choose';
+  const showDeclare = mode === 'both' || mode === 'declare';
+
   return (
     <Box onClick={(e) => e.stopPropagation()} sx={{ minWidth: 72 }}>
       <Typography sx={{ fontSize: 11.5, color: 'inherit', mb: 0.25 }}>{dateLabel}</Typography>
-      <Stack direction="row" spacing={0.25} sx={{ alignItems: 'baseline' }}>
+      {mode === 'choose' ? (
         <Box
           component="span"
           title={chooseTitle}
@@ -161,6 +234,7 @@ export function ReservationStayActions({
           }}
           sx={{
             ...linkSx,
+            display: 'inline-block',
             color: chosenConfirmed ? T.success : T.primaryDeep,
             textDecoration: chosenConfirmed ? 'none' : 'underline',
             textDecorationStyle: 'dotted',
@@ -168,9 +242,8 @@ export function ReservationStayActions({
         >
           {xxLabel}
         </Box>
-        <Typography component="span" sx={{ fontSize: 10, color: T.text4, userSelect: 'none' }}>
-          -
-        </Typography>
+      ) : null}
+      {mode === 'declare' ? (
         <Box
           component="span"
           title={declareTitle}
@@ -180,18 +253,60 @@ export function ReservationStayActions({
           }}
           sx={{
             ...linkSx,
+            display: 'inline-block',
             color: hasDeclared ? T.success : T.text4,
             fontStyle: hasDeclared ? 'normal' : 'italic',
+            textDecoration: hasDeclared ? 'none' : 'underline',
+            textDecorationStyle: 'dotted',
           }}
         >
           {yyLabel}
         </Box>
-      </Stack>
+      ) : null}
+      {mode === 'both' ? (
+        <Stack direction="row" spacing={0.25} sx={{ alignItems: 'baseline' }}>
+          <Box
+            component="span"
+            title={chooseTitle}
+            onClick={(e) => {
+              if (disabled) return;
+              setChooseAnchor(e.currentTarget);
+            }}
+            sx={{
+              ...linkSx,
+              color: chosenConfirmed ? T.success : T.primaryDeep,
+              textDecoration: chosenConfirmed ? 'none' : 'underline',
+              textDecorationStyle: 'dotted',
+            }}
+          >
+            {xxLabel}
+          </Box>
+          <Typography component="span" sx={{ fontSize: 10, color: T.text4, userSelect: 'none' }}>
+            -
+          </Typography>
+          <Box
+            component="span"
+            title={declareTitle}
+            onClick={(e) => {
+              if (disabled) return;
+              setDeclareAnchor(e.currentTarget);
+            }}
+            sx={{
+              ...linkSx,
+              color: hasDeclared ? T.success : T.text4,
+              fontStyle: hasDeclared ? 'normal' : 'italic',
+            }}
+          >
+            {yyLabel}
+          </Box>
+        </Stack>
+      ) : null}
 
       <Popover
-        open={Boolean(chooseAnchor)}
+        open={showChoose && Boolean(chooseAnchor)}
         anchorEl={chooseAnchor}
-        onClose={() => setChooseAnchor(null)}
+        onClose={closeChoose}
+        disableRestoreFocus
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         slotProps={{ paper: { sx: { p: 1.25, minWidth: 140, border: `1px solid ${T.border}` } } }}
@@ -224,9 +339,10 @@ export function ReservationStayActions({
       </Popover>
 
       <Popover
-        open={Boolean(declareAnchor)}
+        open={showDeclare && Boolean(declareAnchor)}
         anchorEl={declareAnchor}
-        onClose={() => setDeclareAnchor(null)}
+        onClose={closeDeclare}
+        disableRestoreFocus
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         slotProps={{ paper: { sx: { p: 1.25, minWidth: 140, border: `1px solid ${T.border}` } } }}

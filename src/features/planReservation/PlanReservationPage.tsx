@@ -17,7 +17,6 @@ interface Props {
   /** Met à jour le plan affiché sans recharger la liste (réponse POST envoi manuel). */
   onPlanUpdated?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
   onPlanRefetch?: () => void;
-  onPlanArchived?: (reservationId: string) => void;
   listTitle?: string;
 }
 
@@ -31,7 +30,6 @@ export default function PlanReservationPage({
   resolveOwnerDisplayName,
   onPlanUpdated,
   onPlanRefetch,
-  onPlanArchived,
   listTitle,
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(initialId ?? null);
@@ -70,7 +68,6 @@ export default function PlanReservationPage({
             }
             onPlanUpdated={onPlanUpdated}
             onPlanRefetch={onPlanRefetch}
-            onPlanArchived={onPlanArchived}
           />
         ) : (
           <div

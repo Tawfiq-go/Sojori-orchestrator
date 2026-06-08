@@ -1362,6 +1362,7 @@ export const listingsService = {
     active?: boolean;
     name?: string;
     forListingsOverview?: boolean;
+    compact?: boolean; // ⚡ Mode compact pour filtres/dropdowns
   }): Promise<ServiceResult<{ items: ListingSummary[]; total: number }>> {
     const page = options?.page ?? 0;
     const limit = options?.limit ?? 20;
@@ -1380,9 +1381,17 @@ export const listingsService = {
     if (options?.name?.trim()) {
       query.set('name', options.name.trim());
     }
+    if (options?.compact) {
+      query.set('compact', 'true'); // ⚡ Mode compact: uniquement {_id, name, city}
+    }
+
+    const url = `${LISTING_API_BASE_URL}/listings/?${query.toString()}`;
+    console.log(`🌐 [listingsService] GET ${url}`);
+    const httpStartTime = performance.now();
 
     try {
-      const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/?${query.toString()}`);
+      const response = await apiClient.get(url);
+      console.log(`🌐 [listingsService] HTTP response received in ${(performance.now() - httpStartTime).toFixed(0)}ms`);
       const payload = asRecord(response.data);
       if (payload.success === false) {
         throw new Error(pickFirstString(payload, ['message', 'error']) || 'Échec chargement listings');

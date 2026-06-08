@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/backendServer.config';
 import { getToken } from '../utils/authUtils';
+import { guestContextStaySummary, logResaGuest } from '../utils/resaGuestActionDebug';
 
 /** En dev : proxy Vite relatif (évite CORS). Avec VITE_API_URL → API distante via srv-admin. */
 function resolveFulltaskBase(): string {
@@ -366,10 +367,11 @@ export async function forcePlanGuestSlot(
   reservationId: string,
   taskId: string,
   time: string,
+  opts?: { date?: string },
 ) {
   return postPlanDispatch(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/escalade/force-slot`,
-    { time },
+    { time, ...(opts?.date ? { date: opts.date } : {}) },
   );
 }
 
@@ -445,42 +447,129 @@ export async function getOpsFeed(days = 2): Promise<OpsFeedResponse> {
 }
 
 export async function chooseGuestArrival(reservationId: string, time: string) {
+  logResaGuest('api:choose-arrival →', { reservationId, time });
   const { data } = await axios.patch(
     `${BASE}/guest-actions/choose-arrival`,
     { reservationId, time },
     authHeaders(),
   );
+  logResaGuest('api:choose-arrival ←', {
+    reservationId,
+    success: data?.success,
+    error: data?.error,
+    guestContext: guestContextStaySummary(data?.data),
+  });
   return data as { success?: boolean; error?: string; data?: unknown };
 }
 
 export async function chooseGuestDeparture(reservationId: string, time: string) {
+  logResaGuest('api:choose-departure →', { reservationId, time });
   const { data } = await axios.patch(
     `${BASE}/guest-actions/choose-departure`,
     { reservationId, time },
     authHeaders(),
   );
+  logResaGuest('api:choose-departure ←', {
+    reservationId,
+    success: data?.success,
+    error: data?.error,
+    guestContext: guestContextStaySummary(data?.data),
+  });
   return data as { success?: boolean; error?: string; data?: unknown };
 }
 
 /** Déclaration — heure entière (HH:00) ou null si non précisée. */
 export async function declareGuestArrival(reservationId: string, hour?: number) {
   const time = hour != null ? `${String(hour).padStart(2, '0')}:00` : null;
+  logResaGuest('api:declare-arrival →', { reservationId, hour, time });
   const { data } = await axios.patch(
     `${BASE}/guest-actions/declare-arrival`,
     { reservationId, declared: true, time },
     authHeaders(),
   );
+  logResaGuest('api:declare-arrival ←', {
+    reservationId,
+    success: data?.success,
+    error: data?.error,
+    guestContext: guestContextStaySummary(data?.data),
+  });
   return data as { success?: boolean; error?: string; data?: unknown };
 }
 
 export async function declareGuestDeparture(reservationId: string, hour?: number) {
   const time = hour != null ? `${String(hour).padStart(2, '0')}:00` : null;
+  logResaGuest('api:declare-departure →', { reservationId, hour, time });
   const { data } = await axios.patch(
     `${BASE}/guest-actions/declare-departure`,
     { reservationId, declared: true, time },
     authHeaders(),
   );
+  logResaGuest('api:declare-departure ←', {
+    reservationId,
+    success: data?.success,
+    error: data?.error,
+    guestContext: guestContextStaySummary(data?.data),
+  });
   return data as { success?: boolean; error?: string; data?: unknown };
+}
+
+export type RegistrationFlowState = {
+  travelersList: Array<{ id: string; title: string; description: string }>;
+  summary: string;
+  total: number;
+  registered: number;
+  complete: boolean;
+};
+
+export type GuestMemberInput = {
+  first_name?: string;
+  last_name?: string;
+  nationality?: string;
+  document_number?: string;
+  gender?: string;
+  date_of_birth?: string;
+  document_type?: string;
+};
+
+export async function getRegistrationFlowState(reservationId: string) {
+  logResaGuest('api:registration-state →', { reservationId });
+  const { data } = await axios.get(
+    `${BASE}/guest-actions/registration/${encodeURIComponent(reservationId)}`,
+    authHeaders(),
+  );
+  logResaGuest('api:registration-state ←', {
+    reservationId,
+    success: data?.success,
+    error: data?.error,
+    state: data?.data,
+  });
+  return data as { success?: boolean; error?: string; data?: RegistrationFlowState };
+}
+
+export async function registerGuestMember(
+  reservationId: string,
+  index: number,
+  member: GuestMemberInput,
+) {
+  logResaGuest('api:register-guest →', { reservationId, index, member });
+  const { data } = await axios.patch(
+    `${BASE}/guest-actions/register-guest`,
+    { reservationId, index, member },
+    authHeaders(),
+  );
+  logResaGuest('api:register-guest ←', {
+    reservationId,
+    index,
+    success: data?.success,
+    error: data?.error,
+    state: data?.data?.state,
+    guestContext: guestContextStaySummary(data?.data?.guestContext),
+  });
+  return data as {
+    success?: boolean;
+    error?: string;
+    data?: { state?: RegistrationFlowState; guestContext?: unknown };
+  };
 }
 
 // ========================================
