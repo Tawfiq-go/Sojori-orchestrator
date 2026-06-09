@@ -68,6 +68,8 @@ export interface TaskListItem {
   /** Fenêtre d’exécution (API récente). */
   execution_hours?: { start: number; end: number } | null;
   hourSource?: 'default' | 'client' | 'admin' | string;
+  /** Choix client enregistré (payload.selectedByGuest / source guest). */
+  guestHourChosen?: boolean;
   /** Heure arrivée/départ (payload) pour colonne Prévu */
   plannedTime?: string | null;
   /** Demande client (WhatsApp) — champ srv-fulltask `requestedAt` */

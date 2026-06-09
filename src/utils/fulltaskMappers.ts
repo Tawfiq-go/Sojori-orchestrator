@@ -200,14 +200,25 @@ export function fullTaskToListItem(
         ) ?? slotIdToTimeLabel(payload.slotId)
       : undefined;
   const hourSource = showsGuestHour ? mapPayloadHourSource(payload) : undefined;
+  const guestHourChosen =
+    showsGuestHour &&
+    (payload.selectedByGuest === true ||
+      String(payload.source || '').toLowerCase() === 'guest');
   const requestedAtRaw = task.requestedAt
     ? String(task.requestedAt)
     : hourSource === 'client'
       ? formatPayloadTime(payload.time ?? payload.requestedTime)
       : formatPayloadTime(payload.requestedTime);
+  const reservationDefaultTime =
+    taskType === 'arrival_choose' || taskType === 'arrival_declare'
+      ? formatPayloadTime(reservationMeta?.checkInTime)
+      : taskType === 'departure_choose' || taskType === 'departure_declare'
+        ? formatPayloadTime(reservationMeta?.checkOutTime)
+        : undefined;
   const scheduledAtRaw = task.scheduledAt
     ? String(task.scheduledAt)
-    : formatPayloadTime(payload.scheduledTime ?? payload.defaultTime);
+    : formatPayloadTime(payload.scheduledTime ?? payload.defaultTime) ??
+      reservationDefaultTime;
   const reservationId = task.reservationId ? String(task.reservationId) : '';
   const reservationNumber =
     reservationMeta?.reservationNumber ||
@@ -270,6 +281,7 @@ export function fullTaskToListItem(
     guestRegistration: reservationMeta?.guestRegistration,
     plannedTime,
     hourSource,
+    guestHourChosen,
     requestedAt: requestedAtRaw || null,
     scheduledAt: scheduledAtRaw || null,
     adults: regCounts?.adults,

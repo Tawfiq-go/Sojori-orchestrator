@@ -270,7 +270,9 @@ export default function TaskDetailDrawer({
       return;
     }
     const clientTime =
-      task.requestedAt || (task.hourSource === 'client' ? task.plannedTime : null);
+      task.requestedAt ||
+      (task.hourSource === 'client' ? task.plannedTime : null) ||
+      (task.guestHourChosen ? task.plannedTime : null);
     const planTime = task.scheduledAt || task.plannedTime;
     setForm({
       scheduledDate: toDateInput(task.startDate),
@@ -331,7 +333,9 @@ export default function TaskDetailDrawer({
   if (!task) return null;
 
   const clientDisplayTime =
-    task.requestedAt || (task.hourSource === 'client' ? task.plannedTime : null);
+    task.requestedAt ||
+    (task.hourSource === 'client' ? task.plannedTime : null) ||
+    (task.guestHourChosen ? task.plannedTime : null);
   const sojoriTime =
     task.scheduledAt || (task.hourSource !== 'client' ? task.plannedTime : null);
   const clientTimeStr = clientDisplayTime ? toTimeInput(clientDisplayTime) : '';
