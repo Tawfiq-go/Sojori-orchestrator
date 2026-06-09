@@ -11,112 +11,130 @@ import {
   type WhatsappAdminDesign,
 } from '../features/taskHub/staff-design/whatsappAdminTypes';
 import * as fulltaskApi from '../services/fulltaskApi';
-import { getListingsTa } from '../features/tasks/services/serverApi.task';
-import fulltaskTasksService from '../services/fulltaskTasksService';
-import { apiStaffToDesign, designStaffToApi } from '../utils/fulltaskMappers';
+import listingsService from '../services/listingsService';
+import { apiStaffToDesign, designStaffToApi, normalizeOwnerId } from '../utils/fulltaskMappers';
 import { useAuth } from '../hooks/useAuth';
 import { resolveTasksUserScope } from '../services/fulltaskTasksService';
+import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import TeamOwnerScopeBar from '../features/taskHub/staff-design/TeamOwnerScopeBar';
+import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
+import { ownerDisplayNameFromId } from '../utils/ownerDisplay.utils';
 import './tasksTeamPage.css';
 
 type HubTab = 'equipe' | 'admin';
 
+type ListingWithOwner = { id: string; name: string; ownerId?: string; ownerName?: string };
+
 function resolveStaffOwnerIdForSave(
   sessionOwnerId: string | undefined,
+  adminFilterOwnerId: string | null | undefined,
   form: Staff,
-  listings: { id: string; name: string; ownerId?: string }[],
+  listings: ListingWithOwner[],
 ): string | undefined {
-  if (sessionOwnerId) return sessionOwnerId;
-  if (form.ownerId) return form.ownerId;
-  const allowed = form.allowedListingIds || [];
-  for (const lid of allowed) {
-    const listing = listings.find((l) => l.id === lid);
-    if (listing?.ownerId) return listing.ownerId;
+  const session = normalizeOwnerId(sessionOwnerId);
+  if (session) return session;
+
+  const fromForm = normalizeOwnerId(form.ownerId);
+  if (fromForm) return fromForm;
+
+  const fromFilter = normalizeOwnerId(adminFilterOwnerId);
+  if (fromFilter) return fromFilter;
+
+  const ownerIds = new Set<string>();
+  for (const lid of form.allowedListingIds || []) {
+    const listing = listings.find((l) => String(l.id) === String(lid));
+    const oid = normalizeOwnerId(listing?.ownerId);
+    if (oid) ownerIds.add(oid);
   }
-  const owners = [
-    ...new Set(listings.map((l) => l.ownerId).filter(Boolean) as string[]),
-  ];
-  if (owners.length === 1) return owners[0];
+  if (ownerIds.size === 1) return [...ownerIds][0];
+
+  const allOwners = new Set(
+    listings.map((l) => normalizeOwnerId(l.ownerId)).filter(Boolean) as string[],
+  );
+  if (allOwners.size === 1) return [...allOwners][0];
+
   return undefined;
 }
 
-export default function TasksStaffFulltaskPage() {
+function TasksStaffFulltaskPageInner() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { requestOwnerId, owners, showOwnerFilter } = useAdminOwnerFilter();
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
-  const ownerId = scope.canAccessAllOwners ? undefined : scope.ownerId;
+  const filterOwnerId = useMemo(
+    () =>
+      scope.canAccessAllOwners
+        ? normalizeOwnerId(requestOwnerId) || undefined
+        : normalizeOwnerId(scope.ownerId),
+    [scope.canAccessAllOwners, scope.ownerId, requestOwnerId],
+  );
 
   const [hubTab, setHubTab] = useState<HubTab>(
     searchParams.get('tab') === 'admin' ? 'admin' : 'equipe',
   );
   const [staff, setStaff] = useState<Staff[]>([]);
   const [admins, setAdmins] = useState<WhatsappAdminDesign[]>([]);
-  const [listings, setListings] = useState<{ id: string; name: string }[]>([]);
+  const [listings, setListings] = useState<ListingWithOwner[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(true);
   const [loadingAdmins, setLoadingAdmins] = useState(false);
 
   const loadListings = useCallback(async () => {
     try {
-      const rows = (await getListingsTa(false)) as Array<{
-        id?: string;
-        _id?: string;
-        name?: string;
-        ownerId?: string;
-      }>;
-      let mapped = (rows || [])
+      const response = await listingsService.getListings({
+        useActiveFilter: true,
+        active: true,
+        limit: 200,
+        page: 0,
+        forListingsOverview: true,
+        compact: false,
+      });
+      let mapped = (response.data?.items || [])
         .map((l) => ({
-          id: String(l.id ?? l._id ?? ''),
+          id: String(l.id),
           name: String(l.name || 'Sans nom'),
-          ownerId: l.ownerId ? String(l.ownerId) : undefined,
+          ownerId: normalizeOwnerId(l.ownerId),
+          ownerName: l.ownerName,
         }))
         .filter((l) => l.id && l.id !== 'undefined');
-      if (ownerId) {
-        mapped = mapped.filter((l) => !l.ownerId || l.ownerId === String(ownerId));
-      }
       setListings(mapped);
-    } catch {
-      try {
-        const listingRows = await fulltaskTasksService.getListings();
-        let mapped = listingRows
-          .map((l) => ({
-            id: String(l.id ?? l._id ?? ''),
-            name: String(l.name || 'Sans nom'),
-            ownerId: (l as { ownerId?: string }).ownerId,
-          }))
-          .filter((l) => l.id && l.id !== 'undefined');
-        if (ownerId) {
-          mapped = mapped.filter((l) => !l.ownerId || l.ownerId === String(ownerId));
-        }
-        setListings(mapped);
-      } catch (e: unknown) {
-        const err = e as { message?: string };
-        toast.error(err.message || 'Erreur chargement annonces');
-        setListings([]);
-      }
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      toast.error(err.message || 'Erreur chargement annonces');
+      setListings([]);
     }
-  }, [ownerId]);
+  }, []);
 
   const loadStaff = useCallback(async () => {
     setLoadingStaff(true);
     try {
       const params: Record<string, unknown> = {};
-      if (ownerId) params.owner_id = ownerId;
+      if (filterOwnerId) {
+        params.owner_id = filterOwnerId;
+        params.ownerId = filterOwnerId;
+      }
       const staffRes = await fulltaskApi.listStaff(params);
-      const rows = staffRes?.data || [];
-      setStaff(rows.map((r: Record<string, unknown>) => apiStaffToDesign(r) as Staff));
+      let rows = (staffRes?.data || []) as Record<string, unknown>[];
+      if (filterOwnerId) {
+        rows = rows.filter((r) => {
+          const oid = normalizeOwnerId(r.ownerId);
+          return !oid || oid === filterOwnerId;
+        });
+      }
+      setStaff(rows.map((r) => apiStaffToDesign(r) as Staff));
     } catch (e: unknown) {
       const err = e as { message?: string };
       toast.error(err.message || 'Erreur chargement équipe');
     } finally {
       setLoadingStaff(false);
     }
-  }, [ownerId]);
+  }, [filterOwnerId]);
 
   const loadAdmins = useCallback(async () => {
     setLoadingAdmins(true);
     try {
       const params: Record<string, unknown> = { paged: false };
-      if (ownerId) params.owner_id = ownerId;
+      if (filterOwnerId) params.owner_id = filterOwnerId;
       const res = await fulltaskApi.listWhatsappAdmins(params);
       const rows = (res?.data || []) as Record<string, unknown>[];
       setAdmins(rows.map(apiWhatsappAdminToDesign));
@@ -127,16 +145,42 @@ export default function TasksStaffFulltaskPage() {
     } finally {
       setLoadingAdmins(false);
     }
-  }, [ownerId]);
+  }, [filterOwnerId]);
 
   useEffect(() => {
     void loadListings();
+  }, [loadListings]);
+
+  useEffect(() => {
     void loadStaff();
-  }, [loadListings, loadStaff]);
+  }, [loadStaff]);
 
   useEffect(() => {
     if (hubTab === 'admin') void loadAdmins();
   }, [hubTab, loadAdmins]);
+
+  const ownerOptions = useMemo(
+    () =>
+      (owners || [])
+        .map((o) => ({
+          id: String(o._id ?? o.id ?? ''),
+          label: ownerDisplayNameFromId(String(o._id ?? o.id ?? ''), owners || []),
+        }))
+        .filter((o) => o.id && o.id !== 'undefined'),
+    [owners],
+  );
+
+  const scopedOwnerLabel = useMemo(() => {
+    if (filterOwnerId) {
+      return ownerDisplayNameFromId(filterOwnerId, owners || []);
+    }
+    if (showOwnerFilter) return '';
+    const legacyName =
+      user?.firstName && user?.lastName
+        ? `${user.firstName} ${user.lastName}`.trim()
+        : user?.email || '';
+    return legacyName;
+  }, [filterOwnerId, owners, showOwnerFilter, user]);
 
   const selectTab = (tab: HubTab) => {
     setHubTab(tab);
@@ -150,6 +194,7 @@ export default function TasksStaffFulltaskPage() {
   return (
     <DashboardWrapper breadcrumb={['taskNew', 'Équipe & Admin WA']}>
       <div className="tasks-team-hub">
+        <TeamOwnerScopeBar />
         <div className="tasks-team-tabs">
           <button
             type="button"
@@ -173,9 +218,35 @@ export default function TasksStaffFulltaskPage() {
             listings={listings}
             loading={loadingStaff}
             useMockFallback={false}
+            showOwnerPicker={showOwnerFilter}
+            ownerOptions={ownerOptions}
+            sessionOwnerId={scope.canAccessAllOwners ? undefined : scope.ownerId}
+            filterOwnerId={filterOwnerId}
+            scopedOwnerLabel={scopedOwnerLabel}
             onSave={async (form, editingId) => {
               try {
-                const resolvedOwnerId = resolveStaffOwnerIdForSave(ownerId, form, listings);
+                const resolvedOwnerId = resolveStaffOwnerIdForSave(
+                  scope.canAccessAllOwners ? undefined : scope.ownerId,
+                  requestOwnerId,
+                  form,
+                  listings,
+                );
+                if (!resolvedOwnerId && !editingId && scope.canAccessAllOwners) {
+                  const selectedOwners = new Set(
+                    (form.allowedListingIds || [])
+                      .map((lid) => {
+                        const listing = listings.find((l) => String(l.id) === String(lid));
+                        return normalizeOwnerId(listing?.ownerId);
+                      })
+                      .filter(Boolean) as string[],
+                  );
+                  const msg =
+                    selectedOwners.size > 1
+                      ? 'Les annonces sélectionnées appartiennent à plusieurs propriétaires. Choisissez un seul PM.'
+                      : 'Choisissez le propriétaire (PM) dans le formulaire avant d\'enregistrer.';
+                  toast.error(msg);
+                  throw new Error(msg);
+                }
                 const body = designStaffToApi(form as Record<string, unknown>, {
                   isCreate: !editingId,
                   ownerId: resolvedOwnerId,
@@ -208,7 +279,19 @@ export default function TasksStaffFulltaskPage() {
             loading={loadingAdmins}
             onSave={async (form, editingId) => {
               try {
-                const body = designWhatsappAdminToApi(form, ownerId);
+                const adminOwnerId = resolveStaffOwnerIdForSave(
+                  scope.canAccessAllOwners ? undefined : scope.ownerId,
+                  requestOwnerId,
+                  { allowedListingIds: form.listingIds, ownerId: form.ownerId } as Staff,
+                  listings,
+                );
+                if (!adminOwnerId && !editingId && scope.canAccessAllOwners) {
+                  const msg =
+                    "Sélectionnez un propriétaire (filtre en tête de page) ou rattachez l'admin à une annonce.";
+                  toast.error(msg);
+                  throw new Error(msg);
+                }
+                const body = designWhatsappAdminToApi(form, adminOwnerId);
                 if (editingId) await fulltaskApi.updateWhatsappAdmin(editingId, body);
                 else await fulltaskApi.createWhatsappAdmin(body);
                 toast.success('Admin enregistré');
@@ -233,5 +316,14 @@ export default function TasksStaffFulltaskPage() {
         )}
       </div>
     </DashboardWrapper>
+  );
+}
+
+/** Provider requis pour le filtre propriétaire (admins cross-tenant). */
+export default function TasksStaffFulltaskPage() {
+  return (
+    <AdminOwnerScopeLayout showTopBar={false}>
+      <TasksStaffFulltaskPageInner />
+    </AdminOwnerScopeLayout>
   );
 }

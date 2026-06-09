@@ -3,6 +3,7 @@ import {
   FULLTASK_TASK_TYPE_EMOJI,
   labelForTaskTypeId,
 } from './fulltaskTaskTypes';
+import { normalizeOwnerId } from '../../../utils/fulltaskMappers';
 
 export type WhatsappAdminPermission = {
   type: string;
@@ -260,13 +261,12 @@ export function designWhatsappAdminToApi(
     notifications[key] = form.notifications[key] !== false;
   }
 
-  return {
+  const body: Record<string, unknown> = {
     username: form.username.trim(),
     whatsappPhone: form.whatsappPhone.trim(),
     language: form.language,
     listingIds: normalizeListingIds(form.listingIds),
     banned: form.banned,
-    ownerId: ownerId || form.ownerId || null,
     permissions: form.permissions.map((p) => ({
       type: p.type,
       access: p.access,
@@ -275,6 +275,9 @@ export function designWhatsappAdminToApi(
     })),
     notifications,
   };
+  const resolvedOwnerId = normalizeOwnerId(ownerId ?? form.ownerId);
+  if (resolvedOwnerId) body.ownerId = resolvedOwnerId;
+  return body;
 }
 
 export function cyclePermissionAccess(current: 'read' | 'write' | 'none'): 'read' | 'write' | 'none' {

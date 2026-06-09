@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-toastify';
 import './staffDesign.css';
 import type { Staff, ContractType } from './types';
 import {
@@ -12,7 +13,8 @@ import {
 import { MOCK_STAFF_DESIGN, MOCK_LISTINGS_DESIGN } from './mockStaffDesign';
 
 type FilterKey = 'all' | 'active' | 'admin' | 'freelance';
-type ListingOpt = { id: string; name: string };
+type ListingOpt = { id: string; name: string; ownerId?: string };
+type OwnerOption = { id: string; label: string };
 
 function emptyStaff(): Staff {
   return {
@@ -60,6 +62,14 @@ interface Props {
   onSave: (form: Staff, editingId: string | null) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   useMockFallback?: boolean;
+  /** Propriétaire actif (filtre ou session). */
+  scopedOwnerLabel?: string;
+  /** Admin : choix du PM dans le formulaire. */
+  showOwnerPicker?: boolean;
+  ownerOptions?: OwnerOption[];
+  sessionOwnerId?: string;
+  /** Propriétaire sélectionné dans le filtre en haut de page. */
+  filterOwnerId?: string;
 }
 
 export default function StaffPageView({
@@ -69,6 +79,11 @@ export default function StaffPageView({
   onSave,
   onDelete,
   useMockFallback = true,
+  scopedOwnerLabel = '',
+  showOwnerPicker = false,
+  ownerOptions = [],
+  sessionOwnerId,
+  filterOwnerId,
 }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -88,6 +103,12 @@ export default function StaffPageView({
     if (listingsProp.length > 0) return listingsProp;
     return MOCK_LISTINGS_DESIGN;
   }, [listingsProp]);
+
+  const formListings = useMemo(() => {
+    const formOwnerId = form.ownerId?.trim();
+    if (!showOwnerPicker || !formOwnerId) return listings;
+    return listings.filter((l) => !l.ownerId || String(l.ownerId) === formOwnerId);
+  }, [listings, form.ownerId, showOwnerPicker]);
 
   const filtered = useMemo(() => {
     return staff.filter((s) => {
@@ -110,9 +131,23 @@ export default function StaffPageView({
 
   const openCreate = () => {
     setEditingId(null);
-    setForm(emptyStaff());
+    setForm({
+      ...emptyStaff(),
+      ownerId: showOwnerPicker ? filterOwnerId || '' : sessionOwnerId || '',
+    });
     setDrawerOpen(true);
     setSelectedId(null);
+  };
+
+  const setFormOwnerId = (ownerId: string) => {
+    setForm((f) => ({
+      ...f,
+      ownerId,
+      allowedListingIds: f.allowedListingIds.filter((lid) => {
+        const listing = listings.find((l) => String(l.id) === String(lid));
+        return !listing?.ownerId || String(listing.ownerId) === ownerId;
+      }),
+    }));
   };
 
   const openEdit = (s: Staff) => {
@@ -146,6 +181,10 @@ export default function StaffPageView({
   };
 
   const handleSave = async () => {
+    if (showOwnerPicker && !editingId && !form.ownerId?.trim()) {
+      toast.error('Choisissez le propriétaire (PM) avant d\'enregistrer.');
+      return;
+    }
     setSaving(true);
     try {
       await onSave(form, editingId);
@@ -345,6 +384,36 @@ export default function StaffPageView({
           </div>
 
           <div className="form-grid">
+            <div className="form-section full">
+              <div className="form-section-h">Propriétaire (PM)</div>
+              {showOwnerPicker ? (
+                <div className="field">
+                  <div className="field-label">
+                    Rattaché au propriétaire<span className="req">*</span>
+                    <span className="hint">Obligatoire pour les comptes admin</span>
+                  </div>
+                  <select
+                    className={`input${!form.ownerId ? ' input--warn' : ''}`}
+                    value={form.ownerId || ''}
+                    onChange={(e) => setFormOwnerId(e.target.value)}
+                  >
+                    <option value="">— Choisir un propriétaire —</option>
+                    {ownerOptions.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="drawer-owner-scope">
+                  <strong>Propriétaire :</strong>{' '}
+                  {scopedOwnerLabel || 'Votre compte'} — détecté automatiquement depuis votre
+                  session.
+                </div>
+              )}
+            </div>
+
             <div className="form-section">
               <div className="form-section-h">Identité</div>
               <div className="field">
@@ -492,8 +561,13 @@ export default function StaffPageView({
 
             <div className="form-section full">
               <div className="form-section-h">Listings rattachés · multi-sélection</div>
+              {showOwnerPicker && !form.ownerId ? (
+                <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--pd)' }}>
+                  Choisissez d&apos;abord un propriétaire pour afficher ses annonces.
+                </p>
+              ) : null}
               <div className="pill-group">
-                {listings.map((l, idx) => (
+                {formListings.map((l, idx) => (
                   <button
                     key={l.id || `listing-${idx}`}
                     type="button"

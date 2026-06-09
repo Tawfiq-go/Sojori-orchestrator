@@ -464,6 +464,14 @@
   background: #fff;
   box-shadow: 0 0 0 3px var(--pt);
 }
+.so-staff-root select.input {
+  cursor: pointer;
+  appearance: auto;
+}
+.so-staff-root .input.input--warn {
+  border-color: rgba(200, 30, 30, 0.45);
+  background: rgba(200, 30, 30, 0.04);
+}
 .so-staff-root .seg {
   display: inline-flex;
   background: var(--bg2);
