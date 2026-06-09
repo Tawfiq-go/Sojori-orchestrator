@@ -8,7 +8,7 @@ import SojoriPrimButton from '../../../components/ui/SojoriPrimButton';
 import { useState, useEffect } from 'react';
 import { useAdminOwnerFilter } from '../../../context/AdminOwnerFilterContext';
 import { getOwnerListLabel } from '../../../utils/ownerDisplay.utils';
-import { ORCHESTRATION_ADMIN_OWNER_ID } from '../../../constants/orchestrationAdmin';
+import { ORCHESTRATION_ADMIN_OWNER_ID, ORCHESTRATION_ADMIN_EMAIL } from '../../../constants/orchestrationAdmin';
 import type { FulltaskConfigOwnerScope } from '../../../hooks/useFulltaskConfigOwner';
 import { getOwnersAllPages } from '../../staff/services/serverApi.task';
 
@@ -40,9 +40,21 @@ type Props = FulltaskConfigOwnerScope & {
   selectedListingIds?: string[];
   onListingSelectionChange?: (listingIds: string[]) => void;
   listingsLoading?: boolean;
+  /** Orchestration admin tabs: sync cible l’onglet actif plutôt que le filtre principal. */
+  syncContextOwnerId?: string | null;
 };
 
-const ADMIN_SENTINEL = { __admin: true, _id: ORCHESTRATION_ADMIN_OWNER_ID, label: 'Admin' };
+const ADMIN_SENTINEL = {
+  __admin: true,
+  _id: ORCHESTRATION_ADMIN_OWNER_ID,
+  label: 'Admin (template global)',
+};
+
+function isAdminOwnerRow(owner: { _id?: string; id?: string; email?: string }): boolean {
+  const id = String(owner?._id ?? owner?.id ?? '');
+  if (id === ORCHESTRATION_ADMIN_OWNER_ID) return true;
+  return (owner.email || '').toLowerCase().trim() === ORCHESTRATION_ADMIN_EMAIL;
+}
 const checkboxIcon = <CheckBoxOutlineBlankIcon fontSize="small" />;
 const checkboxCheckedIcon = <CheckBoxIcon fontSize="small" />;
 
@@ -85,6 +97,7 @@ export default function OwnerConfigScopeBarWithSync({
   selectedListingIds = [],
   onListingSelectionChange,
   listingsLoading = false,
+  syncContextOwnerId,
 }: Props) {
   const syncMode =
     syncModeProp ??
@@ -137,24 +150,29 @@ export default function OwnerConfigScopeBarWithSync({
   const selectedListing = listingOptions.find((l) => l.id === selectedListingId) ?? null;
   const selectedListingsMulti = listingOptions.filter((l) => selectedListingIds.includes(l.id));
 
+  const syncOwnerId =
+    syncContextOwnerId !== undefined && syncContextOwnerId !== null
+      ? String(syncContextOwnerId)
+      : selectedOwnerId;
+
   const isAdminSelected =
     syncMode !== 'listings' &&
-    (!selectedOwnerId || selectedOwnerId === ORCHESTRATION_ADMIN_OWNER_ID);
+    (!syncOwnerId || syncOwnerId === ORCHESTRATION_ADMIN_OWNER_ID);
 
   const selectedOwner =
     syncMode !== 'listings' && !isAdminSelected
-      ? (owners || []).find((o) => String(o?._id ?? o?.id) === String(selectedOwnerId))
+      ? (owners || []).find((o) => String(o?._id ?? o?.id) === String(syncOwnerId))
       : null;
 
   const handleSyncPm = async () => {
     setSyncingPm(true);
     try {
-      if (!selectedOwnerId || selectedOwnerId === ORCHESTRATION_ADMIN_OWNER_ID) {
+      if (!syncOwnerId || syncOwnerId === ORCHESTRATION_ADMIN_OWNER_ID) {
         if (onSyncToAllOwners) await onSyncToAllOwners();
       } else if (onSyncToOwner) {
-        const owner = (owners || []).find((o) => String(o?._id ?? o?.id) === String(selectedOwnerId));
-        const ownerName = owner ? getOwnerListLabel(owner) : selectedOwnerId;
-        await onSyncToOwner(selectedOwnerId, ownerName);
+        const owner = (owners || []).find((o) => String(o?._id ?? o?.id) === String(syncOwnerId));
+        const ownerName = owner ? getOwnerListLabel(owner) : syncOwnerId;
+        await onSyncToOwner(syncOwnerId, ownerName);
       }
     } catch (e: unknown) {
       const err = e as { response?: { status?: number; data?: { error?: string } }; message?: string };
@@ -224,7 +242,7 @@ export default function OwnerConfigScopeBarWithSync({
   })();
 
   const pmSyncDisabled =
-    syncing || (syncMode !== 'listings' && !isAdminSelected && !selectedOwnerId);
+    syncing || (syncMode !== 'listings' && !isAdminSelected && !syncOwnerId);
 
   const listingsSyncDisabled =
     syncing ||
@@ -424,7 +442,14 @@ export default function OwnerConfigScopeBarWithSync({
     );
   }
 
-  const options = [ADMIN_SENTINEL, ...(owners || []).filter((o) => o?._id != null || o?.id != null)];
+  const options = [
+    ADMIN_SENTINEL,
+    ...(owners || []).filter((o) => {
+      const id = o?._id ?? o?.id;
+      if (id == null) return false;
+      return !isAdminOwnerRow(o);
+    }),
+  ];
 
   let currentValue;
   if (!selectedOwnerId || selectedOwnerId === ORCHESTRATION_ADMIN_OWNER_ID) {
@@ -482,7 +507,12 @@ export default function OwnerConfigScopeBarWithSync({
               '& .MuiInputLabel-root': { fontSize: compact ? 12 : 13 },
             }}
             renderInput={(params) =>
-              renderAutocompleteField(params, 'Propriétaire', 'Admin ou PM…', 'Propriétaire')
+              renderAutocompleteField(
+                params,
+                'Propriétaire',
+                'Admin ou un PM (focus)…',
+                'Propriétaire',
+              )
             }
           />
         )}
