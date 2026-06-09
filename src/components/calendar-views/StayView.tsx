@@ -138,7 +138,7 @@ export default function StayView({
     <Box sx={{ maxWidth: 1440, mx: 'auto', p: { xs: 2, md: '20px 24px 50px' } }}>
       <style>{SOJORI_KEYFRAMES}</style>
 
-      <Stack direction="row" alignItems="baseline" gap={1.75} sx={{ mb: 1.75 }}>
+      <Stack sx={{ flexDirection: 'row', alignItems: 'baseline', gap: 1.75, mb: 1.75 }}>
         <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.025em' }}>
           {isReservations ? 'Planning Réservations' : 'Vue Séjour'}
         </Typography>
@@ -147,7 +147,7 @@ export default function StayView({
         </Typography>
       </Stack>
 
-      <Stack direction="row" gap={1.25} flexWrap="wrap" sx={{ mb: 1.5 }}>
+      <Stack sx={{ flexDirection: 'row', flexWrap: 'wrap', gap: 1.25, mb: 1.5 }}>
         <KpiPill icon="🏠" count={kpis.arr} label="Arrivées auj." tone="success" />
         <KpiPill icon="🚪" count={kpis.dep} label="Départs auj." tone="warning" />
         {isReservations ? (

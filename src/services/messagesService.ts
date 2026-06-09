@@ -640,6 +640,18 @@ class MessagesService {
     search?: string;
     sortBy?: string;
     ownerId?: string;
+    otaSearch?: boolean;
+    reservationNumber?: string;
+    guestName?: string;
+    guestPhone?: string;
+    listingName?: string;
+    messageText?: string;
+    arrivalFrom?: string;
+    arrivalTo?: string;
+    stayPeriod?: string;
+    messageStatus?: string;
+    unreplied?: boolean;
+    otaChannel?: string;
   }): Promise<any> {
     try {
       const response = await apiClient.get(
@@ -648,11 +660,22 @@ class MessagesService {
           params: {
             page: params?.page || 0,
             limit: params?.limit || 25,
-            msgLimit: 0, // Optimized: 0 messages for list view
-            source: 'reservation', // Filter only confirmed reservations
-            reservationNumber: params?.search || undefined,
+            msgLimit: 0,
+            source: 'reservation',
+            reservationNumber: params?.reservationNumber || params?.search || undefined,
             sortBy: params?.sortBy || undefined,
             ...(params?.ownerId ? { ownerId: params.ownerId } : {}),
+            ...(params?.otaSearch ? { otaSearch: '1' } : {}),
+            ...(params?.guestName ? { guestName: params.guestName } : {}),
+            ...(params?.guestPhone ? { guestPhone: params.guestPhone } : {}),
+            ...(params?.listingName ? { listingName: params.listingName } : {}),
+            ...(params?.messageText ? { messageText: params.messageText } : {}),
+            ...(params?.arrivalFrom ? { arrivalFrom: params.arrivalFrom } : {}),
+            ...(params?.arrivalTo ? { arrivalTo: params.arrivalTo } : {}),
+            ...(params?.stayPeriod ? { stayPeriod: params.stayPeriod } : {}),
+            ...(params?.messageStatus ? { messageStatus: params.messageStatus } : {}),
+            ...(params?.unreplied ? { unreplied: '1' } : {}),
+            ...(params?.otaChannel ? { otaChannel: params.otaChannel } : {}),
           },
         }
       );

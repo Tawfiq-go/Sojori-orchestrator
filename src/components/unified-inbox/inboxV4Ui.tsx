@@ -4,9 +4,9 @@ import { T } from './_tokens';
 
 export const inboxShellSx = {
   display: 'grid',
-  gridTemplateColumns: { xs: '1fr', lg: '320px 1fr 340px' },
-  height: { xs: 'auto', lg: 'min(760px, calc(100vh - 220px))' },
-  minHeight: 660,
+  gridTemplateColumns: { xs: '1fr', lg: '360px 1fr 340px' },
+  height: { xs: 'auto', lg: 'min(760px, calc(100vh - 200px))' },
+  minHeight: { xs: 0, lg: 560 },
   overflow: 'hidden',
   bgcolor: T.bg1,
   border: `1px solid ${T.border}`,

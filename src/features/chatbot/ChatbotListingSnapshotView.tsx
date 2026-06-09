@@ -1,22 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import ChatbotHubShell from './ChatbotHubShell';
 import * as fullchatbotApi from '../../services/fullchatbotApi';
+import listingsService from '../../services/listingsService';
 import FullChatbotSyncButton from '../../components/listing/FullChatbotSyncButton';
 import ChatbotListingConfigEmbed from './ChatbotListingConfigEmbed';
-
-type SnapshotRow = {
-  listingId: string;
-  name?: string;
-  city?: string;
-  country?: string;
-  propertyType?: string;
-  bedrooms?: number;
-  bathrooms?: number;
-  maxGuests?: number;
-  active?: boolean;
-  snapshotUpdatedAt?: string;
-};
+import {
+  getCachedChatbotListingSnapshots,
+  invalidateChatbotListingSnapshotsCache,
+  setCachedChatbotListingSnapshots,
+  type ChatbotListingSnapshotRow,
+} from '../../utils/chatbotListingSnapshotsCache';
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -32,38 +27,85 @@ function avatarColor(seed: string): number {
 
 export default function ChatbotListingSnapshotView() {
   const [searchParams] = useSearchParams();
-  const [rows, setRows] = useState<SnapshotRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const [rows, setRows] = useState<ChatbotListingSnapshotRow[]>(
+    () => getCachedChatbotListingSnapshots() ?? [],
+  );
+  const [isLoading, setIsLoading] = useState(() => !getCachedChatbotListingSnapshots());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [listReady, setListReady] = useState(() => Boolean(getCachedChatbotListingSnapshots()?.length));
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | undefined>();
+  const loadRequestIdRef = useRef(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const prefetchListing = useCallback(
+    (listingId: string) => {
+      void queryClient.prefetchQuery({
+        queryKey: ['listing', listingId],
+        queryFn: () => listingsService.getListingDocument(listingId),
+        staleTime: 2 * 60 * 1000,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: ['fullchatbot-snapshot', listingId],
+        queryFn: () => fullchatbotApi.getListingSnapshot(listingId),
+        staleTime: 2 * 60 * 1000,
+      });
+    },
+    [queryClient],
+  );
+
+  const fetchSnapshotList = useCallback(async (opts?: { isBootstrap?: boolean }) => {
+    const requestId = ++loadRequestIdRef.current;
+    const isBootstrap = opts?.isBootstrap ?? !listReady;
+
+    if (isBootstrap) {
+      setIsLoading(true);
+      setListReady(false);
+    } else {
+      setIsRefreshing(true);
+    }
     setError(null);
+
     try {
       const res = await fullchatbotApi.listListingSnapshots({ limit: 300, activeOnly: true });
-      setRows(Array.isArray(res?.data) ? res.data : []);
+      if (requestId !== loadRequestIdRef.current) return;
+      const data = Array.isArray(res?.data) ? (res.data as ChatbotListingSnapshotRow[]) : [];
+      setRows(data);
+      setCachedChatbotListingSnapshots(data);
+      setListReady(true);
     } catch (e) {
-      setRows([]);
+      if (requestId !== loadRequestIdRef.current) return;
+      if (isBootstrap) setRows([]);
       setError(e instanceof Error ? e.message : 'Erreur chargement');
+      if (!getCachedChatbotListingSnapshots()?.length) setListReady(true);
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestIdRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
+  }, [listReady]);
+
+  useEffect(() => {
+    const cached = getCachedChatbotListingSnapshots();
+    void fetchSnapshotList({ isBootstrap: !cached?.length });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
     const fromUrl = searchParams.get('listingId')?.trim();
-    if (!fromUrl || rows.length === 0) return;
+    if (!fromUrl) return;
+    prefetchListing(fromUrl);
+    if (rows.length === 0) {
+      setSelectedId(fromUrl);
+      return;
+    }
     if (rows.some((r) => r.listingId === fromUrl)) {
       setSelectedId(fromUrl);
     }
-  }, [searchParams, rows]);
+  }, [searchParams, rows, prefetchListing]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -81,6 +123,13 @@ export default function ChatbotListingSnapshotView() {
       [r.name, r.city, r.listingId].filter(Boolean).some((v) => String(v).toLowerCase().includes(needle)),
     );
   }, [rows, search]);
+
+  const handleRefresh = () => {
+    invalidateChatbotListingSnapshotsCache();
+    void fetchSnapshotList({ isBootstrap: false });
+  };
+
+  const showSidebarSpinner = (isLoading && !listReady) || (listReady && isRefreshing);
 
   return (
     <ChatbotHubShell crumb="Listing sync">
@@ -100,8 +149,10 @@ export default function ChatbotListingSnapshotView() {
         </div>
 
         <div className="sb-list">
-          {loading && <div className="cb-loading">Chargement…</div>}
-          {!loading &&
+          {showSidebarSpinner && (
+            <div className="cb-loading">{isRefreshing ? 'Mise à jour…' : 'Chargement…'}</div>
+          )}
+          {listReady && !showSidebarSpinner &&
             filtered.map((r) => {
               const active = r.listingId === selectedId;
               const color = avatarColor(r.listingId);
@@ -110,6 +161,7 @@ export default function ChatbotListingSnapshotView() {
                   key={r.listingId}
                   className={`sb-item${active ? ' on' : ''}`}
                   onClick={() => setSelectedId(r.listingId)}
+                  onMouseEnter={() => prefetchListing(r.listingId)}
                   onKeyDown={() => {}}
                   role="button"
                   tabIndex={0}
@@ -132,7 +184,7 @@ export default function ChatbotListingSnapshotView() {
                 </div>
               );
             })}
-          {!loading && !filtered.length && (
+          {listReady && !showSidebarSpinner && !filtered.length && (
             <div className="cb-empty">
               <span className="em">📭</span>
               Aucun listing actif synchronisé — lancez Sync FullChatbot.
@@ -143,7 +195,7 @@ export default function ChatbotListingSnapshotView() {
         <div className="sb-foot" style={{ flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
           <span>📊 {filtered.length} actifs</span>
           <FullChatbotSyncButton variant="bulk" size="small" sx={{ width: '100%' }} />
-          <button type="button" className="all" onClick={load}>
+          <button type="button" className="all" onClick={handleRefresh}>
             Actualiser →
           </button>
         </div>
@@ -155,7 +207,7 @@ export default function ChatbotListingSnapshotView() {
         {!selectedId && (
           <div className="cb-empty">
             <span className="em">👈</span>
-            Sélectionnez un listing — onglet Résumé propriété ou Config orchestration (13 onglets).
+            Sélectionnez un listing — onglet Résumé propriété ou Orchestration.
           </div>
         )}
 
@@ -163,7 +215,6 @@ export default function ChatbotListingSnapshotView() {
           <ChatbotListingConfigEmbed
             listingId={selectedId}
             snapshotUpdatedAt={snapshotUpdatedAt}
-            defaultTab="access-config"
           />
         )}
       </div>

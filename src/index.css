@@ -344,7 +344,9 @@ a:hover {
 .create-reservation-form-scroll,
 .create-reservation-summary-scroll,
 .upload-images-modal-scroll,
-.orch-message-vars-scroll {
+.orch-message-vars-scroll,
+.ota-inbox-threads-scroll,
+.ota-inbox-advanced-scroll {
   overflow-y: scroll !important;
   overflow-x: hidden !important;
   overscroll-behavior: contain;
@@ -357,7 +359,9 @@ a:hover {
 .create-reservation-form-scroll::-webkit-scrollbar,
 .create-reservation-summary-scroll::-webkit-scrollbar,
 .upload-images-modal-scroll::-webkit-scrollbar,
-.orch-message-vars-scroll::-webkit-scrollbar {
+.orch-message-vars-scroll::-webkit-scrollbar,
+.ota-inbox-threads-scroll::-webkit-scrollbar,
+.ota-inbox-advanced-scroll::-webkit-scrollbar {
   width: 10px !important;
   -webkit-appearance: none;
 }
@@ -365,7 +369,9 @@ a:hover {
 .create-reservation-form-scroll::-webkit-scrollbar-track,
 .create-reservation-summary-scroll::-webkit-scrollbar-track,
 .upload-images-modal-scroll::-webkit-scrollbar-track,
-.orch-message-vars-scroll::-webkit-scrollbar-track {
+.orch-message-vars-scroll::-webkit-scrollbar-track,
+.ota-inbox-threads-scroll::-webkit-scrollbar-track,
+.ota-inbox-advanced-scroll::-webkit-scrollbar-track {
   background: #f0eee8 !important;
   border-radius: 8px;
 }
@@ -373,7 +379,9 @@ a:hover {
 .create-reservation-form-scroll::-webkit-scrollbar-thumb,
 .create-reservation-summary-scroll::-webkit-scrollbar-thumb,
 .upload-images-modal-scroll::-webkit-scrollbar-thumb,
-.orch-message-vars-scroll::-webkit-scrollbar-thumb {
+.orch-message-vars-scroll::-webkit-scrollbar-thumb,
+.ota-inbox-threads-scroll::-webkit-scrollbar-thumb,
+.ota-inbox-advanced-scroll::-webkit-scrollbar-thumb {
   background: #b8851a !important;
   border-radius: 8px;
   border: 2px solid #f0eee8 !important;

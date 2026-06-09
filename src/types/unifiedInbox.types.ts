@@ -42,6 +42,8 @@ export interface Thread {
   checkInBadge?: string;
   taskCount?: number;
   stayBadge?: string;
+  /** OTA : fil en attente de réponse hôte */
+  needsReply?: boolean;
   isStaff?: boolean;
   isAuto?: boolean;
   tasks?: ReservationTask[];

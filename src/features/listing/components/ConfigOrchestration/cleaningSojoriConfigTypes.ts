@@ -19,7 +19,7 @@ export const DEFAULT_CLEANING_CHECKLIST: CleaningChecklistItem[] = [
   { id: 'chk_aspirer', label: 'Aspirer toutes les pièces', required: true, photoRequired: true, order: 0 },
   { id: 'chk_sdb', label: 'Nettoyer SDB (douche + WC)', required: true, photoRequired: true, order: 1 },
   { id: 'chk_draps', label: 'Changer draps + housses', required: true, photoRequired: false, order: 2 },
-  { id: 'chk_minibar', label: 'Vérifier mini-bar', required: false, photoRequired: false, order: 3 },
+  { id: 'chk_frigo', label: 'Vérifier Frigo', required: true, photoRequired: false, order: 3 },
 ];
 
 function newChecklistId(): string {
@@ -47,7 +47,7 @@ function normalizeChecklist(raw: unknown): CleaningChecklistItem[] {
 
 export function mapListingToCleaningSojoriConfig(raw: Record<string, unknown>): CleaningSojoriConfig {
   const orch = (raw.cleaningOrchestration as Record<string, unknown>) || {};
-  const enabled = orch.enabled === true;
+  const enabled = orch.enabled === true || raw.orchestration_cleaning_sojori === true;
   const preferred = typeof orch.preferredDayAfterCheckout === 'number' ? orch.preferredDayAfterCheckout : 0;
   const safety =
     typeof orch.safetyMaxDirtyDays === 'number'
@@ -62,22 +62,74 @@ export function mapListingToCleaningSojoriConfig(raw: Record<string, unknown>): 
   };
 }
 
-export function mapCleaningSojoriToListingPatch(cfg: CleaningSojoriConfig): Record<string, unknown> {
+function existingCleaningOrch(raw?: Record<string, unknown>): Record<string, unknown> {
+  const orch = raw?.cleaningOrchestration;
+  return orch && typeof orch === 'object' && !Array.isArray(orch)
+    ? { ...(orch as Record<string, unknown>) }
+    : {};
+}
+
+function serializeChecklist(checklist: CleaningChecklistItem[]) {
+  return checklist.map((item, i) => ({
+    id: item.id,
+    label: item.label,
+    required: item.required,
+    photoRequired: item.photoRequired,
+    order: i,
+  }));
+}
+
+/** Patch complet (legacy — préférer triggers ou checklist seuls). */
+export function mapCleaningSojoriToListingPatch(
+  cfg: CleaningSojoriConfig,
+  listingValues?: Record<string, unknown>,
+): Record<string, unknown> {
+  const existing = existingCleaningOrch(listingValues);
   return {
     orchestration_cleaning_sojori: cfg.enabled,
     cleaningOrchestration: {
+      ...existing,
       enabled: cfg.enabled,
       preferredDayAfterCheckout: cfg.preferredDayAfterCheckout,
       safetyMaxDirtyDays: cfg.safetyMaxDirtyDays,
-      checklist: cfg.checklist.map((item, i) => ({
-        id: item.id,
-        label: item.label,
-        required: item.required,
-        photoRequired: item.photoRequired,
-        order: i,
-      })),
+      checklist: serializeChecklist(cfg.checklist),
     },
   };
+}
+
+/** Ménage Sojori : déclenchement + filet (sans écraser la checklist). */
+export function mapCleaningSojoriTriggersPatch(
+  cfg: Pick<CleaningSojoriConfig, 'enabled' | 'preferredDayAfterCheckout' | 'safetyMaxDirtyDays'>,
+  listingValues?: Record<string, unknown>,
+): Record<string, unknown> {
+  const existing = existingCleaningOrch(listingValues);
+  return {
+    orchestration_cleaning_sojori: cfg.enabled,
+    cleaningOrchestration: {
+      ...existing,
+      enabled: cfg.enabled,
+      preferredDayAfterCheckout: cfg.preferredDayAfterCheckout,
+      safetyMaxDirtyDays: cfg.safetyMaxDirtyDays,
+    },
+  };
+}
+
+/** Checklist globale (sans écraser le déclenchement Sojori). */
+export function mapCleaningChecklistPatch(
+  checklist: CleaningChecklistItem[],
+  listingValues?: Record<string, unknown>,
+): Record<string, unknown> {
+  const existing = existingCleaningOrch(listingValues);
+  return {
+    cleaningOrchestration: {
+      ...existing,
+      checklist: serializeChecklist(checklist),
+    },
+  };
+}
+
+export function canPersistListingConfig(listingId: string, templateMode: boolean): boolean {
+  return templateMode || Boolean(String(listingId || '').trim());
 }
 
 export function createEmptyChecklistItem(order: number): CleaningChecklistItem {

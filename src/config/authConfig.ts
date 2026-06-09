@@ -1,21 +1,44 @@
 // Configuration d'authentification client (source unique pour ce dépôt).
 
-// Détermination de l'URL de base de l'API
-const getApiBaseUrl = () => {
-  // En production, utiliser l'URL de l'API de production
-  if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_URL || 'https://dev.sojori.com';
+const normalizeEnvUrl = (raw: string | undefined): string | undefined => {
+  const trimmed = raw?.trim();
+  return trimmed || undefined;
+};
+
+const DEFAULT_REMOTE_API = 'https://dev.sojori.com';
+
+const isBrowserLocalhost = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
   }
-  // En développement, utiliser localhost ou une URL spécifiée
-  return import.meta.env.VITE_API_URL || 'http://localhost';
+  return ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(window.location.hostname);
+};
+
+/** Ports locaux 4000–4015 — opt-in explicite (sinon front local → dev.sojori.com, compatible CSP). */
+const shouldUseLocalMicroservicePorts = (): boolean => {
+  const configured = normalizeEnvUrl(import.meta.env.VITE_API_URL);
+  if (configured === 'http://localhost' || configured?.startsWith('http://127.0.0.1:')) {
+    return true;
+  }
+  return (
+    import.meta.env.VITE_USE_LOCAL_MICROSERVICES === 'true' && isBrowserLocalhost()
+  );
+};
+
+// Détermination de l'URL de base de l'API (runtime : évite localhost baked en prod / preview)
+const getApiBaseUrl = (): string => {
+  const configured = normalizeEnvUrl(import.meta.env.VITE_API_URL);
+  if (configured) {
+    return configured;
+  }
+  if (shouldUseLocalMicroservicePorts()) {
+    return 'http://localhost';
+  }
+  return DEFAULT_REMOTE_API;
 };
 
 const API_BASE_URL = getApiBaseUrl();
-
-// Déterminer si on utilise les ports locaux des microservices
-const useLocalMicroservicePorts =
-  !import.meta.env.PROD &&
-  !import.meta.env.VITE_API_URL;
+const useLocalMicroservicePorts = shouldUseLocalMicroservicePorts();
 
 // URL du service utilisateur (srv-user)
 const SRV_USER_URL = useLocalMicroservicePorts

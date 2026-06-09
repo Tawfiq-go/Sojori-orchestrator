@@ -145,6 +145,7 @@ export function catalogItemToService(item: ConciergeCatalogItem, order: number) 
     maxPersons: item.maxPersons ?? 0,
     enabled: true,
     order,
+    cityIds: 'all' as const,
   };
 }
 

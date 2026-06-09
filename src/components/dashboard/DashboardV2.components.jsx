@@ -169,7 +169,6 @@ const NAV_ICON_BY_ID = {
   chatbot: SmartToyOutlined,
   'chatbot/whitelist': ForumOutlined,
   'chatbot/listing': HomeWorkOutlined,
-  'chatbot/flows-pilote': SmartToyOutlined,
   'comms': ForumOutlined,
   'comms/guests': ForumOutlined,
   'comms/staff': SupportAgentOutlined,

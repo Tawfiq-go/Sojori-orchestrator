@@ -1367,7 +1367,10 @@ export const listingsService = {
     const page = options?.page ?? 0;
     const limit = options?.limit ?? 20;
     const staging = options?.staging ?? false;
-    const forListingsOverview = options?.forListingsOverview ?? true; // ✅ Par défaut optimisé pour overview
+    const compact = options?.compact === true;
+    const forListingsOverview = compact
+      ? false
+      : (options?.forListingsOverview ?? true);
     const query = new URLSearchParams({
       page: String(page),
       limit: String(limit),
@@ -1381,17 +1384,14 @@ export const listingsService = {
     if (options?.name?.trim()) {
       query.set('name', options.name.trim());
     }
-    if (options?.compact) {
+    if (compact) {
       query.set('compact', 'true'); // ⚡ Mode compact: uniquement {_id, name, city}
     }
 
     const url = `${LISTING_API_BASE_URL}/listings/?${query.toString()}`;
-    console.log(`🌐 [listingsService] GET ${url}`);
-    const httpStartTime = performance.now();
 
     try {
       const response = await apiClient.get(url);
-      console.log(`🌐 [listingsService] HTTP response received in ${(performance.now() - httpStartTime).toFixed(0)}ms`);
       const payload = asRecord(response.data);
       if (payload.success === false) {
         throw new Error(pickFirstString(payload, ['message', 'error']) || 'Échec chargement listings');
@@ -1399,7 +1399,7 @@ export const listingsService = {
       const items = Array.isArray(payload.data)
         ? payload.data.map((item) => normalizeListingSummary(item))
         : [];
-      const enriched = await enrichListingSummariesWithOwners(items);
+      const enriched = compact ? items : await enrichListingSummariesWithOwners(items);
       return {
         data: { items: enriched, total: asNumber(payload.total) ?? enriched.length },
         source: 'api',
@@ -1524,6 +1524,56 @@ export const listingsService = {
     return normalizeListingDetail(body.listing);
   },
 
+  /** POST draft en cours d’édition → message interpolé avec dernière résa du listing. */
+  async postDepartureMessagePreview(
+    listingId: string,
+    draft: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const response = await apiClient.post(
+      `${LISTING_API_BASE_URL}/listings/${listingId}/departure-message-preview`,
+      draft,
+    );
+    const body = asRecord(response.data);
+    if (body.success === false) {
+      throw new Error(asString(body.error) || 'departure-message-preview failed');
+    }
+    const data = body.data;
+    if (isRecord(data)) return data;
+    return body;
+  },
+
+  /** Dernière résa du PM → message depuis listing sauvegardé (orchestration). */
+  async getDepartureMessagePreviewByOwner(ownerId: string): Promise<Record<string, unknown>> {
+    const response = await apiClient.get(
+      `${LISTING_API_BASE_URL}/listings/departure-message-preview-by-owner/${ownerId}`,
+    );
+    const body = asRecord(response.data);
+    if (body.success === false) {
+      throw new Error(asString(body.error) || 'departure-message-preview-by-owner failed');
+    }
+    const data = body.data;
+    if (isRecord(data)) return data;
+    return body;
+  },
+
+  /** Draft template PM → aperçu live sans sauvegarder. */
+  async postDepartureMessagePreviewByOwner(
+    ownerId: string,
+    draft: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const response = await apiClient.post(
+      `${LISTING_API_BASE_URL}/listings/departure-message-preview-by-owner/${ownerId}`,
+      draft,
+    );
+    const body = asRecord(response.data);
+    if (body.success === false) {
+      throw new Error(asString(body.error) || 'departure-message-preview-by-owner failed');
+    }
+    const data = body.data;
+    if (isRecord(data)) return data;
+    return body;
+  },
+
   /**
    * PUT /listings/update-property/:id — même contrat que sojori-dashboard (descriptions[], roomTypes, …).
    */
@@ -1560,10 +1610,46 @@ export const listingsService = {
     return data;
   },
 
-  /** Flags effectifs + overrides pour un listing. */
-  async getListingOrchestrationEffective(listingId: string) {
+  /** Flags effectifs + overrides pour un listing (legacy template). */
+  async getListingOrchestrationTemplateEffective(listingId: string) {
     const { data } = await apiClient.get(
       `${LISTING_API_BASE_URL}/listing-orchestration-template/by-listing/${listingId}/effective`,
+    );
+    return data;
+  },
+
+  /** @deprecated alias template — préférer getListingOrchestrationEffective */
+  async getListingOrchestrationEffective(listingId: string) {
+    return this.getListingOrchestrationCompiled(listingId);
+  },
+
+  /** Document orchestration listing (404 si non migré). */
+  async getListingOrchestration(listingId: string) {
+    const { data } = await apiClient.get(
+      `${LISTING_API_BASE_URL}/listings/${listingId}/orchestration`,
+    );
+    return data;
+  },
+
+  /** Config effective compilée — workflows + categoryEnabled (source canonique). */
+  async getListingOrchestrationCompiled(listingId: string) {
+    const { data } = await apiClient.get(
+      `${LISTING_API_BASE_URL}/listings/${listingId}/orchestration-effective`,
+    );
+    return data;
+  },
+
+  async putListingOrchestration(
+    listingId: string,
+    patch: {
+      orchestrationEnabled?: boolean;
+      capabilities?: Record<string, unknown>;
+      scheduledMessages?: unknown[];
+    },
+  ) {
+    const { data } = await apiClient.put(
+      `${LISTING_API_BASE_URL}/listings/${listingId}/orchestration`,
+      patch,
     );
     return data;
   },
@@ -1576,8 +1662,11 @@ export const listingsService = {
     return data;
   },
 
-  async syncOrchestrationTemplateToOwner(ownerId: string) {
-    const url = `${LISTING_API_BASE_URL}/listing-orchestration-template/global/sync-owner/${ownerId}`;
+  async syncOrchestrationTemplateToOwner(
+    ownerId: string,
+    mode: 'auto' | 'bootstrap' | 'library_update' = 'auto',
+  ) {
+    const url = `${LISTING_API_BASE_URL}/listing-orchestration-template/global/sync-owner/${ownerId}?mode=${mode}`;
     console.log('[listingsService] POST', url);
     try {
       const { data } = await apiClient.post(url, {});

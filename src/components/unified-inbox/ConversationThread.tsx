@@ -1,4 +1,5 @@
-import { useRef, useLayoutEffect } from 'react';
+import { useRef } from 'react';
+import { useInboxMessageScroll } from './useInboxMessageScroll';
 import { Box, Stack, Typography, CircularProgress } from '@mui/material';
 import { DoneAll } from '@mui/icons-material';
 import { T } from './_tokens';
@@ -38,38 +39,20 @@ export default function ConversationThread({
   messagesLoadError = null,
   messagesTotal = 0,
 }: ConversationThreadProps) {
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const previousMessageCountRef = useRef(0);
-  const isFirstLoadRef = useRef(true);
+  const hasRenderableMessages =
+    !loadingMessages && messages.filter((m) => m.type !== 'day-separator').length > 0;
+
+  const { containerRef: messagesContainerRef, endRef: messagesEndRef } = useInboxMessageScroll(
+    thread.id,
+    messages.length,
+    loadingMessages,
+  );
 
   const isOta = isOtaChannelType(thread.channel);
   const otaTheme = getOtaTheme(thread.channel, otaPlatform);
   const flag = thread.guestFlag || flagFromPhone(thread.phone);
   const platformLabel = otaPlatform || otaTheme.label;
-
-  useLayoutEffect(() => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
-
-    if (isFirstLoadRef.current && messages.length > 0) {
-      el.scrollTop = el.scrollHeight;
-      isFirstLoadRef.current = false;
-      previousMessageCountRef.current = messages.length;
-      return;
-    }
-
-    if (messages.length > previousMessageCountRef.current) {
-      const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-      if (wasAtBottom) el.scrollTop = el.scrollHeight;
-    }
-    previousMessageCountRef.current = messages.length;
-  }, [messages.length]);
-
-  useLayoutEffect(() => {
-    isFirstLoadRef.current = true;
-    previousMessageCountRef.current = 0;
-  }, [thread.id]);
 
   const handleSend = () => {
     if (!inputRef.current?.value.trim()) return;
@@ -272,6 +255,14 @@ export default function ConversationThread({
           >
             {isOta ? (
               <>
+                {thread.listingName && thread.listingName !== '—' && (
+                  <span style={{ color: T.text2, fontWeight: 600, maxWidth: '100%' }}>
+                    {thread.listingName}
+                  </span>
+                )}
+                {thread.listingName && thread.listingName !== '—' && thread.reservationNumber && (
+                  <span style={{ color: T.text4 }}>·</span>
+                )}
                 {thread.reservationNumber && <span>{thread.reservationNumber}</span>}
                 {thread.reservationCreatedDisplay && (
                   <>
@@ -327,11 +318,8 @@ export default function ConversationThread({
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
-          px: '24px',
-          py: '18px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 0.75,
           background: isOta
             ? `linear-gradient(180deg, ${otaTheme.bgTint} 0%, ${T.bg0} 40%)`
             : `linear-gradient(180deg, ${T.bg2} 0%, ${T.bg0} 100%)`,
@@ -350,7 +338,7 @@ export default function ConversationThread({
               maxWidth: '90%',
               px: 1.5,
               py: 1,
-              mb: 1,
+              m: 1.5,
               borderRadius: 1,
               bgcolor: 'rgba(245,158,11,0.12)',
               border: '1px solid rgba(245,158,11,0.35)',
@@ -394,6 +382,18 @@ export default function ConversationThread({
             </Box>
           )}
 
+        {hasRenderableMessages && (
+          <Box
+            sx={{
+              mt: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.75,
+              px: '24px',
+              py: '18px',
+              width: '100%',
+            }}
+          >
         {!loadingMessages &&
           messages.map((message) => {
           if (message.type === 'system-note') {
@@ -611,6 +611,9 @@ export default function ConversationThread({
               ))}
             </Box>
           )}
+            <Box ref={messagesEndRef} sx={{ height: 0, flexShrink: 0 }} aria-hidden />
+          </Box>
+        )}
       </Box>
 
       {quickTemplates.length > 0 && (

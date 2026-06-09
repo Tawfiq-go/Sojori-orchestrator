@@ -266,7 +266,8 @@ export default function LeadsTabV2() {
           <>
             <ConversationThread
               thread={activeThread}
-              messages={loadingMessages ? [] : messages}
+              messages={messages}
+              loadingMessages={loadingMessages}
               quickTemplates={OTA_QUICK_TEMPLATES}
               quickReplies={OTA_QUICK_REPLIES}
               otaPlatform={otaPlatform}

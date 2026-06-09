@@ -23,7 +23,9 @@ export const MESSAGE_MERGE_VARIABLES: { key: string; label: string; group: strin
   { key: '{paymentMethod}', label: 'Mode de paiement', group: 'Paiement' },
   { key: '{doorCode}', label: 'Code porte', group: 'Listing' },
   { key: '{listingName}', label: 'Nom de l\'annonce', group: 'Listing' },
-  { key: '{checkoutInstructions}', label: 'Instructions départ', group: 'Listing' },
+  { key: '{checkoutInstructions}', label: 'Instructions départ (texte global)', group: 'Listing' },
+  { key: '{cityTaxParagraph}', label: 'Paragraphe taxe de séjour', group: 'Listing' },
+  { key: '{checkoutTime}', label: 'Heure de départ', group: 'Listing' },
   { key: '{cityTaxPerAdult}', label: 'Taxe ville / adulte / nuit', group: 'Listing' },
   { key: '{cityTaxTotal}', label: 'Taxe ville totale', group: 'Listing' },
 ];

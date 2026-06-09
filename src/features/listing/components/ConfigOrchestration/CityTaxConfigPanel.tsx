@@ -8,10 +8,13 @@ import {
   mapCityTaxToListingPatch,
   mapListingToCityTaxConfig,
   CITY_TAX_CALCULATION_OPTIONS,
+  CITY_TAX_COLLECTION_OPTIONS,
+  buildCityTaxParagraphPreview,
   previewCityTaxBreakdown,
   type CityTaxConfig,
   type CityTaxCurrency,
 } from './cityTaxConfigTypes';
+import { TextArea } from './SHARED';
 
 const CURRENCIES: { id: CityTaxCurrency; label: string }[] = [
   { id: 'MAD', label: 'MAD' },
@@ -25,6 +28,8 @@ interface Props {
   listingValues: Record<string, unknown>;
   onListingPatch?: (patch: Record<string, unknown>) => void;
   onSaveStateChange?: (state: CityTaxSaveState) => void;
+  /** État taxe en direct (aperçu message sans attendre la sauvegarde). */
+  onConfigChange?: (cfg: CityTaxConfig) => void;
   templateMode?: boolean;
 }
 
@@ -33,6 +38,7 @@ export default function CityTaxConfigPanel({
   listingValues,
   onListingPatch,
   onSaveStateChange,
+  onConfigChange,
   templateMode = false,
 }: Props) {
   const [config, setConfig] = useState<CityTaxConfig | null>(null);
@@ -111,6 +117,10 @@ export default function CityTaxConfigPanel({
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [config, persist]);
+
+  useEffect(() => {
+    if (config) onConfigChange?.(config);
+  }, [config, onConfigChange]);
 
   if (!config) return null;
 
@@ -230,6 +240,56 @@ export default function CityTaxConfigPanel({
                 <Typography sx={{ fontSize: 11, color: T.text2, mt: 0.5 }}>{preview.formula}</Typography>
               </Box>
             )}
+          </Card>
+
+          <Card
+            compact
+            icon="💳"
+            title="Réception de la taxe"
+            subtitle="Comment le PM souhaite la recevoir — paragraphe ajouté au message si taxe activée"
+          >
+            <FormRow compact label="Mode de réception">
+              <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
+                {CITY_TAX_COLLECTION_OPTIONS.map(mode => (
+                  <PillButton
+                    key={mode.id}
+                    compact
+                    active={config.collectionMode === mode.id}
+                    onClick={() => patch(c => ({ ...c, collectionMode: mode.id }))}
+                  >
+                    {mode.label}
+                  </PillButton>
+                ))}
+              </Stack>
+            </FormRow>
+            <FormRow
+              compact
+              label="Texte taxe (optionnel)"
+              help="Vide = texte auto selon le mode. Variables : {total} {currency} {formula}"
+            >
+              <TextArea
+                rows={3}
+                value={config.instructionText}
+                onChange={e => patch(c => ({ ...c, instructionText: e.target.value }))}
+                placeholder="Taxe de séjour : déposer {total} {currency} sur la table du salon ({formula})."
+              />
+            </FormRow>
+            <Box
+              sx={{
+                mt: 1,
+                p: 1.25,
+                borderRadius: 1,
+                bgcolor: T.bg2,
+                border: `1px dashed ${T.border}`,
+              }}
+            >
+              <Typography sx={{ fontSize: 10, fontWeight: 700, color: T.text3, mb: 0.5 }}>
+                Paragraphe taxe (aperçu)
+              </Typography>
+              <Typography sx={{ fontSize: 12, color: T.text2, whiteSpace: 'pre-wrap' }}>
+                {buildCityTaxParagraphPreview(config) || '—'}
+              </Typography>
+            </Box>
           </Card>
 
           <Card compact icon="👶" title="Exemptions enfants" subtitle="Âge en-dessous duquel la taxe ne s'applique pas">

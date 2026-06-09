@@ -28,8 +28,8 @@ export const ORCHESTRATION_JOURNEY_SLOTS: Array<
 export const SCHEDULED_MESSAGE_EMOJI: Record<string, string> = {
   welcome_sojori_v2: '👋',
   checkin_feedback: '☺️',
-  departure_instructions: '📋',
-  checkout_feedback: '⭐',
+  departure_instructions: '⭐',
+  checkout_feedback: '💌',
 };
 
 export type JourneyListItem =

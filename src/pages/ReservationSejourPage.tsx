@@ -4,12 +4,13 @@
 // Tous les onglets injectés via slots — pas de logique métier ici.
 // ════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Box, Stack, Typography, Tabs, Tab, IconButton, Button, Chip, Tooltip, useTheme, useMediaQuery, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
 import { ArrowBack, Edit, CalendarToday, Person, Email, Save, Close, Warning } from '@mui/icons-material';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import reservationsService from '../services/reservationsService';
+import { getCachedReservationDetail } from '../utils/reservationDetailCache';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { GuestInfoTab } from '../components/reservation/GuestInfoTab';
 import { FinancierTab } from '../components/reservation/FinancierTab';
@@ -37,9 +38,12 @@ export function ReservationSejourPage() {
   const initialTab = TAB_NAMES.indexOf(searchParams.get('tab') || 'guest-info');
   const [tab, setTab] = useState(initialTab >= 0 ? initialTab : 0);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [reservationDetails, setReservationDetails] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedShell = id ? getCachedReservationDetail(id) : null;
+  const [reservationDetails, setReservationDetails] = useState<any | null>(cachedShell);
+  const [isLoading, setIsLoading] = useState(!cachedShell);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fetchRequestIdRef = useRef(0);
 
   // Modal confirmation annulation
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -55,30 +59,41 @@ export function ReservationSejourPage() {
       return;
     }
 
-    const fetchReservationDetail = async () => {
-      const startTime = performance.now();
-      console.log(`[ReservationSejourPage] Starting fetch for reservation ${id}`);
-
+    const requestId = ++fetchRequestIdRef.current;
+    const hasCache = Boolean(getCachedReservationDetail(id));
+    if (!hasCache) {
       setIsLoading(true);
-      setError(null);
+      setReservationDetails(null);
+    } else {
+      setReservationDetails(getCachedReservationDetail(id));
+      setIsRefreshing(true);
+    }
+    setError(null);
 
+    void (async () => {
+      const startTime = performance.now();
       try {
-        const response = await reservationsService.getByRouteParam(id);
+        const response = await reservationsService.getByRouteParam(id, {
+          skipCache: hasCache,
+        });
+        if (requestId !== fetchRequestIdRef.current) return;
         setReservationDetails(response);
-
-        const duration = performance.now() - startTime;
-        console.log(`[ReservationSejourPage] ✅ Page loaded in ${duration.toFixed(0)}ms`);
+        if (import.meta.env.DEV) {
+          console.log(`[ReservationSejourPage] ✅ loaded in ${(performance.now() - startTime).toFixed(0)}ms`);
+        }
       } catch (err: any) {
-        const duration = performance.now() - startTime;
-        console.error(`[ReservationSejourPage] ❌ Error after ${duration.toFixed(0)}ms:`, err);
-        setError(err.message || 'Erreur lors du chargement de la réservation');
-        toast.error('Erreur lors du chargement de la réservation');
+        if (requestId !== fetchRequestIdRef.current) return;
+        if (!hasCache) {
+          setError(err.message || 'Erreur lors du chargement de la réservation');
+          toast.error('Erreur lors du chargement de la réservation');
+        }
       } finally {
-        setIsLoading(false);
+        if (requestId === fetchRequestIdRef.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
       }
-    };
-
-    fetchReservationDetail();
+    })();
   }, [id]);
 
   // Handler: Annuler la réservation
@@ -124,7 +139,7 @@ export function ReservationSejourPage() {
         setIsEditMode(false);
         setEditedData({});
         // Recharger les données
-        const response = await reservationsService.getByRouteParam(id);
+        const response = await reservationsService.getByRouteParam(id, { skipCache: true });
         setReservationDetails(response);
       } else {
         toast.error(result.message || 'Erreur lors de la mise à jour');
@@ -163,6 +178,29 @@ export function ReservationSejourPage() {
 
   return (
     <DashboardWrapper breadcrumb={['Activité', 'Réservations', reservationDetails.reservationNumber || id || '']}>
+      {isRefreshing && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 72,
+            right: 16,
+            zIndex: 1200,
+            bgcolor: 'rgba(184,133,26,0.92)',
+            color: '#fff',
+            px: 1.5,
+            py: 0.75,
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+          }}
+        >
+          <CircularProgress size={14} sx={{ color: '#fff' }} />
+          Mise à jour…
+        </Box>
+      )}
       {/* ─── Header sticky ────────────────────────────────────── */}
       <Box sx={{
         position: 'sticky', top: 0, zIndex: 10,
@@ -318,7 +356,10 @@ export function ReservationSejourPage() {
             reservationId={reservationDetails?._id}
             onRefresh={() => {
               if (!id) return;
-              reservationsService.getByRouteParam(id).then(setReservationDetails).catch(() => undefined);
+              reservationsService
+                .getByRouteParam(id, { skipCache: true })
+                .then(setReservationDetails)
+                .catch(() => undefined);
             }}
           />
         )}

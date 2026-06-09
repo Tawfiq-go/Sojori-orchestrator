@@ -10,6 +10,7 @@ import {
   normalizeBookingSource,
   stayStatusLabel,
 } from './inboxFormat';
+import { resolveListingName } from './inboxListingName';
 
 export function getConversationReservationNumber(conv: Conversation): string | undefined {
   const raw = conv.reservation_number || conv.reservation_id;
@@ -18,19 +19,7 @@ export function getConversationReservationNumber(conv: Conversation): string | u
 }
 
 function listingNameFromReservation(r: Reservation): string | undefined {
-  const anyR = r as Reservation & {
-    listing_name?: string;
-    sojoriListing?: Array<{ name?: string; title?: string }>;
-    listingMap?: Array<{ name?: string; title?: string }>;
-  };
-  return (
-    anyR.listing_name ||
-    anyR.sojoriListing?.[0]?.name ||
-    anyR.sojoriListing?.[0]?.title ||
-    anyR.listingMap?.[0]?.name ||
-    anyR.listingMap?.[0]?.title ||
-    undefined
-  );
+  return resolveListingName(r as unknown as Record<string, unknown>);
 }
 
 function formatGuestsLabel(r: Reservation): string | undefined {

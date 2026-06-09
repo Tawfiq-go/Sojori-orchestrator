@@ -1,0 +1,82 @@
+/** Tokens alignés docs/design/Sojori-Orchestration-Listing-v3.html */
+export const V3 = {
+  p: '#b8851a',
+  pd: '#876119',
+  ps: '#e6c46a',
+  pt: 'rgba(184,133,26,0.10)',
+  pt2: 'rgba(184,133,26,0.22)',
+  bg: '#f6f5f1',
+  card: '#fff',
+  alt: '#fafaf7',
+  rail: '#fcfbf9',
+  t: '#14110a',
+  t2: '#55504a',
+  t3: '#7a756c',
+  t4: '#a8a299',
+  b: 'rgba(20,17,10,0.07)',
+  bs: 'rgba(20,17,10,0.14)',
+  su: '#0a8f5e',
+  suT: 'rgba(10,143,94,0.10)',
+  client: '#0673b3',
+  clientT: 'rgba(6,115,179,0.10)',
+  orch: '#7c3aed',
+  orchT: 'rgba(124,58,237,0.10)',
+  task: '#0891b2',
+  taskT: 'rgba(8,145,178,0.10)',
+  wa: '#0a8f5e',
+  waT: 'rgba(10,143,94,0.10)',
+  warn: '#c46506',
+  warnT: 'rgba(196,101,6,0.12)',
+  er: '#c81e1e',
+  railWidth: 264,
+  headerH: 55,
+  /** Hauteur utile Orchestration V3 dans le formulaire listing (toggle + padding app). */
+  embedViewportH: 'calc(100vh - 168px)',
+} as const;
+
+export const V3_TOGGLE = {
+  manage: { on: V3.p, grad: 'linear-gradient(135deg,#cb9b2c,#b8851a)', ring: 'rgba(184,133,26,0.45)' },
+  client: { on: V3.client, grad: 'linear-gradient(135deg,#3a9fd6,#0673b3)', ring: 'rgba(6,115,179,0.4)' },
+  orch: { on: V3.orch, grad: 'linear-gradient(135deg,#9b6ef0,#7c3aed)', ring: 'rgba(124,58,237,0.4)' },
+  task: { on: V3.task, grad: 'linear-gradient(135deg,#22b8d6,#0891b2)', ring: 'rgba(8,145,178,0.4)' },
+} as const;
+
+/** Couleurs par type de décision / toggle */
+export const V3_KIND = {
+  manage: {
+    color: V3.pd,
+    bg: V3.pt,
+    bgSolid: V3.pt2,
+    border: V3.p,
+    borderSoft: V3.pt2,
+    grad: V3_TOGGLE.manage.grad,
+    ring: V3_TOGGLE.manage.ring,
+  },
+  client: {
+    color: V3.client,
+    bg: V3.clientT,
+    bgSolid: 'rgba(6,115,179,0.22)',
+    border: V3.client,
+    borderSoft: 'rgba(6,115,179,0.25)',
+    grad: V3_TOGGLE.client.grad,
+    ring: V3_TOGGLE.client.ring,
+  },
+  orch: {
+    color: V3.orch,
+    bg: V3.orchT,
+    bgSolid: 'rgba(124,58,237,0.22)',
+    border: V3.orch,
+    borderSoft: 'rgba(124,58,237,0.25)',
+    grad: V3_TOGGLE.orch.grad,
+    ring: V3_TOGGLE.orch.ring,
+  },
+  task: {
+    color: V3.task,
+    bg: V3.taskT,
+    bgSolid: 'rgba(8,145,178,0.22)',
+    border: V3.task,
+    borderSoft: 'rgba(8,145,178,0.25)',
+    grad: V3_TOGGLE.task.grad,
+    ring: V3_TOGGLE.task.ring,
+  },
+} as const;

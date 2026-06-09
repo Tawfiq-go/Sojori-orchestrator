@@ -5,7 +5,7 @@ import {
 } from './orchestrationMessageVars';
 import type { CatalogMessage } from './types';
 
-/** 9 messages alignés design Claude / seeds srv-fulltask (OTA + email, WA plus tard). */
+/** 10 messages alignés design Claude / seeds srv-fulltask (OTA + email, WA Meta). */
 export const CLAUDE_DEFAULT_MESSAGE_CATALOG: CatalogMessage[] = [
   {
     id: 'welcome_sojori_v2',
@@ -51,27 +51,33 @@ Belle journée,
   {
     id: 'departure_instructions',
     label: 'Instructions départ',
-    whatsappTemplateId: '',
+    whatsappTemplateId: 'departure_instructions_v1',
     messageFrOta: `Bonjour {firstName},
 
-Demain est votre jour de départ de {listingName}.
+Votre départ de {listingName} approche : demain à {checkoutTime}.
 
+Avant de partir, merci de :
 {checkoutInstructions}
 
-Merci pour votre séjour chez Sojori !
+{cityTaxParagraph}
+
+Une question ?
+${WHATSAPP_RESERVATION_LINK_VAR}
+
 Équipe Sojori · Réf. {reservationNumber}`,
-    messageFrEmail: `Objet : Instructions de départ — {listingName}
+    messageFrEmail: `Objet : Instructions de départ — {listingName} · {departureDate}
 
 Bonjour {firstName},
 
-Voici les informations pour votre départ de {listingName} :
+Votre départ de {listingName} approche : demain à {checkoutTime}.
 
+Avant de partir, merci de :
 {checkoutInstructions}
 
-Taxe de séjour : {cityTaxTotal} {currency} (selon conditions indiquées à l'arrivée).
+{cityTaxParagraph}
 
-Merci pour votre séjour chez Sojori !
-Équipe Sojori`,
+Question de dernière minute :
+${WHATSAPP_RESERVATION_LINK_VAR}`,
   },
   {
     id: 'checkout_feedback',

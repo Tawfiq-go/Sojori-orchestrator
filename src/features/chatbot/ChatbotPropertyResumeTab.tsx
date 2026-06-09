@@ -165,8 +165,8 @@ export default function ChatbotPropertyResumeTab({
           <Link to={`/listings/${listingId}?level=detail&tab=general`} className="cb-link">
             Modifier General Information ↗
           </Link>
-          <Link to={`/listings/${listingId}?level=config`} className="cb-link cb-link--ghost">
-            Config orchestration ↗
+          <Link to={`/listings/${listingId}?level=orchestration-v3`} className="cb-link cb-link--ghost">
+            Orchestration ↗
           </Link>
         </Stack>
       </Box>

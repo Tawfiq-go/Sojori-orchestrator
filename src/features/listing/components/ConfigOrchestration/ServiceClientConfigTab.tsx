@@ -32,7 +32,6 @@ import {
   TYPO,
   ConfigIntroBar,
 } from './SHARED';
-import ServiceClientWhatsAppMenuPanel from './ServiceClientWhatsAppMenuPanel';
 import {
   DEFAULT_SLA_HOURS,
   DEFAULT_SLA_MESSAGE_FR,
@@ -303,8 +302,6 @@ export default function ServiceClientConfigTab({ listingId, ownerId, templateOwn
 
   const slaPreview = formatSlaGuestMessage(slaMessageFr, slaHours);
   const subjectCount = subjects.length;
-  const waBadge = enabled ? 'WA · OUI' : 'WA · NON';
-  const waKind = enabled ? 'wa-yes' : 'wa-no';
 
   if (loading) {
     return (
@@ -329,11 +326,10 @@ export default function ServiceClientConfigTab({ listingId, ownerId, templateOwn
       <SectionHeader
         icon="💌"
         title="Service client"
-        badge={waBadge}
-        badgeKind={waKind}
         subtitle={
           <>
-            Formulaire de contact pour les voyageurs. Désactivé : le service n’apparaît plus dans le menu.
+            Formulaire contact (objets + SLA). Bouton menu WhatsApp <strong>L</strong> et fenêtre de
+            disponibilité : onglet <strong>Menu WhatsApp</strong> uniquement.
           </>
         }
         toggle={enabled}
@@ -344,18 +340,6 @@ export default function ServiceClientConfigTab({ listingId, ownerId, templateOwn
         }}
         toggleLabel="Activer SC"
       />
-
-      <Card icon="📱" title="Menu WhatsApp" subtitle="Option L — fenêtre de disponibilité (Support K)">
-        <ServiceClientWhatsAppMenuPanel
-          listingId={listingId}
-          ownerId={ownerId}
-          enabled={enabled}
-          onEnabledChange={(on) => {
-            setEnabled(on);
-            scheduleSave({ enabled: on, responseSlaHours: slaHours, subjects });
-          }}
-        />
-      </Card>
 
       <Card icon="⏱️" title="SLA · délai de réponse" subtitle="Affiché au voyageur après envoi du formulaire">
         <FormRow compact label="Délai de réponse affiché">
@@ -424,7 +408,8 @@ export default function ServiceClientConfigTab({ listingId, ownerId, templateOwn
         </Box>
         {!enabled && (
           <Typography sx={{ ...TYPO.caption, mt: 1 }}>
-            Activez « Activer SC » pour proposer le formulaire dans WhatsApp.
+            Désactivé : le formulaire service client n’est plus proposé au voyageur (même si le menu L est
+            activé).
           </Typography>
         )}
       </Card>

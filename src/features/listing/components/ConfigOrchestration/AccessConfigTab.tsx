@@ -34,11 +34,14 @@ interface Props {
 function InstructionBlock({
   step,
   onChange,
+  disabled = false,
 }: {
   step: AccessInstructionStep;
   onChange: (patch: Partial<AccessInstructionStep>) => void;
+  disabled?: boolean;
 }) {
   return (
+    <Box sx={disabled ? { opacity: 0.55, pointerEvents: 'none', userSelect: 'none' } : undefined}>
     <Card icon="📍" title={step.title} compact>
       <FormRow label="Description activée">
         <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
@@ -78,6 +81,7 @@ function InstructionBlock({
         />
       </FormRow>
     </Card>
+    </Box>
   );
 }
 
@@ -103,25 +107,24 @@ export default function AccessConfigTab({
       if (isOwnerTemplate && !templateOwnerKey) return;
       setSavingState('saving');
       try {
-        const sectionBody = {
-          receptionMode: {
-            type: payload.receptionMode.type,
-            assistedGuestMessage: payload.receptionMode.assistedGuestMessage,
-            codeSendSchedule: payload.receptionMode.codeSendSchedule,
-          },
-          instructions: payload.instructions,
+        const receptionMode = {
+          type: payload.receptionMode.type,
+          assistedGuestMessage: payload.receptionMode.assistedGuestMessage,
+          codeSendSchedule: payload.receptionMode.codeSendSchedule,
         };
         if (isOwnerTemplate && templateOwnerKey) {
+          // Template owner/global : uniquement mode d'accueil — pas les codes par logement.
           await listingsService.putListingOwnerConfigTemplateSection(
             templateOwnerKey,
             'access',
-            sectionBody,
+            { receptionMode },
           );
         } else {
           const body = {
             listingId: payload.listingId,
             listingName: payload.listingName || listingName,
-            ...sectionBody,
+            receptionMode,
+            instructions: payload.instructions,
           };
           let res = await listingsService.updateListingAccess(listingId!, body);
           if (res.notFound || (res.error && !res.data)) {
@@ -249,10 +252,17 @@ export default function AccessConfigTab({
         badge="✓ schéma"
         badgeKind="wa-yes"
         subtitle={
-          <>
-            Codes et instructions d&apos;accès (menu WhatsApp <strong>F</strong>) · WiFi ci-dessous
-            (menu WhatsApp <strong>G</strong> — Propriété &amp; WiFi).
-          </>
+          isOwnerTemplate ? (
+            <>
+              Mode d&apos;accueil partagé sur les annonces (menu WhatsApp <strong>F</strong>). Les codes
+              parking / immeuble / appartement se configurent <strong>par listing</strong>.
+            </>
+          ) : (
+            <>
+              Codes et instructions d&apos;accès (menu WhatsApp <strong>F</strong>) · WiFi ci-dessous
+              (menu WhatsApp <strong>G</strong> — Propriété &amp; WiFi).
+            </>
+          )
         }
       />
 
@@ -374,10 +384,19 @@ export default function AccessConfigTab({
         )}
       </Card>
 
+      {isOwnerTemplate && (
+        <Alert severity="info" sx={{ mb: 2, fontSize: 12.5 }}>
+          Parking, immeuble et appartement (codes et descriptions) ne sont <strong>pas</strong>{' '}
+          synchronisés depuis ce template. Configurez-les dans chaque fiche annonce → onglet{' '}
+          <strong>Accès</strong>.
+        </Alert>
+      )}
+
       {form.instructions.map((step, i) => (
         <InstructionBlock
           key={step.title}
           step={step}
+          disabled={isOwnerTemplate}
           onChange={(patchStep) =>
             patch((f) => {
               const instructions = [...f.instructions];
@@ -389,8 +408,9 @@ export default function AccessConfigTab({
       ))}
 
       <Typography sx={{ ...TYPO.caption, mt: 1 }}>
-        Sauvegarde automatique après modification. Premier enregistrement : création du document
-        listing_access si absent.
+        {isOwnerTemplate
+          ? 'Sauvegarde automatique du mode d’accueil uniquement. La sync vers les annonces ne modifie pas les codes d’accès déjà saisis par listing.'
+          : 'Sauvegarde automatique après modification. Premier enregistrement : création du document listing_access si absent.'}
       </Typography>
     </Box>
   );

@@ -122,7 +122,7 @@ export const SOJORI_DEFAULT_MENU_OPTIONS = [
   },
   {
     code: 'C',
-    label: "Parcours d'arrivée 🚶‍♂️",
+    label: 'Parcours Arrivée/Départ 🚶‍♂️',
     enabled: true,
     availability: { type: 'after_booking_confirmed' },
     action: 'show_reservation_details',

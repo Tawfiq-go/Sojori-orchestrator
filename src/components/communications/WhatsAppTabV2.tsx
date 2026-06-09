@@ -147,7 +147,8 @@ export default function WhatsAppTabV2() {
           <>
             <ConversationThread
               thread={activeThread}
-              messages={inbox.loadingMessages ? [] : formattedMessages}
+              messages={formattedMessages}
+              loadingMessages={inbox.loadingMessages}
               quickTemplates={WA_QUICK_TEMPLATES}
               onSendMessage={async (text) => {
                 if (!inbox.activeConversation) return;

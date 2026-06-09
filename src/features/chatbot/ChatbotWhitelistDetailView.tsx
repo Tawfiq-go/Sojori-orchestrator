@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Stack,
@@ -11,7 +11,7 @@ import {
   Chip,
 } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import moment from 'moment';
 import 'moment/locale/fr';
 import '../planReservation/planReservation.css';
@@ -33,6 +33,15 @@ import {
   type ListingSnapshotDetail,
 } from './ChatbotWhitelistStayPanels';
 import { shortLabelForWhatsappAiTier } from '../../constants/whatsappAiTier';
+import {
+  getCachedGuestContext,
+  getCachedListingSnapshot,
+  getCachedWhitelistDetailShell,
+  seedWhitelistDetailFromListRow,
+  setCachedGuestContext,
+  setCachedListingSnapshot,
+  setCachedWhitelistDetailShell,
+} from '../../utils/whitelistEnrichmentCache';
 
 moment.locale('fr');
 
@@ -42,53 +51,145 @@ function initials(name: string): string {
   return (parts[0]?.slice(0, 2) || '?').toUpperCase();
 }
 
+function hydrateDetailCaches(data: Record<string, unknown> | null | undefined): void {
+  if (!data) return;
+  const reservationId = String((data.whitelist as Record<string, unknown> | undefined)?.reservationId ?? '');
+  const listingId = String((data.whitelist as Record<string, unknown> | undefined)?.listingId ?? '');
+  if (reservationId) setCachedWhitelistDetailShell(reservationId, data);
+  const gc = data.guestContext as GuestContextDetail | null | undefined;
+  if (reservationId && gc) setCachedGuestContext(reservationId, gc);
+  const snap = data.listingSnapshot as ListingSnapshotDetail | null | undefined;
+  if (listingId && snap) setCachedListingSnapshot(listingId, snap);
+}
+
+function hasRenderableWhitelist(detail: Record<string, unknown> | null): boolean {
+  const wl = detail?.whitelist as Record<string, unknown> | undefined;
+  return Boolean(wl?.guestName || wl?.reservationCode);
+}
+
+function buildShellFromCaches(reservationId: string): Record<string, unknown> | null {
+  const cachedShell = getCachedWhitelistDetailShell(reservationId);
+  if (cachedShell) return cachedShell;
+
+  const cachedCtx = getCachedGuestContext(reservationId);
+  if (!cachedCtx) return null;
+
+  return {
+    whitelist: { reservationId },
+    guestContext: cachedCtx,
+    listingSnapshot: null,
+    conversationPreview: null,
+    aiModel: null,
+  };
+}
+
+type ListNavState = { row?: Record<string, unknown> };
+
 export default function ChatbotWhitelistDetailView() {
   const { reservationId } = useParams<{ reservationId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loadingCore, setLoadingCore] = useState(() => {
+    if (!reservationId) return true;
+    return !hasRenderableWhitelist(buildShellFromCaches(reservationId));
+  });
+  const [loadingConversation, setLoadingConversation] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [detail, setDetail] = useState<Record<string, unknown> | null>(() => {
+    return reservationId ? buildShellFromCaches(reservationId) : null;
+  });
+
+  const loadCore = useCallback(async () => {
+    if (!reservationId) return;
+    const cached = buildShellFromCaches(reservationId);
+    if (!hasRenderableWhitelist(cached)) {
+      setLoadingCore(true);
+    }
+    setError(null);
+    try {
+      const res = await fullchatbotApi.getWhitelistDetail(reservationId, {
+        includeConversation: false,
+      });
+      const data = (res?.data ?? null) as Record<string, unknown> | null;
+      setDetail((prev) => ({
+        ...(prev ?? {}),
+        ...data,
+        conversationPreview: prev?.conversationPreview ?? null,
+      }));
+      hydrateDetailCaches(data);
+    } catch (e) {
+      if (!hasRenderableWhitelist(cached)) {
+        setError(e instanceof Error ? e.message : 'Erreur');
+      }
+    } finally {
+      setLoadingCore(false);
+    }
+  }, [reservationId]);
+
+  const loadConversation = useCallback(async () => {
+    if (!reservationId) return;
+    setLoadingConversation(true);
+    try {
+      const res = await fullchatbotApi.getWhitelistDetail(reservationId, {
+        includeConversation: true,
+      });
+      const data = res?.data as Record<string, unknown> | undefined;
+      if (data?.conversationPreview) {
+        setDetail((prev) => ({
+          ...(prev ?? {}),
+          conversationPreview: data.conversationPreview,
+          aiModel: data.aiModel ?? prev?.aiModel,
+        }));
+      }
+    } catch {
+      // Mémoire bot reste utilisable sans preview
+    } finally {
+      setLoadingConversation(false);
+    }
+  }, [reservationId]);
 
   useEffect(() => {
     if (!reservationId) return;
-    let cancelled = false;
-    setLoading(true);
-    fullchatbotApi
-      .getWhitelistDetail(reservationId)
-      .then((res) => {
-        if (!cancelled) setDetail(res?.data ?? null);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [reservationId]);
+    const navRow = (location.state as ListNavState | null)?.row;
+    if (navRow && String(navRow.reservationId) === reservationId) {
+      seedWhitelistDetailFromListRow(
+        navRow as Parameters<typeof seedWhitelistDetailFromListRow>[0],
+      );
+    }
+    const shell = buildShellFromCaches(reservationId);
+    if (shell) {
+      setDetail(shell);
+      if (hasRenderableWhitelist(shell)) setLoadingCore(false);
+    }
+    void loadCore();
+  }, [reservationId, loadCore, location.state]);
+
+  useEffect(() => {
+    if (tab !== 2 || !reservationId) return;
+    if (detail?.conversationPreview) return;
+    void loadConversation();
+  }, [tab, reservationId, detail?.conversationPreview, loadConversation]);
+
+  const reloadDetail = useCallback(() => {
+    if (!reservationId) return;
+    void loadCore();
+    if (tab === 2) void loadConversation();
+  }, [reservationId, loadCore, loadConversation, tab]);
 
   const wl = detail?.whitelist as Record<string, unknown> | undefined;
   const guestContext = detail?.guestContext as
     | (GuestContextDetail & { whatsapp?: GuestContextWhatsappLike })
     | null
     | undefined;
-  const listingSnapshot = detail?.listingSnapshot as ListingSnapshotDetail | null | undefined;
+  const listingId = wl?.listingId ? String(wl.listingId) : '';
+  const listingSnapshot = (detail?.listingSnapshot as ListingSnapshotDetail | null | undefined) ??
+    (listingId ? getCachedListingSnapshot(listingId) : null);
   const conversationPreview = detail?.conversationPreview as ConversationPreviewLike | null | undefined;
   const aiModel = detail?.aiModel as WhitelistAiModelLike | null | undefined;
 
-  const reloadDetail = () => {
-    if (!reservationId) return;
-    fullchatbotApi
-      .getWhitelistDetail(reservationId)
-      .then((res) => setDetail(res?.data ?? null))
-      .catch(() => {});
-  };
   const whatsappMemory = guestContext?.whatsapp;
   const registration = guestContext?.registration;
-  const listingId = wl?.listingId ? String(wl.listingId) : '';
   const listingName = listingSnapshot?.name || '';
 
   const guestName = String(wl?.guestName ?? 'Voyageur');
@@ -107,6 +208,8 @@ export default function ChatbotWhitelistDetailView() {
   const checkInLabel = wl?.checkIn ? moment(String(wl.checkIn)).format('DD MMM YYYY') : undefined;
   const checkOutLabel = wl?.checkOut ? moment(String(wl.checkOut)).format('DD MMM YYYY') : undefined;
 
+  const showBlockingSpinner = loadingCore && !hasRenderableWhitelist(detail);
+
   return (
     <div className="so-plan-res so-chatbot-hub">
       <Box sx={{ px: { xs: 2, md: 3 }, pt: 2, pb: 1 }}>
@@ -115,6 +218,9 @@ export default function ChatbotWhitelistDetailView() {
             <ArrowBack />
           </IconButton>
           <Typography sx={{ fontSize: 13, color: T.text3, fontWeight: 600 }}>Retour à la whitelist</Typography>
+          {loadingCore && (
+            <CircularProgress size={14} sx={{ color: T.primary, ml: 0.5 }} />
+          )}
         </Stack>
       </Box>
 
@@ -124,13 +230,13 @@ export default function ChatbotWhitelistDetailView() {
         </Box>
       )}
 
-      {loading && (
+      {showBlockingSpinner && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress sx={{ color: T.primary }} />
         </Box>
       )}
 
-      {!loading && wl && (
+      {!showBlockingSpinner && wl && (
         <Box className="wrap" sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, md: 3 }, pb: 4 }}>
           <div className="hero">
             <div className="hero-main">
@@ -181,8 +287,8 @@ export default function ChatbotWhitelistDetailView() {
                   </div>
                 </div>
                 {Boolean(wl.listingId) && (
-                  <Link to={`/listings/${wl.listingId}?level=config`} className="cb-link">
-                    Config orchestration ↗
+                  <Link to={`/listings/${wl.listingId}?level=orchestration-v3`} className="cb-link">
+                    Orchestration ↗
                   </Link>
                 )}
               </div>
@@ -308,14 +414,20 @@ export default function ChatbotWhitelistDetailView() {
                 <Chip size="small" label="whatsapp · LLM" sx={{ ml: 'auto', fontSize: 10 }} />
               </div>
               <Box sx={{ p: 1.5 }}>
-                <GuestWhatsappMemoryPanel
-                  whatsapp={whatsappMemory}
-                  conversationPreview={conversationPreview}
-                  hasCommunicated={Boolean(wl.hasCommunicated)}
-                  reservationId={reservationId}
-                  aiModel={aiModel}
-                  onAiModelUpdated={reloadDetail}
-                />
+                {loadingConversation && !conversationPreview ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress size={32} sx={{ color: T.primary }} />
+                  </Box>
+                ) : (
+                  <GuestWhatsappMemoryPanel
+                    whatsapp={whatsappMemory}
+                    conversationPreview={conversationPreview}
+                    hasCommunicated={Boolean(wl.hasCommunicated)}
+                    reservationId={reservationId}
+                    aiModel={aiModel}
+                    onAiModelUpdated={reloadDetail}
+                  />
+                )}
               </Box>
             </div>
           )}

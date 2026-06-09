@@ -113,7 +113,7 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         iconColor: '#D4A574',
         sub: [
           { id: 'listings/list', label: 'Listings' },
-          { id: 'listings/config', label: 'Config listing' },
+          { id: 'listings/config', label: 'Template orchestration' },
         ],
       },
       {
@@ -156,7 +156,6 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         sub: [
           { id: 'chatbot/whitelist', label: 'Whitelist' },
           { id: 'chatbot/listing', label: 'Listing chatbot' },
-          { id: 'chatbot/flows', label: 'Flows pilote' },
         ],
       },
       {
