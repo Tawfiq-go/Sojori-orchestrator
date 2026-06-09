@@ -7,6 +7,7 @@ import { orchDragEndListOrder, orchDragEndIndices, useOrchSortableSensors } from
 import MessageBodyModal from './MessageBodyModal';
 import MessageCatalogPicker from './MessageCatalogPicker';
 import OrchConfigListCard from './OrchConfigListCard';
+import OrchConfigCollapseBlock from './OrchConfigCollapseBlock';
 import { SCHEDULED_MESSAGE_EMOJI } from './orchestrationJourneyOrder';
 import type { OrchListKey } from './orchestrationListOrder';
 import OrchConfirmDialog from './OrchConfirmDialog';
@@ -434,9 +435,7 @@ export default function OrchestrationPageView({
             <Stack
               direction="row"
               spacing={1}
-              alignItems="center"
-              flexWrap="wrap"
-              sx={{ mt: 1.25 }}
+              sx={{ mt: 1.25, alignItems: 'center', flexWrap: 'wrap' }}
             >
               <span className="sub" style={{ margin: 0, fontWeight: 700, color: 'var(--t2)' }}>
                 Propriétaire :
@@ -597,11 +596,7 @@ export default function OrchestrationPageView({
                   }
                 >
                   <div className="wf-card-main">
-                    <div className="wf-block">
-                      <div className="wf-block-h">
-                        <span className="wf-block-h-ic">💬</span>
-                        <span className="wf-block-h-txt">MESSAGE</span>
-                      </div>
+                    <OrchConfigCollapseBlock icon="💬" title="MESSAGE" countLabel={catEntry?.label || 'Template'}>
                       <div className="rel-msg-chips-row">
                         <span className="rel-msg-chips-lbl">Template</span>
                         <MessageCatalogPicker
@@ -614,13 +609,9 @@ export default function OrchestrationPageView({
                           variant="select"
                         />
                       </div>
-                    </div>
+                    </OrchConfigCollapseBlock>
 
-                    <div className="wf-block">
-                      <div className="wf-block-h">
-                        <span className="wf-block-h-ic">⏰</span>
-                        <span className="wf-block-h-txt">TIMING ENVOI</span>
-                      </div>
+                    <OrchConfigCollapseBlock icon="⏰" title="TIMING ENVOI" countLabel="Plan réservation">
                       <div className="rel-table">
                         <div className={`rel-table-h rel-table-h--timing${rule.trigger.delay.unit === 'hours' ? ' compact' : ''}`}>
                           <span>RÉF</span>
@@ -738,7 +729,7 @@ export default function OrchestrationPageView({
                           </select>
                         </div>
                       </div>
-                    </div>
+                    </OrchConfigCollapseBlock>
                   </div>
                   <OrchPlanSaveRow saving={saving} onSave={onSave} />
                 </OrchConfigListCard>
@@ -769,13 +760,11 @@ export default function OrchestrationPageView({
               >
                 <div className="wf-card-layout">
                   <div className="wf-card-main">
-                    <div className="wf-block">
-                      <div className="wf-block-h">
-                        <span>📨</span> RELANCES VOYAGEUR
-                        <span className="ct" style={{ marginLeft: 'auto' }}>
-                          {w.relances.length} actives
-                        </span>
-                      </div>
+                    <OrchConfigCollapseBlock
+                      icon="📨"
+                      title="RELANCES VOYAGEUR"
+                      countLabel={`${w.relances.length} actives`}
+                    >
                       <div className="rel-table">
                         <div className="rel-table-h rel-table-h--timing rel-table-h--with-msg">
                           <span>RÉF</span>
@@ -913,23 +902,25 @@ export default function OrchestrationPageView({
                       <button type="button" className="add-btn" onClick={() => onAddRelance(w._id)}>
                         + Ajouter une relance
                       </button>
-                    </div>
+                    </OrchConfigCollapseBlock>
 
-                    <div className="wf-block">
-                      <div className="wf-block-h">
-                        <span className="wf-block-h-ic">🎯</span>
-                        <span className="wf-block-h-txt">ASSIGNATION STAFF</span>
-                        {w.assignment ? (
+                    <OrchConfigCollapseBlock
+                      icon="🎯"
+                      title="ASSIGNATION STAFF"
+                      countLabel={w.assignment ? 'Activée' : 'Désactivée'}
+                      headerExtra={
+                        w.assignment ? (
                           <button
                             type="button"
                             className="add-btn"
-                            style={{ marginLeft: 'auto', fontSize: 11 }}
+                            style={{ fontSize: 11 }}
                             onClick={() => onUpdateWorkflow(w._id, { assignment: null })}
                           >
                             Désactiver
                           </button>
-                        ) : null}
-                      </div>
+                        ) : null
+                      }
+                    >
                       {!w.assignment ? (
                         <button
                           type="button"
@@ -1248,16 +1239,13 @@ export default function OrchestrationPageView({
                       </div>
                       </>
                       )}
-                    </div>
+                    </OrchConfigCollapseBlock>
 
-                    <div className="wf-block">
-                      <div className="wf-block-h">
-                        <span className="wf-block-h-ic">🔔</span>
-                        <span className="wf-block-h-txt">RAPPELS STAFF</span>
-                        <span className="wf-block-h-ct">
-                          {(w.staffReminders ?? []).filter((r) => r.enabled).length} actifs
-                        </span>
-                      </div>
+                    <OrchConfigCollapseBlock
+                      icon="🔔"
+                      title="RAPPELS STAFF"
+                      countLabel={`${(w.staffReminders ?? []).filter((r) => r.enabled).length} actifs`}
+                    >
                       <p className="wf-block-hint">
                         Rappel WhatsApp staff (compte staff / Meta). Template par type — ex. transport
                         2h avant, ménage J-1. Onglet Config → templates{' '}
@@ -1391,12 +1379,14 @@ export default function OrchestrationPageView({
                       >
                         + Ajouter un rappel
                       </button>
-                    </div>
+                    </OrchConfigCollapseBlock>
 
-                    <div className="wf-block">
-                      <div className="wf-block-h">
-                        <span>⏰</span> ESCALADE ADMIN
-                        <label className="wf-toggle-esc" style={{ marginLeft: 'auto' }}>
+                    <OrchConfigCollapseBlock
+                      icon="⏰"
+                      title="ESCALADE ADMIN"
+                      countLabel={w.escalationEnabled !== false ? 'Activée' : 'Désactivée'}
+                      headerExtra={
+                        <label className="wf-toggle-esc">
                           <input
                             type="checkbox"
                             checked={w.escalationEnabled !== false}
@@ -1406,7 +1396,8 @@ export default function OrchestrationPageView({
                           />
                           <span>{w.escalationEnabled !== false ? 'Activée' : 'Désactivée'}</span>
                         </label>
-                      </div>
+                      }
+                    >
                       {w.escalationEnabled === false ? (
                         <p className="wf-block-hint">
                           Escalade désactivée — aucun bloc escalade dans le plan exécuté.
@@ -1520,7 +1511,7 @@ export default function OrchestrationPageView({
                         </div>
                       </div>
                       )}
-                    </div>
+                    </OrchConfigCollapseBlock>
                   </div>
 
                   <aside className="wf-card-sim" aria-label="Simulation timeline">
