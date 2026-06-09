@@ -66,6 +66,7 @@ export const PM_CONFIG_SCHEMA_FIELDS: Record<PmConfigTabKey, SchemaFieldDef[]> =
   'concierge-config': [
     { id: 'wa-menu', label: 'Activer conciergerie', designPath: 'menu WhatsApp', schemaPath: 'orchestration_custom · chatbot', inSchema: true, note: 'Pas de toggle global ici' },
     { id: 'services', label: 'Services listing', designPath: 'concierge.services[]', schemaPath: 'customServices[]', inSchema: true, note: 'Bibliothèque = raccourcis d’ajout' },
+    { id: 'cityIds', label: 'Villes', designPath: 'services[].cityIds', schemaPath: 'customServices[].cityIds', inSchema: true, note: 'all ou cityIds[]' },
     { id: 'formulas', label: 'Formules / prix', designPath: 'services[].formulas[]', schemaPath: 'customServices[].pricing', inSchema: true, note: 'forfait · hourly_per_person · hourly_per_group' },
     { id: 'cat-max', label: 'Max personnes', designPath: 'maxPersons', schemaPath: 'customServices[].capacity.maxPassengers', inSchema: true, note: 'Facultatif' },
     { id: 'availability', label: 'Disponibilités', designPath: 'concierge.availability', schemaPath: 'customServices[].availability', inSchema: true },
@@ -110,14 +111,6 @@ export const PM_CONFIG_SCHEMA_FIELDS: Record<PmConfigTabKey, SchemaFieldDef[]> =
     { id: 'products', label: 'Catalogue produits', designPath: 'products[]', schemaPath: null, inSchema: false, note: 'Retiré du design — texte libre uniquement' },
   ],
   'service-client-config': [
-    {
-      id: 'wa-menu-sc',
-      label: 'Menu WhatsApp L',
-      designPath: 'menuOptions[L]',
-      schemaPath: 'listing_chatbot_config.menuOptions',
-      inSchema: true,
-      note: 'Code L · action contact_service_client',
-    },
     { id: 'sla', label: 'SLA réponse', designPath: 'responseSlaHours', schemaPath: 'listing_service_client_config.responseSlaHours', inSchema: true },
     { id: 'sla-msg', label: 'Message SLA guest', designPath: 'slaGuestMessage.fr', schemaPath: 'listing_service_client_config.slaGuestMessage', inSchema: true },
     { id: 'subjects', label: 'Objets', designPath: 'subjects[]', schemaPath: 'listing_service_client_config.subjects[]', inSchema: true },
@@ -131,9 +124,19 @@ export const PM_CONFIG_SCHEMA_FIELDS: Record<PmConfigTabKey, SchemaFieldDef[]> =
     { id: 'calc', label: 'Mode calcul', designPath: 'calculationMode', schemaPath: 'cityTaxCalculationMode', inSchema: true },
     { id: 'exempt', label: 'Exemption enfants', designPath: 'exemptChildren', schemaPath: 'cityTaxExemptChildren', inSchema: true },
     { id: 'exempt-age', label: 'Âge exemption', designPath: 'exemptBelowAge', schemaPath: 'cityTaxExemptBelowAge', inSchema: true },
+    { id: 'collection', label: 'Mode réception taxe', designPath: 'collectionMode', schemaPath: 'cityTaxCollectionMode', inSchema: true },
+    { id: 'tax-text', label: 'Texte paragraphe taxe', designPath: 'instructionText', schemaPath: 'cityTaxInstructionText', inSchema: true },
   ],
   'whatsapp-config': [
     { id: 'menu', label: 'Menu voyageur', designPath: 'menuOptions[]', schemaPath: 'listing_chatbot_config.menuOptions', inSchema: true },
+    {
+      id: 'wa-menu-sc',
+      label: 'Option L · Service client',
+      designPath: 'menuOptions[L]',
+      schemaPath: 'listing_chatbot_config.menuOptions',
+      inSchema: true,
+      note: 'Code L · action contact_service_client · pas dans onglet Service Client',
+    },
     { id: 'overrides', label: 'Overrides listing', designPath: 'overrides[]', schemaPath: 'listing_chatbot_config.overrides', inSchema: true },
     { id: 'sync', label: 'Sync propriétaire', designPath: '—', schemaPath: 'listing_chatbot_config.sync', inSchema: true },
   ],

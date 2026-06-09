@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { Box } from '@mui/material';
-import ListingFormV2 from '../../components/listing/form-v2/ListingFormV2';
 import ChatbotPropertyResumeTab from './ChatbotPropertyResumeTab';
-import { CONFIG_NEW_TAB_COUNT } from '../../components/listing/form-v2/ListingFormShell';
+import ListingOrchestrationV3Embed from '../orchestrationListingV3/ListingOrchestrationV3Embed';
 
-type MainTab = 'resume' | 'config';
+type MainTab = 'resume' | 'orchestration-v3';
 
 type Props = {
   listingId: string;
@@ -12,18 +11,11 @@ type Props = {
   rawDoc: Record<string, unknown>;
   snapshotUpdatedAt?: string;
   menuOptionsCount: number;
-  configDefaultTab?: string;
-  onSave: (values: Record<string, unknown>) => void;
-  onImagesPersisted: () => void;
-  onVerifyRuChannels: () => void;
-  verifyRuLoading: boolean;
-  listingStructure: unknown;
-  roomTypeConfigs: unknown[];
 };
 
 const MAIN_TABS: Array<{ id: MainTab; icon: string; label: string; pill?: string }> = [
   { id: 'resume', icon: '📋', label: 'Résumé propriété' },
-  { id: 'config', icon: '⚙️', label: 'Config orchestration', pill: `${CONFIG_NEW_TAB_COUNT} onglets` },
+  { id: 'orchestration-v3', icon: '🎯', label: 'Orchestration', pill: 'Par service' },
 ];
 
 export default function ChatbotListingDetailTabs({
@@ -32,13 +24,6 @@ export default function ChatbotListingDetailTabs({
   rawDoc,
   snapshotUpdatedAt,
   menuOptionsCount,
-  configDefaultTab = 'access-config',
-  onSave,
-  onImagesPersisted,
-  onVerifyRuChannels,
-  verifyRuLoading,
-  listingStructure,
-  roomTypeConfigs,
 }: Props) {
   const [mainTab, setMainTab] = useState<MainTab>('resume');
 
@@ -61,7 +46,7 @@ export default function ChatbotListingDetailTabs({
         ))}
       </Box>
 
-      <Box className="cb-detail-tabs__panel" role="tabpanel">
+      <Box className="cb-detail-tabs__panel" role="tabpanel" sx={{ minHeight: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column' }}>
         {mainTab === 'resume' && (
           <ChatbotPropertyResumeTab
             listingId={listingId}
@@ -71,21 +56,14 @@ export default function ChatbotListingDetailTabs({
             menuOptionsCount={menuOptionsCount}
           />
         )}
-        {mainTab === 'config' && (
-          <ListingFormV2
-            listingId={listingId}
-            initialValues={formValues}
-            defaultLevel="config"
-            defaultTab={configDefaultTab}
-            lockLevel="config"
-            embedded
-            onSave={onSave}
-            onImagesPersisted={onImagesPersisted}
-            onVerifyRuChannels={onVerifyRuChannels}
-            verifyRuLoading={verifyRuLoading}
-            listingStructure={listingStructure}
-            roomTypeConfigs={roomTypeConfigs}
-          />
+        {mainTab === 'orchestration-v3' && (
+          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <ListingOrchestrationV3Embed
+              listingId={listingId}
+              ownerId={formValues.ownerId as string | undefined}
+              listingName={formValues.name as string | undefined}
+            />
+          </Box>
         )}
       </Box>
     </Box>

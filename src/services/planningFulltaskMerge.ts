@@ -165,7 +165,7 @@ export async function fetchTaskNewPlanning(params: {
   const startTime = performance.now();
 
   const reservationsPromise = reservationsService.getList({
-    limit: 100,
+    limit: 200, // ⚡ Augmenté de 100 → 200 pour réduire les appels individuels getById()
     status: 'Confirmed,Pending',
     dateType: 'arrival_or_departure',
     startDate: params.startDate,
@@ -192,6 +192,16 @@ export async function fetchTaskNewPlanning(params: {
   ]);
 
   console.log(`⏱️  [fetchTaskNewPlanning] All 3 API calls completed in ${(performance.now() - startTime).toFixed(0)}ms`);
+
+  // ⚡ OPTIMISATION: Augmenter la limite des réservations pour réduire les appels individuels
+  // Si on a plus de tâches que de réservations, on manque probablement des réservations
+  const tasksCount = tasksRes?.data?.length || 0;
+  const reservationsCount = reservationsRes?.data?.length || 0;
+  console.log(`📊 [fetchTaskNewPlanning] Loaded ${reservationsCount} reservations and ${tasksCount} tasks`);
+  if (tasksCount > reservationsCount) {
+    console.warn(`⚠️  [fetchTaskNewPlanning] WARNING: More tasks (${tasksCount}) than reservations (${reservationsCount})! This will cause individual API calls.`);
+    console.warn(`    💡 Solution: Increase limit in reservationsService.getList() from 100 to ${Math.max(200, tasksCount)}`);
+  }
 
   const staffRows = staffRes?.data || [];
   const staffById = Object.fromEntries(
@@ -283,7 +293,30 @@ export async function fetchTaskNewPlanning(params: {
   console.log(`⚠️  [fetchTaskNewPlanning] Found ${missingReservationIds.length} reservations with tasks but NOT in initial API response`);
   console.log(`    ℹ️  This will trigger ${missingReservationIds.length} individual getById() API calls (SLOW!)`);
 
-  const individualFetchStart = performance.now();
+  // ⚡ OPTIMISATION: Batch fetch des réservations manquantes en 1 seul appel
+  if (missingReservationIds.length > 0) {
+    const batchStart = performance.now();
+    try {
+      console.log(`🚀 [fetchTaskNewPlanning] Batch fetching ${missingReservationIds.length} reservations in 1 API call...`);
+      const batchResult = await reservationsService.getBatch(missingReservationIds);
+      const batchMs = performance.now() - batchStart;
+      console.log(`✅ [fetchTaskNewPlanning] Batch fetch completed in ${batchMs.toFixed(0)}ms (vs ${(missingReservationIds.length * 3000).toFixed(0)}ms for individual calls)`);
+
+      if (batchResult.success && batchResult.data) {
+        for (const res of batchResult.data) {
+          const resId = resolveReservationId(res);
+          if (resId) {
+            reservationsById.set(resId, res);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`❌ [fetchTaskNewPlanning] Batch fetch failed:`, error);
+      // Fallback to stub data from tasks
+    }
+  }
+
+  // Créer les lignes de réservations pour les IDs manquants
   for (const [key, timeline] of tasksByReservation) {
     if (reservationKeysSeen.has(key)) continue;
     const [listingId, reservationId] = key.split('::');
@@ -296,17 +329,13 @@ export async function fetchTaskNewPlanning(params: {
     const firstTask = timeline[0]?.data as Record<string, unknown> | undefined;
     if (firstTask?.guestName) guestName = String(firstTask.guestName);
 
-    try {
-      const singleStart = performance.now();
-      const res = await reservationsService.getById(reservationId);
-      console.log(`    📞 [fetchTaskNewPlanning] getById(${reservationId}) took ${(performance.now() - singleStart).toFixed(0)}ms`);
-      reservationsById.set(reservationId, res);
+    // Utiliser les données du batch si disponibles
+    const res = reservationsById.get(reservationId);
+    if (res) {
       arrivalDate = toIsoDate(res.arrivalDate) || arrivalDate;
       departureDate = toIsoDate(res.departureDate) || departureDate;
       guestName = res.guestName || guestName;
       reservationNumber = res.reservationNumber || reservationNumber;
-    } catch {
-      /* stub depuis la tâche */
     }
 
     const row: PlanningReservationRow = {
@@ -322,10 +351,6 @@ export async function fetchTaskNewPlanning(params: {
     list.push(row);
     reservationsByListing.set(listingId, list);
     reservationKeysSeen.add(key);
-  }
-
-  if (missingReservationIds.length > 0) {
-    console.log(`⏱️  [fetchTaskNewPlanning] All ${missingReservationIds.length} individual getById() calls completed in ${(performance.now() - individualFetchStart).toFixed(0)}ms`);
   }
 
   const listingIdsFromTasks = new Set<string>();

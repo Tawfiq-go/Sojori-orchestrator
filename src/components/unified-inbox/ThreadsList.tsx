@@ -1,7 +1,10 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Box, Stack, Typography } from '@mui/material';
+import { ModalScrollColumn } from '../common/ModalScrollColumn';
 import { T } from './_tokens';
 import type { Thread, Channel } from '../../types/unifiedInbox.types';
+import type { OtaAdvancedSearch, OtaChannelFilter, OtaFilterCounts } from './otaThreadFilters';
+import OtaInboxFilters from './OtaInboxFilters';
 
 export type ThreadsListMode = 'whatsapp' | 'ota';
 
@@ -15,10 +18,29 @@ interface ThreadsListProps {
   listTitle?: string;
   listIcon?: string;
   mode?: ThreadsListMode;
+  otaChannelFilter?: OtaChannelFilter;
+  onOtaChannelFilterChange?: (filter: OtaChannelFilter) => void;
+  otaUnrepliedOnly?: boolean;
+  onOtaUnrepliedOnlyChange?: (on: boolean) => void;
+  otaFilterCounts?: OtaFilterCounts;
+  otaAdvancedSearch?: OtaAdvancedSearch;
+  onOtaAdvancedSearchChange?: (search: OtaAdvancedSearch) => void;
+  onOtaAdvancedSearchSubmit?: () => void;
+  onOtaAdvancedSearchReset?: () => void;
+  otaServerSearchActive?: boolean;
+  loading?: boolean;
+  /** OTA : total threads chargés (badge header, avant filtre rapide local) */
+  otaListTotalCount?: number;
+  loadError?: string | null;
+  onRetryLoad?: () => void;
+  otaAdvancedExpanded?: boolean;
+  onOtaAdvancedExpandedChange?: (expanded: boolean) => void;
+  otaSearchResultCount?: number | null;
+  onOtaToutReset?: () => void;
+  otaUnrepliedSearchActive?: boolean;
 }
 
 type WaFilter = 'all' | 'unread' | 'guests' | 'staff';
-type OtaFilter = 'all' | 'ab' | 'bk' | 'vrbo';
 
 export default function ThreadsList({
   threads,
@@ -30,6 +52,25 @@ export default function ThreadsList({
   listTitle,
   listIcon,
   mode = 'whatsapp',
+  otaChannelFilter: otaChannelFilterProp = 'all',
+  onOtaChannelFilterChange,
+  otaUnrepliedOnly = false,
+  onOtaUnrepliedOnlyChange,
+  otaFilterCounts,
+  otaAdvancedSearch,
+  onOtaAdvancedSearchChange,
+  onOtaAdvancedSearchSubmit,
+  onOtaAdvancedSearchReset,
+  otaServerSearchActive,
+  loading,
+  otaListTotalCount,
+  loadError,
+  onRetryLoad,
+  otaAdvancedExpanded,
+  onOtaAdvancedExpandedChange,
+  otaSearchResultCount,
+  onOtaToutReset,
+  otaUnrepliedSearchActive,
 }: ThreadsListProps) {
   const channel = channels[0];
   const title = listTitle || channel?.label || 'Inbox';
@@ -37,7 +78,12 @@ export default function ThreadsList({
   const accentColor = channel?.color || (mode === 'ota' ? '#FF5A5F' : T.green);
 
   const [waFilter, setWaFilter] = useState<WaFilter>('all');
-  const [otaFilter, setOtaFilter] = useState<OtaFilter>('all');
+  const [internalAdvancedExpanded, setInternalAdvancedExpanded] = useState(false);
+  const showOtaAdvanced = otaAdvancedExpanded ?? internalAdvancedExpanded;
+  const setShowOtaAdvanced = onOtaAdvancedExpandedChange ?? setInternalAdvancedExpanded;
+
+  const headerCount =
+    mode === 'ota' && otaListTotalCount != null ? otaListTotalCount : threads.length;
 
   const waUnreadCount = useMemo(() => threads.filter((t) => t.unread > 0).length, [threads]);
 
@@ -47,10 +93,6 @@ export default function ThreadsList({
       if (waFilter === 'unread') list = list.filter((t) => t.unread > 0);
       else if (waFilter === 'guests') list = list.filter((t) => t.reservationNumber && !t.isStaff);
       else if (waFilter === 'staff') list = list.filter((t) => t.isStaff || !t.reservationNumber);
-    } else if (otaFilter !== 'all') {
-      if (otaFilter === 'ab') list = list.filter((t) => t.channel === 'ab');
-      else if (otaFilter === 'bk') list = list.filter((t) => t.channel === 'bk');
-      else list = list.filter((t) => (t.channel as string) === 'vrbo');
     }
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
@@ -59,20 +101,21 @@ export default function ThreadsList({
           t.name.toLowerCase().includes(q) ||
           t.phone?.toLowerCase().includes(q) ||
           t.reservationNumber?.toLowerCase().includes(q) ||
+          t.listingName?.toLowerCase().includes(q) ||
           t.preview.toLowerCase().includes(q),
       );
     }
     return list;
-  }, [threads, mode, waFilter, otaFilter, searchTerm]);
+  }, [threads, mode, waFilter, searchTerm]);
 
-  const otaCounts = useMemo(
-    () => ({
-      ab: threads.filter((t) => t.channel === 'ab').length,
-      bk: threads.filter((t) => t.channel === 'bk').length,
-      vrbo: threads.filter((t) => (t.channel as string) === 'vrbo').length,
-    }),
-    [threads],
-  );
+  const otaCounts: OtaFilterCounts = otaFilterCounts ?? {
+    all: threads.length,
+    ota: threads.filter((t) => t.channel === 'ab' || t.channel === 'bk' || t.channel === 'vrbo').length,
+    ab: threads.filter((t) => t.channel === 'ab').length,
+    bk: threads.filter((t) => t.channel === 'bk').length,
+    direct: 0,
+    unreplied: threads.filter((t) => t.needsReply).length,
+  };
 
   const getInitials = (name: string): string =>
     name
@@ -99,12 +142,13 @@ export default function ThreadsList({
   return (
     <Box
       sx={{
-        width: { xs: '100%', lg: 320 },
-        minWidth: { lg: 320 },
+        width: { xs: '100%', lg: mode === 'ota' ? 360 : 320 },
+        minWidth: { lg: mode === 'ota' ? 360 : 320 },
         borderRight: { lg: `1px solid ${T.border}` },
         borderBottom: { xs: `1px solid ${T.border}`, lg: 'none' },
         display: 'flex',
         flexDirection: 'column',
+        height: { lg: '100%' },
         minHeight: 0,
         overflow: 'hidden',
         bgcolor: T.bg1,
@@ -113,7 +157,7 @@ export default function ThreadsList({
       <Box
         sx={{
           px: '14px',
-          py: '12px',
+          py: mode === 'ota' ? '10px' : '12px',
           borderBottom: `1px solid ${T.border}`,
           bgcolor: T.bg2,
           flexShrink: 0,
@@ -151,10 +195,9 @@ export default function ThreadsList({
               fontWeight: 700,
             }}
           >
-            {threads.length}
+            {loading ? '…' : headerCount}
           </Box>
         </Stack>
-
         <Box
           sx={{
             display: 'flex',
@@ -177,7 +220,7 @@ export default function ThreadsList({
             component="input"
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={mode === 'ota' ? 'Voyageur, résa, plateforme…' : 'Voyageur, téléphone, résa…'}
+            placeholder={mode === 'ota' ? 'Filtrer la liste affichée…' : 'Voyageur, téléphone, résa…'}
             sx={{
               flex: 1,
               border: 0,
@@ -189,25 +232,87 @@ export default function ThreadsList({
               '&::placeholder': { color: T.text4 },
             }}
           />
-          <Box
-            sx={{
-              fontFamily: '"Geist Mono", monospace',
-              fontSize: 9.5,
-              bgcolor: T.bg2,
-              border: `1px solid ${T.border}`,
-              borderRadius: '4px',
-              px: 0.625,
-              color: T.text3,
-            }}
-          >
-            ⌘K
-          </Box>
+          {mode !== 'ota' && (
+            <Box
+              sx={{
+                fontFamily: '"Geist Mono", monospace',
+                fontSize: 9.5,
+                bgcolor: T.bg2,
+                border: `1px solid ${T.border}`,
+                borderRadius: '4px',
+                px: 0.625,
+                color: T.text3,
+              }}
+            >
+              ⌘K
+            </Box>
+          )}
         </Box>
       </Box>
 
+      {mode === 'ota' && onOtaAdvancedSearchChange && (
+        <OtaInboxFilters
+          channelFilter={otaChannelFilterProp}
+          counts={otaCounts}
+          onChannelFilterChange={onOtaChannelFilterChange ?? (() => {})}
+          unrepliedOnly={otaUnrepliedOnly}
+          onUnrepliedOnlyChange={onOtaUnrepliedOnlyChange ?? (() => {})}
+          advanced={otaAdvancedSearch ?? {}}
+          onAdvancedChange={onOtaAdvancedSearchChange}
+          onAdvancedSubmit={() => onOtaAdvancedSearchSubmit?.()}
+          onAdvancedReset={() => onOtaAdvancedSearchReset?.()}
+          onToutReset={onOtaToutReset}
+          serverSearchActive={otaServerSearchActive}
+          unrepliedSearchActive={otaUnrepliedSearchActive}
+          loading={loading}
+          expanded={showOtaAdvanced}
+          onToggleExpanded={() => setShowOtaAdvanced(!showOtaAdvanced)}
+          searchResultCount={otaSearchResultCount}
+        />
+      )}
+
+      {loadError && (
+        <Box
+          sx={{
+            mx: '10px',
+            mt: '8px',
+            p: '10px 12px',
+            borderRadius: '8px',
+            bgcolor: T.errorTint,
+            border: `1px solid ${T.error}`,
+            flexShrink: 0,
+          }}
+        >
+          <Typography sx={{ fontSize: 11, color: T.error, fontWeight: 600, mb: 0.5 }}>
+            Impossible de charger les messages
+          </Typography>
+          <Typography sx={{ fontSize: 10.5, color: T.text3, mb: 1 }}>{loadError}</Typography>
+          {onRetryLoad && (
+            <Box
+              component="button"
+              onClick={onRetryLoad}
+              sx={{
+                border: 0,
+                borderRadius: '6px',
+                px: '10px',
+                py: '5px',
+                bgcolor: T.error,
+                color: '#fff',
+                fontFamily: 'inherit',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Réessayer
+            </Box>
+          )}
+        </Box>
+      )}
+
       <Box
         sx={{
-          display: 'flex',
+          display: mode === 'ota' ? 'none' : 'flex',
           gap: '3px',
           px: '10px',
           py: 1,
@@ -235,36 +340,33 @@ export default function ThreadsList({
               urgent={tab.urgent}
             />
           ))
-        ) : (
-          (
-            [
-              { id: 'all' as const, label: 'Tout', count: threads.length },
-              { id: 'ab' as const, label: '🏠 Airbnb', count: otaCounts.ab },
-              { id: 'bk' as const, label: '🏨 Booking', count: otaCounts.bk },
-              { id: 'vrbo' as const, label: '🌐 Vrbo', count: otaCounts.vrbo },
-            ] as const
-          ).map((tab) => (
-            <SubTab
-              key={tab.id}
-              active={otaFilter === tab.id}
-              onClick={() => setOtaFilter(tab.id)}
-              label={tab.label}
-              count={tab.count}
-            />
-          ))
-        )}
+        ) : null}
       </Box>
 
-      <Box
-        sx={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          px: '8px',
-          py: '6px',
-          bgcolor: T.bg1,
-        }}
+      <ModalScrollColumn
+        active
+        className="ota-inbox-threads-scroll"
+        wrapperSx={{ flex: 1, minHeight: 0, bgcolor: T.bg1 }}
+        innerSx={{ px: '8px', py: '6px' }}
       >
+        {loading && filtered.length === 0 && (
+          <Box sx={{ py: 4, textAlign: 'center' }}>
+            <Typography sx={{ fontSize: 12, color: T.text4 }}>Chargement des fils OTA…</Typography>
+          </Box>
+        )}
+        {!loading && filtered.length === 0 && (
+          <Box sx={{ py: 4, px: 2, textAlign: 'center' }}>
+            <Typography sx={{ fontSize: 28, mb: 1 }}>📭</Typography>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text2, mb: 0.5 }}>
+              {mode === 'ota' ? 'Aucun fil OTA' : 'Aucune conversation'}
+            </Typography>
+            <Typography sx={{ fontSize: 11, color: T.text4, lineHeight: 1.45 }}>
+              {mode === 'ota'
+                ? 'Élargissez les filtres ou lancez une recherche avancée.'
+                : 'Aucun résultat pour cette recherche.'}
+            </Typography>
+          </Box>
+        )}
         {filtered.map((thread) => {
           const isActive = activeThreadId === thread.id;
           const hasUnread = thread.unread > 0;
@@ -389,6 +491,24 @@ export default function ThreadsList({
                     {thread.time}
                   </Typography>
                 </Stack>
+                {mode === 'ota' && thread.listingName && thread.listingName !== '—' && (
+                  <Typography
+                    sx={{
+                      fontSize: 10.5,
+                      color: T.text4,
+                      fontWeight: 500,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1.3,
+                      mb: 0.25,
+                      letterSpacing: '0.01em',
+                    }}
+                    title={thread.listingName}
+                  >
+                    {thread.listingName}
+                  </Typography>
+                )}
                 <Typography
                   sx={{
                     fontSize: 11.5,
@@ -414,6 +534,9 @@ export default function ThreadsList({
                   )}
                   {mode === 'ota' && isAirbnb && <ThreadBadge tone="airbnb">Airbnb</ThreadBadge>}
                   {mode === 'ota' && isBooking && <ThreadBadge tone="booking">Booking</ThreadBadge>}
+                  {mode === 'ota' && thread.needsReply && (
+                    <ThreadBadge tone="unreplied">À répondre</ThreadBadge>
+                  )}
                   {thread.stayBadge && (
                     <ThreadBadge tone="stay">{thread.stayBadge}</ThreadBadge>
                   )}
@@ -426,7 +549,7 @@ export default function ThreadsList({
             </Box>
           );
         })}
-      </Box>
+      </ModalScrollColumn>
     </Box>
   );
 }
@@ -494,7 +617,7 @@ function ThreadBadge({
   tone,
 }: {
   children: ReactNode;
-  tone: 'resa' | 'checkin' | 'task' | 'stay' | 'airbnb' | 'booking' | 'staff' | 'auto';
+  tone: 'resa' | 'checkin' | 'task' | 'stay' | 'airbnb' | 'booking' | 'staff' | 'auto' | 'unreplied';
 }) {
   const styles = {
     resa: { bg: T.primaryTint, color: T.primaryDeep },
@@ -505,6 +628,7 @@ function ThreadBadge({
     booking: { bg: T.bookingBg, color: '#003580' },
     staff: { bg: T.warningTint, color: T.warning },
     auto: { bg: T.aiTint, color: '#5b21b6' },
+    unreplied: { bg: T.errorTint, color: T.error },
   }[tone];
 
   return (

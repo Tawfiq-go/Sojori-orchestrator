@@ -8,6 +8,7 @@ import {
   Box,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import { Link } from 'react-router-dom';
 import type { MenuOptionInterpretation } from './whatsappMenuAvailability';
 import WhatsappMenuInterpretationPanel, { WhatsappMenuDots } from './WhatsappMenuInterpretationPanel';
 import { CHATBOT_T as T } from './chatbotTokens';
@@ -16,6 +17,8 @@ export default function WhatsappConfigCell({
   options,
   hasConfig,
   loading,
+  snapshotMissing,
+  listingId,
   listingName,
   guestName,
   reservationCode,
@@ -25,6 +28,9 @@ export default function WhatsappConfigCell({
   options: MenuOptionInterpretation[];
   hasConfig: boolean;
   loading?: boolean;
+  /** Doc `listing_snapshot` absent dans fullchatbot — pas de lecture srv-listing */
+  snapshotMissing?: boolean;
+  listingId?: string;
   listingName?: string;
   guestName?: string;
   reservationCode?: string;
@@ -38,6 +44,21 @@ export default function WhatsappConfigCell({
   }
 
   if (!hasConfig) {
+    if (snapshotMissing && listingId) {
+      return (
+        <Box>
+          <Typography sx={{ fontSize: 11, color: T.warning, fontStyle: 'italic' }}>
+            Snapshot non sync.
+          </Typography>
+          <Link
+            to={`/chatbot/listing?listingId=${encodeURIComponent(listingId)}`}
+            style={{ fontSize: 10, color: T.primaryDeep, fontWeight: 600 }}
+          >
+            Listing chatbot ↗
+          </Link>
+        </Box>
+      );
+    }
     return (
       <Typography sx={{ fontSize: 11, color: T.text3, fontStyle: 'italic' }}>
         Pas de config WA

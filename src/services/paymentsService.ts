@@ -1,4 +1,7 @@
+import apiClient from './apiClient';
 import reservationsService from './reservationsService';
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4007';
 
 export type NapsPaymentEvent = {
   at: string;
@@ -51,6 +54,8 @@ export type PaymentAuditRow = {
     lastError: Record<string, unknown> | null;
     payload: Record<string, unknown> | null;
     events: NapsPaymentEvent[];
+    eventsCount?: number;
+    hasPayload?: boolean;
     token: string | null;
     signature: string | null;
     idcommande: string | null;
@@ -65,94 +70,72 @@ export type PaymentAuditRow = {
   paymentStatusTimes: unknown[];
 };
 
-function extractIdDemande(events: NapsPaymentEvent[]): string | null {
-  for (let i = events.length - 1; i >= 0; i--) {
-    if (events[i]?.idDemande) return String(events[i].idDemande);
-  }
-  return null;
-}
-
-function isCardPayment(r: Record<string, unknown>): boolean {
-  const link = r.paymentLink as string | undefined;
-  const events = r.napsPaymentEvents as unknown[] | undefined;
-  const payload = r.napsPayload;
-  const method = String(r.paymentMethod || '');
-  const type = String(r.paymentType || '');
-  return (
-    Boolean(link) ||
-    (Array.isArray(events) && events.length > 0) ||
-    Boolean(payload) ||
-    type === 'bank_card' ||
-    /card|naps|cb|bank/i.test(method)
-  );
-}
-
-export function mapReservationToPaymentRow(r: Record<string, unknown>): PaymentAuditRow {
-  const events = (r.napsPaymentEvents || []) as NapsPaymentEvent[];
-  const payload = (r.napsPayload || null) as Record<string, unknown> | null;
-  const lastError = (r.lastNapsError || null) as Record<string, unknown> | null;
-  const listingRaw = r.listing as { _id?: string; name?: string; city?: string } | undefined;
-  const sojori = r.sojoriId as { _id?: string; name?: string; city?: string } | string | undefined;
-  const listing =
-    listingRaw?.name != null
-      ? { _id: String(listingRaw._id || ''), name: listingRaw.name, city: listingRaw.city }
-      : typeof sojori === 'object' && sojori?.name
-        ? { _id: String(sojori._id || ''), name: sojori.name, city: sojori.city }
-        : null;
+function normalizePaymentRow(raw: Record<string, unknown>): PaymentAuditRow {
+  const listingRaw = raw.listing as PaymentAuditRow['listing'];
+  const dates = (raw.dates || {}) as PaymentAuditRow['dates'];
+  const pricing = (raw.pricing || {}) as PaymentAuditRow['pricing'];
+  const payment = (raw.payment || {}) as PaymentAuditRow['payment'];
+  const naps = (raw.naps || {}) as PaymentAuditRow['naps'];
 
   return {
-    _id: String(r._id || r.id || ''),
-    reservationNumber: String(r.reservationNumber || ''),
-    guestName: String(r.guestName || ''),
-    guestEmail: r.guestEmail as string | undefined,
-    phone: r.phone as string | undefined,
-    channelName: r.channelName as string | undefined,
-    status: String(r.status || ''),
-    atSojori: r.atSojori as boolean | undefined,
-    listing,
+    _id: String(raw._id || ''),
+    reservationNumber: String(raw.reservationNumber || ''),
+    guestName: String(raw.guestName || ''),
+    guestEmail: raw.guestEmail as string | undefined,
+    phone: raw.phone as string | undefined,
+    channelName: raw.channelName as string | undefined,
+    status: String(raw.status || ''),
+    atSojori: raw.atSojori as boolean | undefined,
+    listing: listingRaw
+      ? {
+          _id: String(listingRaw._id || ''),
+          name: String(listingRaw.name || ''),
+          city: listingRaw.city,
+        }
+      : null,
     dates: {
-      createdAt: String(r.createdAt || ''),
-      arrival: String(r.arrivalDate || ''),
-      departure: String(r.departureDate || ''),
+      createdAt: String(dates.createdAt || ''),
+      arrival: String(dates.arrival || ''),
+      departure: String(dates.departure || ''),
     },
     pricing: {
-      total: Number(r.totalPrice || 0),
-      paid: Number(r.alreadyPaid || 0),
-      currency: String(r.currency || 'MAD'),
+      total: Number(pricing.total || 0),
+      paid: Number(pricing.paid || 0),
+      currency: String(pricing.currency || 'MAD'),
     },
     payment: {
-      status: String(r.paymentStatus || ''),
-      method: (r.paymentMethod as string | null) ?? null,
-      type: (r.paymentType as string | null) ?? null,
-      link: (r.paymentLink as string | null) ?? null,
-      returnBase: (r.guestPaymentReturnBase as string | null) ?? null,
-      redirectSuccess: Boolean(r.paymentRedirectToSuccess),
-      redirectFail: Boolean(r.paymentRedirectToFail),
+      status: String(payment.status || ''),
+      method: (payment.method as string | null) ?? null,
+      type: (payment.type as string | null) ?? null,
+      link: (payment.link as string | null) ?? null,
+      returnBase: (payment.returnBase as string | null) ?? null,
+      redirectSuccess: Boolean(payment.redirectSuccess),
+      redirectFail: Boolean(payment.redirectFail),
     },
     naps: {
-      idDemande: extractIdDemande(events),
-      lastError,
-      payload,
-      events,
-      token: (payload?.token as string | undefined) ?? null,
-      signature: (payload?.signature as string | undefined) ?? null,
-      idcommande: (payload?.idcommande as string | undefined) ?? String(r.reservationNumber || '') ?? null,
-      numTrans: (payload?.numTrans as string | undefined) ?? null,
-      numAuto: (payload?.numAuto as string | undefined) ?? null,
-      repauto: (payload?.repauto as string | undefined) ?? (lastError?.repauto as string | undefined) ?? null,
-      repautoMessage:
-        (payload?.repautoMessage as string | undefined) ??
-        (lastError?.message as string | undefined) ??
-        null,
-      carte: (payload?.carte as string | undefined) ?? null,
-      typecarte: (payload?.typecarte as string | undefined) ?? null,
-      montant: (payload?.montant as string | undefined) ?? null,
+      idDemande: (naps.idDemande as string | null) ?? null,
+      lastError: (naps.lastError as Record<string, unknown> | null) ?? null,
+      payload: (naps.payload as Record<string, unknown> | null) ?? null,
+      events: Array.isArray(naps.events) ? (naps.events as NapsPaymentEvent[]) : [],
+      eventsCount: typeof naps.eventsCount === 'number' ? naps.eventsCount : undefined,
+      hasPayload: naps.hasPayload === true,
+      token: (naps.token as string | null) ?? null,
+      signature: (naps.signature as string | null) ?? null,
+      idcommande: (naps.idcommande as string | null) ?? null,
+      numTrans: (naps.numTrans as string | null) ?? null,
+      numAuto: (naps.numAuto as string | null) ?? null,
+      repauto: (naps.repauto as string | null) ?? null,
+      repautoMessage: (naps.repautoMessage as string | null) ?? null,
+      carte: (naps.carte as string | null) ?? null,
+      typecarte: (naps.typecarte as string | null) ?? null,
+      montant: (naps.montant as string | null) ?? null,
     },
-    paymentStatusTimes: (r.paymentStatusTimes as unknown[]) || [],
+    paymentStatusTimes: Array.isArray(raw.paymentStatusTimes) ? raw.paymentStatusTimes : [],
   };
 }
 
 class PaymentsService {
+  /** GET /api/v1/reservations/reservations/payments — filtre + pagination côté Mongo */
   async getList(params: {
     page?: number;
     limit?: number;
@@ -167,58 +150,101 @@ class PaymentsService {
       params.startDate ||
       new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
 
-    const res = await reservationsService.getList({
-      page: params.page ?? 0,
-      limit: params.limit ?? 100,
-      dateType: 'creation',
+    const query = new URLSearchParams({
+      page: String(params.page ?? 0),
+      limit: String(params.limit ?? 50),
       startDate: start,
       endDate: end,
-      status: 'Pending,Confirmed,Inside,Completed,CancelledByAdmin,cancelled',
+      cardOnly: params.cardOnly === false ? 'false' : 'true',
+      compact: 'true',
     });
-
-    let rows = (res.data || []).map((r) =>
-      mapReservationToPaymentRow(r as unknown as Record<string, unknown>),
-    );
-
-    if (params.paymentStatus) {
-      const allowed = new Set(
-        params.paymentStatus.split(',').map((s) => s.trim().toLowerCase()),
-      );
-      rows = rows.filter((r) => allowed.has(r.payment.status.toLowerCase()));
-    }
-
+    if (params.paymentStatus) query.set('paymentStatus', params.paymentStatus);
     if (params.reservationNumber?.trim()) {
-      const q = params.reservationNumber.trim().toLowerCase();
-      rows = rows.filter((r) => r.reservationNumber.toLowerCase().includes(q));
+      query.set('reservationNumber', params.reservationNumber.trim());
     }
 
-    if (params.cardOnly) {
-      rows = rows.filter(
-        (r) =>
-          isCardPayment({
-            paymentLink: r.payment.link,
-            napsPaymentEvents: r.naps.events,
-            napsPayload: r.naps.payload,
-            paymentMethod: r.payment.method,
-            paymentType: r.payment.type,
-          }) ||
-          (r.atSojori && r.payment.status.toLowerCase() === 'unpaid'),
-      );
-    }
+    const url = `${BASE_URL}/api/v1/reservations/reservations/payments?${query.toString()}`;
+    const headers: Record<string, string> = {};
+    const isLocalhost =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname === '[::1]');
+    const devToken = import.meta.env.VITE_DEV_TOKEN;
+    if (isLocalhost && devToken) headers['X-Dev-Token'] = String(devToken);
+
+    const response = await apiClient.get(url, { headers });
+    const payload = response.data as {
+      success?: boolean;
+      data?: Record<string, unknown>[];
+      total?: number;
+      count?: number;
+    };
+
+    const rows = Array.isArray(payload.data)
+      ? payload.data.map((r) => normalizePaymentRow(r))
+      : [];
 
     return {
-      success: true,
+      success: payload.success !== false,
       data: rows,
-      total: rows.length,
-      count: rows.length,
+      total: Number(payload.total ?? rows.length),
+      count: Number(payload.count ?? rows.length),
     };
   }
 
-  /** Détail complet NAPS (napsPayload + events) via GET by-id */
+  /** Détail complet si ligne liste incomplète */
   async getDetail(reservationId: string): Promise<PaymentAuditRow | null> {
     const reservation = await reservationsService.getByRouteParam(reservationId);
     if (!reservation) return null;
-    return mapReservationToPaymentRow(reservation as unknown as Record<string, unknown>);
+    const r = reservation as unknown as Record<string, unknown>;
+    return normalizePaymentRow({
+      _id: r._id || r.id,
+      reservationNumber: r.reservationNumber,
+      guestName: r.guestName,
+      guestEmail: r.guestEmail,
+      phone: r.phone,
+      channelName: r.channelName,
+      status: r.status,
+      atSojori: r.atSojori,
+      listing: r.listing || r.sojoriId,
+      dates: {
+        createdAt: r.createdAt,
+        arrival: r.arrivalDate,
+        departure: r.departureDate,
+      },
+      pricing: {
+        total: r.totalPrice,
+        paid: r.alreadyPaid,
+        currency: r.currency,
+      },
+      payment: {
+        status: r.paymentStatus,
+        method: r.paymentMethod,
+        type: r.paymentType,
+        link: r.paymentLink,
+        returnBase: r.guestPaymentReturnBase,
+        redirectSuccess: r.paymentRedirectToSuccess,
+        redirectFail: r.paymentRedirectToFail,
+      },
+      naps: {
+        idDemande: null,
+        lastError: r.lastNapsError,
+        payload: r.napsPayload,
+        events: r.napsPaymentEvents,
+        token: (r.napsPayload as Record<string, unknown> | null)?.token,
+        signature: (r.napsPayload as Record<string, unknown> | null)?.signature,
+        idcommande: (r.napsPayload as Record<string, unknown> | null)?.idcommande,
+        numTrans: (r.napsPayload as Record<string, unknown> | null)?.numTrans,
+        numAuto: (r.napsPayload as Record<string, unknown> | null)?.numAuto,
+        repauto: (r.napsPayload as Record<string, unknown> | null)?.repauto,
+        repautoMessage: (r.napsPayload as Record<string, unknown> | null)?.repautoMessage,
+        carte: (r.napsPayload as Record<string, unknown> | null)?.carte,
+        typecarte: (r.napsPayload as Record<string, unknown> | null)?.typecarte,
+        montant: (r.napsPayload as Record<string, unknown> | null)?.montant,
+      },
+      paymentStatusTimes: r.paymentStatusTimes,
+    });
   }
 }
 

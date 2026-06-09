@@ -13,6 +13,7 @@ import ListingTemplateForm, {
 import { syncAdminTemplateToOwnerSimple } from '../features/listing/utils/syncAdminTemplateToOwner';
 import { getOwnersAllPages } from '../features/staff/services/serverApi.task';
 import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
+import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
 
 function apiErrorMessage(e: unknown): string {
   const err = e as { response?: { status?: number; data?: { error?: string } }; message?: string };
@@ -259,6 +260,7 @@ function TemplatePageInner() {
 
   return (
     <Box sx={{ px: { xs: 1, sm: 1.5 }, py: 1, maxWidth: 1400 }}>
+      <CatalogueAnnoncesTabs />
       <OwnerConfigScopeBarWithSync
         {...ownerScope}
         compact

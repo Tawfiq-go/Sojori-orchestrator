@@ -1,6 +1,6 @@
 // Transport — FR uniquement · transportServices[]
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Stack, Typography, CircularProgress, IconButton, Collapse, Tooltip } from '@mui/material';
+import { Box, Stack, Typography, CircularProgress, IconButton, Collapse, Alert } from '@mui/material';
 import {
   DndContext,
   closestCenter,
@@ -29,12 +29,11 @@ import {
   PillButton,
   LockedPropertyBox,
   PlaceEndpointField,
-  chipActionSx,
   TYPO,
 } from './SHARED';
 import { DashedAddButton } from '../../../../components/listing/form-v2/components/cleaning/CleaningSlotDialogs';
 import {
-  TRANSPORT_ROUTE_PRESETS,
+  createBlankTransportRoute,
   TRANSPORT_JOURNEY_OPTIONS,
   journeyLabel,
   type TransportExternalKind,
@@ -44,6 +43,7 @@ import {
 } from './transportRouteCatalog';
 import { listingPropertyFromValues, type ListingPropertyPlace } from './transportListingProperty';
 import { migrateJourneyTag, syncRouteEndpoints, TRANSPORT_V1_NOTE } from './transportRouteRules';
+import CityAssociationField from './CityAssociationField';
 
 const MAX_ROUTES = 10;
 
@@ -96,6 +96,7 @@ function mapApiRoute(t: Record<string, unknown>, i: number, fallbackProperty: Li
     estimatedDuration: route.estimatedDuration || '',
     enabled: t.enabled !== false,
     order: i,
+    cityIds: (t.cityIds as 'all' | string[] | undefined) ?? 'all',
   };
   return syncRouteEndpoints(draft, propertyPlace);
 }
@@ -141,6 +142,7 @@ function routeToApi(r: TransportRouteItem, i: number, property: ListingPropertyP
     availability: { type: 'always' },
     images: [],
     order: i,
+    cityIds: synced.cityIds ?? 'all',
   };
 }
 
@@ -157,17 +159,12 @@ export default function TransportConfigTab({
   templateOwnerKey,
 }: Props) {
   const isOwnerTemplate = Boolean(templateOwnerKey);
+  const isAdminGlobalTemplate = templateOwnerKey === 'global';
   const listingProperty = listingPropertyFromValues(listingValues);
 
-  const defaultRoutes = () =>
-    TRANSPORT_ROUTE_PRESETS.map((p, i) =>
-      syncRouteEndpoints({ ...p, enabled: true, order: i }, listingProperty),
-    );
-
-  const [routes, setRoutes] = useState<TransportRouteItem[]>(defaultRoutes);
+  const [routes, setRoutes] = useState<TransportRouteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const [catalogOpen, setCatalogOpen] = useState(false);
   const routesRef = useRef(routes);
   const hydratedRef = useRef(false);
   const dirtyRef = useRef(false);
@@ -200,10 +197,10 @@ export default function TransportConfigTab({
         if (Array.isArray(transport) && transport.length > 0) {
           setRoutes(transport.map((t, i) => mapApiRoute(t, i, listingProperty)));
         } else {
-          setRoutes(defaultRoutes());
+          setRoutes([]);
         }
       } catch {
-        /* défauts */
+        setRoutes([]);
       } finally {
         setLoading(false);
         hydratedRef.current = true;
@@ -213,6 +210,7 @@ export default function TransportConfigTab({
   }, [listingId, isOwnerTemplate, templateOwnerKey]);
 
   const persist = useCallback(async () => {
+    if (isAdminGlobalTemplate) return;
     setSavingState('saving');
     try {
       const transportServices = routesRef.current.map((r, i) => routeToApi(r, i, listingProperty));
@@ -239,7 +237,7 @@ export default function TransportConfigTab({
       setSavingState('idle');
       dirtyRef.current = true;
     }
-  }, [listingId, listingProperty, isOwnerTemplate, templateOwnerKey]);
+  }, [listingId, listingProperty, isOwnerTemplate, templateOwnerKey, isAdminGlobalTemplate]);
 
   useEffect(() => {
     if (loading || !hydratedRef.current || !dirtyRef.current) return;
@@ -274,8 +272,6 @@ export default function TransportConfigTab({
     );
   };
 
-  const presetsAvailable = TRANSPORT_ROUTE_PRESETS.filter(p => !routes.some(r => r.id === p.id));
-
   if (loading) {
     return (
       <Box sx={{ p: 4, textAlign: 'center' }}>
@@ -284,49 +280,29 @@ export default function TransportConfigTab({
     );
   }
 
+  const readOnly = isAdminGlobalTemplate;
+
   return (
     <Box>
-      <ConfigIntroBar saveState={savingState}>
-        <b>Arrivée</b> : navette → logement <b>{listingProperty.name}</b> (fixe). <b>Départ</b> : logement → navette.
-        Plusieurs routes possibles (RAK, CMN, gare…). {TRANSPORT_V1_NOTE}
+      {readOnly && (
+        <Alert severity="info" sx={{ mb: 2, fontSize: 12.5 }}>
+          Le transport n’est <strong>pas</strong> configuré au niveau Admin. Chaque PM ajoute ses navettes
+          manuellement (non synchronisées depuis le template global).
+        </Alert>
+      )}
+
+      <ConfigIntroBar saveState={readOnly ? 'idle' : savingState}>
+        <b>Arrivée</b> : navette → logement <b>{listingProperty.name || 'Logement'}</b> (fixe). <b>Départ</b> : logement →
+        navette. Ajoutez vos routes manuellement — aucun modèle prérempli. {TRANSPORT_V1_NOTE}
       </ConfigIntroBar>
 
+      <Box sx={readOnly ? { opacity: 0.55, pointerEvents: 'none', userSelect: 'none' } : undefined}>
       <Card compact icon="📍" title={`Routes · ${routes.length}/${MAX_ROUTES}`}>
-        <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.75, mb: catalogOpen ? 1 : 0 }}>
-          <DashedAddButton
-            label={catalogOpen ? '▲ Masquer modèles' : '▼ Modèles (aéroport, gare…)'}
-            onClick={() => setCatalogOpen(o => !o)}
-          />
-        </Stack>
-        <Collapse in={catalogOpen}>
-          <Stack direction="row" useFlexGap sx={{ gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
-            {presetsAvailable.length === 0 ? (
-              <Typography sx={{ ...TYPO.caption }}>Tous les modèles sont déjà ajoutés.</Typography>
-            ) : (
-              presetsAvailable.map(preset => (
-                <Tooltip key={preset.id} title={`${preset.from} → ${preset.to}`} placement="top">
-                  <Box
-                    component="button"
-                    type="button"
-                    disabled={routes.length >= MAX_ROUTES}
-                    onClick={() =>
-                      mutateRoutes(prev => [
-                        ...prev,
-                        syncRouteEndpoints({ ...preset, enabled: true, order: prev.length }, listingProperty),
-                      ])
-                    }
-                    sx={{
-                      ...chipActionSx(false, { compact: true }),
-                      '&:disabled': { opacity: 0.45, cursor: 'not-allowed' },
-                    }}
-                  >
-                    + {preset.labelFr}
-                  </Box>
-                </Tooltip>
-              ))
-            )}
-          </Stack>
-        </Collapse>
+        {routes.length === 0 && (
+          <Typography sx={{ ...TYPO.caption, color: T.text3, mb: 1 }}>
+            Aucune route. Cliquez « + Route » pour en créer une.
+          </Typography>
+        )}
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={routes.map(r => r.id)} strategy={verticalListSortingStrategy}>
@@ -344,38 +320,21 @@ export default function TransportConfigTab({
           </SortableContext>
         </DndContext>
 
-        {routes.length < MAX_ROUTES && (
+        {routes.length < MAX_ROUTES && !readOnly && (
           <Box sx={{ mt: 1 }}>
             <DashedAddButton
-              label="+ Route personnalisée"
+              label="+ Route"
               onClick={() =>
                 mutateRoutes(prev => [
                   ...prev,
-                  syncRouteEndpoints(
-                    {
-                      id: `route_${Date.now()}`,
-                      labelFr: 'Navette arrivée',
-                      descriptionFr: '',
-                      from: '',
-                      to: '',
-                      journeyTag: 'arrival',
-                      externalKind: 'other',
-                      externalLabel: '',
-                      priceType: 'total',
-                      price: 0,
-                      maxPassengers: 4,
-                      estimatedDuration: '',
-                      enabled: true,
-                      order: prev.length,
-                    },
-                    listingProperty,
-                  ),
+                  syncRouteEndpoints(createBlankTransportRoute(prev.length), listingProperty),
                 ])
               }
             />
           </Box>
         )}
       </Card>
+      </Box>
     </Box>
   );
 }
@@ -558,6 +517,13 @@ function SortableRoute({
             </FormRow>
             <FormRow compact label="Description" optional>
               <TextArea rows={1} value={route.descriptionFr} onChange={e => onUpdate({ descriptionFr: e.target.value })} />
+            </FormRow>
+            <FormRow compact label="Villes" optional>
+              <CityAssociationField
+                compact
+                value={route.cityIds}
+                onChange={cityIds => onUpdate({ cityIds })}
+              />
             </FormRow>
           </Box>
         </Box>

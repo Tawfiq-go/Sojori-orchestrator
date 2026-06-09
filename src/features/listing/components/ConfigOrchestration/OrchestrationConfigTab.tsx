@@ -63,7 +63,7 @@ export default function OrchestrationConfigTab({
     if (!listingId) return;
     setLoading(true);
     try {
-      const res = await listingsService.getListingOrchestrationEffective(listingId);
+      const res = await listingsService.getListingOrchestrationTemplateEffective(listingId);
       const body = res as { success?: boolean; data?: EffectivePayload };
       applyEffective(body?.data ?? null);
     } catch {

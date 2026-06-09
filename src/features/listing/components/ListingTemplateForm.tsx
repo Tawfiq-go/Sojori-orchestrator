@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Box, CircularProgress, Typography } from '@mui/material';
+import { toast } from 'react-toastify';
 import ListingFormShell, { CONFIG_NEW_TAB_COUNT } from '../../../components/listing/form-v2/ListingFormShell';
 import { ListingFormStructureContext } from '../../../components/listing/form-v2/ListingFormStructureContext';
 import SupportConfigTabContainer from './ConfigOrchestration/SupportConfigTabContainer';
 import ConciergeConfigTab from './ConfigOrchestration/ConciergeConfigTab';
-import CleaningConfigTab from './ConfigOrchestration/CleaningConfigTab';
+import CleaningHubTab from './ConfigOrchestration/CleaningHubTab';
 import ArrivalDepartureConfigTab from './ConfigOrchestration/ArrivalDepartureConfigTab';
-import CleaningSojoriConfigTab from './ConfigOrchestration/CleaningSojoriConfigTab';
 import TransportConfigTab from './ConfigOrchestration/TransportConfigTab';
 import GroceryConfigTab from './ConfigOrchestration/GroceryConfigTab';
 import ServiceClientConfigTab from './ConfigOrchestration/ServiceClientConfigTab';
@@ -17,6 +17,14 @@ import OwnerTemplateWhatsAppTab from './ConfigOrchestration/OwnerTemplateWhatsAp
 import RulesConfigTab from './ConfigOrchestration/RulesConfigTab';
 import PmConfigTabFrame from './ConfigOrchestration/PmConfigTabFrame';
 import listingsService from '../../../services/listingsService';
+import { logOrchConfig, orchConfigError } from '../utils/orchConfigDebugLog';
+import { ORCHESTRATION_ADMIN_OWNER_ID } from '../../../constants/orchestrationAdmin';
+
+export function isAdminGlobalTemplateScope(ownerKey: string, isAdminTemplate?: boolean): boolean {
+  if (isAdminTemplate) return true;
+  if (!ownerKey || ownerKey === 'global') return true;
+  return ownerKey === ORCHESTRATION_ADMIN_OWNER_ID;
+}
 
 type Props = {
   ownerKey: string;
@@ -87,17 +95,38 @@ export default function ListingTemplateForm({
   }, [loadOwnerTemplate, templateRefreshKey]);
 
   const templateListingValues = (ownerCfg?.listing || {}) as Record<string, unknown>;
+  const listingRef = useRef<Record<string, unknown>>(templateListingValues);
+  listingRef.current = templateListingValues;
 
   const persistListingSection = useCallback(
     async (patch: Record<string, unknown>) => {
-      const next = { ...templateListingValues, ...patch };
-      await listingsService.putListingOwnerConfigTemplateSection(ownerKey, 'listing', next);
-      setOwnerCfg((prev) => ({ ...prev, listing: next }));
+      const prev = listingRef.current;
+      const next = { ...prev, ...patch };
+      const cleaningOrch = next.cleaningOrchestration as Record<string, unknown> | undefined;
+      logOrchConfig('template.listing.persist →', {
+        ownerKey,
+        patchKeys: Object.keys(patch),
+        preferredDayAfterCheckout: cleaningOrch?.preferredDayAfterCheckout,
+        safetyMaxDirtyDays: cleaningOrch?.safetyMaxDirtyDays,
+        checklistCount: Array.isArray(cleaningOrch?.checklist) ? cleaningOrch.checklist.length : 0,
+      });
+      try {
+        const res = await listingsService.putListingOwnerConfigTemplateSection(ownerKey, 'listing', next);
+        listingRef.current = next;
+        setOwnerCfg((cfg) => ({ ...cfg, listing: next }));
+        const version = (res as { data?: { version?: number } })?.data?.version;
+        logOrchConfig('template.listing.persist ← OK', { ownerKey, version });
+      } catch (e: unknown) {
+        orchConfigError('template.listing.persist ← FAIL', e, { ownerKey, patchKeys: Object.keys(patch) });
+        toast.error('Échec enregistrement template orchestration (voir console OrchConfig)');
+        throw e;
+      }
     },
-    [ownerKey, templateListingValues],
+    [ownerKey],
   );
 
-  const templateOwnerKey = ownerKey;
+  const templateOwnerKey = ownerKey === ORCHESTRATION_ADMIN_OWNER_ID ? 'global' : ownerKey;
+  const isAdminGlobal = isAdminGlobalTemplateScope(ownerKey, isAdminTemplate);
   const ownerId = ownerIdForTabs || (templateListingValues.ownerId as string | undefined);
 
   const renderTab = (tabKey: string, _level: string) => {
@@ -136,13 +165,17 @@ export default function ListingTemplateForm({
     if (tabKey === 'concierge-config') {
       return wrap(
         tabKey,
-        <ConciergeConfigTab templateOwnerKey={templateOwnerKey} ownerId={ownerId} />,
+        <ConciergeConfigTab
+          templateOwnerKey={templateOwnerKey}
+          ownerId={ownerId}
+          adminCatalogOnly={isAdminGlobal}
+        />,
       );
     }
     if (tabKey === 'cleaning-config') {
       return wrap(
         tabKey,
-        <CleaningConfigTab
+        <CleaningHubTab
           listingId=""
           templateMode
           ownerId={ownerId}
@@ -155,18 +188,6 @@ export default function ListingTemplateForm({
       return wrap(
         tabKey,
         <ArrivalDepartureConfigTab
-          listingId=""
-          templateMode
-          ownerId={ownerId}
-          listingValues={templateListingValues}
-          onListingPatch={persistListingSection}
-        />,
-      );
-    }
-    if (tabKey === 'cleaning-sojori-config') {
-      return wrap(
-        tabKey,
-        <CleaningSojoriConfigTab
           listingId=""
           templateMode
           ownerId={ownerId}
@@ -201,6 +222,7 @@ export default function ListingTemplateForm({
           listingId=""
           templateMode
           ownerId={ownerId}
+          referenceListingId={referenceListingId}
           listingValues={templateListingValues}
           onListingPatch={persistListingSection}
         />,

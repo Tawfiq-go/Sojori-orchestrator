@@ -87,25 +87,48 @@ export function ConfigIntroBar({ children, saveState = 'idle' }) {
       : saveState === 'saving'
         ? { bg: T.warningTint, border: T.warning, color: T.warning }
         : { bg: T.bg2, border: T.border, color: T.text3 };
-  const saveLabel = saveState === 'saving' ? '⏳ …' : saveState === 'saved' ? '✓ OK' : '—';
+  const saveLabel =
+    saveState === 'saving'
+      ? 'Enregistrement…'
+      : saveState === 'saved'
+        ? 'Modifications enregistrées'
+        : null;
   return (
-    <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.25 }}>
-      <Typography sx={{ ...TYPO.intro, flex: 1, minWidth: 200 }}>{children}</Typography>
-      <Box
-        sx={{
-          minWidth: 52,
-          textAlign: 'center',
-          px: 1,
-          py: 0.35,
-          borderRadius: 0.75,
-          bgcolor: saveColors.bg,
-          border: `1px solid ${saveColors.border}`,
-        }}
-      >
-        <Typography sx={{ fontSize: 10, fontWeight: 700, fontFamily: CONFIG_ORCH_FONT.mono, color: saveColors.color }}>
-          {saveLabel}
-        </Typography>
-      </Box>
+    <Stack sx={{ gap: 0.75, mb: 1.25 }}>
+      {saveState === 'saved' ? (
+        <Box
+          sx={{
+            px: 1.25,
+            py: 0.6,
+            borderRadius: 1,
+            bgcolor: T.successTint,
+            border: `1px solid ${T.success}`,
+          }}
+        >
+          <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.success }}>
+            ✓ Modifications enregistrées
+          </Typography>
+        </Box>
+      ) : null}
+      <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+        <Typography sx={{ ...TYPO.intro, flex: 1, minWidth: 200 }}>{children}</Typography>
+        {saveLabel && saveState !== 'saved' ? (
+          <Box
+            sx={{
+              textAlign: 'center',
+              px: 1,
+              py: 0.35,
+              borderRadius: 0.75,
+              bgcolor: saveColors.bg,
+              border: `1px solid ${saveColors.border}`,
+            }}
+          >
+            <Typography sx={{ fontSize: 10, fontWeight: 700, fontFamily: CONFIG_ORCH_FONT.mono, color: saveColors.color }}>
+              {saveLabel}
+            </Typography>
+          </Box>
+        ) : null}
+      </Stack>
     </Stack>
   );
 }

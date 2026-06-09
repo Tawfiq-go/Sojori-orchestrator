@@ -159,7 +159,8 @@ export default function StaffWhatsAppTabV2() {
           <>
             <ConversationThread
               thread={activeThread}
-              messages={inbox.loadingMessages ? [] : formattedMessages}
+              messages={formattedMessages}
+              loadingMessages={inbox.loadingMessages}
               quickTemplates={STAFF_TEMPLATES}
               onSendMessage={async (text) => {
                 if (!inbox.activeConversation) return;

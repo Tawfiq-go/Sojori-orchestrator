@@ -1,14 +1,23 @@
-// Instructions départ + taxe de séjour (montant, devise, calcul) — un seul onglet Config Orch. NEW
+// Instructions départ + taxe de séjour — texte global + paragraphe taxe + aperçu message
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import { listingsService } from '../../../../services/listingsService';
 import { SOJORI_TOKENS as T } from './types';
-import { Card, FormRow, TextArea, ConfigIntroBar, TYPO } from './SHARED';
+import { Card, FormRow, TextArea, ConfigIntroBar } from './SHARED';
 import CityTaxConfigPanel, { type CityTaxSaveState } from './CityTaxConfigPanel';
+import {
+  mapCityTaxToListingPatch,
+  mapListingToCityTaxConfig,
+  type CityTaxConfig,
+} from './cityTaxConfigTypes';
+import DepartureMessageLivePreview from './DepartureMessageLivePreview';
+import { EXAMPLE_GLOBAL_INSTRUCTIONS } from './departureMessageExamples';
 
 interface Props {
   listingId: string;
   ownerId?: string;
+  /** Annonce de référence (page template orchestration PM). */
+  referenceListingId?: string | null;
   listingValues?: Record<string, unknown>;
   onListingPatch?: (patch: Record<string, unknown>) => void;
   templateMode?: boolean;
@@ -25,11 +34,14 @@ function mergeSaveState(
 
 export default function MessagesConfigTab({
   listingId,
+  ownerId,
+  referenceListingId,
   listingValues = {},
   onListingPatch,
   templateMode = false,
 }: Props) {
   const [messageFr, setMessageFr] = useState('');
+  const [liveTaxConfig, setLiveTaxConfig] = useState<CityTaxConfig | null>(null);
   const [msgSave, setMsgSave] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [taxSave, setTaxSave] = useState<CityTaxSaveState>('idle');
   const saveState = useMemo(() => mergeSaveState(msgSave, taxSave), [msgSave, taxSave]);
@@ -39,9 +51,36 @@ export default function MessagesConfigTab({
   const dirtyRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const savedTaxConfig = useMemo(
+    () => mapListingToCityTaxConfig(listingValues),
+    [listingValues],
+  );
+
+  const previewListingId = templateMode ? referenceListingId || undefined : listingId || undefined;
+  const previewOwnerId = !previewListingId ? ownerId : undefined;
+  const canPreview = Boolean(previewListingId || previewOwnerId);
+
+  const previewDraft = useMemo(() => {
+    const taxCfg = liveTaxConfig ?? savedTaxConfig;
+    return {
+      messageCheckout: [messageFr, messageFr],
+      ...mapCityTaxToListingPatch(taxCfg),
+      checkOutTime: listingValues.checkOutTime,
+      name: listingValues.name ?? listingValues.listingName,
+    };
+  }, [
+    messageFr,
+    liveTaxConfig,
+    savedTaxConfig,
+    listingValues.checkOutTime,
+    listingValues.name,
+    listingValues.listingName,
+  ]);
+
   useEffect(() => {
     hydratedRef.current = false;
     dirtyRef.current = false;
+    setLiveTaxConfig(null);
   }, [listingId]);
 
   useEffect(() => {
@@ -95,25 +134,24 @@ export default function MessagesConfigTab({
   return (
     <Box>
       <ConfigIntroBar saveState={saveState}>
-        Consignes avant départ et taxe de séjour — envoyées ensemble au voyageur.
+        Consignes globales + paragraphe taxe (si activée) — envoyées ensemble la veille du départ.
       </ConfigIntroBar>
 
       <Card
         icon="🚪"
-        title="Instructions départ"
-        subtitle="Reçues avec le rappel taxe de séjour · FR uniquement · EN = copie FR"
-
+        title="Instructions départ — texte global"
+        subtitle="Consignes avant de partir (frigo, clés, fenêtres…) · sans la taxe"
       >
-        <FormRow label="Instructions départ">
+        <FormRow label="Consignes départ">
           <TextArea
-            rows={8}
+            rows={6}
             value={messageFr}
             onChange={e => {
               dirtyRef.current = true;
               setMessageFr(e.target.value);
               messageRef.current = e.target.value;
             }}
-            placeholder="Avant votre départ, merci de : vider le réfrigérateur, fermer les fenêtres, déposer les clés…"
+            placeholder={EXAMPLE_GLOBAL_INSTRUCTIONS}
           />
         </FormRow>
       </Card>
@@ -124,7 +162,23 @@ export default function MessagesConfigTab({
         listingValues={listingValues}
         onListingPatch={onListingPatch}
         onSaveStateChange={setTaxSave}
+        onConfigChange={setLiveTaxConfig}
       />
+
+      {canPreview ? (
+        <DepartureMessageLivePreview
+          listingId={previewListingId}
+          ownerId={previewOwnerId}
+          draft={previewDraft}
+        />
+      ) : (
+        <Box sx={{ mt: 2, p: 1.5, borderRadius: 1, bgcolor: T.bg2, border: `1px dashed ${T.border}` }}>
+          <Typography sx={{ fontSize: 12, color: T.text3, fontStyle: 'italic' }}>
+            Sélectionnez un propriétaire (ou une annonce de référence) pour voir l’aperçu basé sur la
+            dernière réservation.
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 }

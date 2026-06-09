@@ -49,6 +49,10 @@ import {
   type ConciergeCatalogItem,
   type ConciergePriceType,
 } from './conciergeServiceCatalog';
+import CityAssociationField, {
+  formatCityAssociationSummary,
+} from './CityAssociationField';
+import { logOrchConfig, orchConfigError } from '../../utils/orchConfigDebugLog';
 
 const T = SOJORI_TOKENS;
 const MAX_SERVICES = 15;
@@ -64,6 +68,7 @@ interface ConciergeService {
   priceType: ConciergePriceType;
   enabled: boolean;
   order: number;
+  cityIds?: 'all' | string[];
 }
 
 interface ConciergeConfig {
@@ -71,20 +76,7 @@ interface ConciergeConfig {
   services: ConciergeService[];
 }
 
-const DEFAULT_SERVICES: ConciergeService[] = [
-  catalogItemToService(
-    { id: 'massage', labelFr: 'Massage', descriptionFr: 'Massage relaxant à domicile', icon: '💆', priceType: 'FIXED', price: 350 },
-    0,
-  ),
-  catalogItemToService(
-    { id: 'chef', labelFr: 'Chef à domicile', descriptionFr: 'Repas préparé par un chef privé', icon: '👨‍🍳', priceType: 'ON_QUOTE' },
-    1,
-  ),
-  catalogItemToService(
-    { id: 'babysitting', labelFr: 'Babysitting', descriptionFr: 'Garde d\'enfants qualifiée', icon: '👶', priceType: 'PER_HOUR', price: 80 },
-    2,
-  ),
-];
+const EMPTY_CONCIERGE: ConciergeConfig = { enabled: true, services: [] };
 
 function mapApiService(s: Record<string, unknown>, i: number): ConciergeService {
   const name = (s.name as { fr?: string; en?: string }) || {};
@@ -116,6 +108,7 @@ function mapApiService(s: Record<string, unknown>, i: number): ConciergeService 
     priceType,
     enabled: s.enabled !== false,
     order: i,
+    cityIds: (s.cityIds as 'all' | string[] | undefined) ?? 'all',
   };
 }
 
@@ -179,15 +172,25 @@ interface Props {
   listingId?: string;
   ownerId?: string;
   templateOwnerKey?: string;
+  /** Template Admin global : bibliothèque seule, pas de services configurés ni sync. */
+  adminCatalogOnly?: boolean;
 }
 
-export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Props) {
+export default function ConciergeConfigTab({
+  listingId,
+  templateOwnerKey,
+  adminCatalogOnly = false,
+}: Props) {
   const isOwnerTemplate = Boolean(templateOwnerKey);
-  const [config, setConfig] = useState<ConciergeConfig>({ enabled: true, services: DEFAULT_SERVICES });
+  const isAdminGlobal = adminCatalogOnly || templateOwnerKey === 'global';
+  const [config, setConfig] = useState<ConciergeConfig>(EMPTY_CONCIERGE);
+  const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
+  const [cityOptions, setCityOptions] = useState<Array<{ _id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [activeCategory, setActiveCategory] = useState(CONCIERGE_SERVICE_CATALOG[0]?.id ?? '');
   const configRef = useRef(config);
+  const hydratedRef = useRef(false);
   useEffect(() => { configRef.current = config; }, [config]);
 
   const sensors = useSensors(
@@ -196,10 +199,35 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
   );
 
   useEffect(() => {
+    hydratedRef.current = false;
     fetchConfig();
   }, [listingId, templateOwnerKey, isOwnerTemplate]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await listingsService.getCities({ limit: 200 });
+        const list = (res?.data?.cities ?? res?.data ?? res ?? []) as Array<{ _id: string; name: string }>;
+        if (!cancelled && Array.isArray(list)) {
+          setCityOptions(list.filter(c => c._id && c.name));
+        }
+      } catch {
+        if (!cancelled) setCityOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const fetchConfig = async () => {
+    if (isAdminGlobal) {
+      setConfig({ enabled: true, services: [] });
+      setLoading(false);
+      hydratedRef.current = true;
+      return;
+    }
     try {
       setLoading(true);
       let data: { customServices?: Array<Record<string, unknown>> } | null = null;
@@ -216,22 +244,34 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
         data = res.data as { customServices?: Array<Record<string, unknown>> } | null;
       }
       const custom = data?.customServices;
-      if (Array.isArray(custom) && custom.length > 0) {
+      if (data != null && Array.isArray(custom)) {
+        const services = custom.map(mapApiService);
+        logOrchConfig('concierge.load ←', {
+          source: isOwnerTemplate ? `template:${templateOwnerKey}` : `listing:${listingId}`,
+          count: services.length,
+          ids: services.map(s => s.id),
+        });
         setConfig({
-          enabled: custom.some(s => s.enabled !== false),
-          services: custom.map(mapApiService),
+          enabled: services.length === 0 ? true : services.some(s => s.enabled),
+          services,
         });
       } else {
-        setConfig({ enabled: true, services: DEFAULT_SERVICES });
+        logOrchConfig('concierge.load ← empty (no saved concierge)', {
+          source: isOwnerTemplate ? `template:${templateOwnerKey}` : `listing:${listingId}`,
+        });
+        setConfig(EMPTY_CONCIERGE);
       }
-    } catch {
-      setConfig({ enabled: true, services: DEFAULT_SERVICES });
+    } catch (err) {
+      orchConfigError('concierge.load FAIL', err);
+      setConfig(EMPTY_CONCIERGE);
     } finally {
       setLoading(false);
+      hydratedRef.current = true;
     }
   };
 
   const persistConfig = useCallback(async (cfg: ConciergeConfig) => {
+    if (isAdminGlobal) return;
     const customServices = cfg.services.map((s, i) => ({
         id: s.id,
         enabled: s.enabled,
@@ -256,7 +296,14 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
         requiresPMValidation: true,
         images: [],
         order: i,
+        cityIds: s.cityIds ?? 'all',
       }));
+
+    logOrchConfig('concierge.persist →', {
+      target: isOwnerTemplate ? `template:${templateOwnerKey}` : `listing:${listingId}`,
+      count: customServices.length,
+      ids: customServices.map(s => s.id),
+    });
 
     if (isOwnerTemplate && templateOwnerKey) {
       const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
@@ -267,6 +314,7 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
         groceryServices: prev.groceryServices || [],
         customServices,
       });
+      logOrchConfig('concierge.persist ← OK', { via: 'listing-owner-config-template' });
       return;
     }
 
@@ -278,7 +326,8 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
       groceryServices: doc.groceryServices || [],
       customServices,
     });
-  }, [listingId, isOwnerTemplate, templateOwnerKey]);
+    logOrchConfig('concierge.persist ← OK', { via: 'listing-concierge-config' });
+  }, [listingId, isOwnerTemplate, templateOwnerKey, isAdminGlobal]);
 
   const debouncedSave = useCallback(() => {
     setSavingState('saving');
@@ -288,15 +337,17 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
         await persistConfig(configRef.current);
         setSavingState('saved');
         setTimeout(() => setSavingState('idle'), 2000);
-      } catch {
+      } catch (err) {
+        orchConfigError('concierge.persist FAIL', err);
         setSavingState('idle');
       }
     }, 800);
   }, [persistConfig]);
 
   useEffect(() => {
-    if (!loading) debouncedSave();
-  }, [config, loading]);
+    if (loading || !hydratedRef.current || isAdminGlobal) return;
+    debouncedSave();
+  }, [config, loading, debouncedSave, isAdminGlobal]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -311,8 +362,10 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
   };
 
   const addFromCatalog = (item: ConciergeCatalogItem) => {
+    if (isAdminGlobal) return;
     if (config.services.length >= MAX_SERVICES) return;
     if (config.services.some(s => s.id === item.id)) return;
+    setExpandedServiceId(item.id);
     setConfig(prev => ({
       ...prev,
       services: [...prev.services, catalogItemToService(item, prev.services.length)],
@@ -321,12 +374,14 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
 
   const addCustomService = () => {
     if (config.services.length >= MAX_SERVICES) return;
+    const id = `custom_${Date.now()}`;
+    setExpandedServiceId(id);
     setConfig(prev => ({
       ...prev,
       services: [
         ...prev.services,
         {
-          id: `custom_${Date.now()}`,
+          id,
           labelFr: 'Nouveau service',
           descriptionFr: 'Service personnalisé sur demande',
           icon: '✨',
@@ -336,6 +391,7 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
           priceType: 'ON_QUOTE',
           enabled: true,
           order: prev.services.length,
+          cityIds: 'all',
         },
       ],
     }));
@@ -366,8 +422,18 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
 
   return (
     <Box>
-      <ConfigIntroBar saveState={savingState}>
-        Services sur mesure pour ce logement : ajoutez des modèles depuis la bibliothèque ou créez les vôtres.
+      <ConfigIntroBar saveState={isAdminGlobal ? 'idle' : savingState}>
+        {isAdminGlobal ? (
+          <>
+            <b>Template Admin</b> — catalogue des modèles disponibles pour les PM. Les PM ajoutent et configurent
+            leurs services (prix, villes) ; rien n’est synchronisé depuis l’admin pour la conciergerie configurée.
+          </>
+        ) : (
+          <>
+            Bibliothèque = modèles sans ville. Une fois ajouté, configurez chaque service : tarif, icône et{' '}
+            <b>villes</b> (toutes ou une sélection).
+          </>
+        )}
       </ConfigIntroBar>
 
       {/* Bibliothèque — modèles → ajout dans customServices[] (persisté) */}
@@ -445,7 +511,7 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
             <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, mb: 0.75 }}>
               <Typography sx={{ fontSize: 18, lineHeight: 1 }}>{activeCat.icon}</Typography>
               <Typography sx={{ ...TYPO.bodyBold, fontSize: 12.5, flex: 1 }}>{activeCat.labelFr}</Typography>
-              <Typography sx={{ ...TYPO.monoHelp }}>Ajouter au listing</Typography>
+              <Typography sx={{ ...TYPO.monoHelp }}>{isAdminGlobal ? 'Aperçu modèles' : 'Ajouter au listing'}</Typography>
             </Stack>
             <Box
               sx={{
@@ -455,8 +521,8 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
               }}
             >
               {activeCat.services.map(item => {
-                const already = config.services.some(s => s.id === item.id);
-                const full = config.services.length >= MAX_SERVICES;
+                const already = !isAdminGlobal && config.services.some(s => s.id === item.id);
+                const full = !isAdminGlobal && config.services.length >= MAX_SERVICES;
                 const hint = formatConciergePriceLabel({
                   priceType: item.priceType,
                   price: item.price ?? 0,
@@ -468,12 +534,12 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
                     <Box
                       component="button"
                       type="button"
-                      disabled={already || full}
+                      disabled={isAdminGlobal || already || full}
                       onClick={() => addFromCatalog(item)}
                       sx={{
                         ...chipActionSx(already, { compact: true }),
-                        cursor: already || full ? 'not-allowed' : 'pointer',
-                        opacity: full && !already ? 0.45 : 1,
+                        cursor: isAdminGlobal || already || full ? 'not-allowed' : 'pointer',
+                        opacity: isAdminGlobal ? 0.55 : full && !already ? 0.45 : 1,
                         maxWidth: '100%',
                         '&:hover': !already && !full ? { borderColor: T.primary, bgcolor: T.primaryTint } : {},
                       }}
@@ -484,7 +550,7 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
                           {item.labelFr}
                         </Typography>
                         <Typography sx={{ ...TYPO.monoHelp, fontSize: 9.5, color: already ? T.success : T.text3 }} noWrap>
-                          {already ? '✓' : '+'} {hint}
+                          {isAdminGlobal ? 'PM' : already ? '✓' : '+'} {hint}
                         </Typography>
                       </Box>
                     </Box>
@@ -496,9 +562,17 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
         </Box>
       </Box>
 
+      {!isAdminGlobal && (
+        <>
       <SectionCaps>
         Vos services ({config.services.length}/{MAX_SERVICES})
       </SectionCaps>
+
+      {config.services.length === 0 && (
+        <Typography sx={{ ...TYPO.caption, color: T.text3, mb: 1 }}>
+          Aucun service. Ajoutez depuis la bibliothèque ou créez un service personnalisé.
+        </Typography>
+      )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={config.services.map(s => s.id)} strategy={verticalListSortingStrategy}>
@@ -507,6 +581,11 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
               <SortableService
                 key={service.id}
                 service={service}
+                expanded={expandedServiceId === service.id}
+                onToggleExpand={() =>
+                  setExpandedServiceId(prev => (prev === service.id ? null : service.id))
+                }
+                cityOptions={cityOptions}
                 onUpdate={updates => updateService(service.id, updates)}
                 onDelete={() => deleteService(service.id)}
               />
@@ -518,11 +597,14 @@ export default function ConciergeConfigTab({ listingId, templateOwnerKey }: Prop
       {config.services.length < MAX_SERVICES && (
         <Button
           variant="outlined"
+          fullWidth
+          sx={{ mt: 1.5, borderStyle: 'dashed', textTransform: 'none', fontWeight: 600 }}
           onClick={addCustomService}
-          sx={{ mt: 2, borderColor: T.border, color: T.text2, '&:hover': { borderColor: T.primary, bgcolor: T.bg2 } }}
         >
-          + Service personnalisé (hors catalogue)
+          + Service personnalisé
         </Button>
+      )}
+        </>
       )}
     </Box>
   );
@@ -578,14 +660,19 @@ function IconPicker({
 
 function SortableService({
   service,
+  expanded,
+  onToggleExpand,
+  cityOptions,
   onUpdate,
   onDelete,
 }: {
   service: ConciergeService;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  cityOptions: Array<{ _id: string; name: string }>;
   onUpdate: (updates: Partial<ConciergeService>) => void;
   onDelete: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: service.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -596,6 +683,7 @@ function SortableService({
   if (!service.labelFr) return null;
 
   const priceLabel = formatConciergePriceLabel(service);
+  const cityLabel = formatCityAssociationSummary(service.cityIds, cityOptions);
 
   return (
     <Box
@@ -633,9 +721,12 @@ function SortableService({
                 : ''}
             </Typography>
           )}
+          <Typography sx={{ ...TYPO.monoHelp, fontSize: 10, color: T.text3 }}>
+            📍 {cityLabel}
+          </Typography>
         </Box>
         <Typography sx={{ ...TYPO.price }}>{priceLabel}</Typography>
-        <IconButton size="small" onClick={() => setExpanded(e => !e)}>
+        <IconButton size="small" onClick={onToggleExpand}>
           <Box sx={{ fontSize: 18 }}>{expanded ? '▲' : '▼'}</Box>
         </IconButton>
         <Tooltip title="Supprimer">
@@ -692,6 +783,25 @@ function SortableService({
               slotProps={{ htmlInput: { maxLength: 120 } }}
               sx={{ gridColumn: { md: '1 / -1' } }}
             />
+            <Box
+              sx={{
+                gridColumn: { md: '1 / -1' },
+                p: 1.25,
+                borderRadius: 1,
+                border: `1px solid ${T.primary}44`,
+                bgcolor: T.primaryTint,
+              }}
+            >
+              <Typography sx={{ ...TYPO.bodyBold, fontSize: 12, mb: 0.75 }}>📍 Villes</Typography>
+              <Typography sx={{ ...TYPO.monoHelp, fontSize: 10.5, mb: 1 }}>
+                Toutes les villes, ou sélectionnez une ou plusieurs villes Sojori pour ce service
+              </Typography>
+              <CityAssociationField
+                compact
+                value={service.cityIds}
+                onChange={cityIds => onUpdate({ cityIds })}
+              />
+            </Box>
             {(service.priceType === 'PER_PERSON' || service.priceType === 'PER_PERSON_HOUR') && (
               <TextField
                 size="small"

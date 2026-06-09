@@ -1,5 +1,6 @@
 import listingsService from '../../../services/listingsService';
 import { ADMIN_TEMPLATE_REFERENCE_LISTING_ID } from '../../../constants/listingTemplateAdmin';
+import { logOrchConfig, orchConfigError } from './orchConfigDebugLog';
 
 export const ORCH_FLAG_KEYS = [
   'orchestrationEnabled',
@@ -134,9 +135,19 @@ export async function saveOwnerOrchestrationFlags(
   ownerKey: string,
   flags: Record<string, boolean>,
 ): Promise<string> {
+  logOrchConfig('flags.persist →', { ownerKey, flags });
   if (ownerKey === 'global') {
-    const putRes = await listingsService.putListingOrchestrationTemplate('global', flags);
-    if (!isListingServiceHealthPayload(putRes)) return 'template global (API)';
+    try {
+      const putRes = await listingsService.putListingOrchestrationTemplate('global', flags);
+      if (!isListingServiceHealthPayload(putRes)) {
+        logOrchConfig('flags.persist ← OK', { ownerKey, via: 'listing-orchestration-template global' });
+        return 'template global (API)';
+      }
+      orchConfigError('flags.persist ← health payload (route absente?)', putRes, { ownerKey });
+    } catch (e) {
+      orchConfigError('flags.persist ← FAIL global', e, { ownerKey });
+      throw e;
+    }
     throw new Error(
       'Route listing-orchestration-template non déployée sur srv-listing. Déployer le service ou éditer via Harcay.',
     );
@@ -144,9 +155,13 @@ export async function saveOwnerOrchestrationFlags(
 
   try {
     const putRes = await listingsService.putListingOrchestrationTemplate(ownerKey, flags);
-    if (!isListingServiceHealthPayload(putRes)) return 'template owner (API)';
-  } catch {
-    /* fallback listings */
+    if (!isListingServiceHealthPayload(putRes)) {
+      logOrchConfig('flags.persist ← OK', { ownerKey, via: 'listing-orchestration-template owner' });
+      return 'template owner (API)';
+    }
+    logOrchConfig('flags.persist fallback listings', { ownerKey });
+  } catch (e) {
+    orchConfigError('flags.persist owner API failed, fallback listings', e, { ownerKey });
   }
 
   const { ok, failed, errors } = await applyOrchestrationFlagsToOwnerListings(ownerKey, flags);
@@ -157,8 +172,10 @@ export async function saveOwnerOrchestrationFlags(
     throw new Error(errors[0] || `Échec sur ${failed} annonce(s)`);
   }
   if (failed > 0) {
+    logOrchConfig('flags.persist ← partial', { ownerKey, ok, failed, errors });
     return `${ok} annonce(s) OK, ${failed} échec(s)`;
   }
+  logOrchConfig('flags.persist ← OK listings', { ownerKey, ok });
   return `${ok} annonce(s) mises à jour`;
 }
 

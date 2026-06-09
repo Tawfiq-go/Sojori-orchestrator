@@ -1,9 +1,7 @@
 /**
  * Vue Planning Réservations — même design que /tasks/planning (StayView)
- * • 30 jours mini-map, 14 jours visibles
- * • Filtres réservation (Confirmées / En attente) + légende canaux
- * • Barres Gantt : arrivée 40%, départ 40% (computeReservationBarLayout)
- * • Navigation flèches : rechargement données uniquement (pas de spinner pleine page)
+ * • Grille stable : listings actifs (compact) puis match réservations fenêtre
+ * • Propreté (srv-task planning) chargée en arrière-plan — n bloque pas l'affichage
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -18,15 +16,17 @@ import listingsService from '../services/listingsService';
 import tasksService, { resolveTasksUserScope } from '../services/tasksService';
 import cleanlinessService from '../services/cleanlinessService';
 import type { DisplayCleanliness } from '../utils/cleanlinessDisplay';
+import {
+  getCachedPlanningListings,
+  setCachedPlanningListings,
+  invalidatePlanningListingsCache,
+} from '../utils/planningListingsCache';
 import { useAuth } from '../hooks/useAuth';
 import type { Reservation } from '../types/reservations.types';
 import type { ListingSummary } from '../types/listings.types';
 
-/** Jours passés / futurs visibles dans le planning (évite de masquer les séjours récents) */
 const PLANNING_LOOKBACK_DAYS = 30;
 const PLANNING_FORWARD_DAYS = 45;
-/** Décalage initial du curseur : on cadre J-2 → J+11 (14j visibles dont aujourd'hui en 3e position),
- *  l'utilisateur peut ensuite naviguer dans la fenêtre 75j. */
 const PLANNING_INITIAL_BACK_DAYS = 2;
 
 function normalizeMongoId(value: unknown): string | undefined {
@@ -73,6 +73,8 @@ export function ReservationsPlanningPage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
+  const listingsCacheKey = scope.ownerId || (scope.canAccessAllOwners ? 'admin' : 'unknown');
+
   const [startDate, setStartDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -81,95 +83,141 @@ export function ReservationsPlanningPage() {
   });
   const [daysCount] = useState(PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS);
 
-  const [listings, setListings] = useState<ListingSummary[]>([]);
+  const [activeListings, setActiveListings] = useState<ListingSummary[]>(() => {
+    return getCachedPlanningListings(listingsCacheKey) ?? [];
+  });
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [calendarReady, setCalendarReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [operationalByListing, setOperationalByListing] = useState<Map<string, any>>(new Map());
-  const [refreshKey, setRefreshKey] = useState(0);
-
+  const [operationalByListing, setOperationalByListing] = useState<Map<string, Record<string, unknown>>>(
+    new Map(),
+  );
   const windowRequestIdRef = useRef(0);
-  /** Évite un double fetch fenêtre juste après le chargement initial / refreshKey */
+  const operationalRequestIdRef = useRef(0);
   const skipNextWindowOnlyFetchRef = useRef(false);
+  const listingsHydratedRef = useRef(activeListings.length > 0);
 
-  const fetchListings = useCallback(async () => {
-    const listingsResponse = await listingsService.getListings({
+  const windowRange = useCallback(() => {
+    const apiStart = format(startDate, 'yyyy-MM-dd');
+    const apiEnd = format(addDays(startDate, daysCount), 'yyyy-MM-dd');
+    return { apiStart, apiEnd };
+  }, [startDate, daysCount]);
+
+  const fetchActiveListings = useCallback(async () => {
+    const cached = getCachedPlanningListings(listingsCacheKey);
+    if (cached?.length) {
+      setActiveListings(cached);
+      listingsHydratedRef.current = true;
+      return;
+    }
+    const res = await listingsService.getListings({
       useActiveFilter: true,
       active: true,
-      limit: 1000,
+      compact: true,
+      forListingsOverview: false,
+      limit: 500,
     });
-    setListings(listingsResponse.data.items);
-  }, []);
+    setActiveListings(res.data.items);
+    setCachedPlanningListings(listingsCacheKey, res.data.items);
+    listingsHydratedRef.current = true;
+  }, [listingsCacheKey]);
 
-  const fetchWindowData = useCallback(async () => {
-    const requestId = ++windowRequestIdRef.current;
-    setIsRefreshing(true);
-    setError(null);
+  const fetchReservationsWindow = useCallback(async (): Promise<Reservation[]> => {
+    const { apiStart, apiEnd } = windowRange();
+    const reservationsResponse = await reservationsService.getList({
+      limit: 100,
+      status: 'Confirmed,Pending,Inside',
+      dateType: 'arrival_or_departure',
+      startDate: apiStart,
+      endDate: apiEnd,
+    });
+    return reservationsResponse.data;
+  }, [windowRange]);
+
+  /** srv-task planning — lent : badges propreté uniquement, non bloquant. */
+  const fetchOperationalStatus = useCallback(async () => {
+    const ownerId = scope.canAccessAllOwners ? undefined : scope.ownerId;
+    if (!ownerId && !scope.canAccessAllOwners) return;
+
+    const requestId = ++operationalRequestIdRef.current;
+    const { apiStart, apiEnd } = windowRange();
 
     try {
-      const apiStart = format(startDate, 'yyyy-MM-dd');
-      const apiEnd = format(addDays(startDate, daysCount), 'yyyy-MM-dd');
-
-      const reservationsResponse = await reservationsService.getList({
-        limit: 1000,
-        status: 'Confirmed,Pending,Inside',
-        dateType: 'arrival_or_departure',
+      const planning = await tasksService.getReservationPlanning({
         startDate: apiStart,
         endDate: apiEnd,
+        ownerId,
       });
+      if (requestId !== operationalRequestIdRef.current) return;
+      if (!planning?.data?.listings) return;
 
-      if (requestId !== windowRequestIdRef.current) return;
-      setReservations(reservationsResponse.data);
-
-      const ownerId = scope.canAccessAllOwners ? undefined : scope.ownerId;
-      if (ownerId || scope.canAccessAllOwners) {
-        const planning = await tasksService.getReservationPlanning({
-          startDate: apiStart,
-          endDate: apiEnd,
-          ownerId,
-        });
-        if (requestId !== windowRequestIdRef.current) return;
-        const map = new Map<string, any>();
-        planning.data?.listings?.forEach((l: any) => {
-          const id = String(l.listingId || l._id || '');
-          if (id) map.set(id, l);
-        });
-        setOperationalByListing(map);
-      }
-    } catch (e) {
-      if (requestId !== windowRequestIdRef.current) return;
-      setError(e instanceof Error ? e.message : 'Erreur chargement données');
-    } finally {
-      if (requestId === windowRequestIdRef.current) {
-        setIsRefreshing(false);
-      }
+      const map = new Map<string, Record<string, unknown>>();
+      planning.data.listings.forEach((l: Record<string, unknown>) => {
+        const id = String(l.listingId || l._id || '');
+        if (id) map.set(id, l);
+      });
+      setOperationalByListing(map);
+    } catch {
+      // Grille + résas restent utilisables sans badges opérationnels
     }
-  }, [startDate, daysCount, scope.canAccessAllOwners, scope.ownerId]);
+  }, [windowRange, scope.canAccessAllOwners, scope.ownerId]);
 
-  /** Premier chargement ou refresh propreté : listings + fenêtre */
+  const fetchWindowData = useCallback(
+    async (opts?: { includeOperational?: boolean }) => {
+      const requestId = ++windowRequestIdRef.current;
+      setIsRefreshing(true);
+      setError(null);
+
+      try {
+        const data = await fetchReservationsWindow();
+        if (requestId !== windowRequestIdRef.current) return;
+        setReservations(data);
+
+        if (opts?.includeOperational !== false) {
+          void fetchOperationalStatus();
+        }
+      } catch (e) {
+        if (requestId !== windowRequestIdRef.current) return;
+        setError(e instanceof Error ? e.message : 'Erreur chargement données');
+      } finally {
+        if (requestId === windowRequestIdRef.current) {
+          setIsRefreshing(false);
+        }
+      }
+    },
+    [fetchReservationsWindow, fetchOperationalStatus],
+  );
+
+  /** Bootstrap : listings (cache) + résas en parallèle → affichage ; propreté en async */
   useEffect(() => {
     if (authLoading) return;
 
     let cancelled = false;
     const isBootstrap = !calendarReady;
+    const skipListings = listingsHydratedRef.current && activeListings.length > 0;
 
     void (async () => {
       if (isBootstrap) setIsLoading(true);
       setError(null);
       try {
-        await fetchListings();
-        if (cancelled) return;
         skipNextWindowOnlyFetchRef.current = true;
-        await fetchWindowData();
+
+        const tasks: Promise<void>[] = [];
+        if (!skipListings) tasks.push(fetchActiveListings());
+        tasks.push(
+          fetchWindowData({ includeOperational: true }).then(() => undefined),
+        );
+
+        await Promise.all(tasks);
         if (cancelled) return;
         setCalendarReady(true);
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : 'Erreur chargement données');
         if (isBootstrap) {
-          setListings([]);
+          setActiveListings([]);
           setReservations([]);
         }
       } finally {
@@ -180,62 +228,56 @@ export function ReservationsPlanningPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarReady lu une fois au mount du cycle
-  }, [authLoading, refreshKey, fetchListings, fetchWindowData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading]);
 
-  /** Flèches / date picker : réservations + statuts opérationnels uniquement */
+  /** Navigation dates : réservations + propreté (listings inchangés) */
   useEffect(() => {
     if (authLoading || !calendarReady) return;
     if (skipNextWindowOnlyFetchRef.current) {
       skipNextWindowOnlyFetchRef.current = false;
       return;
     }
-    void fetchWindowData();
+    void fetchWindowData({ includeOperational: true });
   }, [startDate, authLoading, calendarReady, fetchWindowData]);
 
   const listingRows: ListingRow[] = useMemo(() => {
-    if (listings.length === 0) return [];
+    if (activeListings.length === 0) return [];
 
     const windowStart = startDate;
     const windowEnd = addDays(startDate, daysCount);
 
     const reservationsByListing = new Map<string, Reservation[]>();
-    reservations.forEach((res) => {
+    for (const res of reservations) {
       const listingId = resolveListingId(res);
-      if (!listingId) return;
+      if (!listingId) continue;
 
       const arrival = toIsoDate(res.arrivalDate);
       const departure = toIsoDate(res.departureDate);
-      if (!arrival || !departure) return;
+      if (!arrival || !departure) continue;
 
       const arr = new Date(arrival);
       const dep = new Date(departure);
-      if (dep < windowStart || arr > windowEnd) return;
+      if (dep < windowStart || arr > windowEnd) continue;
 
-      if (!reservationsByListing.has(listingId)) {
-        reservationsByListing.set(listingId, []);
-      }
-      reservationsByListing.get(listingId)!.push(res);
-    });
+      const bucket = reservationsByListing.get(listingId);
+      if (bucket) bucket.push(res);
+      else reservationsByListing.set(listingId, [res]);
+    }
 
-    return listings.map((listing) => {
+    return activeListings.map((listing) => {
       const listingId = listing.id;
       const resas = reservationsByListing.get(listingId) || [];
       const op = operationalByListing.get(listingId);
-      const raw = listing.raw as Record<string, unknown> | undefined;
 
       return {
         listingId,
-        listingName: listing.name || 'Sans nom',
-        city: listing.city || 'Sans ville',
-        cleanlinessStatus_v2:
-          op?.cleanlinessStatus_v2 ||
-          (raw?.cleanlinessStatus_v2 as string) ||
-          (raw?.cleanlinessStatus as string) ||
-          'clean',
-        cleanlinessStatus: op?.cleanlinessStatus || (raw?.cleanlinessStatus as string),
-        occupancyStatus: op?.occupancyStatus || (raw?.occupancyStatus as string) || 'vacant',
-        cleanlinessEmergency: Boolean(op?.cleanlinessEmergency || raw?.cleanlinessEmergency),
+        listingName: listing.name || String(op?.listingName || 'Sans nom'),
+        city: listing.city || String(op?.city || 'Sans ville'),
+        cleanlinessStatus_v2: String(op?.cleanlinessStatus_v2 || op?.cleanlinessStatus || 'clean'),
+        cleanlinessStatus: op?.cleanlinessStatus as string | undefined,
+        occupancyStatus: String(op?.occupancyStatus || 'vacant'),
+        cleanlinessEmergency: Boolean(op?.cleanlinessEmergency),
         reservations: resas.map((r) => ({
           reservationId: String(r.id || (r as { _id?: string })._id || r.reservationNumber || ''),
           guestName: r.guestName || 'Guest',
@@ -249,15 +291,36 @@ export function ReservationsPlanningPage() {
         })),
       };
     });
-  }, [listings, reservations, startDate, daysCount, operationalByListing]);
+  }, [activeListings, reservations, startDate, daysCount, operationalByListing]);
 
-  const handleCleanlinessChange = useCallback(async (listingId: string, status: DisplayCleanliness) => {
-    const result = await cleanlinessService.updateListingStatus(listingId, status);
-    if (!result.success) {
-      throw new Error(result.message || 'Échec mise à jour propreté');
-    }
-    setRefreshKey((k) => k + 1);
-  }, []);
+  const handleCleanlinessChange = useCallback(
+    async (listingId: string, status: DisplayCleanliness) => {
+      const result = await cleanlinessService.updateListingStatus(listingId, status);
+      if (!result.success) {
+        throw new Error(result.message || 'Échec mise à jour propreté');
+      }
+      invalidatePlanningListingsCache(listingsCacheKey);
+      setOperationalByListing((prev) => {
+        const next = new Map(prev);
+        const row = { ...(next.get(listingId) || {}), listingId };
+        if (result.data?.cleanlinessStatus_v2) {
+          row.cleanlinessStatus_v2 = result.data.cleanlinessStatus_v2;
+        }
+        if (result.data?.cleanlinessStatus) {
+          row.cleanlinessStatus = result.data.cleanlinessStatus;
+        }
+        if (result.data?.occupancyStatus) {
+          row.occupancyStatus = result.data.occupancyStatus;
+        }
+        if (result.data?.cleanlinessEmergency != null) {
+          row.cleanlinessEmergency = result.data.cleanlinessEmergency;
+        }
+        next.set(listingId, row);
+        return next;
+      });
+    },
+    [listingsCacheKey],
+  );
 
   const goToday = useCallback(() => {
     const d = new Date();
@@ -309,9 +372,8 @@ export function ReservationsPlanningPage() {
           <Box
             sx={{
               position: 'relative',
-              opacity: isRefreshing ? 0.72 : 1,
-              transition: 'opacity 0.2s ease',
-              pointerEvents: isRefreshing ? 'none' : 'auto',
+              opacity: isRefreshing ? 0.92 : 1,
+              transition: 'opacity 0.15s ease',
             }}
           >
             {isRefreshing && (

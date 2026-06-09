@@ -33,11 +33,13 @@ import {
 } from './SHARED';
 import {
   createEmptyChecklistItem,
-  mapCleaningSojoriToListingPatch,
+  canPersistListingConfig,
+  mapCleaningSojoriTriggersPatch,
   mapListingToCleaningSojoriConfig,
   type CleaningChecklistItem,
   type CleaningSojoriConfig,
 } from './cleaningSojoriConfigTypes';
+import { logOrchConfig, orchConfigError } from '../../utils/orchConfigDebugLog';
 
 const TRIGGER_OPTIONS = [
   { value: 0, label: 'J (checkout)' },
@@ -52,6 +54,8 @@ interface Props {
   listingValues?: Record<string, unknown>;
   onListingPatch?: (patch: Record<string, unknown>) => void;
   templateMode?: boolean;
+  /** Hub ménage : checklist dans onglet dédié. */
+  showChecklist?: boolean;
 }
 
 function SortableChecklistRow({
@@ -124,6 +128,7 @@ export default function CleaningSojoriConfigTab({
   listingValues = {},
   onListingPatch,
   templateMode = false,
+  showChecklist = true,
 }: Props) {
   const [config, setConfig] = useState<CleaningSojoriConfig | null>(null);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -142,14 +147,16 @@ export default function CleaningSojoriConfigTab({
     dirtyRef.current = false;
   }, [listingId]);
 
+  const orchSig = JSON.stringify((listingValues.cleaningOrchestration as object) || {});
+
   useEffect(() => {
-    if (hydratedRef.current) return;
+    if (dirtyRef.current) return;
     if (!listingValues || !Object.keys(listingValues).length) return;
     const mapped = mapListingToCleaningSojoriConfig(listingValues);
     setConfig(mapped);
     configRef.current = mapped;
     hydratedRef.current = true;
-  }, [listingValues, listingId]);
+  }, [listingValues, listingId, orchSig]);
 
   const patch = useCallback((fn: (c: CleaningSojoriConfig) => CleaningSojoriConfig) => {
     dirtyRef.current = true;
@@ -163,20 +170,43 @@ export default function CleaningSojoriConfigTab({
 
   const persist = useCallback(async () => {
     const cfg = configRef.current;
-    if (!cfg || !listingId) return;
-    const payload = mapCleaningSojoriToListingPatch(cfg);
+    if (!cfg) return;
+    if (!canPersistListingConfig(listingId, templateMode)) {
+      logOrchConfig('cleaning.sojori.persist SKIP (no listingId, not template)', {
+        listingId,
+        templateMode,
+      });
+      return;
+    }
+    const payload = mapCleaningSojoriTriggersPatch(cfg, listingValues);
+    const orch = payload.cleaningOrchestration as Record<string, unknown> | undefined;
+    logOrchConfig('cleaning.sojori.persist →', {
+      listingId: listingId || '(template)',
+      templateMode,
+      preferredDayAfterCheckout: orch?.preferredDayAfterCheckout,
+      safetyMaxDirtyDays: orch?.safetyMaxDirtyDays,
+      enabled: orch?.enabled,
+    });
     setSavingState('saving');
     try {
       if (!templateMode && listingId) {
         await listingsService.updateListingProperty(listingId, payload);
       }
       await onListingPatch?.(payload);
+      logOrchConfig('cleaning.sojori.persist ← OK', {
+        listingId: listingId || '(template)',
+        preferredDayAfterCheckout: orch?.preferredDayAfterCheckout,
+      });
       setSavingState('saved');
-    } catch {
+    } catch (e) {
+      orchConfigError('cleaning.sojori.persist ← FAIL', e, {
+        listingId: listingId || '(template)',
+        templateMode,
+      });
       setSavingState('idle');
       dirtyRef.current = true;
     }
-  }, [listingId, onListingPatch]);
+  }, [listingId, listingValues, onListingPatch, templateMode]);
 
   useEffect(() => {
     if (!config || !dirtyRef.current) return;
@@ -213,7 +243,9 @@ export default function CleaningSojoriConfigTab({
   return (
     <Box>
       <ConfigIntroBar saveState={savingState}>
-        Orchestration interne Sojori : tâche auto après checkout, filet si le logement reste <b>DIRTY</b>, checklist staff.
+        {showChecklist
+          ? 'Orchestration interne Sojori : tâche auto après checkout, filet si le logement reste DIRTY.'
+          : 'Ménage Sojori : déclenchement automatique après checkout et filet de sécurité DIRTY.'}
       </ConfigIntroBar>
 
       <Card compact icon="🧼" title="Ménage Sojori" subtitle="Activer la création automatique des tâches">
@@ -286,48 +318,49 @@ export default function CleaningSojoriConfigTab({
             </FormRow>
           </Card>
 
-          <Card
-            compact
-            icon="📋"
-            title="Checklist de ménage"
-            subtitle="Items obligatoires + photos requises"
-
-          >
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={config.checklist.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                <Stack sx={{ gap: 0.75 }}>
-                  {config.checklist.map(item => (
-                    <SortableChecklistRow
-                      key={item.id}
-                      item={item}
-                      onUpdate={p =>
-                        patch(c => ({
-                          ...c,
-                          checklist: c.checklist.map(row => (row.id === item.id ? { ...row, ...p } : row)),
-                        }))
-                      }
-                      onDelete={() =>
-                        patch(c => ({
-                          ...c,
-                          checklist: c.checklist.filter(row => row.id !== item.id).map((row, i) => ({ ...row, order: i })),
-                        }))
-                      }
-                    />
-                  ))}
-                </Stack>
-              </SortableContext>
-            </DndContext>
-            <AddRowBtn
-              onClick={() =>
-                patch(c => ({
-                  ...c,
-                  checklist: [...c.checklist, createEmptyChecklistItem(c.checklist.length)],
-                }))
-              }
+          {showChecklist && (
+            <Card
+              compact
+              icon="📋"
+              title="Checklist de ménage"
+              subtitle="Items obligatoires + photos requises"
             >
-              + Ajouter un item checklist
-            </AddRowBtn>
-          </Card>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={config.checklist.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                  <Stack sx={{ gap: 0.75 }}>
+                    {config.checklist.map(item => (
+                      <SortableChecklistRow
+                        key={item.id}
+                        item={item}
+                        onUpdate={p =>
+                          patch(c => ({
+                            ...c,
+                            checklist: c.checklist.map(row => (row.id === item.id ? { ...row, ...p } : row)),
+                          }))
+                        }
+                        onDelete={() =>
+                          patch(c => ({
+                            ...c,
+                            checklist: c.checklist.filter(row => row.id !== item.id).map((row, i) => ({ ...row, order: i })),
+                          }))
+                        }
+                      />
+                    ))}
+                  </Stack>
+                </SortableContext>
+              </DndContext>
+              <AddRowBtn
+                onClick={() =>
+                  patch(c => ({
+                    ...c,
+                    checklist: [...c.checklist, createEmptyChecklistItem(c.checklist.length)],
+                  }))
+                }
+              >
+                + Ajouter un item checklist
+              </AddRowBtn>
+            </Card>
+          )}
         </>
       )}
     </Box>

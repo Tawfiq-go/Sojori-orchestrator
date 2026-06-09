@@ -2,7 +2,7 @@
 // Sojori · Listing Form — Atelier 2026
 // ListingFormShell.jsx — coquille 2-niveaux (Detail OTA / Config Orch.)
 //
-// • Toggle Detail (11 onglets) ↔ Config orchestration (13 onglets)
+// • Toggle Detail (11) ↔ Orchestration V3
 // • Tabs rail à gauche, content scrollable à droite
 // • Header listing résumé + save bar sticky
 // • Slot `renderTab(tabKey)` à brancher sur tes composants existants
@@ -10,6 +10,9 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Stack, Typography, Button } from '@mui/material';
 import { LISTING_LAYOUT } from '../../../constants/listingLayout';
+import { V3 } from '../../../features/orchestrationListingV3/theme';
+
+const V3_ORCH_MIN_H = V3.embedViewportH;
 
 const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a', primaryTint: 'rgba(184,133,26,0.10)',
@@ -51,9 +54,8 @@ export const CONFIG_NEW_TABS = [
     { id: 'access-config',            icon: '🔐', label: 'Accès' },
     { id: 'support-config',           icon: '🆘', label: 'Support' },
     { id: 'concierge-config',         icon: '🛎️', label: 'Conciergerie' },
-    { id: 'cleaning-config',          icon: '🏠', label: 'Ménage' },
+    { id: 'cleaning-config',          icon: '🧹', label: 'Ménage' },
     { id: 'timeslots-config',         icon: '🛬', label: 'Créneaux A/D' },
-    { id: 'cleaning-sojori-config',   icon: '🧼', label: 'Ménage Sojori' },
     { id: 'transport-config',         icon: '🚗', label: 'Transport' },
     { id: 'grocery-config',           icon: '🛒', label: 'Courses' },
     { id: 'messages-config',          icon: '🚪', label: 'Instructions départ' },
@@ -61,12 +63,23 @@ export const CONFIG_NEW_TABS = [
   ]},
   { group: 'Communication', items: [
     { id: 'service-client-config', icon: '💌', label: 'Service Client' },
-    { id: 'whatsapp-config',       icon: '📱', label: 'Menu WhatsApp' },
   ]},
-  { group: 'Orchestration', items: [
-    { id: 'orchestration-config',  icon: '⚡', label: 'Orchestration' },
-  ]},
+  { group: 'Orchestration', items: [] },
 ];
+
+/** Onglets masqués (ex. transport absent du template Admin global). */
+export function filterConfigTabs(tabs, hiddenIds = []) {
+  const hidden = new Set(hiddenIds);
+  if (!hidden.size) return tabs;
+  return tabs
+    .map(g => ({ ...g, items: g.items.filter(t => !hidden.has(t.id)) }))
+    .filter(g => g.items.length > 0);
+}
+
+/** Nombre d’onglets Config orchestration visibles. */
+export function visibleConfigTabCount(tabs) {
+  return tabs.reduce((n, g) => n + g.items.length, 0);
+}
 
 /** Nombre d’onglets Config orchestration (pill toggle + vérif rail). */
 export const CONFIG_NEW_TAB_COUNT = CONFIG_NEW_TABS.reduce((n, g) => n + g.items.length, 0);
@@ -75,10 +88,13 @@ const CONFIG_TAB_IDS = new Set(
   CONFIG_NEW_TABS.flatMap(g => g.items.map(t => t.id)),
 );
 
-/** `config-new` (ancienne URL) → `config`. */
-export function normalizeListingFormLevel(level) {
-  if (level === 'config-new') return 'config';
-  return level === 'config' || level === 'detail' ? level : 'detail';
+/** Legacy `config` / `config-new` → Orchestration V3 (sauf embed template propriétaire). */
+export function normalizeListingFormLevel(level, { forceConfig = false } = {}) {
+  if (level === 'orchestration-v3') return 'orchestration-v3';
+  if (level === 'config-new' || level === 'config') {
+    return forceConfig ? 'config' : 'orchestration-v3';
+  }
+  return level === 'detail' ? 'detail' : 'detail';
 }
 
 /* ─── Helpers UI ───────────────────────────────────────────── */
@@ -141,19 +157,24 @@ function TabButton({ tab, active, statusBadge, onClick }) {
 export default function ListingFormShell({
   listing,                    // { id, name, photoColor, bedrooms, bathrooms, guests, location, completionPct }
   tabsStatus = {},            // { [tabKey]: { tone, label } } — pour les badges
-  defaultLevel = 'detail',    // 'detail' | 'config' (alias legacy : config-new)
+  defaultLevel = 'detail',    // 'detail' | 'orchestration-v3' (legacy config → V3)
   defaultTab = 'photos',
   lockLevel,                  // masque le toggle et fige le niveau (ex. embed chatbot)
   embedded = false,           // rendu dans un panneau (pas pleine page)
   configNewBadgeLabel = '',   // badge optionnel (ex. « Template » sur page catalogue)
+  hiddenConfigTabIds = [],    // ex. ['transport-config'] sur template Admin global
   onSave,
   onPublish,
   onPreview,
   onAiAssist,
   renderTab,                  // (tabKey, level) => ReactNode — branche tes vrais composants ici
 }) {
-  const resolvedDefaultLevel = normalizeListingFormLevel(defaultLevel);
-  const resolvedLockLevel = lockLevel ? normalizeListingFormLevel(lockLevel) : null;
+  const resolvedLockLevel = lockLevel
+    ? normalizeListingFormLevel(lockLevel, { forceConfig: lockLevel === 'config' || lockLevel === 'config-new' })
+    : null;
+  const resolvedDefaultLevel = normalizeListingFormLevel(defaultLevel, {
+    forceConfig: resolvedLockLevel === 'config',
+  });
   const [level, setLevel] = useState(resolvedLockLevel || resolvedDefaultLevel);
   const [activeTab, setActiveTab] = useState(defaultTab);
 
@@ -163,12 +184,40 @@ export default function ListingFormShell({
 
   useEffect(() => {
     if (!defaultTab) return;
+    if (resolvedDefaultLevel === 'orchestration-v3') {
+      setActiveTab('orchestration-v3');
+      return;
+    }
     if (resolvedDefaultLevel === 'config' && !CONFIG_TAB_IDS.has(defaultTab)) return;
     setActiveTab(defaultTab);
   }, [defaultTab, resolvedDefaultLevel]);
 
-  const tabsConfig = level === 'detail' ? DETAIL_TABS : CONFIG_NEW_TABS;
-  const activeTabMeta = tabsConfig.flatMap(g => g.items).find(t => t.id === activeTab) || tabsConfig[0].items[0];
+  const configTabsFiltered = level === 'config' ? filterConfigTabs(CONFIG_NEW_TABS, hiddenConfigTabIds) : CONFIG_NEW_TABS;
+  const configTabCount = visibleConfigTabCount(configTabsFiltered);
+
+  useEffect(() => {
+    if (level !== 'config' || !hiddenConfigTabIds?.length) return;
+    const visibleIds = new Set(configTabsFiltered.flatMap(g => g.items.map(t => t.id)));
+    if (!visibleIds.has(activeTab)) {
+      const first = configTabsFiltered[0]?.items[0]?.id;
+      if (first) setActiveTab(first);
+    }
+  }, [level, hiddenConfigTabIds, configTabsFiltered, activeTab]);
+
+  useEffect(() => {
+    if (resolvedLockLevel !== 'config' || !hiddenConfigTabIds?.length) return;
+    const visibleIds = new Set(configTabsFiltered.flatMap(g => g.items.map(t => t.id)));
+    if (!visibleIds.has(activeTab)) {
+      const first = configTabsFiltered[0]?.items[0]?.id;
+      if (first) setActiveTab(first);
+    }
+  }, [resolvedLockLevel, hiddenConfigTabIds, configTabsFiltered, activeTab]);
+
+  const isOrchV3 = level === 'orchestration-v3';
+  const tabsConfig = level === 'detail' ? DETAIL_TABS : isOrchV3 ? [] : configTabsFiltered;
+  const activeTabMeta = isOrchV3
+    ? { id: 'orchestration-v3', icon: '🎯', label: 'Orchestration' }
+    : tabsConfig.flatMap(g => g.items).find(t => t.id === activeTab) || tabsConfig[0]?.items?.[0] || { id: activeTab, icon: '·', label: activeTab };
   const listingDisplayName = (listing?.name && String(listing.name).trim()) || 'Listing sans nom';
   const locationLine = (listing?.location && String(listing.location).trim()) || '';
   const showListingTitle = Boolean(listing?.name && String(listing.name).trim());
@@ -186,6 +235,15 @@ export default function ListingFormShell({
         }}
       >
 
+        <Box
+          sx={{
+            position: isOrchV3 ? 'sticky' : 'static',
+            top: 0,
+            zIndex: isOrchV3 ? 35 : 'auto',
+            bgcolor: isOrchV3 ? T.bg0 : 'transparent',
+            pb: isOrchV3 ? 0.5 : 0,
+          }}
+        >
         {/* Toggle Détail/Config + nom listing sur une ligne (gain vertical) */}
         <Box
           sx={{
@@ -211,7 +269,7 @@ export default function ListingFormShell({
           >
             {[
               { id: 'detail', icon: '🏠', label: 'Détail listing', pillLabel: '11 onglets', accent: T.primary, tint: T.primaryTint, tintColor: T.primaryDeep },
-              { id: 'config', icon: '⚙️', label: 'Config orchestration', pillLabel: `${CONFIG_NEW_TAB_COUNT} onglets`, accent: '#b8851a', tint: 'rgba(184,133,26,0.10)', tintColor: '#876119' },
+              { id: 'orchestration-v3', icon: '🎯', label: 'Orchestration', pillLabel: 'Par service', accent: '#7c3aed', tint: 'rgba(124,58,237,0.10)', tintColor: '#7c3aed' },
             ].map(opt => {
               const active = level === opt.id;
               return (
@@ -220,8 +278,11 @@ export default function ListingFormShell({
                   component="button"
                   onClick={() => {
                     setLevel(opt.id);
-                    const tabs = opt.id === 'detail' ? DETAIL_TABS : CONFIG_NEW_TABS;
-                    setActiveTab(tabs[0].items[0].id);
+                    if (opt.id === 'orchestration-v3') {
+                      setActiveTab('orchestration-v3');
+                      return;
+                    }
+                    setActiveTab(DETAIL_TABS[0].items[0].id);
                   }}
                   sx={{
                     all: 'unset',
@@ -293,7 +354,7 @@ export default function ListingFormShell({
                     color: T.text3,
                   }}
                 >
-                  {CONFIG_NEW_TAB_COUNT} onglets
+                  {configTabCount} onglets
                 </Box>
               </Box>
             ) : null}
@@ -321,15 +382,20 @@ export default function ListingFormShell({
             ) : null}
           </Box>
         </Box>
+        </Box>
 
         {/* Main frame */}
         <Box sx={{
           bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
           overflow: 'hidden',
-          display: 'grid', gridTemplateColumns: { xs: '1fr', md: `${LISTING_LAYOUT.tabsRailWidth}px 1fr` },
-          minHeight: embedded ? 420 : 560,
+          display: 'grid',
+          gridTemplateColumns: isOrchV3 ? '1fr' : { xs: '1fr', md: `${LISTING_LAYOUT.tabsRailWidth}px 1fr` },
+          minHeight: isOrchV3 ? (embedded ? V3_ORCH_MIN_H : V3_ORCH_MIN_H) : embedded ? 420 : 560,
+          height: isOrchV3 ? V3_ORCH_MIN_H : undefined,
+          maxHeight: isOrchV3 ? V3_ORCH_MIN_H : undefined,
         }}>
           {/* Tabs rail */}
+          {!isOrchV3 && (
           <Stack sx={{
             borderRight: { md: `1px solid ${T.border}` },
             bgcolor: T.bg2, p: LISTING_LAYOUT.tabsRailPad, overflowY: 'auto',
@@ -354,9 +420,21 @@ export default function ListingFormShell({
               </React.Fragment>
             ))}
           </Stack>
+          )}
 
           {/* Content */}
-          <Box sx={{ p: LISTING_LAYOUT.contentPad, overflowY: 'auto', maxHeight: embedded ? 'calc(100vh - 220px)' : '80vh', position: 'relative' }}>
+          <Box sx={{
+            p: isOrchV3 ? 0 : LISTING_LAYOUT.contentPad,
+            overflowY: isOrchV3 ? 'hidden' : 'auto',
+            overflowX: 'hidden',
+            maxHeight: isOrchV3 ? '100%' : embedded ? 'calc(100vh - 220px)' : '80vh',
+            height: isOrchV3 ? '100%' : undefined,
+            minHeight: isOrchV3 ? 0 : undefined,
+            display: isOrchV3 ? 'flex' : 'block',
+            flexDirection: 'column',
+            position: 'relative',
+          }}>
+            {!isOrchV3 && (
             <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center', flexWrap: 'wrap', mb: activeTab === 'amenities' ? 1.25 : 1.5 }}>
               <Typography
                 component="h2"
@@ -371,12 +449,22 @@ export default function ListingFormShell({
               </Typography>
               {tabsStatus[activeTab] && <StatusChip {...tabsStatus[activeTab]} />}
             </Stack>
+            )}
 
-            <Box sx={{ animation: 'sojori-fade-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both' }}>
+            <Box sx={{
+              animation: isOrchV3 ? 'none' : 'sojori-fade-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both',
+              flex: isOrchV3 ? 1 : undefined,
+              minHeight: isOrchV3 ? 0 : undefined,
+              height: isOrchV3 ? '100%' : undefined,
+              display: isOrchV3 ? 'flex' : 'block',
+              flexDirection: 'column',
+              overflow: isOrchV3 ? 'hidden' : 'visible',
+            }}>
               {renderTab ? renderTab(activeTab, level) : <PlaceholderTab tabId={activeTab} />}
             </Box>
 
             {/* Save bar sticky */}
+            {!isOrchV3 && (
             <Stack
               direction="row"
               sx={{
@@ -404,15 +492,14 @@ export default function ListingFormShell({
                   fontFamily: '"Geist Mono", monospace',
                 }}
               >
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: level === 'config' ? T.info : T.success, boxShadow: level === 'config' ? `0 0 6px ${T.info}` : `0 0 6px ${T.success}` }} />
-                {level === 'config'
-                  ? 'Autosave par onglet · barre globale = détail OTA'
-                  : 'Sauvegarder pour enregistrer cet écran'}
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: T.success, boxShadow: `0 0 6px ${T.success}` }} />
+                Sauvegarder pour enregistrer cet écran
               </Stack>
               <Box sx={{ flex: 1 }} />
               <Button onClick={onSave}    sx={btnGhost}>Sauvegarder</Button>
               <Button onClick={onPublish} sx={btnPrim}>Publier →</Button>
             </Stack>
+            )}
           </Box>
         </Box>
       </Box>

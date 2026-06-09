@@ -1,47 +1,28 @@
 import React from 'react';
 import { Alert, Box, CircularProgress } from '@mui/material';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-toastify';
+import { useQuery } from '@tanstack/react-query';
 import ChatbotListingDetailTabs from './ChatbotListingDetailTabs';
 import * as fullchatbotApi from '../../services/fullchatbotApi';
 import listingsService from '../../services/listingsService';
-import {
-  mapApiToFormV2Values,
-  mergeFormV2ToUpdatePropertyPayload,
-} from '../../utils/listingFormV2ApiAdapter';
+import { mapApiToFormV2Values } from '../../utils/listingFormV2ApiAdapter';
 
 type Props = {
   listingId: string;
   snapshotUpdatedAt?: string;
-  defaultTab?: string;
 };
 
 export default function ChatbotListingConfigEmbed({
   listingId,
   snapshotUpdatedAt,
-  defaultTab = 'access-config',
 }: Props) {
-  const queryClient = useQueryClient();
-
   const { data: listingDoc, isLoading, error } = useQuery({
     queryKey: ['listing', listingId],
     queryFn: () => listingsService.getListingDocument(listingId),
     enabled: Boolean(listingId),
+    staleTime: 2 * 60 * 1000,
   });
 
   const formValues = listingDoc ? mapApiToFormV2Values(listingDoc) : null;
-
-  const { data: listingStructure } = useQuery({
-    queryKey: ['listing-structure'],
-    queryFn: () => listingsService.getListingStructure(),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: roomTypeConfigs = [] } = useQuery({
-    queryKey: ['room-type-configs'],
-    queryFn: () => listingsService.getRoomTypeConfigs(),
-    staleTime: 5 * 60 * 1000,
-  });
 
   const { data: snapshotRes } = useQuery({
     queryKey: ['fullchatbot-snapshot', listingId],
@@ -56,30 +37,6 @@ export default function ChatbotListingConfigEmbed({
   )
     ? (snapshotData?.menu as { menuOptions: unknown[] }).menuOptions.length
     : 0;
-
-  const { mutate: saveListing } = useMutation({
-    mutationFn: (values: Record<string, unknown>) =>
-      listingsService.updateListingProperty(listingId, mergeFormV2ToUpdatePropertyPayload(values)),
-    onSuccess: () => {
-      toast.success('Listing enregistré');
-      queryClient.invalidateQueries({ queryKey: ['listing', listingId] });
-    },
-    onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'Erreur enregistrement');
-    },
-  });
-
-  const { mutate: verifyRuChannels, isPending: verifyRuLoading } = useMutation({
-    mutationFn: () => listingsService.verifyOtaChannels(listingId),
-    onSuccess: (result) => {
-      if (result.success) {
-        toast.success('Canaux OTA vérifiés');
-        queryClient.invalidateQueries({ queryKey: ['listing', listingId] });
-      } else {
-        toast.error(result.error || 'Erreur vérification');
-      }
-    },
-  });
 
   if (isLoading) {
     return (
@@ -115,15 +72,6 @@ export default function ChatbotListingConfigEmbed({
         rawDoc={listingDoc}
         snapshotUpdatedAt={snapshotUpdatedAt}
         menuOptionsCount={menuOptionsCount}
-        configDefaultTab={defaultTab}
-        onSave={saveListing}
-        onImagesPersisted={() => {
-          queryClient.invalidateQueries({ queryKey: ['listing', listingId] });
-        }}
-        onVerifyRuChannels={verifyRuChannels}
-        verifyRuLoading={verifyRuLoading}
-        listingStructure={listingStructure ?? null}
-        roomTypeConfigs={roomTypeConfigs}
       />
     </Box>
   );

@@ -2,6 +2,10 @@ import type { Message } from '../../types/unifiedInbox.types';
 import type { InboxReservationData } from '../../types/inboxReservation.types';
 import type { Thread } from '../../types/unifiedInbox.types';
 import {
+  resolveReservationSourceKind,
+  type ReservationSourceInput,
+} from '../reservations/ReservationSourceIcon';
+import {
   checkInDaysLabel,
   formatInboxDaySeparator,
   formatReservationCreatedDisplay,
@@ -12,16 +16,26 @@ import {
 } from './inboxFormat';
 import { otaChannelColor, otaChannelFromName } from './inboxMappers';
 import { formatInboxMessageText, inboxMessagePreview } from './formatInboxMessageText';
+import { resolveListingName } from './inboxListingName';
 
 export interface OtaThreadRow {
   id: string;
   threadId: string;
   guestName: string;
+  guestPhone?: string;
   listingName: string;
   channel: string;
+  /** Valeur brute backend (channelName / communicationChannel) */
+  channelNameRaw?: string;
+  source?: string;
+  byRentals?: boolean;
   reservationNumber: string;
   lastMessage: string;
   lastMessageTime?: string;
+  threadUpdatedAt?: string;
+  threadCreatedAt?: string;
+  messageStatus?: string;
+  lastMessageIsIncoming?: boolean;
   unreadCount: number;
   checkInDate?: string;
   checkOutDate?: string;
@@ -33,30 +47,108 @@ export interface OtaThreadRow {
   preloadedMessages?: any[];
 }
 
-function normalizeChannel(raw?: string): string {
-  const ch = (raw || '').toLowerCase();
-  if (ch.includes('booking')) return 'Booking.com';
-  if (ch.includes('airbnb')) return 'Airbnb';
-  if (ch.includes('vrbo')) return 'Vrbo';
-  if (ch.includes('sojori')) return 'Sojori';
-  return raw || 'OTA';
+function channelLabelFromSourceKind(kind: ReturnType<typeof resolveReservationSourceKind>): string {
+  if (kind === 'airbnb') return 'Airbnb';
+  if (kind === 'booking') return 'Booking.com';
+  if (kind === 'vrbo') return 'Vrbo';
+  return 'OTA';
 }
 
-/** Filtre statut — aligné legacy OTAMessagesTab.jsx */
-export function filterOtaThreadsByStatus(rows: OtaThreadRow[]): OtaThreadRow[] {
-  return rows.filter((thread) => {
-    const status = thread.status?.toLowerCase();
-    if (!status) return true;
-    if (status === 'confirmed' || status === 'pending') return true;
-    const hasUnread = thread.unreadCount > 0;
-    const isRecent =
-      thread.lastMessageTime &&
-      Date.now() - new Date(thread.lastMessageTime).getTime() < 7 * 86400000;
-    if ((status === 'completed' || status.includes('cancel')) && (hasUnread || isRecent)) {
-      return true;
-    }
-    return false;
+export function otaChannelFromReservation(
+  input: ReservationSourceInput,
+): 'ab' | 'bk' | 'vrbo' | null {
+  const kind = resolveReservationSourceKind(input);
+  if (kind === 'airbnb') return 'ab';
+  if (kind === 'booking') return 'bk';
+  if (kind === 'vrbo') return 'vrbo';
+  return null;
+}
+
+/** Plateforme OTA (AB/BK) — source résa puis repli sur le libellé canal brut. */
+export function resolveOtaPlatformChannel(
+  row: Pick<OtaThreadRow, 'source' | 'channelNameRaw' | 'byRentals' | 'channel'>,
+): 'ab' | 'bk' | 'vrbo' | null {
+  const fromReservation = otaChannelFromReservation({
+    source: row.source,
+    channelName: row.channelNameRaw,
+    byRentals: row.byRentals,
   });
+  if (fromReservation) return fromReservation;
+
+  const raw = `${row.channelNameRaw || ''} ${row.channel || ''}`.toLowerCase();
+  if (raw.includes('booking') || raw.includes('book.com')) return 'bk';
+  if (raw.includes('vrbo') || raw === 'ha') return 'vrbo';
+  if (raw.includes('airbnb') || raw === 'ab') return 'ab';
+  return null;
+}
+
+/** Réservation directe Sojori (hors Airbnb / Booking / Vrbo). */
+export function isOtaDirectChannel(
+  row: Pick<OtaThreadRow, 'source' | 'channelNameRaw' | 'byRentals' | 'channel'>,
+): boolean {
+  if (resolveOtaPlatformChannel(row) != null) return false;
+  const raw = `${row.channelNameRaw || ''} ${row.channel || ''} ${row.source || ''}`.toLowerCase();
+  if (raw.includes('whatsapp')) return false;
+  if (
+    raw.includes('sojori') ||
+    raw.includes('direct') ||
+    raw.includes('marketplace') ||
+    raw.includes('vente') ||
+    raw.includes('dashboard')
+  ) {
+    return true;
+  }
+  const kind = resolveReservationSourceKind({
+    source: row.source,
+    channelName: row.channelNameRaw,
+    byRentals: row.byRentals,
+  });
+  return kind === 'vente' || kind === 'admin';
+}
+
+export function isCancelledReservationStatus(status?: string): boolean {
+  const s = (status || '').toLowerCase();
+  if (!s) return false;
+  return (
+    s.includes('cancel') ||
+    s === 'rejected' ||
+    s === 'declined' ||
+    s === 'refused'
+  );
+}
+
+export function isCompletedReservationStatus(status?: string): boolean {
+  const s = (status || '').toLowerCase();
+  if (!s) return false;
+  return s === 'completed' || s.includes('complete');
+}
+
+/** Résa terminée ou annulée — exclue de Tout / canaux / Non répondu. */
+export function isInactiveOtaReservation(status?: string): boolean {
+  return isCancelledReservationStatus(status) || isCompletedReservationStatus(status);
+}
+
+function isWhatsappOnlyThread(
+  row: Pick<OtaThreadRow, 'channelNameRaw' | 'channel' | 'source'>,
+): boolean {
+  const raw = `${row.channelNameRaw || ''} ${row.channel || ''} ${row.source || ''}`.toLowerCase();
+  return raw.includes('whatsapp') && !raw.includes('airbnb') && !raw.includes('booking');
+}
+
+/**
+ * Inbox OTA par défaut (Tout, OTAs, Airbnb, Booking, Direct, Non répondu) :
+ * réservations actives uniquement — jamais completed / annulée.
+ */
+export function filterOtaActiveReservationsOnly(rows: OtaThreadRow[]): OtaThreadRow[] {
+  return rows.filter((thread) => {
+    if (isWhatsappOnlyThread(thread)) return false;
+    return !isInactiveOtaReservation(thread.status);
+  });
+}
+
+/** @deprecated alias */
+export function filterOtaThreadsForInbox(rows: OtaThreadRow[]): OtaThreadRow[] {
+  return filterOtaActiveReservationsOnly(rows);
 }
 
 export function mapApiItemToOtaThread(item: any): OtaThreadRow {
@@ -65,18 +157,32 @@ export function mapApiItemToOtaThread(item: any): OtaThreadRow {
   const guestName = reservation.guestName || threadData.recipientName || 'Guest';
   const reservationNumber =
     reservation.reservationNumber || threadData.reservationId || threadData.reservationNumber || '';
+  const channelNameRaw =
+    reservation.channelName || threadData.communicationChannel || threadData.channelName;
+  const sourceInput: ReservationSourceInput = {
+    source: reservation.source,
+    channelName: channelNameRaw,
+    byRentals: reservation.byRentals,
+  };
+  const sourceKind = resolveReservationSourceKind(sourceInput);
 
   return {
     id: threadData._id,
     threadId: threadData.threadId,
     guestName,
-    listingName: reservation.listingName || threadData.listingName || 'Listing',
-    channel: normalizeChannel(
-      threadData.communicationChannel || threadData.channelName || reservation.channelName,
-    ),
+    listingName: resolveListingName(reservation, threadData) || '—',
+    channel: channelLabelFromSourceKind(sourceKind),
+    channelNameRaw,
+    source: reservation.source,
+    byRentals: reservation.byRentals,
     reservationNumber,
+    guestPhone: reservation.phone || threadData.recipientPhone,
     lastMessage: threadData.preview || threadData.lastMessage || '',
     lastMessageTime: threadData.lastMessageAt || threadData.lastMessageDate,
+    threadUpdatedAt: threadData.updatedAt,
+    threadCreatedAt: threadData.createdAt,
+    messageStatus: threadData.messageStatus,
+    lastMessageIsIncoming: threadData.lastMessageIsIncoming,
     unreadCount: threadData.unreadCount || 0,
     checkInDate: reservation.arrivalDate || reservation.checkInDate,
     checkOutDate: reservation.departureDate || reservation.checkOutDate,
@@ -89,8 +195,15 @@ export function mapApiItemToOtaThread(item: any): OtaThreadRow {
   };
 }
 
+function otaRowNeedsReply(row: OtaThreadRow): boolean {
+  const s = (row.messageStatus || '').toLowerCase();
+  if (s === 'received' || s === 'pending') return true;
+  if (s === 'responded' || s === 'ignored' || s === 'replied') return false;
+  return row.lastMessageIsIncoming === true;
+}
+
 export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread {
-  const ch = otaChannelFromName(row.channel);
+  const ch = resolveOtaPlatformChannel(row) ?? otaChannelFromName(row.channel);
   const checkInBadge = checkInDaysLabel(row.checkInDate);
   return {
     id: row.threadId,
@@ -107,6 +220,7 @@ export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread
     checkOutDate: row.checkOutDate,
     checkInBadge,
     stayBadge: stayStatusLabel(row.checkInDate, row.checkOutDate, 'ota'),
+    needsReply: otaRowNeedsReply(row),
     guestsLabel: row.numberOfGuests ? `${row.numberOfGuests} voyageurs` : undefined,
     nightsCount: nightsBetween(row.checkInDate, row.checkOutDate),
     reservationCreatedDisplay: formatReservationCreatedDisplay(row.reservationCreatedAt),
@@ -115,7 +229,19 @@ export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread
 }
 
 export function mapOtaRowToReservation(row: OtaThreadRow): InboxReservationData {
-  const source = normalizeBookingSource(row.channel);
+  const kind = resolveReservationSourceKind({
+    source: row.source,
+    channelName: row.channelNameRaw,
+    byRentals: row.byRentals,
+  });
+  const source =
+    kind === 'airbnb'
+      ? 'Airbnb'
+      : kind === 'booking'
+        ? 'Booking.com'
+        : kind === 'vrbo'
+          ? 'Vrbo'
+          : normalizeBookingSource(row.channelNameRaw || row.channel);
   const total = row.totalPrice;
   const commission = total != null ? Math.round(total * 0.1) : undefined;
   return {

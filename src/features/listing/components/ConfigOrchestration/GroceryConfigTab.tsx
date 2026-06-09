@@ -17,31 +17,33 @@ import {
 
 const DEFAULT_SLOT_OPTIONS = ['08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'];
 
-const DEFAULT_GROCERY = {
-  enabled: true,
-  serviceFee: 50,
+const EMPTY_GROCERY = {
+  enabled: false,
+  serviceFee: 0,
   currency: 'MAD',
   deliveryLeadTimeHours: 24,
   availability: {
-    daysOfWeek: [0, 1, 2, 3, 4, 5],
-    timeSlots: ['09:00', '10:00', '11:00', '16:00', '17:00', '18:00'],
+    daysOfWeek: [] as number[],
+    timeSlots: [] as string[],
   },
-  noteToGuest:
-    "Saisissez librement votre liste de courses. Sojori s'occupe de tout. Frais de service ajoutés à la facture.",
+  noteToGuest: '',
 };
 
 function mapFromConciergeDoc(doc) {
   const svc = doc?.groceryServices?.[0];
   if (!svc) {
-    return { ...DEFAULT_GROCERY };
+    return { ...EMPTY_GROCERY };
   }
   return {
     enabled: svc.enabled !== false,
-    serviceFee: svc.pricing?.serviceFee ?? DEFAULT_GROCERY.serviceFee,
+    serviceFee: svc.pricing?.serviceFee ?? 0,
     currency: svc.pricing?.currency ?? 'MAD',
-    deliveryLeadTimeHours: DEFAULT_GROCERY.deliveryLeadTimeHours,
-    availability: { ...DEFAULT_GROCERY.availability },
-    noteToGuest: svc.description?.fr || svc.name?.fr || DEFAULT_GROCERY.noteToGuest,
+    deliveryLeadTimeHours: EMPTY_GROCERY.deliveryLeadTimeHours,
+    availability: {
+      daysOfWeek: Array.isArray(svc.availability?.daysOfWeek) ? svc.availability.daysOfWeek : [],
+      timeSlots: Array.isArray(svc.availability?.timeSlots) ? svc.availability.timeSlots : [],
+    },
+    noteToGuest: svc.description?.fr || svc.name?.fr || '',
     _serviceId: svc.id,
   };
 }
@@ -92,7 +94,7 @@ interface Props {
 
 export default function GroceryConfigTab({ listingId, templateOwnerKey }: Props) {
   const isOwnerTemplate = Boolean(templateOwnerKey);
-  const [config, setConfig] = useState(DEFAULT_GROCERY);
+  const [config, setConfig] = useState(EMPTY_GROCERY);
   const [rawDoc, setRawDoc] = useState(null);
   const [loading, setLoading] = useState(true);
   const [savingState, setSavingState] = useState('idle');

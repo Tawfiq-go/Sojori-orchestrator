@@ -20,11 +20,19 @@ export function ListingFormV2Page() {
   const tabParam =
     tabParamRaw === 'city-tax-config' ? 'messages-config' : tabParamRaw;
   const defaultLevel =
-    levelParam === 'config-new' || levelParam === 'config'
-      ? 'config'
+    levelParam === 'orchestration-v3' || levelParam === 'config-new' || levelParam === 'config'
+      ? 'orchestration-v3'
       : levelParam === 'detail'
         ? 'detail'
         : 'detail';
+  const legacyConfigTab =
+    tabParam?.endsWith('-config') ||
+    tabParam === 'orchestration-config' ||
+    tabParam === 'whatsapp-config';
+  const resolvedTab =
+    defaultLevel === 'orchestration-v3' || legacyConfigTab
+      ? undefined
+      : tabParam || undefined;
   const queryClient = useQueryClient();
 
   // Fetch listing data
@@ -125,7 +133,7 @@ export function ListingFormV2Page() {
         listingId={id!}
         initialValues={formValues}
         defaultLevel={defaultLevel}
-        defaultTab={tabParam || undefined}
+        defaultTab={resolvedTab}
         onSave={saveListing}
         onImagesPersisted={() => {
           queryClient.invalidateQueries({ queryKey: ['listing', id] });

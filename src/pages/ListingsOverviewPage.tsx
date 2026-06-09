@@ -20,6 +20,7 @@ import { ImportAirbnbModalContainer } from '../components/listing/import-airbnb'
 import { useAuth } from '../hooks/useAuth';
 import type { ListingStatus, ListingsStats, ListingSummary } from '../types/listings.types';
 import { ListingQuickEditDialog } from '../components/listing/ListingQuickEditDialog';
+import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
 
 const PAGE_SIZE = 20;
 
@@ -228,6 +229,7 @@ export function ListingsOverviewPage() {
 
   return (
     <DashboardWrapper breadcrumb={['Catalogue', 'Annonces']}>
+      <CatalogueAnnoncesTabs />
       {/* Boutons actions en haut */}
       <Box sx={{ display: 'flex', gap: 1.5, mb: 2, justifyContent: 'flex-end' }}>
         <Button sx={btnGhostSx} onClick={() => { void loadStats(); void loadListings(); }}>

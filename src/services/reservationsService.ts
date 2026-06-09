@@ -11,6 +11,10 @@ import type {
   ReservationDetail,
   ReservationDetailResponse,
 } from '../types/reservations.types';
+import {
+  getCachedReservationDetail,
+  setCachedReservationDetail,
+} from '../utils/reservationDetailCache';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4007';
 
@@ -300,13 +304,16 @@ class ReservationsService {
    * Résout une réservation depuis le paramètre de route `/reservations/:id`
    * — SJ-XXXXX via by-reservation-number, ObjectId via by-id
    */
-  async getByRouteParam(routeId: string): Promise<Reservation> {
+  async getByRouteParam(
+    routeId: string,
+    opts?: { includeThreads?: boolean; skipCache?: boolean },
+  ): Promise<Reservation> {
     const param = decodeURIComponent(routeId.trim());
     if (!param) {
       throw new Error('Identifiant de réservation manquant');
     }
     if (isMongoObjectId(param)) {
-      return this.getById(param);
+      return this.getById(param, opts);
     }
     const byNumber = await this.getByReservationNumber(param);
     if (byNumber) {
@@ -315,22 +322,73 @@ class ReservationsService {
     throw new Error(`Réservation introuvable : ${param}`);
   }
 
-  async getById(reservationId: string): Promise<Reservation> {
+  async getById(
+    reservationId: string,
+    opts?: { includeThreads?: boolean; skipCache?: boolean },
+  ): Promise<Reservation> {
     const startTime = performance.now();
-    // Logs désactivés pour nettoyer la console
-    // console.log(`[ReservationsService] Fetching reservation ${reservationId}...`);
+    const cacheKey = reservationId.trim();
+
+    if (!opts?.skipCache) {
+      const cached = getCachedReservationDetail(cacheKey);
+      if (cached) return cached;
+    }
 
     try {
-      const url = `${BASE_URL}/api/v1/reservations/by-id/${reservationId}`;
+      const params = new URLSearchParams();
+      if (opts?.includeThreads) {
+        params.set('includeThreads', 'true');
+        params.set('messagesLimit', '20');
+      } else {
+        params.set('includeThreads', 'false');
+      }
+      const qs = params.toString();
+      const url = `${BASE_URL}/api/v1/reservations/by-id/${reservationId}${qs ? `?${qs}` : ''}`;
 
       const response = await apiClient.get(url);
 
       const duration = performance.now() - startTime;
-      // Logs désactivés pour nettoyer la console
-      // console.log(`[ReservationsService] ✅ Fetched reservation in ${duration.toFixed(0)}ms`);
+      if (import.meta.env.DEV) {
+        console.log(`[ReservationsService] getById ${reservationId} in ${duration.toFixed(0)}ms`);
+      }
 
-      // ⚠️ FIX: Backend retourne { success, message, reservation }
-      return response.data.reservation;
+      const reservation = response.data.reservation as Reservation;
+      setCachedReservationDetail(cacheKey, reservation);
+      return reservation;
+    } catch (error) {
+      const duration = performance.now() - startTime;
+      console.error(`[ReservationsService] ❌ Error fetching reservation ${reservationId} (${duration.toFixed(0)}ms):`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * GET /api/v1/reservations/batch?ids=id1,id2,id3
+   * Récupère plusieurs réservations en 1 seul appel (optimisation performance)
+   * @param ids Array of reservation IDs to fetch
+   * @returns { success: boolean, data: Reservation[], notFound?: string[] }
+   */
+  async getBatch(ids: string[]): Promise<{ success: boolean; data: Reservation[]; notFound?: string[] }> {
+    if (ids.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const startTime = performance.now();
+    console.log(`[ReservationsService] 🚀 Batch fetching ${ids.length} reservations...`);
+
+    try {
+      const url = `${BASE_URL}/api/v1/reservations/batch?ids=${ids.join(',')}`;
+      const response = await apiClient.get(url);
+
+      const duration = performance.now() - startTime;
+      const found = response.data.data?.length || 0;
+      console.log(`[ReservationsService] ✅ Batch fetched ${found}/${ids.length} reservations in ${duration.toFixed(0)}ms`);
+
+      return {
+        success: response.data.success ?? true,
+        data: response.data.data || [],
+        notFound: response.data.notFound,
+      };
     } catch (error) {
       const duration = performance.now() - startTime;
       console.error(`[ReservationsService] ❌ Error after ${duration.toFixed(0)}ms:`, error);

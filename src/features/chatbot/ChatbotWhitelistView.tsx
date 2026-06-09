@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Stack,
@@ -17,19 +17,33 @@ import {
   Divider,
   useMediaQuery,
   useTheme,
+  FormControl,
+  MenuItem,
+  Select,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Refresh as RefreshIcon,
   Inbox as InboxIcon,
   Visibility as VisibilityIcon,
+  ArrowDownward as ArrowDownwardIcon,
+  ArrowUpward as ArrowUpwardIcon,
 } from '@mui/icons-material';
 import moment from 'moment';
 import 'moment/locale/fr';
 import { useNavigate } from 'react-router-dom';
 import * as fullchatbotApi from '../../services/fullchatbotApi';
-import listingsService from '../../services/listingsService';
 import { CHATBOT_T as T } from './chatbotTokens';
+import {
+  getCachedGuestContext,
+  getCachedMenuOptions,
+  hasCachedMenuOptions,
+  invalidateWhitelistEnrichmentCache,
+  seedWhitelistDetailFromListRow,
+  setCachedGuestContext,
+  setCachedMenuOptions,
+  setCachedWhitelistDetailShell,
+} from '../../utils/whitelistEnrichmentCache';
 import WhatsappConfigCell from './WhatsappConfigCell';
 import WhitelistLanguageCell from './WhitelistLanguageCell';
 import {
@@ -58,6 +72,30 @@ export type WhitelistRow = {
 };
 
 type QuickFilter = 'contacted' | 'pending' | 'cancelled' | 'arr7' | null;
+type WhitelistSortField = 'createdAt' | 'checkIn' | 'checkOut';
+type WhitelistSortDir = 'asc' | 'desc';
+
+function sortTimestamp(value?: string | Date | null): number {
+  if (!value) return 0;
+  const t = moment(value).valueOf();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function sortWhitelistRows(
+  rows: WhitelistRow[],
+  field: WhitelistSortField,
+  dir: WhitelistSortDir,
+): WhitelistRow[] {
+  const mul = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const ta = sortTimestamp(field === 'createdAt' ? a.createdAt : field === 'checkIn' ? a.checkIn : a.checkOut);
+    const tb = sortTimestamp(field === 'createdAt' ? b.createdAt : field === 'checkIn' ? b.checkIn : b.checkOut);
+    if (ta === 0 && tb === 0) return 0;
+    if (ta === 0) return 1;
+    if (tb === 0) return -1;
+    return (ta - tb) * mul;
+  });
+}
 
 function isCancelled(status?: string) {
   return String(status ?? '').toLowerCase().includes('cancel');
@@ -86,148 +124,262 @@ function statusMeta(status?: string) {
   return { label: status || '—', bg: 'rgba(20,17,10,0.05)', color: T.text3 };
 }
 
+function filterWhitelistRows(
+  rows: WhitelistRow[],
+  search: string,
+  quickFilter: QuickFilter,
+  listingNames: Record<string, string>,
+): WhitelistRow[] {
+  const needle = search.trim().toLowerCase();
+  const now = moment();
+  const in7 = moment().add(7, 'days');
+
+  return rows.filter((r) => {
+    if (quickFilter !== 'cancelled' && isCancelled(r.status)) return false;
+    if (quickFilter === 'contacted' && !r.hasCommunicated) return false;
+    if (quickFilter === 'pending' && (r.hasCommunicated || isCancelled(r.status))) return false;
+    if (quickFilter === 'cancelled' && !isCancelled(r.status)) return false;
+    if (quickFilter === 'arr7') {
+      const arr = moment(r.checkIn);
+      if (!arr.isValid() || !arr.isBetween(now, in7, 'day', '[]')) return false;
+    }
+    if (!needle) return true;
+    const listingName = r.listingId ? listingNames[r.listingId] : '';
+    return [r.guestName, r.reservationCode, r.phoneOta, r.reservationId, r.listingId, listingName]
+      .filter(Boolean)
+      .some((v) => String(v).toLowerCase().includes(needle));
+  });
+}
+
 export default function ChatbotWhitelistView() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const [rows, setRows] = useState<WhitelistRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [tableReady, setTableReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
+  const [sortField, setSortField] = useState<WhitelistSortField>('createdAt');
+  const [sortDir, setSortDir] = useState<WhitelistSortDir>('desc');
   const [page, setPage] = useState(0);
   const limit = 50;
   const [listingNames, setListingNames] = useState<Record<string, string>>({});
   const [menuByListing, setMenuByListing] = useState<Record<string, MenuOptionLike[]>>({});
+  const [snapshotMissingByListing, setSnapshotMissingByListing] = useState<Record<string, boolean>>({});
   const [guestCtxByResa, setGuestCtxByResa] = useState<Record<string, GuestContextLike>>({});
-  const [enrichingMenus, setEnrichingMenus] = useState(false);
-  const [enrichingCtx, setEnrichingCtx] = useState(false);
+  const enrichRequestIdRef = useRef(0);
+  const skipNextPageEnrichRef = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fullchatbotApi.listWhitelist({ limit: 500 });
-      const data = Array.isArray(res?.data) ? (res.data as WhitelistRow[]) : [];
-      setRows(data);
+  const enrichVisiblePage = useCallback(async (pageRows: WhitelistRow[]) => {
+    const requestId = ++enrichRequestIdRef.current;
 
-      const nameMap: Record<string, string> = {};
+    const listingIds = [...new Set(pageRows.map((r) => r.listingId).filter(Boolean))] as string[];
+    const nextMenus: Record<string, MenuOptionLike[]> = {};
+    const nextMissing: Record<string, boolean> = {};
+    const nextCtx: Record<string, GuestContextLike> = {};
+
+    for (const id of listingIds) {
+      const cached = getCachedMenuOptions(id);
+      if (cached) nextMenus[id] = cached;
+    }
+    for (const row of pageRows) {
+      const cached = getCachedGuestContext(row.reservationId);
+      if (cached) nextCtx[row.reservationId] = cached;
+    }
+
+    const menusToFetch = listingIds.filter((id) => nextMenus[id] === undefined && !hasCachedMenuOptions(id));
+    const resasToFetch = pageRows
+      .map((r) => r.reservationId)
+      .filter((id) => !nextCtx[id]);
+
+    if (menusToFetch.length > 0 || resasToFetch.length > 0) {
       try {
-        const snapList = await fullchatbotApi.listListingSnapshots({ limit: 500, activeOnly: 'true' });
-        const items = Array.isArray(snapList?.data) ? snapList.data : [];
-        for (const row of items as Array<{ listingId?: string; name?: string }>) {
-          if (row.listingId && row.name) nameMap[row.listingId] = row.name;
+        const batch = await fullchatbotApi.batchWhitelistPageEnrichment({
+          reservationIds: resasToFetch,
+          listingIds: menusToFetch,
+        });
+        if (requestId !== enrichRequestIdRef.current) return;
+
+        for (const [listingId, row] of Object.entries(batch.menuByListingId)) {
+          nextMenus[listingId] = row.options;
+          nextMissing[listingId] = row.snapshotMissing;
+          if (!row.snapshotMissing) setCachedMenuOptions(listingId, row.options);
+        }
+        for (const [resaId, gc] of Object.entries(batch.guestContextByReservationId)) {
+          nextCtx[resaId] = gc;
+          setCachedGuestContext(resaId, gc);
         }
       } catch {
-        // fallback listings service
-      }
-
-      const uniqueListingIds = [...new Set(data.map((r) => r.listingId).filter(Boolean))] as string[];
-      const stillMissing = uniqueListingIds.filter((id) => !nameMap[id]);
-      if (stillMissing.length > 0) {
-        try {
-          const listingsRes = await listingsService.getListings({ limit: 1000, useActiveFilter: true, active: true });
-          for (const l of listingsRes.data.items) {
-            if (l.id && l.name) nameMap[l.id] = l.name;
-          }
-        } catch {
-          // ignore
-        }
-      }
-      setListingNames(nameMap);
-
-      setEnrichingMenus(true);
-      const menuMap: Record<string, MenuOptionLike[]> = {};
-      const chunkSize = 8;
-      for (let i = 0; i < uniqueListingIds.length; i += chunkSize) {
-        const chunk = uniqueListingIds.slice(i, i + chunkSize);
-        await Promise.all(
-          chunk.map(async (listingId) => {
-            try {
-              const snapRes = await fullchatbotApi.getListingSnapshot(listingId);
-              const snap = snapRes?.data as { menu?: { menuOptions?: MenuOptionLike[] } } | null;
-              const opts = snap?.menu?.menuOptions;
-              if (Array.isArray(opts)) menuMap[listingId] = opts;
-            } catch {
-              menuMap[listingId] = [];
-            }
+        // Fallback : requêtes unitaires si batch indisponible (ancien backend)
+        await Promise.all([
+          ...menusToFetch.map(async (listingId) => {
+            const { options, snapshotMissing } = await fullchatbotApi.getListingMenuOptions(listingId);
+            if (requestId !== enrichRequestIdRef.current) return;
+            nextMenus[listingId] = options;
+            nextMissing[listingId] = snapshotMissing;
+            if (!snapshotMissing) setCachedMenuOptions(listingId, options);
           }),
-        );
-      }
-      setMenuByListing(menuMap);
-      setEnrichingMenus(false);
-    } catch (e) {
-      setRows([]);
-      setError(e instanceof Error ? e.message : 'Erreur chargement');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const now = moment();
-    const in7 = moment().add(7, 'days');
-
-    return rows.filter((r) => {
-      if (quickFilter !== 'cancelled' && isCancelled(r.status)) return false;
-      if (quickFilter === 'contacted' && !r.hasCommunicated) return false;
-      if (quickFilter === 'pending' && (r.hasCommunicated || isCancelled(r.status))) return false;
-      if (quickFilter === 'cancelled' && !isCancelled(r.status)) return false;
-      if (quickFilter === 'arr7') {
-        const arr = moment(r.checkIn);
-        if (!arr.isValid() || !arr.isBetween(now, in7, 'day', '[]')) return false;
-      }
-      if (!needle) return true;
-      const listingName = r.listingId ? listingNames[r.listingId] : '';
-      return [r.guestName, r.reservationCode, r.phoneOta, r.reservationId, r.listingId, listingName]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(needle));
-    });
-  }, [rows, search, quickFilter, listingNames]);
-
-  const paged = filtered.slice(page * limit, (page + 1) * limit);
-
-  useEffect(() => {
-    if (!paged.length) return;
-    let cancelled = false;
-    setEnrichingCtx(true);
-
-    void (async () => {
-      const chunkSize = 6;
-      const next: Record<string, GuestContextLike> = { ...guestCtxByResa };
-      for (let i = 0; i < paged.length; i += chunkSize) {
-        const chunk = paged.slice(i, i + chunkSize);
-        await Promise.all(
-          chunk.map(async (row) => {
-            if (next[row.reservationId]) return;
+          ...resasToFetch.map(async (reservationId) => {
             try {
-              const detail = await fullchatbotApi.getWhitelistDetail(row.reservationId);
+              const detail = await fullchatbotApi.getWhitelistDetail(reservationId, {
+                includeConversation: false,
+              });
+              if (requestId !== enrichRequestIdRef.current) return;
               const gc = detail?.data?.guestContext as GuestContextLike | null | undefined;
-              if (gc) next[row.reservationId] = gc;
+              if (gc) {
+                nextCtx[reservationId] = gc;
+                setCachedGuestContext(reservationId, gc);
+              }
+              if (detail?.data) {
+                setCachedWhitelistDetailShell(reservationId, detail.data as Record<string, unknown>);
+              }
             } catch {
               // ignore
             }
           }),
-        );
-        if (cancelled) return;
+        ]);
       }
-      if (!cancelled) {
-        setGuestCtxByResa(next);
-        setEnrichingCtx(false);
+    }
+
+    if (requestId !== enrichRequestIdRef.current) return;
+    setMenuByListing((prev) => ({ ...prev, ...nextMenus }));
+    setSnapshotMissingByListing((prev) => ({ ...prev, ...nextMissing }));
+    setGuestCtxByResa((prev) => ({ ...prev, ...nextCtx }));
+  }, []);
+
+  const filtered = useMemo(
+    () => filterWhitelistRows(rows, search, quickFilter, listingNames),
+    [rows, search, quickFilter, listingNames],
+  );
+
+  const sorted = useMemo(
+    () => sortWhitelistRows(filtered, sortField, sortDir),
+    [filtered, sortField, sortDir],
+  );
+
+  const paged = sorted.slice(page * limit, (page + 1) * limit);
+  const pagedReservationIdsKey = useMemo(
+    () => paged.map((r) => r.reservationId).join('|'),
+    [paged],
+  );
+  const pageViewKey = `${page}|${pagedReservationIdsKey}|${search}|${quickFilter ?? ''}|${sortField}|${sortDir}`;
+
+  /** Bootstrap : whitelist + enrichissement page 1 → affichage unique */
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      setIsLoading(true);
+      setTableReady(false);
+      setError(null);
+      try {
+        const [whitelistRes, snapListRes] = await Promise.all([
+          fullchatbotApi.listWhitelist({ limit: 500 }),
+          fullchatbotApi.listListingSnapshots({ limit: 500, activeOnly: 'true' }).catch(() => ({ data: [] })),
+        ]);
+        if (cancelled) return;
+
+        const data = Array.isArray(whitelistRes?.data) ? (whitelistRes.data as WhitelistRow[]) : [];
+        const nameMap: Record<string, string> = {};
+        const items = Array.isArray(snapListRes?.data) ? snapListRes.data : [];
+        for (const row of items as Array<{ listingId?: string; name?: string }>) {
+          if (row.listingId && row.name) nameMap[row.listingId] = row.name;
+        }
+
+        setRows(data);
+        setListingNames(nameMap);
+
+        const firstPage = sortWhitelistRows(
+          filterWhitelistRows(data, search, quickFilter, nameMap),
+          sortField,
+          sortDir,
+        ).slice(0, limit);
+        skipNextPageEnrichRef.current = true;
+        await enrichVisiblePage(firstPage);
+        if (cancelled) return;
+        setTableReady(true);
+      } catch (e) {
+        if (cancelled) return;
+        setRows([]);
+        setError(e instanceof Error ? e.message : 'Erreur chargement');
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recharge contexte page visible uniquement
-  }, [page, filtered.length, paged.map((r) => r.reservationId).join('|')]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap initial uniquement
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    invalidateWhitelistEnrichmentCache();
+    setMenuByListing({});
+    setSnapshotMissingByListing({});
+    setGuestCtxByResa({});
+    setTableReady(false);
+    enrichRequestIdRef.current += 1;
+
+    void (async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const [whitelistRes, snapListRes] = await Promise.all([
+          fullchatbotApi.listWhitelist({ limit: 500 }),
+          fullchatbotApi.listListingSnapshots({ limit: 500, activeOnly: 'true' }).catch(() => ({ data: [] })),
+        ]);
+        const data = Array.isArray(whitelistRes?.data) ? (whitelistRes.data as WhitelistRow[]) : [];
+        const nameMap: Record<string, string> = {};
+        const items = Array.isArray(snapListRes?.data) ? snapListRes.data : [];
+        for (const row of items as Array<{ listingId?: string; name?: string }>) {
+          if (row.listingId && row.name) nameMap[row.listingId] = row.name;
+        }
+        setRows(data);
+        setListingNames(nameMap);
+        const visible = sortWhitelistRows(
+          filterWhitelistRows(data, search, quickFilter, nameMap),
+          sortField,
+          sortDir,
+        ).slice(page * limit, (page + 1) * limit);
+        skipNextPageEnrichRef.current = true;
+        await enrichVisiblePage(visible);
+        setTableReady(true);
+      } catch (e) {
+        setRows([]);
+        setError(e instanceof Error ? e.message : 'Erreur chargement');
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [enrichVisiblePage, limit, page, quickFilter, search, sortField, sortDir]);
+
+  /** Changement page / filtres : attendre config WA + guest context puis réafficher */
+  useEffect(() => {
+    if (!tableReady) return;
+    if (skipNextPageEnrichRef.current) {
+      skipNextPageEnrichRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      setIsRefreshing(true);
+      try {
+        await enrichVisiblePage(paged);
+      } finally {
+        if (!cancelled) setIsRefreshing(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tableReady, pageViewKey, enrichVisiblePage, paged]);
 
   const waInterpretByResa = useMemo(() => {
     const out: Record<string, { options: MenuOptionInterpretation[]; hasConfig: boolean }> = {};
@@ -258,22 +410,37 @@ export default function ChatbotWhitelistView() {
   const handleReset = () => {
     setSearch('');
     setQuickFilter(null);
+    setSortField('createdAt');
+    setSortDir('desc');
     setPage(0);
   };
 
-  const openDetail = (reservationId: string) => {
-    navigate(`/chatbot/whitelist/${encodeURIComponent(reservationId)}`);
+  const openDetail = (row: WhitelistRow) => {
+    seedWhitelistDetailFromListRow(row);
+    navigate(`/chatbot/whitelist/${encodeURIComponent(row.reservationId)}`, { state: { row } });
   };
+
+  const showBlockingSpinner = (isLoading && !tableReady) || (tableReady && isRefreshing);
 
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
+      {isLoading && !tableReady && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+          <CircularProgress size={48} sx={{ color: T.primary }} />
+        </Box>
+      )}
+
+      {tableReady && (
       <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
           <TextField
             size="small"
             placeholder="Rechercher voyageur, SJ, téléphone…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
             slotProps={{
               input: {
                 startAdornment: (
@@ -285,8 +452,39 @@ export default function ChatbotWhitelistView() {
             }}
             sx={{ flex: 1, minWidth: 180, maxWidth: 360 }}
           />
+          <FormControl size="small" sx={{ minWidth: 148 }}>
+            <Select
+              value={sortField}
+              onChange={(e) => {
+                setSortField(e.target.value as WhitelistSortField);
+                setPage(0);
+              }}
+              displayEmpty
+              sx={{ fontSize: 12.5, bgcolor: T.bg1 }}
+            >
+              <MenuItem value="createdAt">Création</MenuItem>
+              <MenuItem value="checkIn">Check-in</MenuItem>
+              <MenuItem value="checkOut">Check-out</MenuItem>
+            </Select>
+          </FormControl>
+          <Tooltip title={sortDir === 'desc' ? 'Plus récent en premier' : 'Plus ancien en premier'}>
+            <IconButton
+              size="small"
+              onClick={() => {
+                setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
+                setPage(0);
+              }}
+              sx={{ border: `1px solid ${T.border}`, borderRadius: 1 }}
+            >
+              {sortDir === 'desc' ? (
+                <ArrowDownwardIcon sx={{ fontSize: 18, color: T.primaryDeep }} />
+              ) : (
+                <ArrowUpwardIcon sx={{ fontSize: 18, color: T.primaryDeep }} />
+              )}
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Actualiser">
-            <IconButton size="small" onClick={load}>
+            <IconButton size="small" onClick={handleRefresh}>
               <RefreshIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Tooltip>
@@ -309,30 +507,31 @@ export default function ChatbotWhitelistView() {
           </Stack>
         </Stack>
       </Paper>
+      )}
 
-      {error && (
+      {tableReady && error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      {loading && (
+      {tableReady && showBlockingSpinner && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-          <CircularProgress size={48} sx={{ color: T.primary }} />
+          <CircularProgress size={40} sx={{ color: T.primary }} />
         </Box>
       )}
 
-      {!loading && !isMobile && paged.length > 0 && (
+      {tableReady && !showBlockingSpinner && !isMobile && paged.length > 0 && (
         <WhitelistTable
           rows={paged}
           listingNames={listingNames}
           waInterpretByResa={waInterpretByResa}
-          waLoading={enrichingMenus || enrichingCtx}
+          snapshotMissingByListing={snapshotMissingByListing}
           onOpen={openDetail}
         />
       )}
 
-      {!loading && isMobile && paged.length > 0 && (
+      {tableReady && !showBlockingSpinner && isMobile && paged.length > 0 && (
         <Stack spacing={1.25}>
           {paged.map((r) => (
             <WhitelistMobileCard
@@ -340,14 +539,15 @@ export default function ChatbotWhitelistView() {
               row={r}
               listingName={r.listingId ? listingNames[r.listingId] : undefined}
               waInterpret={waInterpretByResa[r.reservationId]}
-              waLoading={enrichingMenus || enrichingCtx}
-              onOpen={() => openDetail(r.reservationId)}
+              snapshotMissing={r.listingId ? snapshotMissingByListing[r.listingId] : false}
+              listingId={r.listingId}
+              onOpen={() => openDetail(r)}
             />
           ))}
         </Stack>
       )}
 
-      {!loading && filtered.length === 0 && (
+      {tableReady && !showBlockingSpinner && sorted.length === 0 && (
         <Paper sx={{ textAlign: 'center', py: 8, border: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
           <InboxIcon sx={{ fontSize: 64, color: T.text4, mb: 2 }} />
           <Typography sx={{ fontSize: 16, fontWeight: 600, color: T.text2 }}>Aucune entrée whitelist</Typography>
@@ -360,10 +560,10 @@ export default function ChatbotWhitelistView() {
         </Paper>
       )}
 
-      {!loading && filtered.length > 0 && (
+      {tableReady && !showBlockingSpinner && sorted.length > 0 && (
         <Stack direction="row" sx={{ mt: 2, alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
-            {page * limit + 1}–{Math.min((page + 1) * limit, filtered.length)} sur {filtered.length}
+            {page * limit + 1}–{Math.min((page + 1) * limit, sorted.length)} sur {sorted.length}
           </Typography>
           <Stack direction="row" spacing={1}>
             <Button size="small" disabled={page === 0} onClick={() => setPage(page - 1)} sx={{ textTransform: 'none' }}>
@@ -371,7 +571,7 @@ export default function ChatbotWhitelistView() {
             </Button>
             <Button
               size="small"
-              disabled={(page + 1) * limit >= filtered.length}
+              disabled={(page + 1) * limit >= sorted.length}
               onClick={() => setPage(page + 1)}
               sx={{ textTransform: 'none' }}
             >
@@ -471,14 +671,14 @@ function WhitelistTable({
   rows,
   listingNames,
   waInterpretByResa,
-  waLoading,
+  snapshotMissingByListing,
   onOpen,
 }: {
   rows: WhitelistRow[];
   listingNames: Record<string, string>;
   waInterpretByResa: Record<string, { options: MenuOptionInterpretation[]; hasConfig: boolean }>;
-  waLoading: boolean;
-  onOpen: (id: string) => void;
+  snapshotMissingByListing: Record<string, boolean>;
+  onOpen: (row: WhitelistRow) => void;
 }) {
   const headers = [
     'Réservation',
@@ -539,7 +739,7 @@ function WhitelistTable({
                 >
                   <Box component="td">
                     <Typography
-                      onClick={() => onOpen(r.reservationId)}
+                      onClick={() => onOpen(r)}
                       sx={{
                         fontFamily: '"Geist Mono", monospace',
                         fontSize: 12,
@@ -586,7 +786,8 @@ function WhitelistTable({
                     <WhatsappConfigCell
                       options={waInterpretByResa[r.reservationId]?.options ?? []}
                       hasConfig={waInterpretByResa[r.reservationId]?.hasConfig ?? false}
-                      loading={waLoading && !waInterpretByResa[r.reservationId]}
+                      snapshotMissing={r.listingId ? snapshotMissingByListing[r.listingId] : false}
+                      listingId={r.listingId}
                       listingName={r.listingId ? listingNames[r.listingId] : undefined}
                       guestName={r.guestName}
                       reservationCode={r.reservationCode}
@@ -602,7 +803,7 @@ function WhitelistTable({
                   </Box>
                   <Box component="td" sx={{ textAlign: 'center' }}>
                     <Tooltip title="Voir détail">
-                      <IconButton size="small" onClick={() => onOpen(r.reservationId)}>
+                      <IconButton size="small" onClick={() => onOpen(r)}>
                         <VisibilityIcon sx={{ fontSize: 18, color: T.primaryDeep }} />
                       </IconButton>
                     </Tooltip>
@@ -621,13 +822,15 @@ function WhitelistMobileCard({
   row,
   listingName,
   waInterpret,
-  waLoading,
+  snapshotMissing,
+  listingId,
   onOpen,
 }: {
   row: WhitelistRow;
   listingName?: string;
   waInterpret?: { options: MenuOptionInterpretation[]; hasConfig: boolean };
-  waLoading?: boolean;
+  snapshotMissing?: boolean;
+  listingId?: string;
   onOpen: () => void;
 }) {
   const wa = waMeta(row);
@@ -668,7 +871,8 @@ function WhitelistMobileCard({
           <WhatsappConfigCell
             options={waInterpret?.options ?? []}
             hasConfig={waInterpret?.hasConfig ?? false}
-            loading={waLoading}
+            snapshotMissing={snapshotMissing}
+            listingId={listingId}
             listingName={listingName}
             guestName={row.guestName}
             reservationCode={row.reservationCode}

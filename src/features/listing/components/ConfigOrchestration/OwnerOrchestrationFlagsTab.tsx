@@ -5,6 +5,7 @@ import {
   loadOwnerOrchestrationFlags,
   saveOwnerOrchestrationFlags,
 } from '../../utils/adminOrchestrationTemplate';
+import { logOrchConfig, orchConfigError } from '../../utils/orchConfigDebugLog';
 import { SOJORI_TOKENS as T } from './types';
 import { SectionHeader, Card, FormRow, Toggle, ConfigIntroBar } from './SHARED';
 
@@ -39,7 +40,8 @@ export default function OwnerOrchestrationFlagsTab({ ownerKey, templateLabel }: 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { flags: f } = await loadOwnerOrchestrationFlags(ownerKey);
+      const { flags: f, source } = await loadOwnerOrchestrationFlags(ownerKey);
+      logOrchConfig('flags.load ←', { ownerKey, source, flags: f });
       const next: Record<string, boolean> = {};
       ORCH_FLAGS.forEach(({ key }) => {
         next[key] = f[key] !== false;
@@ -60,10 +62,12 @@ export default function OwnerOrchestrationFlagsTab({ ownerKey, templateLabel }: 
     setSavingField(field);
     setSaveState('saving');
     try {
-      await saveOwnerOrchestrationFlags(ownerKey, { ...flags, [field]: checked });
+      const via = await saveOwnerOrchestrationFlags(ownerKey, { ...flags, [field]: checked });
+      logOrchConfig('flags.toggle ← OK', { ownerKey, field, checked, via });
       setFlags((prev) => ({ ...prev, [field]: checked }));
       setSaveState('saved');
     } catch (e: unknown) {
+      orchConfigError('flags.toggle ← FAIL', e, { ownerKey, field, checked });
       toast.error(e instanceof Error ? e.message : 'Erreur');
       setSaveState('idle');
       throw e;
@@ -98,7 +102,7 @@ export default function OwnerOrchestrationFlagsTab({ ownerKey, templateLabel }: 
       <Card icon="🔀" title="Configuration" subtitle={templateLabel}>
         {ORCH_FLAGS.map(({ key, label }) => (
           <FormRow key={key} label={label}>
-            <Stack direction="row" alignItems="center" spacing={1}>
+            <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
               <Toggle
                 on={flags[key] !== false}
                 onChange={() => {

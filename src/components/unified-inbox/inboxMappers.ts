@@ -72,6 +72,7 @@ export function otaChannelFromName(channelName?: string): 'ab' | 'bk' | 'vrbo' {
   if (ch.includes('booking') || ch === 'bk' || ch.includes('book.com')) return 'bk';
   if (ch.includes('vrbo') || ch === 'ha') return 'vrbo';
   if (ch.includes('airbnb') || ch === 'ab') return 'ab';
+  // Email / WhatsApp / Sojori direct — ne pas afficher comme Airbnb (filtrés côté OTA inbox)
   return 'ab';
 }
 

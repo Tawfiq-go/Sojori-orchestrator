@@ -3,7 +3,7 @@
 // Remplace TasksPlanningPage.tsx avec le nouveau StayView
 // Intègre: sidebar, filtres actifs, scope user, owner selection
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Box, CircularProgress, Alert } from '@mui/material';
 import { format, addDays, subDays } from 'date-fns';
 import { DashboardWrapper } from '../components/DashboardWrapper';
@@ -14,13 +14,18 @@ import { fetchTaskNewPlanning } from '../services/planningFulltaskMerge';
 import listingsService from '../services/listingsService';
 import cleanlinessService from '../services/cleanlinessService';
 import type { DisplayCleanliness } from '../utils/cleanlinessDisplay';
+import {
+  getCachedPlanningListings,
+  setCachedPlanningListings,
+  invalidatePlanningListingsCache,
+} from '../utils/planningListingsCache';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { getStoredOwners } from '../data/catalogueMock';
+import type { ListingSummary } from '../types/listings.types';
 
 /**
  * TaskNew planning :
- * - listingsService.getListings() — listings actifs (srv-listing)
+ * - listingsService.getListings() — listings actifs (srv-listing), cache partagé avec /reservations/planning
  * - fetchTaskNewPlanning() — réservations srv-reservations + tâches srv-fulltask (admin BFF)
  * Pas d’appel srv-task / reservation/planning legacy.
  */
@@ -36,6 +41,7 @@ export default function TasksPlanningPageV2() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
+  const listingsCacheKey = scope.ownerId || (scope.canAccessAllOwners ? 'admin' : 'unknown');
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -51,20 +57,14 @@ export default function TasksPlanningPageV2() {
   });
   const [daysCount] = useState(PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS);
 
-  // ✅ CHANGEMENT: Stocker listings et rawData séparément (comme ReservationsPlanningPage)
-  const [activeListings, setActiveListings] = useState<any[]>([]);
-  const [rawData, setRawData] = useState<any>(null);
+  const [activeListings, setActiveListings] = useState<ListingSummary[]>(() => {
+    return getCachedPlanningListings(listingsCacheKey) ?? [];
+  });
+  const [rawData, setRawData] = useState<{
+    listings?: Array<Record<string, unknown>>;
+  } | null>(null);
   const [adminOwnerId, setAdminOwnerId] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  // Owner options pour le filtre admin
-  const ownerOptions = useMemo(
-    () =>
-      getStoredOwners()
-        .filter((o) => o.role === 'owner')
-        .map((o) => ({ id: o.id, name: o.name })),
-    [],
-  );
+  const listingsHydratedRef = useRef(activeListings.length > 0);
 
   const planningOwnerId = useMemo(() => {
     if (scope.canAccessAllOwners) {
@@ -73,18 +73,30 @@ export default function TasksPlanningPageV2() {
     return scope.ownerId;
   }, [scope.canAccessAllOwners, scope.ownerId, adminOwnerId]);
 
-  const fetchListings = useCallback(async () => {
-    console.log('📋 [TasksPlanningPageV2] fetchListings START - limit=100, compact=true');
-    const startTime = performance.now();
+  const windowRange = useCallback(() => {
+    const startDateStr = format(startDate, 'yyyy-MM-dd');
+    const endDateStr = format(addDays(startDate, daysCount), 'yyyy-MM-dd');
+    return { startDateStr, endDateStr };
+  }, [startDate, daysCount]);
+
+  const fetchActiveListings = useCallback(async () => {
+    const cached = getCachedPlanningListings(listingsCacheKey);
+    if (cached?.length) {
+      setActiveListings(cached);
+      listingsHydratedRef.current = true;
+      return;
+    }
     const listingsResponse = await listingsService.getListings({
       useActiveFilter: true,
       active: true,
-      limit: 100, // ⚡ Réduit de 1000 → 100 (optimisation performance)
-      compact: true, // ⚡ Mode compact: uniquement {_id, name, city}
+      compact: true,
+      forListingsOverview: false,
+      limit: 500,
     });
-    console.log(`✅ [TasksPlanningPageV2] fetchListings completed in ${(performance.now() - startTime).toFixed(0)}ms - ${listingsResponse.data.items.length} items`);
     setActiveListings(listingsResponse.data.items);
-  }, []);
+    setCachedPlanningListings(listingsCacheKey, listingsResponse.data.items);
+    listingsHydratedRef.current = true;
+  }, [listingsCacheKey]);
 
   const fetchWindowData = useCallback(async () => {
     const requestId = ++windowRequestIdRef.current;
@@ -96,9 +108,7 @@ export default function TasksPlanningPageV2() {
         throw new Error('Impossible de déterminer le ownerId de la session.');
       }
 
-      const endDateStr = format(addDays(startDate, daysCount), 'yyyy-MM-dd');
-      const startDateStr = format(startDate, 'yyyy-MM-dd');
-
+      const { startDateStr, endDateStr } = windowRange();
       const result = await fetchTaskNewPlanning({
         startDate: startDateStr,
         endDate: endDateStr,
@@ -120,22 +130,27 @@ export default function TasksPlanningPageV2() {
         setIsRefreshing(false);
       }
     }
-  }, [startDate, daysCount, planningOwnerId, scope.canAccessAllOwners, scope.ownerId]);
+  }, [windowRange, planningOwnerId, scope.canAccessAllOwners, scope.ownerId]);
 
+  /** Bootstrap : listings (cache) + planning en parallèle */
   useEffect(() => {
     if (authLoading) return;
 
     let cancelled = false;
     const isBootstrap = !calendarReady;
+    const skipListings = listingsHydratedRef.current && activeListings.length > 0;
 
     void (async () => {
       if (isBootstrap) setIsLoading(true);
       setError(null);
       try {
-        await fetchListings();
-        if (cancelled) return;
         skipNextWindowOnlyFetchRef.current = true;
-        await fetchWindowData();
+
+        const tasks: Promise<void>[] = [];
+        if (!skipListings) tasks.push(fetchActiveListings());
+        tasks.push(fetchWindowData().then(() => undefined));
+
+        await Promise.all(tasks);
         if (cancelled) return;
         setCalendarReady(true);
       } catch (err: unknown) {
@@ -153,8 +168,10 @@ export default function TasksPlanningPageV2() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, refreshKey, fetchListings, fetchWindowData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading]);
 
+  /** Navigation dates / filtre owner admin : planning uniquement (listings inchangés) */
   useEffect(() => {
     if (authLoading || !calendarReady) return;
     if (skipNextWindowOnlyFetchRef.current) {
@@ -164,81 +181,77 @@ export default function TasksPlanningPageV2() {
     void fetchWindowData();
   }, [startDate, authLoading, calendarReady, fetchWindowData, planningOwnerId]);
 
-  // ✅ CHANGEMENT: Transform en itérant sur activeListings (comme ReservationsPlanningPage)
-  // Afficher TOUS les listings actifs, même sans réservations
   const listings: ListingRow[] = useMemo(() => {
     if (activeListings.length === 0) return [];
 
-    // Map réservations + statuts opérationnels (srv-task planning = source of truth propreté)
-    const reservationsByListing = new Map<string, any[]>();
-    const operationalByListing = new Map<string, any>();
+    const reservationsByListing = new Map<string, Array<Record<string, unknown>>>();
+    const operationalByListing = new Map<string, Record<string, unknown>>();
     if (rawData?.listings) {
-      rawData.listings.forEach((l: any) => {
+      rawData.listings.forEach((l) => {
         const listingId = String(l.listingId || l._id || '');
         if (!listingId) return;
-        if (l.reservations) reservationsByListing.set(listingId, l.reservations);
+        if (Array.isArray(l.reservations)) reservationsByListing.set(listingId, l.reservations);
         operationalByListing.set(listingId, l);
       });
     }
 
-    // ✅ ITÉRER SUR LES LISTINGS ACTIFS (pas sur rawData.listings)
-    return activeListings.map((listing: any) => {
-      const listingId = String(listing.id || listing._id || '');
+    return activeListings.map((listing) => {
+      const listingId = String(listing.id || '');
       const resas = reservationsByListing.get(listingId) || [];
       const op = operationalByListing.get(listingId);
 
-      console.log(`[TasksPlanningPageV2] 📊 Listing ${listing.name}: ${resas.length} reservations`);
-
       return {
         listingId,
-        listingName: listing.name || op?.listingName || 'Sans nom',
-        city: listing.city || op?.city || 'Sans ville',
-        cleanlinessStatus_v2:
-          op?.cleanlinessStatus_v2 || listing.cleanlinessStatus_v2 || listing.cleanlinessStatus || 'clean',
-        cleanlinessStatus: op?.cleanlinessStatus || listing.cleanlinessStatus,
-        occupancyStatus: op?.occupancyStatus || listing.occupancyStatus || 'vacant',
-        cleanlinessEmergency: Boolean(op?.cleanlinessEmergency || listing.cleanlinessEmergency),
-        reservations: resas.map((r: any) => ({
-          reservationId: r.reservationId || r._id || '',
-          guestName: r.guestName || 'Guest',
-          arrivalDate: r.arrivalDate || '',
-          departureDate: r.departureDate || '',
-          status: r.status || 'confirmed',
-          channelName: r.channelName || 'direct',
-          numberOfGuests: r.numberOfGuests || 0,
-          reservationNumber: r.reservationNumber || '',
-          timeline: (r.timeline || []).map((t: any) => ({
-            type: t.type || 'task',
-            category: t.category,
-            scheduledFor: t.scheduledFor || t.startDate || '',
-            isTask: t.isTask ?? true,
-            staffId: t.staffId || null,
-            staffName: t.staffName || null,
-            status: t.status || t.taskStatus || 'CREATED',
-            cleaning_type: t.cleaning_type,
-            data: t.data || {},
+        listingName: listing.name || String(op?.listingName || 'Sans nom'),
+        city: listing.city || String(op?.city || 'Sans ville'),
+        cleanlinessStatus_v2: String(
+          op?.cleanlinessStatus_v2 || listing.cleanlinessStatus || 'clean',
+        ),
+        cleanlinessStatus: (op?.cleanlinessStatus || listing.cleanlinessStatus) as string | undefined,
+        occupancyStatus: String(op?.occupancyStatus || 'vacant'),
+        cleanlinessEmergency: Boolean(op?.cleanlinessEmergency),
+        reservations: resas.map((r) => ({
+          reservationId: String(r.reservationId || r._id || ''),
+          guestName: String(r.guestName || 'Guest'),
+          arrivalDate: String(r.arrivalDate || ''),
+          departureDate: String(r.departureDate || ''),
+          status: String(r.status || 'confirmed'),
+          channelName: String(r.channelName || 'direct'),
+          numberOfGuests: Number(r.numberOfGuests || 0),
+          reservationNumber: String(r.reservationNumber || ''),
+          timeline: (Array.isArray(r.timeline) ? r.timeline : []).map((t: Record<string, unknown>) => ({
+            type: (t.type || 'task') as TimelineItem['type'],
+            category: t.category as string | undefined,
+            scheduledFor: String(t.scheduledFor || t.startDate || ''),
+            isTask: (t.isTask as boolean) ?? true,
+            staffId: (t.staffId as string | null) ?? null,
+            staffName: (t.staffName as string | null) ?? null,
+            status: String(t.status || t.taskStatus || 'CREATED'),
+            cleaning_type: t.cleaning_type as string | undefined,
+            data: (t.data as Record<string, unknown>) || {},
           })),
         })),
       };
     });
-    // ✅ IMPORTANT: Afficher TOUS les listings actifs, même sans réservations
   }, [activeListings, rawData]);
 
   const handleTaskClick = (_item: TimelineItem) => {
     // TODO: Ouvrir drawer détail tâche
   };
 
-  const handleReservationClick = (routeId: string) => {
-    if (!routeId) return;
-    navigate(`/reservations/${encodeURIComponent(routeId)}`);
-  };
+  const handleReservationClick = useCallback(
+    (routeId: string) => {
+      if (!routeId) return;
+      navigate(`/reservations/${encodeURIComponent(routeId)}`);
+    },
+    [navigate],
+  );
 
-  // Navigation temporelle
-  const goToday = () => {
+  const goToday = useCallback(() => {
     const d = subDays(new Date(), PLANNING_INITIAL_BACK_DAYS);
     d.setHours(0, 0, 0, 0);
     setStartDate(d);
-  };
+  }, []);
 
   const shiftDays = useCallback((delta: number) => {
     setStartDate((prev) => {
@@ -254,19 +267,40 @@ export default function TasksPlanningPageV2() {
     setStartDate(d);
   }, []);
 
-  const handleCleanlinessChange = useCallback(async (listingId: string, status: DisplayCleanliness) => {
-    try {
+  const handleCleanlinessChange = useCallback(
+    async (listingId: string, status: DisplayCleanliness) => {
       const result = await cleanlinessService.updateListingStatus(listingId, status);
       if (!result.success) {
         throw new Error(result.message || 'Échec mise à jour propreté');
       }
-      setRefreshKey((k) => k + 1);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erreur mise à jour propreté';
-      setError(msg);
-      throw err;
-    }
-  }, []);
+      invalidatePlanningListingsCache(listingsCacheKey);
+      setRawData((prev) => {
+        if (!prev?.listings) return prev;
+        return {
+          ...prev,
+          listings: prev.listings.map((l) => {
+            const id = String(l.listingId || l._id || '');
+            if (id !== listingId) return l;
+            const row = { ...l };
+            if (result.data?.cleanlinessStatus_v2) {
+              row.cleanlinessStatus_v2 = result.data.cleanlinessStatus_v2;
+            }
+            if (result.data?.cleanlinessStatus) {
+              row.cleanlinessStatus = result.data.cleanlinessStatus;
+            }
+            if (result.data?.occupancyStatus) {
+              row.occupancyStatus = result.data.occupancyStatus;
+            }
+            if (result.data?.cleanlinessEmergency != null) {
+              row.cleanlinessEmergency = result.data.cleanlinessEmergency;
+            }
+            return row;
+          }),
+        };
+      });
+    },
+    [listingsCacheKey],
+  );
 
   return (
     <DashboardWrapper breadcrumb={[]}>
@@ -289,9 +323,8 @@ export default function TasksPlanningPageV2() {
           <Box
             sx={{
               position: 'relative',
-              opacity: isRefreshing ? 0.72 : 1,
-              transition: 'opacity 0.2s ease',
-              pointerEvents: isRefreshing ? 'none' : 'auto',
+              opacity: isRefreshing ? 0.92 : 1,
+              transition: 'opacity 0.15s ease',
             }}
           >
             {isRefreshing && (
@@ -320,7 +353,6 @@ export default function TasksPlanningPageV2() {
               </Box>
             )}
 
-            {/* StayView component - Design Claude (inclut déjà header + mini-map + navigation) */}
             <StayView
               startDate={startDate}
               daysCount={daysCount}

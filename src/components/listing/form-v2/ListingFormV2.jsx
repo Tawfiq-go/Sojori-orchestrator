@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════
 // ListingFormV2.jsx — Exemple d'intégration finale
-// Combine ListingFormShell + tous les onglets Detail + Config
+// Combine ListingFormShell + onglets Detail + Orchestration V3
 // Branchez vos vrais hooks de données à la place de useState({}).
 // ════════════════════════════════════════════════════════════════════
 import React, { useEffect, useState } from 'react';
@@ -12,20 +12,7 @@ import { PhotosTabReal }                                    from './tabs/PhotosT
 import AmenitiesTab                                         from './tabs/DetailTabsAmenities';
 import { PricingTab, AvailabilityTab, FeesTab }             from './tabs/DetailTabsCommercial';
 import { ChannelsTab, DirectBookingTab, RoomsTab, LicenseTab } from './tabs/DetailTabsDistribution';
-import { WhatsAppTab } from './tabs/ConfigTabsCommunication';
-import SupportConfigTabContainer from '../../../features/listing/components/ConfigOrchestration/SupportConfigTabContainer';
-import ConciergeConfigTab from '../../../features/listing/components/ConfigOrchestration/ConciergeConfigTab';
-import CleaningConfigTab from '../../../features/listing/components/ConfigOrchestration/CleaningConfigTab';
-import ArrivalDepartureConfigTab from '../../../features/listing/components/ConfigOrchestration/ArrivalDepartureConfigTab';
-import CleaningSojoriConfigTab from '../../../features/listing/components/ConfigOrchestration/CleaningSojoriConfigTab';
-import TransportConfigTab from '../../../features/listing/components/ConfigOrchestration/TransportConfigTab';
-import GroceryConfigTab from '../../../features/listing/components/ConfigOrchestration/GroceryConfigTab';
-import ServiceClientConfigTab from '../../../features/listing/components/ConfigOrchestration/ServiceClientConfigTab';
-import AccessConfigTab from '../../../features/listing/components/ConfigOrchestration/AccessConfigTab';
-import MessagesConfigTab from '../../../features/listing/components/ConfigOrchestration/MessagesConfigTab';
-import RulesConfigTab from '../../../features/listing/components/ConfigOrchestration/RulesConfigTab';
-import OrchestrationConfigTab from '../../../features/listing/components/ConfigOrchestration/OrchestrationConfigTab';
-import PmConfigTabFrame from '../../../features/listing/components/ConfigOrchestration/PmConfigTabFrame';
+import ListingOrchestrationV3Embed from '../../../features/orchestrationListingV3/ListingOrchestrationV3Embed';
 
 export default function ListingFormV2({
   listingId,
@@ -62,6 +49,15 @@ export default function ListingFormV2({
 
   const renderTab = (tabKey, level) => {
     const common = { values, onChange: handleFormChange };
+    if (level === 'orchestration-v3' && listingId) {
+      return (
+        <ListingOrchestrationV3Embed
+          listingId={listingId}
+          ownerId={values.ownerId}
+          listingName={values.name}
+        />
+      );
+    }
     if (level === 'detail') {
       if (tabKey === 'general') {
         return (
@@ -87,26 +83,6 @@ export default function ListingFormV2({
       if (tabKey === 'direct')       return <DirectBookingTab {...common} />;
       if (tabKey === 'rooms')        return <RoomsTab       {...common} listingId={listingId} />;
       if (tabKey === 'license')      return <LicenseTab     {...common} />;
-    } else if (level === 'config') {
-      const wrap = (tabId, node) => (
-        <PmConfigTabFrame tabKey={tabId}>{node}</PmConfigTabFrame>
-      );
-      if (tabKey === 'access-config')         return wrap('access-config', <AccessConfigTab listingId={listingId} listingName={values.name} ownerId={values.ownerId} />);
-      if (tabKey === 'support-config')        return wrap('support-config', <SupportConfigTabContainer listingId={listingId} ownerId={values.ownerId} />);
-      if (tabKey === 'concierge-config')      return wrap('concierge-config', <ConciergeConfigTab listingId={listingId} ownerId={values.ownerId} />);
-      if (tabKey === 'cleaning-config')       return wrap('cleaning-config', <CleaningConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} onListingPatch={patch => setValues(v => ({ ...v, ...patch }))} />);
-      if (tabKey === 'timeslots-config')      return wrap('timeslots-config', <ArrivalDepartureConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} onListingPatch={patch => setValues(v => ({ ...v, ...patch }))} />);
-      if (tabKey === 'cleaning-sojori-config') return wrap('cleaning-sojori-config', <CleaningSojoriConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} onListingPatch={patch => setValues(v => ({ ...v, ...patch }))} />);
-      if (tabKey === 'transport-config')      return wrap('transport-config', <TransportConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} />);
-      if (tabKey === 'grocery-config')        return wrap('grocery-config', <GroceryConfigTab listingId={listingId} ownerId={values.ownerId} />);
-      if (tabKey === 'service-client-config') return wrap('service-client-config', <ServiceClientConfigTab listingId={listingId} ownerId={values.ownerId} />);
-      if (tabKey === 'messages-config')       return wrap('messages-config', <MessagesConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} onListingPatch={patch => setValues(v => ({ ...v, ...patch }))} />);
-      if (tabKey === 'rules-config')          return wrap('rules-config', <RulesConfigTab listingId={listingId} listingName={values.name} ownerId={values.ownerId} />);
-      if (tabKey === 'orchestration-config')  return wrap('orchestration-config', <OrchestrationConfigTab listingId={listingId} ownerId={values.ownerId} listingValues={values} onListingPatch={patch => setValues(v => ({ ...v, ...patch }))} />);
-      // Menu WhatsApp : UI dédiée (hors cadre Config Orch. simplifié)
-      if (tabKey === 'whatsapp-config') {
-        return <WhatsAppTab {...common} listingId={listingId} listingName={values.name} />;
-      }
     }
     return null;
   };
@@ -124,18 +100,15 @@ export default function ListingFormV2({
         completionPct: 72,
       }}
       tabsStatus={{
-        // adapter selon la complétude réelle des champs
         general:      { tone: 'success', label: '✓' },
         location:     { tone: 'success', label: '✓' },
         photos:       { tone: 'warning', label: `${(values.photos || []).length}/15` },
         amenities:    { tone: 'success', label: '✓' },
         channels:     { tone: 'warning', label: '2/3' },
         license:      { tone: 'warning', label: '⚠' },
-        'whatsapp-config': { tone: 'success', label: '✓' },
-        'support-config': { tone: 'success', label: '✓' },
       }}
       defaultLevel={defaultLevel}
-      defaultTab={defaultTab || (defaultLevel === 'config' || defaultLevel === 'config-new' ? 'support-config' : 'general')}
+      defaultTab={defaultTab || (defaultLevel === 'orchestration-v3' ? 'orchestration-v3' : 'general')}
       lockLevel={lockLevel}
       embedded={embedded}
       onSave={() => onSave?.(values)}

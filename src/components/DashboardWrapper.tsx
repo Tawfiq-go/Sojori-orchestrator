@@ -77,8 +77,6 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'chatbot': '/chatbot/whitelist',
     'chatbot/whitelist': '/chatbot/whitelist',
     'chatbot/listing': '/chatbot/listing',
-    'chatbot/flows': '/chatbot/flows-pilote',
-    'chatbot/flows-pilote': '/chatbot/flows-pilote',
 
     // Communications Hub - Navigation principale
     'comms': '/communications',
@@ -99,6 +97,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'listings/list': '/listings',
     'listings/config': '/catalogue/listing-orchestration',
     'listing-orchestration': '/catalogue/listing-orchestration',
+    'listing-orchestration-v3': '/catalogue/listing-orchestration-v3',
     'pricing': '/dynamic-pricing/portefeuille',
     'pricing/portfolio': '/dynamic-pricing/portefeuille',
     'pricing/audit': '/dynamic-pricing/audit',
@@ -284,9 +283,6 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
 
     if (path.startsWith('/chatbot/listing')) {
       return 'chatbot/listing';
-    }
-    if (path.startsWith('/chatbot/flows-pilote')) {
-      return 'chatbot/flows-pilote';
     }
     if (path.startsWith('/chatbot/whitelist') || path.startsWith('/chatbot')) {
       return 'chatbot/whitelist';

@@ -27,70 +27,30 @@ export type TransportRouteItem = {
   estimatedDuration: string;
   enabled: boolean;
   order: number;
+  /** `'all'` ou cityIds Sojori — absent = toutes les villes */
+  cityIds?: 'all' | string[];
 };
 
-export const TRANSPORT_ROUTE_PRESETS: Omit<TransportRouteItem, 'enabled' | 'order' | 'propertyPlace'>[] = [
-  {
-    id: 'arrival_airport_cmn',
-    labelFr: 'Arrivée depuis aéroport Casablanca',
-    descriptionFr: 'Transfert CMN → logement',
-    from: 'Aéroport Mohammed V, Casablanca',
-    to: '',
-    journeyTag: 'arrival',
-    externalKind: 'airport',
-    externalLabel: 'Aéroport Mohammed V, Casablanca',
-    departureType: 'from_external',
-    arrivalType: 'to_property',
-    priceType: 'total',
-    price: 400,
-    maxPassengers: 4,
-    estimatedDuration: '45 min',
-  },
-  {
-    id: 'arrival_airport_rak',
-    labelFr: 'Arrivée depuis aéroport Marrakech',
-    descriptionFr: 'Transfert RAK → logement',
-    from: 'Aéroport Marrakech Ménara',
-    to: '',
-    journeyTag: 'arrival',
-    externalKind: 'airport',
-    externalLabel: 'Aéroport Marrakech Ménara',
-    priceType: 'total',
-    price: 350,
-    maxPassengers: 4,
-    estimatedDuration: '35 min',
-  },
-  {
-    id: 'departure_airport_cmn',
-    labelFr: 'Départ vers aéroport Casablanca',
-    descriptionFr: 'Transfert logement → CMN',
+/** Route vierge — ajout manuel PM uniquement (pas de seed CMN/RAK/gare). */
+export function createBlankTransportRoute(order: number): Omit<TransportRouteItem, 'propertyPlace'> {
+  return {
+    id: `route_${Date.now()}`,
+    labelFr: 'Navette',
+    descriptionFr: '',
     from: '',
-    to: 'Aéroport Mohammed V, Casablanca',
-    journeyTag: 'departure',
-    externalKind: 'airport',
-    externalLabel: 'Aéroport Mohammed V, Casablanca',
-    departureType: 'from_property',
-    arrivalType: 'to_external',
-    priceType: 'total',
-    price: 400,
-    maxPassengers: 4,
-    estimatedDuration: '45 min',
-  },
-  {
-    id: 'arrival_station_casa',
-    labelFr: 'Arrivée depuis gare Casa-Voyageurs',
-    descriptionFr: 'Transfert gare → logement',
-    from: 'Gare Casa-Voyageurs',
     to: '',
     journeyTag: 'arrival',
-    externalKind: 'station',
-    externalLabel: 'Gare Casa-Voyageurs',
+    externalKind: 'other',
+    externalLabel: '',
     priceType: 'total',
-    price: 250,
+    price: 0,
     maxPassengers: 4,
-    estimatedDuration: '30 min',
-  },
-];
+    estimatedDuration: '',
+    enabled: true,
+    order,
+    cityIds: 'all',
+  };
+}
 
 export const TRANSPORT_JOURNEY_OPTIONS: TransportJourneyTag[] = ['arrival', 'departure', 'other'];
 

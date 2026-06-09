@@ -4,9 +4,13 @@ import { formatInboxDaySeparator } from './inboxFormat';
 import { formatInboxMessageText } from './formatInboxMessageText';
 
 export function buildInboxMessages(exchanges: MessageExchange[], isOta = false): Message[] {
-  return exchanges.flatMap((exchange, index) => {
+  const sorted = [...exchanges].sort(
+    (a, b) =>
+      new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime(),
+  );
+  return sorted.flatMap((exchange, index) => {
     const msgs: Message[] = [];
-    if (index === 0 || isDifferentDay(exchange.timestamp, exchanges[index - 1]?.timestamp)) {
+    if (index === 0 || isDifferentDay(exchange.timestamp, sorted[index - 1]?.timestamp)) {
       msgs.push({
         id: `day-${index}`,
         from: 'guest',

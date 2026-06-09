@@ -105,6 +105,11 @@ const TasksConfigFulltaskPage = lazy(() =>
 const TasksOrchestrationFulltaskPage = lazy(() =>
   import('./pages/TasksOrchestrationFulltaskPage').then((module) => ({ default: module.default }))
 );
+const ListingOrchestrationV3Page = lazy(() =>
+  import('./pages/ListingOrchestrationV3Page').then((module) => ({
+    default: module.default,
+  }))
+);
 const ListingOrchestrationTemplatePage = lazy(() =>
   import('./pages/ListingOrchestrationTemplatePage').then((module) => ({
     default: module.default,
@@ -121,9 +126,6 @@ const ChatbotWhitelistDetailPage = lazy(() =>
 );
 const ChatbotListingSnapshotPage = lazy(() =>
   import('./pages/ChatbotListingSnapshotPage').then((module) => ({ default: module.default }))
-);
-const ChatbotWhatsAppFlowsPilotePage = lazy(() =>
-  import('./pages/ChatbotWhatsAppFlowsPilotePage').then((module) => ({ default: module.default }))
 );
 const PlansReservationPage = lazy(() =>
   import('./pages/PlansReservationPage').then((module) => ({ default: module.default }))
@@ -162,9 +164,6 @@ const WhatsAppGuestsPage = lazy(() =>
 );
 const WhatsAppStaffPage = lazy(() =>
   import('./pages/WhatsAppStaffPageV2').then((module) => ({ default: module.default }))
-);
-const MessagesOTAPage = lazy(() =>
-  import('./pages/MessagesOTAPageV2').then((module) => ({ default: module.default }))
 );
 const UnifiedInboxPage = lazy(() =>
   import('./pages/UnifiedInboxPage').then((module) => ({ default: module.default }))
@@ -292,7 +291,6 @@ function App() {
               <Route path="/chatbot/whitelist/:reservationId" element={<LazyRoute><ChatbotWhitelistDetailPage /></LazyRoute>} />
               <Route path="/chatbot/whitelist" element={<LazyRoute><ChatbotWhitelistPage /></LazyRoute>} />
               <Route path="/chatbot/listing" element={<LazyRoute><ChatbotListingSnapshotPage /></LazyRoute>} />
-              <Route path="/chatbot/flows-pilote" element={<LazyRoute><ChatbotWhatsAppFlowsPilotePage /></LazyRoute>} />
 
               {/* Anciennes vues (backup) */}
               <Route path="/tasks/team-legacy" element={<LazyRoute><TasksTeamPage /></LazyRoute>} />
@@ -308,7 +306,7 @@ function App() {
               <Route path="/communications/whatsapp" element={<LazyRoute><CommsPage /></LazyRoute>} />
               <Route path="/communications/whatsapp-guests" element={<LazyRoute><WhatsAppGuestsPage /></LazyRoute>} />
               <Route path="/communications/whatsapp-staff" element={<LazyRoute><WhatsAppStaffPage /></LazyRoute>} />
-              <Route path="/communications/messages-ota" element={<LazyRoute><MessagesOTAPage /></LazyRoute>} />
+              <Route path="/communications/messages-ota" element={<Navigate to="/communications?tab=ota" replace />} />
               <Route path="/communications/staff" element={<LazyRoute><StaffWhatsAppPage /></LazyRoute>} />
               <Route path="/communications/ota" element={<LazyRoute><OTAMessagesPage /></LazyRoute>} />
 
@@ -336,6 +334,14 @@ function App() {
               <Route path="/catalogue/listings/:id" element={<LazyRoute><ListingDetailPage /></LazyRoute>} />
               <Route path="/catalogue/channels" element={<LazyRoute><ChannelsPage /></LazyRoute>} />
               <Route path="/catalogue/pricing" element={<LazyRoute><PricingPage /></LazyRoute>} />
+              <Route
+                path="/catalogue/listing-orchestration-v2"
+                element={<Navigate to="/catalogue/listing-orchestration-v3" replace />}
+              />
+              <Route
+                path="/catalogue/listing-orchestration-v3"
+                element={<LazyRoute><ListingOrchestrationV3Page /></LazyRoute>}
+              />
               <Route
                 path="/catalogue/listing-orchestration"
                 element={<LazyRoute><ListingOrchestrationTemplatePage /></LazyRoute>}
