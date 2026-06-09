@@ -5,6 +5,8 @@ import { labelForTaskTypeId } from '../features/taskHub/staff-design/fulltaskTas
 import { LEGACY_TO_FULLTASK_STATUS, fullTaskToListItem } from '../utils/fulltaskMappers';
 import type { ReservationMetaLike } from '../utils/fulltaskMappers';
 import type { TaskFulltaskUpdatePayload, TaskListItem, TasksSearchParams } from '../types/tasks.types';
+import { toLegacyAuthUser } from '../utils/legacyAuthUser';
+import { canSelectOwnerInAdminFilter } from '../utils/taskScope.utils';
 
 export interface TasksAuthLikeUser {
   id?: string;
@@ -15,15 +17,16 @@ export interface TasksAuthLikeUser {
 }
 
 export function resolveTasksUserScope(user: TasksAuthLikeUser | null | undefined) {
-  const role = String(user?.role || '').trim();
+  const legacy = toLegacyAuthUser(user as Parameters<typeof toLegacyAuthUser>[0]);
+  const role = String(legacy?.role || user?.role || '').trim();
   if (import.meta.env.VITE_DISABLE_AUTH === 'true') {
     return { ownerId: undefined, canAccessAllOwners: true, role: role || 'dev' };
   }
-  const adminRoles = ['SuperAdmin', 'Admin', 'superadmin', 'admin'];
-  if (adminRoles.includes(role)) {
+  if (canSelectOwnerInAdminFilter(legacy)) {
     return { ownerId: undefined, canAccessAllOwners: true, role };
   }
-  const ownerId = user?.ownerId || user?.theOwnerId || user?.id || user?._id;
+  const ownerId =
+    legacy?.ownerId || user?.ownerId || user?.theOwnerId || legacy?.id || user?.id || user?._id;
   return {
     ownerId: ownerId ? String(ownerId) : undefined,
     canAccessAllOwners: false,

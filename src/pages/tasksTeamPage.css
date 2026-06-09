@@ -26,3 +26,65 @@
   background: linear-gradient(180deg, #cb9b2c, #b8851a);
   color: #1a1408;
 }
+
+.tasks-team-owner-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: #fafaf7;
+  border: 1px solid rgba(20, 17, 10, 0.08);
+  border-radius: 10px;
+}
+
+.tasks-team-owner-bar--locked {
+  align-items: baseline;
+}
+
+.tasks-team-owner-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a756c;
+}
+
+.tasks-team-owner-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #14110a;
+}
+
+.tasks-team-owner-hint {
+  flex: 1 1 220px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #7a756c;
+}
+
+.tasks-team-owner-hint.warn {
+  color: #876119;
+  font-weight: 600;
+}
+
+.so-staff-root .drawer-owner-scope {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(184, 133, 26, 0.08);
+  border: 1px solid rgba(184, 133, 26, 0.2);
+  font-size: 12px;
+  color: #55504a;
+}
+
+.so-staff-root .drawer-owner-scope strong {
+  color: #14110a;
+}
+
+.so-staff-root .drawer-owner-scope.missing {
+  background: rgba(200, 30, 30, 0.06);
+  border-color: rgba(200, 30, 30, 0.2);
+  color: #a33030;
+}

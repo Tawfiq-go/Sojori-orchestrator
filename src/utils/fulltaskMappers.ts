@@ -340,6 +340,13 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
   };
 }
 
+export function normalizeOwnerId(value: unknown): string | undefined {
+  if (value == null || value === '') return undefined;
+  const s = String(value).trim();
+  if (!s || s === 'undefined' || s === 'null') return undefined;
+  return s;
+}
+
 export function designStaffToApi(
   staff: Record<string, unknown>,
   opts?: { isCreate?: boolean; ownerId?: string },
@@ -367,10 +374,9 @@ export function designStaffToApi(
     });
   }
 
-  return {
+  const body: Record<string, unknown> = {
     name: staff.fullName,
     phone: staff.whatsappE164 || staff.phoneE164,
-    ownerId: opts?.ownerId || staff.ownerId || null,
     lang: staff.lang || 'fr',
     contractType: staff.contractType === 'employee' ? 'salaried' : 'freelance',
     taskTypes: staff.allowedTaskTypes || [],
@@ -380,6 +386,9 @@ export function designStaffToApi(
     isAdmin: Boolean(staff.isAdmin),
     pricing,
   };
+  const resolvedOwnerId = normalizeOwnerId(opts?.ownerId ?? staff.ownerId);
+  if (resolvedOwnerId) body.ownerId = resolvedOwnerId;
+  return body;
 }
 
 function normDeliveryChannel(v: unknown): 'whatsapp' | 'email' | 'ota' {
