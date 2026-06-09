@@ -133,8 +133,19 @@ export async function upsertTaskTypeConfig(
   return data;
 }
 
-export async function getOrchestrationConfig(ownerId: string) {
-  const { data } = await axios.get(`${BASE}/orchestration/${ownerId}`, authHeaders());
+export type OrchestrationConfigLoadMeta = {
+  configSource?: 'owner' | 'global_template' | null;
+};
+
+export async function getOrchestrationConfig(
+  ownerId: string,
+  options?: { strictOwner?: boolean },
+) {
+  const params = options?.strictOwner ? { strictOwner: 'true' } : undefined;
+  const { data } = await axios.get(`${BASE}/orchestration/${ownerId}`, {
+    ...authHeaders(),
+    params,
+  });
   return data;
 }
 
@@ -266,11 +277,22 @@ async function postPlanDispatch(
   url: string,
   body: Record<string, unknown> = {},
 ): Promise<PlanDispatchApiResponse> {
-  const { data } = await axios.post(url, body, {
+  const res = await axios.post(url, body, {
     ...authHeaders(),
-    validateStatus: (status) => status >= 200 && status < 500,
+    validateStatus: () => true,
   });
-  return data as PlanDispatchApiResponse;
+  const data = res.data as PlanDispatchApiResponse | string | undefined;
+  if (data && typeof data === 'object' && 'success' in data) {
+    return data as PlanDispatchApiResponse;
+  }
+  const snippet =
+    typeof data === 'string'
+      ? data.replace(/\s+/g, ' ').trim().slice(0, 200)
+      : `HTTP ${res.status}`;
+  return {
+    success: false,
+    error: res.status >= 500 ? `Erreur serveur (${res.status})` : snippet || 'Action refusée',
+  };
 }
 
 export async function sendPlanMessage(reservationId: string, messageIndex: number) {

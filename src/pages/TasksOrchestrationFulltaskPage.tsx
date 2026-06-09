@@ -1,11 +1,14 @@
 import { arrayMove } from '@dnd-kit/sortable';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import OrchestrationPageView, {
   type OrchestrationSubTab,
 } from '../features/taskHub/staff-design/OrchestrationPageView';
+import OrchestrationOwnerScopeTabs, {
+  type OwnerConfigTabStatus,
+} from '../features/taskHub/staff-design/OrchestrationOwnerScopeTabs';
 import { emptyWorkflowPlan, type FulltaskTaskTypeId } from '../features/taskHub/staff-design/fulltaskTaskTypes';
 import { defaultStaffReminderMessageId } from '../features/taskHub/staff-design/staffReminderTemplates';
 import type {
@@ -31,8 +34,11 @@ import {
 import { unwrapFulltaskData } from '../utils/unwrapFulltaskResponse';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
 import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
+import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
-import { ORCHESTRATION_ADMIN_OWNER_ID } from '../constants/orchestrationAdmin';
+import { ORCHESTRATION_ADMIN_OWNER_ID, ORCHESTRATION_ADMIN_EMAIL } from '../constants/orchestrationAdmin';
+import type { OrchestrationConfigLoadMeta } from '../services/fulltaskApi';
+import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
 
 function newCatalogId(): string {
   return `msg_${Date.now()}`;
@@ -43,14 +49,72 @@ function parseOrchestrationSubTab(raw: string | null): OrchestrationSubTab {
   return 'workflows';
 }
 
+function isAdminOwnerRow(owner: { _id?: string; id?: string; email?: string }): boolean {
+  const id = String(owner?._id ?? owner?.id ?? '');
+  if (id === ORCHESTRATION_ADMIN_OWNER_ID) return true;
+  return (owner.email || '').toLowerCase().trim() === ORCHESTRATION_ADMIN_EMAIL;
+}
+
 function TasksOrchestrationFulltaskPageInner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const subTab = parseOrchestrationSubTab(searchParams.get('tab'));
 
   const ownerScope = useFulltaskConfigOwner();
-  const { ownerKey, ownerDisplayName, ownerKeyDetail, isAdminTemplate, showOwnerPicker } = ownerScope;
+  const { ownerKey, ownerDisplayName, ownerKeyDetail, isAdminTemplate } = ownerScope;
+  const { owners } = useAdminOwnerFilter();
 
-  console.log('[TasksOrchestrationFulltaskPageInner] RENDER - ownerKey:', ownerKey);
+  const pmOwners = useMemo(
+    () =>
+      (owners || []).filter((o) => {
+        const id = o?._id ?? o?.id;
+        if (id == null) return false;
+        return !isAdminOwnerRow(o);
+      }),
+    [owners],
+  );
+
+  const adminScopeTab = isAdminTemplate ? searchParams.get('ownerScope') || 'global' : ownerKey;
+
+  const effectiveOwnerKey = useMemo(() => {
+    if (isAdminTemplate) {
+      return adminScopeTab === 'global' ? 'global' : adminScopeTab;
+    }
+    return ownerKey;
+  }, [isAdminTemplate, adminScopeTab, ownerKey]);
+
+  const effectiveDisplayName = useMemo(() => {
+    if (isAdminTemplate && adminScopeTab !== 'global') {
+      const row = pmOwners.find((o) => String(o._id ?? o.id) === adminScopeTab);
+      return getOwnerListLabel(row) || adminScopeTab;
+    }
+    return ownerDisplayName;
+  }, [isAdminTemplate, adminScopeTab, pmOwners, ownerDisplayName]);
+
+  const effectiveKeyDetail = useMemo(() => {
+    if (isAdminTemplate && adminScopeTab === 'global') {
+      return ownerKeyDetail;
+    }
+    if (isAdminTemplate && adminScopeTab !== 'global') {
+      return `${adminScopeTab} · onglet PM (mode Admin)`;
+    }
+    return ownerKeyDetail;
+  }, [isAdminTemplate, adminScopeTab, ownerKeyDetail]);
+
+  const syncContextOwnerId = isAdminTemplate
+    ? adminScopeTab === 'global'
+      ? ORCHESTRATION_ADMIN_OWNER_ID
+      : adminScopeTab
+    : ownerKey;
+
+  const setAdminScopeTab = useCallback(
+    (scope: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (scope === 'global') next.delete('ownerScope');
+      else next.set('ownerScope', scope);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [catalog, setCatalog] = useState<CatalogMessage[]>([]);
@@ -59,6 +123,8 @@ function TasksOrchestrationFulltaskPageInner() {
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<'ok' | 'empty' | 'error'>('ok');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [configSource, setConfigSource] = useState<OrchestrationConfigLoadMeta['configSource']>(null);
+  const [ownerConfigStatus, setOwnerConfigStatus] = useState<Record<string, OwnerConfigTabStatus>>({});
   const [saving, setSaving] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const applyDocToState = useCallback((doc: Record<string, unknown> | null) => {
@@ -80,9 +146,12 @@ function TasksOrchestrationFulltaskPageInner() {
   const load = useCallback(
     async (options?: { background?: boolean }) => {
       const background = options?.background === true;
+      const strictOwner = effectiveOwnerKey !== 'global';
       if (!background) setLoading(true);
       try {
-        const raw = await fulltaskApi.getOrchestrationConfig(ownerKey);
+        const raw = await fulltaskApi.getOrchestrationConfig(effectiveOwnerKey, { strictOwner });
+        const meta = (raw as { meta?: OrchestrationConfigLoadMeta })?.meta;
+        setConfigSource(meta?.configSource ?? null);
         const doc = unwrapFulltaskData<Record<string, unknown>>(raw);
         if (!doc) {
           if (!background) {
@@ -92,6 +161,7 @@ function TasksOrchestrationFulltaskPageInner() {
             setListOrder([]);
             setLoadState('empty');
             setLoadError(null);
+            setConfigSource(null);
           }
         } else {
           const wfN = (doc.workflows as unknown[] | undefined)?.length ?? 0;
@@ -123,6 +193,7 @@ function TasksOrchestrationFulltaskPageInner() {
           } else if (err.response?.status === 404) {
             setLoadError(null);
             setLoadState('empty');
+            setConfigSource(null);
           } else {
             setLoadError(
               err.response?.data?.error ||
@@ -135,13 +206,59 @@ function TasksOrchestrationFulltaskPageInner() {
         if (!background) setLoading(false);
       }
     },
-    [ownerKey, applyDocToState],
+    [effectiveOwnerKey, applyDocToState],
   );
 
+  const refreshOwnerConfigStatus = useCallback(async () => {
+    if (!isAdminTemplate || pmOwners.length === 0) return;
+    const loadingMap = Object.fromEntries(
+      pmOwners.map((o) => [String(o._id ?? o.id), 'loading' as OwnerConfigTabStatus]),
+    );
+    setOwnerConfigStatus(loadingMap);
+    const entries = await Promise.all(
+      pmOwners.map(async (o) => {
+        const id = String(o._id ?? o.id);
+        try {
+          const raw = await fulltaskApi.getOrchestrationConfig(id, { strictOwner: true });
+          const meta = (raw as { meta?: OrchestrationConfigLoadMeta })?.meta;
+          const doc = unwrapFulltaskData<Record<string, unknown>>(raw);
+          const hasOwn =
+            meta?.configSource === 'owner' ||
+            Boolean(doc && ((doc.workflows as unknown[] | undefined)?.length ?? 0) > 0);
+          return [id, hasOwn ? ('owner' as const) : ('empty' as const)] as const;
+        } catch {
+          return [id, 'empty' as const] as const;
+        }
+      }),
+    );
+    setOwnerConfigStatus(Object.fromEntries(entries));
+  }, [isAdminTemplate, pmOwners]);
+
   useEffect(() => {
-    console.log('[TasksOrchestrationFulltaskPageInner] useEffect triggered - ownerKey:', ownerKey);
     void load();
-  }, [load, ownerKey]);
+  }, [load, effectiveOwnerKey]);
+
+  useEffect(() => {
+    void refreshOwnerConfigStatus();
+  }, [refreshOwnerConfigStatus]);
+
+  useEffect(() => {
+    if (!isAdminTemplate) {
+      const next = new URLSearchParams(searchParams);
+      if (next.has('ownerScope')) {
+        next.delete('ownerScope');
+        setSearchParams(next, { replace: true });
+      }
+    }
+  }, [isAdminTemplate, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!isAdminTemplate || adminScopeTab === 'global') return;
+    const valid = pmOwners.some((o) => String(o._id ?? o.id) === adminScopeTab);
+    if (!valid && pmOwners.length > 0) {
+      setAdminScopeTab('global');
+    }
+  }, [isAdminTemplate, adminScopeTab, pmOwners, setAdminScopeTab]);
 
   const persist = async () => {
     if (workflows.length === 0 && scheduledRules.length === 0) {
@@ -159,7 +276,7 @@ function TasksOrchestrationFulltaskPageInner() {
         ordered.scheduledRules as Record<string, unknown>[],
         listOrder,
       );
-      const raw = await fulltaskApi.upsertOrchestrationConfig(ownerKey, body);
+      const raw = await fulltaskApi.upsertOrchestrationConfig(effectiveOwnerKey, body);
       const saved = unwrapFulltaskData<Record<string, unknown>>(raw);
       const savedWf = (saved?.workflows as unknown[] | undefined)?.length ?? 0;
       if (saved && !(savedWf === 0 && workflows.length > 0)) {
@@ -169,6 +286,9 @@ function TasksOrchestrationFulltaskPageInner() {
         await load({ background: true });
       }
       toast.success('Enregistré', { autoClose: 2000 });
+      if (effectiveOwnerKey !== 'global') {
+        await refreshOwnerConfigStatus();
+      }
     } catch (e: unknown) {
       const err = e as { response?: { status?: number; data?: { error?: string } }; message?: string };
       if (err.response?.status === 401) {
@@ -190,6 +310,7 @@ function TasksOrchestrationFulltaskPageInner() {
       );
       toast.success(`Orchestration synchronisée vers ${targetOwnerName}`);
       await load();
+      await refreshOwnerConfigStatus();
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || err.message || 'Erreur synchronisation');
@@ -201,15 +322,34 @@ function TasksOrchestrationFulltaskPageInner() {
       await fulltaskApi.copyOrchestrationConfigToAllOwners(ORCHESTRATION_ADMIN_OWNER_ID);
       toast.success('Orchestration synchronisée vers tous les PMs');
       await load();
+      await refreshOwnerConfigStatus();
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || err.message || 'Erreur synchronisation');
     }
   };
 
+  const scopeBar = (
+    <OwnerConfigScopeBarWithSync
+      {...ownerScope}
+      compact
+      syncContextOwnerId={syncContextOwnerId}
+      onSyncToOwner={handleSyncToOwner}
+      onSyncToAllOwners={handleSyncToAllOwners}
+    />
+  );
+
   if (loading) {
     return (
       <DashboardWrapper breadcrumb={['Tâches', 'Orchestration', 'Config']}>
+        {scopeBar}
+        {isAdminTemplate ? (
+          <OrchestrationOwnerScopeTabs
+            activeScope={adminScopeTab}
+            onChange={setAdminScopeTab}
+            ownerConfigStatus={ownerConfigStatus}
+          />
+        ) : null}
         <p style={{ padding: 24 }}>Chargement…</p>
       </DashboardWrapper>
     );
@@ -217,12 +357,62 @@ function TasksOrchestrationFulltaskPageInner() {
 
   return (
     <DashboardWrapper breadcrumb={['Tâches', 'Orchestration', 'Config']}>
-      <OwnerConfigScopeBarWithSync
-        {...ownerScope}
-        compact
-        onSyncToOwner={handleSyncToOwner}
-        onSyncToAllOwners={handleSyncToAllOwners}
-      />
+      {scopeBar}
+      {isAdminTemplate ? (
+        <OrchestrationOwnerScopeTabs
+          activeScope={adminScopeTab}
+          onChange={setAdminScopeTab}
+          ownerConfigStatus={ownerConfigStatus}
+        />
+      ) : null}
+      {isAdminTemplate && adminScopeTab !== 'global' && loadState === 'empty' && !loadError ? (
+        <div
+          className="orch-load-banner"
+          style={{
+            margin: '0 0 16px',
+            padding: '12px 16px',
+            borderRadius: 10,
+            background: 'rgba(6,115,179,0.08)',
+            border: '1px solid rgba(6,115,179,0.22)',
+            fontSize: 13,
+          }}
+        >
+          {effectiveDisplayName} n&apos;a pas encore de config propre. Utilisez{' '}
+          <strong>Synchroniser PM {effectiveDisplayName}</strong> pour copier le template Admin.
+        </div>
+      ) : null}
+      {!isAdminTemplate && loadState === 'empty' && !loadError ? (
+        <div
+          className="orch-load-banner"
+          style={{
+            margin: '0 0 16px',
+            padding: '12px 16px',
+            borderRadius: 10,
+            background: 'rgba(6,115,179,0.08)',
+            border: '1px solid rgba(6,115,179,0.22)',
+            fontSize: 13,
+          }}
+        >
+          Ce PM n&apos;a pas encore de config orchestration propre. Utilisez{' '}
+          <strong>Synchroniser PM {ownerDisplayName}</strong> pour copier le template Admin, ou
+          chargez le seed puis enregistrez.
+        </div>
+      ) : null}
+      {configSource === 'owner' && effectiveOwnerKey !== 'global' ? (
+        <div
+          style={{
+            margin: '0 0 12px',
+            padding: '8px 14px',
+            borderRadius: 8,
+            background: 'rgba(10,143,94,0.08)',
+            border: '1px solid rgba(10,143,94,0.2)',
+            fontSize: 12,
+            color: '#0a5c40',
+          }}
+        >
+          Config propre du PM · vous modifiez uniquement <strong>{effectiveDisplayName}</strong>
+        </div>
+      ) : null}
       {loadError ? (
         <div
           className="orch-load-banner orch-load-banner--error"
@@ -239,8 +429,8 @@ function TasksOrchestrationFulltaskPageInner() {
         </div>
       ) : null}
       <OrchestrationPageView
-        ownerDisplayName={ownerDisplayName}
-        ownerKeyDetail={ownerKeyDetail}
+        ownerDisplayName={effectiveDisplayName}
+        ownerKeyDetail={effectiveKeyDetail}
         initialSubTab={subTab}
         loadState={loadState}
         onSubTabChange={(tab) => {

@@ -64,7 +64,7 @@ export function useFulltaskConfigOwner(): FulltaskConfigOwnerScope {
 
   const ownerKeyDetail = isAdminTemplate
     ? `Template Admin · ${ORCHESTRATION_ADMIN_OWNER_ID} · tous les PM`
-    : ownerKey;
+    : `${ownerKey} · config propre PM`;
 
   return {
     ownerKey,
