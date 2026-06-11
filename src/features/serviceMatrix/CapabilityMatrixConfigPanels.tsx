@@ -9,22 +9,27 @@ import {
 } from '@mui/material';
 import { toast } from 'react-toastify';
 import MenuOptionCard from '../../components/listing/form-v2/components/ChatbotMenuConfig/MenuOptionCard';
-import { ensureMenuOptionsComplete } from '../../components/listing/form-v2/components/ChatbotMenuConfig/menuDefaults';
+import { ensureMenuOptionsComplete, ensureMenuOptionsForCodes, JOURNEY_MENU_CODES } from '../../components/listing/form-v2/components/ChatbotMenuConfig/menuDefaults';
 import { menuBtnOutlined, T as menuT } from '../../components/listing/form-v2/components/ChatbotMenuConfig/menuTheme';
 import listingsService from '../../services/listingsService';
 import { saveListingWhatsappOption } from '../orchestrationListingV3/listingOrchestrationApi';
 import type { ListingOrchestrationDoc } from '../orchestrationListingV3/listingOrchestrationApi';
+import {
+  saveOwnerWhatsappOption,
+  type OwnerOrchestrationDoc,
+} from '../orchestrationListingV3/ownerOrchestrationApi';
 import AccessConfigTab from '../listing/components/ConfigOrchestration/AccessConfigTab';
 import ArrivalDepartureConfigTab from '../listing/components/ConfigOrchestration/ArrivalDepartureConfigTab';
 import CleaningConfigTab from '../listing/components/ConfigOrchestration/CleaningConfigTab';
 import CleaningSojoriConfigTab from '../listing/components/ConfigOrchestration/CleaningSojoriConfigTab';
 import ConciergeConfigTab from '../listing/components/ConfigOrchestration/ConciergeConfigTab';
 import GroceryConfigTab from '../listing/components/ConfigOrchestration/GroceryConfigTab';
+import PropertyWifiConfigTab from '../listing/components/ConfigOrchestration/PropertyWifiConfigTab';
 import RulesConfigTab from '../listing/components/ConfigOrchestration/RulesConfigTab';
 import ServiceClientConfigTab from '../listing/components/ConfigOrchestration/ServiceClientConfigTab';
 import SupportConfigTabContainer from '../listing/components/ConfigOrchestration/SupportConfigTabContainer';
 import TransportConfigTab from '../listing/components/ConfigOrchestration/TransportConfigTab';
-import type { CapabilityDefinition } from './capabilityRegistry';
+import { V3BlockSaveBar } from '../orchestrationListingV3/V3BlockSaveBar';
 import type { MatrixScopeMode } from './types';
 import { SOJORI_TOKENS as T } from '../listing/components/ConfigOrchestration/types';
 
@@ -35,6 +40,8 @@ type GestionProps = {
   listingId?: string;
   listingValues: Record<string, unknown>;
   onListingPatch: (patch: Record<string, unknown>) => Promise<void>;
+  /** Orchestration V3 : pas d’auto-save, barre Enregistrer par bloc. */
+  manualSaveMode?: boolean;
 };
 
 const embeddedSx = {
@@ -55,6 +62,7 @@ export function CapabilityGestionPanel({
   listingId,
   listingValues,
   onListingPatch,
+  manualSaveMode = true,
 }: GestionProps) {
   const templateMode = scope === 'owner';
   const templateOwnerKey = ownerKey === 'global' ? 'global' : ownerKey;
@@ -67,6 +75,7 @@ export function CapabilityGestionPanel({
     listingValues,
     onListingPatch,
     templateMode,
+    manualSaveMode,
   };
 
   const key = def.key;
@@ -104,7 +113,7 @@ export function CapabilityGestionPanel({
   ) {
     return (
       <Box sx={embeddedSx}>
-        <ArrivalDepartureConfigTab {...commonListing} />
+        <ArrivalDepartureConfigTab {...commonListing} capabilityKey={key} />
       </Box>
     );
   }
@@ -142,9 +151,7 @@ export function CapabilityGestionPanel({
     return (
       <Box sx={embeddedSx}>
         <TransportConfigTab
-          listingId={lid || undefined}
-          ownerId={ownerId}
-          listingValues={listingValues}
+          {...commonListing}
           templateOwnerKey={templateMode ? templateOwnerKey : undefined}
         />
       </Box>
@@ -154,8 +161,7 @@ export function CapabilityGestionPanel({
     return (
       <Box sx={embeddedSx}>
         <GroceryConfigTab
-          listingId={lid || undefined}
-          ownerId={ownerId}
+          {...commonListing}
           templateOwnerKey={templateMode ? templateOwnerKey : undefined}
         />
       </Box>
@@ -165,8 +171,7 @@ export function CapabilityGestionPanel({
     return (
       <Box sx={embeddedSx}>
         <ConciergeConfigTab
-          listingId={lid || undefined}
-          ownerId={ownerId}
+          {...commonListing}
           templateOwnerKey={templateMode ? templateOwnerKey : undefined}
           adminCatalogOnly={templateOwnerKey === 'global'}
         />
@@ -177,8 +182,7 @@ export function CapabilityGestionPanel({
     return (
       <Box sx={embeddedSx}>
         <AccessConfigTab
-          listingId={lid || undefined}
-          ownerId={ownerId}
+          {...commonListing}
           templateOwnerKey={templateMode ? templateOwnerKey : undefined}
         />
       </Box>
@@ -186,10 +190,9 @@ export function CapabilityGestionPanel({
   }
   if (key === 'property_wifi') {
     return (
-      <Alert severity="info" sx={{ fontSize: 12.5 }}>
-        WiFi et infos propriété : champs sur la fiche listing (wifiUsername, wifiPassword, descriptions).
-        Menu G ci-dessous.
-      </Alert>
+      <Box sx={embeddedSx}>
+        <PropertyWifiConfigTab {...commonListing} templateOwnerKey={templateMode ? templateOwnerKey : undefined} />
+      </Box>
     );
   }
   if (key === 'house_rules') {
@@ -215,7 +218,9 @@ type WhatsAppProps = {
   ownerKey: string;
   listingId?: string;
   orchestrationDoc?: ListingOrchestrationDoc;
+  ownerOrchestrationDoc?: OwnerOrchestrationDoc;
   onOrchestrationSaved?: () => void;
+  onWhatsappPatch?: (capabilityKey: string, menuCodes: string[], menuOptions: unknown[]) => void;
 };
 
 export function CapabilityWhatsAppPanel({
@@ -224,11 +229,25 @@ export function CapabilityWhatsAppPanel({
   ownerKey,
   listingId,
   orchestrationDoc,
+  ownerOrchestrationDoc,
   onOrchestrationSaved,
+  onWhatsappPatch,
 }: WhatsAppProps) {
   if (!def.menuCodes.length) {
     return (
       <Typography sx={{ fontSize: 13, color: T.text3 }}>Pas d’option menu WhatsApp pour ce service.</Typography>
+    );
+  }
+
+  if (scope === 'owner' && ownerOrchestrationDoc) {
+    return (
+      <OwnerOrchestrationWhatsAppPanel
+        ownerKey={ownerKey}
+        capabilityKey={def.key}
+        menuCodes={def.menuCodes}
+        orchestrationDoc={ownerOrchestrationDoc}
+        onWhatsappPatch={onWhatsappPatch}
+      />
     );
   }
 
@@ -258,7 +277,7 @@ export function CapabilityWhatsAppPanel({
       capabilityKey={def.key}
       menuCodes={def.menuCodes}
       orchestrationDoc={orchestrationDoc}
-      onSaved={onOrchestrationSaved}
+      onWhatsappPatch={onWhatsappPatch}
     />
   );
 }
@@ -365,140 +384,60 @@ const MENU_NAV_ALWAYS_CODES = ['A', 'B'];
 const MENU_NAV_WINDOW_CODES = ['C'];
 const MENU_NAV_STRUCTURE_CODES = ['D', 'J'];
 
-function ListingOrchestrationWhatsAppPanel({
-  listingId,
-  capabilityKey,
-  menuCodes,
-  orchestrationDoc,
-  onSaved,
-}: {
-  listingId: string;
+type WhatsappOptionsEditorProps = {
   capabilityKey: string;
   menuCodes: string[];
-  orchestrationDoc: ListingOrchestrationDoc;
-  onSaved?: () => void;
-}) {
-  const cap = orchestrationDoc.capabilities?.[capabilityKey];
-  const storedOptions = (cap?.whatsapp?.menuOptions ?? []) as Record<string, unknown>[];
-  const [menuOptions, setMenuOptions] = useState<Record<string, unknown>[]>(() =>
-    ensureMenuOptionsComplete(storedOptions) as Record<string, unknown>[],
-  );
-  const [saving, setSaving] = useState(false);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  storedOptions: Record<string, unknown>[];
+  saving: boolean;
+  dirty: boolean;
+  menuOptions: Record<string, unknown>[];
+  onUpdateOption: (code: string, updated: Record<string, unknown>) => void;
+};
 
-  useEffect(() => {
-    const next = ensureMenuOptionsComplete(storedOptions) as Record<string, unknown>[];
-    setMenuOptions(next);
-  }, [orchestrationDoc, capabilityKey]);
+function WhatsappOptionsEditor({
+  capabilityKey,
+  menuCodes,
+  saving,
+  dirty,
+  menuOptions,
+  onUpdateOption,
+}: WhatsappOptionsEditorProps) {
+  const isJourney = menuCodes.some(code => JOURNEY_MENU_CODES.includes(code));
+  const cardVariant = capabilityKey === 'menu_navigation' ? undefined : isJourney ? 'navigation-leaf' : undefined;
 
-  const persist = async (next: Record<string, unknown>[]) => {
-    setSaving(true);
-    try {
-      await saveListingWhatsappOption({
-        listingId,
-        capabilityKey,
-        menuCodes,
-        menuOptions: next,
-        doc: orchestrationDoc,
-      });
-      toast.success('WhatsApp enregistré (listing orchestration)');
-      onSaved?.();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Erreur enregistrement WhatsApp');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Stack spacing={1.5}>
-      {capabilityKey === 'menu_navigation' ? (
-        <>
-          <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text2, mb: 0.5 }}>
-            Menu WhatsApp
-          </Typography>
-          {MENU_NAV_ALWAYS_CODES.map(code => {
-            const opt = menuOptions.find(o => String(o.code) === code);
-            if (!opt) {
-              return (
-                <Alert key={code} severity="warning" sx={{ fontSize: 12 }}>
-                  Option {code} absente — migrer le listing ou compléter le doc orchestration.
-                </Alert>
-              );
-            }
-            return (
-              <MenuOptionCard
-                key={code}
-                option={{ ...opt, enabled: true, availability: { type: 'always' } }}
-                variant="navigation-leaf"
-                lockEnabledOn
-                lockAvailabilityAlways
-                defaultExpanded
-                onChange={() => {}}
-              />
-            );
-          })}
-          {MENU_NAV_WINDOW_CODES.map(code => {
-            const opt = menuOptions.find(o => String(o.code) === code);
-            if (!opt) {
-              return (
-                <Alert key={code} severity="warning" sx={{ fontSize: 12 }}>
-                  Option {code} absente — migrer le listing ou compléter le doc orchestration.
-                </Alert>
-              );
-            }
-            return (
-              <MenuOptionCard
-                key={code}
-                option={opt}
-                variant="navigation-leaf"
-                defaultExpanded
-                onChange={(updated: Record<string, unknown>) => {
-                  const next = menuOptions.map(o =>
-                    String(o.code) === code ? { ...o, ...updated } : o,
-                  );
-                  setMenuOptions(next);
-                  if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-                  saveTimerRef.current = setTimeout(() => {
-                    void persist(next);
-                  }, 900);
-                }}
-              />
-            );
-          })}
-          {MENU_NAV_STRUCTURE_CODES.map(code => {
-            const opt = menuOptions.find(o => String(o.code) === code);
-            if (!opt) return null;
-            return (
-              <MenuOptionCard
-                key={code}
-                option={opt}
-                variant="navigation-category"
-                onChange={(updated: Record<string, unknown>) => {
-                  const next = menuOptions.map(o =>
-                    String(o.code) === code ? { ...o, ...updated } : o,
-                  );
-                  setMenuOptions(next);
-                  if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-                  saveTimerRef.current = setTimeout(() => {
-                    void persist(next);
-                  }, 900);
-                }}
-              />
-            );
-          })}
-          <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.5 }}>
-            A et B sont toujours visibles dans le menu. C = fenêtre de parcours. D et J = entrées
-            sous-menu — détail D1–D4 et J1–J3 dans chaque service (Arrivée & départ, Conciergerie…).
-          </Typography>
-        </>
-      ) : (
-        menuCodes.map(code => {
+  if (capabilityKey === 'menu_navigation') {
+    return (
+      <>
+        <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text2, mb: 0.5 }}>
+          Menu WhatsApp
+        </Typography>
+        {MENU_NAV_ALWAYS_CODES.map(code => {
           const opt = menuOptions.find(o => String(o.code) === code);
           if (!opt) {
             return (
               <Alert key={code} severity="warning" sx={{ fontSize: 12 }}>
-                Option {code} absente — migrer le listing ou compléter le doc orchestration.
+                Option {code} absente — compléter le modèle orchestration.
+              </Alert>
+            );
+          }
+          return (
+            <MenuOptionCard
+              key={code}
+              option={{ ...opt, enabled: true, availability: { type: 'always' } }}
+              variant="navigation-leaf"
+              lockEnabledOn
+              lockAvailabilityAlways
+              defaultExpanded
+              onChange={() => {}}
+            />
+          );
+        })}
+        {MENU_NAV_WINDOW_CODES.map(code => {
+          const opt = menuOptions.find(o => String(o.code) === code);
+          if (!opt) {
+            return (
+              <Alert key={code} severity="warning" sx={{ fontSize: 12 }}>
+                Option {code} absente — compléter le modèle orchestration.
               </Alert>
             );
           }
@@ -506,25 +445,228 @@ function ListingOrchestrationWhatsAppPanel({
             <MenuOptionCard
               key={code}
               option={opt}
+              variant="navigation-leaf"
               defaultExpanded
-              onChange={(updated: Record<string, unknown>) => {
-                const next = menuOptions.map(o =>
-                  String(o.code) === code ? { ...o, ...updated } : o,
-                );
-                setMenuOptions(next);
-                if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-                saveTimerRef.current = setTimeout(() => {
-                  void persist(next);
-                }, 900);
-              }}
+              onChange={(updated: Record<string, unknown>) => onUpdateOption(code, updated)}
             />
           );
-        })
+        })}
+        {MENU_NAV_STRUCTURE_CODES.map(code => {
+          const opt = menuOptions.find(o => String(o.code) === code);
+          if (!opt) return null;
+          return (
+            <MenuOptionCard
+              key={code}
+              option={opt}
+              variant="navigation-category"
+              onChange={(updated: Record<string, unknown>) => onUpdateOption(code, updated)}
+            />
+          );
+        })}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {menuCodes.map(code => {
+        const opt = menuOptions.find(o => String(o.code) === code);
+        if (!opt) {
+          return (
+            <Alert key={code} severity="warning" sx={{ fontSize: 12 }}>
+              Option {code} absente — compléter le modèle orchestration.
+            </Alert>
+          );
+        }
+        return (
+          <MenuOptionCard
+            key={code}
+            option={opt}
+            variant={cardVariant}
+            defaultExpanded
+            onChange={(updated: Record<string, unknown>) => onUpdateOption(code, updated)}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function useOrchestrationWhatsappState(
+  capabilityKey: string,
+  menuCodes: string[],
+  storedOptions: Record<string, unknown>[],
+  persist: (next: Record<string, unknown>[]) => Promise<void>,
+) {
+  const [menuOptions, setMenuOptions] = useState<Record<string, unknown>[]>(() =>
+    ensureMenuOptionsForCodes(storedOptions, menuCodes) as Record<string, unknown>[],
+  );
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const menuOptionsRef = useRef(menuOptions);
+  menuOptionsRef.current = menuOptions;
+
+  useEffect(() => {
+    setMenuOptions(ensureMenuOptionsForCodes(storedOptions, menuCodes) as Record<string, unknown>[]);
+    setDirty(false);
+    dirtyRef.current = false;
+  }, [capabilityKey]);
+
+  const updateOption = (code: string, updated: Record<string, unknown>) => {
+    const next = menuOptionsRef.current.map(o =>
+      String(o.code) === code ? { ...o, ...updated } : o,
+    );
+    menuOptionsRef.current = next;
+    setMenuOptions(next);
+    dirtyRef.current = true;
+    setDirty(true);
+  };
+
+  const savePending = useCallback(async () => {
+    if (!dirtyRef.current || !menuOptionsRef.current.length) return;
+    setSaving(true);
+    try {
+      await persist(menuOptionsRef.current);
+      dirtyRef.current = false;
+      setDirty(false);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur enregistrement WhatsApp');
+      throw e;
+    } finally {
+      setSaving(false);
+    }
+  }, [persist]);
+
+  return { menuOptions, saving, dirty, updateOption, savePending };
+}
+
+function whatsappSaveLabel(scope: 'owner' | 'listing') {
+  return scope === 'owner'
+    ? 'Menu WhatsApp · owner_orchestrations'
+    : 'Menu WhatsApp · listing_orchestrations';
+}
+
+function OwnerOrchestrationWhatsAppPanel({
+  ownerKey,
+  capabilityKey,
+  menuCodes,
+  orchestrationDoc,
+  onWhatsappPatch,
+}: {
+  ownerKey: string;
+  capabilityKey: string;
+  menuCodes: string[];
+  orchestrationDoc: OwnerOrchestrationDoc;
+  onWhatsappPatch?: (capabilityKey: string, menuCodes: string[], menuOptions: unknown[]) => void;
+}) {
+  const cap = orchestrationDoc.capabilities?.[capabilityKey];
+  const storedOptions = (cap?.whatsapp?.menuOptions ?? []) as Record<string, unknown>[];
+
+  const persist = useCallback(
+    async (next: Record<string, unknown>[]) => {
+      await saveOwnerWhatsappOption({
+        ownerKey,
+        capabilityKey,
+        menuCodes,
+        menuOptions: next,
+        doc: orchestrationDoc,
+      });
+      onWhatsappPatch?.(capabilityKey, menuCodes, next);
+      toast.success('WhatsApp enregistré (modèle PM)');
+    },
+    [ownerKey, capabilityKey, menuCodes, orchestrationDoc, onWhatsappPatch],
+  );
+
+  const { menuOptions, saving, dirty, updateOption, savePending } = useOrchestrationWhatsappState(
+    capabilityKey,
+    menuCodes,
+    storedOptions,
+    persist,
+  );
+
+  return (
+    <Stack spacing={0}>
+      <WhatsappOptionsEditor
+        capabilityKey={capabilityKey}
+        menuCodes={menuCodes}
+        storedOptions={storedOptions}
+        saving={saving}
+        dirty={dirty}
+        menuOptions={menuOptions}
+        onUpdateOption={updateOption}
+      />
+      <V3BlockSaveBar
+        label={whatsappSaveLabel('owner')}
+        dirty={dirty}
+        saving={saving}
+        onSave={savePending}
+      />
+    </Stack>
+  );
+}
+
+function ListingOrchestrationWhatsAppPanel({
+  listingId,
+  capabilityKey,
+  menuCodes,
+  orchestrationDoc,
+  onWhatsappPatch,
+}: {
+  listingId: string;
+  capabilityKey: string;
+  menuCodes: string[];
+  orchestrationDoc: ListingOrchestrationDoc;
+  onWhatsappPatch?: (capabilityKey: string, menuCodes: string[], menuOptions: unknown[]) => void;
+}) {
+  const cap = orchestrationDoc.capabilities?.[capabilityKey];
+  const storedOptions = (cap?.whatsapp?.menuOptions ?? []) as Record<string, unknown>[];
+
+  const persist = useCallback(
+    async (next: Record<string, unknown>[]) => {
+      await saveListingWhatsappOption({
+        listingId,
+        capabilityKey,
+        menuCodes,
+        menuOptions: next,
+        doc: orchestrationDoc,
+      });
+      onWhatsappPatch?.(capabilityKey, menuCodes, next);
+      toast.success('WhatsApp enregistré (listing orchestration)');
+    },
+    [listingId, capabilityKey, menuCodes, orchestrationDoc, onWhatsappPatch],
+  );
+
+  const { menuOptions, saving, dirty, updateOption, savePending } = useOrchestrationWhatsappState(
+    capabilityKey,
+    menuCodes,
+    storedOptions,
+    persist,
+  );
+
+  return (
+    <Stack spacing={0}>
+      <WhatsappOptionsEditor
+        capabilityKey={capabilityKey}
+        menuCodes={menuCodes}
+        storedOptions={storedOptions}
+        saving={saving}
+        dirty={dirty}
+        menuOptions={menuOptions}
+        onUpdateOption={updateOption}
+      />
+      {capabilityKey === 'menu_navigation' && (
+        <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.5, px: 0.5, mt: 1 }}>
+          A et B sont toujours visibles dans le menu. C = fenêtre de parcours. D et J = entrées
+          sous-menu — détail D1–D4 et J1–J3 dans chaque service (Arrivée & départ, Conciergerie…).
+        </Typography>
       )}
-      <Typography sx={{ fontSize: 11, color: T.text3 }}>
-        Sauvegarde auto · listing_orchestrations → chatbot + whitelist
-        {saving ? ' · enregistrement…' : ''}
-      </Typography>
+      <V3BlockSaveBar
+        label={whatsappSaveLabel('listing')}
+        dirty={dirty}
+        saving={saving}
+        onSave={savePending}
+      />
     </Stack>
   );
 }

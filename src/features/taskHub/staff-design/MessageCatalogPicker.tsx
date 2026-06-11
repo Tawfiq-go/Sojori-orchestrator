@@ -1,4 +1,9 @@
 import type { CatalogMessage } from './types';
+import { RELANCE_MESSAGE_BY_TASK_TYPE } from '../../../utils/fulltaskMappers';
+import {
+  defaultStaffReminderMessageId,
+  STAFF_REMINDER_TEMPLATE_OPTIONS,
+} from './staffReminderTemplates';
 
 export type CatalogPickerScope = 'relance' | 'reservation' | 'all';
 
@@ -8,9 +13,33 @@ export function filterCatalogByScope(
 ): CatalogMessage[] {
   if (scope === 'all') return catalog;
   if (scope === 'relance') {
-    return catalog.filter((c) => c.id.startsWith('msg_relance_'));
+    return catalog.filter(c => c.id.startsWith('msg_relance_'));
   }
-  return catalog.filter((c) => !c.id.startsWith('msg_relance_'));
+  return catalog.filter(c => !c.id.startsWith('msg_relance_'));
+}
+
+/** Templates relance voyageur — catalogue client uniquement, filtré par type de tâche si connu. */
+export function clientRelanceTemplatesForTask(
+  catalog: CatalogMessage[],
+  taskTypeId?: string,
+): CatalogMessage[] {
+  const relances = filterCatalogByScope(catalog, 'relance');
+  if (!taskTypeId) return relances;
+  const preferredId = RELANCE_MESSAGE_BY_TASK_TYPE[taskTypeId];
+  if (!preferredId) return relances;
+  const match = relances.filter(c => c.id === preferredId);
+  return match.length > 0 ? match : relances;
+}
+
+/** Templates rappel staff WhatsApp — slugs staff_reminder_* pour ce type de tâche. */
+export function staffReminderTemplatesForTask(
+  taskTypeId: string,
+): { id: string; label: string }[] {
+  const preferredId = defaultStaffReminderMessageId(taskTypeId);
+  const match = STAFF_REMINDER_TEMPLATE_OPTIONS.filter(o => o.id === preferredId);
+  return match.length > 0
+    ? match
+    : STAFF_REMINDER_TEMPLATE_OPTIONS.filter(o => o.id === 'staff_reminder_generic');
 }
 
 interface Props {

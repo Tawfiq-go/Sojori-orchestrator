@@ -3,8 +3,12 @@ import { Alert, Box, CircularProgress } from '@mui/material';
 import { toast } from 'react-toastify';
 import listingsService from '../../services/listingsService';
 import type { Workflow } from '../taskHub/staff-design/types';
-import { loadCapabilityMatrix, saveCapabilityRow } from '../serviceMatrix/capabilityMatrixApi';
-import { CAPABILITY_REGISTRY, getCapabilityDefinition } from '../serviceMatrix/capabilityRegistry';
+import {
+  CAPABILITY_REGISTRY,
+  defaultListingRailCapabilityKey,
+  getCapabilityDefinition,
+  isCapabilityVisibleOnListingRail,
+} from '../serviceMatrix/capabilityRegistry';
 import { applyDependencyRules } from '../serviceMatrix/matrixStateUtils';
 import type { CapabilityRowState } from '../serviceMatrix/types';
 import V3Header, { type V3ScopeMode } from './V3Header';
@@ -15,8 +19,17 @@ import { V3 } from './theme';
 import {
   loadListingOrchestrationMatrix,
   saveListingGestion,
+  saveListingOrchestrationRow,
   type ListingOrchestrationDoc,
 } from './listingOrchestrationApi';
+import {
+  loadOwnerOrchestrationMatrix,
+  saveOwnerGestion,
+  saveOwnerOrchestrationRow,
+  type OwnerOrchestrationDoc,
+} from './ownerOrchestrationApi';
+import { mergeLocalRowsAfterLoad, patchOrchestrationDocExecution, patchOrchestrationDocGestion, patchOrchestrationDocWhatsapp } from './mergeLocalRowsAfterLoad';
+import { logV3Orch } from './v3OrchestrationDebugLog';
 
 type ListingPick = { id: string; name: string };
 
@@ -29,6 +42,8 @@ type Props = {
   listingCount?: number;
   /** Formulaire listing /listings/:id — pas de header ni sélecteur annonce. */
   embedded?: boolean;
+  /** Modèle PM complet (owner_orchestrations) — même UI que listing. */
+  ownerTemplateMode?: boolean;
 };
 
 export default function OrchestrationListingV3View({
@@ -39,8 +54,9 @@ export default function OrchestrationListingV3View({
   onListingChange,
   listingCount,
   embedded = false,
+  ownerTemplateMode = false,
 }: Props) {
-  const [scope, setScope] = useState<V3ScopeMode>('listing');
+  const [scope, setScope] = useState<V3ScopeMode>(ownerTemplateMode ? 'template' : 'listing');
   const [rows, setRows] = useState<CapabilityRowState[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,11 +66,30 @@ export default function OrchestrationListingV3View({
   const listingRef = useRef<Record<string, unknown>>({});
   const menuOptionsRef = useRef<unknown[]>([]);
   const workflowsRef = useRef<Workflow[]>([]);
-  const [orchestrationDoc, setOrchestrationDoc] = useState<ListingOrchestrationDoc | null>(null);
+  const [orchestrationDoc, setOrchestrationDoc] = useState<
+    ListingOrchestrationDoc | OwnerOrchestrationDoc | null
+  >(null);
 
-  const effectiveListingId = scope === 'listing' ? listingId : null;
+  const isOwnerTemplate = ownerTemplateMode;
+  const effectiveListingId = !isOwnerTemplate && scope === 'listing' ? listingId : null;
 
   const loadListingValues = useCallback(async () => {
+    if (isOwnerTemplate) {
+      try {
+        const res = await listingsService.getListingOwnerConfigTemplate(ownerKey);
+        const payload = (res as { data?: { listing?: Record<string, unknown> } })?.data ?? res;
+        const vals = ((payload as { listing?: Record<string, unknown> })?.listing ?? {}) as Record<
+          string,
+          unknown
+        >;
+        listingRef.current = vals;
+        setListingValues(vals);
+      } catch {
+        listingRef.current = {};
+        setListingValues({});
+      }
+      return;
+    }
     if (!effectiveListingId) {
       listingRef.current = {};
       setListingValues({});
@@ -69,29 +104,34 @@ export default function OrchestrationListingV3View({
       listingRef.current = {};
       setListingValues({});
     }
-  }, [effectiveListingId]);
+  }, [effectiveListingId, isOwnerTemplate, ownerKey]);
 
-  const load = useCallback(async (options?: { silent?: boolean }) => {
+  const load = useCallback(async (options?: { silent?: boolean; discardLocalKey?: string }) => {
     const silent = options?.silent === true;
-    if (scope === 'listing' && !effectiveListingId) {
+    const discardLocalKey = options?.discardLocalKey;
+    if (!isOwnerTemplate && scope === 'listing' && !effectiveListingId) {
       setRows([]);
       if (!silent) setLoading(false);
       return;
     }
     if (!silent) setLoading(true);
     try {
-      if (scope === 'listing' && effectiveListingId) {
-        const loaded = await loadListingOrchestrationMatrix(effectiveListingId);
-        setRows(loaded.rows);
+      if (isOwnerTemplate) {
+        const loaded = await loadOwnerOrchestrationMatrix(ownerKey);
+        setRows(prev => mergeLocalRowsAfterLoad(prev, loaded.rows, discardLocalKey));
         menuOptionsRef.current = loaded.menuOptions;
         workflowsRef.current = loaded.workflows;
         setOrchestrationDoc(loaded.doc);
+        logV3Orch('load.owner', { discardLocalKey, rowCount: loaded.rows.length });
+      } else if (scope === 'listing' && effectiveListingId) {
+        const loaded = await loadListingOrchestrationMatrix(effectiveListingId);
+        setRows(prev => mergeLocalRowsAfterLoad(prev, loaded.rows, discardLocalKey));
+        menuOptionsRef.current = loaded.menuOptions;
+        workflowsRef.current = loaded.workflows;
+        setOrchestrationDoc(loaded.doc);
+        logV3Orch('load.listing', { listingId: effectiveListingId, discardLocalKey });
       } else {
-        const next = await loadCapabilityMatrix({
-          scope: 'owner',
-          ownerKey,
-        });
-        setRows(next);
+        setRows([]);
         setOrchestrationDoc(null);
       }
     } catch (e: unknown) {
@@ -106,7 +146,7 @@ export default function OrchestrationListingV3View({
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [scope, ownerKey, effectiveListingId]);
+  }, [scope, ownerKey, effectiveListingId, isOwnerTemplate]);
 
   useEffect(() => {
     void load();
@@ -117,10 +157,17 @@ export default function OrchestrationListingV3View({
   }, [loadListingValues]);
 
   useEffect(() => {
-    if (scope === 'template') {
-      setLibraryActive(true);
+    if (isOwnerTemplate || !effectiveListingId || !selectedKey) return;
+    if (!isCapabilityVisibleOnListingRail(selectedKey)) {
+      setSelectedKey(defaultListingRailCapabilityKey());
     }
-  }, [scope]);
+  }, [isOwnerTemplate, effectiveListingId, selectedKey]);
+
+  useEffect(() => {
+    if (!isOwnerTemplate) {
+      setLibraryActive(false);
+    }
+  }, [isOwnerTemplate, scope]);
 
   const selectedRow = useMemo(
     () => rows.find(r => r.key === selectedKey) ?? null,
@@ -130,29 +177,67 @@ export default function OrchestrationListingV3View({
 
   const patchRow = (key: string, patch: Partial<CapabilityRowState>) => {
     setRows(prev =>
-      prev.map(r => (r.key === key ? applyDependencyRules(r, { ...patch, inherited: false }) : r)),
+      prev.map(r => {
+        if (r.key !== key) return r;
+        const next = applyDependencyRules(r, { ...patch, inherited: false });
+        logV3Orch('row.patch', {
+          key,
+          patch,
+          next: {
+            managed: next.managed,
+            orchestrated: next.orchestrated,
+            taskEnabled: next.taskEnabled,
+            execution: next.execution,
+          },
+        });
+        return next;
+      }),
     );
   };
 
+  const onWhatsappPatch = useCallback(
+    (capabilityKey: string, menuCodes: string[], menuOptions: unknown[]) => {
+      setOrchestrationDoc(prev =>
+        prev ? patchOrchestrationDocWhatsapp(prev, capabilityKey, menuOptions, menuCodes) : prev,
+      );
+      logV3Orch('whatsapp.saved', { key: capabilityKey, codes: menuCodes });
+    },
+    [],
+  );
+
   const onGestionPatch = useCallback(
     async (patch: Record<string, unknown>) => {
-      if (!effectiveListingId || !orchestrationDoc || !selectedKey) return;
+      if (!orchestrationDoc || !selectedKey) return;
       const existing = orchestrationDoc.capabilities?.[selectedKey]?.gestion ?? {};
-      await saveListingGestion({
-        listingId: effectiveListingId,
-        capabilityKey: selectedKey,
-        gestion: { ...existing, ...patch },
-        doc: orchestrationDoc,
-      });
+      if (isOwnerTemplate) {
+        await saveOwnerGestion({
+          ownerKey,
+          capabilityKey: selectedKey,
+          gestion: { ...existing, ...patch },
+          doc: orchestrationDoc as OwnerOrchestrationDoc,
+        });
+      } else if (effectiveListingId) {
+        await saveListingGestion({
+          listingId: effectiveListingId,
+          capabilityKey: selectedKey,
+          gestion: { ...existing, ...patch },
+          doc: orchestrationDoc as ListingOrchestrationDoc,
+        });
+      } else {
+        return;
+      }
       toast.success('Config gestion enregistrée');
-      await load({ silent: true });
+      setOrchestrationDoc(prev =>
+        prev ? patchOrchestrationDocGestion(prev, selectedKey, { ...existing, ...patch }) : prev,
+      );
+      logV3Orch('gestion.saved', { key: selectedKey, patchKeys: Object.keys(patch) });
     },
-    [effectiveListingId, orchestrationDoc, selectedKey, load],
+    [effectiveListingId, orchestrationDoc, selectedKey, isOwnerTemplate, ownerKey],
   );
 
   const persistRow = async (key: string) => {
     const row = rows.find(r => r.key === key);
-    if (!row || !effectiveListingId) return;
+    if (!row) return;
     const doc = orchestrationDoc;
     if (!doc) {
       toast.error('Document orchestration non chargé');
@@ -160,20 +245,26 @@ export default function OrchestrationListingV3View({
     }
     setSaving(true);
     try {
-      const result = await saveCapabilityRow({
-        scope: 'listing',
-        ownerKey,
-        listingId: effectiveListingId,
-        row,
-        allMenuOptions: menuOptionsRef.current,
-        allWorkflows: workflowsRef.current,
-        listingOrchestrationDoc: doc,
-      });
-      if (result.listingOk && result.fulltaskOk) {
+      if (isOwnerTemplate) {
+        await saveOwnerOrchestrationRow({
+          ownerKey,
+          row,
+          allMenuOptions: menuOptionsRef.current,
+          allWorkflows: workflowsRef.current,
+          doc: doc as OwnerOrchestrationDoc,
+        });
+        toast.success('Service enregistré (modèle PM)');
+        await load({ silent: true, discardLocalKey: key });
+      } else if (effectiveListingId) {
+        await saveListingOrchestrationRow({
+          listingId: effectiveListingId,
+          row,
+          allMenuOptions: menuOptionsRef.current,
+          allWorkflows: workflowsRef.current,
+          doc: doc as ListingOrchestrationDoc,
+        });
         toast.success('Service enregistré (listing)');
-        await load({ silent: true });
-      } else {
-        toast.error(result.error ?? 'Erreur enregistrement');
+        await load({ silent: true, discardLocalKey: key });
       }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Erreur enregistrement');
@@ -183,12 +274,21 @@ export default function OrchestrationListingV3View({
   };
 
   const handleSave = () => {
-    if (libraryActive || scope === 'template') {
+    if (libraryActive) {
       toast.info('Bibliothèque messages — édition via orchestration-config');
       return;
     }
     if (selectedKey) void persistRow(selectedKey);
   };
+
+  const showRail = Boolean((scope === 'listing' && effectiveListingId) || isOwnerTemplate);
+  const showServicePanel =
+    !libraryActive &&
+    selectedDef &&
+    selectedRow &&
+    orchestrationDoc &&
+    (isOwnerTemplate || (scope === 'listing' && effectiveListingId)) &&
+    (isOwnerTemplate || isCapabilityVisibleOnListingRail(selectedKey ?? ''));
 
   if (loading) {
     return (
@@ -214,13 +314,12 @@ export default function OrchestrationListingV3View({
         flexDirection: 'column',
       }}
     >
-      {!embedded && (
+      {!embedded && !ownerTemplateMode && (
         <V3Header
           scope={scope}
           onScopeChange={s => {
             setScope(s);
-            if (s === 'template') setLibraryActive(true);
-            else setLibraryActive(false);
+            setLibraryActive(false);
           }}
           listings={listings}
           listingId={listingId}
@@ -246,11 +345,12 @@ export default function OrchestrationListingV3View({
           overflow: 'hidden',
         }}
       >
-        {scope === 'listing' && effectiveListingId && (
+        {showRail && (
           <V3Rail
             rows={rows}
             selectedKey={selectedKey}
             libraryActive={libraryActive}
+            ownerTemplateMode={isOwnerTemplate}
             onSelectService={key => {
               setSelectedKey(key);
               setLibraryActive(false);
@@ -272,22 +372,32 @@ export default function OrchestrationListingV3View({
             WebkitOverflowScrolling: 'touch',
           }}
         >
-          {!embedded && (libraryActive || scope === 'template') && (
+          {!embedded && isOwnerTemplate && libraryActive && (
             <V3MessageLibrary ownerKey={ownerKey} />
           )}
 
-          {!libraryActive && scope === 'listing' && selectedDef && selectedRow && effectiveListingId && orchestrationDoc && (
+          {showServicePanel && (
             <V3ServicePanel
-              def={selectedDef}
-              row={selectedRow}
+              def={selectedDef!}
+              row={selectedRow!}
               ownerKey={ownerKey}
-              listingId={effectiveListingId}
-              orchestrationDoc={orchestrationDoc}
+              listingId={effectiveListingId ?? ''}
+              orchestrationDoc={orchestrationDoc as ListingOrchestrationDoc}
               listingValues={listingValues}
+              ownerTemplateMode={isOwnerTemplate}
               onGestionPatch={onGestionPatch}
               onRowChange={patch => selectedKey && patchRow(selectedKey, patch)}
               onPersist={() => selectedKey && void persistRow(selectedKey)}
-              onReload={() => void load({ silent: true })}
+              onReload={(discardKey?: string) =>
+                void load({ silent: true, discardLocalKey: discardKey ?? selectedKey ?? undefined })
+              }
+              onExecutionDocPatch={execution => {
+                if (!selectedKey || !orchestrationDoc) return;
+                setOrchestrationDoc(prev =>
+                  prev ? patchOrchestrationDocExecution(prev, selectedKey, execution) : prev,
+                );
+              }}
+              onWhatsappPatch={onWhatsappPatch}
             />
           )}
         </Box>

@@ -39,8 +39,8 @@ export const SOJORI_DEFAULT_MENU_OPTIONS = [
     enabled: true,
     availability: {
       type: 'time_window',
-      from: { unit: 'days', value: 7, reference: 'before_checkin' },
-      to: { unit: 'hours', value: 12, reference: 'before_checkout' },
+      from: { unit: 'days', value: 2, reference: 'before_checkout', moment: 'before', event: 'checkout' },
+      to: { unit: 'hours', value: 0, reference: 'before_checkout', moment: 'before', event: 'checkout' },
     },
     action: 'select_departure_time',
     createsTask: true,

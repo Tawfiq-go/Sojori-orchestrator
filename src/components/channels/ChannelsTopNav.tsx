@@ -1,6 +1,6 @@
 /**
- * Navigation Channels en haut de page (legacy : navbar + barres d’onglets, sans sidebar).
- * Niveau 1 : sections · Niveau 2 : biz / mapSub / debug type · Niveau 3 : api / hook / ruListMode
+ * Navigation Channels — Business organisé par sens métier puis domaine.
+ * URL legacy : biz=api|hooks|logapi|owner|listing + api= / hook=
  */
 import { useMemo, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -9,6 +9,15 @@ import { RU_API_MAPPING } from '../../features/channels/data/ruApiMapping';
 import { canonicalSectionTab, type SectionTab } from '../../utils/channelsUrlUtils';
 import { parseMrSeg } from '../../utils/channelsSharedUtils';
 import { resolveBusinessViewTab } from '../../utils/businessTabHelpers';
+import {
+  bizFromBusinessFlow,
+  businessFlowFromBiz,
+  BUSINESS_FLOW_NAV,
+  BUSINESS_STATS_NAV,
+  INBOUND_HOOK_DOMAIN_NAV,
+  OUTBOUND_DOMAIN_NAV,
+  type BusinessFlow,
+} from '../../utils/channelsBusinessNav';
 
 const REST_LIST = RU_API_MAPPING.rest || [];
 
@@ -19,24 +28,17 @@ const MAIN_SECTIONS: Array<{
   defaults?: Record<string, string>;
 }> = [
   { section: 'Sum', label: 'Summary', emoji: '📊' },
-  { section: 'Business', label: 'Business', emoji: '💼', defaults: { biz: 'api', api: 'm' } },
+  {
+    section: 'Business',
+    label: 'Business',
+    emoji: '💼',
+    defaults: { biz: 'api', api: 'm' },
+  },
   { section: 'Mapping', label: 'Mapping', emoji: '🗺️', defaults: { mapSub: 'fields' } },
   { section: 'Debug', label: 'Debug', emoji: '🐛', defaults: { type: 'pull' } },
   { section: 'Cron', label: 'Cron', emoji: '⏰' },
   { section: 'Import', label: 'Import RU', emoji: '📥' },
 ];
-
-const API_SEGMENTS = [
-  { seg: 'm', label: 'Messages' },
-  { seg: 'rev', label: 'Reviews' },
-  { seg: 'lead', label: 'Leads' },
-  { seg: 'r', label: 'Réservations' },
-  { seg: 'c', label: 'Calendrier' },
-  { seg: 'l', label: 'Listing' },
-  { seg: 'o', label: 'OAuth' },
-  { seg: 'u', label: 'User' },
-  { seg: 'd', label: 'Distribution' },
-] as const;
 
 const DEBUG_TYPES = [
   { type: 'pull', label: `Pull (${RU_API_MAPPING.pull.length})` },
@@ -86,10 +88,25 @@ function TabBtn({
   );
 }
 
+function flowDefaults(flow: BusinessFlow, apiSeg: string, hookSeg: string): Record<string, string | undefined> {
+  const biz = bizFromBusinessFlow(flow);
+  if (flow === 'out') {
+    return { tab: 'Business', biz, api: apiSeg === 'g' ? 'm' : apiSeg || 'm', hook: undefined };
+  }
+  if (flow === 'in-hook') {
+    return { tab: 'Business', biz, hook: hookSeg || 'm', api: undefined, docId: undefined };
+  }
+  if (flow === 'in-http') {
+    return { tab: 'Business', biz, api: 'g', hook: undefined };
+  }
+  return { tab: 'Business', biz, api: undefined, hook: undefined };
+}
+
 export function ChannelsTopNav() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionTab = canonicalSectionTab(searchParams.get('tab'));
   const businessBiz = (searchParams.get('biz') || 'api').toLowerCase();
+  const businessFlow = businessFlowFromBiz(businessBiz);
   const viewTab = resolveBusinessViewTab(businessBiz);
   const apiSeg = parseMrSeg(searchParams.get('api'));
   const hookSeg = parseMrSeg(searchParams.get('hook'));
@@ -112,6 +129,20 @@ export function ChannelsTopNav() {
     sectionTab === 'Business' ||
     (sectionTab === 'Business' && viewTab === 'Hook');
 
+  const hoursSelect = (extraClass = '') => (
+    <select
+      className={`channels-select h-7 text-xs shrink-0 ${extraClass}`.trim()}
+      value={hoursVal}
+      onChange={(e) => setSp({ hours: e.target.value })}
+      aria-label="Période"
+    >
+      <option value={6}>6h</option>
+      <option value={24}>24h</option>
+      <option value={72}>3j</option>
+      <option value={168}>7j</option>
+    </select>
+  );
+
   return (
     <div className="channels-top-nav space-y-2" aria-label="Navigation Channels">
       <NavBar>
@@ -133,69 +164,62 @@ export function ChannelsTopNav() {
       </NavBar>
 
       {sectionTab === 'Business' && (
-        <NavBar>
-          <div className="channels-tabs-container flex-wrap">
-            <TabBtn
-              active={businessBiz === 'api'}
-              onClick={() => setSp({ tab: 'Business', biz: 'api', api: apiSeg === 'g' ? 'm' : apiSeg || 'm' })}
-            >
-              API
-            </TabBtn>
-            <TabBtn
-              active={businessBiz === 'logapi'}
-              onClick={() => setSp({ tab: 'Business', biz: 'logapi', api: 'g' })}
-            >
-              API log (HTTP)
-            </TabBtn>
-            <TabBtn
-              active={businessBiz === 'hooks'}
-              onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: hookSeg || 'm' })}
-            >
-              Hooks
-            </TabBtn>
-            <span className="w-px h-5 bg-slate-200 mx-0.5" aria-hidden />
-            <TabBtn
-              active={businessBiz === 'owner'}
-              onClick={() => setSp({ tab: 'Business', biz: 'owner', api: undefined, hook: undefined })}
-            >
-              <span className="inline-flex items-center gap-1">
-                <UserRound size={12} strokeWidth={2.5} />
-                Owner
-              </span>
-            </TabBtn>
-            <TabBtn
-              active={businessBiz === 'listing'}
-              onClick={() => setSp({ tab: 'Business', biz: 'listing', api: undefined, hook: undefined })}
-            >
-              <span className="inline-flex items-center gap-1">
-                <Home size={12} strokeWidth={2.5} />
-                Listing
-              </span>
-            </TabBtn>
-          </div>
-        </NavBar>
+        <>
+          <NavBar>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-1 shrink-0">
+              Flux
+            </span>
+            <div className="channels-tabs-container flex-wrap">
+              {BUSINESS_FLOW_NAV.map(({ flow, label, hint }) => (
+                <TabBtn
+                  key={flow}
+                  active={businessFlow === flow}
+                  title={hint}
+                  onClick={() => setSp(flowDefaults(flow, apiSeg, hookSeg))}
+                >
+                  {label}
+                </TabBtn>
+              ))}
+            </div>
+            <span className="w-px h-5 bg-slate-200 mx-0.5 hidden sm:block" aria-hidden />
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-1 shrink-0">
+              Synthèse
+            </span>
+            <div className="channels-tabs-container flex-wrap">
+              {BUSINESS_STATS_NAV.map(({ flow, label, hint }) => (
+                <TabBtn
+                  key={flow}
+                  active={businessFlow === flow}
+                  title={hint}
+                  onClick={() => setSp(flowDefaults(flow, apiSeg, hookSeg))}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {flow === 'stats-owner' ? (
+                      <UserRound size={12} strokeWidth={2.5} />
+                    ) : (
+                      <Home size={12} strokeWidth={2.5} />
+                    )}
+                    {label.replace('Synthèse · ', '')}
+                  </span>
+                </TabBtn>
+              ))}
+            </div>
+          </NavBar>
+        </>
       )}
 
-      {sectionTab === 'Business' && viewTab === 'Api' && businessBiz === 'api' && (
+      {sectionTab === 'Business' && businessFlow === 'out' && (
         <NavBar>
-          {showHours && (
-            <select
-              className="channels-select h-7 text-xs shrink-0"
-              value={hoursVal}
-              onChange={(e) => setSp({ hours: e.target.value })}
-              aria-label="Période"
-            >
-              <option value={6}>6h</option>
-              <option value={24}>24h</option>
-              <option value={72}>3j</option>
-              <option value={168}>7j</option>
-            </select>
-          )}
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-1 shrink-0">
+            Domaine
+          </span>
+          {showHours && hoursSelect()}
           <div className="channels-tabs-container flex-wrap">
-            {API_SEGMENTS.map(({ seg, label }) => (
+            {OUTBOUND_DOMAIN_NAV.map(({ seg, label, hint }) => (
               <TabBtn
                 key={seg}
                 active={apiSeg === seg}
+                title={hint}
                 onClick={() => setSp({ tab: 'Business', biz: 'api', api: seg })}
               >
                 {label}
@@ -205,51 +229,34 @@ export function ChannelsTopNav() {
         </NavBar>
       )}
 
-      {sectionTab === 'Business' && businessBiz === 'logapi' && (
+      {sectionTab === 'Business' && businessFlow === 'in-http' && (
         <NavBar>
-          <select
-            className="channels-select h-7 text-xs"
-            value={hoursVal}
-            onChange={(e) => setSp({ hours: e.target.value })}
-          >
-            <option value={6}>6h</option>
-            <option value={24}>24h</option>
-            <option value={72}>3j</option>
-            <option value={168}>7j</option>
-          </select>
+          <span className="text-[10px] text-slate-500 mr-2">
+            Requêtes HTTP reçues par srv-channels (collection logapis) — avant routage métier
+          </span>
+          {hoursSelect()}
         </NavBar>
       )}
 
-      {sectionTab === 'Business' && viewTab === 'Hook' && (
+      {sectionTab === 'Business' && businessFlow === 'in-hook' && (
         <NavBar>
-          <select
-            className="channels-select h-7 text-xs"
-            value={hoursVal}
-            onChange={(e) => setSp({ hours: e.target.value })}
-          >
-            <option value={24}>24h</option>
-            <option value={72}>3j</option>
-            <option value={168}>7j</option>
-          </select>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-1 shrink-0">
+            Domaine
+          </span>
+          {hoursSelect()}
           <div className="channels-tabs-container flex-wrap">
-            <TabBtn
-              active={hookSeg === 'm'}
-              onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: 'm', docId: undefined })}
-            >
-              Messages
-            </TabBtn>
-            <TabBtn
-              active={hookSeg === 'lead'}
-              onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: 'lead', docId: undefined })}
-            >
-              Leads
-            </TabBtn>
-            <TabBtn
-              active={hookSeg === 'r'}
-              onClick={() => setSp({ tab: 'Business', biz: 'hooks', hook: 'r', docId: undefined })}
-            >
-              Réservations
-            </TabBtn>
+            {INBOUND_HOOK_DOMAIN_NAV.map(({ seg, label, hint }) => (
+              <TabBtn
+                key={seg}
+                active={hookSeg === seg}
+                title={hint}
+                onClick={() =>
+                  setSp({ tab: 'Business', biz: 'hooks', hook: seg, docId: undefined })
+                }
+              >
+                {label}
+              </TabBtn>
+            ))}
           </div>
         </NavBar>
       )}
@@ -265,7 +272,13 @@ export function ChannelsTopNav() {
             </TabBtn>
             <TabBtn
               active={mapSub === 'list'}
-              onClick={() => setSp({ tab: 'Mapping', mapSub: 'list', ruDictType: searchParams.get('ruDictType') || '2' })}
+              onClick={() =>
+                setSp({
+                  tab: 'Mapping',
+                  mapSub: 'list',
+                  ruDictType: searchParams.get('ruDictType') || '2',
+                })
+              }
             >
               Dictionnaires RU
             </TabBtn>

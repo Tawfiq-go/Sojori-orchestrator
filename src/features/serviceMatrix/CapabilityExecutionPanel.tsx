@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -15,8 +16,16 @@ import {
 } from '@mui/material';
 import { toast } from 'react-toastify';
 import type { CapabilityExecutionState } from './types';
-import { defaultWorkflowAssignment } from '../taskHub/staff-design/fulltaskTaskTypes';
+import {
+  defaultOrchestrationReferenceForTaskType,
+  defaultWorkflowAssignment,
+  REFERENCE_POINT_LABELS,
+} from '../taskHub/staff-design/fulltaskTaskTypes';
 import { STAFF_REMINDER_TEMPLATE_OPTIONS, defaultStaffReminderMessageId } from '../taskHub/staff-design/staffReminderTemplates';
+import {
+  clientRelanceTemplatesForTask,
+  staffReminderTemplatesForTask,
+} from '../taskHub/staff-design/MessageCatalogPicker';
 import type {
   CatalogMessage,
   MessageDeliveryChannel,
@@ -27,8 +36,8 @@ import type {
   WorkflowRelance,
   WorkflowStaffReminder,
 } from '../taskHub/staff-design/types';
+import { designWorkflowToApi, apiOrchestrationToDesign, designOrchestrationToApi } from '../../utils/fulltaskMappers';
 import * as fulltaskApi from '../../services/fulltaskApi';
-import { apiOrchestrationToDesign, designOrchestrationToApi } from '../../utils/fulltaskMappers';
 import { unwrapFulltaskData } from '../../utils/unwrapFulltaskResponse';
 import type { CapabilityDefinition } from './capabilityRegistry';
 import { SOJORI_TOKENS as T } from '../listing/components/ConfigOrchestration/types';
@@ -37,16 +46,148 @@ import {
   workflowFromCapabilityExecution,
   type ListingOrchestrationDoc,
 } from '../orchestrationListingV3/listingOrchestrationApi';
+import {
+  saveOwnerExecutionWorkflow,
+  type OwnerOrchestrationDoc,
+} from '../orchestrationListingV3/ownerOrchestrationApi';
+import { V3BlockSaveBar } from '../orchestrationListingV3/V3BlockSaveBar';
 
-const REF_OPTIONS: { value: ReferencePoint; label: string }[] = [
-  { value: 'reservation_date', label: 'Date réservation' },
-  { value: 'check_in', label: 'Check-in' },
-  { value: 'check_out', label: 'Check-out' },
-  { value: 'task_created', label: 'Création tâche' },
-  { value: 'previous_step_done', label: 'Étape précédente' },
-];
+const REF_OPTIONS: { value: ReferencePoint; label: string }[] = (
+  Object.entries(REFERENCE_POINT_LABELS) as [ReferencePoint, string][]
+).map(([value, label]) => ({ value, label }));
 
 const HOUR_SLOTS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
+
+function parseHourSlot(time: string | undefined, fallback = 9): number {
+  const m = /^(\d{1,2})/.exec(String(time || ''));
+  const h = parseInt(m?.[1] ?? String(fallback), 10);
+  if (!Number.isFinite(h)) return fallback;
+  return Math.min(23, Math.max(0, h));
+}
+
+function formatHourSlot(h: number): string {
+  return `${String(Math.min(23, Math.max(0, h))).padStart(2, '0')}:00`;
+}
+
+function CompactNumericStepper({
+  value,
+  onChange,
+  min = 0,
+  max = 365,
+  disabled,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  min?: number;
+  max?: number;
+  disabled?: boolean;
+}) {
+  const safe = Number.isFinite(value) ? value : min;
+  const clamp = (n: number) => Math.min(max, Math.max(min, n));
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      sx={{
+        border: `1px solid ${T.border}`,
+        borderRadius: 1,
+        bgcolor: T.bg1,
+        minWidth: 0,
+        height: 40,
+      }}
+    >
+      <IconButton
+        type="button"
+        size="small"
+        disabled={disabled || safe <= min}
+        onClick={() => onChange(clamp(safe - 1))}
+        sx={{ width: 28, height: 28, color: T.text2 }}
+      >
+        −
+      </IconButton>
+      <Typography
+        sx={{
+          flex: 1,
+          textAlign: 'center',
+          fontFamily: '"Geist Mono", monospace',
+          fontWeight: 700,
+          fontSize: 13,
+          color: T.text,
+          userSelect: 'none',
+        }}
+      >
+        {safe}
+      </Typography>
+      <IconButton
+        type="button"
+        size="small"
+        disabled={disabled || safe >= max}
+        onClick={() => onChange(clamp(safe + 1))}
+        sx={{ width: 28, height: 28, color: T.text2 }}
+      >
+        +
+      </IconButton>
+    </Stack>
+  );
+}
+
+function HourSlotStepperDisplay({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (t: string) => void;
+  disabled?: boolean;
+}) {
+  const hour = parseHourSlot(value, 9);
+  const clamp = (n: number) => Math.min(23, Math.max(0, n));
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      sx={{
+        border: `1px solid ${T.border}`,
+        borderRadius: 1,
+        bgcolor: T.bg1,
+        minWidth: 0,
+        height: 40,
+      }}
+    >
+      <IconButton
+        type="button"
+        size="small"
+        disabled={disabled || hour <= 0}
+        onClick={() => onChange(formatHourSlot(clamp(hour - 1)))}
+        sx={{ width: 28, height: 28, color: T.text2 }}
+      >
+        −
+      </IconButton>
+      <Typography
+        sx={{
+          flex: 1,
+          textAlign: 'center',
+          fontFamily: '"Geist Mono", monospace',
+          fontWeight: 700,
+          fontSize: 12,
+          color: T.text,
+          userSelect: 'none',
+        }}
+      >
+        {formatHourSlot(hour)}
+      </Typography>
+      <IconButton
+        type="button"
+        size="small"
+        disabled={disabled || hour >= 23}
+        onClick={() => onChange(formatHourSlot(clamp(hour + 1)))}
+        sx={{ width: 28, height: 28, color: T.text2 }}
+      >
+        +
+      </IconButton>
+    </Stack>
+  );
+}
 
 function toUiSendMode(ch: MessageDeliveryChannel): 'message' | 'whatsapp' {
   return ch === 'whatsapp' ? 'whatsapp' : 'message';
@@ -56,14 +197,14 @@ function fromUiSendMode(mode: 'message' | 'whatsapp'): MessageDeliveryChannel {
   return mode === 'whatsapp' ? 'whatsapp' : 'ota';
 }
 
-function newRelance(catalog: CatalogMessage[]): WorkflowRelance {
-  const defaultMsg =
-    catalog.find(c => c.id.startsWith('msg_relance_'))?.id || catalog[0]?.id || '';
+function newRelance(catalog: CatalogMessage[], taskTypeId?: string): WorkflowRelance {
+  const scoped = clientRelanceTemplatesForTask(catalog, taskTypeId);
+  const defaultMsg = scoped[0]?.id || '';
   return {
     id: `rel-${Date.now()}`,
     channel: 'whatsapp',
     deliveryChannel: 'whatsapp',
-    reference: 'check_in',
+    reference: defaultOrchestrationReferenceForTaskType(taskTypeId),
     delay: { value: -1, unit: 'days' },
     time: '09:00',
     catalogMessageId: defaultMsg,
@@ -71,11 +212,82 @@ function newRelance(catalog: CatalogMessage[]): WorkflowRelance {
   };
 }
 
+function defaultEscaladeDeadline(): WorkflowDeadline {
+  return {
+    reference: 'check_out',
+    delay: { value: 0, unit: 'days' },
+    time: '14:00',
+    hardLockAfter: false,
+    notifyPM: true,
+  };
+}
+
+/** Normalise deadline UI (design) même si execution API a ref/day/time sans delay.unit. */
+function coerceEscaladeDeadline(deadline: WorkflowDeadline | undefined): WorkflowDeadline {
+  const base = defaultEscaladeDeadline();
+  if (!deadline) return base;
+
+  const raw = deadline as WorkflowDeadline & {
+    ref?: string;
+    day?: number;
+    hours?: number;
+  };
+
+  if (!deadline.delay && (raw.day != null || raw.hours != null)) {
+    const useHours = raw.hours != null && raw.day == null;
+    return {
+      ...base,
+      reference: (deadline.reference ?? (raw.ref === 'checkout' ? 'check_out' : raw.ref === 'checkin' ? 'check_in' : raw.ref) ?? base.reference) as ReferencePoint,
+      delay: {
+        value: useHours ? Number(raw.hours) : Number(raw.day ?? 0),
+        unit: useHours ? 'hours' : 'days',
+      },
+      time: deadline.time ?? base.time,
+      hardLockAfter: deadline.hardLockAfter ?? base.hardLockAfter,
+      notifyPM: deadline.notifyPM ?? base.notifyPM,
+    };
+  }
+
+  return {
+    ...base,
+    ...deadline,
+    delay: {
+      value: Number(deadline.delay?.value ?? 0),
+      unit: deadline.delay?.unit === 'hours' ? 'hours' : 'days',
+    },
+    time: deadline.time ?? base.time,
+  };
+}
+
+function normalizeWorkflow(wf: Workflow): Workflow {
+  const taskTypeId = String(wf.taskTypeId || wf.kind || '');
+  const preferredStaff = defaultStaffReminderMessageId(taskTypeId);
+  const staffReminders = (wf.staffReminders ?? []).map(r => {
+    const tid = r.staffTemplateId || '';
+    if (
+      taskTypeId === 'checkout_cleaning' &&
+      (!tid || tid === 'staff_reminder_generic')
+    ) {
+      return { ...r, staffTemplateId: 'staff_reminder_cleaning' };
+    }
+    if (!tid) {
+      return { ...r, staffTemplateId: preferredStaff };
+    }
+    return r;
+  });
+  return {
+    ...wf,
+    relances: wf.relances ?? [],
+    staffReminders,
+    deadline: coerceEscaladeDeadline(wf.deadline),
+  };
+}
+
 function newStaffReminder(taskTypeId: string, count: number): WorkflowStaffReminder {
   return {
     id: `staff-${Date.now()}`,
     label: `Rappel ${count + 1}`,
-    reference: 'check_in',
+    reference: defaultOrchestrationReferenceForTaskType(taskTypeId),
     delay: { value: -1, unit: 'days' },
     time: '11:00',
     enabled: true,
@@ -89,11 +301,14 @@ type Props = {
   def: CapabilityDefinition;
   ownerKey: string;
   listingId?: string;
-  orchestrationDoc?: ListingOrchestrationDoc;
+  orchestrationDoc?: ListingOrchestrationDoc | OwnerOrchestrationDoc;
+  ownerTemplateMode?: boolean;
   readOnly?: boolean;
   section?: ExecSection;
   executionFlags?: CapabilityExecutionState;
   onSaved?: () => void;
+  /** Met à jour le doc orchestration en mémoire (évite reload stale). */
+  onExecutionDocPatch?: (execution: Record<string, unknown>) => void;
 };
 
 export default function CapabilityExecutionPanel({
@@ -101,19 +316,37 @@ export default function CapabilityExecutionPanel({
   ownerKey,
   listingId,
   orchestrationDoc,
+  ownerTemplateMode = false,
   readOnly,
   section = 'all',
   executionFlags,
   onSaved,
+  onExecutionDocPatch,
 }: Props) {
   const ownerId = ownerKey === 'global' ? 'global' : ownerKey;
   const listingMode = Boolean(listingId && orchestrationDoc);
+  const ownerMode = Boolean(ownerTemplateMode && orchestrationDoc && !listingId);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [catalog, setCatalog] = useState<CatalogMessage[]>([]);
   const [rawDoc, setRawDoc] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const wfRef = useRef<Workflow | null>(null);
+  const v3ExecMode = listingMode || ownerMode;
+
+  const markDirty = () => {
+    if (v3ExecMode) setDirty(true);
+  };
+
+  const clientCatalog = useMemo(
+    () => clientRelanceTemplatesForTask(catalog, def.taskType),
+    [catalog, def.taskType],
+  );
+  const staffTemplateOptions = useMemo(
+    () => (def.taskType ? staffReminderTemplatesForTask(def.taskType) : STAFF_REMINDER_TEMPLATE_OPTIONS),
+    [def.taskType],
+  );
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent === true;
@@ -124,14 +357,26 @@ export default function CapabilityExecutionPanel({
     }
     if (!silent) setLoading(true);
     try {
-      if (listingMode && listingId && orchestrationDoc) {
+      if ((listingMode || ownerMode) && orchestrationDoc) {
         const cap = orchestrationDoc.capabilities?.[def.key];
-        const wf =
-          workflowFromCapabilityExecution(def.taskType, cap?.execution) ??
-          null;
+        const wf = normalizeWorkflow(
+          workflowFromCapabilityExecution(def.taskType, cap?.execution) ?? {
+            _id: def.taskType,
+            taskTypeId: def.taskType,
+            kind: def.taskType,
+            label: def.label,
+            enabled: true,
+            relances: [],
+            staffReminders: [],
+            assignment: null,
+            escalationEnabled: true,
+            deadline: defaultEscaladeDeadline(),
+          },
+        );
         setRawDoc({ workflows: cap?.execution ? [{ type: def.taskType, ...cap.execution }] : [] });
         setWorkflow(wf);
         wfRef.current = wf;
+        setDirty(false);
         const raw = await fulltaskApi.getOrchestrationConfig(ownerId);
         const ownerDoc = unwrapFulltaskData<Record<string, unknown>>(raw);
         const mapped = ownerDoc ? apiOrchestrationToDesign(ownerDoc) : null;
@@ -145,8 +390,10 @@ export default function CapabilityExecutionPanel({
         const wf =
           wfs.find(w => w.taskTypeId === def.taskType) ??
           wfs.find(w => w._id === def.workflowKey?.replace('wf:', 'wf-'));
-        setWorkflow(wf ?? null);
-        wfRef.current = wf ?? null;
+        const normalized = wf ? normalizeWorkflow(wf) : null;
+        setWorkflow(normalized);
+        wfRef.current = normalized;
+        setDirty(false);
         setCatalog((mapped?.catalog ?? []) as CatalogMessage[]);
       }
     } catch (e: unknown) {
@@ -155,13 +402,14 @@ export default function CapabilityExecutionPanel({
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [ownerId, def.taskType, def.workflowKey, def.key, listingMode, listingId, orchestrationDoc]);
+  }, [ownerId, def.taskType, def.workflowKey, def.key, def.label, listingMode, ownerMode, listingId, orchestrationDoc]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const patchWorkflow = (patch: Partial<Workflow>) => {
+    markDirty();
     setWorkflow(prev => {
       if (!prev) return prev;
       const next = { ...prev, ...patch };
@@ -171,11 +419,12 @@ export default function CapabilityExecutionPanel({
   };
 
   const patchRelance = (id: string, patch: Partial<WorkflowRelance>) => {
+    markDirty();
     setWorkflow(prev => {
       if (!prev) return prev;
       const next = {
         ...prev,
-        relances: prev.relances.map(r => (r.id === id ? { ...r, ...patch } : r)),
+        relances: (prev.relances ?? []).map(r => (r.id === id ? { ...r, ...patch } : r)),
       };
       wfRef.current = next;
       return next;
@@ -183,11 +432,12 @@ export default function CapabilityExecutionPanel({
   };
 
   const patchStaffReminder = (id: string, patch: Partial<WorkflowStaffReminder>) => {
+    markDirty();
     setWorkflow(prev => {
       if (!prev) return prev;
       const next = {
         ...prev,
-        staffReminders: prev.staffReminders.map(r => (r.id === id ? { ...r, ...patch } : r)),
+        staffReminders: (prev.staffReminders ?? []).map(r => (r.id === id ? { ...r, ...patch } : r)),
       };
       wfRef.current = next;
       return next;
@@ -195,31 +445,34 @@ export default function CapabilityExecutionPanel({
   };
 
   const addRelance = () => {
+    markDirty();
     setWorkflow(prev => {
       if (!prev) return prev;
-      const next = { ...prev, relances: [...prev.relances, newRelance(catalog)] };
+      const next = { ...prev, relances: [...(prev.relances ?? []), newRelance(catalog, def.taskType)] };
       wfRef.current = next;
       return next;
     });
   };
 
   const deleteRelance = (id: string) => {
+    markDirty();
     setWorkflow(prev => {
       if (!prev) return prev;
-      const next = { ...prev, relances: prev.relances.filter(r => r.id !== id) };
+      const next = { ...prev, relances: (prev.relances ?? []).filter(r => r.id !== id) };
       wfRef.current = next;
       return next;
     });
   };
 
   const addStaffReminder = () => {
+    markDirty();
     setWorkflow(prev => {
       if (!prev) return prev;
       const next = {
         ...prev,
         staffReminders: [
-          ...prev.staffReminders,
-          newStaffReminder(def.taskType ?? prev.taskTypeId, prev.staffReminders.length),
+          ...(prev.staffReminders ?? []),
+          newStaffReminder(def.taskType ?? prev.taskTypeId, (prev.staffReminders ?? []).length),
         ],
       };
       wfRef.current = next;
@@ -228,15 +481,17 @@ export default function CapabilityExecutionPanel({
   };
 
   const deleteStaffReminder = (id: string) => {
+    markDirty();
     setWorkflow(prev => {
       if (!prev) return prev;
-      const next = { ...prev, staffReminders: prev.staffReminders.filter(r => r.id !== id) };
+      const next = { ...prev, staffReminders: (prev.staffReminders ?? []).filter(r => r.id !== id) };
       wfRef.current = next;
       return next;
     });
   };
 
   const patchDeadline = (patch: Partial<WorkflowDeadline>) => {
+    markDirty();
     setWorkflow(prev => {
       if (!prev) return prev;
       const next = { ...prev, deadline: { ...prev.deadline, ...patch } };
@@ -249,28 +504,57 @@ export default function CapabilityExecutionPanel({
   const save = async () => {
     const wf = wfRef.current;
     if (!wf) return;
+    // Bloc exécution : persister le formulaire tel quel (pills = décisions, bouton haut).
+    const wfToSave: Workflow = { ...wf };
     setSaving(true);
     try {
+      const apiWf = designWorkflowToApi(wfToSave as unknown as Record<string, unknown>);
+      const executionPatch = apiWf
+        ? (() => {
+            const { type: _t, ...execution } = apiWf as Record<string, unknown>;
+            return execution;
+          })()
+        : null;
+
       if (listingMode && listingId && orchestrationDoc && def.taskType) {
         await saveListingExecutionWorkflow({
           listingId,
           capabilityKey: def.key,
           taskType: def.taskType,
-          workflow: wf,
-          doc: orchestrationDoc,
+          workflow: wfToSave,
+          doc: orchestrationDoc as ListingOrchestrationDoc,
         });
         toast.success('Exécution enregistrée (listing)');
+      } else if (ownerMode && orchestrationDoc && def.taskType) {
+        await saveOwnerExecutionWorkflow({
+          ownerKey: ownerKey,
+          capabilityKey: def.key,
+          taskType: def.taskType,
+          workflow: wfToSave,
+          doc: orchestrationDoc as OwnerOrchestrationDoc,
+        });
+        toast.success('Exécution enregistrée (modèle orchestration)');
       } else {
         if (!rawDoc) return;
         const mapped = apiOrchestrationToDesign(rawDoc);
         const workflows = ((mapped.workflows ?? []) as Workflow[]).map(w =>
-          w.taskTypeId === wf.taskTypeId || w._id === wf._id ? wf : w,
+          w.taskTypeId === wfToSave.taskTypeId || w._id === wfToSave._id ? wfToSave : w,
         );
-        const body = designOrchestrationToApi({ ...mapped, workflows });
+        const body = designOrchestrationToApi(
+          workflows as unknown as Record<string, unknown>[],
+          (mapped.catalog ?? []) as Record<string, unknown>[],
+          (mapped.scheduledRules ?? []) as Record<string, unknown>[],
+          mapped.listOrder,
+        );
         await fulltaskApi.upsertOrchestrationConfig(ownerId, body as Record<string, unknown>);
         toast.success('Exécution enregistrée (fulltask)');
+        await load({ silent: true });
       }
-      await load({ silent: true });
+
+      if (executionPatch && (listingMode || ownerMode)) {
+        onExecutionDocPatch?.(executionPatch);
+      }
+      setDirty(false);
       onSaved?.();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Erreur enregistrement');
@@ -298,8 +582,8 @@ export default function CapabilityExecutionPanel({
   if (!workflow) {
     return (
       <Alert severity="warning" sx={{ fontSize: 12.5 }}>
-        Workflow <code>{def.taskType}</code> introuvable pour ce PM. Seed via{' '}
-        <strong>/tasks/orchestration-config</strong>.
+        Exécution <code>{def.taskType}</code> introuvable sur ce listing — enregistrez l&apos;onglet
+        orchestration de l&apos;annonce ou activez la capacité.
       </Alert>
     );
   }
@@ -309,9 +593,18 @@ export default function CapabilityExecutionPanel({
   const showStaff = section === 'all' || section === 'staff';
   const showEscalade = section === 'all' || section === 'escalade';
   const relancesActive = executionFlags?.clientReminders !== false;
-  const staffAssignActive = executionFlags?.staffAssignment !== false;
-  const staffRemindersActive = executionFlags?.staffReminders !== false;
+  const staffAssignActive =
+    executionFlags?.staffAssignment !== false || Boolean(assignment);
   const escaladeActive = executionFlags?.pmEscalation !== false;
+
+  const execSaveLabel =
+    section === 'relances'
+      ? 'Relances voyageur · orchestration'
+      : section === 'staff'
+        ? 'Assignation staff · orchestration'
+        : section === 'escalade'
+          ? 'Escalade PM · orchestration'
+          : 'Exécution · orchestration';
 
   return (
     <Stack spacing={2}>
@@ -334,8 +627,8 @@ export default function CapabilityExecutionPanel({
       {showRelances &&
         (relancesActive ? (
         <ClientRelancesPanel
-          relances={workflow.relances}
-          catalog={catalog}
+          relances={workflow.relances ?? []}
+          catalog={clientCatalog}
           readOnly={readOnly}
           onPatch={patchRelance}
           onAdd={addRelance}
@@ -351,10 +644,11 @@ export default function CapabilityExecutionPanel({
         <Stack spacing={2.5} sx={{ width: '100%' }}>
           {staffAssignActive ? (
           <StaffAssignmentPanel
+            taskTypeId={def.taskType}
             assignment={assignment}
             readOnly={readOnly}
             onPatch={next => patchWorkflow({ assignment: next })}
-            onEnable={() => patchWorkflow({ assignment: defaultWorkflowAssignment() })}
+            onEnable={() => patchWorkflow({ assignment: defaultWorkflowAssignment(def.taskType) })}
             onDisable={() => patchWorkflow({ assignment: null })}
           />
           ) : (
@@ -362,18 +656,15 @@ export default function CapabilityExecutionPanel({
               Assignation staff désactivée dans le plan — activez « Activer staff » puis Enregistrer.
             </Alert>
           )}
-          {staffRemindersActive ? (
-          <StaffRemindersPanel
-            reminders={workflow.staffReminders}
-            readOnly={readOnly}
-            onPatch={patchStaffReminder}
-            onAdd={addStaffReminder}
-            onDelete={deleteStaffReminder}
-          />
-          ) : (
-            <Alert severity="info" sx={{ fontSize: 12 }}>
-              Rappels staff désactivés — activez « Rappels staff » puis Enregistrer.
-            </Alert>
+          {staffAssignActive && (
+            <StaffRemindersPanel
+              reminders={workflow.staffReminders ?? []}
+              templateOptions={staffTemplateOptions}
+              readOnly={readOnly}
+              onPatch={patchStaffReminder}
+              onAdd={addStaffReminder}
+              onDelete={deleteStaffReminder}
+            />
           )}
         </Stack>
       )}
@@ -381,28 +672,34 @@ export default function CapabilityExecutionPanel({
       {showEscalade &&
         (escaladeActive ? (
         <EscaladeDeadlinePanel
-          enabled={workflow.escalationEnabled !== false}
           deadline={workflow.deadline}
           readOnly={readOnly}
-          onEnabledChange={v => patchWorkflow({ escalationEnabled: v })}
           onPatchDeadline={patchDeadline}
         />
         ) : (
           <Alert severity="info" sx={{ fontSize: 12 }}>
-            Escalade désactivée — activez « Activer escalade » puis Enregistrer.
+            Escalade désactivée — activez le pill « Escalade » ci-dessus.
           </Alert>
         ))}
 
-      {!readOnly && (
-        <Button
-          variant="contained"
-          disabled={saving}
-          onClick={() => void save()}
-          sx={{ fontWeight: 800, borderRadius: '10px', bgcolor: T.primaryDeep }}
-        >
-          {saving ? 'Enregistrement…' : listingMode ? 'Enregistrer exécution' : 'Enregistrer exécution (fulltask)'}
-        </Button>
-      )}
+      {!readOnly &&
+        (v3ExecMode ? (
+          <V3BlockSaveBar
+            label={execSaveLabel}
+            dirty={dirty}
+            saving={saving}
+            onSave={() => void save()}
+          />
+        ) : (
+          <Button
+            variant="contained"
+            disabled={saving}
+            onClick={() => void save()}
+            sx={{ fontWeight: 800, borderRadius: '10px', bgcolor: T.primaryDeep }}
+          >
+            {saving ? 'Enregistrement…' : 'Enregistrer exécution (fulltask)'}
+          </Button>
+        ))}
     </Stack>
   );
 }
@@ -433,7 +730,7 @@ const panelSx = {
 
 const compactField = { '& .MuiInputBase-root': { fontSize: 12 } };
 
-const WINDOW_COLS = '64px minmax(100px,1fr) 52px 44px 64px minmax(72px,88px)';
+const WINDOW_COLS = '64px minmax(100px,1fr) 52px 44px 72px minmax(100px,1.1fr)';
 
 const RELANCE_COLS =
   'minmax(56px, 0.65fr) 74px 56px 82px 98px 118px minmax(170px, 2.4fr) 32px';
@@ -527,9 +824,16 @@ function ClientRelancesPanel({
     <Box sx={panelSx}>
       <Box sx={{ px: 1.5, py: 1, bgcolor: T.bg2, borderBottom: `1px solid ${T.border}` }}>
         <Typography sx={{ fontSize: 12, fontWeight: 800 }}>📨 Relances voyageur</Typography>
-        <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 0.25 }}>{activeCount} active(s)</Typography>
+        <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 0.25 }}>
+          {activeCount} active(s) · templates <code>msg_relance_*</code>
+        </Typography>
       </Box>
       <Box sx={{ p: 2 }}>
+        {catalog.length === 0 && (
+          <Typography sx={{ fontSize: 12, color: T.text3, mb: 1 }}>
+            Aucun template relance voyageur — catalogue Messages (fulltask).
+          </Typography>
+        )}
         {relances.length > 0 && (
           <Box
             sx={{
@@ -691,54 +995,35 @@ function ClientRelancesPanel({
 }
 
 function EscaladeDeadlinePanel({
-  enabled,
   deadline,
   readOnly,
-  onEnabledChange,
   onPatchDeadline,
 }: {
-  enabled: boolean;
   deadline: WorkflowDeadline;
   readOnly?: boolean;
-  onEnabledChange: (v: boolean) => void;
   onPatchDeadline: (patch: Partial<WorkflowDeadline>) => void;
 }) {
+  const delayUnit = deadline.delay?.unit === 'hours' ? 'hours' : 'days';
+  const delayValue = Number(deadline.delay?.value ?? 0);
+
   return (
     <Box sx={panelSx}>
-      <Box
-        sx={{
-          px: 1.5,
-          py: 1,
-          bgcolor: T.bg2,
-          borderBottom: `1px solid ${T.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 1,
-        }}
-      >
+      <Box sx={{ px: 1.5, py: 1, bgcolor: T.bg2, borderBottom: `1px solid ${T.border}` }}>
         <Typography sx={{ fontSize: 12, fontWeight: 800 }}>⏰ Escalade admin</Typography>
-        <Stack direction="row" alignItems="center" gap={0.75}>
-          <Typography sx={{ fontSize: 11, color: T.text3 }}>{enabled ? 'Activée' : 'Désactivée'}</Typography>
-          <Switch size="small" checked={enabled} disabled={readOnly} onChange={e => onEnabledChange(e.target.checked)} />
-        </Stack>
+        <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 0.25 }}>
+          Si non traité → escalade auto admin · ON/OFF via pill « Escalade »
+        </Typography>
       </Box>
       <Box sx={{ p: 1.5 }}>
-        {!enabled ? (
-          <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
-            Escalade désactivée — aucun bloc escalade dans le plan exécuté.
-          </Typography>
-        ) : (
-          <Stack spacing={1}>
-            <Typography sx={{ fontSize: 12, fontWeight: 700 }}>🚨 Si non traité → escalade auto admin</Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: DEADLINE_COLS, gap: 0.75, px: 0.25 }}>
-              {['Réf', 'J/H', '±', 'Délai', 'Heure'].map(h => (
-                <Typography key={h} sx={{ fontSize: 9, fontWeight: 800, color: T.text3, textTransform: 'uppercase' }}>
-                  {h}
-                </Typography>
-              ))}
-            </Box>
-            <Box sx={{ display: 'grid', gridTemplateColumns: DEADLINE_COLS, gap: 0.75, alignItems: 'center' }}>
+        <Stack spacing={1}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: DEADLINE_COLS, gap: 0.75, px: 0.25 }}>
+            {['Réf', 'J/H', '±', 'Délai', 'Heure'].map(h => (
+              <Typography key={h} sx={{ fontSize: 9, fontWeight: 800, color: T.text3, textTransform: 'uppercase' }}>
+                {h}
+              </Typography>
+            ))}
+          </Box>
+          <Box sx={{ display: 'grid', gridTemplateColumns: DEADLINE_COLS, gap: 0.75, alignItems: 'center' }}>
               <FormControl size="small" sx={compactField}>
                 <Select
                   value={deadline.reference}
@@ -754,7 +1039,7 @@ function EscaladeDeadlinePanel({
               </FormControl>
               <FormControl size="small" sx={compactField}>
                 <Select
-                  value={deadline.delay.unit}
+                  value={delayUnit}
                   disabled={readOnly}
                   onChange={e =>
                     onPatchDeadline({
@@ -768,12 +1053,12 @@ function EscaladeDeadlinePanel({
               </FormControl>
               <FormControl size="small" sx={compactField}>
                 <Select
-                  value={deadline.delay.value >= 0 ? '+' : '-'}
+                  value={delayValue >= 0 ? '+' : '-'}
                   disabled={readOnly}
                   onChange={e => {
                     const sign = e.target.value === '+' ? 1 : -1;
                     onPatchDeadline({
-                      delay: { ...deadline.delay, value: sign * Math.abs(deadline.delay.value) },
+                      delay: { ...deadline.delay, unit: delayUnit, value: sign * Math.abs(delayValue) },
                     });
                   }}
                 >
@@ -785,16 +1070,16 @@ function EscaladeDeadlinePanel({
                 size="small"
                 type="number"
                 disabled={readOnly}
-                value={Math.abs(deadline.delay.value)}
+                value={Math.abs(delayValue)}
                 onChange={e => {
-                  const sign = deadline.delay.value >= 0 ? 1 : -1;
+                  const sign = delayValue >= 0 ? 1 : -1;
                   onPatchDeadline({
-                    delay: { ...deadline.delay, value: sign * Number(e.target.value) },
+                    delay: { ...deadline.delay, unit: delayUnit, value: sign * Number(e.target.value) },
                   });
                 }}
                 sx={compactField}
               />
-              {deadline.delay.unit === 'days' ? (
+              {delayUnit === 'days' ? (
                 <FormControl size="small" sx={compactField}>
                   <Select
                     value={deadline.time || '14:00'}
@@ -808,34 +1093,39 @@ function EscaladeDeadlinePanel({
                     ))}
                   </Select>
                 </FormControl>
-              ) : null}
+              ) : (
+                <span />
+              )}
             </Box>
           </Stack>
-        )}
       </Box>
     </Box>
   );
 }
 
 function StaffAssignmentPanel({
+  taskTypeId,
   assignment,
   readOnly,
   onPatch,
   onEnable,
   onDisable,
 }: {
+  taskTypeId?: string;
   assignment: WorkflowAssignment | null;
   readOnly?: boolean;
   onPatch: (next: WorkflowAssignment) => void;
   onEnable: () => void;
   onDisable: () => void;
 }) {
+  const assignmentDefaults = () => defaultWorkflowAssignment(taskTypeId);
+
   const patch = (partial: Partial<WorkflowAssignment>) => {
-    onPatch({ ...(assignment ?? defaultWorkflowAssignment()), ...partial });
+    onPatch({ ...(assignment ?? assignmentDefaults()), ...partial });
   };
 
   const patchWindow = (winKey: WindowKey, partial: Partial<WorkflowAssignment['windowStart']>) => {
-    const base = assignment ?? defaultWorkflowAssignment();
+    const base = assignment ?? assignmentDefaults();
     onPatch({
       ...base,
       [winKey]: { ...base[winKey], ...partial },
@@ -843,19 +1133,19 @@ function StaffAssignmentPanel({
   };
 
   const patchAttemptWindow = (index: number, time: string) => {
-    const base = assignment ?? defaultWorkflowAssignment();
+    const base = assignment ?? assignmentDefaults();
     const attemptWindows = [...(base.attemptWindows || [])];
     attemptWindows[index] = time;
     onPatch({ ...base, attemptWindows });
   };
 
   const addAttemptWindow = () => {
-    const base = assignment ?? defaultWorkflowAssignment();
-    onPatch({ ...base, attemptWindows: [...(base.attemptWindows || []), '09:00'] });
+    const base = assignment ?? assignmentDefaults();
+    onPatch({ ...base, attemptWindows: [...(base.attemptWindows || []), '11:00'] });
   };
 
   const removeAttemptWindow = (index: number) => {
-    const base = assignment ?? defaultWorkflowAssignment();
+    const base = assignment ?? assignmentDefaults();
     onPatch({
       ...base,
       attemptWindows: (base.attemptWindows || []).filter((_, i) => i !== index),
@@ -918,7 +1208,7 @@ function StaffAssignmentPanel({
             {(
               [
                 { key: 'windowStart' as const, label: 'Début', refEditable: true, timeFallback: '09:00' },
-                { key: 'windowEnd' as const, label: 'Fin', refEditable: false, timeFallback: '23:00' },
+                { key: 'windowEnd' as const, label: 'Fin', refEditable: false, timeFallback: '11:00' },
               ] as const
             ).map(row => {
               const win = assignment[row.key];
@@ -966,24 +1256,21 @@ function StaffAssignmentPanel({
                       <MenuItem value="-">−</MenuItem>
                     </Select>
                   </FormControl>
-                  <TextField
-                    size="small"
-                    type="number"
-                    disabled={readOnly}
+                  <CompactNumericStepper
                     value={Math.abs(win.value)}
-                    onChange={e => {
+                    min={0}
+                    max={99}
+                    disabled={readOnly}
+                    onChange={n => {
                       const sign = win.value >= 0 ? 1 : -1;
-                      patchWindow(row.key, { value: sign * Number(e.target.value) });
+                      patchWindow(row.key, { value: sign * n });
                     }}
-                    sx={compactField}
                   />
                   {win.unit !== 'hours' ? (
-                    <TextField
-                      size="small"
-                      disabled={readOnly}
+                    <HourSlotStepperDisplay
                       value={win.time || row.timeFallback}
-                      onChange={e => patchWindow(row.key, { time: e.target.value })}
-                      sx={compactField}
+                      disabled={readOnly}
+                      onChange={time => patchWindow(row.key, { time })}
                     />
                   ) : (
                     <span />
@@ -1090,14 +1377,13 @@ function StaffAssignmentPanel({
                 <Stack direction="row" flexWrap="wrap" gap={0.75}>
                   {(assignment.attemptWindows || []).map((time, idx) => (
                     <Stack key={`${idx}-${time}`} direction="row" alignItems="center" spacing={0.25}>
-                      <TextField
-                        size="small"
-                        disabled={readOnly}
-                        value={time}
-                        placeholder="09:00"
-                        onChange={e => patchAttemptWindow(idx, e.target.value)}
-                        sx={{ ...compactField, width: 88 }}
-                      />
+                      <Box sx={{ width: 108 }}>
+                        <HourSlotStepperDisplay
+                          value={time}
+                          disabled={readOnly}
+                          onChange={t => patchAttemptWindow(idx, t)}
+                        />
+                      </Box>
                       <Button
                         size="small"
                         disabled={readOnly}
@@ -1123,12 +1409,14 @@ function StaffAssignmentPanel({
 
 function StaffRemindersPanel({
   reminders,
+  templateOptions,
   readOnly,
   onPatch,
   onAdd,
   onDelete,
 }: {
   reminders: WorkflowStaffReminder[];
+  templateOptions: { id: string; label: string }[];
   readOnly?: boolean;
   onPatch: (id: string, patch: Partial<WorkflowStaffReminder>) => void;
   onAdd: () => void;
@@ -1245,7 +1533,7 @@ function StaffRemindersPanel({
                     disabled={readOnly}
                     onChange={e => onPatch(r.id, { staffTemplateId: e.target.value })}
                   >
-                    {STAFF_REMINDER_TEMPLATE_OPTIONS.map(opt => (
+                    {templateOptions.map(opt => (
                       <MenuItem key={opt.id} value={opt.id}>
                         {opt.label}
                       </MenuItem>

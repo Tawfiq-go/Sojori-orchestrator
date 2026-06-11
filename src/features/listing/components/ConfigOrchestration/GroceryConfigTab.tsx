@@ -1,6 +1,6 @@
 // Courses — liste libre + frais de service
-import React, { useState, useEffect, useCallback } from 'react';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Box, CircularProgress } from '@mui/material';
 import { listingsService } from '../../../../services/listingsService';
 import { SOJORI_TOKENS as T } from './types';
 import {
@@ -14,6 +14,8 @@ import {
   SlotPills,
   WhenOffNote,
 } from './SHARED';
+import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
+import { logV3Orch } from '../../../orchestrationListingV3/v3OrchestrationDebugLog';
 
 const DEFAULT_SLOT_OPTIONS = ['08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'];
 
@@ -29,28 +31,58 @@ const EMPTY_GROCERY = {
   noteToGuest: '',
 };
 
-function mapFromConciergeDoc(doc) {
-  const svc = doc?.groceryServices?.[0];
+function mapFromConciergeDoc(doc: { groceryServices?: unknown[] } | null | undefined) {
+  const svc = doc?.groceryServices?.[0] as Record<string, unknown> | undefined;
   if (!svc) {
     return { ...EMPTY_GROCERY };
   }
+  const pricing = svc.pricing as { serviceFee?: number; currency?: string } | undefined;
+  const availability = svc.availability as {
+    daysOfWeek?: number[];
+    timeSlots?: string[];
+    deliveryLeadTimeHours?: number;
+  } | undefined;
+  const description = svc.description as { fr?: string } | undefined;
+  const name = svc.name as { fr?: string } | undefined;
   return {
     enabled: svc.enabled !== false,
-    serviceFee: svc.pricing?.serviceFee ?? 0,
-    currency: svc.pricing?.currency ?? 'MAD',
-    deliveryLeadTimeHours: EMPTY_GROCERY.deliveryLeadTimeHours,
+    serviceFee: pricing?.serviceFee ?? 0,
+    currency: pricing?.currency ?? 'MAD',
+    deliveryLeadTimeHours:
+      availability?.deliveryLeadTimeHours ?? EMPTY_GROCERY.deliveryLeadTimeHours,
     availability: {
-      daysOfWeek: Array.isArray(svc.availability?.daysOfWeek) ? svc.availability.daysOfWeek : [],
-      timeSlots: Array.isArray(svc.availability?.timeSlots) ? svc.availability.timeSlots : [],
+      daysOfWeek: Array.isArray(availability?.daysOfWeek) ? availability.daysOfWeek : [],
+      timeSlots: Array.isArray(availability?.timeSlots) ? availability.timeSlots : [],
     },
-    noteToGuest: svc.description?.fr || svc.name?.fr || '',
+    noteToGuest: description?.fr || name?.fr || '',
     _serviceId: svc.id,
   };
 }
 
-function mapToConciergeGrocery(config, existingDoc) {
-  const base = existingDoc?.groceryServices?.[0];
+function buildGroceryAvailability(
+  config: Record<string, unknown>,
+  baseAvailability: Record<string, unknown> | undefined,
+) {
+  const avail = config.availability as { daysOfWeek?: number[]; timeSlots?: string[] } | undefined;
+  const daysOfWeek = Array.isArray(avail?.daysOfWeek) ? avail.daysOfWeek : [];
+  const timeSlots = Array.isArray(avail?.timeSlots) ? avail.timeSlots : [];
+  const hasWindow = daysOfWeek.length > 0 || timeSlots.length > 0;
+  return {
+    ...(baseAvailability || {}),
+    type: hasWindow ? 'time_window' : baseAvailability?.type || 'always',
+    daysOfWeek,
+    timeSlots,
+    deliveryLeadTimeHours: Number(config.deliveryLeadTimeHours) || EMPTY_GROCERY.deliveryLeadTimeHours,
+  };
+}
+
+function mapToConciergeGrocery(
+  config: Record<string, unknown>,
+  existingDoc: Record<string, unknown> | null,
+) {
+  const base = (existingDoc?.groceryServices as Record<string, unknown>[] | undefined)?.[0];
   const id = config._serviceId || base?.id || 'grocery_default';
+  const baseAvailability = base?.availability as Record<string, unknown> | undefined;
   const groceryService = {
     id,
     enabled: true,
@@ -75,7 +107,7 @@ function mapToConciergeGrocery(config, existingDoc) {
       },
     },
     clientFields: base?.clientFields || {},
-    availability: base?.availability || { type: 'always' },
+    availability: buildGroceryAvailability(config, baseAvailability),
     requiresPMValidation: base?.requiresPMValidation ?? true,
     images: base?.images || [],
   };
@@ -86,27 +118,103 @@ function mapToConciergeGrocery(config, existingDoc) {
   };
 }
 
+function gestionConciergeShell(listingValues: Record<string, unknown>): Record<string, unknown> {
+  return {
+    transportServices: listingValues.transportServices ?? [],
+    groceryServices: listingValues.groceryServices ?? [],
+    customServices: listingValues.customServices ?? [],
+  };
+}
+
 interface Props {
   listingId?: string;
   ownerId?: string;
+  listingValues?: Record<string, unknown>;
+  onListingPatch?: (patch: Record<string, unknown>) => Promise<void>;
+  templateMode?: boolean;
   templateOwnerKey?: string;
+  /** V3 orchestration : pas d’auto-save (évite boucle save → rawDoc → save). */
+  manualSaveMode?: boolean;
 }
 
-export default function GroceryConfigTab({ listingId, templateOwnerKey }: Props) {
+export default function GroceryConfigTab({
+  listingId,
+  listingValues = {},
+  onListingPatch,
+  templateMode = false,
+  templateOwnerKey,
+  manualSaveMode = false,
+}: Props) {
   const isOwnerTemplate = Boolean(templateOwnerKey);
-  const [config, setConfig] = useState(EMPTY_GROCERY);
-  const [rawDoc, setRawDoc] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [savingState, setSavingState] = useState('idle');
-
-  const patch = useCallback(p => setConfig(c => ({ ...c, ...p })), []);
-  const patchAvail = useCallback(
-    p => setConfig(c => ({ ...c, availability: { ...c.availability, ...p } })),
-    [],
+  const useOrchestrationGestion = Boolean(onListingPatch) && (templateMode || Object.keys(listingValues).length > 0);
+  const gestionGroceryKey = useMemo(
+    () => JSON.stringify(listingValues.groceryServices ?? []),
+    [listingValues.groceryServices],
   );
+  const [config, setConfig] = useState(EMPTY_GROCERY);
+  const [loading, setLoading] = useState(true);
+  const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [dirty, setDirty] = useState(false);
+  const configRef = useRef(config);
+  const rawDocRef = useRef<Record<string, unknown> | null>(null);
+  const dirtyRef = useRef(false);
+  const skipAutoSaveRef = useRef(true);
+  const hydratedRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
+  const markDirty = useCallback(() => {
+    if (skipAutoSaveRef.current) return;
+    dirtyRef.current = true;
+    setDirty(true);
+  }, []);
+
+  const patch = useCallback(
+    (p: Record<string, unknown>) => {
+      markDirty();
+      setConfig(c => ({ ...c, ...p }));
+    },
+    [markDirty],
+  );
+
+  const patchAvail = useCallback(
+    (p: Record<string, unknown>) => {
+      markDirty();
+      setConfig(c => ({ ...c, availability: { ...c.availability, ...p } }));
+    },
+    [markDirty],
+  );
+
+  const hydrateFromGestion = useCallback(() => {
+    const shell = gestionConciergeShell(listingValues);
+    rawDocRef.current = shell;
+    const mapped = mapFromConciergeDoc({ groceryServices: shell.groceryServices as unknown[] });
+    setConfig(mapped);
+    configRef.current = mapped;
+    hydratedRef.current = true;
+  }, [listingValues]);
+
+  useEffect(() => {
+    if (!useOrchestrationGestion) return;
+    if (hydratedRef.current && dirtyRef.current) return;
+    skipAutoSaveRef.current = true;
+    dirtyRef.current = false;
+    setDirty(false);
+    setLoading(false);
+    hydrateFromGestion();
+    skipAutoSaveRef.current = false;
+  }, [useOrchestrationGestion, gestionGroceryKey, hydrateFromGestion]);
+
+  useEffect(() => {
+    if (useOrchestrationGestion) return;
     let cancelled = false;
+    skipAutoSaveRef.current = true;
+    dirtyRef.current = false;
+    hydratedRef.current = false;
+    setDirty(false);
     (async () => {
       setLoading(true);
       if (isOwnerTemplate && templateOwnerKey) {
@@ -114,56 +222,105 @@ export default function GroceryConfigTab({ listingId, templateOwnerKey }: Props)
         if (cancelled) return;
         const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
         const concierge = (payload as { concierge?: Record<string, unknown> })?.concierge || {};
-        setRawDoc({ groceryServices: concierge.groceryServices, transportServices: concierge.transportServices });
-        setConfig(mapFromConciergeDoc({ groceryServices: concierge.groceryServices }));
+        rawDocRef.current = {
+          groceryServices: concierge.groceryServices,
+          transportServices: concierge.transportServices,
+          customServices: concierge.customServices,
+        };
+        setConfig(mapFromConciergeDoc({ groceryServices: concierge.groceryServices as unknown[] }));
       } else if (listingId) {
         const res = await listingsService.getListingConciergeConfig(listingId);
         if (cancelled) return;
         if (res.data) {
-          setRawDoc(res.data);
-          setConfig(mapFromConciergeDoc(res.data));
+          rawDocRef.current = res.data as Record<string, unknown>;
+          setConfig(mapFromConciergeDoc(res.data as { groceryServices?: unknown[] }));
         }
       }
       setLoading(false);
+      hydratedRef.current = true;
+      skipAutoSaveRef.current = false;
     })();
     return () => {
       cancelled = true;
     };
-  }, [listingId, isOwnerTemplate, templateOwnerKey]);
+  }, [listingId, isOwnerTemplate, templateOwnerKey, useOrchestrationGestion]);
 
-  const save = useCallback(async () => {
+  const persist = useCallback(async () => {
     setSavingState('saving');
-    const body = mapToConciergeGrocery(config, rawDoc);
-    if (isOwnerTemplate && templateOwnerKey) {
-      const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
-      const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
-      const prev = (payload as { concierge?: Record<string, unknown> })?.concierge || {};
-      await listingsService.putListingOwnerConfigTemplateSection(templateOwnerKey, 'concierge', {
-        transportServices: prev.transportServices || [],
-        groceryServices: body.groceryServices,
-        customServices: prev.customServices || [],
-      });
-      setRawDoc(prev => ({ ...(prev || {}), groceryServices: body.groceryServices }));
+    const shell = useOrchestrationGestion
+      ? gestionConciergeShell(listingValues)
+      : rawDocRef.current || {};
+    const body = mapToConciergeGrocery(configRef.current as Record<string, unknown>, shell);
+    logV3Orch('gestion.grocery.persist.start', {
+      templateMode,
+      listingId: listingId || null,
+      serviceFee: configRef.current.serviceFee,
+    });
+    try {
+      if (useOrchestrationGestion && onListingPatch) {
+        await onListingPatch({
+          transportServices: body.transportServices,
+          groceryServices: body.groceryServices,
+          customServices: body.customServices,
+        });
+        rawDocRef.current = {
+          transportServices: body.transportServices,
+          groceryServices: body.groceryServices,
+          customServices: body.customServices,
+        };
+      } else if (isOwnerTemplate && templateOwnerKey) {
+        const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+        const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
+        const prev = (payload as { concierge?: Record<string, unknown> })?.concierge || {};
+        await listingsService.putListingOwnerConfigTemplateSection(templateOwnerKey, 'concierge', {
+          transportServices: prev.transportServices || [],
+          groceryServices: body.groceryServices,
+          customServices: prev.customServices || [],
+        });
+        rawDocRef.current = { ...(rawDocRef.current || {}), groceryServices: body.groceryServices };
+      } else if (listingId) {
+        const res = await listingsService.updateListingConciergeServices(listingId, body);
+        if (res.error) throw new Error(res.error);
+        rawDocRef.current = { ...(rawDocRef.current || {}), ...body };
+      } else {
+        return;
+      }
       setSavingState('saved');
-      setTimeout(() => setSavingState('idle'), 2000);
-      return;
-    }
-    if (!listingId) return;
-    const res = await listingsService.updateListingConciergeServices(listingId, body);
-    if (!res.error) {
-      setRawDoc(prev => ({ ...(prev || {}), ...body }));
-      setSavingState('saved');
-      setTimeout(() => setSavingState('idle'), 2000);
-    } else {
+      dirtyRef.current = false;
+      setDirty(false);
+      logV3Orch('gestion.grocery.persist.ok', { serviceFee: configRef.current.serviceFee });
+      if (!manualSaveMode) {
+        window.setTimeout(() => setSavingState('idle'), 2000);
+      }
+    } catch (err) {
       setSavingState('idle');
+      dirtyRef.current = true;
+      setDirty(true);
+      logV3Orch('gestion.grocery.persist.error', {
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
-  }, [config, listingId, rawDoc, isOwnerTemplate, templateOwnerKey]);
+  }, [
+    listingId,
+    isOwnerTemplate,
+    templateOwnerKey,
+    manualSaveMode,
+    useOrchestrationGestion,
+    onListingPatch,
+    templateMode,
+    listingValues,
+  ]);
 
   useEffect(() => {
-    if (loading) return;
-    const t = setTimeout(() => save(), 900);
-    return () => clearTimeout(t);
-  }, [config, loading, save]);
+    if (manualSaveMode || loading || !dirtyRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void persist();
+    }, 900);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [config, loading, persist, manualSaveMode]);
 
   if (loading) {
     return (
@@ -175,40 +332,16 @@ export default function GroceryConfigTab({ listingId, templateOwnerKey }: Props)
 
   return (
     <Box>
-      {savingState !== 'idle' && (
-        <Typography
-          sx={{
-            mb: 1.5,
-            fontSize: 10.5,
-            color: savingState === 'saved' ? T.success : T.text3,
-            fontFamily: '"Geist Mono", monospace',
-            fontWeight: 700,
-          }}
-        >
-          {savingState === 'saving' ? '⏳ Enregistrement…' : '✓ Sauvegardé'}
-        </Typography>
-      )}
-
       <SectionHeader
         icon="🛒"
         title="Courses"
         badge="WA · OUI"
         badgeKind="wa-yes"
-        subtitle={
-          <>
-            Liste libre + frais de service pour ce logement.
-          </>
-        }
+        subtitle={<>Liste libre + frais de service pour ce logement.</>}
       />
 
       <Card icon="💰" title="Frais de service" subtitle="Facturés en plus du coût réel des courses">
-        <FormRow
-          label="Frais de service"
-          required
-          help="Forfait facturé au voyageur"
-
-
-        >
+        <FormRow label="Frais de service" required help="Forfait facturé au voyageur">
           <Box sx={{ maxWidth: 200 }}>
             <NumInput
               value={config.serviceFee}
@@ -263,6 +396,29 @@ export default function GroceryConfigTab({ listingId, templateOwnerKey }: Props)
         <b style={{ color: T.text }}>Quand courses est désactivé</b>, le service n’est plus proposé au voyageur.
         Pas de catalogue produits — demande en texte libre + frais de service.
       </WhenOffNote>
+
+      {manualSaveMode ? (
+        <V3BlockSaveBar
+          label="Courses · gestion concierge"
+          dirty={dirty}
+          saving={savingState === 'saving'}
+          onSave={() => void persist()}
+        />
+      ) : savingState !== 'idle' ? (
+        <Box
+          component="span"
+          sx={{
+            display: 'block',
+            mt: 1.5,
+            fontSize: 10.5,
+            color: savingState === 'saved' ? T.success : T.text3,
+            fontFamily: '"Geist Mono", monospace',
+            fontWeight: 700,
+          }}
+        >
+          {savingState === 'saving' ? '⏳ Enregistrement…' : '✓ Sauvegardé'}
+        </Box>
+      ) : null}
     </Box>
   );
 }

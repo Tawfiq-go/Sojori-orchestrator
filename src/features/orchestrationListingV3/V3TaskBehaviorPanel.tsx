@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Box, Stack, Typography } from '@mui/material';
 import { toast } from 'react-toastify';
 import type { CapabilityDefinition } from '../serviceMatrix/capabilityRegistry';
@@ -10,30 +10,53 @@ import {
   type TaskAutoCompletionTrigger,
 } from '../taskHub/taskConfig/taskCompletionLabels';
 import { saveListingTaskBehavior, type ListingOrchestrationDoc } from './listingOrchestrationApi';
+import { saveOwnerTaskBehavior, type OwnerOrchestrationDoc } from './ownerOrchestrationApi';
 import { V3 } from './theme';
 import { V3FormRow, V3PillButton, V3Toggle } from './V3Primitives';
+import { V3BlockSaveBar } from './V3BlockSaveBar';
 
 type Props = {
   def: CapabilityDefinition;
-  listingId: string;
-  doc: ListingOrchestrationDoc;
+  doc: ListingOrchestrationDoc | OwnerOrchestrationDoc;
+  listingId?: string;
+  ownerKey?: string;
+  ownerTemplateMode?: boolean;
   onSaved: () => void;
 };
 
-export default function V3TaskBehaviorPanel({ def, listingId, doc, onSaved }: Props) {
-  const cap = doc.capabilities?.[def.key];
-  const initial = cap?.taskBehavior ?? {
+function defaultTaskBehavior(def: CapabilityDefinition) {
+  return {
     requiresClientAction: ['cleaning_paid', 'transport', 'groceries', 'concierge', 'support', 'service_client'].includes(
       def.taskType ?? '',
     ),
-    autoCompletionTrigger: 'manual',
+    autoCompletionTrigger: 'manual' as const,
   };
+}
+
+export default function V3TaskBehaviorPanel({
+  def,
+  doc,
+  listingId,
+  ownerKey,
+  ownerTemplateMode = false,
+  onSaved,
+}: Props) {
+  const cap = doc.capabilities?.[def.key];
+  const initial = cap?.taskBehavior ?? defaultTaskBehavior(def);
 
   const [requiresClientAction, setRequiresClientAction] = useState(initial.requiresClientAction);
   const [autoCompletionTrigger, setAutoCompletionTrigger] = useState<TaskAutoCompletionTrigger | null>(
     normalizeCompletionTrigger(initial.autoCompletionTrigger),
   );
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    const next = cap?.taskBehavior ?? defaultTaskBehavior(def);
+    setRequiresClientAction(next.requiresClientAction);
+    setAutoCompletionTrigger(normalizeCompletionTrigger(next.autoCompletionTrigger));
+    setDirty(false);
+  }, [def.key, def.taskType, cap?.taskBehavior?.requiresClientAction, cap?.taskBehavior?.autoCompletionTrigger]);
 
   if (!def.taskType || def.columns.task === 'na') {
     return (
@@ -41,23 +64,34 @@ export default function V3TaskBehaviorPanel({ def, listingId, doc, onSaved }: Pr
     );
   }
 
-  const persist = async (
-    patch: Partial<{ requiresClientAction: boolean; autoCompletionTrigger: TaskAutoCompletionTrigger | null }>,
-  ) => {
+  const persist = async () => {
     setSaving(true);
     try {
-      const nextRequires = patch.requiresClientAction ?? requiresClientAction;
-      const nextTrigger = patch.autoCompletionTrigger ?? autoCompletionTrigger ?? 'manual';
-      await saveListingTaskBehavior({
-        listingId,
-        capabilityKey: def.key,
-        taskBehavior: {
-          requiresClientAction: nextRequires,
-          autoCompletionTrigger: nextTrigger,
-        },
-        doc,
-      });
+      const taskBehavior = {
+        requiresClientAction,
+        autoCompletionTrigger: autoCompletionTrigger ?? 'manual',
+      };
+
+      if (ownerTemplateMode && ownerKey) {
+        await saveOwnerTaskBehavior({
+          ownerKey,
+          capabilityKey: def.key,
+          taskBehavior,
+          doc: doc as OwnerOrchestrationDoc,
+        });
+      } else if (listingId) {
+        await saveListingTaskBehavior({
+          listingId,
+          capabilityKey: def.key,
+          taskBehavior,
+          doc: doc as ListingOrchestrationDoc,
+        });
+      } else {
+        throw new Error('Contexte enregistrement introuvable');
+      }
+
       toast.success('Comportement enregistré');
+      setDirty(false);
       onSaved();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Erreur');
@@ -66,54 +100,62 @@ export default function V3TaskBehaviorPanel({ def, listingId, doc, onSaved }: Pr
     }
   };
 
-  return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-        gap: 2,
-        width: '100%',
-        alignItems: 'start',
-      }}
-    >
-      <V3FormRow label="À la demande client" help="Tâche créée quand le client agit (WhatsApp), pas à la résa.">
-        <Stack direction="row" alignItems="center" gap={1}>
-          <V3Toggle
-            kind="task"
-            checked={requiresClientAction}
-            disabled={saving}
-            onChange={v => {
-              setRequiresClientAction(v);
-              void persist({ requiresClientAction: v });
-            }}
-          />
-          <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: requiresClientAction ? V3.task : V3.t4 }}>
-            {requiresClientAction ? 'Activé' : 'Désactivé'}
-          </Typography>
-        </Stack>
-      </V3FormRow>
+  const saveLabel = ownerTemplateMode
+    ? 'Comportement tâche · owner_orchestrations'
+    : 'Comportement tâche · listing_orchestrations';
 
-      <V3FormRow label="Auto-complétion" help={def.taskType ? hintForAutoCompletion(def.taskType, autoCompletionTrigger) : undefined}>
-        <Stack direction="row" useFlexGap sx={{ gap: 0.5, flexWrap: 'wrap' }}>
-          {TASK_AUTO_COMPLETION_TRIGGERS.map(t => (
-            <V3PillButton
-              key={t}
-              active={autoCompletionTrigger === t}
+  return (
+    <Box>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          gap: 2,
+          width: '100%',
+          alignItems: 'start',
+        }}
+      >
+        <V3FormRow label="À la demande client" help="Tâche créée quand le client agit (WhatsApp), pas à la résa.">
+          <Stack direction="row" alignItems="center" gap={1}>
+            <V3Toggle
+              kind="task"
+              checked={requiresClientAction}
               disabled={saving}
-              onClick={() => {
-                const v = normalizeCompletionTrigger(t);
-                setAutoCompletionTrigger(v);
-                if (v) void persist({ autoCompletionTrigger: v });
+              onChange={v => {
+                setRequiresClientAction(v);
+                setDirty(true);
               }}
-            >
-              {t === 'manual' ? 'Manuel' : t === 'staff_done' ? 'Staff terminé' : 'Statut OK'}
-            </V3PillButton>
-          ))}
-        </Stack>
-        <Typography sx={{ fontSize: 10, color: V3.t4, mt: 0.75 }}>
-          {autoCompletionTrigger ? AUTO_COMPLETION_TRIGGER_LABELS[autoCompletionTrigger] : '—'}
-        </Typography>
-      </V3FormRow>
+            />
+            <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: requiresClientAction ? V3.task : V3.t4 }}>
+              {requiresClientAction ? 'Activé' : 'Désactivé'}
+            </Typography>
+          </Stack>
+        </V3FormRow>
+
+        <V3FormRow label="Auto-complétion" help={def.taskType ? hintForAutoCompletion(def.taskType, autoCompletionTrigger) : undefined}>
+          <Stack direction="row" useFlexGap sx={{ gap: 0.5, flexWrap: 'wrap' }}>
+            {TASK_AUTO_COMPLETION_TRIGGERS.map(t => (
+              <V3PillButton
+                key={t}
+                active={autoCompletionTrigger === t}
+                disabled={saving}
+                onClick={() => {
+                  const v = normalizeCompletionTrigger(t);
+                  setAutoCompletionTrigger(v);
+                  setDirty(true);
+                }}
+              >
+                {t === 'manual' ? 'Manuel' : t === 'staff_done' ? 'Staff terminé' : 'Statut OK'}
+              </V3PillButton>
+            ))}
+          </Stack>
+          <Typography sx={{ fontSize: 10, color: V3.t4, mt: 0.75 }}>
+            {autoCompletionTrigger ? AUTO_COMPLETION_TRIGGER_LABELS[autoCompletionTrigger] : '—'}
+          </Typography>
+        </V3FormRow>
+      </Box>
+
+      <V3BlockSaveBar label={saveLabel} dirty={dirty} saving={saving} onSave={() => void persist()} />
     </Box>
   );
 }

@@ -113,7 +113,7 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         iconColor: '#D4A574',
         sub: [
           { id: 'listings/list', label: 'Listings' },
-          { id: 'listings/config', label: 'Template orchestration' },
+          { id: 'listings/orchestration-model', label: 'Modèle orchestration' },
         ],
       },
       {
@@ -220,7 +220,13 @@ export const NAV_GROUPS: NavGroupConfig[] = [
     roles: ADMIN_ROLES,
     items: [
       { id: 'admin/pms', label: 'Owners · PMs', iconType: 'building', iconColor: '#A6A6A6' },
-      { id: 'admin/channels', label: 'Channels globaux', iconType: 'link', iconColor: '#6D9EEB' },
+      {
+        id: 'admin/channels',
+        label: 'Channels · logs RU',
+        iconType: 'link',
+        iconColor: '#6D9EEB',
+        description: 'Business entrant/sortant, hooks, KPIs RU',
+      },
       { id: 'admin/roles', label: 'Rôles & groupes', iconType: 'shield', iconColor: '#C81E1E' },
       { id: 'admin/settings', label: 'Paramètres', iconType: 'settings', iconColor: '#666666' },
     ],

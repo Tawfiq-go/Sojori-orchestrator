@@ -1,5 +1,5 @@
 // Conciergerie — FR uniquement · catalogue services + picker icônes
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Box,
   Stack,
@@ -18,7 +18,6 @@ import {
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -27,7 +26,6 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
@@ -53,9 +51,20 @@ import CityAssociationField, {
   formatCityAssociationSummary,
 } from './CityAssociationField';
 import { logOrchConfig, orchConfigError } from '../../utils/orchConfigDebugLog';
+import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
+import { logV3Orch } from '../../../orchestrationListingV3/v3OrchestrationDebugLog';
+import { cloneCityAssociation } from './transportRouteCatalog';
 
 const T = SOJORI_TOKENS;
 const MAX_SERVICES = 15;
+
+function gestionConciergeShell(listingValues: Record<string, unknown>) {
+  return {
+    transportServices: listingValues.transportServices ?? [],
+    groceryServices: listingValues.groceryServices ?? [],
+    customServices: listingValues.customServices ?? [],
+  };
+}
 
 interface ConciergeService {
   id: string;
@@ -108,8 +117,48 @@ function mapApiService(s: Record<string, unknown>, i: number): ConciergeService 
     priceType,
     enabled: s.enabled !== false,
     order: i,
-    cityIds: (s.cityIds as 'all' | string[] | undefined) ?? 'all',
+    cityIds: cloneCityAssociation((s.cityIds as 'all' | string[] | undefined) ?? 'all'),
   };
+}
+
+function configFromCustomServices(custom: unknown): ConciergeConfig {
+  if (!Array.isArray(custom) || custom.length === 0) {
+    return EMPTY_CONCIERGE;
+  }
+  const services = (custom as Record<string, unknown>[]).map(mapApiService);
+  return {
+    enabled: services.some(s => s.enabled),
+    services,
+  };
+}
+
+function buildCustomServicesPayload(services: ConciergeService[]) {
+  return services.map((s, i) => ({
+    id: s.id,
+    enabled: s.enabled,
+    icon: s.icon,
+    name: { fr: s.labelFr, en: s.labelFr, ar: s.labelFr },
+    description: { fr: s.descriptionFr, en: s.descriptionFr, ar: s.descriptionFr },
+    pricing: buildPricingPayload(s),
+    ...(s.maxPersons > 0
+      ? {
+          capacity: {
+            maxPassengers: s.maxPersons,
+            errorMessage: {
+              fr: `Maximum ${s.maxPersons} personnes pour ce service`,
+              en: `Maximum ${s.maxPersons} people for this service`,
+              ar: `الحد الأقصى ${s.maxPersons} أشخاص`,
+            },
+          },
+        }
+      : {}),
+    clientFields: {},
+    availability: { type: 'always' },
+    requiresPMValidation: true,
+    images: [],
+    order: i,
+    cityIds: cloneCityAssociation(s.cityIds),
+  }));
 }
 
 function buildPricingPayload(s: ConciergeService) {
@@ -171,37 +220,57 @@ function buildPricingPayload(s: ConciergeService) {
 interface Props {
   listingId?: string;
   ownerId?: string;
+  listingValues?: Record<string, unknown>;
+  onListingPatch?: (patch: Record<string, unknown>) => Promise<void>;
+  templateMode?: boolean;
   templateOwnerKey?: string;
   /** Template Admin global : bibliothèque seule, pas de services configurés ni sync. */
   adminCatalogOnly?: boolean;
+  /** V3 orchestration : pas d’auto-save, barre Enregistrer par bloc. */
+  manualSaveMode?: boolean;
 }
 
 export default function ConciergeConfigTab({
   listingId,
+  listingValues = {},
+  onListingPatch,
+  templateMode = false,
   templateOwnerKey,
   adminCatalogOnly = false,
+  manualSaveMode = false,
 }: Props) {
   const isOwnerTemplate = Boolean(templateOwnerKey);
   const isAdminGlobal = adminCatalogOnly || templateOwnerKey === 'global';
+  const useOrchestrationGestion =
+    Boolean(onListingPatch) && (templateMode || Object.keys(listingValues).length > 0);
+  const gestionCustomKey = useMemo(
+    () => JSON.stringify(listingValues.customServices ?? []),
+    [listingValues.customServices],
+  );
   const [config, setConfig] = useState<ConciergeConfig>(EMPTY_CONCIERGE);
   const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
   const [cityOptions, setCityOptions] = useState<Array<{ _id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [dirty, setDirty] = useState(false);
   const [activeCategory, setActiveCategory] = useState(CONCIERGE_SERVICE_CATALOG[0]?.id ?? '');
   const configRef = useRef(config);
+  const rawDocRef = useRef<Record<string, unknown> | null>(null);
   const hydratedRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const skipAutoSaveRef = useRef(true);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { configRef.current = config; }, [config]);
+
+  const markDirty = useCallback(() => {
+    if (skipAutoSaveRef.current) return;
+    dirtyRef.current = true;
+    setDirty(true);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-
-  useEffect(() => {
-    hydratedRef.current = false;
-    fetchConfig();
-  }, [listingId, templateOwnerKey, isOwnerTemplate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,11 +290,19 @@ export default function ConciergeConfigTab({
     };
   }, []);
 
-  const fetchConfig = async () => {
+  const hydrateFromGestion = useCallback(() => {
+    const shell = gestionConciergeShell(listingValues);
+    rawDocRef.current = shell;
+    setConfig(configFromCustomServices(shell.customServices));
+    hydratedRef.current = true;
+  }, [listingValues]);
+
+  const fetchConfig = useCallback(async () => {
     if (isAdminGlobal) {
       setConfig({ enabled: true, services: [] });
       setLoading(false);
       hydratedRef.current = true;
+      skipAutoSaveRef.current = false;
       return;
     }
     try {
@@ -245,16 +322,11 @@ export default function ConciergeConfigTab({
       }
       const custom = data?.customServices;
       if (data != null && Array.isArray(custom)) {
-        const services = custom.map(mapApiService);
         logOrchConfig('concierge.load ←', {
           source: isOwnerTemplate ? `template:${templateOwnerKey}` : `listing:${listingId}`,
-          count: services.length,
-          ids: services.map(s => s.id),
+          count: custom.length,
         });
-        setConfig({
-          enabled: services.length === 0 ? true : services.some(s => s.enabled),
-          services,
-        });
+        setConfig(configFromCustomServices(custom));
       } else {
         logOrchConfig('concierge.load ← empty (no saved concierge)', {
           source: isOwnerTemplate ? `template:${templateOwnerKey}` : `listing:${listingId}`,
@@ -267,91 +339,132 @@ export default function ConciergeConfigTab({
     } finally {
       setLoading(false);
       hydratedRef.current = true;
+      skipAutoSaveRef.current = false;
     }
-  };
+  }, [isAdminGlobal, isOwnerTemplate, listingId, templateOwnerKey]);
 
-  const persistConfig = useCallback(async (cfg: ConciergeConfig) => {
+  useEffect(() => {
+    if (!useOrchestrationGestion) return;
+    if (hydratedRef.current && dirtyRef.current) return;
+    skipAutoSaveRef.current = true;
+    dirtyRef.current = false;
+    setDirty(false);
+    setLoading(false);
+    hydrateFromGestion();
+    skipAutoSaveRef.current = false;
+  }, [useOrchestrationGestion, gestionCustomKey, hydrateFromGestion]);
+
+  useEffect(() => {
+    if (useOrchestrationGestion) return;
+    hydratedRef.current = false;
+    skipAutoSaveRef.current = true;
+    dirtyRef.current = false;
+    setDirty(false);
+    void fetchConfig();
+  }, [fetchConfig, useOrchestrationGestion]);
+
+  const persist = useCallback(async () => {
     if (isAdminGlobal) return;
-    const customServices = cfg.services.map((s, i) => ({
-        id: s.id,
-        enabled: s.enabled,
-        icon: s.icon,
-        name: { fr: s.labelFr, en: s.labelFr, ar: s.labelFr },
-        description: { fr: s.descriptionFr, en: s.descriptionFr, ar: s.descriptionFr },
-        pricing: buildPricingPayload(s),
-        ...(s.maxPersons > 0
-          ? {
-              capacity: {
-                maxPassengers: s.maxPersons,
-                errorMessage: {
-                  fr: `Maximum ${s.maxPersons} personnes pour ce service`,
-                  en: `Maximum ${s.maxPersons} people for this service`,
-                  ar: `الحد الأقصى ${s.maxPersons} أشخاص`,
-                },
-              },
-            }
-          : {}),
-        clientFields: {},
-        availability: { type: 'always' },
-        requiresPMValidation: true,
-        images: [],
-        order: i,
-        cityIds: s.cityIds ?? 'all',
-      }));
+    const cfg = configRef.current;
+    const customServices = buildCustomServicesPayload(cfg.services);
+    const shell = useOrchestrationGestion
+      ? gestionConciergeShell(listingValues)
+      : rawDocRef.current || gestionConciergeShell({});
 
+    setSavingState('saving');
+    logV3Orch('gestion.concierge.persist.start', {
+      templateMode,
+      listingId: listingId || null,
+      count: customServices.length,
+    });
     logOrchConfig('concierge.persist →', {
       target: isOwnerTemplate ? `template:${templateOwnerKey}` : `listing:${listingId}`,
       count: customServices.length,
-      ids: customServices.map(s => s.id),
     });
 
-    if (isOwnerTemplate && templateOwnerKey) {
-      const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
-      const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
-      const prev = (payload as { concierge?: Record<string, unknown> })?.concierge || {};
-      await listingsService.putListingOwnerConfigTemplateSection(templateOwnerKey, 'concierge', {
-        transportServices: prev.transportServices || [],
-        groceryServices: prev.groceryServices || [],
-        customServices,
-      });
-      logOrchConfig('concierge.persist ← OK', { via: 'listing-owner-config-template' });
-      return;
-    }
-
-    if (!listingId) return;
-    const existing = await listingsService.getListingConciergeConfig(listingId);
-    const doc = (existing.data || {}) as { transportServices?: unknown[]; groceryServices?: unknown[] };
-    await listingsService.updateListingConciergeServices(listingId, {
-      transportServices: doc.transportServices || [],
-      groceryServices: doc.groceryServices || [],
-      customServices,
-    });
-    logOrchConfig('concierge.persist ← OK', { via: 'listing-concierge-config' });
-  }, [listingId, isOwnerTemplate, templateOwnerKey, isAdminGlobal]);
-
-  const debouncedSave = useCallback(() => {
-    setSavingState('saving');
-    if ((debouncedSave as any)._t) clearTimeout((debouncedSave as any)._t);
-    (debouncedSave as any)._t = setTimeout(async () => {
-      try {
-        await persistConfig(configRef.current);
-        setSavingState('saved');
-        setTimeout(() => setSavingState('idle'), 2000);
-      } catch (err) {
-        orchConfigError('concierge.persist FAIL', err);
-        setSavingState('idle');
+    try {
+      if (useOrchestrationGestion && onListingPatch) {
+        await onListingPatch({
+          transportServices: shell.transportServices || [],
+          groceryServices: shell.groceryServices || [],
+          customServices,
+        });
+        if (!templateMode && listingId) {
+          await listingsService.updateListingConciergeServices(listingId, {
+            transportServices: (shell.transportServices as unknown[]) || [],
+            groceryServices: (shell.groceryServices as unknown[]) || [],
+            customServices,
+          });
+        }
+        rawDocRef.current = {
+          transportServices: shell.transportServices || [],
+          groceryServices: shell.groceryServices || [],
+          customServices,
+        };
+      } else if (isOwnerTemplate && templateOwnerKey) {
+        const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+        const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
+        const prev = (payload as { concierge?: Record<string, unknown> })?.concierge || {};
+        await listingsService.putListingOwnerConfigTemplateSection(templateOwnerKey, 'concierge', {
+          transportServices: prev.transportServices || [],
+          groceryServices: prev.groceryServices || [],
+          customServices,
+        });
+      } else if (listingId) {
+        const existing = await listingsService.getListingConciergeConfig(listingId);
+        const doc = (existing.data || {}) as { transportServices?: unknown[]; groceryServices?: unknown[] };
+        await listingsService.updateListingConciergeServices(listingId, {
+          transportServices: doc.transportServices || [],
+          groceryServices: doc.groceryServices || [],
+          customServices,
+        });
+      } else {
+        return;
       }
-    }, 800);
-  }, [persistConfig]);
+      setSavingState('saved');
+      dirtyRef.current = false;
+      setDirty(false);
+      logV3Orch('gestion.concierge.persist.ok', { count: customServices.length });
+      logOrchConfig('concierge.persist ← OK');
+      if (!manualSaveMode) {
+        window.setTimeout(() => setSavingState('idle'), 2000);
+      }
+    } catch (err) {
+      setSavingState('idle');
+      dirtyRef.current = true;
+      setDirty(true);
+      orchConfigError('concierge.persist FAIL', err);
+      logV3Orch('gestion.concierge.persist.error', {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }, [
+    isAdminGlobal,
+    isOwnerTemplate,
+    listingId,
+    listingValues,
+    manualSaveMode,
+    onListingPatch,
+    templateMode,
+    templateOwnerKey,
+    useOrchestrationGestion,
+  ]);
 
   useEffect(() => {
-    if (loading || !hydratedRef.current || isAdminGlobal) return;
-    debouncedSave();
-  }, [config, loading, debouncedSave, isAdminGlobal]);
+    if (manualSaveMode || loading || !hydratedRef.current || isAdminGlobal || !dirtyRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void persist();
+    }, 800);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [config, loading, persist, manualSaveMode, isAdminGlobal]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
+      markDirty();
       setConfig(prev => {
         const oldIndex = prev.services.findIndex(s => s.id === active.id);
         const newIndex = prev.services.findIndex(s => s.id === over.id);
@@ -366,6 +479,7 @@ export default function ConciergeConfigTab({
     if (config.services.length >= MAX_SERVICES) return;
     if (config.services.some(s => s.id === item.id)) return;
     setExpandedServiceId(item.id);
+    markDirty();
     setConfig(prev => ({
       ...prev,
       services: [...prev.services, catalogItemToService(item, prev.services.length)],
@@ -376,6 +490,7 @@ export default function ConciergeConfigTab({
     if (config.services.length >= MAX_SERVICES) return;
     const id = `custom_${Date.now()}`;
     setExpandedServiceId(id);
+    markDirty();
     setConfig(prev => ({
       ...prev,
       services: [
@@ -398,13 +513,19 @@ export default function ConciergeConfigTab({
   };
 
   const deleteService = (id: string) => {
+    markDirty();
     setConfig(prev => ({ ...prev, services: prev.services.filter(s => s.id !== id) }));
   };
 
   const updateService = (id: string, updates: Partial<ConciergeService>) => {
+    markDirty();
+    const normalized =
+      updates.cityIds !== undefined
+        ? { ...updates, cityIds: cloneCityAssociation(updates.cityIds) }
+        : updates;
     setConfig(prev => ({
       ...prev,
-      services: prev.services.map(s => (s.id === id ? { ...s, ...updates } : s)),
+      services: prev.services.map(s => (s.id === id ? { ...s, ...normalized } : s)),
     }));
   };
 
@@ -422,19 +543,26 @@ export default function ConciergeConfigTab({
 
   return (
     <Box>
-      <ConfigIntroBar saveState={isAdminGlobal ? 'idle' : savingState}>
-        {isAdminGlobal ? (
-          <>
-            <b>Template Admin</b> — catalogue des modèles disponibles pour les PM. Les PM ajoutent et configurent
-            leurs services (prix, villes) ; rien n’est synchronisé depuis l’admin pour la conciergerie configurée.
-          </>
-        ) : (
-          <>
-            Bibliothèque = modèles sans ville. Une fois ajouté, configurez chaque service : tarif, icône et{' '}
-            <b>villes</b> (toutes ou une sélection).
-          </>
-        )}
-      </ConfigIntroBar>
+      {!manualSaveMode ? (
+        <ConfigIntroBar saveState={isAdminGlobal ? 'idle' : savingState}>
+          {isAdminGlobal ? (
+            <>
+              <b>Template Admin</b> — catalogue des modèles disponibles pour les PM. Les PM ajoutent et configurent
+              leurs services (prix, villes) ; rien n’est synchronisé depuis l’admin pour la conciergerie configurée.
+            </>
+          ) : (
+            <>
+              Bibliothèque = modèles sans ville. Une fois ajouté, configurez chaque service : tarif, icône et{' '}
+              <b>villes</b> (toutes ou une sélection).
+            </>
+          )}
+        </ConfigIntroBar>
+      ) : (
+        <Typography sx={{ ...TYPO.intro, mb: 2 }}>
+          Bibliothèque = modèles sans ville. Une fois ajouté, configurez chaque service : tarif, icône et{' '}
+          <b>villes</b> (toutes ou une sélection).
+        </Typography>
+      )}
 
       {/* Bibliothèque — modèles → ajout dans customServices[] (persisté) */}
       <Box sx={{
@@ -604,6 +732,15 @@ export default function ConciergeConfigTab({
           + Service personnalisé
         </Button>
       )}
+
+      {manualSaveMode ? (
+        <V3BlockSaveBar
+          label="Conciergerie · services custom"
+          dirty={dirty}
+          saving={savingState === 'saving'}
+          onSave={() => void persist()}
+        />
+      ) : null}
         </>
       )}
     </Box>
@@ -629,6 +766,7 @@ function IconPicker({
         placeholder="…"
         value={value}
         onChange={e => onChange(e.target.value.slice(0, 4))}
+        onKeyDown={e => e.stopPropagation()}
         sx={{ width: 56, '& input': { textAlign: 'center', fontSize: 16, py: 0.5 } }}
       />
       {icons.map(emoji => (
@@ -744,6 +882,7 @@ function SortableService({
               label="Nom"
               value={service.labelFr}
               onChange={e => onUpdate({ labelFr: e.target.value })}
+              onKeyDown={e => e.stopPropagation()}
               fullWidth
               slotProps={{ htmlInput: { maxLength: 60 } }}
             />
@@ -777,6 +916,7 @@ function SortableService({
               label="Description"
               value={service.descriptionFr}
               onChange={e => onUpdate({ descriptionFr: e.target.value })}
+              onKeyDown={e => e.stopPropagation()}
               fullWidth
               multiline
               minRows={1}
@@ -797,6 +937,8 @@ function SortableService({
                 Toutes les villes, ou sélectionnez une ou plusieurs villes Sojori pour ce service
               </Typography>
               <CityAssociationField
+                key={`cities-${service.id}`}
+                instanceId={service.id}
                 compact
                 value={service.cityIds}
                 onChange={cityIds => onUpdate({ cityIds })}

@@ -477,6 +477,14 @@ export function apiOrchestrationToDesign(doc: Record<string, unknown> | null) {
       const hours = sr.hours as number | undefined;
       const useHours = hours != null && hours !== 0;
       const taskTypeId = String(w.type || '');
+      let staffTemplateId = String(
+        (sr as { staffTemplateId?: string }).staffTemplateId ||
+          (sr as { messageId?: string }).messageId ||
+          defaultStaffReminderMessageId(taskTypeId),
+      );
+      if (taskTypeId === 'checkout_cleaning' && staffTemplateId === 'staff_reminder_generic') {
+        staffTemplateId = 'staff_reminder_cleaning';
+      }
       return {
         id: `staff-${i}-${j}`,
         label: String(sr.label || `Rappel ${j + 1}`),
@@ -487,10 +495,7 @@ export function apiOrchestrationToDesign(doc: Record<string, unknown> | null) {
         },
         time: String(sr.time || '09:00'),
         enabled: true,
-        staffTemplateId: String(
-          (sr as { messageId?: string }).messageId ||
-            defaultStaffReminderMessageId(taskTypeId),
-        ),
+        staffTemplateId,
       };
     }),
     assignment: w.staffAssignment

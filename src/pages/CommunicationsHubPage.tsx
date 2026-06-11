@@ -10,6 +10,7 @@ import LeadsTabV2 from '../components/communications/LeadsTabV2';
 import ReviewsTabV2 from '../components/communications/ReviewsTabV2';
 import InboxHubTabs, { type CommsHubTab } from '../components/unified-inbox/InboxHubTabs';
 import messagesService from '../services/messagesService';
+import { getCachedOtaInbox } from '../utils/otaInboxCache';
 
 function isOtaChannel(ch?: string): boolean {
   const c = (ch || '').toLowerCase();
@@ -29,12 +30,24 @@ export default function CommunicationsHubPage() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    (async () => {
+    const cachedOta = getCachedOtaInbox();
+    if (cachedOta) {
+      setCounts((prev) => ({ ...prev, ota: cachedOta.length }));
+    }
+
+    const onOtaUpdated = (event: Event) => {
+      const count = (event as CustomEvent<{ count: number }>).detail?.count;
+      if (typeof count === 'number') {
+        setCounts((prev) => ({ ...prev, ota: count }));
+      }
+    };
+    window.addEventListener('sojori:ota-inbox-updated', onOtaUpdated);
+
+    void (async () => {
       try {
-        const [guestRes, staffRes, otaRes, leadsRes, reviewsRes] = await Promise.all([
+        const [guestRes, staffRes, leadsRes, reviewsRes] = await Promise.all([
           messagesService.getConversations({ filter: 'smart', hasReservation: true, limit: 100 }),
           messagesService.getConversations({ filter: 'smart', hasReservation: false, limit: 50 }),
-          messagesService.getOTAThreads({ page: 0, limit: 50 }).catch(() => ({ threads: [] })),
           messagesService.getLeads({ limit: 50 }).catch(() => ({ threads: [] })),
           messagesService.getReviews({ limit: 50 }).catch(() => ({ threads: [] })),
         ]);
@@ -50,7 +63,7 @@ export default function CommunicationsHubPage() {
           }
         }
 
-        const ota = (otaRes.threads || otaRes.data?.threads || []).length;
+        const ota = cachedOta?.length ?? 0;
 
         const staffCount =
           staffRes.status === 'success' ? staffRes.data.conversations.length : 0;
@@ -70,6 +83,10 @@ export default function CommunicationsHubPage() {
         /* ignore */
       }
     })();
+
+    return () => {
+      window.removeEventListener('sojori:ota-inbox-updated', onOtaUpdated);
+    };
   }, []);
 
   return (

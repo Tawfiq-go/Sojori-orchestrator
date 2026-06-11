@@ -9,28 +9,10 @@ import OrchestrationPageView, {
 import OrchestrationOwnerScopeTabs, {
   type OwnerConfigTabStatus,
 } from '../features/taskHub/staff-design/OrchestrationOwnerScopeTabs';
-import { emptyWorkflowPlan, type FulltaskTaskTypeId } from '../features/taskHub/staff-design/fulltaskTaskTypes';
-import { defaultStaffReminderMessageId } from '../features/taskHub/staff-design/staffReminderTemplates';
-import type {
-  CatalogMessage,
-  ScheduledOrchestrationMessage,
-  Workflow,
-} from '../features/taskHub/staff-design/types';
+import type { CatalogMessage } from '../features/taskHub/staff-design/types';
 import * as fulltaskApi from '../services/fulltaskApi';
 import { mergeCatalogWithClaudeDefaults } from '../features/taskHub/staff-design/defaultMessageCatalog';
-import {
-  applyListOrderToState,
-  defaultOrchestrationListOrder,
-  reconcileOrchestrationListOrder,
-  schedListKey,
-  wfListKey,
-  type OrchListKey,
-} from '../features/taskHub/staff-design/orchestrationListOrder';
-import {
-  apiOrchestrationToDesign,
-  designOrchestrationToApi,
-  RELANCE_MESSAGE_BY_TASK_TYPE,
-} from '../utils/fulltaskMappers';
+import { apiOrchestrationToDesign } from '../utils/fulltaskMappers';
 import { unwrapFulltaskData } from '../utils/unwrapFulltaskResponse';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
 import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
@@ -45,8 +27,9 @@ function newCatalogId(): string {
 }
 
 function parseOrchestrationSubTab(raw: string | null): OrchestrationSubTab {
-  if (raw === 'messages' || raw === 'config' || raw === 'whatsapp') return raw === 'whatsapp' ? 'config' : raw;
-  return 'workflows';
+  if (raw === 'config' || raw === 'whatsapp') return 'config';
+  if (raw === 'workflows') return 'messages';
+  return raw === 'messages' ? 'messages' : 'messages';
 }
 
 function isAdminOwnerRow(owner: { _id?: string; id?: string; email?: string }): boolean {
@@ -116,10 +99,7 @@ function TasksOrchestrationFulltaskPageInner() {
     [searchParams, setSearchParams],
   );
 
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [catalog, setCatalog] = useState<CatalogMessage[]>([]);
-  const [scheduledRules, setScheduledRules] = useState<ScheduledOrchestrationMessage[]>([]);
-  const [listOrder, setListOrder] = useState<OrchListKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<'ok' | 'empty' | 'error'>('ok');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -127,20 +107,11 @@ function TasksOrchestrationFulltaskPageInner() {
   const [ownerConfigStatus, setOwnerConfigStatus] = useState<Record<string, OwnerConfigTabStatus>>({});
   const [saving, setSaving] = useState(false);
   const [seeding, setSeeding] = useState(false);
+
   const applyDocToState = useCallback((doc: Record<string, unknown> | null) => {
     if (!doc) return;
     const mapped = apiOrchestrationToDesign(doc);
-    const wf = mapped.workflows as Workflow[];
-    const sched = mapped.scheduledRules as ScheduledOrchestrationMessage[];
-    const savedOrder = (mapped.listOrder as OrchListKey[] | undefined) ?? [];
-    setWorkflows(wf);
     setCatalog(mergeCatalogWithClaudeDefaults(mapped.catalog as CatalogMessage[]));
-    setScheduledRules(sched);
-    const order =
-      savedOrder.length > 0
-        ? reconcileOrchestrationListOrder(savedOrder, sched, wf)
-        : defaultOrchestrationListOrder(sched, wf);
-    setListOrder(order);
   }, []);
 
   const load = useCallback(
@@ -155,20 +126,15 @@ function TasksOrchestrationFulltaskPageInner() {
         const doc = unwrapFulltaskData<Record<string, unknown>>(raw);
         if (!doc) {
           if (!background) {
-            setWorkflows([]);
             setCatalog([]);
-            setScheduledRules([]);
-            setListOrder([]);
             setLoadState('empty');
             setLoadError(null);
             setConfigSource(null);
           }
         } else {
-          const wfN = (doc.workflows as unknown[] | undefined)?.length ?? 0;
           const catN = (doc.messageCatalog as unknown[] | undefined)?.length ?? 0;
-          const schedN = (doc.scheduledMessages as unknown[] | undefined)?.length ?? 0;
           applyDocToState(doc);
-          setLoadState(wfN === 0 && catN === 0 && schedN === 0 ? 'empty' : 'ok');
+          setLoadState(catN === 0 ? 'empty' : 'ok');
           setLoadError(null);
         }
       } catch (e: unknown) {
@@ -181,10 +147,7 @@ function TasksOrchestrationFulltaskPageInner() {
           error: err.response?.data?.error || err.message,
         });
         if (!background) {
-          setWorkflows([]);
           setCatalog([]);
-          setScheduledRules([]);
-          setListOrder([]);
           setLoadState('error');
           if (err.response?.status === 401) {
             setLoadError(
@@ -224,7 +187,7 @@ function TasksOrchestrationFulltaskPageInner() {
           const doc = unwrapFulltaskData<Record<string, unknown>>(raw);
           const hasOwn =
             meta?.configSource === 'owner' ||
-            Boolean(doc && ((doc.workflows as unknown[] | undefined)?.length ?? 0) > 0);
+            Boolean((doc?.messageCatalog as unknown[] | undefined)?.length);
           return [id, hasOwn ? ('owner' as const) : ('empty' as const)] as const;
         } catch {
           return [id, 'empty' as const] as const;
@@ -261,31 +224,32 @@ function TasksOrchestrationFulltaskPageInner() {
   }, [isAdminTemplate, adminScopeTab, pmOwners, setAdminScopeTab]);
 
   const persist = async () => {
-    if (workflows.length === 0 && scheduledRules.length === 0) {
+    if (catalog.length === 0) {
       toast.error(
-        'Config vide : utilisez "Charger le seed complet". N\'enregistrez pas un état vide (cela effacerait MongoDB).',
+        'Catalogue vide : utilisez "Charger le seed complet" ou ajoutez un message avant d\'enregistrer.',
       );
       return;
     }
     setSaving(true);
     try {
-      const ordered = applyListOrderToState(listOrder, scheduledRules, workflows);
-      const body = designOrchestrationToApi(
-        ordered.workflows as Record<string, unknown>[],
-        catalog as Record<string, unknown>[],
-        ordered.scheduledRules as Record<string, unknown>[],
-        listOrder,
-      );
-      const raw = await fulltaskApi.upsertOrchestrationConfig(effectiveOwnerKey, body);
+      const raw = await fulltaskApi.upsertOrchestrationConfig(effectiveOwnerKey, {
+        messageCatalog: catalog.map((c) => ({
+          id: String(c.id || c.whatsappTemplateId || `msg-${Date.now()}`),
+          label: String(c.label || ''),
+          whatsappTemplateId: String(c.whatsappTemplateId || c.id || ''),
+          ...(c.flowCategory ? { flowCategory: String(c.flowCategory) } : {}),
+          messageFrOta: String(c.messageFrOta || ''),
+          messageFrEmail: String(c.messageFrEmail || ''),
+        })),
+      });
       const saved = unwrapFulltaskData<Record<string, unknown>>(raw);
-      const savedWf = (saved?.workflows as unknown[] | undefined)?.length ?? 0;
-      if (saved && !(savedWf === 0 && workflows.length > 0)) {
+      if (saved) {
         applyDocToState(saved);
         setLoadState('ok');
       } else {
         await load({ background: true });
       }
-      toast.success('Enregistré', { autoClose: 2000 });
+      toast.success('Catalogue messages enregistré', { autoClose: 2000 });
       if (effectiveOwnerKey !== 'global') {
         await refreshOwnerConfigStatus();
       }
@@ -303,7 +267,6 @@ function TasksOrchestrationFulltaskPageInner() {
 
   const handleSyncToOwner = async (targetOwnerId: string, targetOwnerName: string) => {
     try {
-      // Copy API : 'global' ou ID admin legacy → template (ownerId null). Les deux sont acceptés.
       await fulltaskApi.copyOrchestrationConfigToOwner(
         ORCHESTRATION_ADMIN_OWNER_ID,
         targetOwnerId,
@@ -377,7 +340,7 @@ function TasksOrchestrationFulltaskPageInner() {
             fontSize: 13,
           }}
         >
-          {effectiveDisplayName} n&apos;a pas encore de config propre. Utilisez{' '}
+          {effectiveDisplayName} n&apos;a pas encore de catalogue messages. Utilisez{' '}
           <strong>Synchroniser PM {effectiveDisplayName}</strong> pour copier le template Admin.
         </div>
       ) : null}
@@ -393,7 +356,7 @@ function TasksOrchestrationFulltaskPageInner() {
             fontSize: 13,
           }}
         >
-          Ce PM n&apos;a pas encore de config orchestration propre. Utilisez{' '}
+          Ce PM n&apos;a pas encore de catalogue messages. Utilisez{' '}
           <strong>Synchroniser PM {ownerDisplayName}</strong> pour copier le template Admin, ou
           chargez le seed puis enregistrez.
         </div>
@@ -410,7 +373,7 @@ function TasksOrchestrationFulltaskPageInner() {
             color: '#0a5c40',
           }}
         >
-          Config propre du PM · vous modifiez uniquement <strong>{effectiveDisplayName}</strong>
+          Catalogue propre du PM · vous modifiez uniquement <strong>{effectiveDisplayName}</strong>
         </div>
       ) : null}
       {loadError ? (
@@ -435,135 +398,45 @@ function TasksOrchestrationFulltaskPageInner() {
         loadState={loadState}
         onSubTabChange={(tab) => {
           const next = new URLSearchParams(searchParams);
-          if (tab === 'workflows') next.delete('tab');
+          if (tab === 'messages') next.delete('tab');
           else next.set('tab', tab);
           setSearchParams(next, { replace: true });
         }}
-        workflows={workflows}
         catalog={catalog}
-        scheduledRules={scheduledRules}
-        listOrder={listOrder}
         saving={saving}
         onSave={() => void persist()}
         seedingDefaults={seeding}
-        onSeedDefaults={() => {
-                void (async () => {
-                  const isEmpty =
-                    workflows.length === 0 &&
-                    catalog.length === 0 &&
-                    scheduledRules.length === 0;
-                  if (!isEmpty) {
-                    if (
-                      !window.confirm(
-                        'Réinitialiser toute la config orchestration (workflows + messages + ordre) ? Action destructive.',
-                      )
-                    ) {
-                      return;
-                    }
-                  }
-                  setSeeding(true);
-                  try {
-                    await fulltaskApi.seedOrchestrationComplete(!isEmpty);
-                    toast.success(
-                      'Seed chargé : 12 workflows, messages catalogue/plan + templates WhatsApp',
-                    );
-                    await load({ background: true });
-                  } catch (e: unknown) {
-                    const err = e as {
-                      response?: { status?: number; data?: { error?: string } };
-                      message?: string;
-                    };
-                    console.error('[orch-config] seed-complete failed', {
-                      status: err.response?.status,
-                      error: err.response?.data?.error || err.message,
-                    });
-                    toast.error(err.response?.data?.error || err.message);
-                  } finally {
-                    setSeeding(false);
-                  }
-                })();
-              }}
         onSeedDefaultsVisible={loadState === 'empty' && !loadError}
-        onUpdateWorkflow={(id, patch) =>
-          setWorkflows((prev) => prev.map((w) => (w._id === id ? { ...w, ...patch } : w)))
-        }
+        onSeedDefaults={() => {
+          void (async () => {
+            const isEmpty = catalog.length === 0;
+            if (!isEmpty) {
+              if (
+                !window.confirm(
+                  'Réinitialiser le catalogue messages (seed admin) ? Les workflows listing ne sont pas affectés.',
+                )
+              ) {
+                return;
+              }
+            }
+            setSeeding(true);
+            try {
+              await fulltaskApi.seedOrchestrationComplete(!isEmpty);
+              toast.success('Seed chargé : catalogue messages + templates WhatsApp');
+              await load({ background: true });
+            } catch (e: unknown) {
+              const err = e as {
+                response?: { status?: number; data?: { error?: string } };
+                message?: string;
+              };
+              toast.error(err.response?.data?.error || err.message);
+            } finally {
+              setSeeding(false);
+            }
+          })();
+        }}
         onUpdateCatalogEntry={(id, patch) =>
           setCatalog((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
-        }
-        onUpdateScheduledRule={(id, patch) =>
-          setScheduledRules((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r)))
-        }
-        onAddRelance={(workflowId) =>
-          setWorkflows((prev) =>
-            prev.map((w) => {
-              if (w._id !== workflowId) return w;
-              const taskTypeId = w.taskTypeId || w.triggerTaskType || '';
-              const defaultMsg =
-                RELANCE_MESSAGE_BY_TASK_TYPE[taskTypeId] ||
-                catalog.find((c) => c.id.startsWith('msg_relance_'))?.id ||
-                '';
-              return {
-                ...w,
-                relances: [
-                  ...w.relances,
-                  {
-                    id: `rel-${Date.now()}`,
-                    channel: 'whatsapp',
-                    deliveryChannel: 'whatsapp',
-                    reference: 'check_in',
-                    delay: { value: -1, unit: 'days' },
-                    time: '09:00',
-                    catalogMessageId: defaultMsg,
-                    enabled: true,
-                  },
-                ],
-              };
-            }),
-          )
-        }
-        onDeleteRelance={(workflowId, relanceId) =>
-          setWorkflows((prev) =>
-            prev.map((w) =>
-              w._id === workflowId
-                ? { ...w, relances: w.relances.filter((r) => r.id !== relanceId) }
-                : w,
-            ),
-          )
-        }
-        onAddStaffReminder={(workflowId) =>
-          setWorkflows((prev) =>
-            prev.map((w) => {
-              if (w._id !== workflowId) return w;
-              const taskTypeId = w.taskTypeId || w.triggerTaskType || '';
-              return {
-                ...w,
-                staffReminders: [
-                  ...(w.staffReminders ?? []),
-                  {
-                    id: `staff-${Date.now()}`,
-                    label: `Rappel ${(w.staffReminders ?? []).length + 1}`,
-                    reference: 'previous_step_done',
-                    delay: { value: -2, unit: 'hours' },
-                    time: '09:00',
-                    enabled: true,
-                    staffTemplateId: defaultStaffReminderMessageId(taskTypeId),
-                  },
-                ],
-              };
-            }),
-          )
-        }
-        onDeleteStaffReminder={(workflowId, reminderId) =>
-          setWorkflows((prev) =>
-            prev.map((w) =>
-              w._id === workflowId
-                ? {
-                    ...w,
-                    staffReminders: (w.staffReminders ?? []).filter((r) => r.id !== reminderId),
-                  }
-                : w,
-            ),
-          )
         }
         onAddCatalogEntry={() => {
           const id = newCatalogId();
@@ -580,42 +453,6 @@ function TasksOrchestrationFulltaskPageInner() {
           return id;
         }}
         onDeleteCatalogEntry={(id) => setCatalog((prev) => prev.filter((c) => c.id !== id))}
-        onAddScheduledRule={(newId) => {
-          const firstResa = catalog.find((c) => !c.id.startsWith('msg_relance_'));
-          setScheduledRules((prev) => [
-            ...prev,
-            {
-              _id: newId,
-              label: 'Nouvel envoi',
-              enabled: true,
-              catalogMessageId: firstResa?.id || '',
-              trigger: {
-                reference: 'reservation_date',
-                delay: { value: 1, unit: 'hours' },
-                time: '10:00',
-              },
-              deliveryChannel: 'whatsapp',
-            },
-          ]);
-          setListOrder((prev) => [...prev, schedListKey(newId)]);
-        }}
-        onDeleteScheduledRule={(id) => {
-          setScheduledRules((prev) => prev.filter((r) => r._id !== id));
-          setListOrder((prev) => prev.filter((k) => k !== schedListKey(id)));
-        }}
-        onAddWorkflow={(taskTypeId: FulltaskTaskTypeId) => {
-          const plan = emptyWorkflowPlan(taskTypeId) as Workflow;
-          setWorkflows((prev) => [...prev, plan]);
-          setListOrder((prev) => [...prev, wfListKey(plan._id)]);
-          return plan._id;
-        }}
-        onDeleteWorkflow={(workflowId) => {
-          setWorkflows((prev) => prev.filter((w) => w._id !== workflowId));
-          setListOrder((prev) => prev.filter((k) => k !== wfListKey(workflowId)));
-        }}
-        onReorderList={(oldIndex, newIndex) =>
-          setListOrder((prev) => arrayMove(prev, oldIndex, newIndex))
-        }
         onReorderCatalog={(oldIndex, newIndex) =>
           setCatalog((prev) => arrayMove(prev, oldIndex, newIndex))
         }

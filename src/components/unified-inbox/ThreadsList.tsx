@@ -163,7 +163,7 @@ export default function ThreadsList({
           flexShrink: 0,
         }}
       >
-        <Stack direction="row" alignItems="center" gap={1} sx={{ mb: 1 }}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1 }}>
           <Box
             sx={{
               width: 24,
@@ -465,7 +465,7 @@ export default function ThreadsList({
               </Box>
 
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Stack direction="row" alignItems="center" gap={0.75} sx={{ mb: 0.25 }}>
+                <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, mb: 0.25 }}>
                   <Typography
                     sx={{
                       fontSize: 12.5,
@@ -522,7 +522,7 @@ export default function ThreadsList({
                 >
                   {thread.preview}
                 </Typography>
-                <Stack direction="row" gap={0.5} sx={{ mt: 0.375, flexWrap: 'wrap' }}>
+                <Stack direction="row" sx={{ gap: 0.5, mt: 0.375, flexWrap: 'wrap' }}>
                   {thread.reservationNumber && (
                     <ThreadBadge tone="resa">{thread.reservationNumber}</ThreadBadge>
                   )}

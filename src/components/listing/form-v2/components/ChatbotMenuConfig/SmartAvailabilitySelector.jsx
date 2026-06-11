@@ -4,13 +4,13 @@ import {
   Box,
   FormControl,
   FormControlLabel,
+  IconButton,
   InputLabel,
   MenuItem,
   Radio,
   RadioGroup,
   Select,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { T, sxInput } from './menuTheme';
@@ -68,6 +68,54 @@ const ensureBoundary = (boundary, fallback) => {
   };
 };
 
+function NumericStepper({ value, onChange, min = 0, max = 365 }) {
+  const clamp = (n) => Math.min(max, Math.max(min, n));
+  return (
+    <Stack
+      direction="row"
+      sx={{
+        alignItems: 'center',
+        border: `1px solid ${T.border}`,
+        borderRadius: 1,
+        bgcolor: T.bg1,
+        width: { xs: '100%', sm: 88 },
+        flexShrink: 0,
+      }}
+    >
+      <IconButton
+        size="small"
+        aria-label="Diminuer"
+        onClick={() => onChange(clamp(value - 1))}
+        disabled={value <= min}
+        sx={{ width: 32, height: 32, color: T.text2 }}
+      >
+        −
+      </IconButton>
+      <Box
+        sx={{
+          flex: 1,
+          textAlign: 'center',
+          fontFamily: '"Geist Mono", monospace',
+          fontWeight: 700,
+          fontSize: 14,
+          color: T.text,
+        }}
+      >
+        {value}
+      </Box>
+      <IconButton
+        size="small"
+        aria-label="Augmenter"
+        onClick={() => onChange(clamp(value + 1))}
+        disabled={value >= max}
+        sx={{ width: 32, height: 32, color: T.text2 }}
+      >
+        +
+      </IconButton>
+    </Stack>
+  );
+}
+
 function BoundaryRow({ title, boundary, onUnit, onMoment, onEvent, onValue, momentOpts }) {
   return (
     <Box sx={{ p: 1.25, border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1 }}>
@@ -75,7 +123,10 @@ function BoundaryRow({ title, boundary, onUnit, onMoment, onEvent, onValue, mome
         {title}
       </Typography>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
-        <TextField label="Valeur" type="number" size="small" value={boundary.value} onChange={(e) => onValue(e.target.value)} sx={{ ...sxInput, width: { xs: '100%', sm: 88 } }} />
+        <Box sx={{ width: { xs: '100%', sm: 88 } }}>
+          <Typography sx={{ fontSize: 10, color: T.text4, mb: 0.35, fontWeight: 700 }}>Valeur</Typography>
+          <NumericStepper value={boundary.value} onChange={onValue} />
+        </Box>
         <FormControl size="small" sx={{ minWidth: 110, flex: 1 }}>
           <InputLabel>Unité</InputLabel>
           <Select label="Unité" value={boundary.unit} onChange={(e) => onUnit(e.target.value)} sx={sxInput}>

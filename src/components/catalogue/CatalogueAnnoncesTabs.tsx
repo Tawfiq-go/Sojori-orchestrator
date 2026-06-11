@@ -3,19 +3,13 @@ import { Box, Tab, Tabs } from '@mui/material';
 
 const TABS = [
   { id: 'listings', label: 'Listings', path: '/listings' },
-  { id: 'template', label: 'Template orchestration', path: '/catalogue/listing-orchestration' },
-  { id: 'orch-v3', label: 'Orchestration listing', path: '/catalogue/listing-orchestration-v3' },
+  { id: 'orch-model', label: 'Modèle orchestration', path: '/listings/orchestration-model' },
 ] as const;
 
 export function CatalogueAnnoncesTabs() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const active = pathname.startsWith('/catalogue/listing-orchestration-v3') ||
-    pathname.startsWith('/catalogue/listing-orchestration-v2')
-    ? 'orch-v3'
-    : pathname.startsWith('/catalogue/listing-orchestration')
-      ? 'template'
-      : 'listings';
+  const active = pathname.startsWith('/listings/orchestration-model') ? 'orch-model' : 'listings';
 
   return (
     <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>

@@ -16,6 +16,7 @@ export const DEFAULT_STAFF_REMINDER_MESSAGE_ID: Record<string, string> = {
   departure_choose: 'staff_reminder_departure',
   cleaning_free: 'staff_reminder_cleaning',
   cleaning_paid: 'staff_reminder_cleaning',
+  checkout_cleaning: 'staff_reminder_cleaning',
   transport: 'staff_reminder_transport',
   groceries: 'staff_reminder_groceries',
   concierge: 'staff_reminder_concierge',

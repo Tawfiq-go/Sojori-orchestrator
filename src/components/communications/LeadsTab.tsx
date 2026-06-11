@@ -207,9 +207,14 @@ export default function LeadsTab() {
 
     try {
       const response = await messagesService.getLeadMessages(thread.threadId);
+      const rawMessages = Array.isArray(response?.messages)
+        ? response.messages
+        : Array.isArray(response?.data)
+          ? response.data
+          : [];
 
-      if (response.data) {
-        const formatted = response.data.map((msg: any) => ({
+      if (rawMessages.length > 0) {
+        const formatted = rawMessages.map((msg: any) => ({
           id: msg._id || msg.messageId,
           content: msg.body || msg.message || '',
           timestamp: msg.createdAt || msg.date,

@@ -1,10 +1,9 @@
 // Transport — FR uniquement · transportServices[]
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Stack, Typography, CircularProgress, IconButton, Collapse, Alert } from '@mui/material';
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -13,7 +12,6 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
@@ -34,6 +32,7 @@ import {
 import { DashedAddButton } from '../../../../components/listing/form-v2/components/cleaning/CleaningSlotDialogs';
 import {
   createBlankTransportRoute,
+  cloneCityAssociation,
   TRANSPORT_JOURNEY_OPTIONS,
   journeyLabel,
   type TransportExternalKind,
@@ -43,9 +42,19 @@ import {
 } from './transportRouteCatalog';
 import { listingPropertyFromValues, type ListingPropertyPlace } from './transportListingProperty';
 import { migrateJourneyTag, syncRouteEndpoints, TRANSPORT_V1_NOTE } from './transportRouteRules';
-import CityAssociationField from './CityAssociationField';
+import CityAssociationField, { formatCityAssociationSummary } from './CityAssociationField';
+import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
+import { logV3Orch } from '../../../orchestrationListingV3/v3OrchestrationDebugLog';
 
 const MAX_ROUTES = 10;
+
+function gestionConciergeShell(listingValues: Record<string, unknown>) {
+  return {
+    transportServices: listingValues.transportServices ?? [],
+    groceryServices: listingValues.groceryServices ?? [],
+    customServices: listingValues.customServices ?? [],
+  };
+}
 
 function mapApiRoute(t: Record<string, unknown>, i: number, fallbackProperty: ListingPropertyPlace): TransportRouteItem {
   const name = (t.name as { fr?: string }) || {};
@@ -96,9 +105,27 @@ function mapApiRoute(t: Record<string, unknown>, i: number, fallbackProperty: Li
     estimatedDuration: route.estimatedDuration || '',
     enabled: t.enabled !== false,
     order: i,
-    cityIds: (t.cityIds as 'all' | string[] | undefined) ?? 'all',
+    cityIds: cloneCityAssociation((t.cityIds as 'all' | string[] | undefined) ?? 'all'),
   };
   return syncRouteEndpoints(draft, propertyPlace);
+}
+
+function normalizeLoadedRoutes(
+  transport: unknown,
+  property: ListingPropertyPlace,
+): TransportRouteItem[] {
+  const list = Array.isArray(transport) ? transport : [];
+  const seen = new Set<string>();
+  return list.map((t, i) => {
+    const route = mapApiRoute(t as Record<string, unknown>, i, property);
+    let id = route.id;
+    if (seen.has(id)) {
+      id = `${id}__${i}`;
+      route.id = id;
+    }
+    seen.add(id);
+    return route;
+  });
 }
 
 function routeToApi(r: TransportRouteItem, i: number, property: ListingPropertyPlace) {
@@ -142,7 +169,7 @@ function routeToApi(r: TransportRouteItem, i: number, property: ListingPropertyP
     availability: { type: 'always' },
     images: [],
     order: i,
-    cityIds: synced.cityIds ?? 'all',
+    cityIds: cloneCityAssociation(synced.cityIds),
   };
 }
 
@@ -150,36 +177,113 @@ interface Props {
   listingId?: string;
   ownerId?: string;
   listingValues?: Record<string, unknown>;
+  onListingPatch?: (patch: Record<string, unknown>) => Promise<void>;
+  templateMode?: boolean;
   templateOwnerKey?: string;
+  manualSaveMode?: boolean;
 }
 
 export default function TransportConfigTab({
   listingId = '',
   listingValues = {},
+  onListingPatch,
+  templateMode = false,
   templateOwnerKey,
+  manualSaveMode = false,
 }: Props) {
   const isOwnerTemplate = Boolean(templateOwnerKey);
   const isAdminGlobalTemplate = templateOwnerKey === 'global';
-  const listingProperty = listingPropertyFromValues(listingValues);
+  const useOrchestrationGestion =
+    Boolean(onListingPatch) && (templateMode || Object.keys(listingValues).length > 0);
+  const listingProperty = useMemo(
+    () => listingPropertyFromValues(listingValues),
+    [
+      listingValues.name,
+      listingValues.listingName,
+      listingValues.address,
+      listingValues.street,
+      listingValues.city,
+      listingValues.region,
+      listingValues.country,
+      listingValues.locationLine,
+      listingValues.lat,
+      listingValues.latitude,
+      listingValues.lng,
+      listingValues.longitude,
+    ],
+  );
+  const gestionTransportKey = useMemo(
+    () => JSON.stringify(listingValues.transportServices ?? []),
+    [listingValues.transportServices],
+  );
 
   const [routes, setRoutes] = useState<TransportRouteItem[]>([]);
+  const [cityOptions, setCityOptions] = useState<Array<{ _id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [dirty, setDirty] = useState(false);
   const routesRef = useRef(routes);
+  const rawDocRef = useRef<Record<string, unknown> | null>(null);
   const hydratedRef = useRef(false);
   const dirtyRef = useRef(false);
+  const skipAutoSaveRef = useRef(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { routesRef.current = routes; }, [routes]);
+  useEffect(() => {
+    routesRef.current = routes;
+  }, [routes]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await listingsService.getCities({ limit: 200 });
+        const list = (res?.data?.cities ?? res?.data ?? res ?? []) as Array<{ _id: string; name: string }>;
+        if (!cancelled && Array.isArray(list)) {
+          setCityOptions(list.filter(c => c._id && c.name));
+        }
+      } catch {
+        if (!cancelled) setCityOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  const routesFromTransport = useCallback(
+    (transport: unknown) => normalizeLoadedRoutes(transport, listingProperty),
+    [listingProperty],
+  );
+
+  const hydrateFromGestion = useCallback(() => {
+    const shell = gestionConciergeShell(listingValues);
+    rawDocRef.current = shell;
+    setRoutes(routesFromTransport(shell.transportServices));
+    hydratedRef.current = true;
+  }, [listingValues, routesFromTransport]);
+
   useEffect(() => {
+    if (!useOrchestrationGestion) return;
+    if (hydratedRef.current && dirtyRef.current) return;
+    skipAutoSaveRef.current = true;
+    dirtyRef.current = false;
+    setDirty(false);
+    setLoading(false);
+    hydrateFromGestion();
+    skipAutoSaveRef.current = false;
+  }, [useOrchestrationGestion, gestionTransportKey, hydrateFromGestion]);
+
+  useEffect(() => {
+    if (useOrchestrationGestion) return;
     hydratedRef.current = false;
     dirtyRef.current = false;
+    skipAutoSaveRef.current = true;
+    setDirty(false);
     (async () => {
       setLoading(true);
       try {
@@ -194,27 +298,50 @@ export default function TransportConfigTab({
           transport = (res.data as { transportServices?: Array<Record<string, unknown>> } | null)
             ?.transportServices;
         }
-        if (Array.isArray(transport) && transport.length > 0) {
-          setRoutes(transport.map((t, i) => mapApiRoute(t, i, listingProperty)));
-        } else {
-          setRoutes([]);
-        }
+        setRoutes(routesFromTransport(transport));
       } catch {
         setRoutes([]);
       } finally {
         setLoading(false);
         hydratedRef.current = true;
+        skipAutoSaveRef.current = false;
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-fetch si autre listing
-  }, [listingId, isOwnerTemplate, templateOwnerKey]);
+  }, [listingId, isOwnerTemplate, templateOwnerKey, useOrchestrationGestion]);
 
   const persist = useCallback(async () => {
     if (isAdminGlobalTemplate) return;
     setSavingState('saving');
+    const shell = useOrchestrationGestion
+      ? gestionConciergeShell(listingValues)
+      : rawDocRef.current || gestionConciergeShell({});
+    const transportServices = routesRef.current.map((r, i) => routeToApi(r, i, listingProperty));
+    logV3Orch('gestion.transport.persist.start', {
+      templateMode,
+      listingId: listingId || null,
+      routeCount: transportServices.length,
+    });
     try {
-      const transportServices = routesRef.current.map((r, i) => routeToApi(r, i, listingProperty));
-      if (isOwnerTemplate && templateOwnerKey) {
+      if (useOrchestrationGestion && onListingPatch) {
+        await onListingPatch({
+          transportServices,
+          groceryServices: shell.groceryServices || [],
+          customServices: shell.customServices || [],
+        });
+        if (!templateMode && listingId) {
+          await listingsService.updateListingConciergeServices(listingId, {
+            transportServices,
+            groceryServices: (shell.groceryServices as unknown[]) || [],
+            customServices: (shell.customServices as unknown[]) || [],
+          });
+        }
+        rawDocRef.current = {
+          transportServices,
+          groceryServices: shell.groceryServices || [],
+          customServices: shell.customServices || [],
+        };
+      } else if (isOwnerTemplate && templateOwnerKey) {
         const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
         const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
         const prev = (payload as { concierge?: Record<string, unknown> })?.concierge || {};
@@ -231,29 +358,53 @@ export default function TransportConfigTab({
           groceryServices: doc.groceryServices || [],
           customServices: doc.customServices || [],
         });
+      } else {
+        return;
       }
       setSavingState('saved');
-    } catch {
+      dirtyRef.current = false;
+      setDirty(false);
+      logV3Orch('gestion.transport.persist.ok', { routeCount: transportServices.length });
+      if (!manualSaveMode) {
+        window.setTimeout(() => setSavingState('idle'), 2000);
+      }
+    } catch (err) {
       setSavingState('idle');
       dirtyRef.current = true;
+      setDirty(true);
+      logV3Orch('gestion.transport.persist.error', {
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
-  }, [listingId, listingProperty, isOwnerTemplate, templateOwnerKey, isAdminGlobalTemplate]);
+  }, [
+    isAdminGlobalTemplate,
+    listingId,
+    listingProperty,
+    listingValues,
+    manualSaveMode,
+    onListingPatch,
+    templateMode,
+    isOwnerTemplate,
+    templateOwnerKey,
+    useOrchestrationGestion,
+  ]);
 
   useEffect(() => {
-    if (loading || !hydratedRef.current || !dirtyRef.current) return;
+    if (manualSaveMode || loading || !hydratedRef.current || !dirtyRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      persist().finally(() => {
-        dirtyRef.current = false;
-      });
+      void persist();
     }, 800);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [routes, loading, persist]);
+  }, [routes, loading, persist, manualSaveMode]);
 
   const mutateRoutes = (fn: (prev: TransportRouteItem[]) => TransportRouteItem[]) => {
-    dirtyRef.current = true;
+    if (!skipAutoSaveRef.current) {
+      dirtyRef.current = true;
+      setDirty(true);
+    }
     setRoutes(fn);
   };
 
@@ -267,9 +418,17 @@ export default function TransportConfigTab({
   };
 
   const updateRoute = (id: string, patch: Partial<TransportRouteItem>) => {
-    mutateRoutes(prev =>
-      prev.map(r => (r.id === id ? syncRouteEndpoints({ ...r, ...patch }, listingProperty) : r)),
-    );
+    const normalizedPatch =
+      patch.cityIds !== undefined
+        ? { ...patch, cityIds: cloneCityAssociation(patch.cityIds) }
+        : patch;
+    mutateRoutes(prev => {
+      const idx = prev.findIndex(r => r.id === id);
+      if (idx < 0) return prev;
+      const next = [...prev];
+      next[idx] = syncRouteEndpoints({ ...next[idx], ...normalizedPatch }, listingProperty);
+      return next;
+    });
   };
 
   if (loading) {
@@ -291,50 +450,69 @@ export default function TransportConfigTab({
         </Alert>
       )}
 
-      <ConfigIntroBar saveState={readOnly ? 'idle' : savingState}>
-        <b>Arrivée</b> : navette → logement <b>{listingProperty.name || 'Logement'}</b> (fixe). <b>Départ</b> : logement →
-        navette. Ajoutez vos routes manuellement — aucun modèle prérempli. {TRANSPORT_V1_NOTE}
-      </ConfigIntroBar>
+      {!manualSaveMode && (
+        <ConfigIntroBar saveState={readOnly ? 'idle' : savingState}>
+          <b>Arrivée</b> : navette → logement <b>{listingProperty.name || 'Logement'}</b> (fixe). <b>Départ</b> : logement →
+          navette. Ajoutez vos routes manuellement — aucun modèle prérempli. {TRANSPORT_V1_NOTE}
+        </ConfigIntroBar>
+      )}
+
+      {manualSaveMode && (
+        <Typography sx={{ ...TYPO.intro, mb: 2 }}>
+          <b>Arrivée</b> : navette → logement <b>{listingProperty.name || 'Logement'}</b> (fixe). <b>Départ</b> : logement →
+          navette. Ajoutez vos routes manuellement — aucun modèle prérempli. {TRANSPORT_V1_NOTE}
+        </Typography>
+      )}
 
       <Box sx={readOnly ? { opacity: 0.55, pointerEvents: 'none', userSelect: 'none' } : undefined}>
-      <Card compact icon="📍" title={`Routes · ${routes.length}/${MAX_ROUTES}`}>
-        {routes.length === 0 && (
-          <Typography sx={{ ...TYPO.caption, color: T.text3, mb: 1 }}>
-            Aucune route. Cliquez « + Route » pour en créer une.
-          </Typography>
-        )}
+        <Card compact icon="📍" title={`Routes · ${routes.length}/${MAX_ROUTES}`}>
+          {routes.length === 0 && (
+            <Typography sx={{ ...TYPO.caption, color: T.text3, mb: 1 }}>
+              Aucune route. Cliquez « + Route » pour en créer une.
+            </Typography>
+          )}
 
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={routes.map(r => r.id)} strategy={verticalListSortingStrategy}>
-            <Stack sx={{ gap: 1 }}>
-              {routes.map(route => (
-                <SortableRoute
-                  key={route.id}
-                  route={route}
-                  listingProperty={listingProperty}
-                  onUpdate={p => updateRoute(route.id, p)}
-                  onDelete={() => mutateRoutes(prev => prev.filter(r => r.id !== route.id))}
-                />
-              ))}
-            </Stack>
-          </SortableContext>
-        </DndContext>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={routes.map(r => r.id)} strategy={verticalListSortingStrategy}>
+              <Stack sx={{ gap: 1 }}>
+                {routes.map(route => (
+                  <SortableRoute
+                    key={route.id}
+                    route={route}
+                    listingProperty={listingProperty}
+                    cityOptions={cityOptions}
+                    onUpdate={p => updateRoute(route.id, p)}
+                    onDelete={() => mutateRoutes(prev => prev.filter(r => r.id !== route.id))}
+                  />
+                ))}
+              </Stack>
+            </SortableContext>
+          </DndContext>
 
-        {routes.length < MAX_ROUTES && !readOnly && (
-          <Box sx={{ mt: 1 }}>
-            <DashedAddButton
-              label="+ Route"
-              onClick={() =>
-                mutateRoutes(prev => [
-                  ...prev,
-                  syncRouteEndpoints(createBlankTransportRoute(prev.length), listingProperty),
-                ])
-              }
-            />
-          </Box>
-        )}
-      </Card>
+          {routes.length < MAX_ROUTES && !readOnly && (
+            <Box sx={{ mt: 1 }}>
+              <DashedAddButton
+                label="+ Route"
+                onClick={() =>
+                  mutateRoutes(prev => [
+                    ...prev,
+                    syncRouteEndpoints(createBlankTransportRoute(prev.length), listingProperty),
+                  ])
+                }
+              />
+            </Box>
+          )}
+        </Card>
       </Box>
+
+      {manualSaveMode && !readOnly ? (
+        <V3BlockSaveBar
+          label="Transport · routes"
+          dirty={dirty}
+          saving={savingState === 'saving'}
+          onSave={() => void persist()}
+        />
+      ) : null}
     </Box>
   );
 }
@@ -365,11 +543,13 @@ function RoutePlaceCell({
 function SortableRoute({
   route,
   listingProperty,
+  cityOptions,
   onUpdate,
   onDelete,
 }: {
   route: TransportRouteItem;
   listingProperty: ListingPropertyPlace;
+  cityOptions: Array<{ _id: string; name: string }>;
   onUpdate: (p: Partial<TransportRouteItem>) => void;
   onDelete: () => void;
 }) {
@@ -379,6 +559,7 @@ function SortableRoute({
     route.priceType === 'per_person'
       ? `${route.pricePerPerson || route.price} MAD/pers. · max ${route.maxPassengers}`
       : `${route.price} MAD · max ${route.maxPassengers}`;
+  const cityLabel = formatCityAssociationSummary(route.cityIds, cityOptions);
   const isArrival = route.journeyTag === 'arrival';
   const isDeparture = route.journeyTag === 'departure';
   const isOther = route.journeyTag === 'other';
@@ -428,6 +609,9 @@ function SortableRoute({
           <Typography sx={{ ...TYPO.bodyBold, fontSize: 12.5 }} noWrap>{route.labelFr}</Typography>
           <Typography sx={{ ...TYPO.monoHelp, fontSize: 10.5 }} noWrap>
             {route.from || '…'} → {route.to || '…'} · {journeyLabel(route.journeyTag)} · {priceLabel}
+          </Typography>
+          <Typography sx={{ ...TYPO.monoHelp, fontSize: 10, color: T.text3 }} noWrap>
+            📍 {cityLabel}
           </Typography>
         </Box>
         <IconButton size="small" onClick={() => setExpanded(e => !e)} sx={{ p: 0.25 }}>
@@ -520,6 +704,8 @@ function SortableRoute({
             </FormRow>
             <FormRow compact label="Villes" optional>
               <CityAssociationField
+                key={`cities-${route.id}`}
+                instanceId={route.id}
                 compact
                 value={route.cityIds}
                 onChange={cityIds => onUpdate({ cityIds })}
@@ -531,4 +717,3 @@ function SortableRoute({
     </Box>
   );
 }
-

@@ -11,11 +11,13 @@ import {
 } from '@mui/material';
 import type { FrequencyTier, TimeSlot } from '../listing/components/ConfigOrchestration/cleaningConfigTypes';
 import { V3 } from './theme';
+import { V3BlockSaveBar } from './V3BlockSaveBar';
 import {
   cleaningsForNights,
   formatHour,
   parseCleaningIncludedGestion,
   cleaningIncludedToGestion,
+  proposeNextIncludedCleaningSlot,
   type CleaningIncludedGestion,
 } from './cleaningGestionHelpers';
 
@@ -25,7 +27,6 @@ type Props = {
   onSave: (gestion: Record<string, unknown>) => Promise<void>;
 };
 
-const HOURS = Array.from({ length: 17 }, (_, i) => i + 7); // 7h → 23h
 const PREVIEW_NIGHTS = [5, 10, 21];
 
 const fieldSx = {
@@ -48,15 +49,15 @@ const sectionSx = {
 };
 
 const TIER_COLS = 'minmax(88px, 120px) minmax(88px, 120px) minmax(88px, 120px) 36px';
-const SLOT_COLS = 'minmax(100px, 130px) minmax(100px, 130px) minmax(100px, 1fr) 64px 36px';
+const SLOT_COLS = 'minmax(100px, 130px) minmax(100px, 130px) 64px 36px';
 
 export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, onSave }: Props) {
   const [state, setState] = useState<CleaningIncludedGestion>(() =>
     parseCleaningIncludedGestion(gestion, listingValues),
   );
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
 
   useEffect(() => {
@@ -64,10 +65,12 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
     setState(next);
     stateRef.current = next;
     dirtyRef.current = false;
+    setDirty(false);
   }, [gestion, listingValues]);
 
   const patch = useCallback((fn: (s: CleaningIncludedGestion) => CleaningIncludedGestion) => {
     dirtyRef.current = true;
+    setDirty(true);
     setState(prev => {
       const next = fn(prev);
       stateRef.current = next;
@@ -81,21 +84,11 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
       await onSave(cleaningIncludedToGestion(stateRef.current));
       setSaving('saved');
       dirtyRef.current = false;
+      setDirty(false);
     } catch {
       setSaving('idle');
     }
   }, [onSave]);
-
-  useEffect(() => {
-    if (!dirtyRef.current) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      void persist();
-    }, 700);
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [state, persist]);
 
   const updateTier = (index: number, patchTier: Partial<FrequencyTier>) => {
     patch(s => ({
@@ -120,10 +113,6 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
 
   return (
     <Box sx={{ width: '100%', maxWidth: 'none' }}>
-      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
-        <SaveBadge state={saving} />
-      </Stack>
-
       <Box sx={{ mb: 2.5 }}>
         <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t, mb: 0.75 }}>Message voyageur</Typography>
         <TextField
@@ -302,7 +291,7 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
               onClick={() =>
                 patch(s => ({
                   ...s,
-                  timeSlots: [...s.timeSlots, { start: 10, end: 12, type: 'Normal', price: 0, default: false }],
+                  timeSlots: [...s.timeSlots, proposeNextIncludedCleaningSlot(s.timeSlots)],
                 }))
               }
               sx={{
@@ -328,7 +317,7 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
               bgcolor: V3.alt,
             }}
           >
-            {['Début', 'Fin', 'Type', 'Déf.', ''].map(h => (
+            {['Début', 'Fin', 'Déf.', ''].map(h => (
               <Typography
                 key={h || 'x'}
                 sx={{ fontSize: 10, fontWeight: 800, color: V3.t4, textTransform: 'uppercase', letterSpacing: '0.04em' }}
@@ -339,6 +328,11 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
           </Box>
 
           <Stack sx={{ px: 2, py: 1, gap: 0.75 }}>
+            {state.timeSlots.length === 0 && (
+              <Typography sx={{ fontSize: 12, color: V3.t3, py: 1.5, textAlign: 'center' }}>
+                Aucun créneau — ajoutez une plage horaire ou laissez vide si le client ne choisit pas d&apos;horaire.
+              </Typography>
+            )}
             {state.timeSlots.map((slot, i) => (
               <Box
                 key={`slot-${i}`}
@@ -353,15 +347,21 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
                   bgcolor: slot.default ? V3.pt : '#fff',
                 }}
               >
-                <HourSelect value={slot.start} max={slot.end - 1} onChange={v => updateSlot(i, { start: v })} />
-                <HourSelect value={slot.end} min={slot.start + 1} onChange={v => updateSlot(i, { end: v })} />
-                <FormControl size="small" sx={fieldSx}>
-                  <Select value={slot.type || 'Normal'} onChange={e => updateSlot(i, { type: String(e.target.value) })}>
-                    <MenuItem value="Normal">Normal</MenuItem>
-                    <MenuItem value="Early">Early</MenuItem>
-                    <MenuItem value="Late">Late</MenuItem>
-                  </Select>
-                </FormControl>
+                <HourSelect
+                  value={slot.start}
+                  min={0}
+                  max={Math.min(23, slot.end - 1)}
+                  onChange={v => {
+                    const end = v + 2 <= slot.end ? slot.end : Math.min(24, v + 2);
+                    updateSlot(i, { start: v, end: end > v ? end : Math.min(24, v + 2) });
+                  }}
+                />
+                <HourSelect
+                  value={slot.end}
+                  min={Math.max(1, slot.start + 1)}
+                  max={24}
+                  onChange={v => updateSlot(i, { end: v })}
+                />
                 <Button
                   size="small"
                   variant={slot.default ? 'contained' : 'outlined'}
@@ -386,11 +386,10 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
                   onClick={() => patch(s => ({ ...s, timeSlots: s.timeSlots.filter((_, j) => j !== i) }))}
                   sx={{
                     all: 'unset',
-                    cursor: state.timeSlots.length <= 1 ? 'not-allowed' : 'pointer',
+                    cursor: 'pointer',
                     color: V3.er,
                     fontSize: 18,
                     lineHeight: 1,
-                    opacity: state.timeSlots.length <= 1 ? 0.35 : 1,
                   }}
                 >
                   ×
@@ -399,11 +398,20 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
             ))}
           </Stack>
 
-          <Typography sx={{ fontSize: 11, color: V3.t4, px: 2, pb: 2 }}>
-            {state.timeSlots.map(s => formatHour(s.start) + '–' + formatHour(s.end)).join(' · ')}
-          </Typography>
+          {state.timeSlots.length > 0 && (
+            <Typography sx={{ fontSize: 11, color: V3.t4, px: 2, pb: 2 }}>
+              {state.timeSlots.map(s => formatHour(s.start) + '–' + formatHour(s.end)).join(' · ')}
+            </Typography>
+          )}
         </Box>
       </Box>
+
+      <V3BlockSaveBar
+        label="Ménage inclus · gestion owner_orchestrations"
+        dirty={dirty}
+        saving={saving === 'saving'}
+        onSave={() => void persist()}
+      />
     </Box>
   );
 }
@@ -457,8 +465,8 @@ function NumField({
 
 function HourSelect({
   value,
-  min = 7,
-  max = 23,
+  min = 0,
+  max = 24,
   onChange,
 }: {
   value: number;
@@ -466,7 +474,7 @@ function HourSelect({
   max?: number;
   onChange: (v: number) => void;
 }) {
-  const options = HOURS.filter(h => h >= min && h <= max);
+  const options = Array.from({ length: 25 }, (_, i) => i).filter(h => h >= min && h <= max);
   return (
     <FormControl size="small" sx={fieldSx}>
       <Select value={value} onChange={e => onChange(Number(e.target.value))}>
@@ -477,27 +485,5 @@ function HourSelect({
         ))}
       </Select>
     </FormControl>
-  );
-}
-
-function SaveBadge({ state }: { state: 'idle' | 'saving' | 'saved' }) {
-  if (state === 'idle') return null;
-  const label = state === 'saving' ? 'Enregistrement…' : 'Enregistré';
-  const color = state === 'saved' ? V3.su : V3.t3;
-  const bg = state === 'saved' ? V3.suT : V3.alt;
-  return (
-    <Typography
-      sx={{
-        fontSize: 11,
-        fontWeight: 700,
-        color,
-        bgcolor: bg,
-        px: 1.25,
-        py: 0.4,
-        borderRadius: '99px',
-      }}
-    >
-      {label}
-    </Typography>
   );
 }

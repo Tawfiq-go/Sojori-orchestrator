@@ -9,9 +9,6 @@ export type AccessInstructionStep = {
 export type AccessFormState = {
   listingId: string;
   listingName: string;
-  /** Champs listing racine — affichés WhatsApp menu G (Propriété & WiFi). */
-  wifiUsername: string;
-  wifiPassword: string;
   receptionMode: {
     type: 'automatic' | 'assisted';
     assistedGuestMessage: string;
@@ -36,8 +33,6 @@ export function defaultAccessForm(listingId: string, listingName: string): Acces
   return {
     listingId,
     listingName: listingName || '',
-    wifiUsername: '',
-    wifiPassword: '',
     receptionMode: {
       type: 'automatic',
       assistedGuestMessage: '',
@@ -93,5 +88,38 @@ export function normalizeAccessFromApi(
       },
     },
     instructions: ACCESS_STEP_TITLES.map((t) => byTitle.get(t)!),
+  };
+}
+
+export function mapAccessFormToGestionPatch(
+  form: AccessFormState,
+  options: { templateMode: boolean },
+): Record<string, unknown> {
+  const receptionMode = {
+    type: form.receptionMode.type,
+    assistedGuestMessage: form.receptionMode.assistedGuestMessage,
+    codeSendSchedule: form.receptionMode.codeSendSchedule,
+  };
+  if (options.templateMode) {
+    return { receptionMode };
+  }
+  return {
+    receptionMode,
+    instructions: form.instructions,
+    listingId: form.listingId,
+    listingName: form.listingName,
+  };
+}
+
+export function mapAccessFormToListingAccessBody(form: AccessFormState) {
+  return {
+    listingId: form.listingId,
+    listingName: form.listingName,
+    receptionMode: {
+      type: form.receptionMode.type,
+      assistedGuestMessage: form.receptionMode.assistedGuestMessage,
+      codeSendSchedule: form.receptionMode.codeSendSchedule,
+    },
+    instructions: form.instructions,
   };
 }

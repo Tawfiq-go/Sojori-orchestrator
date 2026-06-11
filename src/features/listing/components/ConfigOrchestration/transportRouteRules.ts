@@ -1,10 +1,13 @@
 import type { ListingPropertyPlace } from './transportListingProperty';
 import { isAutoPropertyPlaceLabel } from './transportListingProperty';
 import type { TransportJourneyTag, TransportRouteItem } from './transportRouteCatalog';
+import { cloneCityAssociation } from './transportRouteCatalog';
 
 function pickExternalLabel(route: TransportRouteItem, property: ListingPropertyPlace): string {
-  const stored = (route.externalLabel || '').trim();
-  if (stored) return stored;
+  // Ne pas trim : sinon l'espace en cours de saisie (« aéroport de casa ») est avalé.
+  if (typeof route.externalLabel === 'string') {
+    return route.externalLabel;
+  }
   if (route.journeyTag === 'arrival') {
     const from = (route.from || '').trim();
     return isAutoPropertyPlaceLabel(from, property) ? '' : from;
@@ -37,6 +40,7 @@ export function syncRouteEndpoints(
   if (route.journeyTag === 'arrival') {
     return {
       ...route,
+      cityIds: cloneCityAssociation(route.cityIds),
       departureType: 'from_external',
       arrivalType: 'to_property',
       from: externalLabel,
@@ -49,6 +53,7 @@ export function syncRouteEndpoints(
   if (route.journeyTag === 'departure') {
     return {
       ...route,
+      cityIds: cloneCityAssociation(route.cityIds),
       departureType: 'from_property',
       arrivalType: 'to_external',
       from: propName,
@@ -58,10 +63,11 @@ export function syncRouteEndpoints(
       propertyPlace: property,
     };
   }
-  const from = isAutoPropertyPlaceLabel(route.from || '', property) ? '' : (route.from || '').trim();
-  const to = isAutoPropertyPlaceLabel(route.to || '', property) ? '' : (route.to || '').trim();
+  const from = isAutoPropertyPlaceLabel(route.from || '', property) ? '' : route.from || '';
+  const to = isAutoPropertyPlaceLabel(route.to || '', property) ? '' : route.to || '';
   return {
     ...route,
+    cityIds: cloneCityAssociation(route.cityIds),
     journeyTag: 'other',
     departureType: undefined,
     arrivalType: undefined,

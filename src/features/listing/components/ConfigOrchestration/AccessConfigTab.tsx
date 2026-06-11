@@ -18,17 +18,25 @@ import {
 } from './SHARED';
 import {
   defaultAccessForm,
+  mapAccessFormToGestionPatch,
+  mapAccessFormToListingAccessBody,
   normalizeAccessFromApi,
   type AccessFormState,
   type AccessInstructionStep,
 } from './accessConfigDefaults';
+import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
+import { logV3Orch } from '../../../orchestrationListingV3/v3OrchestrationDebugLog';
 
 interface Props {
   listingId?: string;
   listingName?: string;
   ownerId?: string;
+  listingValues?: Record<string, unknown>;
+  onListingPatch?: (patch: Record<string, unknown>) => Promise<void>;
+  templateMode?: boolean;
   /** Template owner srv-listing : `global` ou id PM (sans listingId). */
   templateOwnerKey?: string;
+  manualSaveMode?: boolean;
 }
 
 function InstructionBlock({
@@ -42,45 +50,45 @@ function InstructionBlock({
 }) {
   return (
     <Box sx={disabled ? { opacity: 0.55, pointerEvents: 'none', userSelect: 'none' } : undefined}>
-    <Card icon="📍" title={step.title} compact>
-      <FormRow label="Description activée">
-        <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
-          <Toggle
-            on={step.description.enabled}
-            onChange={() =>
+      <Card icon="📍" title={step.title} compact>
+        <FormRow label="Description activée">
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+            <Toggle
+              on={step.description.enabled}
+              onChange={() =>
+                onChange({
+                  description: { ...step.description, enabled: !step.description.enabled },
+                })
+              }
+            />
+            <Typography sx={{ fontSize: 12, color: T.text3 }}>
+              {step.description.enabled ? 'Oui' : 'Non'}
+            </Typography>
+          </Stack>
+        </FormRow>
+        {step.description.enabled && (
+          <FormRow label="Description (FR)" required>
+            <TextArea
+              value={step.description.value}
+              onChange={(e) =>
+                onChange({ description: { ...step.description, enabled: true, value: e.target.value } })
+              }
+              placeholder="Instructions pour le voyageur…"
+            />
+          </FormRow>
+        )}
+        <FormRow label="Code d'accès (optionnel)">
+          <TextInput
+            value={step.code.value}
+            onChange={(e) =>
               onChange({
-                description: { ...step.description, enabled: !step.description.enabled },
+                code: { enabled: Boolean(e.target.value), value: e.target.value, description: '' },
               })
             }
-          />
-          <Typography sx={{ fontSize: 12, color: T.text3 }}>
-            {step.description.enabled ? 'Oui' : 'Non'}
-          </Typography>
-        </Stack>
-      </FormRow>
-      {step.description.enabled && (
-        <FormRow label="Description (FR)" required>
-          <TextArea
-            value={step.description.value}
-            onChange={(e) =>
-              onChange({ description: { ...step.description, enabled: true, value: e.target.value } })
-            }
-            placeholder="Instructions pour le voyageur…"
+            placeholder="Ex. 1234#"
           />
         </FormRow>
-      )}
-      <FormRow label="Code d'accès (optionnel)">
-        <TextInput
-          value={step.code.value}
-          onChange={(e) =>
-            onChange({
-              code: { enabled: Boolean(e.target.value), value: e.target.value, description: '' },
-            })
-          }
-          placeholder="Ex. 1234#"
-        />
-      </FormRow>
-    </Card>
+      </Card>
     </Box>
   );
 }
@@ -89,85 +97,166 @@ export default function AccessConfigTab({
   listingId = '',
   listingName = '',
   ownerId,
+  listingValues = {},
+  onListingPatch,
+  templateMode = false,
   templateOwnerKey,
+  manualSaveMode = false,
 }: Props) {
   const isOwnerTemplate = Boolean(templateOwnerKey);
+  const useOrchestrationGestion =
+    Boolean(onListingPatch) && (templateMode || Object.keys(listingValues).length > 0);
+  const contextId = listingId || templateOwnerKey || '';
   const [form, setForm] = useState<AccessFormState>(() =>
-    defaultAccessForm(listingId || templateOwnerKey || '', listingName || 'Template'),
+    defaultAccessForm(contextId, listingName || 'Template'),
   );
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [dirty, setDirty] = useState(false);
+  const formRef = useRef(form);
   const skipSave = useRef(true);
+  const dirtyRef = useRef(false);
+  const hydratedRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const persist = useCallback(
-    async (payload: AccessFormState) => {
-      if (!isOwnerTemplate && !listingId) return;
-      if (isOwnerTemplate && !templateOwnerKey) return;
-      setSavingState('saving');
-      try {
-        const receptionMode = {
-          type: payload.receptionMode.type,
-          assistedGuestMessage: payload.receptionMode.assistedGuestMessage,
-          codeSendSchedule: payload.receptionMode.codeSendSchedule,
-        };
-        if (isOwnerTemplate && templateOwnerKey) {
-          // Template owner/global : uniquement mode d'accueil — pas les codes par logement.
-          await listingsService.putListingOwnerConfigTemplateSection(
-            templateOwnerKey,
-            'access',
-            { receptionMode },
-          );
-        } else {
-          const body = {
-            listingId: payload.listingId,
-            listingName: payload.listingName || listingName,
-            receptionMode,
-            instructions: payload.instructions,
-          };
-          let res = await listingsService.updateListingAccess(listingId!, body);
-          if (res.notFound || (res.error && !res.data)) {
-            res = await listingsService.createListingAccess(body);
-          }
-          if (res.error) throw new Error(res.error);
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
 
-          await listingsService.updateListingProperty(listingId!, {
-            wifiUsername: payload.wifiUsername ?? '',
-            wifiPassword: payload.wifiPassword ?? '',
-          });
+  const persistListingAccess = useCallback(async (payload: AccessFormState) => {
+    const body = mapAccessFormToListingAccessBody(payload);
+    let res = await listingsService.updateListingAccess(listingId!, body);
+    if (res.notFound || (res.error && !res.data)) {
+      res = await listingsService.createListingAccess(body);
+    }
+    if (res.error) throw new Error(res.error);
+  }, [listingId]);
+
+  const persist = useCallback(async () => {
+    const payload = formRef.current;
+    if (!useOrchestrationGestion && !isOwnerTemplate && !listingId) return;
+    if (!useOrchestrationGestion && isOwnerTemplate && !templateOwnerKey) return;
+
+    setSavingState('saving');
+    logV3Orch('gestion.access.persist.start', {
+      templateMode,
+      listingId: listingId || null,
+      receptionType: payload.receptionMode.type,
+    });
+    try {
+      if (useOrchestrationGestion && onListingPatch) {
+        if (!templateMode && listingId) {
+          await persistListingAccess(payload);
         }
-        setSavingState('saved');
-        window.setTimeout(() => setSavingState('idle'), 2200);
-      } catch (e: unknown) {
-        setSavingState('error');
-        toast.error(e instanceof Error ? e.message : 'Erreur enregistrement');
+        await onListingPatch(mapAccessFormToGestionPatch(payload, { templateMode }));
+      } else if (isOwnerTemplate && templateOwnerKey) {
+        await listingsService.putListingOwnerConfigTemplateSection(templateOwnerKey, 'access', {
+          receptionMode: mapAccessFormToGestionPatch(payload, { templateMode: true }).receptionMode,
+        });
+      } else if (listingId) {
+        await persistListingAccess(payload);
+      } else {
+        return;
       }
-    },
-    [listingId, listingName, isOwnerTemplate, templateOwnerKey],
-  );
+      setSavingState('saved');
+      dirtyRef.current = false;
+      setDirty(false);
+      logV3Orch('gestion.access.persist.ok', { receptionType: payload.receptionMode.type });
+      if (!manualSaveMode) {
+        window.setTimeout(() => setSavingState('idle'), 2200);
+      }
+    } catch (e: unknown) {
+      setSavingState('error');
+      dirtyRef.current = true;
+      setDirty(true);
+      toast.error(e instanceof Error ? e.message : 'Erreur enregistrement');
+      logV3Orch('gestion.access.persist.error', {
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }, [
+    isOwnerTemplate,
+    listingId,
+    manualSaveMode,
+    onListingPatch,
+    persistListingAccess,
+    templateMode,
+    templateOwnerKey,
+    useOrchestrationGestion,
+  ]);
 
-  const scheduleSave = useCallback(
-    (next: AccessFormState) => {
-      if (skipSave.current) return;
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => void persist(next), 700);
-    },
-    [persist],
-  );
+  const scheduleSave = useCallback(() => {
+    if (manualSaveMode || skipSave.current) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => void persist(), 700);
+  }, [manualSaveMode, persist]);
 
   const patch = useCallback(
     (updater: (f: AccessFormState) => AccessFormState) => {
+      if (!skipSave.current) {
+        dirtyRef.current = true;
+        setDirty(true);
+      }
       setForm((f) => {
         const next = updater(f);
-        scheduleSave(next);
+        formRef.current = next;
+        scheduleSave();
         return next;
       });
     },
     [scheduleSave],
   );
 
+  const hydrateFromValues = useCallback(() => {
+    const next = normalizeAccessFromApi(listingValues, contextId, listingName || 'Template');
+    setForm(next);
+    formRef.current = next;
+    hydratedRef.current = true;
+  }, [contextId, listingName, listingValues]);
+
   useEffect(() => {
+    if (!useOrchestrationGestion) return;
+    if (hydratedRef.current && dirtyRef.current) return;
+    let cancelled = false;
+    skipSave.current = true;
+    dirtyRef.current = false;
+    setDirty(false);
+    setLoadError(null);
+    setLoading(true);
+    (async () => {
+      try {
+        let source = listingValues;
+        if (!templateMode && listingId && listingValues.receptionMode == null) {
+          const accessRes = await listingsService.getListingAccessConfig(listingId);
+          if (accessRes.data) {
+            source = { ...listingValues, ...(accessRes.data as Record<string, unknown>) };
+          }
+        }
+        if (cancelled) return;
+        const next = normalizeAccessFromApi(source, contextId, listingName || 'Template');
+        setForm(next);
+        formRef.current = next;
+        hydratedRef.current = true;
+      } catch (e: unknown) {
+        if (!cancelled) {
+          setLoadError(e instanceof Error ? e.message : 'Chargement impossible');
+          hydrateFromValues();
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          skipSave.current = false;
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [useOrchestrationGestion, hydrateFromValues, listingValues, templateMode, listingId, contextId, listingName]);
+
+  useEffect(() => {
+    if (useOrchestrationGestion) return;
     if (!isOwnerTemplate && !listingId) return;
     if (isOwnerTemplate && !templateOwnerKey) return;
     let cancelled = false;
@@ -175,6 +264,9 @@ export default function AccessConfigTab({
       setLoading(true);
       setLoadError(null);
       skipSave.current = true;
+      dirtyRef.current = false;
+      hydratedRef.current = false;
+      setDirty(false);
       try {
         let doc: Record<string, unknown> | null = null;
         if (isOwnerTemplate && templateOwnerKey) {
@@ -182,35 +274,27 @@ export default function AccessConfigTab({
           const payload = (res as { data?: { access?: Record<string, unknown> } })?.data ?? res;
           doc = (payload as { access?: Record<string, unknown> })?.access ?? null;
         } else {
-          const [accessRes, listingDoc] = await Promise.all([
-            listingsService.getListingAccessConfig(listingId!),
-            listingsService.getListingDocument(listingId!),
-          ]);
+          const accessRes = await listingsService.getListingAccessConfig(listingId!);
           if (accessRes.error && !accessRes.data && !accessRes.notFound) {
             throw new Error(accessRes.error);
           }
           doc = (accessRes.data || null) as Record<string, unknown> | null;
-          if (cancelled) return;
-          const id = listingId || templateOwnerKey || '';
-          const base = normalizeAccessFromApi(doc, id, listingName || 'Template');
-          const wifiUsername =
-            typeof listingDoc?.wifiUsername === 'string' ? listingDoc.wifiUsername : '';
-          const wifiPassword =
-            typeof listingDoc?.wifiPassword === 'string' ? listingDoc.wifiPassword : '';
-          setForm({ ...base, wifiUsername, wifiPassword });
-          return;
         }
         if (cancelled) return;
-        const id = listingId || templateOwnerKey || '';
-        setForm(normalizeAccessFromApi(doc, id, listingName || 'Template'));
+        const next = normalizeAccessFromApi(doc, contextId, listingName || 'Template');
+        setForm(next);
+        formRef.current = next;
       } catch (e: unknown) {
         if (!cancelled) {
           setLoadError(e instanceof Error ? e.message : 'Chargement impossible');
-          setForm(defaultAccessForm(listingId || templateOwnerKey || '', listingName));
+          const fallback = defaultAccessForm(contextId, listingName);
+          setForm(fallback);
+          formRef.current = fallback;
         }
       } finally {
         if (!cancelled) {
           setLoading(false);
+          hydratedRef.current = true;
           window.setTimeout(() => {
             skipSave.current = false;
           }, 150);
@@ -220,7 +304,7 @@ export default function AccessConfigTab({
     return () => {
       cancelled = true;
     };
-  }, [listingId, listingName, ownerId, isOwnerTemplate, templateOwnerKey]);
+  }, [listingId, listingName, ownerId, isOwnerTemplate, templateOwnerKey, useOrchestrationGestion, contextId]);
 
   const mode = form.receptionMode.type;
   const sched = form.receptionMode.codeSendSchedule;
@@ -235,10 +319,12 @@ export default function AccessConfigTab({
 
   return (
     <Box>
-      <ConfigIntroBar saveState={savingState === 'error' ? 'idle' : savingState}>
-        Instructions d&apos;accès ·{' '}
-        {isOwnerTemplate ? 'template owner (listing_owner_config_templates)' : 'listing_access'}
-      </ConfigIntroBar>
+      {!manualSaveMode && (
+        <ConfigIntroBar saveState={savingState === 'error' ? 'idle' : savingState}>
+          Instructions d&apos;accès ·{' '}
+          {isOwnerTemplate ? 'template owner (listing_owner_config_templates)' : 'listing_access'}
+        </ConfigIntroBar>
+      )}
 
       {loadError && (
         <Alert severity="warning" sx={{ mb: 2, fontSize: 12.5 }}>
@@ -258,43 +344,10 @@ export default function AccessConfigTab({
               parking / immeuble / appartement se configurent <strong>par listing</strong>.
             </>
           ) : (
-            <>
-              Codes et instructions d&apos;accès (menu WhatsApp <strong>F</strong>) · WiFi ci-dessous
-              (menu WhatsApp <strong>G</strong> — Propriété &amp; WiFi).
-            </>
+            <>Codes et instructions d&apos;accès (menu WhatsApp <strong>F</strong>).</>
           )
         }
       />
-
-      {!isOwnerTemplate && (
-        <Card
-          icon="📶"
-          title="WiFi"
-          subtitle="wifiUsername · wifiPassword — listing racine"
-        >
-          <FormRow
-            label="Nom du réseau (SSID)"
-            help="Affiché au voyageur via le menu WhatsApp G"
-          >
-            <TextInput
-              value={form.wifiUsername}
-              onChange={(e) =>
-                patch((f) => ({ ...f, wifiUsername: e.target.value }))
-              }
-              placeholder="Ex. Sojori_Guest"
-            />
-          </FormRow>
-          <FormRow label="Mot de passe WiFi" help="Menu WhatsApp G uniquement">
-            <TextInput
-              value={form.wifiPassword}
-              onChange={(e) =>
-                patch((f) => ({ ...f, wifiPassword: e.target.value }))
-              }
-              placeholder="Mot de passe"
-            />
-          </FormRow>
-        </Card>
-      )}
 
       <Card icon="🚪" title="Mode d'accueil" subtitle="receptionMode">
         <FormRow label="Type">
@@ -407,11 +460,22 @@ export default function AccessConfigTab({
         />
       ))}
 
-      <Typography sx={{ ...TYPO.caption, mt: 1 }}>
-        {isOwnerTemplate
-          ? 'Sauvegarde automatique du mode d’accueil uniquement. La sync vers les annonces ne modifie pas les codes d’accès déjà saisis par listing.'
-          : 'Sauvegarde automatique après modification. Premier enregistrement : création du document listing_access si absent.'}
-      </Typography>
+      {!manualSaveMode && (
+        <Typography sx={{ ...TYPO.caption, mt: 1 }}>
+          {isOwnerTemplate
+            ? 'Sauvegarde automatique du mode d’accueil uniquement. La sync vers les annonces ne modifie pas les codes d’accès déjà saisis par listing.'
+            : 'Sauvegarde automatique après modification. Premier enregistrement : création du document listing_access si absent.'}
+        </Typography>
+      )}
+
+      {manualSaveMode ? (
+        <V3BlockSaveBar
+          label="Accès · mode d'accueil"
+          dirty={dirty}
+          saving={savingState === 'saving'}
+          onSave={() => void persist()}
+        />
+      ) : null}
     </Box>
   );
 }
