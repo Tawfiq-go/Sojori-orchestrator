@@ -105,13 +105,8 @@ const TasksConfigFulltaskPage = lazy(() =>
 const TasksOrchestrationFulltaskPage = lazy(() =>
   import('./pages/TasksOrchestrationFulltaskPage').then((module) => ({ default: module.default }))
 );
-const ListingOrchestrationV3Page = lazy(() =>
-  import('./pages/ListingOrchestrationV3Page').then((module) => ({
-    default: module.default,
-  }))
-);
-const ListingOrchestrationTemplatePage = lazy(() =>
-  import('./pages/ListingOrchestrationTemplatePage').then((module) => ({
+const OwnerOrchestrationModelPage = lazy(() =>
+  import('./pages/OwnerOrchestrationModelPage').then((module) => ({
     default: module.default,
   }))
 );
@@ -314,6 +309,7 @@ function App() {
               <Route path="/reviews" element={<LazyRoute><ReviewsPage /></LazyRoute>} />
 
               <Route path="/listings" element={<LazyRoute><ListingsPage /></LazyRoute>} />
+              <Route path="/listings/orchestration-model" element={<LazyRoute><OwnerOrchestrationModelPage /></LazyRoute>} />
               <Route path="/listings/new" element={<LazyRoute><ListingCreatePage /></LazyRoute>} />
               <Route path="/listings/:id" element={<LazyRoute><ListingFormV2Page /></LazyRoute>} />
               <Route path="/listings/:id/old" element={<LazyRoute><NewListingFormPage /></LazyRoute>} />
@@ -336,15 +332,15 @@ function App() {
               <Route path="/catalogue/pricing" element={<LazyRoute><PricingPage /></LazyRoute>} />
               <Route
                 path="/catalogue/listing-orchestration-v2"
-                element={<Navigate to="/catalogue/listing-orchestration-v3" replace />}
+                element={<Navigate to="/listings/orchestration-model" replace />}
               />
               <Route
                 path="/catalogue/listing-orchestration-v3"
-                element={<LazyRoute><ListingOrchestrationV3Page /></LazyRoute>}
+                element={<Navigate to="/listings/orchestration-model" replace />}
               />
               <Route
                 path="/catalogue/listing-orchestration"
-                element={<LazyRoute><ListingOrchestrationTemplatePage /></LazyRoute>}
+                element={<Navigate to="/listings/orchestration-model" replace />}
               />
               <Route path="/clients" element={<LazyRoute><ClientsPage /></LazyRoute>} />
               <Route path="/clients/contacts" element={<LazyRoute><WhatsAppContactsPage /></LazyRoute>} />

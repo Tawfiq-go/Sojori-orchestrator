@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
 import {
   CapabilityGestionPanel,
   CapabilityWhatsAppPanel,
@@ -9,23 +8,29 @@ import CapabilityExecutionPanel from '../serviceMatrix/CapabilityExecutionPanel'
 import type { CapabilityDefinition } from '../serviceMatrix/capabilityRegistry';
 import type { CapabilityExecutionState, CapabilityRowState } from '../serviceMatrix/types';
 import type { ListingOrchestrationDoc } from './listingOrchestrationApi';
+import type { OwnerOrchestrationDoc } from './ownerOrchestrationApi';
 import { saveListingGestion } from './listingOrchestrationApi';
+import { saveOwnerGestion } from './ownerOrchestrationApi';
 import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import V3TaskBehaviorPanel from './V3TaskBehaviorPanel';
 import { V3 } from './theme';
 import { V3Badge, V3DecisionPill } from './V3Primitives';
+import { logV3Orch } from './v3OrchestrationDebugLog';
 
 type Props = {
   def: CapabilityDefinition;
   row: CapabilityRowState;
   ownerKey: string;
   listingId: string;
-  orchestrationDoc: ListingOrchestrationDoc;
+  orchestrationDoc: ListingOrchestrationDoc | OwnerOrchestrationDoc;
   listingValues: Record<string, unknown>;
+  ownerTemplateMode?: boolean;
   onGestionPatch: (patch: Record<string, unknown>) => Promise<void>;
   onRowChange: (patch: Partial<CapabilityRowState>) => void;
-  onPersist: () => void;
-  onReload: () => void;
+  onPersist: () => void | Promise<void>;
+  onReload: (discardLocalKey?: string) => void;
+  onExecutionDocPatch?: (execution: Record<string, unknown>) => void;
+  onWhatsappPatch?: (capabilityKey: string, menuCodes: string[], menuOptions: unknown[]) => void;
 };
 
 type PanelId = 'gestion' | 'wa' | 'task' | 'exec';
@@ -44,22 +49,12 @@ const EXEC_PILLS: {
   id: string;
   field: keyof CapabilityExecutionState;
   tab: 'relances' | 'staff' | 'escalade';
-  staffFocus?: 'assignment' | 'reminders';
   icon: string;
   label: string;
   hint: string;
 }[] = [
   { id: 'relances', field: 'clientReminders', tab: 'relances', icon: '💌', label: 'Relances', hint: 'Relances client' },
-  { id: 'staff', field: 'staffAssignment', tab: 'staff', staffFocus: 'assignment', icon: '👷', label: 'Staff', hint: 'Assignation' },
-  {
-    id: 'staff-reminders',
-    field: 'staffReminders',
-    tab: 'staff',
-    staffFocus: 'reminders',
-    icon: '🔔',
-    label: 'Rappels staff',
-    hint: 'Rappels staff',
-  },
+  { id: 'staff', field: 'staffAssignment', tab: 'staff', icon: '👷', label: 'Staff', hint: 'Assignation & rappels staff' },
   { id: 'escalade', field: 'pmEscalation', tab: 'escalade', icon: '🚨', label: 'Escalade', hint: 'Escalade PM' },
 ];
 
@@ -70,11 +65,15 @@ export default function V3ServicePanel({
   listingId,
   orchestrationDoc,
   listingValues,
+  ownerTemplateMode = false,
   onGestionPatch,
   onRowChange,
   onPersist,
   onReload,
+  onExecutionDocPatch,
+  onWhatsappPatch,
 }: Props) {
+  const matrixScope = ownerTemplateMode ? ('owner' as const) : ('listing' as const);
   const panels = useMemo(() => {
     const list: PanelId[] = ['gestion'];
     if (def.columns.client !== 'na') list.push('wa');
@@ -85,33 +84,76 @@ export default function V3ServicePanel({
 
   const [activePanel, setActivePanel] = useState<PanelId>('gestion');
   const [execTab, setExecTab] = useState('relances');
-  const [execStaffFocus, setExecStaffFocus] = useState<'assignment' | 'reminders'>('assignment');
 
   useEffect(() => {
     setActivePanel('gestion');
-    setExecTab('relances');
-    setExecStaffFocus('assignment');
-  }, [def.key]);
+    const firstExec =
+      def.columns.client === 'na'
+        ? EXEC_PILLS.find(p => p.id !== 'relances')
+        : EXEC_PILLS[0];
+    setExecTab(firstExec?.tab ?? 'relances');
+    logV3Orch('service.open', { key: def.key, defaultExecTab: firstExec?.tab });
+  }, [def.key, def.columns.client]);
 
-  const gestionValues = useMemo(
-    () => ({
-      ...listingValues,
-      ...(orchestrationDoc.capabilities?.[def.key]?.gestion ?? {}),
-    }),
-    [listingValues, orchestrationDoc, def.key],
-  );
+  const gestionValues = useMemo(() => {
+    const capGestion = orchestrationDoc.capabilities?.[def.key]?.gestion ?? {};
+    const merged: Record<string, unknown> = { ...listingValues, ...capGestion };
+    if (def.key === 'cleaning_sojori' && capGestion.cleaningOrchestration != null) {
+      merged.cleaningOrchestration = capGestion.cleaningOrchestration;
+    }
+    return merged;
+  }, [listingValues, orchestrationDoc, def.key]);
 
   const patchDecision = (field: keyof CapabilityRowState, value: boolean) => {
+    logV3Orch('pill.toggle', { key: def.key, field, value });
     onRowChange({ [field]: value });
   };
 
   const patchExecutionFlag = (field: keyof CapabilityExecutionState, value: boolean) => {
+    logV3Orch('exec.toggle', { key: def.key, field, value });
     onRowChange({
       execution: {
         ...row.execution,
         [field]: value,
       },
     });
+  };
+
+  const visibleExecPills = useMemo(
+    () => (def.columns.client === 'na' ? EXEC_PILLS.filter(p => p.id !== 'relances') : EXEC_PILLS),
+    [def.columns.client],
+  );
+
+  const selectPanel = (id: PanelId) => {
+    setActivePanel(id);
+    const patch: Partial<CapabilityRowState> = {};
+    if (id === 'gestion') {
+      if (!row.managed) patch.managed = true;
+    } else {
+      if (!row.managed) patch.managed = true;
+      const field = PANEL_META[id].field;
+      if (!row[field as keyof CapabilityRowState]) {
+        (patch as Record<string, boolean>)[field as string] = true;
+      }
+    }
+    logV3Orch('panel.select', { key: def.key, panel: id, patch, rowBefore: {
+      managed: row.managed,
+      orchestrated: row.orchestrated,
+      taskEnabled: row.taskEnabled,
+    }});
+    if (Object.keys(patch).length > 0) onRowChange(patch);
+  };
+
+  const selectExecTab = (p: (typeof EXEC_PILLS)[number]) => {
+    setExecTab(p.tab);
+    const patch: Partial<CapabilityRowState> = {};
+    if (!row.managed) patch.managed = true;
+    if (!row.orchestrated) patch.orchestrated = true;
+    if (!row.execution[p.field]) {
+      patch.execution = { ...row.execution, [p.field]: true };
+    }
+    logV3Orch('exec.select', { key: def.key, tab: p.tab, field: p.field, patch });
+    if (Object.keys(patch).length > 0) onRowChange(patch);
   };
 
   const isMenuNav = def.key === 'menu_navigation';
@@ -122,8 +164,6 @@ export default function V3ServicePanel({
 
   const isLocked = (panel: PanelId) => panel !== 'gestion' && !row.managed;
   const isEnabled = (panel: PanelId) => Boolean(row[PANEL_META[panel].field]);
-
-  const expertUrl = `/tasks/orchestration-config?owner=${encodeURIComponent(ownerKey)}&tab=workflows`;
 
   const statusBadge =
     row.status === 'configured' ? (
@@ -137,22 +177,16 @@ export default function V3ServicePanel({
       return (
         <CapabilityWhatsAppPanel
           def={def}
-          scope="listing"
+          scope={matrixScope}
           ownerKey={ownerKey}
-          listingId={listingId}
-          orchestrationDoc={orchestrationDoc}
+          listingId={ownerTemplateMode ? undefined : listingId}
+          orchestrationDoc={orchestrationDoc as ListingOrchestrationDoc}
+          ownerOrchestrationDoc={ownerTemplateMode ? (orchestrationDoc as OwnerOrchestrationDoc) : undefined}
           onOrchestrationSaved={onReload}
         />
       );
     }
 
-    if (activePanel !== 'gestion' && !isEnabled(activePanel)) {
-      return (
-        <Typography sx={{ fontSize: 12, color: V3.t3, py: 2, textAlign: 'center' }}>
-          Activez « {PANEL_META[activePanel].label} » (toggle ON) pour éditer.
-        </Typography>
-      );
-    }
     if (activePanel !== 'gestion' && isLocked(activePanel)) {
       return (
         <Typography sx={{ fontSize: 12, color: V3.t3, py: 2, textAlign: 'center' }}>
@@ -168,21 +202,30 @@ export default function V3ServicePanel({
             gestion={(orchestrationDoc.capabilities?.cleaning_free?.gestion ?? {}) as Record<string, unknown>}
             listingValues={listingValues}
             onSave={async nextGestion => {
-              await saveListingGestion({
-                listingId,
-                capabilityKey: 'cleaning_free',
-                gestion: nextGestion,
-                doc: orchestrationDoc,
-              });
+              if (ownerTemplateMode) {
+                await saveOwnerGestion({
+                  ownerKey,
+                  capabilityKey: 'cleaning_free',
+                  gestion: nextGestion,
+                  doc: orchestrationDoc as OwnerOrchestrationDoc,
+                });
+              } else {
+                await saveListingGestion({
+                  listingId,
+                  capabilityKey: 'cleaning_free',
+                  gestion: nextGestion,
+                  doc: orchestrationDoc as ListingOrchestrationDoc,
+                });
+              }
               onReload();
             }}
           />
         ) : (
           <CapabilityGestionPanel
             def={def}
-            scope="listing"
+            scope={matrixScope}
             ownerKey={ownerKey}
-            listingId={listingId}
+            listingId={ownerTemplateMode ? undefined : listingId}
             listingValues={gestionValues}
             onListingPatch={onGestionPatch}
           />
@@ -191,16 +234,24 @@ export default function V3ServicePanel({
         return (
           <CapabilityWhatsAppPanel
             def={def}
-            scope="listing"
+            scope={matrixScope}
             ownerKey={ownerKey}
-            listingId={listingId}
-            orchestrationDoc={orchestrationDoc}
-            onOrchestrationSaved={onReload}
+            listingId={ownerTemplateMode ? undefined : listingId}
+            orchestrationDoc={orchestrationDoc as ListingOrchestrationDoc}
+            ownerOrchestrationDoc={ownerTemplateMode ? (orchestrationDoc as OwnerOrchestrationDoc) : undefined}
+            onWhatsappPatch={onWhatsappPatch}
           />
         );
       case 'task':
         return (
-          <V3TaskBehaviorPanel def={def} listingId={listingId} doc={orchestrationDoc} onSaved={onReload} />
+          <V3TaskBehaviorPanel
+            def={def}
+            listingId={ownerTemplateMode ? undefined : listingId}
+            ownerKey={ownerKey}
+            ownerTemplateMode={ownerTemplateMode}
+            doc={orchestrationDoc}
+            onSaved={onReload}
+          />
         );
       case 'exec':
         return (
@@ -208,22 +259,14 @@ export default function V3ServicePanel({
             <CapabilityExecutionPanel
               def={def}
               ownerKey={ownerKey}
-              listingId={listingId}
+              listingId={ownerTemplateMode ? undefined : listingId}
               orchestrationDoc={orchestrationDoc}
+              ownerTemplateMode={ownerTemplateMode}
               section={execTab as 'relances' | 'staff' | 'escalade'}
               executionFlags={row.execution}
-              onSaved={onReload}
+              onExecutionDocPatch={onExecutionDocPatch}
+              onSaved={() => onReload(def.key)}
             />
-            {execTab === 'escalade' && (
-              <Button
-                component={RouterLink}
-                to={expertUrl}
-                size="small"
-                sx={{ mt: 1, textTransform: 'none', fontSize: 11, fontWeight: 700, color: V3.orch, px: 0 }}
-              >
-                Mode expert →
-              </Button>
-            )}
           </>
         );
       default:
@@ -269,14 +312,19 @@ export default function V3ServicePanel({
             </Typography>
             <Typography sx={{ fontSize: 10, color: V3.t4, fontFamily: 'monospace' }}>{def.key}</Typography>
           </Box>
-          <Button
-            size="small"
-            variant="contained"
-            onClick={onPersist}
-            sx={{ fontWeight: 800, borderRadius: '8px', bgcolor: V3.pd, fontSize: 11, px: 1.25 }}
-          >
-            Enregistrer
-          </Button>
+          <Box sx={{ textAlign: 'right' }}>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={onPersist}
+              sx={{ fontWeight: 800, borderRadius: '8px', bgcolor: V3.pd, fontSize: 11, px: 1.25 }}
+            >
+              Enregistrer décisions
+            </Button>
+            <Typography sx={{ fontSize: 9, color: V3.t4, mt: 0.35, lineHeight: 1.2, maxWidth: 140 }}>
+              Pills Gérer · Client · Orchestrer · Tâche
+            </Typography>
+          </Box>
         </Box>
 
         {visiblePanels.length > 0 && (
@@ -293,7 +341,7 @@ export default function V3ServicePanel({
                   enabled={isEnabled(id)}
                   selected={activePanel === id}
                   locked={isLocked(id)}
-                  onSelect={() => setActivePanel(id)}
+                  onSelect={() => selectPanel(id)}
                   onEnabledChange={v => patchDecision(meta.field, v)}
                 />
               );
@@ -312,27 +360,19 @@ export default function V3ServicePanel({
               flexWrap: 'wrap',
             }}
           >
-            {EXEC_PILLS.map(p => {
-              const pillSelected =
-                execTab === p.tab &&
-                (p.tab !== 'staff' || execStaffFocus === p.staffFocus);
-              return (
-                <V3DecisionPill
-                  key={p.id}
-                  icon={p.icon}
-                  label={p.label}
-                  hint={p.hint}
-                  kind="orch"
-                  enabled={Boolean(row.execution[p.field])}
-                  selected={pillSelected}
-                  onSelect={() => {
-                    setExecTab(p.tab);
-                    if (p.staffFocus) setExecStaffFocus(p.staffFocus);
-                  }}
-                  onEnabledChange={v => patchExecutionFlag(p.field, v)}
-                />
-              );
-            })}
+            {visibleExecPills.map(p => (
+              <V3DecisionPill
+                key={p.id}
+                icon={p.icon}
+                label={p.label}
+                hint={p.hint}
+                kind="orch"
+                enabled={Boolean(row.execution[p.field])}
+                selected={execTab === p.tab}
+                onSelect={() => selectExecTab(p)}
+                onEnabledChange={v => patchExecutionFlag(p.field, v)}
+              />
+            ))}
           </Box>
         )}
       </Box>

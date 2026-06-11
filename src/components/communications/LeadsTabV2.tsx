@@ -10,8 +10,13 @@ import messagesService from '../../services/messagesService';
 import type { Thread, Message } from '../../types/unifiedInbox.types';
 import type { InboxReservationData } from '../../types/inboxReservation.types';
 import { otaChannelColor, otaChannelFromName } from '../unified-inbox/inboxMappers';
-import { buildInboxMessages, OTA_QUICK_REPLIES, OTA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
-import { formatInboxDaySeparator, formatThreadWhen, nightsBetween, normalizeBookingSource } from '../unified-inbox/inboxFormat';
+import { OTA_QUICK_REPLIES, OTA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
+import {
+  buildOtaPreviewFallbackMessages,
+  extractOtaMessagesFromApiResponse,
+  mapOtaApiMessagesToInbox,
+} from '../unified-inbox/inboxOtaMappers';
+import { formatThreadWhen, nightsBetween, normalizeBookingSource } from '../unified-inbox/inboxFormat';
 import { T } from '../unified-inbox/_tokens';
 
 interface LeadRow {
@@ -38,6 +43,8 @@ export default function LeadsTabV2() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messagesTotal, setMessagesTotal] = useState(0);
+  const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAIModal, setShowAIModal] = useState(false);
   const [filter, setFilter] = useState('all');
@@ -125,44 +132,31 @@ export default function LeadsTabV2() {
   const handleSelect = async (lead: LeadRow) => {
     setActive(lead);
     setLoadingMessages(true);
+    setMessages([]);
+    setMessagesLoadError(null);
+    setMessagesTotal(0);
     try {
-      const response = await messagesService.getLeadMessages(lead.threadId);
-      if (response.data) {
-        const sorted = [...response.data].sort(
-          (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-        );
-        const msgs: Message[] = [];
-        sorted.forEach((m: any, index: number) => {
-          if (index === 0 || new Date(m.createdAt).toDateString() !== new Date(sorted[index - 1].createdAt).toDateString()) {
-            msgs.push({
-              id: `day-${index}`,
-              from: 'guest',
-              text: formatInboxDaySeparator(m.createdAt),
-              time: '',
-              type: 'day-separator',
-            });
-          }
-          const body = m.body || m.message || '';
-          if (body.startsWith('[Auto]')) {
-            msgs.push({
-              id: `sys-${index}`,
-              from: 'sojori',
-              text: body.replace(/^\[Auto\]\s*/, '⚙ Auto · '),
-              time: '',
-              type: 'system-note',
-            });
-          } else {
-            msgs.push({
-              id: m._id || String(index),
-              from: m.isIncoming ? 'guest' : 'you',
-              text: body,
-              time: new Date(m.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-              status: m.isIncoming ? undefined : m.status,
-            });
-          }
-        });
-        setMessages(msgs);
+      const response = await messagesService.getLeadMessages(String(lead.threadId));
+      const raw = extractOtaMessagesFromApiResponse(response);
+      const total =
+        typeof (response as { total?: number })?.total === 'number'
+          ? (response as { total: number }).total
+          : raw.length;
+      setMessagesTotal(total);
+
+      let mapped = mapOtaApiMessagesToInbox(raw, lead.guestName);
+      if (mapped.length === 0 && lead.lastMessage?.trim()) {
+        mapped = buildOtaPreviewFallbackMessages({
+          threadId: lead.threadId,
+          guestName: lead.guestName,
+          lastMessage: lead.lastMessage,
+          lastMessageTime: lead.lastMessageTime,
+        } as Parameters<typeof buildOtaPreviewFallbackMessages>[0]);
       }
+      setMessages(mapped);
+    } catch (err) {
+      console.error('❌ Erreur chargement messages lead:', err);
+      setMessagesLoadError(err instanceof Error ? err.message : 'Erreur chargement messages');
     } finally {
       setLoadingMessages(false);
     }
@@ -268,6 +262,8 @@ export default function LeadsTabV2() {
               thread={activeThread}
               messages={messages}
               loadingMessages={loadingMessages}
+              messagesLoadError={messagesLoadError}
+              messagesTotal={messagesTotal}
               quickTemplates={OTA_QUICK_TEMPLATES}
               quickReplies={OTA_QUICK_REPLIES}
               otaPlatform={otaPlatform}

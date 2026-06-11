@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { Box, Stack, Typography, Switch, TextField, MenuItem, IconButton, Button } from '@mui/material';
 import type { Workflow, SimpleMessage, WorkflowRelance, ChannelKind, ReferencePoint, WindowUnit } from './types';
 import { T } from './types';
+import { REFERENCE_POINT_LABELS } from './fulltaskTaskTypes';
 
 export interface OrchestrationEditorProps {
   workflows: Workflow[];
@@ -18,11 +19,11 @@ export interface OrchestrationEditorProps {
 }
 
 const REFERENCE_LABELS: Record<ReferencePoint, string> = {
-  reservation_date:    '📅 Date réservation',
-  check_in:            '🛬 Check-in',
-  check_out:           '🛫 Check-out',
-  task_created:        '✨ Création de la tâche',
-  previous_step_done:  '✓ Étape précédente terminée',
+  reservation_date: `📅 ${REFERENCE_POINT_LABELS.reservation_date}`,
+  check_in: `🛬 ${REFERENCE_POINT_LABELS.check_in}`,
+  check_out: `🛫 ${REFERENCE_POINT_LABELS.check_out}`,
+  task_created: `✨ ${REFERENCE_POINT_LABELS.task_created}`,
+  previous_step_done: `📍 ${REFERENCE_POINT_LABELS.previous_step_done}`,
 };
 
 const UNIT_LABELS: Record<WindowUnit, string> = {

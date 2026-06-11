@@ -64,33 +64,25 @@ export function fetchChannelsCalendarRuCallBodies(id: string) {
   return fetchChannelsDistributionRuCallBodies(id);
 }
 
-/** OAuth PMS — RuCallApi srv-user via channels-dashboard (proxy interne admin → user). */
+/** OAuth PMS — RuCallApi srv-user (monitoring interne, comme legacy dashboard). */
 export function fetchChannelsOAuthRuApis(query: Record<string, unknown> = {}) {
   const page = query.page != null ? Math.max(1, Number(query.page)) : 1;
   const limit = query.limit != null ? Math.min(100, Math.max(1, Number(query.limit))) : 25;
+  const timeRange = mapOverviewHoursToRuTimeRange(query.hours as number | string | undefined);
   const params = new URLSearchParams();
   params.set('page', String(page));
   params.set('limit', String(limit));
-  if (query.period === 'all') {
-    params.set('period', 'all');
-  } else if (query.from && query.to) {
-    params.set('from', String(query.from));
-    params.set('to', String(query.to));
-  } else {
-    const hours =
-      query.hours != null ? Math.min(8760, Math.max(1, Math.floor(Number(query.hours)))) : 72;
-    params.set('hours', String(hours));
-  }
-  return apiClient.get(`${CHANNELS_DASHBOARD}/ru-oauth-apis?${params.toString()}`, {
-    timeout: 120_000,
-    ...channelsDashboardAxiosConfig(),
-  });
+  params.set('service', 'user');
+  params.set('oauthOnly', 'true');
+  params.set('enrich', 'true');
+  params.set('timeRange', timeRange);
+  return apiClient.get(`${MONITORING}/ru/apis?${params.toString()}`, monitoringAxiosConfig());
 }
 
 export function fetchChannelsOAuthRuCallBodies(id: string) {
   return apiClient.get(
-    `${CHANNELS_DASHBOARD}/ru-oauth-call/${encodeURIComponent(String(id))}`,
-    channelsDashboardAxiosConfig(),
+    `${MONITORING}/ru/apis/user-call/${encodeURIComponent(String(id))}`,
+    monitoringAxiosConfig(),
   );
 }
 

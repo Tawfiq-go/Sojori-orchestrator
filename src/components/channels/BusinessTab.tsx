@@ -37,11 +37,7 @@ import {
   fetchChannelsOwnerRuApis,
   fetchChannelsOwnerRuCallBodies,
 } from '../../services/channelsDashboardApi';
-import {
-  overviewViewFromApiSeg,
-  overviewViewFromHookSeg,
-  parseMrSeg,
-} from '../../utils/channelsSharedUtils';
+import { overviewViewFromHookSeg, parseMrSeg } from '../../utils/channelsSharedUtils';
 import type { IngressOverviewRow } from '../../utils/ingressRowHelpers';
 import { IngressOverviewSection } from './IngressOverviewSection';
 import { formatCasablancaDate } from '../../utils/dateFormatting';
@@ -303,7 +299,6 @@ export function BusinessTab() {
     if (changed) setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  const [overviewPage, setOverviewPage] = useState(1);
   const [calendarPage, setCalendarPage] = useState(1);
   const [listingPage, setListingPage] = useState(1);
   const [userPage, setUserPage] = useState(1);
@@ -315,10 +310,6 @@ export function BusinessTab() {
   const [leadsPage, setLeadsPage] = useState(1);
   const [hookPage, setHookPage] = useState(1);
 
-  const [overviewList, setOverviewList] = useState<{ items?: IngressOverviewRow[]; total?: number; limit?: number } | null>(null);
-  const [overviewSummary, setOverviewSummary] = useState<Record<string, unknown> | null>(null);
-  const [overviewLoading, setOverviewLoading] = useState(false);
-  const [overviewError, setOverviewError] = useState<string | null>(null);
 
   const [calendarList, setCalendarList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
   const [calendarLoading, setCalendarLoading] = useState(false);
@@ -389,33 +380,6 @@ export function BusinessTab() {
   const [hookDoc, setHookDoc] = useState<Record<string, unknown> | null>(null);
   const [hookDocLoading, setHookDocLoading] = useState(false);
   const [hookDocError, setHookDocError] = useState<string | null>(null);
-
-  const loadOverview = useCallback(async () => {
-    const view = overviewViewFromApiSeg(apiSeg);
-    setOverviewLoading(true);
-    setOverviewError(null);
-    try {
-      const [listRes, summary] = await Promise.all([
-        fetchChannelsOverview({ hours, page: overviewPage, limit: LIMIT, view }),
-        fetchChannelsOverviewSummarySafe({ hours, view }),
-      ]);
-      const { data } = listRes;
-      if (!data?.success) {
-        setOverviewError('Failed to load overview list');
-        setOverviewList(null);
-        setOverviewSummary(null);
-      } else {
-        setOverviewList(data.data);
-        setOverviewSummary(summary);
-      }
-    } catch (e) {
-      setOverviewError(errMsg(e));
-      setOverviewList(null);
-      setOverviewSummary(null);
-    } finally {
-      setOverviewLoading(false);
-    }
-  }, [hours, overviewPage, apiSeg]);
 
   const loadCalendar = useCallback(async () => {
     setCalendarLoading(true);
@@ -668,18 +632,12 @@ export function BusinessTab() {
     else if (apiSeg === 'g') loadHttp();
     else if (apiSeg === 'rev') loadReviews();
     else if (apiSeg === 'd') loadDistribution();
-    else if (apiSeg === 'm') {
-      void loadMessagingRu();
-      void loadOverview();
-    } else if (apiSeg === 'lead') {
-      void loadLeadsRu();
-      void loadOverview();
-    } else if (apiSeg === 'r') void loadOverview();
+    else if (apiSeg === 'm') void loadMessagingRu();
+    else if (apiSeg === 'lead') void loadLeadsRu();
   }, [
     viewTab,
     apiSeg,
     docId,
-    loadOverview,
     loadCalendar,
     loadListing,
     loadUser,
@@ -714,13 +672,8 @@ export function BusinessTab() {
           else if (apiSeg === 'g') void loadHttp();
           else if (apiSeg === 'rev') void loadReviews();
           else if (apiSeg === 'd') void loadDistribution();
-          else if (apiSeg === 'm') {
-            void loadMessagingRu();
-            void loadOverview();
-          } else if (apiSeg === 'lead') {
-            void loadLeadsRu();
-            void loadOverview();
-          } else if (apiSeg === 'r') void loadOverview();
+          else if (apiSeg === 'm') void loadMessagingRu();
+          else if (apiSeg === 'lead') void loadLeadsRu();
         }
       }),
     [
@@ -730,7 +683,6 @@ export function BusinessTab() {
       loadBizOwners,
       loadBizListings,
       loadHooks,
-      loadOverview,
       loadCalendar,
       loadListing,
       loadUser,
@@ -843,10 +795,7 @@ export function BusinessTab() {
       .finally(() => setApiDocLoading(false));
   }, [viewTab, docId]);
 
-  const overviewKind = overviewViewFromApiSeg(apiSeg);
   const hookView = overviewViewFromHookSeg(hookSeg);
-  const tableView =
-    overviewKind === 'messaging' ? 'messaging' : overviewKind === 'leads' ? 'leads' : 'reservations';
 
   const hookBanner =
     hookView === 'messaging'
@@ -1248,23 +1197,24 @@ export function BusinessTab() {
       )}
 
       {viewTab === 'Api' && !docId && (apiSeg === 'r' || apiSeg === 'm' || apiSeg === 'lead') && (
-        <IngressOverviewSection
-          view={tableView}
-          list={overviewList}
-          loading={overviewLoading}
-          error={overviewError}
-          summary={overviewSummary as Parameters<typeof IngressOverviewSection>[0]['summary']}
-          page={overviewPage}
-          limit={LIMIT}
-          onPagePrev={() => setOverviewPage((p) => Math.max(1, p - 1))}
-          onPageNext={() => setOverviewPage((p) => p + 1)}
-          detailLink={(rowId) =>
-            chLink(patchParams(searchParams, { tab: 'Business', biz: 'hooks', hook: apiSeg === 'lead' ? 'lead' : apiSeg === 'r' ? 'r' : 'm', docId: rowId }))
-          }
-          msgDetail={msgDetail}
-          msgExpanded={msgExpanded}
-          onToggleMsgDetail={loadMsgDetail}
-        />
+        <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+          <strong>Sortant → RU</strong> uniquement ci-dessus. Les webhooks entrants (même domaine) sont sous{' '}
+          <Link
+            className="font-semibold underline"
+            to={chLink(
+              patchParams(searchParams, {
+                tab: 'Business',
+                biz: 'hooks',
+                hook: apiSeg === 'lead' ? 'lead' : apiSeg === 'r' ? 'r' : 'm',
+                api: undefined,
+                docId: undefined,
+              }),
+            )}
+          >
+            Entrant · webhooks → {apiSeg === 'lead' ? 'Leads' : apiSeg === 'r' ? 'Réservations' : 'Messages'}
+          </Link>
+          .
+        </div>
       )}
 
       {viewTab === 'Api' && !docId && apiSeg === 'g' && (
@@ -1356,8 +1306,8 @@ export function BusinessTab() {
       {viewTab === 'Api' && !docId && apiSeg === 'l' && listingList && (listingList.items?.length ?? 0) > 0 && (
         <>
           <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950 leading-relaxed">
-            <span className="inline-flex items-center gap-1 font-semibold"><Home size={11} /> Listing RU</span>
-            {' '}— ChannelRuApiCall (Pull/Push propriété, sync canal, import). Pas calendrier / réservations.
+            <span className="inline-flex items-center gap-1 font-semibold"><Home size={11} /> Annonces RU (sortant)</span>
+            {' '}— ChannelRuApiCall : Pull/Push propriété, sync OTA, import. Distinct de la synthèse par annonce.
           </div>
           <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between text-xs bg-white border border-slate-200 rounded px-3 py-1.5">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
@@ -1550,7 +1500,8 @@ export function BusinessTab() {
             <select style={{ padding: "4px 8px", borderRadius: 4, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, cursor: "pointer" }} className=" h-7 text-xs" value={hours} onChange={(e) => setHours(Number(e.target.value))}>
               <option value={6}>6h</option><option value={24}>24h</option><option value={72}>3j</option><option value={168}>7j</option>
             </select>
-            <span className="text-xs font-semibold"><UserRound size={13} className="inline" /> Agrégation par Owner</span>
+            <span className="text-xs font-semibold"><UserRound size={13} className="inline" /> Synthèse · Owner</span>
+            <span className="text-[10px] text-slate-500 ml-2">Volumes agrégés — pas les appels RU bruts</span>
           </div>
           {bizOwnersError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{bizOwnersError}</div>}
           {bizOwners.length > 0 && (
@@ -1584,7 +1535,8 @@ export function BusinessTab() {
             <select style={{ padding: "4px 8px", borderRadius: 4, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, cursor: "pointer" }} className=" h-7 text-xs" value={hours} onChange={(e) => setHours(Number(e.target.value))}>
               <option value={6}>6h</option><option value={24}>24h</option><option value={72}>3j</option><option value={168}>7j</option>
             </select>
-            <span className="text-xs font-semibold"><Home size={13} className="inline" /> Agrégation par Listing</span>
+            <span className="text-xs font-semibold"><Home size={13} className="inline" /> Synthèse · Annonces</span>
+            <span className="text-[10px] text-slate-500 ml-2">Volumes agrégés — pas les appels RU bruts</span>
           </div>
           {bizListingsError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{bizListingsError}</div>}
           {bizListings.length > 0 && (
@@ -1613,7 +1565,7 @@ export function BusinessTab() {
         </div>
       )}
 
-      {(overviewLoading || calendarLoading || listingLoading || userLoading || oauthLoading || distLoading || httpLoading || reviewsLoading || hookLoading) && (
+      {(calendarLoading || listingLoading || userLoading || oauthLoading || distLoading || httpLoading || reviewsLoading || hookLoading) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32, color: T.text3, fontSize: 14 }}>
           <div style={{ border: `3px solid ${T.bg2}`, borderTop: `3px solid ${T.primary}`, borderRadius: '50%', width: 24, height: 24, animation: 'spin 0.8s linear infinite', marginRight: 12 }} />
           Chargement…

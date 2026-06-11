@@ -40,6 +40,7 @@ import {
   type CleaningSojoriConfig,
 } from './cleaningSojoriConfigTypes';
 import { logOrchConfig, orchConfigError } from '../../utils/orchConfigDebugLog';
+import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
 
 const TRIGGER_OPTIONS = [
   { value: 0, label: 'J (checkout)' },
@@ -56,6 +57,7 @@ interface Props {
   templateMode?: boolean;
   /** Hub ménage : checklist dans onglet dédié. */
   showChecklist?: boolean;
+  manualSaveMode?: boolean;
 }
 
 function SortableChecklistRow({
@@ -129,9 +131,13 @@ export default function CleaningSojoriConfigTab({
   onListingPatch,
   templateMode = false,
   showChecklist = true,
+  manualSaveMode = false,
 }: Props) {
-  const [config, setConfig] = useState<CleaningSojoriConfig | null>(null);
+  const [config, setConfig] = useState<CleaningSojoriConfig | null>(() =>
+    mapListingToCleaningSojoriConfig(listingValues ?? {}),
+  );
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [dirty, setDirty] = useState(false);
   const configRef = useRef<CleaningSojoriConfig | null>(null);
   const hydratedRef = useRef(false);
   const dirtyRef = useRef(false);
@@ -145,14 +151,14 @@ export default function CleaningSojoriConfigTab({
   useEffect(() => {
     hydratedRef.current = false;
     dirtyRef.current = false;
+    setDirty(false);
   }, [listingId]);
 
   const orchSig = JSON.stringify((listingValues.cleaningOrchestration as object) || {});
 
   useEffect(() => {
     if (dirtyRef.current) return;
-    if (!listingValues || !Object.keys(listingValues).length) return;
-    const mapped = mapListingToCleaningSojoriConfig(listingValues);
+    const mapped = mapListingToCleaningSojoriConfig(listingValues ?? {});
     setConfig(mapped);
     configRef.current = mapped;
     hydratedRef.current = true;
@@ -160,6 +166,7 @@ export default function CleaningSojoriConfigTab({
 
   const patch = useCallback((fn: (c: CleaningSojoriConfig) => CleaningSojoriConfig) => {
     dirtyRef.current = true;
+    setDirty(true);
     setConfig(prev => {
       if (!prev) return prev;
       const next = fn(prev);
@@ -198,6 +205,8 @@ export default function CleaningSojoriConfigTab({
         preferredDayAfterCheckout: orch?.preferredDayAfterCheckout,
       });
       setSavingState('saved');
+      dirtyRef.current = false;
+      setDirty(false);
     } catch (e) {
       orchConfigError('cleaning.sojori.persist ← FAIL', e, {
         listingId: listingId || '(template)',
@@ -209,7 +218,7 @@ export default function CleaningSojoriConfigTab({
   }, [listingId, listingValues, onListingPatch, templateMode]);
 
   useEffect(() => {
-    if (!config || !dirtyRef.current) return;
+    if (manualSaveMode || !config || !dirtyRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       persist().finally(() => {
@@ -219,7 +228,7 @@ export default function CleaningSojoriConfigTab({
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [config, persist]);
+  }, [config, persist, manualSaveMode]);
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -231,7 +240,7 @@ export default function CleaningSojoriConfigTab({
     });
   };
 
-  if (!config || !Object.keys(listingValues).length) {
+  if (!config) {
     return (
       <Box sx={{ p: 4, textAlign: 'center' }}>
         <CircularProgress size={28} sx={{ color: T.primary }} />
@@ -363,6 +372,14 @@ export default function CleaningSojoriConfigTab({
           )}
         </>
       )}
+      {manualSaveMode ? (
+        <V3BlockSaveBar
+          label="Ménage Sojori · gestion owner_orchestrations"
+          dirty={dirty}
+          saving={savingState === 'saving'}
+          onSave={() => void persist()}
+        />
+      ) : null}
     </Box>
   );
 }

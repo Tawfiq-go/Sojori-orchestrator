@@ -33,6 +33,7 @@ import {
 } from './cleaningConfigTypes';
 import { canPersistListingConfig } from './cleaningSojoriConfigTypes';
 import { logOrchConfig, orchConfigError } from '../../utils/orchConfigDebugLog';
+import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
 
 const SUB_TABS = [
   { id: 'included', label: 'Ménage inclus', icon: '🎁' },
@@ -52,6 +53,8 @@ interface Props {
   /** Hub ménage : afficher une seule section. */
   forcedSub?: SubTab;
   hideSubNav?: boolean;
+  /** V3 orchestration : save manuel via barre sticky. */
+  manualSaveMode?: boolean;
 }
 
 export default function CleaningConfigTab({
@@ -61,6 +64,7 @@ export default function CleaningConfigTab({
   templateMode = false,
   forcedSub,
   hideSubNav = false,
+  manualSaveMode = false,
 }: Props) {
   const [sub, setSub] = useState<SubTab>(forcedSub || 'included');
 
@@ -69,6 +73,7 @@ export default function CleaningConfigTab({
   }, [forcedSub]);
   const [config, setConfig] = useState<CleaningListingConfig | null>(null);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [dirty, setDirty] = useState(false);
   const [freqDialog, setFreqDialog] = useState(false);
   const [cleanDialog, setCleanDialog] = useState(false);
   const [paidSlotDialog, setPaidSlotDialog] = useState<string | null>(null);
@@ -84,6 +89,7 @@ export default function CleaningConfigTab({
   useEffect(() => {
     hydratedRef.current = false;
     dirtyRef.current = false;
+    setDirty(false);
   }, [listingId]);
 
   useEffect(() => {
@@ -97,6 +103,7 @@ export default function CleaningConfigTab({
 
   const patch = useCallback((fn: (c: CleaningListingConfig) => CleaningListingConfig) => {
     dirtyRef.current = true;
+    setDirty(true);
     setConfig(prev => {
       if (!prev) return prev;
       const next = fn(prev);
@@ -126,6 +133,8 @@ export default function CleaningConfigTab({
       await onListingPatch?.(payload);
       logOrchConfig('cleaning.hub.persist ← OK', { listingId: listingId || '(template)' });
       setSavingState('saved');
+      dirtyRef.current = false;
+      setDirty(false);
     } catch (e) {
       orchConfigError('cleaning.hub.persist ← FAIL', e, {
         listingId: listingId || '(template)',
@@ -137,7 +146,7 @@ export default function CleaningConfigTab({
   }, [listingId, onListingPatch, listingValues, templateMode, forcedSub]);
 
   useEffect(() => {
-    if (!config || !dirtyRef.current) return;
+    if (manualSaveMode || !config || !dirtyRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       persist().finally(() => {
@@ -147,7 +156,7 @@ export default function CleaningConfigTab({
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [config, persist]);
+  }, [config, persist, manualSaveMode]);
 
   if (!config || !Object.keys(listingValues).length) {
     return (
@@ -526,7 +535,14 @@ export default function CleaningConfigTab({
         open={cleanDialog}
         onClose={() => setCleanDialog(false)}
         title="Créneau ménage inclus"
-        onAdd={(slot: TimeSlot) => patch(c => ({ ...c, TS_CLEAN: [...c.TS_CLEAN, slot] }))}
+        includedMode
+        existingSlots={config.TS_CLEAN}
+        onAdd={(slot: TimeSlot) =>
+          patch(c => ({
+            ...c,
+            TS_CLEAN: [...c.TS_CLEAN, { start: slot.start, end: slot.end, price: 0, default: slot.default === true }],
+          }))
+        }
       />
       {paidSlotDialog && (
         <AddTimeslotDialog
@@ -559,6 +575,20 @@ export default function CleaningConfigTab({
         title="Créneau de départ"
         onAdd={(slot: TimeSlot) => patch(c => ({ ...c, TS_CHECKOUT: [...c.TS_CHECKOUT, slot] }))}
       />
+      {manualSaveMode ? (
+        <V3BlockSaveBar
+          label={
+            forcedSub === 'paid'
+              ? 'Ménage payant · gestion owner_orchestrations'
+              : forcedSub === 'timeslots'
+                ? 'Créneaux A/D · gestion owner_orchestrations'
+                : 'Ménage inclus · gestion owner_orchestrations'
+          }
+          dirty={dirty}
+          saving={savingState === 'saving'}
+          onSave={() => void persist()}
+        />
+      ) : null}
     </Box>
   );
 }

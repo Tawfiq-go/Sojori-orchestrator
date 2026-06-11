@@ -178,6 +178,7 @@ export function PlaceEndpointField({ label, value, onChange, placeholder }) {
         type="text"
         value={value}
         onChange={e => onChange(e.target.value)}
+        onKeyDown={e => e.stopPropagation()}
         placeholder={placeholder}
         sx={{
           width: '100%',
@@ -365,11 +366,15 @@ export function FormRow({ label, required, help, children, optional, compact = f
   );
 }
 
-export function TextInput({ style, inputProps, ...props }) {
+export function TextInput({ style, inputProps, onKeyDown, ...props }) {
   return (
     <input
       {...inputProps}
       {...props}
+      onKeyDown={e => {
+        e.stopPropagation();
+        onKeyDown?.(e);
+      }}
       style={{
         width: '100%',
         padding: '9px 11px',
@@ -386,11 +391,15 @@ export function TextInput({ style, inputProps, ...props }) {
   );
 }
 
-export function TextArea({ style, inputProps, ...props }) {
+export function TextArea({ style, inputProps, onKeyDown, ...props }) {
   return (
     <textarea
       {...inputProps}
       {...props}
+      onKeyDown={e => {
+        e.stopPropagation();
+        onKeyDown?.(e);
+      }}
       style={{
         width: '100%',
         padding: '9px 11px',

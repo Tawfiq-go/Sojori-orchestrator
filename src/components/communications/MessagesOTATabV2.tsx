@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Typography } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
@@ -26,6 +26,13 @@ import {
 } from '../unified-inbox/otaThreadFilters';
 import { OTA_QUICK_REPLIES, OTA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
 import { formatThreadWhen, normalizeBookingSource } from '../unified-inbox/inboxFormat';
+import {
+  getCachedOtaInbox,
+  invalidateOtaInboxCache,
+  setCachedOtaInbox,
+} from '../../utils/otaInboxCache';
+
+const OTA_INBOX_LIMIT = 100;
 
 const EMPTY_ADVANCED: OtaAdvancedSearch = { stayPeriod: 'all' };
 
@@ -42,12 +49,15 @@ function mapApiThreads(response: unknown): OtaThreadRow[] {
 
 export default function MessagesOTATabV2() {
   /** Liste inbox : actives seulement (Tout / canaux) */
-  const [inboxRows, setInboxRows] = useState<OtaThreadRow[]>([]);
+  const [inboxRows, setInboxRows] = useState<OtaThreadRow[]>(() => getCachedOtaInbox() ?? []);
   /** Résultats recherche BD (avancée = toutes resa ; non répondu = actives seulement) */
   const [searchRows, setSearchRows] = useState<OtaThreadRow[]>([]);
   const [searchMode, setSearchMode] = useState<OtaSearchMode>('none');
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getCachedOtaInbox());
+  const [tableReady, setTableReady] = useState(() => Boolean(getCachedOtaInbox()));
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const loadRequestIdRef = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [otaChannelFilter, setOtaChannelFilter] = useState<OtaChannelFilter>('all');
@@ -60,20 +70,49 @@ export default function MessagesOTATabV2() {
 
   const inbox = useInboxOTAConversation();
 
-  const loadInbox = useCallback(async () => {
-    try {
-      setLoading(true);
-      setLoadError(null);
-      const response = await messagesService.getOTAThreads({ page: 0, limit: 500 });
-      setInboxRows(filterOtaActiveReservationsOnly(mapApiThreads(response)));
+  const loadInbox = useCallback(async (opts?: { skipCache?: boolean }) => {
+    const requestId = ++loadRequestIdRef.current;
+    const cached = !opts?.skipCache ? getCachedOtaInbox() : null;
+    const hasCache = Boolean(cached);
+
+    if (hasCache && cached) {
+      setInboxRows(cached);
       setSearchRows([]);
       setSearchMode('none');
-    } catch (err: unknown) {
-      console.error('❌ Erreur chargement threads OTA:', err);
-      setLoadError(err instanceof Error ? err.message : 'Erreur de chargement');
-      setInboxRows([]);
-    } finally {
+      setTableReady(true);
+      setIsRefreshing(true);
       setLoading(false);
+    } else {
+      setLoading(true);
+      setTableReady(false);
+    }
+    setLoadError(null);
+
+    try {
+      const response = await messagesService.getOTAThreads({
+        page: 0,
+        limit: OTA_INBOX_LIMIT,
+      });
+      if (requestId !== loadRequestIdRef.current) return;
+
+      const rows = filterOtaActiveReservationsOnly(mapApiThreads(response));
+      setInboxRows(rows);
+      setSearchRows([]);
+      setSearchMode('none');
+      setCachedOtaInbox(rows);
+      setTableReady(true);
+    } catch (err: unknown) {
+      if (requestId !== loadRequestIdRef.current) return;
+      if (!hasCache) {
+        console.error('❌ Erreur chargement threads OTA:', err);
+        setLoadError(err instanceof Error ? err.message : 'Erreur de chargement');
+        setInboxRows([]);
+      }
+    } finally {
+      if (requestId === loadRequestIdRef.current) {
+        setLoading(false);
+        setIsRefreshing(false);
+      }
     }
   }, []);
 
@@ -98,7 +137,7 @@ export default function MessagesOTATabV2() {
 
         const response = await messagesService.getOTAThreads({
           page: 0,
-          limit: 500,
+          limit: OTA_INBOX_LIMIT,
           ...apiParams,
         });
 
@@ -167,7 +206,8 @@ export default function MessagesOTATabV2() {
     setOtaChannelFilter('all');
     setOtaUnrepliedOnly(false);
     setAdvancedExpanded(false);
-    void loadInbox();
+    invalidateOtaInboxCache();
+    void loadInbox({ skipCache: true });
   };
 
   const handleToutReset = () => {
@@ -228,8 +268,29 @@ export default function MessagesOTATabV2() {
     await inbox.selectOtaThread(row);
   };
 
+  const showBlockingSpinner = (loading && !tableReady) || (tableReady && isRefreshing);
+
   return (
     <>
+      {isRefreshing && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 72,
+            right: 16,
+            zIndex: 1200,
+            bgcolor: 'rgba(255,90,95,0.92)',
+            color: '#fff',
+            px: 1.5,
+            py: 0.75,
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          Mise à jour OTA…
+        </Box>
+      )}
       <InboxLayout>
         <ThreadsList
           threads={formattedThreads}
@@ -240,10 +301,10 @@ export default function MessagesOTATabV2() {
           mode="ota"
           activeThreadId={activeThread?.id ?? null}
           searchTerm={searchTerm}
-          loading={loading}
+          loading={showBlockingSpinner}
           otaListTotalCount={displayRows.length}
           loadError={loadError}
-          onRetryLoad={() => void loadInbox()}
+          onRetryLoad={() => void loadInbox({ skipCache: true })}
           otaChannelFilter={otaChannelFilter}
           onOtaChannelFilterChange={handleChannelFilterChange}
           otaUnrepliedOnly={otaUnrepliedOnly}
@@ -313,9 +374,9 @@ export default function MessagesOTATabV2() {
           >
             <Typography sx={{ fontSize: 48 }}>📨</Typography>
             <Typography sx={{ fontSize: 15, fontWeight: 600, color: t.text2 }}>
-              {loading ? 'Recherche en cours…' : 'Sélectionnez un message OTA'}
+              {showBlockingSpinner && !tableReady ? 'Chargement des messages OTA…' : 'Sélectionnez un message OTA'}
             </Typography>
-            {!loading && displayRows.length === 0 && (
+            {!showBlockingSpinner && displayRows.length === 0 && (
               <Typography sx={{ fontSize: 13, color: t.text3 }}>
                 Aucun résultat — élargissez les critères ou réinitialisez les filtres avancés.
               </Typography>

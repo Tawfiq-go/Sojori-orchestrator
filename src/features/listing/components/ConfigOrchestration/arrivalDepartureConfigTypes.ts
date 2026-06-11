@@ -5,9 +5,6 @@ import type { TimeSlot } from './cleaningConfigTypes';
 export type ArrivalDepartureConfig = {
   checkinTimeslotsEnabled: boolean;
   checkoutTimeslotsEnabled: boolean;
-  checkInTimeStart: number;
-  checkInTimeEnd: number;
-  checkOutTime: number;
   TS_CHECKIN: TimeSlot[];
   TS_CHECKOUT: TimeSlot[];
 };
@@ -44,22 +41,33 @@ export function mapListingToArrivalDepartureConfig(raw: Record<string, unknown>)
   return {
     checkinTimeslotsEnabled: raw.checkinTimeslotsEnabled !== false,
     checkoutTimeslotsEnabled: raw.checkoutTimeslotsEnabled !== false,
-    checkInTimeStart: typeof raw.checkInTimeStart === 'number' ? raw.checkInTimeStart : 15,
-    checkInTimeEnd: typeof raw.checkInTimeEnd === 'number' ? raw.checkInTimeEnd : 21,
-    checkOutTime: typeof raw.checkOutTime === 'number' ? raw.checkOutTime : 11,
     TS_CHECKIN: normalizeSlots(raw.TS_CHECKIN, DEFAULT_TS_CHECKIN),
     TS_CHECKOUT: normalizeSlots(raw.TS_CHECKOUT, DEFAULT_TS_CHECKOUT),
   };
 }
 
-export function mapArrivalDepartureToListingPatch(cfg: ArrivalDepartureConfig): Record<string, unknown> {
-  return {
-    checkinTimeslotsEnabled: cfg.checkinTimeslotsEnabled,
-    checkoutTimeslotsEnabled: cfg.checkoutTimeslotsEnabled,
-    checkInTimeStart: cfg.checkInTimeStart,
-    checkInTimeEnd: cfg.checkInTimeEnd,
-    checkOutTime: cfg.checkOutTime,
-    TS_CHECKIN: cfg.TS_CHECKIN.map(s => ({ ...s })),
-    TS_CHECKOUT: cfg.TS_CHECKOUT.map(s => ({ ...s })),
-  };
+export type ArrivalDepartureScope =
+  | 'arrival_choose'
+  | 'departure_choose'
+  | 'arrival_declare'
+  | 'departure_declare';
+
+export function mapArrivalDepartureToListingPatch(
+  cfg: ArrivalDepartureConfig,
+  scope: ArrivalDepartureScope,
+): Record<string, unknown> {
+  switch (scope) {
+    case 'arrival_choose':
+      return {
+        checkinTimeslotsEnabled: cfg.checkinTimeslotsEnabled,
+        TS_CHECKIN: cfg.TS_CHECKIN.map(s => ({ ...s })),
+      };
+    case 'departure_choose':
+      return {
+        checkoutTimeslotsEnabled: cfg.checkoutTimeslotsEnabled,
+        TS_CHECKOUT: cfg.TS_CHECKOUT.map(s => ({ ...s })),
+      };
+    default:
+      return {};
+  }
 }

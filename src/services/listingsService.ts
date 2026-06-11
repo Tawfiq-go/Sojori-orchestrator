@@ -1656,7 +1656,55 @@ export const listingsService = {
 
   async applyListingOrchestrationFromOwner(listingId: string) {
     const { data } = await apiClient.post(
-      `${LISTING_API_BASE_URL}/listing-orchestration-template/by-listing/${listingId}/apply-owner-template`,
+      `${LISTING_API_BASE_URL}/owner-orchestration/by-listing/${listingId}/apply-owner-template`,
+      {},
+    );
+    return data;
+  },
+
+  async getOwnerOrchestrationCompiled(ownerKey: string) {
+    const { data } = await apiClient.get(
+      `${LISTING_API_BASE_URL}/owner-orchestration/${encodeURIComponent(ownerKey)}/orchestration-effective`,
+    );
+    return data;
+  },
+
+  async putOwnerOrchestration(
+    ownerKey: string,
+    patch: {
+      orchestrationEnabled?: boolean;
+      capabilities?: Record<string, unknown>;
+      scheduledMessages?: unknown[];
+    },
+  ) {
+    const { data } = await apiClient.put(
+      `${LISTING_API_BASE_URL}/owner-orchestration/${encodeURIComponent(ownerKey)}/orchestration`,
+      patch,
+    );
+    return data;
+  },
+
+  async applyOwnerOrchestrationToAllListings(ownerKey: string) {
+    const { data } = await apiClient.post(
+      `${LISTING_API_BASE_URL}/owner-orchestration/${encodeURIComponent(ownerKey)}/apply-listings`,
+      {},
+    );
+    return data;
+  },
+
+  /** Admin global → modèle orchestration d'un PM (owner_orchestrations + template listing). */
+  async syncOwnerOrchestrationFromAdminToOwner(
+    ownerId: string,
+    mode: 'auto' | 'bootstrap' | 'library_update' = 'auto',
+  ) {
+    const url = `${LISTING_API_BASE_URL}/owner-orchestration/global/sync-owner/${ownerId}?mode=${mode}`;
+    const { data } = await apiClient.post(url, {});
+    return data;
+  },
+
+  async syncOwnerOrchestrationFromAdminToAllOwners() {
+    const { data } = await apiClient.post(
+      `${LISTING_API_BASE_URL}/owner-orchestration/global/sync-all-owners`,
       {},
     );
     return data;

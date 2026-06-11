@@ -29,10 +29,11 @@ import {
   sortPlanEventsByListOrder,
 } from './planEventOrder';
 import {
-  anchorDateForScheduleRef,
   formatScheduleOffset,
   inferScheduleOffsetFromDates,
   normalizeScheduleRef,
+  resolveScheduleAnchorDate,
+  type SequenceScheduleAnchors,
 } from './planScheduleLabel';
 import { registrationCountsFromPayload } from '../../utils/fulltaskMappers';
 import { deriveSequenceDisplayStatus } from './planGroupStatus';
@@ -243,6 +244,23 @@ function taskPayloadRecord(
   return p && typeof p === 'object' ? (p as Record<string, unknown>) : undefined;
 }
 
+function sequenceScheduleAnchors(
+  seq: FulltaskPlanDoc['sequences'][0],
+  taskAnchorDate?: Date,
+): SequenceScheduleAnchors {
+  return {
+    taskScheduledDate:
+      taskAnchorDate ??
+      toDate(seq.taskScheduledDate) ??
+      toDate(seq.task?.scheduledDate) ??
+      undefined,
+    taskCreatedAt:
+      toDate(seq.task?.createdAt) ??
+      toDate(seq.assignation?.startAt) ??
+      undefined,
+  };
+}
+
 function resolveTaskDisplayDate(
   seq: FulltaskPlanDoc['sequences'][0],
   plan: FulltaskPlanDoc,
@@ -417,21 +435,13 @@ function mapEscaladeView(
   esc: NonNullable<FulltaskPlanDoc['sequences'][0]['escalade']>,
   plan: FulltaskPlanDoc,
   taskType: string,
-  taskAnchorDate: Date,
+  seqAnchors: SequenceScheduleAnchors,
   now: Date,
 ) {
   const status = normalizeEscaladeStatus(esc.status);
   const escRef = normalizeScheduleRef(esc.scheduleRef, taskType);
   const escAnchor =
-    anchorDateForScheduleRef(plan, escRef, taskAnchorDate) ||
-    toDate(
-      escRef === 'checkout'
-        ? plan.checkOut
-        : escRef === 'scheduledDate'
-          ? taskAnchorDate
-          : plan.checkIn,
-    ) ||
-    now;
+    resolveScheduleAnchorDate(plan, escRef, seqAnchors, esc.scheduledAt) || now;
   return {
     scheduled: status === 'en_attente',
     status,
@@ -1235,6 +1245,7 @@ function buildSequenceView(
 
   const taskAnchorDate =
     toDate(seq.taskScheduledDate) ?? toDate(seq.task?.scheduledDate) ?? undefined;
+  const seqAnchors = sequenceScheduleAnchors(seq, taskAnchorDate ?? undefined);
   const { start, atDisplay, range } = resolveSequenceTimelineDisplay(
     seq,
     plan,
@@ -1247,16 +1258,7 @@ function buildSequenceView(
     const meta = catalogMetaForSequenceRelance(plan, seq, at, r.label);
     const scheduleRef = normalizeScheduleRef(r.scheduleRef, seq.taskType);
     const isLm = Boolean((r as { lm?: boolean }).lm);
-    const anchor =
-      anchorDateForScheduleRef(plan, scheduleRef, taskAnchorDate) ||
-      toDate(
-        scheduleRef === 'checkout'
-          ? plan.checkOut
-          : scheduleRef === 'scheduledDate'
-            ? taskAnchorDate
-            : plan.checkIn,
-      ) ||
-      at;
+    const anchor = resolveScheduleAnchorDate(plan, scheduleRef, seqAnchors, at) || at;
     return {
       ...m,
       relanceIndex: i,
@@ -1282,16 +1284,7 @@ function buildSequenceView(
       (r as { scheduleRef?: string }).scheduleRef,
       seq.taskType,
     );
-    const srAnchor =
-      anchorDateForScheduleRef(plan, srRef, taskAnchorDate) ||
-      toDate(
-        srRef === 'checkout'
-          ? plan.checkOut
-          : srRef === 'scheduledDate'
-            ? taskAnchorDate
-            : plan.checkIn,
-      ) ||
-      at;
+    const srAnchor = resolveScheduleAnchorDate(plan, srRef, seqAnchors, at) || at;
     const scheduleDay = (r as { scheduleDay?: number }).scheduleDay;
     const scheduleTime = (r as { scheduleTime?: string }).scheduleTime;
     return {
@@ -1309,7 +1302,7 @@ function buildSequenceView(
   const attempts = mapAttempts(seq, staffNames);
   const lmAssignSlots = mapLmAssignSlots(seq, now);
   const escalade = seq.escalade
-    ? mapEscaladeView(seq.escalade, plan, seq.taskType, taskAnchorDate, now)
+    ? mapEscaladeView(seq.escalade, plan, seq.taskType, seqAnchors, now)
     : undefined;
 
   const baseTitle = labelForTaskTypeId(seq.taskType);
@@ -1426,6 +1419,7 @@ export function buildPlanViewModel(
   for (const seq of plan.sequences) {
     const taskAnchorDate =
       toDate(seq.taskScheduledDate) ?? toDate(seq.task?.scheduledDate) ?? undefined;
+    const seqAnchors = sequenceScheduleAnchors(seq, taskAnchorDate ?? undefined);
     const { start, atDisplay, range } = resolveSequenceTimelineDisplay(
       seq,
       plan,
@@ -1446,7 +1440,7 @@ export function buildPlanViewModel(
     const staffAssignment = mapStaffAssignment(seq, staffNames, now);
     const sequenceFlow = buildSequenceFlow(seq, staffNames, now);
     const escalade = seq.escalade
-      ? mapEscaladeView(seq.escalade, plan, seq.taskType, taskAnchorDate ?? start, now)
+      ? mapEscaladeView(seq.escalade, plan, seq.taskType, seqAnchors, now)
       : undefined;
 
     const futureParts: string[] = [];

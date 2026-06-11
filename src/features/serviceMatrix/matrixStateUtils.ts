@@ -159,18 +159,14 @@ export function patchWorkflowForCapability(
     if (!row.execution.staffAssignment) {
       assignment = null;
     } else if (!assignment) {
-      assignment = defaultWorkflowAssignment();
+      assignment = defaultWorkflowAssignment(def.taskType);
     }
-    const staffReminders = (wf.staffReminders ?? []).map(r => ({
-      ...r,
-      enabled: row.execution.staffReminders ? r.enabled !== false : false,
-    }));
     return {
       ...wf,
       enabled: row.taskEnabled,
       relances,
       assignment,
-      staffReminders,
+      staffReminders: wf.staffReminders ?? [],
       escalationEnabled: row.execution.pmEscalation,
     };
   });

@@ -31,10 +31,16 @@ export type TransportRouteItem = {
   cityIds?: 'all' | string[];
 };
 
+export function cloneCityAssociation(value: 'all' | string[] | undefined): 'all' | string[] {
+  if (value === 'all' || value === undefined) return 'all';
+  if (!Array.isArray(value) || value.length === 0) return 'all';
+  return [...value];
+}
+
 /** Route vierge — ajout manuel PM uniquement (pas de seed CMN/RAK/gare). */
 export function createBlankTransportRoute(order: number): Omit<TransportRouteItem, 'propertyPlace'> {
   return {
-    id: `route_${Date.now()}`,
+    id: `route_${Date.now()}_${order}_${Math.random().toString(36).slice(2, 8)}`,
     labelFr: 'Navette',
     descriptionFr: '',
     from: '',

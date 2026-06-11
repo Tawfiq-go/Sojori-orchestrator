@@ -48,29 +48,58 @@ export type PlanAnchorDates = {
   bookingCreatedAt?: Date | string;
 };
 
+export type SequenceScheduleAnchors = {
+  taskScheduledDate?: Date | string | null;
+  taskCreatedAt?: Date | string | null;
+};
+
+function toAnchorDate(v: Date | string | null | undefined): Date | undefined {
+  if (!v) return undefined;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
 export function anchorDateForScheduleRef(
   plan: PlanAnchorDates,
   ref: string,
-  taskScheduledDate?: Date | string | null,
+  seqAnchors?: SequenceScheduleAnchors | null,
 ): Date | undefined {
   const r = normalizeScheduleRef(ref);
+  const taskScheduledDate = seqAnchors?.taskScheduledDate;
+  const taskCreatedAt = seqAnchors?.taskCreatedAt;
+
   if (r === 'scheduledDate') {
-    if (taskScheduledDate) return new Date(taskScheduledDate);
-    return undefined;
+    return toAnchorDate(taskScheduledDate);
+  }
+  if (r === 'task_created') {
+    return toAnchorDate(taskCreatedAt);
   }
   if (r === 'checkout') {
-    const d = plan.checkOut;
-    return d ? new Date(d) : undefined;
+    return toAnchorDate(plan.checkOut);
   }
   if (r === 'booking_created') {
-    const d = plan.bookingCreatedAt;
-    return d ? new Date(d) : undefined;
+    return toAnchorDate(plan.bookingCreatedAt);
   }
-  const d = plan.checkIn;
-  return d ? new Date(d) : undefined;
+  if (r === 'checkin') {
+    return toAnchorDate(plan.checkIn);
+  }
+  return toAnchorDate(plan.checkIn);
 }
 
-/** Libellé config orchestration : J-3 · check-in · 09:00 */
+/** Ancre pour libellés J±N quand scheduleDay manque (plans legacy). */
+export function resolveScheduleAnchorDate(
+  plan: PlanAnchorDates,
+  ref: string,
+  seqAnchors?: SequenceScheduleAnchors | null,
+  scheduledAt?: Date | string | null,
+): Date | undefined {
+  const normalized = normalizeScheduleRef(ref);
+  const fromRef = anchorDateForScheduleRef(plan, ref, seqAnchors);
+  if (fromRef) return fromRef;
+  return toAnchorDate(scheduledAt);
+}
+
+/** Libellé config orchestration : J-3 · date tâche · 09:00 */
 export function formatScheduleOffset(
   day?: number | null,
   ref?: string | null,

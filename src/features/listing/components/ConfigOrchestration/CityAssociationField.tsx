@@ -27,12 +27,14 @@ interface Props {
   value: CityAssociation | undefined;
   onChange: (next: CityAssociation) => void;
   compact?: boolean;
+  /** Évite collisions Autocomplete quand plusieurs routes sont ouvertes. */
+  instanceId?: string;
 }
 
-export default function CityAssociationField({ value, onChange, compact = false }: Props) {
+export default function CityAssociationField({ value, onChange, compact = false, instanceId }: Props) {
   const [cities, setCities] = useState<CityOption[]>([]);
   const isAll = isCityAssociationAll(value);
-  const selectedIds = isAll ? [] : (value as string[]);
+  const selectedIds = isAll ? [] : [...(value as string[])];
 
   useEffect(() => {
     let cancelled = false;
@@ -78,10 +80,15 @@ export default function CityAssociationField({ value, onChange, compact = false 
         isOptionEqualToValue={(a, b) => a._id === b._id}
         onChange={(_, opts) => {
           if (!opts.length) onChange('all');
-          else onChange(opts.map((o) => o._id));
+          else onChange([...opts.map((o) => o._id)]);
         }}
         renderInput={(params) => (
-          <TextField {...params} placeholder="Marrakech, Casablanca…" label="Villes ciblées" />
+          <TextField
+            {...params}
+            id={instanceId ? `city-assoc-${instanceId}` : undefined}
+            placeholder="Marrakech, Casablanca…"
+            label="Villes ciblées"
+          />
         )}
         sx={{
           '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: T.bg1 },

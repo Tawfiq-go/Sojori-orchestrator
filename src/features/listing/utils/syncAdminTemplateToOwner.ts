@@ -64,10 +64,25 @@ function formatSyncReport(data: unknown): string[] {
 }
 
 /**
- * Admin → PM : srv-listing global → template PM (orchestration + owner config).
+ * Admin → PM : owner_orchestrations global + template PM (listing-owner-config-template).
  */
 export async function syncAdminTemplateToOwnerSimple(targetOwnerId: string): Promise<SimpleSyncResult> {
   const lines: string[] = [];
+
+  try {
+    const res = await listingsService.syncOwnerOrchestrationFromAdminToOwner(targetOwnerId);
+    const reportLines = formatSyncReport(res);
+    lines.push(...reportLines);
+    const orchOk = (res as { data?: { orchestration?: { ok?: boolean } } })?.data?.orchestration?.ok;
+    return { ok: Boolean(orchOk), lines };
+  } catch (e: unknown) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    if (status !== 404) {
+      const msg = e instanceof Error ? e.message : String(e);
+      lines.push(`Sync API: ${msg}`);
+      return { ok: false, lines };
+    }
+  }
 
   try {
     const res = await listingsService.syncOrchestrationTemplateToOwner(targetOwnerId);

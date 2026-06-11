@@ -19,6 +19,8 @@ type Props = {
   rows: CapabilityRowState[];
   selectedKey: string | null;
   libraryActive: boolean;
+  /** false = rail listing (masque les entrées listingRailHidden). */
+  ownerTemplateMode?: boolean;
   onSelectService: (key: string) => void;
   onSelectLibrary: () => void;
 };
@@ -33,16 +35,25 @@ export default function V3Rail({
   rows,
   selectedKey,
   libraryActive,
+  ownerTemplateMode = false,
   onSelectService,
   onSelectLibrary,
 }: Props) {
   const rowByKey = Object.fromEntries(rows.map(r => [r.key, r]));
 
-  const groups = Object.entries(CAPABILITY_GROUPS).map(([id, label]) => ({
-    id,
-    label,
-    items: CAPABILITY_REGISTRY.filter(c => c.group === id && c.key !== 'menu_navigation'),
-  }));
+  const railCapabilities = CAPABILITY_REGISTRY.filter(
+    c =>
+      c.key !== 'menu_navigation' &&
+      (ownerTemplateMode || !c.listingRailHidden),
+  );
+
+  const groups = Object.entries(CAPABILITY_GROUPS)
+    .map(([id, label]) => ({
+      id,
+      label,
+      items: railCapabilities.filter(c => c.group === id),
+    }))
+    .filter(grp => grp.items.length > 0);
 
   const menuNavDef = CAPABILITY_REGISTRY.find(c => c.key === 'menu_navigation');
   const menuNavRow = rowByKey.menu_navigation;
@@ -215,6 +226,8 @@ export default function V3Rail({
         </Box>
       ))}
 
+      {ownerTemplateMode && (
+        <>
       <Box sx={{ height: 1, bgcolor: V3.b, mx: 1.5, my: 1.25 }} />
 
       <Box
@@ -250,6 +263,8 @@ export default function V3Rail({
           </Typography>
         </Box>
       </Box>
+        </>
+      )}
     </Box>
   );
 }
