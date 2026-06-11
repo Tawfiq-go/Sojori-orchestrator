@@ -271,7 +271,6 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Mode réception · instructions par zone',
     whatsappHint: 'Option F · show_access_info',
     orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
-    listingRailHidden: true,
   },
   {
     key: 'property_wifi',
