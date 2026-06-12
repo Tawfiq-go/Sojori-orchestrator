@@ -53,6 +53,7 @@ import CityAssociationField, {
 import { logOrchConfig, orchConfigError } from '../../utils/orchConfigDebugLog';
 import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
 import { logV3Orch } from '../../../orchestrationListingV3/v3OrchestrationDebugLog';
+import { persistListingConciergeSlice } from './conciergeListingPersist';
 import { cloneCityAssociation } from './transportRouteCatalog';
 
 const T = SOJORI_TOKENS;
@@ -367,9 +368,6 @@ export default function ConciergeConfigTab({
     if (isAdminGlobal) return;
     const cfg = configRef.current;
     const customServices = buildCustomServicesPayload(cfg.services);
-    const shell = useOrchestrationGestion
-      ? gestionConciergeShell(listingValues)
-      : rawDocRef.current || gestionConciergeShell({});
 
     setSavingState('saving');
     logV3Orch('gestion.concierge.persist.start', {
@@ -384,23 +382,16 @@ export default function ConciergeConfigTab({
 
     try {
       if (useOrchestrationGestion && onListingPatch) {
-        await onListingPatch({
-          transportServices: shell.transportServices || [],
-          groceryServices: shell.groceryServices || [],
-          customServices,
-        });
+        await onListingPatch({ customServices });
         if (!templateMode && listingId) {
-          await listingsService.updateListingConciergeServices(listingId, {
-            transportServices: (shell.transportServices as unknown[]) || [],
-            groceryServices: (shell.groceryServices as unknown[]) || [],
+          const merged = await persistListingConciergeSlice(listingId, { customServices });
+          rawDocRef.current = merged;
+        } else {
+          rawDocRef.current = {
+            ...(rawDocRef.current || {}),
             customServices,
-          });
+          };
         }
-        rawDocRef.current = {
-          transportServices: shell.transportServices || [],
-          groceryServices: shell.groceryServices || [],
-          customServices,
-        };
       } else if (isOwnerTemplate && templateOwnerKey) {
         const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
         const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
@@ -411,13 +402,7 @@ export default function ConciergeConfigTab({
           customServices,
         });
       } else if (listingId) {
-        const existing = await listingsService.getListingConciergeConfig(listingId);
-        const doc = (existing.data || {}) as { transportServices?: unknown[]; groceryServices?: unknown[] };
-        await listingsService.updateListingConciergeServices(listingId, {
-          transportServices: doc.transportServices || [],
-          groceryServices: doc.groceryServices || [],
-          customServices,
-        });
+        await persistListingConciergeSlice(listingId, { customServices });
       } else {
         return;
       }

@@ -56,6 +56,9 @@ export interface MessageExchange {
   processing_trace?: any;
   ai_intent?: any;
   user_context?: any;
+  /** Outbound WhatsApp delivery (srv-fullchatbot assistant row). */
+  ai_response_send_status?: 'pending' | 'sent' | 'failed';
+  ai_response_send_error?: string | null;
 }
 
 /**

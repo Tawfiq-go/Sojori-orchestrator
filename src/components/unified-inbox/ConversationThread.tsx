@@ -1,11 +1,13 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useInboxMessageScroll } from './useInboxMessageScroll';
-import { Box, Stack, Typography, CircularProgress } from '@mui/material';
+import { Box, Stack, Typography, CircularProgress, Tooltip } from '@mui/material';
 import { DoneAll } from '@mui/icons-material';
 import { T } from './_tokens';
 import { flagFromPhone } from './inboxFormat';
 import { getOtaTheme, isOtaChannelType } from './otaPlatformTheme';
 import type { Thread, Message, QuickTemplate, QuickAction } from '../../types/unifiedInbox.types';
+import { formatWhatsAppDeliveryError } from './formatWhatsAppDeliveryError';
+import { extractHttpErrorMessage } from '../../utils/extractHttpErrorMessage';
 
 interface ConversationThreadProps {
   thread: Thread;
@@ -14,7 +16,7 @@ interface ConversationThreadProps {
   /** Réponses rapides OTA (pilules, entre messages et templates) */
   quickReplies?: QuickTemplate[];
   quickActions?: QuickAction[];
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => void | Promise<void>;
   onSelectTemplate: (template: QuickTemplate) => void;
   onAISuggestion?: () => void;
   otaPlatform?: string;
@@ -40,6 +42,8 @@ export default function ConversationThread({
   messagesTotal = 0,
 }: ConversationThreadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const hasRenderableMessages =
     !loadingMessages && messages.filter((m) => m.type !== 'day-separator').length > 0;
 
@@ -54,10 +58,19 @@ export default function ConversationThread({
   const flag = thread.guestFlag || flagFromPhone(thread.phone);
   const platformLabel = otaPlatform || otaTheme.label;
 
-  const handleSend = () => {
-    if (!inputRef.current?.value.trim()) return;
-    onSendMessage(inputRef.current.value);
-    inputRef.current.value = '';
+  const handleSend = async () => {
+    const text = inputRef.current?.value.trim();
+    if (!text || sending) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      await onSendMessage(text);
+      if (inputRef.current) inputRef.current.value = '';
+    } catch (err: unknown) {
+      setSendError(extractHttpErrorMessage(err, 'Échec envoi WhatsApp'));
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -472,6 +485,7 @@ export default function ConversationThread({
 
           const isOut = message.from === 'you' || message.from === 'sojori';
           const isGuest = message.from === 'guest';
+          const waFailed = isOut && message.whatsappDelivery === 'failed';
           const styles = bubbleStyles(message.from);
 
           return (
@@ -488,7 +502,7 @@ export default function ConversationThread({
               <Box
                 sx={{
                   background: styles.bg,
-                  border: styles.border,
+                  border: waFailed ? '1px solid rgba(220,38,38,0.45)' : styles.border,
                   borderRadius: styles.radius,
                   px: isOta ? '15px' : '13px',
                   py: isOta ? '11px' : '9px',
@@ -536,13 +550,67 @@ export default function ConversationThread({
                 }}
               >
                 <span>{message.time}</span>
-                {isOut && message.status === 'read' && (
+                {isOut && message.whatsappDelivery === 'failed' && (
+                  <Tooltip
+                    title={formatWhatsAppDeliveryError(message.whatsappDeliveryError)}
+                    arrow
+                    placement="top"
+                    slotProps={{
+                      tooltip: {
+                        sx: {
+                          maxWidth: 360,
+                          whiteSpace: 'pre-line',
+                          fontSize: 11,
+                          lineHeight: 1.45,
+                        },
+                      },
+                    }}
+                  >
+                    <Box
+                      component="span"
+                      sx={{
+                        color: '#dc2626',
+                        fontWeight: 700,
+                        fontSize: 9.5,
+                        letterSpacing: '0.02em',
+                        cursor: 'help',
+                        borderBottom: '1px dashed rgba(220,38,38,0.55)',
+                      }}
+                    >
+                      Non envoyé
+                    </Box>
+                  </Tooltip>
+                )}
+                {isOut && message.whatsappDelivery === 'pending' && (
+                  <Tooltip title="Envoi WhatsApp en cours…" arrow placement="top">
+                    <Box component="span" sx={{ color: T.text3, fontWeight: 600, cursor: 'help' }}>
+                      En attente
+                    </Box>
+                  </Tooltip>
+                )}
+                {isOut && message.whatsappDelivery !== 'failed' && message.status === 'read' && (
                   <DoneAll sx={{ fontSize: 14, color: '#0084FF' }} />
                 )}
-                {isOut && message.status === 'delivered' && (
+                {isOut &&
+                  message.whatsappDelivery !== 'failed' &&
+                  message.status === 'delivered' && (
                   <DoneAll sx={{ fontSize: 14, color: T.text4 }} />
                 )}
               </Stack>
+              {waFailed && (
+                <Typography
+                  sx={{
+                    alignSelf: 'flex-end',
+                    fontSize: 10,
+                    lineHeight: 1.4,
+                    color: '#b91c1c',
+                    maxWidth: '100%',
+                    px: 0.5,
+                  }}
+                >
+                  {formatWhatsAppDeliveryError(message.whatsappDeliveryError).split('\n')[0]}
+                </Typography>
+              )}
               {isOta && isGuest && (
                 <Typography
                   sx={{
@@ -662,6 +730,28 @@ export default function ConversationThread({
         </Box>
       )}
 
+      {sendError && !isOta && (
+        <Box
+          sx={{
+            mx: '18px',
+            mb: 0.5,
+            px: 1.25,
+            py: 1,
+            borderRadius: 1,
+            bgcolor: 'rgba(220,38,38,0.08)',
+            border: '1px solid rgba(220,38,38,0.35)',
+            flexShrink: 0,
+          }}
+        >
+          <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: '#b91c1c', mb: 0.25 }}>
+            WhatsApp — envoi impossible
+          </Typography>
+          <Typography sx={{ fontSize: 11, color: '#7f1d1d', lineHeight: 1.45, whiteSpace: 'pre-line' }}>
+            {sendError}
+          </Typography>
+        </Box>
+      )}
+
       <Box
         sx={{
           px: '18px',
@@ -672,6 +762,7 @@ export default function ConversationThread({
           alignItems: 'center',
           gap: 1,
           flexShrink: 0,
+          opacity: sending ? 0.72 : 1,
         }}
       >
         <Box component="button" sx={iconBtnSx} title="Joindre">
@@ -734,13 +825,14 @@ export default function ConversationThread({
         </Box>
         <Box
           component="button"
-          onClick={handleSend}
+          onClick={() => void handleSend()}
+          disabled={sending}
           sx={{
             width: 36,
             height: 36,
             borderRadius: '10px',
             border: 0,
-            cursor: 'pointer',
+            cursor: sending ? 'wait' : 'pointer',
             fontSize: 15,
             fontWeight: 800,
             color: '#fff',

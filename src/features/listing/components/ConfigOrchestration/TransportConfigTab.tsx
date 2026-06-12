@@ -45,6 +45,7 @@ import { migrateJourneyTag, syncRouteEndpoints, TRANSPORT_V1_NOTE } from './tran
 import CityAssociationField, { formatCityAssociationSummary } from './CityAssociationField';
 import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
 import { logV3Orch } from '../../../orchestrationListingV3/v3OrchestrationDebugLog';
+import { persistListingConciergeSlice } from './conciergeListingPersist';
 
 const MAX_ROUTES = 10;
 
@@ -313,9 +314,6 @@ export default function TransportConfigTab({
   const persist = useCallback(async () => {
     if (isAdminGlobalTemplate) return;
     setSavingState('saving');
-    const shell = useOrchestrationGestion
-      ? gestionConciergeShell(listingValues)
-      : rawDocRef.current || gestionConciergeShell({});
     const transportServices = routesRef.current.map((r, i) => routeToApi(r, i, listingProperty));
     logV3Orch('gestion.transport.persist.start', {
       templateMode,
@@ -324,23 +322,16 @@ export default function TransportConfigTab({
     });
     try {
       if (useOrchestrationGestion && onListingPatch) {
-        await onListingPatch({
-          transportServices,
-          groceryServices: shell.groceryServices || [],
-          customServices: shell.customServices || [],
-        });
+        await onListingPatch({ transportServices });
         if (!templateMode && listingId) {
-          await listingsService.updateListingConciergeServices(listingId, {
+          const merged = await persistListingConciergeSlice(listingId, { transportServices });
+          rawDocRef.current = merged;
+        } else {
+          rawDocRef.current = {
+            ...(rawDocRef.current || {}),
             transportServices,
-            groceryServices: (shell.groceryServices as unknown[]) || [],
-            customServices: (shell.customServices as unknown[]) || [],
-          });
+          };
         }
-        rawDocRef.current = {
-          transportServices,
-          groceryServices: shell.groceryServices || [],
-          customServices: shell.customServices || [],
-        };
       } else if (isOwnerTemplate && templateOwnerKey) {
         const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
         const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
@@ -351,13 +342,7 @@ export default function TransportConfigTab({
           customServices: prev.customServices || [],
         });
       } else if (listingId) {
-        const existing = await listingsService.getListingConciergeConfig(listingId);
-        const doc = (existing.data || {}) as { groceryServices?: unknown[]; customServices?: unknown[] };
-        await listingsService.updateListingConciergeServices(listingId, {
-          transportServices,
-          groceryServices: doc.groceryServices || [],
-          customServices: doc.customServices || [],
-        });
+        await persistListingConciergeSlice(listingId, { transportServices });
       } else {
         return;
       }

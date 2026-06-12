@@ -158,10 +158,14 @@ export default function WhatsAppTabV2() {
                 });
                 await handleSelect(inbox.activeConversation);
               }}
-              onSelectTemplate={(tpl) => tpl.text && void messagesService.sendMessage({
-                phone: inbox.activeConversation!.phone,
-                message: tpl.text,
-              })}
+              onSelectTemplate={async (tpl) => {
+                if (!tpl.text || !inbox.activeConversation) return;
+                await messagesService.sendMessage({
+                  phone: inbox.activeConversation.phone,
+                  message: tpl.text,
+                });
+                await handleSelect(inbox.activeConversation);
+              }}
               onAISuggestion={() => setShowAIModal(true)}
             />
             <ConversationDetails

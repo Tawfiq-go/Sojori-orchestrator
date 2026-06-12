@@ -16,6 +16,7 @@ import {
 } from './SHARED';
 import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
 import { logV3Orch } from '../../../orchestrationListingV3/v3OrchestrationDebugLog';
+import { persistListingConciergeSlice } from './conciergeListingPersist';
 
 const DEFAULT_SLOT_OPTIONS = ['08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'];
 
@@ -258,16 +259,18 @@ export default function GroceryConfigTab({
     });
     try {
       if (useOrchestrationGestion && onListingPatch) {
-        await onListingPatch({
-          transportServices: body.transportServices,
-          groceryServices: body.groceryServices,
-          customServices: body.customServices,
-        });
-        rawDocRef.current = {
-          transportServices: body.transportServices,
-          groceryServices: body.groceryServices,
-          customServices: body.customServices,
-        };
+        await onListingPatch({ groceryServices: body.groceryServices });
+        if (!templateMode && listingId) {
+          const merged = await persistListingConciergeSlice(listingId, {
+            groceryServices: body.groceryServices,
+          });
+          rawDocRef.current = merged;
+        } else {
+          rawDocRef.current = {
+            ...(rawDocRef.current || {}),
+            groceryServices: body.groceryServices,
+          };
+        }
       } else if (isOwnerTemplate && templateOwnerKey) {
         const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
         const payload = (res as { data?: { concierge?: Record<string, unknown> } })?.data ?? res;
@@ -279,9 +282,10 @@ export default function GroceryConfigTab({
         });
         rawDocRef.current = { ...(rawDocRef.current || {}), groceryServices: body.groceryServices };
       } else if (listingId) {
-        const res = await listingsService.updateListingConciergeServices(listingId, body);
-        if (res.error) throw new Error(res.error);
-        rawDocRef.current = { ...(rawDocRef.current || {}), ...body };
+        const merged = await persistListingConciergeSlice(listingId, {
+          groceryServices: body.groceryServices,
+        });
+        rawDocRef.current = merged;
       } else {
         return;
       }

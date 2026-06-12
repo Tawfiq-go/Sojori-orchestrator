@@ -59,6 +59,9 @@ export interface Message {
   type?: 'message' | 'day-separator' | 'system-note';
   // Message status (sent/delivered/read) - displayed for outgoing messages only
   status?: 'sent' | 'delivered' | 'read';
+  /** WhatsApp Cloud API delivery — distinct from thread read receipts. */
+  whatsappDelivery?: 'pending' | 'sent' | 'failed';
+  whatsappDeliveryError?: string | null;
 }
 
 export interface QuickTemplate {
