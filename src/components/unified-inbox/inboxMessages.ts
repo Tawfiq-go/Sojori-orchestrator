@@ -56,13 +56,17 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
           type: 'system-note',
         });
       } else {
+        const waStatus = exchange.ai_response_send_status;
+        const waFailed = waStatus === 'failed';
         msgs.push({
           id: `ai-${index}`,
           from: exchange.sent_by_admin ? 'you' : 'sojori',
           text: aiText,
           time: formatTime(exchange.timestamp),
           isAI: !exchange.sent_by_admin,
-          status: 'sent',
+          status: waFailed ? undefined : waStatus === 'sent' ? 'sent' : undefined,
+          whatsappDelivery: waStatus,
+          whatsappDeliveryError: exchange.ai_response_send_error ?? null,
         });
       }
     }

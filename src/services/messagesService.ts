@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import { extractHttpErrorMessage } from '../utils/extractHttpErrorMessage';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 import type {
   ConversationFilter,
@@ -210,18 +211,20 @@ class MessagesService {
           message: data.message,
         },
         {
-          timeout: 15000,
+          timeout: 45_000,
         }
       );
 
+      const body = response.data as SendMessageResponse & { status?: string; detail?: string };
+      if (body.status === 'error' || body.success === false) {
+        throw new Error(
+          body.error || body.detail || 'Échec envoi WhatsApp',
+        );
+      }
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Erreur envoi message:', error);
-      throw new Error(
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        'Erreur lors de l\'envoi du message'
-      );
+      throw new Error(extractHttpErrorMessage(error, 'Erreur lors de l\'envoi du message'));
     }
   }
 

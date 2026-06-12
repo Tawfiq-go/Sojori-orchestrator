@@ -309,13 +309,28 @@ export function fullTaskToListItem(
   };
 }
 
+/** Évite N jours × M fenêtres (doublons API) → payload géant au PATCH staff. */
+export function uniqueScheduleTimeWindows(
+  schedule: { start?: string; end?: string }[],
+): { start: string; end: string }[] {
+  const seen = new Set<string>();
+  const out: { start: string; end: string }[] = [];
+  for (const s of schedule) {
+    const start = String(s.start || '').trim();
+    const end = String(s.end || '').trim();
+    if (!start || !end) continue;
+    const key = `${start}:${end}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ start, end });
+  }
+  return out;
+}
+
 export function apiStaffToDesign(row: Record<string, unknown>) {
   const schedule = Array.isArray(row.schedule) ? row.schedule : [];
   const daysOfWeek = [...new Set(schedule.map((s: { dayOfWeek: number }) => s.dayOfWeek))];
-  const timeWindows = schedule.map((s: { start: string; end: string }) => ({
-    start: s.start,
-    end: s.end,
-  }));
+  const timeWindows = uniqueScheduleTimeWindows(schedule);
   const rates: Record<string, number> = {};
   (row.pricing as { taskType: string; amount: number }[] | undefined)?.forEach((p) => {
     rates[p.taskType] = p.amount;
@@ -358,11 +373,13 @@ export function designStaffToApi(
     : opts?.isCreate
       ? [0, 1, 2, 3, 4]
       : [];
-  const windows = sched?.timeWindows?.length
-    ? sched.timeWindows
-    : opts?.isCreate
-      ? [{ start: '09:00', end: '18:00' }]
-      : [];
+  const windows = uniqueScheduleTimeWindows(
+    sched?.timeWindows?.length
+      ? sched.timeWindows
+      : opts?.isCreate
+        ? [{ start: '09:00', end: '18:00' }]
+        : [],
+  );
   days.forEach((dayOfWeek) => {
     windows.forEach((w) => schedule.push({ dayOfWeek, start: w.start, end: w.end }));
   });
@@ -455,7 +472,12 @@ export function apiOrchestrationToDesign(doc: Record<string, unknown> | null) {
       const deliveryChannel = normDeliveryChannel(ch?.primary ?? 'whatsapp');
       return {
       id: `rel-${i}-${j}`,
-      channel: (deliveryChannel === 'whatsapp' ? 'whatsapp' : deliveryChannel === 'email' ? 'email' : 'sms') as const,
+      channel:
+        deliveryChannel === 'whatsapp'
+          ? ('whatsapp' as const)
+          : deliveryChannel === 'email'
+            ? ('email' as const)
+            : ('sms' as const),
       deliveryChannel,
       reference: mapRefFromApi(String(r.ref || 'checkin')) as 'check_in',
       delay: {
@@ -623,6 +645,7 @@ export function apiOrchestrationToDesign(doc: Record<string, unknown> | null) {
         id,
         label: legacyName || id,
         whatsappTemplateId: String(m.template || id),
+        flowCategory: m.flowCategory ? String(m.flowCategory) : undefined,
         messageFrOta: primary === 'ota' ? String(m.messageFr || '') : '',
         messageFrEmail: primary === 'email' ? String(m.messageFr || '') : String(m.messageFr || ''),
       });
