@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alert, Box, Button, CircularProgress, Stack } from '@mui/material';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
@@ -6,6 +7,10 @@ import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwne
 import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
 import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
 import OrchestrationListingV3View from '../features/orchestrationListingV3/OrchestrationListingV3View';
+import OrchestrationModelSubTabs, {
+  type OrchestrationModelSection,
+} from '../features/orchestrationListingV3/OrchestrationModelSubTabs';
+import V3ScheduledMessagesPanel from '../features/orchestrationListingV3/V3ScheduledMessagesPanel';
 import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
 import { useAuth } from '../hooks/useAuth';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
@@ -31,7 +36,26 @@ function apiErrorMessage(e: unknown): string {
 
 type ListingPick = { id: string; name: string };
 
+function parseModelSection(raw: string | null): OrchestrationModelSection {
+  return raw === 'messages' ? 'messages' : 'services';
+}
+
 function OwnerModelPageInner() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const section = useMemo(
+    () => parseModelSection(searchParams.get('section')),
+    [searchParams],
+  );
+  const setSection = useCallback(
+    (next: OrchestrationModelSection) => {
+      const params = new URLSearchParams(searchParams);
+      if (next === 'services') params.delete('section');
+      else params.set('section', next);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
   const { user } = useAuth();
   const isAdmin = isAdminRole(user?.role);
   const { selectedOwnerId, setSelectedOwnerId } = useAdminOwnerFilter();
@@ -182,8 +206,9 @@ function OwnerModelPageInner() {
   return (
     <Box sx={{ px: { xs: 2, sm: 3 }, py: 1, width: '100%' }}>
       <CatalogueAnnoncesTabs />
+      <OrchestrationModelSubTabs value={section} onChange={setSection} />
 
-      {isAdmin && isAdminTemplate && (
+      {section === 'services' && isAdmin && isAdminTemplate && (
         <Alert severity="info" sx={{ mb: 1.5, fontSize: 13 }}>
           <strong>Étape 1 — Template Admin.</strong> Configurez tous les services ici, puis cliquez{' '}
           <strong>Sync tous les PMs</strong> pour pousser le modèle vers chaque property manager.
@@ -191,7 +216,7 @@ function OwnerModelPageInner() {
         </Alert>
       )}
 
-      {isAdmin && adminViewingPm && (
+      {section === 'services' && isAdmin && adminViewingPm && (
         <Alert severity="info" sx={{ mb: 1.5, fontSize: 13 }}>
           <strong>Étape 2 — PM sélectionné.</strong> Vérifiez ou ajustez le modèle, puis cochez les
           annonces et synchronisez — ou utilisez « Appliquer le modèle à toutes les annonces ».
@@ -213,6 +238,8 @@ function OwnerModelPageInner() {
         listingsLoading={!isAdminTemplate ? listingsLoading : undefined}
       />
 
+      {section === 'services' && (
+        <>
       {!isAdminTemplate && (
         <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
           <Button
@@ -240,6 +267,16 @@ function OwnerModelPageInner() {
           onListingChange={() => {}}
           listingCount={ownerListings.length}
           ownerTemplateMode
+        />
+      )}
+        </>
+      )}
+
+      {section === 'messages' && (
+        <V3ScheduledMessagesPanel
+          scope="owner"
+          ownerKey={ownerKey}
+          isAdminTemplate={isAdminTemplate}
         />
       )}
     </Box>

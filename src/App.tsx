@@ -99,9 +99,6 @@ const TasksKanbanPage = lazy(() =>
 const TasksStaffFulltaskPage = lazy(() =>
   import('./pages/TasksStaffFulltaskPage').then((module) => ({ default: module.default }))
 );
-const TasksConfigFulltaskPage = lazy(() =>
-  import('./pages/TasksConfigFulltaskPage').then((module) => ({ default: module.default }))
-);
 const TasksOrchestrationFulltaskPage = lazy(() =>
   import('./pages/TasksOrchestrationFulltaskPage').then((module) => ({ default: module.default }))
 );
@@ -272,7 +269,6 @@ function App() {
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
               <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPageV2 /></LazyRoute>} />
               <Route path="/tasks/kanban" element={<LazyRoute><TasksKanbanPage /></LazyRoute>} />
-              <Route path="/tasks/config" element={<LazyRoute><TasksConfigFulltaskPage /></LazyRoute>} />
               <Route
                 path="/tasks/orchestration-config"
                 element={<LazyRoute><TasksOrchestrationFulltaskPage /></LazyRoute>}

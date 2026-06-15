@@ -7,14 +7,18 @@ import {
   CAPABILITY_REGISTRY,
   defaultListingRailCapabilityKey,
   getCapabilityDefinition,
+  isCapabilityPanelVisibleOnListing,
   isCapabilityVisibleOnListingRail,
 } from '../serviceMatrix/capabilityRegistry';
 import { applyDependencyRules } from '../serviceMatrix/matrixStateUtils';
 import type { CapabilityRowState } from '../serviceMatrix/types';
 import V3Header, { type V3ScopeMode } from './V3Header';
-import V3MessageLibrary from './V3MessageLibrary';
 import V3Rail from './V3Rail';
 import V3ServicePanel from './V3ServicePanel';
+import OrchestrationModelSubTabs, {
+  type OrchestrationModelSection,
+} from './OrchestrationModelSubTabs';
+import V3ScheduledMessagesPanel from './V3ScheduledMessagesPanel';
 import { V3 } from './theme';
 import {
   loadListingOrchestrationMatrix,
@@ -30,6 +34,10 @@ import {
 } from './ownerOrchestrationApi';
 import { mergeLocalRowsAfterLoad, patchOrchestrationDocExecution, patchOrchestrationDocGestion, patchOrchestrationDocWhatsapp } from './mergeLocalRowsAfterLoad';
 import { logV3Orch } from './v3OrchestrationDebugLog';
+import {
+  buildCapabilitySyncHints,
+  type OwnerTemplateSyncMeta,
+} from './capabilitySyncHints';
 
 type ListingPick = { id: string; name: string };
 
@@ -61,7 +69,7 @@ export default function OrchestrationListingV3View({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(CAPABILITY_REGISTRY[0]?.key ?? null);
-  const [libraryActive, setLibraryActive] = useState(false);
+  const [listingSection, setListingSection] = useState<OrchestrationModelSection>('services');
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
   const listingRef = useRef<Record<string, unknown>>({});
   const menuOptionsRef = useRef<unknown[]>([]);
@@ -69,6 +77,7 @@ export default function OrchestrationListingV3View({
   const [orchestrationDoc, setOrchestrationDoc] = useState<
     ListingOrchestrationDoc | OwnerOrchestrationDoc | null
   >(null);
+  const [ownerSyncMeta, setOwnerSyncMeta] = useState<OwnerTemplateSyncMeta | null>(null);
 
   const isOwnerTemplate = ownerTemplateMode;
   const effectiveListingId = !isOwnerTemplate && scope === 'listing' ? listingId : null;
@@ -157,17 +166,47 @@ export default function OrchestrationListingV3View({
   }, [loadListingValues]);
 
   useEffect(() => {
+    if (!isOwnerTemplate || ownerKey === 'global') {
+      setOwnerSyncMeta(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await listingsService.getListingOwnerConfigTemplate(ownerKey);
+        const payload = (res as { data?: { syncMeta?: OwnerTemplateSyncMeta } })?.data ?? res;
+        if (!cancelled) {
+          setOwnerSyncMeta((payload as { syncMeta?: OwnerTemplateSyncMeta })?.syncMeta ?? null);
+        }
+      } catch {
+        if (!cancelled) setOwnerSyncMeta(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOwnerTemplate, ownerKey]);
+
+  const syncHints = useMemo(
+    () =>
+      buildCapabilitySyncHints({
+        isAdminTemplate,
+        ownerTemplateMode: isOwnerTemplate,
+        ownerKey,
+        orchestrationDoc,
+        syncMeta: ownerSyncMeta,
+        listingScope: !isOwnerTemplate && scope === 'listing',
+      }),
+    [isAdminTemplate, isOwnerTemplate, ownerKey, orchestrationDoc, ownerSyncMeta, scope],
+  );
+
+  useEffect(() => {
     if (isOwnerTemplate || !effectiveListingId || !selectedKey) return;
+    if (selectedKey === 'menu_navigation') return;
     if (!isCapabilityVisibleOnListingRail(selectedKey)) {
       setSelectedKey(defaultListingRailCapabilityKey());
     }
   }, [isOwnerTemplate, effectiveListingId, selectedKey]);
-
-  useEffect(() => {
-    if (!isOwnerTemplate) {
-      setLibraryActive(false);
-    }
-  }, [isOwnerTemplate, scope]);
 
   const selectedRow = useMemo(
     () => rows.find(r => r.key === selectedKey) ?? null,
@@ -274,21 +313,19 @@ export default function OrchestrationListingV3View({
   };
 
   const handleSave = () => {
-    if (libraryActive) {
-      toast.info('Bibliothèque messages — édition via orchestration-config');
-      return;
-    }
     if (selectedKey) void persistRow(selectedKey);
   };
 
   const showRail = Boolean((scope === 'listing' && effectiveListingId) || isOwnerTemplate);
   const showServicePanel =
-    !libraryActive &&
     selectedDef &&
     selectedRow &&
     orchestrationDoc &&
     (isOwnerTemplate || (scope === 'listing' && effectiveListingId)) &&
-    (isOwnerTemplate || isCapabilityVisibleOnListingRail(selectedKey ?? ''));
+    (isOwnerTemplate || isCapabilityPanelVisibleOnListing(selectedKey ?? ''));
+
+  const showListingMessages =
+    Boolean(effectiveListingId) && (embedded || (scope === 'listing' && !ownerTemplateMode));
 
   if (loading) {
     return (
@@ -319,7 +356,6 @@ export default function OrchestrationListingV3View({
           scope={scope}
           onScopeChange={s => {
             setScope(s);
-            setLibraryActive(false);
           }}
           listings={listings}
           listingId={listingId}
@@ -336,6 +372,22 @@ export default function OrchestrationListingV3View({
         </Alert>
       )}
 
+      {showListingMessages ? (
+        <Box sx={{ px: embedded ? 1 : 2, pt: 1, flexShrink: 0 }}>
+          <OrchestrationModelSubTabs value={listingSection} onChange={setListingSection} />
+        </Box>
+      ) : null}
+
+      {showListingMessages && listingSection === 'messages' && effectiveListingId ? (
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <V3ScheduledMessagesPanel
+            scope="listing"
+            ownerKey={ownerKey}
+            listingId={effectiveListingId}
+            listingName={listings.find(l => l.id === effectiveListingId)?.name}
+          />
+        </Box>
+      ) : (
       <Box
         sx={{
           flex: 1,
@@ -349,14 +401,10 @@ export default function OrchestrationListingV3View({
           <V3Rail
             rows={rows}
             selectedKey={selectedKey}
-            libraryActive={libraryActive}
             ownerTemplateMode={isOwnerTemplate}
+            syncHints={syncHints}
             onSelectService={key => {
               setSelectedKey(key);
-              setLibraryActive(false);
-            }}
-            onSelectLibrary={() => {
-              setLibraryActive(true);
             }}
           />
         )}
@@ -372,10 +420,6 @@ export default function OrchestrationListingV3View({
             WebkitOverflowScrolling: 'touch',
           }}
         >
-          {!embedded && isOwnerTemplate && libraryActive && (
-            <V3MessageLibrary ownerKey={ownerKey} />
-          )}
-
           {showServicePanel && (
             <V3ServicePanel
               def={selectedDef!}
@@ -402,6 +446,7 @@ export default function OrchestrationListingV3View({
           )}
         </Box>
       </Box>
+      )}
     </Box>
   );
 }

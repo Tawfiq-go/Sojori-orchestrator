@@ -142,10 +142,10 @@ export default function ImportAirbnbModal({
           </Typography>
           <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 0.25, lineHeight: 1.45 }}>
             {isImporting
-              ? 'Vos annonces Airbnb sont en cours de création dans Sojori.'
+              ? 'Listing, calendrier et orchestration (template owner + ville Sojori) — ne fermez pas la fenêtre.'
               : isDone
-              ? 'Vos annonces Airbnb sont maintenant des listings Sojori complets.'
-              : 'Importer des annonces Airbnb vers Sojori — création listing, photos et calendrier avec suivi en direct.'}
+                ? 'Listing, calendrier et orchestration configurés — prêt dans Sojori.'
+                : 'Importer des annonces Airbnb — listing, photos, calendrier et orchestration depuis le template propriétaire.'}
           </Typography>
         </Box>
 

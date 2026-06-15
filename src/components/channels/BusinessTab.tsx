@@ -1498,7 +1498,7 @@ export function BusinessTab() {
         <div className="space-y-2">
           <div className="bg-white border rounded px-3 py-2 flex gap-2 items-center">
             <select style={{ padding: "4px 8px", borderRadius: 4, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, cursor: "pointer" }} className=" h-7 text-xs" value={hours} onChange={(e) => setHours(Number(e.target.value))}>
-              <option value={6}>6h</option><option value={24}>24h</option><option value={72}>3j</option><option value={168}>7j</option>
+              <option value={6}>6h</option><option value={24}>24h</option><option value={72}>3j</option><option value={168}>7j</option><option value={720}>30j</option>
             </select>
             <span className="text-xs font-semibold"><UserRound size={13} className="inline" /> Synthèse · Owner</span>
             <span className="text-[10px] text-slate-500 ml-2">Volumes agrégés — pas les appels RU bruts</span>
@@ -1533,7 +1533,7 @@ export function BusinessTab() {
         <div className="space-y-2">
           <div className="bg-white border rounded px-3 py-2 flex gap-2 items-center">
             <select style={{ padding: "4px 8px", borderRadius: 4, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, cursor: "pointer" }} className=" h-7 text-xs" value={hours} onChange={(e) => setHours(Number(e.target.value))}>
-              <option value={6}>6h</option><option value={24}>24h</option><option value={72}>3j</option><option value={168}>7j</option>
+              <option value={6}>6h</option><option value={24}>24h</option><option value={72}>3j</option><option value={168}>7j</option><option value={720}>30j</option>
             </select>
             <span className="text-xs font-semibold"><Home size={13} className="inline" /> Synthèse · Annonces</span>
             <span className="text-[10px] text-slate-500 ml-2">Volumes agrégés — pas les appels RU bruts</span>

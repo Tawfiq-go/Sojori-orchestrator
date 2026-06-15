@@ -307,6 +307,9 @@ export function ChannelsTopNav() {
 
       {sectionTab === 'Debug' && (
         <NavBar>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-orange-700 mr-1 shrink-0">
+            ① Type
+          </span>
           <div className="channels-tabs-container flex-wrap">
             {DEBUG_TYPES.map(({ type, label }) => (
               <TabBtn

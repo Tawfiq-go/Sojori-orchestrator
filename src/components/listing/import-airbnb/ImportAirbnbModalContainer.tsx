@@ -136,24 +136,16 @@ export function ImportAirbnbModalContainer({
     );
   }, []);
 
-  const applyOrchestrationForResults = useCallback(async (results: ImportResultItem[]) => {
-    const ok = results.filter((r) => r.success && r.listingId);
-    if (ok.length === 0) return;
-    let failed = 0;
-    for (const r of ok) {
-      try {
-        await listingsService.applyListingOrchestrationFromOwner(r.listingId!);
-        await listingsService.applyListingOwnerConfigFromOwner(r.listingId!);
-      } catch {
-        failed += 1;
-      }
-    }
-    if (failed > 0) {
-      toast.warn(
-        `Import OK mais config orchestration (13 onglets) en échec sur ${failed}/${ok.length} listing(s)`,
-      );
-    }
-  }, []);
+  const warningsFromImport = (payload: {
+    success?: boolean;
+    errors?: string[];
+    error?: string;
+  }): string | undefined => {
+    const parts = [...(payload.errors ?? [])];
+    if (payload.error) parts.push(payload.error);
+    const unique = [...new Set(parts.map((s) => String(s).trim()).filter(Boolean))];
+    return unique.length > 0 ? unique.join(' · ') : undefined;
+  };
 
   const startImport = useCallback(
     async ({
@@ -182,19 +174,23 @@ export function ImportAirbnbModalContainer({
               }),
           });
           const ok = response.data?.success;
+          const warn = warningsFromImport(response.data ?? {});
           const singleResults: ImportResultItem[] = [
             {
               ruPropertyId: String(ids[0]),
               propertyName: `Annonce #${ids[0]}`,
               success: Boolean(ok),
               listingId: response.data?.listingId,
-              errorMessage: ok ? undefined : response.data?.errors?.join('; ') || response.data?.error,
+              errorMessage: ok ? warn : warn || response.data?.error,
             },
           ];
           setImportResults(singleResults);
           if (ok) {
-            await applyOrchestrationForResults(singleResults);
-            toast.success('Annonce importée avec succès');
+            if (warn) {
+              toast.warn(`Listing créé · avertissement : ${warn}`);
+            } else {
+              toast.success('Annonce importée avec succès');
+            }
           } else toast.error("Échec de l'import");
         } else {
           const { response } = await runTrackedImport({
@@ -219,13 +215,20 @@ export function ImportAirbnbModalContainer({
               propertyName: `Annonce #${r.ruPropertyId}`,
               success: r.success,
               listingId: r.listingId,
-              errorMessage: r.errors?.join('; '),
+              errorMessage:
+                r.errors?.length ? r.errors.join(' · ') : undefined,
             }),
           );
           setImportResults(results);
           if (data?.succeeded > 0) {
-            await applyOrchestrationForResults(results);
-            toast.success(`${data.succeeded} annonce(s) importée(s)`);
+            const withWarn = results.filter((r) => r.success && r.errorMessage);
+            if (withWarn.length > 0) {
+              toast.warn(
+                `${data.succeeded} importée(s) · ${withWarn.length} avec avertissement(s) (sync RU…)`,
+              );
+            } else {
+              toast.success(`${data.succeeded} annonce(s) importée(s)`);
+            }
           }
           if (data?.failed > 0) toast.error(`${data.failed} annonce(s) en échec`);
         }
@@ -235,7 +238,7 @@ export function ImportAirbnbModalContainer({
         throw e;
       }
     },
-    [runTrackedImport, applyOrchestrationForResults],
+    [runTrackedImport],
   );
 
   const handleClose = useCallback(() => {

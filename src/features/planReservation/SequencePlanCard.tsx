@@ -14,9 +14,6 @@ import PlanAssignButtons from './PlanAssignButtons';
 import PlanDispatchButton from './PlanDispatchButton';
 import EscaladeActionsPanel from './EscaladeActionsPanel';
 import {
-  aggregateAssignGroupStatus,
-  aggregateRelancesGroupStatus,
-  aggregateStaffRemindersGroupStatus,
   groupStatusLabel,
   relancesGroupStatusLabel,
   staffRemindersGroupStatusLabel,
@@ -169,7 +166,10 @@ function RelanceDispatchRow({
 
 function assignExecutionLine(assign: StaffAssignmentPlan): string {
   if (assign.status === 'found' && assign.staffName) {
-    return `Exécution · staff retenu · ${assign.staffName}`;
+    return `Exécution · staff accepté · ${assign.staffName}`;
+  }
+  if (assign.status === 'pending_accept' && assign.staffName) {
+    return `Exécution · staff assigné · en attente acceptation · ${assign.staffName}`;
   }
   if (assign.assignationExhausted) {
     return assign.lmFailureLabel
@@ -204,7 +204,10 @@ function AssignBlockBody({
   onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
 }) {
   const [rowLoading, setRowLoading] = useState(false);
-  const wasAssigned = assign.status === 'found' && Boolean(assign.staffName);
+  const hasStaffAssigned =
+    (assign.status === 'found' || assign.status === 'pending_accept') &&
+    Boolean(assign.staffName);
+  const staffAccepted = assign.status === 'found' && Boolean(assign.staffName);
   const showConfig =
     !assign.windowPast ||
     assign.status === 'searching' ||
@@ -219,7 +222,7 @@ function AssignBlockBody({
         <PlanAssignButtons
           reservationId={reservationId}
           taskId={taskId}
-          wasAssigned={wasAssigned}
+          wasAssigned={hasStaffAssigned}
           disabled={false}
           onLoadingChange={setRowLoading}
           onDone={onDispatched}
@@ -228,7 +231,11 @@ function AssignBlockBody({
           <div className="rel-row-top">
             <span className="nm">Assignation staff</span>
             <span className="when" style={{ minWidth: 'auto', fontWeight: 600 }}>
-              {wasAssigned ? 'Staff déjà retenu — relancer possible' : 'Auto ou choix manuel'}
+              {staffAccepted
+                ? 'Staff accepté — relancer possible'
+                : hasStaffAssigned
+                  ? 'Staff assigné — en attente acceptation'
+                  : 'Auto ou choix manuel'}
             </span>
           </div>
         </div>
@@ -280,7 +287,12 @@ function AssignBlockBody({
       ) : null}
       {assign.staffName && assign.status === 'found' ? (
         <div className="assign-winner">
-          ✓ Staff retenu · <b>{assign.staffName}</b>
+          ✓ Staff accepté · <b>{assign.staffName}</b>
+        </div>
+      ) : null}
+      {assign.staffName && assign.status === 'pending_accept' ? (
+        <div className="assign-winner assign-winner--pending">
+          ⏳ Staff assigné · en attente acceptation · <b>{assign.staffName}</b>
         </div>
       ) : null}
       {lmAssignSlots && lmAssignSlots.length > 0 ? (
@@ -439,7 +451,11 @@ function sequenceConfigSubtitle(seq: PlanSequenceView): string {
 function relanceCountSummary(
   items: { executionStatus: PlanGuestRelanceItem['executionStatus'] }[],
   actionCompleted = false,
+  registrationProgress?: { registered: number; total: number },
 ): string {
+  if (actionCompleted && registrationProgress && registrationProgress.total > 0) {
+    return `${registrationProgress.registered}/${registrationProgress.total} enregistrés`;
+  }
   if (actionCompleted) return 'action client complétée';
   const envoyee = items.filter((r) => r.executionStatus === 'envoyee').length;
   const sautee = items.filter((r) => r.executionStatus === 'sautee').length;
@@ -474,13 +490,15 @@ export default function SequencePlanCard({
   const taskId = seq.taskId || seq.id;
   const [open, setOpen] = useState(defaultOpenForStatus(seq.status));
 
-  const relGroup = aggregateRelancesGroupStatus(seq.relances, seq.clientActionCompleted);
-  const staffGroup = aggregateStaffRemindersGroupStatus(seq.staffReminders);
-  const assignGroup = aggregateAssignGroupStatus(
-    seq.staffAssignment,
-    seq.attempts,
-    seq.lmAssignSlots,
-  );
+  const relancesResolved =
+    seq.taskStatus === 'done' ||
+    Boolean(seq.clientActionCompleted) ||
+    (seq.taskType === 'registration' &&
+      seq.registrationProgress != null &&
+      seq.registrationProgress.total > 0 &&
+      seq.registrationProgress.registered >= seq.registrationProgress.total);
+  const { relances: relGroup, assignation: assignGroup, staffReminders: staffGroup, escalade: escaladeGroup } =
+    seq.blockStatuses;
 
   return (
     <div className={`ev seq-l1 ${seq.status}${open ? ' open' : ''}`}>
@@ -546,9 +564,14 @@ export default function SequencePlanCard({
               groupStatusLabel={relancesGroupStatusLabel(
                 relGroup,
                 seq.relances,
-                Boolean(seq.clientActionCompleted),
+                relancesResolved,
+                seq.backendBlockStatuses?.relances,
               )}
-              countLabel={relanceCountSummary(seq.relances, seq.clientActionCompleted)}
+              countLabel={relanceCountSummary(
+                seq.relances,
+                relancesResolved,
+                seq.registrationProgress,
+              )}
               defaultOpen={defaultOpenForStatus(relGroup)}
             >
               <RelanceRows
@@ -566,11 +589,15 @@ export default function SequencePlanCard({
               title="Assignation staff"
               groupStatus={assignGroup}
               countLabel={
-                seq.lmAssignSlots?.some((s) => s.executionStatus === 'prevision')
-                  ? seq.staffAssignment?.nextAssignmentLabel || 'Assignation LM'
-                  : seq.attempts?.length
-                    ? `${seq.attempts.length} tentative(s)`
-                    : seq.staffAssignment.modeLabel
+                seq.staffAssignment?.status === 'pending_accept' && seq.staffAssignment.staffName
+                  ? `En attente acceptation · ${seq.staffAssignment.staffName}`
+                  : seq.staffAssignment?.status === 'found' && seq.staffAssignment.staffName
+                    ? `Staff accepté · ${seq.staffAssignment.staffName}`
+                    : seq.lmAssignSlots?.some((s) => s.executionStatus === 'prevision')
+                      ? seq.staffAssignment?.nextAssignmentLabel || 'Assignation LM'
+                      : seq.attempts?.length
+                        ? `${seq.attempts.length} tentative(s)`
+                        : seq.staffAssignment.modeLabel
               }
               defaultOpen={defaultOpenForStatus(assignGroup)}
             >
@@ -607,15 +634,7 @@ export default function SequencePlanCard({
             <CollapseBlock
               icon={seq.escalade.status === 'active' ? '🚨' : '🛡'}
               title="Escalade PM"
-              groupStatus={
-                seq.escalade.status === 'active'
-                  ? 'now'
-                  : seq.escalade.status === 'saute' || seq.escalade.status === 'fait'
-                    ? 'done'
-                    : seq.escalade.scheduled
-                      ? 'future'
-                      : 'now'
-              }
+              groupStatus={escaladeGroup}
               countLabel={
                 seq.escalade.scheduleOffsetLabel ||
                 (seq.escalade.status === 'active'
@@ -624,17 +643,11 @@ export default function SequencePlanCard({
                     ? 'Non nécessaire'
                     : seq.escalade.scheduled
                       ? 'Prévue si non confirmé'
-                      : 'Active · intervention')
+                      : escaladeGroup === 'done'
+                        ? 'Non nécessaire'
+                        : 'Prévue si non confirmé')
               }
-              defaultOpen={defaultOpenForStatus(
-                seq.escalade.status === 'active'
-                  ? 'now'
-                  : seq.escalade.status === 'saute' || seq.escalade.status === 'fait'
-                    ? 'done'
-                    : seq.escalade.scheduled
-                      ? 'future'
-                      : 'now',
-              )}
+              defaultOpen={defaultOpenForStatus(escaladeGroup)}
             >
               <div
                 className={`escalade-row${

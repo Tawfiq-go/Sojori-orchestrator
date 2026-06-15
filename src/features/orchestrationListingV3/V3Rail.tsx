@@ -6,6 +6,12 @@ import {
 } from '../serviceMatrix/capabilityRegistry';
 import type { CapabilityRowState } from '../serviceMatrix/types';
 import { V3 } from './theme';
+import { V3Badge } from './V3Primitives';
+import {
+  syncHintLabel,
+  syncHintTone,
+  type CapabilitySyncHint,
+} from './capabilitySyncHints';
 
 const GROUP_EMOJI: Record<string, string> = {
   cleaning: '🧹',
@@ -18,11 +24,10 @@ const GROUP_EMOJI: Record<string, string> = {
 type Props = {
   rows: CapabilityRowState[];
   selectedKey: string | null;
-  libraryActive: boolean;
   /** false = rail listing (masque les entrées listingRailHidden). */
   ownerTemplateMode?: boolean;
+  syncHints?: Record<string, CapabilitySyncHint>;
   onSelectService: (key: string) => void;
-  onSelectLibrary: () => void;
 };
 
 function statusColor(status: CapabilityRowState['status']) {
@@ -34,10 +39,9 @@ function statusColor(status: CapabilityRowState['status']) {
 export default function V3Rail({
   rows,
   selectedKey,
-  libraryActive,
   ownerTemplateMode = false,
+  syncHints = {},
   onSelectService,
-  onSelectLibrary,
 }: Props) {
   const rowByKey = Object.fromEntries(rows.map(r => [r.key, r]));
 
@@ -88,9 +92,9 @@ export default function V3Rail({
             p: '11px',
             mb: 1,
             borderRadius: '9px',
-            border: `1px solid ${selectedKey === 'menu_navigation' && !libraryActive ? V3.wa : V3.b}`,
+            border: `1px solid ${selectedKey === 'menu_navigation' ? V3.wa : V3.b}`,
             bgcolor:
-              selectedKey === 'menu_navigation' && !libraryActive
+              selectedKey === 'menu_navigation'
                 ? V3.waT
                 : 'linear-gradient(135deg,rgba(37,211,102,0.08),transparent)',
             cursor: 'pointer',
@@ -139,7 +143,7 @@ export default function V3Rail({
           </Typography>
           {grp.items.map((def: CapabilityDefinition) => {
             const row = rowByKey[def.key];
-            const active = !libraryActive && selectedKey === def.key;
+            const active = selectedKey === def.key;
             const disabled = row?.status === 'not_managed' && !row?.managed;
             return (
               <Box
@@ -177,19 +181,27 @@ export default function V3Rail({
                 }}
               >
                 <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0 }}>{def.emoji}</span>
-                <Typography
-                  sx={{
-                    flex: 1,
-                    fontSize: 12.5,
-                    fontWeight: active ? 700 : 600,
-                    color: active ? V3.pd : disabled ? V3.t4 : V3.t,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {def.label}
-                </Typography>
+                <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography
+                    sx={{
+                      fontSize: 12.5,
+                      fontWeight: active ? 700 : 600,
+                      color: active ? V3.pd : disabled ? V3.t4 : V3.t,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    {def.label}
+                  </Typography>
+                  {syncHintLabel(syncHints[def.key]) ? (
+                    <V3Badge tone={syncHintTone(syncHints[def.key])}>
+                      {syncHintLabel(syncHints[def.key])}
+                    </V3Badge>
+                  ) : null}
+                </Box>
                 <Box sx={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
                   {(['managed', 'clientEnabled', 'orchestrated', 'taskEnabled'] as const).map((f, i) => {
                     const colors = [V3.p, V3.client, V3.orch, V3.task];
@@ -226,45 +238,6 @@ export default function V3Rail({
         </Box>
       ))}
 
-      {ownerTemplateMode && (
-        <>
-      <Box sx={{ height: 1, bgcolor: V3.b, mx: 1.5, my: 1.25 }} />
-
-      <Box
-        component="button"
-        type="button"
-        onClick={onSelectLibrary}
-        sx={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.125,
-          p: '11px',
-          borderRadius: '9px',
-          border: '1px dashed rgba(124,58,247,0.25)',
-          bgcolor: libraryActive ? V3.orchT : 'linear-gradient(135deg,rgba(124,58,247,0.10),transparent)',
-          cursor: 'pointer',
-          textAlign: 'left',
-          '&:hover': { bgcolor: V3.orchT },
-        }}
-      >
-        <span style={{ fontSize: 15 }}>📚</span>
-        <Box>
-          <Typography sx={{ fontSize: 12, fontWeight: 700 }}>Bibliothèque messages</Typography>
-          <Typography
-            sx={{
-              fontSize: 9.5,
-              color: V3.t3,
-              fontFamily: '"Geist Mono", ui-monospace, monospace',
-              mt: '1px',
-            }}
-          >
-            template PM · OTA/Email/WA
-          </Typography>
-        </Box>
-      </Box>
-        </>
-      )}
     </Box>
   );
 }

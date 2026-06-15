@@ -77,7 +77,6 @@ export const NAV_GROUPS: NavGroupConfig[] = [
           { id: 'tasks/planning', label: 'Planning séjour' },
           { id: 'tasks/kanban', label: 'Kanban' },
           { id: 'tasks/team', label: 'Équipe terrain' },
-          { id: 'tasks/config', label: 'Config tâches' },
         ],
       },
       { id: 'calendar', label: 'Calendrier & inventaire', iconType: 'calendar', iconColor: '#E06666' },
@@ -192,6 +191,25 @@ export const NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
+    group: 'Logs API',
+    roles: ADMIN_ROLES,
+    items: [
+      {
+        id: 'admin/channels',
+        label: 'Logs RU',
+        iconType: 'link',
+        iconColor: '#6D9EEB',
+        description: 'Logs Rental United — Business, Debug, Summary, Mapping, Cron, Import',
+        sub: [
+          { id: 'admin/channels/summary', label: 'Summary' },
+          { id: 'admin/channels/business', label: 'Business' },
+          { id: 'admin/channels/debug', label: 'Debug' },
+        ],
+      },
+      { id: 'admin/sojori-logs', label: 'Logs AirROI', iconType: 'document', iconColor: '#FF6B35', description: 'Logs API marché & listings' },
+    ],
+  },
+  {
     group: 'Monitor & infra',
     roles: ADMIN_ROLES,
     items: [
@@ -212,7 +230,6 @@ export const NAV_GROUPS: NavGroupConfig[] = [
           { id: 'mon/res-sync', label: 'Sync réservations' },
         ],
       },
-      { id: 'admin/sojori-logs', label: 'Logs Sojori', iconType: 'document', iconColor: '#A6A6A6' },
     ],
   },
   {
@@ -220,13 +237,6 @@ export const NAV_GROUPS: NavGroupConfig[] = [
     roles: ADMIN_ROLES,
     items: [
       { id: 'admin/pms', label: 'Owners · PMs', iconType: 'building', iconColor: '#A6A6A6' },
-      {
-        id: 'admin/channels',
-        label: 'Channels · logs RU',
-        iconType: 'link',
-        iconColor: '#6D9EEB',
-        description: 'Business entrant/sortant, hooks, KPIs RU',
-      },
       { id: 'admin/roles', label: 'Rôles & groupes', iconType: 'shield', iconColor: '#C81E1E' },
       { id: 'admin/settings', label: 'Paramètres', iconType: 'settings', iconColor: '#666666' },
     ],
@@ -292,7 +302,7 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   'Relation client': true,
   Équipe: false,
   Finances: true,
-  'Monitor & infra': true,
+  'Monitor & infra': false,
   Administration: true,
   Temp: true,
 };

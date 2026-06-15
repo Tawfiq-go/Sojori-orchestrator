@@ -50,3 +50,95 @@
   max-height: 420px;
   overflow: auto;
 }
+
+/* UI logs unifiée */
+.unified-api-page.embedded {
+  padding: 0;
+  max-width: none;
+}
+
+.unified-api-table-compact .sl-table th,
+.unified-api-table-compact .sl-table td {
+  vertical-align: middle;
+}
+
+/* Sidebar sections */
+.sojori-logs-section-btn {
+  border-left: 3px solid transparent;
+}
+.sojori-logs-section-btn-active {
+  background: #fff7ed;
+  border-left-color: #ff6b35;
+}
+.sojori-logs-section-btn-inactive:hover {
+  background: #f8fafc;
+}
+
+/* Endpoint tabs AirROI */
+.sojori-logs-endpoints-panel {
+  max-width: 100%;
+}
+.sojori-logs-ep-search {
+  font-size: 12px;
+  padding: 6px 10px 6px 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+.sojori-logs-ep-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+.sojori-logs-ep-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sojori-logs-ep-tab {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  cursor: pointer;
+  max-width: 220px;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.sojori-logs-ep-tab-inactive:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+.sojori-logs-ep-tab-active {
+  border-color: #ff6b35;
+  background: #fff7ed;
+}
+.sojori-logs-ep-tab-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.2;
+}
+.sojori-logs-ep-tab-label--solo {
+  font-size: 12px;
+}
+.sojori-logs-ep-tab-api {
+  font-family: ui-monospace, monospace;
+  font-size: 9px;
+  color: #94a3b8;
+  line-height: 1.2;
+  word-break: break-all;
+}
+.sojori-logs-recap-cell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

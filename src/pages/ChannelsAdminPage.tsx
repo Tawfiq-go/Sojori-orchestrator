@@ -1,4 +1,4 @@
-// ChannelsAdminPage — parité legacy sojori-dashboard /admin/Channels (nav en haut, pas de sidebar)
+// ChannelsAdminPage — une seule barre de navigation (ChannelsTopNav), pas de sidebar interne dupliquée.
 import { useEffect } from 'react';
 import { useSearchParams, Navigate, useNavigate } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
@@ -15,6 +15,15 @@ import {
   migrateLegacyChannelsSearchParams,
 } from '../utils/channelsUrlUtils';
 import '../styles/channels-hub.css';
+
+const SECTION_HINTS: Record<string, string> = {
+  Sum: 'KPIs agrégés sur la période choisie (6h → 7j).',
+  Business: 'Vue métier : flux sortant RU, webhooks entrants, HTTP brut, stats owner/listing.',
+  Mapping: 'Correspondances champs RU et listes de référence.',
+  Debug: 'Audit technique brut — ① type Pull/Push… ② API à gauche ③ appels à droite.',
+  Cron: 'Jobs planifiés channels.',
+  Import: 'Import propriétés depuis Rental United.',
+};
 
 export function ChannelsAdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,12 +44,13 @@ export function ChannelsAdminPage() {
   }, [searchParams, setSearchParams]);
 
   const sectionTab = canonicalSectionTab(searchParams.get('tab'));
+  const sectionHint = SECTION_HINTS[sectionTab] || '';
 
   return (
-    <DashboardWrapper breadcrumb={['Admin', 'Channels']}>
+    <DashboardWrapper breadcrumb={['Admin', 'Channels RU']}>
       <div className="channels-hub-page min-h-full w-full bg-gradient-to-br from-slate-50 to-slate-100 pb-8 px-2 py-3 md:px-3 md:py-4">
         <div className="w-full max-w-none space-y-2">
-          <ChannelsHubToolbar />
+          <ChannelsHubToolbar sectionHint={sectionHint} sectionTab={sectionTab} />
           <ChannelsTopNav />
 
           <div className="channels-hub-content min-h-[500px]">

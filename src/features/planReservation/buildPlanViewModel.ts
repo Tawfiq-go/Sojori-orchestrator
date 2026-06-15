@@ -36,7 +36,14 @@ import {
   type SequenceScheduleAnchors,
 } from './planScheduleLabel';
 import { registrationCountsFromPayload } from '../../utils/fulltaskMappers';
-import { deriveSequenceDisplayStatus } from './planGroupStatus';
+import {
+  aggregateAssignGroupStatus,
+  aggregateRelancesGroupStatus,
+  aggregateStaffRemindersGroupStatus,
+  deriveSequenceDisplayStatus,
+  mapBackendBlockStatuses,
+  mapBackendOrchestrationStatus,
+} from './planGroupStatus';
 
 export interface FulltaskPlanDoc {
   reservationId: string;
@@ -49,7 +56,20 @@ export interface FulltaskPlanDoc {
     taskId: string;
     taskScheduledDate?: string | Date;
     taskType: string;
-    status: 'en_attente' | 'en_cours' | 'termine' | 'saute';
+    status:
+      | 'en_attente'
+      | 'en_cours'
+      | 'termine'
+      | 'en_retard'
+      | 'bloque'
+      | 'annule'
+      | 'saute';
+    blocks?: {
+      relances: string | null;
+      assignation: string | null;
+      staffReminders: string | null;
+      escalade: string | null;
+    };
     clientActionCompleted?: boolean;
     clientActionCompletedAt?: string | Date;
     task?: {
@@ -102,7 +122,14 @@ export interface FulltaskPlanDoc {
       }>;
     }>;
     assignation?: {
-      status: 'en_recherche' | 'trouvee' | 'echec';
+      status:
+        | 'en_attente'
+        | 'en_cours'
+        | 'en_recherche'
+        | 'trouvee'
+        | 'attente_acceptation'
+        | 'termine'
+        | 'echec';
       startAt: string | Date;
       endAt: string | Date;
       foundAt?: string | Date | null;
@@ -389,8 +416,19 @@ function isAtomeSentStatus(raw: string): boolean {
   return raw === 'fait' || raw === 'envoyee' || raw === 'envoye';
 }
 
-function isAssignationFoundStatus(raw: string): boolean {
-  return raw === 'trouvee' || raw === 'attente_acceptation' || raw === 'termine';
+function isAssignationAcceptedStatus(raw: string): boolean {
+  return raw === 'termine';
+}
+
+function isAssignationPendingAcceptStatus(raw: string): boolean {
+  return raw === 'trouvee' || raw === 'attente_acceptation';
+}
+
+function mapAssignationUiStatus(raw: string): StaffAssignmentPlan['status'] {
+  if (isAssignationAcceptedStatus(raw)) return 'found';
+  if (isAssignationPendingAcceptStatus(raw)) return 'pending_accept';
+  if (raw === 'echec') return 'failed';
+  return 'searching';
 }
 
 function eventStatusAt(scheduled: Date, raw: string, now = new Date()): EventStatus {
@@ -801,7 +839,8 @@ function mapAssignStatus(
   raw: string,
   now = new Date(),
 ): EventStatus {
-  if (isAssignationFoundStatus(raw)) return 'done';
+  if (isAssignationAcceptedStatus(raw)) return 'done';
+  if (isAssignationPendingAcceptStatus(raw)) return 'now';
   if (raw === 'echec') return 'blocked';
   return eventStatusAt(scheduled, 'en_attente', now);
 }
@@ -811,7 +850,7 @@ function computeNextAssignmentLabel(
   end: Date,
   releaseWindows: string[],
   now: Date,
-  status: 'searching' | 'found' | 'failed',
+  status: StaffAssignmentPlan['status'],
   staffName?: string,
   lmAttempts?: Array<{
     scheduledAt: string | Date;
@@ -822,7 +861,10 @@ function computeNextAssignmentLabel(
   lmFailureLabel?: string,
 ): string {
   if (status === 'found' && staffName) {
-    return `Staff assigné · ${staffName}`;
+    return `Staff accepté · ${staffName}`;
+  }
+  if (status === 'pending_accept' && staffName) {
+    return `Staff assigné · en attente acceptation · ${staffName}`;
   }
   if (assignationExhausted && lmFailureLabel) {
     return `Assignation LM échouée · ${lmFailureLabel} · plus de relance`;
@@ -898,12 +940,20 @@ function computeLastAssignmentLabel(
   start: Date,
   end: Date,
   releaseWindows: string[],
-  status: 'searching' | 'found' | 'failed',
+  status: StaffAssignmentPlan['status'],
   foundAt?: Date | null,
   staffName?: string,
 ): string {
-  if (status === 'found' && foundAt) {
-    return `Dernière assignation · ${formatWhen(foundAt)}${staffName ? ` · ${staffName}` : ''}`;
+  if ((status === 'found' || status === 'pending_accept') && foundAt) {
+    const suffix =
+      status === 'found'
+        ? staffName
+          ? ` · ${staffName} · accepté`
+          : ' · accepté'
+        : staffName
+          ? ` · ${staffName} · en attente acceptation`
+          : ' · en attente acceptation';
+    return `Dernière assignation · ${formatWhen(foundAt)}${suffix}`;
   }
   if (status === 'failed') {
     return `Fin assignations · ${formatWhen(end)} · échec`;
@@ -932,8 +982,7 @@ function mapStaffAssignment(
   const staffName = staffId ? staffNames[staffId] : undefined;
   const releaseWindows = a.releaseWindows?.length ? a.releaseWindows : ['11:00', '16:00'];
   const autoAssign = Boolean(a.autoAssign);
-  const status =
-    isAssignationFoundStatus(a.status) ? 'found' : a.status === 'echec' ? 'failed' : 'searching';
+  const status = mapAssignationUiStatus(a.status);
   const windowPast = end.getTime() <= now.getTime();
   const windowOpen = start.getTime() <= now.getTime() && end.getTime() > now.getTime();
   const windowFuture = start.getTime() > now.getTime();
@@ -1079,7 +1128,11 @@ function buildSequenceFlow(
       when: formatWhen(end),
       status: mapRelanceStatus(
         end,
-        isAssignationFoundStatus(a.status) ? 'envoyee' : 'en_attente',
+        isAssignationAcceptedStatus(a.status)
+          ? 'envoyee'
+          : isAssignationPendingAcceptStatus(a.status)
+            ? 'en_cours'
+            : 'en_attente',
         now,
       ),
       detail: a.autoAssign
@@ -1308,13 +1361,6 @@ function buildSequenceView(
   const baseTitle = labelForTaskTypeId(seq.taskType);
   const title = buildSequenceTitle(seq, baseTitle, atDisplay, typeCounts);
 
-  const clientActionCompleted = Boolean(seq.clientActionCompleted);
-  const clientChosenTime =
-    seq.task?.payload?.selectedTime?.trim() ||
-    seq.task?.payload?.time?.trim() ||
-    seq.task?.payload?.declaredTime?.trim() ||
-    undefined;
-
   const taskStatus = seq.task?.status;
   const registrationProgress =
     seq.taskType === 'registration' && seq.task?.payload
@@ -1327,10 +1373,44 @@ function buildSequenceView(
           return { registered: counts.nbreGuestValidated, total };
         })()
       : undefined;
-  const status = deriveSequenceDisplayStatus({
-    taskStatus,
-    seqStatus: seq.status,
-  });
+
+  const clientActionCompleted =
+    Boolean(seq.clientActionCompleted) ||
+    taskStatus === 'done' ||
+    (seq.taskType === 'registration' &&
+      registrationProgress != null &&
+      registrationProgress.total > 0 &&
+      registrationProgress.registered >= registrationProgress.total);
+  const clientChosenTime =
+    seq.task?.payload?.selectedTime?.trim() ||
+    seq.task?.payload?.time?.trim() ||
+    seq.task?.payload?.declaredTime?.trim() ||
+    undefined;
+
+  const hasLinkedTask = Boolean(seq.taskId || seq.task);
+  const blockStatusesFromApi = mapBackendBlockStatuses(seq.blocks);
+  const status = seq.status
+    ? mapBackendOrchestrationStatus(seq.status)
+    : deriveSequenceDisplayStatus({
+        taskStatus,
+        seqStatus: seq.status,
+        hasLinkedTask,
+      });
+
+  const blockStatuses = blockStatusesFromApi ?? {
+    relances: aggregateRelancesGroupStatus(relances, clientActionCompleted),
+    assignation: aggregateAssignGroupStatus(staffAssignment, attempts, lmAssignSlots),
+    staffReminders: aggregateStaffRemindersGroupStatus(staffReminders),
+    escalade: seq.escalade
+      ? mapBackendOrchestrationStatus(
+          seq.escalade.status === 'saute' || seq.escalade.status === 'fait'
+            ? 'termine'
+            : seq.escalade.status === 'active' || seq.escalade.status === 'declenchee'
+              ? 'en_cours'
+              : 'en_attente',
+        )
+      : 'future',
+  };
 
   return {
     id: sequenceId || String(seq.taskId || seq.taskType),
@@ -1357,6 +1437,8 @@ function buildSequenceView(
     clientChosenTime,
     taskStatus,
     registrationProgress,
+    blockStatuses,
+    backendBlockStatuses: seq.blocks,
   };
 }
 
@@ -1461,10 +1543,12 @@ export function buildPlanViewModel(
       title: seqTitle,
       description: staffAssignment
         ? staffAssignment.status === 'found'
-          ? `Staff · ${staffAssignment.staffName || 'assigné'}${staffAssignment.autoAssign ? ' · auto-accept' : ''}`
-          : staffAssignment.status === 'failed'
-            ? 'Assignation · échec'
-            : `Assignation · ${staffAssignment.windowStart} → ${staffAssignment.windowEnd} · ${staffAssignment.releaseWindows.join('/')}${staffAssignment.autoAssign ? ' · auto-accept' : ''}`
+          ? `Staff accepté · ${staffAssignment.staffName || '—'}${staffAssignment.autoAssign ? ' · auto-accept' : ''}`
+          : staffAssignment.status === 'pending_accept'
+            ? `Staff assigné · en attente acceptation · ${staffAssignment.staffName || '—'}`
+            : staffAssignment.status === 'failed'
+              ? 'Assignation · échec'
+              : `Assignation · ${staffAssignment.windowStart} → ${staffAssignment.windowEnd} · ${staffAssignment.releaseWindows.join('/')}${staffAssignment.autoAssign ? ' · auto-accept' : ''}`
         : undefined,
       icon: String(icon),
       at: start.toISOString(),

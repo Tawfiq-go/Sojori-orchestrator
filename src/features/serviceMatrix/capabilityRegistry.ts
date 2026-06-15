@@ -314,6 +314,12 @@ export function isCapabilityVisibleOnListingRail(key: string): boolean {
   return !def.listingRailHidden;
 }
 
+/** Panneau droit listing — inclut menu_navigation (hors rail services). */
+export function isCapabilityPanelVisibleOnListing(key: string): boolean {
+  if (key === 'menu_navigation') return true;
+  return isCapabilityVisibleOnListingRail(key);
+}
+
 export function defaultListingRailCapabilityKey(): string {
   const row = CAPABILITY_REGISTRY.find(
     c => c.key !== 'menu_navigation' && !c.listingRailHidden,

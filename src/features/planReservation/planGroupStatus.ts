@@ -57,7 +57,57 @@ export function groupStatusLabel(status: EventStatus): string {
   return GROUP_LABELS[status] ?? status;
 }
 
-/** Bloc relances voyageur — terminé si et seulement si le client a complété l'action. */
+/** Statut séquence/bloc backend → badge UI (pas de recalcul métier). */
+export function mapBackendOrchestrationStatus(
+  status: string | null | undefined,
+): EventStatus {
+  if (status == null || status === '') return 'future';
+  switch (status) {
+    case 'termine':
+    case 'fait':
+      return 'done';
+    case 'en_cours':
+    case 'declenchee':
+    case 'active':
+      return 'now';
+    case 'en_retard':
+      return 'pending';
+    case 'bloque':
+    case 'echec':
+    case 'annule':
+    case 'saute':
+      return 'blocked';
+    case 'en_attente':
+    default:
+      return 'future';
+  }
+}
+
+export type PlanBlockStatusesView = {
+  relances: EventStatus;
+  assignation: EventStatus;
+  staffReminders: EventStatus;
+  escalade: EventStatus;
+};
+
+export function mapBackendBlockStatuses(
+  blocks?: {
+    relances?: string | null;
+    assignation?: string | null;
+    staffReminders?: string | null;
+    escalade?: string | null;
+  } | null,
+): PlanBlockStatusesView | undefined {
+  if (!blocks) return undefined;
+  return {
+    relances: mapBackendOrchestrationStatus(blocks.relances),
+    assignation: mapBackendOrchestrationStatus(blocks.assignation),
+    staffReminders: mapBackendOrchestrationStatus(blocks.staffReminders),
+    escalade: mapBackendOrchestrationStatus(blocks.escalade),
+  };
+}
+
+/** Bloc relances voyageur — statut propre au bloc (≠ badge séquence L1). */
 export function aggregateRelancesGroupStatus(
   relances: Pick<PlanGuestRelanceItem, 'status' | 'executionStatus'>[],
   actionCompleted: boolean = false,
@@ -122,6 +172,7 @@ export function aggregateAssignGroupStatus(
 ): EventStatus {
   if (!assign) return 'future';
   if (assign.status === 'found') return 'done';
+  if (assign.status === 'pending_accept') return 'now';
   if (assign.status === 'failed') return 'blocked';
 
   if (assign.hasPendingLmAssign) {
@@ -135,7 +186,6 @@ export function aggregateAssignGroupStatus(
   if (assign.windowOpen) return 'now';
 
   if (attempts?.some((a) => a.result === 'declined')) return 'now';
-  if (attempts?.some((a) => a.result === 'accepted')) return 'done';
   if (attempts?.some((a) => a.result === 'pending')) return 'now';
   return 'future';
 }
@@ -155,19 +205,25 @@ export function aggregateEscaladeGroupStatus(
 }
 
 /**
- * Séquence workflow — miroir exclusif de task.status (config auto-complétion côté backend).
- * Ne pas utiliser clientActionCompleted ni les blocs pour le badge L1.
+ * Séquence workflow — miroir backend `seq.status` (task.status si tâche liée).
+ * @deprecated Préférer mapBackendOrchestrationStatus(seq.status) depuis l’API.
  */
 export function deriveSequenceDisplayStatus(input: {
   taskStatus?: string | null;
   seqStatus?: string;
+  /** Séquence liée à une tâche ops — ignorer seqStatus et les blocs. */
+  hasLinkedTask?: boolean;
 }): EventStatus {
-  const st = String(input.taskStatus || '').trim();
+  const st = String(input.taskStatus ?? '').trim();
 
-  if (st === 'done') return 'done';
-  if (st === 'cancelled' || st === 'rejected') return 'blocked';
-  if (['waiting_guest', 'new', 'pending_partner', 'confirmed', 'doing'].includes(st)) {
-    return 'now';
+  if (input.hasLinkedTask) {
+    if (!st) return 'future';
+    if (st === 'done') return 'done';
+    if (st === 'cancelled' || st === 'rejected') return 'blocked';
+    if (['waiting_guest', 'new', 'pending_partner', 'confirmed', 'doing'].includes(st)) {
+      return 'now';
+    }
+    return 'future';
   }
 
   if (input.seqStatus === 'termine') return 'done';
@@ -187,15 +243,19 @@ export function relancesGroupStatusLabel(
   status: EventStatus,
   relances: Pick<PlanGuestRelanceItem, 'executionStatus'>[],
   actionCompleted: boolean,
+  backendBlockStatus?: string | null,
 ): string {
-  if (status === 'pending' && !actionCompleted) {
+  if (
+    (status === 'pending' || backendBlockStatus === 'en_retard') &&
+    !actionCompleted
+  ) {
     const stillActive = relances.some(
       (r) =>
         r.executionStatus === 'prevision' ||
         r.executionStatus === 'en_attente' ||
         r.executionStatus === 'en_retard',
     );
-    if (!stillActive) return 'Expiré';
+    if (!stillActive || backendBlockStatus === 'en_retard') return 'Expiré';
   }
   return groupStatusLabel(status);
 }

@@ -15,7 +15,6 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'tasks/planning': '/tasks/planning',
   'tasks/kanban': '/tasks/kanban',
   'tasks/team': '/tasks/team',
-  'tasks/config': '/tasks/config',
   calendar: '/calendar',
 
   // Orchestration (routes réelles fulltask)
@@ -46,6 +45,9 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'dynamic-pricing/audit': '/dynamic-pricing/audit',
   channels: '/catalogue/channels',
   'admin/channels': '/channels?tab=Business&biz=api&api=m',
+  'admin/channels/business': '/admin/channels?tab=Business&biz=api&api=m',
+  'admin/channels/debug': '/admin/channels?tab=Debug&type=pull',
+  'admin/channels/summary': '/admin/channels?tab=Sum',
   'admin/ChannelManager/channel-manager': '/admin/ChannelManager?tab=channel-manager',
   'admin/ChannelManager/distribution': '/admin/ChannelManager?tab=distribution',
 

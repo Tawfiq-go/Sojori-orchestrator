@@ -166,7 +166,12 @@ class FulltaskTasksService {
       const want = new Set(params.sources.map((s) => s.toLowerCase()));
       rows = rows.filter((t) => {
         const raw = String(t.source || '').toLowerCase();
-        const norm = raw === 'orchestrator' || raw === 'orchestration' ? 'orchestrator' : 'manual';
+        const norm =
+          raw === 'orchestrator' || raw === 'orchestration'
+            ? 'orchestrator'
+            : raw === 'whatsapp' || raw === 'wa'
+              ? 'whatsapp'
+              : 'manual';
         return want.has(norm) || want.has(raw);
       });
     }
@@ -180,6 +185,7 @@ class FulltaskTasksService {
           String(t.listingName || '').toLowerCase().includes(q) ||
           String(t.guestPhone || '').toLowerCase().includes(q) ||
           String(t.staffName || '').toLowerCase().includes(q) ||
+          String(t.reservationNumber || '').toLowerCase().includes(q) ||
           typeLabel.includes(q)
         );
       });
@@ -399,23 +405,21 @@ class FulltaskTasksService {
     ];
     if (ids.length === 0) return map;
 
-    // ⚠️ TEMPORAIRE: Désactivé pour tester performance (3-6 secondes de chargement!)
-    // TODO: Créer un endpoint batch GET /reservations?ids=id1,id2,id3 pour charger en 1 seul appel
-    console.warn(`⚠️  [loadReservationMetaForTasks] SKIPPING ${ids.length} reservations (performance optimization)`);
+    const uniqueIds = ids.slice(0, 200);
+    const chunkSize = 100;
+    for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+      const chunk = uniqueIds.slice(i, i + chunkSize);
+      try {
+        const batch = await reservationsService.getBatch(chunk);
+        for (const res of batch.data || []) {
+          const id = String((res as { _id?: string; id?: string })._id || (res as { id?: string }).id || '');
+          if (id) map.set(id, this.reservationToMeta(res));
+        }
+      } catch (err) {
+        console.warn('[loadReservationMetaForTasks] batch fetch failed', err);
+      }
+    }
     return map;
-
-    // Code original (TRÈS LENT - 24 appels HTTP × 150ms = 3600ms):
-    // await Promise.all(
-    //   ids.slice(0, 60).map(async (id) => {
-    //     try {
-    //       const res = await reservationsService.getById(id);
-    //       map.set(id, this.reservationToMeta(res));
-    //     } catch {
-    //       /* réservation introuvable */
-    //     }
-    //   }),
-    // );
-    // return map;
   }
 
 }

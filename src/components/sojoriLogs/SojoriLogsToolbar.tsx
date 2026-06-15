@@ -5,10 +5,17 @@ import { formatCasablancaDate } from '../../utils/dateFormatting';
 type Props = {
   onRefresh: () => void;
   loading?: boolean;
+  title?: string;
+  subtitle?: string;
 };
 
-/** Barre titre — même pattern que ChannelsHubToolbar (orange Sojori #FF6B35). */
-export function SojoriLogsToolbar({ onRefresh, loading }: Props) {
+/** Barre titre logs AirROI. */
+export function SojoriLogsToolbar({
+  onRefresh,
+  loading,
+  title = 'Logs Sojori · AirROI',
+  subtitle = 'Audit appels API marché & listings',
+}: Props) {
   const [lastRefresh, setLastRefresh] = useState(() => new Date());
 
   const doRefresh = () => {
@@ -22,10 +29,8 @@ export function SojoriLogsToolbar({ onRefresh, loading }: Props) {
         <div className="px-3 py-2 border-b border-slate-200">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="min-w-0">
-              <div className="text-sm font-bold text-slate-900">Logs API marché</div>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Appels API marché & listings — filtre owner session
-              </p>
+              <div className="text-sm font-bold text-slate-900">{title}</div>
+              <p className="text-[11px] text-slate-500 mt-0.5">{subtitle}</p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-xs text-slate-500">{formatCasablancaDate(lastRefresh, 'HH:mm:ss')}</span>
