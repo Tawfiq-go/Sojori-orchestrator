@@ -192,7 +192,7 @@ const PublicStaffPlanning = () => {
 
       {loading ? <div className="w-full flex justify-center items-center h-screen">
           <CircularProgress sx={{
-        color: '#FF6B35'
+        color: '#E6B022'
       }} />
         </div> : <TeamCalendarView staff={staff} onUpdateStaff={handleStaffUpdate} onBulkUpdate={template => {
       // Apply template to all staff

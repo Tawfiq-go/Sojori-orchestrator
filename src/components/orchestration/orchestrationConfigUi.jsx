@@ -1,6 +1,6 @@
 /**
  * Design Atelier — onglet Configuration orchestration (Modèles / Messages).
- * Tokens alignés DashboardV2 ; remplace l’ancien orange legacy #FF6B35.
+ * Tokens alignés DashboardV2 ; remplace l’ancien orange legacy #E6B022.
  */
 import React from 'react';
 import { Box, Typography, FormControl } from '@mui/material';

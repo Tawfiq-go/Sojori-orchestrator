@@ -97,7 +97,7 @@ export default function WidgetModal({ mode, property, scriptUrl, open, onClose }
         .widget-modal-header {
           display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px;
           background: #FFF3E0; border-bottom: 1px solid #E0E0E0; border-radius: 16px 16px 0 0;
-          border-left: 4px solid #FF6B35;
+          border-left: 4px solid #E6B022;
         }
         .widget-modal-icon { font-size: 24px; }
         .widget-modal-title { margin: 0; font-size: 18px; font-weight: 600; color: #333; }
@@ -112,7 +112,7 @@ export default function WidgetModal({ mode, property, scriptUrl, open, onClose }
         .widget-modal-footer { padding: 12px 20px; border-top: 1px solid #E0E0E0; }
         .widget-modal-btn {
           padding: 8px 16px; border-radius: 8px; border: none;
-          background: #FF6B35; color: white; font-weight: 600; cursor: pointer;
+          background: #E6B022; color: white; font-weight: 600; cursor: pointer;
         }
       `}</style>
     </div>

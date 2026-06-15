@@ -585,7 +585,7 @@ const MetricsPageUltra: React.FC = () => {
                   onClick={() => setSortNodesBy(value)}
                   className={`px-1.5 py-0.5 text-[8px] font-bold rounded transition-all ${
                     sortNodesBy === value
-                      ? 'bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white'
+                      ? 'bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
@@ -709,7 +709,7 @@ const MetricsPageUltra: React.FC = () => {
                     onClick={() => setSortPodsBy(value)}
                     className={`px-1.5 py-0.5 text-[8px] font-bold rounded transition-all ${
                       sortPodsBy === value
-                        ? 'bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white'
+                        ? 'bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
@@ -722,7 +722,7 @@ const MetricsPageUltra: React.FC = () => {
                 onClick={() => setShowOnlyProblems(!showOnlyProblems)}
                 className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${
                   showOnlyProblems
-                    ? 'bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white'
+                    ? 'bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white'
                     : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                 }`}
               >

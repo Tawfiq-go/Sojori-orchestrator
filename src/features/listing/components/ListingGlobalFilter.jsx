@@ -48,7 +48,7 @@ const ListingGlobalFilter = ({
               <Button
                 onClick={onReset}
                 sx={{
-                  background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+                  background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
                   color: 'white',
                   borderRadius: '8px',
                   width: '42px',
@@ -90,10 +90,10 @@ const ListingGlobalFilter = ({
                     height: 36,
                     borderRadius: 1,
                     color: '#fff',
-                    background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+                    background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
                     boxShadow: '0 2px 8px rgba(255, 107, 53, 0.25)',
                     '&:hover': {
-                      background: 'linear-gradient(135deg, #E55A2B 0%, #FF6B35 100%)',
+                      background: 'linear-gradient(135deg, #B8881A 0%, #E6B022 100%)',
                       boxShadow: '0 4px 12px rgba(255, 107, 53, 0.35)',
                     },
                   }}
@@ -105,7 +105,7 @@ const ListingGlobalFilter = ({
                   onClick={onAddClick}
                   className="!text-white"
                   sx={{
-                    background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+                    background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
                     color: 'white',
                     padding: '8px 24px',
                     borderRadius: '8px',
@@ -122,7 +122,7 @@ const ListingGlobalFilter = ({
                     '&:hover': {
                       transform: 'translateY(-2px)',
                       boxShadow: '0 6px 20px rgba(255, 107, 53, 0.3)',
-                      background: 'linear-gradient(135deg, #E55A2B 0%, #FF6B35 100%)',
+                      background: 'linear-gradient(135deg, #B8881A 0%, #E6B022 100%)',
                     },
                     '&:active': {
                       transform: 'translateY(0)',

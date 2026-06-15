@@ -55,8 +55,8 @@ export default function DistributionHeader({ summary, onRefresh, loading, apiUna
         .distribution-kpis-hidden { display: none !important; }
         .distribution-header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
         .distribution-title { margin: 0; font-size: 22px; font-weight: 600; color: #333; }
-        .distribution-refresh { padding: 8px 16px; border-radius: 8px; border: 1px solid #FF6B35; background: #fff; color: #FF6B35; font-weight: 500; cursor: pointer; }
-        .distribution-refresh:hover:not(:disabled) { background: #FF6B35; color: #fff; }
+        .distribution-refresh { padding: 8px 16px; border-radius: 8px; border: 1px solid #E6B022; background: #fff; color: #E6B022; font-weight: 500; cursor: pointer; }
+        .distribution-refresh:hover:not(:disabled) { background: #E6B022; color: #fff; }
         .distribution-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
         .distribution-kpis { display: flex; flex-wrap: wrap; gap: 16px; }
         .kpi { padding: 12px 20px; background: #FAFAFA; border-radius: 12px; min-width: 100px; text-align: center; }

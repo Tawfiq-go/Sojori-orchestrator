@@ -143,7 +143,7 @@ function RoomComposite() {
         </Typography>
         
         {composites.length === 0 && <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate} disabled={isLoading || isUpdating} className="!text-white" sx={{
-        background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+        background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
         color: 'white',
         padding: '8px 24px',
         borderRadius: '8px',
@@ -156,7 +156,7 @@ function RoomComposite() {
         '&:hover': {
           transform: 'translateY(-2px)',
           boxShadow: '0 6px 20px rgba(255, 107, 53, 0.3)',
-          background: 'linear-gradient(135deg, #E55A2B 0%, #FF6B35 100%)'
+          background: 'linear-gradient(135deg, #B8881A 0%, #E6B022 100%)'
         },
         '&:active': {
           transform: 'translateY(0)'
@@ -204,7 +204,7 @@ function RoomComposite() {
             {t('Create room composites to define different types of rooms in your properties.')}
           </Typography>
           <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate} disabled={isLoading || isUpdating} className="!text-white" sx={{
-        background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+        background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
         color: 'white',
         padding: '8px 24px',
         borderRadius: '8px',
@@ -217,7 +217,7 @@ function RoomComposite() {
         '&:hover': {
           transform: 'translateY(-2px)',
           boxShadow: '0 6px 20px rgba(255, 107, 53, 0.3)',
-          background: 'linear-gradient(135deg, #E55A2B 0%, #FF6B35 100%)'
+          background: 'linear-gradient(135deg, #B8881A 0%, #E6B022 100%)'
         },
         '&:active': {
           transform: 'translateY(0)'

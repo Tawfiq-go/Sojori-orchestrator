@@ -110,7 +110,34 @@ export function fetchChannelsMessagingRuApis(query: Record<string, unknown> = {}
   });
 }
 
-/** Leads RU (Pull_GetLeads + webhook LNM) — ChannelRuApiCall srv-channels. */
+/** Réservations RU sortant — ChannelRuApiCall srv-channels. */
+export function fetchChannelsReservationsRuApis(query: Record<string, unknown> = {}) {
+  const page = query.page != null ? Math.max(1, Number(query.page)) : 1;
+  const limit = query.limit != null ? Math.min(100, Math.max(1, Number(query.limit))) : 25;
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('limit', String(limit));
+  if (query.period === 'all') {
+    params.set('period', 'all');
+  } else if (query.from && query.to) {
+    params.set('from', String(query.from));
+    params.set('to', String(query.to));
+  } else {
+    const hours =
+      query.hours != null ? Math.min(8760, Math.max(1, Math.floor(Number(query.hours)))) : 72;
+    params.set('hours', String(hours));
+  }
+  if (query.orchestrationId) params.set('orchestrationId', String(query.orchestrationId));
+  if (query.listingId) params.set('listingId', String(query.listingId));
+  if (query.ownerId) params.set('ownerId', String(query.ownerId));
+  if (query.action) params.set('action', String(query.action));
+  return apiClient.get(`${CHANNELS_DASHBOARD}/ru-reservations-apis?${params.toString()}`, {
+    timeout: 120_000,
+    ...channelsDashboardAxiosConfig(),
+  });
+}
+
+/** Leads RU sortant (Pull_GetLeads) — ChannelRuApiCall srv-channels. */
 export function fetchChannelsLeadsRuApis(query: Record<string, unknown> = {}) {
   const page = query.page != null ? Math.max(1, Number(query.page)) : 1;
   const limit = query.limit != null ? Math.min(100, Math.max(1, Number(query.limit))) : 25;
@@ -381,7 +408,7 @@ export function fetchChannelsOverviewReviews(query: Record<string, unknown> = {}
 export function fetchChannelsHttpAccessLogs(query: Record<string, unknown> = {}) {
   const page = query.page != null ? Math.max(1, Number(query.page)) : 1;
   const limit = query.limit != null ? Math.min(100, Math.max(1, Number(query.limit))) : 30;
-  const hours = query.hours != null ? Math.min(168, Math.max(1, Math.floor(Number(query.hours)))) : 72;
+  const hours = query.hours != null ? Math.min(720, Math.max(1, Math.floor(Number(query.hours)))) : 72;
   const params = new URLSearchParams();
   params.set('page', String(page));
   params.set('limit', String(limit));

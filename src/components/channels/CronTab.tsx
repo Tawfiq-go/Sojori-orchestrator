@@ -10,12 +10,41 @@ import { onChannelsRefresh } from '../../utils/channelsRefresh';
 import { fetchChannelsCronJobs, patchChannelsCronJob } from '../../services/channelsDashboardApi';
 
 type CronJob = {
-  _id: string;
-  name: string;
+  id: string;
+  label: string;
   enabled: boolean;
   schedule: string;
   description?: string;
+  apisCalled?: string[];
+  lastTickFinishedAt?: string | null;
+  lastError?: string | null;
 };
+
+function parseCronJobsResponse(result: unknown): CronJob[] {
+  if (!result || typeof result !== 'object') return [];
+  const root = result as { success?: boolean; data?: unknown };
+  if (!root.success) return [];
+  const payload = root.data;
+  const raw = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === 'object' && Array.isArray((payload as { jobs?: unknown }).jobs)
+      ? (payload as { jobs: unknown[] }).jobs
+      : [];
+  return raw.map((row) => {
+    const j = row as Record<string, unknown>;
+    return {
+      id: String(j.id ?? j._id ?? ''),
+      label: String(j.label ?? j.name ?? j.id ?? '—'),
+      description: typeof j.description === 'string' ? j.description : undefined,
+      schedule: String(j.scheduleExpression ?? j.schedule ?? '—'),
+      enabled: Boolean(j.effectiveEnabled ?? j.enabled),
+      apisCalled: Array.isArray(j.apisCalled) ? (j.apisCalled as string[]) : undefined,
+      lastTickFinishedAt:
+        typeof j.lastTickFinishedAt === 'string' ? j.lastTickFinishedAt : null,
+      lastError: typeof j.lastError === 'string' ? j.lastError : null,
+    };
+  });
+}
 
 export function CronTab() {
   const [jobs, setJobs] = useState<CronJob[]>([]);
@@ -33,11 +62,7 @@ export function CronTab() {
     console.log('[CronTab] 🔄 Loading cron jobs...');
     try {
       const { data: result } = await fetchChannelsCronJobs();
-      if (result?.success && Array.isArray(result.data)) {
-        setJobs(result.data);
-      } else {
-        setJobs([]);
-      }
+      setJobs(parseCronJobsResponse(result));
     } catch (error) {
       console.error('[CronTab] ❌ Error:', error);
       setJobs([]);
@@ -51,12 +76,14 @@ export function CronTab() {
     try {
       const { data: result } = await patchChannelsCronJob(jobId, { enabled: !currentlyEnabled });
       if (result?.success) {
-        // Update local state
-        setJobs((prev) =>
-          prev.map((job) =>
-            job._id === jobId ? { ...job, enabled: !currentlyEnabled } : job
-          )
-        );
+        const updated = parseCronJobsResponse(result);
+        if (updated.length > 0) {
+          setJobs(updated);
+        } else {
+          setJobs((prev) =>
+            prev.map((job) => (job.id === jobId ? { ...job, enabled: !currentlyEnabled } : job)),
+          );
+        }
       }
     } catch (error) {
       console.error('[CronTab] ❌ Error toggling job:', error);
@@ -65,7 +92,12 @@ export function CronTab() {
   };
 
   return (
-    <div>
+    <div className="space-y-3">
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 leading-relaxed">
+        <strong>Cron srv-channels</strong> — jobs planifiés côté canaux RU (complément des webhooks temps réel).
+        Activer / désactiver ici surcharge le défaut env (Mongo). Les exécutions apparaissent aussi dans Summary
+        (bloc « API via Cron ») et dans Debug.
+      </div>
       {/* Header */}
       <div
         style={{
@@ -178,7 +210,7 @@ export function CronTab() {
             <tbody>
               {jobs.map((job) => (
                 <tr
-                  key={job._id}
+                  key={job.id}
                   style={{
                     borderBottom: `1px solid ${T.border}`,
                   }}
@@ -191,11 +223,17 @@ export function CronTab() {
                 >
                   <td style={{ padding: '10px 14px' }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
-                      {job.name}
+                      {job.label}
                     </div>
                     {job.description && (
                       <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>
                         {job.description}
+                      </div>
+                    )}
+                    {job.lastTickFinishedAt && (
+                      <div style={{ fontSize: 10, color: T.text3, marginTop: 4 }}>
+                        Dernier run : {new Date(job.lastTickFinishedAt).toLocaleString('fr-FR')}
+                        {job.lastError ? ` — erreur : ${job.lastError}` : ''}
                       </div>
                     )}
                   </td>
@@ -225,7 +263,7 @@ export function CronTab() {
                   </td>
                   <td style={{ padding: '10px 14px' }}>
                     <button
-                      onClick={() => toggleJob(job._id, job.enabled)}
+                      onClick={() => toggleJob(job.id, job.enabled)}
                       style={{
                         padding: '6px 12px',
                         borderRadius: 6,

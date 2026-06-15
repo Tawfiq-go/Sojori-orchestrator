@@ -31,13 +31,8 @@ type RuMapping = {
   description?: string;
 };
 
-const SUB_VIEWS: Array<{ id: SubView; label: string }> = [
-  { id: 'fields', label: 'Champs (CRUD)' },
-  { id: 'list', label: 'Dictionnaires RU' },
-];
-
 export function MappingTab() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const activeView = ((searchParams.get('mapSub') || 'fields').toLowerCase() === 'list' ? 'list' : 'fields') as SubView;
   const ruListMode = searchParams.get('ruListMode') === 'languages' ? 'languages' : 'locations';
 
@@ -49,25 +44,18 @@ export function MappingTab() {
   const [editRow, setEditRow] = useState<RuMapping | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const patchParams = useCallback(
-    (patch: Record<string, string | undefined>) => {
-      const next = new URLSearchParams(searchParams);
-      next.set('tab', 'Mapping');
-      for (const [k, v] of Object.entries(patch)) {
-        if (v === undefined) next.delete(k);
-        else next.set(k, v);
-      }
-      setSearchParams(next);
-    },
-    [searchParams, setSearchParams],
-  );
-
   const loadMappings = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await fetchChannelsRuFieldMappings({ populate: true });
-      if (data?.success && Array.isArray(data.data)) {
-        setMappings(data.data);
+      if (data?.success) {
+        const payload = data.data;
+        const items = Array.isArray(payload)
+          ? payload
+          : Array.isArray((payload as { items?: unknown })?.items)
+            ? ((payload as { items: RuMapping[] }).items)
+            : [];
+        setMappings(items);
       } else {
         setMappings([]);
       }
@@ -84,16 +72,28 @@ export function MappingTab() {
     try {
       if (ruListMode === 'languages') {
         const { data } = await fetchChannelsRuLanguageDictionaryList();
-        if (data?.success && Array.isArray(data.data)) {
-          setDictionaries(data.data);
+        if (data?.success) {
+          const payload = data.data;
+          const items = Array.isArray(payload)
+            ? payload
+            : Array.isArray((payload as { items?: unknown })?.items)
+              ? (payload as { items: unknown[] }).items
+              : [];
+          setDictionaries(items);
         } else {
           setDictionaries([]);
         }
       } else {
         const locId = searchParams.get('ruDictType') || '2';
         const { data } = await fetchChannelsRuCountryDictionaryList({ locationTypeId: locId });
-        if (data?.success && Array.isArray(data.data)) {
-          setDictionaries(data.data);
+        if (data?.success) {
+          const payload = data.data;
+          const items = Array.isArray(payload)
+            ? payload
+            : Array.isArray((payload as { items?: unknown })?.items)
+              ? (payload as { items: unknown[] }).items
+              : [];
+          setDictionaries(items);
         } else {
           setDictionaries([]);
         }
@@ -148,6 +148,15 @@ export function MappingTab() {
 
   return (
     <div className="space-y-3">
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 leading-relaxed">
+        <strong>Mapping RU</strong> — correspondances techniques Sojori ↔ Rental United (champs XML, codes pays/langues).
+        Pas des logs d’appels : config référentiel pour l’import owner et FillCompanyDetails.
+        {activeView === 'list' && (
+          <span className="block mt-1 text-slate-600">
+            Dictionnaires vides ? Cliquez <strong>Sync pays RU</strong> ou <strong>Sync langues RU</strong> (appel Pull_ListLocations / Pull_ListLanguages).
+          </span>
+        )}
+      </div>
       {activeView === 'fields' && (
         <>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -285,32 +294,6 @@ export function MappingTab() {
           </pre>
         </>
       )}
-
-      <nav
-        className="sticky bottom-0 z-40 mt-3 rounded-lg border border-slate-200 bg-white/95 px-2 py-2 shadow-[0_-4px_14px_rgba(15,23,42,0.08)] backdrop-blur-sm"
-        aria-label="Sous-navigation Mapping"
-      >
-        <div className="mx-auto flex max-w-4xl flex-wrap justify-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => patchParams({ mapSub: 'fields' })}
-            className={`channels-tab-button px-3 py-1.5 text-xs font-semibold ${
-              activeView === 'fields' ? 'channels-tab-button-active' : 'channels-tab-button-inactive'
-            }`}
-          >
-            RU mapping
-          </button>
-          <button
-            type="button"
-            onClick={() => patchParams({ mapSub: 'list', ruDictType: searchParams.get('ruDictType') || '2' })}
-            className={`channels-tab-button px-3 py-1.5 text-xs font-semibold ${
-              activeView === 'list' ? 'channels-tab-button-active' : 'channels-tab-button-inactive'
-            }`}
-          >
-            RU list
-          </button>
-        </div>
-      </nav>
     </div>
   );
 }

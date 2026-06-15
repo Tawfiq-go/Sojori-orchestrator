@@ -214,13 +214,13 @@ const CompanyProfilePage = ({ profile, setProfile, canUpdate }) => {
             <Button
               type="submit"
               variant="contained"
-              className="!bg-[#FF6B35] !text-white !shadow-none !rounded-lg !px-6 !py-2 !font-semibold hover:!bg-[#E55A2B] transition"
+              className="!bg-[#E6B022] !text-white !shadow-none !rounded-lg !px-6 !py-2 !font-semibold hover:!bg-[#B8881A] transition"
               disabled={formLoading}
               sx={{ boxShadow: 'none', borderRadius: 2 }}
               form="company-profile-form"
             >
               {formLoading ? (
-                <CircularProgress size={24} sx={{ color: '#FF6B35' }} />
+                <CircularProgress size={24} sx={{ color: '#E6B022' }} />
               ) : (
                 t('Update')
               )}
@@ -237,7 +237,7 @@ const CompanyProfilePage = ({ profile, setProfile, canUpdate }) => {
               mt={3}
               mb={2}
             >
-              <Avatar sx={{ bgcolor: '#FF6B35', width: 80, height: 80 }}>
+              <Avatar sx={{ bgcolor: '#E6B022', width: 80, height: 80 }}>
                 <AccountCircleIcon sx={{ fontSize: 60, color: '#f5f5f5' }} />
               </Avatar>
               <Typography variant="h6" mt={2} mb={1} align="center">

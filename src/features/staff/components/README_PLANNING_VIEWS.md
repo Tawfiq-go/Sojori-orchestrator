@@ -70,7 +70,7 @@ src/features/staff/components/
 
 ## 🎨 Design
 
-- **Couleur principale** : Orange (#FF6B35)
+- **Couleur principale** : Orange (#E6B022)
 - **Gradients** : Oui (vue calendrier)
 - **Responsive** : Oui
 - **Animations** : Transitions fluides

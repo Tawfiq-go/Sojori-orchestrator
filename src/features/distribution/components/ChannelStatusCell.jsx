@@ -61,7 +61,7 @@ export default function ChannelStatusCell({ channel, property, onConnect, onClic
         .badge-stopped { background: #E0E0E0; color: #616161; }
         .channel-markup { font-weight: 600; min-height: 1.2em; }
         .channel-link { color: #00b4b4; text-decoration: none; }
-        .channel-connect-btn { margin-top: 4px; padding: 4px 8px; border-radius: 6px; border: 1px solid #FF6B35; background: #fff; color: #FF6B35; cursor: pointer; font-size: 11px; }
+        .channel-connect-btn { margin-top: 4px; padding: 4px 8px; border-radius: 6px; border: 1px solid #E6B022; background: #fff; color: #E6B022; cursor: pointer; font-size: 11px; }
       `}</style>
     </div>
   );

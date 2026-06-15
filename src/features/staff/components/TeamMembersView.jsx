@@ -12,8 +12,8 @@ import { getcities, getcountries } from '../../setting/services/serverApi.adminC
 import StaffPlanningFilter from './StaffPlanningFilter';
 import ListingSelector from './ListingSelector';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryLight: '#FF8F6B',
   success: '#10B981',
   warning: '#F59E0B',

@@ -95,15 +95,7 @@ interface Reservation {
   };
 }
 
-// ─── Palette « Atelier 2026 » ───────────────────────────────────────
-const T = {
-  primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a',
-  primaryTint: 'rgba(184,133,26,0.10)',
-  bg0: '#f6f5f1', bg1: '#ffffff', bg2: '#fafaf7', bg3: '#f0eee8',
-  text: '#14110a', text2: '#55504a', text3: '#7a756c', text4: '#a8a299',
-  border: 'rgba(20,17,10,0.07)', borderStrong: 'rgba(20,17,10,0.14)',
-  success: '#0a8f5e', warning: '#c46506', error: '#c81e1e', info: '#0673b3',
-};
+import { dashboardTokens as T } from '../design/sojoriBrandTokens';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 const isReservationCancelled = (status: string) => {
@@ -537,10 +529,10 @@ export function ReservationsPage() {
               sx={{
                 textTransform: 'none',
                 bgcolor: T.primary,
-                color: '#fff',
+                color: T.primaryOnGold,
                 fontWeight: 600,
                 px: 2,
-                '&:hover': { bgcolor: T.primaryDeep },
+                '&:hover': { bgcolor: T.primaryDeep, color: '#fff' },
                 whiteSpace: 'nowrap',
               }}
             >
@@ -817,14 +809,17 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
       <Box sx={{ overflowX: 'auto' }}>
         <Box component="table" sx={{ width: '100%', minWidth: 1520, borderCollapse: 'collapse', fontSize: 12.5 }}>
           <Box component="thead">
-            <Box component="tr" sx={{ bgcolor: T.bg2 }}>
+            <Box component="tr" sx={{
+              bgcolor: T.bg2,
+              background: `linear-gradient(180deg, ${T.bg1} 0%, ${T.bg2} 100%)`,
+            }}>
               {['Réservation', 'Source', 'Propriété', 'Voyageur', 'Pays', 'Créé', 'Check-in', 'Check-out', 'Nuits', 'Présence', 'Statut', 'Prix', 'Voyageurs', 'Paiement', 'Actions'].map((h) => (
                 <Box component="th" key={h} sx={{
                   textAlign: h === 'Nuits' || h === 'Présence' || h === 'Voyageurs' || h === 'Actions' ? 'center' : 'left',
                   px: 1.5, py: 1.25,
                   fontSize: 10.75, fontWeight: 700,
                   letterSpacing: '0.08em', textTransform: 'uppercase',
-                  color: T.text3, borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap',
+                  color: T.text2, borderBottom: `2px solid ${T.borderStrong}`, whiteSpace: 'nowrap',
                 }}>{h}</Box>
               ))}
             </Box>

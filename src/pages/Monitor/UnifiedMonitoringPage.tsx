@@ -543,7 +543,7 @@ export default function UnifiedMonitoringPage() {
                           : filters.categories.filter((c) => c !== value);
                         setFilters({ ...filters, categories: newCategories });
                       }}
-                      className="w-3 h-3 rounded border-slate-300 text-[#FF6B35] focus:ring-[#FF6B35] focus:ring-1"
+                      className="w-3 h-3 rounded border-slate-300 text-[#E6B022] focus:ring-[#E6B022] focus:ring-1"
                     />
                     <span className="text-[10px] font-medium text-slate-700 group-hover:text-slate-900">
                       {icon} {label}
@@ -575,7 +575,7 @@ export default function UnifiedMonitoringPage() {
                           : filters.types.filter((t) => t !== value);
                         setFilters({ ...filters, types: newTypes });
                       }}
-                      className="w-3 h-3 rounded border-slate-300 text-[#FF6B35] focus:ring-[#FF6B35] focus:ring-1"
+                      className="w-3 h-3 rounded border-slate-300 text-[#E6B022] focus:ring-[#E6B022] focus:ring-1"
                     />
                     <span className="text-[10px] font-medium text-slate-700 group-hover:text-slate-900">
                       {icon} {label}
@@ -607,7 +607,7 @@ export default function UnifiedMonitoringPage() {
                           : filters.severities.filter((s) => s !== value);
                         setFilters({ ...filters, severities: newSeverities });
                       }}
-                      className="w-3 h-3 rounded border-slate-300 text-[#FF6B35] focus:ring-[#FF6B35] focus:ring-1"
+                      className="w-3 h-3 rounded border-slate-300 text-[#E6B022] focus:ring-[#E6B022] focus:ring-1"
                     />
                     <span className="text-[10px] font-medium text-slate-700 group-hover:text-slate-900">
                       {icon} {label}
@@ -628,7 +628,7 @@ export default function UnifiedMonitoringPage() {
                   onChange={(e) => setFilters({ ...filters, service: e.target.value })}
                   className={`text-[10px] font-semibold rounded-md px-2 py-1 border transition-all ${
                     filters.service
-                      ? 'bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white border-[#FF6B35]'
+                      ? 'bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white border-[#E6B022]'
                       : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                   }`}
                 >
@@ -652,7 +652,7 @@ export default function UnifiedMonitoringPage() {
                   onClick={() => setFilters({ ...filters, limit })}
                   className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-all ${
                     filters.limit === limit
-                      ? 'bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white shadow-sm'
+                      ? 'bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white shadow-sm'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >

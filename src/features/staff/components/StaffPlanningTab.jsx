@@ -26,7 +26,7 @@ const DAYS_OF_WEEK = [{
   fr: 'Dimanche'
 }];
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   success: '#10B981',
   gray: {
     100: '#F3F4F6',

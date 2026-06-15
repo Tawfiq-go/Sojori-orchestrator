@@ -18,6 +18,15 @@ import {
   pctChange,
   prettyRuEventKey,
 } from '../../utils/channelsSharedUtils';
+import {
+  SUMMARY_IMPORTANCE_LEGEND,
+  sortApiSummaryRows,
+  sortWebhookSummaryRows,
+  summaryActionLabel,
+  summaryCategoryLabel,
+} from '../../utils/summaryKpiImportance';
+import { summaryViewFromParams } from '../../utils/channelsBusinessNav';
+import { ChannelsVolumesSection } from './ChannelsVolumesSection';
 
 type KpiData = {
   windowHours?: number;
@@ -54,6 +63,14 @@ type KpiData = {
 };
 
 export function SummaryTab() {
+  const [searchParams] = useSearchParams();
+  const sumView = summaryViewFromParams(searchParams);
+  if (sumView === 'owner-vol') return <ChannelsVolumesSection view="owner-vol" />;
+  if (sumView === 'listing') return <ChannelsVolumesSection view="listing" />;
+  return <SummaryKpiContent />;
+}
+
+function SummaryKpiContent() {
   const [searchParams] = useSearchParams();
   const hoursFromUrl = Number(searchParams.get('hours'));
   const [hours, setHours] = useState(
@@ -192,6 +209,35 @@ export function SummaryTab() {
   const yesterdayFailed = (yd.cronFailed || 0) + (yd.nonCronFailed || 0);
   const webhookTd = (kpi?.webhooksByType || []).reduce((s, r) => s + (r.today || 0), 0);
   const webhookYd = (kpi?.webhooksByType || []).reduce((s, r) => s + (r.yesterday || 0), 0);
+
+  const sortedWebhooks = sortWebhookSummaryRows(kpi?.webhooksByType || []);
+  const sortedDirectApis = sortApiSummaryRows((kpi?.apiCallsTopActions || []).filter((r) => !r.isCron));
+  const sortedCronApis = sortApiSummaryRows((kpi?.apiCallsTopActions || []).filter((r) => r.isCron));
+
+  const categoryBadgeStyle = (cat: string): CSSProperties => {
+    const colors: Record<string, { bg: string; fg: string }> = {
+      Résa: { bg: '#dbeafe', fg: '#1e40af' },
+      Calendrier: { bg: '#fef3c7', fg: '#92400e' },
+      Lead: { bg: '#fce7f3', fg: '#9d174d' },
+      Messagerie: { bg: '#e0e7ff', fg: '#3730a3' },
+      Avis: { bg: '#f3e8ff', fg: '#6b21a8' },
+      Listing: { bg: '#ecfccb', fg: '#3f6212' },
+      'Compte owner': { bg: '#f1f5f9', fg: '#475569' },
+      'Distribution CM': { bg: '#ffedd5', fg: '#9a3412' },
+      Autre: { bg: '#f1f5f9', fg: '#64748b' },
+    };
+    const c = colors[cat] || colors.Autre;
+    return {
+      display: 'inline-block',
+      padding: '2px 7px',
+      borderRadius: 4,
+      fontSize: 10,
+      fontWeight: 700,
+      background: c.bg,
+      color: c.fg,
+      whiteSpace: 'nowrap',
+    };
+  };
 
   const cardStyle: CSSProperties = {
     padding: '14px 16px',
@@ -391,14 +437,18 @@ export function SummaryTab() {
 
           {/* Webhooks table */}
           <div style={{ ...cardStyle, borderColor: '#c7d2fe' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#312e81', marginBottom: 10 }}>Webhooks reçus (temps réel)</div>
-            {(kpi.webhooksByType || []).length === 0 ? (
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#312e81', marginBottom: 4 }}>
+              Webhooks reçus (temps réel)
+            </div>
+            <div style={{ fontSize: 10, color: T.text3, marginBottom: 10, lineHeight: 1.45 }}>{SUMMARY_IMPORTANCE_LEGEND}</div>
+            {sortedWebhooks.length === 0 ? (
               <span style={{ fontSize: 12, color: T.text3 }}>Aucun webhook aujourd&apos;hui / hier</span>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr style={{ color: T.text3, borderBottom: `1px solid ${T.border}` }}>
                     <th style={{ width: 24 }} />
+                    <th style={{ textAlign: 'left', padding: 8, width: 88 }}>Priorité</th>
                     <th style={{ textAlign: 'left', padding: 8 }}>Type</th>
                     <th style={{ textAlign: 'right', padding: 8 }}>Auj.</th>
                     <th style={{ textAlign: 'right', padding: 8 }}>OK</th>
@@ -408,14 +458,20 @@ export function SummaryTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(kpi.webhooksByType || []).map((row) => (
+                  {sortedWebhooks.map((row) => {
+                    const cat = summaryCategoryLabel(row.type, 'webhook');
+                    const label = summaryActionLabel(row.type) || prettyRuEventKey(row.type);
+                    return (
                     <Fragment key={row.type}>
                       <tr
                         style={{ cursor: 'pointer', background: expandedWebhook === row.type ? T.primaryTint : undefined }}
                         onClick={() => toggleWebhook(row.type)}
                       >
                         <td style={{ padding: 8 }}>{expandedWebhook === row.type ? '▼' : '▶'}</td>
-                        <td style={{ padding: 8, fontWeight: 600 }}>{prettyRuEventKey(row.type)}</td>
+                        <td style={{ padding: 8 }}>
+                          <span style={categoryBadgeStyle(cat)}>{cat}</span>
+                        </td>
+                        <td style={{ padding: 8, fontWeight: 600 }} title={row.type}>{label}</td>
                         <td style={{ padding: 8, textAlign: 'right', fontWeight: 700 }}>{row.today}</td>
                         <td style={{ padding: 8, textAlign: 'right', color: '#059669' }}>{row.todayOk}</td>
                         <td style={{ padding: 8, textAlign: 'right', color: '#dc2626' }}>{row.todayFail}</td>
@@ -426,7 +482,7 @@ export function SummaryTab() {
                       </tr>
                       {expandedWebhook === row.type && (
                         <tr>
-                          <td colSpan={7} style={{ background: T.bg2, padding: 0 }}>
+                          <td colSpan={8} style={{ background: T.bg2, padding: 0 }}>
                             <table style={{ width: '100%' }}>
                               <tbody>
                                 {renderDetailRows(
@@ -440,7 +496,7 @@ export function SummaryTab() {
                         </tr>
                       )}
                     </Fragment>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             )}
@@ -448,32 +504,40 @@ export function SummaryTab() {
 
           {/* Direct API */}
           <div style={{ ...cardStyle, borderColor: '#fde68a' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#92400e', marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#92400e', marginBottom: 4 }}>
               API hors Cron (Direct) — {td.nonCron || 0} auj. · {td.nonCronSuccess || 0} ok · {td.nonCronFailed || 0} err
             </div>
+            <div style={{ fontSize: 10, color: T.text3, marginBottom: 8, lineHeight: 1.45 }}>
+              Push résa → calendrier (dispo avant prix) · erreurs remontées en tête
+            </div>
             <ActionTable
-              rows={(kpi.apiCallsTopActions || []).filter((r) => !r.isCron)}
+              rows={sortedDirectApis}
               expandedAction={expandedAction}
               onToggle={toggleAction}
               actionDetails={actionDetails}
               actionLoading={actionLoading}
               renderDetailRows={renderDetailRows}
+              categoryBadgeStyle={categoryBadgeStyle}
             />
           </div>
 
           {/* Cron API */}
           <div style={cardStyle}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: T.text2, marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: T.text2, marginBottom: 4 }}>
               API via Cron — {td.cron || 0} auj.
             </div>
+            <div style={{ fontSize: 10, color: T.text3, marginBottom: 8, lineHeight: 1.45 }}>
+              Pull réservations (horaire) → leads → messagerie REST → avis REST
+            </div>
             <ActionTable
-              rows={(kpi.apiCallsTopActions || []).filter((r) => r.isCron)}
+              rows={sortedCronApis}
               expandedAction={expandedAction}
               onToggle={toggleAction}
               actionDetails={actionDetails}
               actionLoading={actionLoading}
               renderDetailRows={renderDetailRows}
               showDataCol
+              categoryBadgeStyle={categoryBadgeStyle}
             />
           </div>
 
@@ -518,6 +582,7 @@ function ActionTable({
   actionLoading,
   renderDetailRows,
   showDataCol,
+  categoryBadgeStyle,
 }: {
   rows: Array<{ action: string; count: number; success: number; failed: number }>;
   expandedAction: string | null;
@@ -526,15 +591,17 @@ function ActionTable({
   actionLoading: Record<string, boolean>;
   renderDetailRows: (items: unknown[] | null | undefined, isWebhook: boolean, colSpan: number) => React.ReactNode;
   showDataCol?: boolean;
+  categoryBadgeStyle: (cat: string) => CSSProperties;
 }) {
   const T = { border: '#e2e8f0', text3: '#94a3b8', primaryTint: '#fff7ed' };
   if (rows.length === 0) return <span style={{ fontSize: 12, color: T.text3 }}>Aucun appel</span>;
-  const colSpan = showDataCol ? 6 : 5;
+  const colSpan = showDataCol ? 7 : 6;
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
       <thead>
         <tr style={{ color: T.text3, borderBottom: `1px solid ${T.border}` }}>
           <th style={{ width: 24 }} />
+          <th style={{ textAlign: 'left', padding: 8, width: 88 }}>Priorité</th>
           <th style={{ textAlign: 'left', padding: 8 }}>Action</th>
           <th style={{ textAlign: 'right', padding: 8 }}>Total</th>
           <th style={{ textAlign: 'right', padding: 8 }}>OK</th>
@@ -543,14 +610,20 @@ function ActionTable({
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => (
+        {rows.map((row) => {
+          const cat = summaryCategoryLabel(row.action, 'api');
+          const label = summaryActionLabel(row.action) || prettyRuEventKey(row.action);
+          return (
           <Fragment key={row.action}>
             <tr
               style={{ cursor: 'pointer', background: expandedAction === row.action ? T.primaryTint : undefined }}
               onClick={() => onToggle(row.action)}
             >
               <td style={{ padding: 8 }}>{expandedAction === row.action ? '▼' : '▶'}</td>
-              <td style={{ padding: 8, fontWeight: 600 }}>{prettyRuEventKey(row.action)}</td>
+              <td style={{ padding: 8 }}>
+                <span style={categoryBadgeStyle(cat)}>{cat}</span>
+              </td>
+              <td style={{ padding: 8, fontWeight: 600 }} title={row.action}>{label}</td>
               <td style={{ padding: 8, textAlign: 'right', fontWeight: 700 }}>{row.count}</td>
               <td style={{ padding: 8, textAlign: 'right', color: '#059669' }}>{row.success}</td>
               <td style={{ padding: 8, textAlign: 'right', color: '#dc2626' }}>{row.failed}</td>
@@ -572,7 +645,7 @@ function ActionTable({
               </tr>
             )}
           </Fragment>
-        ))}
+        )})}
       </tbody>
     </table>
   );

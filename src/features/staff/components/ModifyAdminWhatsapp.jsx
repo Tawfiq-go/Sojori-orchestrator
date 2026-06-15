@@ -25,8 +25,8 @@ import { hasAdminAccess } from 'utils/rbac.utils';
 import SidePanel from './SidePanel';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   gray: { 100: '#F5F5F5', 200: '#EEEEEE', 300: '#E0E0E0', 600: '#757575', 700: '#616161' },
 };
 

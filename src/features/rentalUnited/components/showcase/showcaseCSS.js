@@ -26,14 +26,14 @@ export function generateShowcaseCSS(config) {
   if (theme.sojoriColors) {
     lines.push('/* --- Couleurs Sojori --- */');
     lines.push('button.btn-primary, .btn-primary {');
-    lines.push('  background: linear-gradient(135deg, #FF6B35, #E55A2B) !important;');
+    lines.push('  background: linear-gradient(135deg, #E6B022, #B8881A) !important;');
     lines.push('  border: none !important;');
     lines.push('  border-radius: 6px !important;');
     lines.push('  color: white !important;');
     lines.push('  font-weight: 600 !important;');
     lines.push('  transition: all 0.2s ease !important;');
     lines.push('}');
-    lines.push('a, .text-primary { color: #FF6B35 !important; }');
+    lines.push('a, .text-primary { color: #E6B022 !important; }');
     lines.push('.btn-success, .label-success { background: #00b4b4 !important; }');
     lines.push('');
   }

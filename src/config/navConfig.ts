@@ -199,14 +199,14 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         label: 'Logs RU',
         iconType: 'link',
         iconColor: '#6D9EEB',
-        description: 'Logs Rental United — Business, Debug, Summary, Mapping, Cron, Import',
+        description: 'Logs Rental United — Summary, Business, Debug, Mapping, Cron',
         sub: [
           { id: 'admin/channels/summary', label: 'Summary' },
           { id: 'admin/channels/business', label: 'Business' },
           { id: 'admin/channels/debug', label: 'Debug' },
         ],
       },
-      { id: 'admin/sojori-logs', label: 'Logs AirROI', iconType: 'document', iconColor: '#FF6B35', description: 'Logs API marché & listings' },
+      { id: 'admin/sojori-logs', label: 'Logs AirROI', iconType: 'document', iconColor: '#E6B022', description: 'Logs API marché & listings' },
     ],
   },
   {

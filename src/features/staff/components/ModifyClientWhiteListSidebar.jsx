@@ -12,8 +12,8 @@ import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { MICROSERVICE_BASE_URL } from '../../../config/backendServer.config';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   gray: {
     300: '#E0E0E0',
@@ -288,7 +288,7 @@ const ModifyClientWhiteListSidebar = ({
             color: SOJORI_COLORS.primary,
             fontSize: 28
           }} />
-            <h3 className="text-xl font-bold bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] bg-clip-text text-transparent">
+            <h3 className="text-xl font-bold bg-gradient-to-r from-[#E6B022] to-[#B8881A] bg-clip-text text-transparent">
               {t('Update Client White List')}
             </h3>
           </div>
@@ -635,13 +635,13 @@ const ModifyClientWhiteListSidebar = ({
               <Button variant="contained" onClick={() => document.getElementById('client-form').requestSubmit()} disabled={isSubmitting} sx={{
             flex: 1,
             borderRadius: '8px',
-            background: 'linear-gradient(to right, #FF6B35, #E55A2B)',
+            background: 'linear-gradient(to right, #E6B022, #B8881A)',
             textTransform: 'none',
             fontWeight: 600,
             color: 'white',
             boxShadow: '0 4px 6px rgba(255, 107, 53, 0.25)',
             '&:hover': {
-              background: 'linear-gradient(to right, #E55A2B, #D44920)',
+              background: 'linear-gradient(to right, #B8881A, #D44920)',
               boxShadow: '0 6px 8px rgba(255, 107, 53, 0.35)'
             },
             '&:disabled': {

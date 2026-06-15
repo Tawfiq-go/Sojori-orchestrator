@@ -24,8 +24,8 @@ import {
 } from '../../../utils/dayNameUtils';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryLight: '#FF8F6B',
   primaryPale: '#FFF3E0',
   success: '#4CAF50',
@@ -191,7 +191,7 @@ const ModifyStaffPlanningNew = ({ open, handleClose, staff, onStaffUpdate }) => 
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '20px 24px',
-          background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+          background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
           boxShadow: '0 4px 6px rgba(255, 107, 53, 0.1)',
         }}>
           <div className="flex items-center gap-3">
@@ -337,7 +337,7 @@ const ModifyStaffPlanningNew = ({ open, handleClose, staff, onStaffUpdate }) => 
                                     height: '20px',
                                     fontSize: '11px',
                                     fontWeight: 600,
-                                    background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+                                    background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
                                     color: 'white',
                                   }}
                                 />
@@ -615,11 +615,11 @@ const ModifyStaffPlanningNew = ({ open, handleClose, staff, onStaffUpdate }) => 
                   startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : <Save className="w-4 h-4" />}
                   sx={{
                     flex: 2,
-                    background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+                    background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
                     color: 'white',
                     fontWeight: 600,
                     '&:hover': {
-                      background: 'linear-gradient(135deg, #E55A2B 0%, #D14520 100%)',
+                      background: 'linear-gradient(135deg, #B8881A 0%, #D14520 100%)',
                       boxShadow: '0 4px 12px rgba(255, 107, 53, 0.3)',
                     }
                   }}

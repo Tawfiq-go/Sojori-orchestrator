@@ -1,9 +1,17 @@
-/* ===== CHANNELS HUB PAGE — Design amélioré inspiré de Reservation ===== */
+/* ===== CHANNELS HUB — Brand Kit v1.0 (or #E6B022, plus d'orange legacy) ===== */
 
-/* ===== SCROLLBAR ORANGE SOJORI ===== */
+/* ===== SCROLLBAR OR PREMIUM ===== */
 .channels-table-scroll {
   scrollbar-width: thin !important;
-  scrollbar-color: #FF6B35 #f8f9fa !important;
+  scrollbar-color: var(--accent) var(--bg-soft) !important;
+}
+
+/** Pas de plafond vertical — le scroll est celui de la page (plus de bande vide ~15% en bas). */
+.channels-table-unbounded {
+  overflow-x: auto;
+  overflow-y: visible;
+  max-height: none !important;
+  width: 100%;
 }
 
 .channels-table-scroll::-webkit-scrollbar {
@@ -18,16 +26,16 @@
 }
 
 .channels-table-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #FF6B35 0%, #E55A2B 100%) !important;
+  background: linear-gradient(180deg, var(--accent-soft) 0%, var(--accent) 100%) !important;
   border-radius: 6px !important;
-  border: 1px solid #f1f1f1 !important;
-  box-shadow: 0 2px 4px rgba(255, 107, 53, 0.2) !important;
+  border: 1px solid var(--bg-soft) !important;
+  box-shadow: 0 2px 4px rgba(230, 176, 34, 0.18) !important;
   min-height: 40px !important;
 }
 
 .channels-table-scroll::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #E55A2B 0%, #D44920 100%) !important;
-  box-shadow: 0 3px 8px rgba(255, 107, 53, 0.5) !important;
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-deep) 100%) !important;
+  box-shadow: 0 3px 8px rgba(184, 136, 26, 0.35) !important;
 }
 
 /* ===== STICKY HEADER (comme Reservation) ===== */
@@ -35,15 +43,15 @@
   position: sticky !important;
   top: 0 !important;
   z-index: 100 !important;
-  background-color: #FF6B35 !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
-  color: white !important;
+  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent) 55%, var(--accent-deep) 100%) !important;
+  box-shadow: 0 2px 4px rgba(20, 17, 10, 0.08) !important;
+  color: var(--accent-on-gold, #1a1408) !important;
   font-weight: 700 !important;
   font-size: 0.75rem !important;
-  letter-spacing: 0.025em !important;
+  letter-spacing: 0.04em !important;
   text-transform: uppercase !important;
   padding: 8px 12px !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-right: 1px solid rgba(26, 20, 8, 0.12) !important;
   text-align: left !important;
 }
 
@@ -169,10 +177,10 @@
 }
 
 .channels-tab-button-active {
-  background: linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%);
-  color: #FFFFFF;
-  box-shadow: 0 2px 4px rgba(255, 107, 53, 0.3);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(180deg, var(--accent-soft) 0%, var(--accent) 100%);
+  color: var(--accent-on-gold, #1a1408);
+  box-shadow: 0 2px 4px rgba(184, 136, 26, 0.25);
+  text-shadow: none;
 }
 
 .channels-tab-button-inactive {
@@ -196,8 +204,8 @@
 
 /* ===== BUTTONS ===== */
 .channels-btn-primary {
-  background: #FF6B35;
-  color: white;
+  background: var(--accent);
+  color: var(--accent-on-gold, #1a1408);
   padding: 4px 12px;
   border-radius: 4px;
   font-weight: 600;
@@ -208,7 +216,7 @@
 }
 
 .channels-btn-primary:hover:not(:disabled) {
-  background: #E55A2B;
+  background: var(--accent-deep);
 }
 
 .channels-btn-primary:disabled {
@@ -294,8 +302,8 @@
 
 .channels-pagination-btn:hover:not(:disabled) {
   background: #f8fafc;
-  border-color: #FF6B35;
-  color: #FF6B35;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .channels-pagination-btn:disabled {
@@ -328,7 +336,7 @@
 }
 
 .channels-select:focus {
-  border-color: #FF6B35;
+  border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.1);
 }
 
@@ -378,7 +386,7 @@
 
 .channels-spinner {
   border: 3px solid #f1f5f9;
-  border-top: 3px solid #FF6B35;
+  border-top: 3px solid var(--accent);
   border-radius: 50%;
   width: 24px;
   height: 24px;
@@ -494,7 +502,7 @@
 }
 
 .channels-expand-button:hover {
-  color: #FF6B35;
+  color: var(--accent);
 }
 
 /* Calendrier RU : première colonne (bouton + date) reste visible au scroll horizontal */
@@ -606,8 +614,8 @@
   justify-content: space-between;
   gap: 6px;
   padding: 6px 10px;
-  background: #FF6B35;
-  border-bottom: 1px solid #E55A2B;
+  background: var(--accent);
+  border-bottom: 1px solid var(--accent-deep);
 }
 
 .channels-ru-recap-modal-title {
@@ -726,7 +734,7 @@
 
 .channels-ru-recap-list li::before {
   content: '•';
-  color: #FF6B35;
+  color: var(--accent);
   font-weight: 700;
   font-size: 1rem;
   flex-shrink: 0;
@@ -974,8 +982,8 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  background-color: #ff6b35 !important;
-  color: #fff !important;
+  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent) 55%, var(--accent-deep) 100%) !important;
+  color: var(--accent-on-gold, #1a1408) !important;
   font-weight: 700;
   font-size: 0.75rem;
   letter-spacing: 0.025em;
@@ -1080,13 +1088,46 @@
 }
 
 .channels-ru-recap-table-btn:hover {
-  background: #ffedd5;
+  background: var(--accent-bg);
 }
 
 .channels-expanded-row {
-  background: #f8fafc !important;
+  background: var(--bg-sub, #fafaf7) !important;
 }
 
 .channels-expanded-content {
   padding: 8px 12px;
+}
+
+/* ===== NAV SIDEBAR / FOOTER — Brand or ===== */
+.channels-nav-active {
+  background: linear-gradient(180deg, var(--accent-soft) 0%, var(--accent) 100%) !important;
+  color: var(--accent-on-gold, #1a1408) !important;
+  box-shadow: var(--shadow-2);
+}
+
+.channels-nav-child-border {
+  border-left-color: rgba(230, 176, 34, 0.35) !important;
+}
+
+.channels-nav-child-active {
+  background: var(--accent-bg) !important;
+  color: var(--accent-deep) !important;
+  font-weight: 600;
+}
+
+.channels-badge-section {
+  background: var(--accent-bg);
+  color: var(--accent-deep);
+  border: 1px solid var(--accent-border);
+}
+
+.channels-icon-btn-primary {
+  background: var(--accent);
+  color: var(--accent-on-gold, #1a1408);
+}
+
+.channels-icon-btn-primary:hover {
+  background: var(--accent-deep);
+  color: #fff;
 }

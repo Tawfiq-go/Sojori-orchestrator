@@ -61,7 +61,7 @@ export function UnifiedApiLogsSidebar() {
             fontSize: link.depth === 0 ? 12 : 11,
             fontWeight: link.depth === 0 ? 600 : 500,
             color: active ? undefined : link.depth === 0 ? '#1e293b' : '#475569',
-            borderLeftColor: active ? '#FF6B35' : undefined,
+            borderLeftColor: active ? '#E6B022' : undefined,
           }}
         >
           {link.label}

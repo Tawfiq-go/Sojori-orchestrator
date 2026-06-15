@@ -3,7 +3,7 @@ import { Box, Typography, Paper, Chip, CircularProgress, Alert, Grid, Card, Card
 import { Calendar, Clock, MapPin, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 import { getStaffAssignments } from '../services/serverApi.staffSimplified';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   success: '#10B981',
   warning: '#F59E0B',
   error: '#EF4444',

@@ -89,10 +89,10 @@ const CompanyProfileTabs = () => {
                   borderBottom: '3px solid #e0e0e0',
                 },
                 '& .MuiTab-root.Mui-selected': {
-                  color: '#FF6B35 !important',
+                  color: '#E6B022 !important',
                 },
                 '& .MuiTabs-indicator': {
-                  backgroundColor: '#FF6B35',
+                  backgroundColor: '#E6B022',
                   height: 3,
                   borderRadius: 2,
                 },
@@ -105,7 +105,7 @@ const CompanyProfileTabs = () => {
               <Button
                 variant="contained"
                 color="primary"
-                className="!bg-[#FF6B35] !text-white hover:!bg-[#E55A2B]"
+                className="!bg-[#E6B022] !text-white hover:!bg-[#B8881A]"
                 onClick={handleSync}
                 disabled={!!profile?.RUSync || syncLoading}
                 sx={{

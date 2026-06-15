@@ -135,7 +135,7 @@ export function AuditTrailView() {
                   marginBottom: 8,
                   padding: 12,
                   background: selectedReservation?._id === reservation._id ? '#fff3e0' : 'white',
-                  border: selectedReservation?._id === reservation._id ? '2px solid #FF6B35' : '1px solid #e0e0e0',
+                  border: selectedReservation?._id === reservation._id ? '2px solid #E6B022' : '1px solid #e0e0e0',
                   borderRadius: 8,
                   cursor: 'pointer',
                   transition: 'all 0.2s',

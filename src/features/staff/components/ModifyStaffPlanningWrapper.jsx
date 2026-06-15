@@ -5,8 +5,8 @@ import ModifyStaffPlanning from './ModifyStaffPlanning';
 import ModifyStaffPlanningNew from './ModifyStaffPlanningNew';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
 };
 
 /**

@@ -20,7 +20,7 @@ import ReservationDetailsModal from './ReservationDetailsModal';
 import ModifyClientWhiteListSidebar from './ModifyClientWhiteListSidebar';
 import '../../../features/reservation/pages/reservation.page.css';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   success: '#4CAF50',
   warning: '#FF9800',
   error: '#F44336',
@@ -565,7 +565,7 @@ const PublicClientWhiteListGrouped = () => {
               backgroundColor: SOJORI_COLORS.primary,
               color: 'white',
               '&:hover': {
-                backgroundColor: '#E55A2B'
+                backgroundColor: '#B8881A'
               }
             }}>
                   <SearchIcon />
@@ -651,7 +651,7 @@ const PublicClientWhiteListGrouped = () => {
                   {isListingFilterOpen && <div className="absolute z-[1100] mt-1 w-80 bg-white border border-slate-300 rounded-lg shadow-xl" style={{
                 maxHeight: '400px'
               }}>
-                      <div className="sticky top-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-3 py-2 flex items-center justify-between">
+                      <div className="sticky top-0 bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white px-3 py-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <HomeIcon fontSize="small" />
                           <span className="text-sm font-semibold">
@@ -671,13 +671,13 @@ const PublicClientWhiteListGrouped = () => {
                               <input type="checkbox" checked={isSelected} onChange={() => {
                         const newListings = isSelected ? pendingListings.filter(name => name !== listingName) : [...pendingListings, listingName];
                         setPendingListings(newListings);
-                      }} className="w-4 h-4 accent-[#FF6B35] cursor-pointer" />
+                      }} className="w-4 h-4 accent-[#E6B022] cursor-pointer" />
                               <HomeIcon style={{
                         fontSize: 16,
-                        color: isSelected ? '#FF6B35' : '#9ca3af'
+                        color: isSelected ? '#E6B022' : '#9ca3af'
                       }} />
                               <span className="flex-1 text-sm" style={{
-                        color: isSelected ? '#FF6B35' : '#1f2937'
+                        color: isSelected ? '#E6B022' : '#1f2937'
                       }}>
                                 {listingName}
                               </span>
@@ -692,7 +692,7 @@ const PublicClientWhiteListGrouped = () => {
                     setSelectedListings([...pendingListings]);
                     setPage(0);
                     setIsListingFilterOpen(false);
-                  }} className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:shadow-lg rounded">
+                  }} className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#E6B022] to-[#B8881A] hover:shadow-lg rounded">
                           Appliquer
                         </button>
                       </div>
@@ -732,7 +732,7 @@ const PublicClientWhiteListGrouped = () => {
               }} />
 
                   {isLanguageFilterOpen && <div className="absolute z-[1100] mt-1 w-64 bg-white border border-slate-300 rounded-lg shadow-xl">
-                      <div className="sticky top-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-3 py-2 flex items-center justify-between">
+                      <div className="sticky top-0 bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white px-3 py-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <LanguageIcon fontSize="small" />
                           <span className="text-sm font-semibold">Langues</span>
@@ -747,9 +747,9 @@ const PublicClientWhiteListGrouped = () => {
                     return <label key={lang} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer" style={{
                       backgroundColor: isSelected ? '#FFF3E0' : undefined
                     }}>
-                              <input type="checkbox" checked={isSelected} onChange={() => setPendingLanguages(isSelected ? pendingLanguages.filter(l => l !== lang) : [...pendingLanguages, lang])} className="w-4 h-4 accent-[#FF6B35] cursor-pointer" />
+                              <input type="checkbox" checked={isSelected} onChange={() => setPendingLanguages(isSelected ? pendingLanguages.filter(l => l !== lang) : [...pendingLanguages, lang])} className="w-4 h-4 accent-[#E6B022] cursor-pointer" />
                               <span className="flex-1 text-sm font-medium" style={{
-                        color: isSelected ? '#FF6B35' : '#1f2937'
+                        color: isSelected ? '#E6B022' : '#1f2937'
                       }}>{lang.toUpperCase()}</span>
                             </label>;
                   })}
@@ -760,7 +760,7 @@ const PublicClientWhiteListGrouped = () => {
                     setSelectedLanguages([...pendingLanguages]);
                     setPage(0);
                     setIsLanguageFilterOpen(false);
-                  }} className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:shadow-lg rounded">Appliquer</button>
+                  }} className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#E6B022] to-[#B8881A] hover:shadow-lg rounded">Appliquer</button>
                       </div>
                     </div>}
                 </div>
@@ -795,7 +795,7 @@ const PublicClientWhiteListGrouped = () => {
               }} />
 
                   {isBlockedFilterOpen && <div className="absolute z-[1100] mt-1 w-56 bg-white border border-slate-300 rounded-lg shadow-xl">
-                      <div className="sticky top-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-3 py-2 flex items-center justify-between">
+                      <div className="sticky top-0 bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white px-3 py-2 flex items-center justify-between">
                         <span className="text-sm font-semibold">Statut client</span>
                         <button onClick={() => setIsBlockedFilterOpen(false)} className="text-white hover:bg-white/20 rounded px-1"><CloseIcon fontSize="small" /></button>
                       </div>
@@ -806,9 +806,9 @@ const PublicClientWhiteListGrouped = () => {
                             <div style={{
                       color: option.color
                     }}>{option.icon}</div>
-                            <input type="radio" checked={tempBlockedFilter === option.value} onChange={() => setTempBlockedFilter(option.value)} className="w-4 h-4 accent-[#FF6B35] cursor-pointer" />
+                            <input type="radio" checked={tempBlockedFilter === option.value} onChange={() => setTempBlockedFilter(option.value)} className="w-4 h-4 accent-[#E6B022] cursor-pointer" />
                             <span className="flex-1 text-sm font-medium" style={{
-                      color: tempBlockedFilter === option.value ? '#FF6B35' : '#1f2937'
+                      color: tempBlockedFilter === option.value ? '#E6B022' : '#1f2937'
                     }}>{option.label}</span>
                           </label>)}
                       </div>
@@ -818,7 +818,7 @@ const PublicClientWhiteListGrouped = () => {
                     setBlockedFilter(tempBlockedFilter);
                     setPage(0);
                     setIsBlockedFilterOpen(false);
-                  }} className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:shadow-lg rounded">Appliquer</button>
+                  }} className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#E6B022] to-[#B8881A] hover:shadow-lg rounded">Appliquer</button>
                       </div>
                     </div>}
                 </div>
@@ -856,7 +856,7 @@ const PublicClientWhiteListGrouped = () => {
               }} />
 
                   {isCommunicationFilterOpen && <div className="absolute z-[1100] mt-1 w-64 bg-white border border-slate-300 rounded-lg shadow-xl">
-                      <div className="sticky top-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-3 py-2 flex items-center justify-between">
+                      <div className="sticky top-0 bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white px-3 py-2 flex items-center justify-between">
                         <span className="text-sm font-semibold">Communication</span>
                         <button onClick={() => setIsCommunicationFilterOpen(false)} className="text-white hover:bg-white/20 rounded px-1"><CloseIcon fontSize="small" /></button>
                       </div>
@@ -867,9 +867,9 @@ const PublicClientWhiteListGrouped = () => {
                             <div style={{
                       color: option.color
                     }}>{option.icon}</div>
-                            <input type="radio" checked={tempCommunicationFilter === option.value} onChange={() => setTempCommunicationFilter(option.value)} className="w-4 h-4 accent-[#FF6B35] cursor-pointer" />
+                            <input type="radio" checked={tempCommunicationFilter === option.value} onChange={() => setTempCommunicationFilter(option.value)} className="w-4 h-4 accent-[#E6B022] cursor-pointer" />
                             <span className="flex-1 text-sm font-medium" style={{
-                      color: tempCommunicationFilter === option.value ? '#FF6B35' : '#1f2937'
+                      color: tempCommunicationFilter === option.value ? '#E6B022' : '#1f2937'
                     }}>{option.label}</span>
                           </label>)}
                       </div>
@@ -879,7 +879,7 @@ const PublicClientWhiteListGrouped = () => {
                     setCommunicationFilter(tempCommunicationFilter);
                     setPage(0);
                     setIsCommunicationFilterOpen(false);
-                  }} className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:shadow-lg rounded">Appliquer</button>
+                  }} className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#E6B022] to-[#B8881A] hover:shadow-lg rounded">Appliquer</button>
                       </div>
                     </div>}
                 </div>
@@ -914,7 +914,7 @@ const PublicClientWhiteListGrouped = () => {
               }} />
 
                   {isReservationStatusFilterOpen && <div className="absolute z-[1100] mt-1 w-64 bg-white border border-slate-300 rounded-lg shadow-xl">
-                      <div className="sticky top-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-3 py-2 flex items-center justify-between">
+                      <div className="sticky top-0 bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white px-3 py-2 flex items-center justify-between">
                         <span className="text-sm font-semibold">Statut Réservation</span>
                         <button onClick={() => setIsReservationStatusFilterOpen(false)} className="text-white hover:bg-white/20 rounded px-1"><CloseIcon fontSize="small" /></button>
                       </div>
@@ -925,9 +925,9 @@ const PublicClientWhiteListGrouped = () => {
                             <div style={{
                       color: option.color
                     }}>{option.icon}</div>
-                            <input type="radio" checked={tempReservationStatusFilter === option.value} onChange={() => setTempReservationStatusFilter(option.value)} className="w-4 h-4 accent-[#FF6B35] cursor-pointer" />
+                            <input type="radio" checked={tempReservationStatusFilter === option.value} onChange={() => setTempReservationStatusFilter(option.value)} className="w-4 h-4 accent-[#E6B022] cursor-pointer" />
                             <span className="flex-1 text-sm font-medium" style={{
-                      color: tempReservationStatusFilter === option.value ? '#FF6B35' : '#1f2937'
+                      color: tempReservationStatusFilter === option.value ? '#E6B022' : '#1f2937'
                     }}>{option.label}</span>
                           </label>)}
                       </div>
@@ -937,7 +937,7 @@ const PublicClientWhiteListGrouped = () => {
                     setReservationStatusFilter(tempReservationStatusFilter);
                     setPage(0);
                     setIsReservationStatusFilterOpen(false);
-                  }} className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:shadow-lg rounded">Appliquer</button>
+                  }} className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#E6B022] to-[#B8881A] hover:shadow-lg rounded">Appliquer</button>
                       </div>
                     </div>}
                 </div>
@@ -961,7 +961,7 @@ const PublicClientWhiteListGrouped = () => {
                   {/* Badge showing count of active advanced filters */}
                   {(() => {
                 const activeCount = [dateRangeFilter.start || dateRangeFilter.end, checkinStatusFilter !== 'all', reservationCountFilter !== 'all'].filter(Boolean).length;
-                return activeCount > 0 ? <span className="absolute -top-1 -right-1 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-md">
+                return activeCount > 0 ? <span className="absolute -top-1 -right-1 bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-md">
                         {activeCount}
                       </span> : null;
               })()}
@@ -980,7 +980,7 @@ const PublicClientWhiteListGrouped = () => {
 
             {/* Right: Pagination */}
             <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] rounded-lg px-3 py-1.5">
+              <div className="flex items-center justify-center bg-gradient-to-r from-[#E6B022] to-[#B8881A] rounded-lg px-3 py-1.5">
                 <span className="text-white font-bold text-xs">
                   {totalCount} client{totalCount > 1 ? 's' : ''}
                 </span>
@@ -1334,7 +1334,7 @@ const PublicClientWhiteListGrouped = () => {
               '&:hover': {
                 backgroundColor: '#FFF3E0'
               },
-              borderTop: row.isFirstRow && index > 0 ? '2px solid #FF6B35' : undefined
+              borderTop: row.isFirstRow && index > 0 ? '2px solid #E6B022' : undefined
             }}>
                       {/* Téléphone (rowspan pour toutes les réservations du même numéro) - Sticky left column */}
                       {row.isFirstRow && <TableCell rowSpan={row.rowSpan} className="px-2 py-1" style={{
@@ -1377,7 +1377,7 @@ const PublicClientWhiteListGrouped = () => {
                     backgroundColor: SOJORI_COLORS.primary,
                     color: 'white',
                     '&:hover': {
-                      backgroundColor: '#E55A2B'
+                      backgroundColor: '#B8881A'
                     },
                     fontSize: '0.7rem',
                     padding: '2px 6px',
@@ -1656,7 +1656,7 @@ const PublicClientWhiteListGrouped = () => {
           height: '100%',
           width: '100%',
           scrollbarWidth: 'thin',
-          scrollbarColor: '#FF6B35 #f1f1f1',
+          scrollbarColor: '#E6B022 #f1f1f1',
           '&::-webkit-scrollbar': {
             height: '10px',
             webkitAppearance: 'none'
@@ -1666,13 +1666,13 @@ const PublicClientWhiteListGrouped = () => {
             borderRadius: '0'
           },
           '&::-webkit-scrollbar-thumb': {
-            background: 'linear-gradient(180deg, #FF6B35 0%, #E55A2B 100%)',
+            background: 'linear-gradient(180deg, #E6B022 0%, #B8881A 100%)',
             borderRadius: '5px',
             border: '1px solid #f1f1f1',
             boxShadow: 'none'
           },
           '&::-webkit-scrollbar-thumb:hover': {
-            background: 'linear-gradient(180deg, #E55A2B 0%, #D44920 100%)'
+            background: 'linear-gradient(180deg, #B8881A 0%, #D44920 100%)'
           }
         }}>
               {/* Width = total - first column (sticky) */}
@@ -1715,7 +1715,7 @@ const PublicClientWhiteListGrouped = () => {
         {advancedFiltersOpen && <div className="fixed inset-0 flex items-center justify-center z-[1100] bg-black bg-opacity-50" onClick={() => setAdvancedFiltersOpen(false)}>
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               {/* Header */}
-              <div className="bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white p-6 rounded-t-2xl">
+              <div className="bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white p-6 rounded-t-2xl">
                 <div className="flex items-center gap-3">
                   <FilterAltIcon fontSize="medium" />
                   <h2 className="text-xl font-semibold">Filtres avancés</h2>
@@ -1803,7 +1803,7 @@ const PublicClientWhiteListGrouped = () => {
               setReservationCountFilter(tempReservationCount);
               setPage(0);
               setAdvancedFiltersOpen(false);
-            }} className="px-6 py-2 rounded-lg bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white hover:from-[#E55A2B] hover:to-[#D44920] transition-all font-medium shadow-md">
+            }} className="px-6 py-2 rounded-lg bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white hover:from-[#B8881A] hover:to-[#D44920] transition-all font-medium shadow-md">
                   Confirmer
                 </button>
               </div>

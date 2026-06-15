@@ -9,7 +9,6 @@ import { BusinessTab } from '../components/channels/BusinessTab';
 import { DebugTab } from '../components/channels/DebugTab';
 import { CronTab } from '../components/channels/CronTab';
 import { MappingTab } from '../components/channels/MappingTab';
-import { ImportTab } from '../components/channels/ImportTab';
 import {
   canonicalSectionTab,
   migrateLegacyChannelsSearchParams,
@@ -17,12 +16,11 @@ import {
 import '../styles/channels-hub.css';
 
 const SECTION_HINTS: Record<string, string> = {
-  Sum: 'KPIs agrégés sur la période choisie (6h → 7j).',
-  Business: 'Vue métier : flux sortant RU, webhooks entrants, HTTP brut, stats owner/listing.',
+  Sum: 'KPIs et volumes agrégés (6h → 30j).',
+  Business: 'Appels API vers RU et webhooks entrants parsés.',
   Mapping: 'Correspondances champs RU et listes de référence.',
-  Debug: 'Audit technique brut — ① type Pull/Push… ② API à gauche ③ appels à droite.',
+  Debug: 'Audit technique — Pull/Push/OAuth/Webhooks/REST RU + HTTP brut (logapis).',
   Cron: 'Jobs planifiés channels.',
-  Import: 'Import propriétés depuis Rental United.',
 };
 
 export function ChannelsAdminPage() {
@@ -33,6 +31,9 @@ export function ChannelsAdminPage() {
     const tab = (searchParams.get('tab') || '').toLowerCase();
     if (tab === 'channel-manager' || tab === 'distribution') {
       navigate(`/admin/ChannelManager?tab=${tab}`, { replace: true });
+    }
+    if (tab === 'import' || tab === 'onboard') {
+      navigate('/listings', { replace: true });
     }
   }, [searchParams, navigate]);
 
@@ -59,7 +60,6 @@ export function ChannelsAdminPage() {
             {sectionTab === 'Debug' && <DebugTab />}
             {sectionTab === 'Cron' && <CronTab />}
             {sectionTab === 'Mapping' && <MappingTab />}
-            {sectionTab === 'Import' && <ImportTab />}
           </div>
         </div>
       </div>

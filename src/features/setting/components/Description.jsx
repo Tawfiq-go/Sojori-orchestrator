@@ -86,7 +86,7 @@ const Description = ({
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <CircularProgress sx={{ color: '#FF6B35' }} size={36} />
+        <CircularProgress sx={{ color: '#E6B022' }} size={36} />
         <Typography variant="body1" sx={{ color: '#6b7280', fontWeight: 500 }}>
           {t('loading_descriptions')}
         </Typography>
@@ -103,7 +103,7 @@ const Description = ({
         <IconButton
           onClick={onRetry}
           sx={{
-            color: '#FF6B35',
+            color: '#E6B022',
             '&:hover': { backgroundColor: '#FFF3E0' },
             padding: '10px',
             borderRadius: '8px',
@@ -120,7 +120,7 @@ const Description = ({
     {
       title: t('Interaction'),
       field: 'interaction',
-      icon: <InteractionIcon sx={{ color: '#FF6B35', fontSize: 28 }} />,
+      icon: <InteractionIcon sx={{ color: '#E6B022', fontSize: 28 }} />,
     },
     {
       title: t('House Rules'),
@@ -130,7 +130,7 @@ const Description = ({
     {
       title: t('Owner Listing Story'),
       field: 'ownerListingStory',
-      icon: <StoryIcon sx={{ color: '#FF6B35', fontSize: 28 }} />,
+      icon: <StoryIcon sx={{ color: '#E6B022', fontSize: 28 }} />,
     },
   ];
 
@@ -150,8 +150,8 @@ const Description = ({
               label={editMode ? t('editing_mode') : t('view_mode')}
               variant="outlined"
               sx={{
-                borderColor: editMode ? '#f97316' : '#FF6B35',
-                color: editMode ? '#f97316' : '#FF6B35',
+                borderColor: editMode ? '#f97316' : '#E6B022',
+                color: editMode ? '#f97316' : '#E6B022',
                 fontWeight: 600,
                 px: 1.5,
                 py: 0.5,
@@ -161,7 +161,7 @@ const Description = ({
             <IconButton
               onClick={onRetry}
               sx={{
-                color: '#FF6B35',
+                color: '#E6B022',
                 '&:hover': { backgroundColor: '#FFF3E0' },
                 padding: '10px',
                 borderRadius: '8px',
@@ -293,9 +293,9 @@ const Description = ({
               variant="contained"
               startIcon={<EditIcon />}
               sx={{
-                backgroundColor: '#FF6B35',
+                backgroundColor: '#E6B022',
                 color: '#ffffff',
-                '&:hover': { backgroundColor: '#E55A2B' },
+                '&:hover': { backgroundColor: '#B8881A' },
                 px: 4,
                 py: 1.5,
                 borderRadius: '8px',
@@ -320,9 +320,9 @@ const Description = ({
                 }
                 disabled={saving || !isFormValid}
                 sx={{
-                  backgroundColor: '#FF6B35',
+                  backgroundColor: '#E6B022',
                   color: '#ffffff',
-                  '&:hover': { backgroundColor: '#E55A2B' },
+                  '&:hover': { backgroundColor: '#B8881A' },
                   px: 4,
                   py: 1.5,
                   borderRadius: '8px',

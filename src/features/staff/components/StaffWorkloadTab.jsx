@@ -3,7 +3,7 @@ import { Box, Typography, Paper, Grid, Chip, LinearProgress, CircularProgress, L
 import { TrendingUp, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { getStaffWorkload } from '../services/serverApi.staffSimplified';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   success: '#10B981',
   warning: '#F59E0B',
   error: '#EF4444',

@@ -4,8 +4,8 @@ import { ChevronLeft, ChevronRight, Calendar, Clock, Copy, Download, Filter, Use
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryLight: '#FF8F6B',
   success: '#10B981',
   warning: '#F59E0B',
@@ -463,7 +463,7 @@ const TeamCalendarView = ({
             {/* Selection Info */}
             {selectedStaff.length > 0 && <Chip label={`${selectedStaff.length} membre${selectedStaff.length > 1 ? 's' : ''} sélectionné${selectedStaff.length > 1 ? 's' : ''}`} size="medium" onDelete={() => setSelectedStaff([])} icon={<Check className="w-4 h-4" />} sx={{
             height: '32px',
-            background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+            background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
             color: 'white',
             fontWeight: 600,
             fontSize: '13px',
@@ -647,7 +647,7 @@ const TeamCalendarView = ({
                     // Orange très clair pour 4-8h
                     '#FEF3E2' // Beige pour moins de 4h
                     : 'white',
-                    borderColor: isActive ? hours >= 8 ? '#FF6B35' : hours >= 4 ? '#FB923C' : '#FDBA74' : SOJORI_COLORS.gray[200]
+                    borderColor: isActive ? hours >= 8 ? '#E6B022' : hours >= 4 ? '#FB923C' : '#FDBA74' : SOJORI_COLORS.gray[200]
                   }}>
                             {isActive ? <>
                                 <div className="flex flex-col items-center gap-1 w-full">
@@ -960,10 +960,10 @@ const TeamCalendarView = ({
                 fontSize: '13px',
                 fontWeight: 600,
                 ...(selectedHours.includes(hour) ? {
-                  background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+                  background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
                   color: 'white',
                   '&:hover': {
-                    background: 'linear-gradient(135deg, #E55A2B 0%, #D14520 100%)'
+                    background: 'linear-gradient(135deg, #B8881A 0%, #D14520 100%)'
                   }
                 } : {
                   borderColor: SOJORI_COLORS.gray[300],
@@ -1024,11 +1024,11 @@ const TeamCalendarView = ({
             Annuler
           </Button>
           <Button onClick={handleQuickAdd} variant="contained" startIcon={<Check className="w-4 h-4" />} disabled={addMode === 'hourly' && selectedHours.length === 0} sx={{
-          background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+          background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
           fontWeight: 600,
           padding: '8px 20px',
           '&:hover': {
-            background: 'linear-gradient(135deg, #E55A2B 0%, #D14520 100%)',
+            background: 'linear-gradient(135deg, #B8881A 0%, #D14520 100%)',
             boxShadow: '0 4px 12px rgba(255, 107, 53, 0.3)'
           },
           '&:disabled': {

@@ -167,10 +167,10 @@ export function Step2ClientRequest({ formData, onChange }: Step2Props) {
       sx={{
         p: 1.5,
         cursor: 'pointer',
-        border: selected ? '2px solid #FF6B35' : '1px solid #e0e0e0',
+        border: selected ? '2px solid #E6B022' : '1px solid #e0e0e0',
         bgcolor: selected ? '#fff8f5' : '#fff',
         transition: 'all 0.15s',
-        '&:hover': { borderColor: '#FF6B35', bgcolor: '#fff8f5' },
+        '&:hover': { borderColor: '#E6B022', bgcolor: '#fff8f5' },
       }}
     >
       <Typography variant="body2" fontWeight={selected ? 700 : 400}>
@@ -182,7 +182,7 @@ export function Step2ClientRequest({ formData, onChange }: Step2Props) {
         </Typography>
       )}
       {service.price > 0 && (
-        <Typography variant="caption" color="#FF6B35" display="block" fontWeight={600}>
+        <Typography variant="caption" color="#E6B022" display="block" fontWeight={600}>
           {service.priceType === 'per_person'
             ? `${service.price} ${service.currency}/pers.`
             : service.priceType === 'service_fee_only'

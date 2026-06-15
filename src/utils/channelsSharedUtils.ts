@@ -6,7 +6,7 @@ export function parseMrSeg(q: string | null) {
   if (v === 'c' || v === 'cal' || v === 'calendar' || v === 'calendrier') return 'c';
   if (v === 'l' || v === 'listing' || v === 'annonce' || v === 'ota-listing') return 'l';
   if (v === 'o' || v === 'oauth' || v === 'pms' || v === 'white' || v === 'token') return 'o';
-  if (v === 'u' || v === 'user' || v === 'compte' || v === 'owner' || v === 'account') return 'u';
+  if (v === 'owner' || v === 'u' || v === 'user' || v === 'compte' || v === 'account') return 'owner';
   if (v === 'g' || v === 'http' || v === 'access' || v === 'logapi' || v === 'logapis') return 'g';
   if (v === 'lead' || v === 'leads') return 'lead';
   if (v === 'rev' || v === 'review' || v === 'reviews' || v === 'avis') return 'rev';
@@ -25,7 +25,7 @@ export function actionToApiSeg(action: string | undefined) {
   const a = action.toLowerCase();
   if (a.includes('putavbunits') || a.includes('putprices') || a.includes('calendar') || a.includes('avb') || a.includes('price')) return 'c';
   if (a.includes('putproperty') || a.includes('putbuilding') || a.includes('listing') || a.includes('putownerlisting')) return 'l';
-  if (a.includes('createuser') || a.includes('archiveuser') || a.includes('fillcompany') || a.includes('owner') || a.includes('user')) return 'u';
+  if (a.includes('createuser') || a.includes('archiveuser') || a.includes('fillcompany') || a.includes('owner') || a.includes('user')) return 'owner';
   if (a.includes('reservation') || a.includes('listreservation')) return 'r';
   if (a.includes('lead')) return 'lead';
   if (a.includes('review') || a.includes('avis')) return 'rev';
@@ -38,10 +38,11 @@ export function ingressKindFromHookSeg(seg: string) {
   return overviewViewFromHookSeg(seg);
 }
 
-/** Vue overview / hooks : messages, leads, réservations (reviews = REST, onglet API). */
-export function overviewViewFromHookSeg(seg: string): 'reservations' | 'messaging' | 'leads' {
+/** Vue overview / hooks : messages, leads, réservations, avis webhooks. */
+export function overviewViewFromHookSeg(seg: string): 'reservations' | 'messaging' | 'leads' | 'reviews' {
   if (seg === 'r') return 'reservations';
   if (seg === 'lead') return 'leads';
+  if (seg === 'rev') return 'reviews';
   return 'messaging';
 }
 

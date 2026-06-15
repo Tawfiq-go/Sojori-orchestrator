@@ -7,7 +7,7 @@ import { useAdminOwnerFilter } from 'context/AdminOwnerFilterContext';
 import { toast } from 'react-toastify';
 import DashboardLayout from 'components/LayoutContainers/DashboardLayout';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   success: '#10B981',
   warning: '#F59E0B',
   info: '#3B82F6',

@@ -437,7 +437,7 @@ export default function RabbitMQPage() {
                           : filterConsumers.filter((c) => c !== value);
                         setFilterConsumers(next);
                       }}
-                      className="w-3 h-3 rounded border-slate-300 text-[#FF6B35]"
+                      className="w-3 h-3 rounded border-slate-300 text-[#E6B022]"
                     />
                     <span className="text-[10px] font-medium text-slate-700">
                       {icon} {label}
@@ -468,7 +468,7 @@ export default function RabbitMQPage() {
                           : filterMessages.filter((m) => m !== value);
                         setFilterMessages(next);
                       }}
-                      className="w-3 h-3 rounded border-slate-300 text-[#FF6B35]"
+                      className="w-3 h-3 rounded border-slate-300 text-[#E6B022]"
                     />
                     <span className="text-[10px] font-medium text-slate-700">
                       {icon} {label}
@@ -499,7 +499,7 @@ export default function RabbitMQPage() {
                           : filterPublisher.filter((p) => p !== value);
                         setFilterPublisher(next);
                       }}
-                      className="w-3 h-3 rounded border-slate-300 text-[#FF6B35]"
+                      className="w-3 h-3 rounded border-slate-300 text-[#E6B022]"
                     />
                     <span className="text-[10px] font-medium text-slate-700">
                       {icon} {label}
@@ -519,7 +519,7 @@ export default function RabbitMQPage() {
                     onChange={(e) => setFilterService(e.target.value)}
                     className={`text-[10px] font-semibold rounded-md px-2 py-1 border ${
                       filterService !== 'all'
-                        ? 'bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white border-[#FF6B35]'
+                        ? 'bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white border-[#E6B022]'
                         : 'bg-slate-100 text-slate-600 border-slate-200'
                     }`}
                   >

@@ -60,13 +60,13 @@ export default function ShowcaseControlPanel({
         .showcase-control-panel label.toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; cursor: pointer; }
         .showcase-control-panel select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ddd; }
         .showcase-control-panel .btn { padding: 8px 12px; border-radius: 6px; border: none; font-size: 13px; cursor: pointer; width: 100%; margin-top: 6px; }
-        .showcase-control-panel .btn-primary { background: linear-gradient(135deg, #FF6B35, #E55A2B); color: white; }
+        .showcase-control-panel .btn-primary { background: linear-gradient(135deg, #E6B022, #B8881A); color: white; }
         .showcase-control-panel .btn-secondary { background: #00b4b4; color: white; }
         .showcase-control-panel .token-error { font-size: 12px; color: #c2410c; margin-top: 6px; }
         .showcase-control-panel .section { margin-bottom: 20px; }
         .showcase-control-panel .preset-btns { display: flex; flex-wrap: wrap; gap: 6px; }
         .showcase-control-panel .preset-btn { padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd; background: #fff; font-size: 12px; cursor: pointer; }
-        .showcase-control-panel .preset-btn.active { background: #FF6B35; color: white; border-color: #FF6B35; }
+        .showcase-control-panel .preset-btn.active { background: #E6B022; color: white; border-color: #E6B022; }
         .showcase-control-panel input[type="text"].selector { width: 100%; padding: 4px 6px; font-size: 11px; margin-top: 2px; }
       `}</style>
 

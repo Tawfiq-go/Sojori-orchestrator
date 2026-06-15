@@ -27,8 +27,8 @@ import { useTeamViewMode } from '../../../context/TeamViewContext';
 import { PropertyManagerHubView } from '../../../components/team/PropertyManagerHubView';
 import { TEAM_T } from '../../../components/team/teamHubTokens';
 const SOJORI = {
-  orange: '#FF6B35',
-  orangeDark: '#E55A2B',
+  orange: '#E6B022',
+  orangeDark: '#B8881A',
   orangeSoft: 'rgba(255, 107, 53, 0.12)',
   teal: '#00b4b4',
   ink: '#0c0c0f',

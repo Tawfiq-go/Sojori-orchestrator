@@ -9,8 +9,8 @@ import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import { CircularProgress, Typography, Button } from '@mui/material';
 import { styled } from '@mui/material/styles';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   gray: {
     300: '#E0E0E0',
@@ -25,14 +25,14 @@ const StyledButton = styled(Button)({
   fontWeight: 600,
   fontSize: '14px',
   padding: '8px 24px',
-  background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+  background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
   color: 'white',
   transition: 'all 0.2s ease',
   boxShadow: '0 2px 8px rgba(255, 107, 53, 0.2)',
   '&:hover': {
     transform: 'translateY(-2px)',
     boxShadow: '0 6px 20px rgba(255, 107, 53, 0.3)',
-    background: 'linear-gradient(135deg, #E55A2B 0%, #FF6B35 100%)'
+    background: 'linear-gradient(135deg, #B8881A 0%, #E6B022 100%)'
   },
   '&:active': {
     transform: 'translateY(0)'

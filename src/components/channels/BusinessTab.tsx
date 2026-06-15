@@ -36,6 +36,7 @@ import {
   fetchChannelsOverviewReviews,
   fetchChannelsOwnerRuApis,
   fetchChannelsOwnerRuCallBodies,
+  fetchChannelsReservationsRuApis,
 } from '../../services/channelsDashboardApi';
 import { overviewViewFromHookSeg, parseMrSeg } from '../../utils/channelsSharedUtils';
 import type { IngressOverviewRow } from '../../utils/ingressRowHelpers';
@@ -56,8 +57,15 @@ import {
 import { buildListingRuRecap } from '../../utils/listingRecapHelpers';
 import { CalendarRuRecapModal, type CalendarRuRecapView } from './CalendarRuRecapModal';
 import { ListingRuRecapModal, type ListingRuRecapView } from './ListingRuRecapModal';
+import { BusinessContextCells } from './BusinessContextCells';
+import {
+  BUSINESS_CONTEXT_HEADERS,
+  extractRuApiCallBusinessContext,
+} from '../../utils/businessRowContext';
 
 const LIMIT = 25;
+const RU_USER_TABLE_HEADERS = ['Date', ...BUSINESS_CONTEXT_HEADERS, 'Action', 'Statut', 'ms', 'Code', 'Message'] as const;
+const RU_USER_TABLE_COLS = RU_USER_TABLE_HEADERS.length;
 
 type RuBody = {
   error?: string;
@@ -264,9 +272,9 @@ function RuBodyPanels({ body, mode }: { body: RuBody; mode: 'calendar' | 'listin
 export function BusinessTab() {
   const [searchParams, setSearchParams] = useSearchParams();
   const businessBiz = (searchParams.get('biz') || 'api').toLowerCase();
-  const viewTab = resolveBusinessViewTab(businessBiz);
   const apiSeg = parseMrSeg(searchParams.get('api'));
   const hookSeg = parseMrSeg(searchParams.get('hook'));
+  const viewTab = resolveBusinessViewTab(businessBiz, apiSeg);
   const docId = searchParams.get('docId') || '';
 
   const hoursFromUrl = Number(searchParams.get('hours'));
@@ -281,11 +289,27 @@ export function BusinessTab() {
     const b = (next.get('biz') || '').toLowerCase();
     if (!b) {
       next.set('biz', 'api');
-      if (!next.get('api')) next.set('api', 'm');
+      if (!next.get('api')) next.set('api', 'r');
       changed = true;
     }
-    if (b === 'logapi' && next.get('api') !== 'g') {
-      next.set('api', 'g');
+    if (b === 'owner') {
+      next.set('biz', 'api');
+      next.set('api', 'owner');
+      changed = true;
+    }
+    if (b === 'owner-vol' || b === 'listing') {
+      next.set('tab', 'Sum');
+      next.set('sumView', b);
+      next.delete('biz');
+      next.delete('api');
+      next.delete('hook');
+      changed = true;
+    }
+    if (b === 'logapi') {
+      next.set('tab', 'Debug');
+      next.set('type', 'http');
+      next.delete('biz');
+      next.delete('api');
       changed = true;
     }
     if (b === 'hooks' && !next.get('hook')) {
@@ -293,7 +317,11 @@ export function BusinessTab() {
       changed = true;
     }
     if (b === 'api' && next.get('api') === 'g') {
-      next.set('api', 'm');
+      next.set('api', 'r');
+      changed = true;
+    }
+    if (b === 'api' && (next.get('api') === 'u' || next.get('api') === 'owner')) {
+      next.set('api', 'owner');
       changed = true;
     }
     if (changed) setSearchParams(next, { replace: true });
@@ -308,6 +336,7 @@ export function BusinessTab() {
   const [reviewsPage, setReviewsPage] = useState(1);
   const [messagingPage, setMessagingPage] = useState(1);
   const [leadsPage, setLeadsPage] = useState(1);
+  const [reservationsPage, setReservationsPage] = useState(1);
   const [hookPage, setHookPage] = useState(1);
 
 
@@ -357,6 +386,11 @@ export function BusinessTab() {
   const [leadsRuError, setLeadsRuError] = useState<string | null>(null);
   const leadsBodies = useRuBodies((id) => fetchChannelsDistributionRuCallBodies(id));
 
+  const [reservationsRuList, setReservationsRuList] = useState<{ items?: RuRow[]; pagination?: { total?: number } } | null>(null);
+  const [reservationsRuLoading, setReservationsRuLoading] = useState(false);
+  const [reservationsRuError, setReservationsRuError] = useState<string | null>(null);
+  const reservationsBodies = useRuBodies((id) => fetchChannelsDistributionRuCallBodies(id));
+
   const [hookList, setHookList] = useState<{ items?: IngressOverviewRow[]; total?: number } | null>(null);
   const [hookSummary, setHookSummary] = useState<Record<string, unknown> | null>(null);
   const [hookLoading, setHookLoading] = useState(false);
@@ -392,6 +426,22 @@ export function BusinessTab() {
       } else {
         setCalendarList(data.data);
         calBodies.setExpandId(null);
+        const items = (data.data?.items || []) as Array<Record<string, unknown>>;
+        const conflictRows = items.filter((r) =>
+          String(r.responseMsg || '').toLowerCase().includes('confirmed reservation'),
+        );
+        const withSj = conflictRows.filter((r) => String(r.sojoriReservationNumber || '').trim());
+        console.info('[calendar-sj-overlap][front] calendrier RU chargé', {
+          total: items.length,
+          conflictRows: conflictRows.length,
+          conflictWithSj: withSj.length,
+          sample: conflictRows.slice(0, 3).map((r) => ({
+            id: r.id,
+            sj: r.sojoriReservationNumber || '—',
+            action: r.action,
+            from: (r as { auditContext?: { ruExecution?: { bundleFrom?: string } } }).auditContext?.ruExecution?.bundleFrom,
+          })),
+        });
       }
     } catch (e) {
       setCalendarError(errMsg(e));
@@ -562,6 +612,27 @@ export function BusinessTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hours, leadsPage]);
 
+  const loadReservationsRu = useCallback(async () => {
+    setReservationsRuLoading(true);
+    setReservationsRuError(null);
+    try {
+      const { data } = await fetchChannelsReservationsRuApis({ hours, page: reservationsPage, limit: LIMIT });
+      if (!data?.success) {
+        setReservationsRuError('Impossible de charger les appels réservations RU');
+        setReservationsRuList(null);
+      } else {
+        setReservationsRuList(data.data);
+        reservationsBodies.setExpandId(null);
+      }
+    } catch (e) {
+      setReservationsRuError(errMsg(e));
+      setReservationsRuList(null);
+    } finally {
+      setReservationsRuLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hours, reservationsPage]);
+
   const loadHooks = useCallback(async () => {
     const view = overviewViewFromHookSeg(hookSeg);
     setHookLoading(true);
@@ -627,26 +698,26 @@ export function BusinessTab() {
     if (viewTab !== 'Api' || docId) return;
     if (apiSeg === 'c') loadCalendar();
     else if (apiSeg === 'l') loadListing();
-    else if (apiSeg === 'u') loadUser();
     else if (apiSeg === 'o') loadOAuth();
     else if (apiSeg === 'g') loadHttp();
     else if (apiSeg === 'rev') loadReviews();
     else if (apiSeg === 'd') loadDistribution();
     else if (apiSeg === 'm') void loadMessagingRu();
     else if (apiSeg === 'lead') void loadLeadsRu();
+    else if (apiSeg === 'r') void loadReservationsRu();
   }, [
     viewTab,
     apiSeg,
     docId,
     loadCalendar,
     loadListing,
-    loadUser,
     loadOAuth,
     loadHttp,
     loadReviews,
     loadDistribution,
     loadMessagingRu,
     loadLeadsRu,
+    loadReservationsRu,
   ]);
 
   useEffect(() => {
@@ -662,18 +733,19 @@ export function BusinessTab() {
     () =>
       onChannelsRefresh(() => {
         if (viewTab === 'BizOwner') void loadBizOwners();
+        else if (viewTab === 'OwnerRu') void loadUser();
         else if (viewTab === 'BizListing') void loadBizListings();
         else if (viewTab === 'Hook') void loadHooks();
         else if (viewTab === 'Api' && !docId) {
           if (apiSeg === 'c') void loadCalendar();
           else if (apiSeg === 'l') void loadListing();
-          else if (apiSeg === 'u') void loadUser();
           else if (apiSeg === 'o') void loadOAuth();
           else if (apiSeg === 'g') void loadHttp();
           else if (apiSeg === 'rev') void loadReviews();
           else if (apiSeg === 'd') void loadDistribution();
           else if (apiSeg === 'm') void loadMessagingRu();
           else if (apiSeg === 'lead') void loadLeadsRu();
+          else if (apiSeg === 'r') void loadReservationsRu();
         }
       }),
     [
@@ -681,17 +753,18 @@ export function BusinessTab() {
       docId,
       apiSeg,
       loadBizOwners,
+      loadUser,
       loadBizListings,
       loadHooks,
       loadCalendar,
       loadListing,
-      loadUser,
       loadOAuth,
       loadHttp,
       loadReviews,
       loadDistribution,
       loadMessagingRu,
       loadLeadsRu,
+      loadReservationsRu,
     ],
   );
 
@@ -772,8 +845,12 @@ export function BusinessTab() {
   }, [viewTab, docId, loadHooks]);
 
   useEffect(() => {
+    if (viewTab === 'OwnerRu') loadUser();
+  }, [viewTab, loadUser]);
+
+  useEffect(() => {
     if (viewTab === 'BizOwner') loadBizOwners();
-  }, [viewTab, loadBizOwners]);
+  }, [viewTab, loadBizOwners, hours]);
 
   useEffect(() => {
     if (viewTab === 'BizListing') loadBizListings();
@@ -799,10 +876,12 @@ export function BusinessTab() {
 
   const hookBanner =
     hookView === 'messaging'
-      ? 'Webhooks messagerie RU — lecture métier (listing, owner, type événement, publish).'
-      : hookView === 'leads'
-        ? 'Webhooks leads (LNM_PutLeadReservation) — guest, dates, listing, owner.'
-        : 'Webhooks réservations — création / modification / annulation, Sojori #, check-in/out, listing, owner.';
+      ? 'Webhooks messagerie RU — listing, owner, Sojori #, type événement, publish.'
+      : hookView === 'reviews'
+        ? 'Webhooks avis invités (GuestReview / AirbnbGuestReview) — listing, owner, Sojori #.'
+        : hookView === 'leads'
+          ? 'Webhooks leads (LNM_PutLeadReservation) — guest, dates, listing, owner.'
+          : 'Webhooks réservations — création / modification / annulation, Sojori #, check-in/out, listing, owner.';
 
   const bizBtn = (active: boolean) => ({
     padding: '6px 16px',
@@ -835,6 +914,7 @@ export function BusinessTab() {
     setReviewsPage(1);
     setMessagingPage(1);
     setLeadsPage(1);
+    setReservationsPage(1);
     setDistPage(1);
   };
 
@@ -869,6 +949,7 @@ export function BusinessTab() {
         const expanded = bodies.expandId === rowId;
         const loadingBody = bodies.loadingId === rowId;
         const sum = mode === 'calendar' ? summarizeCalendarRuRow(row as Parameters<typeof summarizeCalendarRuRow>[0]) : null;
+        const biz = extractRuApiCallBusinessContext(row);
         return (
           <Fragment key={rowId}>
             <tr className="border-t border-slate-100 align-top">
@@ -898,6 +979,7 @@ export function BusinessTab() {
                   <div className="text-[11px] text-slate-600">{ts ? new Date(ts).toLocaleString() : '—'}</div>
                 </div>
               </td>
+              <BusinessContextCells {...biz} />
               <td className="px-2 py-2 text-xs font-mono truncate" title={String(row.action || '')}>{String(row.action || '—')}</td>
               <td className="px-2 py-2 text-xs">
                 <span
@@ -930,8 +1012,6 @@ export function BusinessTab() {
               {mode === 'calendar' && sum ? (
                 <>
                   <td className="px-2 py-2 font-mono text-[10px]">{sum.propertyId != null ? String(sum.propertyId) : '—'}</td>
-                  <td className="px-2 py-2 text-xs line-clamp-2">{sum.listingLabel || '—'}</td>
-                  <td className="px-2 py-2 text-xs line-clamp-2">{sum.ownerLabel || '—'}</td>
                   <td className="px-2 py-2 text-xs font-mono">{sum.rabbitSchemaDisplay}</td>
                   <td className="px-2 py-2 text-xs line-clamp-3">{sum.source}</td>
                   <td className="px-2 py-2 text-xs font-mono line-clamp-2">{sum.priceHint}</td>
@@ -975,6 +1055,7 @@ export function BusinessTab() {
         };
         const sum = summarizeCalendarRuRow(mergedRow as Parameters<typeof summarizeCalendarRuRow>[0]);
         const recap = buildCalendarModificationRecap(mergedRow);
+        const biz = extractRuApiCallBusinessContext(mergedRow);
         const expanded = calBodies.expandId === rowId;
         const loadingBody = calBodies.loadingId === rowId;
         return (
@@ -995,6 +1076,7 @@ export function BusinessTab() {
                   </div>
                 </div>
               </td>
+              <BusinessContextCells {...biz} />
               <td className="px-2 py-2 text-xs font-mono truncate" title={String(row.action || '')}>
                 {String(row.action || '—')}
               </td>
@@ -1005,8 +1087,6 @@ export function BusinessTab() {
               </td>
               <td className="px-2 py-2 text-right tabular-nums text-xs">{row.responseTime != null ? String(row.responseTime) : '—'}</td>
               <td className="px-2 py-2 font-mono text-[10px]">{sum.propertyId != null ? String(sum.propertyId) : '—'}</td>
-              <td className="px-2 py-2 text-xs line-clamp-2" title={sum.listingLabel}>{sum.listingLabel || '—'}</td>
-              <td className="px-2 py-2 text-xs line-clamp-2" title={sum.ownerLabel}>{sum.ownerLabel || '—'}</td>
               <td className="px-2 py-2 text-xs font-mono" title={sum.rabbitSchemaVersion != null ? `schéma ${sum.rabbitSchemaDisplay}` : ''}>
                 {sum.rabbitSchemaDisplay}
               </td>
@@ -1028,7 +1108,7 @@ export function BusinessTab() {
             </tr>
             {expanded && (
               <tr className="channels-expanded-row">
-                <td colSpan={13} className="channels-expanded-content">
+                <td colSpan={14} className="channels-expanded-content">
                   {loadingBody ? (
                     <div className="py-3 text-center text-xs text-slate-500">Chargement…</div>
                   ) : body !== undefined ? (
@@ -1057,6 +1137,7 @@ export function BusinessTab() {
         };
         const sum = summarizeListingRuRow(mergedRow as Parameters<typeof summarizeListingRuRow>[0]);
         const recap = buildListingRuRecap(mergedRow);
+        const biz = extractRuApiCallBusinessContext(mergedRow);
         const expanded = listBodies.expandId === rowId;
         const loadingBody = listBodies.loadingId === rowId;
         return (
@@ -1077,6 +1158,7 @@ export function BusinessTab() {
                   </div>
                 </div>
               </td>
+              <BusinessContextCells {...biz} />
               <td className="px-2 py-2 text-xs font-mono truncate" title={String(row.action || '')}>
                 {String(row.action || '—')}
               </td>
@@ -1086,7 +1168,6 @@ export function BusinessTab() {
                 </span>
               </td>
               <td className="px-2 py-2 text-right tabular-nums text-xs">{row.responseTime != null ? String(row.responseTime) : '—'}</td>
-              <td className="px-2 py-2 font-mono text-[10px]" title={sum.listingId}>{sum.listingLabel || sum.listingId || '—'}</td>
               <td className="px-2 py-2 font-mono text-[10px]">{sum.propertyId != null ? String(sum.propertyId) : '—'}</td>
               <td className="px-2 py-2 text-xs line-clamp-2" title={sum.route}>{sum.route}</td>
               <td className="px-2 py-2 text-xs align-top">
@@ -1104,7 +1185,7 @@ export function BusinessTab() {
             </tr>
             {expanded && (
               <tr className="channels-expanded-row">
-                <td colSpan={9} className="channels-expanded-content">
+                <td colSpan={11} className="channels-expanded-content">
                   {loadingBody ? (
                     <div className="py-3 text-center text-xs text-slate-500">Chargement…</div>
                   ) : body !== undefined ? (
@@ -1139,8 +1220,10 @@ export function BusinessTab() {
           {messagingRuError && (
             <div style={{ padding: 8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 4, color: '#B91C1C', fontSize: 13 }}>{messagingRuError}</div>
           )}
-          <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
-            <strong>API RU</strong> (pull REST) · <code className="font-mono">RU_REST_GET_api_messaging_*</code>. Webhooks ci-dessous (ingress).
+          <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950 leading-relaxed">
+            <strong>Messagerie sortant</strong> — un appel REST par résa RU (<code className="font-mono">GET …/threads?parentType&amp;parentId</code>), cron owner.
+            Colonnes <strong>Listing</strong> / <strong>Sojori #</strong> résolues via la résa Sojori liée au <code className="font-mono">parentId</code> RU.
+            Lignes anciennes sans <code className="font-mono">parentId</code> en base restent vides — webhooks entrants pour le détail fil par fil.
           </div>
           {messagingRuLoading && !messagingRuList && (
             <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement API messagerie…</div>
@@ -1152,16 +1235,15 @@ export function BusinessTab() {
                 <Pag page={messagingPage} prevOff={messagingPage <= 1} nextOff={(messagingRuList.items?.length || 0) < LIMIT} onPrev={() => setMessagingPage((p) => Math.max(1, p - 1))} onNext={() => setMessagingPage((p) => p + 1)} />
               </div>
               <div className="bg-white rounded-lg border overflow-hidden">
-                <div className="channels-table-scroll overflow-auto max-h-[50vh]">
+                <div className="channels-table-scroll channels-table-unbounded">
                   <table className="w-full text-sm min-w-[720px]">
-                    <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
-                    {renderRuTable(messagingRuList.items || [], 6, 'user', messagingBodies)}
+                    <thead className="channels-sticky-thead"><tr>{RU_USER_TABLE_HEADERS.map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+                    {renderRuTable(messagingRuList.items || [], RU_USER_TABLE_COLS, 'user', messagingBodies)}
                   </table>
                 </div>
               </div>
             </>
           )}
-          <div className="text-xs font-semibold text-slate-600 pt-2">Webhooks messagerie (ingress)</div>
         </>
       )}
 
@@ -1170,8 +1252,10 @@ export function BusinessTab() {
           {leadsRuError && (
             <div style={{ padding: 8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 4, color: '#B91C1C', fontSize: 13 }}>{leadsRuError}</div>
           )}
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-            <strong>API RU</strong> · <code className="font-mono">Pull_GetLeads_RQ</code>, <code className="font-mono">LNM_PutLeadReservation_RQ</code>.
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 leading-relaxed">
+            <strong>Leads sortant</strong> — <code className="font-mono">Pull_GetLeads_RQ</code> par owner (fenêtre 7j cron).
+            Listing / Sojori # = premier lead du pull, résolu via <code className="font-mono">ReservationID</code> RU → Lead Sojori.
+            Si plusieurs leads : <em>(+N leads)</em> sur la colonne listing.
           </div>
           {leadsRuLoading && !leadsRuList && (
             <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement API leads…</div>
@@ -1183,16 +1267,52 @@ export function BusinessTab() {
                 <Pag page={leadsPage} prevOff={leadsPage <= 1} nextOff={(leadsRuList.items?.length || 0) < LIMIT} onPrev={() => setLeadsPage((p) => Math.max(1, p - 1))} onNext={() => setLeadsPage((p) => p + 1)} />
               </div>
               <div className="bg-white rounded-lg border overflow-hidden">
-                <div className="channels-table-scroll overflow-auto max-h-[50vh]">
+                <div className="channels-table-scroll channels-table-unbounded">
                   <table className="w-full text-sm min-w-[720px]">
-                    <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
-                    {renderRuTable(leadsRuList.items || [], 6, 'user', leadsBodies)}
+                    <thead className="channels-sticky-thead"><tr>{RU_USER_TABLE_HEADERS.map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+                    {renderRuTable(leadsRuList.items || [], RU_USER_TABLE_COLS, 'user', leadsBodies)}
                   </table>
                 </div>
               </div>
             </>
           )}
-          <div className="text-xs font-semibold text-slate-600 pt-2">Ingress leads (LNM)</div>
+        </>
+      )}
+
+      {viewTab === 'Api' && !docId && apiSeg === 'r' && (
+        <>
+          {reservationsRuError && (
+            <div style={{ padding: 8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 4, color: '#B91C1C', fontSize: 13 }}>{reservationsRuError}</div>
+          )}
+          <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-950">
+            <strong>Réservations sortant</strong> — Push/Pull vers RU ·{' '}
+            <code className="font-mono">Pull_ListReservations_RQ</code>,{' '}
+            <code className="font-mono">Push_PutConfirmedReservationMulti_RQ</code>,{' '}
+            <code className="font-mono">Push_CancelReservation_RQ</code>, etc.
+            Webhooks entrants → lien ci-dessous.
+          </div>
+          {reservationsRuLoading && !reservationsRuList && (
+            <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement API réservations…</div>
+          )}
+          {!reservationsRuLoading && !reservationsRuError && reservationsRuList && (reservationsRuList.items?.length ?? 0) === 0 && (
+            <div className="text-sm text-slate-500 p-4 border rounded bg-white text-center">Aucun appel réservation RU sur la période.</div>
+          )}
+          {reservationsRuList && (reservationsRuList.items?.length ?? 0) > 0 && (
+            <>
+              <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5">
+                <span>API réservations · {reservationsRuList.pagination?.total ?? '—'}</span>
+                <Pag page={reservationsPage} prevOff={reservationsPage <= 1} nextOff={(reservationsRuList.items?.length || 0) < LIMIT} onPrev={() => setReservationsPage((p) => Math.max(1, p - 1))} onNext={() => setReservationsPage((p) => p + 1)} />
+              </div>
+              <div className="bg-white rounded-lg border overflow-hidden">
+                <div className="channels-table-scroll channels-table-unbounded">
+                  <table className="w-full text-sm min-w-[720px]">
+                    <thead className="channels-sticky-thead"><tr>{RU_USER_TABLE_HEADERS.map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+                    {renderRuTable(reservationsRuList.items || [], RU_USER_TABLE_COLS, 'user', reservationsBodies)}
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -1228,7 +1348,7 @@ export function BusinessTab() {
                 <Pag page={httpPage} prevOff={httpPage <= 1} nextOff={(httpData.items?.length || 0) < LIMIT} onPrev={() => setHttpPage((p) => Math.max(1, p - 1))} onNext={() => setHttpPage((p) => p + 1)} />
               </div>
               <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-                <div className="channels-table-scroll overflow-auto max-h-[78vh]">
+                <div className="channels-table-scroll channels-table-unbounded">
                   <table className="w-full text-sm min-w-[900px]">
                     <thead className="channels-sticky-thead"><tr>
                       {['Date', 'Méthode', 'Chemin', 'Cat.', 'HTTP', 'ms', 'Snippet'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}
@@ -1270,11 +1390,17 @@ export function BusinessTab() {
             <span className="flex gap-2 items-center"><CalendarDays size={11} /> Calendrier RU · {calendarList.pagination?.total ?? '—'}</span>
             <Pag page={calendarPage} prevOff={calendarPage <= 1} nextOff={(calendarList.items?.length || 0) < LIMIT} onPrev={() => setCalendarPage((p) => Math.max(1, p - 1))} onNext={() => setCalendarPage((p) => p + 1)} />
           </div>
+          <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950 leading-relaxed">
+            <strong>Sojori #</strong> — souvent vide : pushes <em>prix / dispo</em> (listing + dates), pas une réservation en soi.
+            Rempli si <code className="font-mono">publishContext.occupancyTriggerMeta</code> (file dynamic-pricing après une résa),
+            ou si RU répond « confirmed reservation » → résolution auto listing + plage dates.
+            Sinon → onglet <strong>Réservations</strong> (webhooks).
+          </div>
           <div className="bg-white rounded-lg border overflow-hidden">
-            <div className="channels-table-scroll overflow-auto max-h-[78vh]">
+            <div className="channels-table-scroll channels-table-unbounded">
               <table className="w-full text-sm min-w-[1100px]">
                 <thead className="channels-sticky-thead channels-calendar-ru-thead text-slate-700"><tr>
-                  {['Quand + détail', 'Action', 'Statut', 'ms', 'Prop', 'Listing', 'Owner', 'Queue', 'Source', 'Prix', 'Plages', 'Modifs', 'Réponse'].map((h) => (
+                  {['Quand + détail', ...BUSINESS_CONTEXT_HEADERS, 'Action', 'Statut', 'ms', 'Prop', 'Queue', 'Source', 'Prix', 'Plages', 'Modifs', 'Réponse'].map((h) => (
                     <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr></thead>
@@ -1293,13 +1419,10 @@ export function BusinessTab() {
 
       {viewTab === 'Api' && !docId && apiSeg === 'l' && !listingLoading && !listingError && listingList && (listingList.items?.length ?? 0) === 0 && (
         <div className="text-sm text-slate-500 p-4 border rounded bg-white text-center space-y-2">
-          <p>Aucun appel listing RU sur la période (Pull/Push propriété, sync OTA, import).</p>
+          <p>Aucun appel listing RU sur la période (Pull/Push propriété, sync OTA).</p>
           <p className="text-xs text-slate-400">
             APIs : Pull_ListProperties, Pull_ListSpecProp, Push_PutProperty, Push_PutDescription, ListingOtaSync, etc.
           </p>
-          <Link to={chLink(patchParams(searchParams, { tab: 'Import' }))} className="text-indigo-600 font-semibold text-sm hover:underline">
-            Importer depuis RU →
-          </Link>
         </div>
       )}
 
@@ -1316,12 +1439,6 @@ export function BusinessTab() {
               <span className="channels-badge channels-badge-neutral text-xs">srv-channels</span>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Link
-                to={chLink(patchParams(searchParams, { tab: 'Import' }))}
-                className="text-indigo-600 font-semibold hover:underline whitespace-nowrap"
-              >
-                Import RU →
-              </Link>
               <Pag
                 page={listingPage}
                 prevOff={listingPage <= 1}
@@ -1332,11 +1449,11 @@ export function BusinessTab() {
             </div>
           </div>
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-            <div className="channels-table-scroll overflow-auto max-h-[78vh]">
+            <div className="channels-table-scroll channels-table-unbounded">
               <table className="w-full text-sm min-w-[960px]">
                 <thead className="channels-sticky-thead channels-calendar-ru-thead text-slate-700">
                   <tr>
-                    {['Date', 'Action', 'Statut', 'ms', 'Listing', 'Property RU', 'Route', 'Récap', 'Message'].map((h) => (
+                    {['Date', ...BUSINESS_CONTEXT_HEADERS, 'Action', 'Statut', 'ms', 'Property RU', 'Route', 'Récap', 'Message'].map((h) => (
                       <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap">
                         {h}
                       </th>
@@ -1350,11 +1467,16 @@ export function BusinessTab() {
         </>
       )}
 
-      {viewTab === 'Api' && !docId && apiSeg === 'u' && (
+      {viewTab === 'OwnerRu' && (
         <>
           {userError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{userError}</div>}
           <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
-            Owner RU · <code className="font-mono">Push_CreateUser</code>, <code className="font-mono">Push_FillCompanyDetails</code>, <code className="font-mono">Pull_ListMyUsers</code>…
+            Comptes owner RU — <code className="font-mono">Push_CreateUser_RQ</code>,{' '}
+            <code className="font-mono">Push_FillCompanyDetails_RQ</code>,{' '}
+            <code className="font-mono">Pull_ListMyUsers_RQ</code>,{' '}
+            <code className="font-mono">Push_ArchiveUser_RQ</code>,{' '}
+            <code className="font-mono">LNM_PutHandlerUrl_RQ</code>
+            <span className="text-slate-500"> — pas la messagerie (threads)</span>
           </div>
           {userLoading && !userList && <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement owner RU…</div>}
           {!userLoading && !userError && userList && (userList.items?.length ?? 0) === 0 && (
@@ -1363,10 +1485,10 @@ export function BusinessTab() {
           {userList && (userList.items?.length ?? 0) > 0 && (
             <>
               <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>Owner RU · {userList.pagination?.total ?? '—'}</span><Pag page={userPage} prevOff={userPage <= 1} nextOff={(userList.items?.length || 0) < LIMIT} onPrev={() => setUserPage((p) => Math.max(1, p - 1))} onNext={() => setUserPage((p) => p + 1)} /></div>
-              <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
+              <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll channels-table-unbounded">
                 <table className="w-full text-sm min-w-[720px]">
-                  <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
-                  {renderRuTable(userList.items || [], 6, 'user', userBodies)}
+                  <thead className="channels-sticky-thead"><tr>{RU_USER_TABLE_HEADERS.map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+                  {renderRuTable(userList.items || [], RU_USER_TABLE_COLS, 'user', userBodies)}
                 </table>
               </div></div>
             </>
@@ -1387,7 +1509,7 @@ export function BusinessTab() {
                 <Pag page={distPage} prevOff={distPage <= 1} nextOff={(distList.items?.length || 0) < LIMIT} onPrev={() => setDistPage((p) => Math.max(1, p - 1))} onNext={() => setDistPage((p) => p + 1)} />
               </div>
               <div className="bg-white rounded-lg border overflow-hidden">
-                <div className="overflow-auto max-h-[78vh]">
+                <div className="channels-table-unbounded">
                   <table className="w-full text-sm min-w-[720px]">
                     <thead className="channels-sticky-thead text-slate-700">
                       <tr>
@@ -1398,7 +1520,7 @@ export function BusinessTab() {
                         ))}
                       </tr>
                     </thead>
-                    {renderRuTable(distList.items || [], 6, 'user', distBodies)}
+                    {renderRuTable(distList.items || [], RU_USER_TABLE_COLS, 'user', distBodies)}
                   </table>
                 </div>
               </div>
@@ -1418,8 +1540,10 @@ export function BusinessTab() {
       {viewTab === 'Api' && !docId && apiSeg === 'o' && (
         <>
           {oauthError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{oauthError}</div>}
-          <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950">
-            OAuth PMS · <code className="font-mono">GetMasterToken</code>, <code className="font-mono">GetUserToken</code> (RuCallApi srv-user)
+          <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950 leading-relaxed">
+            <strong>OAuth PMS</strong> — <code className="font-mono">GetMasterToken</code> (compte plateforme Sojori → colonne Owner = <em>Sojori PMS (master)</em>),
+            {' '}<code className="font-mono">GetUserToken</code> (token white-label par owner → Owner résolu via email dans l’URL).
+            Listing / Sojori # : N/A pour OAuth.
           </div>
           {oauthLoading && !oauthList && <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: T.text3 }}>Chargement OAuth…</div>}
           {!oauthLoading && !oauthError && oauthList && (oauthList.items?.length ?? 0) === 0 && (
@@ -1428,10 +1552,10 @@ export function BusinessTab() {
           {oauthList && (oauthList.items?.length ?? 0) > 0 && (
             <>
               <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span className="inline-flex gap-1 items-center"><KeyRound size={11} /> OAuth PMS</span><Pag page={oauthPage} prevOff={oauthPage <= 1} nextOff={(oauthList.items?.length || 0) < LIMIT} onPrev={() => setOauthPage((p) => Math.max(1, p - 1))} onNext={() => setOauthPage((p) => p + 1)} /></div>
-              <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto max-h-[78vh]">
+              <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll channels-table-unbounded">
                 <table className="w-full text-sm min-w-[720px]">
-                  <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Statut', 'ms', 'Code', 'Message'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
-                  {renderRuTable(oauthList.items || [], 6, 'oauth', oauthBodies)}
+                  <thead className="channels-sticky-thead"><tr>{RU_USER_TABLE_HEADERS.map((h) => <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>)}</tr></thead>
+                  {renderRuTable(oauthList.items || [], RU_USER_TABLE_COLS, 'oauth', oauthBodies)}
                 </table>
               </div></div>
             </>
@@ -1442,22 +1566,30 @@ export function BusinessTab() {
       {viewTab === 'Api' && !docId && apiSeg === 'rev' && reviewsList && (
         <>
           {reviewsError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{reviewsError}</div>}
+          <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950 leading-relaxed">
+            <strong>Avis sortant</strong> — REST <code className="font-mono">GET /api/reviews/thread/&#123;parentId&#125;</code> par résa RU (cron owner).
+            Listing / Sojori # résolus via la résa Sojori liée au <code className="font-mono">parentId</code> (ID RU) ou au thread avis.
+          </div>
           <div className="flex justify-between text-xs bg-white border rounded px-3 py-1.5"><span>{reviewsList.total} reviews</span><Pag page={reviewsPage} prevOff={reviewsPage <= 1} nextOff={(reviewsList.items?.length || 0) < LIMIT} onPrev={() => setReviewsPage((p) => Math.max(1, p - 1))} onNext={() => setReviewsPage((p) => p + 1)} /></div>
           <div className="bg-white rounded-lg border overflow-hidden"><div className="channels-table-scroll overflow-auto">
-            <table className="w-full text-xs">
-              <thead className="channels-sticky-thead"><tr>{['Date', 'Action', 'Owner', 'Statut', 'ms', 'Message', 'Correlation'].map((h) => <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+            <table className="w-full text-sm min-w-[960px]">
+              <thead className="channels-sticky-thead"><tr>{['Date', ...BUSINESS_CONTEXT_HEADERS, 'Action', 'Statut', 'ms', 'Message', 'Correlation'].map((h) => <th key={h} className="text-left px-2 py-2 font-medium text-xs">{h}</th>)}</tr></thead>
               <tbody>
-                {(reviewsList.items as Record<string, unknown>[] || []).map((row) => (
+                {(reviewsList.items as Record<string, unknown>[] || []).map((row) => {
+                  const biz = extractRuApiCallBusinessContext(row);
+                  return (
                   <tr key={String(row.id)} className="border-t border-slate-100">
-                    <td className="px-3 py-2">{row.createdAt ? formatCasablancaDate(String(row.createdAt), 'dd/MM HH:mm:ss') : '—'}</td>
+                    <td className="px-2 py-2 text-xs whitespace-nowrap">{row.createdAt ? formatCasablancaDate(String(row.createdAt), 'dd/MM HH:mm:ss') : '—'}</td>
+                    <td className="px-2 py-2 text-xs truncate max-w-[130px]" title={String(row.ownerName || biz.ownerLabel)}>{String(row.ownerName || biz.ownerLabel)}</td>
+                    <td className="px-2 py-2 text-xs truncate max-w-[160px]" title={String(row.listingName || biz.listingLabel)}>{String(row.listingName || biz.listingLabel)}</td>
+                    <td className="px-2 py-2 text-xs font-mono whitespace-nowrap">{String(row.sojoriReservationNumber || biz.sojoriReservationNumber)}</td>
                     <td className="px-3 py-2"><span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }} data-variant="neutral text-[10px]">{String(row.action || '').replace(/^RU_REST_GET_api_/, '')}</span></td>
-                    <td className="px-3 py-2">{String(row.ownerName || '—')}</td>
                     <td className="px-3 py-2">{String(row.status || '—')}</td>
                     <td className="px-3 py-2 text-right">{row.responseTime != null ? String(row.responseTime) : '—'}</td>
                     <td className="px-3 py-2 truncate max-w-[200px]">{String(row.responseMsg || '').slice(0, 60) || '—'}</td>
                     <td className="px-3 py-2 font-mono text-[10px]">{String(row.correlationId || '').slice(0, 16)}</td>
                   </tr>
-                ))}
+                );})}
               </tbody>
             </table>
           </div></div>
@@ -1500,8 +1632,8 @@ export function BusinessTab() {
             <select style={{ padding: "4px 8px", borderRadius: 4, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, cursor: "pointer" }} className=" h-7 text-xs" value={hours} onChange={(e) => setHours(Number(e.target.value))}>
               <option value={6}>6h</option><option value={24}>24h</option><option value={72}>3j</option><option value={168}>7j</option><option value={720}>30j</option>
             </select>
-            <span className="text-xs font-semibold"><UserRound size={13} className="inline" /> Synthèse · Owner</span>
-            <span className="text-[10px] text-slate-500 ml-2">Volumes agrégés — pas les appels RU bruts</span>
+            <span className="text-xs font-semibold"><UserRound size={13} className="inline" /> Volumes owner</span>
+            <span className="text-[10px] text-slate-500 ml-2">Tous appels par PM (messagerie, résa, calendrier…) — pas le provisioning RU</span>
           </div>
           {bizOwnersError && <div style={{ padding: 8, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>{bizOwnersError}</div>}
           {bizOwners.length > 0 && (

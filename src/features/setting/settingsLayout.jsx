@@ -31,7 +31,7 @@ export function SettingsSectionHeader({ title, icon }) {
               width: 32,
               height: 32,
               borderRadius: 1,
-              bgcolor: '#FF6B35',
+              bgcolor: '#E6B022',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -41,7 +41,7 @@ export function SettingsSectionHeader({ title, icon }) {
             {icon}
           </Box>
         ) : null}
-        <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#E55A2B', textTransform: 'uppercase' }}>
+        <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#B8881A', textTransform: 'uppercase' }}>
           {title}
         </Typography>
       </Stack>

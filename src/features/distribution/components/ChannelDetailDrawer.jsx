@@ -195,7 +195,7 @@ export default function ChannelDetailDrawer({
         .channel-drawer-status-error { background: #FEE2E2; color: #991B1B; }
         .channel-drawer-status-not_connected { background: #F5F5F5; color: #6B7280; }
         .channel-drawer-status-stopped { background: #E5E7EB; color: #4B5563; }
-        .channel-drawer-link { font-size: 14px; color: #FF6B35; text-decoration: none; }
+        .channel-drawer-link { font-size: 14px; color: #E6B022; text-decoration: none; }
         .channel-drawer-link:hover { text-decoration: underline; }
         .channel-drawer-message { font-size: 13px; color: #6B7280; }
         .channel-drawer-actions {
@@ -203,10 +203,10 @@ export default function ChannelDetailDrawer({
         }
         .channel-drawer-btn {
           padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; text-align: center;
-          border: 1px solid #FF6B35; background: #fff; color: #FF6B35; text-decoration: none;
+          border: 1px solid #E6B022; background: #fff; color: #E6B022; text-decoration: none;
         }
         .channel-drawer-btn:hover:not(:disabled) { background: #FFF5F0; }
-        .channel-drawer-btn.primary, .channel-drawer-btn-primary { background: #FF6B35; color: #fff; }
+        .channel-drawer-btn.primary, .channel-drawer-btn-primary { background: #E6B022; color: #fff; }
         .channel-drawer-btn.primary:hover:not(:disabled), .channel-drawer-btn-primary:hover:not(:disabled) { filter: brightness(0.95); }
         .channel-drawer-btn:disabled { opacity: 0.6; cursor: not-allowed; }
       `}</style>

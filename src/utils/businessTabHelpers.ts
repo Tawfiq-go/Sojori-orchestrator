@@ -207,12 +207,14 @@ export function summarizeListingRuRow(row: {
   };
 }
 
-export type BusinessViewTab = 'Api' | 'Hook' | 'BizOwner' | 'BizListing';
+export type BusinessViewTab = 'Api' | 'Hook' | 'OwnerRu' | 'BizOwner' | 'BizListing';
 
-export function resolveBusinessViewTab(biz: string): BusinessViewTab {
+export function resolveBusinessViewTab(biz: string, apiSeg?: string): BusinessViewTab {
   const b = (biz || 'api').toLowerCase();
+  const api = (apiSeg || '').toLowerCase();
   if (b === 'hooks') return 'Hook';
-  if (b === 'owner') return 'BizOwner';
+  if (b === 'owner' || api === 'owner') return 'OwnerRu';
+  if (b === 'owner-vol') return 'BizOwner';
   if (b === 'listing') return 'BizListing';
   return 'Api';
 }

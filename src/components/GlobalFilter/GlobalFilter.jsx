@@ -8,9 +8,9 @@ import {
 import { ChevronUp, ChevronDown } from 'lucide-react';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   primaryLight: '#FF8F6B', 
-  primaryDark: '#E55A2B',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   success: '#22c55e',
   error: '#ef4444',

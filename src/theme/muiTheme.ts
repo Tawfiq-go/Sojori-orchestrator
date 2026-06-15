@@ -6,9 +6,9 @@ import { createTheme } from '@mui/material/styles';
  * Surfaces ultra-plates, ombres très douces, typo Geist resserrée.
  *
  * Couples (tokens) avec `DashboardV2.components.jsx` :
- *   primary.main      ↔ tokens.primary      (#b8851a)
- *   primary.light     ↔ tokens.primarySoft  (#e6c46a)
- *   primary.dark      ↔ tokens.primaryDeep  (#876119)
+ *   primary.main      ↔ tokens.primary      (#E6B022)
+ *   primary.light     ↔ tokens.primarySoft  (#F4CF5E)
+ *   primary.dark      ↔ tokens.primaryDeep  (#B8881A)
  *   background.default↔ tokens.bg0          (#f6f5f1)
  *   background.paper  ↔ tokens.bg1          (#ffffff)
  *   text.primary      ↔ tokens.text         (#14110a)
@@ -17,9 +17,9 @@ export const sojoriTheme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#b8851a',         // ambre dignifié, lisible sur fond clair
-      light: '#e6c46a',
-      dark: '#876119',
+      main: '#E6B022',
+      light: '#F4CF5E',
+      dark: '#B8881A',
       contrastText: '#1a1408',
     },
     secondary: {
@@ -44,8 +44,8 @@ export const sojoriTheme = createTheme({
     info:    { main: '#0673b3', light: '#a8d8f2', dark: '#03517f' },
     action: {
       hover: 'rgba(20, 17, 10, 0.045)',
-      selected: 'rgba(184, 133, 26, 0.10)',
-      focus: 'rgba(184, 133, 26, 0.18)',
+      selected: 'rgba(230, 176, 34, 0.10)',
+      focus: 'rgba(230, 176, 34, 0.18)',
       disabled: 'rgba(20, 17, 10, 0.26)',
       disabledBackground: 'rgba(20, 17, 10, 0.06)',
     },
@@ -102,12 +102,12 @@ export const sojoriTheme = createTheme({
           MozOsxFontSmoothing: 'grayscale',
         },
         '::selection': {
-          background: 'rgba(184, 133, 26, 0.25)',
+          background: 'rgba(230, 176, 34, 0.25)',
           color: '#14110a',
         },
         /* Focus visible global, plus subtil que le défaut MUI */
         ':focus-visible': {
-          outline: '2px solid rgba(184, 133, 26, 0.55)',
+          outline: '2px solid rgba(230, 176, 34, 0.55)',
           outlineOffset: '2px',
         },
         /* Scrollbars discrètes */
@@ -164,11 +164,11 @@ export const sojoriTheme = createTheme({
         sizeSmall: { padding: '4px 11px', minHeight: 30, fontSize: '0.75rem' },
         sizeLarge: { padding: '10px 20px', minHeight: 44, fontSize: '0.875rem' },
         containedPrimary: {
-          background: 'linear-gradient(180deg, #cb9b2c 0%, #b8851a 100%)',
+          background: 'linear-gradient(180deg, #f4cf5e 0%, #e6b022 100%)',
           color: '#1a1408',
           boxShadow: '0 1px 2px rgba(135,97,25,0.30), inset 0 1px 0 rgba(255,255,255,0.30)',
           '&:hover': {
-            background: 'linear-gradient(180deg, #d4a432 0%, #b8851a 100%)',
+            background: 'linear-gradient(180deg, #f4cf5e 0%, #e6b022 100%)',
             boxShadow: '0 2px 6px rgba(135,97,25,0.36), inset 0 1px 0 rgba(255,255,255,0.30)',
           },
         },
@@ -186,9 +186,9 @@ export const sojoriTheme = createTheme({
           '& fieldset': { borderColor: 'rgba(20, 17, 10, 0.14)' },
           '&:hover fieldset': { borderColor: 'rgba(20, 17, 10, 0.24)' },
           '&.Mui-focused fieldset': {
-            borderColor: '#b8851a',
+            borderColor: '#e6b022',
             borderWidth: 1.5,
-            boxShadow: '0 0 0 3px rgba(184, 133, 26, 0.16)',
+            boxShadow: '0 0 0 3px rgba(230, 176, 34, 0.16)',
           },
         },
         notchedOutline: { transition: 'border-color 140ms ease' },
@@ -201,7 +201,7 @@ export const sojoriTheme = createTheme({
 
     MuiInputLabel: {
       styleOverrides: {
-        root: { color: '#55504a', '&.Mui-focused': { color: '#876119' } },
+        root: { color: '#55504a', '&.Mui-focused': { color: '#b8881a' } },
       },
     },
 
@@ -270,7 +270,7 @@ export const sojoriTheme = createTheme({
 
     MuiSwitch: {
       styleOverrides: {
-        switchBase: { '&.Mui-checked': { color: '#b8851a' } },
+        switchBase: { '&.Mui-checked': { color: '#e6b022' } },
         track: { backgroundColor: 'rgba(20,17,10,0.22)' },
       },
     },
@@ -281,7 +281,7 @@ export const sojoriTheme = createTheme({
 
     MuiTabs: {
       styleOverrides: {
-        indicator: { backgroundColor: '#b8851a', height: 2.5, borderRadius: 1 },
+        indicator: { backgroundColor: '#e6b022', height: 2.5, borderRadius: 1 },
       },
     },
     MuiTab: {

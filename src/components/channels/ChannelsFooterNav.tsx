@@ -6,7 +6,6 @@ const TABS = [
   { id: 'Debug', section: 'Debug', label: 'Debug', emoji: '🐛' },
   { id: 'Map', section: 'Mapping', label: 'Mapping', emoji: '🗺️' },
   { id: 'Cron', section: 'Cron', label: 'Cron', emoji: '⏰' },
-  { id: 'Import', section: 'Import', label: 'Import', emoji: '📥' },
 ] as const;
 
 export type ChannelsFooterTabId = (typeof TABS)[number]['id'];
@@ -16,7 +15,6 @@ function footerTabFromSection(section: string): ChannelsFooterTabId {
   if (section === 'Mapping') return 'Map';
   if (section === 'Debug') return 'Debug';
   if (section === 'Cron') return 'Cron';
-  if (section === 'Import') return 'Import';
   return 'Sum';
 }
 
@@ -57,14 +55,14 @@ export function ChannelsFooterNav({
                 min-w-[80px] transition-all duration-200 ease-in-out
                 ${
                   isActive
-                    ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg scale-105'
-                    : 'bg-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    ? 'channels-nav-active shadow-lg scale-105'
+                    : 'bg-transparent text-slate-600 hover:bg-[var(--bg-sub)] hover:text-[var(--text-h)]'
                 }
               `}
               title={tab.label}
             >
               <span className={`text-2xl ${isActive ? '' : 'opacity-70'}`}>{tab.emoji}</span>
-              <span className={`text-xs font-semibold ${isActive ? 'text-white' : 'text-slate-700'}`}>
+              <span className={`text-xs font-semibold ${isActive ? 'text-[var(--accent-on-gold)]' : 'text-slate-700'}`}>
                 {tab.label}
               </span>
             </button>

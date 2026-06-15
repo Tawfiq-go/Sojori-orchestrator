@@ -366,7 +366,7 @@ export function RuImportDialog({ open, onClose, cities: citiesProp = [], onImpor
                       bgcolor: selected.has(p.ruPropertyId) ? '#fff7ed' : 'transparent',
                     }}>
                       {!p.alreadyImported ? (
-                        <Checkbox size="small" checked={selected.has(p.ruPropertyId)} onChange={() => toggleProp(p.ruPropertyId)} sx={{ '&.Mui-checked': { color: '#FF6B35' } }} />
+                        <Checkbox size="small" checked={selected.has(p.ruPropertyId)} onChange={() => toggleProp(p.ruPropertyId)} sx={{ '&.Mui-checked': { color: '#E6B022' } }} />
                       ) : <Box sx={{ width: 38 }} />}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="body2" fontWeight={500} noWrap>{p.name}</Typography>
@@ -443,7 +443,7 @@ export function RuImportDialog({ open, onClose, cities: citiesProp = [], onImpor
                         borderRadius: 999,
                         bgcolor: 'rgba(255,255,255,0.75)',
                         '& .MuiLinearProgress-bar': {
-                          bgcolor: '#FF6B35',
+                          bgcolor: '#E6B022',
                           backgroundImage: 'linear-gradient(90deg, rgba(255,107,53,1) 0%, rgba(251,191,36,0.95) 50%, rgba(255,107,53,1) 100%)',
                           backgroundSize: '200% 100%',
                           animation: 'ruImportShimmer 1.8s linear infinite',
@@ -490,7 +490,7 @@ export function RuImportDialog({ open, onClose, cities: citiesProp = [], onImpor
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                bgcolor: isError ? '#dc2626' : isDone ? '#22c55e' : isCurrent ? '#FF6B35' : '#e5e7eb',
+                                bgcolor: isError ? '#dc2626' : isDone ? '#22c55e' : isCurrent ? '#E6B022' : '#e5e7eb',
                                 color: '#fff',
                                 fontSize: '0.7rem',
                                 fontWeight: 700,
@@ -561,7 +561,7 @@ export function RuImportDialog({ open, onClose, cities: citiesProp = [], onImpor
         {step === 3 ? (
           <>
             <Button onClick={() => { resetProgress(); setStep(2); setSelected(new Set()); setImportResults(null); }}>Import more</Button>
-            <Button variant="contained" onClick={() => { onImported?.(); }} sx={{ bgcolor: '#FF6B35', '&:hover': { bgcolor: '#E55A2B' } }}>
+            <Button variant="contained" onClick={() => { onImported?.(); }} sx={{ bgcolor: '#E6B022', '&:hover': { bgcolor: '#B8881A' } }}>
               Done
             </Button>
           </>
@@ -570,7 +570,7 @@ export function RuImportDialog({ open, onClose, cities: citiesProp = [], onImpor
             <Button onClick={onClose} disabled={importing}>Cancel</Button>
             {step === 2 && selected.size > 0 && (
               <Button variant="contained" onClick={handleImport} disabled={importing || !selectedCity}
-                sx={{ bgcolor: '#FF6B35', '&:hover': { bgcolor: '#E55A2B' } }}>
+                sx={{ bgcolor: '#E6B022', '&:hover': { bgcolor: '#B8881A' } }}>
                 {importing ? 'Importing...' : `Import ${selected.size} propert${selected.size === 1 ? 'y' : 'ies'}`}
               </Button>
             )}

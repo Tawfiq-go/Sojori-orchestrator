@@ -29,8 +29,8 @@ import type { Listing } from '../../types/listings.types';
 import type { InventoryData } from './InventoryGridV2';
 
 const COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   success: '#22c55e',
   error: '#ef4444',
   gray: {

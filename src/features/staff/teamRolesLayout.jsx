@@ -50,7 +50,7 @@ export const teamRolesTableHeaderCellSx = {
   fontWeight: 700,
   fontSize: '11px',
   p: 1,
-  borderBottom: '2px solid #FF6B35',
+  borderBottom: '2px solid #E6B022',
 };
 
 export const teamRolesTableHeaderCellSxCenter = {
@@ -75,7 +75,7 @@ const iconWrapSx = {
   width: 32,
   height: 32,
   borderRadius: 1,
-  bgcolor: '#FF6B35',
+  bgcolor: '#E6B022',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -114,7 +114,7 @@ export function TeamRolesSectionHeader({ title, titleKey, icon, chip, actions })
                 fontWeight: 800,
                 fontSize: 13,
                 letterSpacing: '-0.02em',
-                color: '#E55A2B',
+                color: '#B8881A',
                 textTransform: 'uppercase',
               }}
             >
