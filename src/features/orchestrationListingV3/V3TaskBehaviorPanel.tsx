@@ -5,6 +5,7 @@ import type { CapabilityDefinition } from '../serviceMatrix/capabilityRegistry';
 import {
   AUTO_COMPLETION_TRIGGER_LABELS,
   TASK_AUTO_COMPLETION_TRIGGERS,
+  defaultTaskBehaviorForType,
   hintForAutoCompletion,
   normalizeCompletionTrigger,
   type TaskAutoCompletionTrigger,
@@ -25,12 +26,10 @@ type Props = {
 };
 
 function defaultTaskBehavior(def: CapabilityDefinition) {
-  return {
-    requiresClientAction: ['cleaning_paid', 'transport', 'groceries', 'concierge', 'support', 'service_client'].includes(
-      def.taskType ?? '',
-    ),
-    autoCompletionTrigger: 'manual' as const,
-  };
+  if (!def.taskType) {
+    return { requiresClientAction: false, autoCompletionTrigger: 'manual' as const };
+  }
+  return defaultTaskBehaviorForType(def.taskType);
 }
 
 export default function V3TaskBehaviorPanel({

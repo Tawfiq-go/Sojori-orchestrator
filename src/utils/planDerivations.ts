@@ -173,59 +173,20 @@ export function deriveEscaladeBlockStatus(
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * Séquence `kind: 'task'` (avancement avec gates)
- *
- * Ordre de priorité (premier qui matche) :
- * 1. Objectif final atteint (dernier gate `fait`/`termine`, reste `fait`/`saute`) → `termine`
- * 2. Un gate en `echec` qui bloque l'objectif → `bloque`
- * 3. Un élément actionnable dépassé (relance/assignation/escalade) → `en_retard`
- * 4. Au moins un bloc `fait`/`en_cours`/`attente_acceptation` → `en_cours`
- * 5. Rien commencé → `en_attente`
+ * Séquence `kind: 'task'` — miroir exclusif de task.status (aligné srv-fulltask).
+ * Les blocs relances / assignation / escalade ne pilotent pas le statut séquence.
  */
 export function deriveSequenceTaskStatus(
-  sequence: SequenceDoc,
-  actionCompleted: boolean = false,
-  now: Date = new Date(),
+  _sequence: SequenceDoc,
+  _actionCompleted: boolean = false,
+  _now: Date = new Date(),
+  task?: { status?: string },
 ): SequenceStatus {
-  const relanceStatus = deriveRelanceBlockStatus(sequence.relances, actionCompleted, now)
-  const assignStatus = deriveAssignationBlockStatus(sequence.assignation, now)
-  const reminderStatus = deriveStaffReminderBlockStatus(sequence.staffReminders, now)
-  const escaladeStatus = deriveEscaladeBlockStatus(sequence.escalade, now)
-
-  // 1. Objectif atteint (action client complétée OU assignation terminée)
-  if (actionCompleted || assignStatus === 'termine') {
-    // Tout le reste doit être terminé ou sauté
-    const allOthersTerminal =
-      (relanceStatus === 'termine' || relanceStatus === 'en_attente') &&
-      (reminderStatus === 'termine' || reminderStatus === 'en_attente') &&
-      (escaladeStatus === 'termine' || escaladeStatus === 'en_attente')
-
-    if (allOthersTerminal) return 'termine'
-  }
-
-  // 2. Bloqué si assignation en échec ou escalade échouée
-  if (assignStatus === 'bloque') return 'bloque'
-
-  // 3. En retard si un élément est en retard
-  if (
-    relanceStatus === 'en_retard' ||
-    assignStatus === 'en_retard' ||
-    escaladeStatus === 'en_retard'
-  ) {
-    return 'en_retard'
-  }
-
-  // 4. En cours si au moins un élément actif
-  if (
-    relanceStatus === 'en_cours' ||
-    assignStatus === 'en_cours' ||
-    reminderStatus === 'en_cours'
-  ) {
-    return 'en_cours'
-  }
-
-  // 5. Rien commencé
-  return 'en_attente'
+  if (!task?.status) return 'en_attente'
+  const taskStatus = task.status.toLowerCase()
+  if (taskStatus === 'done') return 'termine'
+  if (taskStatus === 'cancelled' || taskStatus === 'rejected') return 'annule'
+  return 'en_cours'
 }
 
 /**
@@ -247,18 +208,17 @@ export function deriveSequenceMessageStatus(
 
 /**
  * Dérivation séquence COMPLÈTE (branche selon kind)
+ * kind:task → miroir task.status ; kind:message → relances.
  */
 export function deriveSequenceStatus(
   sequence: SequenceDoc,
   now: Date = new Date(),
+  task?: { status?: string },
 ): SequenceStatus {
-  // Utiliser le flag persisté
-  const actionCompleted = sequence.clientActionCompleted || false
-
   if (sequence.kind === 'message') {
     return deriveSequenceMessageStatus(sequence, now)
   }
-  return deriveSequenceTaskStatus(sequence, actionCompleted, now)
+  return deriveSequenceTaskStatus(sequence, sequence.clientActionCompleted || false, now, task)
 }
 
 // ═══════════════════════════════════════════════════════════════════

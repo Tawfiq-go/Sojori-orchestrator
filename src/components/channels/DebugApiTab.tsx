@@ -1,10 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { RU_API_MAPPING, getMongoFilterForApi, getBadgeColor } from '../../features/channels/data/ruApiMapping';
 import { RU_API_DOCS } from '../../features/channels/data/ruApiDocs';
 import ruApiUsageIndex from '../../features/channels/data/ruApiUsage.generated.json';
-import { formatCasablancaDate } from '../../utils/dateFormatting';
 import {
   fetchChannelsDistributionRuApis,
   fetchChannelsIngressList,
@@ -21,6 +19,8 @@ import {
   getMonitoringRuApisHoursHint,
 } from '../../features/channels/utils/channelDebugDateRange';
 import { onChannelsRefresh } from '../../utils/channelsRefresh';
+import { UnifiedApiCallTable, UnifiedApiCallDetail } from '../unified';
+import { getDebugApiRowId, mapDebugRowsToUnifiedCalls } from '../../utils/debugApiRowMapper';
 
 const DEBUG_PAGE_SIZE = 20;
 
@@ -382,17 +382,6 @@ export function DebugApiTab({ hideTypeNav = false }: { hideTypeNav?: boolean }) 
     }
   }, [expandedId, bodiesById]);
 
-  const prettyJson = (obj) => {
-    if (!obj || typeof obj !== 'object') return String(obj || '—');
-    return JSON.stringify(obj, null, 2);
-  };
-
-  const ruStatusBadgeClass = (status) => {
-    if (status === 'success' || status === 'ok') return 'inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-50 text-green-700 border border-green-200';
-    if (status === 'error' || status === 'fail') return 'inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-50 text-red-700 border border-red-200';
-    return 'inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200';
-  };
-
   const copyFilter = (api) => {
     const filter = getMongoFilterForApi(api.name, api.collection);
     navigator.clipboard.writeText(JSON.stringify(filter, null, 2));
@@ -462,6 +451,11 @@ export function DebugApiTab({ hideTypeNav = false }: { hideTypeNav?: boolean }) 
     });
 
   const selectedApiObj = currentApis.find((a) => a.name === apiParam) || resolveDebugApiEntry(apiParam);
+
+  const unifiedDebugCalls = useMemo(() => {
+    if (!apiCalls?.items?.length) return [];
+    return mapDebugRowsToUnifiedCalls(apiCalls.items, bodiesById, selectedApiObj, ownerNamesCache);
+  }, [apiCalls?.items, bodiesById, selectedApiObj, ownerNamesCache]);
 
   const clearDocId = () => {
     const next = new URLSearchParams(searchParams);
@@ -627,7 +621,12 @@ export function DebugApiTab({ hideTypeNav = false }: { hideTypeNav?: boolean }) 
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      <div className="text-[11px] text-slate-600 bg-orange-50/80 border border-orange-100 rounded-lg px-3 py-2 leading-relaxed">
+        <strong className="text-orange-900">Debug RU</strong> — ① choisir le type (<span className="font-mono">Pull / Push / OAuth…</span>) dans
+        la barre orange au-dessus · ② cliquer une API ci-dessous · ③ consulter les appels à droite (clic ligne = détail XML).
+      </div>
+
       {!hideTypeNav && (
         <div className="flex gap-2 flex-wrap channels-tabs-container">
           <button
@@ -668,11 +667,13 @@ export function DebugApiTab({ hideTypeNav = false }: { hideTypeNav?: boolean }) 
         </div>
       )}
 
-      {/* Liste API (1/4 gauche) + Tableau (3/4 droite) */}
-      <div className="grid grid-cols-[25%_75%] gap-4">
-        <div className="space-y-2">
-          <div className="text-sm font-bold text-slate-700">Sélectionner une API</div>
-          <div className="space-y-1.5 overflow-y-auto">
+      {/* Liste API (gauche) + appels (droite) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(240px,30%)_1fr] gap-3 items-start">
+        <div className="space-y-2 min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500 px-0.5">
+            ② API · {effectiveType.toUpperCase()}
+          </div>
+          <div className="space-y-1.5 overflow-y-auto max-h-[calc(100vh-320px)] pr-1">
             {decoratedApis.map((api) => {
               const badgeColor = getBadgeColor(api);
               const isSelected = apiParam === api.name;
@@ -732,8 +733,15 @@ export function DebugApiTab({ hideTypeNav = false }: { hideTypeNav?: boolean }) 
           </div>
         </div>
 
-        {/* Liste appels (moitié droite) */}
-        <div className="space-y-2">
+        {/* Panneau appels */}
+        <div className="space-y-2 min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500 px-0.5">
+            ③ Appels MongoDB
+            {apiParam ? (
+              <span className="ml-2 font-mono normal-case text-slate-700">{apiParam}</span>
+            ) : null}
+          </div>
+          <div className="bg-white border border-slate-200 rounded-lg min-h-[280px] p-3">
           {infoApiName && (() => {
             const u = usage?.[infoApiName];
             const integrated = u?.integrated !== false;
@@ -817,10 +825,12 @@ export function DebugApiTab({ hideTypeNav = false }: { hideTypeNav?: boolean }) 
           {infoApiName ? null : (
             <>
               {!apiParam && (
-                <div className="text-center py-8 text-slate-500">
-                  <p className="font-semibold">← Sélectionne une API</p>
-                  <p className="text-xs mt-1">
-                    Les derniers appels MongoDB s&apos;afficheront ici
+                <div className="text-center py-10 text-slate-500">
+                  <p className="text-sm font-semibold text-slate-700">Aucune API sélectionnée</p>
+                  <p className="text-xs mt-2 max-w-sm mx-auto leading-relaxed">
+                    Choisis une API dans la colonne de gauche (ex.{' '}
+                    <span className="font-mono text-slate-600">Pull_ListReservations_RQ</span>) pour afficher les
+                    derniers appels enregistrés.
                   </p>
                 </div>
               )}
@@ -874,140 +884,44 @@ export function DebugApiTab({ hideTypeNav = false }: { hideTypeNav?: boolean }) 
 
               {apiCalls.items && apiCalls.items.length > 0 && (
                 <div className="bg-white rounded border border-slate-200 overflow-hidden">
-                  <div className="overflow-x-auto overflow-y-auto">
-                    <table className="w-full text-xs">
-                      <thead className="bg-slate-50 sticky top-0 text-slate-700 border-b border-slate-200">
-                        <tr>
-                          <th className="text-left px-2 py-1.5 font-medium w-[30px]"></th>
-                          <th className="text-left px-2 py-1.5 font-medium">Date & Heure</th>
-                          <th className="text-left px-2 py-1.5 font-medium">Owner</th>
-                          <th className="text-left px-2 py-1.5 font-medium">Statut</th>
-                          <th className="text-right px-2 py-1.5 font-medium">ms</th>
-                          <th className="text-left px-2 py-1.5 font-medium">Message</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {apiCalls.items.map((row, idx) => {
-                          const ts = row.createdAt || row.timestamp;
-                          const err = row.error || row.responseMsg || '';
-                          const rowId = row._id || row.id || `${row.action}-${idx}`;
-                          const body = bodiesById[rowId];
-                          const expanded = expandedId === rowId;
-                          const loadingBody = bodyLoadingId === rowId;
-                          const rowOwnerId = row.auditContext?.ownerId || (row.auditContext?.ownerIds?.[0]) || '';
-                          const ownerDisplay = rowOwnerId ? (ownerNamesCache[rowOwnerId] || rowOwnerId.slice(-6)) : '';
-
-                          return (
-                            <React.Fragment key={rowId}>
-                              <tr className="border-t border-slate-100 hover:bg-slate-50">
-                                <td className="px-2 py-1.5">
-                                  <button
-                                    type="button"
-                                    className="inline-flex items-center justify-center text-slate-500 hover:text-blue-700 p-0.5 rounded"
-                                    onClick={() => onDetailToggle(rowId, row, selectedApiObj)}
-                                    disabled={loadingBody}
-                                    aria-expanded={expanded}
-                                    aria-label={expanded ? 'Replier les détails XML / JSON' : 'Déplier les détails XML / JSON'}
-                                    title={expanded ? 'Replier les détails' : 'Voir détails XML / JSON'}
-                                  >
-                                    {loadingBody ? (
-                                      <span className="text-xs text-slate-400">⋯</span>
-                                    ) : expanded ? (
-                                      <ChevronUp className="w-4 h-4" aria-hidden />
-                                    ) : (
-                                      <ChevronDown className="w-4 h-4" aria-hidden />
-                                    )}
-                                  </button>
-                                </td>
-                                <td className="px-2 py-1.5">
-                                  <div className="text-[11px] font-medium text-slate-700">
-                                    {ts ? formatCasablancaDate(ts, 'dd/MM HH:mm:ss') : '—'}
-                                  </div>
-                                </td>
-                                <td className="px-2 py-1.5">
-                                  {ownerDisplay ? (
-                                    <span className="text-[11px] text-slate-700 truncate block max-w-[120px]" title={rowOwnerId}>
-                                      {ownerDisplay}
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] text-slate-300">—</span>
-                                  )}
-                                </td>
-                                <td className="px-2 py-1.5">
-                                  <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${ruStatusBadgeClass(row.status)}`}>
-                                    {row.status || row.statusCode || '—'}
-                                  </span>
-                                </td>
-                                <td className="px-2 py-1.5 text-right tabular-nums">{row.responseTime || '—'}</td>
-                                <td className="px-2 py-1.5 text-slate-600 truncate" title={String(err)}>
-                                  {String(err).slice(0, 80)}
-                                </td>
-                              </tr>
-                              {expanded && loadingBody && (
-                                <tr>
-                                  <td colSpan={6} className="px-2 py-3 bg-slate-50 text-center text-xs text-slate-500">
-                                    Chargement…
-                                  </td>
-                                </tr>
-                              )}
-                              {expanded && !loadingBody && body && (
-                                <tr>
-                                  <td colSpan={6} className="px-2 py-3 bg-slate-50">
-                                    {body.error && <div className="text-xs text-red-600 mb-2">{body.error}</div>}
-                                    {!body.error && (
-                                      <div className="space-y-2">
-                                        {body.ingressMeta && (
-                                          <div className="text-[10px] text-slate-600 border border-slate-200 rounded p-2 bg-white">
-                                            <div className="font-semibold text-slate-700 mb-1">Ingress</div>
-                                            <div className="font-mono break-all space-y-0.5">
-                                              <div>
-                                                <span className="text-slate-500">channel:</span> {String(body.ingressMeta.channel ?? '—')}
-                                              </div>
-                                              <div>
-                                                <span className="text-slate-500">ruEventKey:</span> {String(body.ingressMeta.ruEventKey ?? '—')}
-                                              </div>
-                                              <div>
-                                                <span className="text-slate-500">correlationId:</span> {String(body.ingressMeta.correlationId ?? '—')}
-                                              </div>
-                                              <div>
-                                                <span className="text-slate-500">publishOk:</span> {String(body.ingressMeta.publishOk ?? '—')}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
-                                        <div>
-                                          <div className="text-[10px] font-semibold text-slate-700 mb-1">Payload JSON</div>
-                                          <pre className="text-[9px] bg-white border border-slate-200 rounded p-1.5 max-h-[200px] overflow-auto">
-                                            {prettyJson(body.requestPayload)}
-                                          </pre>
-                                        </div>
-                                        {body.requestXml && (
-                                          <div>
-                                            <div className="text-[10px] font-semibold text-slate-700 mb-1">XML Requête</div>
-                                            <pre className="text-[9px] bg-white border border-slate-200 rounded p-1.5 max-h-[160px] overflow-auto whitespace-pre-wrap break-all">
-                                              {body.requestXml}
-                                            </pre>
-                                          </div>
-                                        )}
-                                        {body.responseXml && (
-                                          <div>
-                                            <div className="text-[10px] font-semibold text-slate-700 mb-1">XML Réponse</div>
-                                            <pre className="text-[9px] bg-white border border-slate-200 rounded p-1.5 max-h-[160px] overflow-auto whitespace-pre-wrap break-all">
-                                              {String(body.responseXml).slice(0, 5000)}
-                                            </pre>
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <UnifiedApiCallTable
+                    calls={unifiedDebugCalls}
+                    viewMode="debug"
+                    compact
+                    showBusinessContext={false}
+                    expandedCallId={expandedId}
+                    loadingCallId={bodyLoadingId}
+                    onExpandChange={(callId) => {
+                      if (!callId) {
+                        setExpandedId(null);
+                        return;
+                      }
+                      const idx = apiCalls.items.findIndex((row, i) => getDebugApiRowId(row, i) === callId);
+                      const row = apiCalls.items[idx];
+                      if (row) onDetailToggle(callId, row, selectedApiObj);
+                    }}
+                    renderDetail={(call) => {
+                      const body = bodiesById[call.id];
+                      if (bodyLoadingId === call.id) {
+                        return <div className="text-center text-sm text-slate-500 py-4">Chargement…</div>;
+                      }
+                      if (body?.error) {
+                        return <div className="text-xs text-red-600 p-2">{body.error}</div>;
+                      }
+                      const hasContent =
+                        body &&
+                        (body.requestXml ||
+                          body.responseXml ||
+                          body.requestPayload != null ||
+                          body.responseJson != null ||
+                          body.rawBody ||
+                          body.ingressMeta);
+                      if (!hasContent) {
+                        return <div className="text-center text-sm text-slate-500 py-4">Chargement…</div>;
+                      }
+                      return <UnifiedApiCallDetail call={call} viewMode="debug" />;
+                    }}
+                  />
                 </div>
               )}
 
@@ -1050,6 +964,7 @@ export function DebugApiTab({ hideTypeNav = false }: { hideTypeNav?: boolean }) 
           )}
             </>
           )}
+          </div>
         </div>
       </div>
     </div>

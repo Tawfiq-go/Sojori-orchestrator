@@ -2,11 +2,12 @@
 // Sojori · Staff & Orchestration · types.ts
 // ════════════════════════════════════════════════════════════════════
 
+import type { FulltaskTaskTypeId } from './fulltaskTaskTypes';
+import { STAFF_TASK_PILLS } from './staffDesignConstants';
+
 export type ContractType = 'employee' | 'freelance';
 export type StaffStatus = 'active' | 'off' | 'leave';
-export type TaskType =
-  | 'cleaning_in_out' | 'cleaning_mid_stay' | 'check_in' | 'check_out'
-  | 'maintenance' | 'concierge' | 'transport' | 'groceries' | 'inventory';
+export type TaskType = FulltaskTaskTypeId;
 
 export type ChannelKind = 'whatsapp' | 'email' | 'sms';
 export type WorkflowKind = 'choose_arrival' | 'choose_departure' | 'cleaning_after_checkout' | 'support_ticket' | 'service_client';
@@ -160,14 +161,6 @@ export const T = {
   ai: '#7c3aed', aiTint: 'rgba(124,58,237,0.10)',
 } as const;
 
-export const TASK_TYPE_META: Record<TaskType, { label: string; emoji: string }> = {
-  cleaning_in_out:   { label: 'Ménage entrée/sortie', emoji: '🧼' },
-  cleaning_mid_stay: { label: 'Ménage mi-séjour',     emoji: '🧽' },
-  check_in:          { label: 'Check-in',             emoji: '🛬' },
-  check_out:         { label: 'Check-out',            emoji: '🛫' },
-  maintenance:       { label: 'Maintenance',          emoji: '🔧' },
-  concierge:         { label: 'Conciergerie',         emoji: '🛎' },
-  transport:         { label: 'Transport',            emoji: '🚗' },
-  groceries:         { label: 'Courses',              emoji: '🛒' },
-  inventory:         { label: 'Inventaire',           emoji: '📦' },
-};
+export const TASK_TYPE_META: Record<TaskType, { label: string; emoji: string }> = Object.fromEntries(
+  STAFF_TASK_PILLS.map((p) => [p.key, { label: p.label, emoji: p.emoji }]),
+) as Record<TaskType, { label: string; emoji: string }>;

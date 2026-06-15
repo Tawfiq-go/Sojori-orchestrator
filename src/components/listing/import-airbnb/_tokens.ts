@@ -111,8 +111,14 @@ export const STEPS_LABELS: Record<StepKey, { label: string; sub: string }> = {
   create_listing:   { label: 'Création du listing',          sub: 'Listing et type de logement principal.' },
   wait_inventory:   { label: 'Préparation du calendrier',    sub: 'Création de l\'inventaire calendrier.' },
   apply_inventory:  { label: 'Mise à jour calendrier',       sub: 'Prix et disponibilités injectés.' },
-  post_import_sync: { label: 'Synchronisation',              sub: 'Réservations, messages et avis liés.' },
-  apply_orchestration: { label: 'Config orchestration',       sub: 'Application du template propriétaire sur le listing.' },
+  post_import_sync: {
+    label: 'Synchronisation réservations RU',
+    sub: 'Import des réservations, leads, messages et avis liés au bien (peut prendre 1–2 min).',
+  },
+  apply_orchestration: {
+    label: 'Configuration orchestration',
+    sub: 'Template propriétaire · capacités, messages plan, concierge (filtré par la ville Sojori choisie).',
+  },
 };
 
 /* ─── Helper : initiales staff/owner ─────────────────────────────── */

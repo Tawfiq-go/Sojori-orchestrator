@@ -54,3 +54,32 @@ export function hintForAutoCompletion(
   }
   return 'Terminée quand le statut métier est atteint (ex. enregistrement complet, heure déclarée).';
 }
+
+/** Aligné srv-listing / srv-fulltask DEFAULT_TASK_BEHAVIOR_BY_TYPE */
+export const DEFAULT_TASK_BEHAVIOR_BY_TYPE: Record<
+  string,
+  { requiresClientAction: boolean; autoCompletionTrigger: TaskAutoCompletionTrigger }
+> = {
+  arrival_choose: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },
+  departure_choose: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },
+  cleaning_free: { requiresClientAction: false, autoCompletionTrigger: 'manual' },
+  arrival_declare: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },
+  departure_declare: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },
+  registration: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },
+  cleaning_paid: { requiresClientAction: true, autoCompletionTrigger: 'manual' },
+  checkout_cleaning: { requiresClientAction: false, autoCompletionTrigger: 'staff_done' },
+  transport: { requiresClientAction: true, autoCompletionTrigger: 'manual' },
+  groceries: { requiresClientAction: true, autoCompletionTrigger: 'manual' },
+  concierge: { requiresClientAction: true, autoCompletionTrigger: 'manual' },
+  support: { requiresClientAction: true, autoCompletionTrigger: 'manual' },
+  service_client: { requiresClientAction: true, autoCompletionTrigger: 'manual' },
+};
+
+export function defaultTaskBehaviorForType(taskType: string) {
+  return (
+    DEFAULT_TASK_BEHAVIOR_BY_TYPE[taskType] ?? {
+      requiresClientAction: false,
+      autoCompletionTrigger: 'manual' as const,
+    }
+  );
+}

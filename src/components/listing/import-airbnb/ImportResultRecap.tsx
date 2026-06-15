@@ -59,8 +59,14 @@ export default function ImportResultRecap({ results }: ImportResultRecapProps) {
                 #{r.ruPropertyId}{r.city && ` · ${r.city}`}
               </Typography>
               {r.errorMessage && (
-                <Typography sx={{ fontSize: 11, color: T.error, fontStyle: 'italic', mt: 0.25 }}>
-                  {r.errorMessage}
+                <Typography sx={{
+                  fontSize: 11,
+                  color: r.success ? '#b45309' : T.error,
+                  fontStyle: 'italic',
+                  mt: 0.25,
+                  lineHeight: 1.45,
+                }}>
+                  {r.success ? `⚠ ${r.errorMessage}` : r.errorMessage}
                 </Typography>
               )}
             </Box>

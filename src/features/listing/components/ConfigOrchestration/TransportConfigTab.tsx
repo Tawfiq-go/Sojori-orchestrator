@@ -280,6 +280,38 @@ export default function TransportConfigTab({
   }, [useOrchestrationGestion, gestionTransportKey, hydrateFromGestion]);
 
   useEffect(() => {
+    if (!useOrchestrationGestion || !templateOwnerKey || templateOwnerKey === 'global') return;
+    if (routes.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
+        const payload = (res as { data?: { concierge?: { transportServices?: unknown[] } } })?.data ?? res;
+        const transport = (payload as { concierge?: { transportServices?: unknown[] } })?.concierge
+          ?.transportServices;
+        if (cancelled || !Array.isArray(transport) || transport.length === 0) return;
+        setRoutes(routesFromTransport(transport));
+        rawDocRef.current = {
+          ...gestionConciergeShell(listingValues),
+          transportServices: transport,
+        };
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    useOrchestrationGestion,
+    templateOwnerKey,
+    routes.length,
+    gestionTransportKey,
+    listingValues,
+    routesFromTransport,
+  ]);
+
+  useEffect(() => {
     if (useOrchestrationGestion) return;
     hydratedRef.current = false;
     dirtyRef.current = false;

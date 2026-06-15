@@ -596,7 +596,10 @@ export default function StaffPageView({
                   min={1}
                   max={20}
                   value={form.maxTasksPerDay ?? 5}
-                  onChange={(e) => patchForm({ maxTasksPerDay: Number(e.target.value) })}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    patchForm({ maxTasksPerDay: Number.isFinite(n) && n >= 1 ? n : 1 });
+                  }}
                 />
               </div>
             </div>

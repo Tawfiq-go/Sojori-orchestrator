@@ -12,7 +12,9 @@ interface Props {
   subtitle: string;
   expanded: boolean;
   onToggleExpand: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
+  hideDelete?: boolean;
+  headerExtra?: ReactNode;
   children?: ReactNode;
   sortable?: boolean;
 }
@@ -29,6 +31,8 @@ export default function OrchConfigListCard({
   expanded,
   onToggleExpand,
   onDelete,
+  hideDelete = false,
+  headerExtra,
   children,
   sortable = true,
 }: Props) {
@@ -126,6 +130,13 @@ export default function OrchConfigListCard({
           </Typography>
         </Box>
 
+        {headerExtra ? (
+          <Box sx={{ flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+            {headerExtra}
+          </Box>
+        ) : null}
+
+        {!hideDelete && onDelete ? (
         <IconButton
           size="small"
           onClick={onDelete}
@@ -141,6 +152,7 @@ export default function OrchConfigListCard({
         >
           ✕
         </IconButton>
+        ) : null}
       </Stack>
 
       <Collapse in={expanded}>

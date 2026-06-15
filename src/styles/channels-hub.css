@@ -913,11 +913,12 @@
 }
 
 .channels-hub-page-fixed-sidebar .channels-sidebar {
-  position: fixed;
-  left: 0;
-  top: 0;
-  height: 100vh;
-  z-index: 40;
+  /* Legacy full-screen dashboard only — ne pas utiliser dans DashboardWrapper (recouvre sidebar app) */
+  position: relative;
+  left: auto;
+  top: auto;
+  height: auto;
+  z-index: 2;
 }
 
 .channels-sidebar::-webkit-scrollbar {

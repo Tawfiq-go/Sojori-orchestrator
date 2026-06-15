@@ -19,6 +19,7 @@ import {
 import { loadCapabilityMatrix, saveCapabilityRow } from '../serviceMatrix/capabilityMatrixApi';
 import { cleaningIncludedToGestion, parseCleaningIncludedGestion } from './cleaningGestionHelpers';
 import { isAxiosError } from 'axios';
+import { enrichOwnerDocGestionFromTemplate } from './enrichOwnerOrchestration';
 
 export interface OwnerOrchestrationDoc {
   ownerId: string;
@@ -186,7 +187,11 @@ async function loadOwnerOrchestrationFromLegacy(ownerKey: string): Promise<{
     const raw = await fulltaskApi.getOrchestrationConfig(templateKey === 'global' ? 'global' : templateKey);
     const ftDoc = unwrapFulltaskData<Record<string, unknown>>(raw);
     if (ftDoc) {
-      workflows = (apiOrchestrationToDesign(ftDoc).workflows ?? []) as Workflow[];
+      const mapped = apiOrchestrationToDesign(ftDoc);
+      workflows = (mapped.workflows ?? []) as Workflow[];
+      if (Array.isArray(ftDoc.scheduledMessages) && ftDoc.scheduledMessages.length > 0) {
+        scheduledMessages.push(...(ftDoc.scheduledMessages as unknown[]));
+      }
     }
   } catch {
     workflows = [];
@@ -291,10 +296,12 @@ export async function loadOwnerOrchestrationMatrix(ownerKey: string): Promise<{
 }> {
   try {
     const raw = await listingsService.getOwnerOrchestrationCompiled(ownerKey);
-    const doc = unwrapData<OwnerOrchestrationEffective>(raw);
+    let doc = unwrapData<OwnerOrchestrationEffective>(raw);
     if (!doc?.ownerId) {
       throw new Error('Modèle orchestration introuvable');
     }
+
+    doc = await enrichOwnerDocGestionFromTemplate(ownerKey, doc);
 
     let menuOptions = mergeMenuOptionsFromDoc(doc);
     if (menuOptions.length === 0) {

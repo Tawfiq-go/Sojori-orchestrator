@@ -152,7 +152,8 @@ export interface SequenceFlowItem {
 }
 
 export interface StaffAssignmentPlan {
-  status: 'searching' | 'found' | 'failed';
+  /** found = assigné et accepté (termine) ; pending_accept = assigné, en attente acceptation */
+  status: 'searching' | 'pending_accept' | 'found' | 'failed';
   windowStart: string;
   windowEnd: string;
   /** Ex. 24 AVR · 10:00 → 30 AVR · 12:00 */
@@ -257,6 +258,15 @@ export interface PlanSequenceView {
   taskStatus?: string;
   /** Enregistrement voyageurs : validés / total attendus. */
   registrationProgress?: { registered: number; total: number };
+  /** Statuts blocs — mappés depuis API backend (`blocks`). */
+  blockStatuses: import('./planGroupStatus').PlanBlockStatusesView;
+  /** Statuts bruts API (debug / labels Expiré). */
+  backendBlockStatuses?: {
+    relances: string | null;
+    assignation: string | null;
+    staffReminders: string | null;
+    escalade: string | null;
+  };
 }
 
 export interface ReservationPlan {

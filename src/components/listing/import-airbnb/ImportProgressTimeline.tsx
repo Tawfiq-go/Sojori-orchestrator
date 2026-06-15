@@ -30,7 +30,7 @@ export default function ImportProgressTimeline({ progress }: ImportProgressTimel
           {progress.currentPropertyName || 'Création du listing'}
         </Typography>
         <Typography sx={{ fontSize: 12, color: T.text3, lineHeight: 1.5 }}>
-          Création du listing Sojori avec photos, équipements et calendrier. Ne fermez pas la fenêtre.
+          Listing, calendrier et orchestration (template owner filtré par la ville choisie).
         </Typography>
 
         {/* Progress bar */}
@@ -173,12 +173,21 @@ function liveLabelFor(step: StepState) {
   if (step.key === 'reupload_images' && step.meta?.photosTotal) {
     return 'Téléchargement des photos…';
   }
+  if (step.key === 'apply_orchestration') {
+    return 'Application orchestration · template owner + ville Sojori…';
+  }
+  if (step.key === 'post_import_sync') {
+    return 'Synchronisation réservations et avis…';
+  }
   return 'En cours…';
 }
 
 function liveMetaFor(step: StepState) {
   if (step.key === 'reupload_images' && step.meta?.photosTotal) {
     return `${step.meta.photosDone || 0} / ${step.meta.photosTotal} photos`;
+  }
+  if (step.key === 'apply_orchestration') {
+    return 'Orchestration';
   }
   return '';
 }

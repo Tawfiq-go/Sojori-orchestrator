@@ -1,14 +1,30 @@
-/** Labels & pills — alignés sur preview HTML (0 deviation) */
-export const STAFF_TASK_PILLS = [
-  { key: 'cleaning_free', label: 'Ménage inclus', emoji: '🧹' },
-  { key: 'cleaning_paid', label: 'Ménage payant', emoji: '✨' },
-  { key: 'arrival_choose', label: 'Arrivée', emoji: '🛬' },
-  { key: 'departure_choose', label: 'Départ', emoji: '🛫' },
-  { key: 'transport', label: 'Transport', emoji: '🚗' },
-  { key: 'support', label: 'Support', emoji: '🆘' },
-  { key: 'concierge', label: 'Conciergerie', emoji: '🛎' },
-  { key: 'groceries', label: 'Courses', emoji: '🛒' },
-] as const;
+/**
+ * Labels & pills staff — alignés catalogue admin (13 types fulltask granulaires).
+ */
+import {
+  FULLTASK_TASK_TYPES,
+  FULLTASK_TASK_TYPE_EMOJI,
+  labelForTaskTypeId,
+  type FulltaskTaskTypeId,
+} from './fulltaskTaskTypes';
+
+/** Libellés courts UI équipe terrain (même split que admin push). */
+const STAFF_PILL_LABEL_OVERRIDES: Partial<Record<FulltaskTaskTypeId, string>> = {
+  cleaning_free: 'Ménage gratuit',
+  cleaning_paid: 'Ménage payant',
+  arrival_choose: 'Choisir arrivée',
+  departure_choose: 'Choisir départ',
+  arrival_declare: 'Déclarer arrivée',
+  departure_declare: 'Déclarer départ',
+  registration: 'Enregistrement',
+  checkout_cleaning: 'Ménage checkout',
+};
+
+export const STAFF_TASK_PILLS = FULLTASK_TASK_TYPES.map((key) => ({
+  key,
+  label: STAFF_PILL_LABEL_OVERRIDES[key] ?? labelForTaskTypeId(key),
+  emoji: FULLTASK_TASK_TYPE_EMOJI[key] ?? '📋',
+}));
 
 export const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'] as const;
 
@@ -22,18 +38,26 @@ export function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+const LEGACY_TASK_TYPE_MAP: Record<string, FulltaskTaskTypeId> = {
+  cleaning_in_out: 'cleaning_free',
+  cleaning_mid_stay: 'cleaning_paid',
+  check_in: 'arrival_choose',
+  check_out: 'departure_choose',
+  maintenance: 'support',
+  inventory: 'support',
+};
+
+export function normalizeStaffAllowedTaskType(type: string): FulltaskTaskTypeId | null {
+  const key = String(type || '').trim();
+  if ((FULLTASK_TASK_TYPES as readonly string[]).includes(key)) {
+    return key as FulltaskTaskTypeId;
+  }
+  return LEGACY_TASK_TYPE_MAP[key] ?? null;
+}
+
 export function pillLabelForType(type: string): { label: string; emoji: string } | null {
-  const found = STAFF_TASK_PILLS.find((p) => p.key === type);
+  const canonical = normalizeStaffAllowedTaskType(type) ?? type;
+  const found = STAFF_TASK_PILLS.find((p) => p.key === canonical);
   if (found) return found;
-  const legacy: Record<string, { label: string; emoji: string }> = {
-    cleaning_in_out: { label: 'Ménage inclus', emoji: '🧹' },
-    cleaning_mid_stay: { label: 'Ménage payant', emoji: '✨' },
-    check_in: { label: 'Arrivée', emoji: '🛬' },
-    check_out: { label: 'Départ', emoji: '🛫' },
-    maintenance: { label: 'Support', emoji: '🆘' },
-    concierge: { label: 'Conciergerie', emoji: '🛎' },
-    transport: { label: 'Transport', emoji: '🚗' },
-    groceries: { label: 'Courses', emoji: '🛒' },
-  };
-  return legacy[type] || null;
+  return { label: labelForTaskTypeId(canonical), emoji: '📋' };
 }

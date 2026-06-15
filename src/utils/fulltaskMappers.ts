@@ -1,4 +1,5 @@
 import { labelForTaskTypeId } from '../features/taskHub/staff-design/fulltaskTaskTypes';
+import { normalizeStaffAllowedTaskType } from '../features/taskHub/staff-design/staffDesignConstants';
 import { defaultStaffReminderMessageId } from '../features/taskHub/staff-design/staffReminderTemplates';
 import {
   inferTaskPlannedIso,
@@ -222,9 +223,9 @@ export function fullTaskToListItem(
   const reservationId = task.reservationId ? String(task.reservationId) : '';
   const reservationNumber =
     reservationMeta?.reservationNumber ||
+    (task.reservationCode as string) ||
     (payload.reservationNumber as string) ||
     (payload.reservationCode as string) ||
-    (reservationId.length > 8 ? `…${reservationId.slice(-8)}` : reservationId) ||
     undefined;
 
   const isConciergeType = CONCIERGE_TASK_TYPES.has(taskType)
@@ -254,7 +255,11 @@ export function fullTaskToListItem(
     taskStatus: legacyStatus,
     status: legacyStatus,
     emergency: fullTaskPriorityToEmergency(task.priority as string),
-    source: task.triggeredBy === 'orchestrator' ? 'orchestrator' : 'manual',
+    source: task.triggeredBy === 'orchestrator'
+      ? 'orchestrator'
+      : task.triggeredBy === 'whatsapp'
+        ? 'whatsapp'
+        : 'manual',
     guestName: task.guestName,
     guestPhone: task.guestPhone,
     listingId,
@@ -327,9 +332,24 @@ export function uniqueScheduleTimeWindows(
   return out;
 }
 
+function normalizeStaffAllowedTaskTypes(types: string[] | undefined): string[] {
+  if (!types?.length) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of types) {
+    const n = normalizeStaffAllowedTaskType(raw);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
 export function apiStaffToDesign(row: Record<string, unknown>) {
   const schedule = Array.isArray(row.schedule) ? row.schedule : [];
-  const daysOfWeek = [...new Set(schedule.map((s: { dayOfWeek: number }) => s.dayOfWeek))];
+  const daysOfWeek = [...new Set(schedule.map((s: { dayOfWeek: number }) => s.dayOfWeek))].sort(
+    (a, b) => a - b,
+  );
   const timeWindows = uniqueScheduleTimeWindows(schedule);
   const rates: Record<string, number> = {};
   (row.pricing as { taskType: string; amount: number }[] | undefined)?.forEach((p) => {
@@ -346,7 +366,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     isAdmin: Boolean(row.isAdmin),
     contractType: row.contractType === 'salaried' ? ('employee' as const) : ('freelance' as const),
     rates,
-    allowedTaskTypes: (row.taskTypes as string[]) || [],
+    allowedTaskTypes: normalizeStaffAllowedTaskTypes(row.taskTypes as string[] | undefined),
     allowedListingIds: ((row.listingIds as unknown[]) || []).map(String),
     maxTasksPerDay: row.maxTasksPerDay as number | undefined,
     schedule: { daysOfWeek, timeWindows },
@@ -399,7 +419,7 @@ export function designStaffToApi(
     taskTypes: staff.allowedTaskTypes || [],
     listingIds: staff.allowedListingIds || [],
     schedule,
-    maxTasksPerDay: staff.maxTasksPerDay ?? 8,
+    maxTasksPerDay: Math.max(1, Number(staff.maxTasksPerDay) || 8),
     isAdmin: Boolean(staff.isAdmin),
     pricing,
   };

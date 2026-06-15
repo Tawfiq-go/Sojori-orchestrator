@@ -67,7 +67,6 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'tasks/team': '/tasks/team',
     'tasks/planning': '/tasks/planning',
     'tasks/kanban': '/tasks/kanban',
-    'tasks/config': '/tasks/config',
     'tasks/orchestration': '/tasks/plans',
     'tasks/plans': '/tasks/plans',
     'tasks/orchestration-config': '/tasks/orchestration-config',
@@ -148,12 +147,17 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'admin/monitor/infrastructure': '/monitor?tab=Infrastructure',
     'admin/monitor/reservation-sync': '/monitor?tab=ReservationSync',
     'admin/sojori-logs': '/admin/sojori-logs',
+    'admin/unified': '/admin/unified',
+    'admin/unified-api-demo': '/admin/unified',
 
     // Administration
     'admin/pms': '/admin/equipe/owners?tab=list',
     'admin/roles': '/admin/equipe?tab=worker',
     'admin/settings': '/admin/settings?tab=host-profile',
     'admin/channels': '/channels?tab=Business&biz=api&api=m',
+    'admin/channels/business': '/admin/channels?tab=Business&biz=api&api=m',
+    'admin/channels/debug': '/admin/channels?tab=Debug&type=pull',
+    'admin/channels/summary': '/admin/channels?tab=Sum',
     'admin/ChannelManager/channel-manager': '/admin/ChannelManager?tab=channel-manager',
     'admin/ChannelManager/distribution': '/admin/ChannelManager?tab=distribution',
     'admin/equipe/owners': '/admin/equipe/owners?tab=list',
@@ -260,9 +264,17 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
       return 'admin/sojori-logs';
     }
 
+    if (path.startsWith('/admin/unified')) {
+      return 'admin/unified';
+    }
+
     // Channels admin hub (OTA/RU KPIs)
     if (path.startsWith('/channels') || path.startsWith('/admin/channels')) {
-      return 'admin/channels';
+      const tab = (new URLSearchParams(location.search).get('tab') || 'Business').trim();
+      const tabLo = tab.toLowerCase();
+      if (tabLo === 'sum' || tabLo === 'summary') return 'admin/channels/summary';
+      if (tabLo === 'debug' || tabLo === 'audit') return 'admin/channels/debug';
+      return 'admin/channels/business';
     }
 
     if (path.includes('/admin/setting/currency') || path.includes('/admin/settings/currency')) {

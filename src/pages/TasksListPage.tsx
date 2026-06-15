@@ -598,15 +598,21 @@ function sourceChipMeta(source?: string | null): { label: string; bg: string; co
   if (s === 'orchestrator' || s === 'orchestration') {
     return { label: 'Orch.', bg: 'rgba(59,130,246,0.12)', color: '#1d4ed8' };
   }
+  if (s === 'whatsapp' || s === 'wa') {
+    return { label: 'WA', bg: 'rgba(37,211,102,0.14)', color: '#128c7e' };
+  }
   return { label: 'Manuel', bg: 'rgba(20,17,10,0.06)', color: T.text2 };
+}
+
+function isSojoriReservationRef(value: string): boolean {
+  return /^SJ-[A-Z0-9]{4,12}$/i.test(value.trim());
 }
 
 function reservationDisplayCode(task: TaskListItem): string {
   const n = String(task.reservationNumber || '').trim();
-  if (n && !n.startsWith('…')) return n;
-  const id = task.reservationId ? String(task.reservationId) : '';
-  if (!id) return '—';
-  return id.length > 10 ? `…${id.slice(-8)}` : id;
+  if (n && isSojoriReservationRef(n)) return n.toUpperCase();
+  if (n && !n.startsWith('…') && !/^[a-f0-9]{24}$/i.test(n)) return n;
+  return '—';
 }
 
 /** Nom pays sans répéter le drapeau (ex. « 🇲🇦 Maroc » → « Maroc »). */
@@ -716,6 +722,7 @@ const CATEGORY_MULTI_OPTIONS: { id: string; label: string }[] = FULLTASK_TASK_TY
 
 const SOURCE_MULTI_OPTIONS: { id: string; label: string }[] = [
   { id: 'manual', label: '✋ Manuel' },
+  { id: 'whatsapp', label: '💬 WhatsApp' },
   { id: 'orchestrator', label: '⚙️ Orchestration' },
 ];
 
@@ -1449,9 +1456,17 @@ export function TasksListPage() {
       align: 'left' as const,
       render: (row: TaskRow) => {
         const code = reservationDisplayCode(row);
-        const tip = row.reservationId
-          ? `${code} · ${row.reservationId}`
-          : code;
+        const raw = String(row.reservationNumber || '').trim();
+        const tip =
+          code !== '—'
+            ? row.reservationId
+              ? `${code} · id ${row.reservationId}`
+              : code
+            : raw && raw !== code
+              ? raw
+              : row.reservationId
+                ? `id ${row.reservationId}`
+                : '—';
         return (
           <Tooltip title={tip} arrow>
             <Typography

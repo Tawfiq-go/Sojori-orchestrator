@@ -161,7 +161,6 @@ const NAV_ICON_BY_ID = {
   'tasks/planning': TodayOutlined,
   'tasks/kanban': DashboardOutlined,
   'tasks/team': GroupsOutlined,
-  'tasks/config': SettingsOutlined,
   'tasks/orchestration': HubOutlined,
   'tasks/plans': AutoAwesomeOutlined,
   'tasks/orchestration-config': SettingsOutlined,
