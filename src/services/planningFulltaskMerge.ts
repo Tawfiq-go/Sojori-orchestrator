@@ -1,7 +1,7 @@
 import * as fulltaskApi from './fulltaskApi';
 import reservationsService from './reservationsService';
 import type { Reservation } from '../types/reservations.types';
-import { FULLTASK_TO_LEGACY_STATUS } from '../utils/fulltaskMappers';
+import { mapFulltaskStatusToLegacy } from '../utils/fulltaskMappers';
 import {
   inferTaskPlannedDay,
   inferTaskPlannedIso,
@@ -132,7 +132,7 @@ export function fulltaskToTimelineItem(
   const assignedTo = task.assignedTo ? String(task.assignedTo) : null;
   const staff = assignedTo ? staffById[assignedTo] : null;
   const ftType = String(task.type || 'task');
-  const legacyStatus = FULLTASK_TO_LEGACY_STATUS[String(task.status)] || 'CREATED';
+  const legacyStatus = mapFulltaskStatusToLegacy(task.status, task.assignedTo);
 
   return {
     type: fulltaskTypeToStayTaskType(ftType),

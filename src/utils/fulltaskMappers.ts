@@ -17,6 +17,18 @@ export const FULLTASK_TO_LEGACY_STATUS: Record<string, string> = {
   rejected: 'CANCELLED_ADMIN',
 };
 
+/** pending_partner sans staff = pas encore assignée ; new/CREATED avec staff = assignée en attente acceptation. */
+export function mapFulltaskStatusToLegacy(
+  status: unknown,
+  assignedTo?: unknown,
+): string {
+  const s = String(status || 'new')
+  const hasStaff = assignedTo != null && String(assignedTo).trim() !== ''
+  if (s === 'pending_partner' && !hasStaff) return 'CREATED'
+  if ((s === 'new' || s === 'waiting_guest') && hasStaff) return 'ASSIGNED'
+  return FULLTASK_TO_LEGACY_STATUS[s] || 'CREATED'
+}
+
 export const LEGACY_TO_FULLTASK_STATUS: Record<string, string> = {
   CREATED: 'new',
   ASSIGNED: 'confirmed',
@@ -170,7 +182,7 @@ export function fullTaskToListItem(
   listingById: Record<string, string> = {},
   reservationMeta?: ReservationMetaLike,
 ) {
-  const legacyStatus = FULLTASK_TO_LEGACY_STATUS[String(task.status)] || 'CREATED';
+  const legacyStatus = mapFulltaskStatusToLegacy(task.status, task.assignedTo);
   const assignedTo = task.assignedTo ? String(task.assignedTo) : '';
   const staff = assignedTo ? staffById[assignedTo] : null;
   const listingId = task.listingId ? String(task.listingId) : '';
