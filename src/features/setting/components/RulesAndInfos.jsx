@@ -70,7 +70,7 @@ const RulesAndInfos = ({
   if (loading) {
     return <div className="flex flex-col items-center justify-center h-64 space-y-6">
         <CircularProgress sx={{
-        color: '#FF6B35'
+        color: '#E6B022'
       }} size={36} />
         <Typography variant="body1" sx={{
         color: '#6b7280',
@@ -89,7 +89,7 @@ const RulesAndInfos = ({
           {t('no_rules_and_info_data')}
         </Typography>
         <IconButton onClick={onRetry} sx={{
-        color: '#FF6B35',
+        color: '#E6B022',
         '&:hover': {
           backgroundColor: '#FFF3E0'
         },
@@ -118,13 +118,13 @@ const RulesAndInfos = ({
     title: t('emergency_information'),
     field: 'InfoUtils',
     icon: <InfoIcon sx={{
-      color: '#FF6B35',
+      color: '#E6B022',
       fontSize: 28
     }} />,
     description: t('emergency_description'),
     borderColor: 'border-gray-300',
     bgColor: 'bg-gray-100',
-    color: '#FF6B35'
+    color: '#E6B022'
   }];
   const handleRetry = () => {
     if (editMode) {
@@ -197,15 +197,15 @@ const RulesAndInfos = ({
 
         <div className={`flex items-center justify-end gap-4 ${hidePageHeader ? 'my-4' : 'my-8'}`}>
           <Chip label={editMode ? t('editing_mode') : t('view_mode')} color={editMode ? 'warning' : 'success'} variant="outlined" sx={{
-          borderColor: editMode ? '#f97316' : '#FF6B35',
-          color: editMode ? '#f97316' : '#FF6B35',
+          borderColor: editMode ? '#f97316' : '#E6B022',
+          color: editMode ? '#f97316' : '#E6B022',
           fontWeight: 600,
           padding: '4px 12px',
           borderRadius: '8px',
           fontSize: '0.9rem'
         }} />
           <IconButton onClick={handleRetry} sx={{
-          color: '#FF6B35',
+          color: '#E6B022',
           '&:hover': {
             backgroundColor: '#FFF3E0'
           },
@@ -264,7 +264,7 @@ const RulesAndInfos = ({
                   {editMode ? <div className="flex flex-col gap-6">
                       {editData[card.field]?.map((item, index) => <div key={index} className="flex gap-4 items-center">
                           <div className="flex items-center justify-center flex-shrink-0 mt-1 text-xs font-semibold text-white rounded-full shadow-sm w-7 h-7" style={{
-                    background: card.field === 'Rules' ? 'linear-gradient(to right, #f97316, #fdba74)' : 'linear-gradient(to right, #FF6B35, #FFB366)'
+                    background: card.field === 'Rules' ? 'linear-gradient(to right, #f97316, #fdba74)' : 'linear-gradient(to right, #E6B022, #FFB366)'
                   }}>
                             {index + 1}
                           </div>
@@ -301,7 +301,7 @@ const RulesAndInfos = ({
                       {rulesAndInfo[card.field]?.length > 0 ? <div className="flex flex-col gap-4">
                           {rulesAndInfo[card.field].map((item, index) => <div key={index} className="flex items-start gap-4 p-4 transition-all duration-200 bg-white rounded-xl shadow-sm hover:shadow-md">
                               <div className="flex items-center justify-center flex-shrink-0 mt-1 text-sm font-bold text-white rounded-full shadow-md w-8 h-8" style={{
-                      background: card.field === 'Rules' ? 'linear-gradient(to right, #f97316, #fdba74)' : 'linear-gradient(to right, #FF6B35, #FFB366)'
+                      background: card.field === 'Rules' ? 'linear-gradient(to right, #f97316, #fdba74)' : 'linear-gradient(to right, #E6B022, #FFB366)'
                     }}>
                                 {index + 1}
                               </div>
@@ -421,10 +421,10 @@ const RulesAndInfos = ({
 
         <div className="flex justify-center gap-6">
           {canUpdate && !editMode ? <Button onClick={onEditClick} variant="contained" startIcon={<EditIcon />} sx={{
-          backgroundColor: '#FF6B35',
+          backgroundColor: '#E6B022',
           color: '#ffffff',
           '&:hover': {
-            backgroundColor: '#E55A2B'
+            backgroundColor: '#B8881A'
           },
           padding: '12px 32px',
           borderRadius: '12px',
@@ -433,7 +433,7 @@ const RulesAndInfos = ({
           fontSize: '1rem',
           boxShadow: '0 4px 8px rgba(255, 107, 53, 0.3)',
           '&:hover': {
-            backgroundColor: '#E55A2B',
+            backgroundColor: '#B8881A',
             boxShadow: '0 6px 12px rgba(255, 107, 53, 0.4)'
           }
         }}>
@@ -442,7 +442,7 @@ const RulesAndInfos = ({
               <Button onClick={handleSave} variant="contained" startIcon={saving ? <CircularProgress size={18} sx={{
             color: '#fff'
           }} /> : <SaveIcon />} disabled={saving || !isEditDataValid} sx={{
-            backgroundColor: '#FF6B35',
+            backgroundColor: '#E6B022',
             color: '#ffffff',
             padding: '12px 32px',
             borderRadius: '12px',
@@ -451,7 +451,7 @@ const RulesAndInfos = ({
             fontSize: '1rem',
             boxShadow: '0 4px 8px rgba(255, 107, 53, 0.3)',
             '&:hover': {
-              backgroundColor: '#E55A2B',
+              backgroundColor: '#B8881A',
               boxShadow: '0 6px 12px rgba(255, 107, 53, 0.4)'
             },
             '&:disabled': {
@@ -554,7 +554,7 @@ const RulesAndInfos = ({
             {t('cancel')}
           </Button>
           <Button onClick={confirmDelete} variant="contained" autoFocus sx={{
-          backgroundColor: '#FF6B35',
+          backgroundColor: '#E6B022',
           color: '#ffffff',
           padding: '8px 20px',
           borderRadius: '8px',
@@ -563,7 +563,7 @@ const RulesAndInfos = ({
           fontSize: '0.9rem',
           transition: 'all 0.2s ease-in-out',
           '&:hover': {
-            backgroundColor: '#E55A2B',
+            backgroundColor: '#B8881A',
             boxShadow: '0 2px 8px rgba(255,107,53,0.3)',
             transform: 'scale(1.02)'
           }

@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-const SOJORI_ORANGE = { primary: '#FF6B35', dark: '#E55A2B' };
+const SOJORI_ORANGE = { primary: '#E6B022', dark: '#B8881A' };
 
 const tabBtnCompact = {
   display: 'flex',

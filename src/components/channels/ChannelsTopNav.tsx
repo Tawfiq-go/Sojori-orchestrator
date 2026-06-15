@@ -1,22 +1,20 @@
 /**
- * Navigation Channels — Business organisé par sens métier puis domaine.
- * URL legacy : biz=api|hooks|logapi|owner|listing + api= / hook=
+ * Navigation Channels — Business en 2 niveaux (section + domaine).
  */
 import { useMemo, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Home, UserRound } from 'lucide-react';
 import { RU_API_MAPPING } from '../../features/channels/data/ruApiMapping';
 import { canonicalSectionTab, type SectionTab } from '../../utils/channelsUrlUtils';
 import { parseMrSeg } from '../../utils/channelsSharedUtils';
-import { resolveBusinessViewTab } from '../../utils/businessTabHelpers';
 import {
-  bizFromBusinessFlow,
-  businessFlowFromBiz,
-  BUSINESS_FLOW_NAV,
-  BUSINESS_STATS_NAV,
-  INBOUND_HOOK_DOMAIN_NAV,
-  OUTBOUND_DOMAIN_NAV,
-  type BusinessFlow,
+  API_DOMAIN_NAV,
+  businessSectionFromBiz,
+  BUSINESS_LEVEL1_NAV,
+  level1NavDefaults,
+  SUMMARY_VIEW_NAV,
+  summaryViewFromParams,
+  WEBHOOK_DOMAIN_NAV,
+  type BusinessSection,
 } from '../../utils/channelsBusinessNav';
 
 const REST_LIST = RU_API_MAPPING.rest || [];
@@ -32,12 +30,11 @@ const MAIN_SECTIONS: Array<{
     section: 'Business',
     label: 'Business',
     emoji: '💼',
-    defaults: { biz: 'api', api: 'm' },
+    defaults: { biz: 'api', api: 'r' },
   },
   { section: 'Mapping', label: 'Mapping', emoji: '🗺️', defaults: { mapSub: 'fields' } },
   { section: 'Debug', label: 'Debug', emoji: '🐛', defaults: { type: 'pull' } },
   { section: 'Cron', label: 'Cron', emoji: '⏰' },
-  { section: 'Import', label: 'Import RU', emoji: '📥' },
 ];
 
 const DEBUG_TYPES = [
@@ -46,6 +43,7 @@ const DEBUG_TYPES = [
   { type: 'oauth', label: `OAuth (${RU_API_MAPPING.oauth.length})` },
   { type: 'webhooks', label: `Webhooks (${RU_API_MAPPING.webhooks.length})` },
   { type: 'rest', label: `REST (${REST_LIST.length})` },
+  { type: 'http', label: 'HTTP brut' },
 ] as const;
 
 function patchParams(base: URLSearchParams, patch: Record<string, string | undefined>) {
@@ -88,26 +86,11 @@ function TabBtn({
   );
 }
 
-function flowDefaults(flow: BusinessFlow, apiSeg: string, hookSeg: string): Record<string, string | undefined> {
-  const biz = bizFromBusinessFlow(flow);
-  if (flow === 'out') {
-    return { tab: 'Business', biz, api: apiSeg === 'g' ? 'm' : apiSeg || 'm', hook: undefined };
-  }
-  if (flow === 'in-hook') {
-    return { tab: 'Business', biz, hook: hookSeg || 'm', api: undefined, docId: undefined };
-  }
-  if (flow === 'in-http') {
-    return { tab: 'Business', biz, api: 'g', hook: undefined };
-  }
-  return { tab: 'Business', biz, api: undefined, hook: undefined };
-}
-
 export function ChannelsTopNav() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionTab = canonicalSectionTab(searchParams.get('tab'));
   const businessBiz = (searchParams.get('biz') || 'api').toLowerCase();
-  const businessFlow = businessFlowFromBiz(businessBiz);
-  const viewTab = resolveBusinessViewTab(businessBiz);
+  const businessSection = businessSectionFromBiz(businessBiz);
   const apiSeg = parseMrSeg(searchParams.get('api'));
   const hookSeg = parseMrSeg(searchParams.get('hook'));
   const mapSub = useMemo(() => {
@@ -116,6 +99,7 @@ export function ChannelsTopNav() {
   }, [searchParams]);
   const ruListMode = searchParams.get('ruListMode') === 'languages' ? 'languages' : 'locations';
   const debugType = (searchParams.get('type') || 'pull').toLowerCase();
+  const sumView = summaryViewFromParams(searchParams);
 
   const setSp = (patch: Record<string, string | undefined>) => {
     setSearchParams(patchParams(searchParams, patch), { replace: false });
@@ -124,14 +108,9 @@ export function ChannelsTopNav() {
   const hours = Number(searchParams.get('hours'));
   const hoursVal = Number.isFinite(hours) && hours > 0 ? hours : 72;
 
-  const showHours =
-    sectionTab === 'Sum' ||
-    sectionTab === 'Business' ||
-    (sectionTab === 'Business' && viewTab === 'Hook');
-
   const hoursSelect = (extraClass = '') => (
     <select
-      className={`channels-select h-7 text-xs shrink-0 ${extraClass}`.trim()}
+      className={`channels-select h-7 text-xs shrink-0 ml-auto ${extraClass}`.trim()}
       value={hoursVal}
       onChange={(e) => setSp({ hours: e.target.value })}
       aria-label="Période"
@@ -140,8 +119,11 @@ export function ChannelsTopNav() {
       <option value={24}>24h</option>
       <option value={72}>3j</option>
       <option value={168}>7j</option>
+      <option value={720}>30j</option>
     </select>
   );
+
+  const level1Active = (section: BusinessSection) => businessSection === section;
 
   return (
     <div className="channels-top-nav space-y-2" aria-label="Navigation Channels">
@@ -163,102 +145,86 @@ export function ChannelsTopNav() {
         </div>
       </NavBar>
 
-      {sectionTab === 'Business' && (
-        <>
-          <NavBar>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-1 shrink-0">
-              Flux
-            </span>
-            <div className="channels-tabs-container flex-wrap">
-              {BUSINESS_FLOW_NAV.map(({ flow, label, hint }) => (
-                <TabBtn
-                  key={flow}
-                  active={businessFlow === flow}
-                  title={hint}
-                  onClick={() => setSp(flowDefaults(flow, apiSeg, hookSeg))}
-                >
-                  {label}
-                </TabBtn>
-              ))}
-            </div>
-            <span className="w-px h-5 bg-slate-200 mx-0.5 hidden sm:block" aria-hidden />
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-1 shrink-0">
-              Synthèse
-            </span>
-            <div className="channels-tabs-container flex-wrap">
-              {BUSINESS_STATS_NAV.map(({ flow, label, hint }) => (
-                <TabBtn
-                  key={flow}
-                  active={businessFlow === flow}
-                  title={hint}
-                  onClick={() => setSp(flowDefaults(flow, apiSeg, hookSeg))}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {flow === 'stats-owner' ? (
-                      <UserRound size={12} strokeWidth={2.5} />
-                    ) : (
-                      <Home size={12} strokeWidth={2.5} />
-                    )}
-                    {label.replace('Synthèse · ', '')}
-                  </span>
-                </TabBtn>
-              ))}
-            </div>
-          </NavBar>
-        </>
-      )}
-
-      {sectionTab === 'Business' && businessFlow === 'out' && (
+      {sectionTab === 'Sum' && (
         <NavBar>
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-1 shrink-0">
-            Domaine
-          </span>
-          {showHours && hoursSelect()}
           <div className="channels-tabs-container flex-wrap">
-            {OUTBOUND_DOMAIN_NAV.map(({ seg, label, hint }) => (
+            {SUMMARY_VIEW_NAV.map(({ view, label, hint }) => (
               <TabBtn
-                key={seg}
-                active={apiSeg === seg}
-                title={hint}
-                onClick={() => setSp({ tab: 'Business', biz: 'api', api: seg })}
-              >
-                {label}
-              </TabBtn>
-            ))}
-          </div>
-        </NavBar>
-      )}
-
-      {sectionTab === 'Business' && businessFlow === 'in-http' && (
-        <NavBar>
-          <span className="text-[10px] text-slate-500 mr-2">
-            Requêtes HTTP reçues par srv-channels (collection logapis) — avant routage métier
-          </span>
-          {hoursSelect()}
-        </NavBar>
-      )}
-
-      {sectionTab === 'Business' && businessFlow === 'in-hook' && (
-        <NavBar>
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mr-1 shrink-0">
-            Domaine
-          </span>
-          {hoursSelect()}
-          <div className="channels-tabs-container flex-wrap">
-            {INBOUND_HOOK_DOMAIN_NAV.map(({ seg, label, hint }) => (
-              <TabBtn
-                key={seg}
-                active={hookSeg === seg}
+                key={view}
+                active={sumView === view}
                 title={hint}
                 onClick={() =>
-                  setSp({ tab: 'Business', biz: 'hooks', hook: seg, docId: undefined })
+                  setSp({
+                    tab: 'Sum',
+                    sumView: view === 'kpi' ? undefined : view,
+                    biz: undefined,
+                  })
                 }
               >
                 {label}
               </TabBtn>
             ))}
           </div>
+          {hoursSelect()}
         </NavBar>
+      )}
+
+      {sectionTab === 'Business' && (
+        <>
+          <NavBar>
+            <div className="channels-tabs-container flex-wrap">
+              {BUSINESS_LEVEL1_NAV.map(({ section, label, hint }) => (
+                <TabBtn
+                  key={section}
+                  active={level1Active(section)}
+                  title={hint}
+                  onClick={() => setSp(level1NavDefaults(section, apiSeg, hookSeg))}
+                >
+                  {label}
+                </TabBtn>
+              ))}
+            </div>
+            {hoursSelect()}
+          </NavBar>
+
+          {businessSection === 'api' && (
+            <NavBar>
+              <div className="channels-tabs-container flex-wrap">
+                {API_DOMAIN_NAV.map(({ seg, label, hint }) => (
+                  <TabBtn
+                    key={seg}
+                    active={apiSeg === seg}
+                    title={hint}
+                    onClick={() =>
+                      setSp({ tab: 'Business', biz: 'api', api: seg, hook: undefined, docId: undefined })
+                    }
+                  >
+                    {label}
+                  </TabBtn>
+                ))}
+              </div>
+            </NavBar>
+          )}
+
+          {businessSection === 'hooks' && (
+            <NavBar>
+              <div className="channels-tabs-container flex-wrap">
+                {WEBHOOK_DOMAIN_NAV.map(({ seg, label, hint }) => (
+                  <TabBtn
+                    key={seg}
+                    active={hookSeg === seg}
+                    title={hint}
+                    onClick={() =>
+                      setSp({ tab: 'Business', biz: 'hooks', hook: seg, api: undefined, docId: undefined })
+                    }
+                  >
+                    {label}
+                  </TabBtn>
+                ))}
+              </div>
+            </NavBar>
+          )}
+        </>
       )}
 
       {sectionTab === 'Mapping' && (
@@ -307,8 +273,8 @@ export function ChannelsTopNav() {
 
       {sectionTab === 'Debug' && (
         <NavBar>
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-orange-700 mr-1 shrink-0">
-            ① Type
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--accent-deep)] mr-1 shrink-0">
+            Type
           </span>
           <div className="channels-tabs-container flex-wrap">
             {DEBUG_TYPES.map(({ type, label }) => (
@@ -321,6 +287,7 @@ export function ChannelsTopNav() {
               </TabBtn>
             ))}
           </div>
+          {debugType === 'http' && hoursSelect('ml-0')}
         </NavBar>
       )}
     </div>

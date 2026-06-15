@@ -11,8 +11,8 @@ import { can } from '../../../../utils/permissions';
 
 // SOJORI Brand Colors
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   gray: {
     400: '#BDBDBD'
   }

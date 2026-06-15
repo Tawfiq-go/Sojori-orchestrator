@@ -4,8 +4,8 @@ import { Psychology as AiIcon, Close as CloseIcon, Send as SendIcon } from '@mui
 import { toast } from 'react-toastify';
 import { configureOrchestratorWithAI } from '../services/serverApi.adminConfig';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0'
 };
 const OrchestratorAIWizard = ({

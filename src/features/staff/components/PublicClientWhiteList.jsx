@@ -48,7 +48,7 @@ import { can } from '../../../utils/permissions';
 import '../../../features/reservation/pages/reservation.page.css';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   success: '#4CAF50',
   warning: '#FF9800',
   error: '#F44336',
@@ -338,7 +338,7 @@ const PublicClientWhiteList = () => {
                 sx={{
                   backgroundColor: SOJORI_COLORS.primary,
                   color: 'white',
-                  '&:hover': { backgroundColor: '#E55A2B' },
+                  '&:hover': { backgroundColor: '#B8881A' },
                 }}
               >
                 <SearchIcon />
@@ -377,7 +377,7 @@ const PublicClientWhiteList = () => {
 
                 {isReservationFilterOpen && (
                   <div className="absolute z-[1100] mt-1 w-56 bg-white border border-slate-300 rounded-lg shadow-xl">
-                    <div className="sticky top-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-3 py-2 flex items-center justify-between">
+                    <div className="sticky top-0 bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white px-3 py-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <EventAvailableIcon fontSize="small" />
                         <span className="text-sm font-semibold">Réservation</span>
@@ -401,9 +401,9 @@ const PublicClientWhiteList = () => {
                             name="reservation"
                             checked={tempReservationFilter === option.value}
                             onChange={() => setTempReservationFilter(option.value)}
-                            className="w-4 h-4 accent-[#FF6B35] cursor-pointer"
+                            className="w-4 h-4 accent-[#E6B022] cursor-pointer"
                           />
-                          <span className="flex-1 text-sm font-medium" style={{ color: tempReservationFilter === option.value ? '#FF6B35' : '#1f2937' }}>
+                          <span className="flex-1 text-sm font-medium" style={{ color: tempReservationFilter === option.value ? '#E6B022' : '#1f2937' }}>
                             {option.label}
                           </span>
                         </label>
@@ -422,7 +422,7 @@ const PublicClientWhiteList = () => {
                           setPage(0);
                           setIsReservationFilterOpen(false);
                         }}
-                        className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:shadow-lg rounded"
+                        className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#E6B022] to-[#B8881A] hover:shadow-lg rounded"
                       >
                         Appliquer
                       </button>
@@ -463,7 +463,7 @@ const PublicClientWhiteList = () => {
 
                 {isCommunicationFilterOpen && (
                   <div className="absolute z-[1100] mt-1 w-56 bg-white border border-slate-300 rounded-lg shadow-xl">
-                    <div className="sticky top-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-3 py-2 flex items-center justify-between">
+                    <div className="sticky top-0 bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white px-3 py-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <ChatIcon fontSize="small" />
                         <span className="text-sm font-semibold">Communication</span>
@@ -487,9 +487,9 @@ const PublicClientWhiteList = () => {
                             name="communication"
                             checked={tempCommunicationFilter === option.value}
                             onChange={() => setTempCommunicationFilter(option.value)}
-                            className="w-4 h-4 accent-[#FF6B35] cursor-pointer"
+                            className="w-4 h-4 accent-[#E6B022] cursor-pointer"
                           />
-                          <span className="flex-1 text-sm font-medium" style={{ color: tempCommunicationFilter === option.value ? '#FF6B35' : '#1f2937' }}>
+                          <span className="flex-1 text-sm font-medium" style={{ color: tempCommunicationFilter === option.value ? '#E6B022' : '#1f2937' }}>
                             {option.label}
                           </span>
                         </label>
@@ -508,7 +508,7 @@ const PublicClientWhiteList = () => {
                           setPage(0);
                           setIsCommunicationFilterOpen(false);
                         }}
-                        className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:shadow-lg rounded"
+                        className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#E6B022] to-[#B8881A] hover:shadow-lg rounded"
                       >
                         Appliquer
                       </button>
@@ -549,7 +549,7 @@ const PublicClientWhiteList = () => {
 
                 {isStatusFilterOpen && (
                   <div className="absolute z-[1100] mt-1 w-56 bg-white border border-slate-300 rounded-lg shadow-xl">
-                    <div className="sticky top-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-3 py-2 flex items-center justify-between">
+                    <div className="sticky top-0 bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white px-3 py-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <ToggleOnIcon fontSize="small" />
                         <span className="text-sm font-semibold">Statut</span>
@@ -573,9 +573,9 @@ const PublicClientWhiteList = () => {
                             name="status"
                             checked={tempStatusFilter === option.value}
                             onChange={() => setTempStatusFilter(option.value)}
-                            className="w-4 h-4 accent-[#FF6B35] cursor-pointer"
+                            className="w-4 h-4 accent-[#E6B022] cursor-pointer"
                           />
-                          <span className="flex-1 text-sm font-medium" style={{ color: tempStatusFilter === option.value ? '#FF6B35' : '#1f2937' }}>
+                          <span className="flex-1 text-sm font-medium" style={{ color: tempStatusFilter === option.value ? '#E6B022' : '#1f2937' }}>
                             {option.label}
                           </span>
                         </label>
@@ -594,7 +594,7 @@ const PublicClientWhiteList = () => {
                           setPage(0);
                           setIsStatusFilterOpen(false);
                         }}
-                        className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:shadow-lg rounded"
+                        className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#E6B022] to-[#B8881A] hover:shadow-lg rounded"
                       >
                         Appliquer
                       </button>
@@ -635,7 +635,7 @@ const PublicClientWhiteList = () => {
 
                 {isListingFilterOpen && (
                   <div className="absolute z-[1100] mt-1 w-80 bg-white border border-slate-300 rounded-lg shadow-xl" style={{ maxHeight: '400px' }}>
-                    <div className="sticky top-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-3 py-2 flex items-center justify-between">
+                    <div className="sticky top-0 bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white px-3 py-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <HomeIcon fontSize="small" />
                         <span className="text-sm font-semibold">
@@ -664,10 +664,10 @@ const PublicClientWhiteList = () => {
                                   : [...pendingListings, listingName];
                                 setPendingListings(newListings);
                               }}
-                              className="w-4 h-4 accent-[#FF6B35] cursor-pointer"
+                              className="w-4 h-4 accent-[#E6B022] cursor-pointer"
                             />
-                            <HomeIcon style={{ fontSize: 16, color: isSelected ? '#FF6B35' : '#9ca3af' }} />
-                            <span className="flex-1 text-sm" style={{ color: isSelected ? '#FF6B35' : '#1f2937' }}>
+                            <HomeIcon style={{ fontSize: 16, color: isSelected ? '#E6B022' : '#9ca3af' }} />
+                            <span className="flex-1 text-sm" style={{ color: isSelected ? '#E6B022' : '#1f2937' }}>
                               {listingName}
                             </span>
                           </label>
@@ -687,7 +687,7 @@ const PublicClientWhiteList = () => {
                           setPage(0);
                           setIsListingFilterOpen(false);
                         }}
-                        className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:shadow-lg rounded"
+                        className="flex-1 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-[#E6B022] to-[#B8881A] hover:shadow-lg rounded"
                       >
                         Appliquer
                       </button>
@@ -712,7 +712,7 @@ const PublicClientWhiteList = () => {
 
             {/* Right side: Pagination */}
             <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] rounded-lg px-3 py-1.5">
+              <div className="flex items-center justify-center bg-gradient-to-r from-[#E6B022] to-[#B8881A] rounded-lg px-3 py-1.5">
                 <span className="text-white font-bold text-xs">
                   {totalCount} client{totalCount > 1 ? 's' : ''}
                 </span>
@@ -879,7 +879,7 @@ const PublicClientWhiteList = () => {
                                 key={reservation.reservationId || index}
                                 className="flex items-center gap-2 py-1.5 px-2 hover:bg-gray-50 rounded transition-colors"
                               >
-                                <span className="font-medium text-sm text-[#FF6B35]">
+                                <span className="font-medium text-sm text-[#E6B022]">
                                   #{reservation.reservationNumber || 'N/A'}
                                 </span>
                                 {reservation.listingName && (
@@ -900,7 +900,7 @@ const PublicClientWhiteList = () => {
                                   }}
                                   title="Voir les détails"
                                 >
-                                  <SearchIcon style={{ fontSize: 18, color: '#FF6B35' }} />
+                                  <SearchIcon style={{ fontSize: 18, color: '#E6B022' }} />
                                 </button>
                               </div>
                             ))}

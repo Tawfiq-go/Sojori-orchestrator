@@ -24,8 +24,8 @@ import { TeamHubListTable } from '../../../components/team/TeamHubListTable';
 import { TeamHubPagination } from '../../../components/team/TeamHubPagination';
 import { TEAM_T } from '../../../components/team/teamHubTokens';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   success: '#10B981',
   warning: '#F59E0B',
   error: '#EF4444',

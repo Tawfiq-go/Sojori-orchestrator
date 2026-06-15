@@ -15,9 +15,9 @@ import {
 import { Close, Search, Check } from '@mui/icons-material';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   primaryLight: '#FF8F6B',
-  primaryDark: '#E55A2B',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   hover: 'rgba(255, 107, 53, 0.08)',
   gray: {

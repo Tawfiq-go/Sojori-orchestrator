@@ -129,9 +129,9 @@ export function buildInjectedCSS(config) {
 
   if (theme?.sojoriColors) {
     lines.push('/* Couleurs Sojori */')
-    lines.push('#ruApp .ps-clusters-list-unit-details .apartment-name-cell span { color: #FF6B35 !important; }')
+    lines.push('#ruApp .ps-clusters-list-unit-details .apartment-name-cell span { color: #E6B022 !important; }')
     lines.push('#ruApp button.btn-primary, #ruApp .btn-primary {')
-    lines.push('  background: linear-gradient(135deg, #FF6B35, #E55A2B) !important;')
+    lines.push('  background: linear-gradient(135deg, #E6B022, #B8881A) !important;')
     lines.push('  border: none !important;')
     lines.push('  border-radius: 6px !important;')
     lines.push('  color: white !important;')

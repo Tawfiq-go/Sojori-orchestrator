@@ -28,7 +28,6 @@ const SECTIONS = [
   },
   { id: 'Cron', label: 'Cron', emoji: '⏰', description: 'Scheduled jobs' },
   { id: 'Debug', label: 'Debug', emoji: '🐛', description: 'Audit 45 API' },
-  { id: 'Import', label: 'Import RU', emoji: '📥', description: 'Import properties from RU' },
 ] as const;
 
 function resolveActiveSection(sp: URLSearchParams) {
@@ -38,7 +37,7 @@ function resolveActiveSection(sp: URLSearchParams) {
   if (lo === 'mapping' || lo === 'geo' || lo === 'map' || lo === 'rulist') return 'Mapping';
   if (lo === 'debug' || lo === 'audit') return 'Debug';
   if (lo === 'cron' || lo === 'crons' || lo === 'jobs') return 'Cron';
-  if (lo === 'import' || lo === 'onboard') return 'Import';
+  if (lo === 'import' || lo === 'onboard') return 'Sum';
   return 'Sum';
 }
 
@@ -120,15 +119,15 @@ export function ChannelsSidebar() {
                   transition-all duration-150 ease-in-out
                   ${
                     isActive
-                      ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-md'
-                      : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                      ? 'channels-nav-active shadow-md'
+                      : 'text-slate-700 hover:bg-[var(--bg-sub)] hover:text-[var(--text-h)]'
                   }
                 `}
                 title={section.description}
               >
                 <span className={`text-xl ${isActive ? '' : 'opacity-70'}`}>{section.emoji}</span>
                 <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-semibold ${isActive ? 'text-white' : 'text-slate-800'}`}>
+                  <div className={`text-sm font-semibold ${isActive ? 'text-[var(--accent-on-gold)]' : 'text-[var(--text-h)]'}`}>
                     {section.label}
                   </div>
                   {!isActive && (
@@ -138,7 +137,7 @@ export function ChannelsSidebar() {
               </button>
 
               {isActive && hasChildren && section.children && (
-                <div className="ml-5 mt-1 mb-1 space-y-0.5 border-l-2 border-orange-200 pl-3">
+                <div className="ml-5 mt-1 mb-1 space-y-0.5 border-l-2 channels-nav-child-border pl-3">
                   {section.children.map((child) => {
                     const isChildActive = activeChild === child.id;
                     return (
@@ -151,8 +150,8 @@ export function ChannelsSidebar() {
                           transition-all duration-100
                           ${
                             isChildActive
-                              ? 'bg-orange-50 text-orange-700 font-semibold'
-                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                              ? 'channels-nav-child-active'
+                              : 'text-slate-600 hover:bg-[var(--bg-sub)] hover:text-[var(--text-h)]'
                           }
                         `}
                       >

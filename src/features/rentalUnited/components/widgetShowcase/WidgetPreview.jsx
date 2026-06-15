@@ -90,7 +90,7 @@ export default function WidgetPreview({
         .widget-preview-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #f5f5f5; border-bottom: 1px solid #E0E0E0; font-size: 13px; color: #555; }
         .widget-preview-actions { display: flex; gap: 8px; }
         .btn-load, .btn-reload { padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; }
-        .btn-load { background: linear-gradient(135deg, #FF6B35, #E55A2B); color: white; }
+        .btn-load { background: linear-gradient(135deg, #E6B022, #B8881A); color: white; }
         .btn-reload { background: #00B4B4; color: white; }
         .btn-load:hover, .btn-reload:hover { opacity: 0.9; }
         .widget-preview-container { flex: 1; border: 1px dashed #E0E0E0; margin: 16px; border-radius: 12px; overflow: auto; min-height: 400px; }

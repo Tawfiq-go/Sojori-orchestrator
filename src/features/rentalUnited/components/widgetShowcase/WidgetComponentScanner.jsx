@@ -148,7 +148,7 @@ export default function WidgetComponentScanner() {
         .widget-component-scanner { padding: 16px; font-family: 'Inter', sans-serif; font-size: 13px; overflow-y: auto; }
         .scanner-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
         .scanner-toolbar h3 { margin: 0; font-size: 14px; }
-        .btn-scan { padding: 6px 12px; border-radius: 6px; border: none; background: #FF6B35; color: white; cursor: pointer; }
+        .btn-scan { padding: 6px 12px; border-radius: 6px; border: none; background: #E6B022; color: white; cursor: pointer; }
         .scanner-hint { color: #666; font-size: 12px; margin: 0 0 12px 0; }
         .scanner-group { margin-bottom: 16px; }
         .scanner-group h4 { margin: 0 0 8px 0; font-size: 13px; color: #333; }

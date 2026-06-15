@@ -239,9 +239,9 @@ export function ListingsOverviewPage() {
           <Button
             sx={{
               ...btnGhostSx,
-              borderColor: '#FF6B35',
-              color: '#FF6B35',
-              '&:hover': { borderColor: '#E55A2B', bgcolor: 'rgba(255, 107, 53, 0.06)' },
+              borderColor: '#E6B022',
+              color: '#E6B022',
+              '&:hover': { borderColor: '#B8881A', bgcolor: 'rgba(255, 107, 53, 0.06)' },
             }}
             onClick={() => setShowImportRu(true)}
           >

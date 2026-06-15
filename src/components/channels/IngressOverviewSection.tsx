@@ -10,12 +10,13 @@ import {
   extractGuestLabel,
   extractListingOwner,
   extractRuReservationId,
-  extractSojoriReservationNumber,
   extractStayDates,
   ingressEventCategory,
   publishOkLabel,
   type IngressOverviewRow,
 } from '../../utils/ingressRowHelpers';
+import { BUSINESS_CONTEXT_HEADERS, extractIngressBusinessContext } from '../../utils/businessRowContext';
+import { BusinessContextCells } from './BusinessContextCells';
 import { prettyRuEventKey } from '../../utils/channelsSharedUtils';
 
 type Summary = {
@@ -27,7 +28,7 @@ type Summary = {
 };
 
 type Props = {
-  view: 'messaging' | 'reservations' | 'leads';
+  view: 'messaging' | 'reservations' | 'leads' | 'reviews';
   list: { items?: IngressOverviewRow[]; total?: number } | null;
   loading: boolean;
   error: string | null;
@@ -77,7 +78,7 @@ function SummaryBar({ summary, view }: { summary: Summary | null; view: string }
       <span>
         <strong>{summary.total}</strong> webhooks
       </span>
-      {mappedPct != null && view !== 'messaging' && (
+      {mappedPct != null && view !== 'messaging' && view !== 'reviews' && (
         <span>
           <strong>{summary.mappedCount}</strong> mappés Sojori ({mappedPct}%)
         </span>
@@ -154,13 +155,13 @@ export function IngressOverviewSection({
         </div>
       </div>
       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-        <div className="channels-table-scroll overflow-x-auto overflow-y-auto max-h-[min(78vh,calc(100vh-140px))] w-full">
+        <div className="channels-table-scroll channels-table-unbounded w-full">
           <table className="w-full text-sm min-w-[960px]">
-            {view === 'messaging' ? (
+            {view === 'messaging' || view === 'reviews' ? (
               <>
                 <thead className="channels-sticky-thead">
                   <tr>
-                    {['Date', 'Type', 'Guest', 'Listing', 'Owner', 'Thread', 'Aperçu', 'Publish', 'Détail'].map((h) => (
+                    {['Date', ...BUSINESS_CONTEXT_HEADERS, 'Type', view === 'reviews' ? 'Canal' : 'Guest', 'Thread', 'Aperçu', 'Publish', 'Détail'].map((h) => (
                       <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap text-xs">
                         {h}
                       </th>
@@ -173,9 +174,11 @@ export function IngressOverviewSection({
                     const m = row.ruMessaging || {};
                     const data = m.data || {};
                     const lo = extractListingOwner(row);
-                    const threadId = pickMessagingField(data, ['ThreadID', 'threadId', 'ThreadId']);
+                    const biz = extractIngressBusinessContext(row);
+                    const threadId = pickMessagingField(data, ['ThreadID', 'threadId', 'ThreadId', 'ID']);
                     const guest = pickMessagingField(data, ['GuestName', 'guestName', 'CustomerName', 'Name']) || '—';
-                    const preview = pickMessagingField(data, ['Body', 'body', 'Text', 'message', 'Content']) || '';
+                    const channel = pickMessagingField(data, ['CommunicationChannel', 'communicationChannel']) || '—';
+                    const preview = pickMessagingField(data, ['Body', 'body', 'Text', 'message', 'Content', 'Preview']) || '';
                     const detail = msgDetail[rid];
                     return (
                       <Fragment key={rid}>
@@ -183,14 +186,9 @@ export function IngressOverviewSection({
                           <td className="px-2 py-2 text-xs whitespace-nowrap">
                             {row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : '—'}
                           </td>
+                          <BusinessContextCells {...biz} ownerTitle={lo.ownerName} listingTitle={lo.listingName} />
                           <td className="px-2 py-2 text-xs">{ingressEventCategory(row.ruEventKey)}</td>
-                          <td className="px-2 py-2 text-xs truncate max-w-[120px]">{String(guest)}</td>
-                          <td className="px-2 py-2 text-xs truncate max-w-[140px]" title={lo.listingName}>
-                            {lo.listingName}
-                          </td>
-                          <td className="px-2 py-2 text-xs truncate max-w-[120px]" title={lo.ownerName}>
-                            {lo.ownerName}
-                          </td>
+                          <td className="px-2 py-2 text-xs truncate max-w-[120px]">{view === 'reviews' ? String(channel) : String(guest)}</td>
                           <td className="px-2 py-2 font-mono text-[10px]">{threadId ? String(threadId) : '—'}</td>
                           <td className="px-2 py-2 text-xs max-w-[200px] truncate">{String(preview).slice(0, 80)}</td>
                           <td className="px-2 py-2">
@@ -211,7 +209,7 @@ export function IngressOverviewSection({
                         </tr>
                         {msgExpanded === rid && detail && (
                           <tr className="channels-expanded-row">
-                            <td colSpan={9} className="channels-expanded-content p-2">
+                            <td colSpan={10} className="channels-expanded-content p-2">
                               <pre className="text-[10px] overflow-auto max-h-32">{detail.rawBody || prettyJson(detail.ruMessaging)}</pre>
                             </td>
                           </tr>
@@ -225,7 +223,7 @@ export function IngressOverviewSection({
               <>
                 <thead className="channels-sticky-thead">
                   <tr>
-                    {['Date', 'Type', 'Guest', 'Email', 'Tél', 'Check-in', 'Check-out', 'Listing', 'Owner', 'Publish', 'Détail'].map((h) => (
+                    {['Date', ...BUSINESS_CONTEXT_HEADERS, 'Type', 'Guest', 'Email', 'Tél', 'Check-in', 'Check-out', 'Publish', 'Détail'].map((h) => (
                       <th key={h} className="text-left px-2 py-2 font-medium whitespace-nowrap text-xs">
                         {h}
                       </th>
@@ -236,6 +234,7 @@ export function IngressOverviewSection({
                   {items.map((row) => {
                     const rid = String(row.id);
                     const lo = extractListingOwner(row);
+                    const biz = extractIngressBusinessContext(row);
                     const stay = extractStayDates(row);
                     const pd = (row.parsedData || row.canonicalRuBookingV2 || {}) as Record<string, Record<string, unknown>>;
                     const guest = (pd.guest || {}) as Record<string, string>;
@@ -245,18 +244,13 @@ export function IngressOverviewSection({
                         <td className="px-2 py-2 text-xs whitespace-nowrap">
                           {row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : '—'}
                         </td>
+                        <BusinessContextCells {...biz} ownerTitle={lo.ownerName} listingTitle={lo.listingName} />
                         <td className="px-2 py-2 text-xs">{ingressEventCategory(row.ruEventKey)}</td>
                         <td className="px-2 py-2 text-xs truncate">{guestName}</td>
                         <td className="px-2 py-2 text-xs truncate">{guest.email || '—'}</td>
                         <td className="px-2 py-2 font-mono text-[11px]">{guest.phone || '—'}</td>
                         <td className="px-2 py-2 text-xs">{stay.checkIn}</td>
                         <td className="px-2 py-2 text-xs">{stay.checkOut}</td>
-                        <td className="px-2 py-2 text-xs truncate" title={lo.listingName}>
-                          {lo.listingName}
-                        </td>
-                        <td className="px-2 py-2 text-xs truncate" title={lo.ownerName}>
-                          {lo.ownerName}
-                        </td>
                         <td className="px-2 py-2">
                           <PublishBadge publishOk={row.publishOk} />
                         </td>
@@ -276,15 +270,13 @@ export function IngressOverviewSection({
                   <tr>
                     {[
                       'Date',
+                      ...BUSINESS_CONTEXT_HEADERS,
                       'Type',
                       'Check-in',
                       'Check-out',
                       'Client',
                       '€',
                       'OTA',
-                      'Listing',
-                      'Owner',
-                      'Sojori #',
                       'RU ID',
                       'Map',
                       'Publish',
@@ -300,16 +292,17 @@ export function IngressOverviewSection({
                   {items.map((row) => {
                     const rid = String(row.id);
                     const lo = extractListingOwner(row);
+                    const biz = extractIngressBusinessContext(row);
                     const stay = extractStayDates(row);
                     const c = (row.canonicalRuBookingV2 || {}) as Record<string, Record<string, unknown>>;
                     const money = c.money || {};
                     const ota = c.ota || {};
-                    const sojoriNum = extractSojoriReservationNumber(row);
                     return (
                       <tr key={rid} className="border-t border-slate-100 align-top">
                         <td className="px-2 py-2 text-xs whitespace-nowrap">
                           {row.createdAt ? new Date(String(row.createdAt)).toLocaleString() : '—'}
                         </td>
+                        <BusinessContextCells {...biz} ownerTitle={lo.ownerName} listingTitle={lo.listingName} />
                         <td className="px-2 py-2 text-xs whitespace-nowrap">{ingressEventCategory(row.ruEventKey)}</td>
                         <td className="px-2 py-2 text-xs">{stay.checkIn}</td>
                         <td className="px-2 py-2 text-xs">{stay.checkOut}</td>
@@ -318,13 +311,6 @@ export function IngressOverviewSection({
                           {money.ruPrice != null ? String(money.ruPrice) : money.clientPrice != null ? String(money.clientPrice) : '—'}
                         </td>
                         <td className="px-2 py-2 text-xs truncate">{String(ota.vendor || '—')}</td>
-                        <td className="px-2 py-2 text-xs truncate max-w-[140px]" title={lo.listingName}>
-                          {lo.listingName}
-                        </td>
-                        <td className="px-2 py-2 text-xs truncate max-w-[120px]" title={lo.ownerName}>
-                          {lo.ownerName}
-                        </td>
-                        <td className="px-2 py-2 font-mono text-[11px] font-semibold text-indigo-800">{sojoriNum}</td>
                         <td className="px-2 py-2 font-mono text-[10px]">{extractRuReservationId(row)}</td>
                         <td className="px-2 py-2 text-center">
                           {lo.mapped ? (

@@ -72,7 +72,7 @@ const DS = {
 
 // Sojori Colors (legacy - for compatibility)
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   primaryDark: '#E85A2A',
   primaryPale: 'rgba(255, 107, 53, 0.1)',
   gray: {

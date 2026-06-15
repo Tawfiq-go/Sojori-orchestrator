@@ -28,9 +28,9 @@ export default function AdminCountriesCitiesPage() {
               onChange={handleChange}
               aria-label="admin-countries-cities"
               sx={{
-                '& .MuiTabs-indicator': { backgroundColor: '#FF6B35' },
+                '& .MuiTabs-indicator': { backgroundColor: '#E6B022' },
                 '& .MuiTab-root': { color: 'black', fontWeight: 600 },
-                '& .Mui-selected': { color: '#FF6B35 !important' },
+                '& .Mui-selected': { color: '#E6B022 !important' },
               }}
             >
               <Tab label={t('Countries')} value="1" />

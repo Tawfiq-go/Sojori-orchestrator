@@ -60,15 +60,16 @@ import InsightsOutlined from '@mui/icons-material/InsightsOutlined';
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined';
 import VillaOutlined from '@mui/icons-material/VillaOutlined';
 export const tokens = {
-  // ── Brand · ambre dignifié (WCAG AA contrast on bg0) ──
-  primary:      '#b8851a',
-  primaryDeep:  '#876119',
-  primarySoft:  '#e6c46a',
-  primaryTint:  'rgba(184,133,26,0.10)',
+  // ── Brand · or premium (Brand Kit v1.0 — #E6B022) ──
+  primary:      '#E6B022',
+  primaryDeep:  '#B8881A',
+  primarySoft:  '#F4CF5E',
+  primaryTint:  'rgba(230,176,34,0.10)',
+  primaryOnGold:'#1A1408',
 
   // ── AI accent · violet ──
-  ai:           '#7c3aed',
-  aiTint:       'rgba(124,58,237,0.10)',
+  ai:           '#8B5CF6',
+  aiTint:       'rgba(139,92,246,0.10)',
 
   // ── Sémantique ──
   success:      '#0a8f5e',  successTint: 'rgba(10,143,94,0.10)',
@@ -126,8 +127,8 @@ export function DashboardLayout({ user, activePath, onNavigate, onLogout, childr
           backgroundImage: compactMain
             ? 'none'
             : `
-          radial-gradient(50% 42% at 100% 0%, rgba(184,133,26,0.07), transparent 58%),
-          radial-gradient(38% 28% at 0% 100%, rgba(124,58,237,0.05), transparent 72%)
+          radial-gradient(50% 42% at 100% 0%, rgba(230,176,34,0.07), transparent 58%),
+          radial-gradient(38% 28% at 0% 100%, rgba(139,92,246,0.05), transparent 72%)
         `,
           pt: compactMain ? LISTING_LAYOUT.mainPadTop : { xs: 2, md: '24px' },
           pb: compactMain ? LISTING_LAYOUT.mainPadBottom : { xs: 2, md: '48px' },

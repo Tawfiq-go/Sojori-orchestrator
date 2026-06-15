@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { API_BASE_URL } from '../../../config/backendServer.config';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   primaryPale: '#FFF3E0'
 };
 const STATUS_CONFIG = {
@@ -95,7 +95,7 @@ const ReservationCard = ({
   };
   return <div onClick={onClick} className={`
         flex-shrink-0 w-[140px] p-2 rounded-lg border cursor-pointer transition-all
-        ${selected ? 'bg-gradient-to-r from-[#FFF3E0] to-white border-[#FF6B35] border-l-4' : 'border-slate-200 hover:bg-slate-50'}
+        ${selected ? 'bg-gradient-to-r from-[#FFF3E0] to-white border-[#E6B022] border-l-4' : 'border-slate-200 hover:bg-slate-50'}
       `}>
       {/* Header ultra compact */}
       <div className="flex items-center justify-between gap-1 mb-1">
@@ -130,7 +130,7 @@ const ReservationCard = ({
             </span>
           </div>}
         <div className="flex items-center gap-1 text-[9px] text-slate-500">
-          <span className="font-semibold text-[#FF6B35]">{completedEvents}/{totalEvents}</span>
+          <span className="font-semibold text-[#E6B022]">{completedEvents}/{totalEvents}</span>
           <span>⏳ {reservation.nights ?? reservation.numberOfNights ?? '—'}</span>
           {pendingEvents > 0 && <Tooltip title={`Forcer l'exécution de ${pendingEvents} événement(s)`}>
               <IconButton size="small" onClick={handleForceExecuteAll} disabled={isExecuting} sx={{
@@ -162,7 +162,7 @@ const ReservationCard = ({
       {/* Progress bar fin */}
       <div className="mt-1">
         <div className="h-0.5 bg-slate-200 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] transition-all duration-500" style={{
+          <div className="h-full bg-gradient-to-r from-[#E6B022] to-[#B8881A] transition-all duration-500" style={{
           width: `${progress}%`
         }} />
         </div>

@@ -9,8 +9,8 @@ import { hasAdminAccess } from 'utils/rbac.utils';
 import { useTranslation } from 'react-i18next';
 import SidePanel from './SidePanel';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   gray: {
     50: '#FAFAFA',
     100: '#F5F5F5',

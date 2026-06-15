@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { previewMessageTemplate, updateMessageTemplateDescription } from '../services/serverApi.orchestratorConfig';
 import { fetchEnrichedSampleReservation } from '../utils/orchestratorTemplatePreview';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   primaryLight: '#FF8F6B',
-  primaryDark: '#E55A2B',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   gray: {
     50: '#FAFAFA',

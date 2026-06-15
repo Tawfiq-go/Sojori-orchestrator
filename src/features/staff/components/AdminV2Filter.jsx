@@ -10,8 +10,8 @@ import GlobalPaginationCompact from 'components/GlobalPaginationCompact/GlobalPa
 import AdminFilter from './AdminFilter';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   gray: {
     300: '#E0E0E0',

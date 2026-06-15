@@ -15,7 +15,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 
 // Couleurs Sojori
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   success: '#4CAF50',
   warning: '#FF9800',
   error: '#F44336',

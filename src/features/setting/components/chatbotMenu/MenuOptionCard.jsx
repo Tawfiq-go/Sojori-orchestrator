@@ -60,7 +60,7 @@ const MenuOptionCard = ({ option, onChange }) => {
               fontSize: '0.7rem',
               height: '22px',
               minWidth: '32px',
-              backgroundColor: option.enabled ? '#FF6B35' : '#e5e7eb',
+              backgroundColor: option.enabled ? '#E6B022' : '#e5e7eb',
               color: option.enabled ? 'white' : '#6b7280',
             }}
           />

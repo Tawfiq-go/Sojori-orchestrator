@@ -3,8 +3,8 @@ import { Tooltip, Chip } from '@mui/material';
 import { Clock, Calendar, AlertCircle } from 'lucide-react';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryLight: '#FF8F6B',
   success: '#4CAF50',
   warning: '#FF9800',
@@ -57,7 +57,7 @@ const WeeklyScheduleDisplay = ({ schedule }) => {
               background: totalHours > 35
                 ? 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)'
                 : totalHours > 20
-                ? 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)'
+                ? 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)'
                 : 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
               color: 'white',
               '& .MuiChip-icon': {

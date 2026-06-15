@@ -6,7 +6,6 @@ export const SECTION_VALID = new Set([
   'Mapping',
   'Debug',
   'Cron',
-  'Import',
 ]);
 
 export type SectionTab =
@@ -14,8 +13,7 @@ export type SectionTab =
   | 'Business'
   | 'Mapping'
   | 'Debug'
-  | 'Cron'
-  | 'Import';
+  | 'Cron';
 
 export function canonicalSectionTab(tabParam: string | null): SectionTab {
   if (!tabParam) return 'Sum';
@@ -27,7 +25,7 @@ export function canonicalSectionTab(tabParam: string | null): SectionTab {
   if (lo === 'summary' || lo === 'sum' || lo === 'overview' || lo === 'kpi') return 'Sum';
   if (lo === 'debug' || lo === 'audit') return 'Debug';
   if (lo === 'cron' || lo === 'crons' || lo === 'jobs') return 'Cron';
-  if (lo === 'import' || lo === 'onboard') return 'Import';
+  if (lo === 'import' || lo === 'onboard') return 'Sum';
   if (lo === 'channel-manager' || lo === 'channelmanager' || lo === 'channel_manager') {
     return 'Sum';
   }
@@ -45,7 +43,6 @@ export function sectionToUiTab(section: SectionTab): string {
     Mapping: 'mapping',
     Debug: 'debug',
     Cron: 'cron',
-    Import: 'import',
   };
   return map[section];
 }
@@ -87,6 +84,33 @@ export function migrateLegacyChannelsSearchParams(sp: URLSearchParams): URLSearc
   }
 
   const canon = canonicalSectionTab(raw);
+  const bEarly = (next.get('biz') || '').toLowerCase();
+
+  if (canon === 'Debug' && (bEarly === 'logapi' || next.get('api') === 'g')) {
+    next.set('tab', 'Debug');
+    next.set('type', 'http');
+    next.delete('biz');
+    next.delete('api');
+    return next;
+  }
+
+  if (bEarly === 'owner-vol' || bEarly === 'listing') {
+    next.set('tab', 'Sum');
+    next.set('sumView', bEarly);
+    next.delete('biz');
+    next.delete('api');
+    next.delete('hook');
+    return next;
+  }
+
+  if (canon === 'Business' && bEarly === 'logapi') {
+    next.set('tab', 'Debug');
+    next.set('type', 'http');
+    next.delete('biz');
+    next.delete('api');
+    return next;
+  }
+
   if (!raw) {
     next.set('tab', 'Sum');
     return next;

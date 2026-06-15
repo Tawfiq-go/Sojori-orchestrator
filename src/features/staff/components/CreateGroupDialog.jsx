@@ -30,8 +30,8 @@ import { useTranslation } from 'react-i18next';
 import routes, { buildFeatureRows } from '../../../routes';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   gray: {
     300: '#E0E0E0',
@@ -186,7 +186,7 @@ export default function CreateGroupSidebar({ open, onClose, onSubmit, ownerPicke
             justifyContent: 'space-between',
             padding: '20px 24px',
             borderBottom: '1px solid #e5e7eb',
-            background: 'linear-gradient(135deg, #FF6B35 0%, #E55A2B 100%)',
+            background: 'linear-gradient(135deg, #E6B022 0%, #B8881A 100%)',
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

@@ -152,10 +152,10 @@ const ModifyStaff = ({
                 minHeight: '42px'
               },
               '& .Mui-selected': {
-                color: '#FF6B35 !important'
+                color: '#E6B022 !important'
               },
               '& .MuiTabs-indicator': {
-                backgroundColor: '#FF6B35'
+                backgroundColor: '#E6B022'
               }
             }}>
                   <Tab icon={<User size={16} />} iconPosition="start" label="Informations personnelles" />
@@ -171,7 +171,7 @@ const ModifyStaff = ({
                     <Typography variant="h6" sx={{
                 fontSize: '15px',
                 fontWeight: 700,
-                color: '#FF6B35',
+                color: '#E6B022',
                 mb: 1
               }}>
                       Informations personnelles
@@ -219,7 +219,7 @@ const ModifyStaff = ({
                     <Typography variant="h6" sx={{
                 fontSize: '15px',
                 fontWeight: 700,
-                color: '#FF6B35',
+                color: '#E6B022',
                 mb: 1
               }}>
                       Localisation
@@ -290,7 +290,7 @@ const ModifyStaff = ({
                     <Typography variant="h6" sx={{
                 fontSize: '15px',
                 fontWeight: 700,
-                color: '#FF6B35',
+                color: '#E6B022',
                 mb: 1
               }}>
                       Langue de communication
@@ -299,7 +299,7 @@ const ModifyStaff = ({
                     <Paper sx={{
                 p: 3,
                 bgcolor: '#FFF5F0',
-                border: '2px solid #FF6B35'
+                border: '2px solid #E6B022'
               }}>
                       <Box sx={{
                   display: 'flex',
@@ -308,7 +308,7 @@ const ModifyStaff = ({
                   mb: 2
                 }}>
                         <Languages className="w-5 h-5" style={{
-                    color: '#FF6B35'
+                    color: '#E6B022'
                   }} />
                         <Typography sx={{
                     fontSize: '13px',
@@ -369,7 +369,7 @@ const ModifyStaff = ({
                     <Typography variant="h6" sx={{
                 fontSize: '15px',
                 fontWeight: 700,
-                color: '#FF6B35',
+                color: '#E6B022',
                 mb: 1
               }}>
                       Types de tâches et catégories

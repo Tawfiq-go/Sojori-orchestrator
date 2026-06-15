@@ -48,12 +48,12 @@
 }
 
 .mail-templates-table-container::-webkit-scrollbar-thumb {
-  background: #FF6B35;
+  background: #E6B022;
   border-radius: 4px;
 }
 
 .mail-templates-table-container::-webkit-scrollbar-thumb:hover {
-  background: #E55A2B;
+  background: #B8881A;
 }
 
 /* Table */
@@ -66,7 +66,7 @@
   position: sticky !important;
   top: 0 !important;
   z-index: 100 !important;
-  background-color: #FF6B35 !important;
+  background-color: #E6B022 !important;
   color: white !important;
   font-weight: 600 !important;
   font-size: 0.875rem !important;
@@ -88,7 +88,7 @@
 
 .mail-templates-table thead th:first-child {
   z-index: 102 !important;
-  background-color: #FF6B35 !important;
+  background-color: #E6B022 !important;
 }
 
 .mail-templates-table tbody td:first-child {
@@ -149,7 +149,7 @@
 }
 
 .mail-templates-name-icon {
-  color: #FF6B35;
+  color: #E6B022;
   font-size: 1.25rem;
 }
 

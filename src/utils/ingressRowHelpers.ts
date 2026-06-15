@@ -59,13 +59,13 @@ export function extractListingOwner(row: IngressOverviewRow): {
     enr.listingName || ack.listingName || sojori.listingName || listingId || '',
   ).trim();
   const ownerName = String(
-    enr.ownerDisplayName || ack.ownerDisplayName || sojori.ownerDisplayName || ownerId || '',
+    enr.ownerDisplayName || ack.ownerDisplayName || sojori.ownerDisplayName || '',
   ).trim();
   const mapped = sojori.found === true || enr.found === true || !!ack.sojoriReservationId;
   return {
     listingName: listingName || '—',
     listingId: listingId ? listingId.slice(-8) : '—',
-    ownerName: ownerName || '—',
+    ownerName: ownerName || (ownerId ? ownerId.slice(-8) : '—'),
     ownerId: ownerId ? ownerId.slice(-8) : '—',
     mapped,
   };

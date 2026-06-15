@@ -25,8 +25,8 @@ const MENU_SECTIONS_FALLBACK = [{
   codes: ['A', 'B', 'C', 'E', 'F', 'G', 'H', 'I', 'K', 'L']
 }];
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   gray: {
     300: '#E0E0E0',

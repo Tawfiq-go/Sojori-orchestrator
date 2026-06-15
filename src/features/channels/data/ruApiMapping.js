@@ -87,6 +87,8 @@ export const RU_API_MAPPING = {
     { name: 'ModifiedMessage', collection: 'ChannelBookingIngress', service: 'srv-channels', visibleIn: 'Messages', category: 'Messaging', field: 'ruMessaging' },
     { name: 'ReadMessage', collection: 'ChannelBookingIngress', service: 'srv-channels', visibleIn: 'Messages', category: 'Messaging', field: 'ruMessaging' },
     { name: 'NewThread', collection: 'ChannelBookingIngress', service: 'srv-channels', visibleIn: 'Messages', category: 'Messaging', field: 'ruMessaging' },
+    { name: 'GuestReview', collection: 'ChannelBookingIngress', service: 'srv-channels', visibleIn: 'Reviews', category: 'Reviews', field: 'ruMessaging' },
+    { name: 'AirbnbGuestReview', collection: 'ChannelBookingIngress', service: 'srv-channels', visibleIn: 'Reviews', category: 'Reviews', field: 'ruMessaging' },
     { name: 'NewReservation', collection: 'ChannelBookingIngress', service: 'srv-channels', visibleIn: 'Réservations', category: 'Reservations', field: 'canonicalRuBookingV2' },
     { name: 'ModifiedReservation', collection: 'ChannelBookingIngress', service: 'srv-channels', visibleIn: 'Réservations', category: 'Reservations', field: 'canonicalRuBookingV2' },
     { name: 'CancelledReservation', collection: 'ChannelBookingIngress', service: 'srv-channels', visibleIn: 'Réservations', category: 'Reservations', field: 'canonicalRuBookingV2' },

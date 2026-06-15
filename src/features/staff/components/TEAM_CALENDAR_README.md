@@ -44,8 +44,8 @@ Une interface moderne de planning d'équipe qui affiche tous les membres du staf
 ## 🎨 Design System
 
 ### Couleurs (Sojori Brand)
-- **Primary**: `#FF6B35` (Orange)
-- **Primary Dark**: `#E55A2B`
+- **Primary**: `#E6B022` (Orange)
+- **Primary Dark**: `#B8881A`
 - **Success**: `#10B981`
 - **Warning**: `#F59E0B`
 - **Error**: `#EF4444`

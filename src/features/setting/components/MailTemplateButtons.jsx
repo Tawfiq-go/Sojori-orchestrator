@@ -11,8 +11,8 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import { SHOW_MAIL_TEMPLATE_DESCRIPTION_TAB } from 'features/setting/config/mailTemplateUi.config';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   gray: {
     300: '#E0E0E0',

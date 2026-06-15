@@ -8,7 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Box, Typography, Paper, MenuList, MenuItem, InputBase, FormControl } from '@mui/material';
 
 const COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   primaryLight: '#FFE5DD',
   primaryHover: '#FFD4C4',
   gray: {

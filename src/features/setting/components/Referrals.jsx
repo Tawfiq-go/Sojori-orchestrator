@@ -7,8 +7,8 @@ import { styled } from '@mui/material/styles';
 import { ToastContainer } from 'react-toastify';
 import { AddCircleOutline as AddIcon } from '@mui/icons-material';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   gray: {
     300: '#E0E0E0',
@@ -72,7 +72,7 @@ const Referrals = () => {
           color: SOJORI_COLORS.primary
         }} />
                     </div> : <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                        {referrals.map(referral => <div key={referral._id} className="flex flex-col items-center justify-center p-4 text-black transition-all duration-300 border rounded hover:bg-[#FF6B35] hover:text-white">
+                        {referrals.map(referral => <div key={referral._id} className="flex flex-col items-center justify-center p-4 text-black transition-all duration-300 border rounded hover:bg-[#E6B022] hover:text-white">
                                 <h6 className="m-0 text-sm font-bold text-center">{referral.code}</h6>
                                 <p className="text-xs opacity-70 mt-1 !mb-0">
                                     {new Date(referral.createdAt).toLocaleDateString()}

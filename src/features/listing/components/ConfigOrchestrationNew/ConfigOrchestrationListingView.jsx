@@ -18,8 +18,8 @@ const DS = {
   },
   primary: {
     50: '#FFF5F2',
-    500: '#FF6B35',
-    600: '#E55A2B'
+    500: '#E6B022',
+    600: '#B8881A'
   },
   success: {
     50: '#F0FDF4',
@@ -612,9 +612,9 @@ const ConfigOrchestrationListingView = ({ listingId, ownerId }) => {
               disabled={!hasChanges || isSaving}
               sx={{
                 textTransform: 'none',
-                backgroundColor: '#FF6B35',
+                backgroundColor: '#E6B022',
                 '&:hover': {
-                  backgroundColor: '#E55A2B'
+                  backgroundColor: '#B8881A'
                 }
               }}
             >
@@ -638,10 +638,10 @@ const ConfigOrchestrationListingView = ({ listingId, ownerId }) => {
                 padding: '6px 16px'
               },
               '& .MuiToggleButton-root.Mui-selected': {
-                backgroundColor: '#FF6B35',
+                backgroundColor: '#E6B022',
                 color: 'white !important',
                 '&:hover': {
-                  backgroundColor: '#E55A2B',
+                  backgroundColor: '#B8881A',
                   color: 'white !important'
                 }
               }

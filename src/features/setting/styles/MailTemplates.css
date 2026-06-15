@@ -12,13 +12,13 @@
 }
 
 .mail-templates-container *::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #FF6B35 0%, #E55A2B 100%);
+  background: linear-gradient(180deg, #E6B022 0%, #B8881A 100%);
   border-radius: 4px;
   border: 1px solid #f1f1f1;
 }
 
 .mail-templates-container *::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #E55A2B 0%, #D44920 100%);
+  background: linear-gradient(180deg, #B8881A 0%, #D44920 100%);
   box-shadow: 0 2px 6px rgba(255, 107, 53, 0.5);
 }
 
@@ -52,7 +52,7 @@
   position: sticky !important;
   top: 0 !important;
   z-index: 100 !important;
-  background-color: #FF6B35 !important;
+  background-color: #E6B022 !important;
   color: white !important;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   font-weight: 700 !important;
@@ -107,7 +107,7 @@
 }
 
 .mail-templates-search .MuiOutlinedInput-root.Mui-focused {
-  border-color: #FF6B35;
+  border-color: #E6B022;
 }
 
 /* Filter Chips */
@@ -122,7 +122,7 @@
 }
 
 .mail-templates-filter-chip.active {
-  background-color: #FF6B35 !important;
+  background-color: #E6B022 !important;
   color: white !important;
   font-weight: 600;
 }
@@ -157,13 +157,13 @@
 .mail-templates-action-btn {
   min-width: auto;
   padding: 8px;
-  color: #FF6B35;
+  color: #E6B022;
   transition: all 0.2s ease;
 }
 
 .mail-templates-action-btn:hover {
   background-color: #FFF3E0;
-  color: #E55A2B;
+  color: #B8881A;
   transform: scale(1.1);
 }
 
@@ -207,7 +207,7 @@
   height: 28px !important;
   font-size: 12px !important;
   font-weight: 600;
-  background-color: #FF6B35 !important;
+  background-color: #E6B022 !important;
 }
 
 /* Template Name Cell */
@@ -223,11 +223,11 @@
 }
 
 .mail-templates-name:hover {
-  color: #FF6B35;
+  color: #E6B022;
 }
 
 .mail-templates-name-icon {
-  color: #FF6B35;
+  color: #E6B022;
   font-size: 22px;
   flex-shrink: 0;
 }
@@ -298,7 +298,7 @@
 
 /* Custom button styles for create button */
 .mail-templates-create-btn {
-  background-color: #FF6B35 !important;
+  background-color: #E6B022 !important;
   color: white !important;
   font-weight: 600 !important;
   text-transform: none !important;
@@ -308,7 +308,7 @@
 }
 
 .mail-templates-create-btn:hover {
-  background-color: #E55A2B !important;
+  background-color: #B8881A !important;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3) !important;
 }
@@ -326,12 +326,12 @@
 }
 
 .mail-templates-tab.Mui-selected {
-  color: #FF6B35 !important;
+  color: #E6B022 !important;
   font-weight: 600 !important;
 }
 
 .MuiTabs-indicator {
-  background-color: #FF6B35 !important;
+  background-color: #E6B022 !important;
   height: 3px !important;
 }
 
@@ -357,7 +357,7 @@
 .mail-templates-table tbody td Typography[variant="caption"] {
   font-size: 0.75rem !important;
   font-weight: 600 !important;
-  color: #FF6B35 !important;
+  color: #E6B022 !important;
 }
 
 /* Language Flags - Better spacing */

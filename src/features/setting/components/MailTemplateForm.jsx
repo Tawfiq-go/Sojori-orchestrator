@@ -12,8 +12,8 @@ import { useSelector } from 'react-redux';
 import { hasAdminAccess } from '../../../utils/rbac.utils';
 import { styled } from '@mui/material/styles';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0'
 };
 const hasWeatherMessage = messageName => messageName === 'RAPPEL_X_JOURS_AVANT_ARRIVEE' || messageName === 'MESSAGE_METEO_AVANT_ARRIVEE';
@@ -1091,11 +1091,11 @@ const MailTemplateForm = ({
                                                 <label className="block mb-3 !text-base font-bold text-gray-700">
                                                     {langTab === 0 ? t('Your_model_is_written_in_French') : t('Your_model_is_written_in_English')}
                                                 </label>
-                                                <textarea name={langTab === 0 ? 'content' : 'contentEng'} className="w-full p-4 border-2 rounded-lg min-h-[450px] !text-sm font-mono focus:outline-none focus:border-[#FF6B35] focus:ring-2 focus:ring-[#FF6B35] focus:ring-opacity-20 transition-all" value={langTab === 0 ? messageContent : messageContentEng} onChange={e => langTab === 0 ? setMessageContent(e.target.value) : setMessageContentEng(e.target.value)} style={{
+                                                <textarea name={langTab === 0 ? 'content' : 'contentEng'} className="w-full p-4 border-2 rounded-lg min-h-[450px] !text-sm font-mono focus:outline-none focus:border-[#E6B022] focus:ring-2 focus:ring-[#E6B022] focus:ring-opacity-20 transition-all" value={langTab === 0 ? messageContent : messageContentEng} onChange={e => langTab === 0 ? setMessageContent(e.target.value) : setMessageContentEng(e.target.value)} style={{
                       maxHeight: 600,
                       overflowY: 'auto',
                       scrollbarWidth: 'thin',
-                      scrollbarColor: '#FF6B35 #f1f1f1',
+                      scrollbarColor: '#E6B022 #f1f1f1',
                       lineHeight: '1.6'
                     }} />
                                             </div>
@@ -1170,11 +1170,11 @@ const MailTemplateForm = ({
                                                 <label className="block mb-3 !text-base font-bold text-gray-700">
                                                     {langTab === 0 ? t('Your_whatsapp_message_is_written_in_French') : t('Your_whatsapp_message_is_written_in_English')}
                                                 </label>
-                                                <textarea name={langTab === 0 ? 'whatsappContent' : 'whatsappContentEng'} className="w-full p-4 border-2 rounded-lg min-h-[450px] !text-sm font-mono focus:outline-none focus:border-[#FF6B35] focus:ring-2 focus:ring-[#FF6B35] focus:ring-opacity-20 transition-all" value={langTab === 0 ? whatsappContent : whatsappContentEng} onChange={e => langTab === 0 ? setwhatsappContent(e.target.value) : setwhatsappContentEng(e.target.value)} style={{
+                                                <textarea name={langTab === 0 ? 'whatsappContent' : 'whatsappContentEng'} className="w-full p-4 border-2 rounded-lg min-h-[450px] !text-sm font-mono focus:outline-none focus:border-[#E6B022] focus:ring-2 focus:ring-[#E6B022] focus:ring-opacity-20 transition-all" value={langTab === 0 ? whatsappContent : whatsappContentEng} onChange={e => langTab === 0 ? setwhatsappContent(e.target.value) : setwhatsappContentEng(e.target.value)} style={{
                       maxHeight: 600,
                       overflowY: 'auto',
                       scrollbarWidth: 'thin',
-                      scrollbarColor: '#FF6B35 #f1f1f1',
+                      scrollbarColor: '#E6B022 #f1f1f1',
                       lineHeight: '1.6'
                     }} />
                                             </div>

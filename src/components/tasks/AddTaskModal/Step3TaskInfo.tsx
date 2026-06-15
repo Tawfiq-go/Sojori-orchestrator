@@ -339,11 +339,11 @@ export function Step3TaskInfo({
                     sx={{
                       height: '56px',
                       minWidth: '180px',
-                      borderColor: '#FF6B35',
-                      color: '#FF6B35',
+                      borderColor: '#E6B022',
+                      color: '#E6B022',
                       textTransform: 'none',
                       fontWeight: 600,
-                      '&:hover': { borderColor: '#E55A2B', bgcolor: '#FFF3E0' },
+                      '&:hover': { borderColor: '#B8881A', bgcolor: '#FFF3E0' },
                     }}
                   >
                     Filtres Intelligents

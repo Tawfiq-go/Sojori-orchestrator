@@ -387,7 +387,7 @@ const MailTemplateContainer = ({
       top: 0,
       zIndex: 10,
       backgroundColor: 'white',
-      borderBottom: '2px solid #FF6B35',
+      borderBottom: '2px solid #E6B022',
       pb: 2,
       mb: 3
     }}>

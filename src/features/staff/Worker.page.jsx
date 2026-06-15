@@ -22,7 +22,7 @@ function Worker() {
             label={t('workers_header_count', { count: workersTotal })}
             size="small"
             sx={{
-              bgcolor: '#FF6B35',
+              bgcolor: '#E6B022',
               color: 'white !important',
               fontWeight: 700,
               fontSize: '11px',

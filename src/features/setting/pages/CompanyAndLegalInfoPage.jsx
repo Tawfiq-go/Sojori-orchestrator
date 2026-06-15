@@ -328,13 +328,13 @@ const CompanyAndLegalInfoPage = ({ profile, setProfile, canUpdate }) => {
             <Button
               type="submit"
               variant="contained"
-              className="!bg-[#FF6B35] !text-white !shadow-none !rounded-lg !px-6 !py-2 !font-semibold hover:!bg-[#E55A2B] transition"
+              className="!bg-[#E6B022] !text-white !shadow-none !rounded-lg !px-6 !py-2 !font-semibold hover:!bg-[#B8881A] transition"
               disabled={formLoading}
               sx={{ boxShadow: 'none', borderRadius: 2 }}
               form="company-legal-info-form"
             >
               {formLoading ? (
-                <CircularProgress size={24} sx={{ color: '#FF6B35' }} />
+                <CircularProgress size={24} sx={{ color: '#E6B022' }} />
               ) : (
                 t('Update')
               )}
@@ -742,7 +742,7 @@ const CompanyAndLegalInfoPage = ({ profile, setProfile, canUpdate }) => {
                         <IconButton
                           onClick={handleAddLocation}
                           sx={{
-                            color: '#FF6B35',
+                            color: '#E6B022',
                             height: 40,
                             width: 40,
                             display: 'flex',

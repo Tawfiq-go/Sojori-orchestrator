@@ -10,7 +10,7 @@ import { getListingsTa } from '../tasks/services/serverApi.task';
 import { getcities } from '../setting/services/serverApi.adminConfig';
 import { useAdminOwnerFilter } from 'context/AdminOwnerFilterContext';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   success: '#10B981',
   warning: '#F59E0B',
   info: '#3B82F6',

@@ -38,7 +38,7 @@ export function SojoriLogsSourceNav() {
             fontSize: link.depth === 0 ? 12 : 11,
             fontWeight: link.depth === 0 ? 600 : 500,
             color: active ? undefined : link.depth === 0 ? '#1e293b' : '#475569',
-            borderLeftColor: active ? '#FF6B35' : undefined,
+            borderLeftColor: active ? '#E6B022' : undefined,
           }}
         >
           {link.label}
@@ -60,7 +60,7 @@ export function SojoriLogsSourceNav() {
               className={`sojori-logs-section-btn w-full text-left rounded-md px-2.5 py-2 ${
                 onAirroiPage ? 'sojori-logs-section-btn-active' : 'sojori-logs-section-btn-inactive'
               }`}
-              style={{ borderLeftColor: onAirroiPage ? '#FF6B35' : undefined }}
+              style={{ borderLeftColor: onAirroiPage ? '#E6B022' : undefined }}
             >
               <div className="text-[12.5px] font-semibold text-slate-800">AirROI</div>
               <div className="text-[10px] text-slate-500 mt-0.5">API marché & listings (cette page)</div>

@@ -4,8 +4,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   gray: { 50: '#FAFAFA', 100: '#F5F5F5', 200: '#EEEEEE' },
 };
 

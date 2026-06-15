@@ -7,8 +7,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { toast } from 'react-toastify';
 import { deleteStaff } from '../services/serverApi.task';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   warning: '#FF9800',
   error: '#F44336'
 };

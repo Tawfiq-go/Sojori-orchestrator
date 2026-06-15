@@ -13,8 +13,8 @@ import RoleBasedRenderer from 'components/wrappers/RoleBasedRenderer';
 import { useTranslation } from 'react-i18next';
 import { staffType } from './mock';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
+  primary: '#E6B022',
+  primaryDark: '#B8881A',
   primaryPale: '#FFF3E0',
   gray: {
     50: '#FAFAFA',

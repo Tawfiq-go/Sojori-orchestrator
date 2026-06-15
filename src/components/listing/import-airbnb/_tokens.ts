@@ -5,7 +5,7 @@
 export const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a',
   primaryTint: 'rgba(184,133,26,0.10)', primaryTint2: 'rgba(184,133,26,0.20)',
-  orange: '#FF6B35', orangeBg: 'rgba(255,107,53,0.10)',
+  orange: '#E6B022', orangeBg: 'rgba(255,107,53,0.10)',
   bg0: '#f6f5f1', bg1: '#fff', bg2: '#fafaf7', bg3: '#f0eee8',
   text: '#14110a', text2: '#55504a', text3: '#7a756c', text4: '#a8a299',
   border: 'rgba(20,17,10,0.07)', borderStrong: 'rgba(20,17,10,0.14)',

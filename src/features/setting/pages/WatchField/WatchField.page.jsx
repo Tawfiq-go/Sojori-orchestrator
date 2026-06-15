@@ -251,7 +251,7 @@ export default function FieldWatchConfigPanel() {
             variant="contained"
             onClick={handleSave}
             disabled={saving || !isDirty}
-            className="!text-white !bg-[#FF6B35] hover:!bg-[#E55A2B] disabled:!bg-gray-300 !px-8 !py-2.5 !text-sm !font-semibold !rounded-lg !shadow-md hover:!shadow-lg disabled:!shadow-none !transition-all"
+            className="!text-white !bg-[#E6B022] hover:!bg-[#B8881A] disabled:!bg-gray-300 !px-8 !py-2.5 !text-sm !font-semibold !rounded-lg !shadow-md hover:!shadow-lg disabled:!shadow-none !transition-all"
           >
             {saving ? (
               <span className="flex items-center gap-2">

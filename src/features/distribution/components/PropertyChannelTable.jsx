@@ -230,7 +230,7 @@ export default function PropertyChannelTable({
       <style>{`
         .property-table-wrap { overflow-x: auto; background: #fff; border-radius: 12px; border: 1px solid #E0E0E0; }
         .property-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .property-table th { text-align: left; padding: 14px 12px; background: #fff; border-bottom: 2px solid #FF6B35; font-weight: 600; color: #333; white-space: nowrap; }
+        .property-table th { text-align: left; padding: 14px 12px; background: #fff; border-bottom: 2px solid #E6B022; font-weight: 600; color: #333; white-space: nowrap; }
         .property-table td { padding: 10px 12px; border-bottom: 1px solid #eee; vertical-align: middle; }
         .property-table tbody tr:nth-child(even) { background: #FAFAFA; }
         .property-table tbody tr:hover { background: rgba(255,107,53,0.05); }
@@ -256,8 +256,8 @@ export default function PropertyChannelTable({
         .col-actions { min-width: 52px; }
         .prop-name { font-weight: 600; color: #333; }
         .sync-label, .promos-label { margin-right: 6px; }
-        .table-action-btn { padding: 4px 10px; border-radius: 6px; border: 1px solid #FF6B35; background: #fff; color: #FF6B35; cursor: pointer; font-size: 12px; }
-        .table-action-btn:hover { background: #FF6B35; color: #fff; }
+        .table-action-btn { padding: 4px 10px; border-radius: 6px; border: 1px solid #E6B022; background: #fff; color: #E6B022; cursor: pointer; font-size: 12px; }
+        .table-action-btn:hover { background: #E6B022; color: #fff; }
         .actions-dots { color: #999; cursor: pointer; }
         .property-table-empty { padding: 48px 24px; text-align: center; color: #555; max-width: 520px; margin: 0 auto; }
         .property-table-empty strong { display: block; margin-bottom: 10px; color: #333; }

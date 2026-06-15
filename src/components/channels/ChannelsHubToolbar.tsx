@@ -43,7 +43,6 @@ export function ChannelsHubToolbar({ sectionHint, sectionTab: sectionTabProp }: 
     Mapping: 'Mapping',
     Debug: 'Debug',
     Cron: 'Cron',
-    Import: 'Import RU',
   };
 
   return (
@@ -54,7 +53,7 @@ export function ChannelsHubToolbar({ sectionHint, sectionTab: sectionTabProp }: 
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="text-sm font-bold text-slate-900">Channels · Rental United</div>
-                <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-orange-50 text-orange-800 border border-orange-200">
+                <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded channels-badge-section">
                   {sectionLabels[sectionTab] || sectionTab}
                 </span>
                 <span className="text-xs text-slate-500">{formatCasablancaDate(lastRefresh, 'HH:mm:ss')}</span>
@@ -81,6 +80,7 @@ export function ChannelsHubToolbar({ sectionHint, sectionTab: sectionTabProp }: 
                   <option value={24}>24h</option>
                   <option value={72}>3j</option>
                   <option value={168}>7j</option>
+                  <option value={720}>30j</option>
                 </select>
               )}
               <button
@@ -98,7 +98,7 @@ export function ChannelsHubToolbar({ sectionHint, sectionTab: sectionTabProp }: 
               <button
                 type="button"
                 onClick={doRefresh}
-                className="h-7 w-7 inline-flex items-center justify-center rounded bg-orange-500 text-white hover:bg-orange-600"
+                className="h-7 w-7 inline-flex items-center justify-center rounded channels-icon-btn-primary transition-colors"
                 title="Actualiser"
               >
                 <RefreshCw size={14} />

@@ -6,7 +6,7 @@ import { getStaffSimplified } from '../services/serverApi.staffSimplified';
 import { useAdminOwnerFilter } from 'context/AdminOwnerFilterContext';
 import { CheckCircle, AlertCircle, XCircle, Clock, Calendar, Users as UsersIcon } from 'lucide-react';
 const SOJORI_COLORS = {
-  primary: '#FF6B35',
+  primary: '#E6B022',
   success: '#10B981',
   warning: '#F59E0B',
   error: '#EF4444',
