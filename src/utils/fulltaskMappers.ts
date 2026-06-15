@@ -617,7 +617,7 @@ export function apiOrchestrationToDesign(doc: Record<string, unknown> | null) {
   const rawCatalog = (doc.messageCatalog as Record<string, unknown>[]) || [];
   const rawScheduled = (doc.scheduledMessages as Record<string, unknown>[]) || [];
 
-  let catalog = rawCatalog.map((c) => ({
+  const catalog = rawCatalog.map((c) => ({
     id: String(c.id || ''),
     label: String(c.label || ''),
     whatsappTemplateId: String(c.whatsappTemplateId || c.id || ''),

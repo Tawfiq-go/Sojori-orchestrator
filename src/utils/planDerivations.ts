@@ -16,7 +16,6 @@ import type {
   AssignationDoc,
   AtomeStatus,
   EscaladeDoc,
-  PlannedMessageDoc,
   PlanDocShape,
   PlanStatus,
   RelanceDoc,
@@ -163,7 +162,7 @@ export function deriveEscaladeBlockStatus(
   if (escalade.status === 'saute') return 'termine' // Sauté = terminé
 
   // En retard si date passée et pas déclenché
-  if (isEnRetard(escalade as any, now)) return 'en_retard'
+  if (isEnRetard(escalade, now)) return 'en_retard'
 
   return 'en_attente'
 }
@@ -178,8 +177,6 @@ export function deriveEscaladeBlockStatus(
  */
 export function deriveSequenceTaskStatus(
   _sequence: SequenceDoc,
-  _actionCompleted: boolean = false,
-  _now: Date = new Date(),
   task?: { status?: string },
 ): SequenceStatus {
   if (!task?.status) return 'en_attente'
@@ -218,7 +215,7 @@ export function deriveSequenceStatus(
   if (sequence.kind === 'message') {
     return deriveSequenceMessageStatus(sequence, now)
   }
-  return deriveSequenceTaskStatus(sequence, sequence.clientActionCompleted || false, now, task)
+  return deriveSequenceTaskStatus(sequence, task)
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -282,7 +279,7 @@ export interface NextAction {
 /**
  * Calcule la prochaine action à venir (plus petit scheduledAt en attente)
  */
-export function computeNextAction(plan: PlanDocShape, now: Date = new Date()): NextAction {
+export function computeNextAction(plan: PlanDocShape): NextAction {
   const candidates: Array<{ type: NextAction['type']; label: string; scheduledAt: Date }> = []
 
   // Messages

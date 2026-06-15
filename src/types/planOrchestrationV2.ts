@@ -15,7 +15,14 @@
 export type PlanStatus = 'cree' | 'completed' | 'archived'
 
 /** Statut de séquence (dérivé - voir module planDerivations) */
-export type SequenceStatus = 'en_attente' | 'en_cours' | 'termine' | 'en_retard' | 'bloque'
+export type SequenceStatus =
+  | 'en_attente'
+  | 'en_cours'
+  | 'termine'
+  | 'en_retard'
+  | 'bloque'
+  | 'annule'
+  | 'saute'
 
 /** Statut atome (message/relance/rappel) - `en_retard` est dérivé, pas stocké */
 export type AtomeStatus = 'en_attente' | 'en_cours' | 'fait' | 'saute' | 'echec'
