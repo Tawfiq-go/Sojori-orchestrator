@@ -32,12 +32,12 @@ export function transformAirroiCall(airroi: AirroiCall): UnifiedApiCall {
     action: airroi.endpoint,
     request: {
       format: 'json',
-      content: airroi.requestPayload,
+      content: airroi.requestPayload as string | object,
       size: JSON.stringify(airroi.requestPayload || {}).length,
     },
     response: {
       format: 'json',
-      content: airroi.responsePayload,
+      content: airroi.responsePayload as string | object,
       size: JSON.stringify(airroi.responsePayload || {}).length,
     },
     status: airroi.success ? 'success' : 'error',
