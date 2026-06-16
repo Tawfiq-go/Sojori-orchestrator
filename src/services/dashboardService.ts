@@ -463,6 +463,19 @@ class DashboardService {
     const unreadMessages =
       overviewOk && Array.isArray(overview.unreadMessages) ? overview.unreadMessages : [];
 
+    // 🔍 Audit messages non lus (2026-06-15)
+    console.log('[Dashboard Audit] unreadMessages from /dashboard/overview:', {
+      count: unreadMessages.length,
+      overviewOk,
+      messages: unreadMessages.slice(0, 5).map((m: any) => ({
+        id: m.id || m._id,
+        from: m.from,
+        channelType: m.channelType,
+        preview: m.preview?.substring(0, 50),
+      })),
+      ...(unreadMessages.length > 5 ? { remaining: unreadMessages.length - 5 } : {}),
+    });
+
     const recentReviews = overviewOk && Array.isArray(overview.recentReviews) ? overview.recentReviews : [];
 
     logDashboard('getSnapshot done', {

@@ -644,6 +644,7 @@ class MessagesService {
     sortBy?: string;
     ownerId?: string;
     otaSearch?: boolean;
+    q?: string;
     reservationNumber?: string;
     guestName?: string;
     guestPhone?: string;
@@ -669,6 +670,7 @@ class MessagesService {
             sortBy: params?.sortBy || undefined,
             ...(params?.ownerId ? { ownerId: params.ownerId } : {}),
             ...(params?.otaSearch ? { otaSearch: '1' } : {}),
+            ...(params?.q ? { q: params.q } : {}),
             ...(params?.guestName ? { guestName: params.guestName } : {}),
             ...(params?.guestPhone ? { guestPhone: params.guestPhone } : {}),
             ...(params?.listingName ? { listingName: params.listingName } : {}),

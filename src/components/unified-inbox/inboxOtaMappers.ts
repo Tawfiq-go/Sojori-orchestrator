@@ -45,6 +45,8 @@ export interface OtaThreadRow {
   status?: string;
   reservationCreatedAt?: string;
   preloadedMessages?: any[];
+  /** Recherche avancée « mot-clé dans les messages » */
+  messageMatchCount?: number;
 }
 
 function channelLabelFromSourceKind(kind: ReturnType<typeof resolveReservationSourceKind>): string {
@@ -192,6 +194,8 @@ export function mapApiItemToOtaThread(item: any): OtaThreadRow {
     status: reservation.status || threadData.status,
     reservationCreatedAt: reservation.createdAt || reservation.reservationDate,
     preloadedMessages: item.messages || [],
+    messageMatchCount:
+      typeof threadData.messageMatchCount === 'number' ? threadData.messageMatchCount : undefined,
   };
 }
 
@@ -225,6 +229,7 @@ export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread
     nightsCount: nightsBetween(row.checkInDate, row.checkOutDate),
     reservationCreatedDisplay: formatReservationCreatedDisplay(row.reservationCreatedAt),
     taskCount,
+    messageMatchCount: row.messageMatchCount,
   };
 }
 

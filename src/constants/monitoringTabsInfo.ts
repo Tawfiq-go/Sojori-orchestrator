@@ -40,7 +40,7 @@ export const MONITORING_TABS_INFO = {
     ],
     filters: [
       'Time Range (1h, Today, Yesterday, 7d)',
-      'Category (API, DB, AI, WhatsApp, RabbitMQ, RU, etc.)',
+      'Category (API, DB, AI, WhatsApp, RabbitMQ, Ingress, Alerts, Metrics)',
       'Types (Logs, Metrics, RMQ, Alerts)',
       'Severity (Critical, Error, Warning, Info)',
       'Service',
@@ -206,55 +206,6 @@ export const MONITORING_TABS_INFO = {
       'Export incidents CSV',
     ],
     refreshInterval: 'Toutes les 30 secondes',
-  },
-
-  RU: {
-    title: 'Monitoring Rental United',
-    description:
-      'Monitoring des intégrations Rental United: appels API, webhooks, synchronisations. Affiche le taux de succès, latence, et statut de sync par owner.',
-    graphs: [
-      {
-        name: 'API Call Success Rate',
-        description: 'Pie chart montrant Success (200-299), Client Error (400-499), Server Error (500-599)',
-      },
-      {
-        name: 'API Latency by Endpoint',
-        description: 'Bar chart montrant la latence moyenne (ms) par endpoint RU (PushReservation, PullReservations, etc.)',
-      },
-      {
-        name: 'Webhook Events Timeline',
-        description: 'Area chart des webhooks RU reçus (NewReservation, UpdateReservation, CancelReservation, NewMessage, NewThread)',
-      },
-      {
-        name: 'Sync Status',
-        description: 'Table par owner montrant Last sync time, Synced reservations, Synced listings, Errors, Status',
-      },
-    ],
-    dataSources: [
-      {
-        name: 'API Calls',
-        endpoint: 'GET /api/monitoring/ru/api-calls',
-        collection: 'ru_api_logs',
-        service: 'srv-logs-proxy',
-        type: 'MongoDB (srv-channels DB)',
-      },
-      {
-        name: 'Webhooks',
-        endpoint: 'GET /api/monitoring/ru/webhooks',
-        collection: 'rentals_webhooks',
-        service: 'srv-logs-proxy',
-        type: 'MongoDB (srv-reservations DB)',
-      },
-      {
-        name: 'Sync Status',
-        endpoint: 'GET /api/monitoring/ru/sync-status',
-        collection: 'ru_sync_metadata',
-        service: 'srv-logs-proxy',
-        type: 'MongoDB (srv-channels DB)',
-      },
-    ],
-    filters: ['Time Range (1h, 6h, 24h, 7d)', 'Owner ID', 'Endpoint (PushReservation, PullReservations, etc.)', 'Status (Success, Error)'],
-    refreshInterval: 'Toutes les 60 secondes',
   },
 
   WhatsApp: {

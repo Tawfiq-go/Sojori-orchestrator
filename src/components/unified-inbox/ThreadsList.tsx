@@ -38,6 +38,18 @@ interface ThreadsListProps {
   otaSearchResultCount?: number | null;
   onOtaToutReset?: () => void;
   otaUnrepliedSearchActive?: boolean;
+  /** OTA : recherche serveur globale active (barre 🔍) — pas de filtre client à chaque frappe */
+  otaGlobalSearchActive?: boolean;
+  /** OTA : debounce en cours (pause de frappe avant appel API) */
+  otaSearchPending?: boolean;
+  /** OTA : mot-clé avancé actif (recherche dans messages) */
+  otaActiveKeyword?: string;
+  /** OTA : total occurrences mot-clé sur les fils trouvés */
+  otaKeywordMatchTotal?: number | null;
+  /** OTA : au moins un filtre / recherche active */
+  otaFiltersActive?: boolean;
+  /** OTA : réinitialiser barre 🔍 + avancé + canaux */
+  onOtaResetAll?: () => void;
 }
 
 type WaFilter = 'all' | 'unread' | 'guests' | 'staff';
@@ -71,6 +83,12 @@ export default function ThreadsList({
   otaSearchResultCount,
   onOtaToutReset,
   otaUnrepliedSearchActive,
+  otaGlobalSearchActive,
+  otaSearchPending,
+  otaActiveKeyword,
+  otaKeywordMatchTotal,
+  otaFiltersActive,
+  onOtaResetAll,
 }: ThreadsListProps) {
   const channel = channels[0];
   const title = listTitle || channel?.label || 'Inbox';
@@ -94,7 +112,7 @@ export default function ThreadsList({
       else if (waFilter === 'guests') list = list.filter((t) => t.reservationNumber && !t.isStaff);
       else if (waFilter === 'staff') list = list.filter((t) => t.isStaff || !t.reservationNumber);
     }
-    if (searchTerm.trim()) {
+    if (searchTerm.trim() && mode !== 'ota') {
       const q = searchTerm.toLowerCase();
       list = list.filter(
         (t) =>
@@ -220,7 +238,11 @@ export default function ThreadsList({
             component="input"
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={mode === 'ota' ? 'Filtrer la liste affichée…' : 'Voyageur, téléphone, résa…'}
+            placeholder={
+              mode === 'ota'
+                ? 'Résa, listing, voyageur, tél., owner…'
+                : 'Voyageur, téléphone, résa…'
+            }
             sx={{
               flex: 1,
               border: 0,
@@ -232,6 +254,31 @@ export default function ThreadsList({
               '&::placeholder': { color: T.text4 },
             }}
           />
+          {mode === 'ota' && otaFiltersActive && onOtaResetAll && (
+            <Box
+              component="button"
+              type="button"
+              onClick={onOtaResetAll}
+              title="Réinitialiser tous les filtres"
+              sx={{
+                flexShrink: 0,
+                border: `1px solid ${T.border}`,
+                borderRadius: '6px',
+                px: '7px',
+                py: '3px',
+                bgcolor: T.bg2,
+                color: T.text3,
+                fontFamily: 'inherit',
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                lineHeight: 1.2,
+                '&:hover': { bgcolor: T.errorTint, color: T.error, borderColor: T.error },
+              }}
+            >
+              ✕
+            </Box>
+          )}
           {mode !== 'ota' && (
             <Box
               sx={{
@@ -268,6 +315,8 @@ export default function ThreadsList({
           expanded={showOtaAdvanced}
           onToggleExpanded={() => setShowOtaAdvanced(!showOtaAdvanced)}
           searchResultCount={otaSearchResultCount}
+          keywordMatchTotal={otaKeywordMatchTotal}
+          activeKeyword={otaActiveKeyword}
         />
       )}
 
@@ -349,12 +398,14 @@ export default function ThreadsList({
         wrapperSx={{ flex: 1, minHeight: 0, bgcolor: T.bg1 }}
         innerSx={{ px: '8px', py: '6px' }}
       >
-        {loading && filtered.length === 0 && (
+        {((loading && filtered.length === 0) || (mode === 'ota' && otaSearchPending && filtered.length === 0)) && (
           <Box sx={{ py: 4, textAlign: 'center' }}>
-            <Typography sx={{ fontSize: 12, color: T.text4 }}>Chargement des fils OTA…</Typography>
+            <Typography sx={{ fontSize: 12, color: T.text4 }}>
+              {mode === 'ota' && otaSearchPending && !loading ? 'Recherche…' : 'Chargement des fils OTA…'}
+            </Typography>
           </Box>
         )}
-        {!loading && filtered.length === 0 && (
+        {!loading && !otaSearchPending && filtered.length === 0 && (
           <Box sx={{ py: 4, px: 2, textAlign: 'center' }}>
             <Typography sx={{ fontSize: 28, mb: 1 }}>📭</Typography>
             <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text2, mb: 0.5 }}>
@@ -362,7 +413,9 @@ export default function ThreadsList({
             </Typography>
             <Typography sx={{ fontSize: 11, color: T.text4, lineHeight: 1.45 }}>
               {mode === 'ota'
-                ? 'Élargissez les filtres ou lancez une recherche avancée.'
+                ? otaGlobalSearchActive
+                  ? 'Aucun résultat pour cette recherche.'
+                  : 'Élargissez les filtres ou lancez une recherche avancée.'
                 : 'Aucun résultat pour cette recherche.'}
             </Typography>
           </Box>
@@ -537,6 +590,14 @@ export default function ThreadsList({
                   {mode === 'ota' && thread.needsReply && (
                     <ThreadBadge tone="unreplied">À répondre</ThreadBadge>
                   )}
+                  {mode === 'ota' &&
+                    otaActiveKeyword &&
+                    thread.messageMatchCount != null &&
+                    thread.messageMatchCount > 0 && (
+                      <ThreadBadge tone="keyword">
+                        🔎 {thread.messageMatchCount}×
+                      </ThreadBadge>
+                    )}
                   {thread.stayBadge && (
                     <ThreadBadge tone="stay">{thread.stayBadge}</ThreadBadge>
                   )}
@@ -617,7 +678,17 @@ function ThreadBadge({
   tone,
 }: {
   children: ReactNode;
-  tone: 'resa' | 'checkin' | 'task' | 'stay' | 'airbnb' | 'booking' | 'staff' | 'auto' | 'unreplied';
+  tone:
+    | 'resa'
+    | 'checkin'
+    | 'task'
+    | 'stay'
+    | 'airbnb'
+    | 'booking'
+    | 'staff'
+    | 'auto'
+    | 'unreplied'
+    | 'keyword';
 }) {
   const styles = {
     resa: { bg: T.primaryTint, color: T.primaryDeep },
@@ -629,6 +700,7 @@ function ThreadBadge({
     staff: { bg: T.warningTint, color: T.warning },
     auto: { bg: T.aiTint, color: '#5b21b6' },
     unreplied: { bg: T.errorTint, color: T.error },
+    keyword: { bg: '#fef9c3', color: '#854d0e' },
   }[tone];
 
   return (

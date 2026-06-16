@@ -49,16 +49,28 @@ export function normalizeOtaMessageStatus(raw?: string | null): OtaMessageLifecy
 
 export function hasActiveOtaAdvancedSearch(advanced: OtaAdvancedSearch): boolean {
   return !!(
-    advanced.reservationNumber?.trim() ||
-    advanced.listingName?.trim() ||
-    advanced.guestName?.trim() ||
-    advanced.guestPhone?.trim() ||
     advanced.messageText?.trim() ||
     advanced.arrivalFrom ||
     advanced.arrivalTo ||
     (advanced.stayPeriod && advanced.stayPeriod !== 'all') ||
     advanced.messageStatus
   );
+}
+
+/** Recherche globale visible (barre 🔍) → GET …/get-thread?q=… */
+export function buildOtaGlobalSearchParams(
+  q: string,
+  opts?: { channelFilter?: OtaChannelFilter; ownerId?: string },
+): Record<string, string | boolean | undefined> {
+  const trimmed = q.trim();
+  if (trimmed.length < 2) return {};
+  const channel = opts?.channelFilter ?? 'all';
+  return {
+    otaSearch: true,
+    q: trimmed,
+    ...(opts?.ownerId ? { ownerId: opts.ownerId } : {}),
+    otaChannel: channel === 'ab' ? 'ab' : channel === 'bk' ? 'bk' : undefined,
+  };
 }
 
 /** Paramètres API GET /rentals/get-thread (recherche BD complète). */

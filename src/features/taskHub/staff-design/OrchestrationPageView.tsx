@@ -31,6 +31,8 @@ interface Props {
   loadState?: 'ok' | 'empty' | 'error';
   ownerDisplayName?: string;
   ownerKeyDetail?: string;
+  /** Compte PM unique : ne pas répéter le nom / id propriétaire sous le hero. */
+  hideOwnerScope?: boolean;
   ownerScopeExtra?: ReactNode;
 }
 
@@ -76,6 +78,7 @@ export default function OrchestrationPageView({
   loadState = 'ok',
   ownerDisplayName,
   ownerKeyDetail,
+  hideOwnerScope = false,
   ownerScopeExtra,
 }: Props) {
   const sortableSensors = useOrchSortableSensors();
@@ -180,7 +183,7 @@ export default function OrchestrationPageView({
             <b>Messages</b> (textes OTA / email partagés par PM) · <b>Config</b> (templates Meta).
             Les <b>workflows</b> (timing, relances) se configurent par <b>annonce</b> (orchestration listing v3).
           </div>
-          {ownerDisplayName ? (
+          {ownerDisplayName && !hideOwnerScope ? (
             <Stack
               direction="row"
               spacing={1}

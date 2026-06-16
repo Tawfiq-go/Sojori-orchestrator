@@ -83,7 +83,7 @@ function renderAutocompleteField(
 export default function OwnerConfigScopeBarWithSync({
   ownerDisplayName,
   showOwnerPicker,
-  isAdminTemplate,
+  hideOwnerScopeLabels = false,
   compact = false,
   syncMode: syncModeProp,
   onSyncToOwner,
@@ -112,7 +112,8 @@ export default function OwnerConfigScopeBarWithSync({
   const [localLoading, setLocalLoading] = useState(false);
 
   const syncing = syncingPm || syncingListings;
-  const shouldShowFilter = showOwnerPicker || isAdminTemplate;
+  /** Admin (template global) + Propriétaire + Sync tous les PMs — SuperAdmin / Admin uniquement. */
+  const shouldShowFilter = showOwnerPicker;
   const showListingSinglePicker = syncMode === 'listings' && listingOptions.length > 0;
   const showListingMultiPicker = syncMode === 'admin-pm';
 
@@ -363,7 +364,7 @@ export default function OwnerConfigScopeBarWithSync({
   );
 
   const barSx = {
-    mb: compact ? 1 : 1.5,
+    mb: compact ? (hideOwnerScopeLabels ? 0.5 : 1) : hideOwnerScopeLabels ? 1 : 1.5,
     width: '100%',
     display: 'flex',
     flexWrap: 'wrap' as const,
@@ -397,16 +398,29 @@ export default function OwnerConfigScopeBarWithSync({
   );
 
   if (!shouldShowFilter) {
+    const hasListingSync =
+      syncMode === 'listings' || syncMode === 'admin-pm';
+    const hasPmSync =
+      syncMode === 'owners' &&
+      (onSyncToOwner || onSyncToAllOwners) &&
+      !hideOwnerScopeLabels;
+
+    if (hideOwnerScopeLabels && !hasListingSync && !hasPmSync) {
+      return null;
+    }
+
     return (
       <Box sx={barSx}>
-        {syncMode === 'listings' || syncMode === 'admin-pm' ? (
+        {hasListingSync ? (
           <>
             <Box sx={filtersSx}>
               {syncMode === 'admin-pm' ? listingMultiAutocomplete : listingSingleAutocomplete}
             </Box>
             {syncButtonsWrap(listingsSyncButton)}
           </>
-        ) : (
+        ) : hasPmSync ? (
+          syncButtonsWrap(pmSyncButton)
+        ) : hideOwnerScopeLabels ? null : (
           <>
             <Box
               sx={{

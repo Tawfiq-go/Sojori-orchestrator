@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import WhatsAppTabV2 from '../components/communications/WhatsAppTabV2';
 import StaffWhatsAppTabV2 from '../components/communications/StaffWhatsAppTabV2';
-import WATemplatesTabV2 from '../components/communications/WATemplatesTabV2';
 import MessagesOTATabV2 from '../components/communications/MessagesOTATabV2';
 import LeadsTabV2 from '../components/communications/LeadsTabV2';
 import ReviewsTabV2 from '../components/communications/ReviewsTabV2';
@@ -23,8 +22,16 @@ function isWaGuestChannel(ch?: string): boolean {
 }
 
 export default function CommunicationsHubPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') || 'whatsapp') as CommsHubTab;
+  const tabParam = searchParams.get('tab');
+  const activeTab = (tabParam === 'templates' ? 'whatsapp' : tabParam || 'whatsapp') as CommsHubTab;
+
+  useEffect(() => {
+    if (tabParam === 'templates') {
+      navigate('/communications?tab=whatsapp', { replace: true });
+    }
+  }, [tabParam, navigate]);
 
   const [counts, setCounts] = useState<Partial<Record<CommsHubTab, number>>>({});
   const [unreadCount, setUnreadCount] = useState(0);
@@ -73,7 +80,6 @@ export default function CommunicationsHubPage() {
         setCounts({
           whatsapp: waGuest,
           staff: staffCount,
-          templates: 6,
           ota,
           leads: leadsCount,
           reviews: reviewsCount,
@@ -96,7 +102,6 @@ export default function CommunicationsHubPage() {
 
         {activeTab === 'whatsapp' && <WhatsAppTabV2 />}
         {activeTab === 'staff' && <StaffWhatsAppTabV2 />}
-        {activeTab === 'templates' && <WATemplatesTabV2 />}
         {activeTab === 'ota' && <MessagesOTATabV2 />}
         {activeTab === 'leads' && <LeadsTabV2 />}
         {activeTab === 'reviews' && <ReviewsTabV2 />}

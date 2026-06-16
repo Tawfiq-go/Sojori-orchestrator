@@ -82,7 +82,6 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'comms/inbox': '/communications',
     'comms/guests': '/communications?tab=whatsapp',
     'comms/staff': '/communications?tab=staff',
-    'comms/templates': '/communications?tab=templates',
     'comms/ota': '/communications?tab=ota',
     'comms/leads': '/communications?tab=leads',
     'comms/reviews': '/communications?tab=reviews',
@@ -105,7 +104,9 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'dynamic-pricing/portefeuille': '/dynamic-pricing/portefeuille',
     'dynamic-pricing/audit': '/dynamic-pricing/audit',
     'dynamic-pricing/bien': '/dynamic-pricing/portefeuille',
-    'channels': '/catalogue/channels',
+    'channels': '/admin/ChannelManager?tab=channel-manager',
+    'admin/ChannelManager/channel-manager': '/admin/ChannelManager?tab=channel-manager',
+    'admin/ChannelManager/distribution': '/admin/ChannelManager?tab=distribution',
 
     // CRM
     'crm': '/crm',
@@ -119,7 +120,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     'temp/booking-clients': '/temp/booking-clients',
 
     // Équipe
-    'staff': '/tasks/team',
+    'staff': '/admin/equipe?tab=worker',
     'my-tasks': '/tasks',
     'my-sched': '/tasks/planning',
 
@@ -188,8 +189,56 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
   const getActivePathFromUrl = () => {
     const path = location.pathname;
 
+    if (path === '/tasks' || path === '/tasks/list') {
+      return 'tasks/list';
+    }
+    if (path.startsWith('/tasks/planning')) {
+      return 'tasks/planning';
+    }
+    if (path.startsWith('/tasks/kanban')) {
+      return 'tasks/kanban';
+    }
+    if (path.startsWith('/tasks/team')) {
+      return 'tasks/team';
+    }
+
+    if (path.startsWith('/listings/orchestration-model')) {
+      return 'listings/orchestration-model';
+    }
+    if (path.startsWith('/listings') || path.startsWith('/catalogue/listings')) {
+      return 'listings/list';
+    }
+
+    if (path === '/reservations' || /^\/reservations\/[^/]+$/.test(path)) {
+      return 'reservations';
+    }
+    if (path.startsWith('/reservations/planning')) {
+      return 'reservations/planning';
+    }
+
     if (path.startsWith('/clients/contacts')) {
       return 'clients';
+    }
+
+    if (path.startsWith('/reviews')) {
+      return 'reviews';
+    }
+
+    if (path.startsWith('/communications')) {
+      const tab = new URLSearchParams(location.search).get('tab') || 'whatsapp';
+      const commTabToNav: Record<string, string> = {
+        whatsapp: 'comms/guests',
+        guests: 'comms/guests',
+        staff: 'comms/staff',
+        ota: 'comms/ota',
+        leads: 'comms/leads',
+        reviews: 'reviews',
+      };
+      return commTabToNav[tab] || 'comms/guests';
+    }
+
+    if (path.startsWith('/paiements')) {
+      return 'payments';
     }
 
     if (path.startsWith('/crm')) {
@@ -211,7 +260,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
       return 'crm/onboarding';
     }
 
-    if (path.startsWith('/catalogue/channels')) {
+    if (path.startsWith('/catalogue/channels') || path.startsWith('/admin/ChannelManager')) {
       return 'channels';
     }
 
@@ -229,13 +278,6 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
       if (path.includes('/bien/')) return 'dynamic-pricing/bien';
       if (path.includes('/bien')) return 'dynamic-pricing/bien';
       return 'dynamic-pricing/portefeuille';
-    }
-
-    if (path.startsWith('/admin/ChannelManager')) {
-      const tab = new URLSearchParams(location.search).get('tab') || 'channel-manager';
-      return tab === 'distribution'
-        ? 'admin/ChannelManager/distribution'
-        : 'admin/ChannelManager/channel-manager';
     }
 
     // Monitor hub (onglets via ?tab=)
@@ -316,9 +358,11 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     if (path.startsWith('/admin/equipe')) {
       const tab = new URLSearchParams(location.search).get('tab') || 'list';
       if (tab === 'admin-whatsapp') return 'tasks/team';
+      if (tab === 'worker' || tab === 'groups') return 'staff';
       const map: Record<string, string> = {
-        worker: 'admin/equipe/roles',
-        groups: 'admin/equipe/groups',
+        worker: 'staff',
+        groups: 'staff',
+        list: 'admin/equipe/owners',
       };
       return map[tab] || 'admin/equipe/owners';
     }

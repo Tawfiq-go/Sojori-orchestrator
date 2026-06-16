@@ -528,7 +528,6 @@ export default function UnifiedMonitoringPage() {
                   { value: 'ai', label: 'AI', icon: '🤖' },
                   { value: 'whatsapp', label: 'WhatsApp', icon: '💬' },
                   { value: 'rabbitmq', label: 'RabbitMQ', icon: '🐰' },
-                  { value: 'ru', label: 'RU', icon: '🏠' },
                   { value: 'ingress', label: 'Ingress', icon: '🌐' },
                   { value: 'alerts', label: 'Alerts', icon: '🚨' },
                   { value: 'metrics', label: 'Metrics', icon: '📊' }

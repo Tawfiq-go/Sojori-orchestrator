@@ -12,8 +12,11 @@ export type NavItemConfig = {
   badge?: string;
   badgeRed?: boolean;
   description?: string;
+  /** Sous-liens — affichés sous le parent (parent reste cliquable si route définie). */
   sub?: NavItemConfig[];
   roles?: NavRole[];
+  /** Parent décoratif : pas de navigation au clic (ex. Orchestration CORE). */
+  navDisabled?: boolean;
 };
 
 export type NavGroupConfig = {
@@ -25,61 +28,51 @@ export type NavGroupConfig = {
 };
 
 const ADMIN_ROLES: NavRole[] = [Roles.SuperAdmin, Roles.Admin];
-const PILOTAGE_ROLES: NavRole[] = [Roles.SuperAdmin, Roles.Admin, Roles.Owner];
-const OPS_ROLES: NavRole[] = [Roles.SuperAdmin, Roles.Admin, Roles.Owner, Roles.Worker];
+/** Staff Sojori / property managers — pilotage client (pas infra admin). */
 const PM_ROLES: NavRole[] = [Roles.SuperAdmin, Roles.Admin, Roles.Owner];
-const OWNER_ONLY: NavRole[] = [Roles.Owner];
+const OPS_ROLES: NavRole[] = [Roles.SuperAdmin, Roles.Admin, Roles.Owner, Roles.Worker];
 const WORKER_ONLY: NavRole[] = [Roles.Worker];
 
 /**
- * Sidebar Atelier 2026 — alignée maquette Claude Design (Sojori Sidebar.html).
- * @see docs/SIDEBAR_CLAUDE_DESIGN.md
+ * Sidebar Owner / PM — catégories repliables (Sojori staff pour nos clients).
+ * SuperAdmin & Admin voient en plus les sections infra en bas (navGroupsForRole).
  */
-export const NAV_GROUPS: NavGroupConfig[] = [
+export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
   {
-    group: 'Pilotage',
-    roles: PILOTAGE_ROLES,
+    group: 'Dashboard',
+    roles: PM_ROLES,
     items: [
       { id: 'dashboard', label: 'Tableau de bord', iconType: 'dashboard', iconColor: '#D4A574', badge: 'Live' },
       { id: 'analytics', label: 'Analytics', iconType: 'chart', iconColor: '#5B9BD5' },
-      { id: 'reports', label: 'Rapports', iconType: 'document', iconColor: '#A6A6A6', roles: ADMIN_ROLES },
+      { id: 'reports', label: 'Rapports', iconType: 'document', iconColor: '#A6A6A6' },
     ],
   },
   {
-    group: 'Opérations',
+    group: 'Pricing',
+    roles: PM_ROLES,
+    items: [
+      { id: 'calendar', label: 'Calendrier', iconType: 'calendar', iconColor: '#E06666' },
+      { id: 'pricing/portfolio', label: 'Portefeuille', iconType: 'trending', iconColor: '#93C47D' },
+      { id: 'pricing/audit', label: 'Audit prix', iconType: 'trending', iconColor: '#93C47D' },
+    ],
+  },
+  {
+    group: 'Réservations',
     roles: OPS_ROLES,
     items: [
-      {
-        id: 'reservations',
-        label: 'Réservations',
-        iconType: 'calendar',
-        iconColor: '#E06666',
-        sub: [
-          { id: 'reservations/list', label: 'Liste' },
-          { id: 'reservations/planning', label: 'Planning', roles: ADMIN_ROLES },
-        ],
-      },
-      {
-        id: 'payments',
-        label: 'Paiements',
-        iconType: 'chart',
-        iconColor: '#5B9BD5',
-        description: 'Audit NAPS · idDemande · token',
-      },
-      {
-        id: 'tasks',
-        label: 'Tâches',
-        iconType: 'check',
-        iconColor: '#93C47D',
-        roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
-        sub: [
-          { id: 'tasks/list', label: 'Liste' },
-          { id: 'tasks/planning', label: 'Planning séjour' },
-          { id: 'tasks/kanban', label: 'Kanban' },
-          { id: 'tasks/team', label: 'Équipe terrain' },
-        ],
-      },
-      { id: 'calendar', label: 'Calendrier & inventaire', iconType: 'calendar', iconColor: '#E06666' },
+      { id: 'reservations', label: 'Liste', iconType: 'calendar', iconColor: '#E06666' },
+      { id: 'reservations/planning', label: 'Planning', iconType: 'calendar', iconColor: '#E06666', roles: PM_ROLES },
+      { id: 'payments', label: 'Paiements', iconType: 'chart', iconColor: '#5B9BD5', roles: PM_ROLES },
+    ],
+  },
+  {
+    group: 'Task',
+    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
+    items: [
+      { id: 'tasks/list', label: 'Liste', iconType: 'check', iconColor: '#93C47D' },
+      { id: 'tasks/planning', label: 'Planning', iconType: 'check', iconColor: '#93C47D' },
+      { id: 'tasks/kanban', label: 'Kanban', iconType: 'check', iconColor: '#93C47D' },
+      { id: 'tasks/team', label: 'Équipe terrain', iconType: 'check', iconColor: '#93C47D' },
     ],
   },
   {
@@ -87,109 +80,54 @@ export const NAV_GROUPS: NavGroupConfig[] = [
     roles: PM_ROLES,
     core: true,
     items: [
-      {
-        id: 'orchestration',
-        label: 'Orchestration',
-        iconType: 'settings',
-        iconColor: '#666666',
-        badge: 'CORE',
-        sub: [
-          { id: 'orch/plans', label: 'Plans par séjour' },
-          { id: 'orch/ops', label: 'Ops · J0/J+1' },
-          { id: 'orch/workflows', label: 'Workflows · config' },
-        ],
-      },
+      { id: 'orch/plans', label: 'Plans par séjour', iconType: 'settings', iconColor: '#666666', badge: 'CORE' },
+      { id: 'orch/ops', label: 'Ops · J0/J+1', iconType: 'settings', iconColor: '#666666' },
+      { id: 'orch/workflows', label: 'Workflows · config', iconType: 'settings', iconColor: '#666666' },
     ],
   },
   {
-    group: 'Catalogue & revenue',
+    group: 'Annonces',
     roles: PM_ROLES,
     items: [
-      {
-        id: 'listings',
-        label: 'Annonces',
-        iconType: 'home',
-        iconColor: '#D4A574',
-        sub: [
-          { id: 'listings/list', label: 'Listings' },
-          { id: 'listings/orchestration-model', label: 'Modèle orchestration' },
-        ],
-      },
-      {
-        id: 'pricing',
-        label: 'Dynamic Pricing',
-        iconType: 'trending',
-        iconColor: '#93C47D',
-        sub: [
-          { id: 'pricing/portfolio', label: 'Portefeuille' },
-          { id: 'pricing/audit', label: 'Audit prix' },
-        ],
-      },
+      { id: 'listings/list', label: 'Listings', iconType: 'home', iconColor: '#D4A574' },
+      { id: 'listings/orchestration-model', label: 'Modèle orchestration', iconType: 'home', iconColor: '#D4A574' },
+      { id: 'chatbot/listing', label: 'Listing chatbot', iconType: 'home', iconColor: '#D4A574' },
       { id: 'channels', label: 'Channel Manager', iconType: 'link', iconColor: '#6D9EEB' },
     ],
   },
   {
-    group: 'Relation client',
+    group: 'Inbox',
     roles: PM_ROLES,
     items: [
-      {
-        id: 'comms',
-        label: 'Communications',
-        iconType: 'chat',
-        iconColor: '#6D9EEB',
-        badgeRed: true,
-        sub: [
-          { id: 'comms/inbox', label: 'Inbox unifiée' },
-          { id: 'comms/guests', label: 'WhatsApp voyageurs' },
-          { id: 'comms/staff', label: 'WhatsApp staff' },
-          { id: 'comms/ota', label: 'Messages OTA' },
-          { id: 'comms/templates', label: 'Templates' },
-        ],
-      },
-      {
-        id: 'chatbot',
-        label: 'Chatbot',
-        iconType: 'robot',
-        iconColor: '#7C3AED',
-        badge: 'AI',
-        sub: [
-          { id: 'chatbot/whitelist', label: 'Whitelist' },
-          { id: 'chatbot/listing', label: 'Listing chatbot' },
-        ],
-      },
-      {
-        id: 'crm',
-        label: 'CRM & clients',
-        iconType: 'users',
-        iconColor: '#A6A6A6',
-        sub: [
-          { id: 'crm/clients', label: 'Clients' },
-          { id: 'crm/requests', label: 'Demandes' },
-          { id: 'crm/leads', label: 'Leads & fiches' },
-          { id: 'crm/support', label: 'Rendez-vous' },
-          { id: 'crm/onboarding', label: 'Onboarding' },
-          { id: 'crm/reviews', label: 'Avis' },
-        ],
-      },
+      { id: 'comms/guests', label: 'WhatsApp Guest', iconType: 'chat', iconColor: '#6D9EEB' },
+      { id: 'comms/ota', label: 'Messages OTA', iconType: 'chat', iconColor: '#6D9EEB' },
+      { id: 'crm/requests', label: 'Demandes', iconType: 'chat', iconColor: '#6D9EEB' },
+      { id: 'reviews', label: 'Avis', iconType: 'chat', iconColor: '#6D9EEB' },
+      { id: 'comms/staff', label: 'Staff WhatsApp', iconType: 'chat', iconColor: '#6D9EEB', badgeRed: true },
     ],
   },
   {
     group: 'Équipe',
     roles: OPS_ROLES,
     items: [
-      { id: 'staff', label: 'Staff', iconType: 'worker', iconColor: '#D4A574', roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner] },
+      { id: 'staff', label: 'Staff', iconType: 'worker', iconColor: '#D4A574', roles: PM_ROLES },
+      { id: 'chatbot/whitelist', label: 'Whitelist', iconType: 'robot', iconColor: '#7C3AED', roles: PM_ROLES },
       { id: 'my-tasks', label: 'Mes tâches', iconType: 'check', iconColor: '#93C47D', roles: WORKER_ONLY },
       { id: 'my-sched', label: 'Mon planning', iconType: 'calendar', iconColor: '#E06666', roles: WORKER_ONLY },
     ],
   },
   {
     group: 'Finances',
-    roles: [Roles.SuperAdmin, Roles.Owner],
+    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
     items: [
       { id: 'revenue', label: 'Revenus & versements', iconType: 'trending', iconColor: '#93C47D' },
       { id: 'statements', label: 'Relevés', iconType: 'document', iconColor: '#A6A6A6' },
     ],
   },
+];
+
+/** Sections réservées SuperAdmin / Admin (infra, pas PM client). */
+export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
   {
     group: 'Logs API',
     roles: ADMIN_ROLES,
@@ -199,14 +137,20 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         label: 'Logs RU',
         iconType: 'link',
         iconColor: '#6D9EEB',
-        description: 'Logs Rental United — Summary, Business, Debug, Mapping, Cron',
+        description: 'Logs Rental United — Summary, Business, Debug',
         sub: [
           { id: 'admin/channels/summary', label: 'Summary' },
           { id: 'admin/channels/business', label: 'Business' },
           { id: 'admin/channels/debug', label: 'Debug' },
         ],
       },
-      { id: 'admin/sojori-logs', label: 'Logs AirROI', iconType: 'document', iconColor: '#E6B022', description: 'Logs API marché & listings' },
+      {
+        id: 'admin/sojori-logs',
+        label: 'Logs AirROI',
+        iconType: 'document',
+        iconColor: '#E6B022',
+        description: 'Logs API marché & listings',
+      },
     ],
   },
   {
@@ -258,6 +202,9 @@ export const NAV_GROUPS: NavGroupConfig[] = [
   },
 ];
 
+/** @deprecated alias — préférer OWNER_NAV_GROUPS + navGroupsForRole */
+export const NAV_GROUPS: NavGroupConfig[] = [...OWNER_NAV_GROUPS, ...ADMIN_NAV_GROUPS];
+
 function roleAllowed(allowed: NavRole[] | undefined, role: string | null | undefined): boolean {
   if (!allowed?.length) return true;
   if (!role) return false;
@@ -274,35 +221,70 @@ function filterItems(items: NavItemConfig[], role: string | null | undefined): N
     .filter((item) => !item.sub || item.sub.length > 0);
 }
 
-function applyWorkerOpsFilter(group: NavGroupConfig, role: string | null | undefined): NavGroupConfig {
-  if (role !== Roles.Worker || group.group !== 'Opérations') return group;
+function filterGroup(group: NavGroupConfig, role: string | null | undefined): NavGroupConfig {
   return {
     ...group,
-    items: group.items.filter((item) => item.id === 'calendar' || item.id === 'reservations'),
+    items: filterItems(group.items, role),
   };
+}
+
+/** Worker terrain : calendrier + réservations + mes tâches / planning. */
+function workerNavGroups(): NavGroupConfig[] {
+  return [
+    {
+      group: 'Réservations',
+      items: [
+        { id: 'reservations', label: 'Liste', iconType: 'calendar', iconColor: '#E06666' },
+      ],
+    },
+    {
+      group: 'Pricing',
+      items: [{ id: 'calendar', label: 'Calendrier', iconType: 'calendar', iconColor: '#E06666' }],
+    },
+    {
+      group: 'Équipe',
+      items: [
+        { id: 'my-tasks', label: 'Mes tâches', iconType: 'check', iconColor: '#93C47D' },
+        { id: 'my-sched', label: 'Mon planning', iconType: 'calendar', iconColor: '#E06666' },
+      ],
+    },
+  ];
 }
 
 /** Sidebar filtrée par rôle utilisateur. */
 export function navGroupsForRole(role: string | null | undefined): NavGroupConfig[] {
-  return NAV_GROUPS.filter((g) => roleAllowed(g.roles, role))
-    .map((g) => applyWorkerOpsFilter(g, role))
-    .map((g) => ({
-      ...g,
-      items: filterItems(g.items, role),
-    }))
+  if (role === Roles.Worker) {
+    return workerNavGroups();
+  }
+
+  const ownerGroups = OWNER_NAV_GROUPS.filter((g) => roleAllowed(g.roles, role))
+    .map((g) => filterGroup(g, role))
     .filter((g) => g.items.length > 0);
+
+  if (!roleAllowed(ADMIN_ROLES, role)) {
+    return ownerGroups;
+  }
+
+  const adminGroups = ADMIN_NAV_GROUPS.filter((g) => roleAllowed(g.roles, role))
+    .map((g) => filterGroup(g, role))
+    .filter((g) => g.items.length > 0);
+
+  return [...ownerGroups, ...adminGroups];
 }
 
-/** État collapsed par défaut — groupes secondaires repliés. */
+/** État collapsed par défaut — groupes secondaires repliés au premier login. */
 export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
-  Pilotage: false,
-  Opérations: false,
+  Dashboard: false,
+  Pricing: false,
+  Réservations: false,
+  Task: false,
   Orchestration: false,
-  'Catalogue & revenue': true,
-  'Relation client': true,
-  Équipe: false,
+  Annonces: true,
+  Inbox: false,
+  Équipe: true,
   Finances: true,
-  'Monitor & infra': false,
+  'Logs API': true,
+  'Monitor & infra': true,
   Administration: true,
   Temp: true,
 };
@@ -310,4 +292,4 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
 /** Compat legacy */
 export const NAV = NAV_GROUPS;
 
-export { ADMIN_ROLES, PILOTAGE_ROLES, OPS_ROLES, PM_ROLES, OWNER_ONLY, WORKER_ONLY };
+export { ADMIN_ROLES, PM_ROLES, OPS_ROLES, WORKER_ONLY };

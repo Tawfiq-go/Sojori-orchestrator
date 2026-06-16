@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useInboxMessageScroll } from './useInboxMessageScroll';
+import { highlightInboxKeyword, messageMatchesKeyword } from './highlightInboxKeyword';
 import { Box, Stack, Typography, CircularProgress, Tooltip } from '@mui/material';
 import { DoneAll } from '@mui/icons-material';
 import { T } from './_tokens';
@@ -24,6 +25,8 @@ interface ConversationThreadProps {
   loadingMessages?: boolean;
   messagesLoadError?: string | null;
   messagesTotal?: number;
+  /** OTA recherche avancée : surligner + scroll vers la 1ʳᵉ occurrence */
+  highlightKeyword?: string;
 }
 
 export default function ConversationThread({
@@ -40,6 +43,7 @@ export default function ConversationThread({
   loadingMessages = false,
   messagesLoadError = null,
   messagesTotal = 0,
+  highlightKeyword = '',
 }: ConversationThreadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -51,7 +55,11 @@ export default function ConversationThread({
     thread.id,
     messages.length,
     loadingMessages,
+    highlightKeyword,
+    messages,
   );
+
+  const kw = highlightKeyword?.trim() ?? '';
 
   const isOta = isOtaChannelType(thread.channel);
   const otaTheme = getOtaTheme(thread.channel, otaPlatform);
@@ -487,16 +495,25 @@ export default function ConversationThread({
           const isGuest = message.from === 'guest';
           const waFailed = isOut && message.whatsappDelivery === 'failed';
           const styles = bubbleStyles(message.from);
+          const isKeywordHit = kw && messageMatchesKeyword(message.text, kw);
 
           return (
             <Box
               key={message.id}
+              id={`inbox-msg-${thread.id}-${message.id}`}
               sx={{
                 alignSelf: isOut ? 'flex-end' : 'flex-start',
                 maxWidth: '75%',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '2px',
+                ...(isKeywordHit
+                  ? {
+                      outline: '2px solid #eab308',
+                      outlineOffset: 2,
+                      borderRadius: '12px',
+                    }
+                  : {}),
               }}
             >
               <Box
@@ -535,7 +552,7 @@ export default function ConversationThread({
                     wordBreak: 'break-word',
                   }}
                 >
-                  {message.text}
+                  {kw ? highlightInboxKeyword(message.text, kw) : message.text}
                 </Typography>
               </Box>
               <Stack

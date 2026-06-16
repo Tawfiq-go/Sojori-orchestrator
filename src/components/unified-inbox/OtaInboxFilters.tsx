@@ -19,6 +19,9 @@ interface OtaInboxFiltersProps {
   searchResultCount?: number | null;
   onToutReset?: () => void;
   unrepliedSearchActive?: boolean;
+  /** Total occurrences mot-clé (recherche avancée messages) */
+  keywordMatchTotal?: number | null;
+  activeKeyword?: string;
 }
 
 const CHANNEL_TABS: Array<{ id: OtaChannelFilter; label: string; emoji?: string }> = [
@@ -45,6 +48,8 @@ export default function OtaInboxFilters({
   searchResultCount,
   onToutReset,
   unrepliedSearchActive,
+  keywordMatchTotal,
+  activeKeyword,
 }: OtaInboxFiltersProps) {
   const toutActive = channelFilter === 'all' && !unrepliedOnly && !serverSearchActive && !unrepliedSearchActive;
 
@@ -112,23 +117,86 @@ export default function OtaInboxFilters({
         <Box sx={{ px: '10px', pb: '6px' }}>
           <Box
             sx={{
-              p: '8px',
               borderRadius: '8px',
               border: `1px solid ${T.border}`,
               bgcolor: T.bg1,
-              maxHeight: 200,
-              overflowY: 'scroll',
-              overscrollBehavior: 'contain',
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: 320,
+              overflow: 'hidden',
             }}
-            className="ota-inbox-advanced-scroll"
           >
-            <AdvancedForm
-              advanced={advanced}
-              onAdvancedChange={onAdvancedChange}
-              onAdvancedSubmit={onAdvancedSubmit}
-              onAdvancedReset={onAdvancedReset}
-              loading={loading}
-            />
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                overscrollBehavior: 'contain',
+                p: '8px',
+              }}
+              className="ota-inbox-advanced-scroll"
+            >
+              <AdvancedFormFields
+                advanced={advanced}
+                onAdvancedChange={onAdvancedChange}
+                keywordMatchTotal={keywordMatchTotal}
+                activeKeyword={activeKeyword}
+              />
+            </Box>
+            <Box
+              sx={{
+                flexShrink: 0,
+                display: 'flex',
+                gap: 0.75,
+                p: '8px',
+                borderTop: `1px solid ${T.border}`,
+                bgcolor: T.bg2,
+              }}
+            >
+              <Box
+                component="button"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onAdvancedSubmit();
+                }}
+                disabled={loading}
+                sx={{
+                  flex: 1,
+                  border: 0,
+                  borderRadius: '8px',
+                  py: '9px',
+                  cursor: loading ? 'wait' : 'pointer',
+                  bgcolor: T.primary,
+                  color: '#fff',
+                  fontFamily: 'inherit',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  opacity: loading ? 0.65 : 1,
+                }}
+              >
+                {loading ? 'Recherche…' : 'Rechercher'}
+              </Box>
+              <Box
+                component="button"
+                type="button"
+                onClick={onAdvancedReset}
+                sx={{
+                  px: '12px',
+                  border: `1px solid ${T.border}`,
+                  borderRadius: '8px',
+                  py: '9px',
+                  cursor: 'pointer',
+                  bgcolor: T.bg1,
+                  color: T.text3,
+                  fontFamily: 'inherit',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Effacer
+              </Box>
+            </Box>
           </Box>
         </Box>
       )}
@@ -249,48 +317,27 @@ function CountPill({
   );
 }
 
-function AdvancedForm({
+function AdvancedFormFields({
   advanced,
   onAdvancedChange,
-  onAdvancedSubmit,
-  onAdvancedReset,
-  loading,
+  keywordMatchTotal,
+  activeKeyword,
 }: {
   advanced: OtaAdvancedSearch;
   onAdvancedChange: (s: OtaAdvancedSearch) => void;
-  onAdvancedSubmit: () => void;
-  onAdvancedReset: () => void;
-  loading?: boolean;
+  keywordMatchTotal?: number | null;
+  activeKeyword?: string;
 }) {
+  const kwLabel =
+    keywordMatchTotal != null && activeKeyword
+      ? `Dans les messages · « ${activeKeyword} » · ${keywordMatchTotal} trouvé${keywordMatchTotal > 1 ? 's' : ''}`
+      : 'Dans les messages';
+
   return (
     <Stack gap={1}>
       <Field
-        label="Réservation"
-        placeholder="SJ-XXXX"
-        value={advanced.reservationNumber || ''}
-        onChange={(v) => onAdvancedChange({ ...advanced, reservationNumber: v || undefined })}
-      />
-      <Field
-        label="Logement"
-        placeholder="Nom du listing"
-        value={advanced.listingName || ''}
-        onChange={(v) => onAdvancedChange({ ...advanced, listingName: v || undefined })}
-      />
-      <Field
-        label="Voyageur"
-        placeholder="Nom ou prénom"
-        value={advanced.guestName || ''}
-        onChange={(v) => onAdvancedChange({ ...advanced, guestName: v || undefined })}
-      />
-      <Field
-        label="Téléphone"
-        placeholder="+212…"
-        value={advanced.guestPhone || ''}
-        onChange={(v) => onAdvancedChange({ ...advanced, guestPhone: v || undefined })}
-      />
-      <Field
-        label="Dans les messages"
-        placeholder="Mot-clé"
+        label={kwLabel}
+        placeholder="Mot-clé dans le corps des messages"
         value={advanced.messageText || ''}
         onChange={(v) => onAdvancedChange({ ...advanced, messageText: v || undefined })}
       />
@@ -337,51 +384,6 @@ function AdvancedForm({
           })
         }
       />
-      <Stack direction="row" gap={0.75} sx={{ pt: 0.5 }}>
-        <Box
-          component="button"
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            onAdvancedSubmit();
-          }}
-          disabled={loading}
-          sx={{
-            flex: 1,
-            border: 0,
-            borderRadius: '8px',
-            py: '9px',
-            cursor: loading ? 'wait' : 'pointer',
-            bgcolor: T.primary,
-            color: '#fff',
-            fontFamily: 'inherit',
-            fontSize: 12,
-            fontWeight: 700,
-            opacity: loading ? 0.65 : 1,
-          }}
-        >
-          {loading ? 'Recherche…' : 'Rechercher'}
-        </Box>
-        <Box
-          component="button"
-          type="button"
-          onClick={onAdvancedReset}
-          sx={{
-            px: '12px',
-            border: `1px solid ${T.border}`,
-            borderRadius: '8px',
-            py: '9px',
-            cursor: 'pointer',
-            bgcolor: T.bg2,
-            color: T.text3,
-            fontFamily: 'inherit',
-            fontSize: 12,
-            fontWeight: 600,
-          }}
-        >
-          Effacer
-        </Box>
-      </Stack>
     </Stack>
   );
 }

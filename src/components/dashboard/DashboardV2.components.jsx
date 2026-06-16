@@ -16,7 +16,7 @@
 // ════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { NAV_DEFAULT_COLLAPSED, NAV_GROUPS as NAV } from '../../config/navConfig';
+import { NAV_DEFAULT_COLLAPSED } from '../../config/navConfig';
 import { useSidebarNav } from '../../hooks/useSidebarNav';
 import { LISTING_LAYOUT } from '../../constants/listingLayout';
 import { IconColored } from './IconColored';
@@ -145,9 +145,6 @@ export function DashboardLayout({ user, activePath, onNavigate, onLogout, childr
 // 2. AppSidebar
 // ════════════════════════════════════════════════════════════════════
 
-// NAV config is now imported from navConfig.ts with colored icons
-export { NAV };
-
 /** Icônes MUI alignées brief Claude Design (modules) — emoji en secours si id absent */
 const NAV_ICON_BY_ID = {
   dashboard: DashboardOutlined,
@@ -158,6 +155,7 @@ const NAV_ICON_BY_ID = {
   calendar: CalendarMonthOutlined,
   'reservations/list': ConfirmationNumberOutlined,
   'reservations/planning': TodayOutlined,
+  payments: ShowChartOutlined,
   'tasks/list': AssignmentTurnedInOutlined,
   'tasks/planning': TodayOutlined,
   'tasks/kanban': DashboardOutlined,
@@ -169,10 +167,22 @@ const NAV_ICON_BY_ID = {
   chatbot: SmartToyOutlined,
   'chatbot/whitelist': ForumOutlined,
   'chatbot/listing': HomeWorkOutlined,
+  inbox: InboxOutlined,
   'comms': ForumOutlined,
   'comms/guests': ForumOutlined,
+  'orch/plans': AutoAwesomeOutlined,
+  'orch/ops': TodayOutlined,
+  'orch/workflows': SettingsOutlined,
+  'listings/list': HomeWorkOutlined,
+  'listings/orchestration-model': HubOutlined,
+  'pricing/portfolio': InsightsOutlined,
+  'pricing/audit': HistoryOutlined,
+  staff: GroupsOutlined,
+  'my-tasks': AssignmentTurnedInOutlined,
+  'my-sched': TodayOutlined,
+  revenue: ShowChartOutlined,
+  statements: DescriptionOutlined,
   'comms/staff': SupportAgentOutlined,
-  'comms/templates': DescriptionOutlined,
   'comms/ota': MailOutlined,
   'comms/leads': PersonSearchOutlined,
   'comms/reviews': StarBorderOutlined,
@@ -266,35 +276,26 @@ function NavItemIcon({ item, active, sub }) {
   );
 }
 
-export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogout }) {
-  // États par défaut pour les groupes
-  const defaultCollapsedState = {
-    'Dashboard': false,
-    'Calendrier': false,
-    'Réservations': false,
-    'Tâches': false,
-    'Chatbot': false,
-    'Communications': true,
-    'Catalogue': false,
-    'Dynamic Pricing': true,
-    'CRM & Clients': true,
-    'Monitor & Infra': true,
-    'Admin': true,
-  };
+function navItemMatchesPath(item, activePath) {
+  if (activePath === item.id || activePath.startsWith(`${item.id}/`)) return true;
+  if (item.sub?.some((s) => activePath === s.id || activePath.startsWith(`${s.id}/`))) return true;
+  return false;
+}
 
-  // Initialiser depuis localStorage ou utiliser les défauts
+export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogout }) {
+  const navGroups = useSidebarNav(user?.role);
+
   const [collapsed, setCollapsed] = React.useState(() => {
     try {
       const saved = localStorage.getItem('sojori-sidebar-collapsed');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Merge avec les défauts pour gérer les nouveaux groupes
-        return { ...defaultCollapsedState, ...parsed };
+        return { ...NAV_DEFAULT_COLLAPSED, ...parsed };
       }
     } catch (error) {
       console.warn('Erreur chargement état sidebar:', error);
     }
-    return defaultCollapsedState;
+    return { ...NAV_DEFAULT_COLLAPSED };
   });
 
   // Sauvegarder dans localStorage quand collapsed change
@@ -308,22 +309,13 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
 
   // Auto-ouvrir le groupe qui contient l'item actif
   React.useEffect(() => {
-    // Trouver quel groupe contient l'activePath
-    const activeGroup = NAV.find(group =>
-      group.items.some(item => {
-        // Check exact match ou parent path
-        if (item.id === activePath) return true;
-        // Check si activePath commence par item.id (ex: 'tasks/list' contient 'tasks')
-        if (activePath.startsWith(item.id.split('/')[0])) return true;
-        return false;
-      })
+    const activeGroup = navGroups.find((group) =>
+      group.items.some((item) => navItemMatchesPath(item, activePath)),
     );
-
     if (activeGroup) {
-      // Ouvrir ce groupe automatiquement
-      setCollapsed(prev => ({ ...prev, [activeGroup.group]: false }));
+      setCollapsed((prev) => ({ ...prev, [activeGroup.group]: false }));
     }
-  }, [activePath]);
+  }, [activePath, navGroups]);
 
   const toggleGroup = (groupName) => {
     setCollapsed(prev => ({ ...prev, [groupName]: !prev[groupName] }));
@@ -378,7 +370,9 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
         }}>S</Box>
         <Box sx={{ lineHeight: 1.15 }}>
           <Typography sx={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.4px', color: t.text }}>Sojori</Typography>
-          <Typography sx={{ color: t.text3, fontWeight: 600, fontSize: 10, mt: 0.2, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Property Owner</Typography>
+          <Typography sx={{ color: t.text3, fontWeight: 600, fontSize: 10, mt: 0.2, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+            {user?.role === 'Worker' ? 'Équipe terrain' : 'Property Manager'}
+          </Typography>
         </Box>
       </Stack>
 
@@ -416,8 +410,9 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
           },
         },
       }}>
-        {NAV.map(group => {
-          const isCollapsed = collapsed[group.group];
+        {navGroups.map((group) => {
+          const isCollapsed = collapsed[group.group] ?? true;
+          const isCore = Boolean(group.core);
           return (
             <React.Fragment key={group.group}>
               <Box
@@ -429,7 +424,7 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
                   fontSize: 10,
                   fontFamily: 'system-ui, -apple-system, sans-serif',
                   fontWeight: 700,
-                  color: t.text2,
+                  color: isCore ? t.ai : t.text2,
                   letterSpacing: 0.5,
                   textTransform: 'uppercase',
                   p: '14px 12px 8px',
@@ -437,19 +432,28 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
                   cursor: 'pointer',
                   userSelect: 'none',
                   borderRadius: '10px',
-                  background: isCollapsed ? 'transparent' : 'linear-gradient(135deg, rgba(230,176,34,0.04), rgba(230,176,34,0.01))',
-                  borderLeft: isCollapsed ? 'none' : `2px solid rgba(230,176,34,0.3)`,
+                  background: isCollapsed
+                    ? 'transparent'
+                    : isCore
+                      ? 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.02))'
+                      : 'linear-gradient(135deg, rgba(230,176,34,0.04), rgba(230,176,34,0.01))',
+                  borderLeft: isCollapsed ? 'none' : isCore ? `2px solid rgba(139,92,246,0.35)` : `2px solid rgba(230,176,34,0.3)`,
                   pl: isCollapsed ? '12px' : '14px',
                   transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                   '&:hover': {
                     color: t.text,
-                    bgcolor: 'rgba(230,176,34,0.06)',
-                    borderLeft: `2px solid rgba(230,176,34,0.5)`,
+                    bgcolor: isCore ? 'rgba(139,92,246,0.06)' : 'rgba(230,176,34,0.06)',
+                    borderLeft: isCore ? `2px solid rgba(139,92,246,0.5)` : `2px solid rgba(230,176,34,0.5)`,
                     pl: '14px',
                   },
                 }}
               >
-                <span>{group.group}</span>
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                  <span>{group.group}</span>
+                  {isCore ? (
+                    <Chip label="CORE" size="small" sx={{ height: 16, fontSize: 9, fontWeight: 800, bgcolor: t.aiTint, color: t.ai }} />
+                  ) : null}
+                </Stack>
                 <ExpandMore
                   sx={{
                     fontSize: 19,
@@ -460,17 +464,14 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
                   }}
                 />
               </Box>
-              {!isCollapsed && group.items.map(item => (
+              {!isCollapsed && group.items.map((item) => (
                 <React.Fragment key={item.id}>
                   <SideLink
                     item={item}
-                    active={
-                      activePath === item.id ||
-                      Boolean(item.sub?.some((s) => activePath === s.id || activePath.startsWith(`${s.id}/`)))
-                    }
+                    active={navItemMatchesPath(item, activePath)}
+                    disabled={Boolean(item.navDisabled && item.sub?.length)}
                     onClick={() => {
-                      console.log('🔵 CLICK menu parent:', item.id, item.label);
-                      console.log('   onNavigate exists?', !!onNavigate);
+                      if (item.navDisabled && item.sub?.length) return;
                       onNavigate?.(item.id);
                     }}
                   />
@@ -480,11 +481,7 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
                       item={s}
                       sub
                       active={activePath === s.id}
-                      onClick={() => {
-                        console.log('🟢 CLICK sous-menu:', s.id, s.label);
-                        console.log('   onNavigate exists?', !!onNavigate);
-                        onNavigate?.(s.id);
-                      }}
+                      onClick={() => onNavigate?.(s.id)}
                     />
                   ))}
                 </React.Fragment>
@@ -565,19 +562,16 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
   );
 }
 
-function SideLink({ item, active, sub, onClick }) {
+function SideLink({ item, active, sub, disabled, onClick }) {
   const handleClick = (e) => {
-    console.log('🟡 SideLink clicked:', item.id, item.label, 'onClick exists?', !!onClick);
-    if (onClick) {
-      onClick(e);
-    } else {
-      console.warn('⚠️ NO onClick handler for', item.id);
-    }
+    if (disabled) return;
+    onClick?.(e);
   };
 
   return (
-    <Box component="button" onClick={handleClick} sx={{
-      all: 'unset', cursor: 'pointer', width: '100%', textAlign: 'left',
+    <Box component="button" onClick={handleClick} disabled={disabled} sx={{
+      all: 'unset', cursor: disabled ? 'default' : 'pointer', width: '100%', textAlign: 'left',
+      opacity: disabled ? 0.92 : 1,
       display: 'flex', alignItems: 'center', gap: sub ? 1.2 : 1.3,
       p: sub ? '7px 12px 7px 16px' : '9px 12px',
       ml: sub ? 1.5 : 0,

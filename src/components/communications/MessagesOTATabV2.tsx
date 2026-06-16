@@ -18,12 +18,14 @@ import {
 import {
   applyOtaInboxFilters,
   buildOtaAdvancedApiParams,
+  buildOtaGlobalSearchParams,
   countOtaFilters,
   hasActiveOtaAdvancedSearch,
   sortOtaThreadsByActivity,
   type OtaAdvancedSearch,
   type OtaChannelFilter,
 } from '../unified-inbox/otaThreadFilters';
+import { useAdminOwnerFilter } from '../../context/AdminOwnerFilterContext';
 import { OTA_QUICK_REPLIES, OTA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
 import { formatThreadWhen, normalizeBookingSource } from '../unified-inbox/inboxFormat';
 import {
@@ -36,7 +38,10 @@ const OTA_INBOX_LIMIT = 100;
 
 const EMPTY_ADVANCED: OtaAdvancedSearch = { stayPeriod: 'all' };
 
-type OtaSearchMode = 'none' | 'advanced' | 'unreplied';
+type OtaSearchMode = 'none' | 'global' | 'advanced' | 'unreplied';
+
+const GLOBAL_SEARCH_MIN_LEN = 2;
+const GLOBAL_SEARCH_DEBOUNCE_MS = 500;
 
 function mapApiThreads(response: unknown): OtaThreadRow[] {
   const r = response as Record<string, unknown>;
@@ -58,7 +63,11 @@ export default function MessagesOTATabV2() {
   const [tableReady, setTableReady] = useState(() => Boolean(getCachedOtaInbox()));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const loadRequestIdRef = useRef(0);
+  const globalSearchRequestIdRef = useRef(0);
+  const globalSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [globalSearchPending, setGlobalSearchPending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const { requestOwnerId } = useAdminOwnerFilter();
   const [searchTerm, setSearchTerm] = useState('');
   const [otaChannelFilter, setOtaChannelFilter] = useState<OtaChannelFilter>('all');
   const [otaUnrepliedOnly, setOtaUnrepliedOnly] = useState(false);
@@ -121,44 +130,113 @@ export default function MessagesOTATabV2() {
       advanced?: OtaAdvancedSearch;
       channelFilter?: OtaChannelFilter;
       unrepliedOnly?: boolean;
-      mode: 'advanced' | 'unreplied';
+      globalQuery?: string;
+      mode: 'global' | 'advanced' | 'unreplied';
     }) => {
       const advanced = opts.advanced ?? appliedAdvanced;
       const channel = opts.channelFilter ?? otaChannelFilter;
       const unreplied = opts.unrepliedOnly ?? false;
 
+      const requestId =
+        opts.mode === 'global' ? ++globalSearchRequestIdRef.current : ++loadRequestIdRef.current;
+
       try {
         setLoading(true);
         setLoadError(null);
-        const apiParams = buildOtaAdvancedApiParams(advanced, {
-          channelFilter: channel,
-          unrepliedOnly: unreplied || opts.mode === 'unreplied',
-        });
+        const globalParams =
+          opts.mode === 'global' && opts.globalQuery
+            ? buildOtaGlobalSearchParams(opts.globalQuery, {
+                channelFilter: channel,
+                ownerId: requestOwnerId || undefined,
+              })
+            : {};
+        const apiParams =
+          opts.mode === 'global'
+            ? globalParams
+            : buildOtaAdvancedApiParams(advanced, {
+                channelFilter: channel,
+                unrepliedOnly: unreplied || opts.mode === 'unreplied',
+              });
 
         const response = await messagesService.getOTAThreads({
           page: 0,
           limit: OTA_INBOX_LIMIT,
+          ownerId: requestOwnerId || undefined,
           ...apiParams,
         });
 
+        if (opts.mode === 'global' && requestId !== globalSearchRequestIdRef.current) return;
+
         let rows = mapApiThreads(response);
-        // Avancée seule : peut inclure completed / annulées. Non répondu : actives seulement.
-        if (opts.mode !== 'advanced') {
+        // Recherche globale / avancée : peut inclure completed / annulées. Non répondu : actives seulement.
+        if (opts.mode === 'unreplied') {
           rows = filterOtaActiveReservationsOnly(rows);
         }
 
         setSearchRows(rows);
         setSearchMode(opts.mode);
       } catch (err: unknown) {
+        if (opts.mode === 'global' && requestId !== globalSearchRequestIdRef.current) return;
         console.error('❌ Erreur recherche OTA:', err);
         setLoadError(err instanceof Error ? err.message : 'Erreur de recherche');
         setSearchRows([]);
       } finally {
-        setLoading(false);
+        if (opts.mode === 'global') {
+          if (requestId === globalSearchRequestIdRef.current) {
+            setGlobalSearchPending(false);
+            setLoading(false);
+          }
+        } else {
+          setLoading(false);
+        }
       }
     },
-    [appliedAdvanced, otaChannelFilter],
+    [appliedAdvanced, otaChannelFilter, requestOwnerId],
   );
+
+  useEffect(() => {
+    const q = searchTerm.trim();
+    if (globalSearchDebounceRef.current) {
+      clearTimeout(globalSearchDebounceRef.current);
+      globalSearchDebounceRef.current = null;
+    }
+
+    if (!q) {
+      setGlobalSearchPending(false);
+      setSearchMode((mode) => {
+        if (mode === 'global') {
+          setSearchRows([]);
+          return 'none';
+        }
+        return mode;
+      });
+      return;
+    }
+
+    if (q.length < GLOBAL_SEARCH_MIN_LEN) {
+      setGlobalSearchPending(false);
+      setSearchMode((mode) => {
+        if (mode === 'global') {
+          setSearchRows([]);
+          return 'none';
+        }
+        return mode;
+      });
+      return;
+    }
+
+    setGlobalSearchPending(true);
+    globalSearchDebounceRef.current = setTimeout(() => {
+      void loadServerSearch({ mode: 'global', globalQuery: q });
+    }, GLOBAL_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (globalSearchDebounceRef.current) {
+        clearTimeout(globalSearchDebounceRef.current);
+        globalSearchDebounceRef.current = null;
+      }
+    };
+  }, [searchTerm, loadServerSearch]);
 
   useEffect(() => {
     void loadInbox();
@@ -175,7 +253,9 @@ export default function MessagesOTATabV2() {
 
   const handleChannelFilterChange = (filter: OtaChannelFilter) => {
     setOtaChannelFilter(filter);
-    if (searchMode === 'advanced') {
+    if (searchMode === 'global' && searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN) {
+      void loadServerSearch({ mode: 'global', globalQuery: searchTerm.trim(), channelFilter: filter });
+    } else if (searchMode === 'advanced') {
       void loadServerSearch({ mode: 'advanced', channelFilter: filter, unrepliedOnly: otaUnrepliedOnly });
     } else if (searchMode === 'unreplied') {
       void loadServerSearch({ mode: 'unreplied', channelFilter: filter, unrepliedOnly: true });
@@ -203,6 +283,7 @@ export default function MessagesOTATabV2() {
   const handleResetAdvanced = () => {
     setOtaAdvancedDraft(EMPTY_ADVANCED);
     setAppliedAdvanced(EMPTY_ADVANCED);
+    setSearchTerm('');
     setOtaChannelFilter('all');
     setOtaUnrepliedOnly(false);
     setAdvancedExpanded(false);
@@ -210,22 +291,55 @@ export default function MessagesOTATabV2() {
     void loadInbox({ skipCache: true });
   };
 
-  const handleToutReset = () => {
+  const handleResetAllFilters = () => {
+    setSearchTerm('');
     setOtaChannelFilter('all');
     setOtaUnrepliedOnly(false);
-    if (searchMode !== 'none') {
-      setSearchRows([]);
-      setSearchMode('none');
-    }
+    setOtaAdvancedDraft(EMPTY_ADVANCED);
+    setAppliedAdvanced(EMPTY_ADVANCED);
+    setAdvancedExpanded(false);
+    setSearchRows([]);
+    setSearchMode('none');
+    invalidateOtaInboxCache();
+    void loadInbox({ skipCache: true });
   };
 
   /** Compteurs toujours sur l'inbox actif (hors completed/annulée) */
   const otaFilterCounts = useMemo(() => countOtaFilters(inboxRows), [inboxRows]);
 
-  const otaBaseRows = useMemo(
-    () => (searchMode !== 'none' ? searchRows : inboxRows),
-    [searchMode, searchRows, inboxRows],
+  const otaGlobalQueryActive = searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN;
+
+  const activeKeyword = useMemo(() => {
+    const kw = appliedAdvanced.messageText?.trim();
+    if (searchMode === 'advanced' && kw) return kw;
+    return '';
+  }, [searchMode, appliedAdvanced.messageText]);
+
+  const keywordMatchTotal = useMemo(() => {
+    if (!activeKeyword) return null;
+    return searchRows.reduce((sum, row) => sum + (row.messageMatchCount ?? 0), 0);
+  }, [activeKeyword, searchRows]);
+
+  const otaFiltersActive = useMemo(
+    () =>
+      otaGlobalQueryActive ||
+      searchMode !== 'none' ||
+      otaChannelFilter !== 'all' ||
+      otaUnrepliedOnly ||
+      hasActiveOtaAdvancedSearch(appliedAdvanced),
+    [
+      otaGlobalQueryActive,
+      searchMode,
+      otaChannelFilter,
+      otaUnrepliedOnly,
+      appliedAdvanced,
+    ],
   );
+
+  const otaBaseRows = useMemo(() => {
+    if (otaGlobalQueryActive || searchMode !== 'none') return searchRows;
+    return inboxRows;
+  }, [otaGlobalQueryActive, searchMode, searchRows, inboxRows]);
 
   const displayRows = useMemo(() => {
     const rows = applyOtaInboxFilters(otaBaseRows, otaChannelFilter, otaUnrepliedOnly);
@@ -309,7 +423,7 @@ export default function MessagesOTATabV2() {
           onOtaChannelFilterChange={handleChannelFilterChange}
           otaUnrepliedOnly={otaUnrepliedOnly}
           onOtaUnrepliedOnlyChange={handleUnrepliedOnlyChange}
-          onOtaToutReset={handleToutReset}
+          onOtaToutReset={handleResetAllFilters}
           otaFilterCounts={otaFilterCounts}
           otaAdvancedSearch={otaAdvancedDraft}
           onOtaAdvancedSearchChange={setOtaAdvancedDraft}
@@ -317,9 +431,15 @@ export default function MessagesOTATabV2() {
           onOtaAdvancedSearchReset={handleResetAdvanced}
           otaServerSearchActive={searchMode === 'advanced'}
           otaUnrepliedSearchActive={searchMode === 'unreplied'}
+          otaGlobalSearchActive={otaGlobalQueryActive}
+          otaSearchPending={globalSearchPending}
           otaAdvancedExpanded={advancedExpanded}
           onOtaAdvancedExpandedChange={setAdvancedExpanded}
           otaSearchResultCount={searchMode === 'advanced' ? searchRows.length : null}
+          otaActiveKeyword={activeKeyword}
+          otaKeywordMatchTotal={keywordMatchTotal}
+          otaFiltersActive={otaFiltersActive}
+          onOtaResetAll={handleResetAllFilters}
           onSelectThread={(thread) => {
             const row = displayRows.find((r) => r.threadId === thread.id);
             if (row) void handleSelect(row);
@@ -334,6 +454,7 @@ export default function MessagesOTATabV2() {
               loadingMessages={inbox.loadingMessages}
               messagesLoadError={inbox.messagesLoadError}
               messagesTotal={inbox.messagesTotal}
+              highlightKeyword={activeKeyword}
               quickTemplates={OTA_QUICK_TEMPLATES}
               quickReplies={OTA_QUICK_REPLIES}
               otaPlatform={otaPlatform}

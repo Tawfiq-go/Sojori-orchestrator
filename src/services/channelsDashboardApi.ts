@@ -3,15 +3,10 @@
  * Retourne des réponses Axios (result.data = { success, data, ... }) pour compat composants legacy.
  */
 import apiClient from './apiClient';
-import {
-  channelsDashboardAxiosConfig,
-  monitoringAxiosConfig,
-  shouldRetryMonitoringRuApisWithoutEnrich,
-} from '../utils/channelsAxiosConfig';
+import { channelsDashboardAxiosConfig } from '../utils/channelsAxiosConfig';
 
-/** Chemins relatifs — baseURL via channelsDashboardAxiosConfig / monitoringAxiosConfig (proxy Vite en dev). */
+/** Chemins relatifs — baseURL via channelsDashboardAxiosConfig (proxy Vite en dev). */
 const CHANNELS_DASHBOARD = '/api/v1/admin/channels-dashboard';
-const MONITORING = '/api/monitoring';
 
 export function mapOverviewHoursToRuTimeRange(hours: number | string | undefined) {
   const n = Number(hours);
@@ -64,26 +59,34 @@ export function fetchChannelsCalendarRuCallBodies(id: string) {
   return fetchChannelsDistributionRuCallBodies(id);
 }
 
-/** OAuth PMS — RuCallApi srv-user (monitoring interne, comme legacy dashboard). */
+/** OAuth PMS — RuCallApi srv-user (GetMasterToken, GetUserToken) via channels-dashboard. */
 export function fetchChannelsOAuthRuApis(query: Record<string, unknown> = {}) {
   const page = query.page != null ? Math.max(1, Number(query.page)) : 1;
   const limit = query.limit != null ? Math.min(100, Math.max(1, Number(query.limit))) : 25;
-  const timeRange = mapOverviewHoursToRuTimeRange(query.hours as number | string | undefined);
   const params = new URLSearchParams();
   params.set('page', String(page));
   params.set('limit', String(limit));
-  params.set('service', 'user');
-  params.set('oauthOnly', 'true');
-  params.set('enrich', 'true');
-  params.set('timeRange', timeRange);
-  return apiClient.get(`${MONITORING}/ru/apis?${params.toString()}`, monitoringAxiosConfig());
+  if (query.period === 'all') {
+    params.set('period', 'all');
+  } else if (query.from && query.to) {
+    params.set('from', String(query.from));
+    params.set('to', String(query.to));
+  } else {
+    const hours =
+      query.hours != null ? Math.min(8760, Math.max(1, Math.floor(Number(query.hours)))) : 72;
+    params.set('hours', String(hours));
+  }
+  return apiClient.get(`${CHANNELS_DASHBOARD}/ru-oauth-apis?${params.toString()}`, {
+    timeout: 120_000,
+    ...channelsDashboardAxiosConfig(),
+  });
 }
 
 export function fetchChannelsOAuthRuCallBodies(id: string) {
-  return apiClient.get(
-    `${MONITORING}/ru/apis/user-call/${encodeURIComponent(String(id))}`,
-    monitoringAxiosConfig(),
-  );
+  return apiClient.get(`${CHANNELS_DASHBOARD}/ru-oauth-call/${encodeURIComponent(String(id))}`, {
+    timeout: 120_000,
+    ...channelsDashboardAxiosConfig(),
+  });
 }
 
 /** Messagerie REST RU (cron owner) — ChannelRuApiCall srv-channels. */
