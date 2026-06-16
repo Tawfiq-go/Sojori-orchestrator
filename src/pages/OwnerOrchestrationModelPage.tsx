@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Alert, Box, Button, CircularProgress, Stack } from '@mui/material';
+import { Alert, Box, CircularProgress } from '@mui/material';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
@@ -240,19 +240,6 @@ function OwnerModelPageInner() {
 
       {section === 'services' && (
         <>
-      {!isAdminTemplate && (
-        <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
-          <Button
-            size="small"
-            variant="outlined"
-            disabled={applying || ownerKey === 'global'}
-            onClick={() => void handleSyncAllListings()}
-          >
-            Appliquer le modèle à toutes les annonces
-          </Button>
-        </Stack>
-      )}
-
       {listingsLoading && !isAdminTemplate ? (
         <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
           <CircularProgress size={28} />

@@ -19,8 +19,9 @@ export interface TasksAuthLikeUser {
 export function resolveTasksUserScope(user: TasksAuthLikeUser | null | undefined) {
   const legacy = toLegacyAuthUser(user as Parameters<typeof toLegacyAuthUser>[0]);
   const role = String(legacy?.role || user?.role || '').trim();
-  if (import.meta.env.VITE_DISABLE_AUTH === 'true') {
-    return { ownerId: undefined, canAccessAllOwners: true, role: role || 'dev' };
+  // Dev sans session → admin template ; avec session Owner/Worker → scope prod
+  if (import.meta.env.VITE_DISABLE_AUTH === 'true' && !legacy) {
+    return { ownerId: undefined, canAccessAllOwners: true, role: 'SuperAdmin' };
   }
   if (canSelectOwnerInAdminFilter(legacy)) {
     return { ownerId: undefined, canAccessAllOwners: true, role };

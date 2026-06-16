@@ -51,9 +51,9 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 export function resolveTasksUserScope(user: TasksAuthLikeUser | null | undefined): TasksUserScope {
   const role = String(user?.role || '').trim();
 
-  // Localhost + VITE_DISABLE_AUTH : même comportement que /reservations (JWT / dev token côté API)
-  if (import.meta.env.VITE_DISABLE_AUTH === 'true') {
-    return { ownerId: undefined, canAccessAllOwners: true, role: role || 'dev' };
+  // Dev sans utilisateur connecté → accès admin ; Owner/Worker connectés restent scopés
+  if (import.meta.env.VITE_DISABLE_AUTH === 'true' && !user) {
+    return { ownerId: undefined, canAccessAllOwners: true, role: 'SuperAdmin' };
   }
 
   if (hasAdminAccess(role)) {

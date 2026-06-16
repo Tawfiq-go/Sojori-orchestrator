@@ -57,7 +57,6 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'comms/guests': '/communications?tab=whatsapp',
   'comms/staff': '/communications?tab=staff',
   'comms/ota': '/communications?tab=ota',
-  'comms/templates': '/communications?tab=templates',
   'comms/leads': '/communications?tab=leads',
   'comms/reviews': '/communications?tab=reviews',
   chatbot: '/chatbot/whitelist',

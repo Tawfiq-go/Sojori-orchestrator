@@ -13,8 +13,13 @@ export default function OwnerConfigScopeBar({
   ownerDisplayName,
   ownerKeyDetail,
   showOwnerPicker,
+  hideOwnerScopeLabels = false,
   compact = false,
 }: Props) {
+  if (hideOwnerScopeLabels && !showOwnerPicker) {
+    return null;
+  }
+
   return (
     <Box
       sx={{

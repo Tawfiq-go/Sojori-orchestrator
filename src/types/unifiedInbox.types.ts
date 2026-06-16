@@ -44,6 +44,8 @@ export interface Thread {
   stayBadge?: string;
   /** OTA : fil en attente de réponse hôte */
   needsReply?: boolean;
+  /** OTA recherche mot-clé : occurrences dans ce fil */
+  messageMatchCount?: number;
   isStaff?: boolean;
   isAuto?: boolean;
   tasks?: ReservationTask[];

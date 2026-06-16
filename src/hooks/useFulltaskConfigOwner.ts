@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { resolveTasksUserScope } from '../services/fulltaskTasksService';
 import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
 import { toLegacyAuthUser } from '../utils/legacyAuthUser';
+import { isPlatformAdminRole } from '../utils/taskScope.utils';
 import { ORCHESTRATION_ADMIN_OWNER_ID } from '../constants/orchestrationAdmin';
 
 export type FulltaskConfigOwnerScope = {
@@ -17,29 +18,32 @@ export type FulltaskConfigOwnerScope = {
   showOwnerPicker: boolean;
   /** True si on affiche les templates Admin (pas un Owner réel). */
   isAdminTemplate: boolean;
+  /** Compte PM unique : pas de libellés « propriétaire » (scope implicite). */
+  hideOwnerScopeLabels: boolean;
 };
 
 export function useFulltaskConfigOwner(): FulltaskConfigOwnerScope {
   const { user } = useAuth();
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
   const legacyUser = useMemo(() => toLegacyAuthUser(user), [user]);
-  const {
-    showOwnerFilter,
-    selectedOwnerId,
-    owners,
-  } = useAdminOwnerFilter();
+  const { selectedOwnerId, owners } = useAdminOwnerFilter();
+
+  const isPlatformAdmin = isPlatformAdminRole(String(legacyUser?.role ?? user?.role ?? ''));
 
   const ownerKey = useMemo(() => {
+    if (!scope.canAccessAllOwners) {
+      const id = scope.ownerId || String(legacyUser?._id ?? legacyUser?.id ?? '');
+      return id || 'unknown';
+    }
     const sel = selectedOwnerId?.trim();
-
     if (sel && sel !== ORCHESTRATION_ADMIN_OWNER_ID) {
       return sel;
     }
-
     return 'global';
-  }, [selectedOwnerId]);
+  }, [scope.canAccessAllOwners, scope.ownerId, legacyUser, selectedOwnerId]);
 
-  const isAdminTemplate = ownerKey === 'global';
+  const isAdminTemplate = isPlatformAdmin && scope.canAccessAllOwners && ownerKey === 'global';
+  const hideOwnerScopeLabels = !isPlatformAdmin && !isAdminTemplate;
 
   const ownerDisplayName = useMemo(() => {
     if (scope.canAccessAllOwners) {
@@ -70,7 +74,8 @@ export function useFulltaskConfigOwner(): FulltaskConfigOwnerScope {
     ownerKey,
     ownerDisplayName,
     ownerKeyDetail,
-    showOwnerPicker: showOwnerFilter,
+    showOwnerPicker: isPlatformAdmin,
     isAdminTemplate,
+    hideOwnerScopeLabels,
   };
 }

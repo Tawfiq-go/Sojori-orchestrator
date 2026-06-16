@@ -43,7 +43,8 @@ function TasksOrchestrationFulltaskPageInner() {
   const subTab = parseOrchestrationSubTab(searchParams.get('tab'));
 
   const ownerScope = useFulltaskConfigOwner();
-  const { ownerKey, ownerDisplayName, ownerKeyDetail, isAdminTemplate } = ownerScope;
+  const { ownerKey, ownerDisplayName, ownerKeyDetail, isAdminTemplate, hideOwnerScopeLabels } =
+    ownerScope;
   const { owners } = useAdminOwnerFilter();
 
   const pmOwners = useMemo(
@@ -356,12 +357,20 @@ function TasksOrchestrationFulltaskPageInner() {
             fontSize: 13,
           }}
         >
-          Ce PM n&apos;a pas encore de catalogue messages. Utilisez{' '}
-          <strong>Synchroniser PM {ownerDisplayName}</strong> pour copier le template Admin, ou
-          chargez le seed puis enregistrez.
+          {hideOwnerScopeLabels ? (
+            <>
+              Votre catalogue messages est vide. Chargez le seed puis enregistrez.
+            </>
+          ) : (
+            <>
+              Ce PM n&apos;a pas encore de catalogue messages. Utilisez{' '}
+              <strong>Synchroniser PM {ownerDisplayName}</strong> pour copier le template Admin, ou
+              chargez le seed puis enregistrez.
+            </>
+          )}
         </div>
       ) : null}
-      {configSource === 'owner' && effectiveOwnerKey !== 'global' ? (
+      {configSource === 'owner' && effectiveOwnerKey !== 'global' && !hideOwnerScopeLabels ? (
         <div
           style={{
             margin: '0 0 12px',
@@ -392,8 +401,9 @@ function TasksOrchestrationFulltaskPageInner() {
         </div>
       ) : null}
       <OrchestrationPageView
-        ownerDisplayName={effectiveDisplayName}
-        ownerKeyDetail={effectiveKeyDetail}
+        hideOwnerScope={hideOwnerScopeLabels}
+        ownerDisplayName={hideOwnerScopeLabels ? undefined : effectiveDisplayName}
+        ownerKeyDetail={hideOwnerScopeLabels ? undefined : effectiveKeyDetail}
         initialSubTab={subTab}
         loadState={loadState}
         onSubTabChange={(tab) => {

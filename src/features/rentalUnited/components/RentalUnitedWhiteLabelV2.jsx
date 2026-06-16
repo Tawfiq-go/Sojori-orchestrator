@@ -11,6 +11,7 @@ import OwnerSelectorV2 from './OwnerSelectorV2';
 import RentalUnitedContainerV2 from './RentalUnitedContainerV2';
 import RentalUnitedErrorBoundary from './RentalUnitedErrorBoundary';
 import { CmSpinner, CmAlert, CmOwnerPanel, CmHint } from './ChannelManagerUi';
+import { formatRuError } from '../utils/formatRuError';
 
 const RentalUnitedWhiteLabelV2 = () => {
   const reduxUser = useSelector((state) => state.auth.user);
@@ -70,6 +71,9 @@ const RentalUnitedWhiteLabelV2 = () => {
       const rows = Array.isArray(response?.data) ? response.data : [];
       const ruOwners = rows.filter((owner) => owner.channelManager === 'RU');
       setOwners(ruOwners);
+      if (ruOwners.length > 0) {
+        setSelectedOwnerId((prev) => prev || String(ruOwners[0]._id ?? ruOwners[0].id ?? ''));
+      }
     } catch (err) {
       setOwners([]);
       setOwnersError(
@@ -105,10 +109,10 @@ const RentalUnitedWhiteLabelV2 = () => {
         }
         setError(null);
       } else {
-        setError('Failed to refresh Rental United tokens');
+        setError('Token Rental United indisponible (scriptUrl absent). Vérifiez la config RU du owner.');
       }
     } catch (err) {
-      setError(err.message || 'Failed to refresh Rental United token');
+      setError(formatRuError(err, 'Failed to refresh Rental United token'));
     }
   };
   const handleOwnerChange = event => {
@@ -159,7 +163,7 @@ const RentalUnitedWhiteLabelV2 = () => {
           refreshToken();
         }, 55 * 60 * 1000);
       } catch (err) {
-        setError(err.message || 'Failed to load Rental United White Label');
+        setError(formatRuError(err, 'Failed to load Rental United White Label'));
       } finally {
         setLoading(false);
       }

@@ -2,7 +2,7 @@ import { Box, Typography } from '@mui/material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { T } from './_tokens';
 
-export type CommsHubTab = 'whatsapp' | 'staff' | 'templates' | 'ota' | 'leads' | 'reviews';
+export type CommsHubTab = 'whatsapp' | 'staff' | 'ota' | 'leads' | 'reviews';
 
 const HUB_TABS: {
   id: CommsHubTab;
@@ -12,14 +12,13 @@ const HUB_TABS: {
 }[] = [
   { id: 'whatsapp', label: 'WhatsApp', emoji: '💬', tone: 'wa' },
   { id: 'staff', label: 'Staff WhatsApp', emoji: '👷', tone: 'wa' },
-  { id: 'templates', label: 'Templates (QA)', emoji: '📝', tone: 'wa' },
   { id: 'ota', label: 'Messages OTA', emoji: '🏨', tone: 'ota' },
   { id: 'leads', label: 'Demande', emoji: '🎯', tone: 'ota' },
   { id: 'reviews', label: 'Avis', emoji: '⭐', tone: 'ota' },
 ];
 
 export function isWaDesignTab(tab: string): boolean {
-  return tab === 'whatsapp' || tab === 'staff' || tab === 'templates';
+  return tab === 'whatsapp' || tab === 'staff';
 }
 
 export function isOtaDesignTab(tab: string): boolean {
