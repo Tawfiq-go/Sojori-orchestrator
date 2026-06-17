@@ -23,6 +23,7 @@ import {
   VisibilityOff,
 } from '@mui/icons-material';
 import { AUTH_CONFIG } from '../config/authConfig';
+import { isMockAuthEnabled } from '../services/authService';
 import { logAuth } from '../utils/dashboardDebug';
 
 interface LoginFormState {
@@ -43,6 +44,7 @@ export const LoginPage: React.FC = () => {
 
   const navigate = useNavigate();
   const { login, isAuthenticated, loading, error } = useAuth();
+  const mockAuth = isMockAuthEnabled();
 
   useEffect(() => {
     logAuth('LoginPage mount', { isAuthenticated, loading, error: error ?? null });
@@ -56,11 +58,14 @@ export const LoginPage: React.FC = () => {
   }, [isAuthenticated, navigate]);
 
   const demoCredentials = useMemo(
-    () => [
-      { label: 'Admin demo', email: 'admin@sojori.com', password: 'admin123' },
-      { label: 'Owner demo', email: 'owner@riviera-collection.com', password: 'owner123' },
-    ],
-    []
+    () =>
+      mockAuth
+        ? [
+            { label: 'Admin demo', email: 'admin@sojori.com', password: 'admin123' },
+            { label: 'Owner demo', email: 'owner@riviera-collection.com', password: 'owner123' },
+          ]
+        : [],
+    [mockAuth],
   );
 
   const validate = () => {
@@ -74,8 +79,6 @@ export const LoginPage: React.FC = () => {
 
     if (!form.password.trim()) {
       nextErrors.password = 'Mot de passe requis.';
-    } else if (form.password.trim().length < 3) {
-      nextErrors.password = 'Minimum 3 caracteres pour la demo.';
     }
 
     setFieldErrors(nextErrors);
@@ -93,9 +96,7 @@ export const LoginPage: React.FC = () => {
     try {
       await login(form);
     } catch (err: any) {
-      setLocalError(
-        err?.message || err?.error || 'Connexion impossible. Verifiez vos identifiants mock.'
-      );
+      setLocalError(err?.message || err?.error || 'Connexion impossible. Vérifiez vos identifiants.');
     }
   };
 
@@ -127,7 +128,9 @@ export const LoginPage: React.FC = () => {
               Welcome to Sojori
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Mock authentication for the new orchestration experience.
+              {mockAuth
+                ? 'Mode démo mock (VITE_USE_MOCK_AUTH).'
+                : 'Connexion via dev.sojori.com (proxy local Vite, comptes réels).'}
             </Typography>
           </Box>
 
@@ -135,7 +138,9 @@ export const LoginPage: React.FC = () => {
             Sign in
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Use any valid email/password or pick a seeded demo account.
+            {mockAuth
+              ? 'Comptes démo ou tout email valide avec mot de passe ≥ 3 caractères.'
+              : 'Utilisez l’email et le mot de passe de votre compte admin ou owner.'}
           </Typography>
 
           {(error || localError) && (
@@ -155,7 +160,7 @@ export const LoginPage: React.FC = () => {
                 onChange={(e) => updateForm('email', e.target.value)}
                 required
                 error={!!fieldErrors.email}
-                helperText={fieldErrors.email || 'Ex: admin@sojori.com'}
+                helperText={fieldErrors.email || 'Ex: gouachadmin@sojori.com'}
                 slotProps={{
                   input: {
                     startAdornment: (
@@ -187,7 +192,7 @@ export const LoginPage: React.FC = () => {
                 onChange={(e) => updateForm('password', e.target.value)}
                 required
                 error={!!fieldErrors.password}
-                helperText={fieldErrors.password || 'Le mot de passe mock accepte toute valeur >= 3 caracteres.'}
+                helperText={fieldErrors.password}
                 slotProps={{
                   input: {
                     startAdornment: (
@@ -256,36 +261,27 @@ export const LoginPage: React.FC = () => {
                 {loading ? 'Signing in...' : 'Sign in'}
               </Button>
 
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-                {demoCredentials.map((account) => (
-                  <Button
-                    key={account.label}
-                    variant="outlined"
-                    fullWidth
-                    onClick={() =>
-                      setForm({
-                        email: account.email,
-                        password: account.password,
-                        rememberMe: true,
-                      })
-                    }
-                    sx={{ textTransform: 'none', borderRadius: 2 }}
-                  >
-                    {account.label}
-                  </Button>
-                ))}
-              </Stack>
-
-              <Divider>or continue with</Divider>
-
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-                <Button variant="outlined" fullWidth sx={{ textTransform: 'none', borderRadius: 2 }}>
-                  Google
-                </Button>
-                <Button variant="outlined" fullWidth sx={{ textTransform: 'none', borderRadius: 2 }}>
-                  Facebook
-                </Button>
-              </Stack>
+              {demoCredentials.length > 0 && (
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+                  {demoCredentials.map((account) => (
+                    <Button
+                      key={account.label}
+                      variant="outlined"
+                      fullWidth
+                      onClick={() =>
+                        setForm({
+                          email: account.email,
+                          password: account.password,
+                          rememberMe: true,
+                        })
+                      }
+                      sx={{ textTransform: 'none', borderRadius: 2 }}
+                    >
+                      {account.label}
+                    </Button>
+                  ))}
+                </Stack>
+              )}
 
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
                 No account yet?{' '}

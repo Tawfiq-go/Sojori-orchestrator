@@ -76,6 +76,9 @@ const apiDevProxy = {
   },
 } as const
 
+const devPort = Number(process.env.VITE_DEV_PORT || 4174)
+const devHmrPort = Number(process.env.VITE_HMR_PORT || devPort)
+
 // https://vite.dev/config/
 export default defineConfig({
   appType: 'spa',
@@ -146,7 +149,7 @@ export default defineConfig({
 
   server: {
     host: '127.0.0.1',
-    port: 4174,
+    port: devPort,
     strictPort: true,
     headers: devSecurityHeaders,
     proxy: {
@@ -155,8 +158,8 @@ export default defineConfig({
     hmr: {
       protocol: 'ws',
       host: '127.0.0.1',
-      port: 4174,
-      clientPort: 4174,
+      port: devHmrPort,
+      clientPort: devHmrPort,
     },
     // ⚡ Pré-réchauffer les modules les plus utilisés
     warmup: {
