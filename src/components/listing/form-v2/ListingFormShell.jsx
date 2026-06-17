@@ -165,6 +165,7 @@ export default function ListingFormShell({
   hiddenConfigTabIds = [],    // ex. ['transport-config'] sur template Admin global
   onSave,
   onPublish,
+  publishLoading = false,     // loading state pour le bouton Publier
   onPreview,
   onAiAssist,
   renderTab,                  // (tabKey, level) => ReactNode — branche tes vrais composants ici
@@ -252,8 +253,10 @@ export default function ListingFormShell({
             gap: { xs: 1.25, sm: 2 },
             mb: embedded ? 1.25 : 2,
             alignItems: { xs: 'stretch', sm: 'flex-start' },
+            justifyContent: 'space-between',
           }}
         >
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
           {!lockLevel && (
           <Box
             sx={{
@@ -322,6 +325,7 @@ export default function ListingFormShell({
             })}
           </Box>
           )}
+          </Box>
           <Box sx={{ flex: 1, minWidth: 0, pt: { xs: 0, sm: 0.25 } }}>
             {lockedConfig && configNewBadgeLabel ? (
               <Box
@@ -496,8 +500,10 @@ export default function ListingFormShell({
                 Sauvegarder pour enregistrer cet écran
               </Stack>
               <Box sx={{ flex: 1 }} />
-              <Button onClick={onSave}    sx={btnGhost}>Sauvegarder</Button>
-              <Button onClick={onPublish} sx={btnPrim}>Publier →</Button>
+              <Button onClick={onSave} sx={btnGhost} disabled={publishLoading}>Sauvegarder</Button>
+              <Button onClick={onPublish} sx={btnPrim} disabled={publishLoading}>
+                {publishLoading ? 'Synchronisation RU...' : 'Publier →'}
+              </Button>
             </Stack>
             )}
           </Box>

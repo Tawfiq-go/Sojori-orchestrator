@@ -7,6 +7,11 @@ import {
   resolveCheckInTimeEnd,
   timeInputToHourNumber,
 } from './listingTimeHelpers';
+import {
+  decodeCancellationPolicyUi,
+  encodeCancellationPolicyUi,
+  type CancellationPolicyRow,
+} from './listingCancellationPolicyPresets';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -35,6 +40,71 @@ function asNumber(v: unknown): number | undefined {
   if (typeof v === 'number' && Number.isFinite(v)) return v;
   if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
   return undefined;
+}
+
+function cityTaxAmountFromApi(raw: UnknownRecord): number | undefined {
+  const fromField =
+    asNumber(raw.cityTaxPerAdultPerNight) ?? asNumber(raw.cityTaxPerAdult);
+  if (fromField !== undefined) return fromField;
+  const fees = raw.additionalFees;
+  if (!Array.isArray(fees)) return undefined;
+  const row = fees.find((f) => isRecord(f) && f.feeTaxType === 'city_tax');
+  return row ? asNumber(row.value) : undefined;
+}
+
+/** Montant caution — API Mongo = objet `{ depositRuId, value }`, formulaire = nombre. */
+function depositAmountFromApi(raw: unknown): number | undefined {
+  if (isRecord(raw)) return asNumber(raw.value);
+  return asNumber(raw);
+}
+
+function dateToInputValue(v: unknown): string {
+  if (!v) return '';
+  if (typeof v === 'string') return v.slice(0, 10);
+  if (v instanceof Date && Number.isFinite(v.getTime())) return v.toISOString().slice(0, 10);
+  return '';
+}
+
+function dateInputToIso(v: unknown): Date | null {
+  const s = asString(v).trim();
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+function depositToUpdatePayload(
+  amount: unknown,
+  existingMeta: unknown,
+  depositRequired?: boolean,
+): UnknownRecord | undefined {
+  const value = asNumber(amount);
+  if (value === undefined) return undefined;
+  const existing = isRecord(existingMeta) ? existingMeta : {};
+  const depositId = asString(existing.depositId);
+  const existingRuId = asString(existing.depositRuId);
+  const useFlatAmount = depositRequired !== false && value > 0;
+  const depositRuId = useFlatAmount ? '5' : existingRuId || '1';
+  return {
+    ...(depositId && !useFlatAmount ? { depositId } : {}),
+    depositRuId,
+    value: useFlatAmount ? value : depositRequired === false ? 0 : value,
+  };
+}
+
+function cancellationPoliciesFromApi(raw: UnknownRecord): CancellationPolicyRow[] | undefined {
+  const rows = raw.cancellationPolicies;
+  if (!Array.isArray(rows) || rows.length === 0) return undefined;
+  const parsed = rows
+    .map((row) => {
+      if (!isRecord(row)) return null;
+      const from = asNumber(row.from);
+      const to = asNumber(row.to);
+      const val = asNumber(row.value);
+      if (from === undefined || to === undefined || val === undefined) return null;
+      return { from, to, value: val };
+    })
+    .filter(Boolean) as CancellationPolicyRow[];
+  return parsed.length > 0 ? parsed : undefined;
 }
 
 /** Aligné dashboard `cleanMediaData` — URLs GCS + métadonnées pour update-property. */
@@ -121,6 +191,8 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
   const descriptions = cloneDescriptionArray(raw.description);
   const descLang: DescLangUi = '🇫🇷 FR';
   const fr = getDescEntryForLang(descriptions, descLang);
+  const licenceInfo = isRecord(raw.licenceInfo) ? raw.licenceInfo : {};
+  const cityTaxAmount = cityTaxAmountFromApi(raw);
 
   return {
     ...raw,
@@ -149,8 +221,21 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     airbnbSummary: asString(raw.airbnbSummary),
     active: raw.active !== false,
     staging: raw.staging === true,
-    instantBooking: raw.instantBookable === true,
+    instantBooking: raw.onlineCheckIn === true || raw.instantBookable === true,
     otaOnly: raw.otaOnly === true,
+    basePrice: asNumber(rt.basePrice) ?? asNumber(raw.basePrice),
+    weekendPrice: asNumber(raw.extra),
+    minNights: asNumber(raw.minNights),
+    maxNights: asNumber(raw.maxNights),
+    advanceNotice: asNumber(raw.preparationTimeBeforeArrivalInHours),
+    dynamicPricing: raw.useDynamicPrice === true,
+    frequency: Array.isArray(raw.frequency) ? raw.frequency : [],
+    TS_CLEAN: Array.isArray(raw.TS_CLEAN) ? raw.TS_CLEAN : [],
+    TS_CHECKIN: Array.isArray(raw.TS_CHECKIN) ? raw.TS_CHECKIN : [],
+    TS_CHECKOUT: Array.isArray(raw.TS_CHECKOUT) ? raw.TS_CHECKOUT : [],
+    paidCleaningConfig: isRecord(raw.paidCleaningConfig) ? { ...raw.paidCleaningConfig } : undefined,
+    requiresOnlineCheckin: raw.requiresOnlineCheckin === true,
+    messageCheckout: Array.isArray(raw.messageCheckout) ? [...raw.messageCheckout] : [],
     lat: asNumber(raw.lat) ?? 0,
     lng: asNumber(raw.lng) ?? 0,
     address: asString(raw.address),
@@ -167,6 +252,45 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     checkOutTime: hourNumberToTimeInput(asNumber(raw.checkOutTime)),
     checkInTimeStart: asNumber(raw.checkInTimeStart),
     checkInTimeEnd: asNumber(raw.checkInTimeEnd),
+    currencyCode: asString(raw.currencyCode),
+
+    // Licence / Enregistrement (UI = license*, Mongo = licence*)
+    licenceIsExempt:
+      raw.licenceIsExempt === true || licenceInfo.isExempt === true,
+    licenseNumber:
+      asString(raw.licenceNumber) || asString(licenceInfo.licenceNumber),
+    licenseType: asString(raw.licenceType) || asString(licenceInfo.licenceType),
+    licenseIssueDate:
+      dateToInputValue(licenceInfo.issueDate) || dateToInputValue(raw.licenseIssueDate),
+    licenseExpiryDate:
+      dateToInputValue(licenceInfo.expirationDate) ||
+      dateToInputValue(raw.licenseExpiryDate),
+    cityHall: asString(raw.cityHall),
+    adminContact: asString(raw.adminContact),
+    policeRegistrationRequired: raw.policeRegistrationRequired === true,
+    policeApiEndpoint: asString(raw.policeApiEndpoint),
+
+    // Fees & Taxes (discriminators RU)
+    cleaningFeeEnabled: raw.cleaningFeeEnabled === true,
+    cleaningFee: asNumber(raw.cleaningFee),
+    cleaningFeeDiscriminator: asString(raw.cleaningFeeDiscriminator) || '1',
+    cityTaxEnabled: raw.cityTaxEnabled === true,
+    cityTaxPerAdult: cityTaxAmount,
+    cityTaxPerAdultPerNight: cityTaxAmount,
+    cityTaxDiscriminator: asString(raw.cityTaxDiscriminator) || '6',
+    cityTaxCollectionMode: asString(raw.cityTaxCollectionMode) || 'on_table',
+
+    // Acompte (arrhes RU) + caution
+    bookingDeposit: depositAmountFromApi(raw.deposit),
+    bookingDepositEnabled: (depositAmountFromApi(raw.deposit) ?? 0) > 0,
+    _bookingDepositMeta: isRecord(raw.deposit) ? { ...raw.deposit } : null,
+    depositRequired:
+      raw.depositRequired === true || (depositAmountFromApi(raw.securityDeposit) ?? 0) > 0,
+    securityDeposit: depositAmountFromApi(raw.securityDeposit),
+    _securityDepositMeta: isRecord(raw.securityDeposit) ? { ...raw.securityDeposit } : null,
+
+    // Cancellation policy
+    cancellationPolicy: decodeCancellationPolicyUi(cancellationPoliciesFromApi(raw)),
   };
 }
 
@@ -218,6 +342,8 @@ export function mergeFormV2ToUpdatePropertyPayload(
           if (values.roomTypeConfigId != null) {
             row.roomTypeConfigId = values.roomTypeConfigId;
           }
+          const basePrice = asNumber(values.basePrice);
+          if (basePrice != null) row.basePrice = basePrice;
         }
         return row;
       })
@@ -230,7 +356,8 @@ export function mergeFormV2ToUpdatePropertyPayload(
     propertyType: propertyTypeToApi(values.propertyType),
     active: values.active,
     staging: values.staging,
-    instantBookable: values.instantBooking,
+    otaOnly: values.otaOnly,
+    onlineCheckIn: values.instantBooking,
     floor: values.floor,
     totalFloor: values.totalFloor,
     surface: values.sqm,
@@ -264,6 +391,37 @@ export function mergeFormV2ToUpdatePropertyPayload(
   if (values.country != null) payload.country = asString(values.country);
   if (values.countryCode != null) payload.countryCode = asString(values.countryCode);
   if (values.currencyCode != null) payload.currencyCode = asString(values.currencyCode);
+
+  const minNights = asNumber(values.minNights);
+  const maxNights = asNumber(values.maxNights);
+  if (minNights != null) payload.minNights = minNights;
+  if (maxNights != null) payload.maxNights = maxNights;
+
+  const advanceNotice = asNumber(values.advanceNotice);
+  if (advanceNotice != null) {
+    payload.preparationTimeBeforeArrivalInHours = advanceNotice;
+  }
+
+  const weekendPrice = asNumber(values.weekendPrice);
+  if (weekendPrice != null) payload.extra = weekendPrice;
+
+  if (values.dynamicPricing !== undefined) {
+    payload.useDynamicPrice = Boolean(values.dynamicPricing);
+  }
+
+  if (Array.isArray(values.frequency)) payload.frequency = values.frequency;
+  if (Array.isArray(values.TS_CLEAN)) payload.TS_CLEAN = values.TS_CLEAN;
+  if (Array.isArray(values.TS_CHECKIN)) payload.TS_CHECKIN = values.TS_CHECKIN;
+  if (Array.isArray(values.TS_CHECKOUT)) payload.TS_CHECKOUT = values.TS_CHECKOUT;
+  if (isRecord(values.paidCleaningConfig)) {
+    payload.paidCleaningConfig = values.paidCleaningConfig;
+  }
+  if (values.requiresOnlineCheckin !== undefined) {
+    payload.requiresOnlineCheckin = values.requiresOnlineCheckin;
+  }
+  if (Array.isArray(values.messageCheckout)) {
+    payload.messageCheckout = values.messageCheckout;
+  }
 
   if (Array.isArray(values.listingImages)) {
     payload.listingImages = cleanListingImagesForPayload(values.listingImages);
@@ -306,6 +464,76 @@ export function mergeFormV2ToUpdatePropertyPayload(
     timeInputToHourNumber(values.checkOutTime) ?? asNumber(values.checkOutTime);
   if (checkOutHour != null) {
     payload.checkOutTime = checkOutHour;
+  }
+
+  // Licence / Enregistrement (Mongo = licence*, pas license*)
+  if (values.licenceIsExempt !== undefined) payload.licenceIsExempt = values.licenceIsExempt;
+  if (values.licenseNumber !== undefined) {
+    payload.licenceNumber = asString(values.licenseNumber);
+  }
+  if (values.licenseType !== undefined) payload.licenceType = asString(values.licenseType);
+
+  const existingLicenceInfo = isRecord(values.licenceInfo) ? values.licenceInfo : {};
+  const licenceInfoPatch: UnknownRecord = { ...existingLicenceInfo };
+  let licenceInfoTouched = false;
+  if (values.licenceIsExempt !== undefined) {
+    licenceInfoPatch.isExempt = values.licenceIsExempt;
+    licenceInfoTouched = true;
+  }
+  if (values.licenseNumber !== undefined) {
+    licenceInfoPatch.licenceNumber = asString(values.licenseNumber);
+    licenceInfoTouched = true;
+  }
+  if (values.licenseType !== undefined) {
+    licenceInfoPatch.licenceType = asString(values.licenseType);
+    licenceInfoTouched = true;
+  }
+  const issueDate = dateInputToIso(values.licenseIssueDate);
+  if (values.licenseIssueDate !== undefined) {
+    licenceInfoPatch.issueDate = issueDate;
+    licenceInfoTouched = true;
+  }
+  const expirationDate = dateInputToIso(values.licenseExpiryDate);
+  if (values.licenseExpiryDate !== undefined) {
+    licenceInfoPatch.expirationDate = expirationDate;
+    licenceInfoTouched = true;
+  }
+  if (licenceInfoTouched) payload.licenceInfo = licenceInfoPatch;
+
+  // Fees & Taxes (discriminators RU)
+  if (values.cleaningFeeEnabled !== undefined) payload.cleaningFeeEnabled = values.cleaningFeeEnabled;
+  if (values.cleaningFee !== undefined) payload.cleaningFee = asNumber(values.cleaningFee);
+  if (values.cleaningFeeDiscriminator !== undefined) payload.cleaningFeeDiscriminator = asString(values.cleaningFeeDiscriminator);
+  if (values.cityTaxEnabled !== undefined) payload.cityTaxEnabled = values.cityTaxEnabled;
+  const cityTaxAmount =
+    asNumber(values.cityTaxPerAdult) ?? asNumber(values.cityTaxPerAdultPerNight);
+  if (cityTaxAmount !== undefined) {
+    payload.cityTaxPerAdultPerNight = cityTaxAmount;
+  }
+  if (values.cityTaxDiscriminator !== undefined) payload.cityTaxDiscriminator = asString(values.cityTaxDiscriminator);
+  if (values.cityTaxCollectionMode !== undefined) payload.cityTaxCollectionMode = asString(values.cityTaxCollectionMode);
+
+  // Acompte (arrhes) + caution
+  if (values.bookingDepositEnabled !== undefined || values.bookingDeposit !== undefined) {
+    const enabled = values.bookingDepositEnabled === true;
+    payload.deposit = depositToUpdatePayload(
+      enabled ? values.bookingDeposit : 0,
+      values._bookingDepositMeta ?? (isRecord(values.deposit) ? values.deposit : null),
+      enabled,
+    );
+  }
+  if (values.depositRequired !== undefined) payload.depositRequired = values.depositRequired;
+  if (values.securityDeposit !== undefined || values.depositRequired !== undefined) {
+    const enabled = values.depositRequired === true;
+    payload.securityDeposit = depositToUpdatePayload(
+      enabled ? values.securityDeposit : 0,
+      values._securityDepositMeta ?? (isRecord(values.securityDeposit) ? values.securityDeposit : null),
+      enabled,
+    );
+  }
+
+  if (values.cancellationPolicy !== undefined) {
+    payload.cancellationPolicies = encodeCancellationPolicyUi(asString(values.cancellationPolicy));
   }
 
   return payload;
