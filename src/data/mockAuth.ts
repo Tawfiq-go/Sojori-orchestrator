@@ -210,6 +210,21 @@ export const clearResetEmail = (): void => {
 export const findUserByEmail = (email: string): MockUser | undefined =>
   getStoredUsers().find((user) => user.email.toLowerCase() === email.trim().toLowerCase());
 
+const inferMockRole = (email: string): MockUserRole => {
+  const normalized = email.trim().toLowerCase();
+  if (normalized.includes('admin') || normalized === 'gouachadmin@sojori.com') {
+    return 'admin';
+  }
+  if (
+    normalized.includes('staff') ||
+    normalized.includes('ops') ||
+    normalized.includes('worker')
+  ) {
+    return 'staff';
+  }
+  return 'owner';
+};
+
 export const buildMockUserFromEmail = (
   email: string,
   password: string
@@ -226,7 +241,7 @@ export const buildMockUserFromEmail = (
     password,
     firstName: firstToken,
     lastName: secondToken,
-    role: 'owner',
+    role: inferMockRole(email),
     phone: '+33 6 00 00 00 00',
     company: 'Sojori Sandbox',
     avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(email)}`,

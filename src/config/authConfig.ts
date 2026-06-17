@@ -27,6 +27,15 @@ const shouldUseLocalMicroservicePorts = (): boolean => {
 
 // Détermination de l'URL de base de l'API (runtime : évite localhost baked en prod / preview)
 const getApiBaseUrl = (): string => {
+  // Front Vite local : chemins relatifs → proxy /api (vite.config) → dev.sojori.com, sans CORS
+  if (isBrowserLocalhost() && import.meta.env.DEV) {
+    const forceAbsolute = normalizeEnvUrl(import.meta.env.VITE_API_URL);
+    if (import.meta.env.VITE_USE_ABSOLUTE_API_URL === 'true' && forceAbsolute) {
+      return forceAbsolute;
+    }
+    return '';
+  }
+
   const configured = normalizeEnvUrl(import.meta.env.VITE_API_URL);
   if (configured) {
     return configured;
