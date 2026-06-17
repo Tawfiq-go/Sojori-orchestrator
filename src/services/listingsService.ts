@@ -22,6 +22,7 @@ import {
 import type { ClientServicesPayload } from '../utils/mapApiListingToListingRecord';
 import { getOwners } from './teamDashboardApi';
 import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
+import { isLocalViteDevHost, resolveDevApiOrigin } from '../config/resolveDevApiOrigin';
 
 const LOCAL_LISTING_API = 'http://localhost:4001/api/v1/listing';
 
@@ -188,8 +189,21 @@ function trimTrailingSlash(value: string): string {
 }
 
 function resolveListingApiBaseUrl(): string {
-  const configuredBase = import.meta.env.VITE_API_URL?.trim();
+  /** Front :4174 → proxy Vite /api → dev.sojori.com (évite ERR_CONNECTION_REFUSED / CORS). */
+  if (typeof window !== 'undefined' && isLocalViteDevHost()) {
+    return '/api/v1/listing';
+  }
 
+  const apiOrigin = resolveDevApiOrigin();
+  if (apiOrigin) {
+    const normalized = trimTrailingSlash(apiOrigin);
+    if (normalized.endsWith('/api/v1/listing')) {
+      return normalized;
+    }
+    return `${normalized}/api/v1/listing`;
+  }
+
+  const configuredBase = import.meta.env.VITE_API_URL?.trim();
   if (!configuredBase) {
     return LOCAL_LISTING_API;
   }
@@ -1581,12 +1595,25 @@ export const listingsService = {
     listingId: string,
     payload: Record<string, unknown>,
   ): Promise<Record<string, unknown> | null> {
+    console.log('[LISTING UPDATE] Payload keys:', Object.keys(payload));
+    console.log('[LISTING UPDATE] Fees fields:', {
+      licenceIsExempt: payload.licenceIsExempt,
+      cleaningFeeEnabled: payload.cleaningFeeEnabled,
+      cleaningFee: payload.cleaningFee,
+      cleaningFeeDiscriminator: payload.cleaningFeeDiscriminator,
+      cityTaxEnabled: payload.cityTaxEnabled,
+      cityTaxPerAdult: payload.cityTaxPerAdult,
+      cityTaxDiscriminator: payload.cityTaxDiscriminator,
+    });
+    console.log('[LISTING UPDATE] Full payload:', JSON.stringify(payload, null, 2));
+
     const response = await apiClient.put(
       `${LISTING_API_BASE_URL}/listings/update-property/${listingId}`,
       payload,
     );
     const body = asRecord(response.data);
     if (body.success === false) {
+      console.error('[LISTING UPDATE] Error response:', body);
       throw new Error(asString(body.message) || 'update-property failed');
     }
     const data = body.data;
@@ -1914,6 +1941,72 @@ export const listingsService = {
       }
 
       return { success: false, data: [] };
+    }
+  },
+
+  /**
+   * Synchronise un listing vers RentalsUnited via srv-listing
+   * POST /api/v1/listing/listings/sync-with-rental-united/:listingId
+   *
+   * srv-listing orchestre: récupération credentials RU, validation, appel srv-channels → RU APIs
+   * Retourne { success, orchestrationId, data: { apiCallCount, propertyIds } }
+   */
+  async syncListingToRentalUnited(listingId: string): Promise<ServiceResult<{
+    orchestrationId?: string;
+    apiCallCount?: number;
+    propertyIds?: string[];
+  }>> {
+    try {
+      const url = `${LISTING_API_BASE_URL}/listings/sync-with-rental-united/${listingId}`;
+      console.log('[syncListingToRentalUnited] Request URL:', url);
+      console.log('[syncListingToRentalUnited] LISTING_API_BASE_URL:', LISTING_API_BASE_URL);
+      console.log('[syncListingToRentalUnited] listingId:', listingId);
+
+      const response = await apiClient.post(url, {}, { timeout: 60000 });
+
+      console.log('[syncListingToRentalUnited] Response status:', response.status);
+      console.log('[syncListingToRentalUnited] Response data:', response.data);
+
+      const result = response.data;
+      if (result?.success) {
+        return {
+          success: true,
+          data: result.data || {},
+          message: result.message || 'Listing successfully synchronized with RentalsUnited',
+        };
+      }
+
+      console.warn('[syncListingToRentalUnited] Response success=false:', result);
+      const ruErrors = Array.isArray(result?.data?.errors) ? result.data.errors : [];
+      const ruDetail = ruErrors
+        .map((e: { message?: string; step?: string }) => e?.message)
+        .filter(Boolean)
+        .join(' · ');
+      return {
+        success: false,
+        data: result?.data || {},
+        error: ruDetail || result?.message || 'Failed to sync listing to RentalsUnited',
+      };
+    } catch (error) {
+      if (isAxiosError(error)) {
+        const msg = error.response?.data?.message || error.response?.data?.error || error.message;
+        console.error('[syncListingToRentalUnited] Axios error:');
+        console.error('  - Status:', error.response?.status);
+        console.error('  - Status text:', error.response?.statusText);
+        console.error('  - Response data:', error.response?.data);
+        console.error('  - Error message:', error.message);
+        console.error('  - Full error:', error);
+        return {
+          success: false,
+          error: msg || 'Failed to sync listing to RentalsUnited',
+        };
+      }
+
+      console.error('[syncListingToRentalUnited] Unexpected error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to sync listing to RentalsUnited',
+      };
     }
   },
 };

@@ -306,46 +306,61 @@ export function LicenseTab({ values = {}, onChange }) {
   return (
     <Box>
       <RuFormLegend />
+
       <Card title="📄 Licence touristique" meta="Obligatoire dans certaines villes">
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
-          <Field label="Numéro de licence" required ruField="licenceNumber">
-            <TextField size="small" value={values.licenseNumber || ''} onChange={e => upd('licenseNumber', e.target.value)} placeholder="ex: 06088-MEUB-2024" sx={sxInput} />
-          </Field>
-          <Field label="Type de licence" ruField="licenceType">
-            <SelectField value={values.licenseType || 'meuble_tourisme'} onChange={v => upd('licenseType', v)}
-              options={[
-                { value: 'meuble_tourisme', label: 'Meublé de tourisme' },
-                { value: 'chambres_hotes', label: 'Chambres d\'hôtes' },
-                { value: 'gite_rural', label: 'Gîte rural' },
-                { value: 'residence_secondaire', label: 'Résidence secondaire' },
-              ]} />
-          </Field>
-          <Field label="Date d'émission" ruField="issueDate">
-            <TextField size="small" type="date" InputLabelProps={{ shrink: true }} value={values.licenseIssueDate || ''} onChange={e => upd('licenseIssueDate', e.target.value)} sx={sxInput} />
-          </Field>
-          <Field label="Date d'expiration" required ruField="expirationDate">
-            <TextField size="small" type="date" InputLabelProps={{ shrink: true }} value={values.licenseExpiryDate || ''} onChange={e => upd('licenseExpiryDate', e.target.value)} sx={sxInput} />
-          </Field>
-        </Box>
+        <ToggleRow
+          title="Cette propriété n'a pas besoin de licence"
+          desc="Cocher si pas de licence requise (ex: Airbnb Maroc, certaines villes)"
+          checked={!!values.licenceIsExempt}
+          onChange={v => upd('licenceIsExempt', v)}
+          ruField="licenceInfo"
+        />
+
+        {!values.licenceIsExempt && (
+          <Box sx={{ mt: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
+            <Field label="Numéro de licence" required ruField="licenceNumber">
+              <TextField size="small" value={values.licenseNumber || ''} onChange={e => upd('licenseNumber', e.target.value)} placeholder="ex: 06088-MEUB-2024" sx={sxInput} />
+            </Field>
+            <Field label="Type de licence" ruField="licenceType">
+              <SelectField value={values.licenseType || 'meuble_tourisme'} onChange={v => upd('licenseType', v)}
+                options={[
+                  { value: 'meuble_tourisme', label: 'Meublé de tourisme' },
+                  { value: 'chambres_hotes', label: 'Chambres d\'hôtes' },
+                  { value: 'gite_rural', label: 'Gîte rural' },
+                  { value: 'residence_secondaire', label: 'Résidence secondaire' },
+                ]} />
+            </Field>
+            <Field label="Date d'émission" ruField="issueDate">
+              <TextField size="small" type="date" InputLabelProps={{ shrink: true }} value={values.licenseIssueDate || ''} onChange={e => upd('licenseIssueDate', e.target.value)} sx={sxInput} />
+            </Field>
+            <Field label="Date d'expiration" required ruField="expirationDate">
+              <TextField size="small" type="date" InputLabelProps={{ shrink: true }} value={values.licenseExpiryDate || ''} onChange={e => upd('licenseExpiryDate', e.target.value)} sx={sxInput} />
+            </Field>
+          </Box>
+        )}
       </Card>
 
-      <Card title="🏛 Mairie & autorités">
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
-          <Field label="Mairie de rattachement">
-            <TextField size="small" value={values.cityHall || ''} onChange={e => upd('cityHall', e.target.value)} placeholder="ex: Mairie de Nice" sx={sxInput} />
-          </Field>
-          <Field label="Référent administratif">
-            <TextField size="small" value={values.adminContact || ''} onChange={e => upd('adminContact', e.target.value)} sx={sxInput} />
-          </Field>
-        </Box>
-      </Card>
+      {!values.licenceIsExempt && (
+        <>
+          <Card title="🏛 Mairie & autorités">
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
+              <Field label="Mairie de rattachement">
+                <TextField size="small" value={values.cityHall || ''} onChange={e => upd('cityHall', e.target.value)} placeholder="ex: Mairie de Nice" sx={sxInput} />
+              </Field>
+              <Field label="Référent administratif">
+                <TextField size="small" value={values.adminContact || ''} onChange={e => upd('adminContact', e.target.value)} sx={sxInput} />
+              </Field>
+            </Box>
+          </Card>
 
-      <Card title="🛂 Enregistrement police / hôtelière">
-        <ToggleRow title="Enregistrement obligatoire" desc="Transmission automatique des fiches voyageurs aux autorités" checked={!!values.policeRegistrationRequired} onChange={v => upd('policeRegistrationRequired', v)} />
-        <Box sx={{ mt: 1.5 }}>
-          <Field label="Endpoint API police"><TextField size="small" fullWidth value={values.policeApiEndpoint || ''} onChange={e => upd('policeApiEndpoint', e.target.value)} placeholder="ex: https://api.police.gov.fr/v1/registration" sx={sxInput} /></Field>
-        </Box>
-      </Card>
+          <Card title="🛂 Enregistrement police / hôtelière">
+            <ToggleRow title="Enregistrement obligatoire" desc="Transmission automatique des fiches voyageurs aux autorités" checked={!!values.policeRegistrationRequired} onChange={v => upd('policeRegistrationRequired', v)} />
+            <Box sx={{ mt: 1.5 }}>
+              <Field label="Endpoint API police"><TextField size="small" fullWidth value={values.policeApiEndpoint || ''} onChange={e => upd('policeApiEndpoint', e.target.value)} placeholder="ex: https://api.police.gov.fr/v1/registration" sx={sxInput} /></Field>
+            </Box>
+          </Card>
+        </>
+      )}
     </Box>
   );
 }

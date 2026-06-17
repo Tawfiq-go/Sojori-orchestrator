@@ -17,14 +17,14 @@ export function PricingTab({ values = {}, onChange }) {
       <Card title="💰 Prix de base">
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
           <Field label="Prix par nuit" required ai ruField="basePrice">
-            <MoneyInput value={values.basePrice ?? 220} onChange={v => upd('basePrice', v)} currency={values.currency || '€'} />
+            <MoneyInput value={values.basePrice ?? 220} onChange={v => upd('basePrice', v)} currency={values.currencyCode || 'EUR'} />
           </Field>
           <Field label="Devise" required ruField="currencyCode">
-            <SelectField value={values.currency || 'EUR'} onChange={v => upd('currency', v)}
+            <SelectField value={values.currencyCode || 'EUR'} onChange={v => upd('currencyCode', v)}
               options={[{ value: 'EUR', label: '€ EUR' }, { value: 'MAD', label: 'DH MAD' }, { value: 'USD', label: '$ USD' }, { value: 'GBP', label: '£ GBP' }]} />
           </Field>
           <Field label="Prix week-end" ruField="extra" hint="Override Ven/Sam">
-            <MoneyInput value={values.weekendPrice ?? 260} onChange={v => upd('weekendPrice', v)} currency={values.currency || '€'} />
+            <MoneyInput value={values.weekendPrice ?? 260} onChange={v => upd('weekendPrice', v)} currency={values.currencyCode || 'EUR'} />
           </Field>
         </Box>
       </Card>
@@ -105,36 +105,151 @@ export function AvailabilityTab({ values = {}, onChange }) {
 /* ════════════════════ Fees & Deposits ════════════════════ */
 export function FeesTab({ values = {}, onChange }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
+
+  // Discriminators RU (modes de calcul)
+  const discriminatorOptions = [
+    { value: '1', label: 'Forfait par séjour' },
+    { value: '2', label: 'Par nuit' },
+    { value: '5', label: 'Par personne (séjour)' },
+    { value: '6', label: 'Par personne/nuit' },
+    { value: '7', label: 'Par personne/semaine' },
+    { value: '8', label: 'Par semaine' },
+  ];
+
   return (
     <Box>
       <RuFormLegend />
-      <Card title="🧹 Frais de ménage">
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-          <Field label="Frais ménage (forfaitaire)" ruField="cleaningFee" hint="Inclus dans le prix total"><MoneyInput value={values.cleaningFee ?? 80} onChange={v => upd('cleaningFee', v)} currency="€" /></Field>
-          <Field label="Mode de facturation"><SelectField value={values.cleaningFeeMode || 'flat'} onChange={v => upd('cleaningFeeMode', v)}
-            options={[{ value: 'flat', label: 'Forfaitaire' }, { value: 'per_night', label: 'Par nuit' }, { value: 'per_guest', label: 'Par voyageur' }]} /></Field>
+
+      <Card title="🧹 Frais de ménage" meta="additionalFees[] · RU discriminator">
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 2, alignItems: 'center' }}>
+          <ToggleRow
+            title="Activer"
+            desc=""
+            checked={!!values.cleaningFeeEnabled}
+            onChange={v => upd('cleaningFeeEnabled', v)}
+          />
+          {values.cleaningFeeEnabled ? (
+            <>
+              <Field label="Montant" ruField="additionalFees">
+                <MoneyInput
+                  value={values.cleaningFee ?? 80}
+                  onChange={v => upd('cleaningFee', v)}
+                  currency={values.currencyCode || 'EUR'}
+                />
+              </Field>
+              <Field label="Mode de calcul" ruField="additionalFees">
+                <SelectField
+                  value={values.cleaningFeeDiscriminator || '1'}
+                  onChange={v => upd('cleaningFeeDiscriminator', v)}
+                  options={discriminatorOptions}
+                />
+              </Field>
+            </>
+          ) : (
+            <Box sx={{ gridColumn: 'span 2', color: 'text.secondary', fontSize: '0.875rem' }}>
+              Frais de ménage (forfait, par nuit, etc.) · Envoyé à RU
+            </Box>
+          )}
         </Box>
       </Card>
 
-      <Card title="💳 Caution / Dépôt de garantie">
-        <ToggleRow title="Caution requise" desc="Pré-autorisation CB ou virement avant arrivée" checked={!!values.depositRequired} onChange={v => upd('depositRequired', v)} />
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mt: 1 }}>
-          <Field label="Montant caution" ruField="securityDeposit"><MoneyInput value={values.securityDeposit ?? 500} onChange={v => upd('securityDeposit', v)} currency="€" /></Field>
-          <Field label="Type de prélèvement"><SelectField value={values.depositType || 'preauth'} onChange={v => upd('depositType', v)}
-            options={[{ value: 'preauth', label: 'Pré-autorisation CB' }, { value: 'wire', label: 'Virement' }, { value: 'cash', label: 'Espèces à l\'arrivée' }]} /></Field>
+      <Card title="🧾 Taxe de séjour" meta="additionalFees[] · RU discriminator">
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 2, alignItems: 'center' }}>
+          <ToggleRow
+            title="Activer"
+            desc=""
+            checked={!!values.cityTaxEnabled}
+            onChange={v => upd('cityTaxEnabled', v)}
+          />
+          {values.cityTaxEnabled ? (
+            <>
+              <Field label="Montant" ruField="additionalFees">
+                <MoneyInput
+                  value={values.cityTaxPerAdult ?? 3.5}
+                  onChange={v => upd('cityTaxPerAdult', v)}
+                  currency={values.currencyCode || 'EUR'}
+                />
+              </Field>
+              <Field label="Mode de calcul" ruField="additionalFees">
+                <SelectField
+                  value={values.cityTaxDiscriminator || '6'}
+                  onChange={v => upd('cityTaxDiscriminator', v)}
+                  options={discriminatorOptions}
+                />
+              </Field>
+            </>
+          ) : (
+            <Box sx={{ gridColumn: 'span 2', color: 'text.secondary', fontSize: '0.875rem' }}>
+              Taxe de séjour (par adulte/nuit, forfait, etc.) · Envoyé à RU
+            </Box>
+          )}
+        </Box>
+        {values.cityTaxEnabled && (
+          <Box sx={{ mt: 1.5, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 2, alignItems: 'center' }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+              Mode de collecte (Sojori only) :
+            </Typography>
+            <SelectField
+              value={values.cityTaxCollectionMode || 'on_table'}
+              onChange={v => upd('cityTaxCollectionMode', v)}
+              options={[
+                { value: 'on_table', label: 'Sur place' },
+                { value: 'pre_paid', label: 'Pré-payé' }
+              ]}
+            />
+          </Box>
+        )}
+      </Card>
+
+      <Card title="💰 Acompte / Arrhes" meta="deposit · RU (à la réservation)">
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 2, alignItems: 'center' }}>
+          <ToggleRow
+            title="Activer"
+            desc=""
+            checked={!!values.bookingDepositEnabled}
+            onChange={v => upd('bookingDepositEnabled', v)}
+          />
+          {values.bookingDepositEnabled ? (
+            <Field label="Montant" ruField="deposit" hint="Forfait par séjour · envoyé à RU">
+              <MoneyInput
+                value={values.bookingDeposit ?? 0}
+                onChange={v => upd('bookingDeposit', v)}
+                currency={values.currencyCode || 'EUR'}
+              />
+            </Field>
+          ) : (
+            <Box sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+              Acompte versé à la réservation (arrhes RU) · 0 MAD si désactivé
+            </Box>
+          )}
         </Box>
       </Card>
 
-      <Card title="🧾 Taxes & frais supplémentaires">
-        <ToggleRow title="Taxe de séjour" desc="Ajoutée au total · variable selon ville" checked={!!values.cityTaxEnabled} onChange={v => upd('cityTaxEnabled', v)} />
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5, mt: 1 }}>
-          <Field label="Taxe par adulte/nuit"><MoneyInput value={values.cityTaxPerAdult ?? 3.5} onChange={v => upd('cityTaxPerAdult', v)} currency="€" /></Field>
-          <Field label="TVA (%)"><NumberInput value={values.vatRate ?? 10} suffix="%" onChange={v => upd('vatRate', v)} /></Field>
-          <Field label="Frais service additionnels"><MoneyInput value={values.additionalServiceFee ?? 0} onChange={v => upd('additionalServiceFee', v)} currency="€" /></Field>
+      <Card title="💳 Caution / Dépôt de garantie" meta="securityDeposit · RU">
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 2, alignItems: 'center' }}>
+          <ToggleRow
+            title="Activer"
+            desc=""
+            checked={!!values.depositRequired}
+            onChange={v => upd('depositRequired', v)}
+          />
+          {values.depositRequired ? (
+            <Field label="Montant" ruField="securityDeposit" hint="Forfait par séjour · envoyé à RU">
+              <MoneyInput
+                value={values.securityDeposit ?? 0}
+                onChange={v => upd('securityDeposit', v)}
+                currency={values.currencyCode || 'EUR'}
+              />
+            </Field>
+          ) : (
+            <Box sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+              Dépôt de garantie (dommages) · 0 MAD si désactivé
+            </Box>
+          )}
         </Box>
       </Card>
 
-      <Card title="📋 Politique d'annulation" meta="cancellationPolicies[]">
+      <Card title="📋 Politique d'annulation" meta="cancellationPolicies[] · RU">
         <Field label="Type d'annulation" ruField="cancellation">
         <ChipsRow single value={values.cancellationPolicy || 'flexible'} onToggle={v => upd('cancellationPolicy', v)}
           items={[
