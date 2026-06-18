@@ -42,6 +42,13 @@ import {
   firstActivatedCapabilityKey,
   isCapabilityActivated,
 } from './ownerCapabilityActivation';
+import ListingActivationSection from './ListingActivationSection';
+import {
+  activationStatusFromEffectiveDoc,
+  hasAnyEffectiveActiveService,
+  isEffectivelyActivated,
+  type ServiceActivationStatusEntry,
+} from './listingCapabilityActivation';
 
 type ListingPick = { id: string; name: string };
 
@@ -76,7 +83,13 @@ export default function OrchestrationListingV3View({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(CAPABILITY_REGISTRY[0]?.key ?? null);
-  const [listingSection, setListingSection] = useState<OrchestrationModelSection>('services');
+  const [listingSection, setListingSection] = useState<OrchestrationModelSection>(
+    embedded ? 'activation' : 'services',
+  );
+  const [serviceActivationStatus, setServiceActivationStatus] = useState<
+    ServiceActivationStatusEntry[] | undefined
+  >(undefined);
+  const [activationLoaded, setActivationLoaded] = useState(false);
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
   const listingRef = useRef<Record<string, unknown>>({});
   const menuOptionsRef = useRef<unknown[]>([]);
@@ -88,6 +101,20 @@ export default function OrchestrationListingV3View({
 
   const isOwnerTemplate = ownerTemplateMode;
   const effectiveListingId = !isOwnerTemplate && scope === 'listing' ? listingId : null;
+
+  const applyActivationFromDoc = useCallback((doc: unknown, targetListingId: string) => {
+    const services = activationStatusFromEffectiveDoc(
+      doc as Parameters<typeof activationStatusFromEffectiveDoc>[0],
+      targetListingId,
+    );
+    if (services?.length) {
+      setServiceActivationStatus(services);
+      setActivationLoaded(true);
+      return true;
+    }
+    setActivationLoaded(true);
+    return false;
+  }, []);
 
   const loadListingValues = useCallback(async () => {
     if (isOwnerTemplate) {
@@ -145,6 +172,7 @@ export default function OrchestrationListingV3View({
         menuOptionsRef.current = loaded.menuOptions;
         workflowsRef.current = loaded.workflows;
         setOrchestrationDoc(loaded.doc);
+        applyActivationFromDoc(loaded.doc, effectiveListingId);
         logV3Orch('load.listing', { listingId: effectiveListingId, discardLocalKey });
       } else {
         setRows([]);
@@ -162,7 +190,16 @@ export default function OrchestrationListingV3View({
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [scope, ownerKey, effectiveListingId, isOwnerTemplate]);
+  }, [scope, ownerKey, effectiveListingId, isOwnerTemplate, applyActivationFromDoc]);
+
+  const handleActivationSaved = useCallback(
+    (status: ServiceActivationStatusEntry[]) => {
+      setServiceActivationStatus(status);
+      setActivationLoaded(true);
+      void load({ silent: true });
+    },
+    [load],
+  );
 
   useEffect(() => {
     void load();
@@ -226,12 +263,31 @@ export default function OrchestrationListingV3View({
   }, [isOwnerTemplate, isAdminTemplate, ownerKey, rows, selectedKey]);
 
   useEffect(() => {
-    if (isOwnerTemplate || !effectiveListingId || !selectedKey) return;
+    if (isOwnerTemplate || !effectiveListingId || !selectedKey || !activationLoaded) return;
+    if (listingSection === 'activation') return;
     if (selectedKey === 'menu_navigation') return;
     if (!isCapabilityVisibleOnListingRail(selectedKey)) {
       setSelectedKey(defaultListingRailCapabilityKey());
+      return;
     }
-  }, [isOwnerTemplate, effectiveListingId, selectedKey]);
+    if (!isEffectivelyActivated(selectedKey, serviceActivationStatus)) {
+      const fallback =
+        CAPABILITY_REGISTRY.find(
+          c =>
+            c.key !== 'menu_navigation' &&
+            isCapabilityVisibleOnListingRail(c.key) &&
+            isEffectivelyActivated(c.key, serviceActivationStatus),
+        )?.key ?? null;
+      if (fallback !== selectedKey) setSelectedKey(fallback);
+    }
+  }, [
+    isOwnerTemplate,
+    effectiveListingId,
+    selectedKey,
+    serviceActivationStatus,
+    listingSection,
+    activationLoaded,
+  ]);
 
   const selectedRow = useMemo(
     () => rows.find(r => r.key === selectedKey) ?? null,
@@ -342,16 +398,24 @@ export default function OrchestrationListingV3View({
   };
 
   const showRail = Boolean((scope === 'listing' && effectiveListingId) || isOwnerTemplate);
-  const showServicePanel =
+  const listingHasEffectiveServices =
+    !isOwnerTemplate && effectiveListingId && activationLoaded
+      ? hasAnyEffectiveActiveService(serviceActivationStatus)
+      : true;
+
+  const showServicePanelEffective =
     selectedDef &&
+    selectedKey &&
     selectedRow &&
     orchestrationDoc &&
-    (isOwnerTemplate || (scope === 'listing' && effectiveListingId)) &&
+    (isOwnerTemplate || (scope === 'listing' && effectiveListingId && activationLoaded)) &&
     (isOwnerTemplate && !isAdminTemplate && ownerKey !== 'global'
       ? isCapabilityActivated(selectedRow)
-      : isOwnerTemplate || isCapabilityPanelVisibleOnListing(selectedKey ?? ''));
+      : isOwnerTemplate ||
+        (isCapabilityPanelVisibleOnListing(selectedKey ?? '') &&
+          isEffectivelyActivated(selectedKey ?? '', serviceActivationStatus)));
 
-  const showListingMessages =
+  const showListingOrchestrationTabs =
     Boolean(effectiveListingId) && (embedded || (scope === 'listing' && !ownerTemplateMode));
 
   if (loading) {
@@ -399,13 +463,27 @@ export default function OrchestrationListingV3View({
         </Alert>
       )}
 
-      {showListingMessages ? (
+      {showListingOrchestrationTabs ? (
         <Box sx={{ px: embedded ? 1 : 2, pt: 1, flexShrink: 0 }}>
-          <OrchestrationModelSubTabs value={listingSection} onChange={setListingSection} />
+          <OrchestrationModelSubTabs
+            value={listingSection}
+            onChange={setListingSection}
+            showActivation
+          />
         </Box>
       ) : null}
 
-      {showListingMessages && listingSection === 'messages' && effectiveListingId ? (
+      {showListingOrchestrationTabs && listingSection === 'activation' && effectiveListingId ? (
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: embedded ? 1 : 2, pb: 2 }}>
+          <ListingActivationSection
+            listingId={effectiveListingId}
+            initialServices={serviceActivationStatus}
+            onSaved={handleActivationSaved}
+          />
+        </Box>
+      ) : null}
+
+      {showListingOrchestrationTabs && listingSection === 'messages' && effectiveListingId ? (
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <V3ScheduledMessagesPanel
             scope="listing"
@@ -414,7 +492,7 @@ export default function OrchestrationListingV3View({
             listingName={listings.find(l => l.id === effectiveListingId)?.name}
           />
         </Box>
-      ) : (
+      ) : showListingOrchestrationTabs && listingSection !== 'services' ? null : (
       <Box
         sx={{
           flex: 1,
@@ -429,7 +507,11 @@ export default function OrchestrationListingV3View({
             rows={rows}
             selectedKey={selectedKey}
             ownerTemplateMode={isOwnerTemplate}
-            filterInactiveCapabilities={isOwnerTemplate && !isAdminTemplate && ownerKey !== 'global'}
+            filterInactiveCapabilities={
+              isOwnerTemplate && !isAdminTemplate && ownerKey !== 'global'
+            }
+            filterByEffectiveActivation={!isOwnerTemplate && !!effectiveListingId && activationLoaded}
+            serviceActivationStatus={serviceActivationStatus}
             syncHints={syncHints}
             onSelectService={key => {
               setSelectedKey(key);
@@ -448,7 +530,7 @@ export default function OrchestrationListingV3View({
             WebkitOverflowScrolling: 'touch',
           }}
         >
-          {showServicePanel && (
+          {showServicePanelEffective && (
             <V3ServicePanel
               def={selectedDef!}
               row={selectedRow!}
@@ -472,6 +554,16 @@ export default function OrchestrationListingV3View({
               onWhatsappPatch={onWhatsappPatch}
             />
           )}
+          {!isOwnerTemplate &&
+          effectiveListingId &&
+          activationLoaded &&
+          !listingHasEffectiveServices &&
+          listingSection === 'services' ? (
+            <Alert severity="info" sx={{ m: 2 }}>
+              Aucun service actif pour cette annonce. Activez des services dans l&apos;onglet{' '}
+              <strong>Activation des services</strong>.
+            </Alert>
+          ) : null}
           {isOwnerTemplate && !isAdminTemplate && ownerKey !== 'global' && !anyOwnerServiceActive ? (
             <Alert severity="info" sx={{ m: 2 }}>
               Aucun service activé. Utilisez l&apos;onglet{' '}

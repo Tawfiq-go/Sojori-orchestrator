@@ -18,13 +18,18 @@ import {
   type ListingSummary,
   type ListingRoomTypeSummary,
   type ServiceResult,
+  type RentalUnitedSyncResult,
 } from '../types/listings.types';
 import type { ClientServicesPayload } from '../utils/mapApiListingToListingRecord';
 import { getOwners } from './teamDashboardApi';
 import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
-import { isLocalViteDevHost, resolveDevApiOrigin } from '../config/resolveDevApiOrigin';
+import {
+  LISTING_API_BASE_URL,
+  logListingApiRequest,
+  describeListingApiRequest,
+} from '../config/listingApiBase';
 
-const LOCAL_LISTING_API = 'http://localhost:4001/api/v1/listing';
+export { LISTING_API_BASE_URL, describeListingApiRequest, logListingApiRequest };
 
 /** Même ordre que sojori-dashboard `getPredefinedCategories` / AmenityCategories.jsx */
 export function normalizeAmenityCategoryTabs(apiCategories: string[]): string[] {
@@ -183,49 +188,6 @@ export function amenityMatchesCatalogCategories(
   }
   return typeof amenity.category === 'string' && amenity.category === current;
 }
-
-function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, '');
-}
-
-function resolveListingApiBaseUrl(): string {
-  /** Front :4174 → proxy Vite /api → dev.sojori.com (évite ERR_CONNECTION_REFUSED / CORS). */
-  if (typeof window !== 'undefined' && isLocalViteDevHost()) {
-    return '/api/v1/listing';
-  }
-
-  const apiOrigin = resolveDevApiOrigin();
-  if (apiOrigin) {
-    const normalized = trimTrailingSlash(apiOrigin);
-    if (normalized.endsWith('/api/v1/listing')) {
-      return normalized;
-    }
-    return `${normalized}/api/v1/listing`;
-  }
-
-  const configuredBase = import.meta.env.VITE_API_URL?.trim();
-  if (!configuredBase) {
-    return LOCAL_LISTING_API;
-  }
-
-  const normalized = trimTrailingSlash(configuredBase);
-  if (
-    normalized === 'http://localhost' ||
-    normalized === 'http://127.0.0.1' ||
-    normalized === 'https://localhost' ||
-    normalized === 'https://127.0.0.1'
-  ) {
-    return LOCAL_LISTING_API;
-  }
-
-  if (normalized.endsWith('/api/v1/listing')) {
-    return normalized;
-  }
-
-  return `${normalized}/api/v1/listing`;
-}
-
-const LISTING_API_BASE_URL = resolveListingApiBaseUrl();
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -1681,6 +1643,36 @@ export const listingsService = {
     return data;
   },
 
+  async getListingServiceActivation(listingId: string) {
+    const path = `/listings/${listingId}/service-activation`;
+    logListingApiRequest('GET', path);
+    const { data } = await apiClient.get(`${LISTING_API_BASE_URL}${path}`);
+    return data;
+  },
+
+  async putListingServiceActivation(
+    listingId: string,
+    patch: { overrides?: Record<string, boolean>; unset?: string[]; activations?: Record<string, boolean> },
+  ) {
+    const path = `/listings/${listingId}/service-activation`;
+    logListingApiRequest('PUT', path);
+    const { data } = await apiClient.put(`${LISTING_API_BASE_URL}${path}`, patch);
+    return data;
+  },
+
+  /** Fallback write when …/service-activation is not deployed yet. */
+  async putListingOrchestrationServiceActivation(
+    listingId: string,
+    patch: { overrides?: Record<string, boolean>; unset?: string[]; activations?: Record<string, boolean> },
+  ) {
+    const path = `/listings/${listingId}/orchestration`;
+    logListingApiRequest('PUT', path);
+    const { data } = await apiClient.put(`${LISTING_API_BASE_URL}${path}`, {
+      serviceActivation: patch,
+    });
+    return data;
+  },
+
   async applyListingOrchestrationFromOwner(listingId: string) {
     const { data } = await apiClient.post(
       `${LISTING_API_BASE_URL}/owner-orchestration/by-listing/${listingId}/apply-owner-template`,
@@ -1951,11 +1943,7 @@ export const listingsService = {
    * srv-listing orchestre: récupération credentials RU, validation, appel srv-channels → RU APIs
    * Retourne { success, orchestrationId, data: { apiCallCount, propertyIds } }
    */
-  async syncListingToRentalUnited(listingId: string): Promise<ServiceResult<{
-    orchestrationId?: string;
-    apiCallCount?: number;
-    propertyIds?: string[];
-  }>> {
+  async syncListingToRentalUnited(listingId: string): Promise<RentalUnitedSyncResult> {
     try {
       const url = `${LISTING_API_BASE_URL}/listings/sync-with-rental-united/${listingId}`;
       console.log('[syncListingToRentalUnited] Request URL:', url);

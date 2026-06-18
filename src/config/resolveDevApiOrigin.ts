@@ -1,10 +1,9 @@
 /**
- * Front local (127.0.0.1:4174) + backend prod (dev.sojori.com via proxy Vite).
- * Retourne '' → URLs relatives /api/... proxifiées par vite.config.ts.
+ * Front local (127.0.0.1:4174) — URLs relatives /api/... proxifiées par vite.config.ts.
+ * Inclut `vite dev` et `vite preview` sur localhost (pas seulement import.meta.env.DEV).
  */
 export function isLocalViteDevHost(): boolean {
   return (
-    import.meta.env.DEV &&
     typeof window !== 'undefined' &&
     ['127.0.0.1', 'localhost', '[::1]'].includes(window.location.hostname)
   );

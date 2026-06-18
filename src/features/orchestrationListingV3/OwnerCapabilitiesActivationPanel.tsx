@@ -22,6 +22,12 @@ import {
   defaultActivationsAllOff,
   saveOwnerCapabilityActivations,
 } from './ownerCapabilityActivation';
+import {
+  countEffectiveActiveServices,
+  displayActivationsFromServices,
+  listingActivationLabel,
+  type ServiceActivationStatusEntry,
+} from './listingCapabilityActivation';
 import type { OwnerOrchestrationDoc } from './ownerOrchestrationApi';
 
 const GROUP_EMOJI: Record<CapabilityGroupId, string> = {
@@ -44,6 +50,15 @@ type Props = {
   onChange?: (next: Record<string, boolean>) => void;
   onSaved?: (activations: Record<string, boolean>) => void;
   disabled?: boolean;
+  /** Listing-level activation — can override owner default per listing. */
+  mode?: 'owner' | 'listing';
+  serviceActivationStatus?: ServiceActivationStatusEntry[];
+  onListingSave?: (activations: Record<string, boolean>) => Promise<void>;
+  onResetListingOverride?: (key: string) => void;
+  /** Listing tab: auto-save on toggle (debounced by parent). */
+  autoSaveListing?: boolean;
+  /** Parent-driven save indicator (listing auto-save). */
+  listingSaving?: boolean;
 };
 
 export default function OwnerCapabilitiesActivationPanel({
@@ -56,24 +71,49 @@ export default function OwnerCapabilitiesActivationPanel({
   onChange,
   onSaved,
   disabled = false,
+  mode = 'owner',
+  onListingSave,
+  serviceActivationStatus,
+  onResetListingOverride,
+  autoSaveListing = false,
+  listingSaving = false,
 }: Props) {
+  const statusByKey = useMemo(
+    () => Object.fromEntries((serviceActivationStatus ?? []).map(s => [s.serviceId, s])),
+    [serviceActivationStatus],
+  );
+  const isListingMode = mode === 'listing';
   const isTab = variant === 'tab';
   const controlled = value != null && onChange != null;
   const [local, setLocal] = useState<Record<string, boolean>>(() =>
-    controlled ? (value ?? defaultActivationsAllOff()) : activationsFromRows(rows),
+    controlled
+      ? isListingMode
+        ? displayActivationsFromServices(serviceActivationStatus)
+        : (value ?? defaultActivationsAllOff())
+      : activationsFromRows(rows),
   );
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
+    if (controlled && isListingMode && autoSaveListing) {
+      setLocal(displayActivationsFromServices(serviceActivationStatus ?? []));
+      return;
+    }
     if (controlled) {
-      setLocal(value ?? defaultActivationsAllOff());
-      setDirty(false);
+      setLocal(
+        isListingMode
+          ? displayActivationsFromServices(serviceActivationStatus ?? [])
+          : (value ?? defaultActivationsAllOff()),
+      );
+      if (!autoSaveListing) setDirty(false);
       return;
     }
     setLocal(activationsFromRows(rows));
     setDirty(false);
-  }, [controlled, rows, value]);
+  }, [controlled, rows, value, isListingMode, serviceActivationStatus, autoSaveListing]);
+
+  const savingNow = saving || listingSaving;
 
   const setActivation = useCallback(
     (key: string, active: boolean) => {
@@ -82,9 +122,13 @@ export default function OwnerCapabilitiesActivationPanel({
         onChange?.(next);
         return next;
       });
-      if (!controlled) setDirty(true);
+      if (autoSaveListing && onChange) {
+        setDirty(false);
+      } else if (!controlled || isListingMode) {
+        setDirty(true);
+      }
     },
-    [controlled, onChange],
+    [controlled, isListingMode, onChange, autoSaveListing],
   );
 
   const setGroup = useCallback(
@@ -99,9 +143,13 @@ export default function OwnerCapabilitiesActivationPanel({
         onChange?.(next);
         return next;
       });
-      if (!controlled) setDirty(true);
+      if (autoSaveListing) {
+        setDirty(false);
+      } else if (!controlled || isListingMode) {
+        setDirty(true);
+      }
     },
-    [controlled, onChange],
+    [controlled, isListingMode, onChange, autoSaveListing],
   );
 
   const groups = useMemo(
@@ -116,9 +164,29 @@ export default function OwnerCapabilitiesActivationPanel({
 
   const menuNav = CAPABILITY_REGISTRY.find(c => c.key === 'menu_navigation');
 
-  const activeCount = Object.values(local).filter(Boolean).length;
+  const activeCount = isListingMode
+    ? countEffectiveActiveServices(serviceActivationStatus)
+    : Object.entries(local).filter(([key, on]) => {
+        if (!on) return false;
+        return true;
+      }).length;
 
   const persist = async () => {
+    if (isListingMode) {
+      if (!onListingSave) return;
+      setSaving(true);
+      try {
+        await onListingSave(local);
+        toast.success('Activation listing enregistrée');
+        setDirty(false);
+        onSaved?.(local);
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : 'Erreur enregistrement');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (!ownerKey || ownerKey === 'global') return;
     setSaving(true);
     try {
@@ -152,10 +220,12 @@ export default function OwnerCapabilitiesActivationPanel({
     >
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
-        alignItems={{ xs: 'flex-start', sm: 'center' }}
-        justifyContent="space-between"
         spacing={1}
-        sx={{ mb: 1.5 }}
+        sx={{
+          mb: 1.5,
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          justifyContent: 'space-between',
+        }}
       >
         <Box>
           {!isTab ? (
@@ -164,18 +234,39 @@ export default function OwnerCapabilitiesActivationPanel({
             </Typography>
           ) : null}
           <Typography sx={{ fontSize: 12, color: V3.t3 }}>
-            Désactivé = invisible dans le menu gauche. Par défaut tout est off pour un nouveau PM.
+            {isListingMode
+              ? 'Par défaut, chaque annonce hérite de l’activation propriétaire. Vous pouvez activer ou désactiver un service pour cette annonce uniquement.'
+              : 'Désactivé = invisible dans le menu gauche. Par défaut tout est off pour un nouveau PM.'}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Chip size="small" label={`${activeCount} actif(s)`} color={activeCount ? 'success' : 'default'} />
-          {!controlled && dirty ? (
+          {isListingMode && savingNow ? (
+            <Chip
+              size="small"
+              icon={<CircularProgress size={12} color="inherit" />}
+              label="Enregistrement…"
+              variant="outlined"
+            />
+          ) : null}
+          {!autoSaveListing && !controlled && dirty ? (
             <Button
               size="small"
               variant="contained"
               disabled={saving || disabled}
               onClick={() => void persist()}
-              sx={{ bgcolor: V3.p, '&:hover': { bgcolor: V3.pD } }}
+              sx={{ bgcolor: V3.p, '&:hover': { bgcolor: V3.pd } }}
+            >
+              {saving ? <CircularProgress size={16} color="inherit" /> : 'Enregistrer'}
+            </Button>
+          ) : null}
+          {!autoSaveListing && isListingMode && controlled && dirty ? (
+            <Button
+              size="small"
+              variant="contained"
+              disabled={saving || disabled}
+              onClick={() => void persist()}
+              sx={{ bgcolor: V3.p, '&:hover': { bgcolor: V3.pd } }}
             >
               {saving ? <CircularProgress size={16} color="inherit" /> : 'Enregistrer'}
             </Button>
@@ -197,20 +288,36 @@ export default function OwnerCapabilitiesActivationPanel({
             bgcolor: local.menu_navigation ? V3.waT : 'transparent',
           }}
         >
-          <Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
               {menuNav.emoji} {menuNav.label}
             </Typography>
-            <Typography sx={{ fontSize: 11, color: V3.t3, fontFamily: 'monospace' }}>
-              A · B · C · D · J
-            </Typography>
+            {isListingMode ? (
+              <Typography sx={{ fontSize: 10.5, color: V3.t3, lineHeight: 1.2 }}>
+                {listingActivationLabel(statusByKey.menu_navigation)}
+              </Typography>
+            ) : (
+              <Typography sx={{ fontSize: 11, color: V3.t3, fontFamily: 'monospace' }}>
+                A · B · C · D · J
+              </Typography>
+            )}
           </Box>
-          <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            {isListingMode && statusByKey.menu_navigation?.source === 'listing' ? (
+              <Button
+                size="small"
+                sx={{ minWidth: 0, fontSize: 9, py: 0.1, px: 0.75 }}
+                disabled={disabled || savingNow}
+                onClick={() => onResetListingOverride?.('menu_navigation')}
+              >
+                Hériter
+              </Button>
+            ) : null}
             <Typography sx={{ fontSize: 11, color: V3.t3 }}>{local.menu_navigation ? 'Oui' : 'Non'}</Typography>
             <Switch
               size="small"
               checked={local.menu_navigation === true}
-              disabled={disabled || saving}
+              disabled={disabled || savingNow}
               onChange={(_, checked) => setActivation('menu_navigation', checked)}
             />
           </Stack>
@@ -236,7 +343,10 @@ export default function OwnerCapabilitiesActivationPanel({
               bgcolor: V3.bg,
             }}
           >
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+            <Stack
+              direction="row"
+              sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }}
+            >
               <Typography sx={{ fontSize: 13, fontWeight: 800 }}>
                 {GROUP_EMOJI[grp.id]} {grp.label}
               </Typography>
@@ -244,46 +354,62 @@ export default function OwnerCapabilitiesActivationPanel({
                 <Button
                   size="small"
                   sx={{ minWidth: 0, fontSize: 10, py: 0.25 }}
-                  disabled={disabled || saving}
-                  onClick={() => setGroup(grp.id, true)}
+              disabled={disabled || savingNow}
+              onClick={() => setGroup(grp.id, true)}
                 >
                   Tout Oui
                 </Button>
                 <Button
                   size="small"
                   sx={{ minWidth: 0, fontSize: 10, py: 0.25 }}
-                  disabled={disabled || saving}
-                  onClick={() => setGroup(grp.id, false)}
+              disabled={disabled || savingNow}
+              onClick={() => setGroup(grp.id, false)}
                 >
                   Tout Non
                 </Button>
               </Stack>
             </Stack>
             <Stack spacing={0.75}>
-              {grp.items.map(def => (
+              {grp.items.map(def => {
+                const row = statusByKey[def.key];
+                const hint = isListingMode
+                  ? listingActivationLabel(row)
+                  : capabilityShortHint(def);
+                return (
                 <Stack
                   key={def.key}
                   direction="row"
-                  alignItems="center"
-                  justifyContent="space-between"
-                  sx={{ gap: 1, py: 0.25 }}
+                  sx={{ gap: 1, py: 0.25, alignItems: 'center', justifyContent: 'space-between' }}
                 >
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography sx={{ fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>
                       {def.label}
                     </Typography>
                     <Typography sx={{ fontSize: 10.5, color: V3.t3, lineHeight: 1.2 }}>
-                      {capabilityShortHint(def)}
+                      {hint}
                     </Typography>
                   </Box>
-                  <Switch
-                    size="small"
-                    checked={local[def.key] === true}
-                    disabled={disabled || saving}
-                    onChange={(_, checked) => setActivation(def.key, checked)}
-                  />
+                  <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
+                    {isListingMode && row?.source === 'listing' ? (
+                      <Button
+                        size="small"
+                        sx={{ minWidth: 0, fontSize: 9, py: 0.1, px: 0.75 }}
+                        disabled={disabled || savingNow}
+                        onClick={() => onResetListingOverride?.(def.key)}
+                      >
+                        Hériter
+                      </Button>
+                    ) : null}
+                    <Switch
+                      size="small"
+                      checked={local[def.key] === true}
+                      disabled={disabled || savingNow}
+                      onChange={(_, checked) => setActivation(def.key, checked)}
+                    />
+                  </Stack>
                 </Stack>
-              ))}
+              );
+              })}
             </Stack>
           </Box>
         ))}
