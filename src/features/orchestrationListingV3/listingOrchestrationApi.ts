@@ -50,6 +50,16 @@ export interface ListingOrchestrationEffective extends ListingOrchestrationDoc {
   updatedAt?: string;
   workflows: Record<string, unknown>[];
   categoryEnabled: Record<string, boolean>;
+  serviceActivationStatus?: Array<{
+    serviceId: string;
+    label: string;
+    ownerEnabled: boolean;
+    listingOverride: boolean | null;
+    listingEnabled: boolean | null;
+    effectiveEnabled: boolean;
+    source: 'owner' | 'listing';
+    disabledReason: 'owner' | 'listing' | null;
+  }>;
 }
 
 function unwrapData<T>(res: unknown): T | null {

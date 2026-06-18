@@ -7,6 +7,15 @@ const normalizeEnvUrl = (raw: string | undefined): string | undefined => {
 
 const DEFAULT_REMOTE_API = 'https://dev.sojori.com';
 
+const isLocalhostOrigin = (url: string): boolean => {
+  try {
+    const { hostname } = new URL(url);
+    return ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(hostname);
+  } catch {
+    return url === 'http://localhost' || url.startsWith('http://127.0.0.1');
+  }
+};
+
 const isBrowserLocalhost = (): boolean => {
   if (typeof window === 'undefined') {
     return false;
@@ -27,16 +36,22 @@ const shouldUseLocalMicroservicePorts = (): boolean => {
 
 // Détermination de l'URL de base de l'API (runtime : évite localhost baked en prod / preview)
 const getApiBaseUrl = (): string => {
-  // Front Vite local : chemins relatifs → proxy /api (vite.config) → dev.sojori.com, sans CORS
+  const configured =
+    normalizeEnvUrl(import.meta.env.VITE_API_URL) ||
+    normalizeEnvUrl(import.meta.env.VITE_API_BASE_URL);
+
+  // Front Vite local + gateway distant (VITE_API_URL=https://dev.sojori.com) → appels directs, pas 127.0.0.1:4174
   if (isBrowserLocalhost() && import.meta.env.DEV) {
-    const forceAbsolute = normalizeEnvUrl(import.meta.env.VITE_API_URL);
-    if (import.meta.env.VITE_USE_ABSOLUTE_API_URL === 'true' && forceAbsolute) {
-      return forceAbsolute;
+    if (configured && !isLocalhostOrigin(configured)) {
+      return configured;
     }
+    if (import.meta.env.VITE_USE_ABSOLUTE_API_URL === 'true' && configured) {
+      return configured;
+    }
+    // Pas de gateway configuré → proxy Vite relatif /api → dev.sojori.com
     return '';
   }
 
-  const configured = normalizeEnvUrl(import.meta.env.VITE_API_URL);
   if (configured) {
     return configured;
   }

@@ -7,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import ListingFormShell from './ListingFormShell';
 import { ListingFormStructureContext } from './ListingFormStructureContext';
 import listingsService from '../../../services/listingsService';
-import { useSnackbar } from 'notistack';
+import { toast } from 'react-toastify';
 
 import { GeneralTab, LocationTab }                          from './tabs/GeneralLocationTabs';
 import { PhotosTabReal }                                    from './tabs/PhotosTabReal';
@@ -32,7 +32,6 @@ export default function ListingFormV2({
 }) {
   const [values, setValues] = useState(initialValues);
   const [publishLoading, setPublishLoading] = useState(false);
-  const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
     if (initialValues && Object.keys(initialValues).length > 0) {
@@ -60,14 +59,14 @@ export default function ListingFormV2({
 
     if (!listingId) {
       console.error('[ListingFormV2] No listingId provided');
-      enqueueSnackbar('Impossible de publier: listing ID manquant', { variant: 'error' });
+      toast.error('Impossible de publier: listing ID manquant');
       return;
     }
 
     setPublishLoading(true);
     try {
       console.log('[ListingFormV2] Starting RU sync for listingId:', listingId);
-      enqueueSnackbar('Synchronisation vers Rentals United en cours...', { variant: 'info' });
+      toast.info('Synchronisation vers Rentals United en cours...');
 
       // Synchroniser avec Rentals United
       const syncResult = await listingsService.syncListingToRentalUnited(listingId);
@@ -78,22 +77,21 @@ export default function ListingFormV2({
         const apiCallCount = syncResult.data?.apiCallCount || 0;
         const propertyIds = syncResult.data?.propertyIds || [];
         console.log('[ListingFormV2] Sync SUCCESS - apiCallCount:', apiCallCount, 'propertyIds:', propertyIds);
-        enqueueSnackbar(
+        toast.success(
           `✓ Listing synchronisé avec RU (${apiCallCount} appels API, ${propertyIds.length} propriétés)`,
-          { variant: 'success', autoHideDuration: 5000 }
+          { autoClose: 5000 }
         );
       } else {
         console.error('[ListingFormV2] Sync FAILED - error:', syncResult.error);
-        enqueueSnackbar(
+        toast.error(
           `Échec de la synchronisation RU: ${syncResult.error || 'Erreur inconnue'}`,
-          { variant: 'error', autoHideDuration: 8000 }
+          { autoClose: 8000 }
         );
       }
     } catch (error) {
       console.error('[ListingFormV2] handlePublish exception:', error);
-      enqueueSnackbar(
-        `Erreur lors de la publication: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
-        { variant: 'error' }
+      toast.error(
+        `Erreur lors de la publication: ${error instanceof Error ? error.message : 'Erreur inconnue'}`
       );
     } finally {
       setPublishLoading(false);

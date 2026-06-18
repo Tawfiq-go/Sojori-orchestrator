@@ -14,6 +14,10 @@ import {
   type CapabilitySyncHint,
 } from './capabilitySyncHints';
 import { isCapabilityActivated } from './ownerCapabilityActivation';
+import {
+  isEffectivelyActivated,
+  type ServiceActivationStatusEntry,
+} from './listingCapabilityActivation';
 
 const GROUP_EMOJI: Record<string, string> = {
   cleaning: '🧹',
@@ -30,6 +34,9 @@ type Props = {
   ownerTemplateMode?: boolean;
   /** Modèle PM : masquer les services non activés (pas pour template admin global). */
   filterInactiveCapabilities?: boolean;
+  /** Listing : masquer les services désactivés (owner ou listing). */
+  filterByEffectiveActivation?: boolean;
+  serviceActivationStatus?: ServiceActivationStatusEntry[];
   syncHints?: Record<string, CapabilitySyncHint>;
   onSelectService: (key: string) => void;
 };
@@ -45,6 +52,8 @@ export default function V3Rail({
   selectedKey,
   ownerTemplateMode = false,
   filterInactiveCapabilities = false,
+  filterByEffectiveActivation = false,
+  serviceActivationStatus,
   syncHints = {},
   onSelectService,
 }: Props) {
@@ -56,6 +65,9 @@ export default function V3Rail({
     if (ownerTemplateMode && filterInactiveCapabilities) {
       const row = rowByKey[c.key];
       return isCapabilityActivated(row);
+    }
+    if (filterByEffectiveActivation) {
+      return isEffectivelyActivated(c.key, serviceActivationStatus);
     }
     return true;
   });
@@ -70,7 +82,10 @@ export default function V3Rail({
 
   const menuNavDef = CAPABILITY_REGISTRY.find(c => c.key === 'menu_navigation');
   const menuNavRow = rowByKey.menu_navigation;
-  const showMenuNav = !filterInactiveCapabilities || isCapabilityActivated(menuNavRow);
+  const showMenuNav =
+    (!filterInactiveCapabilities || isCapabilityActivated(menuNavRow)) &&
+    (!filterByEffectiveActivation ||
+      isEffectivelyActivated('menu_navigation', serviceActivationStatus));
 
   return (
     <Box

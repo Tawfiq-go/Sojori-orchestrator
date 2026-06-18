@@ -103,6 +103,17 @@ export interface ServiceResult<T> {
   info?: string;
 }
 
+export type RentalUnitedSyncPayload = {
+  orchestrationId?: string;
+  apiCallCount?: number;
+  propertyIds?: string[];
+};
+
+/** POST sync-with-rental-united — shape consumed by ListingFormV2 publish flow. */
+export type RentalUnitedSyncResult =
+  | { success: true; data: RentalUnitedSyncPayload; message?: string }
+  | { success: false; data?: RentalUnitedSyncPayload; error: string };
+
 // ════════════════════════════════════════════════════════════════════
 // Types pour API Calendar (basé sur sojori-dashboard)
 // ════════════════════════════════════════════════════════════════════
