@@ -26,6 +26,8 @@ type Props = {
   orchestrationDoc: ListingOrchestrationDoc | OwnerOrchestrationDoc;
   listingValues: Record<string, unknown>;
   ownerTemplateMode?: boolean;
+  /** Listing activation gate. true = all decision pills editable; false = read-only; undefined = owner managed chain. */
+  serviceEffectivelyEnabled?: boolean;
   onGestionPatch: (patch: Record<string, unknown>) => Promise<void>;
   onRowChange: (patch: Partial<CapabilityRowState>) => void;
   onPersist: () => void | Promise<void>;
@@ -67,6 +69,7 @@ export default function V3ServicePanel({
   orchestrationDoc,
   listingValues,
   ownerTemplateMode = false,
+  serviceEffectivelyEnabled,
   onGestionPatch,
   onRowChange,
   onPersist,
@@ -163,7 +166,12 @@ export default function V3ServicePanel({
     [isMenuNav, panels],
   );
 
-  const isLocked = (panel: PanelId) => panel !== 'gestion' && !row.managed;
+  const workflowEditorLocked = serviceEffectivelyEnabled === false;
+  const isLocked = (panel: PanelId) => {
+    if (workflowEditorLocked) return true;
+    if (serviceEffectivelyEnabled) return false;
+    return panel !== 'gestion' && !row.managed;
+  };
   const isEnabled = (panel: PanelId) => Boolean(row[PANEL_META[panel].field]);
 
   const statusBadge =
@@ -228,7 +236,7 @@ export default function V3ServicePanel({
             ownerKey={ownerKey}
             listingId={ownerTemplateMode ? undefined : listingId}
             listingValues={gestionValues}
-            onListingPatch={onGestionPatch}
+            onListingPatch={workflowEditorLocked ? async () => {} : onGestionPatch}
           />
         );
       case 'wa':
@@ -263,6 +271,7 @@ export default function V3ServicePanel({
               listingId={ownerTemplateMode ? undefined : listingId}
               orchestrationDoc={orchestrationDoc}
               ownerTemplateMode={ownerTemplateMode}
+              readOnly={workflowEditorLocked}
               section={execTab as 'relances' | 'staff' | 'escalade'}
               executionFlags={row.execution}
               onExecutionDocPatch={onExecutionDocPatch}
@@ -319,6 +328,7 @@ export default function V3ServicePanel({
             <Button
               size="small"
               variant="contained"
+              disabled={workflowEditorLocked}
               onClick={onPersist}
               sx={{ fontWeight: 800, borderRadius: '8px', bgcolor: V3.pd, fontSize: 11, px: 1.25 }}
             >

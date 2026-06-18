@@ -167,7 +167,13 @@ export default function V3Rail({
           {grp.items.map((def: CapabilityDefinition) => {
             const row = rowByKey[def.key];
             const active = selectedKey === def.key;
-            const disabled = !ownerTemplateMode && row?.status === 'not_managed' && !row?.managed;
+            const effectivelyActive = filterByEffectiveActivation
+              ? isEffectivelyActivated(def.key, serviceActivationStatus)
+              : ownerTemplateMode && filterInactiveCapabilities
+                ? isCapabilityActivated(row)
+                : true;
+            const disabled =
+              !ownerTemplateMode && !effectivelyActive && row?.status === 'not_managed' && !row?.managed;
             return (
               <Box
                 key={def.key}
