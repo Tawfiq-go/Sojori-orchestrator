@@ -4,7 +4,7 @@ export const WHATSAPP_AI_TIER_OPTIONS = [
     tier: 1,
     label: 'Économique',
     hint: 'Haiku 4.5 — le plus rapide et le moins cher',
-    modelId: 'claude-haiku-4-5',
+    modelId: 'claude-haiku-4-5-20251001',
   },
   {
     tier: 2,

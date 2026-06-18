@@ -77,7 +77,7 @@ const AIConfigManager = () => {
             version: '1.0.0',
             ai_models: {
               primary: 'gpt-4-turbo',
-              fallback: 'claude-3-haiku-20240307',
+              fallback: 'claude-haiku-4-5-20251001',
               use_fallback: true,
               max_retries: 2,
               timeout_seconds: 10
@@ -100,7 +100,7 @@ const AIConfigManager = () => {
             version: '1.0.0',
             ai_models: {
               primary: 'gpt-4-turbo',
-              fallback: 'claude-3-haiku-20240307',
+              fallback: 'claude-haiku-4-5-20251001',
               use_fallback: true,
               max_retries: 2,
               timeout_seconds: 10
@@ -126,7 +126,7 @@ const AIConfigManager = () => {
           version: '1.0.0',
           ai_models: {
             primary: 'gpt-4-turbo',
-            fallback: 'claude-3-haiku-20240307',
+            fallback: 'claude-haiku-4-5-20251001',
             use_fallback: true,
             max_retries: 2,
             timeout_seconds: 10
