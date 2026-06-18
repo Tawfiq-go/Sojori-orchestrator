@@ -66,6 +66,16 @@ const CommsPage = lazy(() =>
 const ListingsPage = lazy(() =>
   import('./pages/ListingsOverviewPage').then((module) => ({ default: module.ListingsOverviewPage }))
 );
+const ListingsMappingHubPage = lazy(() =>
+  import('./pages/ListingsMappingHubPage').then((module) => ({
+    default: module.ListingsMappingHubPage,
+  }))
+);
+const AdminGlobalMappingHubPage = lazy(() =>
+  import('./pages/AdminGlobalMappingHubPage').then((module) => ({
+    default: module.AdminGlobalMappingHubPage,
+  }))
+);
 const ListingDetailPage = lazy(() =>
   import('./pages/ListingDetailPage').then((module) => ({ default: module.ListingDetailPage }))
 );
@@ -305,6 +315,7 @@ function App() {
               <Route path="/reviews" element={<LazyRoute><ReviewsPage /></LazyRoute>} />
 
               <Route path="/listings" element={<LazyRoute><ListingsPage /></LazyRoute>} />
+              <Route path="/listings/mapping" element={<LazyRoute><ListingsMappingHubPage /></LazyRoute>} />
               <Route path="/listings/orchestration-model" element={<LazyRoute><OwnerOrchestrationModelPage /></LazyRoute>} />
               <Route path="/listings/new" element={<LazyRoute><ListingCreatePage /></LazyRoute>} />
               <Route path="/listings/:id" element={<LazyRoute><ListingFormV2Page /></LazyRoute>} />
@@ -357,6 +368,7 @@ function App() {
               <Route path="/admin/User/team" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
               <Route path="/admin/User/owner" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
               <Route path="/admin/User/owner/*" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
+              <Route path="/admin/mapping" element={<LazyRoute><AdminGlobalMappingHubPage /></LazyRoute>} />
               <Route path="/admin/settings" element={<LazyRoute><SettingsHubPage /></LazyRoute>} />
               <Route path="/admin/Settings" element={<LazyRoute><SettingsLegacyRedirect /></LazyRoute>} />
               <Route path="/admin/setting/currency" element={<LazyRoute><SettingsHubPage /></LazyRoute>} />
