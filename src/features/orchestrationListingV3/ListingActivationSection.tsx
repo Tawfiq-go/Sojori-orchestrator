@@ -82,6 +82,7 @@ export default function ListingActivationSection({
         onSaved?.(data.services ?? []);
         toast.success('Activation listing enregistrée');
       } catch (e: unknown) {
+        setLocal(displayActivationsFromServices(servicesRef.current));
         toast.error(e instanceof Error ? e.message : 'Erreur enregistrement activation');
         throw e;
       } finally {
