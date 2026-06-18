@@ -93,6 +93,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
     // Catalogue & revenue
     'listings': '/listings',
     'listings/list': '/listings',
+    'listings/mapping': '/listings/mapping',
     'listings/config': '/listings/orchestration-model',
     'listings/orchestration-model': '/listings/orchestration-model',
     'listing-orchestration': '/listings/orchestration-model',
@@ -153,6 +154,7 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
 
     // Administration
     'admin/pms': '/admin/equipe/owners?tab=list',
+    'admin/mapping': '/admin/mapping',
     'admin/roles': '/admin/equipe?tab=worker',
     'admin/settings': '/admin/settings?tab=host-profile',
     'admin/channels': '/channels?tab=Business&biz=api&api=m',
@@ -202,6 +204,9 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
       return 'tasks/team';
     }
 
+    if (path.startsWith('/listings/mapping')) {
+      return 'listings/mapping';
+    }
     if (path.startsWith('/listings/orchestration-model')) {
       return 'listings/orchestration-model';
     }
@@ -319,6 +324,9 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
       return 'admin/channels/business';
     }
 
+    if (path.startsWith('/admin/mapping')) {
+      return 'admin/mapping';
+    }
     if (path.includes('/admin/setting/currency') || path.includes('/admin/settings/currency')) {
       return 'admin/setting/currency';
     }

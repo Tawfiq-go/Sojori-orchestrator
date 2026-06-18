@@ -22,7 +22,9 @@ import type { ListingStatus, ListingsStats, ListingSummary } from '../types/list
 import { ListingQuickEditDialog } from '../components/listing/ListingQuickEditDialog';
 import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 5;
+const LISTINGS_GRID_COLUMNS = 5;
+const LISTING_CARD_WIDTH = 280;
 
 type ListingsTab = 'active' | 'inactive';
 
@@ -332,7 +334,16 @@ export function ListingsOverviewPage() {
             </Typography>
           </Box>
         ) : (
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${LISTINGS_GRID_COLUMNS}, ${LISTING_CARD_WIDTH}px)`,
+              gap: 2,
+              justifyContent: 'flex-start',
+              width: 'max-content',
+              maxWidth: '100%',
+            }}
+          >
             {filteredListings.map((listing, index) => {
               const gradient = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
               const ruLabel = formatRuIdsLabel(listing.rentalUnitedIds);
@@ -341,6 +352,9 @@ export function ListingsOverviewPage() {
                 <Box
                   key={listing.id}
                   sx={{
+                    width: LISTING_CARD_WIDTH,
+                    maxWidth: LISTING_CARD_WIDTH,
+                    flexShrink: 0,
                     border: `1px solid ${t.border}`,
                     borderRadius: '14px',
                     overflow: 'hidden',

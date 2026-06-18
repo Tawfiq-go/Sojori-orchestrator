@@ -34,6 +34,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   // Catalogue & revenue
   listings: '/listings',
   'listings/list': '/listings',
+  'listings/mapping': '/listings/mapping',
   'listings/config': '/listings/orchestration-model',
   'listings/orchestration-model': '/listings/orchestration-model',
   'listing-orchestration': '/listings/orchestration-model',
@@ -106,6 +107,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
 
   // Administration
   'admin/pms': '/admin/equipe/owners?tab=list',
+  'admin/mapping': '/admin/mapping',
   'admin/roles': '/admin/equipe?tab=worker',
   'admin/settings': '/admin/settings?tab=host-profile',
   'admin/equipe/owners': '/admin/equipe/owners?tab=list',

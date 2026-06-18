@@ -43,6 +43,7 @@ import MediaGridPhotoCard from './MediaGridPhotoCard';
 import { MEDIA_GRID_THEME as T, PHOTO_GRADIENTS } from './mediaGridConstants';
 import {
   getImageCategoryLabel,
+  getEffectiveImageTypeId,
   getImageTypeDisplayName,
   isImageCategoryUndefined,
 } from '../../../utils/upload/imageTypeDisplay';
@@ -97,6 +98,13 @@ const MediaGrid: React.FC<MediaGridProps> = ({
   const onImagesPersistedRef = useRef(onImagesPersisted);
   onImagesPersistedRef.current = onImagesPersisted;
 
+  const resolveEffectiveTypeId = useCallback(
+    (img: ListingImage) => getEffectiveImageTypeId(img.imageTypeId, img.imageTypeRuId, imageTypes),
+    [imageTypes],
+  );
+
+  const ruImageTypesNormalizedRef = useRef(false);
+
   /** Enregistre listingImages sur le listing (update-property) — pas besoin du bouton Sauvegarder global. */
   const persistListingImages = useCallback(
     async (updatedImages: ListingImage[], action: string, successMessage?: string): Promise<void> => {
@@ -144,6 +152,29 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     fetchImageTypes();
   }, []);
 
+  useEffect(() => {
+    if (!imageTypes.length || ruImageTypesNormalizedRef.current || listingImages.length === 0) return;
+
+    let changed = false;
+    const normalized = listingImages.map((img) => {
+      const effectiveId = getEffectiveImageTypeId(img.imageTypeId, img.imageTypeRuId, imageTypes);
+      if (!effectiveId || String(effectiveId) === String(img.imageTypeId || '')) return img;
+      if (!imageTypes.some((t) => String(t._id) === String(effectiveId))) return img;
+      const sojori = imageTypes.find((t) => String(t._id) === String(effectiveId));
+      changed = true;
+      return {
+        ...img,
+        imageTypeId: effectiveId,
+        imageTypeRuId: sojori?.rentalAmenityIds || img.imageTypeRuId,
+      };
+    });
+
+    ruImageTypesNormalizedRef.current = true;
+    if (!changed) return;
+
+    void persistListingImages(normalized, 'grid.normalizeRuImageTypes');
+  }, [imageTypes, listingImages, persistListingImages]);
+
   const checkImageDimensions = (file: File): Promise<{ width: number; height: number; isValid: boolean }> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -181,27 +212,27 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     const tabs: Array<{ id: string; label: string; count: number }> = [
       { id: GALLERY_TAB_ALL, label: 'Tout', count: listingImages.length },
     ];
-    const noneCount = listingImages.filter((img) => !String(img.imageTypeId || '').trim()).length;
+    const noneCount = listingImages.filter((img) => !resolveEffectiveTypeId(img)).length;
     if (noneCount > 0) {
       tabs.push({ id: GALLERY_TAB_NONE, label: 'Non défini', count: noneCount });
     }
     for (const type of imageTypes) {
-      const count = listingImages.filter((img) => String(img.imageTypeId) === String(type._id)).length;
+      const count = listingImages.filter((img) => String(resolveEffectiveTypeId(img)) === String(type._id)).length;
       if (count > 0) {
         tabs.push({ id: type._id, label: getImageTypeDisplayName(type), count });
       }
     }
     return tabs;
-  }, [listingImages, imageTypes]);
+  }, [listingImages, imageTypes, resolveEffectiveTypeId]);
 
   const visibleImages = useMemo(() => {
     const rows = listingImages.map((img, originalIndex) => ({ img, originalIndex }));
     if (galleryTab === GALLERY_TAB_ALL) return rows;
     if (galleryTab === GALLERY_TAB_NONE) {
-      return rows.filter(({ img }) => !String(img.imageTypeId || '').trim());
+      return rows.filter(({ img }) => !resolveEffectiveTypeId(img));
     }
-    return rows.filter(({ img }) => String(img.imageTypeId) === galleryTab);
-  }, [listingImages, galleryTab]);
+    return rows.filter(({ img }) => String(resolveEffectiveTypeId(img)) === galleryTab);
+  }, [listingImages, galleryTab, resolveEffectiveTypeId]);
 
   useEffect(() => {
     if (!galleryTabs.some((t) => t.id === galleryTab)) {
@@ -224,11 +255,12 @@ const MediaGrid: React.FC<MediaGridProps> = ({
   }, [imageTypes]);
 
   const isMainImage = useCallback(
-    (imageTypeId?: string): boolean => {
-      if (!imageTypeId || !mainImageTypeId) return false;
-      return imageTypeId === mainImageTypeId;
+    (imageTypeId?: string, imageTypeRuId?: number[]): boolean => {
+      const effectiveId = getEffectiveImageTypeId(imageTypeId, imageTypeRuId, imageTypes);
+      if (!effectiveId || !mainImageTypeId) return false;
+      return effectiveId === mainImageTypeId;
     },
-    [mainImageTypeId],
+    [mainImageTypeId, imageTypes],
   );
 
   const exitSelectionMode = () => {
@@ -520,7 +552,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
 
     // Remove main image type from all images
     updatedImages.forEach((img) => {
-      if (isMainImage(img.imageTypeId)) {
+      if (isMainImage(img.imageTypeId, img.imageTypeRuId)) {
         img.imageTypeId = '';
         img.imageTypeRuId = [];
       }
@@ -585,13 +617,14 @@ const MediaGrid: React.FC<MediaGridProps> = ({
       visibleImages.map(({ img, originalIndex }) => ({
         img,
         originalIndex,
-        categoryLabel: getImageCategoryLabel(img.imageTypeId, imageTypes),
-        undefinedCategory: isImageCategoryUndefined(img.imageTypeId),
-        isMain: isMainImage(img.imageTypeId),
+        effectiveImageTypeId: resolveEffectiveTypeId(img),
+        categoryLabel: getImageCategoryLabel(img.imageTypeId, imageTypes, img.imageTypeRuId),
+        undefinedCategory: isImageCategoryUndefined(resolveEffectiveTypeId(img)),
+        isMain: isMainImage(img.imageTypeId, img.imageTypeRuId),
         placeholderGradient: PHOTO_GRADIENTS[originalIndex % PHOTO_GRADIENTS.length],
         showTypeSelector: typeEditIndex === originalIndex,
       })),
-    [visibleImages, imageTypes, isMainImage, typeEditIndex],
+    [visibleImages, imageTypes, isMainImage, typeEditIndex, resolveEffectiveTypeId],
   );
 
   const selectorDisabled = loadingTypes || persisting || uploadLoading;
@@ -833,6 +866,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
               key={`${row.originalIndex}-${row.img.url}`}
               originalIndex={row.originalIndex}
               img={row.img}
+              effectiveImageTypeId={row.effectiveImageTypeId}
               categoryLabel={row.categoryLabel}
               undefinedCategory={row.undefinedCategory}
               isMain={row.isMain}

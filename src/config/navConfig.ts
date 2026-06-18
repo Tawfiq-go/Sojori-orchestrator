@@ -90,6 +90,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: PM_ROLES,
     items: [
       { id: 'listings/list', label: 'Listings', iconType: 'home', iconColor: '#D4A574' },
+      { id: 'listings/mapping', label: 'Mapping RU', iconType: 'link', iconColor: '#6D9EEB', roles: ADMIN_ROLES },
       { id: 'listings/orchestration-model', label: 'Modèle orchestration', iconType: 'home', iconColor: '#D4A574' },
       { id: 'chatbot/listing', label: 'Listing chatbot', iconType: 'home', iconColor: '#D4A574' },
     ],
@@ -181,6 +182,7 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       { id: 'admin/pms', label: 'Owners · PMs', iconType: 'building', iconColor: '#A6A6A6' },
       { id: 'admin/roles', label: 'Rôles & groupes', iconType: 'shield', iconColor: '#C81E1E' },
+      { id: 'admin/mapping', label: 'Mapping global', iconType: 'link', iconColor: '#6D9EEB' },
       { id: 'admin/settings', label: 'Paramètres', iconType: 'settings', iconColor: '#666666' },
     ],
   },

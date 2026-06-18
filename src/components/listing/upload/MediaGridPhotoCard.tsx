@@ -20,6 +20,7 @@ export interface MediaGridListingImage {
 export interface MediaGridPhotoCardProps {
   originalIndex: number;
   img: MediaGridListingImage;
+  effectiveImageTypeId?: string;
   categoryLabel: string;
   undefinedCategory: boolean;
   isMain: boolean;
@@ -42,6 +43,7 @@ export interface MediaGridPhotoCardProps {
 function MediaGridPhotoCardComponent({
   originalIndex: idx,
   img,
+  effectiveImageTypeId,
   categoryLabel,
   undefinedCategory,
   isMain,
@@ -212,7 +214,7 @@ function MediaGridPhotoCardComponent({
         <Box sx={{ px: 0.5, py: 0.5, bgcolor: T.bg2 }} onClick={(e) => e.stopPropagation()}>
           {showTypeSelector ? (
             <ImageTypeSelector
-              value={img.imageTypeId || ''}
+              value={effectiveImageTypeId || img.imageTypeId || ''}
               onChange={(typeId) => onTypeChange(idx, typeId)}
               imageTypes={imageTypes}
               disabled={selectorDisabled}
@@ -250,6 +252,7 @@ function arePhotoCardPropsEqual(
     prev.originalIndex === next.originalIndex &&
     prev.img.url === next.img.url &&
     prev.img.imageTypeId === next.img.imageTypeId &&
+    prev.effectiveImageTypeId === next.effectiveImageTypeId &&
     prev.categoryLabel === next.categoryLabel &&
     prev.undefinedCategory === next.undefinedCategory &&
     prev.isMain === next.isMain &&
