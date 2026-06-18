@@ -282,6 +282,15 @@ export function isEffectivelyActivated(
   return row.effectiveEnabled === true;
 }
 
+/** Workflow decision toggles (Gérer / Client / Orchestrer / Tâche) — only blocked when activation gate is off. */
+export function isWorkflowEditorEnabled(
+  serviceId: string,
+  status: ServiceActivationStatusEntry[] | undefined,
+): boolean {
+  if (!status?.length) return true;
+  return isEffectivelyActivated(serviceId, status);
+}
+
 export function countEffectiveActiveServices(
   status: ServiceActivationStatusEntry[] | undefined,
 ): number {

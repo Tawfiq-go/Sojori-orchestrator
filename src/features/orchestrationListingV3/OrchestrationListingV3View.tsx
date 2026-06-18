@@ -47,6 +47,7 @@ import {
   activationStatusFromEffectiveDoc,
   hasAnyEffectiveActiveService,
   isEffectivelyActivated,
+  isWorkflowEditorEnabled,
   type ServiceActivationStatusEntry,
 } from './listingCapabilityActivation';
 
@@ -539,6 +540,11 @@ export default function OrchestrationListingV3View({
               orchestrationDoc={orchestrationDoc as ListingOrchestrationDoc}
               listingValues={listingValues}
               ownerTemplateMode={isOwnerTemplate}
+              serviceEffectivelyEnabled={
+                isOwnerTemplate
+                  ? undefined
+                  : isWorkflowEditorEnabled(selectedKey ?? '', serviceActivationStatus)
+              }
               onGestionPatch={onGestionPatch}
               onRowChange={patch => selectedKey && patchRow(selectedKey, patch)}
               onPersist={() => selectedKey && void persistRow(selectedKey)}
