@@ -140,6 +140,24 @@ function isRouteNotFoundError(e: unknown): boolean {
   );
 }
 
+export const SAVE_ENDPOINT_NOT_DEPLOYED_MSG =
+  "Impossible d'enregistrer l'activation : endpoint backend non déployé (PUT /api/v1/listing/listings/:listingId/service-activation). Redéployez srv-listing sur dev.sojori.com.";
+
+function formatSaveError(e: unknown): string {
+  if (isRouteNotFoundError(e)) return SAVE_ENDPOINT_NOT_DEPLOYED_MSG;
+  if (isAxiosError(e)) {
+    const body = e.response?.data as { error?: string; message?: string; errors?: { message?: string }[] };
+    const detail =
+      body?.error ||
+      body?.message ||
+      body?.errors?.map(err => err.message).filter(Boolean).join(' · ');
+    if (detail) {
+      return `Enregistrement refusé (${e.response?.status ?? 'erreur'}) : ${detail}`;
+    }
+  }
+  return e instanceof Error ? e.message : 'Erreur enregistrement activation';
+}
+
 /** Pre-deploy fallback when orchestration-effective has no serviceActivationStatus yet. */
 export function activationStatusFromLegacyEffective(
   doc: ListingOrchestrationEffective,
@@ -249,20 +267,8 @@ export async function saveListingServiceActivation(
   try {
     const res = await listingsService.putListingServiceActivation(listingId, patch);
     return parseServiceActivationResponse(res);
-  } catch (dedicatedErr: unknown) {
-    if (!isRouteNotFoundError(dedicatedErr)) throw dedicatedErr;
-  }
-
-  try {
-    const res = await listingsService.putListingOrchestrationServiceActivation(listingId, patch);
-    return parseServiceActivationResponse(res);
-  } catch (orchestrationErr: unknown) {
-    if (isRouteNotFoundError(orchestrationErr)) {
-      throw new Error(
-        'Enregistrement impossible : routes service-activation et PUT orchestration/serviceActivation absentes sur dev.sojori.com. Redéployez srv-listing (≥ main-cf42ed56f).',
-      );
-    }
-    throw orchestrationErr;
+  } catch (e: unknown) {
+    throw new Error(formatSaveError(e));
   }
 }
 

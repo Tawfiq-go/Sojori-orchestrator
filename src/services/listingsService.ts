@@ -26,6 +26,7 @@ import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
 import {
   LISTING_API_BASE_URL,
   logListingApiRequest,
+  logListingActivationSave,
   describeListingApiRequest,
 } from '../config/listingApiBase';
 
@@ -1656,21 +1657,22 @@ export const listingsService = {
   ) {
     const path = `/listings/${listingId}/service-activation`;
     logListingApiRequest('PUT', path);
-    const { data } = await apiClient.put(`${LISTING_API_BASE_URL}${path}`, patch);
-    return data;
-  },
-
-  /** Fallback write when …/service-activation is not deployed yet. */
-  async putListingOrchestrationServiceActivation(
-    listingId: string,
-    patch: { overrides?: Record<string, boolean>; unset?: string[]; activations?: Record<string, boolean> },
-  ) {
-    const path = `/listings/${listingId}/orchestration`;
-    logListingApiRequest('PUT', path);
-    const { data } = await apiClient.put(`${LISTING_API_BASE_URL}${path}`, {
-      serviceActivation: patch,
-    });
-    return data;
+    try {
+      const response = await apiClient.put(`${LISTING_API_BASE_URL}${path}`, patch);
+      logListingActivationSave(listingId, 'PUT', path, patch, {
+        status: response.status,
+        data: response.data,
+      });
+      return response.data;
+    } catch (error: unknown) {
+      if (isAxiosError(error)) {
+        logListingActivationSave(listingId, 'PUT', path, patch, undefined, {
+          status: error.response?.status,
+          data: error.response?.data ?? error.message,
+        });
+      }
+      throw error;
+    }
   },
 
   async applyListingOrchestrationFromOwner(listingId: string) {

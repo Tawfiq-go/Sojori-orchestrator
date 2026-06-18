@@ -55,6 +55,27 @@ export function logListingApiRequest(method: string, pathSuffix: string): Listin
   return info;
 }
 
+export function logListingActivationSave(
+  listingId: string,
+  method: string,
+  pathSuffix: string,
+  body: unknown,
+  result?: { status: number; data: unknown },
+  error?: { status?: number; data: unknown },
+): void {
+  if (!import.meta.env.DEV && import.meta.env.VITE_DEBUG_LISTING_API !== 'true') return;
+  const info = describeListingApiRequest(method, pathSuffix);
+  console.info('[listing-activation-save]', {
+    listingId,
+    method,
+    url: info.browserUrl,
+    remoteGateway: info.remoteGateway,
+    requestBody: body,
+    ...(result ? { responseStatus: result.status, responseBody: result.data } : {}),
+    ...(error ? { errorStatus: error.status, errorBody: error.data } : {}),
+  });
+}
+
 if (import.meta.env.DEV && typeof window !== 'undefined') {
   const boot = describeListingApiRequest('BOOT', '');
   console.info('[listing-api] configured', {
