@@ -2,6 +2,7 @@ import { Box, Typography } from '@mui/material';
 import {
   CAPABILITY_GROUPS,
   CAPABILITY_REGISTRY,
+  capabilityShortHint,
   type CapabilityDefinition,
 } from '../serviceMatrix/capabilityRegistry';
 import type { CapabilityRowState } from '../serviceMatrix/types';
@@ -12,6 +13,7 @@ import {
   syncHintTone,
   type CapabilitySyncHint,
 } from './capabilitySyncHints';
+import { isCapabilityActivated } from './ownerCapabilityActivation';
 
 const GROUP_EMOJI: Record<string, string> = {
   cleaning: '🧹',
@@ -26,6 +28,8 @@ type Props = {
   selectedKey: string | null;
   /** false = rail listing (masque les entrées listingRailHidden). */
   ownerTemplateMode?: boolean;
+  /** Modèle PM : masquer les services non activés (pas pour template admin global). */
+  filterInactiveCapabilities?: boolean;
   syncHints?: Record<string, CapabilitySyncHint>;
   onSelectService: (key: string) => void;
 };
@@ -40,16 +44,21 @@ export default function V3Rail({
   rows,
   selectedKey,
   ownerTemplateMode = false,
+  filterInactiveCapabilities = false,
   syncHints = {},
   onSelectService,
 }: Props) {
   const rowByKey = Object.fromEntries(rows.map(r => [r.key, r]));
 
-  const railCapabilities = CAPABILITY_REGISTRY.filter(
-    c =>
-      c.key !== 'menu_navigation' &&
-      (ownerTemplateMode || !c.listingRailHidden),
-  );
+  const railCapabilities = CAPABILITY_REGISTRY.filter(c => {
+    if (c.key === 'menu_navigation') return false;
+    if (!ownerTemplateMode && c.listingRailHidden) return false;
+    if (ownerTemplateMode && filterInactiveCapabilities) {
+      const row = rowByKey[c.key];
+      return isCapabilityActivated(row);
+    }
+    return true;
+  });
 
   const groups = Object.entries(CAPABILITY_GROUPS)
     .map(([id, label]) => ({
@@ -61,6 +70,7 @@ export default function V3Rail({
 
   const menuNavDef = CAPABILITY_REGISTRY.find(c => c.key === 'menu_navigation');
   const menuNavRow = rowByKey.menu_navigation;
+  const showMenuNav = !filterInactiveCapabilities || isCapabilityActivated(menuNavRow);
 
   return (
     <Box
@@ -79,7 +89,7 @@ export default function V3Rail({
         WebkitOverflowScrolling: 'touch',
       }}
     >
-      {menuNavDef && (
+      {menuNavDef && showMenuNav && (
         <Box
           component="button"
           type="button"
@@ -125,26 +135,24 @@ export default function V3Rail({
         <Box key={grp.id} sx={{ mb: 0.75 }}>
           <Typography
             sx={{
-              px: 1.5,
-              py: '9px 6px',
-              fontFamily: '"Geist Mono", ui-monospace, monospace',
-              fontSize: 9,
-              fontWeight: 800,
-              color: V3.t4,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
+              px: 1.25,
+              py: '8px 4px',
+              fontSize: 11,
+              fontWeight: 700,
+              color: V3.t3,
+              letterSpacing: '0.02em',
               display: 'flex',
               alignItems: 'center',
               gap: 0.75,
             }}
           >
-            <span>{GROUP_EMOJI[grp.id] ?? '•'}</span>
+            <span style={{ fontSize: 14 }}>{GROUP_EMOJI[grp.id] ?? '•'}</span>
             {grp.label}
           </Typography>
           {grp.items.map((def: CapabilityDefinition) => {
             const row = rowByKey[def.key];
             const active = selectedKey === def.key;
-            const disabled = row?.status === 'not_managed' && !row?.managed;
+            const disabled = !ownerTemplateMode && row?.status === 'not_managed' && !row?.managed;
             return (
               <Box
                 key={def.key}
@@ -182,20 +190,33 @@ export default function V3Rail({
               >
                 <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0 }}>{def.emoji}</span>
                 <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Typography
-                    sx={{
-                      fontSize: 12.5,
-                      fontWeight: active ? 700 : 600,
-                      color: active ? V3.pd : disabled ? V3.t4 : V3.t,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      flex: 1,
-                      minWidth: 0,
-                    }}
-                  >
-                    {def.label}
-                  </Typography>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        fontWeight: active ? 700 : 600,
+                        color: active ? V3.pd : disabled ? V3.t4 : V3.t,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      {def.label}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: 10,
+                        color: V3.t4,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {capabilityShortHint(def)}
+                    </Typography>
+                  </Box>
                   {syncHintLabel(syncHints[def.key]) ? (
                     <V3Badge tone={syncHintTone(syncHints[def.key])}>
                       {syncHintLabel(syncHints[def.key])}

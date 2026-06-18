@@ -19,6 +19,8 @@ export interface AnalyticsQuery {
   customEndDate?: string;
   staging?: boolean;
   active?: string[];
+  /** Admin : propriétaire sélectionné (scope obligatoire). */
+  ownerId?: string | null;
 }
 
 export interface AnalyticsPropertyOption {
@@ -27,6 +29,8 @@ export interface AnalyticsPropertyOption {
   label: string;
   city?: string;
   isActive: boolean;
+  /** Devise du listing (currency ou currencyCode côté srv-listing). */
+  currency?: string;
 }
 
 export interface AnalyticsMetric {
@@ -98,6 +102,10 @@ export interface AnalyticsPropertyPerformanceRow {
 
 export interface AnalyticsSnapshot {
   periodLabel: string;
+  /** Devise d'affichage des montants agrégés (API → MAD). */
+  displayCurrency: string;
+  listingCurrencies: string[];
+  mixedListingCurrencies: boolean;
   availableSources: string[];
   properties: AnalyticsPropertyOption[];
   kpis: AnalyticsKpiCards;

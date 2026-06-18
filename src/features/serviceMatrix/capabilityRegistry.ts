@@ -308,6 +308,16 @@ export function getCapabilityDefinition(key: string): CapabilityDefinition | und
   return CAPABILITY_REGISTRY.find(c => c.key === key);
 }
 
+/** Sous-titre rail V3 — menu WA ou extrait gestion (pas le badge « Local »). */
+export function capabilityShortHint(def: CapabilityDefinition): string {
+  if (def.menuCodes.length) {
+    return `Menu ${def.menuCodes.join(' · ')}`;
+  }
+  const gestion = def.gestionHint.split('·').map(s => s.trim()).filter(Boolean);
+  if (gestion.length) return gestion.slice(0, 2).join(' · ');
+  return def.groupLabel;
+}
+
 export function isCapabilityVisibleOnListingRail(key: string): boolean {
   const def = getCapabilityDefinition(key);
   if (!def || def.key === 'menu_navigation') return false;

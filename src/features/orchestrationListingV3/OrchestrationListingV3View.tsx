@@ -38,6 +38,10 @@ import {
   buildCapabilitySyncHints,
   type OwnerTemplateSyncMeta,
 } from './capabilitySyncHints';
+import {
+  firstActivatedCapabilityKey,
+  isCapabilityActivated,
+} from './ownerCapabilityActivation';
 
 type ListingPick = { id: string; name: string };
 
@@ -52,6 +56,8 @@ type Props = {
   embedded?: boolean;
   /** Modèle PM complet (owner_orchestrations) — même UI que listing. */
   ownerTemplateMode?: boolean;
+  /** Signale au parent si au moins un service est activé (onglet messages). */
+  onOwnerActivationMeta?: (meta: { anyActive: boolean }) => void;
 };
 
 export default function OrchestrationListingV3View({
@@ -63,6 +69,7 @@ export default function OrchestrationListingV3View({
   listingCount,
   embedded = false,
   ownerTemplateMode = false,
+  onOwnerActivationMeta,
 }: Props) {
   const [scope, setScope] = useState<V3ScopeMode>(ownerTemplateMode ? 'template' : 'listing');
   const [rows, setRows] = useState<CapabilityRowState[]>([]);
@@ -200,6 +207,24 @@ export default function OrchestrationListingV3View({
     [isAdminTemplate, isOwnerTemplate, ownerKey, orchestrationDoc, ownerSyncMeta, scope],
   );
 
+  const anyOwnerServiceActive = useMemo(() => {
+    if (!isOwnerTemplate || isAdminTemplate || ownerKey === 'global') return true;
+    return rows.some(r => isCapabilityActivated(r));
+  }, [isOwnerTemplate, isAdminTemplate, ownerKey, rows]);
+
+  useEffect(() => {
+    if (!isOwnerTemplate || !onOwnerActivationMeta) return;
+    onOwnerActivationMeta({ anyActive: anyOwnerServiceActive });
+  }, [isOwnerTemplate, anyOwnerServiceActive, onOwnerActivationMeta]);
+
+  useEffect(() => {
+    if (!isOwnerTemplate || isAdminTemplate || ownerKey === 'global' || !selectedKey) return;
+    const row = rows.find(r => r.key === selectedKey);
+    if (row && isCapabilityActivated(row)) return;
+    const fallback = firstActivatedCapabilityKey(rows);
+    if (fallback !== selectedKey) setSelectedKey(fallback);
+  }, [isOwnerTemplate, isAdminTemplate, ownerKey, rows, selectedKey]);
+
   useEffect(() => {
     if (isOwnerTemplate || !effectiveListingId || !selectedKey) return;
     if (selectedKey === 'menu_navigation') return;
@@ -322,7 +347,9 @@ export default function OrchestrationListingV3View({
     selectedRow &&
     orchestrationDoc &&
     (isOwnerTemplate || (scope === 'listing' && effectiveListingId)) &&
-    (isOwnerTemplate || isCapabilityPanelVisibleOnListing(selectedKey ?? ''));
+    (isOwnerTemplate && !isAdminTemplate && ownerKey !== 'global'
+      ? isCapabilityActivated(selectedRow)
+      : isOwnerTemplate || isCapabilityPanelVisibleOnListing(selectedKey ?? ''));
 
   const showListingMessages =
     Boolean(effectiveListingId) && (embedded || (scope === 'listing' && !ownerTemplateMode));
@@ -402,6 +429,7 @@ export default function OrchestrationListingV3View({
             rows={rows}
             selectedKey={selectedKey}
             ownerTemplateMode={isOwnerTemplate}
+            filterInactiveCapabilities={isOwnerTemplate && !isAdminTemplate && ownerKey !== 'global'}
             syncHints={syncHints}
             onSelectService={key => {
               setSelectedKey(key);
@@ -444,6 +472,12 @@ export default function OrchestrationListingV3View({
               onWhatsappPatch={onWhatsappPatch}
             />
           )}
+          {isOwnerTemplate && !isAdminTemplate && ownerKey !== 'global' && !anyOwnerServiceActive ? (
+            <Alert severity="info" sx={{ m: 2 }}>
+              Aucun service activé. Utilisez l&apos;onglet{' '}
+              <strong>Activation des services</strong> pour activer les services à configurer.
+            </Alert>
+          ) : null}
         </Box>
       </Box>
       )}

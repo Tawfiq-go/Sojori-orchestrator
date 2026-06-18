@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
@@ -14,6 +14,17 @@ import { mapConversationToThread } from '../unified-inbox/inboxMappers';
 import { enrichThreadFromReservation } from '../unified-inbox/inboxReservationEnrichment';
 import { buildInboxMessages, WA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
 import { formatThreadWhen } from '../unified-inbox/inboxFormat';
+import {
+  applyWaInboxFilters,
+  countWaFilters,
+  countWaStayQuickFilters,
+  type WaChannelFilter,
+  type WaStayQuickFilter,
+} from '../unified-inbox/waThreadFilters';
+
+const WA_INBOX_LIMIT = 100;
+const GLOBAL_SEARCH_MIN_LEN = 2;
+const GLOBAL_SEARCH_DEBOUNCE_MS = 500;
 
 function isOtaChannel(ch?: string): boolean {
   const c = (ch || '').toLowerCase();
@@ -21,41 +32,168 @@ function isOtaChannel(ch?: string): boolean {
   return c.includes('airbnb') || c.includes('booking') || c.includes('vrbo') || c === 'ab' || c === 'bk';
 }
 
+function normalizeConversations(raw: Conversation[]): Conversation[] {
+  return raw
+    .filter((c) => !isOtaChannel(c.channel_name))
+    .map((c) => ({
+      ...c,
+      reservation_number: c.reservation_number || c.reservation_id,
+    }));
+}
+
 export default function WhatsAppTabV2() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [inboxConversations, setInboxConversations] = useState<Conversation[]>([]);
+  const [searchConversations, setSearchConversations] = useState<Conversation[]>([]);
+  const [searchMode, setSearchMode] = useState<'none' | 'global'>('none');
   const [loading, setLoading] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [globalSearchPending, setGlobalSearchPending] = useState(false);
+  const [waChannelFilter, setWaChannelFilter] = useState<WaChannelFilter>('all');
+  const [waStayQuickFilter, setWaStayQuickFilter] = useState<WaStayQuickFilter>('none');
+  const [waUnreadOnly, setWaUnreadOnly] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
 
+  const globalSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const globalSearchRequestIdRef = useRef(0);
+  const loadRequestIdRef = useRef(0);
+
   const inbox = useInboxConversation();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        const response = await messagesService.getConversations({
-          filter: 'smart',
-          hasReservation: true,
-          limit: 100,
-        });
-        if (response.status === 'success') {
-          setConversations(
-            response.data.conversations
-              .filter((c) => !isOtaChannel(c.channel_name))
-              .map((c) => ({
-                ...c,
-                reservation_number: c.reservation_number || c.reservation_id,
-              })),
-          );
-        }
-      } catch (err) {
-        console.error('❌ Erreur chargement conversations:', err);
-      } finally {
-        setLoading(false);
+  const loadInbox = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current;
+    try {
+      setLoading(true);
+      const response = await messagesService.getConversations({
+        filter: 'smart',
+        limit: WA_INBOX_LIMIT,
+      });
+      if (requestId !== loadRequestIdRef.current) return;
+      if (response.status === 'success') {
+        setInboxConversations(normalizeConversations(response.data.conversations));
+        setSearchConversations([]);
+        setSearchMode('none');
       }
-    })();
+    } catch (err) {
+      if (requestId !== loadRequestIdRef.current) return;
+      console.error('❌ Erreur chargement conversations:', err);
+    } finally {
+      if (requestId === loadRequestIdRef.current) setLoading(false);
+    }
   }, []);
+
+  const loadServerSearch = useCallback(async (query: string) => {
+    const requestId = ++globalSearchRequestIdRef.current;
+    try {
+      setSearchLoading(true);
+      const response = await messagesService.getConversations({
+        filter: 'smart',
+        limit: WA_INBOX_LIMIT,
+        search: query,
+      });
+      if (requestId !== globalSearchRequestIdRef.current) return;
+      if (response.status === 'success') {
+        setSearchConversations(normalizeConversations(response.data.conversations));
+        setSearchMode('global');
+      } else {
+        setSearchConversations([]);
+      }
+    } catch (err) {
+      if (requestId !== globalSearchRequestIdRef.current) return;
+      console.error('❌ Erreur recherche WhatsApp:', err);
+      setSearchConversations([]);
+    } finally {
+      if (requestId === globalSearchRequestIdRef.current) {
+        setGlobalSearchPending(false);
+        setSearchLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadInbox();
+  }, [loadInbox]);
+
+  useEffect(() => {
+    const q = searchTerm.trim();
+    if (globalSearchDebounceRef.current) {
+      clearTimeout(globalSearchDebounceRef.current);
+      globalSearchDebounceRef.current = null;
+    }
+
+    if (!q) {
+      setGlobalSearchPending(false);
+      setSearchMode((mode) => {
+        if (mode === 'global') {
+          setSearchConversations([]);
+          return 'none';
+        }
+        return mode;
+      });
+      return;
+    }
+
+    if (q.length < GLOBAL_SEARCH_MIN_LEN) {
+      setGlobalSearchPending(false);
+      return;
+    }
+
+    setGlobalSearchPending(true);
+    globalSearchDebounceRef.current = setTimeout(() => {
+      void loadServerSearch(q);
+    }, GLOBAL_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (globalSearchDebounceRef.current) {
+        clearTimeout(globalSearchDebounceRef.current);
+        globalSearchDebounceRef.current = null;
+      }
+    };
+  }, [searchTerm, loadServerSearch]);
+
+  const waGlobalQueryActive = searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN;
+
+  const baseConversations = useMemo(() => {
+    if (waGlobalQueryActive || searchMode !== 'none') return searchConversations;
+    return inboxConversations;
+  }, [waGlobalQueryActive, searchMode, searchConversations, inboxConversations]);
+
+  const waFilterCounts = useMemo(() => countWaFilters(baseConversations), [baseConversations]);
+
+  const waStayQuickCounts = useMemo(() => {
+    const scoped = applyWaInboxFilters(baseConversations, waChannelFilter, waUnreadOnly, 'none');
+    return countWaStayQuickFilters(scoped);
+  }, [baseConversations, waChannelFilter, waUnreadOnly]);
+
+  const waFiltersActive = useMemo(
+    () =>
+      waGlobalQueryActive ||
+      waChannelFilter !== 'all' ||
+      waStayQuickFilter !== 'none' ||
+      waUnreadOnly,
+    [waGlobalQueryActive, waChannelFilter, waStayQuickFilter, waUnreadOnly],
+  );
+
+  const displayConversations = useMemo(
+    () =>
+      applyWaInboxFilters(
+        baseConversations,
+        waChannelFilter,
+        waUnreadOnly,
+        waStayQuickFilter,
+      ),
+    [baseConversations, waChannelFilter, waUnreadOnly, waStayQuickFilter],
+  );
+
+  const handleResetAllFilters = () => {
+    setSearchTerm('');
+    setWaChannelFilter('all');
+    setWaStayQuickFilter('none');
+    setWaUnreadOnly(false);
+    setSearchConversations([]);
+    setSearchMode('none');
+  };
 
   const handleSelect = async (conv: Conversation) => {
     await inbox.selectConversation(conv);
@@ -72,7 +210,7 @@ export default function WhatsAppTabV2() {
 
   const formattedThreads: Thread[] = useMemo(
     () =>
-      conversations.map((conv) => {
+      displayConversations.map((conv) => {
         const base = mapConversationToThread(conv, { channel: 'wa', channelColor: '#25D366' });
         return {
           ...base,
@@ -80,7 +218,7 @@ export default function WhatsAppTabV2() {
           taskCount: taskCounts[conv.phone],
         };
       }),
-    [conversations, taskCounts],
+    [displayConversations, taskCounts],
   );
 
   const activeThread: Thread | null = useMemo(() => {
@@ -106,9 +244,9 @@ export default function WhatsAppTabV2() {
   }, [inbox.activeConversation, inbox.tasks, inbox.loadingTasks, inbox.reservation, inbox.rawReservation]);
 
   const formattedMessages = buildInboxMessages(inbox.messages, false);
-  const unreadTotal = conversations.reduce((s, c) => s + (c.unread_count || 0), 0);
+  const unreadTotal = inboxConversations.reduce((s, c) => s + (c.unread_count || 0), 0);
 
-  if (loading) {
+  if (loading && inboxConversations.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
         <CircularProgress size={32} sx={{ color: t.primary }} />
@@ -116,7 +254,7 @@ export default function WhatsAppTabV2() {
     );
   }
 
-  if (conversations.length === 0) {
+  if (inboxConversations.length === 0 && searchMode === 'none' && !searchTerm.trim()) {
     return (
       <InboxLayout>
         <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: 2, gridColumn: '1 / -1' }}>
@@ -132,13 +270,27 @@ export default function WhatsAppTabV2() {
       <InboxLayout>
         <ThreadsList
           threads={formattedThreads}
-          channels={[{ id: 'wa', label: 'WhatsApp', icon: '💬', color: '#25D366', count: conversations.length }]}
+          channels={[{ id: 'wa', label: 'WhatsApp', icon: '💬', color: '#25D366', count: displayConversations.length }]}
           listTitle="WhatsApp"
           mode="whatsapp"
           activeThreadId={activeThread?.id ?? null}
           searchTerm={searchTerm}
+          loading={searchLoading || globalSearchPending}
+          waListTotalCount={displayConversations.length}
+          waGlobalSearchActive={waGlobalQueryActive}
+          waSearchPending={globalSearchPending}
+          waChannelFilter={waChannelFilter}
+          onWaChannelFilterChange={setWaChannelFilter}
+          waUnreadOnly={waUnreadOnly}
+          onWaUnreadOnlyChange={setWaUnreadOnly}
+          waFilterCounts={waFilterCounts}
+          waStayQuickFilter={waStayQuickFilter}
+          onWaStayQuickFilterChange={setWaStayQuickFilter}
+          waStayQuickCounts={waStayQuickCounts}
+          waFiltersActive={waFiltersActive}
+          onWaResetAll={handleResetAllFilters}
           onSelectThread={(thread) => {
-            const conv = conversations.find((c) => c.phone === thread.id);
+            const conv = displayConversations.find((c) => c.phone === thread.id);
             if (conv) void handleSelect(conv);
           }}
           onSearchChange={setSearchTerm}

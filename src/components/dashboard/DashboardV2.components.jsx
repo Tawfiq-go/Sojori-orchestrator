@@ -448,7 +448,7 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
                   },
                 }}
               >
-                <Stack direction="row" spacing={0.75} alignItems="center">
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                   <span>{group.group}</span>
                   {isCore ? (
                     <Chip label="CORE" size="small" sx={{ height: 16, fontSize: 9, fontWeight: 800, bgcolor: t.aiTint, color: t.ai }} />
@@ -636,7 +636,7 @@ export function TopBar({ breadcrumb = [], onSearch, compact = false }) {
     }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0, fontSize: 12.5, color: t.text2 }}>
         {breadcrumb.map((b, i) => (
-          <React.Fragment key={i}>
+          <React.Fragment key={`breadcrumb-${i}-${b}`}>
             <Typography sx={{
               fontSize: 12.5,
               color: i === breadcrumb.length - 1 ? t.text : t.text2,
@@ -722,18 +722,18 @@ export function PageHeader({ title, count, children }) {
       }}
     >
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography
+        <Box
           component="h1"
-          variant="h5"
           sx={{
             fontSize: { xs: '1.2rem', sm: '1.45rem' },
             fontWeight: 800,
             letterSpacing: '-0.045em',
             color: t.text,
             lineHeight: 1.2,
+            m: 0,
             display: 'flex',
-            alignItems: 'center',
             flexWrap: 'wrap',
+            alignItems: 'center',
             gap: 1.5,
           }}
         >
@@ -745,7 +745,7 @@ export function PageHeader({ title, count, children }) {
               border: `1px solid ${t.border}`, letterSpacing: 0.02,
             }}>{count}</Box>
           )}
-        </Typography>
+        </Box>
       </Box>
       <Stack direction="row" spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
         {children}
@@ -1123,7 +1123,7 @@ export function Pagination({ page, totalPages, onChange }) {
       <PaginationBtn onClick={() => onChange?.(Math.max(1, page - 1))}>‹</PaginationBtn>
       {pages.map((p, i) =>
         p === '…' ? <Box key={`ellipsis-${i}`} sx={{ color: t.text4, px: 0.5 }}>…</Box>
-        : <PaginationBtn key={p} active={page === p} onClick={() => onChange?.(p)}>{p}</PaginationBtn>
+        : <PaginationBtn key={`page-${p}`} active={page === p} onClick={() => onChange?.(p)}>{p}</PaginationBtn>
       )}
       <PaginationBtn onClick={() => onChange?.(Math.min(totalPages, page + 1))}>›</PaginationBtn>
     </Stack>
@@ -1343,7 +1343,7 @@ export function CalendarGantt({ days = 21, properties = [], bookings = [], today
         }}>Listing</Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${days}, 1fr)` }}>
           {dayCells.map((d, i) => (
-            <Box key={i} sx={{
+            <Box key={`header-day-${i}-${d.n}`} sx={{
               p: '7px 0', textAlign: 'center',
               borderLeft: `1px solid ${t.border}`,
               fontSize: 10.5, fontFamily: 'Geist Mono',
@@ -1363,7 +1363,7 @@ export function CalendarGantt({ days = 21, properties = [], bookings = [], today
 
       {/* Rows */}
       {properties.map((p, pi) => (
-        <Box key={p.name} sx={{
+        <Box key={`property-${pi}-${p.name}`} sx={{
           display: 'grid', gridTemplateColumns: '160px 1fr',
           borderBottom: pi < properties.length - 1 ? `1px solid ${t.border}` : 0,
           minHeight: 56,
@@ -1381,13 +1381,13 @@ export function CalendarGantt({ days = 21, properties = [], bookings = [], today
           </Stack>
           <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${days}, 1fr)`, position: 'relative', alignItems: 'center' }}>
             {dayCells.map((d, i) => (
-              <Box key={i} sx={{
+              <Box key={`cell-${pi}-${i}-${d.n}`} sx={{
                 borderLeft: `1px solid ${t.border}`, height: '100%',
                 bgcolor: d.today ? 'rgba(230,176,34,0.05)' : d.weekend ? 'rgba(26,20,8,0.02)' : 'transparent',
               }} />
             ))}
             {bookings.filter(b => b.prop === pi).map((b, i) => (
-              <CalBooking key={i} {...b} totalDays={days} />
+              <CalBooking key={`booking-${pi}-${b.start}-${i}`} {...b} totalDays={days} />
             ))}
           </Box>
         </Box>
@@ -1794,9 +1794,9 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
           <>
             {messages.map((m, i) =>
               m.type === 'day'
-                ? <DayLabel key={i}>{m.text}</DayLabel>
+                ? <DayLabel key={`day-${i}-${m.text}`}>{m.text}</DayLabel>
                 : <Message
-                    key={i}
+                    key={`msg-${i}-${m.timestamp || i}`}
                     from={m.from || m.sender}
                     text={m.text || m.content}
                     when={m.when || formatTime(m.timestamp)}
@@ -1822,7 +1822,7 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
       }}>
         {aiSuggestions.length > 0 && (
           <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', mb: 1, rowGap: 0.75 }}>
-            {aiSuggestions.map((s, i) => <AIChip key={i}>{s}</AIChip>)}
+            {aiSuggestions.map((s, i) => <AIChip key={`ai-suggest-${i}-${s.slice(0, 10)}`}>{s}</AIChip>)}
           </Stack>
         )}
         {/* ✅ RÈGLE 3: Input bar uniforme - [✨ AI] [📎 Upload] [Input] [→ Send] */}
@@ -2031,7 +2031,7 @@ export function ListingCard({ photoColor = 'gold', name, place, rating, occupanc
         ) : (
           <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', fontSize: 11.5 }}>
             <Stack direction="row" spacing={0.375}>
-              {channels.map(c => <ChannelDot key={c} source={c} />)}
+              {channels.map((c, ci) => <ChannelDot key={`channel-${ci}-${c}`} source={c} />)}
             </Stack>
             <Typography sx={{ color: t.text3, fontSize: 11.5 }}>{channels.length} canaux</Typography>
           </Stack>

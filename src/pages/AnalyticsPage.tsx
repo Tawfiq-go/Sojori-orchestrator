@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { Alert, Box, Button, Skeleton, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Autocomplete, Box, Button, Skeleton, Stack, TextField, Typography } from '@mui/material';
 import {
   Bar,
   BarChart,
@@ -29,20 +29,18 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { analyticsService } from '../services/analyticsService';
+import { buildEmptyAnalyticsSnapshot } from '../services/analyticsSnapshotBuilder';
+import { AdminOwnerFilterProvider, useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import OwnerFilterField from '../components/OwnerFilterBar/OwnerFilterField';
 import { analyticsPeriodOptions } from '../types/analytics.types';
 import { runtimeLog } from '../utils/runtimeLog';
+import { createCurrencyFormatter } from '../utils/analyticsCurrency';
 import type {
   AnalyticsDistributionItem,
   AnalyticsPropertyPerformanceRow,
   AnalyticsQuery,
   AnalyticsSnapshot,
 } from '../types/analytics.types';
-
-const currency = new Intl.NumberFormat('fr-FR', {
-  style: 'currency',
-  currency: 'EUR',
-  maximumFractionDigits: 0,
-});
 
 const sourceOptions = ['Tous', 'Airbnb', 'Booking.com', 'Sojori', 'Vrbo'] as const;
 
@@ -53,6 +51,16 @@ function isRequestCanceled(err: unknown): boolean {
 }
 
 export function AnalyticsPage() {
+  return (
+    <AdminOwnerFilterProvider>
+      <AnalyticsPageContent />
+    </AdminOwnerFilterProvider>
+  );
+}
+
+function AnalyticsPageContent() {
+  const { showOwnerFilter, requestOwnerId } = useAdminOwnerFilter();
+  const ownerScopeBlocked = showOwnerFilter && !requestOwnerId;
   const [period, setPeriod] = useState<(typeof analyticsPeriodOptions)[number]['value']>('30d');
   const [comparison, setComparison] = useState<'vs-last-period' | 'vs-last-year'>('vs-last-period');
   const [source, setSource] = useState<(typeof sourceOptions)[number]>('Tous');
@@ -61,10 +69,15 @@ export function AnalyticsPage() {
   const [customEndDate, setCustomEndDate] = useState('');
   const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [enrichingLandR, setEnrichingLandR] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
   const [reloadAttempt, setReloadAttempt] = useState(0);
   const loadGenerationRef = useRef(0);
+
+  useEffect(() => {
+    setSelectedProperties([]);
+  }, [requestOwnerId]);
 
   useEffect(() => {
     const loadId = ++loadGenerationRef.current;
@@ -88,22 +101,39 @@ export function AnalyticsPage() {
       return;
     }
 
+    if (ownerScopeBlocked) {
+      runtimeLog('info', 'AnalyticsPage', 'Skip fetch: admin sans proprietaire', { loadId });
+      if (loadId === loadGenerationRef.current) {
+        setSnapshot(buildEmptyAnalyticsSnapshot());
+        setLoading(false);
+        setError(null);
+      }
+      return;
+    }
+
+    const controller = new AbortController();
+
     async function loadAnalytics() {
       if (loadId !== loadGenerationRef.current) {
         runtimeLog('info', 'AnalyticsPage', 'loadAnalytics abandon (stale loadId)', { loadId });
         return;
       }
       setLoading(true);
+      setEnrichingLandR(false);
       runtimeLog('info', 'AnalyticsPage', 'loadAnalytics start', { loadId });
       try {
-        const nextSnapshot = await analyticsService.getSnapshot({
-          period,
-          comparison,
-          source,
-          listingIds: selectedProperties,
-          customStartDate,
-          customEndDate,
-        });
+        const nextSnapshot = await analyticsService.getSnapshot(
+          {
+            period,
+            comparison,
+            source,
+            listingIds: selectedProperties,
+            customStartDate,
+            customEndDate,
+            ownerId: requestOwnerId,
+          },
+          { signal: controller.signal },
+        );
 
         if (loadId !== loadGenerationRef.current) {
           runtimeLog('warn', 'AnalyticsPage', 'Snapshot recu mais loadId obsolete — ignore', { loadId });
@@ -111,10 +141,43 @@ export function AnalyticsPage() {
         }
         setSnapshot(nextSnapshot);
         setError(null);
-        runtimeLog('info', 'AnalyticsPage', 'loadAnalytics success', {
+        setLoading(false);
+        runtimeLog('info', 'AnalyticsPage', 'loadAnalytics success (fast path)', {
           loadId,
           periodLabel: nextSnapshot.periodLabel,
         });
+
+        setEnrichingLandR(true);
+        try {
+          const enriched = await analyticsService.enrichWithLandR(
+            {
+              period,
+              comparison,
+              source,
+              listingIds: selectedProperties,
+              customStartDate,
+              customEndDate,
+              ownerId: requestOwnerId,
+            },
+            nextSnapshot,
+            { signal: controller.signal },
+          );
+          if (loadId === loadGenerationRef.current) {
+            setSnapshot(enriched);
+            runtimeLog('info', 'AnalyticsPage', 'landR enrich OK', { loadId });
+          }
+        } catch (enrichErr) {
+          if (!isRequestCanceled(enrichErr) && loadId === loadGenerationRef.current) {
+            runtimeLog('warn', 'AnalyticsPage', 'landR enrich skipped', {
+              loadId,
+              message: enrichErr instanceof Error ? enrichErr.message : String(enrichErr),
+            });
+          }
+        } finally {
+          if (loadId === loadGenerationRef.current) {
+            setEnrichingLandR(false);
+          }
+        }
       } catch (err) {
         if (loadId !== loadGenerationRef.current) {
           return;
@@ -131,13 +194,33 @@ export function AnalyticsPage() {
       } finally {
         if (loadId === loadGenerationRef.current) {
           setLoading(false);
+          setEnrichingLandR(false);
           runtimeLog('info', 'AnalyticsPage', 'loadAnalytics finally loading=false', { loadId });
         }
       }
     }
 
     void loadAnalytics();
-  }, [comparison, customEndDate, customStartDate, period, reloadAttempt, selectedProperties, source]);
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    comparison,
+    customEndDate,
+    customStartDate,
+    period,
+    reloadAttempt,
+    selectedProperties,
+    source,
+    requestOwnerId,
+    ownerScopeBlocked,
+  ]);
+
+  const activeProperties = useMemo(
+    () => (snapshot?.properties ?? []).filter((property) => property.isActive !== false),
+    [snapshot?.properties],
+  );
 
   const filteredSources = useMemo(() => {
     if (!snapshot) return [];
@@ -154,53 +237,65 @@ export function AnalyticsPage() {
       listingIds: selectedProperties,
       customStartDate,
       customEndDate,
+      ownerId: requestOwnerId,
     }),
-    [comparison, customEndDate, customStartDate, period, selectedProperties, source]
+    [comparison, customEndDate, customStartDate, period, requestOwnerId, selectedProperties, source],
   );
 
-  const performanceColumns = [
-    { key: 'property', label: 'Property', sortable: true },
-    {
-      key: 'revenue',
-      label: 'Revenue',
-      sortable: true,
-      render: (row: AnalyticsPropertyPerformanceRow) => currency.format(row.revenue),
-    },
-    {
-      key: 'occupancy',
-      label: 'Occupancy',
-      sortable: true,
-      render: (row: AnalyticsPropertyPerformanceRow) => `${row.occupancy.toFixed(1)}%`,
-    },
-    {
-      key: 'adr',
-      label: 'ADR',
-      sortable: true,
-      render: (row: AnalyticsPropertyPerformanceRow) => currency.format(row.adr),
-    },
-    {
-      key: 'leadTime',
-      label: 'Lead time',
-      sortable: true,
-      render: (row: AnalyticsPropertyPerformanceRow) => `${row.leadTime} jours`,
-    },
-    {
-      key: 'cancellations',
-      label: 'Cancellations',
-      sortable: true,
-      render: (row: AnalyticsPropertyPerformanceRow) => (
-        <Badge variant={row.cancellations > 2 ? 'warning' : 'success'}>
-          {row.cancellations}
-        </Badge>
-      ),
-    },
-  ];
+  const money = useMemo(
+    () => createCurrencyFormatter(snapshot?.displayCurrency ?? 'MAD'),
+    [snapshot?.displayCurrency],
+  );
+
+  const performanceColumns = useMemo(
+    () => [
+      { key: 'property', label: 'Property', sortable: true },
+      {
+        key: 'revenue',
+        label: 'Revenue',
+        sortable: true,
+        render: (row: AnalyticsPropertyPerformanceRow) => money.format(row.revenue),
+      },
+      {
+        key: 'occupancy',
+        label: 'Occupancy',
+        sortable: true,
+        render: (row: AnalyticsPropertyPerformanceRow) => `${row.occupancy.toFixed(1)}%`,
+      },
+      {
+        key: 'adr',
+        label: 'ADR',
+        sortable: true,
+        render: (row: AnalyticsPropertyPerformanceRow) => money.format(row.adr),
+      },
+      {
+        key: 'leadTime',
+        label: 'Lead time',
+        sortable: true,
+        render: (row: AnalyticsPropertyPerformanceRow) => `${row.leadTime} jours`,
+      },
+      {
+        key: 'cancellations',
+        label: 'Cancellations',
+        sortable: true,
+        render: (row: AnalyticsPropertyPerformanceRow) => (
+          <Badge variant={row.cancellations > 2 ? 'warning' : 'success'}>
+            {row.cancellations}
+          </Badge>
+        ),
+      },
+    ],
+    [money],
+  );
 
   const sourceColors = ['#e6b022', '#8b5cf6', '#10b981', '#06b6d4'];
   const selectedCount =
-    selectedProperties.length > 0 ? selectedProperties.length : snapshot?.propertyPerformance.length ?? 0;
+    selectedProperties.length > 0
+      ? selectedProperties.length
+      : activeProperties.length || snapshot?.propertyPerformance.length || 0;
   const isCustomDateIncomplete = period === 'custom' && (!customStartDate || !customEndDate);
-  const exportDisabled = loading || !snapshot || isCustomDateIncomplete || exporting !== null;
+  const exportDisabled =
+    loading || !snapshot || isCustomDateIncomplete || exporting !== null || ownerScopeBlocked;
 
   const handleExport = async (format: 'csv' | 'pdf') => {
     if (exportDisabled) return;
@@ -227,10 +322,29 @@ export function AnalyticsPage() {
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Analytics']}>
       <PageHeader
-        title="Analytics"
-        count={`${loading ? 'Actualisation' : snapshot?.periodLabel ?? 'Analytics'} · ${
-          comparison === 'vs-last-period' ? 'vs periode precedente' : 'vs annee precedente'
-        }`}
+        title={
+          <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            <span>Analytics</span>
+            <OwnerFilterField requireSelection sx={{ minWidth: 240, maxWidth: 320 }} />
+          </Box>
+        }
+        count={
+          ownerScopeBlocked
+            ? '—'
+            : `${loading ? 'Actualisation' : snapshot?.periodLabel ?? 'Analytics'} · ${
+                comparison === 'vs-last-period' ? 'vs periode precedente' : 'vs annee precedente'
+              }${
+                snapshot?.displayCurrency
+                  ? ` · montants en ${snapshot.displayCurrency}${
+                      snapshot.mixedListingCurrencies && snapshot.listingCurrencies.length > 0
+                        ? ` (listings: ${snapshot.listingCurrencies.join(', ')})`
+                        : snapshot.listingCurrencies.length === 1
+                          ? ` (listings: ${snapshot.listingCurrencies[0]})`
+                          : ''
+                    }`
+                  : ''
+              }`
+        }
       >
         <Button
           sx={btnGhostSx}
@@ -261,6 +375,14 @@ export function AnalyticsPage() {
         </Button>
       </PageHeader>
 
+      {ownerScopeBlocked ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Sélectionnez un propriétaire pour afficher les analytics de son portefeuille.
+        </Alert>
+      ) : null}
+
+      {!ownerScopeBlocked ? (
+        <>
       <FilterBar>
         {analyticsPeriodOptions.map((item) => (
           <FilterChip
@@ -313,29 +435,36 @@ export function AnalyticsPage() {
             onClick={() => setSource(item)}
           />
         ))}
-      </FilterBar>
-
-      <FilterBar>
-        {(snapshot?.properties ?? []).length ? (
-          (snapshot?.properties ?? []).map((property) => (
-            <FilterChip
-              key={property.id}
-              label={property.label}
-              active={selectedProperties.includes(property.id)}
-              onClick={() =>
-                setSelectedProperties((prev) =>
-                  prev.includes(property.id)
-                    ? prev.filter((value) => value !== property.id)
-                    : [...prev, property.id]
-                )
+        <Autocomplete
+          multiple
+          size="small"
+          limitTags={1}
+          options={activeProperties}
+          getOptionLabel={(property) => property.label}
+          isOptionEqualToValue={(option, value) => option.id === value.id}
+          value={activeProperties.filter((property) => selectedProperties.includes(property.id))}
+          onChange={(_event, value) => setSelectedProperties(value.map((property) => property.id))}
+          loading={loading && activeProperties.length === 0}
+          noOptionsText={
+            loading ? 'Chargement des listings actifs…' : 'Aucun listing actif'
+          }
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              placeholder={
+                selectedProperties.length === 0
+                  ? `Listings actifs (${activeProperties.length || '…'})`
+                  : `${selectedProperties.length} listing(s)`
               }
             />
-          ))
-        ) : (
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {loading ? 'Chargement des properties...' : 'Aucune property disponible pour ce filtre.'}
-          </Typography>
-        )}
+          )}
+          sx={{ minWidth: 280, flex: '1 1 320px', maxWidth: 480 }}
+        />
+        {selectedProperties.length > 0 ? (
+          <Button size="small" sx={btnGhostSx} onClick={() => setSelectedProperties([])}>
+            Tous actifs
+          </Button>
+        ) : null}
       </FilterBar>
 
       {error && (
@@ -350,12 +479,51 @@ export function AnalyticsPage() {
         <>
       <StatsRow>
         <StatCard
+          icon="💶"
+          iconBg="rgba(16,185,129,0.12)"
+          iconColor={t.success}
+          value={money.format(snapshot.summary.revenue.value)}
+          label="Revenus"
+          trend={`${snapshot.summary.revenue.trend >= 0 ? '+' : ''}${snapshot.summary.revenue.trend.toFixed(1)}%`}
+          trendUp={snapshot.summary.revenue.trend >= 0}
+        />
+        <StatCard
+          icon="📈"
+          iconBg="rgba(6,182,212,0.12)"
+          iconColor={t.info}
+          value={`${snapshot.summary.occupancyRate.value.toFixed(1)}%`}
+          label="Taux d'occupation"
+          trend={`${snapshot.summary.occupancyRate.trend >= 0 ? '+' : ''}${snapshot.summary.occupancyRate.trend.toFixed(1)}%`}
+          trendUp={snapshot.summary.occupancyRate.trend >= 0}
+        />
+        <StatCard
+          icon="🛏️"
+          iconBg="rgba(139,92,246,0.12)"
+          iconColor={t.ai}
+          value={money.format(snapshot.summary.averageDailyRate.value)}
+          label="ADR"
+          trend={`${snapshot.summary.averageDailyRate.trend >= 0 ? '+' : ''}${snapshot.summary.averageDailyRate.trend.toFixed(1)}%`}
+          trendUp={snapshot.summary.averageDailyRate.trend >= 0}
+        />
+        <StatCard
+          icon="🌙"
+          iconBg="rgba(245,158,11,0.12)"
+          iconColor={t.warning}
+          value={snapshot.summary.bookedNights.value.toString()}
+          label="Nuits reservees"
+          trend={`${snapshot.summary.bookedNights.trend >= 0 ? '+' : ''}${snapshot.summary.bookedNights.trend.toFixed(1)}%`}
+          trendUp={snapshot.summary.bookedNights.trend >= 0}
+        />
+      </StatsRow>
+
+      <StatsRow>
+        <StatCard
           icon="🏆"
           iconBg="rgba(230,176,34,0.12)"
           iconColor={t.primaryDeep}
-          value={snapshot.kpis.performanceScore.toString()}
+          value={`${snapshot.kpis.performanceScore}/100`}
           label="Performance score"
-          trend={`${Math.abs(snapshot.kpis.performanceScoreTrend).toFixed(1)} pts`}
+          trend={`${snapshot.kpis.performanceScoreTrend >= 0 ? '+' : ''}${snapshot.kpis.performanceScoreTrend.toFixed(1)} pts`}
           trendUp={snapshot.kpis.performanceScoreTrend >= 0}
         />
         <StatCard
@@ -364,16 +532,16 @@ export function AnalyticsPage() {
           iconColor={t.info}
           value={`${snapshot.kpis.averageStay.toFixed(1)} nuits`}
           label="Duree moyenne sejour"
-          trend={`${Math.abs(snapshot.kpis.averageStayTrend).toFixed(1)}`}
+          trend={`${snapshot.kpis.averageStayTrend >= 0 ? '+' : ''}${snapshot.kpis.averageStayTrend.toFixed(1)}%`}
           trendUp={snapshot.kpis.averageStayTrend >= 0}
         />
         <StatCard
           icon="⏱️"
           iconBg="rgba(139,92,246,0.12)"
           iconColor={t.ai}
-          value={`${snapshot.kpis.leadTime} jours`}
+          value={`${snapshot.kpis.leadTime} j`}
           label="Lead time moyen"
-          trend={`${Math.abs(snapshot.kpis.leadTimeTrend).toFixed(0)}`}
+          trend={`${snapshot.kpis.leadTimeTrend >= 0 ? '+' : ''}${snapshot.kpis.leadTimeTrend.toFixed(0)}%`}
           trendUp={snapshot.kpis.leadTimeTrend >= 0}
         />
         <StatCard
@@ -381,8 +549,8 @@ export function AnalyticsPage() {
           iconBg="rgba(239,68,68,0.12)"
           iconColor={t.error}
           value={`${snapshot.kpis.cancellationRate.toFixed(1)}%`}
-          label="Taux d’annulation"
-          trend={`${Math.abs(snapshot.kpis.cancellationRateTrend).toFixed(1)}%`}
+          label="Taux d'annulation"
+          trend={`${snapshot.kpis.cancellationRateTrend >= 0 ? '+' : ''}${snapshot.kpis.cancellationRateTrend.toFixed(1)}%`}
           trendUp={snapshot.kpis.cancellationRateTrend <= 0}
         />
       </StatsRow>
@@ -446,7 +614,7 @@ export function AnalyticsPage() {
           '& > *': { minWidth: 0 },
         }}
       >
-        <Panel title="Saisonnalite" desc="Heatmap-like monthly bars">
+        <Panel title="Saisonnalite" desc="Intensite relative par mois (CA ou reservations)">
           {snapshot.seasonality.length > 0 ? (
             <StableChart height={320}>
               {({ width, height }: { width: number; height: number }) => (
@@ -532,9 +700,15 @@ export function AnalyticsPage() {
         </Panel>
       </Box>
 
-      <Panel title="Performance par property" desc={`${selectedCount} selection(s)`}>
+      <Panel
+        title="Performance par property"
+        desc={`${selectedCount} selection(s) · ${enrichingLandR ? 'affinage landR en cours…' : 'source revenue-per-l-and-r'}`}
+      >
         {snapshot.propertyPerformance.length > 0 ? (
-          <DataTable columns={performanceColumns} rows={snapshot.propertyPerformance} />
+          <DataTable
+            columns={performanceColumns}
+            rows={snapshot.propertyPerformance.filter((row) => row.revenue > 0 || row.occupancy > 0)}
+          />
         ) : (
           <EmptyPanelState message="Aucune performance property disponible pour les filtres actifs." />
         )}
@@ -580,6 +754,8 @@ export function AnalyticsPage() {
           </Stack>
         </Panel>
       )}
+        </>
+      ) : null}
     </DashboardWrapper>
   );
 }
@@ -676,7 +852,7 @@ function AnalyticsPageSkeleton() {
           mb: 2,
         }}
       >
-        {Array.from({ length: 4 }).map((_, index) => (
+        {Array.from({ length: 8 }).map((_, index) => (
           <Skeleton key={index} variant="rounded" height={138} />
         ))}
       </Box>

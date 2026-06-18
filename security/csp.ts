@@ -55,8 +55,22 @@ const RU_CONNECT_SRC = [
 
 const RU_FRAME_SRC = 'https://*.rentalsunited.com'
 
-const SOJORI_API_CONNECT =
-  'https://dev.sojori.com wss://dev.sojori.com http://127.0.0.1:4174 ws://127.0.0.1:4174 http://localhost:4007 ws://localhost:4007'
+/** Local Vite dev/preview + HMR — inclut VITE_DEV_PORT / VITE_HMR_PORT (ex. 3001 + 3003). */
+function buildLocalDevConnectSrc(): string {
+  const devPort = process.env.VITE_DEV_PORT || '4174'
+  const hmrPort = process.env.VITE_HMR_PORT || devPort
+  const ports = [...new Set([devPort, hmrPort, '4174', '4007', '3001', '3003', '5173'])]
+  return ports
+    .flatMap((port) => [
+      `http://127.0.0.1:${port}`,
+      `ws://127.0.0.1:${port}`,
+      `http://localhost:${port}`,
+      `ws://localhost:${port}`,
+    ])
+    .join(' ')
+}
+
+const SOJORI_API_CONNECT = `https://dev.sojori.com wss://dev.sojori.com ${buildLocalDevConnectSrc()}`
 
 /** Headers applied by `vite dev` only — never sent with production static assets. */
 export const devSecurityHeaders: Record<string, string> = {

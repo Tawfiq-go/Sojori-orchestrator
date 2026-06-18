@@ -4,6 +4,7 @@
  */
 
 import type { ReservationTask } from './reservationTask.types';
+import type { ReservationSourceKind } from '../components/reservations/ReservationSourceIcon';
 
 export type ChannelType = 'all' | 'wa' | 'ab' | 'bk' | 'em' | 'vrbo';
 
@@ -48,6 +49,9 @@ export interface Thread {
   messageMatchCount?: number;
   isStaff?: boolean;
   isAuto?: boolean;
+  /** Source réservation (liste WA — distinct du canal messagerie WhatsApp). */
+  bookingSourceKind?: ReservationSourceKind;
+  bookingPlatform?: 'ab' | 'bk' | 'direct' | null;
   tasks?: ReservationTask[];
   tasksLoading?: boolean;
 }

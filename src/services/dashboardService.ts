@@ -10,7 +10,6 @@ import type {
   DashboardKpis,
   DashboardListingStatsRaw,
   DashboardMessageStatsRaw,
-  DashboardOccupancyByListingRaw,
   DashboardOccupancyRateRaw,
   DashboardOverviewRaw,
   DashboardPeriod,
@@ -22,7 +21,7 @@ import type {
   DashboardRevenuePoint,
   DashboardSourceDistributionItem,
 } from '../types/dashboard.types';
-import { logApiOutcome, logDashboard } from '../utils/dashboardDebug';
+import { logApiOutcome, logApiStart, logDashboard } from '../utils/dashboardDebug';
 import { getToken } from '../utils/authUtils';
 
 const DEFAULT_CHECK_FLOW: DashboardCheckFlowItem[] = [
@@ -67,6 +66,18 @@ const buildDateRange = (period: DashboardPeriod): { startDate: string; endDate: 
   };
 };
 
+function timelineApiPeriod(period: DashboardPeriod): 'day' | 'week' | 'month' {
+  if (period === 'Année') return 'month';
+  return 'day';
+}
+
+function timelineSliceCount(period: DashboardPeriod): number {
+  if (period === 'Année') return 12;
+  if (period === 'Mois') return 30;
+  if (period === 'Semaine') return 7;
+  return 1;
+}
+
 const extractPayload = <T>(payload: unknown, fallback: T): T => {
   if (payload == null) return fallback;
   if (typeof payload !== 'object') {
@@ -83,6 +94,76 @@ const extractPayload = <T>(payload: unknown, fallback: T): T => {
   return payload as T;
 };
 
+function channelLabelFromRow(channel: DashboardRevenueByChannelRaw): string {
+  if (channel.channelName) return channel.channelName;
+  if (channel.channel) return channel.channel;
+  if (channel.color) return channel.color;
+  if (channel.x?.month) return channel.x.month;
+  if (channel._id) return String(channel._id);
+  return 'Canal';
+}
+
+function revenueFromChannelRow(channel: DashboardRevenueByChannelRaw): number {
+  return parseNumber(channel.totalRevenue ?? channel.revenue ?? channel.y);
+}
+
+function buildSourceDistribution(
+  revenueByChannel: DashboardRevenueByChannelRaw[],
+): DashboardSourceDistributionItem[] {
+  const rows = revenueByChannel
+    .map((channel) => ({
+      source: channelLabelFromRow(channel),
+      revenue: revenueFromChannelRow(channel),
+    }))
+    .filter((row) => row.revenue > 0);
+
+  const totalChannelRevenue = rows.reduce((sum, row) => sum + row.revenue, 0);
+  if (totalChannelRevenue <= 0) {
+    return [];
+  }
+
+  return rows.map((row) => ({
+    source: row.source,
+    revenue: row.revenue,
+    value: Number(((row.revenue / totalChannelRevenue) * 100).toFixed(1)),
+  }));
+}
+
+function timelineBucketKey(
+  x: { year?: number; month?: number; date?: number; week?: number } | undefined,
+  period: 'day' | 'week' | 'month',
+): string {
+  if (!x?.year) return '';
+  if (period === 'week') return `${x.year}-${x.week ?? 0}`;
+  if (period === 'month') return `${x.year}-${x.month ?? 0}`;
+  return `${x.year}-${x.month ?? 0}-${x.date ?? 0}`;
+}
+
+function mergeRevenueAndBookingsTimeline(
+  revenueTimeline: DashboardCheckinsByChannelRaw[],
+  bookingsTimeline: DashboardCheckinsByChannelRaw[],
+  period: DashboardPeriod,
+): DashboardRevenuePoint[] {
+  const apiPeriod = timelineApiPeriod(period);
+  const bookingsByKey = new Map<string, number>();
+  for (const item of bookingsTimeline) {
+    const key = timelineBucketKey(item.x, apiPeriod);
+    if (key) bookingsByKey.set(key, parseNumber(item.y));
+  }
+
+  return revenueTimeline
+    .filter((item) => item.x != null)
+    .map((item) => {
+      const key = timelineBucketKey(item.x, apiPeriod);
+      return {
+        date: formatTimelineDate(item),
+        revenue: parseNumber(item.y),
+        bookings: key ? (bookingsByKey.get(key) ?? 0) : 0,
+      };
+    })
+    .slice(-timelineSliceCount(period));
+}
+
 const formatTimelineDate = (item: DashboardCheckinsByChannelRaw): string => {
   if (item.date) {
     return new Date(item.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
@@ -91,6 +172,12 @@ const formatTimelineDate = (item: DashboardCheckinsByChannelRaw): string => {
     return new Date(item.x.year, item.x.month - 1, item.x.date).toLocaleDateString('fr-FR', {
       day: '2-digit',
       month: 'short',
+    });
+  }
+  if (item.x?.year && item.x?.month && !item.x?.date) {
+    return new Date(item.x.year, item.x.month - 1, 1).toLocaleDateString('fr-FR', {
+      month: 'short',
+      year: '2-digit',
     });
   }
   if (typeof item._id === 'string') {
@@ -120,30 +207,120 @@ function urlSearchParamsWithListingIds(
   return sp;
 }
 
-/** Plage mois calendrier (YYYY-MM) attendue par get-occupancy-stats-by-listing */
-function rollingOccupancyMonthRangeYm(): { startDate: string; endDate: string } {
-  const end = new Date();
-  const start = new Date(end.getFullYear(), end.getMonth() - 2, 1);
-  const pad = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  return { startDate: pad(start), endDate: pad(end) };
+/** Listings actifs envoyés à revenue-per-l-and-r (occupation depuis réservations). */
+const MAX_OCCUPANCY_LISTING_IDS = 30;
+
+type LandRItem = {
+  itemId?: string;
+  itemName?: string;
+  occupancyRate?: number | string;
+  averageNightlyRate?: number | string;
+  nightsBooked?: number | string;
+  nightsAvailable?: number | string;
+};
+
+function resolvePortfolioOccupancyFromLandR(
+  items: LandRItem[],
+  totals: { averageOccupancyRate?: number | string; totalNightsBooked?: number | string; totalNightsAvailable?: number | string },
+  opts: { listingCount: number; startDate: string; endDate: string },
+): number {
+  const fromTotals = parseNumber(totals.averageOccupancyRate);
+  if (fromTotals > 0) return fromTotals;
+
+  let totalBooked = parseNumber(totals.totalNightsBooked);
+  let totalAvailable = parseNumber(totals.totalNightsAvailable);
+  if (totalBooked <= 0) {
+    totalBooked = items.reduce((sum, item) => sum + parseNumber(item.nightsBooked), 0);
+  }
+  if (totalAvailable <= 0) {
+    totalAvailable = items.reduce((sum, item) => sum + parseNumber(item.nightsAvailable), 0);
+  }
+  if (totalAvailable > 0 && totalBooked > 0) {
+    return Math.round((totalBooked / totalAvailable) * 1000) / 10;
+  }
+
+  const rates = items.map((item) => parseNumber(item.occupancyRate)).filter((rate) => rate > 0);
+  if (rates.length > 0) {
+    return Math.round((rates.reduce((sum, rate) => sum + rate, 0) / rates.length) * 10) / 10;
+  }
+
+  if (totalBooked > 0 && opts.listingCount > 0) {
+    const start = new Date(opts.startDate);
+    const end = new Date(opts.endDate);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+      const estimatedAvailable = days * opts.listingCount;
+      if (estimatedAvailable > 0) {
+        return Math.round((totalBooked / estimatedAvailable) * 1000) / 10;
+      }
+    }
+  }
+
+  return 0;
 }
 
-/** Au-delà, l’agrégation calendrier multi-listings explose en durée (timeouts client / ingress). */
-const MAX_OCCUPANCY_BY_LISTING_IDS = 10;
-
-async function fetchOccupancyByListingAxios(listingIds: string[], signal?: AbortSignal) {
+async function fetchOccupancyByPropertyFromReservations(
+  listingIds: string[],
+  startDate: string,
+  endDate: string,
+  signal?: AbortSignal,
+): Promise<{ items: LandRItem[]; portfolioOccupancy: number }> {
   if (listingIds.length === 0) {
-    return { data: { success: true, byItems: [] as DashboardOccupancyByListingRaw[] } };
+    return { items: [], portfolioOccupancy: 0 };
   }
-  const { startDate, endDate } = rollingOccupancyMonthRangeYm();
+
   const sp = new URLSearchParams();
   sp.set('startDate', startDate);
   sp.set('endDate', endDate);
-  for (const id of listingIds) {
-    sp.append('listingIds', id);
+  sp.set('type', 'listing');
+  sp.set('itemIds', listingIds.slice(0, MAX_OCCUPANCY_LISTING_IDS).join(','));
+  sp.set('staging', 'false');
+  sp.set('active', 'true');
+
+  const response = await apiClient.get(
+    `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/revenue-per-l-and-r?${sp.toString()}`,
+    { signal, timeout: 45_000 },
+  );
+
+  const body = response.data as {
+    byItems?: LandRItem[];
+    totals?: {
+      averageOccupancyRate?: number | string;
+      totalNightsBooked?: number | string;
+      totalNightsAvailable?: number | string;
+      revenuePerNightAvailable?: number | string;
+    };
+  };
+
+  const items = Array.isArray(body.byItems) ? body.byItems : [];
+  const totals = body.totals ?? {};
+  const portfolioOccupancy = resolvePortfolioOccupancyFromLandR(items, totals, {
+    listingCount: listingIds.length,
+    startDate,
+    endDate,
+  });
+
+  return {
+    items,
+    portfolioOccupancy,
+    totals,
+  };
+}
+
+async function timedGet<T>(
+  label: string,
+  url: string,
+  options?: { params?: URLSearchParams | Record<string, string | boolean>; signal?: AbortSignal; timeout?: number },
+): Promise<T> {
+  logApiStart(label);
+  try {
+    const response = await apiClient.get(url, options);
+    logApiOutcome(label, { status: 'fulfilled', value: response });
+    return response as T;
+  } catch (reason) {
+    logApiOutcome(label, { status: 'rejected', reason });
+    throw reason;
   }
-  const url = `${MICROSERVICE_BASE_URL.SRV_CALENDAR}/inventory/get-occupancy-stats-by-listing?${sp.toString()}`;
-  return apiClient.get(url, { signal, timeout: 45_000 });
 }
 
 class DashboardService {
@@ -171,7 +348,7 @@ class DashboardService {
             isActive: listing.active ?? listing.isActive ?? true,
           } satisfies DashboardPropertyOption;
         })
-        .filter(Boolean) as DashboardPropertyOption[];
+        .filter((listing) => listing.isActive !== false) as DashboardPropertyOption[];
     } catch (error) {
       if (axios.isCancel(error)) return [];
       console.error('Error fetching dashboard property options:', error);
@@ -182,20 +359,27 @@ class DashboardService {
   async getSnapshot(query: DashboardQuery): Promise<DashboardSnapshot> {
     const { period, listingIds = [], staging = false, signal } = query;
     const { startDate, endDate } = buildDateRange(period);
+    const timelinePeriod = timelineApiPeriod(period);
 
     logDashboard('getSnapshot start', {
       period,
       listingIds,
       staging,
       dateRange: { startDate, endDate },
+      timelinePeriod,
       hasAuthToken: !!getToken(),
     });
 
     const propertyOptions = await this.getPropertyOptions(staging, signal);
     logDashboard('listings loaded', { count: propertyOptions.length });
+    const activeProperties = propertyOptions.filter((property) => property.isActive !== false);
     const idsForOccupancy = (
-      listingIds.length > 0 ? listingIds : propertyOptions.map((property) => property.id).filter(Boolean)
-    ).slice(0, MAX_OCCUPANCY_BY_LISTING_IDS);
+      listingIds.length > 0
+        ? listingIds.filter((id) => activeProperties.some((property) => property.id === id))
+        : activeProperties.map((property) => property.id)
+    ).slice(0, MAX_OCCUPANCY_LISTING_IDS);
+
+    const listingParams = urlSearchParamsWithListingIds({ startDate, endDate, staging }, listingIds);
 
     const [
       listingStatsResult,
@@ -205,54 +389,66 @@ class DashboardService {
       averageDailyRateResult,
       revenueByChannelResult,
       timelineResult,
-      occupancyByListingResult,
+      checkinsTimelineResult,
+      occupancyLandRResult,
       overviewResult,
     ] = await Promise.allSettled([
-      apiClient.get(`${MICROSERVICE_BASE_URL.SRV_LISTING}/listings/stats`, { params: { staging }, signal }),
-      apiClient.get(`${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/stats`, { params: { staging }, signal }),
-      apiClient.get(`${MICROSERVICE_BASE_URL.SRV_RESERVATION_MESSAGE}/get-message-kpis-live`, {
+      timedGet('listings/stats', `${MICROSERVICE_BASE_URL.SRV_LISTING}/listings/stats`, {
+        params: { staging },
+        signal,
+      }),
+      timedGet('reservations/stats', `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/stats`, {
+        params: { staging },
+        signal,
+      }),
+      timedGet('message/get-message-kpis-live', `${MICROSERVICE_BASE_URL.SRV_RESERVATION_MESSAGE}/get-message-kpis-live`, {
         params: { staging },
         signal,
         timeout: 45_000,
       }),
-      apiClient.get(`${MICROSERVICE_BASE_URL.SRV_CALENDAR}/calendar/occupancy-rate`, {
-        params: urlSearchParamsWithListingIds({ startDate, endDate, staging }, listingIds),
+      timedGet('calendar/occupancy-rate', `${MICROSERVICE_BASE_URL.SRV_CALENDAR}/calendar/occupancy-rate`, {
+        params: listingParams,
         signal,
         timeout: 45_000,
       }),
-      apiClient.get(`${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/average-daily-rate`, {
-        params: urlSearchParamsWithListingIds({ startDate, endDate, staging }, listingIds),
+      timedGet('reservations/average-daily-rate', `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/average-daily-rate`, {
+        params: listingParams,
         signal,
         timeout: 45_000,
       }),
-      apiClient.get(`${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/revenue-per-channel`, {
-        params: urlSearchParamsWithListingIds({ startDate, endDate, staging }, listingIds),
+      timedGet('reservations/revenue-per-channel', `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/revenue-per-channel`, {
+        params: listingParams,
         signal,
         timeout: 45_000,
       }),
-      apiClient.get(`${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/checkins-by-channel`, {
-        params: urlSearchParamsWithListingIds({ startDate, endDate, staging, period: 'day' }, listingIds),
+      timedGet('reservations/reservation-stats', `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/reservation-stats`, {
+        params: urlSearchParamsWithListingIds({ startDate, endDate, staging, period: timelinePeriod }, listingIds),
         signal,
         timeout: 45_000,
       }),
-      fetchOccupancyByListingAxios(idsForOccupancy, signal),
-      apiClient.get(`${MICROSERVICE_BASE_URL.SRV_ADMIN}/dashboard/overview`, {
+      timedGet('reservations/checkins-by-channel', `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/checkins-by-channel`, {
+        params: urlSearchParamsWithListingIds({ startDate, endDate, staging, period: timelinePeriod }, listingIds),
+        signal,
+        timeout: 45_000,
+      }),
+      fetchOccupancyByPropertyFromReservations(idsForOccupancy, startDate, endDate, signal).then((result) => {
+        logApiStart('reservations/revenue-per-l-and-r');
+        logApiOutcome('reservations/revenue-per-l-and-r', {
+          status: 'fulfilled',
+          value: { data: result, status: 200 },
+        });
+        return result;
+      }).catch((reason) => {
+        logApiStart('reservations/revenue-per-l-and-r');
+        logApiOutcome('reservations/revenue-per-l-and-r', { status: 'rejected', reason });
+        throw reason;
+      }),
+      timedGet('admin/dashboard/overview', `${MICROSERVICE_BASE_URL.SRV_ADMIN}/dashboard/overview`, {
         params: urlSearchParamsWithListingIds({}, listingIds),
         signal,
-        /** Agrège plusieurs microservices ; le client axios par défaut est 30s — trop court si un amont est lent. */
-        timeout: 75000,
+        timeout: 75_000,
       }),
     ]);
-
-    logApiOutcome('listings/stats', listingStatsResult);
-    logApiOutcome('reservations/stats', reservationStatsResult);
-    logApiOutcome('message/get-message-kpis-live', messageStatsResult);
-    logApiOutcome('calendar/occupancy-rate', occupancyRateResult);
-    logApiOutcome('reservations/average-daily-rate', averageDailyRateResult);
-    logApiOutcome('reservations/revenue-per-channel', revenueByChannelResult);
-    logApiOutcome('reservations/checkins-by-channel', timelineResult);
-    logApiOutcome('calendar/occupancy-by-listing', occupancyByListingResult);
-    logApiOutcome('admin/dashboard/overview', overviewResult);
 
     const properties = propertyOptions;
 
@@ -291,10 +487,15 @@ class DashboardService {
         ? extractPayload<DashboardCheckinsByChannelRaw[]>(timelineResult.value.data, [])
         : [];
 
-    const occupancyByListing =
-      occupancyByListingResult.status === 'fulfilled'
-        ? extractPayload<DashboardOccupancyByListingRaw[]>(occupancyByListingResult.value.data, [])
+    const checkinsTimeline =
+      checkinsTimelineResult.status === 'fulfilled'
+        ? extractPayload<DashboardCheckinsByChannelRaw[]>(checkinsTimelineResult.value.data, [])
         : [];
+
+    const occupancyLandR =
+      occupancyLandRResult.status === 'fulfilled'
+        ? occupancyLandRResult.value
+        : { items: [] as LandRItem[], portfolioOccupancy: 0, totals: {} };
 
     const overviewResponse = overviewResult.status === 'fulfilled' ? overviewResult.value.data : null;
     const overviewOk =
@@ -306,11 +507,13 @@ class DashboardService {
     const overview = extractPayload<DashboardOverviewRaw>(overviewResponse, {});
 
     const totalRevenue = parseNumber(reservationStats.totalRevenueLast30Days);
-    const occupancyValue = parseNumber(occupancyRate.occupancyRate);
+    let occupancyValue = parseNumber(occupancyRate.occupancyRate);
+    if (occupancyValue <= 0) {
+      occupancyValue = occupancyLandR.portfolioOccupancy;
+    }
     const adrValue = parseNumber(averageDailyRate.averageDailyRate);
-    const activeProperties = parseNumber(listingStats.totalActive);
-    const revparValue =
-      adrValue > 0 && occupancyValue > 0 ? Math.round((adrValue * occupancyValue) / 100) : 0;
+    const activePropertiesCount =
+      parseNumber(listingStats.totalActive) || activeProperties.length;
 
     const kpis: DashboardKpis = {
       totalReservations: {
@@ -322,23 +525,23 @@ class DashboardService {
         trend: formatTrend(reservationStats.totalRevenuePercentageChange),
       },
       occupancyRate: {
-        value: occupancyValue,
-        trend: occupancyValue ? `${occupancyValue.toFixed(1)}%` : '—',
+        value: Number(occupancyValue.toFixed(1)),
+        trend: occupancyValue > 0 ? `${occupancyValue.toFixed(1)}%` : '—',
       },
       adr: {
         value: adrValue,
-        trend: adrValue ? `${adrValue.toFixed(0)} EUR` : '—',
+        trend: adrValue ? `${adrValue.toFixed(0)} MAD` : '—',
       },
       revpar: {
-        value: revparValue,
-        trend: revparValue ? `${revparValue} EUR` : '—',
+        value: 0,
+        trend: '—',
       },
       guestsThisMonth: {
         value: parseNumber(reservationStats.checkInsLast30Days || reservationStats.stayingGuests),
         trend: formatTrend(reservationStats.checkInsPercentageChange),
       },
       activeProperties: {
-        value: activeProperties,
+        value: activePropertiesCount,
         trend: '—',
       },
       averageRating: {
@@ -349,62 +552,48 @@ class DashboardService {
 
     const revenueChart: DashboardRevenuePoint[] =
       timeline.length > 0
-        ? timeline
-            .map((item) => ({
-              date: formatTimelineDate(item),
-              revenue: parseNumber(item.revenue || item.y),
-              bookings: parseNumber(item.count || item.checkIns),
-            }))
-            .slice(-14)
+        ? mergeRevenueAndBookingsTimeline(timeline, checkinsTimeline, period)
         : [];
 
-    const totalChannelRevenue = revenueByChannel.reduce(
-      (sum, channel) => sum + parseNumber(channel.totalRevenue || channel.revenue),
-      0,
-    );
-
-    const sourceDistribution: DashboardSourceDistributionItem[] =
-      revenueByChannel.length > 0 && totalChannelRevenue > 0
-        ? revenueByChannel.map((channel) => {
-            const revenue = parseNumber(channel.totalRevenue || channel.revenue);
-            return {
-              source: channel.channelName || channel.channel || 'Canal',
-              revenue,
-              value: Number(((revenue / totalChannelRevenue) * 100).toFixed(1)),
-            };
-          })
-        : [];
-
-    const occupancyMap = new Map(
-      occupancyByListing.map((item) => [
-        String(item.listingId || ''),
-        Array.isArray(item.listingMonth) && item.listingMonth.length > 0
-          ? item.listingMonth.reduce((sum, month) => sum + parseNumber(month.occupancy), 0) / item.listingMonth.length
-          : 0,
-      ]),
-    );
-
-    const selectedOrTopProperties = properties
-      .filter((property) => listingIds.length === 0 || listingIds.includes(property.id))
-      .slice(0, 5);
-
-    const liveOccupancyByProperty = selectedOrTopProperties
-      .map((property) => ({
-        property: property.name,
-        occupancy: Number((occupancyMap.get(property.id) || 0).toFixed(1)),
-        ...(adrValue > 0 ? { adr: Math.round(adrValue) } : {}),
-      }))
-      .filter((item) => item.occupancy > 0);
-
-    const overviewOccupancy =
-      overviewOk &&
-      Array.isArray(overview.occupancyByProperty) &&
-      overview.occupancyByProperty.length > 0
-        ? overview.occupancyByProperty
-        : null;
+    const sourceDistribution = buildSourceDistribution(revenueByChannel);
 
     const occupancyByProperty =
-      overviewOccupancy ?? (liveOccupancyByProperty.length > 0 ? liveOccupancyByProperty : []);
+      occupancyLandR.items.length > 0
+        ? occupancyLandR.items
+            .map((item) => {
+              const adr = parseNumber(item.averageNightlyRate);
+              return {
+                property: String(item.itemName || '—'),
+                occupancy: Number(parseNumber(item.occupancyRate).toFixed(1)),
+                ...(adr > 0 ? { adr: Math.round(adr) } : {}),
+              };
+            })
+            .sort((left, right) => right.occupancy - left.occupancy)
+        : overviewOk &&
+            Array.isArray(overview.occupancyByProperty) &&
+            overview.occupancyByProperty.length > 0
+          ? overview.occupancyByProperty.filter(
+              (row) =>
+                listingIds.length === 0 ||
+                activeProperties.some(
+                  (property) =>
+                    listingIds.includes(property.id) &&
+                    (property.name === row.property || property.label === row.property),
+                ),
+            )
+          : [];
+
+    const revparFromTotals = parseNumber(occupancyLandR.totals?.revenuePerNightAvailable);
+    const revparValue =
+      adrValue > 0 && occupancyValue > 0
+        ? Math.round((adrValue * occupancyValue) / 100)
+        : revparFromTotals > 0
+          ? Math.round(revparFromTotals)
+          : 0;
+    kpis.revpar = {
+      value: revparValue,
+      trend: revparValue ? `${revparValue} MAD` : '—',
+    };
 
     const unreadThreads = messageStats.unreadThreads || [];
     const liveAlerts: DashboardAlertItem[] = [];
@@ -463,19 +652,6 @@ class DashboardService {
     const unreadMessages =
       overviewOk && Array.isArray(overview.unreadMessages) ? overview.unreadMessages : [];
 
-    // 🔍 Audit messages non lus (2026-06-15)
-    console.log('[Dashboard Audit] unreadMessages from /dashboard/overview:', {
-      count: unreadMessages.length,
-      overviewOk,
-      messages: unreadMessages.slice(0, 5).map((m: any) => ({
-        id: m.id || m._id,
-        from: m.from,
-        channelType: m.channelType,
-        preview: m.preview?.substring(0, 50),
-      })),
-      ...(unreadMessages.length > 5 ? { remaining: unreadMessages.length - 5 } : {}),
-    });
-
     const recentReviews = overviewOk && Array.isArray(overview.recentReviews) ? overview.recentReviews : [];
 
     logDashboard('getSnapshot done', {
@@ -485,7 +661,9 @@ class DashboardService {
       upcomingCheckOuts: upcomingCheckOuts.length,
       occupancyByProperty: occupancyByProperty.length,
       revenueChartPoints: revenueChart.length,
+      sourceDistribution: sourceDistribution.length,
       monthlyRevenue: kpis.monthlyRevenue.value,
+      occupancyRate: kpis.occupancyRate.value,
     });
 
     return {

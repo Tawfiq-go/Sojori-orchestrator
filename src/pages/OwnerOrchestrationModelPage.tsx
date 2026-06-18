@@ -7,6 +7,7 @@ import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwne
 import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
 import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
 import OrchestrationListingV3View from '../features/orchestrationListingV3/OrchestrationListingV3View';
+import OwnerActivationSection from '../features/orchestrationListingV3/OwnerActivationSection';
 import OrchestrationModelSubTabs, {
   type OrchestrationModelSection,
 } from '../features/orchestrationListingV3/OrchestrationModelSubTabs';
@@ -37,7 +38,9 @@ function apiErrorMessage(e: unknown): string {
 type ListingPick = { id: string; name: string };
 
 function parseModelSection(raw: string | null): OrchestrationModelSection {
-  return raw === 'messages' ? 'messages' : 'services';
+  if (raw === 'messages') return 'messages';
+  if (raw === 'activation') return 'activation';
+  return 'services';
 }
 
 function OwnerModelPageInner() {
@@ -65,6 +68,11 @@ function OwnerModelPageInner() {
   const [ownerListings, setOwnerListings] = useState<ListingPick[]>([]);
   const [selectedListingIds, setSelectedListingIds] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
+  const [ownerServicesActive, setOwnerServicesActive] = useState(false);
+
+  useEffect(() => {
+    setOwnerServicesActive(false);
+  }, [ownerKey]);
 
   const syncMode = isAdminTemplate ? 'owners' : isAdmin ? 'admin-pm' : 'listings';
   const adminViewingPm = isAdmin && !isAdminTemplate;
@@ -113,6 +121,20 @@ function OwnerModelPageInner() {
   useEffect(() => {
     void loadOwnerListings();
   }, [loadOwnerListings]);
+
+  const showActivationTab = !isAdminTemplate && ownerKey !== 'global';
+
+  useEffect(() => {
+    if (!showActivationTab && section === 'activation') {
+      setSection('services');
+    }
+  }, [showActivationTab, section, setSection]);
+
+  useEffect(() => {
+    if (!ownerServicesActive && section === 'messages') {
+      setSection('services');
+    }
+  }, [ownerServicesActive, section, setSection]);
 
   const handleSyncToOwner = async (targetOwnerId: string, targetOwnerName: string) => {
     const result = await syncAdminTemplateToOwnerSimple(targetOwnerId);
@@ -206,7 +228,20 @@ function OwnerModelPageInner() {
   return (
     <Box sx={{ px: { xs: 2, sm: 3 }, py: 1, width: '100%' }}>
       <CatalogueAnnoncesTabs />
-      <OrchestrationModelSubTabs value={section} onChange={setSection} />
+      <OrchestrationModelSubTabs
+        value={section}
+        onChange={setSection}
+        showActivation={showActivationTab}
+        hideMessages={!ownerServicesActive}
+      />
+
+      {section === 'activation' && showActivationTab && (
+        <OwnerActivationSection
+          key={ownerKey}
+          ownerKey={ownerKey}
+          onMetaChange={({ anyActive }) => setOwnerServicesActive(anyActive)}
+        />
+      )}
 
       {section === 'services' && isAdmin && isAdminTemplate && (
         <Alert severity="info" sx={{ mb: 1.5, fontSize: 13 }}>
@@ -223,43 +258,45 @@ function OwnerModelPageInner() {
         </Alert>
       )}
 
+      {section === 'services' && (
+        <>
       <OwnerConfigScopeBarWithSync
         {...ownerScope}
         compact
+        hideListingPicker={syncMode === 'listings'}
         syncMode={syncMode}
-        onSyncToOwner={isAdmin ? handleSyncToOwner : undefined}
-        onSyncToAllOwners={isAdmin && isAdminTemplate ? handleSyncToAllOwners : undefined}
-        onSyncAllListings={!isAdminTemplate ? handleSyncAllListings : undefined}
-        onSyncSelectedListings={adminViewingPm ? handleSyncSelectedListings : undefined}
-        onSyncOneListing={!isAdmin ? handleSyncOneListing : undefined}
-        listingOptions={!isAdminTemplate ? ownerListings : undefined}
-        selectedListingIds={adminViewingPm ? selectedListingIds : undefined}
-        onListingSelectionChange={adminViewingPm ? setSelectedListingIds : undefined}
-        listingsLoading={!isAdminTemplate ? listingsLoading : undefined}
-      />
+            onSyncToOwner={isAdmin ? handleSyncToOwner : undefined}
+            onSyncToAllOwners={isAdmin && isAdminTemplate ? handleSyncToAllOwners : undefined}
+            onSyncAllListings={!isAdminTemplate ? handleSyncAllListings : undefined}
+            onSyncSelectedListings={adminViewingPm ? handleSyncSelectedListings : undefined}
+            onSyncOneListing={!isAdmin ? handleSyncOneListing : undefined}
+            listingOptions={!isAdminTemplate ? ownerListings : undefined}
+            selectedListingIds={adminViewingPm ? selectedListingIds : undefined}
+            onListingSelectionChange={adminViewingPm ? setSelectedListingIds : undefined}
+            listingsLoading={!isAdminTemplate ? listingsLoading : undefined}
+          />
 
-      {section === 'services' && (
-        <>
-      {listingsLoading && !isAdminTemplate ? (
-        <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
-          <CircularProgress size={28} />
-        </Box>
-      ) : (
-        <OrchestrationListingV3View
-          key={ownerKey}
-          ownerKey={ownerKey}
-          isAdminTemplate={isAdminTemplate}
-          listingId={null}
-          listings={ownerListings}
-          onListingChange={() => {}}
-          listingCount={ownerListings.length}
-          ownerTemplateMode
-        />
-      )}
+          {listingsLoading && !isAdminTemplate ? (
+            <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : (
+            <OrchestrationListingV3View
+              key={ownerKey}
+              ownerKey={ownerKey}
+              isAdminTemplate={isAdminTemplate}
+              listingId={null}
+              listings={ownerListings}
+              onListingChange={() => {}}
+              listingCount={ownerListings.length}
+              ownerTemplateMode
+              onOwnerActivationMeta={({ anyActive }) => setOwnerServicesActive(anyActive)}
+            />
+          )}
         </>
       )}
 
-      {section === 'messages' && (
+      {section === 'messages' && ownerServicesActive && (
         <V3ScheduledMessagesPanel
           scope="owner"
           ownerKey={ownerKey}

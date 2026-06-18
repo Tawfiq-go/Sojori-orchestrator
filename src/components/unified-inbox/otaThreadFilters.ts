@@ -1,5 +1,16 @@
 import type { OtaThreadRow } from './inboxOtaMappers';
 import { isOtaDirectChannel, resolveOtaPlatformChannel } from './inboxOtaMappers';
+import {
+  applyStayQuickFilter,
+  countStayQuickFilters,
+  isArrivalOn,
+  isDepartureOn,
+  type StayQuickFilter,
+  type StayQuickFilterCounts,
+} from './inboxStayFilters';
+
+export type OtaStayQuickFilter = StayQuickFilter;
+export type OtaStayQuickFilterCounts = StayQuickFilterCounts;
 
 /** Filtre canal (ligne 2) */
 export type OtaChannelFilter = 'all' | 'ota' | 'ab' | 'bk' | 'direct';
@@ -31,6 +42,14 @@ export interface OtaFilterCounts {
   direct: number;
   unreplied: number;
 }
+
+/** @deprecated — alias StayQuickFilter */
+export type { StayQuickFilter };
+
+const otaStayDates = (row: OtaThreadRow) => ({
+  checkInDate: row.checkInDate,
+  checkOutDate: row.checkOutDate,
+});
 
 const LEGACY_STATUS: Record<string, OtaMessageLifecycleStatus> = {
   pending: 'received',
@@ -149,12 +168,32 @@ export function applyOtaInboxFilters(
   rows: OtaThreadRow[],
   channelFilter: OtaChannelFilter,
   unrepliedOnly: boolean,
+  stayQuickFilter: OtaStayQuickFilter = 'none',
 ): OtaThreadRow[] {
   let list = applyOtaChannelFilter(rows, channelFilter);
   if (unrepliedOnly) {
     list = list.filter(isOtaUnreplied);
   }
-  return list;
+  return applyStayQuickFilter(list, stayQuickFilter, otaStayDates);
+}
+
+export function isOtaArrivalOn(row: OtaThreadRow, offsetDays: 0 | 1): boolean {
+  return isArrivalOn(otaStayDates(row), offsetDays);
+}
+
+export function isOtaDepartureOn(row: OtaThreadRow, offsetDays: 0 | 1): boolean {
+  return isDepartureOn(otaStayDates(row), offsetDays);
+}
+
+export function applyOtaStayQuickFilter(
+  rows: OtaThreadRow[],
+  filter: OtaStayQuickFilter,
+): OtaThreadRow[] {
+  return applyStayQuickFilter(rows, filter, otaStayDates);
+}
+
+export function countOtaStayQuickFilters(rows: OtaThreadRow[]): OtaStayQuickFilterCounts {
+  return countStayQuickFilters(rows, otaStayDates);
 }
 
 export function countOtaFilters(rows: OtaThreadRow[]): OtaFilterCounts {

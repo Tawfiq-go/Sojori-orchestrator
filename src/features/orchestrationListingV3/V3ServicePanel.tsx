@@ -6,6 +6,7 @@ import {
 } from '../serviceMatrix/CapabilityMatrixConfigPanels';
 import CapabilityExecutionPanel from '../serviceMatrix/CapabilityExecutionPanel';
 import type { CapabilityDefinition } from '../serviceMatrix/capabilityRegistry';
+import { capabilityShortHint } from '../serviceMatrix/capabilityRegistry';
 import type { CapabilityExecutionState, CapabilityRowState } from '../serviceMatrix/types';
 import type { ListingOrchestrationDoc } from './listingOrchestrationApi';
 import type { OwnerOrchestrationDoc } from './ownerOrchestrationApi';
@@ -310,7 +311,9 @@ export default function V3ServicePanel({
             <Typography sx={{ fontSize: 16, fontWeight: 800, lineHeight: 1.2 }}>
               {def.label} {statusBadge}
             </Typography>
-            <Typography sx={{ fontSize: 10, color: V3.t4, fontFamily: 'monospace' }}>{def.key}</Typography>
+            <Typography sx={{ fontSize: 11, color: V3.t3, lineHeight: 1.3 }}>
+              {def.groupLabel} · {capabilityShortHint(def)}
+            </Typography>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
             <Button

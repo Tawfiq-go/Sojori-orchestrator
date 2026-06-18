@@ -2,7 +2,7 @@ import { CAPABILITY_REGISTRY } from '../serviceMatrix/capabilityRegistry';
 import type { OwnerOrchestrationDoc } from './ownerOrchestrationApi';
 import type { ListingOrchestrationDoc } from './listingOrchestrationApi';
 
-export type CapabilitySyncHint = 'admin' | 'local' | 'pm' | 'listing';
+export type CapabilitySyncHint = 'admin' | 'local' | 'customized' | 'pm' | 'listing';
 
 export type OwnerTemplateSyncMeta = {
   sections?: Partial<
@@ -69,10 +69,10 @@ export function buildCapabilitySyncHints(input: {
     for (const def of CAPABILITY_REGISTRY) {
       const section = sectionForCapability(def.key);
       const customized = input.syncMeta?.sections?.[section]?.customized === true;
-      if (CONCIERGE_KEYS.has(def.key)) {
-        hints[def.key] = customized || !fromAdmin ? 'local' : 'admin';
-      } else if (customized) {
-        hints[def.key] = 'local';
+      if (customized) {
+        hints[def.key] = 'customized';
+      } else if (CONCIERGE_KEYS.has(def.key)) {
+        hints[def.key] = fromAdmin ? 'admin' : 'local';
       } else {
         hints[def.key] = fromAdmin ? 'admin' : 'local';
       }
@@ -86,11 +86,13 @@ export function buildCapabilitySyncHints(input: {
 export function syncHintLabel(hint: CapabilitySyncHint | undefined): string | null {
   switch (hint) {
     case 'admin':
-      return 'Admin';
+      return 'Modèle admin';
+    case 'customized':
+      return null;
     case 'local':
-      return 'Local';
+      return null;
     case 'pm':
-      return 'PM';
+      return 'Modèle PM';
     case 'listing':
       return 'Annonce';
     default:
@@ -103,8 +105,10 @@ export function syncHintTone(hint: CapabilitySyncHint | undefined): 'ok' | 'owne
     case 'admin':
     case 'pm':
       return 'ok';
-    case 'local':
+    case 'customized':
       return 'todo';
+    case 'local':
+      return 'ok';
     case 'listing':
       return 'owner';
     default:

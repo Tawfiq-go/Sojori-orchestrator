@@ -5,9 +5,10 @@ import type {
   DashboardKpiValue,
   DashboardKpis,
   DashboardPeriod,
+  DashboardPropertyOption,
   DashboardSnapshot,
 } from '../types/dashboard.types';
-import { logDashboard } from '../utils/dashboardDebug';
+import { logDashboard, logDashboardApiDetail, logDashboardKpisSummary } from '../utils/dashboardDebug';
 
 const DEFAULT_CHECK_FLOW: DashboardCheckFlowItem[] = [
   { label: "Aujourd'hui", checkIns: 0, checkOuts: 0 },
@@ -89,18 +90,34 @@ export function ensureDashboardSnapshot(
   };
 }
 
-function pickDefinedKpis(kpis?: Partial<DashboardKpis>): Partial<DashboardKpis> {
+function pickDefinedKpis(
+  kpis: Partial<DashboardKpis> | undefined,
+  base?: DashboardKpis,
+): Partial<DashboardKpis> {
   if (!kpis) {
     return {};
   }
   return Object.fromEntries(
-    Object.entries(kpis).filter(([, v]) => v != null),
+    Object.entries(kpis).filter(([key, value]) => {
+      if (value == null) return false;
+      const nextValue = Number((value as DashboardKpiValue).value);
+      const baseValue = Number(base?.[key as keyof DashboardKpis]?.value ?? 0);
+      if (Number.isFinite(nextValue) && nextValue <= 0 && baseValue > 0) {
+        return false;
+      }
+      return true;
+    }),
   ) as Partial<DashboardKpis>;
 }
 
 export interface DashboardV1Query {
   period: DashboardPeriod;
   listingIds?: string[];
+  /** IDs du core — débloque revenue-per-l-and-r si listing-directory timeout. */
+  listingIdsHint?: string[];
+  ownerId?: string | null;
+  /** fast = KPIs seuls (~8s), charts = graphiques seuls, complete = tout (défaut). */
+  mode?: 'fast' | 'charts' | 'complete';
   signal?: AbortSignal;
 }
 
@@ -124,10 +141,25 @@ function extractData<T>(payload: unknown, label: string): T {
   return data;
 }
 
-function snapshotParams(period: DashboardPeriod, listingIds: string[]) {
+function snapshotParams(
+  period: DashboardPeriod,
+  listingIds: string[],
+  ownerId?: string | null,
+  listingIdsHint?: string[],
+  mode?: DashboardV1Query['mode'],
+) {
   const params: Record<string, string | string[]> = { period };
   if (listingIds.length > 0) {
     params.listingIds = listingIds;
+  }
+  if (listingIdsHint && listingIdsHint.length > 0) {
+    params.listingIdsHint = listingIdsHint;
+  }
+  if (ownerId) {
+    params.ownerId = ownerId;
+  }
+  if (mode && mode !== 'complete') {
+    params.mode = mode;
   }
   return params;
 }
@@ -155,6 +187,126 @@ function preferNonEmpty<T>(next: T[] | undefined, prev: T[]): T[] {
   return next && next.length > 0 ? next : prev;
 }
 
+/** Occupation portfolio — toujours bornée [0, 100]. */
+export function clampOccupancyPercent(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(100, Math.round(value * 10) / 10);
+}
+
+/** Recalcule occupation / RevPAR / properties actives si les extras arrivent incomplets. */
+export function finalizeDashboardSnapshot(snapshot: DashboardSnapshot): DashboardSnapshot {
+  const kpis = { ...snapshot.kpis };
+
+  if (kpis.activeProperties.value <= 0) {
+    const activeCount =
+      snapshot.properties.filter((property) => property.isActive !== false).length ||
+      snapshot.properties.length ||
+      snapshot.listingIdsHint.length;
+    if (activeCount > 0) {
+      kpis.activeProperties = { value: activeCount, trend: '—' };
+    }
+  }
+
+  if (kpis.occupancyRate.value <= 0 && snapshot.occupancyByProperty.length > 0) {
+    const rates = snapshot.occupancyByProperty
+      .map((row) => clampOccupancyPercent(row.occupancy))
+      .filter((rate) => rate > 0);
+    if (rates.length > 0) {
+      const avg = rates.reduce((sum, rate) => sum + rate, 0) / rates.length;
+      const clamped = clampOccupancyPercent(avg);
+      kpis.occupancyRate = {
+        value: clamped,
+        trend: `${clamped.toFixed(1)}%`,
+      };
+    }
+  }
+
+  if (
+    kpis.occupancyRate.value <= 0 &&
+    kpis.adr.value > 0 &&
+    kpis.monthlyRevenue.value > 0 &&
+    kpis.activeProperties.value > 0
+  ) {
+    const bookedNights = kpis.monthlyRevenue.value / kpis.adr.value;
+    const estimatedOccupancy = clampOccupancyPercent(
+      Math.round((bookedNights / (30 * kpis.activeProperties.value)) * 1000) / 10,
+    );
+    if (estimatedOccupancy > 0) {
+      kpis.occupancyRate = {
+        value: estimatedOccupancy,
+        trend: `${estimatedOccupancy.toFixed(1)}%`,
+      };
+    }
+  }
+
+  if (kpis.occupancyRate.value > 0) {
+    const clamped = clampOccupancyPercent(kpis.occupancyRate.value);
+    kpis.occupancyRate = {
+      value: clamped,
+      trend: `${clamped.toFixed(1)}%`,
+    };
+  }
+
+  if (kpis.revpar.value <= 0 && kpis.adr.value > 0 && kpis.occupancyRate.value > 0) {
+    const revpar = Math.round((kpis.adr.value * kpis.occupancyRate.value) / 100);
+    kpis.revpar = { value: revpar, trend: `${revpar} MAD` };
+  } else if (
+    kpis.revpar.value <= 0 &&
+    kpis.monthlyRevenue.value > 0 &&
+    kpis.activeProperties.value > 0
+  ) {
+    const revpar = Math.round(kpis.monthlyRevenue.value / (30 * kpis.activeProperties.value));
+    if (revpar > 0) {
+      kpis.revpar = { value: revpar, trend: `${revpar} MAD` };
+    }
+  }
+
+  let occupancyByProperty = snapshot.occupancyByProperty.map((row) => ({
+    ...row,
+    occupancy: clampOccupancyPercent(row.occupancy),
+  }));
+  if (occupancyByProperty.length === 0 && kpis.occupancyRate.value > 0 && snapshot.properties.length > 0) {
+    const adr = kpis.adr.value > 0 ? Math.round(kpis.adr.value) : undefined;
+    occupancyByProperty = [
+      {
+        property: snapshot.properties.length === 1 ? snapshot.properties[0].name : 'Portfolio',
+        occupancy: Number(kpis.occupancyRate.value.toFixed(1)),
+        ...(adr ? { adr } : {}),
+      },
+    ];
+  }
+
+  if (kpis.averageRating.value <= 0 && snapshot.recentReviews.length > 0) {
+    const ratings = snapshot.recentReviews
+      .map((review) => Number(review.rating))
+      .filter((rating) => Number.isFinite(rating) && rating > 0);
+    if (ratings.length > 0) {
+      const avg = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
+      const formatted = formatDashboardRating(avg);
+      kpis.averageRating = {
+        value: Number(avg.toFixed(2)),
+        trend: formatted.trend,
+      };
+    }
+  }
+
+  return ensureDashboardSnapshot({ ...snapshot, kpis, occupancyByProperty });
+}
+
+/** Affichage rating : Channex/Booking souvent sur /10 → montrer /5 + /10. */
+export function formatDashboardRating(value: number): { display: string; trend: string } {
+  if (!Number.isFinite(value) || value <= 0) {
+    return { display: '—', trend: '—' };
+  }
+  if (value > 5.5) {
+    const on10 = Number(value.toFixed(2));
+    const on5 = Number((value / 2).toFixed(2));
+    return { display: `${on5}`, trend: `${on5}/5 · ${on10}/10` };
+  }
+  const on5 = Number(value.toFixed(2));
+  return { display: `${on5}`, trend: `${on5}/5` };
+}
+
 export function mergeDashboardSnapshots(
   base: DashboardSnapshot,
   patch: Partial<DashboardSnapshot> & { kpis?: Partial<DashboardKpis> },
@@ -162,7 +314,7 @@ export function mergeDashboardSnapshots(
   return ensureDashboardSnapshot({
     ...base,
     ...patch,
-    kpis: patch.kpis ? { ...base.kpis, ...pickDefinedKpis(patch.kpis) } : base.kpis,
+    kpis: patch.kpis ? { ...base.kpis, ...pickDefinedKpis(patch.kpis, base.kpis) } : base.kpis,
     revenueChart: preferNonEmpty(patch.revenueChart, base.revenueChart),
     sourceDistribution: preferNonEmpty(patch.sourceDistribution, base.sourceDistribution),
     occupancyByProperty: preferNonEmpty(patch.occupancyByProperty, base.occupancyByProperty),
@@ -175,27 +327,101 @@ export function mergeDashboardSnapshots(
   });
 }
 
+/** Catalogue listings pour filtre dashboard (jusqu’à 500 actifs). */
+export async function fetchDashboardListingDirectory(
+  ownerId?: string | null,
+  signal?: AbortSignal,
+): Promise<DashboardPropertyOption[]> {
+  const t0 = performance.now();
+  logDashboard('fetchDashboardListingDirectory start', { ownerId });
+  const params: Record<string, string | boolean> = { staging: false };
+  if (ownerId) {
+    params.ownerId = ownerId;
+  }
+  const url = `${MICROSERVICE_BASE_URL.SRV_LISTING}/listings/dashboard-directory`;
+  try {
+    const response = await apiClient.get(url, { params, signal, timeout: 45_000 });
+    const clientMs = Math.round(performance.now() - t0);
+    const listings =
+      (response.data as { data?: unknown[] })?.data ??
+      (Array.isArray(response.data) ? response.data : []);
+
+    const mapped = (listings as Array<Record<string, unknown>>)
+      .map((listing) => {
+        const id = String(listing.id ?? listing._id ?? '');
+        const name = String(listing.name || '').trim();
+        const city = String(
+          (listing.city as { name?: string })?.name || listing.cityName || listing.city || '',
+        ).trim();
+        if (!id || !name) return null;
+        return {
+          id,
+          name,
+          label: String(listing.label || (city ? `${name} - ${city}` : name)),
+          city: city || undefined,
+          isActive: (listing.active ?? listing.isActive ?? true) as boolean,
+        } satisfies DashboardPropertyOption;
+      })
+      .filter((listing): listing is DashboardPropertyOption => listing != null)
+      .filter((listing) => listing.isActive !== false);
+
+    logDashboard('fetchDashboardListingDirectory done', {
+      clientMs,
+      count: mapped.length,
+    });
+    logDashboardApiDetail('directory', {
+      url: `${url}?${new URLSearchParams(
+        Object.entries(params).map(([k, v]) => [k, String(v)]),
+      ).toString()}`,
+      clientMs,
+      meta: { count: mapped.length },
+    });
+    return mapped;
+  } catch (error) {
+    const clientMs = Math.round(performance.now() - t0);
+    logDashboard('fetchDashboardListingDirectory failed', {
+      clientMs,
+      message: (error as Error)?.message,
+    });
+    throw error;
+  }
+}
+
 /** Premier paint — KPI + listes (~6s max côté serveur). */
 export async function fetchDashboardV1Core(query: DashboardV1Query): Promise<DashboardSnapshot> {
-  const { period, listingIds = [], signal } = query;
+  const { period, listingIds = [], ownerId, signal } = query;
   const t0 = performance.now();
-  logDashboard('fetchDashboardV1Core start', { period, listingIds });
+  logDashboard('fetchDashboardV1Core start', { period, listingIds, ownerId });
 
-  const response = await apiClient.get(`${MICROSERVICE_BASE_URL.SRV_ADMIN}/dashboard/v1/snapshot`, {
-    params: snapshotParams(period, listingIds),
+  const url = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/dashboard/v1/snapshot`;
+  const params = snapshotParams(period, listingIds, ownerId);
+  const response = await apiClient.get(url, {
+    params,
     signal,
     timeout: 25_000,
   });
 
   const snapshot = normalizeSnapshot(extractData<Record<string, unknown>>(response.data, 'core'));
   const meta = (response.data as Record<string, unknown>)?.meta as Record<string, unknown> | undefined;
+  const clientMs = Math.round(performance.now() - t0);
   logDashboard('fetchDashboardV1Core done', {
-    clientMs: Math.round(performance.now() - t0),
+    clientMs,
     serverProcessingMs: meta?.processingMs,
     cached: meta?.cached,
     partialBlocks: meta?.partialBlocks,
     listingIdsHintCount: meta?.listingIdsHintCount ?? snapshot.listingIdsHint?.length,
     propertiesCount: snapshot.properties.length,
+    averageRating: snapshot.kpis.averageRating.value,
+  });
+  logDashboardApiDetail('core', {
+    url: `${url}?${new URLSearchParams(
+      Object.entries(params).flatMap(([k, v]) =>
+        Array.isArray(v) ? v.map((item) => [k, item]) : [[k, String(v)]],
+      ) as [string, string][],
+    ).toString()}`,
+    clientMs,
+    meta,
+    kpis: snapshot.kpis as unknown as Record<string, unknown>,
   });
   return snapshot;
 }
@@ -204,25 +430,45 @@ export async function fetchDashboardV1Core(query: DashboardV1Query): Promise<Das
 export async function fetchDashboardV1Extras(
   query: DashboardV1Query,
 ): Promise<Partial<DashboardSnapshot> & { kpis?: Partial<DashboardKpis> }> {
-  const { period, listingIds = [], signal } = query;
+  const { period, listingIds = [], listingIdsHint = [], ownerId, signal } = query;
   const t0 = performance.now();
-  logDashboard('fetchDashboardV1Extras start', { period, listingIds });
+  logDashboard('fetchDashboardV1Extras start', { period, listingIds, listingIdsHint, ownerId });
 
-  const response = await apiClient.get(`${MICROSERVICE_BASE_URL.SRV_ADMIN}/dashboard/v1/snapshot/extras`, {
-    params: snapshotParams(period, listingIds),
+  const url = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/dashboard/v1/snapshot/extras`;
+  const params = snapshotParams(period, listingIds, ownerId, listingIdsHint);
+  const response = await apiClient.get(url, {
+    params,
     signal,
-    timeout: 30_000,
+    timeout: 90_000,
   });
 
   const data = extractData<Record<string, unknown>>(response.data, 'extras');
   const meta = (response.data as Record<string, unknown>)?.meta as Record<string, unknown> | undefined;
+  const recentReviews = (data.recentReviews as unknown[]) ?? [];
+  const extrasKpis = (data.kpis as Record<string, unknown>) ?? {};
+  const clientMs = Math.round(performance.now() - t0);
   logDashboard('fetchDashboardV1Extras done', {
-    clientMs: Math.round(performance.now() - t0),
+    clientMs,
     serverProcessingMs: meta?.processingMs,
     cached: meta?.cached,
     partialBlocks: meta?.partialBlocks,
     sourceCount: ((data.sourceDistribution as unknown[]) ?? []).length,
     occupancyCount: ((data.occupancyByProperty as unknown[]) ?? []).length,
+    averageRating: (extrasKpis.averageRating as { value?: number })?.value,
+    recentReviewsCount: recentReviews.length,
+  });
+  logDashboardApiDetail('extras', {
+    url: `${url}?${new URLSearchParams(
+      Object.entries(params).flatMap(([k, v]) =>
+        Array.isArray(v) ? v.map((item) => [k, item]) : [[k, String(v)]],
+      ) as [string, string][],
+    ).toString()}`,
+    clientMs,
+    meta,
+    kpis: extrasKpis,
+    extrasKpisKeys: Object.keys(extrasKpis),
+    recentReviewsCount: recentReviews.length,
+    recentReviewsPreview: recentReviews.slice(0, 3),
   });
 
   return {
@@ -254,59 +500,110 @@ function patchHasData(patch: Partial<DashboardSnapshot> & { kpis?: Partial<Dashb
   });
 }
 
-const paintFrame = () =>
-  new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-
-/** Applique les blocs extras un par un (logs + paint intermédiaire pour le debug perf). */
+/** Merge extras en 2 paints (KPIs puis graphiques) — plus fluide que 8 étapes. */
 export async function applyDashboardExtrasProgressively(
   base: DashboardSnapshot,
   extras: Partial<DashboardSnapshot> & { kpis?: Partial<DashboardKpis> },
   onStep: (merged: DashboardSnapshot) => void,
 ): Promise<DashboardSnapshot> {
-  const steps: Array<{
-    block: string;
-    patch: Partial<DashboardSnapshot> & { kpis?: Partial<DashboardKpis> };
-  }> = [
-    { block: 'kpis', patch: { kpis: extras.kpis } },
-    { block: 'revenueChart', patch: { revenueChart: extras.revenueChart } },
-    { block: 'sourceDistribution', patch: { sourceDistribution: extras.sourceDistribution } },
-    { block: 'occupancyByProperty', patch: { occupancyByProperty: extras.occupancyByProperty } },
-    { block: 'urgentTasks', patch: { urgentTasks: extras.urgentTasks } },
-    { block: 'unreadMessages', patch: { unreadMessages: extras.unreadMessages } },
-    { block: 'recentReviews', patch: { recentReviews: extras.recentReviews } },
-    { block: 'alerts', patch: { alerts: extras.alerts } },
-  ];
+  const kpiPatch = finalizeDashboardSnapshot(
+    mergeDashboardSnapshots(base, { kpis: extras.kpis }),
+  );
+  onStep(kpiPatch);
 
-  let current = base;
-  for (const { block, patch } of steps) {
-    if (!patchHasData(patch)) {
-      logDashboard(`block: ${block} skip (vide)`);
-      continue;
-    }
-    const t0 = performance.now();
-    logDashboard(`block: ${block} merge start`);
-    current = mergeDashboardSnapshots(current, patch);
-    onStep(current);
-    logDashboard(`block: ${block} merge done`, {
-      ms: Math.round(performance.now() - t0),
-      revenueChart: current.revenueChart.length,
-      sourceDistribution: current.sourceDistribution.length,
-      occupancyByProperty: current.occupancyByProperty.length,
-    });
-    await paintFrame();
-  }
-  return current;
+  const chartsPatch: Partial<DashboardSnapshot> = {
+    revenueChart: extras.revenueChart,
+    sourceDistribution: extras.sourceDistribution,
+    occupancyByProperty: extras.occupancyByProperty,
+    urgentTasks: extras.urgentTasks,
+    unreadMessages: extras.unreadMessages,
+    recentReviews: extras.recentReviews,
+    alerts: extras.alerts,
+  };
+
+  const merged = finalizeDashboardSnapshot(mergeDashboardSnapshots(kpiPatch, chartsPatch));
+  onStep(merged);
+  return merged;
 }
 
-/** @deprecated Utiliser fetchDashboardV1Core + fetchDashboardV1Extras */
-export async function fetchDashboardV1Snapshot(query: DashboardV1Query): Promise<DashboardSnapshot> {
-  const core = await fetchDashboardV1Core(query);
-  try {
-    const extras = await fetchDashboardV1Extras(query);
-    return mergeDashboardSnapshots(core, extras);
-  } catch {
-    return core;
+/** Snapshot complet — une requête, agrégation serveur (remplace core + extras). */
+export async function fetchDashboardV1Full(query: DashboardV1Query): Promise<DashboardSnapshot> {
+  const { period, listingIds = [], listingIdsHint = [], ownerId, mode = 'complete', signal } = query;
+  const t0 = performance.now();
+  logDashboard(`fetchDashboardV1Full start (${mode})`, {
+    period,
+    listingIds,
+    listingIdsHint,
+    ownerId,
+    mode,
+  });
+
+  const url = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/dashboard/v1/snapshot/full`;
+  const params = snapshotParams(period, listingIds, ownerId, listingIdsHint, mode);
+  const timeout = mode === 'fast' ? 25_000 : mode === 'charts' ? 20_000 : 60_000;
+  const response = await apiClient.get(url, {
+    params,
+    signal,
+    timeout,
+  });
+
+  const snapshot = finalizeDashboardSnapshot(
+    normalizeSnapshot(extractData<Record<string, unknown>>(response.data, mode)),
+  );
+  const meta = (response.data as Record<string, unknown>)?.meta as Record<string, unknown> | undefined;
+  const clientMs = Math.round(performance.now() - t0);
+  logDashboard(`fetchDashboardV1Full done (${mode})`, {
+    clientMs,
+    serverProcessingMs: meta?.processingMs,
+    wave1Ms: meta?.wave1Ms,
+    wave2Ms: meta?.wave2Ms,
+    cached: meta?.cached,
+    partialBlocks: meta?.partialBlocks,
+    failedUpstreams: meta?.failedUpstreams,
+    slowestUpstream: meta?.slowestUpstream,
+    bottleneckHint: meta?.bottleneckHint,
+    listingIdsHintCount: meta?.listingIdsHintCount ?? snapshot.listingIdsHint?.length,
+    propertiesCount: snapshot.properties.length,
+    occupancyByProperty: snapshot.occupancyByProperty.length,
+    sourceDistribution: snapshot.sourceDistribution.length,
+    averageRating: snapshot.kpis.averageRating.value,
+    occupancyRate: snapshot.kpis.occupancyRate.value,
+  });
+  if (mode === 'complete') {
+    logDashboardApiDetail('full', {
+      url: `${url}?${new URLSearchParams(
+        Object.entries(params).flatMap(([k, v]) =>
+          Array.isArray(v) ? v.map((item) => [k, item]) : [[k, String(v)]],
+        ) as [string, string][],
+      ).toString()}`,
+      clientMs,
+      meta,
+      kpis: snapshot.kpis as unknown as Record<string, unknown>,
+    });
+    logDashboardKpisSummary(snapshot.kpis as unknown as Record<string, { value?: number }>);
   }
+  return snapshot;
+}
+
+export async function fetchDashboardV1Fast(query: DashboardV1Query): Promise<DashboardSnapshot> {
+  return fetchDashboardV1Full({ ...query, mode: 'fast' });
+}
+
+export async function fetchDashboardV1Charts(
+  query: DashboardV1Query,
+): Promise<Partial<DashboardSnapshot> & { kpis?: Partial<DashboardKpis> }> {
+  const snapshot = await fetchDashboardV1Full({ ...query, mode: 'charts' });
+  return {
+    kpis: snapshot.kpis,
+    revenueChart: snapshot.revenueChart,
+    sourceDistribution: snapshot.sourceDistribution,
+    occupancyByProperty: snapshot.occupancyByProperty,
+    unreadMessages: snapshot.unreadMessages,
+    alerts: snapshot.alerts,
+  };
+}
+
+/** @deprecated Utiliser fetchDashboardV1Full */
+export async function fetchDashboardV1Snapshot(query: DashboardV1Query): Promise<DashboardSnapshot> {
+  return fetchDashboardV1Full(query);
 }

@@ -74,8 +74,9 @@ export function ImportAirbnbModalContainer({
 
   const sessionOwner: Owner | null = useMemo(() => {
     if (isAdmin || !user?.id) return null;
+    const ownerAccountId = (user as { ownerId?: string }).ownerId || user.id;
     return {
-      _id: user.id,
+      _id: ownerAccountId,
       email: user.email || '',
       firstName: user.firstName,
       lastName: user.lastName,
@@ -124,11 +125,13 @@ export function ImportAirbnbModalContainer({
       (p: {
         ruPropertyId: number;
         name?: string;
+        isActive?: boolean;
         alreadyImported?: boolean;
         sojoriListingId?: string;
       }) => ({
         ruPropertyId: String(p.ruPropertyId),
         name: p.name || `Annonce #${p.ruPropertyId}`,
+        isActive: p.isActive !== false,
         alreadyImported: Boolean(p.alreadyImported),
         importable: !p.alreadyImported,
         photoGradient: ((p.ruPropertyId % 5) + 1) as 1 | 2 | 3 | 4 | 5,
