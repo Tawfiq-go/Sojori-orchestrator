@@ -1,6 +1,13 @@
 import { Box, Stack, Typography } from '@mui/material';
 import { T } from './_tokens';
-import type { OtaAdvancedSearch, OtaChannelFilter, OtaFilterCounts } from './otaThreadFilters';
+import { FilterChip, CountPill } from './InboxFilterChips';
+import type {
+  OtaAdvancedSearch,
+  OtaChannelFilter,
+  OtaFilterCounts,
+  OtaStayQuickFilter,
+  OtaStayQuickFilterCounts,
+} from './otaThreadFilters';
 
 interface OtaInboxFiltersProps {
   channelFilter: OtaChannelFilter;
@@ -22,13 +29,23 @@ interface OtaInboxFiltersProps {
   /** Total occurrences mot-clé (recherche avancée messages) */
   keywordMatchTotal?: number | null;
   activeKeyword?: string;
+  stayQuickFilter?: OtaStayQuickFilter;
+  onStayQuickFilterChange?: (f: OtaStayQuickFilter) => void;
+  stayQuickCounts?: OtaStayQuickFilterCounts;
 }
 
 const CHANNEL_TABS: Array<{ id: OtaChannelFilter; label: string; emoji?: string }> = [
   { id: 'ota', label: 'OTAs', emoji: '🌐' },
   { id: 'ab', label: 'Airbnb', emoji: '🏠' },
-  { id: 'bk', label: 'Booking' },
+  { id: 'bk', label: 'Book.' },
   { id: 'direct', label: 'Direct', emoji: '◎' },
+];
+
+const STAY_QUICK_TABS: Array<{ id: Exclude<OtaStayQuickFilter, 'none'>; label: string }> = [
+  { id: 'arr_today', label: 'Arr auj' },
+  { id: 'arr_tomorrow', label: 'Arr dem' },
+  { id: 'dep_today', label: 'Dép auj' },
+  { id: 'dep_tomorrow', label: 'Dép dem' },
 ];
 
 export default function OtaInboxFilters({
@@ -50,8 +67,16 @@ export default function OtaInboxFilters({
   unrepliedSearchActive,
   keywordMatchTotal,
   activeKeyword,
+  stayQuickFilter = 'none',
+  onStayQuickFilterChange,
+  stayQuickCounts,
 }: OtaInboxFiltersProps) {
-  const toutActive = channelFilter === 'all' && !unrepliedOnly && !serverSearchActive && !unrepliedSearchActive;
+  const toutActive =
+    channelFilter === 'all' &&
+    !unrepliedOnly &&
+    !serverSearchActive &&
+    !unrepliedSearchActive &&
+    stayQuickFilter === 'none';
 
   return (
     <Box sx={{ flexShrink: 0, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
@@ -63,6 +88,7 @@ export default function OtaInboxFilters({
             count={counts.all}
             active={toutActive}
             compact
+            countInline
             onClick={() => {
               if (onToutReset) onToutReset();
               else {
@@ -77,6 +103,7 @@ export default function OtaInboxFilters({
             active={unrepliedOnly || !!unrepliedSearchActive}
             urgent={counts.unreplied > 0}
             compact
+            countInline
             onClick={() => onUnrepliedOnlyChange(!unrepliedOnly)}
           />
           <Box
@@ -202,7 +229,7 @@ export default function OtaInboxFilters({
       )}
 
       {/* Ligne 2 — Canaux */}
-      <Box sx={{ px: '10px', pb: '8px' }}>
+      <Box sx={{ px: '10px', pb: '4px' }}>
         <Box
           sx={{
             display: 'grid',
@@ -218,6 +245,7 @@ export default function OtaInboxFilters({
               count={counts[tab.id]}
               active={channelFilter === tab.id && !unrepliedOnly}
               compact
+              countInline
               onClick={() => {
                 onUnrepliedOnlyChange(false);
                 onChannelFilterChange(channelFilter === tab.id ? 'all' : tab.id);
@@ -226,93 +254,33 @@ export default function OtaInboxFilters({
           ))}
         </Box>
       </Box>
-    </Box>
-  );
-}
 
-function FilterChip({
-  label,
-  count,
-  active,
-  urgent,
-  compact,
-  emoji,
-  onClick,
-}: {
-  label: string;
-  count?: number;
-  active?: boolean;
-  urgent?: boolean;
-  compact?: boolean;
-  emoji?: string;
-  onClick: () => void;
-}) {
-  return (
-    <Box
-      component="button"
-      type="button"
-      onClick={onClick}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: compact ? 'center' : 'space-between',
-        flexDirection: compact ? 'column' : 'row',
-        gap: compact ? 0.25 : 0.5,
-        px: compact ? '4px' : '10px',
-        py: compact ? '6px' : '7px',
-        border: `1px solid ${active ? T.primary : T.border}`,
-        borderRadius: '8px',
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        fontSize: compact ? 10 : 11,
-        fontWeight: active ? 700 : 600,
-        color: active ? T.primaryDeep : urgent ? T.error : T.text2,
-        bgcolor: active ? T.primaryTint : T.bg1,
-        transition: 'all 0.15s',
-        minWidth: 0,
-        '&:hover': { bgcolor: active ? T.primaryTint : T.bg3 },
-      }}
-    >
-      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {emoji ? `${emoji} ` : ''}
-        {label}
-      </span>
-      {count != null && (
-        <CountPill value={count} active={active} urgent={urgent && !active} compact={compact} />
+      {/* Ligne 3 — Arrivée / départ auj. & dem. */}
+      {onStayQuickFilterChange && stayQuickCounts && (
+        <Box sx={{ px: '10px', pb: '8px' }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: '4px',
+            }}
+          >
+            {STAY_QUICK_TABS.map((tab) => (
+              <FilterChip
+                key={tab.id}
+                label={tab.label}
+                count={stayQuickCounts[tab.id]}
+                active={stayQuickFilter === tab.id}
+                compact
+                countInline
+                onClick={() =>
+                  onStayQuickFilterChange(stayQuickFilter === tab.id ? 'none' : tab.id)
+                }
+              />
+            ))}
+          </Box>
+        </Box>
       )}
-    </Box>
-  );
-}
-
-function CountPill({
-  value,
-  active,
-  urgent,
-  compact,
-}: {
-  value: number;
-  active?: boolean;
-  urgent?: boolean;
-  compact?: boolean;
-}) {
-  return (
-    <Box
-      component="span"
-      sx={{
-        fontFamily: '"Geist Mono", monospace',
-        fontSize: compact ? 8 : 9,
-        fontWeight: 700,
-        minWidth: compact ? 14 : 18,
-        textAlign: 'center',
-        px: 0.5,
-        py: '1px',
-        borderRadius: 999,
-        bgcolor: active ? T.primary : urgent ? T.errorTint : T.bg3,
-        color: active ? '#fff' : urgent ? T.error : T.text4,
-        lineHeight: 1.2,
-      }}
-    >
-      {value}
     </Box>
   );
 }

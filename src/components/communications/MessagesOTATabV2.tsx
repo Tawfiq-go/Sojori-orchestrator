@@ -20,10 +20,12 @@ import {
   buildOtaAdvancedApiParams,
   buildOtaGlobalSearchParams,
   countOtaFilters,
+  countOtaStayQuickFilters,
   hasActiveOtaAdvancedSearch,
   sortOtaThreadsByActivity,
   type OtaAdvancedSearch,
   type OtaChannelFilter,
+  type OtaStayQuickFilter,
 } from '../unified-inbox/otaThreadFilters';
 import { useAdminOwnerFilter } from '../../context/AdminOwnerFilterContext';
 import { OTA_QUICK_REPLIES, OTA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
@@ -70,6 +72,7 @@ export default function MessagesOTATabV2() {
   const { requestOwnerId } = useAdminOwnerFilter();
   const [searchTerm, setSearchTerm] = useState('');
   const [otaChannelFilter, setOtaChannelFilter] = useState<OtaChannelFilter>('all');
+  const [otaStayQuickFilter, setOtaStayQuickFilter] = useState<OtaStayQuickFilter>('none');
   const [otaUnrepliedOnly, setOtaUnrepliedOnly] = useState(false);
   const [otaAdvancedDraft, setOtaAdvancedDraft] = useState<OtaAdvancedSearch>(EMPTY_ADVANCED);
   const [appliedAdvanced, setAppliedAdvanced] = useState<OtaAdvancedSearch>(EMPTY_ADVANCED);
@@ -285,6 +288,7 @@ export default function MessagesOTATabV2() {
     setAppliedAdvanced(EMPTY_ADVANCED);
     setSearchTerm('');
     setOtaChannelFilter('all');
+    setOtaStayQuickFilter('none');
     setOtaUnrepliedOnly(false);
     setAdvancedExpanded(false);
     invalidateOtaInboxCache();
@@ -294,6 +298,7 @@ export default function MessagesOTATabV2() {
   const handleResetAllFilters = () => {
     setSearchTerm('');
     setOtaChannelFilter('all');
+    setOtaStayQuickFilter('none');
     setOtaUnrepliedOnly(false);
     setOtaAdvancedDraft(EMPTY_ADVANCED);
     setAppliedAdvanced(EMPTY_ADVANCED);
@@ -304,10 +309,20 @@ export default function MessagesOTATabV2() {
     void loadInbox({ skipCache: true });
   };
 
-  /** Compteurs toujours sur l'inbox actif (hors completed/annulée) */
-  const otaFilterCounts = useMemo(() => countOtaFilters(inboxRows), [inboxRows]);
-
+  /** Compteurs sur la liste affichée (inbox ou résultats recherche) */
   const otaGlobalQueryActive = searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN;
+
+  const otaBaseRows = useMemo(() => {
+    if (otaGlobalQueryActive || searchMode !== 'none') return searchRows;
+    return inboxRows;
+  }, [otaGlobalQueryActive, searchMode, searchRows, inboxRows]);
+
+  const otaFilterCounts = useMemo(() => countOtaFilters(otaBaseRows), [otaBaseRows]);
+
+  const otaStayQuickCounts = useMemo(() => {
+    const scoped = applyOtaInboxFilters(otaBaseRows, otaChannelFilter, otaUnrepliedOnly, 'none');
+    return countOtaStayQuickFilters(scoped);
+  }, [otaBaseRows, otaChannelFilter, otaUnrepliedOnly]);
 
   const activeKeyword = useMemo(() => {
     const kw = appliedAdvanced.messageText?.trim();
@@ -325,26 +340,28 @@ export default function MessagesOTATabV2() {
       otaGlobalQueryActive ||
       searchMode !== 'none' ||
       otaChannelFilter !== 'all' ||
+      otaStayQuickFilter !== 'none' ||
       otaUnrepliedOnly ||
       hasActiveOtaAdvancedSearch(appliedAdvanced),
     [
       otaGlobalQueryActive,
       searchMode,
       otaChannelFilter,
+      otaStayQuickFilter,
       otaUnrepliedOnly,
       appliedAdvanced,
     ],
   );
 
-  const otaBaseRows = useMemo(() => {
-    if (otaGlobalQueryActive || searchMode !== 'none') return searchRows;
-    return inboxRows;
-  }, [otaGlobalQueryActive, searchMode, searchRows, inboxRows]);
-
   const displayRows = useMemo(() => {
-    const rows = applyOtaInboxFilters(otaBaseRows, otaChannelFilter, otaUnrepliedOnly);
+    const rows = applyOtaInboxFilters(
+      otaBaseRows,
+      otaChannelFilter,
+      otaUnrepliedOnly,
+      otaStayQuickFilter,
+    );
     return sortOtaThreadsByActivity(rows);
-  }, [otaBaseRows, otaChannelFilter, otaUnrepliedOnly]);
+  }, [otaBaseRows, otaChannelFilter, otaUnrepliedOnly, otaStayQuickFilter]);
 
   const formattedThreads: Thread[] = useMemo(
     () =>
@@ -425,6 +442,9 @@ export default function MessagesOTATabV2() {
           onOtaUnrepliedOnlyChange={handleUnrepliedOnlyChange}
           onOtaToutReset={handleResetAllFilters}
           otaFilterCounts={otaFilterCounts}
+          otaStayQuickFilter={otaStayQuickFilter}
+          onOtaStayQuickFilterChange={setOtaStayQuickFilter}
+          otaStayQuickCounts={otaStayQuickCounts}
           otaAdvancedSearch={otaAdvancedDraft}
           onOtaAdvancedSearchChange={setOtaAdvancedDraft}
           onOtaAdvancedSearchSubmit={handleAdvancedSearch}

@@ -159,24 +159,16 @@ export async function saveOwnerOrchestrationFlags(
       logOrchConfig('flags.persist ← OK', { ownerKey, via: 'listing-orchestration-template owner' });
       return 'template owner (API)';
     }
-    logOrchConfig('flags.persist fallback listings', { ownerKey });
+    throw new Error(
+      'Route listing-orchestration-template indisponible — déployer srv-listing ou utiliser l’onglet Activation (V3).',
+    );
   } catch (e) {
-    orchConfigError('flags.persist owner API failed, fallback listings', e, { ownerKey });
+    orchConfigError('flags.persist owner API failed', e, { ownerKey });
+    throw new Error(
+      patchErrorMessage(e) ||
+        'Échec enregistrement template orchestration — utilisez l’onglet Activation des services.',
+    );
   }
-
-  const { ok, failed, errors } = await applyOrchestrationFlagsToOwnerListings(ownerKey, flags);
-  if (ok === 0 && failed === 0) {
-    throw new Error('Ce PM n’a aucune annonce — orchestration non appliquée');
-  }
-  if (ok === 0) {
-    throw new Error(errors[0] || `Échec sur ${failed} annonce(s)`);
-  }
-  if (failed > 0) {
-    logOrchConfig('flags.persist ← partial', { ownerKey, ok, failed, errors });
-    return `${ok} annonce(s) OK, ${failed} échec(s)`;
-  }
-  logOrchConfig('flags.persist ← OK listings', { ownerKey, ok });
-  return `${ok} annonce(s) mises à jour`;
 }
 
 export async function loadOwnerOrchestrationFlags(ownerKey: string): Promise<{

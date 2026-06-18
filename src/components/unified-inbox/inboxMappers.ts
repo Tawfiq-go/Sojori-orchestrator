@@ -3,17 +3,40 @@ import type { InboxReservationData } from '../../types/inboxReservation.types';
 import type { Thread } from '../../types/unifiedInbox.types';
 import { getConversationReservationNumber } from './inboxReservationEnrichment';
 import {
+  conversationReservationSourceInput,
+  resolveWaBookingPlatform,
+  resolveWaBookingSourceKind,
+} from './inboxReservationSource';
+import {
   checkInDaysLabel,
   flagFromPhone,
   formatStayDateShort,
   nightsBetween,
-  normalizeBookingSource,
   stayStatusLabel,
 } from './inboxFormat';
+import { resolveReservationSourceKind } from '../reservations/ReservationSourceIcon';
+
+function bookingSourceLabel(conv: Conversation): string {
+  const kind = resolveReservationSourceKind(conversationReservationSourceInput(conv));
+  switch (kind) {
+    case 'airbnb':
+      return 'Airbnb';
+    case 'booking':
+      return 'Booking.com';
+    case 'rentals':
+      return 'Rentals United';
+    case 'whatsapp':
+      return 'WhatsApp Booking';
+    case 'admin':
+      return 'Admin';
+    default:
+      return 'Direct';
+  }
+}
 
 export function mapConversationToReservation(conv: Conversation): InboxReservationData {
   const nights = nightsBetween(conv.checkin_date, conv.checkout_date);
-  const source = normalizeBookingSource(conv.channel_name);
+  const source = bookingSourceLabel(conv);
   return {
     reservationNumber: getConversationReservationNumber(conv),
     listingName: conv.listing_name,
@@ -36,6 +59,22 @@ export function mapConversationToThread(
 ): Thread {
   const checkInBadge = checkInDaysLabel(conv.checkin_date);
   const mode = opts.isOta ? 'ota' : 'whatsapp';
+  const bookingPlatform = opts.isOta ? null : resolveWaBookingPlatform(conv);
+  const bookingSourceKind = opts.isOta ? undefined : resolveWaBookingSourceKind(conv) ?? undefined;
+  const displayChannel =
+    opts.isOta
+      ? opts.channel
+      : bookingPlatform === 'ab'
+        ? 'ab'
+        : bookingPlatform === 'bk'
+          ? 'bk'
+          : 'wa';
+  const displayColor =
+    bookingPlatform === 'ab'
+      ? '#FF5A5F'
+      : bookingPlatform === 'bk'
+        ? '#003580'
+        : opts.channelColor;
   const preview =
     conv.recent_exchanges[0]?.user_message ||
     conv.recent_exchanges[0]?.ai_response ||
@@ -45,8 +84,8 @@ export function mapConversationToThread(
     id: conv.phone,
     name: conv.name || conv.phone,
     phone: conv.phone,
-    channel: opts.channel,
-    channelColor: opts.channelColor,
+    channel: displayChannel,
+    channelColor: displayColor,
     preview: isAuto ? preview : preview,
     time: '',
     unread: conv.unread_count,
@@ -64,6 +103,8 @@ export function mapConversationToThread(
     checkInBadge,
     stayBadge: stayStatusLabel(conv.checkin_date, conv.checkout_date, mode),
     taskCount: undefined,
+    bookingSourceKind,
+    bookingPlatform,
   };
 }
 

@@ -52,6 +52,7 @@ export default function ImportAirbnbModal({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [city, setCity] = useState<SojoriCity | null>(null);
   const [cityError, setCityError] = useState(false);
+  const [propsError, setPropsError] = useState<string | null>(null);
 
   // Reset au montage / changement de mode
   useEffect(() => {
@@ -59,6 +60,7 @@ export default function ImportAirbnbModal({
     setPhase(isAdmin ? 'A-admin' : 'A-owner');
     setOwner(isAdmin ? null : (sessionOwner || null));
     setProperties([]); setSelectedIds([]); setCity(null); setCityError(false);
+    setPropsError(null);
   }, [open, isAdmin, sessionOwner]);
 
   // Fetch properties dès qu'on a un owner
@@ -66,8 +68,19 @@ export default function ImportAirbnbModal({
     if (!owner) return;
     let cancelled = false;
     setPropsLoading(true);
+    setPropsError(null);
     fetchOwnerProperties(owner._id)
       .then(p => { if (!cancelled) { setProperties(p); setPhase('B'); } })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        const msg =
+          (e as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
+          (e as Error)?.message ||
+          'Impossible de charger les annonces Airbnb';
+        setPropsError(msg);
+        setProperties([]);
+        setPhase('B');
+      })
       .finally(() => { if (!cancelled) setPropsLoading(false); });
     return () => { cancelled = true; };
   }, [owner, fetchOwnerProperties]);
@@ -188,16 +201,33 @@ export default function ImportAirbnbModal({
 
         {phase === 'A-owner' && (
           <Stack alignItems="center" sx={{ py: 5 }}>
-            <Box sx={{
-              width: 48, height: 48, borderRadius: '50%',
-              border: `3px solid ${T.border}`, borderTopColor: T.primary,
-              mb: 2.25, animation: 'sj-spin 0.8s linear infinite',
-            }} />
-            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Chargement de vos annonces Airbnb…</Typography>
-            <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
-              Synchronisation avec votre compte hôte · quelques secondes
-            </Typography>
+            {!owner ? (
+              <>
+                <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Connexion au compte hôte…</Typography>
+                <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
+                  Si cet écran reste bloqué, reconnectez-vous ou contactez le support.
+                </Typography>
+              </>
+            ) : (
+              <>
+                <Box sx={{
+                  width: 48, height: 48, borderRadius: '50%',
+                  border: `3px solid ${T.border}`, borderTopColor: T.primary,
+                  mb: 2.25, animation: 'sj-spin 0.8s linear infinite',
+                }} />
+                <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Chargement de vos annonces Airbnb…</Typography>
+                <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
+                  Synchronisation avec votre compte hôte · quelques secondes
+                </Typography>
+              </>
+            )}
           </Stack>
+        )}
+
+        {phase === 'B' && propsError && (
+          <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1.25, bgcolor: T.errorTint, border: `1px solid rgba(220,38,38,0.25)` }}>
+            <Typography sx={{ fontSize: 12.5, color: T.error, fontWeight: 600 }}>{propsError}</Typography>
+          </Box>
         )}
 
         {phase === 'B' && owner && (

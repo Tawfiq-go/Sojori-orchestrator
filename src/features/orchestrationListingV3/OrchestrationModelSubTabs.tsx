@@ -1,8 +1,9 @@
 import { Box, Tab, Tabs } from '@mui/material';
 
-export type OrchestrationModelSection = 'services' | 'messages';
+export type OrchestrationModelSection = 'activation' | 'services' | 'messages';
 
-const TABS: { id: OrchestrationModelSection; label: string; emoji: string }[] = [
+const TAB_DEFS: { id: OrchestrationModelSection; label: string; emoji: string }[] = [
+  { id: 'activation', label: 'Activation des services', emoji: '🔌' },
   { id: 'services', label: 'Services & workflows', emoji: '⚙️' },
   { id: 'messages', label: 'Messages planifiés', emoji: '📨' },
 ];
@@ -11,9 +12,24 @@ type Props = {
   value: OrchestrationModelSection;
   onChange: (section: OrchestrationModelSection) => void;
   messageCount?: number;
+  /** Onglet activation (modèle PM uniquement). */
+  showActivation?: boolean;
+  /** Masque l’onglet messages (ex. aucun service activé sur le modèle PM). */
+  hideMessages?: boolean;
 };
 
-export default function OrchestrationModelSubTabs({ value, onChange, messageCount }: Props) {
+export default function OrchestrationModelSubTabs({
+  value,
+  onChange,
+  messageCount,
+  showActivation = false,
+  hideMessages = false,
+}: Props) {
+  const tabs = TAB_DEFS.filter(t => {
+    if (t.id === 'activation' && !showActivation) return false;
+    if (t.id === 'messages' && hideMessages) return false;
+    return true;
+  });
   return (
     <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
       <Tabs
@@ -21,7 +37,7 @@ export default function OrchestrationModelSubTabs({ value, onChange, messageCoun
         onChange={(_, v) => onChange(v as OrchestrationModelSection)}
         sx={{ minHeight: 42 }}
       >
-        {TABS.map(t => (
+        {tabs.map(t => (
           <Tab
             key={t.id}
             value={t.id}

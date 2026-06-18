@@ -61,9 +61,13 @@ export interface DashboardAverageDailyRateRaw {
 export interface DashboardRevenueByChannelRaw {
   channelName?: string;
   channel?: string;
+  color?: string;
   totalRevenue?: number;
   revenue?: number;
   reservationCount?: number;
+  y?: number | string;
+  x?: { month?: string };
+  _id?: string;
 }
 
 export interface DashboardCheckinsByChannelRaw {
@@ -126,6 +130,8 @@ export interface DashboardOccupancyByPropertyItem {
   property: string;
   occupancy: number;
   adr?: number;
+  /** Listing Mongo id — clé React stable quand `property` est un libellé générique. */
+  listingId?: string;
 }
 
 export interface DashboardAlertItem {

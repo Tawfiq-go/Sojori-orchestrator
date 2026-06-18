@@ -367,9 +367,11 @@ export function ListingsOverviewPage() {
                     <Typography sx={{ mt: 0.5, fontSize: 12, color: t.text3, fontFamily: 'Geist Mono' }}>
                       {listing.city || 'Ville inconnue'} · {listing.country || 'Pays inconnu'}
                     </Typography>
-                    <Typography sx={{ mt: 1.25, fontSize: 12.5, color: t.text2 }}>
-                      Propriétaire : {listing.ownerName}
-                    </Typography>
+                    {isAdmin && (
+                      <Typography sx={{ mt: 1.25, fontSize: 12.5, color: t.text2 }}>
+                        Propriétaire : {listing.ownerName}
+                      </Typography>
+                    )}
                     {ruLabel && (
                       <Typography
                         sx={{ mt: 0.5, fontSize: 11.5, fontWeight: 700, color: '#f97316', fontFamily: 'Geist Mono' }}

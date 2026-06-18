@@ -105,8 +105,11 @@ export default function PropertyList({ properties, selectedIds, onToggle, onSele
                 }}>{p.name}</Typography>
                 <Stack direction="row" alignItems="center" gap={1} sx={{ mt: 0.375, fontSize: 11, color: T.text3 }}>
                   <Box component="span" sx={{ fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em' }}>
-                    #{p.ruPropertyId}
+                    RU #{p.ruPropertyId}
                   </Box>
+                  {p.isActive === false && (
+                    <Box component="span" sx={{ color: '#b45309', fontWeight: 700 }}>· inactif RU</Box>
+                  )}
                   {p.city && <><Box component="span" sx={{ color: T.text4 }}>·</Box>{p.city}</>}
                   {p.guests != null && <><Box component="span" sx={{ color: T.text4 }}>·</Box>👥 {p.guests} voyageurs</>}
                 </Stack>

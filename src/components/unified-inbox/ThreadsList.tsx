@@ -3,8 +3,15 @@ import { Box, Stack, Typography } from '@mui/material';
 import { ModalScrollColumn } from '../common/ModalScrollColumn';
 import { T } from './_tokens';
 import type { Thread, Channel } from '../../types/unifiedInbox.types';
-import type { OtaAdvancedSearch, OtaChannelFilter, OtaFilterCounts } from './otaThreadFilters';
+import type { OtaAdvancedSearch, OtaChannelFilter, OtaFilterCounts, OtaStayQuickFilter, OtaStayQuickFilterCounts } from './otaThreadFilters';
 import OtaInboxFilters from './OtaInboxFilters';
+import WaInboxFilters from './WaInboxFilters';
+import type {
+  WaChannelFilter,
+  WaFilterCounts,
+  WaStayQuickFilter,
+  WaStayQuickFilterCounts,
+} from './waThreadFilters';
 
 export type ThreadsListMode = 'whatsapp' | 'ota';
 
@@ -23,6 +30,9 @@ interface ThreadsListProps {
   otaUnrepliedOnly?: boolean;
   onOtaUnrepliedOnlyChange?: (on: boolean) => void;
   otaFilterCounts?: OtaFilterCounts;
+  otaStayQuickFilter?: OtaStayQuickFilter;
+  onOtaStayQuickFilterChange?: (filter: OtaStayQuickFilter) => void;
+  otaStayQuickCounts?: OtaStayQuickFilterCounts;
   otaAdvancedSearch?: OtaAdvancedSearch;
   onOtaAdvancedSearchChange?: (search: OtaAdvancedSearch) => void;
   onOtaAdvancedSearchSubmit?: () => void;
@@ -50,9 +60,22 @@ interface ThreadsListProps {
   otaFiltersActive?: boolean;
   /** OTA : réinitialiser barre 🔍 + avancé + canaux */
   onOtaResetAll?: () => void;
+  /** WhatsApp guest : recherche serveur active (pas de filtre client à chaque frappe) */
+  waGlobalSearchActive?: boolean;
+  /** WhatsApp guest : debounce en cours */
+  waSearchPending?: boolean;
+  waChannelFilter?: WaChannelFilter;
+  onWaChannelFilterChange?: (filter: WaChannelFilter) => void;
+  waUnreadOnly?: boolean;
+  onWaUnreadOnlyChange?: (on: boolean) => void;
+  waFilterCounts?: WaFilterCounts;
+  waStayQuickFilter?: WaStayQuickFilter;
+  onWaStayQuickFilterChange?: (filter: WaStayQuickFilter) => void;
+  waStayQuickCounts?: WaStayQuickFilterCounts;
+  waListTotalCount?: number;
+  onWaResetAll?: () => void;
+  waFiltersActive?: boolean;
 }
-
-type WaFilter = 'all' | 'unread' | 'guests' | 'staff';
 
 export default function ThreadsList({
   threads,
@@ -69,6 +92,9 @@ export default function ThreadsList({
   otaUnrepliedOnly = false,
   onOtaUnrepliedOnlyChange,
   otaFilterCounts,
+  otaStayQuickFilter = 'none',
+  onOtaStayQuickFilterChange,
+  otaStayQuickCounts,
   otaAdvancedSearch,
   onOtaAdvancedSearchChange,
   onOtaAdvancedSearchSubmit,
@@ -89,30 +115,40 @@ export default function ThreadsList({
   otaKeywordMatchTotal,
   otaFiltersActive,
   onOtaResetAll,
+  waGlobalSearchActive,
+  waSearchPending,
+  waChannelFilter = 'all',
+  onWaChannelFilterChange,
+  waUnreadOnly = false,
+  onWaUnreadOnlyChange,
+  waFilterCounts,
+  waStayQuickFilter = 'none',
+  onWaStayQuickFilterChange,
+  waStayQuickCounts,
+  waListTotalCount,
+  onWaResetAll,
+  waFiltersActive,
 }: ThreadsListProps) {
   const channel = channels[0];
   const title = listTitle || channel?.label || 'Inbox';
   const icon = listIcon || channel?.icon || '💬';
   const accentColor = channel?.color || (mode === 'ota' ? '#FF5A5F' : T.green);
+  const waFiltersEnabled = mode === 'whatsapp' && Boolean(onWaChannelFilterChange);
 
-  const [waFilter, setWaFilter] = useState<WaFilter>('all');
   const [internalAdvancedExpanded, setInternalAdvancedExpanded] = useState(false);
   const showOtaAdvanced = otaAdvancedExpanded ?? internalAdvancedExpanded;
   const setShowOtaAdvanced = onOtaAdvancedExpandedChange ?? setInternalAdvancedExpanded;
 
   const headerCount =
-    mode === 'ota' && otaListTotalCount != null ? otaListTotalCount : threads.length;
-
-  const waUnreadCount = useMemo(() => threads.filter((t) => t.unread > 0).length, [threads]);
+    mode === 'ota' && otaListTotalCount != null
+      ? otaListTotalCount
+      : mode === 'whatsapp' && waListTotalCount != null
+        ? waListTotalCount
+        : threads.length;
 
   const filtered = useMemo(() => {
     let list = threads;
-    if (mode === 'whatsapp') {
-      if (waFilter === 'unread') list = list.filter((t) => t.unread > 0);
-      else if (waFilter === 'guests') list = list.filter((t) => t.reservationNumber && !t.isStaff);
-      else if (waFilter === 'staff') list = list.filter((t) => t.isStaff || !t.reservationNumber);
-    }
-    if (searchTerm.trim() && mode !== 'ota') {
+    if (searchTerm.trim() && mode !== 'ota' && !waGlobalSearchActive && !waFiltersEnabled) {
       const q = searchTerm.toLowerCase();
       list = list.filter(
         (t) =>
@@ -124,7 +160,15 @@ export default function ThreadsList({
       );
     }
     return list;
-  }, [threads, mode, waFilter, searchTerm]);
+  }, [threads, mode, searchTerm, waGlobalSearchActive, waFiltersEnabled]);
+
+  const waCounts: WaFilterCounts = waFilterCounts ?? {
+    all: threads.length,
+    ab: 0,
+    bk: 0,
+    no_resa: 0,
+    unreplied: threads.filter((t) => t.unread > 0).length,
+  };
 
   const otaCounts: OtaFilterCounts = otaFilterCounts ?? {
     all: threads.length,
@@ -160,8 +204,8 @@ export default function ThreadsList({
   return (
     <Box
       sx={{
-        width: { xs: '100%', lg: mode === 'ota' ? 360 : 320 },
-        minWidth: { lg: mode === 'ota' ? 360 : 320 },
+        width: { xs: '100%', lg: 360 },
+        minWidth: { lg: 360 },
         borderRight: { lg: `1px solid ${T.border}` },
         borderBottom: { xs: `1px solid ${T.border}`, lg: 'none' },
         display: 'flex',
@@ -241,7 +285,7 @@ export default function ThreadsList({
             placeholder={
               mode === 'ota'
                 ? 'Résa, listing, voyageur, tél., owner…'
-                : 'Voyageur, téléphone, résa…'
+                : 'Résa, listing, voyageur, tél…'
             }
             sx={{
               flex: 1,
@@ -279,7 +323,32 @@ export default function ThreadsList({
               ✕
             </Box>
           )}
-          {mode !== 'ota' && (
+          {mode === 'whatsapp' && waFiltersActive && onWaResetAll && (
+            <Box
+              component="button"
+              type="button"
+              onClick={onWaResetAll}
+              title="Réinitialiser tous les filtres"
+              sx={{
+                flexShrink: 0,
+                border: `1px solid ${T.border}`,
+                borderRadius: '6px',
+                px: '7px',
+                py: '3px',
+                bgcolor: T.bg2,
+                color: T.text3,
+                fontFamily: 'inherit',
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                lineHeight: 1.2,
+                '&:hover': { bgcolor: T.errorTint, color: T.error, borderColor: T.error },
+              }}
+            >
+              ✕
+            </Box>
+          )}
+          {mode !== 'ota' && mode !== 'whatsapp' && (
             <Box
               sx={{
                 fontFamily: '"Geist Mono", monospace',
@@ -317,6 +386,24 @@ export default function ThreadsList({
           searchResultCount={otaSearchResultCount}
           keywordMatchTotal={otaKeywordMatchTotal}
           activeKeyword={otaActiveKeyword}
+          stayQuickFilter={otaStayQuickFilter}
+          onStayQuickFilterChange={onOtaStayQuickFilterChange}
+          stayQuickCounts={otaStayQuickCounts}
+        />
+      )}
+
+      {waFiltersEnabled && (
+        <WaInboxFilters
+          channelFilter={waChannelFilter}
+          counts={waCounts}
+          onChannelFilterChange={onWaChannelFilterChange ?? (() => {})}
+          unreadOnly={waUnreadOnly}
+          onUnreadOnlyChange={onWaUnreadOnlyChange ?? (() => {})}
+          stayQuickFilter={waStayQuickFilter}
+          onStayQuickFilterChange={onWaStayQuickFilterChange}
+          stayQuickCounts={waStayQuickCounts}
+          onResetAll={onWaResetAll}
+          filtersActive={waFiltersActive}
         />
       )}
 
@@ -359,39 +446,6 @@ export default function ThreadsList({
         </Box>
       )}
 
-      <Box
-        sx={{
-          display: mode === 'ota' ? 'none' : 'flex',
-          gap: '3px',
-          px: '10px',
-          py: 1,
-          borderBottom: `1px solid ${T.border}`,
-          bgcolor: T.bg2,
-          flexShrink: 0,
-          overflowX: 'auto',
-        }}
-      >
-        {mode === 'whatsapp' ? (
-          (
-            [
-              { id: 'all' as const, label: 'Tout', count: threads.length },
-              { id: 'unread' as const, label: 'Non lus', count: waUnreadCount, urgent: true },
-              { id: 'guests' as const, label: 'Guests', count: threads.filter((t) => t.reservationNumber && !t.isStaff).length },
-              { id: 'staff' as const, label: 'Staff', count: threads.filter((t) => t.isStaff || !t.reservationNumber).length },
-            ] as const
-          ).map((tab) => (
-            <SubTab
-              key={tab.id}
-              active={waFilter === tab.id}
-              onClick={() => setWaFilter(tab.id)}
-              label={tab.label}
-              count={tab.count}
-              urgent={tab.urgent}
-            />
-          ))
-        ) : null}
-      </Box>
-
       <ModalScrollColumn
         active
         className="ota-inbox-threads-scroll"
@@ -423,8 +477,10 @@ export default function ThreadsList({
         {filtered.map((thread) => {
           const isActive = activeThreadId === thread.id;
           const hasUnread = thread.unread > 0;
-          const isAirbnb = thread.channel === 'ab';
-          const isBooking = thread.channel === 'bk';
+          const isAirbnb =
+            mode === 'ota' ? thread.channel === 'ab' : thread.bookingPlatform === 'ab';
+          const isBooking =
+            mode === 'ota' ? thread.channel === 'bk' : thread.bookingPlatform === 'bk';
 
           return (
             <Box
@@ -587,6 +643,8 @@ export default function ThreadsList({
                   )}
                   {mode === 'ota' && isAirbnb && <ThreadBadge tone="airbnb">Airbnb</ThreadBadge>}
                   {mode === 'ota' && isBooking && <ThreadBadge tone="booking">Booking</ThreadBadge>}
+                  {mode === 'whatsapp' && isAirbnb && <ThreadBadge tone="airbnb">Airbnb</ThreadBadge>}
+                  {mode === 'whatsapp' && isBooking && <ThreadBadge tone="booking">Booking</ThreadBadge>}
                   {mode === 'ota' && thread.needsReply && (
                     <ThreadBadge tone="unreplied">À répondre</ThreadBadge>
                   )}
@@ -611,64 +669,6 @@ export default function ThreadsList({
           );
         })}
       </ModalScrollColumn>
-    </Box>
-  );
-}
-
-function SubTab({
-  label,
-  active,
-  onClick,
-  count,
-  urgent,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  count?: number;
-  urgent?: boolean;
-}) {
-  return (
-    <Box
-      component="button"
-      onClick={onClick}
-      sx={{
-        px: '9px',
-        py: '5px',
-        borderRadius: '6px',
-        border: 0,
-        cursor: 'pointer',
-        fontSize: 10.5,
-        fontWeight: active ? 700 : 600,
-        whiteSpace: 'nowrap',
-        fontFamily: 'inherit',
-        bgcolor: active ? T.bg1 : 'transparent',
-        color: urgent && !active ? T.error : active ? T.text : T.text3,
-        boxShadow: active ? '0 1px 2px rgba(20,17,10,0.06)' : 'none',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 0.625,
-      }}
-    >
-      {label}
-      {count != null && (
-        <Box
-          component="span"
-          sx={{
-            fontFamily: '"Geist Mono", monospace',
-            fontSize: 9,
-            fontWeight: 700,
-            bgcolor: active && urgent ? T.error : active ? T.bg3 : T.bg3,
-            color: active && urgent ? '#fff' : active ? T.primaryDeep : T.text4,
-            px: 0.625,
-            py: '1px',
-            borderRadius: 999,
-            animation: urgent && !active && count > 0 ? 'sojori-pulse-error 1.8s infinite' : 'none',
-          }}
-        >
-          {count}
-        </Box>
-      )}
     </Box>
   );
 }

@@ -40,6 +40,8 @@ type Props = FulltaskConfigOwnerScope & {
   selectedListingIds?: string[];
   onListingSelectionChange?: (listingIds: string[]) => void;
   listingsLoading?: boolean;
+  /** Page modèle PM : masquer le sélecteur d’annonce (sync bulk uniquement). */
+  hideListingPicker?: boolean;
   /** Orchestration admin tabs: sync cible l’onglet actif plutôt que le filtre principal. */
   syncContextOwnerId?: string | null;
 };
@@ -97,6 +99,7 @@ export default function OwnerConfigScopeBarWithSync({
   selectedListingIds = [],
   onListingSelectionChange,
   listingsLoading = false,
+  hideListingPicker = false,
   syncContextOwnerId,
 }: Props) {
   const syncMode =
@@ -114,7 +117,8 @@ export default function OwnerConfigScopeBarWithSync({
   const syncing = syncingPm || syncingListings;
   /** Admin (template global) + Propriétaire + Sync tous les PMs — SuperAdmin / Admin uniquement. */
   const shouldShowFilter = showOwnerPicker;
-  const showListingSinglePicker = syncMode === 'listings' && listingOptions.length > 0;
+  const showListingSinglePicker =
+    !hideListingPicker && syncMode === 'listings' && listingOptions.length > 0;
   const showListingMultiPicker = syncMode === 'admin-pm';
 
   useEffect(() => {
@@ -239,7 +243,7 @@ export default function OwnerConfigScopeBarWithSync({
     if (selectedListing) {
       return compact ? `Sync ${selectedListing.name}` : `Synchroniser ${selectedListing.name}`;
     }
-    return compact ? 'Sync toutes les annonces' : 'Synchroniser toutes les annonces';
+    return compact ? 'Appliquer à toutes les annonces' : 'Appliquer le modèle à toutes les annonces';
   })();
 
   const pmSyncDisabled =

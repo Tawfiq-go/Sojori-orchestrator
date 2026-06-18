@@ -111,6 +111,12 @@ export interface Conversation {
   status?: string;
   checkin_date?: string;
   checkout_date?: string;
+  /** Source résa (legacy — channelName ou source) — enrichi par srv-fullchatbot */
+  booking_source?: string | null;
+  /** Champs résa srv-reservations (alignés liste Réservations) */
+  reservation_source?: string | null;
+  reservation_channel_name?: string | null;
+  by_rentals?: boolean;
   last_message_time?: string;
   messages_count: number;
   exchanges_count: number;

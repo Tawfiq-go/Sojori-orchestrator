@@ -44,12 +44,14 @@ export interface Owner {
 }
 
 export interface RuProperty {
-  ruPropertyId: string;       // identifiant Airbnb (#4021713)
+  ruPropertyId: string;       // identifiant RU (#4021713)
   name: string;
   city?: string;
   guests?: number;
   alreadyImported: boolean;
   importable: boolean;        // false si non éligible
+  /** false = doublon Airbnb / archive RU — préférer un bien actif avec photos */
+  isActive?: boolean;
   photoUrl?: string;
   photoGradient?: 1 | 2 | 3 | 4 | 5; // fallback gradient
 }
@@ -64,8 +66,8 @@ export interface SojoriCity {
 export type StepKey =
   | 'pull_spec' | 'pull_prices' | 'pull_calendar' | 'pull_external'
   | 'build_payload' | 'reupload_images' | 'create_listing'
-  | 'wait_inventory' | 'apply_inventory' | 'post_import_sync'
-  | 'apply_orchestration';
+  | 'wait_inventory' | 'apply_inventory' | 'push_payment_methods'
+  | 'post_import_sync' | 'apply_orchestration';
 
 export type StepStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -97,8 +99,8 @@ export interface ImportResultItem {
 export const STEPS_ORDER: StepKey[] = [
   'pull_spec', 'pull_prices', 'pull_calendar', 'pull_external',
   'build_payload', 'reupload_images', 'create_listing',
-  'wait_inventory', 'apply_inventory', 'post_import_sync',
-  'apply_orchestration',
+  'wait_inventory', 'apply_inventory', 'push_payment_methods',
+  'post_import_sync', 'apply_orchestration',
 ];
 
 export const STEPS_LABELS: Record<StepKey, { label: string; sub: string }> = {
@@ -111,6 +113,10 @@ export const STEPS_LABELS: Record<StepKey, { label: string; sub: string }> = {
   create_listing:   { label: 'Création du listing',          sub: 'Listing et type de logement principal.' },
   wait_inventory:   { label: 'Préparation du calendrier',    sub: 'Création de l\'inventaire calendrier.' },
   apply_inventory:  { label: 'Mise à jour calendrier',       sub: 'Prix et disponibilités injectés.' },
+  push_payment_methods: {
+    label: 'Moyens de paiement RU',
+    sub: 'Carte de crédit en ligne (requis RU — absent après import Airbnb).',
+  },
   post_import_sync: {
     label: 'Synchronisation réservations RU',
     sub: 'Import des réservations, leads, messages et avis liés au bien (peut prendre 1–2 min).',

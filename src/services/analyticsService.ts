@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { runtimeLog } from '../utils/runtimeLog';
 import type { AnalyticsQuery, AnalyticsSnapshot } from '../types/analytics.types';
-import { buildAnalyticsSnapshotClient, snapshotToCsv } from './analyticsSnapshotBuilder';
+import { buildAnalyticsSnapshotClient, enrichAnalyticsSnapshotWithLandR, snapshotToCsv } from './analyticsSnapshotBuilder';
 
 export type AnalyticsSnapshotRequestOptions = {
   signal?: AbortSignal;
@@ -17,6 +17,7 @@ const buildParams = (query: AnalyticsQuery) => ({
   ...(query.customStartDate ? { customStartDate: query.customStartDate } : {}),
   ...(query.customEndDate ? { customEndDate: query.customEndDate } : {}),
   ...(query.staging !== undefined ? { staging: query.staging } : {}),
+  ...(query.ownerId ? { ownerId: query.ownerId } : {}),
 });
 
 /** Same query in flight → one HTTP call (React Strict Mode double-mount). */
@@ -85,6 +86,17 @@ class AnalyticsService {
     }
   }
 
+  async enrichWithLandR(
+    query: AnalyticsQuery,
+    snapshot: AnalyticsSnapshot,
+    options?: AnalyticsSnapshotRequestOptions,
+  ): Promise<AnalyticsSnapshot> {
+    return enrichAnalyticsSnapshotWithLandR(query, snapshot, {
+      signal: options?.signal,
+      timeoutMs: 25_000,
+    });
+  }
+
   private async downloadPerformanceFile(
     query: AnalyticsQuery,
     format: AnalyticsExportFormat,
@@ -97,7 +109,10 @@ class AnalyticsService {
         'Export PDF serveur indisponible — endpoint /admin/analytics/export non déployé.',
       );
     }
-    const snapshot = await buildAnalyticsSnapshotClient(query);
+    const snapshot = await buildAnalyticsSnapshotClient(query, {
+      includeLandR: true,
+      landRTimeoutMs: 90_000,
+    });
     const blob = new Blob([snapshotToCsv(snapshot)], { type: 'text/csv;charset=utf-8;' });
     const blobUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');

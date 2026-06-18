@@ -7,6 +7,11 @@ import { User, Users } from 'lucide-react';
 import { createOwner, getCities } from '../services/serverApi.task';
 import { useTranslation } from 'react-i18next';
 import { WHATSAPP_AI_TIER_OPTIONS, tierOptionDropdownLabel } from '../../../constants/whatsappAiTier';
+import OwnerCapabilitiesActivationPanel from '../../orchestrationListingV3/OwnerCapabilitiesActivationPanel';
+import {
+  defaultActivationsAllOff,
+  initializeOwnerOrchestrationFromActivations,
+} from '../../orchestrationListingV3/ownerCapabilityActivation';
 import SidePanel from './SidePanel';
 const SOJORI_COLORS = {
   primary: '#E6B022',
@@ -73,6 +78,10 @@ const CreateOwnerSidebar = ({
   } = useTranslation('common');
   const [cities, setCities] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
+  const [serviceActivations, setServiceActivations] = useState(() => defaultActivationsAllOff());
+  useEffect(() => {
+    if (open) setServiceActivations(defaultActivationsAllOff());
+  }, [open]);
   useEffect(() => {
     const fetchCities = async () => {
       if (open) {
@@ -111,6 +120,14 @@ const CreateOwnerSidebar = ({
         role: 'Owner'
       });
       if (response.data) {
+        const ownerId = String(response.data?._id ?? response.data?.id ?? '');
+        if (ownerId) {
+          try {
+            await initializeOwnerOrchestrationFromActivations(ownerId, serviceActivations);
+          } catch (initError) {
+            console.warn('Owner orchestration init failed', initError);
+          }
+        }
         onOwnerCreated(response.data);
         onClose();
       }
@@ -143,7 +160,7 @@ const CreateOwnerSidebar = ({
       handleBlur,
       setFieldValue,
       submitForm
-    }) => <SidePanel open={open} onClose={onClose} title={t('Create Owner')} width={600} headerIcon={<Users size={24} color="white" strokeWidth={2.2} />} footer={<>
+    }) => <SidePanel open={open} onClose={onClose} title={t('Create Owner')} width={720} headerIcon={<Users size={24} color="white" strokeWidth={2.2} />} footer={<>
                             <ResetButton onClick={onClose} disabled={isSubmitting} sx={{
         flex: 1,
         fontSize: 14
@@ -168,6 +185,15 @@ const CreateOwnerSidebar = ({
                     <Box sx={{
         p: 3
       }}>
+                        <OwnerCapabilitiesActivationPanel
+                          ownerKey=""
+                          rows={[]}
+                          orchestrationDoc={null}
+                          compact
+                          value={serviceActivations}
+                          onChange={setServiceActivations}
+                          disabled={isSubmitting}
+                        />
                         <Form id="owner-form" className="space-y-4">
                                     {errors.submit ? <Alert severity="error" sx={{ mb: 2 }}>{errors.submit}</Alert> : null}
                                     <div style={{

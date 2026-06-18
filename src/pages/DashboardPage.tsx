@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
@@ -38,14 +38,27 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { dashboardPeriods } from '../data/mockDashboard';
-import { EMPTY_DASHBOARD_SNAPSHOT, ensureDashboardSnapshot } from '../services/dashboardV1Service';
+import { ListingCheckboxFilter } from '../components/dashboard/ListingCheckboxFilter';
+import {
+  EMPTY_DASHBOARD_SNAPSHOT,
+  applyDashboardExtrasProgressively,
+  ensureDashboardSnapshot,
+  fetchDashboardListingDirectory,
+  fetchDashboardV1Charts,
+  fetchDashboardV1Fast,
+  finalizeDashboardSnapshot,
+  formatDashboardRating,
+  mergeDashboardSnapshots,
+} from '../services/dashboardV1Service';
 import { dashboardService } from '../services/dashboardService';
 import {
-  readDashboardSnapshotCache,
+  readDashboardSnapshotCacheEntry,
   writeDashboardSnapshotCache,
 } from '../utils/dashboardSnapshotCache';
+import { AdminOwnerFilterProvider, useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import OwnerFilterField from '../components/OwnerFilterBar/OwnerFilterField';
 import { useAuth } from '../hooks/useAuth';
-import { dashboardDebugEnabled, logDashboard } from '../utils/dashboardDebug';
+import { dashboardDebugEnabled, logDashboard, logDashboardApiDetail, logDashboardKpisSummary } from '../utils/dashboardDebug';
 import { getToken } from '../utils/authUtils';
 import type {
   DashboardPeriod,
@@ -58,14 +71,29 @@ const chartColors = ['#e6b022', '#8b5cf6', '#10b981', '#06b6d4'];
 
 const currency = new Intl.NumberFormat('fr-FR', {
   style: 'currency',
-  currency: 'EUR',
+  currency: 'MAD',
   maximumFractionDigits: 0,
 });
 
+const SCROLL_LIST_MAX_HEIGHT = 320;
+const VISIBLE_LIST_HINT = '4 visibles · scroll';
+
 export function DashboardPage() {
+  return (
+    <AdminOwnerFilterProvider>
+      <DashboardPageContent />
+    </AdminOwnerFilterProvider>
+  );
+}
+
+function DashboardPageContent() {
   const { isAuthenticated, loading: authLoading, user, token, error: authError } = useAuth();
+  const { showOwnerFilter, requestOwnerId } = useAdminOwnerFilter();
+  const ownerScopeBlocked = showOwnerFilter && !requestOwnerId;
   const [period, setPeriod] = useState<DashboardPeriod>('Mois');
   const [properties, setProperties] = useState<DashboardPropertyOption[]>([]);
+  const [listingFilterOptions, setListingFilterOptions] = useState<DashboardPropertyOption[]>([]);
+  const [listingsLoading, setListingsLoading] = useState(false);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>(EMPTY_DASHBOARD_SNAPSHOT);
   /** false tant que l’agrégation multi-API n’est pas terminée (évite flash KPI à 0). */
@@ -80,6 +108,17 @@ export function DashboardPage() {
       dashboardDebugEnabled,
     });
   }, []);
+
+  useEffect(() => {
+    setSelectedPropertyIds([]);
+  }, [requestOwnerId]);
+
+  const listingOptions = useMemo(() => {
+    if (listingFilterOptions.length > 0) {
+      return listingFilterOptions;
+    }
+    return properties.filter((property) => property.isActive !== false);
+  }, [listingFilterOptions, properties]);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -98,7 +137,21 @@ export function DashboardPage() {
         return;
       }
 
-      const cached = readDashboardSnapshotCache(period, selectedPropertyIds);
+      if (ownerScopeBlocked) {
+        if (!cancelled) {
+          setSnapshot(EMPTY_DASHBOARD_SNAPSHOT);
+          setProperties([]);
+          setDashboardReady(true);
+          setError(null);
+        }
+        return;
+      }
+
+      const skipSessionCache = refreshKey > 0;
+      const cacheEntry = skipSessionCache
+        ? null
+        : readDashboardSnapshotCacheEntry(period, selectedPropertyIds, requestOwnerId);
+      const cached = cacheEntry?.snapshot ?? null;
       if (cached && !cancelled) {
         setSnapshot(ensureDashboardSnapshot(cached));
         setProperties(cached.properties);
@@ -106,10 +159,17 @@ export function DashboardPage() {
         setError(null);
         logDashboard('DashboardPage — cache session affiché', {
           properties: cached.properties.length,
+          averageRating: cached.kpis.averageRating.value,
+          occupancyRate: cached.kpis.occupancyRate.value,
+          cacheAgeMs: cacheEntry?.ageMs,
+          listingIdsHint: cached.listingIdsHint?.length ?? 0,
         });
       } else if (!cancelled) {
         setDashboardReady(false);
       }
+
+      const CACHE_FRESH_MS = 180_000;
+      const cacheIsFresh = cacheEntry != null && cacheEntry.ageMs < CACHE_FRESH_MS;
 
       logDashboard('DashboardPage load', {
         authLoading,
@@ -119,16 +179,138 @@ export function DashboardPage() {
         userEmail: user?.email,
         authError,
         hadCache: !!cached,
+        cacheAgeMs: cacheEntry?.ageMs,
+        cacheIsFresh,
       });
 
+      if (cacheIsFresh && refreshKey === 0) {
+        logDashboard('DashboardPage — cache frais (<3 min), skip refetch réseau', {
+          cacheAgeMs: cacheEntry.ageMs,
+        });
+        void fetchDashboardListingDirectory(requestOwnerId)
+          .then((listings) => {
+            if (!cancelled) {
+              setListingFilterOptions(listings);
+            }
+          })
+          .catch(() => {
+            if (!cancelled && cached?.properties?.length) {
+              setListingFilterOptions(cached.properties);
+            }
+          });
+        return;
+      }
+
       try {
-        const loaded = ensureDashboardSnapshot(
-          await dashboardService.getSnapshot({
-            period,
-            listingIds: selectedPropertyIds,
-            signal: abort.signal,
-          }),
-        );
+        let loaded = EMPTY_DASHBOARD_SNAPSHOT;
+        let listingIdsHint = cached?.listingIdsHint?.length ? [...cached.listingIdsHint] : [];
+
+        setListingsLoading(true);
+        const fastQueryBase = {
+          period,
+          listingIds: selectedPropertyIds,
+          ownerId: requestOwnerId,
+          signal: abort.signal,
+        };
+
+        const directoryPromise = fetchDashboardListingDirectory(requestOwnerId, abort.signal)
+          .then((dirListings) => {
+            if (!cancelled) {
+              setListingFilterOptions(dirListings);
+            }
+            return dirListings;
+          })
+          .catch((directoryError) => {
+            if (!cancelled) {
+              setListingFilterOptions([]);
+            }
+            if ((directoryError as { code?: string })?.code !== 'ERR_CANCELED') {
+              logDashboard('DashboardPage — directory échoué', {
+                message: (directoryError as Error)?.message,
+              });
+            }
+            return [] as Awaited<ReturnType<typeof fetchDashboardListingDirectory>>;
+          })
+          .finally(() => {
+            if (!cancelled) {
+              setListingsLoading(false);
+            }
+          });
+
+        try {
+          if (listingIdsHint.length > 0) {
+            const [dirListings, fastResult] = await Promise.all([
+              directoryPromise,
+              fetchDashboardV1Fast({ ...fastQueryBase, listingIdsHint }),
+            ]);
+            if (cancelled) return;
+            loaded = fastResult;
+            logDashboard('DashboardPage — directory + fast en parallèle', {
+              count: dirListings.length,
+              listingIdsHintCount: listingIdsHint.length,
+            });
+          } else {
+            const dirListings = await directoryPromise;
+            if (cancelled) return;
+            listingIdsHint = dirListings.map((property) => property.id).slice(0, 50);
+            logDashboard('DashboardPage — directory pour hints + filtre', {
+              count: dirListings.length,
+              listingIdsHintCount: listingIdsHint.length,
+            });
+            loaded = await fetchDashboardV1Fast({ ...fastQueryBase, listingIdsHint });
+            if (cancelled) return;
+          }
+
+          setSnapshot(loaded);
+          setProperties(loaded.properties);
+          setDashboardReady(true);
+          setError(null);
+          writeDashboardSnapshotCache(period, selectedPropertyIds, loaded, requestOwnerId, false);
+
+          logDashboard('DashboardPage — KPIs affichés (mode fast), chargement graphiques…');
+
+          const fastQuery = { ...fastQueryBase, listingIdsHint };
+
+          void fetchDashboardV1Charts(fastQuery)
+            .then((charts) => {
+              if (cancelled) return;
+              return applyDashboardExtrasProgressively(loaded, charts, (merged) => {
+                if (!cancelled) {
+                  setSnapshot(merged);
+                }
+              });
+            })
+            .then((merged) => {
+              if (cancelled || !merged) return;
+              loaded = merged;
+              setSnapshot(merged);
+              writeDashboardSnapshotCache(period, selectedPropertyIds, merged, requestOwnerId);
+              logDashboard('DashboardPage — graphiques fusionnés', {
+                occupancyByProperty: merged.occupancyByProperty.length,
+                sourceDistribution: merged.sourceDistribution.length,
+              });
+            })
+            .catch((chartsError) => {
+              if (cancelled || (chartsError as { code?: string })?.code === 'ERR_CANCELED') return;
+              logDashboard('DashboardPage — graphiques indisponibles, conservation fast', {
+                message: (chartsError as Error)?.message,
+              });
+            });
+        } catch (v1Error) {
+          if (cancelled || (v1Error as { code?: string })?.code === 'ERR_CANCELED') {
+            return;
+          }
+          logDashboard('DashboardPage — fallback dashboardService (core v1 indisponible)', {
+            message: (v1Error as Error)?.message,
+          });
+          loaded = ensureDashboardSnapshot(
+            await dashboardService.getSnapshot({
+              period,
+              listingIds: selectedPropertyIds,
+              signal: abort.signal,
+            }),
+          );
+        }
 
         if (cancelled) {
           return;
@@ -138,13 +320,25 @@ export function DashboardPage() {
         setProperties(loaded.properties);
         setError(null);
         setDashboardReady(true);
-        writeDashboardSnapshotCache(period, selectedPropertyIds, loaded);
-        logDashboard('DashboardPage données prêtes (agrégation multi-API)', {
+        writeDashboardSnapshotCache(period, selectedPropertyIds, loaded, requestOwnerId);
+        logDashboard('DashboardPage données prêtes (snapshot full)', {
           properties: loaded.properties.length,
           occupancyByProperty: loaded.occupancyByProperty.length,
           sourceDistribution: loaded.sourceDistribution.length,
           monthlyRevenue: loaded.kpis.monthlyRevenue.value,
+          occupancyRate: loaded.kpis.occupancyRate.value,
+          activeProperties: loaded.kpis.activeProperties.value,
+          averageRating: loaded.kpis.averageRating.value,
+          revpar: loaded.kpis.revpar.value,
+          recentReviews: loaded.recentReviews.length,
         });
+        logDashboardApiDetail('merged', {
+          url: 'snapshot/full',
+          kpis: loaded.kpis as unknown as Record<string, unknown>,
+          recentReviewsCount: loaded.recentReviews.length,
+          recentReviewsPreview: loaded.recentReviews.slice(0, 3),
+        });
+        logDashboardKpisSummary(loaded.kpis as unknown as Record<string, { value?: number }>);
       } catch (fetchError) {
         if (cancelled || (fetchError as { code?: string })?.code === 'ERR_CANCELED') {
           return;
@@ -168,7 +362,7 @@ export function DashboardPage() {
       cancelled = true;
       abort.abort();
     };
-  }, [period, refreshKey, selectedPropertyIds, authLoading, isAuthenticated]);
+  }, [period, refreshKey, selectedPropertyIds, authLoading, isAuthenticated, requestOwnerId, ownerScopeBlocked]);
 
   const topLiveProperties = useMemo(
     () =>
@@ -178,19 +372,50 @@ export function DashboardPage() {
     [snapshot.occupancyByProperty]
   );
 
-  const toggleProperty = (propertyId: string) => {
-    setSelectedPropertyIds((prev) =>
-      prev.includes(propertyId)
-        ? prev.filter((value) => value !== propertyId)
-        : [...prev, propertyId]
+  const occupancyPanelDesc = useMemo(() => {
+    const scope =
+      selectedPropertyIds.length > 0
+        ? `${selectedPropertyIds.length} listing(s) actif(s) sélectionné(s)`
+        : 'listings actifs';
+    const detail =
+      snapshot.occupancyByProperty.length <= 1 && snapshot.properties.length > 1
+        ? ' · détail par listing en cours (directory timeout)'
+        : '';
+    return `Nuits réservées ÷ nuits disponibles · ${scope} · période du filtre · ${VISIBLE_LIST_HINT}${detail}`;
+  }, [
+    snapshot.kpis.occupancyRate.value,
+    snapshot.occupancyByProperty.length,
+    snapshot.properties.length,
+    selectedPropertyIds.length,
+  ]);
+
+  const displayedOccupancyByProperty = useMemo(() => {
+    if (selectedPropertyIds.length === 0) {
+      return snapshot.occupancyByProperty;
+    }
+    const selectedNames = new Set(
+      listingOptions.filter((property) => selectedPropertyIds.includes(property.id)).map((property) => property.name),
     );
+    const filtered = snapshot.occupancyByProperty.filter((row) => selectedNames.has(row.property));
+    return filtered.length > 0 ? filtered : snapshot.occupancyByProperty;
+  }, [snapshot.occupancyByProperty, selectedPropertyIds, listingOptions]);
+
+  const applyListingFilter = (ids: string[]) => {
+    setSelectedPropertyIds(ids);
   };
+
+  const ratingDisplay = formatDashboardRating(snapshot.kpis.averageRating.value);
 
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Dashboard']}>
       <PageHeader
-        title="Dashboard principal"
-        count={dashboardReady ? period : 'Chargement…'}
+        title={
+          <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            <span>Dashboard principal</span>
+            <OwnerFilterField requireSelection sx={{ minWidth: 240, maxWidth: 320 }} />
+          </Box>
+        }
+        count={ownerScopeBlocked ? '—' : dashboardReady ? period : 'Chargement…'}
       >
         <Button sx={btnGhostSx} onClick={() => setRefreshKey((value) => value + 1)}>
           Actualiser
@@ -199,6 +424,12 @@ export function DashboardPage() {
           Generer report
         </Button>
       </PageHeader>
+
+      {ownerScopeBlocked ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Sélectionnez un propriétaire pour afficher les indicateurs de son portefeuille.
+        </Alert>
+      ) : null}
 
       {error ? (
         <Alert severity={!getToken() ? 'error' : 'warning'} sx={{ mb: 2 }}>
@@ -219,7 +450,7 @@ export function DashboardPage() {
         </Alert>
       ) : null}
 
-      {!dashboardReady ? (
+      {!dashboardReady && !ownerScopeBlocked ? (
         <Box
           sx={{
             minHeight: 'min(70vh, 640px)',
@@ -235,7 +466,7 @@ export function DashboardPage() {
             Chargement des indicateurs et graphiques…
           </Typography>
         </Box>
-      ) : (
+      ) : ownerScopeBlocked ? null : (
         <>
       <FilterBar>
         {dashboardPeriods.map((item) => (
@@ -246,22 +477,19 @@ export function DashboardPage() {
             onClick={() => setPeriod(item)}
           />
         ))}
+        <ListingCheckboxFilter
+          listings={listingOptions}
+          selectedIds={selectedPropertyIds}
+          onApply={applyListingFilter}
+          loading={listingsLoading}
+          disabled={listingOptions.length === 0}
+        />
+        {selectedPropertyIds.length > 0 ? (
+          <Button size="small" sx={btnGhostSx} onClick={() => setSelectedPropertyIds([])}>
+            Réinitialiser listings
+          </Button>
+        ) : null}
       </FilterBar>
-
-      {properties.length > 0 ? (
-        <FilterBar>
-          {properties
-            .filter((property) => property.isActive !== false)
-            .map((property) => (
-              <FilterChip
-                key={property.id}
-                label={property.label}
-                active={selectedPropertyIds.includes(property.id)}
-                onClick={() => toggleProperty(property.id)}
-              />
-            ))}
-        </FilterBar>
-      ) : null}
 
       <StatsRow>
         <StatCard
@@ -292,7 +520,7 @@ export function DashboardPage() {
           icon="🛏️"
           iconBg="rgba(139,92,246,0.12)"
           iconColor={t.ai}
-          value={`${snapshot.kpis.adr.value} EUR`}
+          value={`${snapshot.kpis.adr.value} MAD`}
           label="ADR"
           trend={snapshot.kpis.adr.trend}
         />
@@ -311,9 +539,9 @@ export function DashboardPage() {
           icon="⭐"
           iconBg="rgba(230,176,34,0.12)"
           iconColor={t.primaryDeep}
-          value={snapshot.kpis.averageRating.value.toString()}
+          value={ratingDisplay.display}
           label="Rating moyen"
-          trend={snapshot.kpis.averageRating.trend}
+          trend={ratingDisplay.trend}
         />
         <StatCard
           icon="👥"
@@ -327,7 +555,7 @@ export function DashboardPage() {
           icon="📊"
           iconBg="rgba(239,68,68,0.12)"
           iconColor={t.error}
-          value={`${snapshot.kpis.revpar.value} EUR`}
+          value={`${snapshot.kpis.revpar.value} MAD`}
           label="RevPAR"
           trend={snapshot.kpis.revpar.trend}
         />
@@ -342,18 +570,47 @@ export function DashboardPage() {
           '& > *': { minWidth: 0 },
         }}
       >
-        <Panel title="Revenus par jour / semaine / mois" desc="Timeline réservations · période sélectionnée">
+        <Panel title="Revenus par jour / semaine / mois" desc="Timeline · revenu (MAD) à gauche · réservations à droite">
           <StableChart height={320}>
             {({ width, height }: { width: number; height: number }) => (
               <LineChart width={width} height={height} data={snapshot.revenueChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="date" />
-                <YAxis yAxisId="revenue" />
-                <YAxis yAxisId="bookings" orientation="right" />
-                <Tooltip />
+                <YAxis
+                  yAxisId="revenue"
+                  name="Revenu (MAD)"
+                  tickFormatter={(value) => (value >= 1000 ? `${Math.round(value / 1000)}k` : String(value))}
+                />
+                <YAxis
+                  yAxisId="bookings"
+                  orientation="right"
+                  name="Réservations"
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) =>
+                    name === 'Revenu (MAD)' ? currency.format(value) : value
+                  }
+                />
                 <Legend />
-                <Line yAxisId="revenue" type="monotone" dataKey="revenue" stroke="#e6b022" strokeWidth={3} />
-                <Line yAxisId="bookings" type="monotone" dataKey="bookings" stroke="#8b5cf6" strokeWidth={2} />
+                <Line
+                  yAxisId="revenue"
+                  type="monotone"
+                  dataKey="revenue"
+                  name="Revenu (MAD)"
+                  stroke="#e6b022"
+                  strokeWidth={3}
+                  dot={false}
+                />
+                <Line
+                  yAxisId="bookings"
+                  type="monotone"
+                  dataKey="bookings"
+                  name="Réservations"
+                  stroke="#8b5cf6"
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             )}
           </StableChart>
@@ -397,32 +654,40 @@ export function DashboardPage() {
           '& > *': { minWidth: 0 },
         }}
       >
-        <Panel title="Taux d’occupation par property" desc="Bar chart par actif">
+        <Panel
+          title="Taux d’occupation par property"
+          desc={occupancyPanelDesc}
+          headRight={
+            snapshot.kpis.occupancyRate.value > 0 ? (
+              <Badge variant="success">{snapshot.kpis.occupancyRate.value}% global</Badge>
+            ) : null
+          }
+        >
           <StableChart height={320}>
             {({ width, height }: { width: number; height: number }) => (
-              <BarChart width={width} height={height} data={snapshot.occupancyByProperty}>
+              <BarChart width={width} height={height} data={displayedOccupancyByProperty}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="property" hide />
-                <YAxis />
-                <Tooltip />
+                <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
+                <Tooltip formatter={(value: number) => `${value}%`} />
                 <Bar dataKey="occupancy" radius={[8, 8, 0, 0]} fill="#10b981" />
               </BarChart>
             )}
           </StableChart>
-          <Stack spacing={1}>
-            {snapshot.occupancyByProperty.map((property) => (
+          <ScrollableList>
+            {displayedOccupancyByProperty.map((property, index) => (
               <Stack
-                key={property.property}
+                key={property.listingId ?? `${property.property}-${index}`}
                 direction="row"
                 sx={{ justifyContent: 'space-between' }}
               >
                 <Typography variant="body2">{property.property}</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {property.occupancy}%{property.adr ? ` · ADR ${property.adr} EUR` : ''}
+                  {property.occupancy}%{property.adr ? ` · ADR ${property.adr} MAD` : ''}
                 </Typography>
               </Stack>
             ))}
-          </Stack>
+          </ScrollableList>
         </Panel>
 
         <Panel title="Check-ins / Check-outs" desc="Vue jour par jour">
@@ -450,8 +715,8 @@ export function DashboardPage() {
           mb: 2,
         }}
       >
-        <Panel title="Prochains check-ins" desc="5 prochains">
-          <Stack spacing={1.25}>
+        <Panel title="Prochains check-ins" desc={`5 prochains · ${VISIBLE_LIST_HINT}`}>
+          <ScrollableList>
             {snapshot.upcomingCheckIns.map((item) => (
               <MiniRow
                 key={item.id}
@@ -460,11 +725,11 @@ export function DashboardPage() {
                 badge={item.source}
               />
             ))}
-          </Stack>
+          </ScrollableList>
         </Panel>
 
-        <Panel title="Prochains check-outs" desc="5 prochains">
-          <Stack spacing={1.25}>
+        <Panel title="Prochains check-outs" desc={`5 prochains · ${VISIBLE_LIST_HINT}`}>
+          <ScrollableList>
             {snapshot.upcomingCheckOuts.map((item) => (
               <MiniRow
                 key={item.id}
@@ -473,11 +738,11 @@ export function DashboardPage() {
                 badge={item.source}
               />
             ))}
-          </Stack>
+          </ScrollableList>
         </Panel>
 
-        <Panel title="Reservations recentes" desc="Derniers mouvements">
-          <Stack spacing={1.25}>
+        <Panel title="Reservations recentes" desc={`Derniers mouvements · ${VISIBLE_LIST_HINT}`}>
+          <ScrollableList>
             {snapshot.recentBookings.map((item) => (
               <MiniRow
                 key={`${item.type || 'booking'}-${item.id}`}
@@ -486,7 +751,7 @@ export function DashboardPage() {
                 badge={item.source}
               />
             ))}
-          </Stack>
+          </ScrollableList>
         </Panel>
       </Box>
 
@@ -497,8 +762,8 @@ export function DashboardPage() {
           gap: 2,
         }}
       >
-        <Panel title="Quick actions" desc="Raccourcis de pilotage">
-          <Stack spacing={0.75}>
+        <Panel title="Quick actions" desc={`Raccourcis de pilotage · ${VISIBLE_LIST_HINT}`}>
+          <ScrollableList spacing={0.75}>
             {['📤 Exporter les KPIs', '📅 Voir reservations', '🧩 Ouvrir les taches', '💬 Aller aux messages'].map((action) => (
               <Button
                 key={action}
@@ -512,11 +777,11 @@ export function DashboardPage() {
                 {action}
               </Button>
             ))}
-          </Stack>
+          </ScrollableList>
         </Panel>
 
-        <Panel title="Taches urgentes" desc="5 prioritaires">
-          <Stack spacing={1.25}>
+        <Panel title="Taches urgentes" desc={`5 prioritaires · ${VISIBLE_LIST_HINT}`}>
+          <ScrollableList>
             {snapshot.urgentTasks.map((task) => (
               <MiniRow
                 key={task.id}
@@ -525,11 +790,11 @@ export function DashboardPage() {
                 badge={task.priority}
               />
             ))}
-          </Stack>
+          </ScrollableList>
         </Panel>
 
-        <Panel title="Messages non lus" desc="Guests + OTA + staff">
-          <Stack spacing={1.25}>
+        <Panel title="Messages non lus" desc={`Guests + OTA + staff · ${VISIBLE_LIST_HINT}`}>
+          <ScrollableList>
             {snapshot.unreadMessages.map((message) => (
               <MiniRow
                 key={message.id}
@@ -538,11 +803,11 @@ export function DashboardPage() {
                 badge={message.channel}
               />
             ))}
-          </Stack>
+          </ScrollableList>
         </Panel>
 
-        <Panel title="Avis recents & alertes" desc="Reviews + notifications">
-          <Stack spacing={1.5}>
+        <Panel title="Avis recents & alertes" desc={`Reviews + notifications · ${VISIBLE_LIST_HINT}`}>
+          <ScrollableList spacing={1.5}>
             {snapshot.recentReviews.map((review) => (
               <Box key={review.id}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
@@ -554,7 +819,7 @@ export function DashboardPage() {
                 </Typography>
               </Box>
             ))}
-            <Divider />
+            {snapshot.recentReviews.length > 0 && snapshot.alerts.length > 0 ? <Divider /> : null}
             {snapshot.alerts.map((alert) => (
               <Box key={alert.id}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
@@ -568,7 +833,7 @@ export function DashboardPage() {
                 </Typography>
               </Box>
             ))}
-          </Stack>
+          </ScrollableList>
         </Panel>
       </Box>
 
@@ -578,9 +843,9 @@ export function DashboardPage() {
             <Stack spacing={1.25}>
               {topLiveProperties.map((item, index) => (
                 <MiniRow
-                  key={item.property}
+                  key={item.listingId ?? `${item.property}-${index}`}
                   title={`${index + 1}. ${item.property}`}
-                  subtitle={`OCC ${item.occupancy}%${item.adr ? ` · ADR ${item.adr} EUR` : ''}`}
+                  subtitle={`OCC ${item.occupancy}%${item.adr ? ` · ADR ${item.adr} MAD` : ''}`}
                   badge="Live"
                 />
               ))}
@@ -591,6 +856,31 @@ export function DashboardPage() {
         </>
       )}
     </DashboardWrapper>
+  );
+}
+
+function ScrollableList({
+  children,
+  spacing = 1.25,
+}: {
+  children: ReactNode;
+  spacing?: number;
+}) {
+  return (
+    <Box
+      sx={{
+        maxHeight: SCROLL_LIST_MAX_HEIGHT,
+        overflowY: 'auto',
+        pr: 0.5,
+        '&::-webkit-scrollbar': { width: 6 },
+        '&::-webkit-scrollbar-thumb': {
+          bgcolor: 'rgba(26,20,8,0.15)',
+          borderRadius: 3,
+        },
+      }}
+    >
+      <Stack spacing={spacing}>{children}</Stack>
+    </Box>
   );
 }
 
