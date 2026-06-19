@@ -93,6 +93,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
       { id: 'listings/mapping', label: 'Mapping RU', iconType: 'link', iconColor: '#6D9EEB', roles: ADMIN_ROLES },
       { id: 'listings/orchestration-model', label: 'Modèle orchestration', iconType: 'home', iconColor: '#D4A574' },
       { id: 'chatbot/listing', label: 'Listing chatbot', iconType: 'home', iconColor: '#D4A574' },
+      {
+        id: 'admin/ChannelManager/channel-manager',
+        label: 'Channel Manager',
+        iconType: 'link',
+        iconColor: '#6D9EEB',
+        description: 'RU · connexion Airbnb & OTA',
+      },
     ],
   },
   {
@@ -280,7 +287,7 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Réservations: false,
   Task: false,
   Orchestration: false,
-  Annonces: true,
+  Annonces: false,
   Inbox: false,
   Équipe: true,
   Finances: true,

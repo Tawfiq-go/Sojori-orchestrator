@@ -1,304 +1,196 @@
 // ════════════════════════════════════════════════════════════════════
-// DetailTabsDistribution.jsx — Channel Mgmt · Direct Booking · Rooms · License
+// DetailTabsDistribution.jsx — Distribution · Rooms · License
 // ════════════════════════════════════════════════════════════════════
-import React from 'react';
-import { Box, Stack, Typography, TextField, Button, IconButton, Avatar } from '@mui/material';
-import { T, sxInput, Field, Card, ToggleRow, Counter, ChipsRow, NumberInput, SelectField, GlobalBanner, RuFormLegend } from './_shared';
+import React, { useState } from 'react';
+import { Box, TextField, Typography, Stack, Button } from '@mui/material';
+import { sxInput, Field, Card, ToggleRow, ChipsRow, NumberInput, SelectField, RuFormLegend, T } from './_shared';
+import {
+  OtaChannelsSnapshotTable,
+  RuExternalListingDisplay,
+} from '../utils/ruImportFieldHelpers';
 import { RoomsTab } from './RoomsTabComposition';
 export { RoomsTab };
 
-/* ════════════════════ Channel Management ════════════════════ */
-const OTA_PROVIDERS = [
-  { id: 'airbnb',  name: 'Airbnb',     color: '#FF5A5F', logo: 'A' },
-  { id: 'booking', name: 'Booking.com', color: '#003580', logo: 'B' },
-  { id: 'vrbo',    name: 'Vrbo',       color: '#0E64A4', logo: 'V' },
-  { id: 'expedia', name: 'Expedia',    color: '#FECC00', logo: 'E' },
+const DIRECT_PAYMENT_METHODS = [
+  { id: 'card', label: '💳 Carte bancaire' },
+  { id: 'wire', label: '🏦 Virement' },
+  { id: 'cash', label: "💵 Espèces à l'arrivée" },
 ];
-const SYNC_STATUS_META = {
-  ok:      { label: 'Synced', color: T.success, dot: T.success },
-  pending: { label: 'En cours', color: T.warning, dot: T.warning },
-  error:   { label: 'Erreur', color: T.error, dot: T.error },
-  off:     { label: 'Désactivé', color: T.text3, dot: T.text4 },
-};
 
-// Rental United OTA Distribution Panel Component
-const RentalUnitedOtaPanel = ({ ruPropertyKey, otaChannelsSnapshot, onVerifyClick, verifyLoading }) => {
-  const channels = otaChannelsSnapshot?.channels || [];
-  const updatedAt = otaChannelsSnapshot?.updatedAt;
-
-  const formatDate = (date) => {
-    if (!date) return '';
-    return new Date(date).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'online': return T.success;
-      case 'pending': return T.warning;
-      case 'error': return T.error;
-      default: return T.text3;
-    }
-  };
-
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'online': return 'En ligne';
-      case 'pending': return 'En attente';
-      case 'error': return 'Erreur';
-      default: return 'Non connecté';
-    }
-  };
-
-  const getCmStatusColor = (status) => {
-    const s = String(status ?? '').trim().toLowerCase();
-    if (s === 'ok') return T.success;
-    if (s === 'error') return T.error;
-    if (s === 'inactive') return T.text3;
-    if (s) return T.warning;
-    return T.text3;
-  };
-
-  const sortedChannels = [...channels].sort((a, b) => {
-    const order = { online: 0, pending: 1, error: 2, not_connected: 3 };
-    return (order[a.status] ?? 9) - (order[b.status] ?? 9);
-  });
-
+function DistributionSubTabs({ active, onChange }) {
+  const tabs = [
+    { id: 'ota', label: 'OTA' },
+    { id: 'direct', label: 'Direct booking' },
+  ];
   return (
-    <Card
-      title={
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <span>📡 Distribution Rental United</span>
-          {ruPropertyKey && (
-            <Box sx={{
-              display: 'inline-flex', alignItems: 'center', gap: 0.5,
-              px: 1, py: 0.25, borderRadius: '99px', ml: 1,
-              bgcolor: `${T.accent}15`, color: T.accent,
-              fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em',
-            }}>
-              R
-            </Box>
-          )}
-        </Stack>
-      }
-      meta={ruPropertyKey ? `Clé RU: ${ruPropertyKey}` : 'Connecter via Rental United'}>
-
-      {ruPropertyKey ? (
-        <>
-          <Typography variant="body2" sx={{ color: T.text3, fontSize: 12, mb: 1.5 }}>
-            Rental United synchronise ce listing avec les plateformes OTA ci-dessous.
-            {updatedAt && ` Dernière vérification: ${formatDate(updatedAt)}`}
-          </Typography>
-
+    <Stack direction="row" gap={0.75} sx={{ mb: 2, flexWrap: 'wrap' }} useFlexGap>
+      {tabs.map((tab) => {
+        const selected = active === tab.id;
+        return (
           <Button
-            variant="contained"
+            key={tab.id}
             size="small"
-            disabled={verifyLoading}
-            onClick={onVerifyClick}
+            onClick={() => onChange(tab.id)}
             sx={{
               textTransform: 'none',
               fontWeight: 700,
-              fontSize: 12,
-              color: '#fff',
-              background: `linear-gradient(135deg, #b8851a 0%, #8f6814 100%)`,
-              boxShadow: '0 2px 8px rgba(184, 133, 26, 0.3)',
-              '&:hover': {
-                background: `linear-gradient(135deg, #c99520 0%, #a07518 100%)`,
-                boxShadow: '0 3px 10px rgba(184, 133, 26, 0.4)',
-              },
-              '&.Mui-disabled': { opacity: 0.72, color: '#fff' },
-              mb: 2,
-            }}>
-            {verifyLoading ? '⏳ Vérification...' : '🔄 Vérifier les canaux RU'}
-          </Button>
-
-          {sortedChannels.length > 0 && (
-            <Box sx={{
-              border: `1px solid ${T.border}`,
+              fontSize: 12.5,
               borderRadius: 1,
-              overflow: 'hidden',
-              bgcolor: T.bg1
-            }}>
-              <Box sx={{
-                display: 'grid',
-                gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
-                gap: 1,
-                p: 1,
-                bgcolor: T.bg2,
-                borderBottom: `1px solid ${T.border}`,
-                fontSize: 11,
-                fontWeight: 700,
-                color: T.text2,
-              }}>
-                <div>OTA</div>
-                <div>Statut</div>
-                <div>Contenu</div>
-                <div>Prix/Dispo</div>
-                <div>Markup</div>
-              </Box>
-              {sortedChannels.map((ch) => (
-                <Box
-                  key={ch.channelId}
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
-                    gap: 1,
-                    p: 1,
-                    borderBottom: `1px solid ${T.border}`,
-                    fontSize: 12,
-                    '&:last-child': { borderBottom: 'none' },
-                    '&:hover': { bgcolor: T.bg2 },
-                  }}>
-                  <div style={{ fontWeight: 600 }}>{ch.channelName}</div>
-                  <div style={{ color: getStatusColor(ch.status), fontWeight: 600 }}>
-                    {getStatusLabel(ch.status)}
-                  </div>
-                  <div style={{ color: getCmStatusColor(ch.contentStatus), fontWeight: 600 }}>
-                    {ch.contentStatus || '—'}
-                  </div>
-                  <div style={{ color: getCmStatusColor(ch.ariStatus), fontWeight: 600 }}>
-                    {ch.ariStatus || '—'}
-                  </div>
-                  <div>{ch.markup != null ? `${ch.markup}%` : '—'}</div>
-                </Box>
-              ))}
-            </Box>
-          )}
-
-          {channels.length === 0 && updatedAt && (
-            <Typography variant="body2" sx={{ color: T.text3, fontStyle: 'italic', mt: 1 }}>
-              Aucun canal OTA connecté pour le moment.
-            </Typography>
-          )}
-        </>
-      ) : (
-        <Typography variant="body2" sx={{ color: T.text3, fontSize: 12 }}>
-          Ce listing n'est pas encore connecté à Rental United. Configure la clé RU Property pour activer la distribution multi-OTA.
-        </Typography>
-      )}
-    </Card>
+              px: 1.75,
+              py: 0.75,
+              color: selected ? T.primaryDeep : T.text2,
+              bgcolor: selected ? T.primaryTint : T.bg2,
+              border: `1px solid ${selected ? T.primary : T.border}`,
+              '&:hover': { bgcolor: selected ? T.primaryTint : T.bg3 },
+            }}
+          >
+            {tab.label}
+          </Button>
+        );
+      })}
+    </Stack>
   );
-};
+}
 
-export function ChannelsTab({ values = {}, onChange, listingId, onVerifyRuChannels, verifyRuLoading = false }) {
+/* ════════════════════ OTA ════════════════════ */
+export function OtaDistributionTab({ values = {}, onChange }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
-  const updChannel = (id, patch) => upd('channels', { ...(values.channels || {}), [id]: { ...(values.channels?.[id] || {}), ...patch } });
-
-  // Extract Rental United data
-  const ruPropertyKey = values.channelManagerPropertyKey || values.ruPropertyKey;
-  const otaChannelsSnapshot = values.otaChannelsSnapshot;
+  const externalListing =
+    values.ruExternalListing || values.preporteyInformation?.ruExternalListing;
+  const hasOtaLink = Boolean(
+    externalListing &&
+      (externalListing.Property?.ExternalListing?.Url ||
+        externalListing.Property?.externalListing?.url ||
+        externalListing.ExternalListing?.Url ||
+        externalListing.url),
+  );
+  const linkedOta =
+    values.syncToRentalUnited === true ||
+    (Array.isArray(values.rentalUnitedIds) && values.rentalUnitedIds.length > 0) ||
+    hasOtaLink ||
+    Boolean(values.otaChannelsSnapshot?.channels?.length);
 
   return (
     <Box>
-      <RuFormLegend />
-      <GlobalBanner>
-        <strong>Channex est l'intégration centrale.</strong> Les credentials API sont gérés au niveau organisation. Ici tu actives/désactives la sync par canal, et tu mappes les IDs spécifiques au listing.
-      </GlobalBanner>
-
-      {/* Rental United Distribution Panel */}
-      {ruPropertyKey && (
-        <RentalUnitedOtaPanel
-          ruPropertyKey={ruPropertyKey}
-          otaChannelsSnapshot={otaChannelsSnapshot}
-          onVerifyClick={onVerifyRuChannels}
-          verifyLoading={verifyRuLoading}
+      <Card title="📡 Canaux OTA">
+        <ToggleRow
+          title="Synchroniser avec les OTA"
+          desc="Active la diffusion et la synchronisation vers Airbnb et les autres canaux connectés."
+          ruField="syncToRentalUnited"
+          checked={values.syncToRentalUnited === true}
+          onChange={(v) => upd('syncToRentalUnited', v)}
         />
-      )}
 
-      {OTA_PROVIDERS.map(p => {
-        const cfg = values.channels?.[p.id] || {};
-        const status = cfg.enabled ? (cfg.syncStatus || 'ok') : 'off';
-        const meta = SYNC_STATUS_META[status];
-        return (
-          <Card key={p.id}
-            title={<Stack direction="row" alignItems="center" spacing={1.5}>
-              <Avatar sx={{ bgcolor: p.color, color: '#fff', width: 28, height: 28, fontSize: 14, fontWeight: 700 }}>{p.logo}</Avatar>
-              <span>{p.name}</span>
-              <Box sx={{
-                display: 'inline-flex', alignItems: 'center', gap: 0.5,
-                px: 1, py: 0.25, borderRadius: '99px', ml: 1,
-                bgcolor: `${meta.color}15`, color: meta.color,
-                fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em',
-              }}>
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: meta.dot }} />
-                {meta.label.toUpperCase()}
-              </Box>
-            </Stack>}
-            meta={cfg.lastSync ? `Sync ${cfg.lastSync}` : 'Pas encore connecté'}>
-            <ToggleRow title={`Activer ${p.name}`} desc={`Publier ce listing sur ${p.name} via Channex`}
-              checked={!!cfg.enabled} onChange={v => updChannel(p.id, { enabled: v })} />
-            {cfg.enabled && (
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5, mt: 1.25 }}>
-                <Field label={`Listing ID ${p.name}`}>
-                  <TextField size="small" value={cfg.listingId || ''} onChange={e => updChannel(p.id, { listingId: e.target.value })}
-                    placeholder={`ex: ${p.id === 'airbnb' ? 'abnb_12345' : p.id === 'booking' ? 'bkg_67890' : 'xxx_xxx'}`} sx={sxInput} />
-                </Field>
-                <Field label="Channex Property ID">
-                  <TextField size="small" value={cfg.channexId || ''} onChange={e => updChannel(p.id, { channexId: e.target.value })} sx={sxInput} />
-                </Field>
-                {p.id === 'airbnb' && (
-                  <>
-                    <Field label="airbnbName" ruField="airbnbName" hint="Override nom Airbnb spécifique">
-                      <TextField size="small" value={cfg.airbnbName || ''} onChange={e => updChannel(p.id, { airbnbName: e.target.value })} sx={sxInput} />
-                    </Field>
-                    <Field label="airbnbSummary" ruField="airbnbSummary" hint="Override résumé Airbnb">
-                      <TextField size="small" multiline rows={2} value={cfg.airbnbSummary || ''} onChange={e => updChannel(p.id, { airbnbSummary: e.target.value })} sx={sxInput} />
-                    </Field>
-                  </>
-                )}
-                {p.id === 'booking' && (
-                  <Field label="bookingcomPropertyName" ruField="bookingcomPropertyName" hint="Override nom Booking">
-                    <TextField size="small" value={cfg.bookingPropertyName || ''} onChange={e => updChannel(p.id, { bookingPropertyName: e.target.value })} sx={sxInput} />
-                  </Field>
-                )}
-              </Box>
-            )}
-          </Card>
-        );
-      })}
+        <Box sx={{ mt: 1.5 }}>
+          <RuExternalListingDisplay value={externalListing} ruField="ruExternalListing" clientView />
+        </Box>
+
+        {values.otaChannelsSnapshot ? (
+          <Box sx={{ mt: 1.5 }}>
+            <Field label="Canaux connectés" ruField="rentalUnitedIds" fullWidth>
+              <OtaChannelsSnapshotTable snapshot={values.otaChannelsSnapshot} clientView />
+            </Field>
+          </Box>
+        ) : linkedOta ? (
+          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1.5 }}>
+            Aucun détail canal disponible pour le moment. Lancez une synchronisation depuis le menu
+            publication.
+          </Typography>
+        ) : (
+          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1.5 }}>
+            Aucun canal OTA connecté. Importez ou synchronisez le listing pour activer la distribution.
+          </Typography>
+        )}
+      </Card>
     </Box>
   );
 }
 
-/* ════════════════════ Direct Booking ════════════════════ */
+/* ════════════════════ Direct booking ════════════════════ */
 export function DirectBookingTab({ values = {}, onChange }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
+  const slug = values.slug || '';
+  const directPaymentMethods = Array.isArray(values.directPaymentMethods)
+    ? values.directPaymentMethods
+    : ['card', 'wire'];
+
   return (
     <Box>
-      <RuFormLegend />
-      <Card title="🌐 Portail Direct Booking" meta="Réservation sans commission OTA">
-        <ToggleRow title="Activer la réservation directe" desc="Le listing apparaît sur sojori.com/villa-belvedere et accepte les réservations sans intermédiaire."
-          checked={values.directEnabled !== false} onChange={v => upd('directEnabled', v)} />
+      <Card title="🌐 Portail Sojori">
+        <ToggleRow
+          title="Activer la réservation directe"
+          desc={
+            slug
+              ? `Le listing apparaît sur sojori.com/villa-${slug} et accepte les réservations sans intermédiaire.`
+              : 'Le listing apparaît sur sojori.com et accepte les réservations sans intermédiaire.'
+          }
+          checked={values.directEnabled === true}
+          onChange={(v) => upd('directEnabled', v)}
+        />
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5, mt: 1.5 }}>
           <Field label="Slug URL" hint="sojori.com/villa-{slug}">
-            <TextField size="small" value={values.slug || 'belvedere-nice'} onChange={e => upd('slug', e.target.value)} sx={sxInput} />
+            <TextField
+              size="small"
+              value={slug}
+              onChange={(e) => upd('slug', e.target.value)}
+              placeholder="ex: belvedere-nice"
+              sx={sxInput}
+            />
           </Field>
-          <Field label="Discount direct"><NumberInput value={values.directDiscount ?? 5} suffix="%" onChange={v => upd('directDiscount', v)} /></Field>
+          <Field label="Remise direct booking" hint="Réduction sur le portail Sojori">
+            <NumberInput
+              value={values.directDiscount ?? ''}
+              suffix="%"
+              onChange={(v) => upd('directDiscount', v)}
+            />
+          </Field>
+        </Box>
+        <Box sx={{ mt: 1.5 }}>
+          <ToggleRow
+            title="Remise client récurrent"
+            desc="−10% pour les voyageurs ayant déjà séjourné dans un de tes listings"
+            checked={!!values.returningGuestDiscount}
+            onChange={(v) => upd('returningGuestDiscount', v)}
+          />
         </Box>
       </Card>
 
-      <Card title="💳 Méthodes de paiement acceptées">
-        <ChipsRow value={values.paymentMethods || ['card', 'wire']} onToggle={v => {
-          const cur = values.paymentMethods || ['card', 'wire'];
-          upd('paymentMethods', cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v]);
-        }}
-          items={[
-            { id: 'card', label: '💳 Carte bancaire' },
-            { id: 'wire', label: '🏦 Virement' },
-            { id: 'paypal', label: '💰 PayPal' },
-            { id: 'crypto', label: '₿ Crypto' },
-            { id: 'cash', label: '💵 Espèces à l\'arrivée' },
-          ]} />
-      </Card>
-
-      <Card title="🤝 Programmes de fidélité">
-        <ToggleRow title="Remise client récurrent" desc="−10% pour les voyageurs ayant déjà séjourné dans un de tes listings" checked={!!values.returningGuestDiscount} onChange={v => upd('returningGuestDiscount', v)} />
-        <ToggleRow title="Code promo" desc="Active la saisie de codes promo dans le tunnel de réservation" checked={!!values.promoCodesEnabled} onChange={v => upd('promoCodesEnabled', v)} />
+      <Card title="💳 Paiement portail direct">
+        <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mb: 1.25 }}>
+          Moyens acceptés sur <strong>sojori.com</strong> uniquement. Les moyens de paiement OTA sont
+          visibles dans l&apos;onglet <strong>Frais</strong>.
+        </Typography>
+        <ChipsRow
+          value={directPaymentMethods}
+          onToggle={(v) => {
+            const next = directPaymentMethods.includes(v)
+              ? directPaymentMethods.filter((x) => x !== v)
+              : [...directPaymentMethods, v];
+            upd('directPaymentMethods', next);
+          }}
+          items={DIRECT_PAYMENT_METHODS}
+        />
       </Card>
     </Box>
   );
 }
 
-/* RoomsTab — voir RoomsTabComposition.jsx (legacy Room Composition) */
+/* ════════════════════ Distribution (parent) ════════════════════ */
+export function DistributionTab({ values = {}, onChange }) {
+  const [subTab, setSubTab] = useState('ota');
+  const common = { values, onChange };
+
+  return (
+    <Box>
+      <RuFormLegend />
+      <DistributionSubTabs active={subTab} onChange={setSubTab} />
+      {subTab === 'ota' ? <OtaDistributionTab {...common} /> : <DirectBookingTab {...common} />}
+    </Box>
+  );
+}
+
+/** @deprecated utiliser DistributionTab */
+export const DirectBookingTabLegacy = DistributionTab;
 
 /* ════════════════════ License ════════════════════ */
 export function LicenseTab({ values = {}, onChange }) {
@@ -307,34 +199,34 @@ export function LicenseTab({ values = {}, onChange }) {
     <Box>
       <RuFormLegend />
 
-      <Card title="📄 Licence touristique" meta="Obligatoire dans certaines villes">
+      <Card title="📄 Licence touristique">
         <ToggleRow
           title="Cette propriété n'a pas besoin de licence"
           desc="Cocher si pas de licence requise (ex: Airbnb Maroc, certaines villes)"
           checked={!!values.licenceIsExempt}
-          onChange={v => upd('licenceIsExempt', v)}
+          onChange={(v) => upd('licenceIsExempt', v)}
           ruField="licenceInfo"
         />
 
         {!values.licenceIsExempt && (
           <Box sx={{ mt: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
             <Field label="Numéro de licence" required ruField="licenceNumber">
-              <TextField size="small" value={values.licenseNumber || ''} onChange={e => upd('licenseNumber', e.target.value)} placeholder="ex: 06088-MEUB-2024" sx={sxInput} />
+              <TextField size="small" value={values.licenseNumber || ''} onChange={(e) => upd('licenseNumber', e.target.value)} placeholder="ex: 06088-MEUB-2024" sx={sxInput} />
             </Field>
             <Field label="Type de licence" ruField="licenceType">
-              <SelectField value={values.licenseType || 'meuble_tourisme'} onChange={v => upd('licenseType', v)}
+              <SelectField value={values.licenseType || 'meuble_tourisme'} onChange={(v) => upd('licenseType', v)}
                 options={[
                   { value: 'meuble_tourisme', label: 'Meublé de tourisme' },
-                  { value: 'chambres_hotes', label: 'Chambres d\'hôtes' },
+                  { value: 'chambres_hotes', label: "Chambres d'hôtes" },
                   { value: 'gite_rural', label: 'Gîte rural' },
                   { value: 'residence_secondaire', label: 'Résidence secondaire' },
                 ]} />
             </Field>
             <Field label="Date d'émission" ruField="issueDate">
-              <TextField size="small" type="date" InputLabelProps={{ shrink: true }} value={values.licenseIssueDate || ''} onChange={e => upd('licenseIssueDate', e.target.value)} sx={sxInput} />
+              <TextField size="small" type="date" InputLabelProps={{ shrink: true }} value={values.licenseIssueDate || ''} onChange={(e) => upd('licenseIssueDate', e.target.value)} sx={sxInput} />
             </Field>
             <Field label="Date d'expiration" required ruField="expirationDate">
-              <TextField size="small" type="date" InputLabelProps={{ shrink: true }} value={values.licenseExpiryDate || ''} onChange={e => upd('licenseExpiryDate', e.target.value)} sx={sxInput} />
+              <TextField size="small" type="date" InputLabelProps={{ shrink: true }} value={values.licenseExpiryDate || ''} onChange={(e) => upd('licenseExpiryDate', e.target.value)} sx={sxInput} />
             </Field>
           </Box>
         )}
@@ -345,18 +237,18 @@ export function LicenseTab({ values = {}, onChange }) {
           <Card title="🏛 Mairie & autorités">
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
               <Field label="Mairie de rattachement">
-                <TextField size="small" value={values.cityHall || ''} onChange={e => upd('cityHall', e.target.value)} placeholder="ex: Mairie de Nice" sx={sxInput} />
+                <TextField size="small" value={values.cityHall || ''} onChange={(e) => upd('cityHall', e.target.value)} placeholder="ex: Mairie de Nice" sx={sxInput} />
               </Field>
               <Field label="Référent administratif">
-                <TextField size="small" value={values.adminContact || ''} onChange={e => upd('adminContact', e.target.value)} sx={sxInput} />
+                <TextField size="small" value={values.adminContact || ''} onChange={(e) => upd('adminContact', e.target.value)} sx={sxInput} />
               </Field>
             </Box>
           </Card>
 
           <Card title="🛂 Enregistrement police / hôtelière">
-            <ToggleRow title="Enregistrement obligatoire" desc="Transmission automatique des fiches voyageurs aux autorités" checked={!!values.policeRegistrationRequired} onChange={v => upd('policeRegistrationRequired', v)} />
+            <ToggleRow title="Enregistrement obligatoire" desc="Transmission automatique des fiches voyageurs aux autorités" checked={!!values.policeRegistrationRequired} onChange={(v) => upd('policeRegistrationRequired', v)} />
             <Box sx={{ mt: 1.5 }}>
-              <Field label="Endpoint API police"><TextField size="small" fullWidth value={values.policeApiEndpoint || ''} onChange={e => upd('policeApiEndpoint', e.target.value)} placeholder="ex: https://api.police.gov.fr/v1/registration" sx={sxInput} /></Field>
+              <Field label="Endpoint API police"><TextField size="small" fullWidth value={values.policeApiEndpoint || ''} onChange={(e) => upd('policeApiEndpoint', e.target.value)} placeholder="ex: https://api.police.gov.fr/v1/registration" sx={sxInput} /></Field>
             </Box>
           </Card>
         </>

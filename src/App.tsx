@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { AdminRoute } from './components/AdminRoute';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { DevRuntimeLogPanel } from './components/DevRuntimeLogPanel';
 import { ToastContainer } from 'react-toastify';
@@ -315,7 +316,9 @@ function App() {
               <Route path="/reviews" element={<LazyRoute><ReviewsPage /></LazyRoute>} />
 
               <Route path="/listings" element={<LazyRoute><ListingsPage /></LazyRoute>} />
-              <Route path="/listings/mapping" element={<LazyRoute><ListingsMappingHubPage /></LazyRoute>} />
+              <Route element={<AdminRoute />}>
+                <Route path="/listings/mapping/*" element={<LazyRoute><ListingsMappingHubPage /></LazyRoute>} />
+              </Route>
               <Route path="/listings/orchestration-model" element={<LazyRoute><OwnerOrchestrationModelPage /></LazyRoute>} />
               <Route path="/listings/new" element={<LazyRoute><ListingCreatePage /></LazyRoute>} />
               <Route path="/listings/:id" element={<LazyRoute><ListingFormV2Page /></LazyRoute>} />

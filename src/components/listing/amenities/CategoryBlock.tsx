@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { Box, Stack, Typography } from '@mui/material';
-import { T, CATEGORY_META } from './_tokens';
+import { T, getCategoryMeta } from './_tokens';
 import type { Amenity, CategoryName, Density, SelectedAmenity } from './_tokens';
 import AmenityCard from './AmenityCard';
 
@@ -27,7 +27,7 @@ const COLS = {
 export default function CategoryBlock({
   category, amenities, selected, density, totalInCategory, selectedCount, onToggle, onQty,
 }: CategoryBlockProps) {
-  const meta = CATEGORY_META[category];
+  const meta = getCategoryMeta(category);
   if (amenities.length === 0) return null;
 
   return (

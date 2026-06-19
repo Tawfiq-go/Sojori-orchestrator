@@ -9,8 +9,10 @@ import { sojoriTheme } from './theme/muiTheme'
 import { logAuth } from './utils/dashboardDebug'
 import { AmenitiesProvider } from './contexts/AmenitiesContext'
 import './i18n'
+import { bootstrapDevSessionFromEnv } from './utils/devApiAccess'
 import { setupLegacyAxiosAuth } from './components/LegacyReduxBridge'
 
+bootstrapDevSessionFromEnv()
 setupLegacyAxiosAuth()
 
 // Create a client for React Query

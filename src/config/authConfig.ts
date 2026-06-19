@@ -5,7 +5,9 @@ const normalizeEnvUrl = (raw: string | undefined): string | undefined => {
   return trimmed || undefined;
 };
 
-const DEFAULT_REMOTE_API = 'https://dev.sojori.com';
+import { SOJORI_API_ORIGIN } from './sojoriApiOrigins';
+
+const DEFAULT_REMOTE_API = SOJORI_API_ORIGIN;
 
 const isLocalhostOrigin = (url: string): boolean => {
   try {
@@ -23,7 +25,7 @@ const isBrowserLocalhost = (): boolean => {
   return ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(window.location.hostname);
 };
 
-/** Ports locaux 4000–4015 — opt-in explicite (sinon front local → dev.sojori.com, compatible CSP). */
+/** Ports locaux 4000–4015 — opt-in explicite (sinon front local → sojori.com via proxy Vite). */
 const shouldUseLocalMicroservicePorts = (): boolean => {
   const configured = normalizeEnvUrl(import.meta.env.VITE_API_URL);
   if (configured === 'http://localhost' || configured?.startsWith('http://127.0.0.1:')) {
@@ -40,7 +42,8 @@ const getApiBaseUrl = (): string => {
     normalizeEnvUrl(import.meta.env.VITE_API_URL) ||
     normalizeEnvUrl(import.meta.env.VITE_API_BASE_URL);
 
-  // Front Vite local + gateway distant (VITE_API_URL=https://dev.sojori.com) → appels directs, pas 127.0.0.1:4174
+  // Front Vite local + gateway distant (VITE_API_URL=https://dev.sojori.com) → appels directs
+  // Sinon chemins relatifs → proxy /api (vite.config) → dev.sojori.com, sans CORS
   if (isBrowserLocalhost() && import.meta.env.DEV) {
     if (configured && !isLocalhostOrigin(configured)) {
       return configured;

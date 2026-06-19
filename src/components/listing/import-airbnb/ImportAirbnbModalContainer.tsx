@@ -16,12 +16,15 @@ import ImportAirbnbModal from './ImportAirbnbModal';
 import { adaptRuImportProgress } from './adaptRuImportProgress';
 import type { ImportProgress, ImportResultItem, Owner, RuProperty, SojoriCity } from './_tokens';
 import { STEPS_ORDER } from './_tokens';
+import {
+  isAdminDashboardRole,
+  resolveRuImportOwnerAccountId,
+} from '../../../utils/resolveRuImportOwnerAccountId';
 
 const devAuthBypass = import.meta.env.VITE_DISABLE_AUTH === 'true';
 
 function isAdminRole(role?: string): boolean {
-  const r = (role || '').toLowerCase().replace(/\s+/g, '');
-  return r === 'superadmin' || r === 'admin' || r === 'super_admin';
+  return isAdminDashboardRole(role);
 }
 
 function resolveCityLabel(c: { name?: string | { fr?: string; en?: string; FR?: string } }): string {
@@ -47,8 +50,9 @@ export function ImportAirbnbModalContainer({
   onImported,
   initialCities = [],
 }: ImportAirbnbModalContainerProps) {
-  const { user } = useAuth();
-  const isAdmin = isAdminRole(user?.role) || (devAuthBypass && !user?.id);
+  const { user, loading: authLoading } = useAuth();
+  const isAdmin =
+    isAdminRole(user?.role) || (devAuthBypass && authLoading && !user?.id);
 
   const [cities, setCities] = useState<SojoriCity[]>(() =>
     initialCities.map((c) => ({ _id: c._id, name: resolveCityLabel(c) || c._id })),
@@ -72,16 +76,25 @@ export function ImportAirbnbModalContainer({
     };
   }, [progressData, isPolling]);
 
+  const authReady = !authLoading && Boolean(user?.id);
+  const sessionOwnerAccountId = resolveRuImportOwnerAccountId(user);
+
   const sessionOwner: Owner | null = useMemo(() => {
-    if (isAdmin || !user?.id) return null;
-    const ownerAccountId = (user as { ownerId?: string }).ownerId || user.id;
+    if (isAdmin || !authReady || !sessionOwnerAccountId) return null;
     return {
-      _id: ownerAccountId,
-      email: user.email || '',
-      firstName: user.firstName,
-      lastName: user.lastName,
+      _id: sessionOwnerAccountId,
+      email: user?.email || '',
+      firstName: user?.firstName,
+      lastName: user?.lastName,
     };
-  }, [isAdmin, user]);
+  }, [
+    isAdmin,
+    authReady,
+    sessionOwnerAccountId,
+    user?.email,
+    user?.firstName,
+    user?.lastName,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -116,28 +129,48 @@ export function ImportAirbnbModalContainer({
   }, []);
 
   const fetchOwnerProperties = useCallback(async (ownerId: string): Promise<RuProperty[]> => {
-    const res = await fetchRuOwnerProperties(ownerId);
-    if (!res.data?.success) {
-      throw new Error(res.data?.error || 'Impossible de charger les annonces Airbnb');
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 90_000);
+    try {
+      const res = await fetchRuOwnerProperties(ownerId, {
+        signal: controller.signal,
+      });
+      if (!res.data?.success) {
+        throw new Error(res.data?.error || 'Impossible de charger les annonces Airbnb');
+      }
+      const list = res.data.properties ?? [];
+      if (list.length === 0) {
+        console.warn('[ImportAirbnb] list-owner-properties empty', { ownerId, res: res.data });
+      }
+      return list.map(
+        (p: {
+          ruPropertyId: number;
+          name?: string;
+          isActive?: boolean;
+          isArchived?: boolean;
+          alreadyImported?: boolean;
+          importable?: boolean;
+          sojoriListingId?: string;
+        }) => ({
+          ruPropertyId: String(p.ruPropertyId),
+          name: p.name || `Annonce #${p.ruPropertyId}`,
+          isActive: p.isActive !== false,
+          isArchived: p.isArchived === true,
+          alreadyImported: Boolean(p.alreadyImported),
+          importable: p.importable === true,
+          photoGradient: ((p.ruPropertyId % 5) + 1) as 1 | 2 | 3 | 4 | 5,
+        }),
+      );
+    } catch (e: unknown) {
+      const ax = e as { code?: string; name?: string; message?: string };
+      if (ax.code === 'ERR_CANCELED' || ax.name === 'CanceledError') {
+        throw new Error('Délai dépassé — Rentals United met trop de temps à répondre. Réessayez.');
+      }
+      throw e;
+    } finally {
+      window.clearTimeout(timer);
     }
-    const list = res.data.properties ?? [];
-    return list.map(
-      (p: {
-        ruPropertyId: number;
-        name?: string;
-        isActive?: boolean;
-        alreadyImported?: boolean;
-        sojoriListingId?: string;
-      }) => ({
-        ruPropertyId: String(p.ruPropertyId),
-        name: p.name || `Annonce #${p.ruPropertyId}`,
-        isActive: p.isActive !== false,
-        alreadyImported: Boolean(p.alreadyImported),
-        importable: !p.alreadyImported,
-        photoGradient: ((p.ruPropertyId % 5) + 1) as 1 | 2 | 3 | 4 | 5,
-      }),
-    );
-  }, []);
+  }, [isAdmin]);
 
   const warningsFromImport = (payload: {
     success?: boolean;
@@ -256,6 +289,7 @@ export function ImportAirbnbModalContainer({
       onClose={handleClose}
       isAdmin={isAdmin}
       sessionOwner={sessionOwner}
+      authReady={authReady}
       searchOwners={searchOwners}
       fetchOwnerProperties={fetchOwnerProperties}
       cities={cities}

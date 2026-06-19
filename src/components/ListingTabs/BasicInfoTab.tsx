@@ -146,8 +146,6 @@ export function BasicInfoTab({ data, onChange }: BasicInfoTabProps) {
         <Stack spacing={0}>
           {[
             { key: 'active', label: 'Listing actif', hint: 'Visible sur les canaux. Désactivez pour cacher partout en 1 clic.', value: true },
-            { key: 'otaOnly', label: 'OTA only', hint: 'Réservable uniquement via Airbnb / Booking. Bloque les réservations directes.', value: false },
-            { key: 'instantBooking', label: 'Instant booking', hint: 'Pas d\'approbation manuelle requise.', value: true },
           ].map((toggle, idx) => (
             <Box key={toggle.key} sx={{ display: 'flex', alignItems: 'center', gap: 1.75, py: 1.5, ...(idx > 0 && { borderTop: `1px solid ${tokens.border}` }) }}>
               <Box sx={{ flex: 1 }}>

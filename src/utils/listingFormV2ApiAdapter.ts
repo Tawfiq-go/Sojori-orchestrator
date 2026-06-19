@@ -8,10 +8,12 @@ import {
   timeInputToHourNumber,
 } from './listingTimeHelpers';
 import {
-  decodeCancellationPolicyUi,
+  decodeCancellationPolicyUiDetailed,
   encodeCancellationPolicyUi,
+  CANCELLATION_POLICY_PRESET_LABELS,
   type CancellationPolicyRow,
 } from './listingCancellationPolicyPresets';
+import { buildAdditionalFeesSavePayload } from './listingRuFeesDisplay';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -36,10 +38,203 @@ function asString(v: unknown): string {
   return '';
 }
 
+function infoSectionHasContent(section: unknown): boolean {
+  if (!isRecord(section)) return false;
+  const descs = section.descriptions;
+  if (!Array.isArray(descs)) return false;
+  return descs.some((d) => {
+    if (typeof d === 'string') return d.trim().length > 0;
+    if (!isRecord(d)) return false;
+    return hasStoredValue(d.fr) || hasStoredValue(d.en);
+  });
+}
+
+const PICKUP_PARAGRAPH_RE =
+  /pickup\s+service|prise en charge|arrange transportation|transport sur demande/i;
+
+type LocalizedRow = UnknownRecord;
+
+function localizedRowsHaveText(rows: unknown): boolean {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  return rows.some((row) => isRecord(row) && hasStoredValue(row.value));
+}
+
+/** Airbnb/RU : parfois tout est dans HowToArrive, PickupService vide. */
+function splitPickupParagraphsFromHowToArrive(howToArrive: unknown): {
+  howToArrive: LocalizedRow[];
+  pickupService: LocalizedRow[];
+} {
+  if (!Array.isArray(howToArrive)) return { howToArrive: [], pickupService: [] };
+  const nextHow: LocalizedRow[] = [];
+  const pickup: LocalizedRow[] = [];
+  for (const row of howToArrive) {
+    if (!isRecord(row)) continue;
+    const value = asString(row.value).trim();
+    if (!value) continue;
+    const parts = value.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length <= 1) {
+      nextHow.push({ ...row, value });
+      continue;
+    }
+    const main: string[] = [];
+    const pickupParts: string[] = [];
+    for (const part of parts) {
+      if (PICKUP_PARAGRAPH_RE.test(part)) pickupParts.push(part);
+      else main.push(part);
+    }
+    if (main.length > 0) nextHow.push({ ...row, value: main.join('\n\n') });
+    if (pickupParts.length > 0) pickup.push({ ...row, value: pickupParts.join('\n\n') });
+  }
+  return { howToArrive: nextHow, pickupService: pickup };
+}
+
+function infoSectionFromLocalizedRows(
+  rows: unknown,
+  label: string,
+): UnknownRecord | undefined {
+  if (!Array.isArray(rows)) return undefined;
+  const lines = rows
+    .map((row) => (isRecord(row) ? asString(row.value).trim() : ''))
+    .filter(Boolean);
+  if (!lines.length) return undefined;
+  return {
+    name: { fr: label, en: label },
+    descriptions: lines.map((line) => ({ fr: line, en: line })),
+    iconUrl: '',
+  };
+}
+
+function infoSectionFromDescriptionLines(
+  description: unknown,
+  field: string,
+  label: string,
+): UnknownRecord | undefined {
+  if (!Array.isArray(description)) return undefined;
+  const lines = description
+    .map((row) => (isRecord(row) ? asString(row[field]).trim() : ''))
+    .filter(Boolean);
+  if (!lines.length) return undefined;
+  return {
+    name: { fr: label, en: label },
+    descriptions: lines.map((line) => ({ fr: line, en: line })),
+    iconUrl: '',
+  };
+}
+
 function asNumber(v: unknown): number | undefined {
   if (typeof v === 'number' && Number.isFinite(v)) return v;
   if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
   return undefined;
+}
+
+function hasStoredValue(v: unknown): boolean {
+  if (v == null) return false;
+  if (typeof v === 'string') return v.trim().length > 0;
+  if (typeof v === 'number') return Number.isFinite(v);
+  if (typeof v === 'boolean') return true;
+  if (Array.isArray(v)) return v.length > 0;
+  if (isRecord(v)) return Object.keys(v).length > 0;
+  return false;
+}
+
+function hasTimeFeeRows(rows: unknown): boolean {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  return rows.some((row) => {
+    if (!isRecord(row)) return false;
+    return row.fromHour != null || row.toHour != null || row.fee != null;
+  });
+}
+
+/** Listings importés avant schéma top-level : hydrate depuis preporteyInformation. */
+function hydrateRuFieldsFromPreportey(raw: UnknownRecord): UnknownRecord {
+  const info = isRecord(raw.preporteyInformation) ? raw.preporteyInformation : {};
+  const out: UnknownRecord = { ...raw };
+  const arrival = isRecord(info.ruArrivalInstructions) ? info.ruArrivalInstructions : {};
+
+  const fill = (key: string, value: unknown) => {
+    if (!hasStoredValue(out[key]) && hasStoredValue(value)) out[key] = value;
+  };
+
+  fill('daysBeforeArrival', arrival.daysBeforeArrival);
+  fill('arrivalLandlord', arrival.landlord);
+  fill('arrivalEmail', arrival.email);
+  fill('arrivalPhone', arrival.phone);
+  fill('howToArrive', arrival.howToArrive);
+  fill('pickupService', arrival.pickupService);
+  fill('ruExternalListing', info.ruExternalListing);
+  fill('ruLateArrivalFees', info.ruLateArrivalFees);
+  fill('ruEarlyDepartureFees', info.ruEarlyDepartureFees);
+
+  if (!hasTimeFeeRows(out.ruLateArrivalFees) && hasTimeFeeRows(info.ruLateArrivalFees)) {
+    out.ruLateArrivalFees = info.ruLateArrivalFees;
+  }
+  if (!hasTimeFeeRows(out.ruEarlyDepartureFees) && hasTimeFeeRows(info.ruEarlyDepartureFees)) {
+    out.ruEarlyDepartureFees = info.ruEarlyDepartureFees;
+  }
+
+  if (!hasStoredValue(out.zoneDescription) && Array.isArray(out.description)) {
+    const fromDesc = out.description
+      .filter((row) => isRecord(row) && hasStoredValue(row.locationDesc))
+      .map((row) => ({
+        languageRuId: asString(row.languageRuId) || '4',
+        value: asString(row.locationDesc),
+        locationDesc: asString(row.locationDesc),
+      }));
+    if (fromDesc.length > 0) out.zoneDescription = fromDesc;
+  }
+
+  if (!hasStoredValue(out.center) && Array.isArray(out.description)) {
+    const lines = out.description
+      .map((row) => (isRecord(row) ? asString(row.neighborhood).trim() : ''))
+      .filter(Boolean);
+    if (lines.length > 0) {
+      out.center = {
+        name: { fr: 'Quartier', en: 'Neighborhood' },
+        descriptions: lines.map((line) => ({ fr: line, en: line })),
+        iconUrl: '',
+      };
+    }
+  }
+
+  if (!infoSectionHasContent(out.transport) && Array.isArray(out.description)) {
+    const fromAccess = infoSectionFromDescriptionLines(out.description, 'access', 'Accès & transport');
+    if (fromAccess) out.transport = fromAccess;
+  }
+
+  if (!hasStoredValue(out.pickupService) && Array.isArray(out.description)) {
+    const fromDesc = out.description
+      .filter((row) => isRecord(row) && hasStoredValue(row.pickupService))
+      .flatMap((row) => {
+        const text = asString(row.pickupService).trim();
+        return text ? [{ languageRuId: asString(row.languageRuId) || '4', value: text }] : [];
+      });
+    if (fromDesc.length > 0) out.pickupService = fromDesc;
+  }
+
+  if (!hasStoredValue(out.pickupService) && localizedRowsHaveText(out.howToArrive)) {
+    const split = splitPickupParagraphsFromHowToArrive(out.howToArrive);
+    if (split.pickupService.length > 0) {
+      out.pickupService = split.pickupService;
+      if (split.howToArrive.length > 0) out.howToArrive = split.howToArrive;
+    }
+  }
+
+  if (!infoSectionHasContent(out.transport)) {
+    const arrivalLines = [
+      ...(Array.isArray(out.howToArrive) ? out.howToArrive : []),
+      ...(Array.isArray(out.pickupService) ? out.pickupService : []),
+    ];
+    const fromArrival = infoSectionFromLocalizedRows(arrivalLines, 'Accès & transport');
+    if (fromArrival) out.transport = fromArrival;
+  }
+
+  const ruProp = isRecord(info.ruRawProperty) ? info.ruRawProperty : {};
+  fill('standardGuests', asNumber(ruProp.StandardGuests));
+  if (!hasStoredValue(out.timeZoneName)) {
+    fill('timeZoneName', ruProp.TimeZone || ruProp.timeZoneName);
+  }
+
+  return out;
 }
 
 function cityTaxAmountFromApi(raw: UnknownRecord): number | undefined {
@@ -50,6 +245,24 @@ function cityTaxAmountFromApi(raw: UnknownRecord): number | undefined {
   if (!Array.isArray(fees)) return undefined;
   const row = fees.find((f) => isRecord(f) && f.feeTaxType === 'city_tax');
   return row ? asNumber(row.value) : undefined;
+}
+
+function feeRowFromAdditional(raw: UnknownRecord, feeTaxType: string): UnknownRecord | undefined {
+  const fees = raw.additionalFees;
+  if (!Array.isArray(fees)) return undefined;
+  const row = fees.find((f) => isRecord(f) && f.feeTaxType === feeTaxType);
+  return isRecord(row) ? row : undefined;
+}
+
+function feeEnabledFromAdditionalFees(
+  raw: UnknownRecord,
+  feeTaxType: string,
+  topLevelFlag: unknown,
+): boolean {
+  if (topLevelFlag === true) return true;
+  const row = feeRowFromAdditional(raw, feeTaxType);
+  if (row && (asNumber(row.value) ?? 0) > 0) return true;
+  return false;
 }
 
 /** Montant caution — API Mongo = objet `{ depositRuId, value }`, formulaire = nombre. */
@@ -75,19 +288,28 @@ function dateInputToIso(v: unknown): Date | null {
 function depositToUpdatePayload(
   amount: unknown,
   existingMeta: unknown,
-  depositRequired?: boolean,
+  enabled?: boolean,
 ): UnknownRecord | undefined {
-  const value = asNumber(amount);
-  if (value === undefined) return undefined;
   const existing = isRecord(existingMeta) ? existingMeta : {};
   const depositId = asString(existing.depositId);
   const existingRuId = asString(existing.depositRuId);
-  const useFlatAmount = depositRequired !== false && value > 0;
+
+  if (enabled === false) {
+    return {
+      ...(depositId ? { depositId } : {}),
+      depositRuId: '1',
+      value: 0,
+    };
+  }
+
+  const value = asNumber(amount);
+  if (value === undefined) return undefined;
+  const useFlatAmount = value > 0;
   const depositRuId = useFlatAmount ? '5' : existingRuId || '1';
   return {
     ...(depositId && !useFlatAmount ? { depositId } : {}),
     depositRuId,
-    value: useFlatAmount ? value : depositRequired === false ? 0 : value,
+    value: useFlatAmount ? value : 0,
   };
 }
 
@@ -187,32 +409,33 @@ export function getDescEntryForLang(
  * Charge le formulaire V2 depuis le document listing brut.
  */
 export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
-  const rt = firstRoomType(raw);
-  const descriptions = cloneDescriptionArray(raw.description);
+  const hydrated = hydrateRuFieldsFromPreportey(raw);
+  const rt = firstRoomType(hydrated);
+  const descriptions = cloneDescriptionArray(hydrated.description);
   const descLang: DescLangUi = '🇫🇷 FR';
   const fr = getDescEntryForLang(descriptions, descLang);
-  const licenceInfo = isRecord(raw.licenceInfo) ? raw.licenceInfo : {};
-  const cityTaxAmount = cityTaxAmountFromApi(raw);
+  const licenceInfo = isRecord(hydrated.licenceInfo) ? hydrated.licenceInfo : {};
+  const cityTaxAmount = cityTaxAmountFromApi(hydrated);
 
   return {
-    ...raw,
-    name: asString(raw.name),
-    locationLine: formatListingLocationLine(raw),
-    propertyType: propertyTypeToUi(raw.propertyType),
-    propertyUnit: asString(raw.propertyUnit) || 'Single',
-    bedrooms: asNumber(rt.bedroomsNumber) ?? asNumber(raw.bedroomsNumber),
-    bathrooms: asNumber(rt.bathroomsNumber) ?? asNumber(raw.bathroomsNumber),
+    ...hydrated,
+    name: asString(hydrated.name),
+    locationLine: formatListingLocationLine(hydrated),
+    propertyType: propertyTypeToUi(hydrated.propertyType),
+    propertyUnit: asString(hydrated.propertyUnit) || 'Single',
+    bedrooms: asNumber(rt.bedroomsNumber) ?? asNumber(hydrated.bedroomsNumber),
+    bathrooms: asNumber(rt.bathroomsNumber) ?? asNumber(hydrated.bathroomsNumber),
     guests:
       asNumber(rt.personCapacityMax) ??
-      asNumber(raw.personCapacityMax) ??
+      asNumber(hydrated.personCapacityMax) ??
       asNumber(rt.personCapacity),
     personCapacity: asNumber(rt.personCapacity),
     personCapacityMax:
-      asNumber(rt.personCapacityMax) ?? asNumber(raw.personCapacityMax),
-    beds: asNumber(rt.bedsNumber) ?? asNumber(raw.bedsNumber),
-    sqm: asNumber(rt.surface) ?? asNumber(raw.surface),
-    floor: asNumber(raw.floor),
-    totalFloor: asNumber(raw.totalFloor),
+      asNumber(rt.personCapacityMax) ?? asNumber(hydrated.personCapacityMax),
+    beds: asNumber(rt.bedsNumber) ?? asNumber(hydrated.bedsNumber),
+    sqm: asNumber(rt.surface) ?? asNumber(hydrated.surface),
+    floor: hydrated.floor != null ? asNumber(hydrated.floor) : null,
+    totalFloor: hydrated.totalFloor != null ? asNumber(hydrated.totalFloor) : null,
     roomTypeConfigId: asString(rt.roomTypeConfigId),
     description: descriptions,
     _descLang: descLang,
@@ -220,11 +443,25 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     longDescription: asString(fr.value),
     airbnbSummary: asString(raw.airbnbSummary),
     active: raw.active !== false,
-    staging: raw.staging === true,
     instantBooking: raw.onlineCheckIn === true || raw.instantBookable === true,
-    otaOnly: raw.otaOnly === true,
+    onlineCheckIn: raw.onlineCheckIn === true,
+    instantBookingMode: asString(raw.instantBookingMode) || (raw.onlineCheckIn === true ? 'everyone' : 'off'),
+    checkInMethod: asString(raw.checkInMethod),
+    petsAllowed: raw.petsAllowed === true,
+    petsPaid: raw.petsPaid === true,
+    petsMax: raw.petsMax != null ? asNumber(raw.petsMax) : null,
+    childrenAllowed: raw.childrenAllowed !== false,
+    infantsAllowed: raw.infantsAllowed !== false,
+    smokingAllowed: raw.smokingAllowed === true,
+    eventsAllowed: raw.eventsAllowed === true,
+    ruChannelToggles: isRecord(raw.ruChannelToggles) ? { ...raw.ruChannelToggles } : undefined,
+    longStayDiscounts: [],
+    lastMinuteDiscount: [],
     basePrice: asNumber(rt.basePrice) ?? asNumber(raw.basePrice),
-    weekendPrice: asNumber(raw.extra),
+    weekendPrice: (() => {
+      const n = asNumber(raw.extra);
+      return n != null && n > 0 ? n : null;
+    })(),
     minNights: asNumber(raw.minNights),
     maxNights: asNumber(raw.maxNights),
     advanceNotice: asNumber(raw.preparationTimeBeforeArrivalInHours),
@@ -254,6 +491,8 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     checkInTimeEnd: asNumber(raw.checkInTimeEnd),
     currencyCode: asString(raw.currencyCode),
 
+    ruImportedFields: Array.isArray(raw.ruImportedFields) ? [...raw.ruImportedFields] : undefined,
+
     // Licence / Enregistrement (UI = license*, Mongo = licence*)
     licenceIsExempt:
       raw.licenceIsExempt === true || licenceInfo.isExempt === true,
@@ -271,26 +510,87 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     policeApiEndpoint: asString(raw.policeApiEndpoint),
 
     // Fees & Taxes (discriminators RU)
-    cleaningFeeEnabled: raw.cleaningFeeEnabled === true,
-    cleaningFee: asNumber(raw.cleaningFee),
-    cleaningFeeDiscriminator: asString(raw.cleaningFeeDiscriminator) || '1',
-    cityTaxEnabled: raw.cityTaxEnabled === true,
+    cleaningFeeEnabled: feeEnabledFromAdditionalFees(raw, 'cleaning', raw.cleaningFeeEnabled),
+    cleaningFee:
+      asNumber(raw.cleaningFee) ?? asNumber(feeRowFromAdditional(raw, 'cleaning')?.value),
+    cleaningFeeDiscriminator:
+      asString(raw.cleaningFeeDiscriminator) ||
+      asString(feeRowFromAdditional(raw, 'cleaning')?.discriminatorId) ||
+      '1',
+    cityTaxEnabled: feeEnabledFromAdditionalFees(raw, 'city_tax', raw.cityTaxEnabled),
     cityTaxPerAdult: cityTaxAmount,
     cityTaxPerAdultPerNight: cityTaxAmount,
-    cityTaxDiscriminator: asString(raw.cityTaxDiscriminator) || '6',
+    cityTaxDiscriminator:
+      asString(raw.cityTaxDiscriminator) ||
+      asString(feeRowFromAdditional(raw, 'city_tax')?.discriminatorId) ||
+      '6',
     cityTaxCollectionMode: asString(raw.cityTaxCollectionMode) || 'on_table',
 
-    // Acompte (arrhes RU) + caution
-    bookingDeposit: depositAmountFromApi(raw.deposit),
+    additionalFees: Array.isArray(raw.additionalFees)
+      ? raw.additionalFees.map((row) => {
+          if (!isRecord(row)) return row;
+          const value = asNumber(row.value) ?? 0;
+          const kind = asString(row.feeTaxType);
+          const isKnown = kind === 'cleaning' || kind === 'city_tax';
+          return {
+            ...row,
+            enabled: isKnown ? value > 0 : row.enabled === true || value > 0,
+          };
+        })
+      : [],
+
+    // Acompte (arrhes RU) + caution — afficher 0 MAD comme RU
+    bookingDeposit: depositAmountFromApi(raw.deposit) ?? 0,
     bookingDepositEnabled: (depositAmountFromApi(raw.deposit) ?? 0) > 0,
     _bookingDepositMeta: isRecord(raw.deposit) ? { ...raw.deposit } : null,
     depositRequired:
       raw.depositRequired === true || (depositAmountFromApi(raw.securityDeposit) ?? 0) > 0,
-    securityDeposit: depositAmountFromApi(raw.securityDeposit),
+    securityDeposit: depositAmountFromApi(raw.securityDeposit) ?? 0,
     _securityDepositMeta: isRecord(raw.securityDeposit) ? { ...raw.securityDeposit } : null,
 
     // Cancellation policy
-    cancellationPolicy: decodeCancellationPolicyUi(cancellationPoliciesFromApi(raw)),
+    cancellationPolicies: cancellationPoliciesFromApi(raw),
+    ...(() => {
+      const policies = cancellationPoliciesFromApi(raw);
+      const decoded = decodeCancellationPolicyUiDetailed(policies);
+      return {
+        cancellationPolicy: decoded.exact ?? (decoded.isCustom ? 'custom' : decoded.suggested ?? ''),
+        cancellationPolicySuggested: decoded.suggested,
+        cancellationPolicyIsCustom: decoded.isCustom,
+      };
+    })(),
+
+    standardGuests: asNumber(hydrated.standardGuests),
+    daysBeforeArrival: asNumber(hydrated.daysBeforeArrival),
+    arrivalLandlord: asString(hydrated.arrivalLandlord),
+    arrivalEmail: asString(hydrated.arrivalEmail),
+    arrivalPhone: asString(hydrated.arrivalPhone),
+    howToArrive: Array.isArray(hydrated.howToArrive) ? [...hydrated.howToArrive] : [],
+    pickupService: Array.isArray(hydrated.pickupService) ? [...hydrated.pickupService] : [],
+    houseRule: isRecord(hydrated.houseRule) ? { ...hydrated.houseRule } : undefined,
+    note: isRecord(hydrated.note) ? { ...hydrated.note } : undefined,
+    center: isRecord(hydrated.center) ? { ...hydrated.center } : undefined,
+    transport: isRecord(hydrated.transport) ? { ...hydrated.transport } : undefined,
+    policy: isRecord(hydrated.policy) ? { ...hydrated.policy } : undefined,
+    zoneDescription: Array.isArray(hydrated.zoneDescription) ? [...hydrated.zoneDescription] : [],
+    ruLateArrivalFees: Array.isArray(hydrated.ruLateArrivalFees) ? [...hydrated.ruLateArrivalFees] : [],
+    ruEarlyDepartureFees: Array.isArray(hydrated.ruEarlyDepartureFees) ? [...hydrated.ruEarlyDepartureFees] : [],
+    ruExternalListing: isRecord(hydrated.ruExternalListing) ? { ...hydrated.ruExternalListing } : undefined,
+    rulesAndInfo: isRecord(hydrated.rulesAndInfo) ? { ...hydrated.rulesAndInfo } : {},
+    paymentMethods: Array.isArray(hydrated.paymentMethods) ? [...hydrated.paymentMethods] : [],
+    rentalUnitedIds: Array.isArray(hydrated.rentalUnitedIds) ? [...hydrated.rentalUnitedIds] : [],
+    rentalUnitedBuildingId: asString(hydrated.rentalUnitedBuildingId),
+    syncToRentalUnited: hydrated.syncToRentalUnited === true,
+    timeZoneName: asString(hydrated.timeZoneName),
+    wifiUsername: asString(hydrated.wifiUsername),
+    wifiPassword: asString(hydrated.wifiPassword),
+    messageCheckin: Array.isArray(hydrated.messageCheckin) ? [...hydrated.messageCheckin] : [],
+    messageCheckout: Array.isArray(hydrated.messageCheckout) ? [...hydrated.messageCheckout] : [],
+    preporteyInformation: isRecord(hydrated.preporteyInformation) ? { ...hydrated.preporteyInformation } : {},
+    otaChannelsSnapshot: isRecord(hydrated.otaChannelsSnapshot) ? { ...hydrated.otaChannelsSnapshot } : undefined,
+    directPaymentMethods: Array.isArray(hydrated.directPaymentMethods)
+      ? [...hydrated.directPaymentMethods]
+      : undefined,
   };
 }
 
@@ -355,11 +655,24 @@ export function mergeFormV2ToUpdatePropertyPayload(
     propertyUnit: values.propertyUnit,
     propertyType: propertyTypeToApi(values.propertyType),
     active: values.active,
-    staging: values.staging,
-    otaOnly: values.otaOnly,
     onlineCheckIn: values.instantBooking,
-    floor: values.floor,
-    totalFloor: values.totalFloor,
+    instantBookingMode: values.instantBooking
+      ? (asString(values.instantBookingMode) || 'everyone')
+      : 'off',
+    checkInMethod: asString(values.checkInMethod) || '',
+    petsAllowed: values.petsAllowed === true,
+    petsPaid: values.petsPaid === true,
+    ...(values.petsAllowed === true && asNumber(values.petsMax) != null
+      ? { petsMax: asNumber(values.petsMax) }
+      : values.petsAllowed === false
+        ? { petsMax: null }
+        : {}),
+    childrenAllowed: values.childrenAllowed !== false,
+    infantsAllowed: values.infantsAllowed !== false,
+    smokingAllowed: values.smokingAllowed === true,
+    eventsAllowed: values.eventsAllowed === true,
+    ...(values.floor !== undefined ? { floor: values.floor ?? null } : {}),
+    ...(values.totalFloor !== undefined ? { totalFloor: values.totalFloor ?? null } : {}),
     surface: values.sqm,
     personCapacityMax: values.personCapacityMax ?? values.guests,
   };
@@ -402,8 +715,10 @@ export function mergeFormV2ToUpdatePropertyPayload(
     payload.preparationTimeBeforeArrivalInHours = advanceNotice;
   }
 
-  const weekendPrice = asNumber(values.weekendPrice);
-  if (weekendPrice != null) payload.extra = weekendPrice;
+  if (values.weekendPrice !== undefined) {
+    const weekendPrice = asNumber(values.weekendPrice);
+    payload.extra = weekendPrice != null && weekendPrice > 0 ? weekendPrice : 0;
+  }
 
   if (values.dynamicPricing !== undefined) {
     payload.useDynamicPrice = Boolean(values.dynamicPricing);
@@ -452,12 +767,13 @@ export function mergeFormV2ToUpdatePropertyPayload(
 
   const checkInHour =
     timeInputToHourNumber(values.checkInTime) ?? asNumber(values.checkInTimeStart);
+  const checkInEndHour =
+    timeInputToHourNumber(values.checkInTimeEnd) ?? asNumber(values.checkInTimeEnd);
   if (checkInHour != null) {
     payload.checkInTimeStart = checkInHour;
-    payload.checkInTimeEnd = resolveCheckInTimeEnd(
-      checkInHour,
-      asNumber(values.checkInTimeEnd),
-    );
+    payload.checkInTimeEnd = resolveCheckInTimeEnd(checkInHour, checkInEndHour);
+  } else if (checkInEndHour != null) {
+    payload.checkInTimeEnd = checkInEndHour;
   }
 
   const checkOutHour =
@@ -513,6 +829,16 @@ export function mergeFormV2ToUpdatePropertyPayload(
   if (values.cityTaxDiscriminator !== undefined) payload.cityTaxDiscriminator = asString(values.cityTaxDiscriminator);
   if (values.cityTaxCollectionMode !== undefined) payload.cityTaxCollectionMode = asString(values.cityTaxCollectionMode);
 
+  if (
+    values.cleaningFeeEnabled !== undefined ||
+    values.cityTaxEnabled !== undefined ||
+    values.additionalFees !== undefined ||
+    values.cleaningFee !== undefined ||
+    values.cityTaxPerAdult !== undefined
+  ) {
+    payload.additionalFees = buildAdditionalFeesSavePayload(values);
+  }
+
   // Acompte (arrhes) + caution
   if (values.bookingDepositEnabled !== undefined || values.bookingDeposit !== undefined) {
     const enabled = values.bookingDepositEnabled === true;
@@ -522,7 +848,7 @@ export function mergeFormV2ToUpdatePropertyPayload(
       enabled,
     );
   }
-  if (values.depositRequired !== undefined) payload.depositRequired = values.depositRequired;
+  if (values.depositRequired !== undefined) payload.depositRequired = values.depositRequired === true;
   if (values.securityDeposit !== undefined || values.depositRequired !== undefined) {
     const enabled = values.depositRequired === true;
     payload.securityDeposit = depositToUpdatePayload(
@@ -532,11 +858,152 @@ export function mergeFormV2ToUpdatePropertyPayload(
     );
   }
 
-  if (values.cancellationPolicy !== undefined) {
+  if (values.syncToRentalUnited !== undefined) {
+    payload.syncToRentalUnited = values.syncToRentalUnited === true;
+  }
+
+  if (values.cancellationPolicy !== undefined && values.cancellationPolicy !== 'custom' && values.cancellationPolicy !== '') {
     payload.cancellationPolicies = encodeCancellationPolicyUi(asString(values.cancellationPolicy));
+  } else if (Array.isArray(values.cancellationPolicies) && values.cancellationPolicies.length > 0) {
+    payload.cancellationPolicies = values.cancellationPolicies;
+  }
+
+  const ruImportPassthrough = [
+    'daysBeforeArrival',
+    'arrivalLandlord',
+    'arrivalEmail',
+    'arrivalPhone',
+    'howToArrive',
+    'pickupService',
+    'houseRule',
+    'note',
+    'center',
+    'transport',
+    'policy',
+    'zoneDescription',
+    'standardGuests',
+    'ruLateArrivalFees',
+    'ruEarlyDepartureFees',
+    'ruExternalListing',
+    'rulesAndInfo',
+    'paymentMethods',
+    'rentalUnitedIds',
+    'rentalUnitedBuildingId',
+    'timeZoneName',
+    'wifiUsername',
+    'wifiPassword',
+    'messageCheckin',
+    'messageCheckout',
+    'preporteyInformation',
+    'directPaymentMethods',
+  ] as const;
+  for (const key of ruImportPassthrough) {
+    if (values[key] !== undefined) payload[key] = values[key];
   }
 
   return payload;
+}
+
+function dateToInput(v: unknown): string {
+  if (!v) return '';
+  if (typeof v === 'string') return v.slice(0, 10);
+  if (v instanceof Date && Number.isFinite(v.getTime())) return v.toISOString().slice(0, 10);
+  return '';
+}
+
+export type LongStayDiscountUi = {
+  from: string;
+  to: string;
+  adjustment: number;
+  bigger: number;
+  smaller: number;
+  name?: string;
+  active: boolean;
+};
+
+export type LastMinuteDiscountUi = {
+  from: string;
+  to: string;
+  DaysToArrivalFrom: number;
+  DaysToArrivalTo: number;
+  adjustment: number;
+  name?: string;
+  active: boolean;
+};
+
+export function normalizeLongStayDiscountsFromApi(rows: unknown): LongStayDiscountUi[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((raw) => {
+      if (!isRecord(raw)) return null;
+      const from = dateToInput(raw.from);
+      const to = dateToInput(raw.to);
+      const adjustment = asNumber(raw.adjustment) ?? 0;
+      if (!from || !to) return null;
+      return {
+        from,
+        to,
+        adjustment,
+        bigger: asNumber(raw.bigger) ?? 7,
+        smaller: asNumber(raw.smaller) ?? 28,
+        name: asString(raw.name) || undefined,
+        active: raw.active !== false,
+      };
+    })
+    .filter(Boolean) as LongStayDiscountUi[];
+}
+
+export function normalizeLastMinuteDiscountsFromApi(rows: unknown): LastMinuteDiscountUi[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((raw) => {
+      if (!isRecord(raw)) return null;
+      const from = dateToInput(raw.from);
+      const to = dateToInput(raw.to);
+      const adjustment = asNumber(raw.adjustment) ?? 0;
+      if (!from || !to) return null;
+      return {
+        from,
+        to,
+        adjustment,
+        DaysToArrivalFrom: asNumber(raw.DaysToArrivalFrom) ?? 0,
+        DaysToArrivalTo: asNumber(raw.DaysToArrivalTo) ?? 3,
+        name: asString(raw.name) || undefined,
+        active: raw.active !== false,
+      };
+    })
+    .filter(Boolean) as LastMinuteDiscountUi[];
+}
+
+export function discountsToApiPayload(values: UnknownRecord) {
+  const longStay = Array.isArray(values.longStayDiscounts) ? values.longStayDiscounts : [];
+  const lastMinute = Array.isArray(values.lastMinuteDiscount) ? values.lastMinuteDiscount : [];
+  return {
+    longStayDiscounts: longStay.map((row) => {
+      const r = isRecord(row) ? row : {};
+      return {
+        from: new Date(String(r.from)),
+        to: new Date(String(r.to)),
+        adjustment: asNumber(r.adjustment) ?? 0,
+        bigger: asNumber(r.bigger) ?? 7,
+        smaller: asNumber(r.smaller) ?? 28,
+        name: asString(r.name) || '',
+        active: r.active !== false,
+      };
+    }),
+    lastMinuteDiscount: lastMinute.map((row) => {
+      const r = isRecord(row) ? row : {};
+      return {
+        from: new Date(String(r.from)),
+        to: new Date(String(r.to)),
+        adjustment: asNumber(r.adjustment) ?? 0,
+        DaysToArrivalFrom: asNumber(r.DaysToArrivalFrom) ?? 0,
+        DaysToArrivalTo: asNumber(r.DaysToArrivalTo) ?? 3,
+        name: asString(r.name) || '',
+        active: r.active !== false,
+      };
+    }),
+  };
 }
 
 export { DESC_LANG_UI, LANG_RU_BY_UI };

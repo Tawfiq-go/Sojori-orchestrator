@@ -1,6 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import { FormControl, Select, MenuItem, type SelectChangeEvent } from '@mui/material';
 import { type ImageType } from '../../../services/imageTypesService';
+import { getMainImageTypeFromCatalog } from '../../../utils/upload/imageTypeDisplay';
 
 interface ImageTypeSelectorProps {
   value: string;
@@ -26,13 +27,10 @@ const ImageTypeSelector: React.FC<ImageTypeSelectorProps> = ({
     onChange(newValue === '' ? null : newValue);
   };
 
-  const mainImageTypeId = useMemo(() => {
-    let mainType = imageTypes.find((type) => type.sojoriName?.en === 'Main Image');
-    if (!mainType) {
-      mainType = imageTypes.find((type) => type.rentalAmenityIds?.includes(1));
-    }
-    return mainType?._id ?? null;
-  }, [imageTypes]);
+  const mainImageTypeId = useMemo(
+    () => getMainImageTypeFromCatalog(imageTypes)?._id ?? null,
+    [imageTypes],
+  );
 
   const hasExistingMainImage = useMemo(
     () =>

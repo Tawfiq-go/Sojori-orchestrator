@@ -243,6 +243,7 @@ export function CleaningTab({ values = {}, onChange }) {
       )}
 
       {sub === 'reg' && (
+        <>
         <Card title="📄 Registration" meta="requiresOnlineCheckin">
           <ToggleRow title="Enregistrement en ligne (check-in online)" desc="Crée automatiquement un timeslot de type 'registration' lors de chaque réservation. Statuts: not_started → in_progress → completed"
             checked={!!values.requiresOnlineCheckin} onChange={v => upd('requiresOnlineCheckin', v)} />
@@ -250,6 +251,28 @@ export function CleaningTab({ values = {}, onChange }) {
             💡 Le voyageur recevra un lien WhatsApp pour scanner son passeport et compléter ses informations (assisté par AI dans <code>srv-chatbot</code>).
           </Typography>
         </Card>
+        <Card title="💬 Messages check-in Sojori" meta="messageCheckin[] · non importé RU">
+          <Field label="Messages check-in (une ligne = un message)" fullWidth>
+            <TextField
+              size="small"
+              multiline
+              rows={3}
+              fullWidth
+              value={Array.isArray(values.messageCheckin) ? values.messageCheckin.join('\n') : ''}
+              onChange={(e) =>
+                upd(
+                  'messageCheckin',
+                  String(e.target.value)
+                    .split(/\n/)
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                )
+              }
+              sx={sxInput}
+            />
+          </Field>
+        </Card>
+        </>
       )}
 
       {sub === 'checkout' && (

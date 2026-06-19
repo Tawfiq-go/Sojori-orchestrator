@@ -8,6 +8,7 @@ import {
   isListingFieldRu,
   type ListingStructureDoc,
 } from '../../../../utils/listingFieldFlags';
+import { useIsRuImportedField } from '../ListingFormImportedContext';
 
 const badgeSx = {
   display: 'inline-flex',
@@ -40,9 +41,11 @@ export function FieldIndicator({
   adminOnlyGate = true,
 }: FieldIndicatorProps) {
   const { user } = useAuth();
+  const isAdmin = Boolean(user && hasAdminAccess(user.role));
+  const isImported = useIsRuImportedField(field);
 
   if (!field) return null;
-  if (adminOnlyGate && (!user || !hasAdminAccess(user.role))) {
+  if (adminOnlyGate && !isAdmin) {
     return null;
   }
 
@@ -57,9 +60,36 @@ export function FieldIndicator({
     showRu = true;
   }
 
-  if (!showRu && !showReq) return null;
+  const showImported = isAdmin && isImported;
+
+  if (!showRu && !showReq && !showImported) return null;
 
   const indicators: React.ReactNode[] = [];
+
+  if (showImported) {
+    indicators.push(
+      <Tooltip
+        key="imported"
+        title="Valeur importée depuis Rentals United (import Airbnb / RU)"
+        arrow
+        placement="top"
+      >
+        <Box
+          component="span"
+          sx={{
+            ...badgeSx,
+            backgroundColor: 'rgba(10, 143, 94, 0.12)',
+            color: '#0a8f5e',
+            '&:hover': { backgroundColor: 'rgba(10, 143, 94, 0.2)' },
+          }}
+        >
+          <Typography component="span" sx={{ fontSize: 'inherit', fontWeight: 700, lineHeight: 1 }}>
+            I
+          </Typography>
+        </Box>
+      </Tooltip>,
+    );
+  }
 
   if (showRu) {
     indicators.push(

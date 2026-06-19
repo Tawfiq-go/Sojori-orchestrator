@@ -3,11 +3,15 @@
 // API client pour la configuration orchestrator (templates & messages)
 // ════════════════════════════════════════════════════════════════════
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://dev.sojori.com';
+import { isLocalViteDevHost } from '../config/resolveDevApiOrigin';
+import { SOJORI_API_ORIGIN } from '../config/sojoriApiOrigins';
+import { getToken } from '../utils/authUtils';
+
+const API_BASE =
+  import.meta.env.VITE_API_URL?.trim() ||
+  (isLocalViteDevHost() ? '' : SOJORI_API_ORIGIN);
 // srv-orchestrator routes : /api/v1/orchestrator/*
 const ORCHESTRATOR_BASE = `${API_BASE}/api/v1/orchestrator`;
-
-import { getToken } from '../utils/authUtils';
 
 /**
  * Create headers with auth token

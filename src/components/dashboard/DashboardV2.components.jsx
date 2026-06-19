@@ -174,6 +174,7 @@ const NAV_ICON_BY_ID = {
   'orch/ops': TodayOutlined,
   'orch/workflows': SettingsOutlined,
   'listings/list': HomeWorkOutlined,
+  'listings/mapping': HubOutlined,
   'listings/orchestration-model': HubOutlined,
   'pricing/portfolio': InsightsOutlined,
   'pricing/audit': HistoryOutlined,

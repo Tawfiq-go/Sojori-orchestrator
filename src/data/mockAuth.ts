@@ -7,6 +7,8 @@ export interface MockUser {
   firstName: string;
   lastName: string;
   role: MockUserRole;
+  /** Compte propriétaire lié (Worker) */
+  ownerId?: string;
   phone: string;
   company: string;
   avatar: string;

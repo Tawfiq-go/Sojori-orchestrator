@@ -50,7 +50,7 @@ export interface RegisterPayload {
 
 /**
  * Service d'authentification RÉEL
- * Se connecte au backend production (dev.sojori.com)
+ * Se connecte au backend production (sojori.com)
  */
 const authService = {
   /**

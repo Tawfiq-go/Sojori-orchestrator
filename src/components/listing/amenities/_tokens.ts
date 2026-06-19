@@ -54,19 +54,44 @@ export const CATEGORY_META: Record<CategoryName, { emoji: string; short: string 
   'Building Features':         { emoji: '🏢', short: 'Building' },
 };
 
+/** Catégories Airbnb FR (catalogue PM srv-listing) */
+export const AIRBNB_FR_CATEGORY_META: Record<string, { emoji: string; short: string }> = {
+  'Équipements de base':           { emoji: '🏠', short: 'Essentiels' },
+  'Salle de bain':                 { emoji: '🚿', short: 'Salle de bain' },
+  'Chambre et linge':              { emoji: '🛏', short: 'Chambre & linge' },
+  'Divertissement':                { emoji: '📺', short: 'Divertissement' },
+  'Famille':                       { emoji: '👶', short: 'Famille' },
+  'Chauffage et climatisations':   { emoji: '❄️', short: 'Chauffage & clim' },
+  'Sécurité à la maison':          { emoji: '🛡', short: 'Sécurité' },
+  'Internet et bureau':            { emoji: '📶', short: 'Internet & bureau' },
+  'Cuisine et salle à manger':     { emoji: '🍳', short: 'Cuisine' },
+  "Caractéristiques de l'emplacement": { emoji: '📍', short: 'Emplacement' },
+  'Extérieur':                     { emoji: '🌳', short: 'Extérieur' },
+  'Parking et installations':      { emoji: '🚗', short: 'Parking' },
+  'Services':                      { emoji: '🛎', short: 'Services' },
+};
+
+export function getCategoryMeta(cat: string): { emoji: string; short: string } {
+  if (cat === 'Basic') return { emoji: '⚡', short: 'Essentiels Airbnb' };
+  return (
+    CATEGORY_META[cat as CategoryName] ??
+    AIRBNB_FR_CATEGORY_META[cat] ?? { emoji: '✨', short: cat }
+  );
+}
+
 export interface Amenity {
   _id: string;
   rentalAmenityId: number;
   nameFr: string;
   nameEn: string;
-  categories: CategoryName[];
+  categories: string[];
   basic: boolean;
   useBed: boolean;
   needsRoomAssignment: boolean;
   /** rentalId des pièces où l'équipement peut être placé (catalogue API) */
   compositionRoomIds: string[];
   iconUrl?: string;
-  emoji?: string;                      // fallback front (mapping rentalAmenityId → emoji)
+  emoji?: string;
 }
 
 export interface CompositionRoom {
@@ -94,13 +119,13 @@ export const AMENITY_EMOJI: Record<number, string> = {
   792:  '📶', 187: '🌡', 180: '❄️', 600: '🧺', 599: '🧺', 781: '🚨', 955: '🧯', 943: '💨',
   364:  '🔥', 689: '🛗', 829: '💻', 438: '📶', 73:  '💼', 779: '🛏', 778: '🛏', 957: '🛏',
   852:  '📺', 480: '📺', 468: '📺', 889: '🔊', 1857: '🚿', 1858: '🚿', 1840: '🧴', 1838: '🧴',
-  328:  '🌡', 187: '🌡', 281: '♿', 775: '♿', 1834: '🌳', 999: '🌳', 977: '🏖',
+  328:  '🌡', 281: '♿', 775: '♿', 1834: '🌳', 999: '🌳', 977: '🏖',
 };
+
 export function emojiFor(a: Amenity): string {
   if (a.emoji) return a.emoji;
   if (AMENITY_EMOJI[a.rentalAmenityId]) return AMENITY_EMOJI[a.rentalAmenityId];
-  // fallback générique par catégorie
-  return CATEGORY_META[a.categories[0]]?.emoji || '✅';
+  return getCategoryMeta(a.categories[0] ?? '').emoji || '✅';
 }
 
 export const ALL_CATEGORIES: CategoryName[] = Object.keys(CATEGORY_META) as CategoryName[];

@@ -59,7 +59,7 @@ import { AdminOwnerFilterProvider, useAdminOwnerFilter } from '../context/AdminO
 import OwnerFilterField from '../components/OwnerFilterBar/OwnerFilterField';
 import { useAuth } from '../hooks/useAuth';
 import { dashboardDebugEnabled, logDashboard, logDashboardApiDetail, logDashboardKpisSummary } from '../utils/dashboardDebug';
-import { getToken } from '../utils/authUtils';
+import { hasLocalDevApiAccess } from '../utils/devApiAccess';
 import type {
   DashboardPeriod,
   DashboardPropertyOption,
@@ -130,9 +130,9 @@ function DashboardPageContent() {
         return;
       }
 
-      if (!getToken()) {
-        logDashboard('⚠️ Pas de token JWT — les APIs renverront 401');
-        setError('Aucun jeton de session — connectez-vous pour charger le dashboard.');
+      if (!hasLocalDevApiAccess()) {
+        logDashboard('⚠️ Pas de session — connectez-vous ou configurez VITE_DEV_TOKEN (.env.local)');
+        setError('Session requise — connectez-vous via /login (compte prod) ou vérifiez VITE_DEV_TOKEN.');
         setDashboardReady(false);
         return;
       }

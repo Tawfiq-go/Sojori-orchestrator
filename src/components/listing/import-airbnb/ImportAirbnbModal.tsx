@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════
 // ImportAirbnbModal.tsx — Modal principale (5 phases)
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, Box, Stack, Typography, Button, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { T, KEYFRAMES } from './_tokens';
@@ -21,6 +21,8 @@ export interface ImportAirbnbModalProps {
   isAdmin: boolean;
   /** Owner session (uniquement si isAdmin=false) */
   sessionOwner?: Owner | null;
+  /** Auth chargée (évite fetch owner avant JWT / ownerId résolu) */
+  authReady?: boolean;
   /** ─── handlers branchés sur ton API ─── */
   searchOwners: (query: string) => Promise<Owner[]>;
   fetchOwnerProperties: (ownerId: string) => Promise<RuProperty[]>;
@@ -41,7 +43,7 @@ export interface ImportAirbnbModalProps {
 }
 
 export default function ImportAirbnbModal({
-  open, onClose, isAdmin, sessionOwner,
+  open, onClose, isAdmin, sessionOwner, authReady = true,
   searchOwners, fetchOwnerProperties, cities, citiesLoading = false,
   startImport, importProgress, importResults, onImported,
 }: ImportAirbnbModalProps) {
@@ -53,37 +55,73 @@ export default function ImportAirbnbModal({
   const [city, setCity] = useState<SojoriCity | null>(null);
   const [cityError, setCityError] = useState(false);
   const [propsError, setPropsError] = useState<string | null>(null);
+  const wasOpenRef = useRef(false);
+  const activePropertiesFetchOwnerRef = useRef<string | null>(null);
 
-  // Reset au montage / changement de mode
+  // Reset uniquement à l'ouverture
   useEffect(() => {
-    if (!open) return;
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!justOpened) return;
+    activePropertiesFetchOwnerRef.current = null;
     setPhase(isAdmin ? 'A-admin' : 'A-owner');
     setOwner(isAdmin ? null : (sessionOwner || null));
-    setProperties([]); setSelectedIds([]); setCity(null); setCityError(false);
+    setProperties([]);
+    setSelectedIds([]);
+    setCity(null);
+    setCityError(false);
     setPropsError(null);
+    setPropsLoading(false);
+  }, [open, isAdmin]);
+
+  // Owner session : auth / ownerId résolu après ouverture
+  useEffect(() => {
+    if (!open || isAdmin || !sessionOwner?._id) return;
+    setOwner((prev) => (prev?._id === sessionOwner._id ? prev : sessionOwner));
   }, [open, isAdmin, sessionOwner]);
 
-  // Fetch properties dès qu'on a un owner
+  const ownerId = owner?._id;
+
+  // Dès qu'on connaît l'owner → phase B (liste + skeleton, plus d'écran A bloqué)
   useEffect(() => {
-    if (!owner) return;
-    let cancelled = false;
+    if (!open || isAdmin || !ownerId) return;
+    setPhase('B');
+  }, [open, isAdmin, ownerId]);
+
+  // Fetch properties dès qu'on a un owner (admin : id sélectionné · owner : session JWT)
+  useEffect(() => {
+    if (!open || !ownerId) return;
+    if (!isAdmin && !authReady) return;
+    activePropertiesFetchOwnerRef.current = ownerId;
     setPropsLoading(true);
     setPropsError(null);
-    fetchOwnerProperties(owner._id)
-      .then(p => { if (!cancelled) { setProperties(p); setPhase('B'); } })
+    fetchOwnerProperties(ownerId)
+      .then((p) => {
+        if (activePropertiesFetchOwnerRef.current !== ownerId) return;
+        setProperties(p);
+      })
       .catch((e: unknown) => {
-        if (cancelled) return;
+        if (activePropertiesFetchOwnerRef.current !== ownerId) return;
         const msg =
           (e as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ||
           (e as Error)?.message ||
           'Impossible de charger les annonces Airbnb';
         setPropsError(msg);
         setProperties([]);
-        setPhase('B');
       })
-      .finally(() => { if (!cancelled) setPropsLoading(false); });
-    return () => { cancelled = true; };
-  }, [owner, fetchOwnerProperties]);
+      .finally(() => {
+        if (activePropertiesFetchOwnerRef.current !== ownerId) return;
+        setPropsLoading(false);
+        setPhase('B');
+      });
+  }, [open, ownerId, fetchOwnerProperties, isAdmin, authReady]);
+
+  useEffect(() => {
+    if (!open) {
+      activePropertiesFetchOwnerRef.current = null;
+      setPropsLoading(false);
+    }
+  }, [open]);
 
   // Transitions automatiques sur progress
   useEffect(() => {
@@ -91,7 +129,7 @@ export default function ImportAirbnbModal({
     if (importResults && importResults.length > 0) setPhase('D');
   }, [importProgress, importResults]);
 
-  const importable = useMemo(() => properties.filter(p => p.importable && !p.alreadyImported), [properties]);
+  const importable = useMemo(() => properties.filter((p) => p.importable), [properties]);
   const canImport = selectedIds.length > 0 && !!city;
   const isImporting = phase === 'C';
   const isDone = phase === 'D';
@@ -117,16 +155,18 @@ export default function ImportAirbnbModal({
       onClose={isImporting ? undefined : onClose}
       disableEscapeKeyDown={isImporting}
       maxWidth={false}
-      PaperProps={{
-        sx: {
-          width: 720, maxWidth: '95vw', m: { xs: 1, sm: 3 },
-          borderRadius: '16px', overflow: 'hidden',
-          display: 'grid', gridTemplateRows: 'auto auto 1fr auto',
-          minHeight: 540, maxHeight: 'calc(100vh - 100px)',
-          boxShadow: '0 32px 72px rgba(20,17,10,0.18)',
+      slotProps={{
+        paper: {
+          sx: {
+            width: 720, maxWidth: '95vw', m: { xs: 1, sm: 3 },
+            borderRadius: '16px', overflow: 'hidden',
+            display: 'grid', gridTemplateRows: 'auto auto 1fr auto',
+            minHeight: 540, maxHeight: 'calc(100vh - 100px)',
+            boxShadow: '0 32px 72px rgba(20,17,10,0.18)',
+          },
         },
+        backdrop: { sx: { bgcolor: 'rgba(20,17,10,0.40)', backdropFilter: 'blur(2px)' } },
       }}
-      BackdropProps={{ sx: { bgcolor: 'rgba(20,17,10,0.40)', backdropFilter: 'blur(2px)' } }}
     >
       <style>{KEYFRAMES}</style>
 
@@ -199,28 +239,30 @@ export default function ImportAirbnbModal({
           <OwnerSearch searchOwners={searchOwners} selectedOwner={owner} onSelect={setOwner} />
         )}
 
-        {phase === 'A-owner' && (
+        {phase === 'A-owner' && !owner && (
           <Stack alignItems="center" sx={{ py: 5 }}>
-            {!owner ? (
-              <>
-                <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Connexion au compte hôte…</Typography>
-                <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
-                  Si cet écran reste bloqué, reconnectez-vous ou contactez le support.
-                </Typography>
-              </>
-            ) : (
-              <>
-                <Box sx={{
-                  width: 48, height: 48, borderRadius: '50%',
-                  border: `3px solid ${T.border}`, borderTopColor: T.primary,
-                  mb: 2.25, animation: 'sj-spin 0.8s linear infinite',
-                }} />
-                <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Chargement de vos annonces Airbnb…</Typography>
-                <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
-                  Synchronisation avec votre compte hôte · quelques secondes
-                </Typography>
-              </>
-            )}
+            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+              {!authReady ? 'Connexion au compte hôte…' : 'Compte hôte introuvable'}
+            </Typography>
+            <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
+              {!authReady
+                ? 'Chargement de votre session…'
+                : 'Reconnectez-vous ou contactez le support.'}
+            </Typography>
+          </Stack>
+        )}
+
+        {phase === 'A-owner' && owner && propsLoading && (
+          <Stack alignItems="center" sx={{ py: 5 }}>
+            <Box sx={{
+              width: 48, height: 48, borderRadius: '50%',
+              border: `3px solid ${T.border}`, borderTopColor: T.primary,
+              mb: 2.25, animation: 'sj-spin 0.8s linear infinite',
+            }} />
+            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Chargement de vos annonces Airbnb…</Typography>
+            <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
+              Synchronisation Rentals United · jusqu&apos;à 1 min
+            </Typography>
           </Stack>
         )}
 

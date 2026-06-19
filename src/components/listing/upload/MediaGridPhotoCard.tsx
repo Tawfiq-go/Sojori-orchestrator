@@ -8,6 +8,9 @@ import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import ImageTypeSelector from './ImageTypeSelector';
 import { type ImageType } from '../../../services/imageTypesService';
 import { MEDIA_GRID_THEME as T } from './mediaGridConstants';
+import { useAuth } from '../../../hooks/useAuth';
+import { hasAdminAccess } from '../../../utils/rbac.utils';
+import { isListingImageImportedFromRu } from '../../../utils/resolveRuImportedFields';
 
 export interface MediaGridListingImage {
   fileName?: string;
@@ -15,6 +18,7 @@ export interface MediaGridListingImage {
   imageTypeRuId?: number[];
   sortOrder?: number;
   url: string;
+  importedFromRu?: boolean;
 }
 
 export interface MediaGridPhotoCardProps {
@@ -62,6 +66,9 @@ function MediaGridPhotoCardComponent({
   onTypeChange,
   onStartTypeEdit,
 }: MediaGridPhotoCardProps) {
+  const { user } = useAuth();
+  const isAdmin = Boolean(user && hasAdminAccess(user.role));
+  const showImportedBadge = isAdmin && isListingImageImportedFromRu(img as Record<string, unknown>);
   const dimUnselected = selectionMode && !isSelected;
 
   return (
@@ -150,6 +157,32 @@ function MediaGridPhotoCardComponent({
             }}
           >
             COVER
+          </Box>
+        )}
+
+        {showImportedBadge && (
+          <Box
+            title="Importée depuis Rentals United"
+            sx={{
+              position: 'absolute',
+              top: isMain ? 32 : 6,
+              right: 6,
+              bgcolor: 'rgba(10, 143, 94, 0.92)',
+              color: '#fff',
+              minWidth: 20,
+              height: 20,
+              px: 0.5,
+              borderRadius: 0.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10,
+              fontWeight: 800,
+              fontFamily: '"Geist Mono", monospace',
+              zIndex: 2,
+            }}
+          >
+            I
           </Box>
         )}
 

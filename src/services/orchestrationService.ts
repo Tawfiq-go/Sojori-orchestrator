@@ -11,10 +11,13 @@ import type {
   CancelPlanParams,
 } from '../types/orchestration.types';
 
-// ✅ CORRECTION: srv-orchestrator est sur port 4010 (pas 4008)
-// Production: https://dev.sojori.com/api/v1/orchestrator (via ingress)
-// Local: http://localhost:4010/api/v1/orchestrator
-const API_BASE = import.meta.env.VITE_SRV_ORCHESTRATOR_URL || 'https://dev.sojori.com';
+import { isLocalViteDevHost } from '../config/resolveDevApiOrigin';
+import { SOJORI_API_ORIGIN } from '../config/sojoriApiOrigins';
+
+// Prod : https://sojori.com/api/v1/orchestrator · local Vite : proxy /api
+const API_BASE =
+  import.meta.env.VITE_SRV_ORCHESTRATOR_URL?.trim() ||
+  (isLocalViteDevHost() ? '' : SOJORI_API_ORIGIN);
 const API_PREFIX = '/api/v1/orchestrator';
 
 import { getToken } from '../utils/authUtils';

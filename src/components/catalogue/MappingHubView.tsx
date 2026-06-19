@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import SearchIcon from '@mui/icons-material/Search';
+import EditIcon from '@mui/icons-material/Edit';
 import { MEDIA_GRID_THEME as T } from '../listing/upload/mediaGridConstants';
 import {
   resolveMappingHref,
@@ -26,7 +27,13 @@ const DB_LABELS: Record<string, string> = {
   'srv-calendar': 'Mongo srv-calendar',
 };
 
-function MappingPreviewPanel({ entry }: { entry: MappingEntry | null }) {
+function MappingPreviewPanel({
+  entry,
+  onOpenNative,
+}: {
+  entry: MappingEntry | null;
+  onOpenNative?: (slug: string) => void;
+}) {
   const href = entry ? resolveMappingHref(entry) : '';
 
   if (!entry) {
@@ -72,7 +79,7 @@ function MappingPreviewPanel({ entry }: { entry: MappingEntry | null }) {
             API : {entry.apiHint}
           </Typography>
         )}
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
           {(entry.tags || []).map((tag) => (
             <Chip key={tag} label={tag} size="small" sx={{ fontSize: 10, height: 22 }} />
           ))}
@@ -84,9 +91,20 @@ function MappingPreviewPanel({ entry }: { entry: MappingEntry | null }) {
             sx={{ fontSize: 10, height: 22 }}
           />
         </Stack>
-        <Stack direction="row" spacing={1} flexWrap="wrap">
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+          {entry.nativeSlug && onOpenNative && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<EditIcon />}
+              onClick={() => onOpenNative(entry.nativeSlug!)}
+              sx={{ textTransform: 'none', fontWeight: 700 }}
+            >
+              Ouvrir (natif)
+            </Button>
+          )}
           <Button
-            variant="contained"
+            variant={entry.nativeSlug ? 'outlined' : 'contained'}
             size="small"
             endIcon={<OpenInNewIcon />}
             href={href}
@@ -147,6 +165,7 @@ export interface MappingHubViewProps {
   subtitle: string;
   groups: MappingGroup[];
   searchPlaceholder?: string;
+  onOpenNative?: (slug: string) => void;
 }
 
 export function MappingHubView({
@@ -154,6 +173,7 @@ export function MappingHubView({
   subtitle,
   groups,
   searchPlaceholder = 'Rechercher…',
+  onOpenNative,
 }: MappingHubViewProps) {
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string>(groups[0]?.items[0]?.id ?? '');
@@ -200,12 +220,14 @@ export function MappingHubView({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         sx={{ mb: 2, maxWidth: 420 }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" />
-            </InputAdornment>
-          ),
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          },
         }}
       />
 
@@ -254,7 +276,17 @@ export function MappingHubView({
                     }}
                   >
                     <Box>
-                      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{item.label}</Typography>
+                      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                        {item.label}
+                        {item.nativeSlug ? (
+                          <Chip
+                            label="Natif"
+                            size="small"
+                            color="primary"
+                            sx={{ ml: 1, height: 18, fontSize: 9, verticalAlign: 'middle' }}
+                          />
+                        ) : null}
+                      </Typography>
                       <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.25 }}>
                         {DB_LABELS[item.database]} · {item.path}
                       </Typography>
@@ -266,7 +298,7 @@ export function MappingHubView({
           ))}
         </Box>
 
-        <MappingPreviewPanel entry={selectedEntry} />
+        <MappingPreviewPanel entry={selectedEntry} onOpenNative={onOpenNative} />
       </Box>
     </Box>
   );
