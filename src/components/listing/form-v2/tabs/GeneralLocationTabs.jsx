@@ -18,6 +18,12 @@ import { FieldIndicator } from '../components/FieldIndicator';
 import { useListingFormStructure } from '../ListingFormStructureContext';
 import { RuFormLegend } from './_shared';
 import {
+  InfoSectionField,
+  LocalizedRowsField,
+  rulesListToText,
+  textToRulesList,
+} from '../utils/ruImportFieldHelpers';
+import {
   Box, Stack, Typography, TextField, Select, MenuItem, FormControl,
   Switch, IconButton, Chip, Button,
 } from '@mui/material';
@@ -363,15 +369,16 @@ export function GeneralTab({
 
           <Field
             fullWidth
-            label="number of floors"
+            label="Étage du logement"
             ruField="floor"
           >
             <TextField
               size="small"
               type="number"
               fullWidth
+              placeholder="N/A"
               value={values.floor ?? ''}
-              onChange={(e) => upd('floor', e.target.value === '' ? undefined : +e.target.value)}
+              onChange={(e) => upd('floor', e.target.value === '' ? null : +e.target.value)}
               sx={sxInput}
               slotProps={{ htmlInput: { min: 0 } }}
             />
@@ -379,15 +386,16 @@ export function GeneralTab({
 
           <Field
             fullWidth
-            label="Total Floors"
+            label="Nombre d'étages (immeuble)"
             ruField="totalFloor"
           >
             <TextField
               size="small"
               type="number"
               fullWidth
+              placeholder="N/A"
               value={values.totalFloor ?? ''}
-              onChange={(e) => upd('totalFloor', e.target.value === '' ? undefined : +e.target.value)}
+              onChange={(e) => upd('totalFloor', e.target.value === '' ? null : +e.target.value)}
               sx={sxInput}
               slotProps={{ htmlInput: { min: 1 } }}
             />
@@ -429,6 +437,41 @@ export function GeneralTab({
               }}
               sx={sxInput}
               slotProps={{ htmlInput: { min: 0 } }}
+            />
+          </Field>
+
+          <Field
+            fullWidth
+            label="StandardGuests (RU)"
+            ruField="standardGuests"
+            hint="RU StandardGuests · capacité « standard » OTA"
+          >
+            <TextField
+              size="small"
+              type="number"
+              fullWidth
+              value={values.standardGuests ?? ''}
+              onChange={(e) =>
+                upd('standardGuests', e.target.value === '' ? undefined : +e.target.value)
+              }
+              sx={sxInput}
+              slotProps={{ htmlInput: { min: 1 } }}
+            />
+          </Field>
+
+          <Field
+            fullWidth
+            label="Fuseau horaire"
+            ruField="timeZoneName"
+            hint="RU timeZoneName"
+          >
+            <TextField
+              size="small"
+              fullWidth
+              value={values.timeZoneName || ''}
+              onChange={(e) => upd('timeZoneName', e.target.value)}
+              placeholder="ex: Africa/Casablanca"
+              sx={sxInput}
             />
           </Field>
 
@@ -517,17 +560,91 @@ export function GeneralTab({
           </Field>
         </Box>
         <Box sx={{ mt: 1.75 }}>
-          <Field label="airbnbSummary" charCount="spécifique Airbnb">
+          <Field
+            label="airbnbSummary"
+            ruField="airbnbSummary"
+            charCount="spécifique Airbnb"
+            hint="Optionnel · remplace la description courte sur Airbnb (Sojori / channel manager)"
+          >
             <TextField size="small" multiline rows={2} fullWidth placeholder="Optionnel · remplace la description courte sur Airbnb" value={values.airbnbSummary || ''} onChange={e => upd('airbnbSummary', e.target.value)} sx={sxInput} />
           </Field>
         </Box>
       </Card>
 
+      <Card title="📋 Règles du séjour (RU)" meta="houseRule · note · rulesAndInfo">
+        <InfoSectionField
+          label="Règlement intérieur (houseRule)"
+          ruField="houseRule"
+          value={values.houseRule}
+          onChange={(v) => upd('houseRule', v)}
+          minRows={3}
+        />
+        <Box sx={{ mt: 1.5 }}>
+          <InfoSectionField
+            label="Notes voyageurs (note)"
+            ruField="note"
+            value={values.note}
+            onChange={(v) => upd('note', v)}
+            minRows={2}
+          />
+        </Box>
+        <Box sx={{ mt: 1.5 }}>
+          <Field
+            label="Règles structurées (rulesAndInfo.Rules)"
+            ruField="houseRule"
+            fullWidth
+            hint="Import RU · une ligne = une règle"
+          >
+            <TextField
+              size="small"
+              multiline
+              rows={3}
+              fullWidth
+              value={rulesListToText(values.rulesAndInfo, 'Rules')}
+              onChange={(e) =>
+                onChange?.({
+                  ...values,
+                  rulesAndInfo: {
+                    ...(values.rulesAndInfo && typeof values.rulesAndInfo === 'object' ? values.rulesAndInfo : {}),
+                    Rules: textToRulesList(e.target.value),
+                  },
+                })
+              }
+              sx={sxInput}
+            />
+          </Field>
+        </Box>
+        <Box sx={{ mt: 1.5 }}>
+          <Field label="Infos utiles (rulesAndInfo.InfoUtils)" ruField="note" fullWidth>
+            <TextField
+              size="small"
+              multiline
+              rows={3}
+              fullWidth
+              value={rulesListToText(values.rulesAndInfo, 'InfoUtils')}
+              onChange={(e) =>
+                onChange?.({
+                  ...values,
+                  rulesAndInfo: {
+                    ...(values.rulesAndInfo && typeof values.rulesAndInfo === 'object' ? values.rulesAndInfo : {}),
+                    InfoUtils: textToRulesList(e.target.value),
+                  },
+                })
+              }
+              sx={sxInput}
+            />
+          </Field>
+        </Box>
+      </Card>
+
       <Card title="⚙️ Statut & visibilité">
-        <ToggleRow title="Listing actif" ruField="active" desc="Visible sur tous les canaux. Décocher pour masquer partout en 1 clic." checked={values.active !== false} onChange={v => upd('active', v)} />
-        <ToggleRow title="OTA only" ruField="otaOnly" desc="Réservable uniquement via Airbnb / Booking. Bloque les réservations directes." checked={!!values.otaOnly} onChange={v => upd('otaOnly', v)} />
-        <ToggleRow title="Instant booking" ruField="instantBookable" desc="Pas d'approbation manuelle requise (recommandé Airbnb Plus)." checked={!!values.instantBooking} onChange={v => upd('instantBooking', v)} />
-        <ToggleRow title="Staging (test)"  desc="Mode brouillon · non synchronisé OTA." checked={!!values.staging} onChange={v => upd('staging', v)} />
+        <ToggleRow
+          title="Listing actif"
+          ruField="active"
+          desc="Visible sur tous les canaux. Décocher pour masquer partout en 1 clic."
+          checked={values.active !== false}
+          onChange={(v) => upd('active', v)}
+        />
       </Card>
     </Box>
   );
@@ -757,6 +874,25 @@ export function LocationTab({ values, onChange }) {
               sx={sxInput}
             />
           </Field>
+        </Box>
+      </Card>
+
+      <Card title="🧭 Quartier & environnement">
+        <LocalizedRowsField
+          label="Description du quartier"
+          ruField="zoneDescription"
+          value={values.zoneDescription}
+          onChange={(v) => upd('zoneDescription', v)}
+          minRows={3}
+        />
+        <Box sx={{ mt: 1.5 }}>
+          <InfoSectionField
+            label="Quartier / voisinage"
+            ruField="center"
+            value={values.center}
+            onChange={(v) => upd('center', v)}
+            minRows={2}
+          />
         </Box>
       </Card>
     </Box>

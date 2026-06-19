@@ -4,6 +4,42 @@ import { mapAmenityFromApi, mapCompositionRoom } from './mapAmenityFromApi';
 import { useAmenitiesData } from './useAmenitiesData';
 import type { CategoryName } from './_tokens';
 
+function filterCatalogItems(
+  items: ReturnType<typeof mapAmenityFromApi>[],
+  params: {
+    categories?: CategoryName[];
+    roomIds?: string[];
+    basic?: boolean;
+    search_text?: string;
+    limit?: number;
+  },
+) {
+  let out = items;
+  if (params.basic) out = out.filter((a) => a.basic);
+  if (params.search_text?.trim()) {
+    const q = params.search_text.trim().toLowerCase();
+    out = out.filter(
+      (a) => a.nameFr.toLowerCase().includes(q) || a.nameEn.toLowerCase().includes(q),
+    );
+  }
+  if (params.categories?.length) {
+    const set = new Set(params.categories);
+    out = out.filter((a) => a.categories.some((c) => set.has(c as CategoryName)));
+  }
+  if (params.roomIds?.length) {
+    const roomSet = new Set(params.roomIds.map(String));
+    out = out.filter(
+      (a) =>
+        a.compositionRoomIds.length === 0 ||
+        a.compositionRoomIds.some((id) => roomSet.has(String(id))),
+    );
+  }
+  if (params.limit && params.limit > 0) {
+    out = out.slice(0, params.limit);
+  }
+  return out;
+}
+
 export function useSojoriAmenitiesData(listingId: string) {
   const services = useMemo(
     () => ({
@@ -14,6 +50,21 @@ export function useSojoriAmenitiesData(listingId: string) {
         search_text?: string;
         limit?: number;
       }) => {
+        const catalog = await listingsService.getListingCatalogForPm();
+        if (catalog.categories.length > 0) {
+          let items = catalog.categories.flatMap((cat) =>
+            cat.amenities.map((row) =>
+              mapAmenityFromApi({
+                ...row,
+                categoryFr: cat.nameFr,
+                SojoriSubcategory: [{ fr: cat.nameFr, en: cat.nameEn }],
+              }),
+            ),
+          );
+          items = filterCatalogItems(items, params);
+          return { items, total: items.length };
+        }
+
         const result = await listingsService.getAmenitiesCatalogPage({
           page: 0,
           limit: params.limit ?? 500,
@@ -28,6 +79,10 @@ export function useSojoriAmenitiesData(listingId: string) {
         };
       },
       fetchCategories: async (): Promise<CategoryName[]> => {
+        const catalog = await listingsService.getListingCatalogForPm();
+        if (catalog.categories.length > 0) {
+          return catalog.categories.map((c) => c.nameFr) as CategoryName[];
+        }
         const cats = await listingsService.getPredefinedCategories();
         return cats.filter((c) => c && c !== 'All Categories' && c !== 'Basic') as CategoryName[];
       },

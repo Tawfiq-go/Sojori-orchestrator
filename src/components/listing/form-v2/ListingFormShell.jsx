@@ -35,16 +35,16 @@ export const DETAIL_TABS = [
   ]},
   { group: 'Commercial', items: [
     { id: 'pricing',      icon: '💰', label: 'Pricing' },
-    { id: 'availability', icon: '📅', label: 'Availability' },
+    { id: 'availability', icon: '📅', label: 'Disponibilité & séjour' },
     { id: 'fees',         icon: '💳', label: 'Fees & Deposits' },
   ]},
   { group: 'Distribution', items: [
-    { id: 'channels',     icon: '🔗', label: 'Channel Management' },
-    { id: 'direct',       icon: '🌐', label: 'Direct Booking' },
+    { id: 'distribution', icon: '📡', label: 'Distribution' },
   ]},
   { group: 'Inventaire', items: [
     { id: 'rooms',        icon: '🛏️', label: 'Rooms & Beds' },
     { id: 'license',      icon: '📄', label: 'License' },
+    { id: 'ru-import',    icon: '🗄️', label: 'Trace import RU' },
   ]},
 ];
 
@@ -271,7 +271,7 @@ export default function ListingFormShell({
             }}
           >
             {[
-              { id: 'detail', icon: '🏠', label: 'Détail listing', pillLabel: '11 onglets', accent: T.primary, tint: T.primaryTint, tintColor: T.primaryDeep },
+              { id: 'detail', icon: '🏠', label: 'Détail listing', pillLabel: '10 onglets', accent: T.primary, tint: T.primaryTint, tintColor: T.primaryDeep },
               { id: 'orchestration-v3', icon: '🎯', label: 'Orchestration', pillLabel: 'Par service', accent: '#7c3aed', tint: 'rgba(124,58,237,0.10)', tintColor: '#7c3aed' },
             ].map(opt => {
               const active = level === opt.id;

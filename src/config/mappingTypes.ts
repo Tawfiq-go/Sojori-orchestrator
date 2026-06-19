@@ -23,6 +23,8 @@ export type MappingEntry = {
   tags?: string[];
   apiHint?: string;
   database: MappingDatabase;
+  /** Route native orchestrator : /listings/mapping/{nativeSlug} */
+  nativeSlug?: string;
 };
 
 export type MappingGroup = {

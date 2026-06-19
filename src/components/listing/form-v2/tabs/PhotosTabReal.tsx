@@ -13,6 +13,8 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MediaGrid from '../../upload/MediaGrid';
 import { LegacyReduxProvider } from '../../../LegacyReduxBridge';
+import { FieldIndicator } from '../components/FieldIndicator';
+import { RuFormLegend } from './_shared';
 
 const T = {
   primary: '#b8851a',
@@ -61,6 +63,19 @@ export const PhotosTabReal = memo(function PhotosTabReal({
 
   return (
     <Box>
+      <RuFormLegend />
+      <Stack
+        direction="row"
+        alignItems="center"
+        flexWrap="wrap"
+        gap={0.75}
+        sx={{ mb: 0.75 }}
+      >
+        <Typography sx={{ fontSize: 11, color: T.text3 }}>
+          Galerie
+        </Typography>
+        <FieldIndicator field="listingImages" dense adminOnlyGate />
+      </Stack>
       <Stack
         direction="row"
         alignItems="center"

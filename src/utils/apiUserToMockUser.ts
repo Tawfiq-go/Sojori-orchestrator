@@ -10,6 +10,7 @@ export function apiUserToMockUser(api: ApiUser, prev: MockUser | null): MockUser
     firstName: api.firstName ?? prev?.firstName ?? '',
     lastName: api.lastName ?? prev?.lastName ?? '',
     role,
+    ownerId: api.ownerId ?? prev?.ownerId,
     phone: api.phone ?? prev?.phone ?? '',
     company: api.company ?? prev?.company ?? '',
     avatar: api.avatar ?? prev?.avatar ?? '',

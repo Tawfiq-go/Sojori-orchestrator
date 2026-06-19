@@ -501,10 +501,16 @@ export function deleteChannelsRuFieldMapping(id: string) {
   return apiClient.delete(`${CHANNELS_DASHBOARD}/ru-field-mappings/${encodeURIComponent(String(id))}`, channelsDashboardAxiosConfig());
 }
 
-export function fetchRuOwnerProperties(ownerId: string) {
-  return apiClient.post(`${CHANNELS_DASHBOARD}/ru-import/list-owner-properties`, { ownerId }, {
+export function fetchRuOwnerProperties(
+  ownerId?: string,
+  options?: { signal?: AbortSignal; sessionScoped?: boolean },
+) {
+  // Toujours envoyer ownerId quand connu ; srv-admin le force côté session Owner/Worker.
+  const body = ownerId ? { ownerId } : {};
+  return apiClient.post(`${CHANNELS_DASHBOARD}/ru-import/list-owner-properties`, body, {
     ...channelsDashboardAxiosConfig(),
     timeout: 120000,
+    signal: options?.signal,
   });
 }
 

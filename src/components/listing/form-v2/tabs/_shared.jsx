@@ -9,6 +9,8 @@ import { Box, Stack, Typography, TextField, Switch, IconButton, Chip, Button, Se
 import { FieldIndicator } from '../components/FieldIndicator';
 import { useListingFormStructure } from '../ListingFormStructureContext';
 import { localizeField } from '../utils/localizeField';
+import { useAuth } from '../../../../hooks/useAuth';
+import { hasAdminAccess } from '../../../../utils/rbac.utils';
 
 export const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a', primaryTint: 'rgba(184,133,26,0.10)',
@@ -37,13 +39,27 @@ export const sxInputAI = {
 
 export function RuFormLegend() {
   const listingStructure = useListingFormStructure();
-  if (!listingStructure) return null;
+  const { user } = useAuth();
+  const isAdmin = Boolean(user && hasAdminAccess(user.role));
+  if (!listingStructure && !isAdmin) return null;
+  if (!isAdmin) {
+    return (
+      <Typography sx={{ fontSize: 11, color: T.text3, mb: 1.5, lineHeight: 1.45 }}>
+        <Box component="span" sx={{ color: '#4a90e2', fontWeight: 700 }}>R</Box>
+        {' '}= envoyé ou mappé vers Rentals United ·{' '}
+        <Box component="span" sx={{ color: '#b91c1c', fontWeight: 700 }}>*</Box>
+        {' '}= obligatoire pour une annonce valide
+      </Typography>
+    );
+  }
   return (
     <Typography sx={{ fontSize: 11, color: T.text3, mb: 1.5, lineHeight: 1.45 }}>
+      <Box component="span" sx={{ color: '#0a8f5e', fontWeight: 700 }}>I</Box>
+      {' '}= importé depuis RU ·{' '}
       <Box component="span" sx={{ color: '#4a90e2', fontWeight: 700 }}>R</Box>
-      {' '}= envoyé ou mappé vers Rentals United ·{' '}
+      {' '}= mappé export RU ·{' '}
       <Box component="span" sx={{ color: '#b91c1c', fontWeight: 700 }}>*</Box>
-      {' '}= obligatoire pour une annonce valide
+      {' '}= obligatoire
     </Typography>
   );
 }
@@ -221,16 +237,20 @@ export function Counter({ value, onChange, min = 0, max = 99 }) {
   );
 }
 
-export function ChipsRow({ items, value = [], onToggle, single = false }) {
+export function ChipsRow({ items, value = [], onToggle, single = false, suggested }) {
   return (
     <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: 'wrap' }}>
       {items.map(item => {
         const active = single ? value === item.id : value.includes(item.id);
+        const isSuggested = single && suggested === item.id && !active;
         return (
           <Chip key={item.id} label={item.label} clickable size="small" onClick={() => onToggle?.(item.id)}
             sx={{
-              bgcolor: active ? T.primaryTint : T.bg1, color: active ? T.primaryDeep : T.text2,
-              border: '1px solid', borderColor: active ? T.primary : T.border,
+              bgcolor: active ? T.primaryTint : isSuggested ? T.warningTint : T.bg1,
+              color: active ? T.primaryDeep : isSuggested ? T.warning : T.text2,
+              border: '1px solid',
+              borderColor: active ? T.primary : isSuggested ? T.warning : T.border,
+              borderStyle: isSuggested ? 'dashed' : 'solid',
               fontWeight: active ? 600 : 500, fontSize: 11.5,
               '&:hover': { borderColor: T.borderStrong },
             }} />

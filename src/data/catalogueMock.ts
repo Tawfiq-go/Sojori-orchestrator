@@ -587,7 +587,6 @@ export const LISTING_TAB_META: ListingTabMeta[] = [
   { key: 'pricing', icon: '💰', label: 'Pricing', group: 'LISTING' },
   { key: 'availability', icon: '📅', label: 'Availability & Booking Rules', group: 'LISTING' },
   { key: 'deposit', icon: '💳', label: 'Fees & Deposits', group: 'LISTING' },
-  { key: 'channels', icon: '🔗', label: 'Channel Management', group: 'LISTING' },
   { key: 'roomtypes', icon: '🛏️', label: 'Rooms & Beds', group: 'LISTING' },
   { key: 'licenses', icon: '📄', label: 'License info', group: 'LISTING' },
   { key: 'houserules', icon: 'ℹ️', label: 'Others', group: 'LISTING' },

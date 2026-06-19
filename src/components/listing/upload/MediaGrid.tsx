@@ -34,7 +34,7 @@ import {
 } from '../../../utils/upload/uploadInBatches';
 import type { UploadProgressInfo } from '../../../utils/upload/uploadInBatches';
 import type { UploadBatchProgress } from './UploadDialog';
-import { getImageTypesSojori, type ImageType } from '../../../services/imageTypesService';
+import { getImageOtaTypesForListing, resolveImageOtaDisplayTypes, type ImageType } from '../../../services/imageTypesService';
 import listingsService from '../../../services/listingsService';
 import { cleanListingImagesForPayload } from '../../../utils/listingFormV2ApiAdapter';
 import UploadDialog from './UploadDialog';
@@ -45,7 +45,10 @@ import {
   getImageCategoryLabel,
   getEffectiveImageTypeId,
   getImageTypeDisplayName,
+  getMainImageTypeFromCatalog,
   isImageCategoryUndefined,
+  isMainImageCategory,
+  ruIdsForImageType,
 } from '../../../utils/upload/imageTypeDisplay';
 import type { RootState } from '../../../redux/store';
 
@@ -58,6 +61,8 @@ interface ListingImage {
   imageTypeRuId?: number[];
   sortOrder?: number;
   url: string;
+  caption?: string | null;
+  importedFromRu?: boolean;
 }
 
 interface MediaGridProps {
@@ -139,18 +144,41 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     const fetchImageTypes = async () => {
       setLoadingTypes(true);
       try {
-        const response = await getImageTypesSojori({ priority: '1,2,3' });
-        if (response.data && response.data.data) {
-          setImageTypes(response.data.data);
+        const response = await getImageOtaTypesForListing();
+        let types: ImageType[] = response.data?.data ? [...response.data.data] : [];
+
+        const assignedIds = [
+          ...new Set(
+            listingImages
+              .map((img) => String(img.imageTypeId || '').trim())
+              .filter(Boolean),
+          ),
+        ];
+        const missingIds = assignedIds.filter(
+          (id) => !types.some((t) => String(t._id) === id),
+        );
+        if (missingIds.length > 0) {
+          const extraRes = await resolveImageOtaDisplayTypes(missingIds);
+          const extra: ImageType[] = extraRes.data?.data || [];
+          const seen = new Set(types.map((t) => String(t._id)));
+          for (const row of extra) {
+            const id = String(row._id);
+            if (!seen.has(id)) {
+              types.push(row);
+              seen.add(id);
+            }
+          }
         }
+
+        setImageTypes(types);
       } catch (error) {
         toast.error('Failed to load image types');
       } finally {
         setLoadingTypes(false);
       }
     };
-    fetchImageTypes();
-  }, []);
+    void fetchImageTypes();
+  }, [listingImages]);
 
   useEffect(() => {
     if (!imageTypes.length || ruImageTypesNormalizedRef.current || listingImages.length === 0) return;
@@ -165,7 +193,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
       return {
         ...img,
         imageTypeId: effectiveId,
-        imageTypeRuId: sojori?.rentalAmenityIds || img.imageTypeRuId,
+        imageTypeRuId: sojori ? ruIdsForImageType(sojori) : img.imageTypeRuId,
       };
     });
 
@@ -192,18 +220,15 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     });
   };
 
-  const getMainImageType = (): ImageType | undefined => {
-    if (!imageTypes?.length) return undefined;
-    let mainType = imageTypes.find((type) => type.sojoriName?.en === 'Main Image');
-    if (!mainType) {
-      mainType = imageTypes.find((type) => type.rentalAmenityIds && type.rentalAmenityIds.includes(1));
-    }
-    return mainType || imageTypes[0];
-  };
+  const getMainImageType = (): ImageType | undefined => getMainImageTypeFromCatalog(imageTypes);
 
   const getDefaultNonMainImageType = (): ImageType | undefined => {
     if (!imageTypes?.length) return undefined;
     const mainType = getMainImageType();
+    const additional = imageTypes.find(
+      (t) => t.sojoriName?.en === 'Additional photos' || t.airbnbCategory === 'Additional photos',
+    );
+    if (additional && additional._id !== mainType?._id) return additional;
     const nonMain = imageTypes.find((t) => t._id !== mainType?._id);
     return nonMain || mainType;
   };
@@ -245,22 +270,10 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     setTypeEditIndex(null);
   }, [galleryTab]);
 
-  const mainImageTypeId = useMemo(() => {
-    if (!imageTypes.length) return null;
-    let mainType = imageTypes.find((type) => type.sojoriName?.en === 'Main Image');
-    if (!mainType) {
-      mainType = imageTypes.find((type) => type.rentalAmenityIds?.includes(1));
-    }
-    return mainType?._id ?? null;
-  }, [imageTypes]);
-
   const isMainImage = useCallback(
-    (imageTypeId?: string, imageTypeRuId?: number[]): boolean => {
-      const effectiveId = getEffectiveImageTypeId(imageTypeId, imageTypeRuId, imageTypes);
-      if (!effectiveId || !mainImageTypeId) return false;
-      return effectiveId === mainImageTypeId;
-    },
-    [mainImageTypeId, imageTypes],
+    (imageTypeId?: string, imageTypeRuId?: number[]) =>
+      isMainImageCategory(imageTypeId, imageTypeRuId, imageTypes),
+    [imageTypes],
   );
 
   const exitSelectionMode = () => {
@@ -356,7 +369,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
       updatedImages[idx] = {
         ...updatedImages[idx],
         imageTypeId: bulkCategoryId,
-        imageTypeRuId: selectedType?.rentalAmenityIds || [],
+        imageTypeRuId: ruIdsForImageType(selectedType),
       };
     });
     try {
@@ -478,7 +491,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
         return {
           fileName: file.fileName || `image_${Date.now()}_${index}`,
           imageTypeId,
-          imageTypeRuId: imageType?.rentalAmenityIds || [],
+          imageTypeRuId: ruIdsForImageType(imageType),
           sortOrder: listingLenBefore + index + 1,
           url: normalizeUrl(file.url),
         };
@@ -515,7 +528,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
       updatedImages[index] = {
         ...updatedImages[index],
         imageTypeId: typeId || '',
-        imageTypeRuId: selectedType?.rentalAmenityIds || [],
+        imageTypeRuId: ruIdsForImageType(selectedType),
       };
       try {
         await persistListingImages(updatedImages, 'grid.typeChange', 'Catégorie mise à jour');
@@ -560,7 +573,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
 
     // Set the selected image as main
     updatedImages[index].imageTypeId = mainImageType?._id || '';
-    updatedImages[index].imageTypeRuId = mainImageType?.rentalAmenityIds || [];
+    updatedImages[index].imageTypeRuId = ruIdsForImageType(mainImageType);
 
     // Move to first position
     const mainImage = updatedImages[index];
@@ -618,7 +631,12 @@ const MediaGrid: React.FC<MediaGridProps> = ({
         img,
         originalIndex,
         effectiveImageTypeId: resolveEffectiveTypeId(img),
-        categoryLabel: getImageCategoryLabel(img.imageTypeId, imageTypes, img.imageTypeRuId),
+        categoryLabel: getImageCategoryLabel(
+          img.imageTypeId,
+          imageTypes,
+          img.imageTypeRuId,
+          img.caption,
+        ),
         undefinedCategory: isImageCategoryUndefined(resolveEffectiveTypeId(img)),
         isMain: isMainImage(img.imageTypeId, img.imageTypeRuId),
         placeholderGradient: PHOTO_GRADIENTS[originalIndex % PHOTO_GRADIENTS.length],

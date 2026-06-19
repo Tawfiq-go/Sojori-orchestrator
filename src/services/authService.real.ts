@@ -23,6 +23,8 @@ export interface User {
   phone?: string;
   company?: string;
   avatar?: string;
+  /** Compte propriétaire (Worker) */
+  ownerId?: string;
 }
 
 export interface AuthResponse {
@@ -73,6 +75,10 @@ function userFromValidTokenPayload(data: Record<string, unknown>): User | undefi
     phone: r.phone != null ? String(r.phone) : undefined,
     company: r.company != null ? String(r.company) : undefined,
     avatar: r.avatar != null ? String(r.avatar) : undefined,
+    ownerId:
+      r.ownerId != null
+        ? String(r.ownerId)
+        : undefined,
   };
 }
 

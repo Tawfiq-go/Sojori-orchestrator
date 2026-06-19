@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════
 // CalendarInventoryPage.jsx — wrapper toolbar + Multi/Simple toggle
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { T } from './_shared';
 import MultiView from './MultiView';
 import SimpleView from './SimpleView';
@@ -9,6 +9,9 @@ import ColumnFilters from './ColumnFilters';
 import UpdateInventoryModal from './UpdateInventoryModal';
 import CalendarDatePicker from './CalendarDatePicker';
 import DpSyncAuditStrip from './DpSyncAuditStrip';
+import ReservationCalendarDrawer from './ReservationCalendarDrawer';
+import { normalizeCalendarReservation, reservationRouteId } from './reservationCalendarUtils';
+import reservationsService from '../../services/reservationsService';
 import {
   MULTI_VISIBLE_DAYS,
   INVENTORY_PAST_RETENTION_DAYS,
@@ -54,6 +57,8 @@ export default function CalendarInventoryPage({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerAnchor, setPickerAnchor] = useState(null);
   const [limitHint, setLimitHint] = useState(null);
+  const [drawerReservation, setDrawerReservation] = useState(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
 
   const { maxPivotStart, horizonEnd } = useMemo(() => getCalendarWindowBounds(), []);
   const atHorizonEnd = isAtHorizonEnd(pivotDate);
@@ -123,6 +128,35 @@ export default function CalendarInventoryPage({
     commitDate(d);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pivotDate lu pour éviter boucle
   }, [modalCells]);
+
+  const openReservationDrawer = useCallback(async (rawRes) => {
+    const shell = normalizeCalendarReservation(rawRes);
+    if (!shell) return;
+    setDrawerReservation(shell);
+    setDrawerLoading(true);
+    try {
+      const id = reservationRouteId(shell);
+      if (id) {
+        const full = await reservationsService.getByRouteParam(id);
+        setDrawerReservation({
+          ...full,
+          guestName:
+            full.guestName ||
+            `${full.guestFirstName || ''} ${full.guestLastName || ''}`.trim() ||
+            shell.guestName,
+        });
+      }
+    } catch (err) {
+      console.error('[CalendarV3] détail résa:', err);
+    } finally {
+      setDrawerLoading(false);
+    }
+  }, []);
+
+  const closeReservationDrawer = useCallback(() => {
+    setDrawerReservation(null);
+    setDrawerLoading(false);
+  }, []);
 
   return (
     <div
@@ -369,6 +403,7 @@ export default function CalendarInventoryPage({
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
           onCellsSelected={setModalCells}
+          onOpenReservation={openReservationDrawer}
         />
       )}
       {view === 'simple' && inventoryLoading && (
@@ -390,6 +425,7 @@ export default function CalendarInventoryPage({
           month={pivotDate.getMonth()}
           inventories={inventoriesByListing[selectedListingId] || {}}
           onCellsSelected={setModalCells}
+          onOpenReservation={openReservationDrawer}
         />
       )}
       {view === 'simple' && !selectedListing && (
@@ -427,6 +463,14 @@ export default function CalendarInventoryPage({
           setModalCells(null);
         }}
       />
+
+      {drawerReservation && (
+        <ReservationCalendarDrawer
+          reservation={drawerReservation}
+          loading={drawerLoading}
+          onClose={closeReservationDrawer}
+        />
+      )}
     </div>
   );
 }

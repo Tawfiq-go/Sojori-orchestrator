@@ -248,6 +248,47 @@ class CalendarService {
       throw error;
     }
   }
+
+  /** GET /api/v1/calendar/dynamic-price/get?listingId= */
+  async getDynamicPricingRule(listingId: string): Promise<Record<string, unknown> | null> {
+    const response = await apiClient.get<{ success: boolean; rule?: Record<string, unknown> }>(
+      `${CALENDAR_BASE}/dynamic-price/get`,
+      { params: { listingId } },
+    );
+    if (!response.data?.success) return null;
+    return response.data.rule ?? null;
+  }
+
+  /** Met à jour uniquement long stay / last minute (merge sur règle existante). */
+  async updatePricingDiscounts(
+    listingId: string,
+    discounts: {
+      longStayDiscounts: unknown[];
+      lastMinuteDiscount: unknown[];
+    },
+  ): Promise<void> {
+    const rule = (await this.getDynamicPricingRule(listingId)) || {};
+    const payload = {
+      listingId,
+      monthRules: rule.monthRules ?? {},
+      weekdayRules: rule.weekdayRules ?? {},
+      eventRules: rule.eventRules ?? [],
+      occupancyRules: rule.occupancyRules ?? [],
+      monthActive: rule.monthActive ?? false,
+      weekdayActive: rule.weekdayActive ?? false,
+      eventActive: rule.eventActive ?? false,
+      occupancyActive: rule.occupancyActive ?? false,
+      longStayDiscounts: discounts.longStayDiscounts,
+      lastMinuteDiscount: discounts.lastMinuteDiscount,
+    };
+    const response = await apiClient.put<{ success: boolean; message?: string }>(
+      `${CALENDAR_BASE}/dynamic-price/update`,
+      payload,
+    );
+    if (!response.data?.success) {
+      throw new Error(response.data?.message || 'Failed to update pricing discounts');
+    }
+  }
 }
 
 // Export singleton instance

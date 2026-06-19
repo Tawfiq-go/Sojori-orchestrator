@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useMemo } from 'react';
 import { Box, Stack, Typography, Button, IconButton } from '@mui/material';
-import { T, CATEGORY_META, emojiFor } from './_tokens';
+import { T, getCategoryMeta, emojiFor } from './_tokens';
 import type { Amenity, SelectedAmenity, CategoryName } from './_tokens';
 
 export interface SelectedPanelProps {
@@ -27,7 +27,7 @@ export default function SelectedPanel({
     selected.forEach((_, id) => {
       const a = catalog.get(id);
       if (!a) return;
-      const cat = a.categories.find((c) => Boolean(c && CATEGORY_META[c as CategoryName]));
+      const cat = a.categories.find((c) => Boolean(c && getCategoryMeta(c).short));
       const key = cat ?? '__other__';
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(a);
@@ -65,7 +65,7 @@ export default function SelectedPanel({
         ) : grouped.map(([cat, items]) => {
           const meta = cat === '__other__'
             ? { emoji: '✨', short: 'Autre' }
-            : (CATEGORY_META[cat as CategoryName] ?? { emoji: '✨', short: cat });
+            : getCategoryMeta(cat);
           return (
           <Box key={cat} sx={{ mb: 1.75 }}>
             <Stack direction="row" gap={0.75} sx={{ alignItems: 'center', mb: 0.875 }}>

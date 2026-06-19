@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import ListingFormShell from './ListingFormShell';
 import { ListingFormStructureContext } from './ListingFormStructureContext';
+import { ListingFormImportedProvider } from './ListingFormImportedContext';
 import listingsService from '../../../services/listingsService';
 import { toast } from 'react-toastify';
 
@@ -13,25 +14,26 @@ import { GeneralTab, LocationTab }                          from './tabs/General
 import { PhotosTabReal }                                    from './tabs/PhotosTabReal';
 import AmenitiesTab                                         from './tabs/DetailTabsAmenities';
 import { PricingTab, AvailabilityTab, FeesTab }             from './tabs/DetailTabsCommercial';
-import { ChannelsTab, DirectBookingTab, RoomsTab, LicenseTab } from './tabs/DetailTabsDistribution';
+import { DistributionTab, RoomsTab, LicenseTab } from './tabs/DetailTabsDistribution';
+import { RuImportDataTab } from './tabs/DetailTabsRuImport';
 import ListingOrchestrationV3Embed from '../../../features/orchestrationListingV3/ListingOrchestrationV3Embed';
 
 export default function ListingFormV2({
   listingId,
   initialValues = {},
+  importedFieldsSource,
   defaultLevel = 'detail',
   defaultTab,
   lockLevel,
   embedded = false,
   onSave,
   onImagesPersisted,
-  onVerifyRuChannels,
-  verifyRuLoading = false,
   listingStructure = null,
   roomTypeConfigs = [],
 }) {
   const [values, setValues] = useState(initialValues);
   const [publishLoading, setPublishLoading] = useState(false);
+  const ruImportSnapshot = importedFieldsSource ?? initialValues;
 
   useEffect(() => {
     if (initialValues && Object.keys(initialValues).length > 0) {
@@ -120,6 +122,7 @@ export default function ListingFormV2({
           />
         );
       }
+      if (tabKey === 'rules-guest') return <AvailabilityTab {...common} />;
       if (tabKey === 'location')     return <LocationTab    {...common} />;
       if (tabKey === 'photos')       return <PhotosTabReal  listingId={listingId}
                                                             listingImages={values.listingImages || []}
@@ -128,11 +131,11 @@ export default function ListingFormV2({
                                                             airbnbHeroOrder={values.airbnbHeroOrder}
                                                             onAirbnbOrderChange={v => setValues(s => ({ ...s, airbnbHeroOrder: v }))} />;
       if (tabKey === 'amenities')    return <AmenitiesTab   {...common} listingId={listingId} />;
+      if (tabKey === 'ru-import')    return <RuImportDataTab {...common} />;
       if (tabKey === 'pricing')      return <PricingTab     {...common} />;
       if (tabKey === 'availability') return <AvailabilityTab {...common} />;
       if (tabKey === 'fees')         return <FeesTab        {...common} />;
-      if (tabKey === 'channels')     return <ChannelsTab    {...common} listingId={listingId} onVerifyRuChannels={onVerifyRuChannels} verifyRuLoading={verifyRuLoading} />;
-      if (tabKey === 'direct')       return <DirectBookingTab {...common} />;
+      if (tabKey === 'distribution' || tabKey === 'direct') return <DistributionTab {...common} />;
       if (tabKey === 'rooms')        return <RoomsTab       {...common} listingId={listingId} />;
       if (tabKey === 'license')      return <LicenseTab     {...common} />;
     }
@@ -140,6 +143,7 @@ export default function ListingFormV2({
   };
 
   return (
+    <ListingFormImportedProvider listingRaw={ruImportSnapshot}>
     <ListingFormStructureContext.Provider value={listingStructure}>
     <ListingFormShell
       listing={{
@@ -156,7 +160,6 @@ export default function ListingFormV2({
         location:     { tone: 'success', label: '✓' },
         photos:       { tone: 'warning', label: `${(values.photos || []).length}/15` },
         amenities:    { tone: 'success', label: '✓' },
-        channels:     { tone: 'warning', label: '2/3' },
         license:      { tone: 'warning', label: '⚠' },
       }}
       defaultLevel={defaultLevel}
@@ -171,5 +174,6 @@ export default function ListingFormV2({
       renderTab={renderTab}
     />
     </ListingFormStructureContext.Provider>
+    </ListingFormImportedProvider>
   );
 }

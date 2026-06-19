@@ -128,8 +128,6 @@ export default function ChatbotPropertyResumeTab({
           <DetailRow label="Channel manager">{d.channelManager}</DetailRow>
           <DetailRow label="Statut">{d.active ? 'Actif' : 'Inactif'}</DetailRow>
           <DetailRow label="Réservation instantanée">{boolLabel(d.instantBooking)}</DetailRow>
-          <DetailRow label="Staging">{boolLabel(d.staging)}</DetailRow>
-          <DetailRow label="OTA only">{boolLabel(d.otaOnly)}</DetailRow>
           <DetailRow label="Dernière maj listing">
             {formatSummaryDate(d.listingUpdatedAt)}
           </DetailRow>

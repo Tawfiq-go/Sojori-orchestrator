@@ -3,7 +3,12 @@
 // ════════════════════════════════════════════════════════════════════
 import { getToken } from '../utils/authUtils';
 
-const API_BASE = import.meta.env.VITE_SRV_ORCHESTRATOR_URL || 'https://dev.sojori.com';
+import { isLocalViteDevHost } from '../config/resolveDevApiOrigin';
+import { SOJORI_API_ORIGIN } from '../config/sojoriApiOrigins';
+
+const API_BASE =
+  import.meta.env.VITE_SRV_ORCHESTRATOR_URL?.trim() ||
+  (isLocalViteDevHost() ? '' : SOJORI_API_ORIGIN);
 const API_PREFIX = '/api/v1/orchestrator';
 
 function getHeaders(): HeadersInit {

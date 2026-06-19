@@ -107,17 +107,16 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
     const currentRoomTypes = cloneRoomTypes(valuesRef.current);
     const currentAmenities = currentRoomTypes[0]?.roomAmenities || [];
 
-    const initializedAmenities = enabledRooms.map((room) => {
-      const label = getCompositionRoomLabel(room);
-      const existing = currentAmenities.find(
-        (item) =>
-          String(item.roomId) === String(room.rentalId) && item.roomType === label,
-      );
-      if (existing) {
+    const initializedAmenities = enabledRooms
+      .map((room) => {
+        const label = getCompositionRoomLabel(room);
+        const existing = currentAmenities.find(
+          (item) => String(item.roomId) === String(room.rentalId),
+        );
+        if (!existing || !(existing.rooms || []).length) return null;
         return { ...existing, roomType: label, rooms: existing.rooms || [] };
-      }
-      return { roomType: label, roomId: room.rentalId, rooms: [] };
-    });
+      })
+      .filter(Boolean);
 
     currentRoomTypes[0] = {
       ...currentRoomTypes[0],
@@ -199,8 +198,7 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
   const renderRoomInstances = (room) => {
     const label = getCompositionRoomLabel(room);
     const composed = getRoomAmenities().find(
-      (item) =>
-        String(item.roomId) === String(room.rentalId) && item.roomType === label,
+      (item) => String(item.roomId) === String(room.rentalId),
     );
     const instances = composed?.rooms || [];
     const noBedsForType = room.useBed === false;
@@ -299,7 +297,7 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
                         </Stack>
                       ) : (
                         <Typography variant="caption" sx={{ color: T.text4, fontStyle: 'italic' }}>
-                          : No beds
+                          : Pas de lits
                         </Typography>
                       )}
                     </Stack>
@@ -336,6 +334,13 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
   const enabledRooms =
     composition?.rooms?.filter((r) => r.enable !== false) ?? [];
 
+  const roomsToDisplay = enabledRooms.filter((room) => {
+    const composed = getRoomAmenities().find(
+      (item) => String(item.roomId) === String(room.rentalId),
+    );
+    return (composed?.rooms || []).length > 0;
+  });
+
   return (
     <Box>
       <RuFormLegend />
@@ -347,10 +352,10 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
 
       <Card
         title="🛏 Composition des pièces"
-        meta={`${enabledRooms.length} types · roomAmenities[]`}
+        meta={`${roomsToDisplay.length} types · roomAmenities[]`}
       >
         <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1.5 }}>
-          Ajoutez et configurez chaque pièce avec ses types de lits (comme le dashboard legacy).
+          Seules les pièces présentes sur l&apos;annonce sont affichées. Utilisez + pour en ajouter.
         </Typography>
         <Box
           sx={{
@@ -360,8 +365,26 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
             bgcolor: T.bg1,
           }}
         >
-          {enabledRooms.length > 0 ? (
-            enabledRooms.map((room) => renderRoomInstances(room))
+          {roomsToDisplay.length > 0 ? (
+            roomsToDisplay.map((room) => renderRoomInstances(room))
+          ) : enabledRooms.length > 0 ? (
+            <Box sx={{ py: 3, px: 2 }}>
+              <Typography sx={{ textAlign: 'center', color: T.text3, fontStyle: 'italic', mb: 2 }}>
+                Aucune pièce configurée pour le moment.
+              </Typography>
+              <Stack direction="row" useFlexGap flexWrap="wrap" gap={1} justifyContent="center">
+                {enabledRooms.map((room) => (
+                  <Button
+                    key={room.rentalId}
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handleAddRoomInstance(room)}
+                  >
+                    + {getCompositionRoomLabel(room)}
+                  </Button>
+                ))}
+              </Stack>
+            </Box>
           ) : (
             <Typography sx={{ py: 4, textAlign: 'center', color: T.text3, fontStyle: 'italic' }}>
               Aucune composition de pièces disponible.

@@ -265,7 +265,12 @@ export function DashboardWrapper({ children, breadcrumb = [], compactMain = fals
       return 'crm/onboarding';
     }
 
-    if (path.startsWith('/catalogue/channels') || path.startsWith('/admin/ChannelManager')) {
+    if (path.startsWith('/admin/ChannelManager')) {
+      const tab = new URLSearchParams(location.search).get('tab');
+      if (tab === 'distribution') return 'admin/ChannelManager/distribution';
+      return 'admin/ChannelManager/channel-manager';
+    }
+    if (path.startsWith('/catalogue/channels')) {
       return 'channels';
     }
 

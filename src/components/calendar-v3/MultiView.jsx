@@ -10,6 +10,7 @@ import {
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
 import PopoverReservations from './PopoverReservations';
+import { normalizeCalendarReservations } from './reservationCalendarUtils';
 
 const CELL_W = 90;
 const LEFT_W = 200;
@@ -23,6 +24,7 @@ export default function MultiView({
   inventoryLoading = false,
   selectedColumns = [],
   onCellsSelected,
+  onOpenReservation,
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsLegacy || [];
   const days = useMemo(() => genDays(startDate, daysCount), [startDate, daysCount]);
@@ -147,8 +149,18 @@ export default function MultiView({
     return () => { b.removeEventListener('scroll', onBody); h.removeEventListener('scroll', onHead); };
   }, []);
 
-  /* ─── Popover rotations ─── */
+  /* ─── Popover rotations / clic résa ─── */
   const [popover, setPopover] = useState(null);
+
+  const handleReservationDayClick = useCallback((rect, dateStr, rawReservations) => {
+    const reservations = normalizeCalendarReservations(rawReservations);
+    if (reservations.length === 0) return;
+    if (reservations.length === 1) {
+      onOpenReservation?.(reservations[0]);
+      return;
+    }
+    setPopover({ rect, dateStr, reservations });
+  }, [onOpenReservation]);
 
   return (
     <div style={{
@@ -237,7 +249,7 @@ export default function MultiView({
               isSelected={isSelected}
               onMouseDown={onMouseDown}
               onMouseEnter={onMouseEnter}
-              onReservationClick={(rect, dateStr, reservations) => setPopover({ rect, dateStr, reservations })}
+              onReservationClick={handleReservationDayClick}
             />
           ))}
         </div>
@@ -250,6 +262,10 @@ export default function MultiView({
           dayStr={popover.dateStr}
           reservations={popover.reservations}
           onClose={() => setPopover(null)}
+          onResaClick={(res) => {
+            onOpenReservation?.(normalizeCalendarReservations([res])[0]);
+            setPopover(null);
+          }}
         />
       )}
     </div>
@@ -461,7 +477,7 @@ function ListingRow({
                   onMouseDown={draggable && cellState === 'data' ? () => onMouseDown(cellMeta) : undefined}
                   onMouseEnter={draggable ? () => onMouseEnter(cellMeta) : undefined}
                   onReservationClick={(rect) => {
-                    if (colId === 'reservations' && (inv.reservations?.length ?? 0) >= 2) {
+                    if (colId === 'reservations' && (inv.reservations?.length ?? 0) >= 1) {
                       onReservationClick(rect, d.iso, inv.reservations);
                     }
                   }}
@@ -596,15 +612,22 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   else if (col.id === 'closedDeparture') content = inv.closedDeparture ? <span style={{ color: T.error }}>⛔</span> : <span style={{ color: T.success }}>✅</span>;
   else if (col.id === 'reservations') {
     const n = inv.reservations?.length ?? 0;
-    content = n === 0 ? '—' : n === 1 ? <span style={{ fontSize: 10 }}>1 résa</span> :
-      <span onClick={(e) => { e.stopPropagation(); onReservationClick?.(ref.current.getBoundingClientRect()); }}
-        style={{
-          fontSize: 10, fontWeight: 700, color: T.primaryDeep,
-          background: T.primaryTint, padding: '1px 6px', borderRadius: 99,
-          cursor: 'pointer', fontFamily: '"Geist Mono", monospace',
-        }}>
-        {n} résa
-      </span>;
+    const resaBadgeStyle = {
+      fontSize: 10, fontWeight: 700, color: T.primaryDeep,
+      background: T.primaryTint, padding: '1px 6px', borderRadius: 99,
+      cursor: 'pointer', fontFamily: '"Geist Mono", monospace',
+    };
+    content = n === 0 ? '—' : (
+      <span
+        onClick={(e) => {
+          e.stopPropagation();
+          onReservationClick?.(ref.current?.getBoundingClientRect());
+        }}
+        style={resaBadgeStyle}
+      >
+        {n === 1 ? '1 résa' : `${n} résa`}
+      </span>
+    );
   }
 
   return (

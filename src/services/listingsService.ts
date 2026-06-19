@@ -768,7 +768,7 @@ export const listingsService = {
    */
   async getCountries(): Promise<{ _id: string; name: string }[]> {
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || 'https://dev.sojori.com';
+      const baseUrl = import.meta.env.VITE_API_URL || SOJORI_API_ORIGIN;
       const response = await apiClient.get(`${baseUrl}/api/v1/admin/country?paged=false`);
       return response.data?.data || [];
     } catch {
@@ -786,7 +786,7 @@ export const listingsService = {
     search_text?: string;
   }): Promise<{ _id: string; name: string; countryId?: string }[]> {
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || 'https://dev.sojori.com';
+      const baseUrl = import.meta.env.VITE_API_URL || SOJORI_API_ORIGIN;
       const params = new URLSearchParams({
         page: '0',
         limit: String(options?.limit ?? 2000),
@@ -867,6 +867,26 @@ export const listingsService = {
     try {
       const response = await apiClient.get(`${LISTING_API_BASE_URL}/tag?paged=false`);
       return response.data?.data || [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * GET /api/v1/listing/payment-methods — catalogue Sojori (résolution RU → PaymentMethod).
+   */
+  async getPaymentMethodsCatalog(): Promise<
+    Array<{ _id: string; name: string; rentalPaymentMethodId: number }>
+  > {
+    try {
+      const response = await apiClient.get(`${LISTING_API_BASE_URL}/payment-methods`);
+      const data = response.data?.data;
+      if (!Array.isArray(data)) return [];
+      return data.map((row: Record<string, unknown>) => ({
+        _id: String(row._id ?? ''),
+        name: String(row.name ?? ''),
+        rentalPaymentMethodId: Number(row.rentalPaymentMethodId) || 0,
+      }));
     } catch {
       return [];
     }
@@ -1099,6 +1119,51 @@ export const listingsService = {
       return { items };
     } catch (error) {
       return { items: [], error: buildServiceError(error) };
+    }
+  },
+
+  /**
+   * GET /amenities/catalog-for-listing — catalogue PM (catégories Airbnb, enabledForListing).
+   */
+  async getListingCatalogForPm(): Promise<{
+    categories: Array<{
+      _id: string;
+      nameFr: string;
+      nameEn: string;
+      sortOrder: number;
+      isBasicEquipment: boolean;
+      amenities: Record<string, unknown>[];
+    }>;
+    total: number;
+    error?: string;
+  }> {
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/amenities/catalog-for-listing`,
+      );
+      const payload = asRecord(response.data);
+      if (payload.success === false) {
+        return { categories: [], total: 0 };
+      }
+      const categories = Array.isArray(payload.categories) ? payload.categories : [];
+      const total = asNumber(payload.total) ?? 0;
+      return {
+        categories: categories.map((c) => {
+          const row = asRecord(c);
+          const amenities = Array.isArray(row.amenities) ? row.amenities : [];
+          return {
+            _id: asString(row._id),
+            nameFr: asString(row.nameFr),
+            nameEn: asString(row.nameEn),
+            sortOrder: asNumber(row.sortOrder) ?? 0,
+            isBasicEquipment: Boolean(row.isBasicEquipment),
+            amenities: amenities.map((a) => asRecord(a)),
+          };
+        }),
+        total,
+      };
+    } catch (error) {
+      return { categories: [], total: 0, error: buildServiceError(error) };
     }
   },
 

@@ -4,16 +4,19 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { devSecurityHeaders, previewSecurityHeaders } from './security/csp'
 
+/** Ingress K8s prod (dev.sojori.com). sojori.com = vitrine sans /api. Override : VITE_DEV_PROXY_TARGET. */
 const devProxyTarget = process.env.VITE_DEV_PROXY_TARGET || 'https://dev.sojori.com'
 
 /**
- * Pattern dev (comme réservations / listing) :
- * - Par défaut → dev.sojori.com (srv-admin reverse-proxy vers K8s prod).
- * - Port-forward local uniquement si VITE_FULLTASK_URL / VITE_FULLCHATBOT_URL explicites
- *   (ex. http://127.0.0.1:4015 après kubectl port-forward).
+ * Pattern dev local :
+ * - Par défaut → dev.sojori.com (ingress API cluster prod).
+ * - Port-forward local : VITE_FULLTASK_URL / VITE_LISTING_URL explicites.
  */
 const fulltaskTarget = process.env.VITE_FULLTASK_URL || devProxyTarget
 const fullchatbotTarget = process.env.VITE_FULLCHATBOT_URL || devProxyTarget
+/** Port-forward ou srv-listing local — ex. http://127.0.0.1:4001 */
+const listingTarget = process.env.VITE_LISTING_URL || devProxyTarget
+const listingDirectLocal = listingTarget !== devProxyTarget && isDirectLocalService(listingTarget, 4001)
 
 function isDirectLocalService(url: string, port: number): boolean {
   try {
@@ -62,10 +65,22 @@ const monitoringDevProxy = {
 } as const
 
 /** Proxy API dev — évite les appels relatifs vers 127.0.0.1:4174 (404 Not Found App). */
+const listingDevProxy = {
+  '/api/v1/listing': {
+    target: listingTarget,
+    changeOrigin: true,
+    secure: !listingDirectLocal,
+    timeout: 180_000,
+    proxyTimeout: 180_000,
+  },
+} as const
+
 const apiDevProxy = {
   ...adminServiceProxy('fulltask', fulltaskTarget, '4015'),
   ...adminServiceProxy('fullchatbot', fullchatbotTarget, '4016'),
   ...monitoringDevProxy,
+  /** Listing (amenities/image OTA catalog) — toujours prioritaire sur le catch-all /api */
+  ...listingDevProxy,
   '/api': {
     target: devProxyTarget,
     changeOrigin: true,
@@ -158,8 +173,10 @@ export default defineConfig({
     hmr: {
       protocol: 'ws',
       host: '127.0.0.1',
+      /** Même port que le serveur si VITE_HMR_PORT non défini (évite send-before-connect). */
       port: devHmrPort,
       clientPort: devHmrPort,
+      overlay: false,
     },
     // ⚡ Pré-réchauffer les modules les plus utilisés
     warmup: {

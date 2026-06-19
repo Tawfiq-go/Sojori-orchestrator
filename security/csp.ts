@@ -55,6 +55,10 @@ const RU_CONNECT_SRC = [
 
 const RU_FRAME_SRC = 'https://*.rentalsunited.com'
 
+/** Dashboard legacy (sojori-dashboard) — iframe aperçu mapping admin en dev. */
+const LEGACY_DASHBOARD_FRAME_SRC =
+  'http://localhost:3000 http://127.0.0.1:3000 https://dashboard.sojori.com'
+
 /** Local Vite dev/preview + HMR — inclut VITE_DEV_PORT / VITE_HMR_PORT (ex. 3001 + 3003). */
 function buildLocalDevConnectSrc(): string {
   const devPort = process.env.VITE_DEV_PORT || '4174'
@@ -88,7 +92,7 @@ export const devSecurityHeaders: Record<string, string> = {
     "img-src 'self' data: https: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com https://*.tile.openstreetmap.org",
     `font-src 'self' data: ${RU_FONT_SRC}`,
     `connect-src 'self' ${SOJORI_API_CONNECT} ${RU_CONNECT_SRC}`,
-    `frame-src 'self' ${RU_FRAME_SRC}`,
+    `frame-src 'self' ${RU_FRAME_SRC} ${LEGACY_DASHBOARD_FRAME_SRC}`,
     "media-src 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
@@ -111,7 +115,7 @@ export const previewSecurityHeaders: Record<string, string> = {
     "img-src 'self' data: https: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com https://*.tile.openstreetmap.org",
     `font-src 'self' data: ${RU_FONT_SRC}`,
     `connect-src 'self' https://dev.sojori.com wss://dev.sojori.com ${RU_CONNECT_SRC}`,
-    `frame-src 'self' ${RU_FRAME_SRC}`,
+    `frame-src 'self' ${RU_FRAME_SRC} ${LEGACY_DASHBOARD_FRAME_SRC}`,
     "media-src 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",

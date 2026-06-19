@@ -79,8 +79,6 @@ export type ChatbotPropertyResumeDetail = ChatbotListingSummary & {
   roomTypeName: string;
   roomTypeId: string;
   instantBooking: boolean;
-  staging: boolean;
-  otaOnly: boolean;
   shortDescription: string;
   longDescription: string;
 };
@@ -178,8 +176,6 @@ export function buildChatbotPropertyResumeDetail(
     roomTypeName: asString(rt.roomTypeName) || asString(rt.name),
     roomTypeId: asString(rt._id) || asString(rt.id),
     instantBooking: formValues.instantBooking === true,
-    staging: formValues.staging === true,
-    otaOnly: formValues.otaOnly === true,
     shortDescription: asString(formValues.shortDescription),
     longDescription: asString(formValues.longDescription),
   };

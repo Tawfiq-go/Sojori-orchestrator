@@ -4,11 +4,16 @@ import { DashboardWrapper } from '../components/DashboardWrapper';
 import ListingFormV2 from '../components/listing/form-v2/ListingFormV2';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import listingsService from '../services/listingsService';
+import calendarService from '../services/calendarService';
 import {
   mapApiToFormV2Values,
   mergeFormV2ToUpdatePropertyPayload,
+  normalizeLongStayDiscountsFromApi,
+  normalizeLastMinuteDiscountsFromApi,
+  discountsToApiPayload,
 } from '../utils/listingFormV2ApiAdapter';
 import { toast } from 'react-toastify';
+import { useMemo } from 'react';
 
 export function ListingFormV2Page() {
   const { id } = useParams<{ id: string }>();
@@ -16,9 +21,15 @@ export function ListingFormV2Page() {
   const [searchParams] = useSearchParams();
   const levelParam = searchParams.get('level');
   const tabParamRaw = searchParams.get('tab');
-  /** Ancien onglet « Montant & devise » fusionné dans Instructions départ */
+  /** Ancien onglet « Montant & devise » fusionné dans Instructions départ ; channels retiré (RU géré ailleurs) */
   const tabParam =
-    tabParamRaw === 'city-tax-config' ? 'messages-config' : tabParamRaw;
+    tabParamRaw === 'city-tax-config'
+      ? 'messages-config'
+      : tabParamRaw === 'channels' || tabParamRaw === 'direct'
+        ? 'distribution'
+        : tabParamRaw === 'rules' || tabParamRaw === 'rules-guest'
+          ? 'availability'
+          : tabParamRaw;
   const defaultLevel =
     levelParam === 'orchestration-v3' || levelParam === 'config-new' || levelParam === 'config'
       ? 'orchestration-v3'
@@ -44,6 +55,21 @@ export function ListingFormV2Page() {
 
   const formValues = listingDoc ? mapApiToFormV2Values(listingDoc) : null;
 
+  const { data: pricingRule } = useQuery({
+    queryKey: ['listing-pricing-discounts', id],
+    queryFn: () => calendarService.getDynamicPricingRule(id!),
+    enabled: !!id,
+  });
+
+  const initialFormValues = useMemo(() => {
+    if (!formValues) return null;
+    return {
+      ...formValues,
+      longStayDiscounts: normalizeLongStayDiscountsFromApi(pricingRule?.longStayDiscounts),
+      lastMinuteDiscount: normalizeLastMinuteDiscountsFromApi(pricingRule?.lastMinuteDiscount),
+    };
+  }, [formValues, pricingRule]);
+
   const { data: listingStructure } = useQuery({
     queryKey: ['listing-structure'],
     queryFn: () => listingsService.getListingStructure(),
@@ -58,33 +84,21 @@ export function ListingFormV2Page() {
 
   // Update listing mutation
   const { mutate: saveListing, isPending: isSaving } = useMutation({
-    mutationFn: (values: Record<string, unknown>) =>
-      listingsService.updateListingProperty(
+    mutationFn: async (values: Record<string, unknown>) => {
+      await listingsService.updateListingProperty(
         id!,
         mergeFormV2ToUpdatePropertyPayload(values),
-      ),
+      );
+      const discounts = discountsToApiPayload(values);
+      await calendarService.updatePricingDiscounts(id!, discounts);
+    },
     onSuccess: () => {
       toast.success('Listing enregistré avec succès');
       queryClient.invalidateQueries({ queryKey: ['listing', id] });
+      queryClient.invalidateQueries({ queryKey: ['listing-pricing-discounts', id] });
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Erreur lors de l\'enregistrement');
-    },
-  });
-
-  // Verify Rental United OTA channels mutation
-  const { mutate: verifyRuChannels, isPending: isVerifyingRu } = useMutation({
-    mutationFn: () => listingsService.verifyOtaChannels(id!),
-    onSuccess: (result) => {
-      if (result.success) {
-        toast.success('Canaux OTA vérifiés avec succès');
-        queryClient.invalidateQueries({ queryKey: ['listing', id] });
-      } else {
-        toast.error(result.error || 'Erreur lors de la vérification');
-      }
-    },
-    onError: (error: any) => {
-      toast.error(error?.message || 'Erreur lors de la vérification des canaux OTA');
     },
   });
 
@@ -115,7 +129,7 @@ export function ListingFormV2Page() {
     );
   }
 
-  if (!formValues) {
+  if (!initialFormValues) {
     return (
       <DashboardWrapper>
         <Box sx={{ p: 4 }}>
@@ -131,7 +145,8 @@ export function ListingFormV2Page() {
     <DashboardWrapper>
       <ListingFormV2
         listingId={id!}
-        initialValues={formValues}
+        initialValues={initialFormValues}
+        importedFieldsSource={initialFormValues}
         defaultLevel={defaultLevel}
         defaultTab={resolvedTab}
         onSave={saveListing}
@@ -139,8 +154,6 @@ export function ListingFormV2Page() {
           queryClient.invalidateQueries({ queryKey: ['listing', id] });
         }}
         isSaving={isSaving}
-        onVerifyRuChannels={verifyRuChannels}
-        verifyRuLoading={isVerifyingRu}
         listingStructure={listingStructure ?? null}
         roomTypeConfigs={roomTypeConfigs}
       />

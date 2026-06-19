@@ -6,7 +6,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_BASE_URL || 'https://dev.sojori.com';
+import { SOJORI_API_ORIGIN } from '../config/sojoriApiOrigins';
+
+const API_URL = import.meta.env.VITE_API_BASE_URL || SOJORI_API_ORIGIN;
 
 /**
  * Composant de vue Audit Trail global

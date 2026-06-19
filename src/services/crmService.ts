@@ -1,7 +1,7 @@
 /**
  * crmService.ts
  * Service pour les fonctionnalités CRM dans Sojori Orchestrator
- * Endpoints: https://dev.sojori.com/api/v1/crm/* et /api/v1/demo/*
+ * Endpoints: https://sojori.com/api/v1/crm/* et /api/v1/demo/*
  *
  * Backend: sojori-production/apps/srv-crm
  * Legacy ref: sojori-dashboard/src/features/{demo,lead,support-team}

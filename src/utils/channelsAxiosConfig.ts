@@ -1,7 +1,7 @@
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 
 /**
- * En dev Vite (:4174), requêtes relatives → proxy local → dev.sojori.com (JWT + X-Dev-Token).
+ * En dev Vite, requêtes relatives → proxy local → sojori.com (JWT + X-Dev-Token).
  * Aligné sur sojori-dashboard/monitoringAxiosDevProxy.js.
  */
 export function monitoringAxiosConfig() {

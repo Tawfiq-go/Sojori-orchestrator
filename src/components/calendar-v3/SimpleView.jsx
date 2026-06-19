@@ -9,11 +9,12 @@ import {
 } from './_shared';
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import PopoverReservations from './PopoverReservations';
+import { normalizeCalendarReservations } from './reservationCalendarUtils';
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
-export default function SimpleView({ listing, year, month, inventories = {}, onCellsSelected }) {
+export default function SimpleView({ listing, year, month, inventories = {}, onCellsSelected, onOpenReservation }) {
   const first = useMemo(() => new Date(year, month, 1), [year, month]);
   const offset = (first.getDay() + 6) % 7;     // Mon = 0
   const lastDay = new Date(year, month + 1, 0).getDate();
@@ -65,6 +66,16 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
       listingId: listing._id, roomTypeId: listing.roomTypes?.[0]?._id, dateStr: iso, column: 'rate',
     })));
     setSelected([]);
+  };
+
+  const handleReservationClick = (rect, dateStr, rawReservations) => {
+    const reservations = normalizeCalendarReservations(rawReservations);
+    if (reservations.length === 0) return;
+    if (reservations.length === 1) {
+      onOpenReservation?.(reservations[0]);
+      return;
+    }
+    setPopover({ rect, dateStr, reservations });
   };
 
   /* ─── Render ─── */
@@ -212,15 +223,19 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
                   {!c.noInventory && !c.stopSell && !c.booked && (
                     <span style={{ fontSize: 9.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>{c.available} / {c.available}</span>
                   )}
-                  {c.reservations.length >= 2 && (
+                  {c.reservations.length >= 1 && (
                     <span onClick={(e) => {
                       e.stopPropagation();
-                      setPopover({ rect: e.currentTarget.getBoundingClientRect(), dateStr: c.iso, reservations: c.reservations });
+                      handleReservationClick(
+                        e.currentTarget.getBoundingClientRect(),
+                        c.iso,
+                        c.reservations,
+                      );
                     }} style={{
                       fontSize: 9, background: T.infoTint, color: T.info,
                       padding: '1px 5px', borderRadius: 99, fontWeight: 700,
                       fontFamily: '"Geist Mono", monospace', cursor: 'pointer',
-                    }}>{c.reservations.length} résa</span>
+                    }}>{c.reservations.length === 1 ? '1 résa' : `${c.reservations.length} résa`}</span>
                   )}
                 </div>
               </div>
@@ -257,6 +272,10 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
         <PopoverReservations
           open={!!popover} anchorRect={popover.rect} dayStr={popover.dateStr}
           reservations={popover.reservations} onClose={() => setPopover(null)}
+          onResaClick={(res) => {
+            onOpenReservation?.(normalizeCalendarReservations([res])[0]);
+            setPopover(null);
+          }}
         />
       )}
     </div>

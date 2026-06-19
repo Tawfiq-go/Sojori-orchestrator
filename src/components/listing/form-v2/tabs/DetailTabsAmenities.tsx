@@ -2,9 +2,11 @@
  * Onglet Équipements — UI Claude Design branchée sur srv-listing.
  */
 import { useCallback, useMemo } from 'react';
-import { Box } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import AmenitiesTabUi from '../../amenities/AmenitiesTab';
 import { useSojoriAmenitiesData } from '../../amenities/useSojoriAmenitiesData';
+import { FieldIndicator } from '../components/FieldIndicator';
+import { RuFormLegend } from './_shared';
 import type { Amenity, SelectedAmenity } from '../../amenities/_tokens';
 
 interface ListingAmenityRow {
@@ -58,7 +60,7 @@ function toListingRows(next: SelectedAmenity[], catalogById: Map<string, Amenity
 }
 
 export default function AmenitiesTab({ values, onChange, listingId = '' }: AmenitiesTabProps) {
-  const { catalog, catalogById, rooms, loading } = useSojoriAmenitiesData(listingId);
+  const { catalog, catalogById, categories, rooms, loading } = useSojoriAmenitiesData(listingId);
 
   const selected = useMemo(() => toSelected(values.listingAmenitiesIds), [values.listingAmenitiesIds]);
 
@@ -80,13 +82,21 @@ export default function AmenitiesTab({ values, onChange, listingId = '' }: Ameni
   }
 
   return (
-    <AmenitiesTabUi
+    <Box>
+      <RuFormLegend />
+      <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.25 }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>Équipements</Typography>
+        <FieldIndicator field="listingAmenitiesIds" dense />
+      </Stack>
+      <AmenitiesTabUi
       catalog={catalog}
+      catalogCategories={categories}
       rooms={rooms}
       value={selected}
       onChange={handleChange}
       propertyUnit={propertyUnit}
       loading={loading}
     />
+    </Box>
   );
 }

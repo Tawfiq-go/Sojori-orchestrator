@@ -4,6 +4,7 @@
  */
 import { useSearchParams } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
 import { tokens as T } from '../components/dashboard/DashboardV2.components';
 import { LegacyReduxProvider } from '../components/LegacyReduxBridge';
 import { ChannelManagerTab } from '../components/channels/ChannelManagerTab';
@@ -35,9 +36,10 @@ export function ChannelManagerHubPage() {
   const tabLabel = TABS.find((t) => t.id === tab)?.label ?? 'Channel Manager';
 
   return (
-    <DashboardWrapper breadcrumb={['Channel Manager', tabLabel]}>
+    <DashboardWrapper breadcrumb={['Catalogue', 'Annonces', 'Channel Manager', tabLabel]}>
       <LegacyReduxProvider>
-        <div style={{ padding: '22px 28px 50px', maxWidth: 1680, margin: '0 auto' }}>
+        <CatalogueAnnoncesTabs />
+        <div style={{ padding: '0 0 50px', maxWidth: 1680, margin: '0 auto' }}>
           <div style={{ marginBottom: 20 }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: T.text, margin: 0 }}>Channel Manager</h1>
             <p style={{ fontSize: 13, color: T.text3, margin: '6px 0 0' }}>

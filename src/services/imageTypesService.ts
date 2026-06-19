@@ -15,59 +15,24 @@ export interface ImageType {
   airbnbCategory?: string;
   bookingCategory?: string;
   rentalAmenityIds?: number[];
+  rentalImageTypeIds?: number[];
   uiPriority?: number;
+  categoryGroup?: string;
+  sortOrder?: number;
 }
 
-export interface ImageTypesParams {
-  priority?: string; // ex: "1,2,3"
-  other?: string;
+/** Catalogue Image OTA — espaces photo actifs pour la galerie listing. */
+export async function getImageOtaTypesForListing() {
+  return apiClient.get(`${LISTING_API}/image-types/ota-catalog/for-listing`);
 }
 
-/**
- * Récupère les types d'images Sojori depuis srv-listing
- */
-export async function getImageTypesSojori(params: ImageTypesParams = {}) {
-  const queryParams = new URLSearchParams();
-  if (params.priority) {
-    queryParams.append('priority', params.priority);
+/** Libellés catalogue pour imageTypeId déjà assignés (orphelins RU / hors listing PM). */
+export async function resolveImageOtaDisplayTypes(catalogIds: string[]) {
+  const ids = [...new Set(catalogIds.map(String).filter(Boolean))]
+  if (!ids.length) {
+    return { data: { success: true, data: [] as ImageType[] } }
   }
-  if (params.other) {
-    queryParams.append('other', params.other);
-  }
-
-  const queryString = queryParams.toString();
-  const url = queryString
-    ? `${LISTING_API}/image-types-sojori?${queryString}`
-    : `${LISTING_API}/image-types-sojori`;
-
-  return apiClient.get(url);
-}
-
-/**
- * Met à jour un type d'image
- */
-export async function updateImageTypesSojori(imageTypeId: string, formData: unknown) {
-  const response = await apiClient.put(
-    `${LISTING_API}/image-types-sojori/update/${imageTypeId}`,
-    formData,
-  );
-  return response;
-}
-
-/**
- * Crée un type d'image
- */
-export async function createImageTypesSojori(formData: unknown) {
-  const response = await apiClient.post(`${LISTING_API}/image-types-sojori/create`, formData);
-  return response;
-}
-
-/**
- * Supprime un type d'image
- */
-export async function deleteImageTypesSojori(imageTypeId: string) {
-  const response = await apiClient.delete(
-    `${LISTING_API}/image-types-sojori/delete/${imageTypeId}`,
-  );
-  return response;
+  return apiClient.post(`${LISTING_API}/image-types/ota-catalog/resolve-display`, {
+    catalogIds: ids,
+  })
 }

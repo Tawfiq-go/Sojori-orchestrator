@@ -25,6 +25,7 @@ function buildEmptyCreateValues(propertyUnit: string): Record<string, unknown> {
     name: '',
     propertyUnit,
     active: false,
+    directEnabled: false,
     atSojori: true,
     country: '',
     city: '',

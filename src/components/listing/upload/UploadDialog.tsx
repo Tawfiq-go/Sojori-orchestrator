@@ -18,12 +18,13 @@ import PhotoIcon from '@mui/icons-material/Photo';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { LISTING_MEDIA_ACCEPT, MIN_IMAGE_WIDTH, MIN_IMAGE_HEIGHT, MAX_FILE_SIZE } from '../../../utils/upload/dropzoneConfig';
-import { getImageTypesSojori, type ImageType } from '../../../services/imageTypesService';
+import { getImageOtaTypesForListing, type ImageType } from '../../../services/imageTypesService';
 import { logListingMedia } from '../../../utils/upload/helpers';
 import { UPLOAD_BATCH_SIZE } from '../../../utils/upload/uploadInBatches';
 import type { UploadProgressInfo } from '../../../utils/upload/uploadInBatches';
 import {
   getImageCategoryLabel,
+  getMainImageTypeFromCatalog,
   isImageCategoryUndefined,
 } from '../../../utils/upload/imageTypeDisplay';
 import ImageTypeSelector from './ImageTypeSelector';
@@ -143,7 +144,7 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
 
     const fetchImageTypes = async () => {
       try {
-        const response = await getImageTypesSojori({ priority: '1,2,3' });
+        const response = await getImageOtaTypesForListing();
         if (response.data?.data) {
           setImageTypes(response.data.data);
         }
@@ -318,12 +319,8 @@ const UploadDialog: React.FC<UploadDialogProps> = ({
 
   const isMainImage = (imageTypeId?: string | null): boolean => {
     if (!imageTypeId) return false;
-    const imageType = imageTypes.find((type) => type._id === imageTypeId);
-    return (
-      imageType?.sojoriName?.en === 'Main Image' ||
-      (imageType?.rentalAmenityIds && imageType.rentalAmenityIds.includes(1)) ||
-      false
-    );
+    const main = getMainImageTypeFromCatalog(imageTypes);
+    return main ? String(imageTypeId) === String(main._id) : false;
   };
 
   const getDisplayName = (imageType: ImageType): string => {

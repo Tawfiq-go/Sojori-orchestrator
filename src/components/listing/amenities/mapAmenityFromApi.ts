@@ -1,5 +1,5 @@
 import type { Amenity, CategoryName, CompositionRoom } from './_tokens';
-import { ALL_CATEGORIES } from './_tokens';
+import { ALL_CATEGORIES, AIRBNB_FR_CATEGORY_META } from './_tokens';
 
 function pickName(n: unknown, prefer: 'fr' | 'en'): string {
   if (typeof n === 'string' && n.trim()) return n.trim();
@@ -11,7 +11,10 @@ function pickName(n: unknown, prefer: 'fr' | 'en'): string {
   return '';
 }
 
-function pickCategories(row: Record<string, unknown>): CategoryName[] {
+function pickCategories(row: Record<string, unknown>): string[] {
+  if (typeof row.categoryFr === 'string' && row.categoryFr.trim()) {
+    return [row.categoryFr.trim()];
+  }
   const subs = row.SojoriSubcategory;
   const out: string[] = [];
   if (Array.isArray(subs)) {
@@ -24,8 +27,8 @@ function pickCategories(row: Record<string, unknown>): CategoryName[] {
     }
   }
   if (typeof row.category === 'string' && row.category) out.push(row.category);
-  const valid = new Set<string>(ALL_CATEGORIES);
-  return [...new Set(out.filter((c) => valid.has(c)))] as CategoryName[];
+  const legacyValid = new Set<string>(ALL_CATEGORIES);
+  return [...new Set(out.filter((c) => c && (legacyValid.has(c) || AIRBNB_FR_CATEGORY_META[c])))];
 }
 
 function pickCompositionRoomIds(comp: unknown): string[] {
