@@ -29,6 +29,7 @@ import {
   logListingActivationSave,
   describeListingApiRequest,
 } from '../config/listingApiBase';
+import { SOJORI_API_ORIGIN } from '../config/sojoriApiOrigins';
 
 export { LISTING_API_BASE_URL, describeListingApiRequest, logListingApiRequest };
 
