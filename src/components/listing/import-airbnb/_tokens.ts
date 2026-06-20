@@ -47,6 +47,8 @@ export interface RuProperty {
   ruPropertyId: string;       // identifiant RU (#4021713)
   name: string;
   city?: string;
+  suggestedCityId?: string;
+  suggestedCityName?: string;
   guests?: number;
   alreadyImported: boolean;
   importable: boolean;        // false si non éligible
@@ -100,8 +102,8 @@ export interface ImportResultItem {
 export const STEPS_ORDER: StepKey[] = [
   'pull_spec', 'pull_prices', 'pull_calendar', 'pull_external',
   'build_payload', 'reupload_images', 'create_listing',
-  'wait_inventory', 'apply_inventory', 'check',
-  'post_import_sync', 'apply_orchestration',
+  'wait_inventory', 'apply_inventory',
+  'post_import_sync', 'apply_orchestration', 'check',
 ];
 
 export const STEPS_LABELS: Record<StepKey, { label: string; sub: string }> = {

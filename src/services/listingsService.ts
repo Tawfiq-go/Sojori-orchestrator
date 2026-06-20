@@ -1,5 +1,7 @@
 import { isAxiosError } from 'axios';
 import apiClient from './apiClient';
+import { MICROSERVICE_BASE_URL } from '../config/authConfig';
+import { monitoringAxiosConfig } from '../utils/channelsAxiosConfig';
 import {
   getStoredChannelsData,
   getStoredListings,
@@ -769,8 +771,11 @@ export const listingsService = {
    */
   async getCountries(): Promise<{ _id: string; name: string }[]> {
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || SOJORI_API_ORIGIN;
-      const response = await apiClient.get(`${baseUrl}/api/v1/admin/country?paged=false`);
+      const params = new URLSearchParams({ paged: 'false' });
+      const response = await apiClient.get(
+        `${MICROSERVICE_BASE_URL.SRV_ADMIN}/country?${params.toString()}`,
+        monitoringAxiosConfig(),
+      );
       return response.data?.data || [];
     } catch {
       return [];
@@ -787,7 +792,6 @@ export const listingsService = {
     search_text?: string;
   }): Promise<{ _id: string; name: string; countryId?: string }[]> {
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || SOJORI_API_ORIGIN;
       const params = new URLSearchParams({
         page: '0',
         limit: String(options?.limit ?? 2000),
@@ -795,7 +799,10 @@ export const listingsService = {
         allCities: String(options?.allCities !== false),
         search_text: options?.search_text ?? '',
       });
-      const response = await apiClient.get(`${baseUrl}/api/v1/admin/city?${params.toString()}`);
+      const response = await apiClient.get(
+        `${MICROSERVICE_BASE_URL.CITY}?${params.toString()}`,
+        monitoringAxiosConfig(),
+      );
       const body = response.data;
       let rows: unknown[] = [];
       if (Array.isArray(body)) rows = body;

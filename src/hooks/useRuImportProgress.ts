@@ -123,16 +123,20 @@ export function useRuImportProgress() {
 
       try {
         const response = await runImportRequest(nextCorrelationId);
-        await pollOnce(nextCorrelationId);
-        stopPolling();
+        for (let i = 0; i < 5; i += 1) {
+          const latest = await pollOnce(nextCorrelationId);
+          if (latest && ['success', 'error'].includes(String(latest.status))) {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        }
         return { correlationId: nextCorrelationId, response };
       } catch (error) {
         await pollOnce(nextCorrelationId);
-        stopPolling();
         throw error;
       }
     },
-    [pollOnce, startPolling, stopPolling],
+    [pollOnce, startPolling],
   );
 
   const resetProgress = useCallback(() => {

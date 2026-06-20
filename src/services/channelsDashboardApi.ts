@@ -514,10 +514,17 @@ export function fetchRuOwnerProperties(
   });
 }
 
+export function resolveRuImportCities(body: { ownerId: string; ruPropertyIds: number[] }) {
+  return apiClient.post(`${CHANNELS_DASHBOARD}/ru-import/resolve-cities`, body, {
+    ...channelsDashboardAxiosConfig(),
+    timeout: 120000,
+  });
+}
+
 export function importRuProperty(body: {
   ownerId: string;
   ruPropertyId: number;
-  cityId: string;
+  cityId?: string;
   correlationId: string;
 }) {
   return apiClient.post(`${CHANNELS_DASHBOARD}/ru-import/import`, body, {
@@ -528,7 +535,7 @@ export function importRuProperty(body: {
 
 export function importRuPropertyBatch(body: {
   ownerId: string;
-  cityId: string;
+  cityId?: string;
   ruPropertyIds: number[];
   correlationId: string;
 }) {

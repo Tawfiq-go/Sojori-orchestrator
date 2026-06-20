@@ -165,7 +165,7 @@ function stepIconFor(key: StepState['key']) {
     pull_spec: '📄', pull_prices: '💰', pull_calendar: '📅', pull_external: '✨',
     build_payload: '⚙', reupload_images: '🖼', create_listing: '🏠',
     wait_inventory: '⏳', apply_inventory: '✅', post_import_sync: '🔄',
-    apply_orchestration: '⚡',
+    apply_orchestration: '⚡', check: '🔍',
   } as const)[key];
 }
 
@@ -178,6 +178,9 @@ function liveLabelFor(step: StepState) {
   }
   if (step.key === 'post_import_sync') {
     return 'Synchronisation réservations et avis…';
+  }
+  if (step.key === 'check') {
+    return 'Vérification RU · paiement et image principale…';
   }
   return 'En cours…';
 }

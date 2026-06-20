@@ -11,6 +11,23 @@ function normalizeStepStatus(raw: string | undefined): StepStatus {
   return 'pending';
 }
 
+/** Les étapes antérieures à la dernière active ne restent jamais pending. */
+function cascadeStepStatuses(steps: StepState[], importSucceeded: boolean): StepState[] {
+  let maxActiveIndex = -1;
+  for (let i = 0; i < steps.length; i += 1) {
+    if (steps[i].status !== 'pending') maxActiveIndex = i;
+  }
+  return steps.map((step, idx) => {
+    if (importSucceeded && step.status === 'pending') {
+      return { ...step, status: 'done' as StepStatus };
+    }
+    if (step.status === 'pending' && idx < maxActiveIndex) {
+      return { ...step, status: 'done' as StepStatus };
+    }
+    return step;
+  });
+}
+
 /** Mappe la réponse polling srv-channels → format UI Claude Design. */
 export function adaptRuImportProgress(raw: RuImportProgressData | null): ImportProgress | null {
   if (!raw) return null;
@@ -34,14 +51,17 @@ export function adaptRuImportProgress(raw: RuImportProgressData | null): ImportP
   const total = Number(raw.summary?.totalProperties ?? raw.currentProperty?.total ?? 1);
   const index = Number(raw.currentProperty?.index ?? 1);
 
+  const importCompleted = raw.status === 'success' || raw.status === 'error';
+  const cascadedSteps = cascadeStepStatuses(steps, raw.status === 'success');
+
   return {
     currentBatchIndex: Math.max(0, index - 1),
     totalBatch: Math.max(1, total),
     currentPropertyName:
       raw.currentProperty?.listingName ||
       (raw.currentProperty?.ruPropertyId ? `Annonce #${raw.currentProperty.ruPropertyId}` : undefined),
-    steps,
-    completed: raw.status === 'success' || raw.status === 'error',
-    hasError: raw.status === 'error' || steps.some((s) => s.status === 'error'),
+    steps: cascadedSteps,
+    completed: importCompleted,
+    hasError: raw.status === 'error' || cascadedSteps.some((s) => s.status === 'error'),
   };
 }

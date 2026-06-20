@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════
-// PropertyList.tsx — Phase B : annonces importables uniquement (PRÊTE)
+// PropertyList.tsx — Phase B : importables + visibilité déjà importées / inactives
 // ════════════════════════════════════════════════════════════════════
 import React, { useMemo } from 'react';
 import { Box, Stack, Typography, Skeleton } from '@mui/material';
@@ -22,8 +22,110 @@ const GRADIENTS = [
   'linear-gradient(135deg, #ddd6fe, #7c3aed)',
 ];
 
+function PropertyRow({
+  p,
+  idx,
+  isSelected,
+  onToggle,
+  selectable,
+  badge,
+  badgeColor,
+}: {
+  p: RuProperty;
+  idx: number;
+  isSelected?: boolean;
+  onToggle?: () => void;
+  selectable: boolean;
+  badge: string;
+  badgeColor: { color: string; bg: string; border: string };
+}) {
+  return (
+    <Box
+      onClick={selectable ? onToggle : undefined}
+      sx={{
+        p: '12px 14px',
+        border: '1px solid',
+        borderColor: isSelected ? T.primary : T.border,
+        borderRadius: 1.4,
+        bgcolor: isSelected ? 'linear-gradient(180deg,#fff7ed,#fff)' : T.bg1,
+        background: isSelected ? 'linear-gradient(180deg,#fff7ed,#fff)' : T.bg1,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        cursor: selectable ? 'pointer' : 'default',
+        opacity: selectable ? 1 : 0.72,
+        transition: 'all 0.15s',
+        boxShadow: isSelected
+          ? `inset 3px 0 0 ${T.primary}, 0 2px 8px -4px rgba(184,133,26,0.20)`
+          : 'none',
+        animation: selectable ? `sj-slideUp 0.25s ${idx * 0.05}s both` : undefined,
+        '&:hover': selectable
+          ? { borderColor: isSelected ? T.primary : T.borderStrong }
+          : undefined,
+      }}
+    >
+      {selectable ? <Checkbox checked={!!isSelected} /> : <Box sx={{ width: 20, flexShrink: 0 }} />}
+      <Box
+        sx={{
+          width: 48,
+          height: 48,
+          borderRadius: 1,
+          background: p.photoUrl
+            ? `url(${p.photoUrl}) center/cover`
+            : GRADIENTS[((p.photoGradient || (idx % 5) + 1) - 1) as 0 | 1 | 2 | 3 | 4],
+          flexShrink: 0,
+        }}
+      />
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography
+          sx={{
+            fontSize: 13.5,
+            fontWeight: 700,
+            letterSpacing: '-0.005em',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {p.name}
+        </Typography>
+        <Stack direction="row" alignItems="center" gap={1} sx={{ mt: 0.375, fontSize: 11, color: T.text3 }}>
+          <Box component="span" sx={{ fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em' }}>
+            RU #{p.ruPropertyId}
+          </Box>
+        </Stack>
+      </Box>
+      <Box
+        sx={{
+          px: 1.125,
+          py: 0.375,
+          borderRadius: '99px',
+          fontSize: 9.5,
+          fontFamily: '"Geist Mono", monospace',
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          flexShrink: 0,
+          color: badgeColor.color,
+          bgcolor: badgeColor.bg,
+          border: `1px solid ${badgeColor.border}`,
+        }}
+      >
+        {badge}
+      </Box>
+    </Box>
+  );
+}
+
 export default function PropertyList({ properties, selectedIds, onToggle, onSelectAll, loading }: PropertyListProps) {
   const importable = useMemo(() => properties.filter((p) => p.importable), [properties]);
+  const alreadyImported = useMemo(
+    () => properties.filter((p) => p.alreadyImported && !p.importable),
+    [properties],
+  );
+  const inactive = useMemo(
+    () => properties.filter((p) => !p.importable && !p.alreadyImported),
+    [properties],
+  );
   const allSelected = importable.length > 0 && selectedIds.length === importable.length;
 
   if (loading) {
@@ -36,18 +138,66 @@ export default function PropertyList({ properties, selectedIds, onToggle, onSele
     );
   }
 
-  if (importable.length === 0) {
+  if (properties.length === 0) {
     return (
       <Box sx={{ p: 5, textAlign: 'center' }}>
         <Box sx={{ fontSize: 48, mb: 1.75, opacity: 0.5 }}>📭</Box>
         <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 0.625 }}>
-          Aucune annonce à importer
+          Aucune annonce Rentals United
         </Typography>
         <Typography sx={{ fontSize: 12, color: T.text3 }}>
-          Seules les annonces actives sur Rentals United et pas encore importées dans Sojori sont
-          proposées ici.
+          Vérifiez que le compte propriétaire a des credentials RU et des annonces sur Rentals United.
         </Typography>
       </Box>
+    );
+  }
+
+  if (importable.length === 0) {
+    return (
+      <Stack gap={2}>
+        <Box sx={{ p: 3, textAlign: 'center', bgcolor: T.bg2, borderRadius: 1.5, border: `1px solid ${T.border}` }}>
+          <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 0.625 }}>
+            Aucune annonce à importer
+          </Typography>
+          <Typography sx={{ fontSize: 12, color: T.text3 }}>
+            {alreadyImported.length > 0 && inactive.length > 0
+              ? `${alreadyImported.length} déjà importée(s) · ${inactive.length} inactive(s) ou archivée(s) sur RU`
+              : alreadyImported.length > 0
+                ? `${alreadyImported.length} annonce(s) déjà présente(s) dans Sojori`
+                : inactive.length > 0
+                  ? `${inactive.length} annonce(s) inactive(s) ou archivée(s) sur Rentals United`
+                  : 'Seules les annonces actives et non importées peuvent être importées.'}
+          </Typography>
+        </Box>
+        {alreadyImported.length > 0 && (
+          <Section title="Déjà importées dans Sojori" count={alreadyImported.length}>
+            {alreadyImported.map((p, idx) => (
+              <PropertyRow
+                key={p.ruPropertyId}
+                p={p}
+                idx={idx}
+                selectable={false}
+                badge="IMPORTÉE"
+                badgeColor={{ color: T.text3, bg: T.bg2, border: T.border }}
+              />
+            ))}
+          </Section>
+        )}
+        {inactive.length > 0 && (
+          <Section title="Inactives ou archivées (RU)" count={inactive.length}>
+            {inactive.map((p, idx) => (
+              <PropertyRow
+                key={p.ruPropertyId}
+                p={p}
+                idx={idx}
+                selectable={false}
+                badge={p.isArchived ? 'ARCHIVÉE' : 'INACTIVE'}
+                badgeColor={{ color: '#c46506', bg: 'rgba(196,101,6,0.10)', border: 'rgba(196,101,6,0.25)' }}
+              />
+            ))}
+          </Section>
+        )}
+      </Stack>
     );
   }
 
@@ -79,109 +229,66 @@ export default function PropertyList({ properties, selectedIds, onToggle, onSele
       </Stack>
 
       <Stack gap={0.875}>
-        {importable.map((p, idx) => {
-          const isSelected = selectedIds.includes(p.ruPropertyId);
-          return (
-            <Box
-              key={p.ruPropertyId}
-              onClick={() => onToggle(p.ruPropertyId)}
-              sx={{
-                p: '12px 14px',
-                border: '1px solid',
-                borderColor: isSelected ? T.primary : T.border,
-                borderRadius: 1.4,
-                bgcolor: isSelected ? 'linear-gradient(180deg,#fff7ed,#fff)' : T.bg1,
-                background: isSelected ? 'linear-gradient(180deg,#fff7ed,#fff)' : T.bg1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                boxShadow: isSelected
-                  ? `inset 3px 0 0 ${T.primary}, 0 2px 8px -4px rgba(184,133,26,0.20)`
-                  : 'none',
-                animation: `sj-slideUp 0.25s ${idx * 0.05}s both`,
-                '&:hover': {
-                  borderColor: isSelected ? T.primary : T.borderStrong,
-                },
-              }}
-            >
-              <Checkbox checked={isSelected} />
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 1,
-                  background: p.photoUrl
-                    ? `url(${p.photoUrl}) center/cover`
-                    : GRADIENTS[((p.photoGradient || (idx % 5) + 1) - 1) as 0 | 1 | 2 | 3 | 4],
-                  flexShrink: 0,
-                }}
-              />
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography
-                  sx={{
-                    fontSize: 13.5,
-                    fontWeight: 700,
-                    letterSpacing: '-0.005em',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {p.name}
-                </Typography>
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  gap={1}
-                  sx={{ mt: 0.375, fontSize: 11, color: T.text3 }}
-                >
-                  <Box
-                    component="span"
-                    sx={{ fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em' }}
-                  >
-                    RU #{p.ruPropertyId}
-                  </Box>
-                  {p.city && (
-                    <>
-                      <Box component="span" sx={{ color: T.text4 }}>
-                        ·
-                      </Box>
-                      {p.city}
-                    </>
-                  )}
-                  {p.guests != null && (
-                    <>
-                      <Box component="span" sx={{ color: T.text4 }}>
-                        ·
-                      </Box>
-                      👥 {p.guests} voyageurs
-                    </>
-                  )}
-                </Stack>
-              </Box>
-              <Box
-                sx={{
-                  px: 1.125,
-                  py: 0.375,
-                  borderRadius: '99px',
-                  fontSize: 9.5,
-                  fontFamily: '"Geist Mono", monospace',
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  flexShrink: 0,
-                  color: T.info,
-                  bgcolor: T.infoTint,
-                  border: `1px solid rgba(6,115,179,0.20)`,
-                }}
-              >
-                PRÊTE
-              </Box>
-            </Box>
-          );
-        })}
+        {importable.map((p, idx) => (
+          <PropertyRow
+            key={p.ruPropertyId}
+            p={p}
+            idx={idx}
+            isSelected={selectedIds.includes(p.ruPropertyId)}
+            onToggle={() => onToggle(p.ruPropertyId)}
+            selectable
+            badge="PRÊTE"
+            badgeColor={{ color: T.info, bg: T.infoTint, border: 'rgba(6,115,179,0.20)' }}
+          />
+        ))}
       </Stack>
+
+      {(alreadyImported.length > 0 || inactive.length > 0) && (
+        <Stack gap={1.5} sx={{ mt: 2 }}>
+          {alreadyImported.length > 0 && (
+            <Section title="Déjà importées" count={alreadyImported.length}>
+              {alreadyImported.map((p, idx) => (
+                <PropertyRow
+                  key={p.ruPropertyId}
+                  p={p}
+                  idx={idx}
+                  selectable={false}
+                  badge="IMPORTÉE"
+                  badgeColor={{ color: T.text3, bg: T.bg2, border: T.border }}
+                />
+              ))}
+            </Section>
+          )}
+          {inactive.length > 0 && (
+            <Section title="Inactives / archivées" count={inactive.length}>
+              {inactive.map((p, idx) => (
+                <PropertyRow
+                  key={p.ruPropertyId}
+                  p={p}
+                  idx={idx}
+                  selectable={false}
+                  badge={p.isArchived ? 'ARCHIVÉE' : 'INACTIVE'}
+                  badgeColor={{ color: '#c46506', bg: 'rgba(196,101,6,0.10)', border: 'rgba(196,101,6,0.25)' }}
+                />
+              ))}
+            </Section>
+          )}
+        </Stack>
+      )}
+    </Box>
+  );
+}
+
+function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+  return (
+    <Box>
+      <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2, mb: 0.75 }}>
+        {title}{' '}
+        <Box component="span" sx={{ color: T.text3, fontWeight: 600 }}>
+          ({count})
+        </Box>
+      </Typography>
+      <Stack gap={0.875}>{children}</Stack>
     </Box>
   );
 }

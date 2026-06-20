@@ -11,6 +11,7 @@ export interface CityAutocompleteProps {
   onSelect: (city: SojoriCity | null) => void;
   error?: boolean;
   loading?: boolean;
+  autoDetected?: boolean;
 }
 
 export default function CityAutocomplete({
@@ -19,6 +20,7 @@ export default function CityAutocomplete({
   onSelect,
   error,
   loading,
+  autoDetected,
 }: CityAutocompleteProps) {
   return (
     <Box>
@@ -36,7 +38,13 @@ export default function CityAutocomplete({
           gap: 0.625,
         }}
       >
-        Ville Sojori <Box component="span" sx={{ color: T.error }}>*</Box>
+        Ville Sojori{' '}
+        {!autoDetected && <Box component="span" sx={{ color: T.error }}>*</Box>}
+        {autoDetected && (
+          <Box component="span" sx={{ color: T.info, fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>
+            · détectée depuis RU
+          </Box>
+        )}
       </Typography>
 
       <Autocomplete
@@ -113,9 +121,13 @@ export default function CityAutocomplete({
       >
         {error
           ? '⚠ Sélectionne une ville Sojori pour continuer.'
-          : cities.length > 0
-            ? `Obligatoire — ${cities.length} ville(s) disponibles.`
-            : 'Chargement des villes Sojori…'}
+          : loading
+            ? 'Chargement des villes Sojori…'
+            : autoDetected && selected
+              ? `Orchestration filtrée sur ${selected.name} (mapping RU → Sojori).`
+              : cities.length > 0
+                ? `Optionnel si détectée depuis RU — ${cities.length} ville(s) disponibles.`
+                : 'Ville résolue automatiquement depuis Rentals United à l’import.'}
       </Typography>
     </Box>
   );
