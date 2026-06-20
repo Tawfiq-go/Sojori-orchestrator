@@ -9,6 +9,7 @@ import {
   fetchRuOwnerProperties,
   importRuProperty,
   importRuPropertyBatch,
+  resolveRuImportCities,
 } from '../../../services/channelsDashboardApi';
 import { getOwners } from '../../../services/teamDashboardApi';
 import { listingsService } from '../../../services/listingsService';
@@ -58,6 +59,7 @@ export function ImportAirbnbModalContainer({
     initialCities.map((c) => ({ _id: c._id, name: resolveCityLabel(c) || c._id })),
   );
   const [citiesLoading, setCitiesLoading] = useState(false);
+  const [ownerDefaultCity, setOwnerDefaultCity] = useState<SojoriCity | null>(null);
   const [importResults, setImportResults] = useState<ImportResultItem[] | null>(null);
 
   const { progressData, resetProgress, runTrackedImport, isPolling } = useRuImportProgress();
@@ -139,6 +141,18 @@ export function ImportAirbnbModalContainer({
         throw new Error(res.data?.error || 'Impossible de charger les annonces Airbnb');
       }
       const list = res.data.properties ?? [];
+      const defaultCity = res.data.ownerDefaultCity as
+        | { cityId?: string; cityName?: string }
+        | null
+        | undefined;
+      if (defaultCity?.cityId) {
+        setOwnerDefaultCity({
+          _id: String(defaultCity.cityId),
+          name: defaultCity.cityName || String(defaultCity.cityId),
+        });
+      } else {
+        setOwnerDefaultCity(null);
+      }
       if (list.length === 0) {
         console.warn('[ImportAirbnb] list-owner-properties empty', { ownerId, res: res.data });
       }
@@ -154,7 +168,7 @@ export function ImportAirbnbModalContainer({
         }) => ({
           ruPropertyId: String(p.ruPropertyId),
           name: p.name || `Annonce #${p.ruPropertyId}`,
-          isActive: p.isActive !== false,
+          isActive: p.isActive === true,
           isArchived: p.isArchived === true,
           alreadyImported: Boolean(p.alreadyImported),
           importable: p.importable === true,
@@ -171,6 +185,27 @@ export function ImportAirbnbModalContainer({
       window.clearTimeout(timer);
     }
   }, [isAdmin]);
+
+  const resolveCitiesForSelection = useCallback(
+    async (ownerId: string, ruPropertyIds: string[]) => {
+      const ids = ruPropertyIds.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+      if (!ownerId || ids.length === 0) return null;
+      const res = await resolveRuImportCities({ ownerId, ruPropertyIds: ids });
+      const map = (res.data?.cities ?? {}) as Record<string, { cityId?: string; cityName?: string }>;
+      const unique = new Map<string, SojoriCity>();
+      for (const entry of Object.values(map)) {
+        if (entry?.cityId) {
+          unique.set(entry.cityId, {
+            _id: String(entry.cityId),
+            name: entry.cityName || String(entry.cityId),
+          });
+        }
+      }
+      if (unique.size === 1) return [...unique.values()][0];
+      return null;
+    },
+    [],
+  );
 
   const warningsFromImport = (payload: {
     success?: boolean;
@@ -191,7 +226,7 @@ export function ImportAirbnbModalContainer({
     }: {
       ownerId: string;
       ruPropertyIds: string[];
-      cityId: string;
+      cityId?: string;
     }) => {
       setImportResults(null);
       const ids = ruPropertyIds.map(Number).filter((n) => Number.isFinite(n) && n > 0);
@@ -205,7 +240,7 @@ export function ImportAirbnbModalContainer({
               importRuProperty({
                 ownerId,
                 ruPropertyId: ids[0],
-                cityId,
+                ...(cityId ? { cityId } : {}),
                 correlationId,
               }),
           });
@@ -234,7 +269,7 @@ export function ImportAirbnbModalContainer({
             runImportRequest: (correlationId) =>
               importRuPropertyBatch({
                 ownerId,
-                cityId,
+                ...(cityId ? { cityId } : {}),
                 ruPropertyIds: ids,
                 correlationId,
               }),
@@ -294,6 +329,8 @@ export function ImportAirbnbModalContainer({
       fetchOwnerProperties={fetchOwnerProperties}
       cities={cities}
       citiesLoading={citiesLoading}
+      ownerDefaultCity={ownerDefaultCity}
+      resolveCitiesForSelection={resolveCitiesForSelection}
       startImport={startImport}
       importProgress={importProgress}
       importResults={importResults}

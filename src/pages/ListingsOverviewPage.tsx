@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { Box, Button, CircularProgress, TextField, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  MenuItem,
+  Select,
+  TextField,
+  Typography,
+} from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
@@ -22,7 +30,8 @@ import type { ListingStatus, ListingsStats, ListingSummary } from '../types/list
 import { ListingQuickEditDialog } from '../components/listing/ListingQuickEditDialog';
 import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 20;
 const LISTINGS_GRID_COLUMNS = 5;
 const LISTING_CARD_WIDTH = 280;
 
@@ -115,19 +124,25 @@ export function ListingsOverviewPage() {
   );
 
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [totalListings, setTotalListings] = useState(0);
   const [statsLoading, setStatsLoading] = useState(true);
 
   const listingsQueryOptions = useMemo(
     () => ({
       page,
-      limit: PAGE_SIZE,
+      limit: pageSize,
       staging: false,
       useActiveFilter: true,
       active: statusFilter === 'active',
+      name: search.trim() || undefined,
     }),
-    [page, statusFilter],
+    [page, pageSize, statusFilter, search],
   );
+
+  const totalPages = Math.max(1, Math.ceil(totalListings / pageSize));
+  const pageStart = totalListings === 0 ? 0 : page * pageSize + 1;
+  const pageEnd = Math.min(totalListings, (page + 1) * pageSize);
 
   const loadStats = async () => {
     setStatsLoading(true);
@@ -190,24 +205,6 @@ export function ListingsOverviewPage() {
     }
     setStatusFilter(tab);
   }, [searchParams, setSearchParams]);
-
-  const filteredListings = useMemo(() => {
-    return listings.filter((listing) => {
-      const haystack = [
-        listing.name,
-        listing.city,
-        listing.country,
-        listing.ownerName,
-        listing.propertyUnit,
-      ]
-        .join(' ')
-        .toLowerCase();
-
-      if (search.trim() && !haystack.includes(search.trim().toLowerCase())) return false;
-      if (listing.status !== statusFilter) return false;
-      return true;
-    });
-  }, [listings, search, statusFilter]);
 
   const handleListingQuickUpdated = (updated: ListingSummary) => {
     setListings((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
@@ -297,10 +294,13 @@ export function ListingsOverviewPage() {
         {/* Recherche + Filtres sur la même ligne */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           <TextField
-            placeholder="Rechercher une annonce"
+            placeholder="Rechercher par nom d'annonce"
             size="small"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(0);
+            }}
             sx={{ flex: 1, minWidth: 240, maxWidth: 360 }}
           />
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -322,14 +322,71 @@ export function ListingsOverviewPage() {
         </Box>
       </Panel>
 
-      <Panel title="Listings" desc={loading ? 'Chargement...' : `${filteredListings.length} entrée(s)`}>
+      <Panel
+        title="Listings"
+        desc={
+          loading
+            ? 'Chargement...'
+            : `${totalListings} annonce(s) ${statusFilter === 'active' ? 'active(s)' : 'inactive(s)'}`
+        }
+      >
+        {!loading && totalListings > 0 && (
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 1.5,
+              mb: 2,
+              pb: 2,
+              borderBottom: `1px solid ${t.border}`,
+            }}
+          >
+            <Typography sx={{ fontSize: 12, color: t.text3 }}>
+              {totalListings === 0
+                ? 'Aucun résultat'
+                : `${pageStart}–${pageEnd} sur ${totalListings} · page ${page + 1}/${totalPages}`}
+              {statsLoading ? '' : ` · ${stats.total} total (stats)`}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Typography sx={{ fontSize: 12, color: t.text3, mr: 0.5 }}>Par page</Typography>
+              <Select
+                size="small"
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(0);
+                }}
+                sx={{ minWidth: 72, fontSize: 13, height: 32 }}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <MenuItem key={size} value={size}>
+                    {size}
+                  </MenuItem>
+                ))}
+              </Select>
+              <Button sx={btnGhostSx} disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                Précédent
+              </Button>
+              <Button
+                sx={btnGhostSx}
+                disabled={page + 1 >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Suivant
+              </Button>
+            </Box>
+          </Box>
+        )}
+
         {loading ? (
           <Typography sx={{ py: 6, textAlign: 'center', color: t.text3 }}>Chargement des annonces...</Typography>
-        ) : filteredListings.length === 0 ? (
+        ) : listings.length === 0 ? (
           <Box sx={{ py: 6, textAlign: 'center' }}>
             <Typography sx={{ color: t.text3 }}>
-              {listings.length === 0
-                ? 'Aucune annonce retournée par l’API.'
+              {search.trim()
+                ? 'Aucune annonce ne correspond à cette recherche.'
                 : `Aucune annonce ${statusFilter === 'active' ? 'active' : 'inactive'}.`}
             </Typography>
           </Box>
@@ -344,7 +401,7 @@ export function ListingsOverviewPage() {
               maxWidth: '100%',
             }}
           >
-            {filteredListings.map((listing, index) => {
+            {listings.map((listing, index) => {
               const gradient = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
               const ruLabel = formatRuIdsLabel(listing.rentalUnitedIds);
               const otaAuditing = otaAuditListingId === listing.id;
@@ -456,26 +513,6 @@ export function ListingsOverviewPage() {
         )}
       </Panel>
 
-        {!loading && totalListings > PAGE_SIZE && (
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2, pt: 2, borderTop: `1px solid ${t.border}` }}>
-            <Typography sx={{ fontSize: 12, color: t.text3 }}>
-              Page {page + 1} · {totalListings} annonce(s)
-              {statsLoading ? '' : ` · ${stats.total} total (stats)`}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button sx={btnGhostSx} disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                Précédent
-              </Button>
-              <Button
-                sx={btnGhostSx}
-                disabled={(page + 1) * PAGE_SIZE >= totalListings}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Suivant
-              </Button>
-            </Box>
-          </Box>
-        )}
       <ImportAirbnbModalContainer
         open={showImportRu}
         initialCities={cities}

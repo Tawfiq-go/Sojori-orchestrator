@@ -28,11 +28,15 @@ export interface ImportAirbnbModalProps {
   fetchOwnerProperties: (ownerId: string) => Promise<RuProperty[]>;
   cities: SojoriCity[];
   citiesLoading?: boolean;
+  /** Ville par défaut du compte owner (fallback) */
+  ownerDefaultCity?: SojoriCity | null;
+  /** Résout la ville Sojori depuis RU pour la sélection courante */
+  resolveCitiesForSelection?: (ownerId: string, ruPropertyIds: string[]) => Promise<SojoriCity | null>;
   /** Lance l'import (batch) — retourne quand polling commence */
   startImport: (params: {
     ownerId: string;
     ruPropertyIds: string[];
-    cityId: string;
+    cityId?: string;
   }) => Promise<void>;
   /** Hook progress polling → renvoie l'état temps réel (10 étapes backend) */
   importProgress: ImportProgress | null;                      // null tant que pas démarré
@@ -45,6 +49,7 @@ export interface ImportAirbnbModalProps {
 export default function ImportAirbnbModal({
   open, onClose, isAdmin, sessionOwner, authReady = true,
   searchOwners, fetchOwnerProperties, cities, citiesLoading = false,
+  ownerDefaultCity = null, resolveCitiesForSelection,
   startImport, importProgress, importResults, onImported,
 }: ImportAirbnbModalProps) {
   const [phase, setPhase] = useState<ModalPhase>(isAdmin ? 'A-admin' : 'A-owner');
@@ -53,6 +58,8 @@ export default function ImportAirbnbModal({
   const [propsLoading, setPropsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [city, setCity] = useState<SojoriCity | null>(null);
+  const [cityAutoFromRu, setCityAutoFromRu] = useState(false);
+  const [cityResolving, setCityResolving] = useState(false);
   const [cityError, setCityError] = useState(false);
   const [propsError, setPropsError] = useState<string | null>(null);
   const wasOpenRef = useRef(false);
@@ -69,6 +76,8 @@ export default function ImportAirbnbModal({
     setProperties([]);
     setSelectedIds([]);
     setCity(null);
+    setCityAutoFromRu(false);
+    setCityResolving(false);
     setCityError(false);
     setPropsError(null);
     setPropsLoading(false);
@@ -123,6 +132,31 @@ export default function ImportAirbnbModal({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !ownerDefaultCity || city) return;
+    setCity(ownerDefaultCity);
+    setCityAutoFromRu(true);
+  }, [open, ownerDefaultCity, city]);
+
+  useEffect(() => {
+    if (!open || !ownerId || selectedIds.length === 0 || !resolveCitiesForSelection) return;
+    let cancelled = false;
+    setCityResolving(true);
+    void resolveCitiesForSelection(ownerId, selectedIds)
+      .then((resolved) => {
+        if (cancelled || !resolved) return;
+        setCity(resolved);
+        setCityAutoFromRu(true);
+        setCityError(false);
+      })
+      .finally(() => {
+        if (!cancelled) setCityResolving(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, ownerId, selectedIds, resolveCitiesForSelection]);
+
   // Transitions automatiques sur progress
   useEffect(() => {
     if (importProgress && !importProgress.completed) setPhase('C');
@@ -130,7 +164,7 @@ export default function ImportAirbnbModal({
   }, [importProgress, importResults]);
 
   const importable = useMemo(() => properties.filter((p) => p.importable), [properties]);
-  const canImport = selectedIds.length > 0 && !!city;
+  const canImport = selectedIds.length > 0;
   const isImporting = phase === 'C';
   const isDone = phase === 'D';
 
@@ -142,10 +176,14 @@ export default function ImportAirbnbModal({
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
   const handleImport = async () => {
-    if (!owner || !city) { setCityError(true); return; }
+    if (!owner) return;
     if (selectedIds.length === 0) return;
     setCityError(false);
-    await startImport({ ownerId: owner._id, ruPropertyIds: selectedIds, cityId: city._id });
+    await startImport({
+      ownerId: owner._id,
+      ruPropertyIds: selectedIds,
+      ...(city?._id ? { cityId: city._id } : {}),
+    });
     // phase C s'active via useEffect importProgress
   };
 
@@ -353,8 +391,13 @@ export default function ImportAirbnbModal({
                 <CityAutocomplete
                   cities={cities}
                   selected={city}
-                  loading={citiesLoading}
-                  onSelect={(c) => { setCity(c); setCityError(false); }}
+                  loading={citiesLoading || cityResolving}
+                  autoDetected={cityAutoFromRu && !!city}
+                  onSelect={(c) => {
+                    setCity(c);
+                    setCityAutoFromRu(false);
+                    setCityError(false);
+                  }}
                   error={cityError}
                 />
               </Box>
@@ -383,8 +426,10 @@ export default function ImportAirbnbModal({
               : phase === 'B'
                 ? selectedIds.length > 0
                   ? city
-                    ? `${selectedIds.length} annonce${selectedIds.length !== 1 ? 's' : ''} · ${city.name}`
-                    : `${selectedIds.length} annonce${selectedIds.length !== 1 ? 's' : ''} — choisir une ville Sojori`
+                    ? `${selectedIds.length} annonce${selectedIds.length !== 1 ? 's' : ''} · ${city.name}${cityAutoFromRu ? ' (RU)' : ''}`
+                    : cityResolving
+                      ? `${selectedIds.length} annonce${selectedIds.length !== 1 ? 's' : ''} · ville RU…`
+                      : `${selectedIds.length} annonce${selectedIds.length !== 1 ? 's' : ''} · ville auto à l'import`
                   : 'Sélectionnez au moins une annonce'
                 : 'Esc pour annuler'}
         </Typography>
