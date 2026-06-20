@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite'
+import type { ClientRequest } from 'node:http'
+import { defineConfig, type ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
@@ -55,12 +56,12 @@ const monitoringDevProxy = {
     secure: false,
     timeout: 180_000,
     proxyTimeout: 180_000,
-    configure: (proxy: import('http-proxy').ProxyServer) => {
-      proxy.on('proxyReq', (proxyReq) => {
+    configure: ((proxy) => {
+      proxy.on('proxyReq', (proxyReq: ClientRequest) => {
         proxyReq.removeHeader('origin')
         proxyReq.removeHeader('referer')
       })
-    },
+    }) satisfies NonNullable<ProxyOptions['configure']>,
   },
 } as const
 
