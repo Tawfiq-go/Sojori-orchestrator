@@ -3,11 +3,12 @@
 // Combine ListingFormShell + onglets Detail + Orchestration V3
 // Branchez vos vrais hooks de données à la place de useState({}).
 // ════════════════════════════════════════════════════════════════════
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import ListingFormShell from './ListingFormShell';
 import { ListingFormStructureContext } from './ListingFormStructureContext';
 import { ListingFormImportedProvider } from './ListingFormImportedContext';
 import listingsService from '../../../services/listingsService';
+import { getListingImportOnboarding } from '../../../services/importOnboardingService';
 import { toast } from 'react-toastify';
 
 import { GeneralTab, LocationTab }                          from './tabs/GeneralLocationTabs';
@@ -16,6 +17,7 @@ import AmenitiesTab                                         from './tabs/DetailT
 import { PricingTab, AvailabilityTab, FeesTab }             from './tabs/DetailTabsCommercial';
 import { DistributionTab, RoomsTab, LicenseTab } from './tabs/DetailTabsDistribution';
 import { RuImportDataTab } from './tabs/DetailTabsRuImport';
+import PostImportOnboardingTab from './tabs/PostImportOnboardingTab';
 import ListingOrchestrationV3Embed from '../../../features/orchestrationListingV3/ListingOrchestrationV3Embed';
 
 export default function ListingFormV2({
@@ -33,13 +35,35 @@ export default function ListingFormV2({
 }) {
   const [values, setValues] = useState(initialValues);
   const [publishLoading, setPublishLoading] = useState(false);
+  const [importOnboardingActive, setImportOnboardingActive] = useState(
+    Boolean(initialValues?.importOnboarding?.active),
+  );
   const ruImportSnapshot = importedFieldsSource ?? initialValues;
 
   useEffect(() => {
     if (initialValues && Object.keys(initialValues).length > 0) {
       setValues(initialValues);
+      setImportOnboardingActive(Boolean(initialValues.importOnboarding?.active));
     }
   }, [initialValues]);
+
+  useEffect(() => {
+    if (!listingId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const state = await getListingImportOnboarding(listingId);
+        if (!cancelled) setImportOnboardingActive(Boolean(state?.active));
+      } catch {
+        /* listing sans onboarding — ignore */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [listingId]);
+
+  const handleImportOnboardingFinished = useCallback(() => {
+    setImportOnboardingActive(false);
+  }, []);
 
   /** GeneralTab passe un objet ; AmenitiesTab passe (field, value). */
   const handleFormChange = (arg1, arg2) => {
@@ -113,6 +137,14 @@ export default function ListingFormV2({
       );
     }
     if (level === 'detail') {
+      if (tabKey === 'post-import' && listingId) {
+        return (
+          <PostImportOnboardingTab
+            listingId={listingId}
+            onFinished={handleImportOnboardingFinished}
+          />
+        );
+      }
       if (tabKey === 'general') {
         return (
           <GeneralTab
@@ -163,9 +195,17 @@ export default function ListingFormV2({
         license:      { tone: 'warning', label: '⚠' },
       }}
       defaultLevel={defaultLevel}
-      defaultTab={defaultTab || (defaultLevel === 'orchestration-v3' ? 'orchestration-v3' : 'general')}
+      defaultTab={
+        defaultTab ||
+        (importOnboardingActive && defaultLevel === 'detail'
+          ? 'post-import'
+          : defaultLevel === 'orchestration-v3'
+            ? 'orchestration-v3'
+            : 'general')
+      }
       lockLevel={lockLevel}
       embedded={embedded}
+      importOnboardingActive={importOnboardingActive}
       onSave={() => onSave?.(values)}
       onPublish={handlePublish}
       publishLoading={publishLoading}

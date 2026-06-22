@@ -12,8 +12,9 @@ interface Props {
   taskId?: string;
   itemIndex?: number;
   disabled?: boolean;
-  /** Indique qu’un envoi a déjà eu lieu (bouton reste actif pour renvoyer). */
+  /** Indique qu’un envoi a déjà eu lieu — renvoi avec confirmation. */
   wasSent?: boolean;
+  itemLabel?: string;
   onDone?: (planDoc?: FulltaskPlanDoc) => void;
   onLoadingChange?: (loading: boolean) => void;
 }
@@ -41,6 +42,7 @@ export default function PlanDispatchButton({
   itemIndex,
   disabled,
   wasSent,
+  itemLabel = 'ce message',
   onDone,
   onLoadingChange,
 }: Props) {
@@ -56,13 +58,32 @@ export default function PlanDispatchButton({
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!canSend) return;
+
+    const isClientMessage = kind === 'message' || kind === 'relance';
+    let forceResend = false;
+    if (wasSent && isClientMessage) {
+      const ok = window.confirm(
+        `« ${itemLabel} » a déjà été envoyé avec succès au client (WhatsApp ou OTA/email).\n\nRenvoyer quand même ?`,
+      );
+      if (!ok) return;
+      forceResend = true;
+    }
+
     setBusy(true);
+    console.log('[dispatch-test] PlanDispatchButton click', {
+      reservationId,
+      kind,
+      messageIndex,
+      taskId,
+      itemIndex,
+      wasSent,
+    });
     try {
       let res: fulltaskApi.PlanDispatchApiResponse;
       if (kind === 'message' && messageIndex != null) {
-        res = await fulltaskApi.sendPlanMessage(reservationId, messageIndex);
+        res = await fulltaskApi.sendPlanMessage(reservationId, messageIndex, { forceResend });
       } else if (kind === 'relance' && taskId && itemIndex != null) {
-        res = await fulltaskApi.sendPlanRelance(reservationId, taskId, itemIndex);
+        res = await fulltaskApi.sendPlanRelance(reservationId, taskId, itemIndex, { forceResend });
       } else if (kind === 'staff_reminder' && taskId && itemIndex != null) {
         res = await fulltaskApi.sendPlanStaffReminder(reservationId, taskId, itemIndex);
       } else if (kind === 'assignment' && taskId) {
@@ -72,6 +93,19 @@ export default function PlanDispatchButton({
       }
 
       const planDoc = parsePlanFromResponse(res);
+      const msg = planDoc?.messages?.[messageIndex ?? -1] as
+        | { label?: string; messageId?: string; status?: string; canal?: string }
+        | undefined;
+
+      console.log('[dispatch-test] PlanDispatchButton result', {
+        success: res?.success,
+        channel: res?.dispatch?.channel,
+        error: res?.error,
+        messageLabel: msg?.label,
+        messageId: msg?.messageId,
+        messageStatus: msg?.status,
+        messageCanal: msg?.canal,
+      });
 
       if (!res?.success) {
         toast.error(res?.error || 'Action refusée');
@@ -84,6 +118,7 @@ export default function PlanDispatchButton({
       toast.success(stub ? 'Enregistré (mode test)' : label);
       onDone?.(planDoc);
     } catch (err) {
+      console.error('[dispatch-test] PlanDispatchButton error', err);
       toast.error(err instanceof Error ? err.message : 'Erreur');
     } finally {
       setBusy(false);
@@ -96,7 +131,7 @@ export default function PlanDispatchButton({
         ? 'Relancer l’assignation staff'
         : 'Lancer l’assignation staff'
       : wasSent
-        ? 'Renvoyer (toujours possible)'
+        ? 'Renvoyer au client (confirmation requise)'
         : 'Envoyer maintenant';
 
   return (

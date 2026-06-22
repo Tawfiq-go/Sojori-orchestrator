@@ -1,8 +1,9 @@
 import apiClient from './apiClient';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 import { displayToUpdateBody, type DisplayCleanliness } from '../utils/cleanlinessDisplay';
+import { applyOperationalStatusPatch } from '../utils/operationalStatusStore';
 
-const TASK_BASE = MICROSERVICE_BASE_URL.SRV_TASK;
+const LISTING_BASE = MICROSERVICE_BASE_URL.SRV_LISTING;
 
 export interface CleanlinessUpdateResult {
   success: boolean;
@@ -11,7 +12,7 @@ export interface CleanlinessUpdateResult {
     listingId: string;
     occupancyStatus?: string;
     cleanlinessStatus_v2?: string;
-    cleanlinessStatus?: string;
+    dirtySince?: string | null;
     cleanlinessEmergency?: boolean;
   };
 }
@@ -22,11 +23,24 @@ class CleanlinessService {
     displayStatus: DisplayCleanliness,
   ): Promise<CleanlinessUpdateResult> {
     const body = displayToUpdateBody(displayStatus);
-    const response = await apiClient.patch<CleanlinessUpdateResult>(
-      `${TASK_BASE}/listings/${listingId}/cleanliness-status`,
-      body,
-    );
-    return response.data;
+    const url = `${LISTING_BASE}/listings/${listingId}/operational-status`;
+    console.log('[cleanlinessService] PATCH operational-status', { listingId, displayStatus, body, url });
+    const response = await apiClient.patch<CleanlinessUpdateResult>(url, body);
+    const result = response.data;
+    console.log('[cleanlinessService] PATCH response', {
+      listingId,
+      success: result.success,
+      data: result.data,
+      message: result.message,
+    });
+    if (result.success && result.data) {
+      applyOperationalStatusPatch(listingId, {
+        occupancyStatus: result.data.occupancyStatus,
+        cleanlinessStatus_v2: result.data.cleanlinessStatus_v2,
+        cleanlinessEmergency: result.data.cleanlinessEmergency,
+      });
+    }
+    return result;
   }
 }
 

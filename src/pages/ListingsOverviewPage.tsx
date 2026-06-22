@@ -29,6 +29,12 @@ import { useAuth } from '../hooks/useAuth';
 import type { ListingStatus, ListingsStats, ListingSummary } from '../types/listings.types';
 import { ListingQuickEditDialog } from '../components/listing/ListingQuickEditDialog';
 import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
+import { CleanlinessBadgeInteractive } from '../components/calendar-views/CleanlinessBadgeInteractive';
+import cleanlinessService from '../services/cleanlinessService';
+import {
+  deriveDisplayCleanliness,
+  type DisplayCleanliness,
+} from '../utils/cleanlinessDisplay';
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 20;
@@ -208,6 +214,26 @@ export function ListingsOverviewPage() {
 
   const handleListingQuickUpdated = (updated: ListingSummary) => {
     setListings((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+  };
+
+  const handleCleanlinessChange = async (listingId: string, status: DisplayCleanliness) => {
+    const result = await cleanlinessService.updateListingStatus(listingId, status);
+    if (!result.success) {
+      toast.error(result.message || 'Échec mise à jour du statut');
+      throw new Error(result.message || 'Échec mise à jour du statut');
+    }
+    setListings((prev) =>
+      prev.map((item) =>
+        item.id !== listingId
+          ? item
+          : {
+              ...item,
+              occupancyStatus: result.data?.occupancyStatus ?? item.occupancyStatus,
+              cleanlinessStatus_v2: result.data?.cleanlinessStatus_v2 ?? item.cleanlinessStatus_v2,
+              cleanlinessEmergency: result.data?.cleanlinessEmergency ?? item.cleanlinessEmergency,
+            },
+      ),
+    );
   };
 
   const handleOtaQuickAudit = async (listingId: string) => {
@@ -405,6 +431,11 @@ export function ListingsOverviewPage() {
               const gradient = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
               const ruLabel = formatRuIdsLabel(listing.rentalUnitedIds);
               const otaAuditing = otaAuditListingId === listing.id;
+              const displayStatus = deriveDisplayCleanliness({
+                occupancyStatus: listing.occupancyStatus,
+                cleanlinessStatus_v2: listing.cleanlinessStatus_v2,
+                cleanlinessEmergency: listing.cleanlinessEmergency,
+              });
               return (
                 <Box
                   key={listing.id}
@@ -435,6 +466,14 @@ export function ListingsOverviewPage() {
 
                   <Box sx={{ p: 2 }}>
                     <Typography sx={{ fontSize: 15, fontWeight: 700, color: t.text }}>{listing.name}</Typography>
+                    <Box sx={{ mt: 1 }}>
+                      <CleanlinessBadgeInteractive
+                        status={displayStatus}
+                        displayStatus={displayStatus}
+                        emergency={listing.cleanlinessEmergency}
+                        onChange={(next) => handleCleanlinessChange(listing.id, next)}
+                      />
+                    </Box>
                     <Typography sx={{ mt: 0.5, fontSize: 12, color: t.text3, fontFamily: 'Geist Mono' }}>
                       {listing.city || 'Ville inconnue'} · {listing.country || 'Pays inconnu'}
                     </Typography>

@@ -4,7 +4,7 @@
 // · Paiement · Breakdown détaillé par jour · Notes
 // ════════════════════════════════════════════════════════════════════
 
-import { Box, Stack, Typography, Paper, Divider, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+import { Box, Stack, Typography, Paper, Divider, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, MenuItem } from '@mui/material';
 import moment from 'moment';
 import 'moment/locale/fr';
 import { formatPrice, formatPriceWithCurrency, formatPriceOrPlaceholder } from '../../utils/formatPrice';
@@ -14,6 +14,8 @@ moment.locale('fr');
 interface FinancierTabProps {
   reservationDetails: any;
   isEditMode: boolean;
+  editedData?: Record<string, unknown>;
+  onEditedDataChange?: (data: Record<string, unknown>) => void;
 }
 
 const T = {
@@ -45,12 +47,23 @@ const Row = ({ label, value, bold, mono, accent }: { label: string; value: any; 
   </Stack>
 );
 
-export function FinancierTab({ reservationDetails }: FinancierTabProps) {
+export function FinancierTab({
+  reservationDetails,
+  isEditMode,
+  editedData = {},
+  onEditedDataChange,
+}: FinancierTabProps) {
   if (!reservationDetails) {
     return <Box sx={{ p: 3 }}><Typography sx={{ color: T.text3 }}>Aucune donnée disponible.</Typography></Box>;
   }
   const r = reservationDetails;
   const breakdown = r.reservationBreakdown?.normalizedBreakdown;
+  const displayTotal = editedData.totalPrice ?? r.totalPrice;
+  const displayPaymentStatus = editedData.paymentStatus ?? r.paymentStatus;
+
+  const setField = (field: string, value: unknown) => {
+    onEditedDataChange?.({ ...editedData, [field]: value });
+  };
 
   return (
     <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
@@ -65,15 +78,42 @@ export function FinancierTab({ reservationDetails }: FinancierTabProps) {
               Prix total réservation
             </Typography>
             <Typography sx={{ fontSize: 32, fontWeight: 700, color: T.primaryDeep, fontFamily: '"Geist Mono", monospace', lineHeight: 1 }}>
-              {formatPriceOrPlaceholder(r.totalPrice, r.currency || 'MAD')}
+              {isEditMode ? (
+                <TextField
+                  size="small"
+                  type="number"
+                  value={displayTotal ?? ''}
+                  onChange={(e) => setField('totalPrice', e.target.value === '' ? '' : Number(e.target.value))}
+                  sx={{ maxWidth: 200, '& .MuiInputBase-input': { fontSize: 24, fontWeight: 700, fontFamily: '"Geist Mono", monospace' } }}
+                />
+              ) : (
+                formatPriceOrPlaceholder(r.totalPrice, r.currency || 'MAD')
+              )}
             </Typography>
+            {isEditMode && (
+              <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 0.5 }}>{r.currency || 'MAD'}</Typography>
+            )}
           </Box>
           <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
             <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, letterSpacing: '0.06em', textTransform: 'uppercase', mb: 0.5 }}>
               Statut paiement
             </Typography>
-            <Typography sx={{ fontSize: 18, fontWeight: 700, color: r.paymentStatus === 'Paid' ? T.success : T.warning }}>
-              {r.paymentStatus || 'Non défini'}
+            <Typography sx={{ fontSize: 18, fontWeight: 700, color: displayPaymentStatus === 'Paid' ? T.success : T.warning }}>
+              {isEditMode ? (
+                <TextField
+                  select
+                  size="small"
+                  value={String(displayPaymentStatus || 'UnPaid')}
+                  onChange={(e) => setField('paymentStatus', e.target.value)}
+                  sx={{ minWidth: 140, '& .MuiInputBase-input': { fontSize: 14, fontWeight: 700 } }}
+                >
+                  <MenuItem value="Paid">Payé</MenuItem>
+                  <MenuItem value="UnPaid">Non payé</MenuItem>
+                  <MenuItem value="Pending">En attente</MenuItem>
+                </TextField>
+              ) : (
+                r.paymentStatus || 'Non défini'
+              )}
             </Typography>
             <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 0.25, fontFamily: '"Geist Mono", monospace' }}>
               Déjà payé : {formatPriceWithCurrency(r.alreadyPaid || 0, r.currency)}
@@ -164,7 +204,24 @@ export function FinancierTab({ reservationDetails }: FinancierTabProps) {
           )}
 
           <SectionCard title="💳 Paiement">
-            <Row label="Statut"     value={r.paymentStatus} bold />
+            {isEditMode ? (
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', py: 0.5 }}>
+                <Typography sx={{ fontSize: 12.5, color: T.text2 }}>Statut</Typography>
+                <TextField
+                  select
+                  size="small"
+                  value={String(displayPaymentStatus || 'UnPaid')}
+                  onChange={(e) => setField('paymentStatus', e.target.value)}
+                  sx={{ minWidth: 140 }}
+                >
+                  <MenuItem value="Paid">Payé</MenuItem>
+                  <MenuItem value="UnPaid">Non payé</MenuItem>
+                  <MenuItem value="Pending">En attente</MenuItem>
+                </TextField>
+              </Stack>
+            ) : (
+              <Row label="Statut" value={r.paymentStatus} bold />
+            )}
             <Row label="Méthode"    value={r.paymentMethod} />
             <Row label="Type"       value={r.paymentType} />
             <Row label="Déjà payé"  value={formatPriceWithCurrency(r.alreadyPaid || 0, r.currency)} bold mono accent={T.success} />

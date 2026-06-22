@@ -31,6 +31,7 @@ export default function StaffForm({ initial, allListings, onSave, onCancel, onDe
     rates: initial?.rates || {},
     allowedTaskTypes: initial?.allowedTaskTypes || [],
     allowedListingIds: initial?.allowedListingIds || [],
+    allowedCityIds: initial?.allowedCityIds || [],
     maxTasksPerDay: initial?.maxTasksPerDay,
     schedule: initial?.schedule || { daysOfWeek: [0,1,2,3,4], timeWindows: [{ start: '08:00', end: '18:00' }] },
     notes: initial?.notes,

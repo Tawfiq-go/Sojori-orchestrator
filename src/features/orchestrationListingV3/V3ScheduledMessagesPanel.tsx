@@ -38,7 +38,7 @@ const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => {
 });
 
 function sendModeLabel(ch: MessageDeliveryChannel): string {
-  return ch === 'whatsapp' ? 'WhatsApp' : ch === 'email' ? 'Email' : 'OTA / Message';
+  return ch === 'whatsapp' ? 'WhatsApp' : ch === 'email' ? 'Email' : 'OTA / Email';
 }
 
 function formatSubtitle(rule: ScheduledOrchestrationMessage, catalogLabel?: string): string {

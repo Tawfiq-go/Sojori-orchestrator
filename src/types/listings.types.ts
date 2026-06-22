@@ -20,6 +20,9 @@ export interface ListingSummary {
   rentalUnitedIds: string[];
   coverImageUrl: string;
   updatedAt: string | null;
+  occupancyStatus?: string;
+  cleanlinessStatus_v2?: string;
+  cleanlinessEmergency?: boolean;
   raw: Record<string, unknown>;
 }
 

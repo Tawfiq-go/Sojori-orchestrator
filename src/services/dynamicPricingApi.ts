@@ -580,6 +580,59 @@ export async function fetchPortfolioEstimateDiff(listingIds: string[]) {
   );
 }
 
+export type ApplyPreviewDiffAlertDto =
+  | 'ok'
+  | 'large_delta'
+  | 'below_floor'
+  | 'reserved'
+  | 'manual'
+  | 'blocked'
+  | 'no_change';
+
+export type ApplyPreviewDiffRowDto = {
+  date: string;
+  airroiMad: number | null;
+  g7ProposedMad: number | null;
+  calendarCurrentMad: number | null;
+  baseImportMad: number | null;
+  deltaMad: number | null;
+  alert: ApplyPreviewDiffAlertDto;
+  pushToCalendar: boolean;
+  skipReason?: string;
+};
+
+export type ApplyPreviewDiffDto = {
+  success: boolean;
+  listingId: string;
+  airroiSnapshotAt: string | null;
+  previewComputedAt: string;
+  rows: ApplyPreviewDiffRowDto[];
+  summary: {
+    totalDays: number;
+    daysWithDiff: number;
+    daysWithLargeDelta: number;
+    daysBlocked: number;
+    daysManual: number;
+    daysReserved: number;
+    daysPushable: number;
+  };
+};
+
+export async function fetchApplyPreviewDiff(
+  listingId: string,
+  body?: {
+    config?: Partial<PilotPricingConfigDto>;
+    onlyChanged?: boolean;
+    limit?: number;
+  },
+) {
+  return apiClient.post<ApplyPreviewDiffDto>(
+    `${BASE}/listings/${encodeURIComponent(listingId)}/apply-preview-diff`,
+    body ?? {},
+    { timeout: 120_000 },
+  );
+}
+
 export type PricingAuditRowDto = {
   _id: string;
   appliedAt: string;

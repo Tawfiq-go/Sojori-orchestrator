@@ -392,8 +392,6 @@ function ListingRowComp({
 }) {
   const numTasks = listing.reservations.reduce((n, r) => n + (r.timeline?.length || 0), 0);
   const displayStatus = deriveDisplayCleanliness(listing, listing.reservations);
-  // Badge must match filter logic (deriveDisplayCleanliness). Do not prefer cleanlinessStatus_v2
-  // alone — it can be "clean" while legacy cleanlinessStatus is still "dirty".
 
   return (
     <Box sx={{

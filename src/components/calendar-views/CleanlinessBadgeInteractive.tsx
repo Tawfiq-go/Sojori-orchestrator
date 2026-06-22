@@ -91,7 +91,7 @@ export function CleanlinessBadgeInteractive({
         onClose={() => setAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-        PaperProps={{ sx: { minWidth: 200, borderRadius: 1.5 } }}
+        slotProps={{ paper: { sx: { minWidth: 200, borderRadius: 1.5 } } }}
       >
         {OPTIONS.map((opt) => (
           <MenuItem
@@ -100,7 +100,7 @@ export function CleanlinessBadgeInteractive({
             onClick={() => handlePick(opt.value)}
           >
             <ListItemIcon sx={{ minWidth: 32 }}>{opt.icon}</ListItemIcon>
-            <ListItemText primaryTypographyProps={{ fontSize: 13 }}>{opt.label}</ListItemText>
+            <ListItemText slotProps={{ primary: { sx: { fontSize: 13 } } }}>{opt.label}</ListItemText>
           </MenuItem>
         ))}
       </Menu>

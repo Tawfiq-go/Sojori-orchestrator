@@ -34,6 +34,12 @@ export interface RuImportProgressData {
     index?: number;
     total?: number;
   };
+  properties?: Array<{
+    ruPropertyId?: number;
+    listingName?: string;
+    listingId?: string;
+    status?: string;
+  }>;
 }
 
 export function getRuImportProgressPercent(progress: RuImportProgressData | null): number {

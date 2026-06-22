@@ -19,11 +19,13 @@ import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import TeamOwnerScopeBar from '../features/taskHub/staff-design/TeamOwnerScopeBar';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
 import { ownerDisplayNameFromId } from '../utils/ownerDisplay.utils';
+import { filterStaffSelectableCities } from '../features/taskHub/staff-design/staffActiveCities';
 import './tasksTeamPage.css';
 
 type HubTab = 'equipe' | 'admin';
 
-type ListingWithOwner = { id: string; name: string; ownerId?: string; ownerName?: string };
+type ListingWithOwner = { id: string; name: string; ownerId?: string; ownerName?: string; cityId?: string };
+type CityOption = { id: string; name: string };
 
 function resolveStaffOwnerIdForSave(
   sessionOwnerId: string | undefined,
@@ -76,6 +78,7 @@ function TasksStaffFulltaskPageInner() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [admins, setAdmins] = useState<WhatsappAdminDesign[]>([]);
   const [listings, setListings] = useState<ListingWithOwner[]>([]);
+  const [cities, setCities] = useState<CityOption[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(true);
   const [loadingAdmins, setLoadingAdmins] = useState(false);
 
@@ -95,6 +98,7 @@ function TasksStaffFulltaskPageInner() {
           name: String(l.name || 'Sans nom'),
           ownerId: normalizeOwnerId(l.ownerId),
           ownerName: l.ownerName,
+          cityId: l.cityId ? String(l.cityId) : undefined,
         }))
         .filter((l) => l.id && l.id !== 'undefined');
       setListings(mapped);
@@ -102,6 +106,19 @@ function TasksStaffFulltaskPageInner() {
       const err = e as { message?: string };
       toast.error(err.message || 'Erreur chargement annonces');
       setListings([]);
+    }
+  }, []);
+
+  const loadCities = useCallback(async () => {
+    try {
+      const rows = await listingsService.getCities({ allCities: false, limit: 200 });
+      setCities(
+        filterStaffSelectableCities(rows)
+          .map((c) => ({ id: String(c._id), name: String(c.name || c._id) }))
+          .filter((c) => c.id && c.id !== 'undefined'),
+      );
+    } catch {
+      setCities([]);
     }
   }, []);
 
@@ -149,7 +166,8 @@ function TasksStaffFulltaskPageInner() {
 
   useEffect(() => {
     void loadListings();
-  }, [loadListings]);
+    void loadCities();
+  }, [loadListings, loadCities]);
 
   useEffect(() => {
     void loadStaff();
@@ -216,6 +234,7 @@ function TasksStaffFulltaskPageInner() {
           <StaffPageView
             staff={staff}
             listings={listings}
+            cities={cities}
             loading={loadingStaff}
             useMockFallback={false}
             showOwnerPicker={showOwnerFilter}

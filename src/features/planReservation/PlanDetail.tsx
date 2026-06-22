@@ -8,6 +8,8 @@ import {
   reservationRefDisplay,
 } from './buildPlanViewModel';
 import DispatchLastSendLine from './DispatchLastSendLine';
+import DispatchPreviewChips from './DispatchPreviewChips';
+import { dispatchPreviewShort, formatReservationSourceLabel } from './planDispatchPreview';
 import { formatDispatchHistoryError, formatDispatchWhen } from './planDispatchDisplay';
 import PlanDispatchButton from './PlanDispatchButton';
 import {
@@ -198,7 +200,8 @@ export default function PlanDetail({
                   <StatePill status={r.status} />
                 </div>
                 <div className="meta">
-                  <b>{r.listing.name}</b> · {r.guestsCount} voyageurs · {r.source}
+                  <b>{r.listing.name}</b> · {r.guestsCount} voyageurs ·{' '}
+                  {formatReservationSourceLabel(plan.dispatchContext) || r.source}
                   <span className="meta-id" title="ID Mongo réservation">
                     {' '}
                     · id {r.id.slice(-8)}
@@ -518,13 +521,23 @@ function MessagePlanCard({
               <span className="kind-badge message-relance">Relance</span>
             ) : null}
             <MessageExecBadge status={exec} />
-            {ev.channel && <ChannelChip channel={ev.channel} />}
+            {ev.dispatchPreview ? (
+              <DispatchPreviewChips preview={ev.dispatchPreview} />
+            ) : ev.channel ? (
+              <ChannelChip channel={ev.channel} />
+            ) : null}
           </div>
           {open ? (
             <span className="when msg-when-open">Prévu · {ev.atDisplay || '—'}</span>
           ) : (
             <div className="msg-summary">
               <span className="msg-summary-pre">Prévu · {ev.atDisplay || '—'}</span>
+              {dispatchPreviewShort(ev.dispatchPreview) ? (
+                <>
+                  <span className="msg-summary-sep"> · </span>
+                  <span className="msg-summary-channel">{dispatchPreviewShort(ev.dispatchPreview)}</span>
+                </>
+              ) : null}
               <span className="msg-summary-sep"> · </span>
               <span className={`msg-summary-sent ${sentSummaryClass}`}>{sentSummary}</span>
             </div>
@@ -555,6 +568,7 @@ function MessagePlanCard({
                 kind="message"
                 messageIndex={ev.messageIndex}
                 wasSent={wasSent}
+                itemLabel={ev.title}
                 disabled={false}
                 onLoadingChange={setRowLoading}
                 onDone={onDispatched}
@@ -604,10 +618,16 @@ function MessagePlanCard({
             </div>
           ) : null}
 
-          {ev.messageCategory === 'simple' && (ev.template || channel) ? (
+          {ev.messageCategory === 'simple' && (ev.template || ev.dispatchPreview || channel) ? (
             <div className="rel-row-config msg-l1-config">
               Config · {ev.template || '—'}
-              {channel ? ` · ${channel.toUpperCase()}` : ''}
+              {ev.dispatchPreview ? (
+                <> · Envoi prévu · {ev.dispatchPreview.label}</>
+              ) : channel ? (
+                ` · ${channel.toUpperCase()}`
+              ) : (
+                ''
+              )}
             </div>
           ) : null}
         </div>

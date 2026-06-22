@@ -2,12 +2,21 @@
 // ImportResultRecap.tsx — Phase D : récapitulatif post-import
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography, Link } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 import { T } from './_tokens';
 import type { ImportResultItem } from './_tokens';
 
 export interface ImportResultRecapProps {
   results: ImportResultItem[];
+}
+
+function displayTitle(r: ImportResultItem): string {
+  const sojori = r.listingName?.trim();
+  const ru = r.propertyName?.trim();
+  if (sojori && !sojori.startsWith('Annonce #')) return sojori;
+  if (ru && !ru.startsWith('Annonce #')) return ru;
+  return ru || sojori || `Annonce RU #${r.ruPropertyId}`;
 }
 
 export default function ImportResultRecap({ results }: ImportResultRecapProps) {
@@ -53,10 +62,10 @@ export default function ImportResultRecap({ results }: ImportResultRecapProps) {
             }}>{r.success ? '✓' : '✕'}</Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography sx={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.005em' }}>
-                {r.propertyName}
+                {displayTitle(r)}
               </Typography>
               <Typography sx={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
-                #{r.ruPropertyId}{r.city && ` · ${r.city}`}
+                RU #{r.ruPropertyId}{r.city ? ` · ${r.city}` : ''}
               </Typography>
               {r.errorMessage && (
                 <Typography sx={{
@@ -70,12 +79,21 @@ export default function ImportResultRecap({ results }: ImportResultRecapProps) {
                 </Typography>
               )}
             </Box>
-            {r.listingId && (
-              <Box sx={{
-                fontFamily: '"Geist Mono", monospace', fontSize: 10.5, color: T.text3,
-                bgcolor: T.bg2, px: 1, py: 0.375, borderRadius: 0.625,
-                letterSpacing: '0.02em', flexShrink: 0,
-              }}>{r.listingId}</Box>
+            {r.listingId && r.success && (
+              <Link
+                component={RouterLink}
+                to={`/listings/${r.listingId}`}
+                underline="hover"
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: T.primaryDeep,
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Ouvrir →
+              </Link>
             )}
           </Box>
         ))}

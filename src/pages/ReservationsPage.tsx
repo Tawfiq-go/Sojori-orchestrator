@@ -40,6 +40,7 @@ import {
   ReservationRegistrationActions,
   type RegistrationFieldPatch,
 } from '../components/reservations/ReservationRegistrationActions';
+import { PostImportListingIndicator } from '../components/reservations/PostImportListingIndicator';
 
 moment.locale('fr');
 
@@ -51,7 +52,15 @@ interface Reservation {
   channelName: string;
   source?: string;
   byRentals?: boolean;
-  listing: { name: string; _id: string };
+  listing: {
+    name: string;
+    _id: string;
+    importOnboarding?: { active?: boolean } | null;
+  };
+  orchestrationLaunch?: {
+    status?: 'pending' | 'launched' | string | null;
+    importListingId?: string | null;
+  } | null;
   guestName: string;
   guestFirstName?: string;
   guestLastName?: string;
@@ -862,9 +871,12 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                     <ReservationSourceIcon reservation={r} />
                   </Box>
                   <Box component="td">
-                    <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text }}>
-                      {r.listing?.name || '—'}
-                    </Typography>
+                    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+                      <PostImportListingIndicator reservation={r} />
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text, minWidth: 0 }}>
+                        {r.listing?.name || '—'}
+                      </Typography>
+                    </Stack>
                   </Box>
                   <Box component="td">
                     <Typography sx={{ fontSize: 12.5, fontWeight: 500, color: T.text }}>{r.guestName || '—'}</Typography>
@@ -1074,7 +1086,10 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpd
           </Box>
         )}
 
-        <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.text, mb: 0.5 }}>{r.listing?.name}</Typography>
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mb: 0.5, minWidth: 0 }}>
+          <PostImportListingIndicator reservation={r} />
+          <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.text, minWidth: 0 }}>{r.listing?.name}</Typography>
+        </Stack>
         <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1.25 }}>
           {(() => {
             const { flag, label } = formatGuestCountryDisplay(r.guestCountry, r.guestCountryCode);

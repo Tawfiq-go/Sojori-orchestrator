@@ -4,6 +4,8 @@ import {
   labelForTaskTypeId,
 } from '../taskHub/staff-design/fulltaskTaskTypes';
 import { mapDispatchDisplay } from './planDispatchDisplay';
+import { dispatchPreviewToChannel, sourceLabelFromSummary } from './planDispatchPreview';
+import type { PlanDispatchContext } from './planDispatchPreview';
 import type {
   Channel,
   EventStatus,
@@ -97,6 +99,7 @@ export interface FulltaskPlanDoc {
       scheduledAt: string | Date;
       sentAt?: string | Date | null;
       status: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+      dispatchPreview?: import('./planDispatchPreview').MessageDispatchPreview;
       dispatchLog?: Array<{
         at: string | Date;
         ok: boolean;
@@ -172,9 +175,11 @@ export interface FulltaskPlanDoc {
       sentAt?: string | Date | null;
       status: 'en_attente' | 'envoye' | 'saute' | 'echec';
       canal: 'whatsapp' | 'OTA' | 'email';
+      effectiveCanal?: 'whatsapp' | 'OTA' | 'email';
       template?: string;
       messageFr?: string;
       messageId?: string;
+      dispatchPreview?: import('./planDispatchPreview').MessageDispatchPreview;
       dispatchLog?: Array<{
         at: string | Date;
         ok: boolean;
@@ -186,6 +191,7 @@ export interface FulltaskPlanDoc {
   uiPlanListOrder?: string[];
   /** Origine config utilisée pour ce plan (API srv-fulltask). */
   orchestrationConfigSource?: 'owner' | 'global_template';
+  dispatchContext?: import('./planDispatchPreview').PlanDispatchContext;
   guestPhone?: string;
   guestName?: string;
   checkIn?: string | Date;
@@ -547,6 +553,8 @@ export interface PlanListSummaryDoc {
   guestName?: string;
   checkIn?: string | Date;
   checkOut?: string | Date;
+  atSojori?: boolean;
+  channelName?: string;
 }
 
 export function deriveReservationStatusFromSummary(
@@ -594,7 +602,7 @@ export function buildReservationViewFromSummary(
       id: summary.listingId,
       name: listingName || 'Logement',
     },
-    source: 'Direct',
+    source: sourceLabelFromSummary(summary),
     guestsCount: 1,
     checkIn,
     checkOut,
@@ -678,7 +686,7 @@ export function buildReservationView(
       id: String(resa.sojoriId || resa.listingMapId || plan?.listingId || ''),
       name: listingName || String(resa.sojoriId || 'Logement'),
     },
-    source: resa.channelName || resa.otaCode || 'Direct',
+    source: resa.channelName || resa.otaCode || plan?.channelName || 'Direct',
     guestsCount: resa.numberOfGuests || resa.adults || 1,
     checkIn,
     checkOut,
@@ -1317,6 +1325,8 @@ function buildSequenceView(
       relanceIndex: i,
       channel: meta.catalogChannel ?? m.channel,
       catalogTemplate: meta.catalogTemplate,
+      dispatchPreview: (r as { dispatchPreview?: import('./planDispatchPreview').MessageDispatchPreview })
+        .dispatchPreview,
       scheduleOffsetLabel: isLm
         ? 'LM · prochaine heure'
         : formatScheduleOffset(r.scheduleDay, scheduleRef, r.scheduleTime, seq.taskType) ??
@@ -1457,7 +1467,9 @@ export function buildPlanViewModel(
 
     const at = toDate(m.scheduledAt) || now;
     const status = eventStatusAt(at, m.status, now);
-    const ch = mapCanal(m.canal);
+    const ch =
+      dispatchPreviewToChannel(m.dispatchPreview) ??
+      mapCanal(m.effectiveCanal ?? m.canal);
     const messageCategory = inferMessageCategory(m.label);
     const planOrderKey =
       messageCategory === 'simple'
@@ -1493,6 +1505,7 @@ export function buildPlanViewModel(
       lastDispatch,
       lastDispatchAttempt,
       dispatchLog,
+      dispatchPreview: m.dispatchPreview,
     });
   }
 
@@ -1596,6 +1609,7 @@ export function buildPlanViewModel(
     ownerId: plan.ownerId,
     listingId: plan.listingId,
     orchestrationConfigSource: plan.orchestrationConfigSource,
+    dispatchContext: plan.dispatchContext,
     guestPhone: plan.guestPhone,
     guestName: plan.guestName,
     events: ordered,

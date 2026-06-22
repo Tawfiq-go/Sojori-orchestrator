@@ -315,6 +315,9 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .ch-chip.ota{background:var(--int);color:var(--in)}
 .ch-chip.email{background:var(--ait);color:var(--ai)}
 .ch-chip.sms{background:var(--wat);color:var(--wa)}
+.dispatch-preview-chips{display:inline-flex;align-items:center;gap:4px;flex-shrink:0}
+.dispatch-preview-arrow{font-size:9px;color:var(--t3);font-weight:700}
+.msg-summary-channel{font-size:11px;color:var(--t2);font-weight:600}
 
 /* Expand arrow */
 .ev-h .arr{color:var(--t3);font-size:10px;transition:transform .2s;margin-left:6px;align-self:center}
