@@ -6,6 +6,7 @@ import { Box, Stack, Typography, Button, Tooltip, Chip } from '@mui/material';
 import {
   ResponsiveContainer,
   AreaChart,
+  ComposedChart,
   Area,
   Line,
   XAxis,
@@ -62,8 +63,10 @@ const TIER_BG: Record<PriceTier, string> = {
 
 export interface YearlyCalendarProps {
   days: CalendarDay[];
-  /** Snapshot AirROI brut (future/rates) — 2ᵉ courbe quand pilote actif */
+  /** Snapshot AirROI / estimate brut — courbe bleue */
   compareMarketDays?: CalendarDay[];
+  /** calculatedPrice calendrier ops — courbe grise */
+  compareCalendarDays?: CalendarDay[];
   /** Dans BienView : pas de titre dupliqué, en-tête compact */
   compactHeader?: boolean;
   /** airroi = suggestion marché (1 prix/jour) · sojori = moteur interne */
@@ -124,6 +127,7 @@ function sliceVisibleDays(
 export default function YearlyCalendar({
   days,
   compareMarketDays,
+  compareCalendarDays,
   compactHeader = false,
   pricingSource = 'sojori',
   windowMode = 'rolling365',
@@ -162,6 +166,8 @@ export default function YearlyCalendar({
       pricingSource === 'airroi') &&
     Boolean(compareMarketDays?.length && isRollingWindow);
 
+  const tripleCurve = dualCurve && Boolean(compareCalendarDays?.length);
+
   const visibleDays = useMemo(
     () => sliceVisibleDays(days, windowMode, year, today, true),
     [days, windowMode, year, today],
@@ -171,6 +177,11 @@ export default function YearlyCalendar({
     if (!compareMarketDays?.length) return [];
     return sliceVisibleDays(compareMarketDays, windowMode, year, today, true);
   }, [compareMarketDays, windowMode, year, today]);
+
+  const visibleOpsDays = useMemo(() => {
+    if (!compareCalendarDays?.length) return [];
+    return sliceVisibleDays(compareCalendarDays, windowMode, year, today, false);
+  }, [compareCalendarDays, windowMode, year, today]);
 
   const coverage = useMemo(() => {
     if (windowMode !== 'rolling365' && windowMode !== 'rolling12m') return null;
@@ -237,7 +248,17 @@ export default function YearlyCalendar({
         },
       ]),
     );
-    const dates = new Set([...marketByDate.keys(), ...pilotByDate.keys()]);
+    const opsByDate = new Map(
+      visibleOpsDays.map((d) => [
+        d.date,
+        d.status === 'blocked' || d.recommendedPrice <= 0 ? null : d.recommendedPrice,
+      ]),
+    );
+    const dates = new Set([
+      ...marketByDate.keys(),
+      ...pilotByDate.keys(),
+      ...opsByDate.keys(),
+    ]);
     return [...dates]
       .sort()
       .map((date) => {
@@ -245,19 +266,24 @@ export default function YearlyCalendar({
         const market = marketByDate.get(date);
         const m = market?.price ?? null;
         const p = pilot?.price ?? null;
+        const c = opsByDate.get(date) ?? null;
         const deltaMad =
           m != null && p != null && m > 0 && p > 0 ? p - m : null;
+        const deltaApplyMad =
+          p != null && c != null && p > 0 && c > 0 ? p - c : null;
         return {
           date,
           marketPrice: m,
           pilotPrice: p,
+          calendarPrice: c,
           deltaMad,
-          price: p ?? m ?? null,
+          deltaApplyMad,
+          price: p ?? m ?? c ?? null,
           status: pilot?.status,
           tierLabel: market?.tierLabel,
         };
       });
-  }, [dualCurve, visibleDays, visibleMarketDays]);
+  }, [dualCurve, visibleDays, visibleMarketDays, visibleOpsDays]);
 
   const dualCompareStats = useMemo(() => {
     if (!dualCurve) return null;
@@ -309,11 +335,23 @@ export default function YearlyCalendar({
       isRollingWindow ? countExpectedDaysInWindow(today, addDaysIso(windowEnd, 1)) : 0;
     const missingInWindow = Math.max(0, expected - visibleMarketDays.length);
     const blockedInWindow = visibleMarketDays.filter((d) => d.status === 'blocked').length;
+    let applyDifferent = 0;
+    let maxApplyDelta = 0;
+    for (const r of chartData) {
+      const d = r.deltaApplyMad;
+      if (d == null) continue;
+      const abs = Math.abs(d);
+      if (abs <= 5) continue;
+      applyDifferent += 1;
+      maxApplyDelta = Math.max(maxApplyDelta, abs);
+    }
     return {
       identical,
       different,
       maxAbsDelta,
       compared: priced.length,
+      applyDifferent,
+      maxApplyDelta,
       rangeStart: marketDates[0] ?? null,
       rangeEnd: marketDates[marketDates.length - 1] ?? null,
       flatStreakLen,
@@ -333,14 +371,18 @@ export default function YearlyCalendar({
     for (const row of chartData) {
       if (row.marketPrice != null && row.marketPrice > 0) prices.push(row.marketPrice);
       if (row.pilotPrice != null && row.pilotPrice > 0) prices.push(row.pilotPrice);
+      if (row.calendarPrice != null && row.calendarPrice > 0) prices.push(row.calendarPrice);
       if (!dualCurve && row.price != null && row.price > 0) prices.push(row.price);
     }
-    if (!prices.length) return { min: 0, max: 0, marketMin: 0, marketMax: 0, pilotMin: 0, pilotMax: 0 };
+    if (!prices.length) return { min: 0, max: 0, marketMin: 0, marketMax: 0, pilotMin: 0, pilotMax: 0, calendarMin: 0, calendarMax: 0 };
     const marketPrices = chartData
       .map((r) => r.marketPrice)
       .filter((p): p is number => p != null && p > 0);
     const pilotPrices = chartData
       .map((r) => r.pilotPrice)
+      .filter((p): p is number => p != null && p > 0);
+    const calendarPrices = chartData
+      .map((r) => r.calendarPrice)
       .filter((p): p is number => p != null && p > 0);
     return {
       min: Math.min(...prices),
@@ -349,6 +391,8 @@ export default function YearlyCalendar({
       marketMax: marketPrices.length ? Math.max(...marketPrices) : 0,
       pilotMin: pilotPrices.length ? Math.min(...pilotPrices) : 0,
       pilotMax: pilotPrices.length ? Math.max(...pilotPrices) : 0,
+      calendarMin: calendarPrices.length ? Math.min(...calendarPrices) : 0,
+      calendarMax: calendarPrices.length ? Math.max(...calendarPrices) : 0,
     };
   }, [chartData, dualCurve]);
 
@@ -361,8 +405,19 @@ export default function YearlyCalendar({
     const pilotWith = visibleDays.filter(
       (d) => d.status !== 'blocked' && d.recommendedPrice > 0,
     ).length;
-    return { expected, marketWith, pilotWith };
-  }, [dualCurve, windowMode, today, windowEnd, visibleMarketDays, visibleDays]);
+    const opsWith = visibleOpsDays.filter((d) => d.recommendedPrice > 0).length;
+    return { expected, marketWith, pilotWith, opsWith };
+  }, [dualCurve, windowMode, today, windowEnd, visibleMarketDays, visibleDays, visibleOpsDays]);
+
+  const calendarOpsFlat = useMemo(
+    () =>
+      Boolean(
+        tripleCurve &&
+          priceExtent.calendarMin > 0 &&
+          priceExtent.calendarMin === priceExtent.calendarMax,
+      ),
+    [tripleCurve, priceExtent.calendarMin, priceExtent.calendarMax],
+  );
 
   const monthGrids: HeatmapMonth[] = useMemo(() => {
     if (windowMode === 'calendarYear') {
@@ -633,162 +688,381 @@ export default function YearlyCalendar({
       {/* Courbe prix/jour — fenêtre glissante depuis aujourd'hui */}
       {isRollingWindow && chartData.length > 0 && (
         <Box sx={{ mb: 2.5 }}>
-          <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 0.75 }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text2 }}>
-              {dualCurve ? 'Courbes des prix (MAD / nuit)' : 'Courbe des prix (MAD / nuit)'}
-            </Typography>
-            <Typography
+          <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text2, mb: 1 }}>
+            {tripleCurve
+              ? 'Comparaison 3 niveaux (MAD / nuit)'
+              : dualCurve
+                ? 'Courbes des prix (MAD / nuit)'
+                : 'Courbe des prix (MAD / nuit)'}
+          </Typography>
+
+          {dualCurve && dualCompareStats ? (
+            <Box
               sx={{
-                fontSize: 10.5,
-                color: T.text4,
-                fontFamily: '"Geist Mono", monospace',
-                textAlign: 'right',
-                maxWidth: '62%',
+                display: 'flex',
+                flexDirection: { xs: 'column', lg: 'row' },
+                alignItems: { lg: 'center' },
+                gap: { xs: 1, lg: 1.25 },
+                flexWrap: 'wrap',
+                px: 1.25,
+                py: 1,
+                mb: 1,
+                borderRadius: 1.25,
+                bgcolor: T.bg2,
+                border: `1px solid ${T.border}`,
               }}
             >
-              {dualCoverage ? (
-                <>
-                  AirROI {dualCoverage.marketWith}/{dualCoverage.expected} j
-                  <Box component="span" sx={{ mx: 0.5 }}>·</Box>
-                  Pilote {dualCoverage.pilotWith}/{dualCoverage.expected} j
-                  <Box component="span" sx={{ display: 'block', mt: 0.25 }}>
-                    Marché {priceExtent.marketMin}–{priceExtent.marketMax} MAD
-                    <Box component="span" sx={{ mx: 0.5 }}>·</Box>
-                    Pilote {priceExtent.pilotMin}–{priceExtent.pilotMax} MAD
-                  </Box>
-                </>
-              ) : (
-                <>
-                  {coverage
-                    ? `${coverage.withPrice}/${coverage.expected} j`
-                    : `${visibleDays.length} j`}{' '}
-                  · min {priceExtent.min} · max {priceExtent.max} MAD
-                </>
-              )}
-              {eventDayCount > 0 ? (
-                <Box component="span" sx={{ color: STATUS_BG.override, fontWeight: 800, ml: 0.75 }}>
-                  · {eventDayCount} event
-                </Box>
-              ) : null}
-            </Typography>
-          </Stack>
-          {dualCurve && dualCompareStats ? (
-            <Box sx={{ mb: 1 }}>
-              <Stack direction="row" sx={{ gap: 1, mb: 0.75, flexWrap: 'wrap' }}>
+              <Stack
+                direction="row"
+                sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap', flexShrink: 0 }}
+              >
                 <Box
                   sx={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 0.75,
-                    px: 1.125,
-                    py: 0.5,
+                    px: 1,
+                    py: 0.45,
                     borderRadius: 1,
                     bgcolor: 'rgba(37,99,235,0.10)',
                     border: '1px solid rgba(37,99,235,0.35)',
                     fontSize: 10.5,
                     fontWeight: 700,
                     color: '#1d4ed8',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  <Box sx={{ width: 14, height: 3, bgcolor: '#2563eb', borderRadius: 0.5 }} />
-                  {pricingSource === 'estimate' ? 'Marché estimate (brut)' : 'Marché AirROI (brut)'}
+                  <Box sx={{ width: 16, height: 3, bgcolor: '#2563eb', borderRadius: 0.5 }} />
+                  {pricingSource === 'estimate' ? 'Estimate (brut)' : 'Marché AirROI (brut)'}
                 </Box>
                 <Box
                   sx={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 0.75,
-                    px: 1.125,
-                    py: 0.5,
+                    px: 1,
+                    py: 0.45,
                     borderRadius: 1,
                     bgcolor: T.goldTint,
                     border: `1px solid ${T.gold}`,
                     fontSize: 10.5,
                     fontWeight: 700,
                     color: T.goldDeep,
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  <Box sx={{ width: 14, height: 3, bgcolor: T.goldDeep, borderRadius: 0.5 }} />
-                  Prix calendrier Sojori
+                  <Box sx={{ width: 16, height: 3, bgcolor: T.goldDeep, borderRadius: 0.5 }} />
+                  Sojori (bornes · mode · events)
                 </Box>
+                {tripleCurve ? (
+                  <Box
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.75,
+                      px: 1,
+                      py: 0.45,
+                      borderRadius: 1,
+                      bgcolor: 'rgba(100,116,139,0.12)',
+                      border: '1px solid rgba(100,116,139,0.45)',
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      color: '#475569',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <Box sx={{ width: 16, height: 3, bgcolor: '#94a3b8', borderRadius: 0.5 }} />
+                    Calendrier ops actuel
+                  </Box>
+                ) : null}
               </Stack>
-              <Typography sx={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', lineHeight: 1.45 }}>
+
+              <Box
+                sx={{
+                  display: { xs: 'none', lg: 'block' },
+                  width: '1px',
+                  alignSelf: 'stretch',
+                  minHeight: 28,
+                  bgcolor: T.border,
+                  flexShrink: 0,
+                }}
+              />
+
+              <Typography
+                sx={{
+                  flex: 1,
+                  minWidth: { xs: '100%', lg: 280 },
+                  fontSize: 10.5,
+                  color: T.text3,
+                  fontFamily: '"Geist Mono", monospace',
+                  lineHeight: 1.5,
+                }}
+              >
                 {dualCompareStats.rangeStart && dualCompareStats.rangeEnd ? (
                   <>
-                    Données AirROI du {formatFrShort(dualCompareStats.rangeStart)} au{' '}
-                    {formatFrShort(dualCompareStats.rangeEnd)}
+                    {formatFrShort(dualCompareStats.rangeStart)} → {formatFrShort(dualCompareStats.rangeEnd)}
                     {' · '}
                   </>
                 ) : null}
                 {dualCompareStats.different > 0 ? (
                   <Box component="span" sx={{ color: T.goldDeep, fontWeight: 800 }}>
-                    {dualCompareStats.different} j avec écart
+                    {dualCompareStats.different} j estimate ≠ Sojori
                     {dualCompareStats.maxAbsDelta > 0
-                      ? ` (max Δ ${dualCompareStats.maxAbsDelta.toLocaleString('fr-FR')} MAD)`
+                      ? ` (max ${dualCompareStats.maxAbsDelta.toLocaleString('fr-FR')})`
                       : ''}
                   </Box>
                 ) : (
                   <Box component="span" sx={{ color: '#1d4ed8', fontWeight: 800 }}>
-                    Courbes quasi identiques sur {dualCompareStats.compared} j
+                    Estimate ≈ Sojori · {dualCompareStats.compared} j
                   </Box>
                 )}
-                {dualCompareStats.identical > 0 ? (
+                {dualCompareStats.applyDifferent > 0 ? (
                   <>
                     {' · '}
-                    {dualCompareStats.identical} j superposés (mode ×1, bornes non touchées)
+                    <Box component="span" sx={{ color: T.warning, fontWeight: 800 }}>
+                      {dualCompareStats.applyDifferent} j Sojori ≠ ops (Δ apply max{' '}
+                      {dualCompareStats.maxApplyDelta.toLocaleString('fr-FR')} MAD)
+                    </Box>
+                  </>
+                ) : null}
+                {dualCoverage ? (
+                  <>
+                    {' · '}
+                    estimate {priceExtent.marketMin}–{priceExtent.marketMax}
+                    {' · '}
+                    Sojori {priceExtent.pilotMin}–{priceExtent.pilotMax}
+                    {tripleCurve ? (
+                      <>
+                        {' · '}
+                        ops {priceExtent.calendarMin}–{priceExtent.calendarMax}
+                      </>
+                    ) : null}
                   </>
                 ) : null}
               </Typography>
-              {(dualCompareStats.missingInWindow > 0 ||
-                dualCompareStats.blockedInWindow > 0 ||
-                dualCompareStats.flatStreakLen >= 14) && (
-                <Box
-                  sx={{
-                    mt: 0.75,
-                    p: 1,
-                    borderRadius: 1,
-                    bgcolor: T.bg2,
-                    border: `1px solid ${T.border}`,
-                    fontSize: 10.5,
-                    color: T.text2,
-                    lineHeight: 1.45,
-                  }}
-                >
-                  {dualCompareStats.missingInWindow > 0 ? (
-                    <Box>
-                      <b>Trous dans la courbe (vides)</b> : {dualCompareStats.missingInWindow} j
-                      sans ligne dans le snapshot AirROI (API n’a pas envoyé de tarif pour ces dates).
-                      Cases grises dans la grille = même chose.
-                    </Box>
-                  ) : null}
-                  {dualCompareStats.blockedInWindow > 0 ? (
-                    <Box sx={{ mt: dualCompareStats.missingInWindow > 0 ? 0.5 : 0 }}>
-                      <b>Indisponible</b> : {dualCompareStats.blockedInWindow} j marqués{' '}
-                      <code>available=false</code> chez AirROI (pas de prix marché).
-                    </Box>
-                  ) : null}
-                  {dualCompareStats.flatStreakLen >= 14 ? (
-                    <Box sx={{ mt: 0.5 }}>
-                      <b>Plat en fin de période</b> : AirROI renvoie le même tarif (
-                      {dualCompareStats.flatStreakPrice.toLocaleString('fr-FR')} MAD) sur{' '}
-                      {dualCompareStats.flatStreakLen} jours consécutifs — comportement fournisseur
-                      fréquent loin dans le futur, pas un calcul Sojori.
-                    </Box>
-                  ) : null}
-                </Box>
-              )}
             </Box>
+          ) : (
+            <Typography
+              sx={{
+                fontSize: 10.5,
+                color: T.text4,
+                fontFamily: '"Geist Mono", monospace',
+                mb: 0.75,
+              }}
+            >
+              {coverage
+                ? `${coverage.withPrice}/${coverage.expected} j · min ${priceExtent.min} · max ${priceExtent.max} MAD`
+                : `${visibleDays.length} j`}
+              {eventDayCount > 0 ? ` · ${eventDayCount} event` : ''}
+            </Typography>
+          )}
+
+          {calendarOpsFlat ? (
+            <Box
+              sx={{
+                mb: 1,
+                px: 1.25,
+                py: 1,
+                borderRadius: 1,
+                bgcolor: T.warningTint,
+                border: `1px solid ${T.warning}`,
+                fontSize: 11,
+                color: T.text2,
+                lineHeight: 1.5,
+              }}
+            >
+              <b>Calendrier ops plat à {priceExtent.calendarMin.toLocaleString('fr-FR')} MAD</b> sur toute la
+              fenêtre — inventaire sans variation (base ou calculatedPrice). Si /calendar affiche d’autres
+              tarifs, vérifiez que vous êtes sur le même listing ID ; après déploiement, la courbe grise =
+              prix affiché calendrier (manualPrice si dynamique OFF).
+            </Box>
+          ) : null}
+
+          {dualCurve && dualCompareStats ? (
+            <Typography
+              sx={{
+                fontSize: 10,
+                color: T.text4,
+                fontFamily: '"Geist Mono", monospace',
+                mb: 0.75,
+                lineHeight: 1.45,
+              }}
+            >
+              Tableau §04 = Δ apply (Sojori − ops). Survol = 3 prix du jour.
+              {dualCompareStats.missingInWindow > 0 ? (
+                <> · {dualCompareStats.missingInWindow} j sans tarif estimate dans le snapshot.</>
+              ) : null}
+              {dualCompareStats.flatStreakLen >= 14 ? (
+                <>
+                  {' '}
+                  · Plat estimate loin ({dualCompareStats.flatStreakPrice.toLocaleString('fr-FR')} MAD /{' '}
+                  {dualCompareStats.flatStreakLen} j) = AirROI, pas Sojori.
+                </>
+              ) : null}
+            </Typography>
           ) : null}
           <Box
             sx={{
-              height: dualCurve ? 200 : 168,
+              height: dualCurve ? 248 : 168,
               width: '100%',
               minWidth: 0,
-              minHeight: dualCurve ? 200 : 168,
+              minHeight: dualCurve ? 248 : 168,
               position: 'relative',
             }}
           >
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={dualCurve ? 200 : 168}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={dualCurve ? 248 : 168}>
+              {dualCurve ? (
+                <ComposedChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                  <CartesianGrid stroke={T.border} strokeDasharray="2 2" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 9, fill: T.text4, fontFamily: 'Geist Mono' }}
+                    axisLine={false}
+                    tickLine={false}
+                    minTickGap={48}
+                    tickFormatter={(v: string) => {
+                      const [, m, d] = v.split('-');
+                      return `${d}/${m}`;
+                    }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 9, fill: T.text4, fontFamily: 'Geist Mono' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={44}
+                    tickFormatter={(v: number) => String(Math.round(v))}
+                    domain={['auto', 'auto']}
+                  />
+                  <RechartsTooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const row = payload[0]?.payload as {
+                        marketPrice?: number | null;
+                        pilotPrice?: number | null;
+                        calendarPrice?: number | null;
+                        deltaMad?: number | null;
+                        deltaApplyMad?: number | null;
+                        status?: DayStatus;
+                        tierLabel?: string;
+                      };
+                      const m = row.marketPrice;
+                      const p = row.pilotPrice;
+                      const c = row.calendarPrice;
+                      const delta = row.deltaMad;
+                      const deltaApply = row.deltaApplyMad;
+                      return (
+                        <Box sx={{ ...chartTooltipStyle, p: 1.25, minWidth: 220 }}>
+                          <Typography sx={{ fontSize: 11, fontWeight: 800, mb: 0.75 }}>
+                            {formatFrShort(String(label))}
+                          </Typography>
+                          {m != null && m > 0 ? (
+                            <Typography sx={{ fontSize: 11, color: '#1d4ed8', fontFamily: '"Geist Mono", monospace' }}>
+                              {pricingSource === 'estimate' ? 'Estimate' : 'Marché AirROI'} :{' '}
+                              <b>{Math.round(m).toLocaleString('fr-FR')} MAD</b>
+                              {row.tierLabel ? ` · ${row.tierLabel}` : ''}
+                            </Typography>
+                          ) : (
+                            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>Estimate : —</Typography>
+                          )}
+                          {p != null && p > 0 ? (
+                            <Typography sx={{ fontSize: 11, color: T.goldDeep, fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
+                              Sojori : <b>{Math.round(p).toLocaleString('fr-FR')} MAD</b>
+                              {row.status === 'override' ? ' · event' : ''}
+                            </Typography>
+                          ) : (
+                            <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 0.25 }}>Sojori : —</Typography>
+                          )}
+                          {c != null && c > 0 ? (
+                            <Typography sx={{ fontSize: 11, color: '#475569', fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
+                              Calendrier ops : <b>{Math.round(c).toLocaleString('fr-FR')} MAD</b>
+                            </Typography>
+                          ) : null}
+                          {delta != null ? (
+                            <Typography
+                              sx={{
+                                fontSize: 10.5,
+                                mt: 0.5,
+                                fontWeight: 800,
+                                color: Math.abs(delta) <= 5 ? T.text3 : delta > 0 ? T.goldDeep : T.error,
+                                fontFamily: '"Geist Mono", monospace',
+                              }}
+                            >
+                              Δ Sojori − estimate : {delta > 0 ? '+' : ''}
+                              {Math.round(delta).toLocaleString('fr-FR')} MAD
+                            </Typography>
+                          ) : null}
+                          {deltaApply != null ? (
+                            <Typography
+                              sx={{
+                                fontSize: 10.5,
+                                mt: 0.25,
+                                fontWeight: 800,
+                                color: Math.abs(deltaApply) <= 5 ? T.text3 : deltaApply > 0 ? T.warning : T.success,
+                                fontFamily: '"Geist Mono", monospace',
+                              }}
+                            >
+                              Δ apply (Sojori − ops) : {deltaApply > 0 ? '+' : ''}
+                              {Math.round(deltaApply).toLocaleString('fr-FR')} MAD
+                            </Typography>
+                          ) : null}
+                        </Box>
+                      );
+                    }}
+                  />
+                  {/* Ordre : ops (fond) → estimate → Sojori (devant) — lignes seules, pas de remplissage opaque */}
+                  {tripleCurve ? (
+                    <Line
+                      type="monotone"
+                      name="Calendrier ops"
+                      dataKey="calendarPrice"
+                      connectNulls={false}
+                      stroke="#94a3b8"
+                      strokeWidth={2}
+                      strokeDasharray="4 3"
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  ) : null}
+                  <Line
+                    type="monotone"
+                    name="Estimate"
+                    dataKey="marketPrice"
+                    connectNulls={false}
+                    stroke="#2563eb"
+                    strokeWidth={2.5}
+                    strokeDasharray="8 5"
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="monotone"
+                    name="Sojori"
+                    dataKey="pilotPrice"
+                    connectNulls={false}
+                    stroke={T.goldDeep}
+                    strokeWidth={3.25}
+                    dot={ChartEventDot}
+                    activeDot={(props: {
+                      cx?: number;
+                      cy?: number;
+                      payload?: { status?: DayStatus };
+                    }) => {
+                      const isEvent = props.payload?.status === 'override';
+                      return (
+                        <circle
+                          cx={props.cx}
+                          cy={props.cy}
+                          r={isEvent ? 6 : 4}
+                          fill={isEvent ? STATUS_BG.override : T.goldDeep}
+                          stroke="#fff"
+                          strokeWidth={2}
+                        />
+                      );
+                    }}
+                    isAnimationActive={false}
+                  />
+                </ComposedChart>
+              ) : (
               <AreaChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
                 <defs>
                   <linearGradient id="dpPriceGrad" x1="0" y1="0" x2="0" y2="1">
@@ -826,35 +1100,44 @@ export default function YearlyCalendar({
                     const row = payload[0]?.payload as {
                       marketPrice?: number | null;
                       pilotPrice?: number | null;
+                      calendarPrice?: number | null;
                       deltaMad?: number | null;
+                      deltaApplyMad?: number | null;
                       status?: DayStatus;
                       tierLabel?: string;
                     };
                     const m = row.marketPrice;
                     const p = row.pilotPrice;
+                    const c = row.calendarPrice;
                     const delta = row.deltaMad;
+                    const deltaApply = row.deltaApplyMad;
                     return (
-                      <Box sx={{ ...chartTooltipStyle, p: 1.25, minWidth: 200 }}>
+                      <Box sx={{ ...chartTooltipStyle, p: 1.25, minWidth: 220 }}>
                         <Typography sx={{ fontSize: 11, fontWeight: 800, mb: 0.75 }}>
                           {formatFrShort(String(label))}
                         </Typography>
                         {m != null && m > 0 ? (
                           <Typography sx={{ fontSize: 11, color: '#1d4ed8', fontFamily: '"Geist Mono", monospace' }}>
-                            {pricingSource === 'estimate' ? 'Marché estimate' : 'Marché AirROI'} :{' '}
+                            {pricingSource === 'estimate' ? 'Estimate' : 'Marché AirROI'} :{' '}
                             <b>{Math.round(m).toLocaleString('fr-FR')} MAD</b>
                             {row.tierLabel ? ` · ${row.tierLabel}` : ''}
                           </Typography>
                         ) : (
-                          <Typography sx={{ fontSize: 10.5, color: T.text3 }}>AirROI : —</Typography>
+                          <Typography sx={{ fontSize: 10.5, color: T.text3 }}>Estimate : —</Typography>
                         )}
                         {p != null && p > 0 ? (
                           <Typography sx={{ fontSize: 11, color: T.goldDeep, fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
-                            Calendrier Sojori : <b>{Math.round(p).toLocaleString('fr-FR')} MAD</b>
+                            Sojori : <b>{Math.round(p).toLocaleString('fr-FR')} MAD</b>
                             {row.status === 'override' ? ' · event' : ''}
                           </Typography>
                         ) : (
-                          <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 0.25 }}>Pilote : —</Typography>
+                          <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 0.25 }}>Sojori : —</Typography>
                         )}
+                        {c != null && c > 0 ? (
+                          <Typography sx={{ fontSize: 11, color: '#475569', fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
+                            Calendrier ops : <b>{Math.round(c).toLocaleString('fr-FR')} MAD</b>
+                          </Typography>
+                        ) : null}
                         {delta != null ? (
                           <Typography
                             sx={{
@@ -865,82 +1148,52 @@ export default function YearlyCalendar({
                               fontFamily: '"Geist Mono", monospace',
                             }}
                           >
-                            Δ pilote − AirROI : {delta > 0 ? '+' : ''}
+                            Δ Sojori − estimate : {delta > 0 ? '+' : ''}
                             {Math.round(delta).toLocaleString('fr-FR')} MAD
+                          </Typography>
+                        ) : null}
+                        {deltaApply != null ? (
+                          <Typography
+                            sx={{
+                              fontSize: 10.5,
+                              mt: 0.25,
+                              fontWeight: 800,
+                              color: Math.abs(deltaApply) <= 5 ? T.text3 : deltaApply > 0 ? T.warning : T.success,
+                              fontFamily: '"Geist Mono", monospace',
+                            }}
+                          >
+                            Δ apply (Sojori − ops) : {deltaApply > 0 ? '+' : ''}
+                            {Math.round(deltaApply).toLocaleString('fr-FR')} MAD
                           </Typography>
                         ) : null}
                       </Box>
                     );
                   }}
                 />
-                {dualCurve ? (
-                  <>
-                    <Line
-                      type="monotone"
-                      name="Marché AirROI"
-                      dataKey="marketPrice"
-                      connectNulls={false}
-                      stroke="#2563eb"
-                      strokeWidth={2.5}
-                      strokeDasharray="6 4"
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                    <Area
-                      type="monotone"
-                      name="Pilote Sojori"
-                      dataKey="pilotPrice"
-                      connectNulls={false}
-                      stroke={T.goldDeep}
-                      strokeWidth={2.25}
-                      fill="url(#dpPriceGrad)"
-                      fillOpacity={0.35}
-                      dot={ChartEventDot}
-                      activeDot={(props: {
-                        cx?: number;
-                        cy?: number;
-                        payload?: { status?: DayStatus };
-                      }) => {
-                        const isEvent = props.payload?.status === 'override';
-                        return (
-                          <circle
-                            cx={props.cx}
-                            cy={props.cy}
-                            r={isEvent ? 6 : 4}
-                            fill={isEvent ? STATUS_BG.override : T.goldDeep}
-                            stroke="#fff"
-                            strokeWidth={2}
-                          />
-                        );
-                      }}
-                      isAnimationActive={false}
-                    />
-                  </>
-                ) : (
-                  <Area
-                    type="monotone"
-                    dataKey="price"
-                    connectNulls={false}
-                    stroke={T.goldDeep}
-                    strokeWidth={2}
-                    fill="url(#dpPriceGrad)"
-                    dot={ChartEventDot}
-                    activeDot={(props: { cx?: number; cy?: number; payload?: { status?: DayStatus } }) => {
-                      const isEvent = props.payload?.status === 'override';
-                      return (
-                        <circle
-                          cx={props.cx}
-                          cy={props.cy}
-                          r={isEvent ? 6 : 4}
-                          fill={isEvent ? STATUS_BG.override : T.goldDeep}
-                          stroke="#fff"
-                          strokeWidth={2}
-                        />
-                      );
-                    }}
-                  />
-                )}
+                <Area
+                  type="monotone"
+                  dataKey="price"
+                  connectNulls={false}
+                  stroke={T.goldDeep}
+                  strokeWidth={2}
+                  fill="url(#dpPriceGrad)"
+                  dot={ChartEventDot}
+                  activeDot={(props: { cx?: number; cy?: number; payload?: { status?: DayStatus } }) => {
+                    const isEvent = props.payload?.status === 'override';
+                    return (
+                      <circle
+                        cx={props.cx}
+                        cy={props.cy}
+                        r={isEvent ? 6 : 4}
+                        fill={isEvent ? STATUS_BG.override : T.goldDeep}
+                        stroke="#fff"
+                        strokeWidth={2}
+                      />
+                    );
+                  }}
+                />
               </AreaChart>
+              )}
             </ResponsiveContainer>
           </Box>
         </Box>

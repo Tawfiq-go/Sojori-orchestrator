@@ -274,7 +274,9 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
 
   const pilot = usePilotPricing({
     listingId,
-    hasAirroiSnapshot: Boolean(portfolioRow?.hasAirroiSnapshot),
+    hasAirroiSnapshot: Boolean(
+      portfolioRow?.hasAirroiSnapshot || portfolioRow?.hasRevenueEstimate,
+    ),
     activeModeId,
     pricingModes,
     legacyMode: mode,
@@ -291,7 +293,9 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   });
   const previewDiff = useApplyPreviewDiff({
     listingId,
-    hasAirroiSnapshot: Boolean(portfolioRow?.hasAirroiSnapshot),
+    hasAirroiSnapshot: Boolean(
+      portfolioRow?.hasAirroiSnapshot || portfolioRow?.hasRevenueEstimate,
+    ),
     configPayload: pilot.buildConfigPayload,
     previewReady: pilot.hasSojoriPreview,
     previewLoading: pilot.previewLoading,
@@ -548,12 +552,9 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     const district =
       l.district && l.district !== '—' ? l.district : ar?.district ?? l.district;
     const parts = [l.name, district, l.city].filter(Boolean);
-    const bedrooms = Math.max(0, Number(l.bedrooms ?? ar?.bedrooms ?? 1));
-    const baths = Math.max(
-      1,
-      Number(l.bathrooms ?? portfolioRow.airroiGeoUsed?.baths ?? bedrooms),
-    );
-    const guestsMax = Math.max(1, Number(l.guests ?? 0));
+    const bedrooms = Math.max(0, Number(l.bedrooms ?? ar?.bedrooms ?? 0));
+    const baths = Math.max(0, Number(l.bathrooms ?? portfolioRow.airroiGeoUsed?.baths ?? 0));
+    const guestsMax = Math.max(0, Number(l.guests ?? 0));
     const geoUsed = portfolioRow.airroiGeoUsed;
     return {
       listingId,
@@ -642,10 +643,15 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       : pilot.previewLoading
         ? pilot.previewDays
         : calendarDays;
-  /** Courbe bleue = marché estimate brut (avant corrections Sojori) */
+  /** Courbe bleue = estimate marché brut (avant corrections Sojori) */
   const calendarMarketDays =
     usesPilotPreview && pilot.previewMarketDays.length > 0
       ? pilot.previewMarketDays
+      : undefined;
+  /** Courbe grise = calculatedPrice calendrier ops actuel */
+  const calendarOpsDays =
+    usesPilotPreview && pilot.previewCalendarDays.length > 0
+      ? pilot.previewCalendarDays
       : undefined;
   const calendarHasEventOverlay = !usesPilotPreview && events.length > 0;
   const displayHasCalendarProd =
@@ -896,6 +902,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       calendarYear,
       calendarDays: displayCalendarDays,
       calendarMarketDays,
+      calendarOpsDays,
       calendarYearOptions: [calendarYear, calendarYear + 1],
       compsMarketStats,
       selfVsComps,

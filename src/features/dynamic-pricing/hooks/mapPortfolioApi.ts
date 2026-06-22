@@ -14,6 +14,7 @@ function toListingRow(dto: PortfolioListingDto, index: number): PortfolioRow {
     city: dto.city ?? 'Marrakech',
     airroiZoneAvailable: true,
     bedrooms: dto.bedrooms ?? dto.airroiRaw?.bedrooms ?? 0,
+    bathrooms: dto.bathrooms ?? undefined,
     guests: dto.guests ?? dto.airroiRaw?.guests ?? 0,
     amenities: [],
     position:
@@ -33,6 +34,9 @@ function toListingRow(dto: PortfolioListingDto, index: number): PortfolioRow {
     listing,
     airroiRaw: dto.airroiRaw ?? null,
     hasAirroiSnapshot: Boolean(dto.hasAirroiSnapshot),
+    hasRevenueEstimate: Boolean(dto.hasRevenueEstimate),
+    estimateSummary: dto.estimateSummary ?? null,
+    airroiGeoUsed: dto.airroiGeoUsed ?? null,
     airroiSnapshotAt: dto.airroiSnapshotAt
       ? new Date(dto.airroiSnapshotAt).toISOString()
       : null,
