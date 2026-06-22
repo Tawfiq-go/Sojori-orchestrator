@@ -22,6 +22,7 @@ import {
 } from '../../../services/dynamicPricingApi';
 import type { PricingEvent } from '../bien/PricingControls';
 import { usePilotPricing } from './usePilotPricing';
+import { useApplyPreviewDiff } from './useApplyPreviewDiff';
 import { mapPortfolioApiToView } from './mapPortfolioApi';
 import { chartsFromApi } from '../utils/extractMarketChartsFromApi';
 import type { CompMapPin } from '../bien/MarrakechMap';
@@ -288,6 +289,14 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     applyMinStay,
     calendarYear,
   });
+  const previewDiff = useApplyPreviewDiff({
+    listingId,
+    hasAirroiSnapshot: Boolean(portfolioRow?.hasAirroiSnapshot),
+    configPayload: pilot.buildConfigPayload,
+    previewReady: pilot.hasSojoriPreview,
+    previewLoading: pilot.previewLoading,
+  });
+
 
   const persistPilotConfig = useCallback(
     async (eventsOverride?: PricingEvent[]) => {
@@ -851,6 +860,12 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       pilotPreviewLoading: pilot.previewLoading,
       pilotApplyLoading: pilot.applyLoading,
       pilotApplySummary: pilot.lastApplySummary,
+      previewDiffData: previewDiff.data,
+      previewDiffLoading: previewDiff.loading,
+      previewDiffError: previewDiff.error,
+      previewDiffOnlyChanged: previewDiff.onlyChanged,
+      onPreviewDiffOnlyChanged: previewDiff.setOnlyChanged,
+      onPreviewDiffReload: previewDiff.reload,
       pilotApplyError: applyError,
       potentialHint,
       calendarPricingSource,

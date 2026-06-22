@@ -11,9 +11,41 @@ import {
   type WorkLang,
 } from './staffDesignConstants';
 import { MOCK_STAFF_DESIGN, MOCK_LISTINGS_DESIGN } from './mockStaffDesign';
+import StaffAccessMultiSelect from './StaffAccessMultiSelect';
 
 type FilterKey = 'all' | 'active' | 'admin' | 'freelance';
-type ListingOpt = { id: string; name: string; ownerId?: string };
+type ListingOpt = { id: string; name: string; ownerId?: string; cityId?: string };
+type CityOpt = { id: string; name: string };
+
+function hasAllAccess(ids: string[] | undefined): boolean {
+  if (!ids?.length) return false;
+  return ids.some((id) => id === 'All' || id === 'ALL');
+}
+
+function accessSummary(s: Staff, cities: CityOpt[]): string {
+  if (hasAllAccess(s.allowedListingIds)) return 'Tous les listings';
+  if (!s.allowedListingIds?.length && !s.allowedCityIds?.length) return 'Tous les listings';
+  const parts: string[] = [];
+  if (hasAllAccess(s.allowedCityIds)) {
+    parts.push('Toutes les villes');
+  } else if (s.allowedCityIds?.length) {
+    const names = s.allowedCityIds
+      .map((id) => cities.find((c) => c.id === id)?.name || '')
+      .filter(Boolean)
+      .slice(0, 2);
+    if (names.length) {
+      parts.push(
+        names.join(', ') +
+          (s.allowedCityIds.length > 2 ? ` +${s.allowedCityIds.length - 2}` : ''),
+      );
+    }
+  }
+  const listingCount = (s.allowedListingIds || []).filter(
+    (id) => id !== 'All' && id !== 'ALL',
+  ).length;
+  if (listingCount) parts.push(`${listingCount} annonce(s)`);
+  return parts.length ? parts.join(' · ') : 'Aucun accès';
+}
 type OwnerOption = { id: string; label: string };
 
 function emptyStaff(): Staff {
@@ -27,6 +59,7 @@ function emptyStaff(): Staff {
     contractType: 'employee',
     allowedTaskTypes: [],
     allowedListingIds: [],
+    allowedCityIds: [],
     maxTasksPerDay: 5,
     lang: 'fr',
     schedule: { daysOfWeek: [0, 1, 2, 3, 4], timeWindows: [{ start: '08:00', end: '17:00' }] },
@@ -62,6 +95,8 @@ interface Props {
   onSave: (form: Staff, editingId: string | null) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   useMockFallback?: boolean;
+  /** Villes Sojori pour permissions par ville. */
+  cities?: CityOpt[];
   /** Propriétaire actif (filtre ou session). */
   scopedOwnerLabel?: string;
   /** Admin : choix du PM dans le formulaire. */
@@ -84,6 +119,7 @@ export default function StaffPageView({
   ownerOptions = [],
   sessionOwnerId,
   filterOwnerId,
+  cities: citiesProp = [],
 }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -104,11 +140,21 @@ export default function StaffPageView({
     return MOCK_LISTINGS_DESIGN;
   }, [listingsProp]);
 
+  const cities = useMemo(() => citiesProp, [citiesProp]);
+
+  const allListingsMode = hasAllAccess(form.allowedListingIds);
+  const allCitiesMode = hasAllAccess(form.allowedCityIds);
+
   const formListings = useMemo(() => {
     const formOwnerId = form.ownerId?.trim();
     if (!showOwnerPicker || !formOwnerId) return listings;
     return listings.filter((l) => !l.ownerId || String(l.ownerId) === formOwnerId);
   }, [listings, form.ownerId, showOwnerPicker]);
+
+  const formCities = useMemo(() => {
+    // Uniquement les villes actives Sojori (usedInSojoriSysytem) — déjà filtrées côté API.
+    return cities;
+  }, [cities]);
 
   const filtered = useMemo(() => {
     return staff.filter((s) => {
@@ -166,12 +212,42 @@ export default function StaffPageView({
     patchForm({ allowedTaskTypes: [...set] as Staff['allowedTaskTypes'] });
   };
 
-  const toggleListing = (id: string) => {
-    const set = new Set(form.allowedListingIds);
-    if (set.has(id)) set.delete(id);
-    else set.add(id);
-    patchForm({ allowedListingIds: [...set] });
+  const toggleAllListings = () => {
+    if (allListingsMode) {
+      patchForm({ allowedListingIds: [], allowedCityIds: [] });
+      return;
+    }
+    patchForm({ allowedListingIds: ['All'], allowedCityIds: ['All'] });
   };
+
+  const toggleAllCities = () => {
+    if (allListingsMode) return;
+    if (allCitiesMode) {
+      patchForm({ allowedCityIds: [] });
+      return;
+    }
+    patchForm({ allowedCityIds: ['All'] });
+  };
+
+  const selectedCityIds = useMemo(
+    () => form.allowedCityIds.filter((id) => id !== 'All' && id !== 'ALL'),
+    [form.allowedCityIds],
+  );
+
+  const selectedListingIds = useMemo(
+    () => form.allowedListingIds.filter((id) => id !== 'All' && id !== 'ALL'),
+    [form.allowedListingIds],
+  );
+
+  const cityOptions = useMemo(
+    () => formCities.map((c) => ({ id: c.id, label: c.name, emoji: '📍' })),
+    [formCities],
+  );
+
+  const listingOptions = useMemo(
+    () => formListings.map((l) => ({ id: l.id, label: l.name, emoji: '🏠' })),
+    [formListings],
+  );
 
   const toggleDay = (d: number) => {
     const set = new Set(form.schedule.daysOfWeek);
@@ -315,6 +391,12 @@ export default function StaffPageView({
                       </span>
                     );
                   })}
+                </div>
+                <div className="meta-line">
+                  <span style={{ textTransform: 'uppercase', fontSize: 9.5, fontWeight: 700 }}>
+                    Accès
+                  </span>
+                  <span style={{ color: 'var(--t2)', fontSize: 11 }}>{accessSummary(s, cities)}</span>
                 </div>
                 <div className="meta-line">
                   <span style={{ textTransform: 'uppercase', fontSize: 9.5, fontWeight: 700 }}>
@@ -560,27 +642,92 @@ export default function StaffPageView({
             </div>
 
             <div className="form-section full">
-              <div className="form-section-h">Listings rattachés · multi-sélection</div>
-              {showOwnerPicker && !form.ownerId ? (
-                <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--pd)' }}>
-                  Choisissez d&apos;abord un propriétaire pour afficher ses annonces.
-                </p>
-              ) : null}
-              <div className="pill-group">
-                {formListings.map((l, idx) => (
+              <div className="form-section-h">Accès annonces</div>
+              <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--pd)' }}>
+                Par ville : les nouvelles annonces de la ville sont incluses automatiquement.
+              </p>
+              <button
+                type="button"
+                className={`access-all-chip${allListingsMode ? ' on' : ''}`}
+                onClick={toggleAllListings}
+              >
+                <span>🌍</span>
+                Tous les listings
+              </button>
+              {!allListingsMode ? (
+                <>
+                  <div className="form-section-h" style={{ marginTop: 4, marginBottom: 6 }}>
+                    Villes autorisées
+                  </div>
                   <button
-                    key={l.id || `listing-${idx}`}
                     type="button"
-                    className={`pill-toggle${
-                      form.allowedListingIds.includes(l.id) ? ' on' : ''
-                    }`}
-                    onClick={() => toggleListing(l.id)}
+                    className={`access-all-chip${allCitiesMode ? ' on' : ''}`}
+                    style={{ marginBottom: 8 }}
+                    onClick={toggleAllCities}
                   >
-                    <span style={{ marginRight: 3 }}>🏠</span>
-                    {l.name}
+                    Toutes les villes
                   </button>
-                ))}
-              </div>
+                  {allCitiesMode ? (
+                    <div className="access-selected-chips" style={{ marginBottom: 12 }}>
+                      <span className="access-chip">
+                        <span className="access-chip-emoji">📍</span>
+                        <span className="access-chip-label">Toutes les villes</span>
+                        <button
+                          type="button"
+                          className="access-chip-x"
+                          aria-label="Retirer toutes les villes"
+                          onClick={toggleAllCities}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    </div>
+                  ) : (
+                    <StaffAccessMultiSelect
+                      options={cityOptions}
+                      selectedIds={selectedCityIds}
+                      onChange={(ids) => patchForm({ allowedCityIds: ids })}
+                      placeholder="Aucune ville — ajoutez Casablanca, Rabat…"
+                      searchPlaceholder="Rechercher une ville…"
+                      addLabel="+ Ajouter des villes"
+                      emptyLabel="Aucune ville trouvée"
+                    />
+                  )}
+                  <div className="form-section-h" style={{ marginTop: 14, marginBottom: 6 }}>
+                    Annonces spécifiques (optionnel)
+                  </div>
+                  {showOwnerPicker && !form.ownerId ? (
+                    <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--pd)' }}>
+                      Choisissez d&apos;abord un propriétaire pour afficher ses annonces.
+                    </p>
+                  ) : null}
+                  <StaffAccessMultiSelect
+                    options={listingOptions}
+                    selectedIds={selectedListingIds}
+                    onChange={(ids) => patchForm({ allowedListingIds: ids })}
+                    disabled={!formListings.length}
+                    placeholder="Aucune annonce spécifique"
+                    searchPlaceholder="Rechercher une annonce…"
+                    addLabel="+ Ajouter des annonces"
+                    emptyLabel="Aucune annonce trouvée"
+                  />
+                </>
+              ) : (
+                <div className="access-selected-chips">
+                  <span className="access-chip">
+                    <span className="access-chip-emoji">🌍</span>
+                    <span className="access-chip-label">Tous les listings</span>
+                    <button
+                      type="button"
+                      className="access-chip-x"
+                      aria-label="Retirer accès total"
+                      onClick={toggleAllListings}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="form-section">

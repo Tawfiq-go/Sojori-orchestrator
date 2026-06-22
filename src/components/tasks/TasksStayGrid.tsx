@@ -18,6 +18,12 @@ import type {
   PlanningReservationRow,
   PlanningTimelineItem,
 } from '../../types/tasksPlanning.types';
+import {
+  derivePlanningCleanliness,
+  displayCleanlinessLabel,
+  type DisplayCleanliness,
+} from '../../utils/cleanlinessDisplay';
+import { mergeOperationalStatusFields } from '../../utils/operationalStatusStore';
 
 // ─── Tokens locaux alignés DashboardV2 ──────────────────────────────
 const T = {
@@ -30,28 +36,15 @@ const T = {
   border: 'rgba(20,17,10,0.07)', borderStrong: 'rgba(20,17,10,0.14)',
 };
 
-type PlanningCleanliness = 'clean' | 'dirty' | 'occupied';
-
-function derivePlanningCleanliness(l: PlanningListingRow): PlanningCleanliness {
-  const lc = (s: unknown) => String(s ?? '').trim().toLowerCase();
-  const legacy = lc(l.cleanlinessStatus);
-  if (legacy === 'clean' || legacy === 'cl') return 'clean';
-  if (legacy === 'dirty' || legacy === 'dr') return 'dirty';
-  if (legacy === 'occupied' || legacy === 'occupé' || legacy === 'occupe' || legacy === 'in') return 'occupied';
-  const occ = lc(l.occupancyStatus);
-  if (occ === 'occupied') return 'occupied';
-  const v2 = lc(l.cleanlinessStatus_v2);
-  if (v2 === 'dirty' || v2 === 'in_progress') return 'dirty';
-  if (v2 === 'clean') return 'clean';
-  return 'clean';
-}
+type PlanningCleanliness = DisplayCleanliness;
 
 function cleanlinessBadgeLabel(s: PlanningCleanliness) {
-  return s === 'clean' ? 'CLEAN' : s === 'dirty' ? 'DIRTY' : 'OCCUPÉ';
+  return displayCleanlinessLabel(s);
 }
 function cleanlinessBadgeStyle(s: PlanningCleanliness) {
   if (s === 'clean')  return { bg: 'rgba(10,143,94,0.10)',  color: T.success, border: 'rgba(10,143,94,0.30)' };
   if (s === 'dirty')  return { bg: 'rgba(200,30,30,0.08)',  color: T.error,   border: 'rgba(200,30,30,0.25)' };
+  if (s === 'in_progress') return { bg: 'rgba(196,101,6,0.10)', color: T.warning, border: 'rgba(196,101,6,0.28)' };
   return { bg: 'rgba(6,115,179,0.10)', color: T.info, border: 'rgba(6,115,179,0.30)' };
 }
 
@@ -691,7 +684,13 @@ export function normalizePlanningListings(rows: PlanningListingRow[]): StayListi
   return (rows || []).map((l) => ({
     id: String(l.listingId || ''),
     name: l.listingName || l.name || 'Sans nom',
-    cleanlinessStatus: derivePlanningCleanliness(l),
+    cleanlinessStatus: derivePlanningCleanliness(
+      mergeOperationalStatusFields(String(l.listingId || l._id || ''), {
+        occupancyStatus: l.occupancyStatus,
+        cleanlinessStatus_v2: l.cleanlinessStatus_v2,
+      }),
+      l.reservations || [],
+    ),
     reservations: (l.reservations || []).map((r) => ({ ...r, id: String(r.reservationId || r.id || r._id || '') })),
   }));
 }

@@ -269,6 +269,7 @@ export async function runPlanScheduler(reservationId: string) {
 export type PlanDispatchApiResponse = {
   success: boolean;
   error?: string;
+  code?: string;
   data?: unknown;
   dispatch?: { stubOnly?: boolean; channel?: string };
 };
@@ -277,27 +278,45 @@ async function postPlanDispatch(
   url: string,
   body: Record<string, unknown> = {},
 ): Promise<PlanDispatchApiResponse> {
+  const t0 = performance.now();
+  console.log('[dispatch-test] POST start', { url, body });
   const res = await axios.post(url, body, {
     ...authHeaders(),
     validateStatus: () => true,
   });
+  const ms = Math.round(performance.now() - t0);
   const data = res.data as PlanDispatchApiResponse | string | undefined;
   if (data && typeof data === 'object' && 'success' in data) {
-    return data as PlanDispatchApiResponse;
+    console.log('[dispatch-test] POST response', {
+      url,
+      ms,
+      status: res.status,
+      success: data.success,
+      channel: data.dispatch?.channel,
+      error: data.error,
+      code: (data as PlanDispatchApiResponse).code,
+    });
+    return { ...(data as PlanDispatchApiResponse), success: data.success && res.status < 400 };
   }
   const snippet =
     typeof data === 'string'
       ? data.replace(/\s+/g, ' ').trim().slice(0, 200)
       : `HTTP ${res.status}`;
+  console.warn('[dispatch-test] POST unexpected', { url, ms, status: res.status, snippet });
   return {
     success: false,
     error: res.status >= 500 ? `Erreur serveur (${res.status})` : snippet || 'Action refusée',
   };
 }
 
-export async function sendPlanMessage(reservationId: string, messageIndex: number) {
+export async function sendPlanMessage(
+  reservationId: string,
+  messageIndex: number,
+  opts?: { forceResend?: boolean },
+) {
   return postPlanDispatch(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/messages/${messageIndex}/send`,
+    opts?.forceResend ? { forceResend: true } : {},
   );
 }
 
@@ -305,9 +324,11 @@ export async function sendPlanRelance(
   reservationId: string,
   taskId: string,
   relanceIndex: number,
+  opts?: { forceResend?: boolean },
 ) {
   return postPlanDispatch(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/relances/${relanceIndex}/send`,
+    opts?.forceResend ? { forceResend: true } : {},
   );
 }
 

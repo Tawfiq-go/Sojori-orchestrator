@@ -92,10 +92,13 @@ export interface ImportProgress {
 
 export interface ImportResultItem {
   ruPropertyId: string;
+  /** Nom RU / Airbnb (phase sélection ou progress) */
   propertyName: string;
+  /** Nom du listing Sojori après création */
+  listingName?: string;
   city?: string;
   success: boolean;
-  listingId?: string;            // SJ-LIST-XXXX si success
+  listingId?: string;
   errorMessage?: string;
 }
 

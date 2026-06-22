@@ -31,7 +31,10 @@ export interface Staff {
   /** Freelance only · prix par type de tâche en MAD (clés fulltask) */
   rates?: Record<string, number>;
   allowedTaskTypes: string[];
-  allowedListingIds: string[];        // [] = tous
+  /** Sentinel « All » ou ids listing — [] sans cityIds = tous (legacy). */
+  allowedListingIds: string[];
+  /** Sentinel « All » ou ids ville — inclut les nouvelles annonces de la ville. */
+  allowedCityIds: string[];
   maxTasksPerDay?: number;
   schedule: {
     daysOfWeek: number[];             // 0=L → 6=D

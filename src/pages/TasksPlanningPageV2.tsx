@@ -15,6 +15,10 @@ import listingsService from '../services/listingsService';
 import cleanlinessService from '../services/cleanlinessService';
 import type { DisplayCleanliness } from '../utils/cleanlinessDisplay';
 import {
+  OPERATIONAL_STATUS_CHANGED,
+  mergeListingOperationalRow,
+} from '../utils/operationalStatusStore';
+import {
   getCachedPlanningListings,
   setCachedPlanningListings,
   invalidatePlanningListingsCache,
@@ -64,6 +68,7 @@ export default function TasksPlanningPageV2() {
     listings?: Array<Record<string, unknown>>;
   } | null>(null);
   const [adminOwnerId, setAdminOwnerId] = useState('');
+  const [opSyncTick, setOpSyncTick] = useState(0);
   const listingsHydratedRef = useRef(activeListings.length > 0);
 
   const planningOwnerId = useMemo(() => {
@@ -132,6 +137,12 @@ export default function TasksPlanningPageV2() {
     }
   }, [windowRange, planningOwnerId, scope.canAccessAllOwners, scope.ownerId]);
 
+  useEffect(() => {
+    const onOperationalStatusChanged = () => setOpSyncTick((n) => n + 1);
+    window.addEventListener(OPERATIONAL_STATUS_CHANGED, onOperationalStatusChanged);
+    return () => window.removeEventListener(OPERATIONAL_STATUS_CHANGED, onOperationalStatusChanged);
+  }, []);
+
   /** Bootstrap : listings (cache) + planning en parallèle */
   useEffect(() => {
     if (authLoading) return;
@@ -198,16 +209,17 @@ export default function TasksPlanningPageV2() {
     return activeListings.map((listing) => {
       const listingId = String(listing.id || '');
       const resas = reservationsByListing.get(listingId) || [];
-      const op = operationalByListing.get(listingId);
+      const op = mergeListingOperationalRow(listingId, {
+        occupancyStatus: listing.occupancyStatus,
+        cleanlinessStatus_v2: listing.cleanlinessStatus_v2,
+        cleanlinessEmergency: listing.cleanlinessEmergency,
+      }, operationalByListing.get(listingId));
 
       return {
         listingId,
         listingName: listing.name || String(op?.listingName || 'Sans nom'),
         city: listing.city || String(op?.city || 'Sans ville'),
-        cleanlinessStatus_v2: String(
-          op?.cleanlinessStatus_v2 || listing.cleanlinessStatus || 'clean',
-        ),
-        cleanlinessStatus: (op?.cleanlinessStatus || listing.cleanlinessStatus) as string | undefined,
+        cleanlinessStatus_v2: String(op?.cleanlinessStatus_v2 || 'clean'),
         occupancyStatus: String(op?.occupancyStatus || 'vacant'),
         cleanlinessEmergency: Boolean(op?.cleanlinessEmergency),
         reservations: resas.map((r) => ({
@@ -233,7 +245,7 @@ export default function TasksPlanningPageV2() {
         })),
       };
     });
-  }, [activeListings, rawData]);
+  }, [activeListings, rawData, opSyncTick]);
 
   const handleTaskClick = (_item: TimelineItem) => {
     // TODO: Ouvrir drawer détail tâche
@@ -269,11 +281,27 @@ export default function TasksPlanningPageV2() {
 
   const handleCleanlinessChange = useCallback(
     async (listingId: string, status: DisplayCleanliness) => {
+      console.log('[TasksPlanning] handleCleanlinessChange', { listingId, status });
       const result = await cleanlinessService.updateListingStatus(listingId, status);
       if (!result.success) {
         throw new Error(result.message || 'Échec mise à jour propreté');
       }
       invalidatePlanningListingsCache(listingsCacheKey);
+      setActiveListings((prev) => {
+        const next = prev.map((l) =>
+          l.id === listingId
+            ? {
+                ...l,
+                occupancyStatus: result.data?.occupancyStatus ?? l.occupancyStatus,
+                cleanlinessStatus_v2: result.data?.cleanlinessStatus_v2 ?? l.cleanlinessStatus_v2,
+                cleanlinessEmergency:
+                  result.data?.cleanlinessEmergency ?? l.cleanlinessEmergency,
+              }
+            : l,
+        );
+        setCachedPlanningListings(listingsCacheKey, next);
+        return next;
+      });
       setRawData((prev) => {
         if (!prev?.listings) return prev;
         return {
@@ -282,15 +310,9 @@ export default function TasksPlanningPageV2() {
             const id = String(l.listingId || l._id || '');
             if (id !== listingId) return l;
             const row = { ...l };
-            if (result.data?.cleanlinessStatus_v2) {
-              row.cleanlinessStatus_v2 = result.data.cleanlinessStatus_v2;
-            }
-            if (result.data?.cleanlinessStatus) {
-              row.cleanlinessStatus = result.data.cleanlinessStatus;
-            }
-            if (result.data?.occupancyStatus) {
-              row.occupancyStatus = result.data.occupancyStatus;
-            }
+            row.cleanlinessStatus_v2 =
+              result.data?.cleanlinessStatus_v2 ?? row.cleanlinessStatus_v2;
+            row.occupancyStatus = result.data?.occupancyStatus ?? row.occupancyStatus;
             if (result.data?.cleanlinessEmergency != null) {
               row.cleanlinessEmergency = result.data.cleanlinessEmergency;
             }

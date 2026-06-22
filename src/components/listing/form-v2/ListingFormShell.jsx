@@ -26,6 +26,8 @@ const T = {
 };
 
 /* ─── Onglets ──────────────────────────────────────────────── */
+export const POST_IMPORT_TAB = { id: 'post-import', icon: '🚀', label: 'Lancer orchestration' };
+
 export const DETAIL_TABS = [
   { group: 'Identité', items: [
     { id: 'general',      icon: '🏠', label: 'General Information' },
@@ -169,6 +171,7 @@ export default function ListingFormShell({
   onPreview,
   onAiAssist,
   renderTab,                  // (tabKey, level) => ReactNode — branche tes vrais composants ici
+  importOnboardingActive = false,
 }) {
   const resolvedLockLevel = lockLevel
     ? normalizeListingFormLevel(lockLevel, { forceConfig: lockLevel === 'config' || lockLevel === 'config-new' })
@@ -215,7 +218,11 @@ export default function ListingFormShell({
   }, [resolvedLockLevel, hiddenConfigTabIds, configTabsFiltered, activeTab]);
 
   const isOrchV3 = level === 'orchestration-v3';
-  const tabsConfig = level === 'detail' ? DETAIL_TABS : isOrchV3 ? [] : configTabsFiltered;
+  const detailTabsBase = level === 'detail' ? DETAIL_TABS : [];
+  const detailTabsWithImport = importOnboardingActive && level === 'detail'
+    ? [{ group: 'Post-import', items: [POST_IMPORT_TAB] }, ...detailTabsBase]
+    : detailTabsBase;
+  const tabsConfig = level === 'detail' ? detailTabsWithImport : isOrchV3 ? [] : configTabsFiltered;
   const activeTabMeta = isOrchV3
     ? { id: 'orchestration-v3', icon: '🎯', label: 'Orchestration' }
     : tabsConfig.flatMap(g => g.items).find(t => t.id === activeTab) || tabsConfig[0]?.items?.[0] || { id: activeTab, icon: '·', label: activeTab };
@@ -467,8 +474,8 @@ export default function ListingFormShell({
               {renderTab ? renderTab(activeTab, level) : <PlaceholderTab tabId={activeTab} />}
             </Box>
 
-            {/* Save bar sticky */}
-            {!isOrchV3 && (
+            {/* Save bar sticky — masquée onglet post-import (workflow dédié) */}
+            {!isOrchV3 && activeTab !== 'post-import' && (
             <Stack
               direction="row"
               sx={{

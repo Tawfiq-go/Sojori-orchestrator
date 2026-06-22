@@ -201,7 +201,7 @@ export async function assignAirbnbCategoriesCatalogMappings(): Promise<{
   const res = await apiClient.post(`${LISTING}/amenities/catalog-mapping/assign-categories`);
   return res.data?.data;
 }
-    updated: number;
+
 export type PmListingModelResult = {
   enabledTotal: number;
   airbnbFirstEnabled: number;
@@ -218,18 +218,6 @@ export async function selectPmListingModelCatalog(): Promise<PmListingModelResul
   return res.data?.data;
 }
 
-    stillOrphanCategory: number;
-  };
-};
-
-export async function assignAirbnbCategoriesCatalogMappings(): Promise<{
-  updated: number;
-  stillOrphanCategory: number;
-}> {
-  const res = await apiClient.post(`${LISTING}/amenities/catalog-mapping/assign-categories`);
-  return res.data?.data;
-}
-
 export async function bootstrapAmenityCatalogMappings(options?: {
   syncRu?: boolean;
 }): Promise<BootstrapAmenityCatalogResult> {
@@ -239,6 +227,18 @@ export async function bootstrapAmenityCatalogMappings(options?: {
 
 export async function enrichOtaChannelsCatalogMappings(): Promise<EnrichOtaChannelsResult> {
   const res = await apiClient.post(`${LISTING}/amenities/catalog-mapping/enrich-ota-channels`);
+  return res.data?.data;
+}
+
+export async function mergeOtaRuIdsCatalogMappings(): Promise<{
+  rowsUpdated: number;
+  idsMerged: number;
+  orphansRemoved: number;
+  orphansReset: number;
+}> {
+  const res = await apiClient.post(`${LISTING}/amenities/catalog-mapping/merge-ota-ru-ids`);
+  return res.data?.data;
+}
 
 // ─── Image OTA catalog (srv-listing /image-types/ota-catalog) ───────────────
 
@@ -334,29 +334,5 @@ export type PmImageListingModelResult = {
 
 export async function selectPmImageListingModelCatalog(): Promise<PmImageListingModelResult> {
   const res = await apiClient.post(`${LISTING}/image-types/ota-catalog/mapping/select-pm-model`);
-  return res.data?.data;
-}
-  return res.data?.data;
-}
-
-export async function mergeOtaRuIdsCatalogMappings(): Promise<{
-  rowsUpdated: number;
-  idsMerged: number;
-  orphansRemoved: number;
-  orphansReset: number;
-}> {
-  const res = await apiClient.post(`${LISTING}/amenities/catalog-mapping/merge-ota-ru-ids`);
-  return res.data?.data;
-}
-  return res.data?.data;
-}
-
-export async function mergeOtaRuIdsCatalogMappings(): Promise<{
-  rowsUpdated: number;
-  idsMerged: number;
-  orphansRemoved: number;
-  orphansReset: number;
-}> {
-  const res = await apiClient.post(`${LISTING}/amenities/catalog-mapping/merge-ota-ru-ids`);
   return res.data?.data;
 }

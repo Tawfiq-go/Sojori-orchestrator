@@ -17,6 +17,10 @@ import tasksService, { resolveTasksUserScope } from '../services/tasksService';
 import cleanlinessService from '../services/cleanlinessService';
 import type { DisplayCleanliness } from '../utils/cleanlinessDisplay';
 import {
+  OPERATIONAL_STATUS_CHANGED,
+  mergeListingOperationalRow,
+} from '../utils/operationalStatusStore';
+import {
   getCachedPlanningListings,
   setCachedPlanningListings,
   invalidatePlanningListingsCache,
@@ -98,6 +102,7 @@ export function ReservationsPlanningPage() {
   const operationalRequestIdRef = useRef(0);
   const skipNextWindowOnlyFetchRef = useRef(false);
   const listingsHydratedRef = useRef(activeListings.length > 0);
+  const [opSyncTick, setOpSyncTick] = useState(0);
 
   const windowRange = useCallback(() => {
     const apiStart = format(startDate, 'yyyy-MM-dd');
@@ -118,6 +123,15 @@ export function ReservationsPlanningPage() {
       compact: true,
       forListingsOverview: false,
       limit: 500,
+    });
+    console.log('[ReservationsPlanning] fetchActiveListings', {
+      count: res.data.items.length,
+      sample: res.data.items.slice(0, 3).map((l) => ({
+        id: l.id,
+        name: l.name,
+        occupancyStatus: l.occupancyStatus,
+        cleanlinessStatus_v2: l.cleanlinessStatus_v2,
+      })),
     });
     setActiveListings(res.data.items);
     setCachedPlanningListings(listingsCacheKey, res.data.items);
@@ -157,6 +171,14 @@ export function ReservationsPlanningPage() {
       planning.data.listings.forEach((l: Record<string, unknown>) => {
         const id = String(l.listingId || l._id || '');
         if (id) map.set(id, l);
+      });
+      console.log('[ReservationsPlanning] fetchOperationalStatus (srv-task fallback)', {
+        listingsCount: map.size,
+        sample: [...map.entries()].slice(0, 3).map(([id, row]) => ({
+          id,
+          occupancyStatus: row.occupancyStatus,
+          cleanlinessStatus_v2: row.cleanlinessStatus_v2,
+        })),
       });
       setOperationalByListing(map);
     } catch {
@@ -241,6 +263,12 @@ export function ReservationsPlanningPage() {
     void fetchWindowData({ includeOperational: true });
   }, [startDate, authLoading, calendarReady, fetchWindowData]);
 
+  useEffect(() => {
+    const onOperationalStatusChanged = () => setOpSyncTick((n) => n + 1);
+    window.addEventListener(OPERATIONAL_STATUS_CHANGED, onOperationalStatusChanged);
+    return () => window.removeEventListener(OPERATIONAL_STATUS_CHANGED, onOperationalStatusChanged);
+  }, []);
+
   const listingRows: ListingRow[] = useMemo(() => {
     if (activeListings.length === 0) return [];
 
@@ -268,14 +296,17 @@ export function ReservationsPlanningPage() {
     return activeListings.map((listing) => {
       const listingId = listing.id;
       const resas = reservationsByListing.get(listingId) || [];
-      const op = operationalByListing.get(listingId);
+      const op = mergeListingOperationalRow(listingId, {
+        occupancyStatus: listing.occupancyStatus,
+        cleanlinessStatus_v2: listing.cleanlinessStatus_v2,
+        cleanlinessEmergency: listing.cleanlinessEmergency,
+      }, operationalByListing.get(listingId));
 
       return {
         listingId,
         listingName: listing.name || String(op?.listingName || 'Sans nom'),
         city: listing.city || String(op?.city || 'Sans ville'),
-        cleanlinessStatus_v2: String(op?.cleanlinessStatus_v2 || op?.cleanlinessStatus || 'clean'),
-        cleanlinessStatus: op?.cleanlinessStatus as string | undefined,
+        cleanlinessStatus_v2: String(op?.cleanlinessStatus_v2 || 'clean'),
         occupancyStatus: String(op?.occupancyStatus || 'vacant'),
         cleanlinessEmergency: Boolean(op?.cleanlinessEmergency),
         reservations: resas.map((r) => ({
@@ -291,31 +322,45 @@ export function ReservationsPlanningPage() {
         })),
       };
     });
-  }, [activeListings, reservations, startDate, daysCount, operationalByListing]);
+  }, [activeListings, reservations, startDate, daysCount, operationalByListing, opSyncTick]);
 
   const handleCleanlinessChange = useCallback(
     async (listingId: string, status: DisplayCleanliness) => {
+      console.log('[ReservationsPlanning] handleCleanlinessChange', { listingId, status });
       const result = await cleanlinessService.updateListingStatus(listingId, status);
       if (!result.success) {
         throw new Error(result.message || 'Échec mise à jour propreté');
       }
       invalidatePlanningListingsCache(listingsCacheKey);
+      setActiveListings((prev) => {
+        const next = prev.map((l) =>
+          l.id === listingId
+            ? {
+                ...l,
+                occupancyStatus: result.data?.occupancyStatus ?? l.occupancyStatus,
+                cleanlinessStatus_v2: result.data?.cleanlinessStatus_v2 ?? l.cleanlinessStatus_v2,
+                cleanlinessEmergency:
+                  result.data?.cleanlinessEmergency ?? l.cleanlinessEmergency,
+              }
+            : l,
+        );
+        setCachedPlanningListings(listingsCacheKey, next);
+        return next;
+      });
       setOperationalByListing((prev) => {
         const next = new Map(prev);
         const row = { ...(next.get(listingId) || {}), listingId };
-        if (result.data?.cleanlinessStatus_v2) {
-          row.cleanlinessStatus_v2 = result.data.cleanlinessStatus_v2;
-        }
-        if (result.data?.cleanlinessStatus) {
-          row.cleanlinessStatus = result.data.cleanlinessStatus;
-        }
-        if (result.data?.occupancyStatus) {
-          row.occupancyStatus = result.data.occupancyStatus;
-        }
+        row.cleanlinessStatus_v2 =
+          result.data?.cleanlinessStatus_v2 ?? row.cleanlinessStatus_v2;
+        row.occupancyStatus = result.data?.occupancyStatus ?? row.occupancyStatus;
         if (result.data?.cleanlinessEmergency != null) {
           row.cleanlinessEmergency = result.data.cleanlinessEmergency;
         }
         next.set(listingId, row);
+        console.log('[ReservationsPlanning] operational state after PATCH', {
+          listingId,
+          row,
+        });
         return next;
       });
     },

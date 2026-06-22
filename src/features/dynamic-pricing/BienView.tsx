@@ -29,6 +29,7 @@ import EventEditorModal from './bien/EventEditorModal';
 import DynamicPriceScopeModal from './bien/DynamicPriceScopeModal';
 import CalendarUpdateModal from './bien/CalendarUpdateModal';
 import type { PilotApplyReportDto } from '../../services/dynamicPricingApi';
+import ApplyPreviewDiffPanel from './bien/ApplyPreviewDiffPanel';
 import { SectionSourceBar, type DataSourceItem } from './DataSourceBadges';
 import DataEmptyPlaceholder from './DataEmptyPlaceholder';
 import { normalizeCityKey } from './cityScope';
@@ -148,6 +149,18 @@ export interface BienViewProps {
   pilotApplyLoading?: boolean;
   pilotApplySummary?: string | null;
   pilotApplyError?: string | null;
+  previewDiffData?: import('../../services/dynamicPricingApi').ApplyPreviewDiffDto | null;
+  previewDiffLoading?: boolean;
+  previewDiffError?: string | null;
+  previewDiffOnlyChanged?: boolean;
+  onPreviewDiffOnlyChanged?: (v: boolean) => void;
+  onPreviewDiffReload?: () => void;
+  previewDiffData?: import('../../services/dynamicPricingApi').ApplyPreviewDiffDto | null;
+  previewDiffLoading?: boolean;
+  previewDiffError?: string | null;
+  previewDiffOnlyChanged?: boolean;
+  onPreviewDiffOnlyChanged?: (v: boolean) => void;
+  onPreviewDiffReload?: () => void;
 }
 
 export default function BienView(props: BienViewProps) {
@@ -168,6 +181,8 @@ export default function BienView(props: BienViewProps) {
     estimatedRevenueMad, estimatedRevenueLiftPct, boundsContextHint, compsMedianAdr, estimateAdrMad,
     onToggleAi, onScopeModalClose, onScopeModalConfirm, onEditSyncScope,
     onFloorChange, onCeilingChange, onApplyRecoBounds,
+    previewDiffData, previewDiffLoading, previewDiffError,
+    previewDiffOnlyChanged = true, onPreviewDiffOnlyChanged, onPreviewDiffReload,
     onActiveModeChange, onModeToggle, onAddCustomMode, onUpdateCustomMode, onDeleteCustomMode,
     onGapBlockEnabledChange, onGapBlockMinNightsChange, onModeEnabledChange,
     onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
@@ -547,6 +562,27 @@ export default function BienView(props: BienViewProps) {
               : 'Snapshot marché'
           }
         >
+          {calendarUsesPilotPreview && provenance.hasAirroiSnapshot && applyPrice ? (
+            <Box sx={{ mb: 2 }}>
+              <ApplyPreviewDiffPanel
+                data={previewDiffData ?? null}
+                loading={previewDiffLoading}
+                error={previewDiffError}
+                onlyChanged={previewDiffOnlyChanged}
+                onOnlyChangedChange={onPreviewDiffOnlyChanged ?? (() => undefined)}
+                onReload={onPreviewDiffReload ?? (() => undefined)}
+                onApply={() => {
+                  if (onRunCalendarUpdate) {
+                    setCalendarUpdateOpen(true);
+                  } else {
+                    void onApplyToOps();
+                  }
+                }}
+                applyLoading={pilotApplyLoading}
+                canApply={Boolean(provenance.hasRevenueEstimate || provenance.hasAirroiSnapshot)}
+              />
+            </Box>
+          ) : null}
           {pilotApplyError ? (
             <Typography sx={{ fontSize: 12, color: T.error, fontWeight: 600, mb: 1 }}>
               {pilotApplyError}

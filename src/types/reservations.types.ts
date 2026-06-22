@@ -100,6 +100,15 @@ export interface Reservation {
   // Listing & Room
   sojoriId?: string; // Listing ID
   listingMapId?: string; // Fallback Listing ID
+  listing?: {
+    _id?: string;
+    name?: string;
+    importOnboarding?: { active?: boolean } | null;
+  };
+  orchestrationLaunch?: {
+    status?: 'pending' | 'launched' | string | null;
+    importListingId?: string | null;
+  } | null;
   roomTypeId?: string;
   doorCode?: string;
 

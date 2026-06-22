@@ -4,10 +4,11 @@
 // · Statuts · Données OTA · Comparaison prix · Frais & Taxes
 // ════════════════════════════════════════════════════════════════════
 
-import { Box, Stack, Typography, Paper, Chip, Button, Divider, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Avatar } from '@mui/material';
+import { Box, Stack, Typography, Paper, Chip, Button, Divider, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Avatar, TextField, MenuItem } from '@mui/material';
 import moment from 'moment';
 import 'moment/locale/fr';
-import { formatPrice, formatPriceWithCurrency, formatPriceOrPlaceholder } from '../../utils/formatPrice';
+import { formatPriceOrPlaceholder } from '../../utils/formatPrice';
+import { formatDateInputValue } from '../../utils/reservationEditPayload';
 import * as fulltaskApi from '../../services/fulltaskApi';
 import { toast } from 'react-toastify';
 
@@ -16,6 +17,8 @@ moment.locale('fr');
 interface GuestInfoTabProps {
   reservationDetails: any;
   isEditMode: boolean;
+  editedData?: Record<string, unknown>;
+  onEditedDataChange?: (data: Record<string, unknown>) => void;
   reservationId?: string;
   onRefresh?: () => void;
 }
@@ -50,6 +53,88 @@ const Row = ({ label, value, bold, mono, accent }: { label: string; value: any; 
   </Stack>
 );
 
+const RESERVATION_STATUS_OPTIONS = [
+  { value: 'Pending', label: 'En attente' },
+  { value: 'Confirmed', label: 'Confirmée' },
+  { value: 'Completed', label: 'Terminée' },
+  { value: 'CancelledByAdmin', label: 'Annulée (Admin)' },
+  { value: 'CancelledByCustomer', label: 'Annulée (Client)' },
+];
+
+const PAYMENT_STATUS_OPTIONS = [
+  { value: 'Paid', label: 'Payé' },
+  { value: 'UnPaid', label: 'Non payé' },
+  { value: 'Pending', label: 'En attente' },
+];
+
+type EditableRowProps = {
+  label: string;
+  field: string;
+  value: unknown;
+  isEditMode: boolean;
+  editedData: Record<string, unknown>;
+  onChange: (field: string, value: unknown) => void;
+  type?: 'text' | 'email' | 'tel' | 'number' | 'date' | 'select';
+  options?: Array<{ value: string; label: string }>;
+  mono?: boolean;
+};
+
+const fieldSx = {
+  '& .MuiInputBase-input': { fontSize: 12.5, py: 0.75, textAlign: 'right' as const },
+  '& .MuiOutlinedInput-root': { borderRadius: 1 },
+  minWidth: 160,
+  maxWidth: 220,
+};
+
+const EditableRow = ({
+  label,
+  field,
+  value,
+  isEditMode,
+  editedData,
+  onChange,
+  type = 'text',
+  options,
+  mono,
+}: EditableRowProps) => {
+  if (!isEditMode) {
+    return <Row label={label} value={value} mono={mono} />;
+  }
+  const current = editedData[field] ?? value ?? '';
+  return (
+    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', py: 0.5, gap: 1 }}>
+      <Typography sx={{ fontSize: 12.5, color: T.text3, flexShrink: 0 }}>{label}</Typography>
+      {type === 'select' && options ? (
+        <TextField
+          select
+          size="small"
+          value={String(current)}
+          onChange={(e) => onChange(field, e.target.value)}
+          sx={fieldSx}
+        >
+          {options.map((opt) => (
+            <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+          ))}
+        </TextField>
+      ) : (
+        <TextField
+          size="small"
+          type={type}
+          value={type === 'date' ? formatDateInputValue(current) : current}
+          onChange={(e) => {
+            const raw = e.target.value;
+            onChange(field, type === 'number' ? Number(raw) : raw);
+          }}
+          sx={{
+            ...fieldSx,
+            ...(mono ? { '& .MuiInputBase-input': { ...fieldSx['& .MuiInputBase-input'], fontFamily: '"Geist Mono", monospace' } } : {}),
+          }}
+        />
+      )}
+    </Stack>
+  );
+};
+
 const formatDate = (date: any) => date ? moment(date).format('DD MMM YYYY') : '—';
 const formatTime = (t: any) => {
   if (!t) return '—';
@@ -80,7 +165,14 @@ const OTAHeaderBadge = ({ channel }: { channel: string }) => {
 };
 
 // ─── Composant principal ───────────────────────────────────────────
-export function GuestInfoTab({ reservationDetails, reservationId, onRefresh }: GuestInfoTabProps) {
+export function GuestInfoTab({
+  reservationDetails,
+  isEditMode,
+  editedData = {},
+  onEditedDataChange,
+  reservationId,
+  onRefresh,
+}: GuestInfoTabProps) {
   if (!reservationDetails) {
     return (
       <Box sx={{ p: 3 }}>
@@ -89,6 +181,15 @@ export function GuestInfoTab({ reservationDetails, reservationId, onRefresh }: G
     );
   }
   const r = reservationDetails;
+  const patch = editedData;
+  const setField = (field: string, value: unknown) => {
+    onEditedDataChange?.({ ...patch, [field]: value });
+  };
+  const rowProps = {
+    isEditMode,
+    editedData: patch,
+    onChange: setField,
+  };
   const isBooking = (r.channelName || '').toLowerCase().includes('booking');
   const resaId = reservationId || r._id;
 
@@ -158,11 +259,19 @@ export function GuestInfoTab({ reservationDetails, reservationId, onRefresh }: G
         {/* ── LEFT ── */}
         <Box>
           <SectionCard title="👤 Voyageur">
-            <Row label="Nom"        value={r.guestName || `${r.guestFirstName ?? ''} ${r.guestLastName ?? ''}`.trim() || '—'} bold />
-            <Row label="Email"      value={r.guestEmail} />
-            <Row label="Téléphone"  value={r.phone} mono />
-            <Row label="Pays"       value={r.guestCountry} />
-            <Row label="Voyageurs"  value={`${r.adults || 0}A · ${r.children || 0}E · ${r.infants || 0}B`} bold mono />
+            <EditableRow label="Nom" field="guestName" value={r.guestName || `${r.guestFirstName ?? ''} ${r.guestLastName ?? ''}`.trim()} {...rowProps} />
+            <EditableRow label="Email" field="guestEmail" value={r.guestEmail} type="email" {...rowProps} />
+            <EditableRow label="Téléphone" field="phone" value={r.phone} type="tel" mono {...rowProps} />
+            <EditableRow label="Pays" field="guestCountry" value={r.guestCountry} {...rowProps} />
+            {isEditMode ? (
+              <>
+                <EditableRow label="Adultes" field="adults" value={r.adults ?? 0} type="number" mono {...rowProps} />
+                <EditableRow label="Enfants" field="children" value={r.children ?? 0} type="number" mono {...rowProps} />
+                <EditableRow label="Bébés" field="infants" value={r.infants ?? 0} type="number" mono {...rowProps} />
+              </>
+            ) : (
+              <Row label="Voyageurs" value={`${r.adults || 0}A · ${r.children || 0}E · ${r.infants || 0}B`} bold mono />
+            )}
             {(r.guestRegistration || r.adults) && (
               <>
                 <Divider sx={{ my: 1.5 }} />
@@ -227,13 +336,26 @@ export function GuestInfoTab({ reservationDetails, reservationId, onRefresh }: G
             </Stack>
           </SectionCard>
 
-          {r.notes && (
+          {(r.notes || isEditMode) && (
             <SectionCard title="📝 Notes">
-              <Box sx={{ p: 1.5, bgcolor: T.bg2, borderRadius: 1, border: `1px solid ${T.border}` }}>
-                <Typography sx={{ fontSize: 12.5, color: T.text2, whiteSpace: 'pre-wrap', lineHeight: 1.55, maxHeight: 200, overflowY: 'auto' }}>
-                  {r.notes}
-                </Typography>
-              </Box>
+              {isEditMode ? (
+                <TextField
+                  multiline
+                  minRows={4}
+                  fullWidth
+                  size="small"
+                  value={String(patch.notes ?? r.notes ?? '')}
+                  onChange={(e) => setField('notes', e.target.value)}
+                  placeholder="Notes internes…"
+                  sx={{ '& .MuiInputBase-input': { fontSize: 12.5, lineHeight: 1.55 } }}
+                />
+              ) : (
+                <Box sx={{ p: 1.5, bgcolor: T.bg2, borderRadius: 1, border: `1px solid ${T.border}` }}>
+                  <Typography sx={{ fontSize: 12.5, color: T.text2, whiteSpace: 'pre-wrap', lineHeight: 1.55, maxHeight: 200, overflowY: 'auto' }}>
+                    {r.notes}
+                  </Typography>
+                </Box>
+              )}
             </SectionCard>
           )}
         </Box>
@@ -241,38 +363,44 @@ export function GuestInfoTab({ reservationDetails, reservationId, onRefresh }: G
         {/* ── RIGHT ── */}
         <Box>
           <SectionCard title="🏠 Propriété & dates">
-            <Row label="Nom"  value={r.listing?.name || r.sojoriId} bold />
+            <Row label="Nom" value={r.listing?.name || r.sojoriId} bold />
             <Row label="Type" value={r.roomTypes?.roomTypeName} />
             <Divider sx={{ my: 1.25 }} />
-            <Row label="Check-in" value={formatDate(r.arrivalDate)} bold />
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', py: 0.5, pl: 1.5 }}>
-              <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
-                {r.confirmedCheckInTime ? 'Choisie guest' : 'Prévue OTA'} / Déclarée
-              </Typography>
-              <Typography sx={{ fontSize: 11.5, color: T.text2, fontFamily: '"Geist Mono", monospace' }}>
-                {formatTime(r.checkInTime)} · {r.actualArrivalTime ? (
-                  <Box component="span" sx={{ color: T.success, fontWeight: 700 }}>✓ {formatTime(r.actualArrivalTime)}</Box>
-                ) : <Box component="span" sx={{ color: T.text4 }}>—</Box>}
-              </Typography>
-            </Stack>
-            <Row label="Check-out" value={formatDate(r.departureDate)} bold />
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', py: 0.5, pl: 1.5 }}>
-              <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
-                {r.confirmedCheckOutTime ? 'Choisie guest' : 'Prévue OTA'} / Déclarée
-              </Typography>
-              <Typography sx={{ fontSize: 11.5, color: T.text2, fontFamily: '"Geist Mono", monospace' }}>
-                {formatTime(r.checkOutTime)} · {r.actualDepartureTime ? (
-                  <Box component="span" sx={{ color: T.warning, fontWeight: 700 }}>✓ {formatTime(r.actualDepartureTime)}</Box>
-                ) : <Box component="span" sx={{ color: T.text4 }}>—</Box>}
-              </Typography>
-            </Stack>
+            <EditableRow label="Check-in" field="arrivalDate" value={r.arrivalDate} type="date" {...rowProps} />
+            <EditableRow label="Heure check-in" field="checkInTime" value={r.checkInTime ?? ''} mono {...rowProps} />
+            <EditableRow label="Check-out" field="departureDate" value={r.departureDate} type="date" {...rowProps} />
+            <EditableRow label="Heure check-out" field="checkOutTime" value={r.checkOutTime ?? ''} mono {...rowProps} />
+            {!isEditMode && (
+              <>
+                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', py: 0.5, pl: 1.5 }}>
+                  <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
+                    {r.confirmedCheckInTime ? 'Choisie guest' : 'Prévue OTA'} / Déclarée
+                  </Typography>
+                  <Typography sx={{ fontSize: 11.5, color: T.text2, fontFamily: '"Geist Mono", monospace' }}>
+                    {formatTime(r.checkInTime)} · {r.actualArrivalTime ? (
+                      <Box component="span" sx={{ color: T.success, fontWeight: 700 }}>✓ {formatTime(r.actualArrivalTime)}</Box>
+                    ) : <Box component="span" sx={{ color: T.text4 }}>—</Box>}
+                  </Typography>
+                </Stack>
+                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', py: 0.5, pl: 1.5 }}>
+                  <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
+                    {r.confirmedCheckOutTime ? 'Choisie guest' : 'Prévue OTA'} / Déclarée
+                  </Typography>
+                  <Typography sx={{ fontSize: 11.5, color: T.text2, fontFamily: '"Geist Mono", monospace' }}>
+                    {formatTime(r.checkOutTime)} · {r.actualDepartureTime ? (
+                      <Box component="span" sx={{ color: T.warning, fontWeight: 700 }}>✓ {formatTime(r.actualDepartureTime)}</Box>
+                    ) : <Box component="span" sx={{ color: T.text4 }}>—</Box>}
+                  </Typography>
+                </Stack>
+              </>
+            )}
           </SectionCard>
 
           <SectionCard title="📊 Statuts">
-            <Row label="Réservation"        value={r.status} bold />
-            <Row label="Paiement"           value={r.paymentStatus} />
+            <EditableRow label="Réservation" field="status" value={r.status} type="select" options={RESERVATION_STATUS_OPTIONS} {...rowProps} />
+            <EditableRow label="Paiement" field="paymentStatus" value={r.paymentStatus} type="select" options={PAYMENT_STATUS_OPTIONS} {...rowProps} />
             <Row label="Mode d'encaissement" value={r.paymentMethod} />
-            <Row label="Créé le"            value={formatDate(r.createdAt || r.reservationDate)} />
+            <Row label="Créé le" value={formatDate(r.createdAt || r.reservationDate)} />
           </SectionCard>
 
           {isBooking && (

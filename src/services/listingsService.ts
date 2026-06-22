@@ -379,6 +379,9 @@ function normalizeListingSummary(source: unknown): ListingSummary {
     rentalUnitedIds: collectRentalUnitedIds(record),
     coverImageUrl: listingImages[0]?.url || '',
     updatedAt: pickFirstString(record, ['updatedAt', 'createdAt']) || null,
+    occupancyStatus: pickFirstString(record, ['occupancyStatus']),
+    cleanlinessStatus_v2: pickFirstString(record, ['cleanlinessStatus_v2']),
+    cleanlinessEmergency: record.cleanlinessEmergency === true ? true : undefined,
     raw: record,
   };
 }
@@ -790,15 +793,18 @@ export const listingsService = {
     allCities?: boolean;
     limit?: number;
     search_text?: string;
-  }): Promise<{ _id: string; name: string; countryId?: string }[]> {
+  }): Promise<{ _id: string; name: string; countryId?: string; usedInSojoriSysytem?: boolean }[]> {
     try {
       const params = new URLSearchParams({
         page: '0',
-        limit: String(options?.limit ?? 2000),
+        limit: String(options?.limit ?? 200),
         paged: 'false',
-        allCities: String(options?.allCities !== false),
         search_text: options?.search_text ?? '',
       });
+      // Ne pas envoyer allCities=false : l’API filtre les villes actives par défaut.
+      if (options?.allCities === true) {
+        params.set('allCities', 'true');
+      }
       const response = await apiClient.get(
         `${MICROSERVICE_BASE_URL.CITY}?${params.toString()}`,
         monitoringAxiosConfig(),
@@ -826,9 +832,11 @@ export const listingsService = {
             _id: asString(r._id),
             name: name || asString(r._id),
             countryId: asString(r.countryId) || undefined,
+            usedInSojoriSysytem: r.usedInSojoriSysytem === true,
           };
         })
         .filter((c) => c._id)
+        .filter((c) => options?.allCities === true || c.usedInSojoriSysytem)
         .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
     } catch {
       return [];

@@ -107,6 +107,8 @@ export interface PlanEvent {
 
   /* Message-only */
   channel?: Channel;
+  /** Canal effectif prévu (OTA vs Email selon source résa, fallback WA). */
+  dispatchPreview?: import('./planDispatchPreview').MessageDispatchPreview;
   channels?: Channel[];            // multi (ex Bienvenue OTA + Email)
   template?: string;
   /** Corps catalogue (non affiché sur /tasks/plans — statut envoi seulement). */
@@ -199,6 +201,8 @@ export interface PlanGuestRelanceItem {
   dueAt: string;
   status: RelanceStatus;
   channel?: Channel;
+  /** Canal effectif prévu (OTA vs Email selon source résa). */
+  dispatchPreview?: import('./planDispatchPreview').MessageDispatchPreview;
   catalogTemplate?: string;
   /** Ex. J-3 · check-in · 09:00 (config, pas la date seule). */
   scheduleOffsetLabel?: string;
@@ -278,6 +282,8 @@ export interface ReservationPlan {
   guestName?: string;
   /** owner = config PM dédiée ; global_template = repli template admin (ownerId null). */
   orchestrationConfigSource?: 'owner' | 'global_template';
+  /** Source résa + arbitrage Email/OTA (srv-fulltask). */
+  dispatchContext?: import('./planDispatchPreview').PlanDispatchContext;
   /** Tous les événements (progression globale, filtres legacy). */
   events: PlanEvent[];
   /** Séquences tâches — affichage 3 niveaux. */

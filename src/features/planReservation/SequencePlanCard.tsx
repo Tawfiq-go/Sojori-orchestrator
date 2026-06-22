@@ -10,6 +10,7 @@ import type {
   StaffAssignmentPlan,
 } from './types';
 import DispatchLastSendLine from './DispatchLastSendLine';
+import DispatchPreviewChips from './DispatchPreviewChips';
 import PlanAssignButtons from './PlanAssignButtons';
 import PlanDispatchButton from './PlanDispatchButton';
 import EscaladeActionsPanel from './EscaladeActionsPanel';
@@ -133,6 +134,7 @@ function RelanceDispatchRow({
             taskId={taskId}
             itemIndex={r.relanceIndex}
             wasSent={wasSent}
+            itemLabel={r.label}
             disabled={false}
             onLoadingChange={setRowLoading}
             onDone={onDispatched}
@@ -150,12 +152,22 @@ function RelanceDispatchRow({
                 #{r.step} · {r.label}
               </span>
               <RelanceStatusBadge status={r.executionStatus} />
-              {showWa !== false && r.channel ? <ChannelChip channel={r.channel} /> : null}
+              {r.dispatchPreview ? (
+                <DispatchPreviewChips preview={r.dispatchPreview} />
+              ) : showWa !== false && r.channel ? (
+                <ChannelChip channel={r.channel} />
+              ) : null}
             </div>
-            {showRelanceConfigHint(r.executionStatus) && (r.catalogTemplate || r.channel) ? (
+            {showRelanceConfigHint(r.executionStatus) && (r.catalogTemplate || r.dispatchPreview || r.channel) ? (
               <div className="rel-row-config">
                 Config · {r.catalogTemplate || '—'}
-                {r.channel ? ` · ${r.channel.toUpperCase()}` : ''}
+                {r.dispatchPreview ? (
+                  <> · Envoi prévu · {r.dispatchPreview.label}</>
+                ) : r.channel ? (
+                  ` · ${r.channel.toUpperCase()}`
+                ) : (
+                  ''
+                )}
               </div>
             ) : null}
             <DispatchLastSendLine last={r.lastDispatch} attempt={r.lastDispatchAttempt} />

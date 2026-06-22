@@ -11,6 +11,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import reservationsService from '../services/reservationsService';
 import { getCachedReservationDetail } from '../utils/reservationDetailCache';
+import { buildReservationUpdatePayload } from '../utils/reservationEditPayload';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { GuestInfoTab } from '../components/reservation/GuestInfoTab';
 import { FinancierTab } from '../components/reservation/FinancierTab';
@@ -51,6 +52,19 @@ export function ReservationSejourPage() {
 
   // Edited data for save
   const [editedData, setEditedData] = useState<any>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  const enterEditMode = () => {
+    if (reservationDetails) {
+      setEditedData({ ...reservationDetails });
+    }
+    setIsEditMode(true);
+  };
+
+  const exitEditMode = () => {
+    setIsEditMode(false);
+    setEditedData({});
+  };
 
   useEffect(() => {
     if (!id) {
@@ -126,20 +140,25 @@ export function ReservationSejourPage() {
 
   // Handler: Sauvegarder les modifications
   const handleSaveReservation = async () => {
-    if (!id || Object.keys(editedData).length === 0) {
-      toast.info('Aucune modification à sauvegarder');
+    const effectiveId =
+      reservationDetails?._id || reservationDetails?.id || id;
+    if (!effectiveId || !reservationDetails) {
+      toast.error('Identifiant réservation manquant');
       return;
     }
 
+    setIsSaving(true);
     try {
-      const result = await reservationsService.update(id, editedData);
+      const payload = buildReservationUpdatePayload(
+        reservationDetails as Record<string, unknown>,
+        editedData as Record<string, unknown>,
+      );
+      const result = await reservationsService.update(String(effectiveId), payload);
 
       if (result.success) {
         toast.success('Réservation mise à jour avec succès');
-        setIsEditMode(false);
-        setEditedData({});
-        // Recharger les données
-        const response = await reservationsService.getByRouteParam(id, { skipCache: true });
+        exitEditMode();
+        const response = await reservationsService.getByRouteParam(String(id), { skipCache: true });
         setReservationDetails(response);
       } else {
         toast.error(result.message || 'Erreur lors de la mise à jour');
@@ -147,6 +166,8 @@ export function ReservationSejourPage() {
     } catch (err: any) {
       console.error('Error updating reservation:', err);
       toast.error(err.message || 'Erreur lors de la mise à jour');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -225,8 +246,12 @@ export function ReservationSejourPage() {
           <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
             {/* Icon actions */}
             <Stack direction="row" sx={{ gap: 0, mr: 1, borderRight: `1px solid ${T.border}`, pr: 1 }}>
-              <Tooltip title="Modifier">
-                <IconButton size="small" onClick={() => setIsEditMode(true)} sx={{ color: T.text2 }}>
+              <Tooltip title={isEditMode ? 'Mode édition actif' : 'Modifier'}>
+                <IconButton
+                  size="small"
+                  onClick={() => (isEditMode ? exitEditMode() : enterEditMode())}
+                  sx={{ color: isEditMode ? T.primary : T.text2 }}
+                >
                   <Edit sx={{ fontSize: 18 }} />
                 </IconButton>
               </Tooltip>
@@ -253,10 +278,8 @@ export function ReservationSejourPage() {
                 <Button
                   size="small"
                   startIcon={<Close sx={{ fontSize: 16 }} />}
-                  onClick={() => {
-                    setIsEditMode(false);
-                    setEditedData({});
-                  }}
+                  onClick={exitEditMode}
+                  disabled={isSaving}
                   sx={{
                     textTransform: 'none', fontWeight: 600, color: T.text2,
                     border: `1px solid ${T.border}`,
@@ -266,9 +289,10 @@ export function ReservationSejourPage() {
                 </Button>
                 <Button
                   size="small"
-                  startIcon={<Save sx={{ fontSize: 16 }} />}
+                  startIcon={isSaving ? <CircularProgress size={14} color="inherit" /> : <Save sx={{ fontSize: 16 }} />}
                   variant="contained"
                   onClick={handleSaveReservation}
+                  disabled={isSaving}
                   sx={{
                     textTransform: 'none', fontWeight: 600,
                     background: `linear-gradient(180deg, #cb9b2c 0%, ${T.primary} 100%)`,
@@ -316,6 +340,9 @@ export function ReservationSejourPage() {
             </Typography>
           </Box>
           <Chip label={statusBadge.label} sx={{ bgcolor: statusBadge.bg, color: statusBadge.color, fontWeight: 700, fontSize: 12 }} />
+          {isEditMode && (
+            <Chip label="✏ Mode édition" sx={{ bgcolor: T.primaryTint, color: T.primaryDeep, fontWeight: 700, fontSize: 12 }} />
+          )}
         </Stack>
       </Box>
 
@@ -353,6 +380,8 @@ export function ReservationSejourPage() {
           <GuestInfoTab
             reservationDetails={reservationDetails}
             isEditMode={isEditMode}
+            editedData={editedData}
+            onEditedDataChange={setEditedData}
             reservationId={reservationDetails?._id}
             onRefresh={() => {
               if (!id) return;
@@ -373,7 +402,14 @@ export function ReservationSejourPage() {
             </Box>
           </Box>
         )}
-        {tab === 3 && <FinancierTab reservationDetails={reservationDetails} isEditMode={isEditMode} />}
+        {tab === 3 && (
+          <FinancierTab
+            reservationDetails={reservationDetails}
+            isEditMode={isEditMode}
+            editedData={editedData}
+            onEditedDataChange={setEditedData}
+          />
+        )}
       </Box>
 
       {/* Modal de confirmation d'annulation */}

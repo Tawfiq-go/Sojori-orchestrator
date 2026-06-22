@@ -650,3 +650,153 @@
   border: none;
   box-shadow: 0 1px 2px rgba(135, 97, 25, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
+
+/* Accès annonces — chips + dropdown checkboxes */
+.so-staff-root .access-multi {
+  position: relative;
+}
+.so-staff-root .access-multi.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.so-staff-root .access-selected-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  margin-bottom: 8px;
+}
+.so-staff-root .access-empty {
+  font-size: 12px;
+  color: var(--t3);
+  font-style: italic;
+}
+.so-staff-root .access-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px 6px 4px 8px;
+  border-radius: 999px;
+  background: var(--pt);
+  border: 1px solid var(--pt2);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t);
+}
+.so-staff-root .access-chip-emoji {
+  flex-shrink: 0;
+}
+.so-staff-root .access-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+.so-staff-root .access-chip-x {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(20, 17, 10, 0.08);
+  color: var(--t2);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  padding: 0;
+}
+.so-staff-root .access-chip-x:hover {
+  background: rgba(200, 30, 30, 0.15);
+  color: #c81e1e;
+}
+.so-staff-root .access-picker {
+  position: relative;
+}
+.so-staff-root .access-add-btn {
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1.5px dashed var(--bs);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pd);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.so-staff-root .access-add-btn.on {
+  border-color: var(--pd);
+  background: var(--pt);
+}
+.so-staff-root .access-dropdown {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  background: #fff;
+  border: 1px solid var(--bs);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(20, 17, 10, 0.12);
+  overflow: hidden;
+}
+.so-staff-root .access-search {
+  border: none;
+  border-bottom: 1px solid var(--b);
+  border-radius: 0;
+}
+.so-staff-root .access-options {
+  max-height: 220px;
+  overflow-y: auto;
+}
+.so-staff-root .access-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--b);
+}
+.so-staff-root .access-option:last-child {
+  border-bottom: none;
+}
+.so-staff-root .access-option:hover {
+  background: var(--bg2);
+}
+.so-staff-root .access-option.on {
+  background: var(--pt);
+}
+.so-staff-root .access-option input {
+  flex-shrink: 0;
+  accent-color: var(--pd);
+}
+.so-staff-root .access-opt-label {
+  flex: 1;
+  min-width: 0;
+}
+.so-staff-root .access-option-empty {
+  padding: 16px 12px;
+  font-size: 12px;
+  color: var(--t3);
+  text-align: center;
+}
+.so-staff-root .access-all-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--bs);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+.so-staff-root .access-all-chip.on {
+  background: linear-gradient(180deg, #cb9b2c, var(--p));
+  border-color: var(--pd);
+  color: #1a1408;
+}

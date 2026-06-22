@@ -357,6 +357,13 @@ function normalizeStaffAllowedTaskTypes(types: string[] | undefined): string[] {
   return out;
 }
 
+export const STAFF_ACCESS_ALL = 'All';
+
+export function staffHasAllAccess(ids: string[] | undefined): boolean {
+  if (!ids?.length) return false;
+  return ids.some((id) => id === STAFF_ACCESS_ALL || id === 'ALL');
+}
+
 export function apiStaffToDesign(row: Record<string, unknown>) {
   const schedule = Array.isArray(row.schedule) ? row.schedule : [];
   const daysOfWeek = [...new Set(schedule.map((s: { dayOfWeek: number }) => s.dayOfWeek))].sort(
@@ -380,6 +387,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     rates,
     allowedTaskTypes: normalizeStaffAllowedTaskTypes(row.taskTypes as string[] | undefined),
     allowedListingIds: ((row.listingIds as unknown[]) || []).map(String),
+    allowedCityIds: ((row.cityIds as unknown[]) || []).map(String),
     maxTasksPerDay: row.maxTasksPerDay as number | undefined,
     schedule: { daysOfWeek, timeWindows },
     lang: (['fr', 'en', 'ar'].includes(String(row.lang)) ? row.lang : 'fr') as 'fr' | 'en' | 'ar',
@@ -430,6 +438,7 @@ export function designStaffToApi(
     contractType: staff.contractType === 'employee' ? 'salaried' : 'freelance',
     taskTypes: staff.allowedTaskTypes || [],
     listingIds: staff.allowedListingIds || [],
+    cityIds: staff.allowedCityIds || [],
     schedule,
     maxTasksPerDay: Math.max(1, Number(staff.maxTasksPerDay) || 8),
     isAdmin: Boolean(staff.isAdmin),
@@ -444,7 +453,8 @@ function normDeliveryChannel(v: unknown): 'whatsapp' | 'email' | 'ota' {
   const s = String(v || '').toLowerCase();
   if (s === 'whatsapp') return 'whatsapp';
   if (s === 'ota') return 'ota';
-  return 'email';
+  if (s === 'email') return 'email';
+  return 'whatsapp';
 }
 
 function deliveryChannelToApi(ch: 'whatsapp' | 'email' | 'ota'): 'whatsapp' | 'OTA' | 'email' {
