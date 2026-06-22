@@ -86,11 +86,22 @@ export function DynamicPricingPage() {
 
   const patchPilotConfig = portfolio.patchListingPilot;
 
+  const listingCanEstimate = Boolean(
+    bienDetail?.listingEstimateInputs &&
+      ((bienDetail.listingEstimateInputs.lat != null &&
+        bienDetail.listingEstimateInputs.lng != null) ||
+        bienDetail.listingEstimateInputs.addressLine) &&
+      bienDetail.listingEstimateInputs.bedrooms > 0 &&
+      bienDetail.listingEstimateInputs.baths > 0 &&
+      bienDetail.listingEstimateInputs.guests > 0,
+  );
+
   const listingFieldCoverage =
     isBienPage && bienDetail
       ? buildListingDataCoverage({
           listingHasAirbnb: bienDetail.listingHasAirbnb,
           hasAirroiSnapshot: Boolean(bienDetail.row?.hasAirroiSnapshot),
+          hasRevenueEstimate: Boolean(bienDetail.view?.provenance.hasRevenueEstimate),
           hasTtm: bienDetail.hasTtm ?? false,
           hasL90d: bienDetail.hasL90d ?? false,
           hasMarketProd: bienDetail.hasMarketProd ?? false,
@@ -126,6 +137,34 @@ export function DynamicPricingPage() {
         bienDetail.view?.listing.name ?? bienDetail.row?.listing.name ?? 'Ce bien'
       }
       listingHasAirbnb={bienDetail.listingHasAirbnb}
+      listingCanEstimate={listingCanEstimate}
+      hasRevenueEstimate={Boolean(bienDetail.view?.provenance.hasRevenueEstimate)}
+      estimatePayloadHint={
+        bienDetail.listingEstimateInputs
+          ? {
+              locationLabel:
+                bienDetail.listingEstimateInputs.lat != null &&
+                bienDetail.listingEstimateInputs.lng != null
+                  ? `${bienDetail.listingEstimateInputs.lat.toFixed(5)}, ${bienDetail.listingEstimateInputs.lng.toFixed(5)}`
+                  : (bienDetail.listingEstimateInputs.addressLine ?? '—'),
+              bedrooms: bienDetail.listingEstimateInputs.bedrooms,
+              baths: bienDetail.listingEstimateInputs.baths,
+              guests: bienDetail.listingEstimateInputs.guests,
+              usesGps:
+                bienDetail.listingEstimateInputs.lat != null &&
+                bienDetail.listingEstimateInputs.lng != null,
+            }
+          : null
+      }
+      estimateSummaryHint={
+        bienDetail.row?.estimateSummary?.adrP50Mad
+          ? {
+              adrP50Mad: bienDetail.row.estimateSummary.adrP50Mad,
+              revenueP50Mad: bienDetail.row.estimateSummary.revenueP50Mad,
+              occupancyP50: bienDetail.row.estimateSummary.occupancyP50,
+            }
+          : null
+      }
       sojoriListingsCount={1}
       withAirbnbCount={bienDetail.listingHasAirbnb ? 1 : 0}
       withAirroiSnapshotCount={bienDetail.row?.hasAirroiSnapshot ? 1 : 0}
@@ -142,6 +181,7 @@ export function DynamicPricingPage() {
       onReloadPortfolio={() => bienDetail.refetch()}
       onRefreshListingPerformance={async () => undefined}
       onRefreshThisListingPerformance={() => bienDetail.refreshAirroi()}
+      onRefreshListingEstimate={() => bienDetail.refreshAirroiPart('estimate')}
       onRefreshAirroiMarket={(city) => portfolio.refreshMarket(city)}
       onRecomputePricing={() => bienDetail.applyToOps()}
     />

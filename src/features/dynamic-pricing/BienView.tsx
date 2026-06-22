@@ -91,6 +91,7 @@ export interface BienViewProps {
   calendarDays: CalendarDay[];
   /** Jours AirROI brut pour comparer à la courbe pilote (2 graphes) */
   calendarMarketDays?: CalendarDay[];
+  calendarOpsDays?: CalendarDay[];
   calendarYearOptions?: number[];
 
   compsMarketStats: CompsMarketStats | null;
@@ -174,7 +175,7 @@ export default function BienView(props: BienViewProps) {
     applyPrice, applyMinStay, scopeModalOpen, scopeModalEdit, scopeSaving, scopeSaveError,
     configSaveStatus, events, suggestions,
     eventModalOpen, editingEventId,
-    calendarYear, calendarDays, calendarMarketDays, calendarYearOptions,
+    calendarYear, calendarDays, calendarMarketDays, calendarOpsDays, calendarYearOptions,
     compsMarketStats, selfVsComps, hasCompsMarket,
     seasonality, pacing, supplyGrowth,
     compMapPins, bienMapPosition, compRows,
@@ -447,6 +448,25 @@ export default function BienView(props: BienViewProps) {
           pacing={performance.pacing}
           potentialHint={potentialHint}
         />
+        {provenance.hasRevenueEstimate && !hasTtm ? (
+          <Box
+            sx={{
+              mt: 2,
+              p: 1.5,
+              borderRadius: 1.5,
+              bgcolor: T.warningTint,
+              border: `1px solid ${T.warning}`,
+              fontSize: 12,
+              color: T.text2,
+              lineHeight: 1.5,
+            }}
+          >
+            <b>Snapshot estimate seul</b> — pas encore de perf Airbnb TTM / comps sur ce listing (
+            <code style={{ fontSize: 11 }}>{listing._id}</code>). Modal ⟳ →{' '}
+            <b>Performances Airbnb</b> + comparables pour remplir §02, §06–§07 et enrichir le tableau
+            §04. Un autre listing du même nom peut déjà avoir ces données (vérifiez l’URL / l’ID).
+          </Box>
+        ) : null}
       </Section>
 
       {/* ── Section 3 — toujours visible (AI OFF = pas de sync auto seulement) ── */}
@@ -514,7 +534,7 @@ export default function BienView(props: BienViewProps) {
           sub={
             calendarUsesPilotPreview
               ? calendarPricingSource === 'estimate'
-                ? `${calendarDays.length} j · 2 courbes (estimate brut + prix calendrier) · vérifiez avant « Appliquer »`
+                ? `${calendarDays.length} j · 3 niveaux (estimate → Sojori §03 → calendrier ops) · vérifiez avant « Appliquer »`
                 : `${calendarDays.length} jours · pilote v2 (modes, bornes${(eventsCount ?? 0) > 0 ? ', events' : ''}) · courbe 365j`
               : calendarHasEventOverlay
                 ? `${calendarDays.length} j · events en orange sur la courbe · preview pilote en cours…`
@@ -523,7 +543,7 @@ export default function BienView(props: BienViewProps) {
               : pilotPreviewLoading
                 ? 'Calcul preview depuis estimate…'
                 : provenance.hasRevenueEstimate
-                  ? 'Estimate enregistré — ajustez §03 puis attendez la courbe preview'
+                  ? 'Estimate enregistré — courbe générée depuis ADR estimate × saisonnalité (pas les prix Airbnb jour/jour)'
                   : calendarFromCache
                   ? `Prix/jour · pilote Sojori (mixEngine v2 + audit G7)${pilotApplySummary ? ` · ${pilotApplySummary}` : ''}`
                   : 'Modal ⟳ · GET /calculator/estimate puis preview ici avant envoi calendrier'
@@ -540,7 +560,7 @@ export default function BienView(props: BienViewProps) {
                         : 'Pilote v2',
                   tooltip:
                     calendarPricingSource === 'estimate'
-                      ? 'Bleu = marché estimate brut · Or = prix après bornes, occupation, events'
+                      ? 'Bleu = estimate · Or = Sojori (bornes, mode, events) · Gris = calendrier ops'
                       : 'Preview mixEngine v2.4 · orange = jour event',
                 }
               : calendarFromAirroi
@@ -562,7 +582,8 @@ export default function BienView(props: BienViewProps) {
               : 'Snapshot marché'
           }
         >
-          {calendarUsesPilotPreview && provenance.hasAirroiSnapshot && applyPrice ? (
+          {calendarUsesPilotPreview &&
+          (provenance.hasRevenueEstimate || provenance.hasAirroiSnapshot) ? (
             <Box sx={{ mb: 2 }}>
               <ApplyPreviewDiffPanel
                 data={previewDiffData ?? null}
@@ -571,16 +592,33 @@ export default function BienView(props: BienViewProps) {
                 onlyChanged={previewDiffOnlyChanged}
                 onOnlyChangedChange={onPreviewDiffOnlyChanged ?? (() => undefined)}
                 onReload={onPreviewDiffReload ?? (() => undefined)}
-                onApply={() => {
-                  if (onRunCalendarUpdate) {
-                    setCalendarUpdateOpen(true);
-                  } else {
-                    void onApplyToOps();
-                  }
-                }}
+                onApply={
+                  applyPrice
+                    ? () => {
+                        if (onRunCalendarUpdate) {
+                          setCalendarUpdateOpen(true);
+                        } else {
+                          void onApplyToOps();
+                        }
+                      }
+                    : undefined
+                }
                 applyLoading={pilotApplyLoading}
-                canApply={Boolean(provenance.hasRevenueEstimate || provenance.hasAirroiSnapshot)}
+                canApply={
+                  applyPrice &&
+                  Boolean(provenance.hasRevenueEstimate || provenance.hasAirroiSnapshot)
+                }
+                marketSource={
+                  previewDiffData?.marketSource ??
+                  (provenance.hasRevenueEstimate ? 'estimate' : 'airroi')
+                }
               />
+              {!applyPrice ? (
+                <Typography sx={{ fontSize: 11, color: T.text3, mt: 1, px: 0.5 }}>
+                  Tableau visible en lecture seule — activez « Prix » dans Sojori AI pour appliquer au
+                  calendrier.
+                </Typography>
+              ) : null}
             </Box>
           ) : null}
           {pilotApplyError ? (
@@ -591,6 +629,7 @@ export default function BienView(props: BienViewProps) {
           <YearlyCalendar
             days={calendarDays}
             compareMarketDays={calendarMarketDays}
+            compareCalendarDays={calendarOpsDays}
             compactHeader
             pricingSource={
               calendarPricingSource ??
@@ -618,7 +657,7 @@ export default function BienView(props: BienViewProps) {
               if (calendarUsesPilotPreview) {
                 const lines = [
                   calendarPricingSource === 'estimate'
-                    ? 'Courbe or = prix pilote dérivés de GET /calculator/estimate (modes + bornes §03).'
+                    ? 'Courbe or = Sojori (modes §03 + bornes min/max + events). Bleu = estimate brut. Gris = prix actuel calendrier ops.'
                     : 'Courbe or = pilote Sojori (preview live).',
                   snap ? `Snapshot estimate du ${snap}.` : '',
                   'Non synchronisé vers le calendrier ops tant que vous n’avez pas activé Sojori AI et cliqué « Appliquer ».',

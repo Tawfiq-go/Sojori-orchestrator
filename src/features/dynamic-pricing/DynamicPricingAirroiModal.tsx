@@ -21,6 +21,7 @@ import {
 
 /** Coûts marché tier Standard (USD / appel) — aligné srv-channels pricing */
 const COST = {
+  estimate: 0.2,
   listing: 0.1,
   listingMetrics: 0.1,
   listingFutureRates: 0.1,
@@ -42,6 +43,23 @@ export type DynamicPricingAirroiModalProps = {
   scope?: 'portfolio' | 'listing';
   listingName?: string;
   listingHasAirbnb?: boolean;
+  /** GPS ou adresse + chambres — requis pour GET /calculator/estimate (sans Airbnb) */
+  listingCanEstimate?: boolean;
+  hasRevenueEstimate?: boolean;
+  /** Profil Sojori envoyé à calculator/estimate */
+  estimatePayloadHint?: {
+    locationLabel: string;
+    bedrooms: number;
+    baths: number;
+    guests: number;
+    usesGps: boolean;
+  } | null;
+  /** Dernier estimate en base (après rechargement portefeuille) */
+  estimateSummaryHint?: {
+    adrP50Mad: number;
+    revenueP50Mad: number;
+    occupancyP50: number;
+  } | null;
   sojoriListingsCount: number;
   withAirbnbCount: number;
   withAirroiSnapshotCount: number;
@@ -55,8 +73,10 @@ export type DynamicPricingAirroiModalProps = {
     failed: number;
     totalCostUsd: number;
   } | void>;
-  /** Un seul bien (scope listing) */
+  /** Un seul bien (scope listing) — performances Airbnb (TTM, comps) */
   onRefreshThisListingPerformance?: () => void | Promise<{ costUsd?: number } | void>;
+  /** GET /calculator/estimate — prix marché §04 */
+  onRefreshListingEstimate?: () => void | Promise<{ costUsd?: number } | void>;
   /** Ville cible du refresh marché (Marrakech | Casablanca) */
   onRefreshAirroiMarket: (city: string) => void | Promise<void>;
   /** Fiche bien : tableau section ↔ API */
@@ -65,12 +85,23 @@ export type DynamicPricingAirroiModalProps = {
   onRecomputePricing?: () => void | Promise<void>;
 };
 
-type RunKind = 'portfolio' | 'listingPerf' | 'listingOne' | 'market' | 'recompute' | null;
+type RunKind =
+  | 'portfolio'
+  | 'listingPerf'
+  | 'listingOne'
+  | 'listingEstimate'
+  | 'market'
+  | 'recompute'
+  | null;
 
 export default function DynamicPricingAirroiModal({
   scope = 'portfolio',
   listingName,
   listingHasAirbnb = true,
+  listingCanEstimate = true,
+  hasRevenueEstimate = false,
+  estimatePayloadHint = null,
+  estimateSummaryHint = null,
   sojoriListingsCount,
   withAirbnbCount,
   withAirroiSnapshotCount,
@@ -80,6 +111,7 @@ export default function DynamicPricingAirroiModal({
   onReloadPortfolio,
   onRefreshListingPerformance,
   onRefreshThisListingPerformance,
+  onRefreshListingEstimate,
   onRefreshAirroiMarket,
   fieldCoverage,
   airroiCompsCount = 0,
@@ -118,7 +150,13 @@ export default function DynamicPricingAirroiModal({
         const r = res as { costUsd?: number } | void;
         const cost = r?.costUsd ?? PER_LISTING_USD;
         setLastMsg(
-          `Snapshot enregistré pour ${listingName ?? 'ce bien'} · coût estimé ~$${cost.toFixed(2)} USD`,
+          `Performances enregistrées pour ${listingName ?? 'ce bien'} · coût estimé ~$${cost.toFixed(2)} USD`,
+        );
+      } else if (kind === 'listingEstimate') {
+        const r = res as { costUsd?: number } | void;
+        const cost = r?.costUsd ?? COST.estimate;
+        setLastMsg(
+          `Prix marché (estimate) enregistrés · coût ~$${cost.toFixed(2)} USD · section 04 mise à jour`,
         );
       } else if (kind === 'listingPerf') {
         const r = res as { refreshed?: number; failed?: number; totalCostUsd?: number } | void;
@@ -194,11 +232,13 @@ export default function DynamicPricingAirroiModal({
         }}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            border: `1px solid ${T.border}`,
-            boxShadow: '0 12px 40px rgba(20,17,10,0.12)',
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 2,
+              border: `1px solid ${T.border}`,
+              boxShadow: '0 12px 40px rgba(20,17,10,0.12)',
+            },
           },
         }}
       >
@@ -237,8 +277,13 @@ export default function DynamicPricingAirroiModal({
               <>
                 <strong>Fiche bien</strong>
                 {' · '}
-                {listingHasAirbnb ? 'ID Airbnb présent' : 'Pas d’ID Airbnb — refresh indisponible'}
-                {withAirroiSnapshotCount > 0 ? ' · snapshot en base' : ' · pas encore de snapshot'}
+                {listingCanEstimate
+                  ? 'Profil estimate OK (Sojori)'
+                  : 'Profil estimate incomplet — nom + ville ou GPS requis'}
+                {hasRevenueEstimate ? ' · prix marché en base' : ' · pas encore de prix marché'}
+                {' · '}
+                {listingHasAirbnb ? 'ID Airbnb présent' : 'sans ID Airbnb'}
+                {withAirroiSnapshotCount > 0 ? ' · perf Airbnb en base' : ''}
               </>
             ) : (
               <>
@@ -262,63 +307,175 @@ export default function DynamicPricingAirroiModal({
           </Typography>
 
           {isListing ? (
-            <Box
-              sx={{
-                mb: 2,
-                p: 2,
-                borderRadius: 1.5,
-                border: `2px solid ${T.goldDeep}`,
-                bgcolor: T.goldTint,
-                boxShadow: '0 2px 8px rgba(199,155,34,0.15)',
-              }}
-            >
-              <Typography sx={{ fontSize: 14, fontWeight: 800, mb: 0.75 }}>
-                Récupération données marché · ce bien
-              </Typography>
-              <Typography sx={{ fontSize: 12, color: T.text2, lineHeight: 1.5, mb: 1.5 }}>
-                Envoie 4 appels API, enregistre le snapshot (TTM, L90D, comparables §07).
-                Coût estimé ~${PER_LISTING_USD.toFixed(2)} USD.
-              </Typography>
-              <Button
-                fullWidth
-                size="large"
-                variant="contained"
-                disabled={
-                  !!running ||
-                  !listingHasAirbnb ||
-                  !onRefreshThisListingPerformance ||
-                  loadingPortfolio
-                }
-                onClick={() =>
-                  void run(
-                    'listingOne',
-                    onRefreshThisListingPerformance ?? (async () => undefined),
-                  )
-                }
+            <>
+              <Box
                 sx={{
-                  py: 1.35,
-                  textTransform: 'none',
-                  fontWeight: 800,
-                  fontSize: 15,
-                  letterSpacing: '-0.01em',
-                  bgcolor: T.goldDeep,
-                  color: T.text,
-                  '&:hover': { bgcolor: T.gold },
-                  '&.Mui-disabled': { bgcolor: T.bg3, color: T.text3 },
+                  mb: 2,
+                  p: 2,
+                  borderRadius: 1.5,
+                  border: `2px solid ${T.goldDeep}`,
+                  bgcolor: T.goldTint,
+                  boxShadow: '0 2px 8px rgba(199,155,34,0.15)',
                 }}
               >
-                {running === 'listingOne' ? (
-                  <CircularProgress size={22} sx={{ color: T.text }} />
-                ) : (
-                  'Envoyer · récupérer les données'
-                )}
-              </Button>
-              {!listingHasAirbnb ? (
-                <Typography sx={{ fontSize: 11, color: T.warning, mt: 1, fontWeight: 600 }}>
-                  Connectez l’ID Airbnb sur le dashboard legacy avant d’envoyer.
+                <Typography sx={{ fontSize: 14, fontWeight: 800, mb: 0.75 }}>
+                  Récupérer prix marché · ce bien
                 </Typography>
-              ) : null}
-            </Box>
+                <Typography sx={{ fontSize: 12, color: T.text2, lineHeight: 1.5, mb: 1 }}>
+                  1 appel AirROI · <strong>GET /calculator/estimate</strong> — indépendant d’Airbnb.
+                  Alimente le potentiel §02 et le calendrier §04. Coût ~${COST.estimate.toFixed(2)} USD.
+                </Typography>
+                {estimatePayloadHint ? (
+                  <Box
+                    sx={{
+                      mb: 1.5,
+                      p: 1.25,
+                      borderRadius: 1,
+                      bgcolor: 'rgba(255,255,255,0.55)',
+                      border: `1px solid ${T.border}`,
+                      fontSize: 11,
+                      color: T.text2,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 10, fontWeight: 800, color: T.text3, mb: 0.5 }}>
+                      Données Sojori envoyées à AirROI
+                    </Typography>
+                    <strong>Lieu</strong> ·{' '}
+                    {estimatePayloadHint.usesGps ? 'GPS lat/lng' : 'adresse'} —{' '}
+                    {estimatePayloadHint.locationLabel}
+                    <br />
+                    <strong>Capacité</strong> · {estimatePayloadHint.bedrooms} ch ·{' '}
+                    {estimatePayloadHint.baths} sdb · {estimatePayloadHint.guests} pers.
+                  </Box>
+                ) : null}
+                <Button
+                  fullWidth
+                  size="large"
+                  variant="contained"
+                  disabled={
+                    !!running ||
+                    !listingCanEstimate ||
+                    !onRefreshListingEstimate ||
+                    loadingPortfolio
+                  }
+                  onClick={() =>
+                    void run(
+                      'listingEstimate',
+                      onRefreshListingEstimate ?? (async () => undefined),
+                    )
+                  }
+                  sx={{
+                    py: 1.35,
+                    textTransform: 'none',
+                    fontWeight: 800,
+                    fontSize: 15,
+                    letterSpacing: '-0.01em',
+                    bgcolor: T.text,
+                    color: '#fff',
+                    boxShadow: '0 2px 6px rgba(20,17,10,0.2)',
+                    '&:hover': { bgcolor: '#2a2418' },
+                    '&.Mui-disabled': { bgcolor: T.bg3, color: T.text3 },
+                  }}
+                >
+                  {running === 'listingEstimate' ? (
+                    <CircularProgress size={22} sx={{ color: '#fff' }} />
+                  ) : (
+                    'Récupérer prix marché'
+                  )}
+                </Button>
+                {!listingCanEstimate ? (
+                  <Typography sx={{ fontSize: 11, color: T.warning, mt: 1, fontWeight: 600 }}>
+                    Profil incomplet — renseigner GPS ou adresse, chambres, SDB et capacité max sur
+                    General Information / Rooms &amp; Beds (RoomType), puis recharger la fiche.
+                  </Typography>
+                ) : null}
+                {hasRevenueEstimate && estimateSummaryHint ? (
+                  <Box
+                    sx={{
+                      mt: 1.5,
+                      p: 1.25,
+                      borderRadius: 1,
+                      bgcolor: T.successTint,
+                      border: `1px solid ${T.success}`,
+                      fontSize: 12,
+                      color: T.text2,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 10, fontWeight: 800, color: T.success, mb: 0.5 }}>
+                      Prix marché en base (estimate)
+                    </Typography>
+                    ADR P50 ≈{' '}
+                    <strong>{estimateSummaryHint.adrP50Mad.toLocaleString('fr-FR')} MAD</strong>
+                    {' · '}
+                    potentiel annuel P50 ≈{' '}
+                    <strong>{estimateSummaryHint.revenueP50Mad.toLocaleString('fr-FR')} MAD</strong>
+                    {estimateSummaryHint.occupancyP50 > 0 ? (
+                      <>
+                        {' · '}
+                        occupation ≈ {Math.round(estimateSummaryHint.occupancyP50 * 100)}%
+                      </>
+                    ) : null}
+                  </Box>
+                ) : null}
+              </Box>
+
+              <Box
+                sx={{
+                  mb: 2,
+                  p: 2,
+                  borderRadius: 1.5,
+                  border: `1px solid ${T.border}`,
+                  bgcolor: T.bg2,
+                }}
+              >
+                <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 0.75 }}>
+                  Performances Airbnb · ce bien
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: T.text2, lineHeight: 1.5, mb: 1.5 }}>
+                  4 appels API — snapshot TTM, L90D, comparables §07. Coût ~$
+                  {PER_LISTING_USD.toFixed(2)} USD · ID Airbnb requis.
+                </Typography>
+                <Button
+                  fullWidth
+                  size="medium"
+                  variant="contained"
+                  disabled={
+                    !!running ||
+                    !listingHasAirbnb ||
+                    !onRefreshThisListingPerformance ||
+                    loadingPortfolio
+                  }
+                  onClick={() =>
+                    void run(
+                      'listingOne',
+                      onRefreshThisListingPerformance ?? (async () => undefined),
+                    )
+                  }
+                  sx={{
+                    py: 1,
+                    textTransform: 'none',
+                    fontWeight: 800,
+                    fontSize: 13,
+                    bgcolor: T.goldDeep,
+                    color: T.text,
+                    '&:hover': { bgcolor: T.gold },
+                    '&.Mui-disabled': { bgcolor: T.bg3, color: T.text3 },
+                  }}
+                >
+                  {running === 'listingOne' ? (
+                    <CircularProgress size={20} sx={{ color: T.text }} />
+                  ) : (
+                    'Récupérer performances (TTM + comps)'
+                  )}
+                </Button>
+                {!listingHasAirbnb ? (
+                  <Typography sx={{ fontSize: 11, color: T.warning, mt: 1, fontWeight: 600 }}>
+                    Connectez l’ID Airbnb sur le dashboard legacy avant d’envoyer.
+                  </Typography>
+                ) : null}
+              </Box>
+            </>
           ) : null}
 
           {lastMsg && (

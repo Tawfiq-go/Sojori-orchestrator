@@ -79,6 +79,12 @@ function buildConfigPayload(
   };
 }
 
+function marketMadFromPreviewDay(d: PilotPreviewDay): number {
+  if ((d.marketPriceMad ?? 0) > 0) return d.marketPriceMad ?? 0;
+  const base = d.breakdown?.factors?.find((f) => f.key === 'base')?.inputAfter;
+  return typeof base === 'number' && base > 0 ? Math.round(base) : 0;
+}
+
 export function usePilotPricing(options: {
   listingId: string | undefined;
   /** Snapshot avec estimate et/ou listing AirROI — requis pour preview/apply */
@@ -120,6 +126,7 @@ export function usePilotPricing(options: {
   const [applyLoading, setApplyLoading] = useState(false);
   const [previewDays, setPreviewDays] = useState<CalendarDay[]>([]);
   const [previewMarketDays, setPreviewMarketDays] = useState<CalendarDay[]>([]);
+  const [previewCalendarDays, setPreviewCalendarDays] = useState<CalendarDay[]>([]);
   const [hasSojoriPreview, setHasSojoriPreview] = useState(false);
   const [lastApplySummary, setLastApplySummary] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,6 +181,7 @@ export function usePilotPricing(options: {
     if (!listingId || !hasAirroiSnapshot || !payload) {
       setPreviewDays([]);
       setPreviewMarketDays([]);
+      setPreviewCalendarDays([]);
       setHasSojoriPreview(false);
       return;
     }
@@ -183,24 +191,34 @@ export function usePilotPricing(options: {
       if (res.data?.success && res.data.days?.length) {
         const raw = res.data.days as PilotPreviewDay[];
         const market = raw
-          .filter((d) => (d.marketPriceMad ?? 0) > 0)
+          .filter((d) => marketMadFromPreviewDay(d) > 0)
           .map((d) => ({
             date: d.date,
-            recommendedPrice: d.marketPriceMad ?? 0,
+            recommendedPrice: marketMadFromPreviewDay(d),
+            status: 'std' as const,
+          }));
+        const opsCalendar = raw
+          .filter((d) => (d.calendarPriceMad ?? 0) > 0)
+          .map((d) => ({
+            date: d.date,
+            recommendedPrice: d.calendarPriceMad ?? 0,
             status: 'std' as const,
           }));
         const days = raw
           .filter((d) => d.finalPriceMad > 0 || d.status === 'blocked')
           .map((d) => mapPilotDayToCalendar(d));
         setPreviewMarketDays(market);
+        setPreviewCalendarDays(opsCalendar);
         setPreviewDays(days);
         setHasSojoriPreview(true);
       } else {
         setPreviewMarketDays([]);
+        setPreviewCalendarDays([]);
         setHasSojoriPreview(false);
       }
     } catch {
       setPreviewMarketDays([]);
+      setPreviewCalendarDays([]);
       setHasSojoriPreview(false);
     } finally {
       setPreviewLoading(false);
@@ -217,6 +235,7 @@ export function usePilotPricing(options: {
     if (!listingId || !hasAirroiSnapshot || floor == null || ceiling == null) {
       setPreviewDays([]);
       setPreviewMarketDays([]);
+      setPreviewCalendarDays([]);
       setHasSojoriPreview(false);
       return;
     }
@@ -353,6 +372,7 @@ export function usePilotPricing(options: {
     applyLoading,
     previewDays,
     previewMarketDays,
+    previewCalendarDays,
     hasSojoriPreview,
     lastApplySummary,
     runPreview,

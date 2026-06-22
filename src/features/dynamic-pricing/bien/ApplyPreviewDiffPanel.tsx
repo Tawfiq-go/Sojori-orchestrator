@@ -45,6 +45,8 @@ type Props = {
   onApply?: () => void;
   applyLoading?: boolean;
   canApply?: boolean;
+  /** Fallback libellé colonne marché avant chargement API */
+  marketSource?: 'estimate' | 'airroi';
 };
 
 export default function ApplyPreviewDiffPanel({
@@ -57,10 +59,17 @@ export default function ApplyPreviewDiffPanel({
   onApply,
   applyLoading = false,
   canApply = false,
+  marketSource: marketSourceProp,
 }: Props) {
   const rows = data?.rows ?? [];
   const summary = data?.summary;
   const airroiSnapshotLabel = fmtSnapshotShort(data?.airroiSnapshotAt);
+  const marketSource = data?.marketSource ?? marketSourceProp ?? 'airroi';
+  const marketColLabel = marketSource === 'estimate' ? 'Estimate' : 'Marché AirROI';
+  const marketColTitle =
+    marketSource === 'estimate'
+      ? 'GET /calculator/estimate — prix marché brut (ADR × saisonnalité)'
+      : 'Prix brut AirROI (future/rates, USD×10)';
 
   return (
     <Box
@@ -83,7 +92,7 @@ export default function ApplyPreviewDiffPanel({
         }}
       >
         <Typography sx={{ fontWeight: 800, fontSize: 13, color: T.ai, flex: 1 }}>
-          Vérifier les écarts
+          Vérifier les écarts (estimate → Sojori → calendrier)
         </Typography>
         {summary ? (
           <Typography sx={{ fontSize: 11, color: T.text2, fontFamily: '"Geist Mono", monospace' }}>
@@ -176,9 +185,9 @@ export default function ApplyPreviewDiffPanel({
             <thead>
               <tr>
                 <th title="Jour concerné (à partir d'aujourd'hui)">Date</th>
-                <th title="Prix brut AirROI (future/rates, USD×10)">
+                <th title={marketColTitle}>
                   <Box component="span" sx={{ display: 'block', lineHeight: 1.25 }}>
-                    AirROI
+                    {marketColLabel}
                     {airroiSnapshotLabel ? (
                       <Box
                         component="span"
@@ -210,10 +219,14 @@ export default function ApplyPreviewDiffPanel({
                     )}
                   </Box>
                 </th>
-                <th title="Prix après mixEngine G7 (modes, bornes, events)">G7 proposé</th>
-                <th title="calculatedPrice actuel dans le calendrier Sojori">Calendrier</th>
-                <th title="basePrice import RU/Airbnb (référence OTA)">Base RU</th>
-                <th title="G7 proposé − Calendrier actuel">Δ</th>
+                <th title="Prix Sojori après bornes min/max, mode agressif/normal et events §03">
+                  Sojori
+                </th>
+                <th title="Prix affiché dans /calendar (manualPrice si dynamique OFF, sinon calculatedPrice)">
+                  Calendrier ops
+                </th>
+                <th title="basePrice import RU/Airbnb (référence OTA, secondaire)">Base RU</th>
+                <th title="Sojori proposé − Calendrier ops actuel">Δ apply</th>
                 <th title="Statut apply : OK, écart, réservé, manuel, bloqué…">Alerte</th>
               </tr>
             </thead>

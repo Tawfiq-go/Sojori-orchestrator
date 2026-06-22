@@ -388,6 +388,7 @@ export interface PilotPreviewDay {
   date: string;
   price: number;
   marketPriceMad?: number;
+  calendarPriceMad?: number;
   finalPriceMad: number;
   minStay: number;
   status: string;
@@ -604,6 +605,8 @@ export type ApplyPreviewDiffRowDto = {
 export type ApplyPreviewDiffDto = {
   success: boolean;
   listingId: string;
+  /** estimate ou future/rates selon snapshot */
+  marketSource?: 'airroi' | 'estimate';
   airroiSnapshotAt: string | null;
   previewComputedAt: string;
   rows: ApplyPreviewDiffRowDto[];
