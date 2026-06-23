@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { Box, Menu, MenuItem, ListItemIcon, ListItemText, CircularProgress } from '@mui/material';
+import { toast } from 'react-toastify';
 import { CleanlinessBadge, T, type Cleanliness } from './_shared';
 import type { DisplayCleanliness } from '../../utils/cleanlinessDisplay';
+
+const CLEANLINESS_UPDATE_ERROR =
+  'Impossible de mettre à jour le statut du logement. Réessayez.';
 
 const OPTIONS: { value: DisplayCleanliness; icon: string; label: string }[] = [
   { value: 'clean', icon: '✨', label: 'Propre (CLEAN)' },
@@ -36,6 +40,13 @@ export function CleanlinessBadgeInteractive({
     setSaving(true);
     try {
       await onChange(next);
+    } catch (err) {
+      console.error('[CleanlinessBadgeInteractive] status update failed', {
+        next,
+        current,
+        err,
+      });
+      toast.error(CLEANLINESS_UPDATE_ERROR);
     } finally {
       setSaving(false);
     }

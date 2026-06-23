@@ -20,7 +20,22 @@ export const T = {
 };
 
 /* ─── Constantes dimensions ─── */
-export const STAY = { CELL_W: 82, STICKY_W: 240, ROW_H: 76, MAX_CHIPS: 2 };
+export const STAY = {
+  CELL_W: 82,
+  STICKY_W: 240,
+  /** Hauteur ligne vue réservations (barres seules) */
+  ROW_H: 80,
+  /** Hauteur ligne vue tâches : lane réservation + chips empilés */
+  TASK_ROW_H: 96,
+  MAX_CHIPS: 2,
+  /** Colonne listing planning (aligné /calendar) */
+  LISTING_ICON_SIZE: 28,
+  LISTING_ICON_GAP: 12,
+  /** Lane réservation en haut de ligne (aligné GanttBar top/height) */
+  RES_BAR_TOP: 6,
+  RES_BAR_HEIGHT: 22,
+  RES_TASK_GAP: 4,
+};
 
 /** Barres réservation : arrivée à 14h (40% jour), départ ~11h (fin à 40%), 10% marge si 2 resa/jour */
 export const STAY_RES_BAR = {

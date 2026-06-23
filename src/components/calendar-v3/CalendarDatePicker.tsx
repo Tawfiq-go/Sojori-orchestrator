@@ -1,5 +1,5 @@
 // Popover calendrier — sélection d'une date de début (taille fixe)
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { T } from './_shared';
 
 const WEEKDAYS = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'];
@@ -20,6 +20,10 @@ type Props = {
   /** Dernière date de début sélectionnable (horizon 3 ans) */
   maxSelectableDate?: Date;
   horizonEndDate?: Date;
+  /** Si fourni, remplace le comportement par défaut du bouton « Aujourd'hui » (ex. planning J−2). */
+  onTodaySelect?: () => void;
+  /** Affiche le texte d'horizon inventaire (défaut: true). */
+  showHorizonHint?: boolean;
 };
 
 function startOfDay(d: Date) {
@@ -34,6 +38,8 @@ export default function CalendarDatePicker({
   onSelect,
   maxSelectableDate,
   horizonEndDate,
+  onTodaySelect,
+  showHorizonHint = true,
 }: Props) {
   const [pickerMonth, setPickerMonth] = useState(() => new Date(value.getFullYear(), value.getMonth(), 1));
 
@@ -165,18 +171,24 @@ export default function CalendarDatePicker({
           })}
         </div>
 
-        <p style={{ margin: '8px 0 0', fontSize: 10, color: T.text3, textAlign: 'center', lineHeight: 1.35 }}>
-          Calendrier géré sur 3 ans
-          {horizonEndDate
-            ? ` · jusqu'au ${horizonEndDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`
-            : ''}
-        </p>
+        {showHorizonHint && (
+          <p style={{ margin: '8px 0 0', fontSize: 10, color: T.text3, textAlign: 'center', lineHeight: 1.35 }}>
+            Calendrier géré sur 3 ans
+            {horizonEndDate
+              ? ` · jusqu'au ${horizonEndDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`
+              : ''}
+          </p>
+        )}
 
-        <div style={{ textAlign: 'center', marginTop: 8 }}>
+        <div style={{ textAlign: 'center', marginTop: showHorizonHint ? 8 : 12 }}>
           <button
             type="button"
             onClick={() => {
-              onSelect(new Date());
+              if (onTodaySelect) {
+                onTodaySelect();
+              } else {
+                onSelect(new Date());
+              }
               onClose();
             }}
             style={{
