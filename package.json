@@ -12,7 +12,8 @@
     "start:admin": "VITE_DEV_PORT=5001 VITE_HMR_PORT=5002 vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "npx tsx --test src/utils/cleanlinessDisplay.test.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

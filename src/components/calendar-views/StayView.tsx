@@ -6,8 +6,9 @@
 // • Mini-map 30j au-dessus
 // • Groupement par ville
 // ════════════════════════════════════════════════════════════════════
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Box, Stack, Typography, Popover } from '@mui/material';
+import CalendarDatePicker from '../calendar-v3/CalendarDatePicker';
 import {
   T, STAY, type ListingRow, type TimelineItem, channelFromName, genDays,
   KpiPill, DayHeader, TaskChip, GanttBar, SOJORI_KEYFRAMES, computeReservationBarLayout,
@@ -44,6 +45,54 @@ export interface StayViewProps {
 
 const VISIBLE_DAYS = 14;
 
+function toLocalDate(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function PlanningNavBtn({
+  children,
+  onClick,
+  title,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  title?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={disabled ? undefined : onClick}
+      sx={{
+        all: 'unset',
+        boxSizing: 'border-box',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 28,
+        height: 28,
+        borderRadius: '7px',
+        color: disabled ? T.text4 : T.text2,
+        fontSize: 13,
+        fontWeight: 700,
+        bgcolor: 'transparent',
+        border: 0,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontFamily: 'inherit',
+        px: 0.5,
+        opacity: disabled ? 0.45 : 1,
+        '&:hover': disabled ? {} : { bgcolor: T.bg2 },
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
+
 export default function StayView({
   startDate, daysCount = 30, listings, variant = 'tasks', onTaskClick, onReservationClick,
   onGoToday, onPrevDay, onNextDay, onPrevWeek, onNextWeek, onDateChange, onCleanlinessChange,
@@ -52,7 +101,15 @@ export default function StayView({
   const minimapDays = useMemo(() => genDays(startDate, daysCount), [startDate, daysCount]);
   const days = useMemo(() => genDays(startDate, VISIBLE_DAYS), [startDate]);
 
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
+  const pickerValue = useMemo(() => toLocalDate(startDate), [startDate]);
+
+  const shiftMonth = (delta: number) => {
+    onDateChange?.(
+      new Date(startDate.getFullYear(), startDate.getMonth() + delta, startDate.getDate()),
+    );
+  };
   const [statusFilters, setStatusFilters] = useState<Set<'confirmed' | 'pending'>>(
     () => new Set(['confirmed', 'pending']),
   );
@@ -169,72 +226,93 @@ export default function StayView({
         p: '10px 14px', display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap',
         mb: 1.25, boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
       }}>
-        {/* Date range - cliquable pour ouvrir calendrier */}
-        <Box component="button" onClick={() => setShowDatePicker(true)} sx={{
-          all: 'unset', cursor: 'pointer', fontFamily: '"Geist Mono", monospace',
-          fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5,
-          '&:hover': { color: T.primary },
-        }}>
-          {days[0]?.frShort || ''}<span style={{ color: T.text4, margin: '0 6px' }}>→</span>{days[days.length - 1]?.frShort || ''}
-          <span style={{ fontSize: 10, marginLeft: 4 }}>📅</span>
-        </Box>
+        {/* Date navigation — style unifié aligné /calendar */}
+        <Box
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '2px',
+            bgcolor: T.bg1,
+            border: `1px solid ${T.border}`,
+            borderRadius: '9px',
+            p: '3px',
+          }}
+        >
+          <PlanningNavBtn title="−1 mois" onClick={() => shiftMonth(-1)}>
+            &lt;&lt;&lt;
+          </PlanningNavBtn>
+          <PlanningNavBtn title="−1 semaine" onClick={onPrevWeek}>
+            &lt;&lt;
+          </PlanningNavBtn>
+          <PlanningNavBtn title="−1 jour" onClick={onPrevDay}>
+            &lt;
+          </PlanningNavBtn>
 
-        {/* Navigation pills */}
-        <Box sx={{
-          display: 'inline-flex', bgcolor: T.bg2, border: `1px solid ${T.border}`,
-          borderRadius: '9px', p: '3px', gap: '2px',
-        }}>
-          <Box component="button" onClick={onPrevWeek} sx={{
-            all: 'unset', cursor: 'pointer', p: '5px 9px', borderRadius: '6px',
-            fontSize: 11.5, fontWeight: 700, color: T.text2, '&:hover': { bgcolor: T.bg1 },
-          }}>«</Box>
-          <Box component="button" onClick={onPrevDay} sx={{
-            all: 'unset', cursor: 'pointer', p: '5px 9px', borderRadius: '6px',
-            fontSize: 11.5, fontWeight: 700, color: T.text2, '&:hover': { bgcolor: T.bg1 },
-          }}>‹</Box>
-          <Box component="button" onClick={onGoToday} sx={{
-            all: 'unset', cursor: 'pointer', p: '5px 9px', borderRadius: '6px',
-            fontSize: 11.5, fontWeight: 700, background: `linear-gradient(180deg,#cb9b2c,${T.primary})`,
-            color: '#1a1408',
-          }}>Auj.</Box>
-          <Box component="button" onClick={onNextDay} sx={{
-            all: 'unset', cursor: 'pointer', p: '5px 9px', borderRadius: '6px',
-            fontSize: 11.5, fontWeight: 700, color: T.text2, '&:hover': { bgcolor: T.bg1 },
-          }}>›</Box>
-          <Box component="button" onClick={onNextWeek} sx={{
-            all: 'unset', cursor: 'pointer', p: '5px 9px', borderRadius: '6px',
-            fontSize: 11.5, fontWeight: 700, color: T.text2, '&:hover': { bgcolor: T.bg1 },
-          }}>»</Box>
-        </Box>
-
-        {/* Date Picker Popover */}
-        {showDatePicker && (
-          <Popover
-            open={showDatePicker}
-            onClose={() => setShowDatePicker(false)}
-            anchorReference="anchorPosition"
-            anchorPosition={{ top: 200, left: 400 }}
-            PaperProps={{ sx: { p: 2, borderRadius: 1.5 } }}
+          <Box
+            component="button"
+            type="button"
+            onClick={(e) => {
+              setPickerAnchor(e.currentTarget);
+              setPickerOpen(true);
+            }}
+            title="Choisir la date de début (14 jours visibles)"
+            sx={{
+              all: 'unset',
+              boxSizing: 'border-box',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 0.5,
+              px: 1.5,
+              minWidth: 148,
+              height: 28,
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: T.text,
+              fontFamily: '"Geist Mono", monospace',
+              textAlign: 'center',
+              bgcolor: pickerOpen ? T.primaryTint : T.bg2,
+              border: `1px solid ${pickerOpen ? T.primary : T.border}`,
+              borderRadius: '7px',
+              cursor: 'pointer',
+              textTransform: 'capitalize',
+            }}
           >
-            <input
-              type="date"
-              defaultValue={startDate.toISOString().slice(0, 10)}
-              onChange={(e) => {
-                if (e.target.value && onDateChange) {
-                  onDateChange(new Date(e.target.value));
-                  setShowDatePicker(false);
-                }
-              }}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: `1px solid ${T.border}`,
-                fontFamily: '"Geist Mono", monospace',
-                fontSize: 13,
-              }}
-            />
-          </Popover>
-        )}
+            {days[0]?.frShort || ''}
+            <Box component="span" sx={{ color: T.text4, mx: 0.75 }}>→</Box>
+            {days[days.length - 1]?.frShort || ''}
+          </Box>
+
+          <PlanningNavBtn title="+1 jour" onClick={onNextDay}>
+            &gt;
+          </PlanningNavBtn>
+          <PlanningNavBtn title="+1 semaine" onClick={onNextWeek}>
+            &gt;&gt;
+          </PlanningNavBtn>
+          <PlanningNavBtn title="+1 mois" onClick={() => shiftMonth(1)}>
+            &gt;&gt;&gt;
+          </PlanningNavBtn>
+          <PlanningNavBtn title="Aujourd'hui" onClick={onGoToday}>
+            ⊙
+          </PlanningNavBtn>
+        </Box>
+
+        <CalendarDatePicker
+          anchorEl={pickerAnchor}
+          open={pickerOpen}
+          onClose={() => {
+            setPickerOpen(false);
+            setPickerAnchor(null);
+          }}
+          value={pickerValue}
+          showHorizonHint={false}
+          onTodaySelect={onGoToday}
+          onSelect={(d) => {
+            onDateChange?.(toLocalDate(d));
+            setPickerOpen(false);
+            setPickerAnchor(null);
+          }}
+        />
 
         {/* Filtres propreté */}
         <Stack direction="row" gap={0.5} flexWrap="wrap" alignItems="center">
@@ -392,38 +470,81 @@ function ListingRowComp({
 }) {
   const numTasks = listing.reservations.reduce((n, r) => n + (r.timeline?.length || 0), 0);
   const displayStatus = deriveDisplayCleanliness(listing, listing.reservations);
+  const rowHeight = showTaskChips ? STAY.TASK_ROW_H : STAY.ROW_H;
 
   return (
     <Box sx={{
       display: 'grid', gridTemplateColumns: `${STAY.STICKY_W}px repeat(${days.length}, ${STAY.CELL_W}px)`,
-      borderBottom: `1px solid ${T.border}`, height: STAY.ROW_H, position: 'relative',
+      borderBottom: `1px solid ${T.border}`, height: rowHeight, position: 'relative',
     }}>
-      {/* Sticky left */}
-      <Stack sx={{
-        p: '10px 14px', borderRight: `1px solid ${T.border}`, bgcolor: T.bg1,
-        justifyContent: 'center', gap: 0.375,
-      }}>
-        <Stack direction="row" alignItems="center" gap={0.875}>
-          <Box sx={{ width: 22, height: 22, borderRadius: 0.75,
-            background: 'linear-gradient(135deg,#fde68a,#d97706)', flexShrink: 0 }} />
-          <Typography sx={{
-            fontSize: 12.5, fontWeight: 700, lineHeight: 1.1, flex: 1,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{listing.listingName}</Typography>
-        </Stack>
-        <CleanlinessBadgeInteractive
-          status={displayStatus}
-          displayStatus={displayStatus}
-          emergency={listing.cleanlinessEmergency}
-          onChange={
-            onCleanlinessChange
-              ? (next) => onCleanlinessChange(listing.listingId, next)
-              : undefined
-          }
-        />
-        <Typography sx={{
-          fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em',
-        }}>
+      {/* Sticky left — bloc nom/badge + stats séparés (style /calendar) */}
+      <Stack
+        sx={{
+          px: '14px',
+          py: '11px',
+          borderRight: `1px solid ${T.border}`,
+          bgcolor: T.bg1,
+          minWidth: 0,
+          height: '100%',
+          gap: 0.75,
+          justifyContent: 'center',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: `${STAY.LISTING_ICON_SIZE}px minmax(0, 1fr)`,
+            columnGap: `${STAY.LISTING_ICON_GAP}px`,
+            alignItems: 'start',
+            width: '100%',
+          }}
+        >
+          <Box
+            sx={{
+              width: STAY.LISTING_ICON_SIZE,
+              height: STAY.LISTING_ICON_SIZE,
+              borderRadius: '7px',
+              background: 'linear-gradient(135deg,#fde68a,#d97706)',
+              flexShrink: 0,
+            }}
+          />
+          <Stack sx={{ minWidth: 0, gap: 0.5, pt: 0.125 }}>
+            <Typography
+              sx={{
+                fontSize: 12.5,
+                fontWeight: 700,
+                lineHeight: 1.2,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                display: 'block',
+              }}
+            >
+              {listing.listingName}
+            </Typography>
+            <CleanlinessBadgeInteractive
+              status={displayStatus}
+              displayStatus={displayStatus}
+              emergency={listing.cleanlinessEmergency}
+              onChange={
+                onCleanlinessChange
+                  ? (next) => onCleanlinessChange(listing.listingId, next)
+                  : undefined
+              }
+            />
+          </Stack>
+        </Box>
+
+        <Typography
+          sx={{
+            fontSize: 10,
+            color: T.text3,
+            fontFamily: '"Geist Mono", monospace',
+            letterSpacing: '0.02em',
+            lineHeight: 1.35,
+            width: '100%',
+          }}
+        >
           {days.length}j · <b style={{ color: T.text2, fontWeight: 700 }}>{listing.reservations.length} séj.</b>
           {showTaskChips && (
             <> · <b style={{ color: T.text2, fontWeight: 700 }}>{numTasks} tâch.</b></>
@@ -438,13 +559,21 @@ function ListingRowComp({
               (r.timeline || []).filter(t => (t.scheduledFor || '').slice(0, 10) === d.iso)
             )
           : [];
-        return <DayCell key={d.iso} day={d} tasks={tasks} onTaskClick={onTaskClick} />;
+        return (
+          <DayCell
+            key={d.iso}
+            day={d}
+            tasks={tasks}
+            onTaskClick={onTaskClick}
+            reserveTaskLane={showTaskChips}
+          />
+        );
       })}
 
       {/* Gantt bars overlay */}
       <Box sx={{
         position: 'absolute', top: 0, left: STAY.STICKY_W,
-        width: days.length * STAY.CELL_W, height: STAY.ROW_H, pointerEvents: 'none', zIndex: 3,
+        width: days.length * STAY.CELL_W, height: rowHeight, pointerEvents: 'none', zIndex: 3,
       }}>
         {(() => {
           const arrivalSlotCount = new Map<number, number>();
@@ -496,12 +625,16 @@ function ListingRowComp({
 }
 
 /* ─── Day cell with chip overflow popover ─── */
-function DayCell({ day, tasks, onTaskClick }: {
-  day: ReturnType<typeof genDays>[0]; tasks: TimelineItem[]; onTaskClick?: (i: TimelineItem) => void;
+function DayCell({ day, tasks, onTaskClick, reserveTaskLane = false }: {
+  day: ReturnType<typeof genDays>[0];
+  tasks: TimelineItem[];
+  onTaskClick?: (i: TimelineItem) => void;
+  reserveTaskLane?: boolean;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const visible = tasks.slice(0, STAY.MAX_CHIPS);
   const overflow = tasks.length - STAY.MAX_CHIPS;
+  const taskLaneTop = STAY.RES_BAR_TOP + STAY.RES_BAR_HEIGHT + STAY.RES_TASK_GAP;
 
   return (
     <Box sx={{
@@ -510,8 +643,15 @@ function DayCell({ day, tasks, onTaskClick }: {
     }}>
       {tasks.length > 0 && (
         <Stack sx={{
-          position: 'absolute', bottom: 5, left: 3, right: 3,
-          flexDirection: 'column', gap: 0.25, zIndex: 1,
+          position: 'absolute',
+          left: 3,
+          right: 3,
+          flexDirection: 'column',
+          gap: 0.25,
+          zIndex: 4,
+          ...(reserveTaskLane
+            ? { top: taskLaneTop, bottom: 4 }
+            : { bottom: 5 }),
         }}>
           {visible.map((t, i) => (
             <Box key={i} onClick={() => onTaskClick?.(t)} sx={{ cursor: 'pointer' }}>

@@ -26,8 +26,24 @@ export function displayCleanlinessLabel(s: DisplayCleanliness): string {
   return 'OCCUPÉ';
 }
 
+/** True when a reservation covers `today` (arrival ≤ today < departure, or status Inside). */
+export function hasActiveStayToday(
+  reservations: StayReservationLike[],
+  today = new Date(),
+): boolean {
+  const todayStr = today.toISOString().slice(0, 10);
+  return reservations.some((r) => {
+    const arr = (r.arrivalDate || '').slice(0, 10);
+    const dep = (r.departureDate || '').slice(0, 10);
+    if (!arr || !dep) return false;
+    const st = String(r.status || '').toLowerCase();
+    if (st.includes('inside')) return true;
+    return arr <= todayStr && todayStr < dep;
+  });
+}
+
 /**
- * Derive badge label: explicit srv-listing fields win over calendar inference.
+ * Derive badge label: occupied (DB or active stay) wins, then vacant cleanliness v2.
  */
 export function deriveDisplayCleanliness(
   listing: CleanlinessListingFields,
@@ -38,23 +54,14 @@ export function deriveDisplayCleanliness(
   const v2 = String(listing.cleanlinessStatus_v2 || 'clean').toLowerCase();
 
   if (occ === 'occupied') return 'occupied';
+
+  if (hasActiveStayToday(reservations, today)) return 'occupied';
+
   if (occ === 'vacant') {
     if (v2 === 'in_progress') return 'in_progress';
     if (v2 === 'dirty') return 'dirty';
     return 'clean';
   }
-
-  const todayStr = today.toISOString().slice(0, 10);
-  const hasActiveStay = reservations.some((r) => {
-    const arr = (r.arrivalDate || '').slice(0, 10);
-    const dep = (r.departureDate || '').slice(0, 10);
-    if (!arr || !dep) return false;
-    const st = String(r.status || '').toLowerCase();
-    if (st.includes('inside')) return true;
-    return arr <= todayStr && todayStr < dep;
-  });
-
-  if (hasActiveStay) return 'occupied';
 
   if (v2 === 'in_progress') return 'in_progress';
   if (v2 === 'dirty') return 'dirty';
