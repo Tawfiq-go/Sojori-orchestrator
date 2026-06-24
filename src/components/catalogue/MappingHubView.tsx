@@ -208,7 +208,7 @@ export function MappingHubView({
   const totalCount = groups.reduce((n, g) => n + g.items.length, 0);
 
   return (
-    <Box sx={{ px: { xs: 1, md: 0 }, pb: 4 }}>
+    <Box sx={{ px: { xs: 0.5, md: 1 }, pb: 4 }}>
       <Typography sx={{ fontSize: 22, fontWeight: 800, color: T.text, mb: 0.5 }}>{title}</Typography>
       <Typography sx={{ fontSize: 13, color: T.text3, mb: 2, maxWidth: 800 }}>
         {subtitle} {totalCount} écran(s) recensé(s).
@@ -251,7 +251,7 @@ export function MappingHubView({
         >
           {filteredGroups.map((group) => (
             <Box key={group.id} sx={{ borderBottom: `1px solid ${T.border}` }}>
-              <Box sx={{ px: 1.5, py: 1.25, bgcolor: T.bg2 }}>
+              <Box sx={{ px: 2.25, py: 1.25, bgcolor: T.bg2 }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text }}>{group.label}</Typography>
                 <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.25 }}>{group.description}</Typography>
               </Box>
@@ -268,7 +268,8 @@ export function MappingHubView({
                       textTransform: 'none',
                       borderRadius: 0,
                       py: 1.25,
-                      px: 1.5,
+                      px: 2.25,
+                      pl: active ? 2 : 2.25,
                       bgcolor: active ? 'rgba(212,165,116,0.18)' : 'transparent',
                       borderLeft: active ? `3px solid ${T.primary}` : '3px solid transparent',
                       color: T.text,

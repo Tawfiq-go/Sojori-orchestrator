@@ -306,6 +306,12 @@ export interface ReservationPlan {
 export type ResaFilterKey = 'in_progress' | 'blocked' | 'today' | 'next7d' | 'done';
 export type ResaSortKey = 'arrival_asc' | 'urgency' | 'recent' | 'by_listing';
 
+export interface PlanListQuery {
+  filters: ResaFilterKey[];
+  search: string;
+  sort: ResaSortKey;
+}
+
 export interface ReservationGroup {
   label: string;
   icon: string;

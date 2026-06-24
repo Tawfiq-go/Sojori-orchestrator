@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import ReservationsSidebar from './ReservationsSidebar';
 import PlanDetail from './PlanDetail';
-import type { Reservation, ReservationPlan } from './types';
+import type { Reservation, ReservationPlan, PlanListQuery, ResaFilterKey, ResaSortKey } from './types';
 import './planReservation.css';
 
 interface Props {
   reservations: Reservation[];
+  totalCount: number;
   plans: Record<string, ReservationPlan>;
   initialId?: string;
   /** Chargement du plan complet (GET /plans/:id). */
@@ -18,10 +19,19 @@ interface Props {
   onPlanUpdated?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
   onPlanRefetch?: () => void;
   listTitle?: string;
+  listQuery: PlanListQuery;
+  searchInput: string;
+  listRefreshing?: boolean;
+  onFiltersChange: (filters: ResaFilterKey[]) => void;
+  onSortChange: (sort: ResaSortKey) => void;
+  onSearchInputChange: (value: string) => void;
+  onSearchSubmit: () => void;
+  onClearFilters: () => void;
 }
 
 export default function PlanReservationPage({
   reservations,
+  totalCount,
   plans,
   initialId,
   planLoadingId = null,
@@ -31,6 +41,14 @@ export default function PlanReservationPage({
   onPlanUpdated,
   onPlanRefetch,
   listTitle,
+  listQuery,
+  searchInput,
+  listRefreshing = false,
+  onFiltersChange,
+  onSortChange,
+  onSearchInputChange,
+  onSearchSubmit,
+  onClearFilters,
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(initialId ?? null);
 
@@ -52,9 +70,20 @@ export default function PlanReservationPage({
       <div className="app">
         <ReservationsSidebar
           reservations={reservations}
+          totalCount={totalCount}
           activeId={activeId}
           onSelect={handleSelect}
           listTitle={listTitle}
+          filters={listQuery.filters}
+          sort={listQuery.sort}
+          searchInput={searchInput}
+          appliedSearch={listQuery.search}
+          listRefreshing={listRefreshing}
+          onFiltersChange={onFiltersChange}
+          onSortChange={onSortChange}
+          onSearchInputChange={onSearchInputChange}
+          onSearchSubmit={onSearchSubmit}
+          onClearFilters={onClearFilters}
         />
         {activeResa && activePlan ? (
           <PlanDetail

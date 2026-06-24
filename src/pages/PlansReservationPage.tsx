@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { useAuth } from '../hooks/useAuth';
@@ -10,7 +10,8 @@ import {
   type FulltaskPlanDoc,
   type PlanListSummaryDoc,
 } from '../features/planReservation/buildPlanViewModel';
-import type { Reservation, ReservationPlan } from '../features/planReservation/types';
+import type { Reservation, ReservationPlan, PlanListQuery } from '../features/planReservation/types';
+import { applyPlanListQuery } from '../features/planReservation/applyPlanListQuery';
 import * as fulltaskApi from '../services/fulltaskApi';
 import tasksService from '../services/fulltaskTasksService';
 import {
@@ -63,13 +64,25 @@ export default function PlansReservationPage() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [summariesById, setSummariesById] = useState<Record<string, PlanListSummaryDoc>>({});
   const [plans, setPlans] = useState<Record<string, ReservationPlan>>({});
   const [staffNames, setStaffNames] = useState<Record<string, string>>({});
   const [orderByOwner, setOrderByOwner] = useState<UiPlanListOrderCache>({});
   const [loading, setLoading] = useState(true);
+  const [listRefreshing, setListRefreshing] = useState(false);
   const [planLoadingId, setPlanLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [listQuery, setListQuery] = useState<PlanListQuery>({
+    filters: [],
+    search: '',
+    sort: 'arrival_asc',
+  });
+  const [searchInput, setSearchInput] = useState('');
+
+  const listingNamesRef = useRef<Record<string, string>>({});
+  const hasLoadedRef = useRef(false);
+  const listSeqRef = useRef(0);
 
   const selectedId = searchParams.get('reservationId') || undefined;
 
@@ -128,65 +141,121 @@ export default function PlansReservationPage() {
     [],
   );
 
-  const loadList = useCallback(async (): Promise<Record<string, PlanListSummaryDoc>> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [plansRes, staffRes, listingRows] = await Promise.all([
-        fulltaskApi.listPlansSummary({ limit: 300 }),
-        fulltaskApi.listStaff(),
-        (tasksService as { getListings: () => Promise<{ _id: string; name: string }[]> }).getListings(),
-      ]);
-
-      const summaries: PlanListSummaryDoc[] = [];
-      const plansPayload = plansRes?.data ?? plansRes;
-      if (Array.isArray(plansPayload)) summaries.push(...(plansPayload as PlanListSummaryDoc[]));
-
-      const namesMap: Record<string, string> = {};
-      for (const l of listingRows || []) {
-        if (l._id) namesMap[l._id] = l.name || 'Logement';
+  const loadList = useCallback(
+    async (query: PlanListQuery, opts?: { silent?: boolean }): Promise<Record<string, PlanListSummaryDoc>> => {
+      const seq = ++listSeqRef.current;
+      if (opts?.silent) {
+        setListRefreshing(true);
+      } else {
+        setLoading(true);
       }
+      setError(null);
 
-      const names: Record<string, string> = {};
-      const staffList = staffRes?.data ?? staffRes?.staff ?? staffRes;
-      if (Array.isArray(staffList)) {
-        for (const s of staffList) {
-          const id = String(s._id || s.id || '');
-          const label = [s.firstName, s.lastName].filter(Boolean).join(' ') || s.name || id;
-          if (id) names[id] = label;
+      try {
+        const appliedSearch = query.search.trim();
+        const listingIdsForSearch =
+          appliedSearch.length > 0
+            ? Object.entries(listingNamesRef.current)
+                .filter(([, name]) => name.toLowerCase().includes(appliedSearch.toLowerCase()))
+                .map(([id]) => id)
+            : undefined;
+
+        const hasQuery = query.filters.length > 0 || Boolean(appliedSearch);
+        const [plansRes, totalRes, staffRes, listingRows] = await Promise.all([
+          fulltaskApi.listPlansSummary({
+            limit: 300,
+            filters: query.filters.length ? query.filters.join(',') : undefined,
+            search: appliedSearch || undefined,
+            listingIds: listingIdsForSearch?.length ? listingIdsForSearch.join(',') : undefined,
+            sort: query.sort,
+            includeReservationId: selectedId || undefined,
+          }),
+          hasQuery
+            ? fulltaskApi.listPlansSummary({ limit: 300 })
+            : Promise.resolve(null),
+          fulltaskApi.listStaff(),
+          (tasksService as { getListings: () => Promise<{ _id: string; name: string }[]> }).getListings(),
+        ]);
+
+        if (seq !== listSeqRef.current) return {};
+
+        const namesMap: Record<string, string> = {};
+        for (const l of listingRows || []) {
+          if (l._id) namesMap[l._id] = l.name || 'Logement';
+        }
+        listingNamesRef.current = namesMap;
+
+        const summaries: PlanListSummaryDoc[] = [];
+        const plansPayload = plansRes?.data ?? plansRes;
+        if (Array.isArray(plansPayload)) summaries.push(...(plansPayload as PlanListSummaryDoc[]));
+
+        const names: Record<string, string> = {};
+        const staffList = staffRes?.data ?? staffRes?.staff ?? staffRes;
+        if (Array.isArray(staffList)) {
+          for (const s of staffList) {
+            const id = String(s._id || s.id || '');
+            const label = [s.firstName, s.lastName].filter(Boolean).join(' ') || s.name || id;
+            if (id) names[id] = label;
+          }
+        }
+        setStaffNames(names);
+
+        const byId: Record<string, PlanListSummaryDoc> = {};
+        let viewResa: Reservation[] = [];
+        for (const s of summaries) {
+          if (!s.reservationId || s.status === 'annule' || s.status === 'archive') continue;
+          byId[s.reservationId] = s;
+          viewResa.push(buildReservationViewFromSummary(s, namesMap[s.listingId] || 'Logement'));
+        }
+
+        // L’API distante (dev.sojori.com) ignore encore filters/search tant que srv-fulltask
+        // n’est pas déployé — on envoie les query params mais on applique aussi côté client
+        // (idempotent quand le serveur filtre déjà correctement).
+        viewResa = applyPlanListQuery(viewResa, query, selectedId);
+
+        setSummariesById(byId);
+        setReservations(viewResa);
+
+        if (!hasQuery) {
+          setTotalCount(viewResa.length);
+        } else if (totalRes) {
+          const totalPayload = totalRes?.data ?? totalRes;
+          if (Array.isArray(totalPayload)) {
+            setTotalCount(
+              (totalPayload as PlanListSummaryDoc[]).filter(
+                (s) => s.reservationId && s.status !== 'annule' && s.status !== 'archive',
+              ).length,
+            );
+          }
+        }
+
+        hasLoadedRef.current = true;
+        return byId;
+      } catch (e) {
+        if (seq !== listSeqRef.current) return {};
+        setReservations([]);
+        setSummariesById({});
+        if (!opts?.silent) {
+          setPlans({});
+        }
+        setError(e instanceof Error ? e.message : 'Erreur chargement');
+        return {};
+      } finally {
+        if (seq === listSeqRef.current) {
+          if (opts?.silent) {
+            setListRefreshing(false);
+          } else {
+            setLoading(false);
+          }
         }
       }
-      setStaffNames(names);
-
-      const byId: Record<string, PlanListSummaryDoc> = {};
-      const viewResa: Reservation[] = [];
-      for (const s of summaries) {
-        if (!s.reservationId || s.status === 'annule' || s.status === 'archive') continue;
-        byId[s.reservationId] = s;
-        viewResa.push(
-          buildReservationViewFromSummary(s, namesMap[s.listingId] || 'Logement'),
-        );
-      }
-      viewResa.sort((a, b) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime());
-
-      setSummariesById(byId);
-      setReservations(viewResa);
-      setPlans({});
-      return byId;
-    } catch (e) {
-      setReservations([]);
-      setSummariesById({});
-      setPlans({});
-      setError(e instanceof Error ? e.message : 'Erreur chargement');
-      return {};
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [selectedId],
+  );
 
   useEffect(() => {
-    loadList();
-  }, [loadList]);
+    loadList(listQuery, { silent: hasLoadedRef.current });
+  }, [listQuery, loadList]);
 
   useEffect(() => {
     if (!selectedId || plans[selectedId] || planLoadingId === selectedId) return;
@@ -234,13 +303,24 @@ export default function PlansReservationPage() {
   );
 
   const handlePlanRefetch = useCallback(async () => {
-    const byId = await loadList();
+    const byId = await loadList(listQuery, { silent: true });
     if (selectedId) {
       await loadPlanDetail(selectedId, staffNames, orderByOwner, byId[selectedId]?.ownerId);
     }
-  }, [loadList, selectedId, staffNames, orderByOwner, loadPlanDetail]);
+  }, [loadList, listQuery, selectedId, staffNames, orderByOwner, loadPlanDetail]);
 
-  const planCount = reservations.length;
+  const handleSearchSubmit = useCallback(() => {
+    setListQuery((prev) => ({ ...prev, search: searchInput.trim() }));
+  }, [searchInput]);
+
+  const handleClearFilters = useCallback(() => {
+    setSearchInput('');
+    setListQuery({ filters: [], search: '', sort: 'arrival_asc' });
+  }, []);
+
+  const hasActiveQuery = listQuery.filters.length > 0 || Boolean(listQuery.search.trim());
+  const showPlanLayout =
+    !loading && !error && (totalCount > 0 || reservations.length > 0 || hasActiveQuery);
 
   return (
     <DashboardWrapper breadcrumb={['Tâches', 'Orchestration', 'Plans réservation']} compactMain>
@@ -261,7 +341,8 @@ export default function PlansReservationPage() {
           }}
         >
           <span>
-            <b>Plans</b> : liste légère ({planCount}) · détail chargé au clic
+            <b>Plans</b> : liste API ({totalCount || reservations.length}) · détail chargé au clic
+            {hasActiveQuery ? ' · filtre serveur actif' : ''}
           </span>
           <Link
             to="/tasks/orchestration-config"
@@ -271,22 +352,23 @@ export default function PlansReservationPage() {
           </Link>
         </div>
       )}
-      {loading && (
+      {loading && reservations.length === 0 && (
         <div style={{ padding: 24, color: 'var(--t3, #7a756c)' }}>Chargement des plans…</div>
       )}
       {error && !loading && (
         <div style={{ padding: '8px 14px 0', color: '#c46506', fontSize: 12 }}>{error}</div>
       )}
-      {!loading && !error && reservations.length === 0 && (
+      {!loading && !error && totalCount === 0 && reservations.length === 0 && !hasActiveQuery && (
         <div style={{ padding: 24, color: 'var(--t3, #7a756c)', fontSize: 13 }}>
           Aucun plan en base. Configurez l&apos;orchestration sur{' '}
           <Link to="/tasks/orchestration-config">Orchestration config</Link>, puis créez une réservation
           (ou rejouez <code>create.reservation</code>) pour générer un plan.
         </div>
       )}
-      {!loading && reservations.length > 0 && (
+      {showPlanLayout && (
         <PlanReservationPage
           reservations={reservations}
+          totalCount={totalCount || reservations.length}
           plans={plans}
           initialId={selectedId}
           planLoadingId={planLoadingId}
@@ -296,6 +378,14 @@ export default function PlansReservationPage() {
           onPlanUpdated={handlePlanUpdated}
           onPlanRefetch={handlePlanRefetch}
           listTitle="Plans"
+          listQuery={listQuery}
+          searchInput={searchInput}
+          listRefreshing={listRefreshing}
+          onFiltersChange={(filters) => setListQuery((prev) => ({ ...prev, filters }))}
+          onSortChange={(sort) => setListQuery((prev) => ({ ...prev, sort }))}
+          onSearchInputChange={setSearchInput}
+          onSearchSubmit={handleSearchSubmit}
+          onClearFilters={handleClearFilters}
         />
       )}
     </DashboardWrapper>
