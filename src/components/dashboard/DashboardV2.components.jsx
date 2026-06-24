@@ -103,7 +103,17 @@ const t = tokens;
 // 1. DashboardLayout — root grid: sidebar + topbar + main
 // ════════════════════════════════════════════════════════════════════
 
-export function DashboardLayout({ user, activePath, onNavigate, onLogout, children, breadcrumb = [], compactMain = false }) {
+export function DashboardLayout({
+  user,
+  activePath,
+  onNavigate,
+  onLogout,
+  children,
+  breadcrumb = [],
+  compactMain = false,
+  mainRef,
+  persistent = false,
+}) {
   return (
     <Box sx={{
       display: 'grid',
@@ -117,7 +127,8 @@ export function DashboardLayout({ user, activePath, onNavigate, onLogout, childr
       <AppSidebar user={user} activePath={activePath} onNavigate={onNavigate} onLogout={onLogout} />
       <TopBar breadcrumb={breadcrumb} compact={compactMain} />
       <Box
-        className="sojori-main-enter"
+        ref={mainRef}
+        className={persistent ? undefined : 'sojori-main-enter'}
         sx={{
           gridArea: 'main',
           overflow: 'auto',
@@ -283,8 +294,11 @@ function navItemMatchesPath(item, activePath) {
   return false;
 }
 
+const SIDEBAR_SCROLL_KEY = 'sojori-sidebar-scroll';
+
 export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogout }) {
   const navGroups = useSidebarNav(user?.role);
+  const navScrollRef = React.useRef(null);
 
   const [collapsed, setCollapsed] = React.useState(() => {
     try {
@@ -307,6 +321,30 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
       console.warn('Erreur sauvegarde état sidebar:', error);
     }
   }, [collapsed]);
+
+  React.useLayoutEffect(() => {
+    const el = navScrollRef.current;
+    if (!el) return;
+    try {
+      const saved = sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
+      if (saved != null) {
+        const top = Number.parseInt(saved, 10);
+        if (!Number.isNaN(top)) el.scrollTop = top;
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistSidebarScroll = React.useCallback(() => {
+    const el = navScrollRef.current;
+    if (!el) return;
+    try {
+      sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(el.scrollTop));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Auto-ouvrir le groupe qui contient l'item actif
   React.useEffect(() => {
@@ -377,7 +415,11 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
         </Box>
       </Stack>
 
-      <Stack spacing={0.5} sx={{
+      <Stack
+        ref={navScrollRef}
+        onScroll={persistSidebarScroll}
+        spacing={0.5}
+        sx={{
         p: '16px 14px',
         overflowY: 'auto',
         overflowX: 'hidden',

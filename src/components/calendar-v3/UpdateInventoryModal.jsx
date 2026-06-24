@@ -4,6 +4,7 @@
 // Génère 1 payload par type de modif pour calendarService.updateCalendar
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo, useEffect } from 'react';
+import { ModalPortal } from '../ModalPortal';
 import { T, toIso, parseIsoLocal, daysBetweenIsoInclusive } from './_shared';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -16,7 +17,6 @@ export default function UpdateInventoryModal({
   const [step, setStep] = useState('form'); // 'form' | 'confirm'
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [modalPosition, setModalPosition] = useState({ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' });
 
   /* ─── Date range from selectedCells ─── */
   const selectionMeta = useMemo(() => {
@@ -147,36 +147,8 @@ export default function UpdateInventoryModal({
       // Convert ISO string dates to Date objects for MUI DatePicker
       setEditableStartDate(selectionMeta.startDate ? parseIsoLocal(selectionMeta.startDate) : null);
       setEditableEndDate(selectionMeta.endDate ? parseIsoLocal(selectionMeta.endDate) : null);
-      // Calculer la position optimale du modal quand il s'ouvre
-      calculateModalPosition();
     }
   }, [open, selectionMeta.startDate, selectionMeta.endDate]);
-
-  const calculateModalPosition = () => {
-    const modalWidth = 520;
-    const viewportWidth = window.innerWidth;
-    const scrollY = window.scrollY;
-
-    // Positionner en haut de l'écran visible avec une marge
-    const topMargin = 40; // Marge depuis le haut du viewport
-    const top = scrollY + topMargin;
-
-    // Centrer horizontalement
-    let left = viewportWidth / 2;
-
-    // Ajuster horizontalement si nécessaire
-    if (left - modalWidth / 2 < 20) {
-      left = modalWidth / 2 + 20;
-    } else if (left + modalWidth / 2 > viewportWidth - 20) {
-      left = viewportWidth - modalWidth / 2 - 20;
-    }
-
-    setModalPosition({
-      top: `${top}px`,
-      left: `${left}px`,
-      transform: 'translateX(-50%)',
-    });
-  };
 
   const changesSummary = useMemo(() => {
     const out = [];
@@ -276,20 +248,34 @@ export default function UpdateInventoryModal({
   if (!open) return null;
 
   return (
-    <>
+    <ModalPortal>
       <div onClick={onClose} style={{
         position: 'fixed', inset: 0, background: 'rgba(20,17,10,0.45)',
         backdropFilter: 'blur(4px)', zIndex: 55,
       }} />
       <div style={{
         position: 'fixed',
-        top: modalPosition.top,
-        left: modalPosition.left,
-        transform: modalPosition.transform,
-        background: T.bg1, borderRadius: 18, width: 520, maxWidth: '90vw', maxHeight: '90vh',
-        boxShadow: '0 24px 64px rgba(20,17,10,0.25)', zIndex: 60,
-        animation: 'fadeIn 0.3s both', display: 'flex', flexDirection: 'column',
+        inset: 0,
+        zIndex: 60,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        pointerEvents: 'none',
       }}>
+        <div style={{
+          pointerEvents: 'auto',
+          background: T.bg1,
+          borderRadius: 18,
+          width: 'min(520px, calc(100vw - 32px))',
+          maxHeight: 'min(90vh, calc(100dvh - 32px))',
+          boxShadow: '0 24px 64px rgba(20,17,10,0.25)',
+          animation: 'fadeIn 0.3s both',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxSizing: 'border-box',
+        }}>
         {/* Header */}
         <div style={{
           padding: '18px 22px', borderBottom: `1px solid ${T.border}`,
@@ -312,7 +298,7 @@ export default function UpdateInventoryModal({
         </div>
 
         {/* Content */}
-        <div style={{ padding: '18px 22px', overflowY: 'auto', flex: 1 }}>
+        <div style={{ padding: '18px 24px', overflowY: 'auto', overflowX: 'hidden', flex: 1, minWidth: 0 }}>
           {error && (
             <div style={{
               padding: '10px 12px', background: T.errorTint, border: `1px solid ${T.error}40`,
@@ -324,8 +310,8 @@ export default function UpdateInventoryModal({
             <>
               <Section label="Dates">
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
-                    <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
+                    <div style={{ minWidth: 0 }}>
                       <label style={{ fontSize: 10, color: T.text3, display: 'block', marginBottom: 4, fontWeight: 600 }}>
                         Début
                       </label>
@@ -345,6 +331,8 @@ export default function UpdateInventoryModal({
                             size: 'small',
                             fullWidth: true,
                             sx: {
+                              width: '100%',
+                              maxWidth: '100%',
                               '& .MuiOutlinedInput-root': {
                                 fontSize: '12.5px',
                                 fontFamily: '"Geist Mono", monospace',
@@ -360,7 +348,7 @@ export default function UpdateInventoryModal({
                         }}
                       />
                     </div>
-                    <div>
+                    <div style={{ minWidth: 0, paddingRight: 4 }}>
                       <label style={{ fontSize: 10, color: T.text3, display: 'block', marginBottom: 4, fontWeight: 600 }}>
                         Fin
                       </label>
@@ -375,6 +363,8 @@ export default function UpdateInventoryModal({
                             size: 'small',
                             fullWidth: true,
                             sx: {
+                              width: '100%',
+                              maxWidth: '100%',
                               '& .MuiOutlinedInput-root': {
                                 fontSize: '12.5px',
                                 fontFamily: '"Geist Mono", monospace',
@@ -560,8 +550,9 @@ export default function UpdateInventoryModal({
             </>
           )}
         </div>
+        </div>
       </div>
-    </>
+    </ModalPortal>
   );
 }
 
@@ -582,20 +573,28 @@ function FieldBox({ children }) {
     <div style={{
       display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px',
       background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 9,
+      minWidth: 0,
     }}>
-      <style>{`input { flex: 1; border: 0; background: transparent; outline: 0; font: inherit; font-size: 13px; font-family: 'Geist Mono', monospace; font-weight: 700; color: ${T.text}; }`}</style>
+      <style>{`input { flex: 1; min-width: 0; border: 0; background: transparent; outline: 0; font: inherit; font-size: 13px; font-family: 'Geist Mono', monospace; font-weight: 700; color: ${T.text}; }`}</style>
       {children}
     </div>
   );
 }
 function ToggleGroup({ value, onChange, options }) {
   return (
-    <div style={{ display: 'flex', gap: 6 }}>
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       {options.map(o => {
         const active = value === o.value;
         return (
           <button key={String(o.value)} onClick={() => onChange(o.value)} style={{
-            flex: 1, padding: 8, borderRadius: 8, fontSize: 11.5, fontWeight: active ? 700 : 600,
+            flex: '1 1 calc(33.333% - 4px)',
+            minWidth: 0,
+            padding: '8px 6px',
+            borderRadius: 8,
+            fontSize: 11.5,
+            fontWeight: active ? 700 : 600,
+            lineHeight: 1.25,
+            whiteSpace: 'normal',
             background: active ? T.primaryTint : T.bg1,
             color: active ? T.primaryDeep : T.text2,
             border: `1px solid ${active ? T.primary : T.border}`,

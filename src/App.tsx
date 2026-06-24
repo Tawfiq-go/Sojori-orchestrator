@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { DashboardShellLayout } from './components/DashboardShellLayout';
 import { AdminRoute } from './components/AdminRoute';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { DevRuntimeLogPanel } from './components/DevRuntimeLogPanel';
@@ -247,6 +248,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             <Route element={<ProtectedRoute />}>
+              <Route element={<DashboardShellLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
               <Route path="/dashboard" element={<DashboardPage />} />
@@ -379,6 +381,7 @@ function App() {
               <Route path="/onboarding" element={<LazyRoute><OnboardingPage /></LazyRoute>} />
 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Route>
             </Route>
           </Routes>
         </AppErrorBoundary>

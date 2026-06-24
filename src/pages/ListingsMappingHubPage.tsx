@@ -90,17 +90,19 @@ function MappingIndex() {
 export function ListingsMappingHubPage() {
   return (
     <DashboardWrapper breadcrumb={['Catalogue', 'Annonces', 'Mapping RU']}>
-      <CatalogueAnnoncesTabs />
-      <MappingUrlHint />
-      <MappingSubNav />
-      <Box sx={{ px: { xs: 0.5, md: 0 } }}>
-        <Routes>
-          <Route index element={<MappingIndex />} />
-          <Route path="amenities/*" element={<AmenitiesConfigPage />} />
-          <Route path="images/*" element={<ImagesConfigPage />} />
-          <Route path="property-types" element={<PropertyTypesMappingPanel />} />
-          <Route path="*" element={<Navigate to="/listings/mapping" replace />} />
-        </Routes>
+      <Box sx={{ px: { xs: 2, md: 3 }, pb: 3, maxWidth: 1600 }}>
+        <CatalogueAnnoncesTabs />
+        <MappingUrlHint />
+        <MappingSubNav />
+        <Box sx={{ pt: 0.5 }}>
+          <Routes>
+            <Route index element={<MappingIndex />} />
+            <Route path="amenities/*" element={<AmenitiesConfigPage />} />
+            <Route path="images/*" element={<ImagesConfigPage />} />
+            <Route path="property-types" element={<PropertyTypesMappingPanel />} />
+            <Route path="*" element={<Navigate to="/listings/mapping" replace />} />
+          </Routes>
+        </Box>
       </Box>
     </DashboardWrapper>
   );

@@ -1,13 +1,23 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { planCodeDisplay, reservationRefDisplay } from './buildPlanViewModel';
 import type { Reservation, ResaFilterKey, ResaSortKey, ReservationGroup } from './types';
 
 interface Props {
   reservations: Reservation[];
+  totalCount: number;
   activeId: string | null;
   onSelect: (id: string) => void;
-  /** Titre colonne gauche (défaut : plans avec résa). */
   listTitle?: string;
+  filters: ResaFilterKey[];
+  sort: ResaSortKey;
+  searchInput: string;
+  appliedSearch: string;
+  listRefreshing?: boolean;
+  onFiltersChange: (filters: ResaFilterKey[]) => void;
+  onSortChange: (sort: ResaSortKey) => void;
+  onSearchInputChange: (value: string) => void;
+  onSearchSubmit: () => void;
+  onClearFilters: () => void;
 }
 
 const FILTERS: { id: ResaFilterKey; label: string; icon: string }[] = [
@@ -27,100 +37,65 @@ const SORT_OPTIONS: { id: ResaSortKey; label: string }[] = [
 
 export default function ReservationsSidebar({
   reservations,
+  totalCount,
   activeId,
   onSelect,
   listTitle = 'Plans',
+  filters,
+  sort,
+  searchInput,
+  appliedSearch,
+  listRefreshing = false,
+  onFiltersChange,
+  onSortChange,
+  onSearchInputChange,
+  onSearchSubmit,
+  onClearFilters,
 }: Props) {
-  const [search, setSearch] = useState('');
-  /** Vide = afficher tous les plans (évite « 0 sur 1 » quand le séjour calendrier est passé mais le plan tourne encore). */
-  const [activeFilters, setActiveFilters] = useState<Set<ResaFilterKey>>(new Set());
-  const [sort, setSort] = useState<ResaSortKey>('arrival_asc');
-
   const toggleFilter = (k: ResaFilterKey) => {
-    setActiveFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      return next;
-    });
+    const next = filters.includes(k) ? filters.filter((f) => f !== k) : [...filters, k];
+    onFiltersChange(next);
   };
-
-  const filtered = useMemo(() => {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayEnd = new Date(todayStart.getTime() + 86400000);
-    const in7 = new Date(now.getTime() + 7 * 86400000);
-
-    return reservations.filter((r) => {
-      if (activeId && r.id === activeId) return true;
-
-      if (search) {
-        const q = search.toLowerCase();
-        if (
-          !r.guest.name.toLowerCase().includes(q) &&
-          !r.listing.name.toLowerCase().includes(q) &&
-          !r.planCode.toLowerCase().includes(q) &&
-          !r.reference.toLowerCase().includes(q) &&
-          !r.id.toLowerCase().includes(q)
-        ) {
-          return false;
-        }
-      }
-      if (activeFilters.size === 0) return true;
-      const checkIn = new Date(r.checkIn);
-      const checkOut = new Date(r.checkOut);
-      let ok = false;
-      if (activeFilters.has('in_progress') && (r.status === 'now' || r.status === 'pending')) ok = true;
-      if (activeFilters.has('blocked') && r.status === 'blocked') ok = true;
-      if (activeFilters.has('today') && checkIn < todayEnd && checkOut >= todayStart) ok = true;
-      if (activeFilters.has('next7d') && checkIn > now && checkIn <= in7) ok = true;
-      if (activeFilters.has('done') && r.status === 'done') ok = true;
-      return ok;
-    });
-  }, [reservations, search, activeFilters, activeId]);
-
-  const sorted = useMemo(() => {
-    const list = [...filtered];
-    if (sort === 'urgency') {
-      const rank = (s: Reservation['status']) =>
-        ({ blocked: 0, now: 1, pending: 2, future: 3, done: 4 })[s] ?? 5;
-      list.sort((a, b) => rank(a.status) - rank(b.status) || new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime());
-    } else if (sort === 'recent') {
-      list.sort((a, b) => new Date(b.checkIn).getTime() - new Date(a.checkIn).getTime());
-    } else if (sort === 'by_listing') {
-      list.sort((a, b) => a.listing.name.localeCompare(b.listing.name) || a.guest.name.localeCompare(b.guest.name));
-    } else {
-      list.sort((a, b) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime());
-    }
-    return list;
-  }, [filtered, sort]);
 
   const groups = useMemo<ReservationGroup[]>(() => {
     return [
-      { label: 'Attention requise', icon: '🚨', reservations: sorted.filter((r) => r.status === 'blocked') },
-      { label: 'En cours', icon: '⚡', reservations: sorted.filter((r) => r.status === 'now' || r.status === 'pending') },
-      { label: 'À venir', icon: '📅', reservations: sorted.filter((r) => r.status === 'future') },
-      { label: 'Terminées récemment', icon: '✓', reservations: sorted.filter((r) => r.status === 'done') },
+      { label: 'Attention requise', icon: '🚨', reservations: reservations.filter((r) => r.status === 'blocked') },
+      {
+        label: 'En cours',
+        icon: '⚡',
+        reservations: reservations.filter((r) => r.status === 'now' || r.status === 'pending'),
+      },
+      { label: 'À venir', icon: '📅', reservations: reservations.filter((r) => r.status === 'future') },
+      { label: 'Terminées récemment', icon: '✓', reservations: reservations.filter((r) => r.status === 'done') },
     ].filter((g) => g.reservations.length > 0);
-  }, [sorted]);
+  }, [reservations]);
 
   const totalShown = groups.reduce((sum, g) => sum + g.reservations.length, 0);
+  const hasActiveQuery = filters.length > 0 || Boolean(appliedSearch.trim());
 
   return (
     <aside className="sidebar">
       <div className="sb-h">
         <h2>📋 {listTitle}</h2>
-        <span className="ct">{reservations.length}</span>
+        <span className="ct">{totalCount}</span>
       </div>
 
       <div className="sb-search">
         <span className="ic">🔍</span>
         <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => onSearchInputChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onSearchSubmit();
+            }
+          }}
           placeholder="Nom, listing, réf. résa, id…"
         />
-        <kbd>⌘K</kbd>
+        <button type="button" className="sb-search-ok" onClick={onSearchSubmit}>
+          OK
+        </button>
       </div>
 
       <div className="sb-filters">
@@ -128,7 +103,7 @@ export default function ReservationsSidebar({
           <button
             key={f.id}
             type="button"
-            className={`sb-chip${activeFilters.has(f.id) ? ' on' : ''}`}
+            className={`sb-chip${filters.includes(f.id) ? ' on' : ''}`}
             onClick={() => toggleFilter(f.id)}
           >
             {f.icon} {f.label}
@@ -138,7 +113,10 @@ export default function ReservationsSidebar({
 
       <div className="sb-sort">
         <span className="lbl">TRI</span>
-        <select value={sort} onChange={(e) => setSort(e.target.value as ResaSortKey)}>
+        <select
+          value={sort}
+          onChange={(e) => onSortChange(e.target.value as ResaSortKey)}
+        >
           {SORT_OPTIONS.map((s) => (
             <option key={s.id} value={s.id}>
               {s.label}
@@ -147,20 +125,17 @@ export default function ReservationsSidebar({
         </select>
       </div>
 
-      <div className="sb-list">
-        {totalShown === 0 && reservations.length > 0 ? (
+      <div className={`sb-list${listRefreshing ? ' sb-list--refreshing' : ''}`}>
+        {totalShown === 0 && hasActiveQuery ? (
           <div className="sb-empty">
             <p>Aucun plan ne correspond aux filtres.</p>
-            <button
-              type="button"
-              className="sb-chip on"
-              onClick={() => {
-                setActiveFilters(new Set());
-                setSearch('');
-              }}
-            >
-              Afficher tous ({reservations.length})
+            <button type="button" className="sb-chip on" onClick={onClearFilters}>
+              Réinitialiser
             </button>
+          </div>
+        ) : totalShown === 0 && !hasActiveQuery ? (
+          <div className="sb-empty">
+            <p>Aucun plan.</p>
           </div>
         ) : (
           groups.map((group) => (
@@ -178,7 +153,8 @@ export default function ReservationsSidebar({
 
       <div className="sb-foot">
         <span>
-          📊 {totalShown} sur {reservations.length} plan{reservations.length > 1 ? 's' : ''}
+          📊 {totalShown} sur {totalCount} plan{totalCount > 1 ? 's' : ''}
+          {listRefreshing ? ' · …' : ''}
         </span>
       </div>
     </aside>
@@ -262,7 +238,6 @@ function barClassFor(s: Reservation['status']): string {
   }
 }
 
-/** Abréviation dans le pastille (ex. SJ-12345 → SJ). */
 function refShort(ref: string): string {
   if (/^OS-/i.test(ref)) return 'OS';
   if (/^SJ-/i.test(ref)) return 'SJ';

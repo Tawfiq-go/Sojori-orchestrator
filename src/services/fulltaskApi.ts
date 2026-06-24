@@ -431,7 +431,19 @@ export async function listPlans(params: Record<string, unknown> = {}) {
 }
 
 /** Sidebar plans : métadonnées uniquement (pas sequences/messages). */
-export async function listPlansSummary(params: Record<string, unknown> = {}) {
+export type ListPlansSummaryParams = {
+  limit?: number;
+  filters?: string;
+  search?: string;
+  listingIds?: string;
+  sort?: string;
+  includeReservationId?: string;
+  status?: string;
+  includeArchived?: boolean;
+  includeCancelled?: boolean;
+};
+
+export async function listPlansSummary(params: ListPlansSummaryParams = {}) {
   return listPlans({ ...params, summary: 'true' });
 }
 
