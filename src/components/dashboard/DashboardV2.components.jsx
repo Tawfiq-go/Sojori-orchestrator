@@ -20,6 +20,7 @@ import { NAV_DEFAULT_COLLAPSED } from '../../config/navConfig';
 import { useSidebarNav } from '../../hooks/useSidebarNav';
 import { LISTING_LAYOUT } from '../../constants/listingLayout';
 import { IconColored } from './IconColored';
+import { SojoriBrandLockup } from '../brand/SojoriBrandLogo';
 import {
   Box, Stack, Typography, Button, IconButton, Avatar, Chip, Switch,
   TextField, InputAdornment, Divider, Tooltip,
@@ -413,20 +414,11 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
         background: 'linear-gradient(180deg, rgba(255,255,255,0.8), rgba(255,255,255,0.4))',
         backdropFilter: 'blur(10px)',
       }}>
-        <Box sx={{
-          width: 32, height: 32, borderRadius: '10px',
-          background: `linear-gradient(135deg, ${t.primarySoft}, ${t.primaryDeep})`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontWeight: 900, fontSize: 15,
-          boxShadow: '0 6px 16px rgba(230,176,34,0.35), inset 0 1px 0 rgba(255,255,255,0.3)',
-          border: '1px solid rgba(255,255,255,0.2)',
-        }}>S</Box>
-        <Box sx={{ lineHeight: 1.15 }}>
-          <Typography sx={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.4px', color: t.text }}>Sojori</Typography>
-          <Typography sx={{ color: t.text3, fontWeight: 600, fontSize: 10, mt: 0.2, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-            {user?.role === 'Worker' ? 'Équipe terrain' : 'Property Manager'}
-          </Typography>
-        </Box>
+        <SojoriBrandLockup
+          subtitleColor={t.text3}
+          roleLabel={user?.role === 'Worker' ? 'Équipe terrain' : 'Orchestration logicielle'}
+          iconSize={34}
+        />
       </Stack>
 
       <Stack

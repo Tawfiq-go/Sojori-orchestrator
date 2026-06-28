@@ -50,6 +50,9 @@ export type LedgerEntry = {
   transactionRole?: string;
   status?: string;
   supplier?: string;
+  invoiceUrls?: string[];
+  source?: string;
+  recurringTemplateId?: string;
 };
 
 export type ExpenseCategory = {
@@ -65,7 +68,10 @@ export type RecurringTemplate = {
   amount: number;
   currency?: string;
   categoryId?: string;
+  scopeType?: 'listing' | 'pm' | 'landlord';
   listingIds?: string[];
+  landlordId?: string;
+  paidBy?: 'pm' | 'landlord' | 'guest';
   frequency?: string;
   dayOfMonth?: number;
   lastDayOfMonth?: boolean;
@@ -76,10 +82,24 @@ export type RecurringTemplate = {
 
 export type ProfitReportStatus = 'draft' | 'published' | 'archived';
 
+/** En-tête PDF/HTML figé dans snapshot.header */
+export type ProfitReportHeader = {
+  companyName?: string;
+  publicName?: string;
+  tagline?: string;
+  logoText?: string;
+  logoUrl?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  website?: string;
+};
+
 export type ProfitMetric = {
   key: string;
   label: string;
   value: number;
+  hint?: string;
 };
 
 export type ProfitReport = {
@@ -100,6 +120,11 @@ export type ProfitReport = {
     grandTotal?: number;
     currency?: string;
     contract?: LandlordContract;
+    columnConfig?: {
+      reservations: string[];
+      ledger: string[];
+    };
+    header?: ProfitReportHeader;
   };
   updatedAt?: string;
   createdAt?: string;

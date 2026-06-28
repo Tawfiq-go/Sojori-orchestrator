@@ -32,6 +32,8 @@ export default function WorkerCredentialsDialog({
   emailSent,
   emailError,
   title = 'Identifiants du worker',
+  onDefinePassword,
+  definePasswordLabel = 'Définir un autre mot de passe',
 }) {
   const [copiedKey, setCopiedKey] = useState(null);
 
@@ -51,7 +53,10 @@ export default function WorkerCredentialsDialog({
             </Alert>
           )}
           <Typography variant="body2" sx={{ color: WF.text2 }}>
-            Ce mot de passe n&apos;est affiché qu&apos;une fois. En cas de perte, utilisez « Régénérer les identifiants ».
+            Ce mot de passe n&apos;est affiché qu&apos;une fois.
+            {onDefinePassword
+              ? ' Utilisez le bouton ci-dessous pour en choisir un autre avant de fermer.'
+              : ' En cas de perte, utilisez « Mot de passe / identifiants » sur la fiche du compte.'}
           </Typography>
           <TextField
             label="Email"
@@ -104,7 +109,12 @@ export default function WorkerCredentialsDialog({
           ) : null}
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
+      <DialogActions sx={{ px: 3, pb: 2, gap: 1, flexWrap: 'wrap' }}>
+        {onDefinePassword ? (
+          <Button onClick={onDefinePassword} sx={{ textTransform: 'none', mr: 'auto' }}>
+            {definePasswordLabel}
+          </Button>
+        ) : null}
         <Button onClick={onClose} variant="contained" sx={{ bgcolor: WF.primaryDeep, '&:hover': { bgcolor: WF.primary } }}>
           Fermer
         </Button>

@@ -105,6 +105,10 @@ export const MICROSERVICE_BASE_URL = {
   SRV_RESERVATION: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4002/api/v1/reservations`
     : `${API_BASE_URL}/api/v1/reservations`,
+  /** Routes inter-services srv-reservations (for-profit-report, etc.) */
+  SRV_RESERVATION_INTERNAL: useLocalMicroservicePorts
+    ? `${API_BASE_URL}:4002/api/v1/internal`
+    : `${API_BASE_URL}/api/v1/internal`,
   /** Router Express `messageState` : `/api/v1/message/*` (pas sous `/reservations/`) */
   SRV_RESERVATION_MESSAGE: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4002/api/v1/message`
@@ -136,11 +140,17 @@ export const MICROSERVICE_BASE_URL = {
     : `${API_BASE_URL}/api/v1/become-host`,
   // Upload endpoints
   UPLOAD_IMAGE: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4006/api/v1/admin/uploads/image`
-    : `${API_BASE_URL}/api/v1/admin/uploads/image`,
+    ? `${API_BASE_URL}:4006/api/v1/admin/upload/get_link`
+    : `${API_BASE_URL}/api/v1/admin/upload/get_link`,
   UPLOAD_IMAGE_MULTIPLE: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4006/api/v1/admin/upload/upload_multiple`
     : `${API_BASE_URL}/api/v1/admin/upload/upload_multiple`,
+  LEDGER_ATTACHMENT_UPLOAD: useLocalMicroservicePorts
+    ? `${API_BASE_URL}:4006/api/v1/admin/ledger-attachments/upload`
+    : `${API_BASE_URL}/api/v1/admin/ledger-attachments/upload`,
+  LEDGER_ATTACHMENT_SIGNED_URL: useLocalMicroservicePorts
+    ? `${API_BASE_URL}:4006/api/v1/admin/ledger-attachments/signed-url`
+    : `${API_BASE_URL}/api/v1/admin/ledger-attachments/signed-url`,
 };
 
 // Logs désactivés pour nettoyer la console

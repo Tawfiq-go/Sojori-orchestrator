@@ -14,8 +14,8 @@ import {
   Typography,
 } from '@mui/material';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
-import { Form, Formik } from 'formik';
-import { toast, ToastContainer } from 'react-toastify';
+import { Form, Formik, type FormikProps } from 'formik';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { getListings, getOneListing } from '../../listing/services/serverApi.listing';
 import { resendWorkerCredentials } from '../../staff/services/serverApi.task';
@@ -38,11 +38,16 @@ import {
   normalizeLandlordGrants,
   type FeatureGrant,
 } from '../../../utils/ownerRoutePermissions';
+import { getOwnerListLabel } from '../../../utils/ownerDisplay.utils';
 import {
   getLandlordById,
   inviteLandlord,
   updateLandlordAccount,
 } from '../landlordApi';
+import {
+  buildStoredLandlordContract,
+  formContractTypeFromStored,
+} from '../utils/contractCommissionBase';
 import { useFinancesOwnerScope } from '../useFinancesOwnerScope';
 import type { LandlordAccount, LandlordContract, LandlordContractType } from '../types';
 import {
@@ -54,7 +59,7 @@ import { useSectionInView } from '../hooks/useSectionInView';
 const fieldSx = workerTextFieldSx();
 
 const defaultContract: LandlordContract = {
-  type: 'percent_with_ota',
+  type: 'percent_without_ota',
   commissionPercent: 18,
   revenueBase: 'net_after_ota',
   currency: 'MAD',
@@ -89,7 +94,7 @@ const EMPTY: LandlordFormValues = {
   dashboardAccess: true,
   featureGrants: [...DEFAULT_LANDLORD_DASHBOARD_GRANTS],
   _previousFeatureGrants: [],
-  contractType: 'percent_with_ota',
+  contractType: 'percent_without_ota',
   commissionPercent: '18',
   fixedAmount: '',
   fixedPeriod: 'per_month',
@@ -115,7 +120,7 @@ function toFormValues(account: LandlordAccount | null): LandlordFormValues {
     dashboardAccess: landlordHasDashboardAccess(grants),
     featureGrants: grants.length ? normalizeLandlordGrants(grants) : [...DEFAULT_LANDLORD_DASHBOARD_GRANTS],
     _previousFeatureGrants: [],
-    contractType: lc.type || 'percent_with_ota',
+    contractType: formContractTypeFromStored(lc),
     commissionPercent: String(lc.commissionPercent ?? 18),
     fixedAmount: lc.fixedAmount != null ? String(lc.fixedAmount) : '',
     fixedPeriod: lc.fixedPeriod || 'per_month',
@@ -124,21 +129,14 @@ function toFormValues(account: LandlordAccount | null): LandlordFormValues {
 }
 
 function buildContract(v: LandlordFormValues): LandlordContract {
-  const base: LandlordContract = { currency: 'MAD', notes: v.contractNotes || undefined };
-  if (v.contractType === 'fixed') {
-    return {
-      ...base,
-      type: 'fixed',
-      fixedAmount: Number(v.fixedAmount) || 0,
-      fixedPeriod: v.fixedPeriod,
-    };
-  }
-  return {
-    ...base,
-    type: v.contractType,
-    commissionPercent: Number(v.commissionPercent) || 0,
-    revenueBase: v.contractType === 'percent_without_ota' ? 'gross' : 'net_after_ota',
-  };
+  return buildStoredLandlordContract(
+    v.contractType,
+    Number(v.commissionPercent) || 0,
+    Number(v.fixedAmount) || 0,
+    v.fixedPeriod,
+    'MAD',
+    v.contractNotes,
+  );
 }
 
 export default function LandlordForm() {
@@ -146,7 +144,7 @@ export default function LandlordForm() {
   const isEdit = Boolean(landlordId && landlordId !== 'new');
   const navigate = useNavigate();
   const { t } = useTranslation('common');
-  const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
+  const { ownerId, needsOwnerPick, isPlatformAdmin, owners } = useFinancesOwnerScope();
   const [active, setActive] = useState(LANDLORD_FORM_SECTIONS[0].id);
   const [account, setAccount] = useState<LandlordAccount | null>(null);
   const [loading, setLoading] = useState(isEdit);
@@ -164,10 +162,13 @@ export default function LandlordForm() {
     emailSent?: boolean;
     emailError?: string | null;
   } | null>(null);
+  const [createdLandlordId, setCreatedLandlordId] = useState<string | null>(null);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordResult, setPasswordResult] = useState<typeof credentialsDialog>(null);
   const [passwordLoading, setPasswordLoading] = useState(false);
-  const formikRef = useRef<{ submitForm: () => void } | null>(null);
+  const [passwordSendEmailDefault, setPasswordSendEmailDefault] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const formikRef = useRef<FormikProps<LandlordFormValues> | null>(null);
   const staging = JSON.parse(localStorage.getItem('isStaging') || 'false');
   const listingsSectionVisible = useSectionInView('listings-access');
   const shouldLoadListings = listingsSectionVisible || active === 'listings-access';
@@ -274,17 +275,59 @@ export default function LandlordForm() {
       (account.email ? ` · ${account.email}` : '')
     : undefined;
 
+  const selectedPmLabel = useMemo(() => {
+    if (!isPlatformAdmin || !ownerId) return '';
+    const row = owners.find((o) => String(o._id ?? o.id) === String(ownerId));
+    return row ? getOwnerListLabel(row) : ownerId.slice(-6);
+  }, [isPlatformAdmin, ownerId, owners]);
+
   const validate = (v: LandlordFormValues) => {
     const errors: Partial<Record<keyof LandlordFormValues, string>> = {};
-    if (!v.firstName?.trim()) errors.firstName = 'Requis';
-    if (!v.lastName?.trim()) errors.lastName = 'Requis';
-    if (!isEdit && !v.email?.trim()) errors.email = 'Requis';
+    if (!v.firstName?.trim()) errors.firstName = 'Prénom requis';
+    if (!v.lastName?.trim()) errors.lastName = 'Nom requis';
+    if (!isEdit) {
+      const email = v.email?.trim();
+      if (!email) errors.email = 'Email requis';
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Email invalide';
+    }
+    if (v.contractType === 'fixed' && !(Number(v.fixedAmount) > 0)) {
+      errors.fixedAmount = 'Montant fixe requis';
+    }
     return errors;
   };
 
-  const handleSubmit = async (v: LandlordFormValues) => {
+  const triggerSave = async () => {
+    const formik = formikRef.current;
+    if (!formik) {
+      toast.error('Formulaire indisponible — rechargez la page.');
+      return;
+    }
     if (needsOwnerPick) {
-      toast.error('Sélectionnez un propriétaire PM dans la barre du haut.');
+      toast.warn('Choisissez le propriétaire PM en haut de page.');
+      return;
+    }
+    const errors = await formik.validateForm();
+    const keys = Object.keys(errors);
+    if (keys.length) {
+      await formik.setTouched(
+        Object.fromEntries(keys.map((k) => [k, true])) as Partial<Record<keyof LandlordFormValues, boolean>>,
+        true,
+      );
+      const first = errors[keys[0] as keyof LandlordFormValues];
+      toast.warn(typeof first === 'string' ? first : 'Complétez les champs obligatoires.');
+      return;
+    }
+    await formik.submitForm();
+  };
+
+  const handleSubmit = async (v: LandlordFormValues) => {
+    if (submitting) return;
+    if (needsOwnerPick) {
+      toast.warn('Choisissez le propriétaire PM en haut de page.');
+      return;
+    }
+    if (!ownerId && isPlatformAdmin) {
+      toast.error('Propriétaire PM manquant — resélectionnez-le en haut de page.');
       return;
     }
     const grants = v.dashboardAccess ? normalizeLandlordGrants(v.featureGrants) : [];
@@ -302,6 +345,7 @@ export default function LandlordForm() {
     };
 
     try {
+      setSubmitting(true);
       if (isEdit && landlordId) {
         await updateLandlordAccount(landlordId, body);
         toast.success('Propriétaire mis à jour');
@@ -316,6 +360,8 @@ export default function LandlordForm() {
       });
 
       if (v.dashboardAccess && res?.temporaryPassword) {
+        toast.success('Propriétaire créé — consultez les identifiants ci-dessous.');
+        setCreatedLandlordId(res.landlordId ? String(res.landlordId) : null);
         setCredentialsDialog({
           email: res.email || v.email,
           temporaryPassword: res.temporaryPassword,
@@ -328,28 +374,35 @@ export default function LandlordForm() {
         navigate('/finances/landlords', { replace: true });
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erreur');
+      toast.error(e instanceof Error ? e.message : 'Erreur lors de la création');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handlePasswordSubmit = async ({ password, sendEmail = true }: { password?: string; sendEmail?: boolean }) => {
-    if (!landlordId || passwordLoading) return;
+    const targetId = landlordId || createdLandlordId;
+    if (!targetId || passwordLoading) return;
     setPasswordLoading(true);
     const trimmed = typeof password === 'string' ? password.trim() : '';
     try {
       const payload: { sendEmail: boolean; password?: string } = { sendEmail };
       if (trimmed) payload.password = trimmed;
-      const res = await resendWorkerCredentials(landlordId, payload);
+      const res = await resendWorkerCredentials(targetId, payload);
       const d = res?.data || {};
       if (d.temporaryPassword) {
-        setPasswordResult({
+        const next = {
           email: d.email,
           temporaryPassword: d.temporaryPassword,
           loginUrl: d.loginUrl,
           emailSent: !!d.emailSent,
           emailError: d.emailError,
-        });
-        toast.success(d.emailSent ? 'Identifiants renvoyés' : 'Mot de passe généré');
+        };
+        setPasswordResult(next);
+        if (credentialsDialog) {
+          setCredentialsDialog((prev) => (prev ? { ...prev, ...next } : prev));
+        }
+        toast.success(d.emailSent ? 'Identifiants renvoyés' : 'Mot de passe enregistré');
       } else {
         toast.error(d.error || 'Échec');
       }
@@ -371,14 +424,14 @@ export default function LandlordForm() {
 
   return (
     <WorkerFormPage>
-      <ToastContainer position="top-right" autoClose={3000} />
       <WorkerFormHeader
         title={isEdit ? 'Modifier le propriétaire' : 'Ajouter un propriétaire'}
         subtitle={headerSubtitle}
         onBack={() => navigate('/finances/landlords')}
         onCancel={() => navigate('/finances/landlords')}
-        onSave={() => formikRef.current?.submitForm()}
-        saveLabel={isEdit ? t('Save') : 'Ajouter'}
+        onSave={() => void triggerSave()}
+        saveLabel={submitting ? (isEdit ? 'Enregistrement…' : 'Ajout…') : isEdit ? t('Save') : 'Ajouter'}
+        saveDisabled={submitting || (!isEdit && needsOwnerPick)}
         extraActions={
           isEdit && landlordHasDashboardAccess(account?.featureGrants) ? (
             <Button
@@ -386,6 +439,7 @@ export default function LandlordForm() {
               disabled={passwordLoading}
               onClick={() => {
                 setPasswordResult(null);
+                setPasswordSendEmailDefault(true);
                 setPasswordDialogOpen(true);
               }}
               startIcon={passwordLoading ? <CircularProgress size={16} color="inherit" /> : <VpnKeyOutlinedIcon />}
@@ -402,6 +456,19 @@ export default function LandlordForm() {
           ) : null
         }
       />
+
+      {needsOwnerPick ? (
+        <Alert severity="warning" sx={{ mb: 2, borderRadius: '12px' }}>
+          Choisissez le <strong>propriétaire PM</strong> dans la barre en haut de page avant d&apos;ajouter un
+          propriétaire immobilier.
+        </Alert>
+      ) : null}
+
+      {!isEdit && isPlatformAdmin && ownerId && selectedPmLabel ? (
+        <Alert severity="info" sx={{ mb: 2, borderRadius: '12px' }}>
+          Ce propriétaire immobilier sera rattaché au PM <strong>{selectedPmLabel}</strong>.
+        </Alert>
+      ) : null}
 
       {isEdit && landlordHasDashboardAccess(account?.featureGrants) ? (
         <Alert severity="info" sx={{ mb: 2, borderRadius: '12px' }}>
@@ -527,8 +594,8 @@ export default function LandlordForm() {
                         {(
                           [
                             ['fixed', 'Forfait fixe', 'Montant fixe par mois, réservation ou an'],
-                            ['percent_with_ota', 'Commission % — net après OTA', '% sur revenu net OTA'],
-                            ['percent_without_ota', 'Commission % — brut', '% sur revenu brut'],
+                            ['percent_without_ota', 'Commission % — net après OTA', '% sur revenu net OTA'],
+                            ['percent_with_ota', 'Commission % — brut', '% sur revenu brut'],
                           ] as const
                         ).map(([type, nm, ds]) => (
                           <Box
@@ -680,8 +747,9 @@ export default function LandlordForm() {
                 actions={
                   <WorkerFormActions
                     onCancel={() => navigate('/finances/landlords')}
-                    onSave={() => formikRef.current?.submitForm()}
-                    saveLabel={isEdit ? t('Save') : 'Ajouter'}
+                    onSave={() => void triggerSave()}
+                    saveLabel={submitting ? (isEdit ? 'Enregistrement…' : 'Ajout…') : isEdit ? t('Save') : 'Ajouter'}
+                    saveDisabled={submitting || (!isEdit && needsOwnerPick)}
                   />
                 }
               />
@@ -694,6 +762,7 @@ export default function LandlordForm() {
         open={!!credentialsDialog}
         onClose={() => {
           setCredentialsDialog(null);
+          setCreatedLandlordId(null);
           navigate('/finances/landlords', { replace: true });
         }}
         title="Identifiants du propriétaire"
@@ -702,6 +771,15 @@ export default function LandlordForm() {
         loginUrl={credentialsDialog?.loginUrl}
         emailSent={credentialsDialog?.emailSent}
         emailError={credentialsDialog?.emailError}
+        onDefinePassword={
+          createdLandlordId
+            ? () => {
+                setPasswordSendEmailDefault(!credentialsDialog?.emailSent);
+                setPasswordResult(null);
+                setPasswordDialogOpen(true);
+              }
+            : undefined
+        }
       />
 
       <WorkerPasswordDialog
@@ -710,11 +788,15 @@ export default function LandlordForm() {
           setPasswordDialogOpen(false);
           setPasswordResult(null);
         }}
-        workerEmail={account?.email}
+        workerEmail={credentialsDialog?.email || account?.email}
         loading={passwordLoading}
         onSubmit={handlePasswordSubmit}
         result={passwordResult}
         onEditAgain={() => setPasswordResult(null)}
+        dialogTitle="Mot de passe du propriétaire"
+        resultTitle="Mot de passe enregistré"
+        sendEmailLabel="Envoyer les identifiants par email au propriétaire"
+        initialSendEmail={passwordSendEmailDefault}
       />
     </WorkerFormPage>
   );

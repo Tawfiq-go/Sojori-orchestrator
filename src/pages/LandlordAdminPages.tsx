@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
-import { Box } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { LegacyReduxProvider } from '../components/LegacyReduxBridge';
-import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout.jsx';
+import { FinancesModule } from '../features/finances/FinancesModule';
 import LandlordForm from '../features/finances/components/LandlordForm';
 
 function LandlordFormShell({
@@ -15,9 +14,7 @@ function LandlordFormShell({
   return (
     <DashboardWrapper breadcrumb={breadcrumb}>
       <LegacyReduxProvider>
-        <AdminOwnerScopeLayout inlineBar={false} showTopBar={false}>
-          <Box sx={{ bgcolor: '#f6f5f1', minHeight: '100%' }}>{children}</Box>
-        </AdminOwnerScopeLayout>
+        <FinancesModule>{children}</FinancesModule>
       </LegacyReduxProvider>
     </DashboardWrapper>
   );

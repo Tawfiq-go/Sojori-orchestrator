@@ -1,13 +1,50 @@
 import { ensureDashboardSnapshot, finalizeDashboardSnapshot } from '../services/dashboardV1Service';
 import type { DashboardPeriod, DashboardSnapshot } from '../types/dashboard.types';
 
-/** v9 : chargement fast + charts progressif. */
-const PREFIX = 'sojori-dashboard-v10:';
+/** v11 : fast partial cache + listingIdsHint persistés par owner. */
+const PREFIX = 'sojori-dashboard-v11:';
+const HINTS_PREFIX = 'sojori-dashboard-hints-v1:';
+
+const SNAPSHOT_TTL_MS = 5 * 60_000;
+const HINTS_TTL_MS = 30 * 60_000;
 
 function cacheKey(period: DashboardPeriod, listingIds: string[], ownerId?: string | null) {
   const ids = [...listingIds].sort().join(',');
   const owner = ownerId ? String(ownerId) : 'scoped';
   return `${PREFIX}${owner}:${period}:${ids}`;
+}
+
+function hintsCacheKey(ownerId?: string | null) {
+  const owner = ownerId ? String(ownerId) : 'scoped';
+  return `${HINTS_PREFIX}${owner}`;
+}
+
+export function readDashboardListingIdsHint(ownerId?: string | null): string[] {
+  try {
+    const raw = sessionStorage.getItem(hintsCacheKey(ownerId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { savedAt: number; ids: string[] };
+    if (Date.now() - parsed.savedAt > HINTS_TTL_MS) {
+      sessionStorage.removeItem(hintsCacheKey(ownerId));
+      return [];
+    }
+    return Array.isArray(parsed.ids) ? parsed.ids.filter(Boolean).slice(0, 50) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeDashboardListingIdsHint(ownerId: string | null | undefined, ids: string[]): void {
+  try {
+    const unique = [...new Set(ids.filter(Boolean))].slice(0, 50);
+    if (unique.length === 0) return;
+    sessionStorage.setItem(
+      hintsCacheKey(ownerId),
+      JSON.stringify({ savedAt: Date.now(), ids: unique }),
+    );
+  } catch {
+    // quota / private mode
+  }
 }
 
 export function readDashboardSnapshotCache(
@@ -29,6 +66,7 @@ export function readDashboardSnapshotCacheEntry(
   period: DashboardPeriod,
   listingIds: string[],
   ownerId?: string | null,
+  options?: { includePartial?: boolean },
 ): DashboardSnapshotCacheEntry | null {
   try {
     const raw = sessionStorage.getItem(cacheKey(period, listingIds, ownerId));
@@ -41,18 +79,19 @@ export function readDashboardSnapshotCacheEntry(
       hydrated?: boolean;
     };
     const ageMs = Date.now() - parsed.savedAt;
-    if (ageMs > 5 * 60_000) {
+    if (ageMs > SNAPSHOT_TTL_MS) {
       sessionStorage.removeItem(cacheKey(period, listingIds, ownerId));
       return null;
     }
-    if (!parsed.hydrated) {
+    const hydrated = parsed.hydrated !== false;
+    if (!hydrated && !options?.includePartial) {
       return null;
     }
     return {
       snapshot: finalizeDashboardSnapshot(ensureDashboardSnapshot(parsed.snapshot)),
       savedAt: parsed.savedAt,
       ageMs,
-      hydrated: true,
+      hydrated,
     };
   } catch {
     return null;

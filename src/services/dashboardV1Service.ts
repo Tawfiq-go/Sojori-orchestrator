@@ -10,6 +10,11 @@ import type {
 } from '../types/dashboard.types';
 import { logDashboard, logDashboardApiDetail, logDashboardKpisSummary } from '../utils/dashboardDebug';
 
+function isAbortError(error: unknown): boolean {
+  const e = error as { code?: string; name?: string };
+  return e?.code === 'ERR_CANCELED' || e?.name === 'CanceledError' || e?.name === 'AbortError';
+}
+
 const DEFAULT_CHECK_FLOW: DashboardCheckFlowItem[] = [
   { label: "Aujourd'hui", checkIns: 0, checkOuts: 0 },
   { label: 'Demain', checkIns: 0, checkOuts: 0 },
@@ -378,11 +383,13 @@ export async function fetchDashboardListingDirectory(
     });
     return mapped;
   } catch (error) {
-    const clientMs = Math.round(performance.now() - t0);
-    logDashboard('fetchDashboardListingDirectory failed', {
-      clientMs,
-      message: (error as Error)?.message,
-    });
+    if (!isAbortError(error)) {
+      const clientMs = Math.round(performance.now() - t0);
+      logDashboard('fetchDashboardListingDirectory failed', {
+        clientMs,
+        message: (error as Error)?.message,
+      });
+    }
     throw error;
   }
 }

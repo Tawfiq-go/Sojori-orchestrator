@@ -67,7 +67,7 @@ export async function inviteLandlord(body: {
 }) {
   try {
     const { data } = await apiClient.post(`${SRV_USER}/auth/invite-landlord`, body);
-    if (data?.success === false) throw new Error(data.error || data.message || 'Invitation failed');
+    if (data?.success === false) throw new Error(data.error || data.message || 'Invitation impossible');
     return data;
   } catch (e) {
     if (isAxiosError(e) && e.response?.status === 409) {
@@ -90,7 +90,15 @@ export async function inviteLandlord(body: {
       }
       throw new Error(body409.error || body409.message || 'Conflit (409)');
     }
-    throw e;
+    if (isAxiosError(e)) {
+      const body = e.response?.data as { error?: string; message?: string } | undefined;
+      const msg = body?.error || body?.message;
+      if (msg) throw new Error(String(msg));
+      if (e.response?.status === 403) {
+        throw new Error('Accès refusé — vérifiez votre session Admin.');
+      }
+    }
+    throw e instanceof Error ? e : new Error('Invitation impossible');
   }
 }
 

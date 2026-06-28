@@ -1110,13 +1110,13 @@ const PublicOwner = ({
             <CreateOwnerSidebar open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} onOwnerCreated={onOwnerCreated} />
 
             {!insidePageShell ? (
-            <UpdateOwnerSidebar
-              open={openUpdateDialog}
-              onClose={() => setOpenUpdateDialog(false)}
-              owner={selectedOwner}
-              onOwnerUpdated={onOwnerUpdated}
-              inline={false}
-            />
+              <UpdateOwnerSidebar
+                open={openUpdateDialog}
+                onClose={() => setOpenUpdateDialog(false)}
+                owner={selectedOwner}
+                onOwnerUpdated={onOwnerUpdated}
+                inline={false}
+              />
             ) : null}
 
             {/* Dialog Propriétaire - View Only */}

@@ -15,11 +15,12 @@ const EMPTY_OWNER_IDS = Object.freeze([]);
 /**
  * Propriétaire filter for users who can work across owners (see canSelectOwnerInAdminFilter).
  * Property Owner accounts: no filter, scoped data only.
+ * Pas de persistance sessionStorage — resélection obligatoire à chaque chargement de page.
  */
 export function AdminOwnerFilterProvider({ children }) {
   const { user: authUser } = useAuth();
   const user = useMemo(() => toLegacyAuthUser(authUser), [authUser]);
-  const [selectedOwnerId, setSelectedOwnerId] = useState('');
+  const [selectedOwnerId, setSelectedOwnerIdState] = useState('');
   const [owners, setOwners] = useState([]);
   const [ownersLoading, setOwnersLoading] = useState(false);
   const showOwnerFilter = canSelectOwnerInAdminFilter(user);
@@ -34,15 +35,30 @@ export function AdminOwnerFilterProvider({ children }) {
     [selectedOwnerId],
   );
 
-  const setSelectedOwnerIds = useCallback((ids) => {
-    if (!Array.isArray(ids) || !ids.length) {
-      setSelectedOwnerId('');
-      return;
-    }
-    setSelectedOwnerId(String(ids[0]));
+  const setSelectedOwnerId = useCallback((id) => {
+    setSelectedOwnerIdState(id ? String(id).trim() : '');
   }, []);
 
-  const clearSelection = useCallback(() => setSelectedOwnerId(''), []);
+  const setSelectedOwnerIds = useCallback(
+    (ids) => {
+      if (!Array.isArray(ids) || !ids.length) {
+        setSelectedOwnerId('');
+        return;
+      }
+      setSelectedOwnerId(String(ids[0]));
+    },
+    [setSelectedOwnerId],
+  );
+
+  const clearSelection = useCallback(() => setSelectedOwnerId(''), [setSelectedOwnerId]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem('sojori.adminOwnerFilter.selectedOwnerId');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     if (!showOwnerFilter) return;
@@ -79,6 +95,7 @@ export function AdminOwnerFilterProvider({ children }) {
     [
       showOwnerFilter,
       selectedOwnerId,
+      setSelectedOwnerId,
       selectedOwnerIds,
       setSelectedOwnerIds,
       clearSelection,
