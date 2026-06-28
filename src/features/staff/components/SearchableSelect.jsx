@@ -25,7 +25,7 @@ export default function SearchableSelect({
   placeholder,
   filterOptions = defaultFilterOptions,
   noOptionsText,
-  ListboxProps,
+  listboxProps,
 }) {
   const selected = options.find((o) => String(o[optionValueKey]) === String(value ?? '')) ?? null;
   return (
@@ -39,7 +39,9 @@ export default function SearchableSelect({
       isOptionEqualToValue={(a, b) => String(a?.[optionValueKey]) === String(b?.[optionValueKey])}
       filterOptions={filterOptions}
       noOptionsText={noOptionsText}
-      ListboxProps={{ style: { maxHeight: 280 }, ...ListboxProps }}
+      slotProps={{
+        listbox: { style: { maxHeight: 280 }, ...listboxProps },
+      }}
       renderInput={(params) => (
         <TextField
           {...params}

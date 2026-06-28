@@ -10,6 +10,16 @@ import { contractBadge, initials, personName } from '../utils/format';
 import { landlordListingCount } from '../utils/landlordListing';
 
 export function FinancesLandlordsPage() {
+  return (
+    <DashboardWrapper breadcrumb={['Finances', 'Propriétaires']}>
+      <FinancesModule>
+        <FinancesLandlordsPageContent />
+      </FinancesModule>
+    </DashboardWrapper>
+  );
+}
+
+function FinancesLandlordsPageContent() {
   const navigate = useNavigate();
   const { canWrite } = useFinancesAccess();
   const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
@@ -59,12 +69,17 @@ export function FinancesLandlordsPage() {
     listingsCount: rows.reduce((s, r) => s + landlordListingCount(r), 0),
   };
 
-  const openCreate = () => navigate('/finances/landlords/new');
+  const openCreate = () => {
+    if (needsOwnerPick) {
+      toast.warn('Choisissez d’abord le propriétaire PM en haut de page');
+      return;
+    }
+    navigate('/finances/landlords/new');
+  };
   const openEdit = (row: LandlordAccount) => navigate(`/finances/landlords/${row._id}`);
 
   return (
-    <DashboardWrapper breadcrumb={['Finances', 'Propriétaires']}>
-      <FinancesModule>
+    <>
         <div className="ph">
           <div>
             <div className="eyebrow">Finances · /finances/landlords</div>
@@ -179,8 +194,7 @@ export function FinancesLandlordsPage() {
             </table>
           )}
         </div>
-      </FinancesModule>
-    </DashboardWrapper>
+    </>
   );
 }
 

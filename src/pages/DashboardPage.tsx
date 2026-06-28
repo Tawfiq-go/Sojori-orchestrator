@@ -53,6 +53,8 @@ import {
 import { dashboardService } from '../services/dashboardService';
 import {
   readDashboardSnapshotCacheEntry,
+  readDashboardListingIdsHint,
+  writeDashboardListingIdsHint,
   writeDashboardSnapshotCache,
 } from '../utils/dashboardSnapshotCache';
 import { AdminOwnerFilterProvider, useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
@@ -151,7 +153,9 @@ function DashboardPageContent() {
       const skipSessionCache = refreshKey > 0;
       const cacheEntry = skipSessionCache
         ? null
-        : readDashboardSnapshotCacheEntry(period, selectedPropertyIds, requestOwnerId);
+        : readDashboardSnapshotCacheEntry(period, selectedPropertyIds, requestOwnerId, {
+            includePartial: true,
+          });
       const cached = cacheEntry?.snapshot ?? null;
       if (cached && !cancelled) {
         setSnapshot(ensureDashboardSnapshot(cached));
@@ -164,6 +168,7 @@ function DashboardPageContent() {
           occupancyRate: cached.kpis.occupancyRate.value,
           cacheAgeMs: cacheEntry?.ageMs,
           listingIdsHint: cached.listingIdsHint?.length ?? 0,
+          hydrated: cacheEntry?.hydrated,
         });
       } else if (!cancelled) {
         setDashboardReady(false);
@@ -204,7 +209,10 @@ function DashboardPageContent() {
 
       try {
         let loaded = EMPTY_DASHBOARD_SNAPSHOT;
-        let listingIdsHint = cached?.listingIdsHint?.length ? [...cached.listingIdsHint] : [];
+        let listingIdsHint =
+          cached?.listingIdsHint?.length
+            ? [...cached.listingIdsHint]
+            : readDashboardListingIdsHint(requestOwnerId);
 
         setListingsLoading(true);
         const fastQueryBase = {
@@ -218,6 +226,10 @@ function DashboardPageContent() {
           .then((dirListings) => {
             if (!cancelled) {
               setListingFilterOptions(dirListings);
+            }
+            const ids = dirListings.map((property) => property.id).slice(0, 50);
+            if (ids.length > 0) {
+              writeDashboardListingIdsHint(requestOwnerId, ids);
             }
             return dirListings;
           })
@@ -238,28 +250,39 @@ function DashboardPageContent() {
             }
           });
 
+        const mergeChartsIntoSnapshot = async (
+          base: DashboardSnapshot,
+          charts: Awaited<ReturnType<typeof fetchDashboardV1Charts>>,
+        ) =>
+          applyDashboardExtrasProgressively(base, charts, (step) => {
+            if (!cancelled) {
+              setSnapshot(step);
+            }
+          });
+
         try {
-          if (listingIdsHint.length > 0) {
-            const [dirListings, fastResult] = await Promise.all([
-              directoryPromise,
-              fetchDashboardV1Fast({ ...fastQueryBase, listingIdsHint }),
-            ]);
-            if (cancelled) return;
-            loaded = fastResult;
-            logDashboard('DashboardPage — directory + fast en parallèle', {
-              count: dirListings.length,
-              listingIdsHintCount: listingIdsHint.length,
-            });
-          } else {
-            const dirListings = await directoryPromise;
-            if (cancelled) return;
+          const initialHints = listingIdsHint;
+          const chartsPromise =
+            initialHints.length > 0
+              ? fetchDashboardV1Charts({ ...fastQueryBase, listingIdsHint: initialHints })
+              : null;
+
+          logDashboard('DashboardPage — fast + directory en parallèle', {
+            listingIdsHintCount: initialHints.length,
+            chartsParallel: !!chartsPromise,
+          });
+
+          const [dirListings, fastResult] = await Promise.all([
+            directoryPromise,
+            fetchDashboardV1Fast({ ...fastQueryBase, listingIdsHint: initialHints }),
+          ]);
+          if (cancelled) return;
+
+          loaded = fastResult;
+          if (dirListings.length > 0) {
             listingIdsHint = dirListings.map((property) => property.id).slice(0, 50);
-            logDashboard('DashboardPage — directory pour hints + filtre', {
-              count: dirListings.length,
-              listingIdsHintCount: listingIdsHint.length,
-            });
-            loaded = await fetchDashboardV1Fast({ ...fastQueryBase, listingIdsHint });
-            if (cancelled) return;
+          } else if (loaded.listingIdsHint?.length) {
+            listingIdsHint = [...loaded.listingIdsHint];
           }
 
           setSnapshot(loaded);
@@ -268,18 +291,23 @@ function DashboardPageContent() {
           setError(null);
           writeDashboardSnapshotCache(period, selectedPropertyIds, loaded, requestOwnerId, false);
 
-          logDashboard('DashboardPage — KPIs affichés (mode fast), chargement graphiques…');
+          logDashboard('DashboardPage — KPIs affichés (mode fast)', {
+            listingIdsHintCount: listingIdsHint.length,
+            chartsParallel: !!chartsPromise,
+          });
 
           const fastQuery = { ...fastQueryBase, listingIdsHint };
 
-          void fetchDashboardV1Charts(fastQuery)
-            .then((charts) => {
-              if (cancelled) return;
-              return applyDashboardExtrasProgressively(loaded, charts, (merged) => {
-                if (!cancelled) {
-                  setSnapshot(merged);
-                }
-              });
+          const chartsTask =
+            chartsPromise ??
+            (listingIdsHint.length > 0
+              ? fetchDashboardV1Charts(fastQuery)
+              : Promise.resolve(null));
+
+          void chartsTask
+            .then(async (charts) => {
+              if (cancelled || !charts) return null;
+              return mergeChartsIntoSnapshot(loaded, charts);
             })
             .then((merged) => {
               if (cancelled || !merged) return;

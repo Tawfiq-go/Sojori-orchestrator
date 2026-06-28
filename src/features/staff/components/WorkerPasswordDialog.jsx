@@ -44,6 +44,10 @@ export default function WorkerPasswordDialog({
   onSubmit,
   result = null,
   onEditAgain,
+  dialogTitle = 'Mot de passe du worker',
+  resultTitle = 'Mot de passe enregistré',
+  sendEmailLabel = 'Envoyer les identifiants par email au worker',
+  initialSendEmail = true,
 }) {
   const [tab, setTab] = useState(0);
   const [passwordLen, setPasswordLen] = useState(0);
@@ -62,12 +66,12 @@ export default function WorkerPasswordDialog({
     setPasswordLen(0);
     setConfirmLen(0);
     setShowPassword(false);
-    setSendEmail(true);
+    setSendEmail(initialSendEmail);
     setLocalError('');
     setCopiedKey(null);
     setFormKey((k) => k + 1);
     logWorkerPassword('dialog:open', { workerEmail });
-  }, [open, workerEmail]);
+  }, [open, workerEmail, initialSendEmail]);
 
   const syncLen = (ref, setter) => {
     const len = ref?.current?.value?.length ?? 0;
@@ -116,7 +120,7 @@ export default function WorkerPasswordDialog({
   if (result) {
     return (
       <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, color: WF.text }}>Mot de passe enregistré</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800, color: WF.text }}>{resultTitle}</DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
             {result.emailSent ? (
@@ -127,7 +131,7 @@ export default function WorkerPasswordDialog({
               <Alert severity="warning">
                 Mot de passe mis à jour.
                 {result.emailError ? ` Email non envoyé (${result.emailError}).` : ' Email non envoyé.'}
-                {' '}Transmettez-le manuellement au worker.
+                {' '}Transmettez-le manuellement.
               </Alert>
             )}
             <TextField
@@ -176,7 +180,7 @@ export default function WorkerPasswordDialog({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ fontWeight: 800, color: WF.text }}>Mot de passe du worker</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 800, color: WF.text }}>{dialogTitle}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" sx={{ color: WF.text2, mb: 2 }}>
           Compte : <strong>{workerEmail}</strong>
@@ -248,7 +252,7 @@ export default function WorkerPasswordDialog({
               sx={{ color: WF.primaryDeep, '&.Mui-checked': { color: WF.primaryDeep } }}
             />
           }
-          label="Envoyer les identifiants par email au worker"
+          label={sendEmailLabel}
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>

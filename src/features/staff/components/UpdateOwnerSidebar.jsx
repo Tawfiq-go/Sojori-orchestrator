@@ -1,10 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { updateOwner, updateOwnerWhatsappAiTier, getCities, getCurrencies } from '../services/serverApi.task';
-import { uploadMultipleImagesToAPI } from '../../../redux/slices/UploadSlice';
+import { uploadImageToAPI, uploadMultipleImagesToAPI } from '../../../redux/slices/UploadSlice';
+import {
+  extractUrlsFromUploadResult,
+  getPmLogoUrl,
+  normalizePmImageList,
+  normalizePmImageUrl,
+} from '../utils/pmProfileMediaUtils';
+import OwnerPmLogoImage from './OwnerPmLogoImage';
 import * as fullchatbotApi from '../../../services/fullchatbotApi';
 import { useTranslation } from 'react-i18next';
 import { hasAdminAccess } from '../../../utils/rbac.utils';
@@ -55,6 +62,7 @@ const buildValidationSchema = (t, owner) =>
 
 const OWNER_TABS = [
   { id: 'compte', label: 'Compte' },
+  { id: 'rapports-pl', label: 'Rapports P&L' },
   { id: 'sojori-web', label: 'Sojori Web' },
   { id: 'config-ia', label: 'Config IA' },
 ];
@@ -72,6 +80,7 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
     : OWNER_TABS.filter((tab) => tab.id !== 'config-ia');
   const [uploadingImages, setUploadingImages] = useState(false);
   const [activeTab, setActiveTab] = useState('compte');
+  const drawerRef = useRef(null);
   const [cities, setCities] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [currencies, setCurrencies] = useState([]);
@@ -106,11 +115,15 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
 
   useEffect(() => {
     if (open) setActiveTab('compte');
-  }, [open, owner?._id]  );
+  }, [open, owner?._id]);
 
   useEffect(() => {
-    if (open) setActiveTab('compte');
-  }, [open, owner?._id]);
+    if (!open || !inline || !owner) return;
+    const id = window.requestAnimationFrame(() => {
+      drawerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [open, inline, owner?._id]);
 
   useEffect(() => {
     if (!open) return;
@@ -143,22 +156,37 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
     setUploadingImages(true);
     try {
       const result = await dispatch(uploadMultipleImagesToAPI({ files, folder: 'other' })).unwrap();
-      let urls = [];
-      if (Array.isArray(result?.files)) {
-        urls = result.files.map((f) => (typeof f === 'object' ? f.url : f)).filter(Boolean);
-      } else if (Array.isArray(result)) {
-        urls = result.filter(Boolean);
-      } else if (Array.isArray(result?.urls)) {
-        urls = result.urls.filter(Boolean);
-      }
+      const urls = extractUrlsFromUploadResult(result);
       if (urls.length === 0) {
         toast.error('Échec upload (réponse inattendue)');
         return;
       }
-      setFieldValue('pmProfile.images', [...(currentImages || []), ...urls]);
+      setFieldValue('pmProfile.images', [...normalizePmImageList(currentImages), ...urls]);
       toast.success(`${urls.length} photo(s) ajoutée(s)`);
     } catch (err) {
       toast.error(`Échec upload : ${err?.message || ''}`);
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  /** Logo rapport P&L = 1ère image pmProfile */
+  const handlePmLogoUpload = async (fileList, currentImages, setFieldValue) => {
+    const file = fileList?.[0];
+    if (!file) return;
+    setUploadingImages(true);
+    try {
+      const result = await dispatch(uploadImageToAPI({ file, folder: 'other' })).unwrap();
+      const url = normalizePmImageUrl(result?.url || result);
+      if (!url) {
+        toast.error('Échec upload logo (URL manquante)');
+        return;
+      }
+      const rest = normalizePmImageList(currentImages).filter((u, i) => i > 0 && u !== url);
+      setFieldValue('pmProfile.images', [url, ...rest]);
+      toast.info('Logo ajouté — cliquez Enregistrer ⚡ pour sauvegarder le profil');
+    } catch (err) {
+      toast.error(`Échec upload logo : ${err?.message || ''}`);
     } finally {
       setUploadingImages(false);
     }
@@ -186,9 +214,14 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
         settings: values.settings,
         banned: values.banned,
         deleted: values.deleted,
+        address: values.address,
+        postalCode: values.postalCode,
+        city: values.city,
+        country: values.country,
         pmProfile: {
           ...values.pmProfile,
           slug: normalizePmSlug(values.pmProfile?.slug),
+          images: normalizePmImageList(values.pmProfile?.images),
         },
         ...(ruPwd.length >= 6 ? { ruExtranetPassword: ruPwd } : {}),
       });
@@ -254,12 +287,17 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
     elevatedAuthEmail: '',
     elevatedAuthPassword: '',
     whatsappConversationalTier: owner.whatsappConversationalTier || 2,
+    email: owner.email || '',
+    address: owner.address || '',
+    postalCode: owner.postalCode || '',
+    city: owner.city || '',
+    country: owner.country || '',
     pmProfile: {
       publicName: owner?.pmProfile?.publicName || '',
       slug: owner?.pmProfile?.slug || '',
       tagline: owner?.pmProfile?.tagline || '',
       description: owner?.pmProfile?.description || '',
-      images: Array.isArray(owner?.pmProfile?.images) ? owner.pmProfile.images : [],
+      images: normalizePmImageList(owner?.pmProfile?.images),
       brandColor: {
         from: owner?.pmProfile?.brandColor?.from || '',
         to: owner?.pmProfile?.brandColor?.to || '',
@@ -272,6 +310,7 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
 
   const drawerPanel = (
     <div
+      ref={drawerRef}
       className={`drawer owner-drawer-panel${inline ? ' owner-drawer-inline' : ''}`}
       role="dialog"
       onClick={(e) => {
@@ -563,6 +602,153 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
                 </div>
               </TabPanel>
 
+              <TabPanel active={activeTab} id="rapports-pl">
+                <div className="owner-form-hint owner-pl-source-hint">
+                  <b>Source des en-têtes PDF/HTML</b> — Finances → Rapports P&L utilisent ces infos via « ↻ Profil ».
+                  Le logo est la <b>1ère image</b> ci-dessous. Email = compte (lecture seule).
+                </div>
+
+                <div className="owner-pl-preview">
+                  <OwnerPmLogoImage
+                    images={values.pmProfile.images}
+                    className="owner-pl-preview-logo"
+                    emptyLabel={
+                      (values.pmProfile.publicName || `${values.firstName} ${values.lastName}`)
+                        .trim()
+                        .charAt(0)
+                        .toUpperCase() || '?'
+                    }
+                  />
+                  <div className="owner-pl-preview-text">
+                    <div className="owner-pl-preview-name">
+                      {values.pmProfile.publicName ||
+                        `${values.firstName} ${values.lastName}`.trim() ||
+                        'Nom société'}
+                    </div>
+                    {values.pmProfile.tagline ? (
+                      <div className="owner-pl-preview-line">{values.pmProfile.tagline}</div>
+                    ) : null}
+                    {values.email ? <div className="owner-pl-preview-line">{values.email}</div> : null}
+                    {values.phone ? <div className="owner-pl-preview-line">{values.phone}</div> : null}
+                    {[values.address, values.postalCode, values.city, values.country]
+                      .filter(Boolean)
+                      .join(', ') ? (
+                      <div className="owner-pl-preview-line">
+                        {[values.address, values.postalCode, values.city, values.country]
+                          .filter(Boolean)
+                          .join(', ')}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="form-section full" style={{ marginTop: 14 }}>
+                  <div className="form-section-h">Logo rapport</div>
+                  <div className="owner-pl-logo-row">
+                    <OwnerPmLogoImage
+                      images={values.pmProfile.images}
+                      className="owner-pl-logo-thumb"
+                      emptyLabel="Aucun logo"
+                    />
+                    <label className="btn btn-ghost owner-photo-btn">
+                      {uploadingImages ? 'Envoi…' : '+ Ajouter / remplacer logo'}
+                      <input
+                        hidden
+                        type="file"
+                        accept="image/*"
+                        disabled={uploadingImages}
+                        onChange={(e) => {
+                          handlePmLogoUpload(e.target.files, values.pmProfile.images, setFieldValue);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {getPmLogoUrl(values.pmProfile.images) ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() =>
+                          setFieldValue('pmProfile.images', normalizePmImageList(values.pmProfile.images).slice(1))
+                        }
+                      >
+                        Retirer logo
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="owner-form-hint" style={{ marginTop: 8 }}>
+                    PNG ou JPG recommandé · fond transparent si possible. Photos marketplace dans l&apos;onglet
+                    Sojori Web (la 1ère photo sert aussi de logo si vous n&apos;en mettez pas ici).
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14 }}>
+                  <div className="field">
+                    <div className="field-label">Nom société / marque</div>
+                    <input
+                      className="input"
+                      name="pmProfile.publicName"
+                      value={values.pmProfile.publicName}
+                      onChange={handleChange}
+                      placeholder="Raison sociale sur le PDF"
+                    />
+                  </div>
+                  <div className="field">
+                    <div className="field-label">Slogan</div>
+                    <input
+                      className="input"
+                      name="pmProfile.tagline"
+                      value={values.pmProfile.tagline}
+                      onChange={handleChange}
+                      placeholder="Optionnel"
+                    />
+                  </div>
+                  <div className="field">
+                    <div className="field-label">Email</div>
+                    <input className="input" name="email" value={values.email} readOnly disabled />
+                    <span className="owner-form-hint" style={{ display: 'block', marginTop: 6, padding: '6px 8px' }}>
+                      Modifiable côté compte utilisateur / admin comptes.
+                    </span>
+                  </div>
+                  <div className="field">
+                    <div className="field-label">Téléphone</div>
+                    <input
+                      className="input"
+                      name="phone"
+                      value={values.phone}
+                      onChange={handleChange}
+                      placeholder="+212…"
+                    />
+                  </div>
+                  <div className="field" style={{ gridColumn: '1 / -1' }}>
+                    <div className="field-label">Adresse</div>
+                    <input
+                      className="input"
+                      name="address"
+                      value={values.address}
+                      onChange={handleChange}
+                      placeholder="Rue, numéro"
+                    />
+                  </div>
+                  <div className="field">
+                    <div className="field-label">Code postal</div>
+                    <input
+                      className="input"
+                      name="postalCode"
+                      value={values.postalCode}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="field">
+                    <div className="field-label">Ville</div>
+                    <input className="input" name="city" value={values.city} onChange={handleChange} />
+                  </div>
+                  <div className="field">
+                    <div className="field-label">Pays</div>
+                    <input className="input" name="country" value={values.country} onChange={handleChange} />
+                  </div>
+                </div>
+              </TabPanel>
+
               <TabPanel active={activeTab} id="sojori-web">
                 <div className="owner-form-hint" style={{ marginBottom: 12 }}>
                   Profil public sur sojori.com (page partenaires, bloc hôte). Activez « Publié » pour
@@ -626,14 +812,11 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr auto', gap: 12, marginTop: 12, alignItems: 'end' }}>
                   <div>
-                    <div className="field-label">Logo</div>
-                    <div
-                      className="owner-pm-logo"
-                      style={{
-                        background: `linear-gradient(135deg, ${values.pmProfile.brandColor.from || '#e8c87a'}, ${values.pmProfile.brandColor.to || '#c89b3c'})`,
-                      }}
-                    >
-                      {(
+                    <div className="field-label">Logo marketplace</div>
+                    <OwnerPmLogoImage
+                      images={values.pmProfile.images}
+                      className="owner-pm-logo owner-pm-logo-img"
+                      emptyLabel={
                         (values.pmProfile.publicName || `${values.firstName} ${values.lastName}`)
                           .trim()
                           .split(' ')
@@ -642,8 +825,8 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
                           .join('')
                           .slice(0, 2)
                           .toUpperCase() || 'SJ'
-                      )}
-                    </div>
+                      }
+                    />
                   </div>
                   <div className="field">
                     <div className="field-label">Couleur début</div>
@@ -711,15 +894,15 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
                     </label>
                   </div>
                   <div className="owner-form-hint" style={{ marginBottom: 8 }}>
-                    La 1re photo est principale. Sans photo, fallback sur un logement du PM.
+                    La 1re photo est principale (logo rapports P&L — voir onglet <b>Rapports P&L</b>).
                   </div>
                   <div className="owner-pm-photos">
                     {(values.pmProfile.images || []).length === 0 ? (
                       <span className="owner-pm-empty">Aucune photo</span>
                     ) : (
                       (values.pmProfile.images || []).map((url, idx) => (
-                        <div key={`${url}-${idx}`} className={`owner-pm-thumb${idx === 0 ? ' main' : ''}`}>
-                          <img src={url} alt="" />
+                        <div key={`${normalizePmImageUrl(url)}-${idx}`} className={`owner-pm-thumb${idx === 0 ? ' main' : ''}`}>
+                          <img src={normalizePmImageUrl(url)} alt="" referrerPolicy="no-referrer" />
                           {idx === 0 ? <span className="owner-pm-badge">Principale</span> : null}
                           <div className="owner-pm-actions">
                             {idx !== 0 ? (

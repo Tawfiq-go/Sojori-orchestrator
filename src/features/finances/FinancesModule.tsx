@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { Roles } from '../../constants/roles';
+import AdminOwnerScopeLayout from '../../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout.jsx';
+import { FinancesOwnerScopeBar } from './components/FinancesOwnerScopeBar';
 import './finances.css';
 
 type Props = {
@@ -13,11 +15,14 @@ export function FinancesModule({ children }: Props) {
   const isLandlord = user?.role === Roles.Landlord;
 
   return (
-    <div className="finances-module" data-role={isLandlord ? 'landlord' : 'pm'}>
-      <div className="main">
-        <div className="page on">{children}</div>
+    <AdminOwnerScopeLayout showTopBar={false}>
+      <div className="finances-module" data-role={isLandlord ? 'landlord' : 'pm'}>
+        <FinancesOwnerScopeBar />
+        <div className="main">
+          <div className="page on">{children}</div>
+        </div>
       </div>
-    </div>
+    </AdminOwnerScopeLayout>
   );
 }
 

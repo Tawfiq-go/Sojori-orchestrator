@@ -15,6 +15,7 @@ export function getListings(params = {}) {
     useActiveFilter = false,
     active = true,
     compact = false,
+    filterOwnerId,
   } = params;
   const q = new URLSearchParams({
     page: String(page),
@@ -30,6 +31,12 @@ export function getListings(params = {}) {
     q.set('active', String(active));
   }
   if (compact) q.set('compact', 'true');
+  const ownerFilterIds = Array.isArray(filterOwnerId)
+    ? filterOwnerId
+    : filterOwnerId
+      ? [filterOwnerId]
+      : [];
+  ownerFilterIds.filter(Boolean).forEach((id) => q.append('filterOwnerId', String(id)));
   const cityIds = Array.isArray(cityId) ? cityId : cityId ? [cityId] : [];
   cityIds.filter(Boolean).forEach((id) => q.append('cityId', String(id)));
   const url = `${MICROSERVICE_BASE_URL.LISTING}/listings?${q}`;
@@ -63,7 +70,8 @@ export async function getListingById(listingId, staging = false) {
   const res = await axios.get(
     `${MICROSERVICE_BASE_URL.LISTING}/listings/by-id/${encodeURIComponent(String(listingId))}?staging=${staging}`,
   );
-  return res.data?.data ?? res.data;
+  const body = res.data ?? {};
+  return body.listing ?? body.data ?? body;
 }
 
 /** Aligné backend : GET /listings/by-id/:id (pas /listings/:id). */

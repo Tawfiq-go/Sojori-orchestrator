@@ -11,7 +11,8 @@
 }
 
 .owner-drawer-inline {
-  margin-top: 22px;
+  margin-top: 16px;
+  scroll-margin-top: 80px;
 }
 
 .owner-drawer-tabs {
@@ -94,4 +95,183 @@
   font-size: 11px;
   color: #c81e1e;
   margin-top: 4px;
+}
+
+.owner-pl-source-hint {
+  margin-bottom: 12px;
+  border-color: var(--pt2);
+  background: var(--pt);
+  color: var(--pd);
+}
+
+.owner-pl-preview {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--b);
+  border-radius: 10px;
+  background: var(--bg2);
+}
+
+.owner-pl-preview-logo,
+.owner-pl-preview-fallback {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.owner-pl-logo-empty,
+.owner-pl-preview-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 4px;
+  background: linear-gradient(135deg, #f5e6c8, #e8c96a);
+  color: #5c4a12;
+}
+
+.owner-pl-preview-fallback {
+  font-size: 18px;
+}
+
+.owner-pl-preview-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--t);
+}
+
+.owner-pl-preview-line {
+  font-size: 11.5px;
+  color: var(--t3);
+  margin-top: 3px;
+  line-height: 1.35;
+}
+
+.owner-pl-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.owner-pl-logo-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  object-fit: contain;
+  border: 1px solid var(--b);
+  background: #fff;
+}
+
+.owner-pm-logo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--t4);
+  text-transform: uppercase;
+  text-align: center;
+  padding: 4px;
+  background: linear-gradient(135deg, #f5e6c8, #e8c96a);
+  color: #5c4a12;
+}
+
+.owner-pm-logo-broken {
+  background: #fff5f5;
+  color: #c81e1e;
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.owner-pm-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+  color: #5c4a12;
+}
+
+.owner-pm-logo-img {
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--b);
+  padding: 4px;
+}
+
+.owner-pm-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.owner-pm-thumb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--b);
+}
+
+.owner-pm-thumb.main {
+  border-color: var(--pd);
+  box-shadow: 0 0 0 2px var(--pt);
+}
+
+.owner-pm-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.owner-pm-badge {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  font-size: 8px;
+  font-weight: 800;
+  background: var(--pd);
+  color: #fff;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.owner-pm-actions {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  gap: 2px;
+}
+
+.owner-pm-actions button {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  border: 0;
+  cursor: pointer;
+}
+
+.owner-pm-empty {
+  font-size: 12px;
+  color: var(--t4);
+}
+
+.owner-photo-btn {
+  cursor: pointer;
 }

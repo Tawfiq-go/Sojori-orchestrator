@@ -1,4 +1,5 @@
 import type { LandlordContract } from '../types';
+import { contractBaseShortLabel } from './contractCommissionBase';
 
 export function formatMoney(amount: number, currency = 'MAD'): string {
   const sign = amount > 0 ? '+' : '';
@@ -48,10 +49,8 @@ export function contractBadge(contract?: LandlordContract): { label: string; ton
     return { label: `Forfait fixe · ${amt}${period}`, tone: 'info' };
   }
   const pct = contract.commissionPercent ?? 0;
-  if (contract.type === 'percent_without_ota') {
-    return { label: `% brut · ${pct}%`, tone: 'gold' };
-  }
-  return { label: `% net après OTA · ${pct}%`, tone: 'gold' };
+  const base = contractBaseShortLabel(contract);
+  return { label: `% ${base} · ${pct}%`, tone: 'gold' };
 }
 
 export function paidByLabel(paidBy?: string): string {

@@ -168,7 +168,7 @@ export function WorkerFormPage({ children }) {
   );
 }
 
-export function WorkerFormHeader({ title, subtitle, onBack, onCancel, onSave, saveLabel = 'Enregistrer', extraActions = null }) {
+export function WorkerFormHeader({ title, subtitle, onBack, onCancel, onSave, saveLabel = 'Enregistrer', saveDisabled = false, extraActions = null }) {
   return (
     <Box
       sx={{
@@ -210,7 +210,7 @@ export function WorkerFormHeader({ title, subtitle, onBack, onCancel, onSave, sa
           <Button sx={btnGhostSx} onClick={onCancel}>
             Annuler
           </Button>
-          <Button sx={btnPrimarySx} onClick={onSave}>
+          <Button sx={btnPrimarySx} onClick={onSave} disabled={saveDisabled}>
             {saveLabel}
           </Button>
         </Box>
@@ -372,7 +372,7 @@ export function WorkerFormNav({ sections = WORKER_FORM_SECTIONS, activeId, onJum
   );
 }
 
-export function WorkerFormActions({ onCancel, onSave, saveLabel = 'Enregistrer' }) {
+export function WorkerFormActions({ onCancel, onSave, saveLabel = 'Enregistrer', saveDisabled = false }) {
   return (
     <Box
       sx={{
@@ -385,10 +385,10 @@ export function WorkerFormActions({ onCancel, onSave, saveLabel = 'Enregistrer' 
         justifyContent: 'flex-end',
       }}
     >
-      <Button fullWidth sx={btnGhostSx} onClick={onCancel}>
+      <Button fullWidth sx={btnGhostSx} onClick={onCancel} disabled={saveDisabled}>
         Annuler
       </Button>
-      <Button fullWidth sx={btnPrimarySx} onClick={onSave}>
+      <Button fullWidth sx={btnPrimarySx} onClick={onSave} disabled={saveDisabled}>
         {saveLabel}
       </Button>
     </Box>
