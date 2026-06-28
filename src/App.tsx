@@ -195,6 +195,15 @@ const TeamRolesHubPage = lazy(() =>
 const TeamLegacyRedirect = lazy(() =>
   import('./pages/TeamRolesHubPage').then((module) => ({ default: module.TeamLegacyRedirect }))
 );
+const WorkerCreatePage = lazy(() =>
+  import('./pages/WorkerAdminPages').then((module) => ({ default: module.WorkerCreatePage }))
+);
+const WorkerCreateOwnerPage = lazy(() =>
+  import('./pages/WorkerAdminPages').then((module) => ({ default: module.WorkerCreateOwnerPage }))
+);
+const WorkerEditPage = lazy(() =>
+  import('./pages/WorkerAdminPages').then((module) => ({ default: module.WorkerEditPage }))
+);
 const SettingsHubPage = lazy(() =>
   import('./pages/SettingsHubPage').then((module) => ({ default: module.SettingsHubPage }))
 );
@@ -202,13 +211,34 @@ const SettingsLegacyRedirect = lazy(() =>
   import('./pages/SettingsHubPage').then((module) => ({ default: module.SettingsLegacyRedirect }))
 );
 const OnboardingPage = lazy(() =>
-  import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage }))
+  import('./pages/PmOnboardingPage').then((module) => ({ default: module.PmOnboardingPage }))
+);
+const OnboardingSuitePage = lazy(() =>
+  import('./features/onboarding/OnboardingSuitePage').then((module) => ({ default: module.OnboardingSuitePage }))
 );
 const MonitoringHubPage = lazy(() =>
   import('./pages/Monitor/MonitoringHubPage').then((module) => ({ default: module.default }))
 );
 const SojoriLogsAdminPage = lazy(() =>
   import('./pages/SojoriLogsAdminPage').then((module) => ({ default: module.default }))
+);
+const FinancesLandlordsPage = lazy(() =>
+  import('./features/finances/pages/FinancesLandlordsPage').then((module) => ({ default: module.default }))
+);
+const FinancesLedgerPage = lazy(() =>
+  import('./features/finances/pages/FinancesLedgerPage').then((module) => ({ default: module.default }))
+);
+const FinancesReportsPage = lazy(() =>
+  import('./features/finances/pages/FinancesReportsPage').then((module) => ({ default: module.default }))
+);
+const FinancesReportDetailPage = lazy(() =>
+  import('./features/finances/pages/FinancesReportDetailPage').then((module) => ({ default: module.default }))
+);
+const LandlordCreatePage = lazy(() =>
+  import('./pages/LandlordAdminPages').then((module) => ({ default: module.LandlordCreatePage }))
+);
+const LandlordEditPage = lazy(() =>
+  import('./pages/LandlordAdminPages').then((module) => ({ default: module.LandlordEditPage }))
 );
 
 function RouteLoader() {
@@ -370,6 +400,9 @@ function App() {
               <Route path="/admin/ChannelManager" element={<LazyRoute><ChannelManagerHubPage /></LazyRoute>} />
               <Route path="/admin/equipe" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
               <Route path="/admin/equipe/owners" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
+              <Route path="/admin/User/create-user" element={<LazyRoute><WorkerCreatePage /></LazyRoute>} />
+              <Route path="/admin/User/create-owner-user" element={<LazyRoute><WorkerCreateOwnerPage /></LazyRoute>} />
+              <Route path="/admin/User/edit-user/:userId" element={<LazyRoute><WorkerEditPage /></LazyRoute>} />
               <Route path="/admin/User/team" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
               <Route path="/admin/User/owner" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
               <Route path="/admin/User/owner/*" element={<LazyRoute><TeamLegacyRedirect /></LazyRoute>} />
@@ -379,6 +412,14 @@ function App() {
               <Route path="/admin/setting/currency" element={<LazyRoute><SettingsHubPage /></LazyRoute>} />
               <Route path="/admin/settings/currency" element={<LazyRoute><SettingsLegacyRedirect /></LazyRoute>} />
               <Route path="/onboarding" element={<LazyRoute><OnboardingPage /></LazyRoute>} />
+              <Route path="/onboarding/suite" element={<LazyRoute><OnboardingSuitePage /></LazyRoute>} />
+
+              <Route path="/finances/landlords" element={<LazyRoute><FinancesLandlordsPage /></LazyRoute>} />
+              <Route path="/finances/landlords/new" element={<LazyRoute><LandlordCreatePage /></LazyRoute>} />
+              <Route path="/finances/landlords/:landlordId" element={<LazyRoute><LandlordEditPage /></LazyRoute>} />
+              <Route path="/finances/ledger" element={<LazyRoute><FinancesLedgerPage /></LazyRoute>} />
+              <Route path="/finances/reports" element={<LazyRoute><FinancesReportsPage /></LazyRoute>} />
+              <Route path="/finances/reports/:id" element={<LazyRoute><FinancesReportDetailPage /></LazyRoute>} />
 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Route>

@@ -15,6 +15,7 @@ import {
   Tooltip as RechartsTooltip,
 } from 'recharts';
 import { T } from '../_tokens';
+import { DP, marketCurveLegend } from '../clientLabels';
 import DataEmptyPlaceholder from '../DataEmptyPlaceholder';
 import {
   addDaysIso,
@@ -152,9 +153,9 @@ export default function YearlyCalendar({
   const helpLinkLabel =
     sourceLinkLabel ??
     pricingSource === 'estimate'
-      ? 'Preview estimate (Sojori) ⓘ'
+      ? 'Prévisualisation estimation Sojori ⓘ'
       : pricingSource === 'airroi'
-        ? 'Comparaison OTA (future/rates) ⓘ'
+        ? 'Comparaison tarifs marché Sojori ⓘ'
         : 'Source pilote Sojori ⓘ';
 
   /** Pas de courbe future/rates OTA — estimate / pilote uniquement */
@@ -363,7 +364,7 @@ export default function YearlyCalendar({
 
   React.useEffect(() => {
     if (!import.meta.env.DEV || !dualCompareStats) return;
-    console.info('[DP] compare AirROI vs Pilote', dualCompareStats);
+    console.info('[DP] compare estimation vs pilote', dualCompareStats);
   }, [dualCompareStats]);
 
   const priceExtent = useMemo(() => {
@@ -437,10 +438,10 @@ export default function YearlyCalendar({
   const title =
     pricingSource === 'airroi'
       ? isRollingWindow
-        ? 'Comparaison OTA (future/rates)'
-        : `Comparaison OTA ${year}`
+        ? 'Tarifs marché Sojori · 12 mois'
+        : `Tarifs marché Sojori ${year}`
       : pricingSource === 'estimate'
-        ? 'Prix estimés (calculator/estimate) · 12 mois'
+        ? 'Estimation Sojori · 12 mois'
         : isRollingWindow
           ? 'Prix recommandés Sojori · 12 mois'
           : `Prix recommandés Sojori ${year}`;
@@ -454,8 +455,7 @@ export default function YearlyCalendar({
       <DataEmptyPlaceholder
         title="Calendrier vide"
         hint={
-          emptyHint ??
-          'Modal ⟳ · GET /calculator/estimate puis preview ici (12 mois)'
+          emptyHint ?? DP.fetchEstimationHint
         }
       />
     );
@@ -467,7 +467,7 @@ export default function YearlyCalendar({
         title="Aucun jour dans la fenêtre"
         hint={
           isRollingWindow
-            ? `Aucun jour entre aujourd’hui et le ${formatFrShort(windowEnd)}. Relancez ⟳ calculator/estimate.`
+            ? `Aucun jour entre aujourd’hui et le ${formatFrShort(windowEnd)}. ${DP.fetchEstimationEmpty}`
             : `Aucune date en ${year} — essayez l’autre année.`
         }
       />
@@ -634,7 +634,7 @@ export default function YearlyCalendar({
                 ? 'Application…'
                 : pricingSource === 'airroi'
                   ? 'Activer pilote §03 puis appliquer'
-                  : '✨ Appliquer au calendrier ops + RU'}
+                  : '✨ Appliquer au calendrier Sojori'}
             </Button>
           ) : null}
         </Stack>
@@ -733,7 +733,7 @@ export default function YearlyCalendar({
                   }}
                 >
                   <Box sx={{ width: 16, height: 3, bgcolor: '#2563eb', borderRadius: 0.5 }} />
-                  {pricingSource === 'estimate' ? 'Estimate (brut)' : 'Marché AirROI (brut)'}
+                  {marketCurveLegend(pricingSource === 'estimate' ? 'estimate' : pricingSource === 'airroi' ? 'airroi' : undefined)}
                 </Box>
                 <Box
                   sx={{
@@ -772,7 +772,7 @@ export default function YearlyCalendar({
                     }}
                   >
                     <Box sx={{ width: 16, height: 3, bgcolor: '#94a3b8', borderRadius: 0.5 }} />
-                    Calendrier ops actuel
+                    {DP.calendrierActuel}
                   </Box>
                 ) : null}
               </Stack>
@@ -806,21 +806,21 @@ export default function YearlyCalendar({
                 ) : null}
                 {dualCompareStats.different > 0 ? (
                   <Box component="span" sx={{ color: T.goldDeep, fontWeight: 800 }}>
-                    {dualCompareStats.different} j estimate ≠ Sojori
+                    {dualCompareStats.different} j estimation ≠ Sojori
                     {dualCompareStats.maxAbsDelta > 0
                       ? ` (max ${dualCompareStats.maxAbsDelta.toLocaleString('fr-FR')})`
                       : ''}
                   </Box>
                 ) : (
                   <Box component="span" sx={{ color: '#1d4ed8', fontWeight: 800 }}>
-                    Estimate ≈ Sojori · {dualCompareStats.compared} j
+                    Estimation ≈ Sojori · {dualCompareStats.compared} j
                   </Box>
                 )}
                 {dualCompareStats.applyDifferent > 0 ? (
                   <>
                     {' · '}
                     <Box component="span" sx={{ color: T.warning, fontWeight: 800 }}>
-                      {dualCompareStats.applyDifferent} j Sojori ≠ ops (Δ apply max{' '}
+                      {dualCompareStats.applyDifferent} j Sojori ≠ calendrier (Δ apply max{' '}
                       {dualCompareStats.maxApplyDelta.toLocaleString('fr-FR')} MAD)
                     </Box>
                   </>
@@ -828,13 +828,13 @@ export default function YearlyCalendar({
                 {dualCoverage ? (
                   <>
                     {' · '}
-                    estimate {priceExtent.marketMin}–{priceExtent.marketMax}
+                    estimation {priceExtent.marketMin}–{priceExtent.marketMax}
                     {' · '}
                     Sojori {priceExtent.pilotMin}–{priceExtent.pilotMax}
                     {tripleCurve ? (
                       <>
                         {' · '}
-                        ops {priceExtent.calendarMin}–{priceExtent.calendarMax}
+                        calendrier {priceExtent.calendarMin}–{priceExtent.calendarMax}
                       </>
                     ) : null}
                   </>
@@ -871,7 +871,7 @@ export default function YearlyCalendar({
                 lineHeight: 1.5,
               }}
             >
-              <b>Calendrier ops plat à {priceExtent.calendarMin.toLocaleString('fr-FR')} MAD</b> sur toute la
+              <b>{DP.calendrierActuel} plat à {priceExtent.calendarMin.toLocaleString('fr-FR')} MAD</b> sur toute la
               fenêtre — inventaire sans variation (base ou calculatedPrice). Si /calendar affiche d’autres
               tarifs, vérifiez que vous êtes sur le même listing ID ; après déploiement, la courbe grise =
               prix affiché calendrier (manualPrice si dynamique OFF).
@@ -888,15 +888,15 @@ export default function YearlyCalendar({
                 lineHeight: 1.45,
               }}
             >
-              Tableau §04 = Δ apply (Sojori − ops). Survol = 3 prix du jour.
+              Tableau §04 = Δ apply (Sojori − calendrier). Survol = 3 prix du jour.
               {dualCompareStats.missingInWindow > 0 ? (
-                <> · {dualCompareStats.missingInWindow} j sans tarif estimate dans le snapshot.</>
+                <> · {dualCompareStats.missingInWindow} j sans tarif d’estimation dans le snapshot.</>
               ) : null}
               {dualCompareStats.flatStreakLen >= 14 ? (
                 <>
                   {' '}
-                  · Plat estimate loin ({dualCompareStats.flatStreakPrice.toLocaleString('fr-FR')} MAD /{' '}
-                  {dualCompareStats.flatStreakLen} j) = AirROI, pas Sojori.
+                  · Plat estimation ({dualCompareStats.flatStreakPrice.toLocaleString('fr-FR')} MAD /{' '}
+                  {dualCompareStats.flatStreakLen} j) = estimation brute, pas prix Sojori.
                 </>
               ) : null}
             </Typography>
@@ -957,12 +957,12 @@ export default function YearlyCalendar({
                           </Typography>
                           {m != null && m > 0 ? (
                             <Typography sx={{ fontSize: 11, color: '#1d4ed8', fontFamily: '"Geist Mono", monospace' }}>
-                              {pricingSource === 'estimate' ? 'Estimate' : 'Marché AirROI'} :{' '}
+                              {marketCurveLegend(pricingSource === 'estimate' ? 'estimate' : 'airroi')} :{' '}
                               <b>{Math.round(m).toLocaleString('fr-FR')} MAD</b>
                               {row.tierLabel ? ` · ${row.tierLabel}` : ''}
                             </Typography>
                           ) : (
-                            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>Estimate : —</Typography>
+                            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>{DP.estimationSojori} : —</Typography>
                           )}
                           {p != null && p > 0 ? (
                             <Typography sx={{ fontSize: 11, color: T.goldDeep, fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
@@ -974,7 +974,7 @@ export default function YearlyCalendar({
                           )}
                           {c != null && c > 0 ? (
                             <Typography sx={{ fontSize: 11, color: '#475569', fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
-                              Calendrier ops : <b>{Math.round(c).toLocaleString('fr-FR')} MAD</b>
+                              {DP.calendrierActuel} : <b>{Math.round(c).toLocaleString('fr-FR')} MAD</b>
                             </Typography>
                           ) : null}
                           {delta != null ? (
@@ -987,7 +987,7 @@ export default function YearlyCalendar({
                                 fontFamily: '"Geist Mono", monospace',
                               }}
                             >
-                              Δ Sojori − estimate : {delta > 0 ? '+' : ''}
+                              Δ Sojori − estimation : {delta > 0 ? '+' : ''}
                               {Math.round(delta).toLocaleString('fr-FR')} MAD
                             </Typography>
                           ) : null}
@@ -1001,7 +1001,7 @@ export default function YearlyCalendar({
                                 fontFamily: '"Geist Mono", monospace',
                               }}
                             >
-                              Δ apply (Sojori − ops) : {deltaApply > 0 ? '+' : ''}
+                              Δ apply (Sojori − calendrier) : {deltaApply > 0 ? '+' : ''}
                               {Math.round(deltaApply).toLocaleString('fr-FR')} MAD
                             </Typography>
                           ) : null}
@@ -1013,7 +1013,7 @@ export default function YearlyCalendar({
                   {tripleCurve ? (
                     <Line
                       type="monotone"
-                      name="Calendrier ops"
+                      name={DP.calendrierActuel}
                       dataKey="calendarPrice"
                       connectNulls={false}
                       stroke="#94a3b8"
@@ -1025,7 +1025,7 @@ export default function YearlyCalendar({
                   ) : null}
                   <Line
                     type="monotone"
-                    name="Estimate"
+                    name={DP.estimationSojori}
                     dataKey="marketPrice"
                     connectNulls={false}
                     stroke="#2563eb"
@@ -1118,12 +1118,12 @@ export default function YearlyCalendar({
                         </Typography>
                         {m != null && m > 0 ? (
                           <Typography sx={{ fontSize: 11, color: '#1d4ed8', fontFamily: '"Geist Mono", monospace' }}>
-                            {pricingSource === 'estimate' ? 'Estimate' : 'Marché AirROI'} :{' '}
+                            {marketCurveLegend(pricingSource === 'estimate' ? 'estimate' : 'airroi')} :{' '}
                             <b>{Math.round(m).toLocaleString('fr-FR')} MAD</b>
                             {row.tierLabel ? ` · ${row.tierLabel}` : ''}
                           </Typography>
                         ) : (
-                          <Typography sx={{ fontSize: 10.5, color: T.text3 }}>Estimate : —</Typography>
+                          <Typography sx={{ fontSize: 10.5, color: T.text3 }}>{DP.estimationSojori} : —</Typography>
                         )}
                         {p != null && p > 0 ? (
                           <Typography sx={{ fontSize: 11, color: T.goldDeep, fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
@@ -1135,7 +1135,7 @@ export default function YearlyCalendar({
                         )}
                         {c != null && c > 0 ? (
                           <Typography sx={{ fontSize: 11, color: '#475569', fontFamily: '"Geist Mono", monospace', mt: 0.25 }}>
-                            Calendrier ops : <b>{Math.round(c).toLocaleString('fr-FR')} MAD</b>
+                            {DP.calendrierActuel} : <b>{Math.round(c).toLocaleString('fr-FR')} MAD</b>
                           </Typography>
                         ) : null}
                         {delta != null ? (
@@ -1148,7 +1148,7 @@ export default function YearlyCalendar({
                               fontFamily: '"Geist Mono", monospace',
                             }}
                           >
-                            Δ Sojori − estimate : {delta > 0 ? '+' : ''}
+                            Δ Sojori − estimation : {delta > 0 ? '+' : ''}
                             {Math.round(delta).toLocaleString('fr-FR')} MAD
                           </Typography>
                         ) : null}
@@ -1290,8 +1290,8 @@ export default function YearlyCalendar({
         <Box>
           {isRollingWindow && pricingSource === 'estimate' ? (
             <>
-              <b>Prix pilote</b> dérivés de <b>calculator/estimate</b> (12 mois) — pas les tarifs
-              Airbnb future/rates. Vérifiez ici avant « Appliquer » vers le calendrier ops.
+              <b>Prix pilote</b> dérivés de l’<b>estimation Sojori</b> (12 mois) — pas les tarifs
+              journaliers bruts du marché. Vérifiez ici avant « Appliquer » vers le {DP.calendrierSojori.toLowerCase()}.
             </>
           ) : isRollingWindow && eventDayCount > 0 ? (
             <>

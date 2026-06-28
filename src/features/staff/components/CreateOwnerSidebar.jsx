@@ -120,7 +120,8 @@ const CreateOwnerSidebar = ({
         role: 'Owner'
       });
       if (response.data) {
-        const ownerId = String(response.data?._id ?? response.data?.id ?? '');
+        const payload = response.data?.data ?? response.data;
+        const ownerId = String(payload?.accountId ?? payload?._id ?? payload?.id ?? '');
         if (ownerId) {
           try {
             await initializeOwnerOrchestrationFromActivations(ownerId, serviceActivations);

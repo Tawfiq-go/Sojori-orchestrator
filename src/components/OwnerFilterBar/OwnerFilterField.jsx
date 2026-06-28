@@ -40,6 +40,8 @@ export default function OwnerFilterField({ toolbarInputHeight, requireSelection 
   return (
     <Autocomplete
       size="small"
+      openOnFocus
+      autoHighlight
       loading={ownersLoading}
       options={options}
       value={value}
@@ -50,6 +52,17 @@ export default function OwnerFilterField({ toolbarInputHeight, requireSelection 
         }
         setSelectedOwnerId(String(o._id ?? o.id));
       }}
+      filterOptions={(rows, state) => {
+        const q = state.inputValue.trim().toLowerCase();
+        if (!q) return rows;
+        return rows.filter((o) => {
+          if (o?.__all) return true;
+          const label = getOwnerListLabel(o).toLowerCase();
+          const email = String(o?.email ?? '').toLowerCase();
+          const company = String(o?.fillCompany?.companyName ?? o?.companyName ?? '').toLowerCase();
+          return label.includes(q) || email.includes(q) || company.includes(q);
+        });
+      }}
       isOptionEqualToValue={(a, b) => {
         if (a?.__all && b?.__all) return true;
         return String(a?._id ?? a?.id) === String(b?._id ?? b?.id);
@@ -58,8 +71,15 @@ export default function OwnerFilterField({ toolbarInputHeight, requireSelection 
         if (!o || o?.__all) return t('All owners', 'Tous les propriétaires');
         return getOwnerListLabel(o);
       }}
-      noOptionsText={requireSelection ? t('No owners', 'Aucun propriétaire') : undefined}
-      ListboxProps={{ style: { maxHeight: 360 } }}
+      noOptionsText={
+        requireSelection
+          ? ownersLoading
+            ? t('Loading…', 'Chargement…')
+            : t('No owners', 'Aucun propriétaire')
+          : undefined
+      }
+      loadingText={t('Loading owners…', 'Chargement des propriétaires…')}
+      slotProps={{ listbox: { style: { maxHeight: 360 } } }}
       sx={{
         minWidth: 200,
         maxWidth: 300,
@@ -79,9 +99,11 @@ export default function OwnerFilterField({ toolbarInputHeight, requireSelection 
                 ? t('Select owner', 'Choisir un propriétaire…')
                 : t('Search owner', 'Rechercher un propriétaire...')
           }
-          inputProps={{
-            ...params.inputProps,
-            ...(compactToolbar ? { 'aria-label': ownerAria } : {}),
+          slotProps={{
+            htmlInput: {
+              ...params.inputProps,
+              ...(compactToolbar ? { 'aria-label': ownerAria } : {}),
+            },
           }}
         />
       )}

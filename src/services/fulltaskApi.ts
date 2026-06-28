@@ -137,6 +137,8 @@ export type OrchestrationConfigLoadMeta = {
   configSource?: 'owner' | 'global_template' | null;
 };
 
+const ORCH_HTTP_TIMEOUT_MS = 90_000;
+
 export async function getOrchestrationConfig(
   ownerId: string,
   options?: { strictOwner?: boolean },
@@ -145,12 +147,16 @@ export async function getOrchestrationConfig(
   const { data } = await axios.get(`${BASE}/orchestration/${ownerId}`, {
     ...authHeaders(),
     params,
+    timeout: ORCH_HTTP_TIMEOUT_MS,
   });
   return data;
 }
 
 export async function upsertOrchestrationConfig(ownerId: string, body: Record<string, unknown>) {
-  const { data } = await axios.put(`${BASE}/orchestration/${ownerId}`, body, authHeaders());
+  const { data } = await axios.put(`${BASE}/orchestration/${ownerId}`, body, {
+    ...authHeaders(),
+    timeout: ORCH_HTTP_TIMEOUT_MS,
+  });
   return data;
 }
 
@@ -667,7 +673,7 @@ export async function copyOrchestrationConfigToOwner(sourceOwnerId: string, targ
   const { data } = await axios.post(
     `${BASE}/orchestration/copy`,
     { sourceOwnerId, targetOwnerId },
-    authHeaders(),
+    { ...authHeaders(), timeout: ORCH_HTTP_TIMEOUT_MS },
   );
   return data;
 }

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { MICROSERVICE_BASE_URL } from 'config/backendServer.config';
+import { logWorkerCreate, warnWorkerCreate } from '../../../utils/workerCreateDebug';
 
 export function getListings(params = {}) {
   const {
@@ -7,9 +8,13 @@ export function getListings(params = {}) {
     limit = 20,
     name = '',
     city = '',
+    cityId = [],
     country = '',
     sortingBy = '',
     staging = false,
+    useActiveFilter = false,
+    active = true,
+    compact = false,
   } = params;
   const q = new URLSearchParams({
     page: String(page),
@@ -20,7 +25,34 @@ export function getListings(params = {}) {
     sortingBy,
     staging: String(staging),
   });
-  return axios.get(`${MICROSERVICE_BASE_URL.LISTING}/listings?${q}`);
+  if (useActiveFilter) {
+    q.set('useActiveFilter', 'true');
+    q.set('active', String(active));
+  }
+  if (compact) q.set('compact', 'true');
+  const cityIds = Array.isArray(cityId) ? cityId : cityId ? [cityId] : [];
+  cityIds.filter(Boolean).forEach((id) => q.append('cityId', String(id)));
+  const url = `${MICROSERVICE_BASE_URL.LISTING}/listings?${q}`;
+  logWorkerCreate('api:get-listings', { url, cityIds, useActiveFilter, compact });
+  return axios.get(url).then((res) => {
+    logWorkerCreate('api:get-listings:ok', {
+      status: res?.status,
+      total: res?.data?.total,
+      count: Array.isArray(res?.data?.data) ? res.data.data.length : 0,
+    });
+    return res;
+  }).catch((error) => {
+    if (error?.response?.status === 404) {
+      warnWorkerCreate('api:get-listings:empty-404', { url, cityIds });
+      return { data: { success: true, data: [], total: 0 } };
+    }
+    warnWorkerCreate('api:get-listings:fail', {
+      url,
+      status: error?.response?.status,
+      message: error?.response?.data?.message || error?.message,
+    });
+    throw error;
+  });
 }
 
 export function getCountries() {

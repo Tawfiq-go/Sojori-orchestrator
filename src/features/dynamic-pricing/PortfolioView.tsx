@@ -229,7 +229,7 @@ export default function PortfolioView({
         items={[
           { kind: 'prod', label: 'PROD', tooltip: 'srv-listing — tous les biens actifs' },
         ]}
-        note="Rechargé à chaque ouverture (GET /portfolio) — pas d’appel marché automatique"
+        note="Rechargé à chaque ouverture — pas d’appel marché automatique"
       />
       <MacroKpisTest macro={scopedMacro} rows={displayRows} loading={loading} cityLabel={cityScope} />
 
@@ -369,7 +369,7 @@ function MacroKpisTest({
     }}>
       <MacroCard label="BIENS SOJORI" emoji="🏠" value={String(macro.totalListings)}
         ctx={<>{cityLabel ? `Vue ${cityLabel}` : 'Toutes villes'} · hors staging</>} />
-      <MacroCard label="ID AIRBNB" emoji="🔗" value={String(withAirbnb)}
+      <MacroCard label="CANAL" emoji="🔗" value={String(withAirbnb)}
         ctx={<>Prêts pour refresh marché</>} />
       <MacroCard label="SNAPSHOTS" emoji="💾" value={String(withSnap)}
         ctx={<>Données brutes en base (channels)</>} />
@@ -586,7 +586,7 @@ function PortfolioTable({
     tableTab === 'audit'
       ? 'Toutes les colonnes brutes snapshot (USD)'
       : tableTab === 'todo'
-        ? 'Biens sans Airbnb ou sans snapshot ⟳'
+        ? 'Biens sans annonce connectée ou sans snapshot ⟳'
         : 'Vue synthèse · statut données par bien';
 
   return (
@@ -691,7 +691,7 @@ function PortfolioTable({
               width: 6, height: 6, borderRadius: '50%',
               bgcolor: airbnbOnly ? T.success : T.text4,
             }} />
-            ID Airbnb
+            Annonces connectées
             <Box component="span" sx={{
               fontFamily: '"Geist Mono", monospace', fontSize: 10, fontWeight: 800,
               px: 0.625, py: 0.125, borderRadius: 999,
@@ -708,7 +708,7 @@ function PortfolioTable({
         <SectionSourceBar
           compact
           items={[
-            { kind: 'prod', label: 'Sojori · OTA', tooltip: 'Colonnes Bien + Airbnb (srv-listing)' },
+            { kind: 'prod', label: 'Sojori · canal', tooltip: 'Colonnes Bien + Canal (srv-listing)' },
             tableTab === 'audit'
               ? {
                   kind: 'prod',
@@ -766,7 +766,7 @@ function PortfolioTable({
                 ) : null}
                 <Box component="th" sx={tableHeadSx(T.text3)}>Bien</Box>
                 <Box component="th" sx={tableHeadSx(T.text3)}>Statut</Box>
-                <Box component="th" sx={tableHeadSx(T.text3)}>Airbnb</Box>
+                <Box component="th" sx={tableHeadSx(T.text3)}>Canal</Box>
                 <SnapshotHeaderCell
                   label="Snapshot"
                   hintTitle="Date snapshot"
@@ -1038,7 +1038,7 @@ function PortfolioOperationalRow({
       <Box component="td" sx={{ ...tableCellSx, minWidth: 160 }}>
         <ListingNameLink
           name={row.listing.name}
-          sub={row.listing.ruPropertyKey ? `RU ${row.listing.ruPropertyKey}` : row.listing._id.slice(-8)}
+          sub={row.listing._id.slice(-8)}
           onNavigate={onDrillDown}
         />
       </Box>
@@ -1295,7 +1295,7 @@ function PortfolioRowComp({ row, bulkSelectEnabled = true, selected, onToggle, o
             <Box key={col.id} component="td" sx={{ ...tableCellSx, minWidth: 160 }}>
               <ListingNameLink
                 name={row.listing.name}
-                sub={row.listing.ruPropertyKey ? `RU ${row.listing.ruPropertyKey}` : row.listing._id.slice(-8)}
+                sub={row.listing._id.slice(-8)}
                 onNavigate={onDrillDown}
               />
             </Box>
@@ -1368,12 +1368,12 @@ function AirbnbConnectCell({ listing }: { listing: Listing }) {
             fontSize: 10, fontWeight: 700, color: T.info, textDecoration: 'none',
             '&:hover': { textDecoration: 'underline' },
           }}>
-          Ouvrir Airbnb
+          Ouvrir l’annonce
         </Box>
       )}
       {!connected && listing.otaVerifiedAt && (
         <Box sx={{ fontSize: 9, color: T.text4 }} title="Vérifier les canaux sur le dashboard legacy">
-          OTA vérifié — pas d’ID Airbnb
+          Canal vérifié — identifiant manquant
         </Box>
       )}
     </Stack>

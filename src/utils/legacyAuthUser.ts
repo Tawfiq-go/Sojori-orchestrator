@@ -30,6 +30,7 @@ export function toLegacyAuthUser(user: MockUser | ApiUser | null): Record<string
     phone: 'phone' in user ? user.phone : undefined,
     company: 'company' in user ? user.company : undefined,
     ownerId: (user as { ownerId?: string }).ownerId,
+    ownerAccess: !!(user as { ownerAccess?: boolean }).ownerAccess,
     featureGrants: (user as { featureGrants?: unknown[] }).featureGrants,
   };
 }

@@ -11,7 +11,6 @@ import {
   InputAdornment,
   MenuItem,
   Paper,
-  Select,
   Stack,
   TextField,
   Tooltip,
@@ -20,8 +19,16 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SyncIcon from '@mui/icons-material/Sync';
-import BusinessIcon from '@mui/icons-material/Business';
 import ChipMultiSelect from 'components/ChipMultiSelect/ChipMultiSelect';
+import {
+  PageHeader,
+  StatCard,
+  FilterBar,
+  FilterChip,
+  btnPrimarySx,
+  btnGhostSx,
+  tokens as dashT,
+} from '../dashboard/DashboardV2.components';
 import { useTeamViewMode } from '../../context/TeamViewContext';
 import { TeamHubMemberCard, TeamHubCardGrid } from './TeamHubMemberCard';
 import { TeamHubListTable } from './TeamHubListTable';
@@ -72,6 +79,26 @@ export function PropertyManagerHubView({
 }) {
   const { viewMode } = useTeamViewMode();
   const [inputValue, setInputValue] = useState(searchText || '');
+  const [statusFilter, setStatusFilter] = useState(() => {
+    if (deletedFilter === 'true' || deletedFilter === true) return 'deleted';
+    if (bannedFilter === 'true' || bannedFilter === true) return 'banned';
+    return 'active';
+  });
+
+  const applyStatusFilter = (key) => {
+    setStatusFilter(key);
+    setPage(0);
+    if (key === 'active') {
+      onDeletedChange('false');
+      onBannedChange('false');
+    } else if (key === 'banned') {
+      onDeletedChange('false');
+      onBannedChange('true');
+    } else if (key === 'deleted') {
+      onDeletedChange('true');
+      onBannedChange('false');
+    }
+  };
 
   const listingOptions = useMemo(
     () =>
@@ -172,43 +199,50 @@ export function PropertyManagerHubView({
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1.5 }}>
-        <BusinessIcon sx={{ fontSize: 22, color: TEAM_T.primary, mt: 0.25 }} />
-        <Box sx={{ flex: 1 }}>
-          <Typography sx={{ fontWeight: 800, fontSize: 16, color: TEAM_T.text }}>
-            Property managers
-          </Typography>
-          <Typography sx={{ fontSize: 12, color: TEAM_T.text3, mt: 0.25, maxWidth: 720 }}>
-            Comptes <b>Owner</b> (gestionnaires de parc) : identité, channel manager RU/Channex,
-            annonces rattachées. Distinct du staff terrain →{' '}
-            <a href="/tasks/team" style={{ color: TEAM_T.primaryDeep, fontWeight: 700 }}>
-              /tasks/team
-            </a>
-          </Typography>
-        </Box>
-        <Chip
-          label={`${totalCount} PM`}
-          size="small"
-          sx={{
-            bgcolor: TEAM_T.primaryTint,
-            color: TEAM_T.primaryDeep,
-            fontWeight: 700,
-            fontSize: 11,
-            height: 24,
-          }}
-        />
+      <PageHeader title="Comptes Owner" count={String(totalCount)}>
+        {canCreate ? (
+          <Button sx={btnPrimarySx} onClick={onCreate}>
+            Nouveau PM
+          </Button>
+        ) : null}
+      </PageHeader>
+
+      <Typography sx={{ fontSize: 12.5, color: dashT.text3, mb: 2, maxWidth: 760 }}>
+        Gestionnaires de parc Sojori : identité, channel manager RU/Channex, annonces rattachées.
+        Réservé aux administrateurs plateforme.
+      </Typography>
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
+          gap: 1.25,
+          mb: 2,
+        }}
+      >
+        <StatCard icon="🏢" iconBg={dashT.primaryTint} iconColor={dashT.primaryDeep} value={String(totalCount)} label="PM" />
+        <StatCard icon="🏠" iconBg={dashT.infoTint} iconColor={dashT.info} value={String(portfolioKpis?.listingsTotal ?? 0)} label="Annonces" />
+        <StatCard icon="🔗" iconBg={dashT.successTint} iconColor={dashT.success} value={String(portfolioKpis?.listingsRu ?? 0)} label="RU" />
+        <StatCard icon="📡" iconBg={dashT.aiTint} iconColor={dashT.ai} value={String(portfolioKpis?.listingsChannex ?? 0)} label="Channex" />
       </Box>
+
+      <FilterBar>
+        <FilterChip label="Actifs" active={statusFilter === 'active'} onClick={() => applyStatusFilter('active')} />
+        <FilterChip label="Bannis" active={statusFilter === 'banned'} onClick={() => applyStatusFilter('banned')} />
+        <FilterChip label="Supprimés" active={statusFilter === 'deleted'} onClick={() => applyStatusFilter('deleted')} />
+      </FilterBar>
 
       <Paper
         sx={{
           p: 1.5,
           mb: 1.5,
+          mt: 1.5,
           border: `1px solid ${TEAM_T.border}`,
           borderRadius: 1.5,
           bgcolor: TEAM_T.bg1,
         }}
       >
-        <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" useFlexGap>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center', gap: 1 }} useFlexGap>
           <TextField
             size="small"
             placeholder={t('Search by name or email')}
@@ -238,30 +272,6 @@ export function PropertyManagerHubView({
             width="140px"
             t={t}
           />
-          <Select
-            size="small"
-            value={deletedFilter}
-            onChange={(e) => {
-              onDeletedChange(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 110, height: 36, fontSize: 12 }}
-          >
-            <MenuItem value="false">{t('Active')}</MenuItem>
-            <MenuItem value="true">{t('Deleted')}</MenuItem>
-          </Select>
-          <Select
-            size="small"
-            value={bannedFilter}
-            onChange={(e) => {
-              onBannedChange(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 110, height: 36, fontSize: 12 }}
-          >
-            <MenuItem value="false">{t('Not banned')}</MenuItem>
-            <MenuItem value="true">{t('Banned')}</MenuItem>
-          </Select>
           <Button
             size="small"
             variant="outlined"
@@ -277,22 +287,6 @@ export function PropertyManagerHubView({
           >
             Sync RU
           </Button>
-          {canCreate ? (
-            <Button
-              variant="contained"
-              size="small"
-              onClick={onCreate}
-              sx={{
-                bgcolor: TEAM_T.primary,
-                color: '#fff !important',
-                textTransform: 'none',
-                fontWeight: 600,
-                '&:hover': { bgcolor: TEAM_T.primaryDeep },
-              }}
-            >
-              {t('New Owner')}
-            </Button>
-          ) : null}
           <Tooltip title="Réinitialiser les filtres">
             <span>
               <IconButton
@@ -305,14 +299,9 @@ export function PropertyManagerHubView({
               </IconButton>
             </span>
           </Tooltip>
-          <Button size="small" onClick={handleSearchSubmit} sx={{ textTransform: 'none', fontWeight: 600 }}>
+          <Button size="small" onClick={handleSearchSubmit} sx={btnGhostSx}>
             {t('Search')}
           </Button>
-        </Stack>
-        <Stack direction="row" spacing={0.75} flexWrap="wrap" sx={{ mt: 1 }}>
-          <Chip size="small" label={`Annonces ${portfolioKpis?.listingsTotal ?? 0}`} sx={{ fontSize: 10, height: 22 }} />
-          <Chip size="small" label={`RU ${portfolioKpis?.listingsRu ?? 0}`} sx={{ fontSize: 10, height: 22 }} />
-          <Chip size="small" label={`CX ${portfolioKpis?.listingsChannex ?? 0}`} sx={{ fontSize: 10, height: 22 }} />
         </Stack>
       </Paper>
 

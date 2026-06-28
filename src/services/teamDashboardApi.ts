@@ -2,6 +2,7 @@
  * API Équipe & Rôles — port sojori-dashboard features/staff/services/serverApi.task.js + staffSimplified
  */
 import apiClient from './apiClient';
+import { isAxiosError } from 'axios';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 
 const SRV_USER = MICROSERVICE_BASE_URL.SRV_USER;
@@ -48,9 +49,50 @@ export async function getOwners(params: Record<string, unknown> = {}) {
   return data;
 }
 
+/** Tous les owners (pagination) — filtre admin « Propriétaire » */
+export async function getOwnersAllPages(params: Record<string, unknown> = {}) {
+  const pageSize = 200;
+  const maxPages = 500;
+  const acc: unknown[] = [];
+  for (let page = 0; page < maxPages; page += 1) {
+    let res: { data?: unknown[]; total?: number } | null = null;
+    try {
+      res = (await getOwners({
+        page,
+        limit: pageSize,
+        deleted: false,
+        banned: false,
+        search_text: params.search_text ?? '',
+        ...params,
+      })) as { data?: unknown[]; total?: number };
+    } catch {
+      if (page === 0) return [];
+      break;
+    }
+    const batch = Array.isArray(res?.data) ? res.data : [];
+    acc.push(...batch);
+    const total = typeof res?.total === 'number' ? res.total : null;
+    if (batch.length < pageSize) break;
+    if (total != null && acc.length >= total) break;
+  }
+  return acc;
+}
+
 export async function deleteOwner(id: string) {
   const { data } = await apiClient.delete(`${SRV_USER}/user/delete-account/${encodeURIComponent(id)}`);
   return data;
+}
+
+/** Création PM (admin) — POST /auth/register ; si channelManager=RU → provision RU auto (srv-user). */
+export async function createOwnerAccount(body: Record<string, unknown>) {
+  const { role: _r, ...fields } = body;
+  const { data } = await apiClient.post(`${SRV_USER}/auth/register`, { ...fields, role: 'Owner' });
+  return data as {
+    success?: boolean;
+    message?: string;
+    error?: string;
+    data?: { accountId?: string; email?: string; ruOwnerId?: string | null };
+  };
 }
 
 export async function updateFillCompany(id: string, body: Record<string, unknown>) {
@@ -76,9 +118,62 @@ export async function getWorkers(params: Record<string, unknown> = {}) {
   return data;
 }
 
+export class AccountInviteConflictError extends Error {
+  readonly existingRole?: string;
+
+  constructor(message: string, existingRole?: string) {
+    super(message);
+    this.name = 'AccountInviteConflictError';
+    this.existingRole = existingRole;
+  }
+}
+
+export function parseAccountInvite409(error: unknown): string | null {
+  if (!isAxiosError(error) || error.response?.status !== 409) return null;
+  const body = error.response.data as {
+    error?: string;
+    message?: string;
+    existingRole?: string;
+  };
+  if (body.error === 'owner is required' || body.message === 'owner is required') {
+    return 'Propriétaire PM requis — sélectionnez un owner dans le filtre en haut de page.';
+  }
+  if (body.error === 'owner not exist') {
+    return 'Compte Owner introuvable — vérifiez le filtre propriétaire.';
+  }
+  if (body.error === 'parent account must be owner') {
+    return 'Le compte parent doit être un Property Manager (Owner).';
+  }
+  if (body.error === 'Email already in use') {
+    if (body.existingRole === 'Owner') {
+      return "Cet email est déjà le compte Owner (PM). Utilisez une autre adresse pour l'accès dashboard équipe.";
+    }
+    if (body.existingRole === 'Landlord') {
+      return 'Cet email est déjà un compte Propriétaire (Finances → Propriétaires). Pas besoin de le recréer ici.';
+    }
+    if (body.existingRole === 'Worker') {
+      return 'Cet email est déjà un worker dashboard — le compte existe déjà.';
+    }
+    return (
+      body.message ||
+      'Cet email est déjà enregistré — utilisez une autre adresse ou modifiez le compte existant.'
+    );
+  }
+  return body.error || body.message || 'Conflit (409)';
+}
+
 export async function inviteWorker(body: Record<string, unknown>) {
-  const { data } = await apiClient.post(`${SRV_USER}/auth/invite-woker`, body);
-  return data;
+  try {
+    const { data } = await apiClient.post(`${SRV_USER}/auth/invite-woker`, body);
+    return data;
+  } catch (e) {
+    if (isAxiosError(e) && e.response?.status === 409) {
+      const body = e.response.data as { error?: string; existingRole?: string };
+      const msg = parseAccountInvite409(e);
+      if (msg) throw new AccountInviteConflictError(msg, body.existingRole);
+    }
+    throw e;
+  }
 }
 
 export async function updateWorker(id: string, body: Record<string, unknown>) {

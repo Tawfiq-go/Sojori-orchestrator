@@ -202,6 +202,15 @@ export function ListingsOverviewPage() {
     });
   }, []);
 
+  useEffect(() => {
+    if (searchParams.get('import') === 'airbnb') {
+      setShowImportRu(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('import');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   // URL : toujours ?tab=active ou ?tab=inactive
   useEffect(() => {
     const tab = parseListingsTab(searchParams.get('tab'));

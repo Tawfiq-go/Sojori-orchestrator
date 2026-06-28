@@ -8,7 +8,8 @@ import AdminFilter from './AdminFilter';
 import CreateOwnerSidebar from './CreateOwnerSidebar';
 import UpdateOwnerSidebar from './UpdateOwnerSidebar';
 import TableLoading from 'components/TableLoading/TableLoadign';
-import { getOwners, getCities, updateFillCompany, deleteOwner, getOwnerRuLoginCredentials, syncOwnersRuIds, applyOwnersRuIdsSync } from '../services/serverApi.task';
+import { getOwners } from '../../../services/teamDashboardApi';
+import { getCities, updateFillCompany, deleteOwner, getOwnerRuLoginCredentials, syncOwnersRuIds, applyOwnersRuIdsSync } from '../services/serverApi.task';
 import { getListingsWithChannelMetrics } from 'features/tasks/services/serverApi.task';
 import { Chip, Popover, Tooltip, Checkbox, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { RemoveRedEye } from '@mui/icons-material';
@@ -21,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import OwnerFilter from './OwnerFilter';
 import { useSelector } from 'react-redux';
-import { can } from '../../../utils/permissions';
+import { hasAdminAccess } from '../../../utils/rbac.utils';
 import { Users, Milestone } from 'lucide-react';
 import { useTeamViewMode } from '../../../context/TeamViewContext';
 import { PropertyManagerHubView } from '../../../components/team/PropertyManagerHubView';
@@ -94,9 +95,10 @@ const PublicOwner = ({
   const [pendingArchiveOwner, setPendingArchiveOwner] = useState(null);
 
   const authUser = useSelector((state) => state.auth?.user);
-  const canCreate = useMemo(() => can('create'), [authUser]);
-  const canUpdate = useMemo(() => can('update'), [authUser]);
-  const canDelete = useMemo(() => can('delete'), [authUser]);
+  const isPlatformAdmin = hasAdminAccess(authUser?.role);
+  const canCreate = useMemo(() => isPlatformAdmin, [isPlatformAdmin]);
+  const canUpdate = useMemo(() => isPlatformAdmin, [isPlatformAdmin]);
+  const canDelete = useMemo(() => isPlatformAdmin, [isPlatformAdmin]);
   useEffect(() => {
     fetchOwners();
     fetchCities();

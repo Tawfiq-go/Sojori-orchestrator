@@ -7,12 +7,22 @@ import OwnerCapabilitiesActivationPanel from './OwnerCapabilitiesActivationPanel
 import { isCapabilityActivated } from './ownerCapabilityActivation';
 import { loadOwnerOrchestrationMatrix, type OwnerOrchestrationDoc } from './ownerOrchestrationApi';
 
+import {
+  shouldAutoSyncListingsAfterOwnerSave,
+  syncAllListingsFromOwnerOrchestration,
+} from './ownerOrchestrationListingSync';
+
 type Props = {
   ownerKey: string;
   onMetaChange?: (meta: { anyActive: boolean }) => void;
+  isAdminTemplate?: boolean;
 };
 
-export default function OwnerActivationSection({ ownerKey, onMetaChange }: Props) {
+export default function OwnerActivationSection({
+  ownerKey,
+  onMetaChange,
+  isAdminTemplate = false,
+}: Props) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<CapabilityRowState[]>([]);
   const [orchestrationDoc, setOrchestrationDoc] = useState<OwnerOrchestrationDoc | null>(null);
@@ -104,6 +114,8 @@ export default function OwnerActivationSection({ ownerKey, onMetaChange }: Props
       rows={rows}
       orchestrationDoc={orchestrationDoc}
       onSaved={applyActivationsLocally}
+      autoSyncListings
+      isAdminTemplate={isAdminTemplate}
     />
   );
 }

@@ -380,6 +380,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     fullName: String(row.name),
     phoneE164: String(row.phone),
     whatsappE164: String(row.phone),
+    email: row.email ? String(row.email) : '',
     ownerId: row.ownerId ? String(row.ownerId) : undefined,
     status: 'active' as const,
     isAdmin: Boolean(row.isAdmin),
@@ -434,6 +435,7 @@ export function designStaffToApi(
   const body: Record<string, unknown> = {
     name: staff.fullName,
     phone: staff.whatsappE164 || staff.phoneE164,
+    email: staff.email ? String(staff.email).trim() : '',
     lang: staff.lang || 'fr',
     contractType: staff.contractType === 'employee' ? 'salaried' : 'freelance',
     taskTypes: staff.allowedTaskTypes || [],

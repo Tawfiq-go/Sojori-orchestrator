@@ -59,18 +59,6 @@ export default function BienAirroiView({ row }: { row: PortfolioRow }) {
         }}
       >
         <Typography sx={{ fontSize: 20, fontWeight: 900, mb: 0.5 }}>{row.listing.name}</Typography>
-        {row.listing.ruPropertyKey && (
-          <Typography
-            sx={{
-              fontSize: 11,
-              color: T.text3,
-              fontFamily: '"Geist Mono", monospace',
-              mb: 1,
-            }}
-          >
-            RU {row.listing.ruPropertyKey}
-          </Typography>
-        )}
         <Stack direction="row" sx={{ gap: 2,  flexWrap: 'wrap', fontSize: 12, color: T.text2 }}>
           <span>
             Snapshot marché :{' '}

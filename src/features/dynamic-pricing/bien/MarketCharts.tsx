@@ -296,7 +296,7 @@ export default function MarketCharts(props: MarketChartsProps) {
       >
         <MarketFrame
           title={cs ? `Concurrents marché (${cs.count})` : 'Concurrents marché'}
-          subtitle="Médianes TTM · GET /listings/comparables"
+          subtitle="Médianes TTM · annonces comparables"
           badge="Comps"
         >
           {hasCompsStats && cs ? (

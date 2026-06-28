@@ -107,7 +107,7 @@ export function buildCapabilitiesPatchFromActivations(
   return out;
 }
 
-/** Persiste l’activation PM (owner_orchestrations — source de vérité V3). */
+/** Persiste l’activation PM (merge partiel — préférer replaceOwnerOrchestrationCapabilities pour onboarding). */
 export async function saveOwnerCapabilityActivations(
   ownerKey: string,
   activations: Record<string, boolean>,
@@ -137,7 +137,10 @@ export async function initializeOwnerOrchestrationFromActivations(
   activations: Record<string, boolean>,
 ): Promise<void> {
   const merged = { ...defaultActivationsAllOff(), ...activations };
-  await saveOwnerCapabilityActivations(ownerKey, merged, null);
+  const { buildFreshCapabilitiesFromActivations, replaceOwnerOrchestrationCapabilities } =
+    await import('./ownerOrchestrationReplace');
+  const capabilities = buildFreshCapabilitiesFromActivations(merged);
+  await replaceOwnerOrchestrationCapabilities(ownerKey, capabilities, merged);
 }
 
 export function firstActivatedCapabilityKey(rows: CapabilityRowState[]): string | null {

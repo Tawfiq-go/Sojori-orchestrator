@@ -50,13 +50,12 @@ const DeleteUserDialog = ({
 
     setIsLoading(true);
     try {
-      functionToExecute();
+      await Promise.resolve(functionToExecute());
+      onClose();
     } catch (error) {
       toast.error(error.response?.data?.error && error.response?.data?.error.length && error.response?.data?.error[0]?.message || error.response?.data?.message || 'Failed to delete admin');
-      onClose();
     } finally {
       setIsLoading(false);
-      onClose();
     }
   };
 

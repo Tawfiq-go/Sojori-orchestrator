@@ -25,6 +25,8 @@ export interface User {
   avatar?: string;
   /** Compte propriétaire (Worker) */
   ownerId?: string;
+  ownerAccess?: boolean;
+  featureGrants?: Array<{ feature?: string; actions?: string[] }>;
 }
 
 export interface AuthResponse {
@@ -79,6 +81,10 @@ function userFromValidTokenPayload(data: Record<string, unknown>): User | undefi
       r.ownerId != null
         ? String(r.ownerId)
         : undefined,
+    ownerAccess: !!r.ownerAccess,
+    featureGrants: Array.isArray(r.featureGrants)
+      ? (r.featureGrants as User['featureGrants'])
+      : [],
   };
 }
 

@@ -1777,6 +1777,7 @@ export const listingsService = {
       orchestrationEnabled?: boolean;
       capabilities?: Record<string, unknown>;
       scheduledMessages?: unknown[];
+      replaceCapabilities?: boolean;
     },
   ) {
     const { data } = await apiClient.put(

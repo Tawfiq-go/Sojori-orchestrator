@@ -862,6 +862,19 @@ export function mergeFormV2ToUpdatePropertyPayload(
     payload.syncToRentalUnited = values.syncToRentalUnited === true;
   }
 
+  if (isRecord(values.otaChannelsSnapshot)) {
+    payload.otaChannelsSnapshot = values.otaChannelsSnapshot;
+  }
+
+  if (values.directEnabled !== undefined) {
+    payload.directEnabled = values.directEnabled === true;
+  }
+  if (values.slug !== undefined) payload.slug = asString(values.slug);
+  if (values.directDiscount !== undefined) payload.directDiscount = asNumber(values.directDiscount);
+  if (values.returningGuestDiscount !== undefined) {
+    payload.returningGuestDiscount = values.returningGuestDiscount === true;
+  }
+
   if (values.cancellationPolicy !== undefined && values.cancellationPolicy !== 'custom' && values.cancellationPolicy !== '') {
     payload.cancellationPolicies = encodeCancellationPolicyUi(asString(values.cancellationPolicy));
   } else if (Array.isArray(values.cancellationPolicies) && values.cancellationPolicies.length > 0) {

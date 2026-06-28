@@ -29,6 +29,10 @@ import {
   type ServiceActivationStatusEntry,
 } from './listingCapabilityActivation';
 import type { OwnerOrchestrationDoc } from './ownerOrchestrationApi';
+import {
+  shouldAutoSyncListingsAfterOwnerSave,
+  syncAllListingsFromOwnerOrchestration,
+} from './ownerOrchestrationListingSync';
 
 const GROUP_EMOJI: Record<CapabilityGroupId, string> = {
   cleaning: '🧹',
@@ -59,6 +63,9 @@ type Props = {
   autoSaveListing?: boolean;
   /** Parent-driven save indicator (listing auto-save). */
   listingSaving?: boolean;
+  /** Après save owner : propager le modèle PM vers toutes les annonces. */
+  autoSyncListings?: boolean;
+  isAdminTemplate?: boolean;
 };
 
 export default function OwnerCapabilitiesActivationPanel({
@@ -77,6 +84,8 @@ export default function OwnerCapabilitiesActivationPanel({
   onResetListingOverride,
   autoSaveListing = false,
   listingSaving = false,
+  autoSyncListings = false,
+  isAdminTemplate = false,
 }: Props) {
   const statusByKey = useMemo(
     () => Object.fromEntries((serviceActivationStatus ?? []).map(s => [s.serviceId, s])),
@@ -191,7 +200,26 @@ export default function OwnerCapabilitiesActivationPanel({
     setSaving(true);
     try {
       await saveOwnerCapabilityActivations(ownerKey, local, orchestrationDoc);
-      toast.success('Activation services enregistrée');
+      let syncCount = 0;
+      if (
+        autoSyncListings &&
+        shouldAutoSyncListingsAfterOwnerSave(ownerKey, isAdminTemplate)
+      ) {
+        try {
+          syncCount = await syncAllListingsFromOwnerOrchestration(ownerKey);
+        } catch (syncErr: unknown) {
+          toast.warn(
+            syncErr instanceof Error
+              ? `Activation PM OK — sync annonces : ${syncErr.message}`
+              : 'Activation PM OK — sync annonces échouée',
+          );
+        }
+      }
+      toast.success(
+        syncCount > 0
+          ? `Activation enregistrée · ${syncCount} annonce(s) synchronisée(s)`
+          : 'Activation services enregistrée',
+      );
       setDirty(false);
       onSaved?.(local);
     } catch (e: unknown) {

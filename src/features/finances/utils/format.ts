@@ -1,0 +1,61 @@
+import type { LandlordContract } from '../types';
+
+export function formatMoney(amount: number, currency = 'MAD'): string {
+  const sign = amount > 0 ? '+' : '';
+  return `${sign}${amount.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} ${currency}`;
+}
+
+export function formatShortDate(value?: string | Date | null): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+}
+
+export function formatPeriod(start?: string, end?: string): string {
+  if (!start || !end) return '—';
+  const s = new Date(start);
+  const e = new Date(end);
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return '—';
+  const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
+  if (sameMonth) {
+    return `${String(s.getDate()).padStart(2, '0')}–${String(e.getDate()).padStart(2, '0')} ${e.toLocaleDateString('fr-FR', { month: 'short' })}`;
+  }
+  return `${formatShortDate(s)} → ${formatShortDate(e)}`;
+}
+
+export function personName(first?: string, last?: string, fallback = '—'): string {
+  const n = [first, last].filter(Boolean).join(' ').trim();
+  return n || fallback;
+}
+
+export function initials(first?: string, last?: string): string {
+  const a = (first || '').charAt(0);
+  const b = (last || '').charAt(0);
+  return `${a}${b}`.toUpperCase() || '?';
+}
+
+export function contractBadge(contract?: LandlordContract): { label: string; tone: 'gold' | 'info' | 'gray' } {
+  if (!contract?.type) return { label: '— à définir', tone: 'gray' };
+  if (contract.type === 'fixed') {
+    const amt = contract.fixedAmount != null ? `${contract.fixedAmount.toLocaleString('fr-FR')} ${contract.currency || 'MAD'}` : '';
+    const period =
+      contract.fixedPeriod === 'per_booking'
+        ? '/résa'
+        : contract.fixedPeriod === 'per_year'
+          ? '/an'
+          : '/mois';
+    return { label: `Forfait fixe · ${amt}${period}`, tone: 'info' };
+  }
+  const pct = contract.commissionPercent ?? 0;
+  if (contract.type === 'percent_without_ota') {
+    return { label: `% brut · ${pct}%`, tone: 'gold' };
+  }
+  return { label: `% net après OTA · ${pct}%`, tone: 'gold' };
+}
+
+export function paidByLabel(paidBy?: string): string {
+  if (paidBy === 'landlord') return 'Propriétaire';
+  if (paidBy === 'guest') return 'Voyageur';
+  return 'PM';
+}

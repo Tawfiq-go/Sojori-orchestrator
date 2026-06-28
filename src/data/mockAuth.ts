@@ -6,9 +6,11 @@ export interface MockUser {
   password: string;
   firstName: string;
   lastName: string;
-  role: MockUserRole;
+  role: MockUserRole | string;
   /** Compte propriétaire lié (Worker) */
   ownerId?: string;
+  ownerAccess?: boolean;
+  featureGrants?: Array<{ feature?: string; actions?: string[] }>;
   phone: string;
   company: string;
   avatar: string;

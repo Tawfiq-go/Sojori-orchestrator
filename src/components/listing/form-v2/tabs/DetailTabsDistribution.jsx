@@ -1,12 +1,12 @@
 // ════════════════════════════════════════════════════════════════════
 // DetailTabsDistribution.jsx — Distribution · Rooms · License
 // ════════════════════════════════════════════════════════════════════
-import React, { useState } from 'react';
-import { Box, TextField, Typography, Stack, Button } from '@mui/material';
+import React, { useState, useCallback } from 'react';
+import { Box, TextField, Typography, Stack, Button, CircularProgress } from '@mui/material';
+import listingsService from '../../../../services/listingsService';
 import { sxInput, Field, Card, ToggleRow, ChipsRow, NumberInput, SelectField, RuFormLegend, T } from './_shared';
 import {
   OtaChannelsSnapshotTable,
-  RuExternalListingDisplay,
 } from '../utils/ruImportFieldHelpers';
 import { RoomsTab } from './RoomsTabComposition';
 export { RoomsTab };
@@ -16,6 +16,57 @@ const DIRECT_PAYMENT_METHODS = [
   { id: 'wire', label: '🏦 Virement' },
   { id: 'cash', label: "💵 Espèces à l'arrivée" },
 ];
+
+function listingHasOtaDistribution(values = {}) {
+  return (
+    values.syncToRentalUnited === true ||
+    (Array.isArray(values.rentalUnitedIds) && values.rentalUnitedIds.length > 0)
+  );
+}
+
+function channelSnapshotKey(ch) {
+  return String(ch?.channelId || ch?.channelName || '').trim();
+}
+
+/** Conserve les liens saisis à la main si la vérif OTA ne renvoie pas d'URL. */
+function mergeOtaSnapshotPreservingManualUrls(previous, incoming) {
+  if (!incoming || typeof incoming !== 'object') return incoming;
+  const prevChannels = Array.isArray(previous?.channels) ? previous.channels : [];
+  const nextChannels = Array.isArray(incoming.channels) ? incoming.channels : [];
+  if (!prevChannels.length) return incoming;
+
+  const manualUrls = new Map();
+  for (const ch of prevChannels) {
+    const url = String(ch?.url || '').trim();
+    const key = channelSnapshotKey(ch);
+    if (key && url) manualUrls.set(key, url);
+  }
+
+  const mergedChannels = nextChannels.length
+    ? nextChannels.map((ch) => {
+        const key = channelSnapshotKey(ch);
+        const incomingUrl = String(ch?.url || '').trim();
+        const manualUrl = key ? manualUrls.get(key) : '';
+        if (!incomingUrl && manualUrl) return { ...ch, url: manualUrl };
+        return ch;
+      })
+    : [];
+
+  const mergedKeys = new Set(mergedChannels.map(channelSnapshotKey));
+  for (const ch of prevChannels) {
+    const key = channelSnapshotKey(ch);
+    const isManualRow = String(ch?.channelId || '').startsWith('manual-');
+    if (isManualRow && key && !mergedKeys.has(key)) {
+      mergedChannels.push(ch);
+      mergedKeys.add(key);
+    }
+  }
+
+  return {
+    ...incoming,
+    channels: mergedChannels.length ? mergedChannels : nextChannels,
+  };
+}
 
 function DistributionSubTabs({ active, onChange }) {
   const tabs = [
@@ -53,52 +104,81 @@ function DistributionSubTabs({ active, onChange }) {
 }
 
 /* ════════════════════ OTA ════════════════════ */
-export function OtaDistributionTab({ values = {}, onChange }) {
+export function OtaDistributionTab({ values = {}, onChange, listingId }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
-  const externalListing =
-    values.ruExternalListing || values.preporteyInformation?.ruExternalListing;
-  const hasOtaLink = Boolean(
-    externalListing &&
-      (externalListing.Property?.ExternalListing?.Url ||
-        externalListing.Property?.externalListing?.url ||
-        externalListing.ExternalListing?.Url ||
-        externalListing.url),
-  );
-  const linkedOta =
-    values.syncToRentalUnited === true ||
-    (Array.isArray(values.rentalUnitedIds) && values.rentalUnitedIds.length > 0) ||
-    hasOtaLink ||
-    Boolean(values.otaChannelsSnapshot?.channels?.length);
+  const otaEnabled = listingHasOtaDistribution(values);
+  const [otaRefreshState, setOtaRefreshState] = useState('idle');
+
+  const runOtaChannelVerify = useCallback(async () => {
+    if (!listingId || !otaEnabled) return;
+    setOtaRefreshState('loading');
+    try {
+      const result = await listingsService.verifyOtaChannels(listingId);
+      const snap =
+        result.data && typeof result.data === 'object'
+          ? result.data.otaChannelsSnapshot
+          : undefined;
+      if (result.success && snap && typeof snap === 'object') {
+        const merged = mergeOtaSnapshotPreservingManualUrls(values.otaChannelsSnapshot, snap);
+        onChange?.({ otaChannelsSnapshot: merged });
+        setOtaRefreshState('done');
+      } else if (result.success) {
+        setOtaRefreshState('done');
+      } else {
+        setOtaRefreshState('error');
+      }
+    } catch {
+      setOtaRefreshState('error');
+    }
+  }, [listingId, otaEnabled, onChange, values.otaChannelsSnapshot]);
+
+  const snapshotChannels = values.otaChannelsSnapshot?.channels;
+  const hasSnapshot = Array.isArray(snapshotChannels) && snapshotChannels.length > 0;
+  const otaLoading = otaRefreshState === 'loading';
 
   return (
     <Box>
       <Card title="📡 Canaux OTA">
         <ToggleRow
           title="Synchroniser avec les OTA"
-          desc="Active la diffusion et la synchronisation vers Airbnb et les autres canaux connectés."
+          desc="Active la diffusion sur Airbnb, Booking et les autres plateformes connectées."
           ruField="syncToRentalUnited"
           checked={values.syncToRentalUnited === true}
           onChange={(v) => upd('syncToRentalUnited', v)}
         />
 
-        <Box sx={{ mt: 1.5 }}>
-          <RuExternalListingDisplay value={externalListing} ruField="ruExternalListing" clientView />
-        </Box>
-
-        {values.otaChannelsSnapshot ? (
+        {listingId && otaEnabled ? (
           <Box sx={{ mt: 1.5 }}>
-            <Field label="Canaux connectés" ruField="rentalUnitedIds" fullWidth>
-              <OtaChannelsSnapshotTable snapshot={values.otaChannelsSnapshot} clientView />
-            </Field>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={otaLoading}
+              onClick={() => void runOtaChannelVerify()}
+              startIcon={otaLoading ? <CircularProgress size={14} color="inherit" /> : undefined}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              {otaLoading ? 'Vérification en cours…' : 'Vérifier connexion OTA'}
+            </Button>
+            {otaRefreshState === 'error' ? (
+              <Typography sx={{ fontSize: '0.8125rem', color: 'error.main', mt: 1 }}>
+                Vérification impossible pour le moment. Réessayez dans quelques instants.
+              </Typography>
+            ) : null}
           </Box>
-        ) : linkedOta ? (
-          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1.5 }}>
-            Aucun détail canal disponible pour le moment. Lancez une synchronisation depuis le menu
-            publication.
-          </Typography>
+        ) : null}
+
+        {hasSnapshot || otaEnabled ? (
+          <Box sx={{ mt: 1.5 }}>
+            <OtaChannelsSnapshotTable
+              snapshot={values.otaChannelsSnapshot}
+              clientView
+              editable
+              onSnapshotChange={(snap) => onChange?.({ otaChannelsSnapshot: snap })}
+            />
+          </Box>
         ) : (
           <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1.5 }}>
-            Aucun canal OTA connecté. Importez ou synchronisez le listing pour activer la distribution.
+            La distribution OTA n&apos;est pas encore activée pour cette annonce.
           </Typography>
         )}
       </Card>
@@ -176,13 +256,12 @@ export function DirectBookingTab({ values = {}, onChange }) {
 }
 
 /* ════════════════════ Distribution (parent) ════════════════════ */
-export function DistributionTab({ values = {}, onChange }) {
+export function DistributionTab({ values = {}, onChange, listingId }) {
   const [subTab, setSubTab] = useState('ota');
-  const common = { values, onChange };
+  const common = { values, onChange, listingId };
 
   return (
     <Box>
-      <RuFormLegend />
       <DistributionSubTabs active={subTab} onChange={setSubTab} />
       {subTab === 'ota' ? <OtaDistributionTab {...common} /> : <DirectBookingTab {...common} />}
     </Box>

@@ -5,7 +5,6 @@ import { AUTH_CONFIG } from '../config/authConfig';
 import { logAuth, maskToken } from '../utils/dashboardDebug';
 import { getToken } from '../utils/authUtils';
 import { CircularProgress, Box, Typography } from '@mui/material';
-
 /**
  * Composant de route protégée (équivalent AuthRoute historique).
  *

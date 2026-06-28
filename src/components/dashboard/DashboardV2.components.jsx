@@ -190,6 +190,7 @@ const NAV_ICON_BY_ID = {
   'pricing/portfolio': InsightsOutlined,
   'pricing/audit': HistoryOutlined,
   staff: GroupsOutlined,
+  'equipe/onboarding': AssignmentOutlined,
   'my-tasks': AssignmentTurnedInOutlined,
   'my-sched': TodayOutlined,
   revenue: ShowChartOutlined,
@@ -297,8 +298,21 @@ function navItemMatchesPath(item, activePath) {
 const SIDEBAR_SCROLL_KEY = 'sojori-sidebar-scroll';
 
 export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogout }) {
-  const navGroups = useSidebarNav(user?.role);
+  const navGroups = useSidebarNav(user);
   const navScrollRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const role = String(user?.role || '').toLowerCase();
+    if (role !== 'worker' && role !== 'staff') return;
+    const itemCount = navGroups.reduce((n, g) => n + (g.items?.length || 0), 0);
+    console.info('[worker-nav]', {
+      role: user?.role,
+      ownerAccess: user?.ownerAccess,
+      grants: user?.featureGrants?.length ?? 0,
+      navGroups: navGroups.length,
+      items: itemCount,
+    });
+  }, [user?.role, user?.ownerAccess, user?.featureGrants, navGroups]);
 
   const [collapsed, setCollapsed] = React.useState(() => {
     try {

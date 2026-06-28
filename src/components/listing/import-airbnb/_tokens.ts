@@ -52,6 +52,11 @@ export interface RuProperty {
   guests?: number;
   alreadyImported: boolean;
   importable: boolean;        // false si non éligible
+  /** Même nom qu'un listing déjà importé sous un autre RU ID */
+  nameDuplicateBlocked?: boolean;
+  nameDuplicateOfRuId?: string;
+  nameDuplicateListingId?: string;
+  blockReason?: string;
   /** false = doublon Airbnb / archive RU — préférer un bien actif avec photos */
   isActive?: boolean;
   isArchived?: boolean;

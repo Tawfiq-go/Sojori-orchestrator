@@ -31,22 +31,22 @@ export function buildListingDataCoverage(input: {
     {
       section: '02 · TTM / L90D',
       status: input.hasTtm ? 'prod' : snap ? 'partial' : 'empty',
-      api: 'GET /listings + /listings/metrics/all',
+      api: 'Performances annonce',
       fills: 'ttm_revenue, occupation, ADR, nuits',
       note: input.listingHasAirbnb
         ? snap
-          ? 'Snapshot Mongo après ⟳ perf'
+          ? 'Snapshot Sojori après ⟳ perf'
           : 'Lancer ⟳ performances ce bien'
-        : 'Connecter ID Airbnb (legacy)',
+        : 'Connecter l’annonce sur les canaux de diffusion',
     },
     {
       section: '02 · Potentiel annuel',
       status: input.hasRevenueEstimate ? 'prod' : input.airroiCompsCount > 0 ? 'partial' : 'empty',
-      api: 'GET /calculator/estimate',
+      api: 'Estimation Sojori',
       fills: 'revenue, ADR, occupation, percentiles p25–p90',
       note: input.hasRevenueEstimate
-        ? 'Estimate en snapshot — date en barre snapshot §02/§04'
-        : 'Modal ⟳ → Envoyer calculator/estimate (GPS ou adresse + chambres)',
+        ? 'Estimation enregistrée — date en barre snapshot §02/§04'
+        : 'Modal ⟳ → Estimation Sojori (GPS ou adresse + chambres)',
     },
     {
       section: '03 · Bornes & mode',
@@ -58,11 +58,11 @@ export function buildListingDataCoverage(input: {
     {
       section: '04 · Calendrier prix / jour',
       status: input.hasCalendarProd ? 'prod' : input.hasAirroiSnapshot ? 'partial' : 'empty',
-      api: 'GET /calculator/estimate + recompute Sojori',
+      api: 'Estimation Sojori + moteur prix',
       fills: 'Prix MAD par date (grille §04)',
       note: input.hasCalendarProd
-        ? 'Estimate obligatoire (modal ⟳) — pas de fallback future/rates'
-        : 'Lancer estimate puis Recalculer 365 j — prix manuels dans srv-calendar',
+        ? 'Estimation obligatoire (modal ⟳) — pas de fallback tarifs journaliers bruts'
+        : 'Lancer l’estimation puis Recalculer 365 j — prix manuels dans le calendrier Sojori',
     },
     {
       section: '05 · Graphiques marché',
@@ -76,7 +76,7 @@ export function buildListingDataCoverage(input: {
     {
       section: '06 · Carte',
       status: comps > 0 ? 'prod' : snap ? 'partial' : 'empty',
-      api: 'GET /listings/comparables',
+      api: 'Annonces comparables',
       fills: 'Pins concurrents + votre bien',
       note: comps > 0
         ? `${comps} comps dans le dernier snapshot`
@@ -85,7 +85,7 @@ export function buildListingDataCoverage(input: {
     {
       section: '07 · Table comps',
       status: comps > 0 ? 'prod' : 'empty',
-      api: 'GET /listings/comparables',
+      api: 'Annonces comparables',
       fills: 'Jusqu’à 25 annonces similaires',
       note:
         comps === 0
@@ -102,9 +102,12 @@ export function buildListingDataCoverage(input: {
   ];
 }
 
-export const AIRROI_COMPS_FAQ = [
-  'Le refresh ⟳ appelle GET /listings/comparables (≈ $0,10) avec lat/lng/chambres/sdb/voyageurs de votre fiche.',
-  'L’API comparables renvoie au plus 25 listings « similaires » — beaucoup peuvent être inactifs ou sans métriques (d’où une table presque vide avant refresh).',
-  'Ce n’est pas un bug Sojori : l’API ne garantit pas 25 comps avec données complètes (audit interne : nombreux 404 sur IDs comparables).',
-  'Potentiel marché (P50 annuel) et graphiques ville nécessitent d’autres endpoints (revenue-estimate, markets/*) — voir tableau ci-dessus.',
+export const MARKET_COMPS_FAQ = [
+  'Le refresh ⟳ récupère les annonces comparables (≈ $0,10) avec lat/lng/chambres/sdb/voyageurs de votre fiche Sojori.',
+  'Sojori renvoie au plus 25 annonces « similaires » — beaucoup peuvent être inactives ou sans métriques (d’où une table presque vide avant refresh).',
+  'Ce n’est pas un bug Sojori : toutes les annonces comparables du marché ne sont pas toujours disponibles avec données complètes.',
+  'Le potentiel marché (P50 annuel) et les graphiques ville nécessitent d’autres données — voir tableau ci-dessus.',
 ];
+
+/** @deprecated alias interne */
+export const AIRROI_COMPS_FAQ = MARKET_COMPS_FAQ;

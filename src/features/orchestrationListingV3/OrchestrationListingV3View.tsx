@@ -50,6 +50,10 @@ import {
   isWorkflowEditorEnabled,
   type ServiceActivationStatusEntry,
 } from './listingCapabilityActivation';
+import {
+  shouldAutoSyncListingsAfterOwnerSave,
+  syncAllListingsFromOwnerOrchestration,
+} from './ownerOrchestrationListingSync';
 
 type ListingPick = { id: string; name: string };
 
@@ -102,6 +106,11 @@ export default function OrchestrationListingV3View({
 
   const isOwnerTemplate = ownerTemplateMode;
   const effectiveListingId = !isOwnerTemplate && scope === 'listing' ? listingId : null;
+
+  const syncListingsAfterOwnerSave = useCallback(async (): Promise<number> => {
+    if (!shouldAutoSyncListingsAfterOwnerSave(ownerKey, isAdminTemplate)) return 0;
+    return syncAllListingsFromOwnerOrchestration(ownerKey);
+  }, [ownerKey, isAdminTemplate]);
 
   const applyActivationFromDoc = useCallback((doc: unknown, targetListingId: string) => {
     const services = activationStatusFromEffectiveDoc(
@@ -337,6 +346,12 @@ export default function OrchestrationListingV3View({
           gestion: { ...existing, ...patch },
           doc: orchestrationDoc as OwnerOrchestrationDoc,
         });
+        const synced = await syncListingsAfterOwnerSave();
+        toast.success(
+          synced > 0
+            ? `Config gestion enregistrée · ${synced} annonce(s) synchronisée(s)`
+            : 'Config gestion enregistrée (modèle PM)',
+        );
       } else if (effectiveListingId) {
         await saveListingGestion({
           listingId: effectiveListingId,
@@ -344,16 +359,16 @@ export default function OrchestrationListingV3View({
           gestion: { ...existing, ...patch },
           doc: orchestrationDoc as ListingOrchestrationDoc,
         });
+        toast.success('Config gestion enregistrée (annonce)');
       } else {
         return;
       }
-      toast.success('Config gestion enregistrée');
       setOrchestrationDoc(prev =>
         prev ? patchOrchestrationDocGestion(prev, selectedKey, { ...existing, ...patch }) : prev,
       );
       logV3Orch('gestion.saved', { key: selectedKey, patchKeys: Object.keys(patch) });
     },
-    [effectiveListingId, orchestrationDoc, selectedKey, isOwnerTemplate, ownerKey],
+    [effectiveListingId, orchestrationDoc, selectedKey, isOwnerTemplate, ownerKey, syncListingsAfterOwnerSave],
   );
 
   const persistRow = async (key: string) => {
@@ -374,7 +389,12 @@ export default function OrchestrationListingV3View({
           allWorkflows: workflowsRef.current,
           doc: doc as OwnerOrchestrationDoc,
         });
-        toast.success('Service enregistré (modèle PM)');
+        const synced = await syncListingsAfterOwnerSave();
+        toast.success(
+          synced > 0
+            ? `Service enregistré · ${synced} annonce(s) synchronisée(s)`
+            : 'Service enregistré (modèle PM)',
+        );
         await load({ silent: true, discardLocalKey: key });
       } else if (effectiveListingId) {
         await saveListingOrchestrationRow({

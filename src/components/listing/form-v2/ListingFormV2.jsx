@@ -167,7 +167,9 @@ export default function ListingFormV2({
       if (tabKey === 'pricing')      return <PricingTab     {...common} />;
       if (tabKey === 'availability') return <AvailabilityTab {...common} />;
       if (tabKey === 'fees')         return <FeesTab        {...common} />;
-      if (tabKey === 'distribution' || tabKey === 'direct') return <DistributionTab {...common} />;
+      if (tabKey === 'distribution' || tabKey === 'direct') {
+        return <DistributionTab {...common} listingId={listingId} />;
+      }
       if (tabKey === 'rooms')        return <RoomsTab       {...common} listingId={listingId} />;
       if (tabKey === 'license')      return <LicenseTab     {...common} />;
     }

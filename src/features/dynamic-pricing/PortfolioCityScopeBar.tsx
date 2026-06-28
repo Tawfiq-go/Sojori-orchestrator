@@ -33,7 +33,7 @@ export default function PortfolioCityScopeBar({
           Ville · portefeuille
         </Typography>
         <Tooltip
-          title="Choisir une ville pour filtrer biens, macros et tableau. Les données marché (—) apparaissent seulement après ⟳ refresh par bien avec ID Airbnb connecté."
+          title="Choisir une ville pour filtrer biens, macros et tableau. Les données marché (—) apparaissent seulement après ⟳ refresh par bien avec annonce connectée."
           arrow
         >
           <InfoOutlinedIcon sx={{ fontSize: 14, color: T.text3, cursor: 'help' }} />
@@ -106,7 +106,7 @@ export default function PortfolioCityScopeBar({
             {' · '}
             {stats.withSnapshot}/{stats.total} bien{stats.total !== 1 ? 's' : ''} avec snapshot marché
             {stats.withAirbnb < stats.total ? (
-              <> · {stats.withAirbnb} ID Airbnb (refresh ⟳ possible)</>
+              <> · {stats.withAirbnb} annonce{stats.withAirbnb !== 1 ? 's' : ''} connectée{stats.withAirbnb !== 1 ? 's' : ''} (refresh ⟳ possible)</>
             ) : null}
             {stats.withoutSnapshot > 0 ? (
               <>
@@ -115,7 +115,7 @@ export default function PortfolioCityScopeBar({
                   {stats.withoutSnapshot} ligne{stats.withoutSnapshot !== 1 ? 's' : ''} en —
                 </Box>
                 {' '}
-                = pas encore de refresh marché (pas un bug GET /portfolio). Connecter Airbnb sur le legacy
+                = pas encore de refresh marché (pas un bug portefeuille). Connecter l’annonce sur le listing
                 puis ⟳ « Actualiser performances ».
               </>
             ) : null}

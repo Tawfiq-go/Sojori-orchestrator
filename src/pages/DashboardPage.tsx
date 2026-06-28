@@ -60,6 +60,7 @@ import OwnerFilterField from '../components/OwnerFilterBar/OwnerFilterField';
 import { useAuth } from '../hooks/useAuth';
 import { dashboardDebugEnabled, logDashboard, logDashboardApiDetail, logDashboardKpisSummary } from '../utils/dashboardDebug';
 import { hasLocalDevApiAccess } from '../utils/devApiAccess';
+import { getToken } from '../utils/authUtils';
 import type {
   DashboardPeriod,
   DashboardPropertyOption,

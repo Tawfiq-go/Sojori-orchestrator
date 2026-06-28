@@ -127,13 +127,13 @@ export default function CalendarUpdateModal({
           <>
             <Typography sx={{ fontSize: 12, color: T.text2, lineHeight: 1.55, mb: 2 }}>
               Envoie les prix calculés vers le calendrier Sojori (<code>Inventory</code>) puis la file
-              de publication RU. Cascade : <b>estimate brut</b> → <b>bornes</b> → <b>× occupation</b> →{' '}
+              de publication canaux. Cascade : <b>estimation brute</b> → <b>bornes</b> → <b>× occupation</b> →{' '}
               <b>events</b>.
             </Typography>
             {!hasEstimate ? (
               <Box sx={{ p: 1.25, mb: 2, borderRadius: 1, bgcolor: T.errorTint, border: `1px solid ${T.error}` }}>
                 <Typography sx={{ fontSize: 12, color: T.error, fontWeight: 600 }}>
-                  Estimate manquant — lancer ⟳ · GET /calculator/estimate avant d’appliquer.
+                  Estimation Sojori manquante — lancez ⟳ « Estimation Sojori » avant d’appliquer.
                 </Typography>
               </Box>
             ) : (
@@ -156,7 +156,7 @@ export default function CalendarUpdateModal({
         {phase === 'running' && (
           <Box sx={{ py: 3 }}>
             <Typography sx={{ fontSize: 12, color: T.text2, mb: 2 }}>
-              Calcul mixEngine + écriture calendrier + file RU…
+              Calcul moteur Sojori + écriture calendrier + publication canaux…
             </Typography>
             <LinearProgress sx={{ borderRadius: 1, '& .MuiLinearProgress-bar': { bgcolor: T.gold } }} />
           </Box>
@@ -213,7 +213,7 @@ export default function CalendarUpdateModal({
                 />
               )}
               <ReportRow
-                label="Publication Rentals United"
+                label="Publication canaux"
                 value={report.ruPublishQueued ? 'En file ✓ (plage des dates écrites)' : '—'}
               />
             </Box>

@@ -14,6 +14,8 @@ import {
 } from '../../../services/channelsDashboardApi';
 import { getOwners } from '../../../services/teamDashboardApi';
 import { listingsService } from '../../../services/listingsService';
+import apiClient from '../../../services/apiClient';
+import { MICROSERVICE_BASE_URL } from '../../../config/authConfig';
 import ImportAirbnbModal from './ImportAirbnbModal';
 import { adaptRuImportProgress } from './adaptRuImportProgress';
 import type { ImportProgress, ImportResultItem, Owner, RuProperty, SojoriCity } from './_tokens';
@@ -44,6 +46,10 @@ export interface ImportAirbnbModalContainerProps {
   onImported?: () => void;
   /** Villes déjà chargées sur la page listings (évite double fetch + liste vide) */
   initialCities?: Array<{ _id: string; name?: string | { fr?: string; en?: string; FR?: string } }>;
+  /** Owner cible (onboarding admin ou scope PM fixe) */
+  presetOwnerId?: string | null;
+  /** Masque la sélection owner — utilise presetOwnerId ou session */
+  lockOwner?: boolean;
 }
 
 export function ImportAirbnbModalContainer({
@@ -51,6 +57,8 @@ export function ImportAirbnbModalContainer({
   onClose,
   onImported,
   initialCities = [],
+  presetOwnerId = null,
+  lockOwner = false,
 }: ImportAirbnbModalContainerProps) {
   const { user, loading: authLoading } = useAuth();
   const isAdmin =
@@ -62,6 +70,8 @@ export function ImportAirbnbModalContainer({
   const [citiesLoading, setCitiesLoading] = useState(false);
   const [ownerDefaultCity, setOwnerDefaultCity] = useState<SojoriCity | null>(null);
   const [importResults, setImportResults] = useState<ImportResultItem[] | null>(null);
+  const [presetOwner, setPresetOwner] = useState<Owner | null>(null);
+  const [presetOwnerLoading, setPresetOwnerLoading] = useState(false);
   const propertiesMapRef = useRef<Map<string, { name: string; city?: string }>>(new Map());
 
   const { progressData, resetProgress, runTrackedImport, isPolling } = useRuImportProgress();
@@ -83,6 +93,43 @@ export function ImportAirbnbModalContainer({
   const authReady = !authLoading && Boolean(user?.id);
   const sessionOwnerAccountId = resolveRuImportOwnerAccountId(user);
 
+  useEffect(() => {
+    if (!open || !presetOwnerId) {
+      setPresetOwner(null);
+      setPresetOwnerLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setPresetOwnerLoading(true);
+    void apiClient
+      .get(`${MICROSERVICE_BASE_URL.SRV_USER}/user/get-account-by-id/${encodeURIComponent(presetOwnerId)}`)
+      .then((res) => {
+        if (cancelled) return;
+        const a = res.data as {
+          _id?: string;
+          email?: string;
+          firstName?: string;
+          lastName?: string;
+        };
+        const id = String(a?._id || presetOwnerId);
+        setPresetOwner({
+          _id: id,
+          email: a?.email || '',
+          firstName: a?.firstName,
+          lastName: a?.lastName,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setPresetOwner(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPresetOwnerLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, presetOwnerId]);
+
   const sessionOwner: Owner | null = useMemo(() => {
     if (isAdmin || !authReady || !sessionOwnerAccountId) return null;
     return {
@@ -99,6 +146,12 @@ export function ImportAirbnbModalContainer({
     user?.firstName,
     user?.lastName,
   ]);
+
+  const modalIsAdmin = lockOwner ? false : isAdmin;
+  const modalSessionOwner = lockOwner && presetOwner ? presetOwner : sessionOwner;
+  const modalAuthReady = lockOwner
+    ? !presetOwnerLoading && Boolean(presetOwner?._id)
+    : authReady;
 
   useEffect(() => {
     if (!open) return;
@@ -168,6 +221,9 @@ export function ImportAirbnbModalContainer({
           alreadyImported?: boolean;
           importable?: boolean;
           sojoriListingId?: string;
+          nameDuplicateBlocked?: boolean;
+          nameDuplicateOfRuId?: string;
+          blockReason?: string;
         }) => ({
           ruPropertyId: String(p.ruPropertyId),
           name: p.name || `Annonce #${p.ruPropertyId}`,
@@ -176,6 +232,9 @@ export function ImportAirbnbModalContainer({
           isArchived: p.isArchived === true,
           alreadyImported: Boolean(p.alreadyImported),
           importable: p.importable === true,
+          nameDuplicateBlocked: Boolean(p.nameDuplicateBlocked),
+          nameDuplicateOfRuId: p.nameDuplicateOfRuId ? String(p.nameDuplicateOfRuId) : undefined,
+          blockReason: p.blockReason,
           photoGradient: ((p.ruPropertyId % 5) + 1) as 1 | 2 | 3 | 4 | 5,
         }),
       );
@@ -382,9 +441,9 @@ export function ImportAirbnbModalContainer({
     <ImportAirbnbModal
       open={open}
       onClose={handleClose}
-      isAdmin={isAdmin}
-      sessionOwner={sessionOwner}
-      authReady={authReady}
+      isAdmin={modalIsAdmin}
+      sessionOwner={modalSessionOwner}
+      authReady={modalAuthReady}
       searchOwners={searchOwners}
       fetchOwnerProperties={fetchOwnerProperties}
       cities={cities}

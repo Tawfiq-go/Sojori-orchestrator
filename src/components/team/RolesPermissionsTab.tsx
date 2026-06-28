@@ -2,7 +2,7 @@
 import PublicWorker from '../../features/staff/components/PublicWorker';
 
 export function RolesPermissionsTab() {
-  return <PublicWorker hidePageHeader embedded />;
+  return <PublicWorker hidePageHeader embedded workerTypeOwner />;
 }
 
 export default RolesPermissionsTab;

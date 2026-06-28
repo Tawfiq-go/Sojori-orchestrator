@@ -1,4 +1,9 @@
 import { Roles } from '../constants/roles';
+import {
+  grantAllows,
+  isWorkerAdminAccess,
+  type FeatureGrant,
+} from '../utils/ownerRoutePermissions';
 
 /** Rôles autorisés sur un groupe ou item (absent = hérite du groupe). */
 export type NavRole = (typeof Roles)[keyof typeof Roles];
@@ -72,7 +77,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
       { id: 'tasks/list', label: 'Liste', iconType: 'check', iconColor: '#93C47D' },
       { id: 'tasks/planning', label: 'Planning', iconType: 'check', iconColor: '#93C47D' },
       { id: 'tasks/kanban', label: 'Kanban', iconType: 'check', iconColor: '#93C47D' },
-      { id: 'tasks/team', label: 'Équipe terrain', iconType: 'check', iconColor: '#93C47D' },
+      { id: 'tasks/team', label: 'Équipe', iconType: 'check', iconColor: '#93C47D', description: 'Staff terrain & admin WhatsApp' },
     ],
   },
   {
@@ -119,16 +124,40 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       { id: 'staff', label: 'Staff', iconType: 'worker', iconColor: '#D4A574', roles: PM_ROLES },
       { id: 'chatbot/whitelist', label: 'Whitelist', iconType: 'robot', iconColor: '#7C3AED', roles: PM_ROLES },
+      {
+        id: 'equipe/onboarding',
+        label: 'On-boarding',
+        icon: '🚀',
+        roles: PM_ROLES,
+        description: 'Configuration initiale PM — équipe, import Airbnb, orchestration',
+      },
       { id: 'my-tasks', label: 'Mes tâches', iconType: 'check', iconColor: '#93C47D', roles: WORKER_ONLY },
       { id: 'my-sched', label: 'Mon planning', iconType: 'calendar', iconColor: '#E06666', roles: WORKER_ONLY },
     ],
   },
   {
     group: 'Finances',
-    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
+    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner, Roles.Landlord],
     items: [
-      { id: 'revenue', label: 'Revenus & versements', iconType: 'trending', iconColor: '#93C47D' },
-      { id: 'statements', label: 'Relevés', iconType: 'document', iconColor: '#A6A6A6' },
+      {
+        id: 'finances/landlords',
+        label: 'Propriétaires',
+        iconType: 'worker',
+        iconColor: '#B8851A',
+        roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
+      },
+      {
+        id: 'finances/ledger',
+        label: 'Dépenses & extras',
+        iconType: 'chart',
+        iconColor: '#C81E1E',
+      },
+      {
+        id: 'finances/reports',
+        label: 'Rapports P&L',
+        iconType: 'document',
+        iconColor: '#93C47D',
+      },
     ],
   },
 ];
@@ -153,10 +182,10 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
       },
       {
         id: 'admin/sojori-logs',
-        label: 'Logs AirROI',
+        label: 'Logs estimation marché',
         iconType: 'document',
         iconColor: '#E6B022',
-        description: 'Logs API marché & listings',
+        description: 'Logs estimation & données marché Sojori',
       },
     ],
   },
@@ -236,45 +265,89 @@ function filterGroup(group: NavGroupConfig, role: string | null | undefined): Na
   };
 }
 
-/** Worker terrain : calendrier + réservations + mes tâches / planning. */
-function workerNavGroups(): NavGroupConfig[] {
-  return [
-    {
-      group: 'Réservations',
-      items: [
-        { id: 'reservations', label: 'Liste', iconType: 'calendar', iconColor: '#E06666' },
-      ],
-    },
-    {
-      group: 'Pricing',
-      items: [{ id: 'calendar', label: 'Calendrier', iconType: 'calendar', iconColor: '#E06666' }],
-    },
-    {
-      group: 'Équipe',
-      items: [
-        { id: 'my-tasks', label: 'Mes tâches', iconType: 'check', iconColor: '#93C47D' },
-        { id: 'my-sched', label: 'Mon planning', iconType: 'calendar', iconColor: '#E06666' },
-      ],
-    },
-  ];
+/** Worker dashboard : filtre les entrées sidebar selon featureGrants (lecture = get). */
+function filterNavItemsByGrants(
+  items: NavItemConfig[],
+  grants: FeatureGrant[],
+  ownerAccess?: boolean,
+): NavItemConfig[] {
+  return items
+    .map((item) => {
+      if (item.sub?.length) {
+        const sub = filterNavItemsByGrants(item.sub, grants, ownerAccess);
+        if (!sub.length) return null;
+        return { ...item, sub };
+      }
+      if (grantAllows(grants, item.id, 'get', ownerAccess)) {
+        return { ...item, sub: undefined };
+      }
+      return null;
+    })
+    .filter((item): item is NavItemConfig => item != null);
 }
 
-/** Sidebar filtrée par rôle utilisateur. */
-export function navGroupsForRole(role: string | null | undefined): NavGroupConfig[] {
-  if (role === Roles.Worker) {
-    return workerNavGroups();
+export function navGroupsForWorker(
+  grants: FeatureGrant[] = [],
+  ownerAccess = false,
+): NavGroupConfig[] {
+  const admin = isWorkerAdminAccess(grants, ownerAccess);
+
+  return OWNER_NAV_GROUPS.map((group) => {
+    const ownerItems = filterItems(group.items, Roles.Owner);
+    const items = admin
+      ? ownerItems
+      : filterNavItemsByGrants(ownerItems, grants, ownerAccess);
+    return { ...group, items };
+  }).filter((g) => g.items.length > 0);
+}
+
+function normalizeNavRole(role: string | null | undefined): string | null | undefined {
+  if (role == null) return role;
+  const r = String(role).trim();
+  const lower = r.toLowerCase();
+  if (r === Roles.Worker || lower === 'worker' || lower === 'staff') return Roles.Worker;
+  if (r === Roles.Owner || lower === 'owner') return Roles.Owner;
+  if (r === Roles.Admin || lower === 'admin') return Roles.Admin;
+  if (r === Roles.SuperAdmin || lower === 'superadmin') return Roles.SuperAdmin;
+  if (r === Roles.Landlord || lower === 'landlord') return Roles.Landlord;
+  return r;
+}
+
+/** Sidebar filtrée par rôle (+ droits worker si role Worker). */
+export function navGroupsForRole(
+  role: string | null | undefined,
+  workerGrants?: FeatureGrant[],
+  workerOwnerAccess?: boolean,
+): NavGroupConfig[] {
+  const navRole = normalizeNavRole(role);
+  if (navRole === Roles.Worker) {
+    return navGroupsForWorker(workerGrants ?? [], !!workerOwnerAccess);
   }
 
-  const ownerGroups = OWNER_NAV_GROUPS.filter((g) => roleAllowed(g.roles, role))
-    .map((g) => filterGroup(g, role))
+  if (navRole === Roles.Landlord) {
+    const stripPmOnly = (items: NavItemConfig[]): NavItemConfig[] =>
+      items
+        .filter((item) => item.id !== 'finances/landlords')
+        .map((item) =>
+          item.sub?.length ? { ...item, sub: stripPmOnly(item.sub) } : item,
+        )
+        .filter((item) => !item.sub || item.sub.length > 0);
+
+    return navGroupsForWorker(workerGrants ?? [], false)
+      .map((g) => ({ ...g, items: stripPmOnly(g.items) }))
+      .filter((g) => g.items.length > 0);
+  }
+
+  const ownerGroups = OWNER_NAV_GROUPS.filter((g) => roleAllowed(g.roles, navRole))
+    .map((g) => filterGroup(g, navRole))
     .filter((g) => g.items.length > 0);
 
-  if (!roleAllowed(ADMIN_ROLES, role)) {
+  if (!roleAllowed(ADMIN_ROLES, navRole)) {
     return ownerGroups;
   }
 
-  const adminGroups = ADMIN_NAV_GROUPS.filter((g) => roleAllowed(g.roles, role))
-    .map((g) => filterGroup(g, role))
+  const adminGroups = ADMIN_NAV_GROUPS.filter((g) => roleAllowed(g.roles, navRole))
+    .map((g) => filterGroup(g, navRole))
     .filter((g) => g.items.length > 0);
 
   return [...ownerGroups, ...adminGroups];

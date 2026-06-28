@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Button, Stack, Typography, Chip } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { T } from '../_tokens';
+import { DP, marketColumnLabel, marketColumnTooltip } from '../clientLabels';
 import type { ApplyPreviewDiffDto, ApplyPreviewDiffRowDto } from '../../../services/dynamicPricingApi';
 
 const ALERT_LABEL: Record<ApplyPreviewDiffRowDto['alert'], { label: string; color: string; bg: string }> = {
@@ -65,11 +66,8 @@ export default function ApplyPreviewDiffPanel({
   const summary = data?.summary;
   const airroiSnapshotLabel = fmtSnapshotShort(data?.airroiSnapshotAt);
   const marketSource = data?.marketSource ?? marketSourceProp ?? 'airroi';
-  const marketColLabel = marketSource === 'estimate' ? 'Estimate' : 'Marché AirROI';
-  const marketColTitle =
-    marketSource === 'estimate'
-      ? 'GET /calculator/estimate — prix marché brut (ADR × saisonnalité)'
-      : 'Prix brut AirROI (future/rates, USD×10)';
+  const marketColLabel = marketColumnLabel(marketSource);
+  const marketColTitle = marketColumnTooltip(marketSource);
 
   return (
     <Box
@@ -92,7 +90,7 @@ export default function ApplyPreviewDiffPanel({
         }}
       >
         <Typography sx={{ fontWeight: 800, fontSize: 13, color: T.ai, flex: 1 }}>
-          Vérifier les écarts (estimate → Sojori → calendrier)
+          Vérifier les écarts (estimation Sojori → prix Sojori → calendrier)
         </Typography>
         {summary ? (
           <Typography sx={{ fontSize: 11, color: T.text2, fontFamily: '"Geist Mono", monospace' }}>
@@ -143,7 +141,7 @@ export default function ApplyPreviewDiffPanel({
 
       {loading && !rows.length ? (
         <Typography sx={{ fontSize: 12, color: T.text3, px: 2, py: 2 }}>
-          Calcul des écarts AirROI · G7 · calendrier…
+          Calcul des écarts estimation · G7 · calendrier…
         </Typography>
       ) : null}
 
@@ -222,11 +220,11 @@ export default function ApplyPreviewDiffPanel({
                 <th title="Prix Sojori après bornes min/max, mode agressif/normal et events §03">
                   Sojori
                 </th>
-                <th title="Prix affiché dans /calendar (manualPrice si dynamique OFF, sinon calculatedPrice)">
-                  Calendrier ops
+                <th title="Prix affiché dans le calendrier Sojori (manuel ou dynamique)">
+                  {DP.calendrierActuel}
                 </th>
-                <th title="basePrice import RU/Airbnb (référence OTA, secondaire)">Base RU</th>
-                <th title="Sojori proposé − Calendrier ops actuel">Δ apply</th>
+                <th title="Prix catalogue de référence (secondaire)">{DP.prixDeBase}</th>
+                <th title="Sojori proposé − calendrier actuel">Δ apply</th>
                 <th title="Statut apply : OK, écart, réservé, manuel, bloqué…">Alerte</th>
               </tr>
             </thead>
