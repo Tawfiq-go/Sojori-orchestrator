@@ -15,6 +15,8 @@ type TeamViewContextValue = {
   setViewMode: (mode: TeamViewMode) => void;
   stats: TeamStat[];
   setTeamStats: (stats: TeamStat[]) => void;
+  toolbarAction: ReactNode;
+  setToolbarAction: (action: ReactNode) => void;
 };
 
 const TeamViewContext = createContext<TeamViewContextValue | null>(null);
@@ -22,10 +24,12 @@ const TeamViewContext = createContext<TeamViewContextValue | null>(null);
 export function TeamViewProvider({ children }: { children: ReactNode }) {
   const [viewMode, setViewMode] = useState<TeamViewMode>('cards');
   const [stats, setStatsState] = useState<TeamStat[]>([]);
+  const [toolbarAction, setToolbarActionState] = useState<ReactNode>(null);
   const setTeamStats = useCallback((next: TeamStat[]) => setStatsState(next), []);
+  const setToolbarAction = useCallback((next: ReactNode) => setToolbarActionState(next), []);
   const value = useMemo(
-    () => ({ viewMode, setViewMode, stats, setTeamStats }),
-    [viewMode, stats, setTeamStats],
+    () => ({ viewMode, setViewMode, stats, setTeamStats, toolbarAction, setToolbarAction }),
+    [viewMode, stats, setTeamStats, toolbarAction, setToolbarAction],
   );
   return <TeamViewContext.Provider value={value}>{children}</TeamViewContext.Provider>;
 }
@@ -38,6 +42,8 @@ export function useTeamViewMode() {
       setViewMode: () => {},
       stats: [] as TeamStat[],
       setTeamStats: () => {},
+      toolbarAction: null as ReactNode,
+      setToolbarAction: () => {},
     };
   }
   return ctx;

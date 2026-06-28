@@ -156,7 +156,7 @@ export default function DynamicPricingAirroiModal({
         const r = res as { costUsd?: number } | void;
         const cost = r?.costUsd ?? COST.estimate;
         setLastMsg(
-          `Prix marché (estimate) enregistrés · coût ~$${cost.toFixed(2)} USD · section 04 mise à jour`,
+          `Estimation Sojori enregistrée · coût ~$${cost.toFixed(2)} USD · section 04 mise à jour`,
         );
       } else if (kind === 'listingPerf') {
         const r = res as { refreshed?: number; failed?: number; totalCostUsd?: number } | void;
@@ -165,7 +165,7 @@ export default function DynamicPricingAirroiModal({
         setLastMsg(
           cost != null
             ? `Perf enregistrées · ${n} bien${n !== 1 ? 's' : ''} · coût estimé ~$${cost.toFixed(2)} USD`
-            : `Perf enregistrées pour ${n} bien${n !== 1 ? 's' : ''} avec ID Airbnb.`,
+            : `Perf enregistrées pour ${n} bien${n !== 1 ? 's' : ''} avec annonce connectée.`,
         );
       } else if (kind === 'market') {
         setLastMsg(`Cache marché ${marketRefreshCity} mis à jour.`);
@@ -278,12 +278,12 @@ export default function DynamicPricingAirroiModal({
                 <strong>Fiche bien</strong>
                 {' · '}
                 {listingCanEstimate
-                  ? 'Profil estimate OK (Sojori)'
-                  : 'Profil estimate incomplet — nom + ville ou GPS requis'}
-                {hasRevenueEstimate ? ' · prix marché en base' : ' · pas encore de prix marché'}
+                  ? 'Profil estimation OK (Sojori)'
+                  : 'Profil estimation incomplet — nom + ville ou GPS requis'}
+                {hasRevenueEstimate ? ' · estimation en base' : ' · pas encore d’estimation'}
                 {' · '}
-                {listingHasAirbnb ? 'ID Airbnb présent' : 'sans ID Airbnb'}
-                {withAirroiSnapshotCount > 0 ? ' · perf Airbnb en base' : ''}
+                {listingHasAirbnb ? 'Annonce connectée' : 'annonce non connectée'}
+                {withAirroiSnapshotCount > 0 ? ' · performances en base' : ''}
               </>
             ) : (
               <>
@@ -297,7 +297,7 @@ export default function DynamicPricingAirroiModal({
                 )}
                 {' · '}
                 {sojoriListingsCount} bien{sojoriListingsCount !== 1 ? 's' : ''} Sojori ·{' '}
-                {withAirbnbCount} avec ID Airbnb
+                {withAirbnbCount} annonce{withAirbnbCount !== 1 ? 's' : ''} connectée{withAirbnbCount !== 1 ? 's' : ''}
                 {withAirroiSnapshotCount > 0
                   ? ` · ${withAirroiSnapshotCount} snapshot${withAirroiSnapshotCount !== 1 ? 's' : ''}`
                   : ''}
@@ -319,10 +319,10 @@ export default function DynamicPricingAirroiModal({
                 }}
               >
                 <Typography sx={{ fontSize: 14, fontWeight: 800, mb: 0.75 }}>
-                  Récupérer prix marché · ce bien
+                  Récupérer l’estimation Sojori · ce bien
                 </Typography>
                 <Typography sx={{ fontSize: 12, color: T.text2, lineHeight: 1.5, mb: 1 }}>
-                  1 appel AirROI · <strong>GET /calculator/estimate</strong> — indépendant d’Airbnb.
+                  Estimation marché Sojori — indépendante de la connexion canal.
                   Alimente le potentiel §02 et le calendrier §04. Coût ~${COST.estimate.toFixed(2)} USD.
                 </Typography>
                 {estimatePayloadHint ? (
@@ -339,7 +339,7 @@ export default function DynamicPricingAirroiModal({
                     }}
                   >
                     <Typography sx={{ fontSize: 10, fontWeight: 800, color: T.text3, mb: 0.5 }}>
-                      Données Sojori envoyées à AirROI
+                      Profil Sojori utilisé pour l’estimation
                     </Typography>
                     <strong>Lieu</strong> ·{' '}
                     {estimatePayloadHint.usesGps ? 'GPS lat/lng' : 'adresse'} —{' '}
@@ -403,7 +403,7 @@ export default function DynamicPricingAirroiModal({
                     }}
                   >
                     <Typography sx={{ fontSize: 10, fontWeight: 800, color: T.success, mb: 0.5 }}>
-                      Prix marché en base (estimate)
+                      Estimation Sojori en base
                     </Typography>
                     ADR P50 ≈{' '}
                     <strong>{estimateSummaryHint.adrP50Mad.toLocaleString('fr-FR')} MAD</strong>
@@ -430,11 +430,11 @@ export default function DynamicPricingAirroiModal({
                 }}
               >
                 <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 0.75 }}>
-                  Performances Airbnb · ce bien
+                  Performances annonce · ce bien
                 </Typography>
                 <Typography sx={{ fontSize: 12, color: T.text2, lineHeight: 1.5, mb: 1.5 }}>
                   4 appels API — snapshot TTM, L90D, comparables §07. Coût ~$
-                  {PER_LISTING_USD.toFixed(2)} USD · ID Airbnb requis.
+                  {PER_LISTING_USD.toFixed(2)} USD · annonce connectée requise.
                 </Typography>
                 <Button
                   fullWidth
@@ -471,7 +471,7 @@ export default function DynamicPricingAirroiModal({
                 </Button>
                 {!listingHasAirbnb ? (
                   <Typography sx={{ fontSize: 11, color: T.warning, mt: 1, fontWeight: 600 }}>
-                    Connectez l’ID Airbnb sur le dashboard legacy avant d’envoyer.
+                    Connectez l’annonce sur les canaux de diffusion avant d’envoyer.
                   </Typography>
                 ) : null}
               </Box>
@@ -500,21 +500,21 @@ export default function DynamicPricingAirroiModal({
                 title="Récupérer les performances par bien"
                 description={
                   perfCityLabel
-                    ? `Pour chaque annonce avec ID Airbnb dans ${perfCityLabel} (${withAirbnbCount} bien${withAirbnbCount !== 1 ? 's' : ''}), 4 appels/bien dont comparables.`
-                    : `Pour chaque annonce avec ID Airbnb (${withAirbnbCount} bien${withAirbnbCount !== 1 ? 's' : ''}, toutes villes), 4 appels/bien dont comparables.`
+                    ? `Pour chaque annonce connectée dans ${perfCityLabel} (${withAirbnbCount} bien${withAirbnbCount !== 1 ? 's' : ''}), 4 analyses/bien dont comparables.`
+                    : `Pour chaque annonce connectée (${withAirbnbCount} bien${withAirbnbCount !== 1 ? 's' : ''}, toutes villes), 4 analyses/bien dont comparables.`
                 }
                 costLines={[
-                  { label: 'GET /listings (fiche + perf TTM)', usd: COST.listing },
-                  { label: 'GET /listings/metrics/all (24 mois)', usd: COST.listingMetrics },
-                  { label: 'GET /listings/future/rates (pacing)', usd: COST.listingFutureRates },
-                  { label: 'GET /listings/comparables', usd: COST.listingComparables },
+                  { label: 'Fiche + performances (12 mois)', usd: COST.listing },
+                  { label: 'Historique mensuel (24 mois)', usd: COST.listingMetrics },
+                  { label: 'Tarifs journaliers marché', usd: COST.listingFutureRates },
+                  { label: 'Annonces comparables', usd: COST.listingComparables },
                 ]}
                 totalLabel={`${withAirbnbCount} listing${withAirbnbCount !== 1 ? 's' : ''} × ${PER_LISTING_CALLS} appels`}
                 totalUsd={perfListingUsd}
                 example={
                   withAirbnbCount > 0
                     ? `Ex. ${withAirbnbCount} listing${withAirbnbCount !== 1 ? 's' : ''} → ~$${perfListingUsd.toFixed(2)} USD`
-                    : 'Aucun ID Airbnb — connectez les canaux sur le dashboard legacy.'
+                    : 'Aucune annonce connectée — configurez la diffusion sur le listing.'
                 }
                 onRun={() => run('listingPerf', () => onRefreshListingPerformance(activeCityScope))}
                 running={running === 'listingPerf'}

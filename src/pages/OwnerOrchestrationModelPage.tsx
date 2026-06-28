@@ -239,8 +239,18 @@ function OwnerModelPageInner() {
         <OwnerActivationSection
           key={ownerKey}
           ownerKey={ownerKey}
+          isAdminTemplate={isAdminTemplate}
           onMetaChange={({ anyActive }) => setOwnerServicesActive(anyActive)}
         />
+      )}
+
+      {!isAdminTemplate && ownerKey !== 'global' && (
+        <Alert severity="info" sx={{ mb: 1.5, fontSize: 13 }}>
+          <strong>Modèle PM → annonces.</strong> Chaque enregistrement met d&apos;abord à jour le
+          modèle propriétaire (<code>owner_orchestrations</code>), puis synchronise les annonces qui
+          héritent de ce modèle — comme à l&apos;onboarding (pas d&apos;écriture directe listing
+          depuis le wizard).
+        </Alert>
       )}
 
       {section === 'services' && isAdmin && isAdminTemplate && (

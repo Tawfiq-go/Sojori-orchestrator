@@ -3,4 +3,5 @@ export const Roles = {
   Admin: 'Admin',
   Owner: 'Owner',
   Worker: 'Worker',
+  Landlord: 'Landlord',
 };

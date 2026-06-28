@@ -44,7 +44,7 @@ export function TeamHubPagination({
         {from}–{to} sur {total} {itemLabel}
       </Typography>
 
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         {onLimitChange ? (
           <FormControl size="small" sx={{ minWidth: 110 }}>
             <Select

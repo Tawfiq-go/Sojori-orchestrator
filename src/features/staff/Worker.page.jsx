@@ -32,7 +32,7 @@ function Worker() {
         }
       />
       <Paper elevation={0} sx={{ ...teamRolesContentPaperSx, px: { xs: 0.5, sm: 1 }, pt: 1, pb: 1.5 }}>
-        <PublicWorker hidePageHeader onWorkersTotalChange={onWorkersTotalChange} />
+        <PublicWorker hidePageHeader embedded onWorkersTotalChange={onWorkersTotalChange} />
       </Paper>
     </TeamRolesPageShell>
   );

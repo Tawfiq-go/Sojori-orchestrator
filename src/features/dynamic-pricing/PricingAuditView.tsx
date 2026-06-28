@@ -114,7 +114,7 @@ export function PricingAuditView() {
         <Typography sx={{ fontSize: 12, color: T.text3, mb: 2, lineHeight: 1.5 }}>
           Jours où le <strong>prix estimé G7</strong> (mix engine) a changé entre le snapshot actuel et le
           snapshot précédent (avant la dernière synchro). Ce ne sont pas les prix envoyés au calendrier /
-          Rentals United.
+          canaux de diffusion.
         </Typography>
 
         {loading && <Typography sx={{ fontSize: 12, color: T.text3 }}>Chargement…</Typography>}

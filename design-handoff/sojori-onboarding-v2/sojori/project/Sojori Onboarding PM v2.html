@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sojori · Onboarding PM · Wizard · Atelier 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --p:#b8851a;--pd:#876119;--ps:#e6c46a;--pt:rgba(184,133,26,0.10);--pt2:rgba(184,133,26,0.22);
+  --wa:#25D366;--wa-bg:#075E54;
+  --bg0:#f6f5f1;--bg1:#fff;--bg2:#fafaf7;--bg3:#f0eee8;
+  --t:#14110a;--t2:#55504a;--t3:#7a756c;--t4:#a8a299;
+  --b:rgba(20,17,10,0.07);--bs:rgba(20,17,10,0.14);
+  --su:#0a8f5e;--sut:rgba(10,143,94,0.10);
+  --er:#c81e1e;--ert:rgba(200,30,30,0.10);
+  --info:#1d6fd6;--infot:rgba(29,111,214,0.09);
+  --ai:#7c3aed;--ait:rgba(124,58,237,0.10);
+  --sans:Geist,system-ui,sans-serif;--mono:'Geist Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg0);font-family:var(--sans);color:var(--t);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit;padding:0}
+@keyframes pulseGold{0%,100%{box-shadow:0 0 0 0 rgba(184,133,26,0.45)}50%{box-shadow:0 0 0 6px rgba(184,133,26,0)}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes panelIn{from{transform:translateY(8px);opacity:.6}to{transform:none;opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── Top bar ─── */
+.topbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,0.88);backdrop-filter:blur(16px) saturate(180%);border-bottom:1px solid var(--b);padding:11px 26px;display:flex;align-items:center;gap:16px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--ps),var(--pd));color:#1a1408;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(184,133,26,0.30)}
+.brand-name{font-weight:700;font-size:15px;letter-spacing:-0.02em}
+.brand-name span{font-family:var(--mono);font-size:9.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-left:4px}
+.crumb{font-size:11px;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;padding-left:14px;border-left:1px solid var(--b)}
+.topbar .who{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:12px;color:var(--t2)}
+.topbar .who .av{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--ps),var(--pd));color:#1a1408;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
+
+/* ─── Stepper ─── */
+.stepper{position:sticky;top:53px;z-index:35;background:rgba(246,245,241,0.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--b);padding:13px 26px 0}
+.stepper-inner{max-width:1340px;margin:0 auto}
+.steps-row{display:flex;gap:4px;align-items:flex-start;overflow-x:auto;padding-bottom:13px;scrollbar-width:none}
+.steps-row::-webkit-scrollbar{display:none}
+.snode{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;min-width:78px;cursor:pointer;position:relative}
+.snode .bar{height:4px;width:100%;border-radius:99px;background:var(--bg3);position:relative;overflow:hidden}
+.snode.done .bar{background:var(--su)}
+.snode.active .bar{background:linear-gradient(90deg,var(--ps),var(--p))}
+.snode .lbl{font-size:11px;font-weight:600;color:var(--t3);text-align:center;letter-spacing:-0.005em;line-height:1.2;display:flex;align-items:center;gap:5px}
+.snode.active .lbl{color:var(--pd);font-weight:800}
+.snode.done .lbl{color:var(--t2)}
+.snode .no{font-family:var(--mono);font-size:9px;font-weight:700;width:15px;height:15px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.snode.done .no{background:var(--su);color:#fff}
+.snode.active .no{background:var(--p);color:#fff}
+.snode.pending .no{background:var(--bg3);color:var(--t4);box-shadow:inset 0 0 0 1.5px var(--bs)}
+
+/* ─── Layout ─── */
+.shell{max-width:1340px;margin:22px auto 0;padding:0 26px 60px;display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start}
+.main{min-width:0}
+.step-panel{display:none}
+.step-panel.on{display:block;animation:panelIn .28s ease}
+
+.sh{margin-bottom:20px}
+.sh .eyebrow{font-size:10.5px;font-weight:800;color:var(--pd);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.09em;margin-bottom:7px}
+.sh h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-0.03em}
+.sh .sub{font-size:13px;color:var(--t3);margin-top:7px;line-height:1.55;max-width:620px}
+
+/* config banner */
+.cfg-banner{background:var(--infot);border:1px solid rgba(29,111,214,0.22);border-radius:11px;padding:11px 15px;display:flex;align-items:center;gap:11px;font-size:12.5px;color:#14406f;margin-bottom:20px}
+.cfg-banner .ic{width:26px;height:26px;border-radius:7px;background:var(--info);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+
+/* cards & blocks */
+.card{background:var(--bg1);border:1px solid var(--b);border-radius:14px;box-shadow:0 1px 2px rgba(20,17,10,0.04);overflow:hidden;margin-bottom:16px}
+.card-h{padding:13px 17px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px}
+.card-h .ct{font-size:13px;font-weight:700;letter-spacing:-0.01em}
+.card-h .sub{font-size:11px;color:var(--t3);font-family:var(--mono)}
+.card-h .right{margin-left:auto;display:flex;gap:7px;align-items:center}
+.card-b{padding:17px}
+.label{font-size:10.5px;font-weight:800;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.label .opt{font-family:var(--sans);font-weight:600;color:var(--t4);text-transform:none;letter-spacing:0}
+.grp-label{font-size:11px;font-weight:800;color:var(--t2);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.07em;margin:20px 0 10px;display:flex;align-items:center;gap:8px}
+.grp-label .em{font-size:14px}
+.grp-label .ct{margin-left:auto;font-family:var(--mono);font-size:9.5px;background:var(--bg3);color:var(--t3);padding:2px 8px;border-radius:99px;font-weight:700}
+.grp-label:first-child{margin-top:0}
+
+/* inputs */
+.field{display:block;width:100%;padding:10px 12px;border:1px solid var(--b);border-radius:9px;font:inherit;font-size:13px;background:var(--bg2);color:var(--t);margin-bottom:10px}
+.field:focus{outline:0;border-color:var(--p);background:#fff;box-shadow:0 0 0 3px var(--pt)}
+.field.sel{display:flex;align-items:center;justify-content:space-between;font-weight:600;cursor:pointer;margin-bottom:0}
+.field.sel::after{content:'▾';color:var(--t3);font-size:10px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+
+/* radio cards */
+.radios{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rcard{display:flex;align-items:flex-start;gap:11px;padding:14px;border:1.5px solid var(--b);border-radius:12px;cursor:pointer;background:var(--bg1);transition:all .14s}
+.rcard:hover{border-color:var(--bs)}
+.rcard.on{border-color:var(--p);background:var(--pt);box-shadow:0 0 0 1px var(--pt2)}
+.rcard .r{width:17px;height:17px;border-radius:50%;border:2px solid var(--bs);flex-shrink:0;margin-top:1px;transition:all .12s}
+.rcard.on .r{border-color:var(--p);background:radial-gradient(circle at center,var(--p) 0 5px,transparent 5px)}
+.rcard .em{font-size:20px;flex-shrink:0}
+.rcard .nm{font-weight:700;letter-spacing:-0.01em}
+.rcard .ds{font-size:11.5px;color:var(--t3);margin-top:2px;font-weight:500}
+
+/* toggle */
+.toggle{width:38px;height:22px;border-radius:99px;background:var(--bs);position:relative;cursor:pointer;flex-shrink:0;transition:background .2s}
+.toggle.on{background:linear-gradient(135deg,#cb9b2c,var(--p));box-shadow:0 0 0 2px var(--pt)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.20);transition:transform .2s}
+.toggle.on::after{transform:translateX(16px)}
+
+/* chips / pills */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:600;border:1px solid var(--b);background:#fff;color:var(--t3);cursor:pointer;transition:all .12s;font-family:var(--mono)}
+.chip.on{background:var(--pt);border-color:var(--p);color:var(--pd);font-weight:700}
+
+/* capability cards grid */
+.cap-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cap{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--b);border-radius:12px;background:var(--bg1);transition:all .14s}
+.cap.off{opacity:.6;background:var(--bg2)}
+.cap .em{width:38px;height:38px;border-radius:10px;background:var(--pt);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.cap.off .em{background:var(--bg3);filter:grayscale(1)}
+.cap .info{flex:1;min-width:0}
+.cap .nm{font-weight:700;font-size:13px;letter-spacing:-0.005em}
+.cap .ds{font-size:11px;color:var(--t3);margin-top:1px}
+.cap .lock{font-size:9px;font-family:var(--mono);color:var(--t4);background:var(--bg3);padding:2px 6px;border-radius:5px;font-weight:700;margin-top:3px;display:inline-block}
+
+/* J-X access rows */
+.jx-row{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px dashed var(--b)}
+.jx-row:last-child{border-bottom:0}
+.jx-row .ji{width:34px;height:34px;border-radius:9px;background:var(--pt);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.jx-row .jt{flex:1;min-width:0}
+.jx-row .jt .nm{font-weight:700;font-size:13px}
+.jx-row .jt .ds{font-size:11px;color:var(--t3);margin-top:1px}
+.jx-row .jsel{flex-shrink:0;min-width:170px}
+
+/* prerequisite chain */
+.chain{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin-bottom:18px}
+.chain-box{flex:1;min-width:120px;background:var(--bg1);border:1.5px solid var(--pt2);border-radius:12px;padding:13px;text-align:center;position:relative}
+.chain-box .em{font-size:22px}
+.chain-box .nm{font-weight:700;font-size:12px;margin-top:5px;letter-spacing:-0.005em}
+.chain-box .st{font-family:var(--mono);font-size:9px;color:var(--pd);margin-top:3px;text-transform:uppercase;letter-spacing:0.04em}
+.chain-arrow{display:flex;align-items:center;justify-content:center;color:var(--p);font-size:20px;padding:0 4px;flex-shrink:0}
+.cond-row{display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--b);border-radius:12px;background:var(--bg1);margin-bottom:10px}
+.cond-row .ct{flex:1}
+.cond-row .nm{font-weight:700;font-size:13px}
+.cond-row .phrase{font-size:11.5px;color:var(--t3);margin-top:3px;line-height:1.45}
+.cond-row .phrase b{color:var(--pd);font-weight:700}
+
+/* deadline presets */
+.preset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.preset{border:1.5px solid var(--b);border-radius:13px;padding:15px;cursor:pointer;background:var(--bg1);transition:all .14s}
+.preset:hover{border-color:var(--bs)}
+.preset.on{border-color:var(--p);background:var(--pt);box-shadow:0 0 0 1px var(--pt2)}
+.preset .pn{font-weight:800;font-size:14px;letter-spacing:-0.01em;display:flex;align-items:center;gap:7px}
+.preset .pn .em{font-size:17px}
+.preset .pl{margin-top:10px;display:flex;flex-direction:column;gap:5px}
+.preset .pl .li{display:flex;justify-content:space-between;font-size:11.5px;color:var(--t2)}
+.preset .pl .li .v{font-family:var(--mono);font-weight:700;color:var(--t)}
+
+/* import */
+.subtabs{display:inline-flex;background:var(--bg1);border:1px solid var(--b);border-radius:10px;padding:3px;gap:1px;margin-bottom:16px}
+.subtab{padding:7px 14px;border-radius:7px;font-size:12px;font-weight:700;color:var(--t3)}
+.subtab.on{background:linear-gradient(180deg,#cb9b2c,var(--p));color:#1a1408;box-shadow:0 1px 2px rgba(135,97,25,0.30),inset 0 1px 0 rgba(255,255,255,0.30)}
+.sub-panel{display:none}.sub-panel.on{display:block}
+.batch{padding:17px}
+.batch .row1{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px}
+.batch .big{font-size:15px;font-weight:700}.batch .big b{font-family:var(--mono);color:var(--pd)}
+.batch .corr{font-family:var(--mono);font-size:10px;color:var(--t4)}
+.batch-track{height:11px;background:var(--bg3);border-radius:99px;overflow:hidden;display:flex}
+.batch-seg{height:100%}.batch-seg.ok{background:linear-gradient(90deg,var(--su),#15a86f)}.batch-seg.err{background:var(--er)}
+.batch-seg.run{background:linear-gradient(90deg,var(--ps),var(--p));position:relative;overflow:hidden}
+.batch-seg.run::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent);background-size:200% 100%;animation:shimmer 1.4s infinite}
+.batch-legend{display:flex;gap:15px;margin-top:11px;font-size:11px;color:var(--t3);font-family:var(--mono);flex-wrap:wrap}
+.batch-legend .lg{display:flex;align-items:center;gap:6px}.batch-legend .sw{width:9px;height:9px;border-radius:3px}
+table{width:100%;border-collapse:collapse}
+thead th{text-align:left;padding:9px 16px;font-size:9.5px;font-family:var(--mono);font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;background:var(--bg2);border-bottom:1px solid var(--b)}
+tbody td{padding:11px 16px;font-size:12.5px;border-bottom:1px solid var(--b);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:var(--bg2)}
+.lst-nm{font-weight:700;letter-spacing:-0.005em}.lst-loc{font-size:10.5px;color:var(--t3);font-family:var(--mono);margin-top:1px}
+.tag{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.tag.ok{background:var(--sut);color:var(--su)}.tag.run{background:var(--pt);color:var(--pd)}.tag.err{background:var(--ert);color:var(--er)}.tag.wait{background:var(--bg3);color:var(--t3)}
+.tag .dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.errtxt{font-size:11px;color:var(--er);font-weight:600}
+.link{color:var(--pd);font-weight:700;font-size:11.5px;font-family:var(--mono);cursor:pointer}.link:hover{text-decoration:underline}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--bg1);border:1px solid var(--b);border-radius:13px;padding:15px 16px}
+.kpi .v{font-size:26px;font-weight:800;letter-spacing:-0.03em;font-family:var(--mono);font-variant-numeric:tabular-nums;line-height:1}
+.kpi .v small{font-size:13px;color:var(--t3);font-weight:700}
+.kpi .k{font-size:11px;color:var(--t3);margin-top:6px;font-weight:600}
+.kpi.gold .v{color:var(--pd)}.kpi.green .v{color:var(--su)}.kpi.err .v{color:var(--er)}
+.orch-row{display:flex;align-items:center;gap:13px;padding:12px 16px;border-bottom:1px solid var(--b)}
+.orch-row:last-child{border-bottom:0}.orch-row:hover{background:var(--bg2)}
+.orch-row .thumb{width:38px;height:38px;border-radius:9px;flex-shrink:0;background:linear-gradient(135deg,var(--bg3),#e6e1d6);display:flex;align-items:center;justify-content:center;font-size:17px}
+.orch-row .info{flex:1;min-width:0}.orch-row .cnt{font-family:var(--mono);font-size:11px;color:var(--t3)}.orch-row .cnt b{color:var(--pd)}
+
+.inote{font-size:11.5px;color:var(--t2);background:var(--bg2);border:1px solid var(--b);border-radius:9px;padding:10px 13px;display:flex;gap:8px;align-items:flex-start;line-height:1.45;margin-top:6px}
+.inote.info{background:var(--infot);border-color:rgba(29,111,214,0.20);color:#14406f}
+.inote .i{flex-shrink:0;font-size:14px}
+
+/* select list block */
+.listing-pick{max-height:280px;overflow-y:auto;border:1px solid var(--b);border-radius:11px}
+.lp-row{display:flex;align-items:center;gap:11px;padding:11px 14px;border-bottom:1px solid var(--b);cursor:pointer}
+.lp-row:last-child{border-bottom:0}.lp-row:hover{background:var(--bg2)}
+.lp-row .c{width:17px;height:17px;border-radius:5px;border:2px solid var(--bs);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;transition:all .12s}
+.lp-row.on .c{background:var(--p);border-color:var(--p)}.lp-row.on .c::after{content:'✓'}
+
+/* recap hero */
+.recap-hero{background:linear-gradient(135deg,#fff,var(--pt));border:1px solid var(--pt2);border-radius:18px;padding:28px;text-align:center;margin-bottom:16px}
+.recap-hero .big-emoji{font-size:42px}
+.recap-hero h2{margin:10px 0 6px;font-size:24px;font-weight:800;letter-spacing:-0.025em}
+.recap-hero p{font-size:13px;color:var(--t2);max-width:440px;margin:0 auto}
+.recap-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
+.recap-item{display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--bg1);border:1px solid var(--b);border-radius:12px}
+.recap-item .ic{width:32px;height:32px;border-radius:8px;background:var(--sut);color:var(--su);display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+.recap-item .rt{flex:1}.recap-item .rt .nm{font-weight:700;font-size:13px}.recap-item .rt .ds{font-size:11px;color:var(--t3)}
+
+/* nav bar */
+.navbar{display:flex;align-items:center;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--b)}
+.btn{padding:11px 20px;border-radius:10px;font-size:13.5px;font-weight:700;letter-spacing:-0.005em;display:inline-flex;align-items:center;gap:8px}
+.btn-ghost{background:var(--bg1);color:var(--t);border:1px solid var(--b)}.btn-ghost:hover{border-color:var(--bs)}
+.btn-prim{background:linear-gradient(180deg,#cb9b2c,var(--p));color:#1a1408;box-shadow:0 2px 8px rgba(184,133,26,0.30),inset 0 1px 0 rgba(255,255,255,0.30)}
+.btn-prim:hover{transform:translateY(-1px)}
+.btn-go{background:linear-gradient(180deg,#1bb673,var(--su));color:#fff;box-shadow:0 2px 10px rgba(10,143,94,0.35),inset 0 1px 0 rgba(255,255,255,0.25)}
+.navbar .spacer{flex:1}
+.navbar .stepcount{font-family:var(--mono);font-size:11px;color:var(--t3)}
+
+/* ─── Tracking panel ─── */
+.track{position:sticky;top:130px;background:var(--bg1);border:1px solid var(--b);border-radius:15px;box-shadow:0 1px 2px rgba(20,17,10,0.04);overflow:hidden}
+.track-h{padding:15px 16px 13px;border-bottom:1px solid var(--b)}
+.track-h .top{display:flex;align-items:baseline;justify-content:space-between}
+.track-h .pct{font-size:24px;font-weight:800;font-family:var(--mono);color:var(--pd);letter-spacing:-0.02em}
+.track-h .lbl{font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:0.07em;color:var(--t3);font-weight:700}
+.track-track{height:7px;background:var(--bg3);border-radius:99px;overflow:hidden;margin-top:9px}
+.track-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--ps),var(--p));transition:width .4s ease}
+.track-sec{padding:13px 16px;border-bottom:1px solid var(--b)}
+.track-sec h3{margin:0 0 10px;font-size:9.5px;font-weight:800;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.08em}
+.tcounters{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.tc{text-align:center;padding:9px 4px;background:var(--bg2);border-radius:9px}
+.tc .v{font-size:17px;font-weight:800;font-family:var(--mono);letter-spacing:-0.02em}
+.tc .v.gold{color:var(--pd)}.tc .v.green{color:var(--su)}
+.tc .k{font-size:9px;color:var(--t3);margin-top:2px;font-weight:600;line-height:1.2}
+.tcheck{display:flex;align-items:center;gap:9px;padding:6px 0;font-size:12px;cursor:pointer}
+.tcheck .d{width:16px;height:16px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800}
+.tcheck .d.done{background:var(--su);color:#fff}
+.tcheck .d.active{background:var(--p);color:#fff;animation:pulseGold 2.2s infinite}
+.tcheck .d.pending{background:var(--bg3);color:var(--t4);box-shadow:inset 0 0 0 1.5px var(--bs);font-family:var(--mono)}
+.tcheck .nm{color:var(--t2);font-weight:600}
+.tcheck.active .nm{color:var(--t);font-weight:700}
+.tl-body{padding:8px 16px 14px;max-height:200px;overflow-y:auto}
+.tl-ev{display:flex;gap:10px;padding:7px 0;align-items:flex-start;position:relative}
+.tl-ev::before{content:'';position:absolute;left:5px;top:18px;bottom:-7px;width:1.5px;background:var(--b)}
+.tl-ev:last-child::before{display:none}
+.tl-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;margin-top:3px;background:var(--bg1);box-shadow:inset 0 0 0 2.5px var(--p)}
+.tl-dot.ok{box-shadow:inset 0 0 0 2.5px var(--su)}.tl-dot.err{box-shadow:inset 0 0 0 2.5px var(--er)}.tl-dot.info{box-shadow:inset 0 0 0 2.5px var(--info)}
+.tl-ev .time{font-family:var(--mono);font-size:9.5px;color:var(--t4);width:34px;flex-shrink:0;margin-top:2px}
+.tl-ev .txt{font-size:11.5px;flex:1;line-height:1.35}.tl-ev .txt b{font-weight:700}
+
+@media(max-width:1080px){.shell{grid-template-columns:1fr}.track{position:static;margin-top:6px}}
+@media(max-width:600px){
+  .topbar{padding:10px 14px}.stepper{padding:11px 14px 0}.shell{padding:0 14px 50px}
+  .radios,.cap-grid,.recap-grid{grid-template-columns:1fr}.preset-grid{grid-template-columns:1fr}
+  .row2,.row3{grid-template-columns:1fr}.jx-row{flex-wrap:wrap}.jx-row .jsel{min-width:0;width:100%}
+  .chain{flex-direction:column}.chain-arrow{transform:rotate(90deg);padding:4px 0}
+}
+</style></head><body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="brand"><div class="brand-mark">S</div><div class="brand-name">Sojori<span>Atelier · 2026</span></div></div>
+  <div class="crumb">PM · Onboarding</div>
+  <div class="who"><span>Karim · Riad Collection</span><div class="av">K</div></div>
+</div>
+
+<!-- STEPPER -->
+<div class="stepper"><div class="stepper-inner"><div class="steps-row" id="stepsRow">
+  <div class="snode" data-go="0"><div class="bar"></div><div class="lbl"><span class="no">0</span>Profil</div></div>
+  <div class="snode" data-go="1"><div class="bar"></div><div class="lbl"><span class="no">1</span>Équipe</div></div>
+  <div class="snode" data-go="2"><div class="bar"></div><div class="lbl"><span class="no">2</span>Accès</div></div>
+  <div class="snode" data-go="3"><div class="bar"></div><div class="lbl"><span class="no">3</span>Parcours client</div></div>
+  <div class="snode" data-go="4"><div class="bar"></div><div class="lbl"><span class="no">4</span>Accès voyageur</div></div>
+  <div class="snode" data-go="5"><div class="bar"></div><div class="lbl"><span class="no">5</span>Conditions</div></div>
+  <div class="snode" data-go="6"><div class="bar"></div><div class="lbl"><span class="no">6</span>Délais</div></div>
+  <div class="snode" data-go="7"><div class="bar"></div><div class="lbl"><span class="no">7</span>Import</div></div>
+  <div class="snode" data-go="8"><div class="bar"></div><div class="lbl"><span class="no">8</span>Go live</div></div>
+</div></div></div>
+
+<!-- SHELL -->
+<div class="shell">
+<div class="main">
+
+  <!-- ░░ STEP 0 · PROFIL & PARCOURS ░░ -->
+  <div class="step-panel on" data-panel="0">
+    <div class="sh"><div class="eyebrow">Étape 0 · Profil</div><h1>Parlons de votre activité</h1><p class="sub">Quelques infos pour adapter votre onboarding. On masque les étapes qui ne vous concernent pas.</p></div>
+    <div class="cfg-banner"><div class="ic">🛠</div><div><b>Phase de configuration.</b> Rien n'est envoyé aux voyageurs tant que vous n'avez pas tout validé et lancé l'orchestration.</div></div>
+
+    <div class="card"><div class="card-h"><span class="ct">Vous êtes déjà sur Airbnb ?</span></div><div class="card-b">
+      <div class="radios">
+        <div class="rcard on" data-radio="path"><div class="r"></div><span class="em">🏠</span><div><div class="nm">Oui, j'ai déjà des annonces</div><div class="ds">On importe tout via Rentals United</div></div></div>
+        <div class="rcard" data-radio="path"><div class="r"></div><span class="em">✨</span><div><div class="nm">Non, je débute</div><div class="ds">On crée votre première propriété</div></div></div>
+      </div>
+    </div></div>
+
+    <div class="card"><div class="card-h"><span class="ct">Votre périmètre</span></div><div class="card-b">
+      <div class="label">Villes où vous opérez</div>
+      <div class="chips" style="margin-bottom:16px">
+        <button class="chip on">Marrakech</button><button class="chip">Casablanca</button><button class="chip">Essaouira</button>
+        <button class="chip">Rabat</button><button class="chip">Agadir</button><button class="chip">+ Ajouter</button>
+      </div>
+      <div class="row2">
+        <div><div class="label">Nombre de biens</div><div class="field sel">50 propriétés</div></div>
+        <div><div class="label">Type principal</div><div class="field sel">Riads & appartements</div></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ░░ STEP 1 · ÉQUIPE ░░ -->
+  <div class="step-panel" data-panel="1">
+    <div class="sh"><div class="eyebrow">Étape 1 · Équipe</div><h1>Qui fait tourner les opérations ?</h1><p class="sub">Votre staff terrain reçoit les tâches sur WhatsApp. Les admins sont notifiés des demandes importantes.</p></div>
+
+    <div class="card"><div class="card-h"><span class="ct">Staff terrain</span><span class="sub">reçoit les tâches</span><div class="right"><button class="btn-ghost" style="padding:7px 12px;font-size:12px">+ Ajouter</button></div></div>
+      <table><thead><tr><th>Nom</th><th>Rôle</th><th>WhatsApp</th><th>Jours</th></tr></thead><tbody>
+        <tr><td class="lst-nm">Fatima Z.</td><td>Ménage</td><td style="font-family:var(--mono)">+212 6 61 …</td><td><span class="tag ok">L→S</span></td></tr>
+        <tr><td class="lst-nm">Youssef A.</td><td>Accueil / clés</td><td style="font-family:var(--mono)">+212 6 62 …</td><td><span class="tag ok">7j/7</span></td></tr>
+        <tr><td class="lst-nm">Hicham B.</td><td>Maintenance</td><td style="font-family:var(--mono)">+212 6 63 …</td><td><span class="tag ok">L→V</span></td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="card"><div class="card-h"><span class="ct">Admins notifiés</span><span class="sub">demandes & escalades</span></div><div class="card-b">
+      <div class="cap-grid">
+        <div class="cap"><div class="em">🆘</div><div class="info"><div class="nm">Demandes de support</div><div class="ds">Karim (vous)</div></div><div class="toggle on"></div></div>
+        <div class="cap"><div class="em">💌</div><div class="info"><div class="nm">Service client</div><div class="ds">Karim (vous)</div></div><div class="toggle on"></div></div>
+        <div class="cap"><div class="em">🛎</div><div class="info"><div class="nm">Nouvelles réservations conciergerie</div><div class="ds">Sara (assistante)</div></div><div class="toggle on"></div></div>
+        <div class="cap off"><div class="em">⭐</div><div class="info"><div class="nm">Nouveaux avis</div><div class="ds">Personne</div></div><div class="toggle"></div></div>
+      </div>
+      <div class="label" style="margin-top:18px">Jours travaillés par défaut <span class="opt">(staff terrain)</span></div>
+      <div class="chips"><button class="chip on">L</button><button class="chip on">M</button><button class="chip on">M</button><button class="chip on">J</button><button class="chip on">V</button><button class="chip on">S</button><button class="chip">D</button></div>
+    </div></div>
+  </div>
+
+  <!-- ░░ STEP 2 · ACCÈS DASHBOARD ░░ -->
+  <div class="step-panel" data-panel="2">
+    <div class="sh"><div class="eyebrow">Étape 2 · Accès dashboard</div><h1>Qui voit quoi dans Sojori ?</h1><p class="sub">Invitez votre équipe et choisissez les sections accessibles à chacun.</p></div>
+
+    <div class="card"><div class="card-h"><span class="ct">Membres invités</span><div class="right"><button class="btn-ghost" style="padding:7px 12px;font-size:12px">+ Inviter</button></div></div>
+      <table><thead><tr><th>Email</th><th>Rôle</th><th>Statut</th></tr></thead><tbody>
+        <tr><td style="font-family:var(--mono)">sara@riad-collection.ma</td><td>Assistante</td><td><span class="tag ok"><span class="dot"></span>Actif</span></td></tr>
+        <tr><td style="font-family:var(--mono)">compta@riad-collection.ma</td><td>Comptabilité</td><td><span class="tag wait">Invitation envoyée</span></td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="card"><div class="card-h"><span class="ct">Sections accessibles</span><span class="sub">rôle · Assistante</span></div><div class="card-b">
+      <div class="cap-grid">
+        <div class="cap"><div class="em">📊</div><div class="info"><div class="nm">Tableau de bord</div></div><div class="toggle on"></div></div>
+        <div class="cap"><div class="em">📅</div><div class="info"><div class="nm">Calendrier</div></div><div class="toggle on"></div></div>
+        <div class="cap"><div class="em">💬</div><div class="info"><div class="nm">Inbox messages</div></div><div class="toggle on"></div></div>
+        <div class="cap"><div class="em">🛎</div><div class="info"><div class="nm">Conciergerie</div></div><div class="toggle on"></div></div>
+        <div class="cap off"><div class="em">💰</div><div class="info"><div class="nm">Revenus & tarifs</div></div><div class="toggle"></div></div>
+        <div class="cap off"><div class="em">⚙️</div><div class="info"><div class="nm">Paramètres facturation</div></div><div class="toggle"></div></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ░░ STEP 3 · PARCOURS CLIENT ░░ -->
+  <div class="step-panel" data-panel="3">
+    <div class="sh"><div class="eyebrow">Étape 3 · Parcours client & orchestration</div><h1>Ce que vos voyageurs peuvent faire</h1><p class="sub">Activez les services proposés automatiquement via WhatsApp. Vous réglez le « quand » à l'étape suivante.</p></div>
+
+    <div class="grp-label"><span class="em">💬</span>Communication<span class="ct">4 actifs</span></div>
+    <div class="cap-grid">
+      <div class="cap"><div class="em">👋</div><div class="info"><div class="nm">Message de bienvenue</div><div class="ds">Dès la réservation</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">📝</div><div class="info"><div class="nm">Enregistrement</div><div class="ds">Infos voyageurs avant arrivée</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">🆘</div><div class="info"><div class="nm">Support</div><div class="ds">Problème technique · confort</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">💌</div><div class="info"><div class="nm">Service client</div><div class="ds">Réclamation · facturation</div></div><div class="toggle on"></div></div>
+    </div>
+
+    <div class="grp-label"><span class="em">🛬</span>Arrivée & départ<span class="ct">4 actifs</span></div>
+    <div class="cap-grid">
+      <div class="cap"><div class="em">🕓</div><div class="info"><div class="nm">Choisir l'heure d'arrivée</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">🕙</div><div class="info"><div class="nm">Choisir l'heure de départ</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">✅</div><div class="info"><div class="nm">Déclarer son arrivée</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">👋</div><div class="info"><div class="nm">Déclarer son départ</div></div><div class="toggle on"></div></div>
+    </div>
+
+    <div class="grp-label"><span class="em">🛎</span>Conciergerie<span class="ct">2 actifs · 1 off</span></div>
+    <div class="cap-grid">
+      <div class="cap"><div class="em">🚐</div><div class="info"><div class="nm">Transport & navette</div><div class="ds">Transfert aéroport</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">🛒</div><div class="info"><div class="nm">Courses à l'arrivée</div></div><div class="toggle on"></div></div>
+      <div class="cap off"><div class="em">✨</div><div class="info"><div class="nm">Conciergerie sur-mesure</div><div class="ds">Demandes libres</div></div><div class="toggle"></div></div>
+    </div>
+
+    <div class="grp-label"><span class="em">🧹</span>Ménage<span class="ct">paramétré</span></div>
+    <div class="cap-grid">
+      <div class="cap"><div class="em">🏠</div><div class="info"><div class="nm">Ménage inclus</div><div class="ds">Selon durée du séjour</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">✨</div><div class="info"><div class="nm">Ménage payant</div><div class="ds">À la demande</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">🤖</div><div class="info"><div class="nm">Ménage Sojori auto</div><div class="ds">Déclenché au départ</div></div><div class="toggle on"></div></div>
+    </div>
+
+    <div class="grp-label"><span class="em">ℹ️</span>Infos pratiques<span class="ct">3 actifs</span></div>
+    <div class="cap-grid">
+      <div class="cap"><div class="em">🔑</div><div class="info"><div class="nm">Accès & codes</div><div class="ds">Envoyés au bon moment</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">📶</div><div class="info"><div class="nm">WiFi</div></div><div class="toggle on"></div></div>
+      <div class="cap"><div class="em">📋</div><div class="info"><div class="nm">Règles du logement</div></div><div class="toggle on"></div></div>
+    </div>
+  </div>
+
+  <!-- ░░ STEP 4 · ACCÈS VOYAGEUR J-X ░░ -->
+  <div class="step-panel" data-panel="4">
+    <div class="sh"><div class="eyebrow">Étape 4 · Accès voyageur</div><h1>Quand le voyageur peut-il agir ?</h1><p class="sub">En langage simple : à partir de quand chaque service devient disponible dans le menu WhatsApp.</p></div>
+    <div class="card"><div class="card-b">
+      <div class="jx-row"><div class="ji">📱</div><div class="jt"><div class="nm">Menu WhatsApp actif dès</div><div class="ds">Le voyageur peut ouvrir le menu</div></div><div class="jsel"><div class="field sel">À la réservation</div></div></div>
+      <div class="jx-row"><div class="ji">📝</div><div class="jt"><div class="nm">Enregistrement accessible</div><div class="ds">Saisie des infos voyageurs</div></div><div class="jsel"><div class="field sel">À partir de J-3</div></div></div>
+      <div class="jx-row"><div class="ji">🕓</div><div class="jt"><div class="nm">Choisir l'heure d'arrivée</div></div><div class="jsel"><div class="field sel">De J-7 à J-1</div></div></div>
+      <div class="jx-row"><div class="ji">🆘</div><div class="jt"><div class="nm">Support</div><div class="ds">Signaler un problème</div></div><div class="jsel"><div class="field sel">Toujours disponible</div></div></div>
+      <div class="jx-row"><div class="ji">🛎</div><div class="jt"><div class="nm">Conciergerie</div><div class="ds">Réserver un service</div></div><div class="jsel"><div class="field sel">Dès la réservation</div></div></div>
+      <div class="jx-row"><div class="ji">🔑</div><div class="jt"><div class="nm">Codes d'accès envoyés</div><div class="ds">Après enregistrement + créneau d'arrivée</div></div><div class="toggle on"></div></div>
+    </div></div>
+    <div class="inote info"><span class="i">💡</span><div>Réglages exprimés en jours avant l'arrivée (J-X). Aucun délai d'attente imposé au voyageur — ces seuils contrôlent seulement <b>quand</b> les options apparaissent.</div></div>
+  </div>
+
+  <!-- ░░ STEP 5 · CONDITIONS OBLIGATOIRES ░░ -->
+  <div class="step-panel" data-panel="5">
+    <div class="sh"><div class="eyebrow">Étape 5 · Conditions</div><h1>L'ordre des choses</h1><p class="sub">Certaines actions doivent se faire dans l'ordre. Voici l'enchaînement que vous imposez.</p></div>
+
+    <div class="card"><div class="card-b">
+      <div class="chain">
+        <div class="chain-box"><div class="em">📝</div><div class="nm">Enregistrement</div><div class="st">obligatoire</div></div>
+        <div class="chain-arrow">→</div>
+        <div class="chain-box"><div class="em">🕓</div><div class="nm">Créneau d'arrivée</div><div class="st">obligatoire</div></div>
+        <div class="chain-arrow">→</div>
+        <div class="chain-box"><div class="em">🔑</div><div class="nm">Codes d'accès</div><div class="st">débloqués</div></div>
+        <div class="chain-arrow">→</div>
+        <div class="chain-box"><div class="em">🧹</div><div class="nm">Tâche accueil staff</div><div class="st">planifiée</div></div>
+      </div>
+    </div></div>
+
+    <div class="cond-row"><div class="ct"><div class="nm">Enregistrement obligatoire avant de choisir l'heure d'arrivée</div><div class="phrase">Le voyageur doit <b>remplir l'enregistrement</b> avant de pouvoir <b>choisir son heure d'arrivée</b>.</div></div><div class="toggle on"></div></div>
+    <div class="cond-row"><div class="ct"><div class="nm">Créneau d'arrivée obligatoire avant l'envoi des codes</div><div class="phrase">Les <b>codes d'accès</b> ne partent qu'une fois le <b>créneau d'arrivée confirmé</b>.</div></div><div class="toggle on"></div></div>
+    <div class="cond-row"><div class="ct"><div class="nm">Enregistrement obligatoire avant la tâche d'accueil staff</div><div class="phrase">La <b>tâche d'accueil</b> n'est assignée au staff qu'après <b>l'enregistrement du voyageur</b>.</div></div><div class="toggle on"></div></div>
+  </div>
+
+  <!-- ░░ STEP 6 · DÉLAIS & RELANCES ░░ -->
+  <div class="step-panel" data-panel="6">
+    <div class="sh"><div class="eyebrow">Étape 6 · Délais & relances</div><h1>Le rythme des réponses</h1><p class="sub">Choisissez un rythme. Vous pourrez l'affiner service par service plus tard.</p></div>
+
+    <div class="preset-grid" style="margin-bottom:18px">
+      <div class="preset" data-radio="preset"><div class="pn"><span class="em">⚡</span>Réactif</div><div class="pl"><div class="li"><span>Réponse visée</span><span class="v">2 h</span></div><div class="li"><span>Relance voyageur</span><span class="v">1 h</span></div><div class="li"><span>Relance staff</span><span class="v">30 min</span></div></div></div>
+      <div class="preset on" data-radio="preset"><div class="pn"><span class="em">⚖️</span>Standard</div><div class="pl"><div class="li"><span>Réponse visée</span><span class="v">4 h</span></div><div class="li"><span>Relance voyageur</span><span class="v">2 h</span></div><div class="li"><span>Relance staff</span><span class="v">1 h</span></div></div></div>
+      <div class="preset" data-radio="preset"><div class="pn"><span class="em">🌿</span>Détendu</div><div class="pl"><div class="li"><span>Réponse visée</span><span class="v">12 h</span></div><div class="li"><span>Relance voyageur</span><span class="v">6 h</span></div><div class="li"><span>Relance staff</span><span class="v">3 h</span></div></div></div>
+    </div>
+
+    <div class="card"><div class="card-h"><span class="ct">Si le staff n'accepte pas une tâche</span></div><div class="card-b">
+      <div class="radios" style="grid-template-columns:1fr">
+        <div class="rcard on" data-radio="esc"><div class="r"></div><span class="em">🔁</span><div><div class="nm">Réassigner automatiquement à un autre membre</div><div class="ds">Après 1 h sans réponse, la tâche passe au suivant disponible</div></div></div>
+        <div class="rcard" data-radio="esc"><div class="r"></div><span class="em">🔔</span><div><div class="nm">Prévenir l'admin</div><div class="ds">Vous êtes notifié pour réassigner vous-même</div></div></div>
+        <div class="rcard" data-radio="esc"><div class="r"></div><span class="em">⏳</span><div><div class="nm">Laisser ouvert</div><div class="ds">La tâche reste disponible sans relance</div></div></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ░░ STEP 7 · IMPORT ░░ -->
+  <div class="step-panel" data-panel="7">
+    <div class="sh"><div class="eyebrow">Étape 7 · Import</div><h1>Vos annonces Airbnb arrivent</h1><p class="sub">Connexion Rentals United, import, vérification — sans quitter cette page.</p></div>
+
+    <div class="subtabs">
+      <button class="subtab on" data-sub="7a">① Sélection</button>
+      <button class="subtab" data-sub="7b">② Import</button>
+      <button class="subtab" data-sub="7c">③ Résultats</button>
+    </div>
+
+    <!-- 7a -->
+    <div class="sub-panel on" data-sub-panel="7a">
+      <div class="card"><div class="card-h"><span class="ct">Rentals United</span><div class="right"><span class="tag ok"><span class="dot"></span>Connecté</span></div></div><div class="card-b" style="padding:14px 17px"><div style="display:flex;align-items:center;gap:13px"><div style="width:44px;height:44px;border-radius:11px;background:linear-gradient(135deg,#2bb6c4,#1a7f8c);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center">RU</div><div style="flex:1"><div class="lst-nm">Compte white-label vérifié</div><div class="lst-loc">50 annonces détectées sur Airbnb</div></div></div></div></div>
+      <div class="card"><div class="card-h"><span class="ct">Annonces à importer</span><span class="sub">3 / 50 sélectionnées affichées</span><div class="right"><span class="link">Tout sélectionner</span></div></div>
+        <div class="listing-pick">
+          <div class="lp-row on"><div class="c"></div><div style="flex:1"><div class="lst-nm">Riad Majorelle</div><div class="lst-loc">Marrakech · Médina</div></div><span class="tag wait">prêt</span></div>
+          <div class="lp-row on"><div class="c"></div><div style="flex:1"><div class="lst-nm">Appart CFC</div><div class="lst-loc">Casablanca · CFC</div></div><span class="tag wait">prêt</span></div>
+          <div class="lp-row on"><div class="c"></div><div style="flex:1"><div class="lst-nm">Villa Palmeraie</div><div class="lst-loc">Marrakech · Palmeraie</div></div><span class="tag wait">prêt</span></div>
+          <div class="lp-row on"><div class="c"></div><div style="flex:1"><div class="lst-nm">Dar Essaouira</div><div class="lst-loc">Essaouira · Médina</div></div><span class="tag wait">prêt</span></div>
+          <div class="lp-row on"><div class="c"></div><div style="flex:1"><div class="lst-nm">Riad Yasmina</div><div class="lst-loc">Marrakech · Médina</div></div><span class="tag wait">prêt</span></div>
+        </div>
+        <div style="padding:13px 16px;background:var(--bg2);border-top:1px solid var(--b);display:flex;align-items:center"><span style="font-size:12px;color:var(--t3);font-family:var(--mono)">50 / 50 sélectionnées</span><button class="btn-prim" style="margin-left:auto;padding:9px 16px;font-size:12.5px">Lancer l'import →</button></div>
+      </div>
+    </div>
+
+    <!-- 7b -->
+    <div class="sub-panel" data-sub-panel="7b">
+      <div class="card"><div class="batch">
+        <div class="row1"><span class="big">Import en cours · <b>23 / 50</b></span><span class="corr">batch · IMP-7F3A29</span></div>
+        <div class="batch-track"><div class="batch-seg ok" style="width:40%"></div><div class="batch-seg err" style="width:6%"></div><div class="batch-seg run" style="width:8%"></div></div>
+        <div class="batch-legend"><span class="lg"><span class="sw" style="background:var(--su)"></span>20 OK</span><span class="lg"><span class="sw" style="background:var(--er)"></span>3 erreurs</span><span class="lg"><span class="sw" style="background:var(--p)"></span>4 en cours</span><span class="lg"><span class="sw" style="background:var(--bg3)"></span>23 en attente</span></div>
+      </div></div>
+      <div class="inote"><span class="i">🔒</span><div>Import <b>silencieux</b> : calendriers, photos et tarifs sont récupérés. Aucun message n'est envoyé aux voyageurs à cette étape.</div></div>
+    </div>
+
+    <!-- 7c -->
+    <div class="sub-panel" data-sub-panel="7c">
+      <div class="kpis">
+        <div class="kpi green"><div class="v">47<small>/50</small></div><div class="k">listings importés</div></div>
+        <div class="kpi err"><div class="v">3</div><div class="k">erreurs à corriger</div></div>
+        <div class="kpi gold"><div class="v">48 320</div><div class="k">jours de calendrier</div></div>
+        <div class="kpi"><div class="v">312</div><div class="k">réservations en base</div></div>
+      </div>
+      <div class="card"><div class="card-h"><span class="ct">Détail par listing</span><span class="sub">50 lignes</span><div class="right"><button class="btn-ghost" style="padding:7px 12px;font-size:12px;color:var(--er);border-color:rgba(200,30,30,0.25);background:var(--ert)">↻ Relancer les échecs</button></div></div>
+        <table><thead><tr><th>Propriété</th><th>Statut</th><th>Calendrier</th><th>Détail</th></tr></thead><tbody>
+          <tr><td><div class="lst-nm">Riad Majorelle</div><div class="lst-loc">Marrakech · Médina</div></td><td><span class="tag ok"><span class="dot"></span>Importé</span></td><td><span class="tag ok">1 240 j</span></td><td><span class="link">Ouvrir la fiche →</span></td></tr>
+          <tr><td><div class="lst-nm">Appart CFC</div><div class="lst-loc">Casablanca · CFC</div></td><td><span class="tag ok"><span class="dot"></span>Importé</span></td><td><span class="tag ok">980 j</span></td><td><span class="link">Ouvrir la fiche →</span></td></tr>
+          <tr><td><div class="lst-nm">Villa Palmeraie</div><div class="lst-loc">Marrakech · Palmeraie</div></td><td><span class="tag err"><span class="dot"></span>Erreur</span></td><td><span class="tag wait">—</span></td><td><span class="errtxt">3 photos illisibles</span></td></tr>
+          <tr><td><div class="lst-nm">Loft Gauthier</div><div class="lst-loc">Casablanca · Gauthier</div></td><td><span class="tag err"><span class="dot"></span>Erreur</span></td><td><span class="tag wait">—</span></td><td><span class="errtxt">Adresse incomplète</span></td></tr>
+          <tr><td><div class="lst-nm">Dar Essaouira</div><div class="lst-loc">Essaouira · Médina</div></td><td><span class="tag ok"><span class="dot"></span>Importé</span></td><td><span class="tag ok">730 j</span></td><td><span class="link">Ouvrir la fiche →</span></td></tr>
+        </tbody></table>
+        <div style="padding:12px 16px;background:var(--bg2);border-top:1px solid var(--b)"><span class="link">Voir les 45 autres lignes →</span></div>
+      </div>
+
+      <div class="card"><div class="card-h"><span class="ct">Réservations en attente d'orchestration</span><span class="sub">89 futures</span></div>
+        <div class="orch-row"><div class="thumb">🏠</div><div class="info"><div class="lst-nm">Riad Majorelle</div><div class="cnt"><b>14</b> résas futures · récupérées en base</div></div><button class="btn-prim" style="padding:9px 15px;font-size:12.5px">Ouvrir la fiche →</button></div>
+        <div class="orch-row"><div class="thumb">🏛</div><div class="info"><div class="lst-nm">Appart CFC</div><div class="cnt"><b>9</b> résas futures · récupérées en base</div></div><button class="btn-prim" style="padding:9px 15px;font-size:12.5px">Ouvrir la fiche →</button></div>
+        <div class="orch-row"><div class="thumb">🌴</div><div class="info"><div class="lst-nm">Dar Essaouira</div><div class="cnt"><b>6</b> résas futures · récupérées en base</div></div><button class="btn-prim" style="padding:9px 15px;font-size:12.5px">Ouvrir la fiche →</button></div>
+        <div class="inote" style="margin:12px 16px"><span class="i">🎯</span><div>Le lancement de l'orchestration se fait <b>listing par listing</b> depuis sa fiche (onglet post-import). Rien ne part tant que vous ne l'avez pas lancé.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ░░ STEP 8 · GO LIVE ░░ -->
+  <div class="step-panel" data-panel="8">
+    <div class="sh"><div class="eyebrow">Étape 8 · Go live</div><h1>Vous y êtes presque</h1></div>
+    <div class="recap-hero"><div class="big-emoji">🎉</div><h2>Tout est prêt, Karim</h2><p>Vos réglages sont enregistrés et vos annonces importées. Lancez l'orchestration quand vous le décidez.</p></div>
+    <div class="recap-grid">
+      <div class="recap-item"><div class="ic">✓</div><div class="rt"><div class="nm">Équipe & accès configurés</div><div class="ds">3 staff · 2 admins · 2 invités</div></div></div>
+      <div class="recap-item"><div class="ic">✓</div><div class="rt"><div class="nm">Parcours client défini</div><div class="ds">16 services activés</div></div></div>
+      <div class="recap-item"><div class="ic">✓</div><div class="rt"><div class="nm">47 / 50 listings importés</div><div class="ds">3 erreurs à corriger</div></div></div>
+      <div class="recap-item"><div class="ic">✓</div><div class="rt"><div class="nm">312 réservations en base</div><div class="ds">89 futures, prêtes à orchestrer</div></div></div>
+    </div>
+    <div class="inote info" style="margin-bottom:6px"><span class="i">🚀</span><div>« Terminer » enregistre votre configuration. L'orchestration se lancera ensuite <b>listing par listing</b>, à votre rythme — rien n'est envoyé automatiquement avant.</div></div>
+  </div>
+
+  <!-- NAV -->
+  <div class="navbar">
+    <button class="btn btn-ghost" id="prevBtn" style="visibility:hidden">← Précédent</button>
+    <div class="spacer"></div>
+    <span class="stepcount" id="stepCount">Étape 1 / 9</span>
+    <button class="btn btn-prim" id="nextBtn">Continuer →</button>
+  </div>
+
+</div>
+
+<!-- ─── TRACKING PANEL ─── -->
+<aside class="track">
+  <div class="track-h">
+    <div class="top"><span class="pct" id="tpct">0%</span><span class="lbl">complété</span></div>
+    <div class="track-track"><div class="track-fill" id="tfill" style="width:0%"></div></div>
+  </div>
+  <div class="track-sec">
+    <h3>Suivi import</h3>
+    <div class="tcounters">
+      <div class="tc"><div class="v green">47<small style="font-size:11px">/50</small></div><div class="k">listings OK</div></div>
+      <div class="tc"><div class="v gold">89</div><div class="k">résas en attente</div></div>
+      <div class="tc"><div class="v">8<small style="font-size:11px">/12</small></div><div class="k">orch. lancée</div></div>
+    </div>
+  </div>
+  <div class="track-sec">
+    <h3>Étapes</h3>
+    <div id="trackChecklist"></div>
+  </div>
+  <div class="track-sec" style="border-bottom:0">
+    <h3>Timeline · derniers événements</h3>
+    <div class="tl-body" style="max-height:180px;padding:0">
+      <div class="tl-ev"><span class="time">14:32</span><span class="tl-dot ok"></span><div class="txt"><b>Calendrier peuplé</b> — Riad Majorelle</div></div>
+      <div class="tl-ev"><span class="time">14:30</span><span class="tl-dot"></span><div class="txt"><b>Listing importé</b> — Riad Yasmina</div></div>
+      <div class="tl-ev"><span class="time">14:29</span><span class="tl-dot err"></span><div class="txt"><b>Échec</b> — Villa Palmeraie · photos</div></div>
+      <div class="tl-ev"><span class="time">14:28</span><span class="tl-dot info"></span><div class="txt"><b>23 résas récupérées</b> en base</div></div>
+      <div class="tl-ev"><span class="time">14:24</span><span class="tl-dot ok"></span><div class="txt"><b>Airbnb connecté</b> via RU</div></div>
+    </div>
+  </div>
+</aside>
+
+</div>
+
+<script>
+const STEPS = ['Profil & parcours','Équipe','Accès dashboard','Parcours client','Accès voyageur','Conditions','Délais & relances','Import listings','Go live'];
+const TOTAL = STEPS.length;
+let cur = 0;
+
+const panels = document.querySelectorAll('.step-panel');
+const snodes = document.querySelectorAll('.snode');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+
+// build tracking checklist
+const tcWrap = document.getElementById('trackChecklist');
+tcWrap.innerHTML = STEPS.map((s,i)=>`<div class="tcheck" data-tgo="${i}"><span class="d pending">${i}</span><span class="nm">${s}</span></div>`).join('');
+
+function render(){
+  panels.forEach(p=>p.classList.toggle('on', +p.dataset.panel===cur));
+  snodes.forEach((n,i)=>{n.classList.remove('done','active','pending');n.classList.add(i<cur?'done':i===cur?'active':'pending');});
+  // tracking checklist
+  tcWrap.querySelectorAll('.tcheck').forEach((c,i)=>{
+    c.classList.toggle('active', i===cur);
+    const d=c.querySelector('.d');d.classList.remove('done','active','pending');
+    if(i<cur){d.classList.add('done');d.textContent='✓';}
+    else if(i===cur){d.classList.add('active');d.textContent=i;}
+    else{d.classList.add('pending');d.textContent=i;}
+  });
+  const pct = Math.round(cur/(TOTAL-1)*100);
+  document.getElementById('tpct').textContent=pct+'%';
+  document.getElementById('tfill').style.width=pct+'%';
+  document.getElementById('stepCount').textContent='Étape '+(cur+1)+' / '+TOTAL;
+  prevBtn.style.visibility = cur===0?'hidden':'visible';
+  if(cur===TOTAL-1){nextBtn.textContent='Terminer l\u2019onboarding ✓';nextBtn.classList.remove('btn-prim');nextBtn.classList.add('btn-go');}
+  else{nextBtn.textContent='Continuer →';nextBtn.classList.add('btn-prim');nextBtn.classList.remove('btn-go');}
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function go(i){cur=Math.max(0,Math.min(TOTAL-1,i));render();}
+
+nextBtn.addEventListener('click',()=>{if(cur<TOTAL-1)go(cur+1);});
+prevBtn.addEventListener('click',()=>go(cur-1));
+snodes.forEach(n=>n.addEventListener('click',()=>go(+n.dataset.go)));
+tcWrap.querySelectorAll('.tcheck').forEach(c=>c.addEventListener('click',()=>go(+c.dataset.tgo)));
+
+// import subtabs
+document.querySelectorAll('.subtab').forEach(s=>s.addEventListener('click',()=>{
+  document.querySelectorAll('.subtab').forEach(x=>x.classList.remove('on'));s.classList.add('on');
+  document.querySelectorAll('.sub-panel').forEach(p=>p.classList.toggle('on',p.dataset.subPanel===s.dataset.sub));
+}));
+
+// generic interactions
+document.querySelectorAll('.toggle').forEach(t=>t.addEventListener('click',e=>{e.stopPropagation();t.classList.toggle('on');const cap=t.closest('.cap');if(cap)cap.classList.toggle('off',!t.classList.contains('on'));}));
+document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('on')));
+document.querySelectorAll('.lp-row').forEach(r=>r.addEventListener('click',()=>r.classList.toggle('on')));
+function radioGroup(sel){document.querySelectorAll('[data-radio="'+sel+'"]').forEach(r=>r.addEventListener('click',()=>{document.querySelectorAll('[data-radio="'+sel+'"]').forEach(x=>x.classList.remove('on'));r.classList.add('on');}));}
+['path','preset','esc'].forEach(radioGroup);
+
+render();
+</script>
+</body></html>

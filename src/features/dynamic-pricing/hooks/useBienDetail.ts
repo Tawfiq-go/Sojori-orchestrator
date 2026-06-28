@@ -729,8 +729,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         })
       : null;
     potentialHint = snap
-      ? `GET /calculator/estimate · snapshot ${snap}`
-      : 'GET /calculator/estimate (AirROI)';
+      ? `Estimation Sojori · snapshot ${snap}`
+      : 'Estimation Sojori';
   } else if (p50Comps > 0) {
     hasPotentialProd = true;
     performance = {
@@ -759,12 +759,12 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
             ? `Comps directs (§07) : ADR médiane ≈ ${compsMedianAdr.toLocaleString('fr-FR')} MAD/nuit`
             : null,
           selfCompAdr > 0
-            ? `Votre annonce Airbnb (TTM snapshot) : ≈ ${selfCompAdr.toLocaleString('fr-FR')} MAD`
+            ? `Votre annonce (12 mois) : ≈ ${selfCompAdr.toLocaleString('fr-FR')} MAD`
             : null,
           est?.adrP50Mad
-            ? `Calculator/estimate (modèle AirROI) : ADR P50 ≈ ${est.adrP50Mad.toLocaleString('fr-FR')} MAD — peut être plus bas que les comps luxe`
+            ? `Estimation Sojori : ADR P50 ≈ ${est.adrP50Mad.toLocaleString('fr-FR')} MAD — peut être plus bas que les comparables haut de gamme`
             : null,
-          'Les curseurs §03 (500 min) = bornes du slider UI, pas un prix imposé par AirROI.',
+          'Les curseurs §03 (500 min) = bornes du slider UI, pas un prix imposé par l’estimation.',
         ]
           .filter(Boolean)
           .join(' · ')
@@ -781,7 +781,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     district: portfolioRow.airroiRaw?.district ?? portfolioRow.listing.district ?? '—',
     airroiZone: portfolioRow.airroiRaw?.district ?? undefined,
     maxGuests: airroiGuestsMax,
-    airroiApiProfile: `API AirROI · ${airroiBedrooms} ch. · ${airroiBaths} sdb. · ${airroiGuestsMax} pers. max`,
+    airroiApiProfile: `${airroiBedrooms} ch. · ${airroiBaths} sdb. · ${airroiGuestsMax} pers. max`,
     amenities: portfolioRow.listing.amenities ?? [],
     position: resolveBienLatLng(portfolioRow) ?? portfolioRow.listing.position,
   };

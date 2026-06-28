@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { AUTH_CONFIG } from 'config/auth.config';
 import { MICROSERVICE_BASE_URL } from 'config/backendServer.config';
+import apiClient from '../../../services/apiClient';
+import { logWorkerCreate, errorWorkerCreate } from '../../../utils/workerCreateDebug';
 
 const TEAM_API = MICROSERVICE_BASE_URL.SRV_FULLTASK;
 
@@ -764,10 +766,44 @@ export function getWorkers(params = {}) {
   });
 }
 export function inviteWorker(data) {
-  return axios.post(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/invite-woker`, data);
+  logWorkerCreate('api:invite-woker:post', {
+    email: data?.email,
+    ownerId: data?.ownerId,
+    workerTypeOwner: data?.workerTypeOwner,
+    listingCityIds: data?.listingCityIds,
+    listingIdsCount: data?.listingIds?.length,
+  });
+  return apiClient
+    .post(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/invite-woker`, data)
+    .then((res) => {
+      logWorkerCreate('api:invite-woker:response', {
+        status: res?.status,
+        success: res?.data?.success,
+        message: res?.data?.message,
+        emailSent: res?.data?.emailSent,
+        newToken: !!res?.data?.newToken,
+      });
+      return res;
+    })
+    .catch((err) => {
+      errorWorkerCreate('api:invite-woker:error', {
+        status: err?.response?.status,
+        error: err?.response?.data?.error,
+        message: err?.response?.data?.message,
+        data: err?.response?.data,
+      });
+      throw err;
+    });
+}
+
+export function resendWorkerCredentials(workerId, payload = {}) {
+  return apiClient.post(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/resend-worker-credentials/${workerId}`, payload);
+}
+export function deleteWorker(workerId) {
+  return apiClient.delete(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/delete-worker/${workerId}`);
 }
 export function updateWorker(id, data) {
-  return axios.put(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/update-account/${id}`, data);
+  return apiClient.put(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/update-account/${id}`, data);
 }
 /** Réponse GET `/city` : tableau direct (paged=false) ou `{ cities, total }` (paged=true). */
 export function normalizeCitiesApiResponse(data) {

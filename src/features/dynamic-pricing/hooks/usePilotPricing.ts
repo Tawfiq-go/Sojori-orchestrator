@@ -254,7 +254,7 @@ export function usePilotPricing(options: {
     }
     if (!hasAirroiSnapshot) {
       throw new Error(
-        'Estimate requis — modal ⟳ · GET /calculator/estimate puis vérifier la courbe avant d’appliquer',
+        'Estimation Sojori requise — lancez ⟳ « Estimation Sojori » puis vérifiez la courbe avant d’appliquer',
       );
     }
     setApplyLoading(true);
@@ -279,7 +279,7 @@ export function usePilotPricing(options: {
       }
       const r = res.data.applyReport;
       setLastApplySummary(
-        `${res.data.daysChanged} j modifiés · prix ${r?.daysPricePushed ?? 0} · min stay trous ${r?.daysGapMinStayAdjusted ?? 0} · RU ${res.data.ruPublishQueued ? 'OK' : '—'}`,
+        `${res.data.daysChanged} j modifiés · prix ${r?.daysPricePushed ?? 0} · min stay trous ${r?.daysGapMinStayAdjusted ?? 0} · canaux ${res.data.ruPublishQueued ? 'OK' : '—'}`,
       );
       await runPreview();
       return res.data;

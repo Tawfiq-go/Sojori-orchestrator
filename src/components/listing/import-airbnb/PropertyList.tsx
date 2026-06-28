@@ -30,6 +30,7 @@ function PropertyRow({
   selectable,
   badge,
   badgeColor,
+  subtitle,
 }: {
   p: RuProperty;
   idx: number;
@@ -38,6 +39,7 @@ function PropertyRow({
   selectable: boolean;
   badge: string;
   badgeColor: { color: string; bg: string; border: string };
+  subtitle?: string;
 }) {
   return (
     <Box
@@ -89,11 +91,37 @@ function PropertyRow({
         >
           {p.name}
         </Typography>
-        <Stack direction="row" alignItems="center" gap={1} sx={{ mt: 0.375, fontSize: 11, color: T.text3 }}>
+        <Stack direction="row" alignItems="center" gap={1} sx={{ mt: 0.375, fontSize: 11, color: T.text3, flexWrap: 'wrap' }}>
           <Box component="span" sx={{ fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em' }}>
             RU #{p.ruPropertyId}
           </Box>
+          {(p.city || p.suggestedCityName) && (
+            <>
+              <Box component="span" sx={{ opacity: 0.45 }}>
+                ·
+              </Box>
+              {p.city && <Box component="span">{p.city}</Box>}
+              {p.suggestedCityName && (
+                <Box
+                  component="span"
+                  sx={{
+                    color: T.primaryDeep,
+                    fontWeight: 600,
+                    ...(p.city ? { ml: 0.25 } : {}),
+                  }}
+                >
+                  {p.city ? '→ ' : ''}
+                  Sojori {p.suggestedCityName}
+                </Box>
+              )}
+            </>
+          )}
         </Stack>
+        {subtitle && (
+          <Typography sx={{ fontSize: 10.5, color: T.error, mt: 0.25, lineHeight: 1.35 }}>
+            {subtitle}
+          </Typography>
+        )}
       </Box>
       <Box
         sx={{
@@ -122,8 +150,12 @@ export default function PropertyList({ properties, selectedIds, onToggle, onSele
     () => properties.filter((p) => p.alreadyImported && !p.importable),
     [properties],
   );
+  const nameDuplicates = useMemo(
+    () => properties.filter((p) => p.nameDuplicateBlocked),
+    [properties],
+  );
   const inactive = useMemo(
-    () => properties.filter((p) => !p.importable && !p.alreadyImported),
+    () => properties.filter((p) => !p.importable && !p.alreadyImported && !p.nameDuplicateBlocked),
     [properties],
   );
   const allSelected = importable.length > 0 && selectedIds.length === importable.length;
@@ -183,20 +215,6 @@ export default function PropertyList({ properties, selectedIds, onToggle, onSele
             ))}
           </Section>
         )}
-        {inactive.length > 0 && (
-          <Section title="Inactives ou archivées (RU)" count={inactive.length}>
-            {inactive.map((p, idx) => (
-              <PropertyRow
-                key={p.ruPropertyId}
-                p={p}
-                idx={idx}
-                selectable={false}
-                badge={p.isArchived ? 'ARCHIVÉE' : 'INACTIVE'}
-                badgeColor={{ color: '#c46506', bg: 'rgba(196,101,6,0.10)', border: 'rgba(196,101,6,0.25)' }}
-              />
-            ))}
-          </Section>
-        )}
       </Stack>
     );
   }
@@ -243,8 +261,30 @@ export default function PropertyList({ properties, selectedIds, onToggle, onSele
         ))}
       </Stack>
 
-      {(alreadyImported.length > 0 || inactive.length > 0) && (
+      {(alreadyImported.length > 0 || nameDuplicates.length > 0) && (
         <Stack gap={1.5} sx={{ mt: 2 }}>
+          {nameDuplicates.length > 0 && (
+            <Section title="Doublon RU — ne pas importer" count={nameDuplicates.length}>
+              <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 0.5, lineHeight: 1.45 }}>
+                Même annonce déjà présente dans Sojori sous un autre ID Rentals United.
+              </Typography>
+              {nameDuplicates.map((p, idx) => (
+                <PropertyRow
+                  key={p.ruPropertyId}
+                  p={p}
+                  idx={idx}
+                  selectable={false}
+                  badge="DOUBLON RU"
+                  badgeColor={{ color: T.error, bg: T.errorTint, border: 'rgba(220,38,38,0.20)' }}
+                  subtitle={
+                    p.nameDuplicateOfRuId
+                      ? `Déjà importée sous RU #${p.nameDuplicateOfRuId}`
+                      : p.blockReason
+                  }
+                />
+              ))}
+            </Section>
+          )}
           {alreadyImported.length > 0 && (
             <Section title="Déjà importées" count={alreadyImported.length}>
               {alreadyImported.map((p, idx) => (
@@ -255,20 +295,6 @@ export default function PropertyList({ properties, selectedIds, onToggle, onSele
                   selectable={false}
                   badge="IMPORTÉE"
                   badgeColor={{ color: T.text3, bg: T.bg2, border: T.border }}
-                />
-              ))}
-            </Section>
-          )}
-          {inactive.length > 0 && (
-            <Section title="Inactives / archivées" count={inactive.length}>
-              {inactive.map((p, idx) => (
-                <PropertyRow
-                  key={p.ruPropertyId}
-                  p={p}
-                  idx={idx}
-                  selectable={false}
-                  badge={p.isArchived ? 'ARCHIVÉE' : 'INACTIVE'}
-                  badgeColor={{ color: '#c46506', bg: 'rgba(196,101,6,0.10)', border: 'rgba(196,101,6,0.25)' }}
                 />
               ))}
             </Section>

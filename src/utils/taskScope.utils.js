@@ -38,7 +38,10 @@ export function canSelectOwnerInAdminFilter(user) {
   if (String(user.role).trim() === Roles.Owner) return false;
   if (String(user.role).trim() === Roles.Worker) {
     const o = user.ownerId;
-    if (o == null || String(o).trim() === '') return true;
+    // Worker lié à un propriétaire : données scopées à ownerId — jamais le filtre cross-owner.
+    if (o != null && String(o).trim() !== '') return false;
+    // Worker interne sans ownerId : filtre seulement si grants wildcard (staff plateforme).
+    return hasWildcardFeatureGrants(user);
   }
   return hasWildcardFeatureGrants(user);
 }

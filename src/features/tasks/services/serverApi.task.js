@@ -108,39 +108,58 @@ export function getListings(staging = false, listingIds = [], cityIds = [], coun
   return axios.get(`${MICROSERVICE_BASE_URL.SRV_LISTING}/listings/listings-by-city?${params.toString()}`);
 }
 export function getListingsTa(staging = false) {
-  return axios.get(`${MICROSERVICE_BASE_URL.LISTING}?staging=${staging}`).then(response => {
-    if (!response.data.success) {
-      throw new Error(response.data.message);
-    }
-    return response.data.data.map(listing => ({
-      id: listing._id,
-      name: listing.name,
-      TS_CLEAN: listing.TS_CLEAN,
-      services: listing?.services || [],
-      ownerId: listing?.ownerId
-    }));
-  }).catch(error => {
-    throw error;
+  const q = new URLSearchParams({
+    page: '0',
+    limit: '500',
+    staging: String(staging),
+    compact: 'true',
   });
+  return axios
+    .get(`${MICROSERVICE_BASE_URL.SRV_LISTING}/listings?${q.toString()}`)
+    .then((response) => {
+      const body = response.data;
+      const rows = Array.isArray(body?.data) ? body.data : [];
+      return rows.map((listing) => ({
+        id: listing._id,
+        _id: listing._id,
+        name: listing.name,
+        TS_CLEAN: listing.TS_CLEAN,
+        services: listing?.services || [],
+        ownerId: listing?.ownerId,
+      }));
+    })
+    .catch((error) => {
+      if (error?.response?.status === 404) return [];
+      throw error;
+    });
 }
 
 /** Listings avec ownerId + indicateurs sync RU / Channex (admin owners). */
 export function getListingsWithChannelMetrics(staging = false) {
-  return axios.get(`${MICROSERVICE_BASE_URL.LISTING}?staging=${staging}`).then(response => {
-    if (!response.data.success) {
-      throw new Error(response.data.message);
-    }
-    return response.data.data.map(listing => ({
-      id: listing._id,
-      _id: listing._id,
-      name: listing.name,
-      ownerId: listing?.ownerId,
-      rentalUnitedIds: Array.isArray(listing?.rentalUnitedIds) ? listing.rentalUnitedIds : [],
-      channexListingId: listing?.channexListingId || ''
-    }));
-  }).catch(error => {
-    throw error;
+  const q = new URLSearchParams({
+    page: '0',
+    limit: '500',
+    staging: String(staging),
+    forListingsOverview: 'true',
   });
+  return axios
+    .get(`${MICROSERVICE_BASE_URL.SRV_LISTING}/listings?${q.toString()}`)
+    .then((response) => {
+      const body = response.data;
+      const rows = Array.isArray(body?.data) ? body.data : [];
+      return rows.map((listing) => ({
+        id: listing._id,
+        _id: listing._id,
+        name: listing.name,
+        ownerId: listing?.ownerId,
+        rentalUnitedIds: Array.isArray(listing?.rentalUnitedIds) ? listing.rentalUnitedIds : [],
+        channexListingId: listing?.channexListingId || '',
+      }));
+    })
+    .catch((error) => {
+      if (error?.response?.status === 404) return [];
+      throw error;
+    });
 }
 export function getTasksByStaff(params = {}) {
   const {

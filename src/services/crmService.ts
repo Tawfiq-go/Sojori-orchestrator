@@ -530,6 +530,81 @@ export async function getOnboardingByOwnerId(ownerId: string): Promise<{ success
   return data;
 }
 
+export interface WizardDraftPayload {
+  version?: number;
+  currentPanel?: number;
+  lastSavedAt?: string;
+  path?: 'A' | 'B';
+  panels?: Record<string, Record<string, unknown>>;
+  panelsValidated?: number[];
+  suiteCompleted?: string[];
+  applyLog?: {
+    orchestrationAt?: string;
+    staffAt?: string;
+    adminWaAt?: string;
+    staffOpsAt?: string;
+    dashboardAt?: string;
+    guestsAt?: string;
+    orchestrationSummary?: string;
+    staffSummary?: string;
+    adminWaSummary?: string;
+    staffOpsSummary?: string;
+    dashboardSummary?: string;
+    importSummary?: string;
+    staffRecapLines?: string[];
+    adminWaRecapLines?: string[];
+    staffOpsRecapLines?: string[];
+    dashboardRecapLines?: string[];
+    orchestrationRecapLines?: string[];
+    importRecapLines?: string[];
+    suiteRunAt?: string;
+  };
+}
+
+export interface WizardDraftResponse {
+  onboarding: OwnerOnboarding | null;
+  wizardDraft: WizardDraftPayload | null;
+}
+
+/**
+ * Charge le brouillon wizard PM
+ * GET /api/v1/crm/onboarding/by-owner/:ownerId/wizard-draft
+ */
+export async function getWizardDraft(ownerId: string): Promise<{ success: boolean; data: WizardDraftResponse }> {
+  const { data } = await apiClient.get(`${CRM_BASE}/onboarding/by-owner/${ownerId}/wizard-draft`);
+  return data;
+}
+
+/**
+ * Sauvegarde (merge) le brouillon wizard PM
+ * PUT /api/v1/crm/onboarding/by-owner/:ownerId/wizard-draft
+ */
+export async function saveWizardDraft(
+  ownerId: string,
+  payload: {
+    wizardDraft: WizardDraftPayload;
+    ownerName?: string;
+    ownerEmail?: string;
+    emitEvent?: boolean;
+    panelValidated?: number;
+    triggeredBy?: string;
+  },
+): Promise<{ success: boolean; data: { onboarding: OwnerOnboarding; wizardDraft: WizardDraftPayload } }> {
+  const { data } = await apiClient.put(`${CRM_BASE}/onboarding/by-owner/${ownerId}/wizard-draft`, payload);
+  return data;
+}
+
+/**
+ * PATCH onboarding metadata / status
+ */
+export async function patchOnboarding(
+  id: string,
+  body: Partial<Pick<OwnerOnboarding, 'status' | 'currentStep' | 'notes' | 'assignedAgent' | 'metadata'>>,
+): Promise<{ success: boolean; data: OwnerOnboarding }> {
+  const { data } = await apiClient.patch(`${CRM_BASE}/onboarding/${id}`, body);
+  return data;
+}
+
 /**
  * Récupère les événements d'onboarding pour un utilisateur/listing
  * GET /api/v1/crm/onboarding/events

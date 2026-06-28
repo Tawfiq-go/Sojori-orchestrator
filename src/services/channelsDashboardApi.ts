@@ -541,7 +541,7 @@ export function importRuPropertyBatch(body: {
 }) {
   return apiClient.post(`${CHANNELS_DASHBOARD}/ru-import/import-batch`, body, {
     ...channelsDashboardAxiosConfig(),
-    timeout: 600000,
+    timeout: 90000,
   });
 }
 

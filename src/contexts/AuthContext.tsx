@@ -145,6 +145,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         userId: newUser?.id,
         email: newUser?.email,
         role: newUser?.role,
+        ownerAccess: newUser?.ownerAccess,
+        featureGrants: newUser?.featureGrants?.length ?? 0,
         newToken: !!response.newToken,
       });
 
@@ -193,7 +195,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // ✅ Persister le user dans localStorage pour le garder après reload
       persistUser(user);
-      logAuth('login OK', { userId: user.id, email: user.email, role: user.role });
+      logAuth('login OK', {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        ownerAccess: user.ownerAccess,
+        featureGrants: user.featureGrants?.length ?? 0,
+      });
 
       setState({
         user,
@@ -223,7 +231,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // ✅ Persister le user dans localStorage pour le garder après reload
       persistUser(user);
-      logAuth('login OK', { userId: user.id, email: user.email, role: user.role });
+      logAuth('login OK', {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        ownerAccess: user.ownerAccess,
+        featureGrants: user.featureGrants?.length ?? 0,
+      });
 
       setState({
         user,

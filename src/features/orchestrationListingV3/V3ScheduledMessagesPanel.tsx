@@ -23,6 +23,10 @@ import {
   loadOwnerScheduledMessagesContext,
   saveOwnerScheduledMessages,
 } from './ownerScheduledMessagesApi';
+import {
+  shouldAutoSyncListingsAfterOwnerSave,
+  syncAllListingsFromOwnerOrchestration,
+} from './ownerOrchestrationListingSync';
 
 const REF_OPTIONS: { value: ReferencePoint; label: string }[] = [
   { value: 'reservation_date', label: 'Réservation créée' },
@@ -114,10 +118,25 @@ export default function V3ScheduledMessagesPanel({
   const persistRules = async (nextRules: ScheduledOrchestrationMessage[], successMsg: string) => {
     if (isListingScope && listingId) {
       await saveListingScheduledMessages(listingId, nextRules, catalog);
+      toast.success(successMsg);
     } else {
       await saveOwnerScheduledMessages(ownerKey, nextRules, catalog);
+      let syncCount = 0;
+      if (shouldAutoSyncListingsAfterOwnerSave(ownerKey, isAdminTemplate)) {
+        try {
+          syncCount = await syncAllListingsFromOwnerOrchestration(ownerKey);
+        } catch (syncErr: unknown) {
+          toast.warn(
+            syncErr instanceof Error
+              ? `Modèle PM OK — sync annonces : ${syncErr.message}`
+              : 'Modèle PM OK — sync annonces échouée',
+          );
+        }
+      }
+      toast.success(
+        syncCount > 0 ? `${successMsg} · ${syncCount} annonce(s) synchronisée(s)` : successMsg,
+      );
     }
-    toast.success(successMsg);
     await load();
   };
 

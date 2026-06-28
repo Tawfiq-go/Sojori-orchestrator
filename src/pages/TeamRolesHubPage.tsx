@@ -1,7 +1,7 @@
 /**
  * Hub Équipe & Rôles — migration sojori-dashboard
  */
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useSearchParams, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { tokens as T } from '../components/dashboard/DashboardV2.components';
@@ -14,7 +14,11 @@ import { RolesPermissionsTab } from '../components/team/RolesPermissionsTab';
 import { GroupsTab } from '../components/team/GroupsTab';
 import { TeamViewProvider, useTeamViewMode } from '../context/TeamViewContext';
 import { TeamViewToolbar } from '../components/team/TeamViewToolbar';
-import { STAFF_DASHBOARD_LEGACY_TAB, ADMIN_WHATSAPP_LEGACY_TAB } from '../utils/teamUrlUtils';
+import { STAFF_DASHBOARD_LEGACY_TAB, ADMIN_WHATSAPP_LEGACY_TAB, ONBOARDING_LEGACY_TAB } from '../utils/teamUrlUtils';
+import { PmOnboardingWizard } from '../features/onboarding/PmOnboardingWizard';
+import { canAccessPmOnboarding } from '../features/onboarding/resolveOwnerId';
+import { useAuth } from '../hooks/useAuth';
+import { hasAdminAccess } from '../utils/rbac.utils';
 
 function TeamViewToolbarSlot({ section }: { section: TeamSection }) {
   const { stats } = useTeamViewMode();
@@ -22,18 +26,19 @@ function TeamViewToolbarSlot({ section }: { section: TeamSection }) {
   return <TeamViewToolbar stats={stats} />;
 }
 
-const SECTIONS: Array<{ id: TeamSection; label: string; icon: string; hint: string }> = [
+const ALL_SECTIONS: Array<{ id: TeamSection; label: string; icon: string; hint: string; adminOnly?: boolean; onboardingOnly?: boolean }> = [
   {
     id: 'property-manager',
     label: 'Property managers',
     icon: '🏢',
     hint: 'Comptes Owner · gestionnaires de parc (annonces, RU/Channex)',
+    adminOnly: true,
   },
   {
     id: 'worker',
     label: 'Accès dashboard',
     icon: '🔐',
-    hint: 'Workers · utilisateurs invités sur le dashboard (modules / permissions)',
+    hint: 'Workers invités — droits lecture / écriture par route du menu Owner',
   },
   {
     id: 'groups',
@@ -41,17 +46,40 @@ const SECTIONS: Array<{ id: TeamSection; label: string; icon: string; hint: stri
     icon: '👨‍👩‍👧‍👦',
     hint: 'Templates de droits pour Workers (featureGrants)',
   },
+  {
+    id: 'onboarding',
+    label: 'On-boarding',
+    icon: '🚀',
+    hint: 'Configuration initiale PM — équipe, orchestration, import Airbnb',
+    onboardingOnly: true,
+  },
 ];
 
 export function TeamRolesHubPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isPlatformAdmin = hasAdminAccess(user?.role);
+  const sections = useMemo(
+    () =>
+      ALL_SECTIONS.filter((s) => {
+        if (s.adminOnly && !isPlatformAdmin) return false;
+        if (s.onboardingOnly && !canAccessPmOnboarding(user)) return false;
+        return true;
+      }),
+    [isPlatformAdmin, user],
+  );
   const section = teamSectionFromPath(pathname, searchParams.get('tab'));
   const legacyStaffTab = searchParams.get('tab') === STAFF_DASHBOARD_LEGACY_TAB;
   const legacyAdminTab = searchParams.get('tab') === ADMIN_WHATSAPP_LEGACY_TAB;
+  const legacyOnboardingTab = searchParams.get('tab') === ONBOARDING_LEGACY_TAB;
 
   useEffect(() => {
+    if (legacyOnboardingTab) {
+      navigate('/admin/equipe?tab=onboarding', { replace: true });
+      return;
+    }
     if (legacyAdminTab) {
       navigate('/tasks/team?tab=admin', { replace: true });
       return;
@@ -60,43 +88,51 @@ export function TeamRolesHubPage() {
       navigate('/tasks/team', { replace: true });
       return;
     }
+    if (!isPlatformAdmin && (pathname.includes('/admin/equipe/owners') || section === 'property-manager')) {
+      navigate('/admin/equipe?tab=worker', { replace: true });
+      return;
+    }
     if (pathname.includes('/admin/equipe/owners') && !searchParams.get('tab')) {
       const next = new URLSearchParams(searchParams);
       next.set('tab', 'list');
       setSearchParams(next, { replace: true });
     } else if (pathname === '/admin/equipe' && !searchParams.get('tab')) {
-      navigate('/admin/equipe/owners?tab=list', { replace: true });
+      navigate(
+        isPlatformAdmin ? '/admin/equipe/owners?tab=list' : '/admin/equipe?tab=worker',
+        { replace: true },
+      );
     }
-  }, [pathname, searchParams, setSearchParams, legacyStaffTab, legacyAdminTab, navigate]);
+  }, [pathname, searchParams, setSearchParams, legacyStaffTab, legacyAdminTab, legacyOnboardingTab, navigate, isPlatformAdmin, section]);
 
-  if (legacyStaffTab || legacyAdminTab) return null;
+  if (legacyStaffTab || legacyAdminTab || legacyOnboardingTab) return null;
 
   const setSection = (id: TeamSection) => {
     if (id === 'property-manager') {
+      if (!isPlatformAdmin) return;
       navigate('/admin/equipe/owners?tab=list');
       return;
     }
     const next = new URLSearchParams(searchParams);
     const tabMap: Record<TeamSection, string> = {
       'property-manager': 'list',
-      'admin-whatsapp': 'admin-whatsapp',
       worker: 'worker',
       groups: 'groups',
+      onboarding: 'onboarding',
     };
     next.set('tab', tabMap[id]);
     navigate(`/admin/equipe?${next.toString()}`);
   };
 
   return (
-    <DashboardWrapper breadcrumb={['Équipe & Rôles', SECTIONS.find((s) => s.id === section)?.label || '']}>
+    <DashboardWrapper breadcrumb={['Équipe & Rôles', sections.find((s) => s.id === section)?.label || '']}>
       <LegacyReduxProvider>
-      <AdminOwnerScopeLayout inlineBar={false} showTopBar={false}>
+      <AdminOwnerScopeLayout inlineBar showTopBar={isPlatformAdmin}>
       <TeamViewProvider>
       <div style={{ padding: '22px 28px 50px', maxWidth: 1680, margin: '0 auto', background: TEAM_T.bg0, minHeight: '100%' }}>
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: T.text, margin: 0 }}>Équipe & Rôles</h1>
-          <p style={{ fontSize: 13, color: T.text3, margin: '6px 0 0' }}>
-            Owners, accès dashboard et groupes de droits — staff terrain & admin WhatsApp sur{' '}
+        <div style={{ marginBottom: 14 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: T.text, margin: 0 }}>Équipe & Rôles</h1>
+          <p style={{ fontSize: 12.5, color: T.text3, margin: '4px 0 0' }}>
+            Accès dashboard, groupes de droits et on-boarding PM · Staff terrain →{' '}
             <a href="/tasks/team" style={{ color: TEAM_T.primaryDeep, fontWeight: 700 }}>
               /tasks/team
             </a>
@@ -109,10 +145,10 @@ export function TeamRolesHubPage() {
             gap: 8,
             flexWrap: 'wrap',
             borderBottom: `2px solid ${T.border}`,
-            marginBottom: 12,
+            marginBottom: 10,
           }}
         >
-          {SECTIONS.map((s) => {
+          {sections.map((s) => {
             const active = section === s.id;
             return (
               <button
@@ -142,22 +178,6 @@ export function TeamRolesHubPage() {
           })}
         </div>
 
-        {SECTIONS.find((s) => s.id === section)?.hint ? (
-          <p
-            style={{
-              fontSize: 12,
-              color: TEAM_T.text2,
-              margin: '0 0 14px',
-              padding: '10px 14px',
-              background: TEAM_T.bg2,
-              borderRadius: 10,
-              border: `1px solid ${TEAM_T.border}`,
-            }}
-          >
-            {SECTIONS.find((s) => s.id === section)?.hint}
-          </p>
-        ) : null}
-
         <TeamViewToolbarSlot section={section} />
 
         <div
@@ -165,13 +185,16 @@ export function TeamRolesHubPage() {
             background: TEAM_T.bg1,
             border: `1px solid ${TEAM_T.border}`,
             borderRadius: 14,
-            padding: 16,
+            padding: section === 'worker' || section === 'onboarding' ? 12 : 16,
             minHeight: 480,
           }}
         >
-          {section === 'property-manager' && <PropertyManagerTab />}
+          {section === 'property-manager' && isPlatformAdmin ? <PropertyManagerTab /> : null}
           {section === 'worker' && <RolesPermissionsTab />}
           {section === 'groups' && <GroupsTab />}
+          {section === 'onboarding' && canAccessPmOnboarding(user) ? (
+            <PmOnboardingWizard embedded />
+          ) : null}
         </div>
       </div>
       </TeamViewProvider>
@@ -189,6 +212,9 @@ export function TeamLegacyRedirect() {
   }
   if (pathname.includes('/admin/User/team')) {
     const tab = new URLSearchParams(search).get('tab');
+    if (tab === ONBOARDING_LEGACY_TAB || tab === 'onboarding') {
+      return <Navigate to="/admin/equipe?tab=onboarding" replace />;
+    }
     if (tab === STAFF_DASHBOARD_LEGACY_TAB || tab === 'owners') {
       return <Navigate to="/tasks/team" replace />;
     }
@@ -196,7 +222,7 @@ export function TeamLegacyRedirect() {
       return <Navigate to="/tasks/team?tab=admin" replace />;
     }
   }
-  return <Navigate to="/admin/equipe/owners?tab=list" replace />;
+  return <Navigate to="/admin/equipe?tab=worker" replace />;
 }
 
 export default TeamRolesHubPage;

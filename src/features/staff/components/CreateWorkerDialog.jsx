@@ -112,7 +112,8 @@ const CreateWorkerSidebar = ({
         email: values.email,
         phone: values.phone,
         whatsapp: values.whatsapp,
-        ownerId: values.ownerId
+        ownerId: values.ownerId,
+        workerTypeOwner: false,
       });
       if (response.data) {
         onWorkerCreated(response.data);

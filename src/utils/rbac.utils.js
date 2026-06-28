@@ -6,17 +6,38 @@ export const ROLES = {
 };
 
 export const hasSuperAdminAccess = (role) => {
-    return role === ROLES.SUPER_ADMIN;
+    if (role == null) return false;
+    const r = String(role).trim();
+    return r === ROLES.SUPER_ADMIN || r.toLowerCase() === 'superadmin';
 };
 
 export const hasAdminAccess = (role) => {
-    return [ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(role);
+    if (role == null) return false;
+    const r = String(role).trim();
+    return (
+        r === ROLES.SUPER_ADMIN ||
+        r === ROLES.ADMIN ||
+        r.toLowerCase() === 'superadmin' ||
+        r.toLowerCase() === 'admin'
+    );
 };
 
 export const hasOwnerAccess = (role) => {
-    return [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.OWNER].includes(role);
+    if (role == null) return false;
+    const r = String(role).trim();
+    return (
+        hasAdminAccess(r) ||
+        r === ROLES.OWNER ||
+        r.toLowerCase() === 'owner'
+    );
 };
 
 export const hasWorkerAccess = (role) => {
-    return [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.OWNER, ROLES.WORKER].includes(role);
+    if (role == null) return false;
+    const r = String(role).trim();
+    return (
+        hasOwnerAccess(r) ||
+        r === ROLES.WORKER ||
+        r.toLowerCase() === 'worker'
+    );
 };

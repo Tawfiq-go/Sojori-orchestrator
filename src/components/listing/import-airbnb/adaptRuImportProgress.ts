@@ -28,6 +28,31 @@ function cascadeStepStatuses(steps: StepState[], importSucceeded: boolean): Step
   });
 }
 
+/** Parse le headline suite « Import 2/2 — Nom annonce ». */
+export function parseImportSuiteHeadline(
+  headline: string,
+): { index: number; total: number; name: string } | null {
+  const m = headline.trim().match(/Import\s+(\d+)\/(\d+)\s+—\s+(.+)/i);
+  if (!m) return null;
+  return { index: Math.max(0, Number(m[1]) - 1), total: Math.max(1, Number(m[2])), name: m[3].trim() };
+}
+
+/** Timeline vide en attendant le 1er poll (une annonce du batch). */
+export function createPendingImportProgress(opts: {
+  index: number;
+  total: number;
+  propertyName?: string;
+}): ImportProgress {
+  return {
+    currentBatchIndex: Math.max(0, opts.index),
+    totalBatch: Math.max(1, opts.total),
+    currentPropertyName: opts.propertyName,
+    steps: STEPS_ORDER.map((key) => ({ key, status: 'pending' as StepStatus })),
+    completed: false,
+    hasError: false,
+  };
+}
+
 /** Mappe la réponse polling srv-channels → format UI Claude Design. */
 export function adaptRuImportProgress(raw: RuImportProgressData | null): ImportProgress | null {
   if (!raw) return null;
@@ -35,9 +60,15 @@ export function adaptRuImportProgress(raw: RuImportProgressData | null): ImportP
   const byKey = new Map<string, { status: StepStatus; errorMessage?: string; meta?: Record<string, unknown> }>();
   for (const step of raw.steps ?? []) {
     if (!step?.key || !STEP_KEYS.has(step.key)) continue;
+    const rawStep = step as {
+      status?: string;
+      detail?: string;
+      meta?: Record<string, unknown>;
+    };
     byKey.set(step.key, {
-      status: normalizeStepStatus(step.status),
-      errorMessage: step.detail || undefined,
+      status: normalizeStepStatus(rawStep.status),
+      errorMessage: rawStep.detail || undefined,
+      meta: rawStep.meta,
     });
   }
 

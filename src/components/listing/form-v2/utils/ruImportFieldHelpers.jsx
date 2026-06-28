@@ -194,7 +194,7 @@ function parseRuExternalListing(raw) {
 /** Listing externe OTA — lien Airbnb / statut (sans ID technique côté client). */
 export function RuExternalListingDisplay({ value, ruField = 'ruExternalListing', clientView = false }) {
   const parsed = useMemo(() => parseRuExternalListing(value), [value]);
-  const label = clientView ? 'Annonce Airbnb / OTA' : 'Annonce externe OTA';
+  const label = clientView ? 'Statut diffusion (import RU)' : 'Annonce externe OTA';
   return (
     <Field label={label} ruField={ruField} fullWidth>
       {!parsed ? (
@@ -245,26 +245,89 @@ export function RuExternalListingDisplay({ value, ruField = 'ruExternalListing',
 
 function otaStatusChipColor(status) {
   const s = String(status || '').toLowerCase();
-  if (s === 'online') return 'success';
+  if (s === 'online' || s === 'active' || s === 'connected' || s === 'live') return 'success';
   if (s === 'not_connected' || s === 'offline') return 'default';
   if (s === 'error' || s === 'failed') return 'error';
   return 'warning';
 }
 
-/** Snapshot canaux OTA — tableau lisible (sans IDs techniques en vue client). */
-export function OtaChannelsSnapshotTable({ snapshot, clientView = false }) {
+/** Snapshot canaux OTA — tableau (lecture ou édition des liens annonce). */
+export function OtaChannelsSnapshotTable({
+  snapshot,
+  clientView = false,
+  editable = false,
+  onSnapshotChange,
+}) {
   const [showAll, setShowAll] = useState(false);
+  const [editingChannelKey, setEditingChannelKey] = useState(null);
+  const [editUrlDraft, setEditUrlDraft] = useState('');
+  const [newChannelName, setNewChannelName] = useState('');
+  const [newChannelUrl, setNewChannelUrl] = useState('');
   const channels = Array.isArray(snapshot?.channels) ? snapshot.channels : [];
   const updatedAt = snapshot?.updatedAt ? new Date(snapshot.updatedAt) : null;
   const connected = channels.filter((c) => String(c?.status || '').toLowerCase() === 'online');
   const visible = showAll ? channels : connected;
 
-  if (!channels.length) {
+  const patchChannels = (nextChannels) => {
+    onSnapshotChange?.({
+      ...(snapshot && typeof snapshot === 'object' ? snapshot : {}),
+      updatedAt: snapshot?.updatedAt ?? new Date().toISOString(),
+      channels: nextChannels,
+    });
+  };
+
+  const updateChannel = (channelKey, patch) => {
+    const next = channels.map((ch) => {
+      const key = String(ch.channelId || ch.channelName || '');
+      if (key !== channelKey) return ch;
+      return { ...ch, ...patch };
+    });
+    patchChannels(next);
+  };
+
+  const handleAddManualChannel = () => {
+    const name = newChannelName.trim();
+    const url = newChannelUrl.trim();
+    if (!name || !url) return;
+    const channelId = `manual-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
+    patchChannels([
+      ...channels,
+      {
+        channelId,
+        channelName: name,
+        status: 'online',
+        markup: null,
+        url,
+        contentStatus: null,
+        ariStatus: null,
+      },
+    ]);
+    setNewChannelName('');
+    setNewChannelUrl('');
+  };
+
+  const startEditUrl = (channelKey, currentUrl) => {
+    setEditingChannelKey(channelKey);
+    setEditUrlDraft(currentUrl || '');
+  };
+
+  const commitEditUrl = (channelKey) => {
+    updateChannel(channelKey, { url: editUrlDraft.trim() || null });
+    setEditingChannelKey(null);
+    setEditUrlDraft('');
+  };
+
+  const cancelEditUrl = () => {
+    setEditingChannelKey(null);
+    setEditUrlDraft('');
+  };
+
+  if (!channels.length && !editable) {
     return (
       <Typography sx={{ fontSize: 11.5, color: T.text4, fontStyle: 'italic' }}>
         {clientView
           ? 'Aucun canal connecté pour le moment.'
-          : 'Aucun snapshot canaux — lancer la vérification OTA depuis le channel manager.'}
+          : 'Aucun canal enregistré — utiliser « Vérifier connexion OTA ».'}
       </Typography>
     );
   }
@@ -284,53 +347,151 @@ export function OtaChannelsSnapshotTable({ snapshot, clientView = false }) {
           </Button>
         ) : null}
       </Stack>
-      <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Canal</TableCell>
-              <TableCell>Statut</TableCell>
-              <TableCell>URL</TableCell>
-              {!clientView ? <TableCell align="right">Markup</TableCell> : null}
-              {!clientView ? <TableCell>Contenu</TableCell> : null}
-              {!clientView ? <TableCell>ARI</TableCell> : null}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {visible.map((ch) => (
-              <TableRow key={ch.channelName || ch.channelId}>
-                <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>{ch.channelName || 'Canal'}</TableCell>
-                <TableCell>
-                  <Chip
-                    size="small"
-                    label={ch.status || '—'}
-                    color={otaStatusChipColor(ch.status)}
-                    variant="outlined"
-                  />
-                </TableCell>
-                <TableCell sx={{ maxWidth: 220 }}>
-                  {ch.url ? (
-                    <Link href={ch.url} target="_blank" rel="noopener noreferrer" sx={{ fontSize: 11.5, wordBreak: 'break-all' }}>
-                      {clientView ? "Voir l'annonce" : ch.url.replace(/^https?:\/\/(www\.)?/, '')}
-                    </Link>
-                  ) : (
-                    '—'
-                  )}
-                </TableCell>
-                {!clientView ? (
-                  <TableCell align="right">{ch.markup != null ? `${ch.markup}%` : '—'}</TableCell>
-                ) : null}
-                {!clientView ? (
-                  <TableCell sx={{ fontSize: 11.5 }}>{ch.contentStatus || '—'}</TableCell>
-                ) : null}
-                {!clientView ? (
-                  <TableCell sx={{ fontSize: 11.5 }}>{ch.ariStatus || '—'}</TableCell>
-                ) : null}
+      {channels.length > 0 ? (
+        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Canal</TableCell>
+                <TableCell>Statut</TableCell>
+                <TableCell sx={{ minWidth: 180 }}>Annonce</TableCell>
+                {!clientView && !editable ? <TableCell align="right">Markup</TableCell> : null}
+                {!clientView && !editable ? <TableCell>Contenu</TableCell> : null}
+                {!clientView && !editable ? <TableCell>ARI</TableCell> : null}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Paper>
+            </TableHead>
+            <TableBody>
+              {visible.map((ch) => {
+                const channelKey = String(ch.channelId || ch.channelName || '');
+                const url = ch.url || '';
+                return (
+                  <TableRow key={channelKey}>
+                    <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>{ch.channelName || 'Canal'}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={ch.status || '—'}
+                        color={otaStatusChipColor(ch.status)}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {editable && editingChannelKey === channelKey ? (
+                        <Stack direction="row" spacing={0.75} alignItems="center">
+                          <TextField
+                            size="small"
+                            fullWidth
+                            placeholder="https://…"
+                            value={editUrlDraft}
+                            onChange={(e) => setEditUrlDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') commitEditUrl(channelKey);
+                              if (e.key === 'Escape') cancelEditUrl();
+                            }}
+                            sx={sxInput}
+                            autoFocus
+                          />
+                          <Button
+                            size="small"
+                            onClick={() => commitEditUrl(channelKey)}
+                            sx={{ textTransform: 'none', minWidth: 48, fontSize: 11 }}
+                          >
+                            OK
+                          </Button>
+                          <Button
+                            size="small"
+                            onClick={cancelEditUrl}
+                            sx={{ textTransform: 'none', minWidth: 56, fontSize: 11, color: T.text3 }}
+                          >
+                            Annuler
+                          </Button>
+                        </Stack>
+                      ) : (
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                          {url ? (
+                            <Link
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              sx={{ fontSize: 12.5, fontWeight: 600 }}
+                            >
+                              Voir l&apos;annonce
+                            </Link>
+                          ) : (
+                            <Typography sx={{ fontSize: 12, color: T.text4 }}>—</Typography>
+                          )}
+                          {editable ? (
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => startEditUrl(channelKey, url)}
+                              sx={{
+                                textTransform: 'none',
+                                fontSize: 11.5,
+                                fontWeight: 600,
+                                minWidth: 0,
+                                px: 0.75,
+                                py: 0.25,
+                              }}
+                            >
+                              Éditer
+                            </Button>
+                          ) : null}
+                        </Stack>
+                      )}
+                    </TableCell>
+                    {!clientView && !editable ? (
+                      <TableCell align="right">{ch.markup != null ? `${ch.markup}%` : '—'}</TableCell>
+                    ) : null}
+                    {!clientView && !editable ? (
+                      <TableCell sx={{ fontSize: 11.5 }}>{ch.contentStatus || '—'}</TableCell>
+                    ) : null}
+                    {!clientView && !editable ? (
+                      <TableCell sx={{ fontSize: 11.5 }}>{ch.ariStatus || '—'}</TableCell>
+                    ) : null}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Paper>
+      ) : null}
+      {editable ? (
+        <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1, border: `1px dashed ${T.border}`, bgcolor: T.bg2 }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 600, mb: 1 }}>Ajouter un lien annonce</Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'flex-start' }}>
+            <TextField
+              size="small"
+              label="Canal"
+              placeholder="ex. Airbnb, Booking.com"
+              value={newChannelName}
+              onChange={(e) => setNewChannelName(e.target.value)}
+              sx={{ ...sxInput, minWidth: { sm: 160 } }}
+            />
+            <TextField
+              size="small"
+              label="URL"
+              placeholder="https://…"
+              value={newChannelUrl}
+              onChange={(e) => setNewChannelUrl(e.target.value)}
+              sx={{ ...sxInput, flex: 1, minWidth: { sm: 240 } }}
+            />
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={!newChannelName.trim() || !newChannelUrl.trim()}
+              onClick={handleAddManualChannel}
+              sx={{ textTransform: 'none', whiteSpace: 'nowrap', mt: { sm: 0.25 } }}
+            >
+              Ajouter
+            </Button>
+          </Stack>
+          <Typography sx={{ fontSize: 11, color: T.text4, mt: 1 }}>
+            Les liens saisis manuellement sont conservés lors d&apos;une nouvelle vérification OTA si le canal
+            ne renvoie pas d&apos;URL. Pensez à <strong>Sauvegarder</strong> l&apos;annonce.
+          </Typography>
+        </Box>
+      ) : null}
     </Box>
   );
 }

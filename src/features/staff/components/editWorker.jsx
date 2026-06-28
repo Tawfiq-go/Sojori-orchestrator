@@ -1,90 +1,47 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Container, Grid, Paper, Typography, TextField, Stack, Button, Avatar, Checkbox, FormControlLabel, Chip, useMediaQuery, Switch, FormControl, InputLabel, Select, MenuItem, InputAdornment, Tabs, Tab, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+import { Box, Grid, Typography, TextField, Stack, Checkbox, FormControlLabel, Chip, Switch, MenuItem, InputAdornment, Button, CircularProgress, Alert } from '@mui/material';
+import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
+import { Trash2 } from 'lucide-react';
 import Autocomplete from '@mui/material/Autocomplete';
-import { useTheme } from '@mui/material/styles';
-import { Tooltip } from '@mui/material';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { getListings } from '../../listing/services/serverApi.listing';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft } from 'lucide-react';
 import { Formik, Form } from 'formik';
-import { getAccounById, getNotificationEvent, updateWorker, getGroups } from '../services/serverApi.task';
-import routes, { buildFeatureRows } from '../../../routes';
-import { useDispatch } from 'react-redux';
-import { uploadImageToAPI } from '../../../redux/slices/UploadSlice';
-import { toast } from 'react-toastify';
-import { ToastContainer } from 'react-toastify';
+import { getAccounById, getNotificationEvent, updateWorker, getGroups, getCities, resendWorkerCredentials, deleteWorker } from '../services/serverApi.task';
+import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-const SOJORI_COLORS = {
-  primary: '#E6B022',
-  primaryDark: '#B8881A',
-  gray: {
-    50: '#FAFAFA',
-    100: '#F5F5F5',
-    200: '#EEEEEE',
-    300: '#E0E0E0',
-    600: '#757575',
-    700: '#616161'
-  }
+import {
+  WORKER_FORM_SECTIONS,
+  WorkerFormPage,
+  WorkerFormHeader,
+  WorkerFormLayout,
+  WorkerFormSection,
+  WorkerFormNav,
+  WorkerFormActions,
+  WorkerListingPicker,
+  WorkerDashboardAccessPanel,
+  WorkerNotificationsPanel,
+  buildAllNotificationsConfig,
+  isNotificationsAllMode,
+  isWildcardGrants,
+  workerTextFieldSx,
+  WF,
+} from './workerFormDesign';
+import WorkerPasswordDialog from './WorkerPasswordDialog';
+import DeleteUserDialog from './DeleteUserDialog';
+
+const CONTRACT_TYPES = ['GROSS REVENUE', 'NET REVENUE', 'NET-NET', 'FIXED FEE'];
+const fieldSx = workerTextFieldSx();
+const ACTIONS = [
+  { key: 'get', label: 'Lecture' },
+  { key: 'update', label: 'Écriture' },
+  { key: 'create', label: 'Création' },
+  { key: 'delete', label: 'Suppression' },
+];
+const ADMIN_OPT = {
+  _id: '__ADMIN__',
+  name: 'Admin-level access',
 };
-const ACTIONS = [{
-  key: 'get',
-  label: 'View'
-}, {
-  key: 'update',
-  label: 'Modify'
-}, {
-  key: 'create',
-  label: 'Create'
-}, {
-  key: 'delete',
-  label: 'Delete'
-}];
-const setAction = (grants, feature, action, value) => {
-  const next = Array.isArray(grants) ? [...grants] : [];
-  const i = next.findIndex(g => g.feature === feature);
-  if (i === -1) {
-    if (value) next.push({
-      feature,
-      actions: [action]
-    });
-    return next;
-  }
-  const set = new Set(next[i].actions || []);
-  if (value) set.add(action);else set.delete(action);
-  const updated = Array.from(set);
-  if (updated.length === 0) next.splice(i, 1);else next[i] = {
-    feature,
-    actions: updated
-  };
-  return next;
-};
-const setRowAll = (grants, feature, value) => {
-  const next = Array.isArray(grants) ? [...grants] : [];
-  const i = next.findIndex(g => g.feature === feature);
-  if (value) {
-    const all = ACTIONS.map(a => a.key);
-    if (i === -1) next.push({
-      feature,
-      actions: all
-    });else next[i] = {
-      feature,
-      actions: all
-    };
-  } else {
-    if (i !== -1) next.splice(i, 1);
-  }
-  return next;
-};
-const hasAction = (grants, feature, action) => {
-  const arr = Array.isArray(grants) ? grants : [];
-  return arr.some(g => (g.feature === '*' || g.feature === feature) && (g.actions?.includes('*') || g.actions?.includes(action)));
-};
-const isWildcardGrants = grants => Array.isArray(grants) && grants.some(g => g?.feature === '*' || (g?.actions || []).includes('*'));
 const NOTIF_CHANNELS = [{
   key: 'dashboard',
   label: 'Dashboard'
@@ -108,7 +65,9 @@ const EMPTY_WORKER = {
   featureGrants: [],
   groupIds: [],
   listingIds: [],
+  listingCityIds: [],
   ownerAccess: false,
+  notificationsAll: false,
   notificationConfig: [],
   workerTypeOwner: false,
   contractType: '',
@@ -136,39 +95,32 @@ const toWorker = account => {
     isOwnerAdmin: !!account.isOwnerAdmin || adminByWildcard,
     banned: !!account.banned,
     featureGrants: grants,
-    groupIds: [],
-    listingIds: Array.isArray(account.listingIds) ? account.listingIds : [],
+    groupIds: Array.isArray(account.groupIds)
+      ? account.groupIds.map((id) => String(typeof id === 'object' && id ? id._id || id : id))
+      : [],
+    listingIds: Array.isArray(account.listingIds)
+      ? account.listingIds.map((id) => String(typeof id === 'object' && id ? id._id || id : id))
+      : [],
+    listingCityIds: Array.isArray(account.listingCityIds)
+      ? account.listingCityIds.map((id) => String(typeof id === 'object' && id ? id._id || id : id))
+      : [],
     ownerAccess: !!account.ownerAccess,
+    notificationsAll: !!account.notificationsAll,
     notificationConfig: Array.isArray(account.notificationConfig) ? account.notificationConfig : [],
     workerTypeOwner: !!account.workerTypeOwner,
     contractType: account.contractType || '',
     commission: Number(account.commission ?? 0)
   };
 };
-function TabPanel({
-  children,
-  value,
-  index
-}) {
-  return <div hidden={value !== index}>
-      {value === index && <Box sx={{
-      p: 2
-    }}>{children}</Box>}
-    </div>;
-}
 export default function WorkerAccessForm() {
   const {
     userId
   } = useParams();
   const navigate = useNavigate();
-  const theme = useTheme();
   const {
     t
   } = useTranslation('common');
-  const isTabletOrMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const dispatch = useDispatch();
-  const [uploading, setUploading] = useState(false);
-  const [activeTab, setActiveTab] = useState(0);
+  const [active, setActive] = useState(WORKER_FORM_SECTIONS[0].id);
   const [accountFromApi, setAccountFromApi] = useState(null);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -177,9 +129,16 @@ export default function WorkerAccessForm() {
   const [listingsTotal, setListingsTotal] = useState(0);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsPage, setListingsPage] = useState(0);
-  const [listingsLimit, setListingsLimit] = useState(4);
+  const [listingsLimit, setListingsLimit] = useState(25);
   const [listingSearch, setListingSearch] = useState('');
-  const [avatarPreview, setAvatarPreview] = useState('');
+  const [cities, setCities] = useState([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [listingLabels, setListingLabels] = useState({});
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordResult, setPasswordResult] = useState(null);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const staging = JSON.parse(localStorage.getItem('isStaging')) || false;
   const formikRef = React.useRef(null);
   useEffect(() => {
@@ -189,6 +148,13 @@ export default function WorkerAccessForm() {
       data
     }) => setAccountFromApi(data?.account || null)).catch(() => {}).finally(() => setLoading(false));
   }, [userId]);
+  useEffect(() => {
+    setCitiesLoading(true);
+    getCities({ paged: false, limit: 300 })
+      .then((rows) => setCities(Array.isArray(rows) ? rows : []))
+      .catch(() => setCities([]))
+      .finally(() => setCitiesLoading(false));
+  }, []);
   useEffect(() => {
     getNotificationEvent().then(({
       data
@@ -201,6 +167,13 @@ export default function WorkerAccessForm() {
       data
     }) => setGroups(Array.isArray(data?.groups) ? data.groups : [])).catch(() => {});
   }, [accountFromApi?.ownerId]);
+  useEffect(() => {
+    if (!accountFromApi || !NOTIFICATION_EVENTS.length || !formikRef.current) return;
+    const all =
+      !!accountFromApi.notificationsAll ||
+      isNotificationsAllMode(accountFromApi.notificationConfig, NOTIFICATION_EVENTS, 'dashboard');
+    formikRef.current.setFieldValue('worker.notificationsAll', all);
+  }, [accountFromApi, NOTIFICATION_EVENTS]);
   useEffect(() => {
     const t = setTimeout(() => {
       (async () => {
@@ -216,6 +189,13 @@ export default function WorkerAccessForm() {
           });
           setListings(Array.isArray(result?.data?.data) ? result.data?.data : []);
           setListingsTotal(result?.data?.total ?? 0);
+          setListingLabels((prev) => {
+            const next = { ...prev };
+            (result?.data?.data || []).forEach((l) => {
+              if (l?._id) next[String(l._id)] = l.name || next[String(l._id)];
+            });
+            return next;
+          });
         } catch (e) {
           setListings([]);
           setListingsTotal(0);
@@ -226,24 +206,29 @@ export default function WorkerAccessForm() {
     }, 300);
     return () => clearTimeout(t);
   }, [listingSearch, listingsPage, listingsLimit, staging]);
+
+  useEffect(() => {
+    if (loading) return;
+    const observer = new IntersectionObserver(entries => {
+      const v = entries.filter(e => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (v?.target?.id) setActive(v.target.id);
+    }, {
+      root: null,
+      rootMargin: '0px 0px -60% 0px',
+      threshold: [0.1, 0.25, 0.5, 0.75, 1]
+    });
+    WORKER_FORM_SECTIONS.forEach(s => {
+      const el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [loading, accountFromApi]);
+
   const initialWorker = useMemo(() => toWorker(accountFromApi), [accountFromApi]);
-  const featureRows = useMemo(() => buildFeatureRows(routes, t, 'Owner'), [routes, t]);
-  const setRowAllLimited = (grants, feature, value, allowedKeys) => {
-    const next = Array.isArray(grants) ? [...grants] : [];
-    const i = next.findIndex(g => g.feature === feature);
-    if (value) {
-      const all = Array.from(new Set(allowedKeys));
-      if (i === -1) next.push({
-        feature,
-        actions: all
-      });else next[i] = {
-        feature,
-        actions: all
-      };
-    } else {
-      if (i !== -1) next.splice(i, 1);
-    }
-    return next;
+  const normalizePhone = (val = '') => (val || '').replace(/[^\d+]/g, '');
+  const jumpSection = (id) => {
+    setActive(id);
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const validate = values => {
     const v = values.worker || {};
@@ -279,27 +264,44 @@ export default function WorkerAccessForm() {
       toast.error(data?.message || data?.error || 'Failed to save');
     }
   };
-  const updateWorkerFunction = async values => {
-    values.groupIds = [];
+  const updateWorkerFunction = async (values) => {
+    if (accountFromApi?.deleted) {
+      toast.error(t('Worker is deleted', 'Ce worker est supprimé'));
+      return;
+    }
     const {
       _previousFeatureGrants,
+      _groupGrants,
+      _previousNotificationConfig,
       ...payload
     } = values || {};
-    updateWorker(userId, payload).then(({
-      data
-    }) => {
+    payload.groupIds = Array.isArray(payload.groupIds) ? payload.groupIds : [];
+    payload.listingIds = Array.isArray(payload.listingIds) ? payload.listingIds : [];
+    payload.listingCityIds = Array.isArray(payload.listingCityIds) ? payload.listingCityIds : [];
+    payload.featureGrants = Array.isArray(payload.featureGrants) ? payload.featureGrants : [];
+    payload.phone = payload.phone?.trim() ? normalizePhone(payload.phone) : null;
+    payload.whatsapp = payload.whatsapp?.trim() ? normalizePhone(payload.whatsapp) : null;
+    if (payload.notificationsAll) {
+      payload.notificationConfig = buildAllNotificationsConfig(NOTIFICATION_EVENTS, 'dashboard');
+    }
+    delete payload.address;
+    delete payload.postalCode;
+    delete payload.city;
+    delete payload.country;
+    delete payload.timezone;
+    delete payload.noteBeforeContact;
+    delete payload._previousNotificationConfig;
+    if (!payload.workerTypeOwner) {
+      payload.contractType = '';
+      payload.commission = 0;
+    }
+    try {
+      await updateWorker(userId, payload);
       toast.success(t('saved'));
-      const isOwner = !!payload.workerTypeOwner;
-      navigate(`/admin/User/${isOwner ? 'owners' : 'worker'}`, {
-        replace: true
-      });
-    }).catch(err => {
+      navigate('/admin/equipe?tab=worker', { replace: true });
+    } catch (err) {
       consumeApiError(err, formikRef.current?.setFieldError);
-    });
-  };
-  const ADMIN_OPT = {
-    _id: '__ADMIN__',
-    name: 'Admin-level access'
+    }
   };
   const selectedGroupOptions = w => {
     const arr = [];
@@ -311,43 +313,21 @@ export default function WorkerAccessForm() {
     });
     return arr;
   };
-  const handleGroupsChange = (w, setFieldValue, groups = []) => (_, options) => {
-    const adminNow = options.some(o => o?._id === ADMIN_OPT._id);
+  const handleGroupsChange = (w, setFieldValue) => (_, options) => {
     const wasAdmin = !!w.isOwnerAdmin || isWildcardGrants(w.featureGrants);
-    if (adminNow) {
-      if (!wasAdmin) {
-        setFieldValue('worker._previousFeatureGrants', w.featureGrants || []);
-      }
-      setFieldValue('worker.isOwnerAdmin', true);
-      setFieldValue('worker.ownerAccess', true);
-      setFieldValue('worker.groupIds', []);
-      setFieldValue('worker._groupGrants', []);
-      setFieldValue('worker.featureGrants', [{
-        feature: '*',
-        actions: ['*']
-      }]);
-      return;
-    }
+    const base = wasAdmin ? w._previousFeatureGrants || [] : w.featureGrants || [];
     setFieldValue('worker.isOwnerAdmin', false);
     setFieldValue('worker.ownerAccess', false);
-    let base = w.featureGrants;
-    if (wasAdmin) {
-      base = w._previousFeatureGrants || [];
-      setFieldValue('worker._previousFeatureGrants', []);
-    }
-    const realOptions = options.filter(o => o?._id !== ADMIN_OPT._id);
-    const pickedIds = realOptions.map(o => String(o._id));
+    setFieldValue('worker._previousFeatureGrants', []);
+    const pickedIds = options.map((o) => String(o._id));
     setFieldValue('worker.groupIds', pickedIds);
-    const byId = new Map((groups || []).map(g => [String(g._id), g]));
-    const selected = pickedIds.map(id => byId.get(id)).filter(Boolean);
-    const selectedGroupGrants = selected.map(g => g.featureGrants || []);
-    const {
-      next,
-      overlay
-    } = mergeGrants({
+    const byId = new Map((groups || []).map((g) => [String(g._id), g]));
+    const selected = pickedIds.map((id) => byId.get(id)).filter(Boolean);
+    const selectedGroupGrants = selected.map((g) => g.featureGrants || []);
+    const { next, overlay } = mergeGrants({
       current: base,
       selectedGroups: selectedGroupGrants,
-      prevOverlay: w._groupGrants || []
+      prevOverlay: w._groupGrants || [],
     });
     setFieldValue('worker.featureGrants', next);
     setFieldValue('worker._groupGrants', overlay);
@@ -420,7 +400,6 @@ export default function WorkerAccessForm() {
       overlay: newOverlay
     };
   };
-  const allCurrentListingIds = useMemo(() => listings.map(l => l._id), [listings]);
   const notifFind = (config, key) => (Array.isArray(config) ? config : []).find(e => e.key === key) || null;
   const notifIsOn = (config, key, channelKey, defaults = {}) => {
     const found = notifFind(config, key);
@@ -457,75 +436,163 @@ export default function WorkerAccessForm() {
     }
     return next;
   };
-  const groupEventsByCategory = events => events.reduce((acc, ev) => {
-    const cat = ev.category || 'other';
-    (acc[cat] = acc[cat] || []).push(ev);
-    return acc;
-  }, {});
-  const groupFeaturesBySection = rows => {
-    const sections = {};
-    let currentSection = 'Other';
-    rows.forEach(row => {
-      if (row.kind === 'section') {
-        currentSection = row.label;
-        if (!sections[currentSection]) sections[currentSection] = [];
-      } else {
-        if (!sections[currentSection]) sections[currentSection] = [];
-        sections[currentSection].push(row);
-      }
-    });
-    return sections;
+  const headerSubtitle = accountFromApi
+    ? [accountFromApi.firstName, accountFromApi.lastName].filter(Boolean).join(' ') +
+      (accountFromApi.email ? ` · ${accountFromApi.email}` : '')
+    : undefined;
+
+  const handleOpenPasswordDialog = () => {
+    setPasswordResult(null);
+    setPasswordDialogOpen(true);
   };
-  return <Container maxWidth="lg" sx={{
-    py: 3
-  }}>
+
+  const handlePasswordSubmit = async ({ password, sendEmail = true }) => {
+    if (!userId || passwordLoading) return;
+    setPasswordLoading(true);
+    const trimmed = typeof password === 'string' ? password.trim() : '';
+    console.info('[worker-password] api:request', {
+      workerId: String(userId),
+      manual: !!trimmed,
+      passwordLength: trimmed.length,
+      sendEmail,
+    });
+    try {
+      const payload = { sendEmail };
+      if (trimmed) payload.password = trimmed;
+      const res = await resendWorkerCredentials(userId, payload);
+      const d = res?.data || {};
+      console.info('[worker-password] api:response', {
+        success: d.success,
+        emailSent: d.emailSent,
+        emailError: d.emailError,
+        hasTemporaryPassword: !!d.temporaryPassword,
+        message: d.message,
+      });
+      if (d.temporaryPassword) {
+        setPasswordResult({
+          email: d.email,
+          temporaryPassword: d.temporaryPassword,
+          loginUrl: d.loginUrl,
+          emailSent: !!d.emailSent,
+          emailError: d.emailError,
+        });
+        toast.success(password ? 'Mot de passe enregistré' : d.emailSent ? 'Identifiants renvoyés par email' : 'Nouveau mot de passe généré');
+      } else {
+        toast.error(d.error || 'Échec de la mise à jour');
+      }
+    } catch (err) {
+      console.error('[worker-password] api:error', {
+        status: err?.response?.status,
+        error: err?.response?.data?.error,
+        message: err?.response?.data?.message,
+        errors: err?.response?.data?.errors,
+      });
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || 'Échec de la mise à jour');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const closePasswordDialog = () => {
+    setPasswordDialogOpen(false);
+    setPasswordResult(null);
+  };
+
+  const handleDeleteWorker = async () => {
+    if (!userId || deleteLoading || accountFromApi?.deleted) return;
+    setDeleteLoading(true);
+    try {
+      await deleteWorker(userId);
+      toast.success(t('Worker deleted', 'Worker supprimé'));
+      setDeleteDialogOpen(false);
+      navigate('/admin/equipe?tab=worker', { replace: true });
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.error ||
+          err?.response?.data?.message ||
+          t('Failed to delete worker', 'Échec de la suppression'),
+      );
+      throw err;
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const workerDisplayName =
+    [accountFromApi?.firstName, accountFromApi?.lastName].filter(Boolean).join(' ') ||
+    accountFromApi?.email ||
+    'ce worker';
+
+  if (loading && !accountFromApi) {
+    return (
+      <WorkerFormPage>
+        <Typography sx={{ color: WF.text3, textAlign: 'center', py: 6 }}>{t('Loading...')}</Typography>
+      </WorkerFormPage>
+    );
+  }
+
+  return (
+    <WorkerFormPage>
       <ToastContainer position="top-right" autoClose={3000} />
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{
-      mb: 2
-    }}>
-        <Button variant="text" onClick={() => navigate(-1)} sx={{
-        color: SOJORI_COLORS.gray[600],
-        '&:hover': {
-          bgcolor: SOJORI_COLORS.gray[100]
-        },
-        px: 2,
-        py: 1,
-        fontSize: '0.875rem',
-        fontWeight: 500,
-        textTransform: 'none'
-      }}>
-          <ArrowLeft style={{
-          width: 16,
-          height: 16,
-          marginRight: 8
-        }} />
-          {t('Back')}
-        </Button>
-        <Stack direction="row" spacing={1}>
-          <Button variant="contained" onClick={() => navigate(-1)} sx={{
-          bgcolor: SOJORI_COLORS.gray[300],
-          color: SOJORI_COLORS.gray[700],
-          '&:hover': {
-            bgcolor: SOJORI_COLORS.gray[400]
-          },
-          textTransform: 'none',
-          fontSize: '0.875rem'
-        }}>
-            {t('Cancel')}
-          </Button>
-          <Button variant="contained" onClick={() => document.getElementById('worker-form')?.requestSubmit()} sx={{
-          bgcolor: SOJORI_COLORS.primary,
-          color: 'white !important',
-          '&:hover': {
-            bgcolor: SOJORI_COLORS.primaryDark
-          },
-          textTransform: 'none',
-          fontSize: '0.875rem'
-        }}>
-            {t('Save')}
-          </Button>
-        </Stack>
-      </Stack>
+      <WorkerFormHeader
+        title="Modifier le worker"
+        subtitle={headerSubtitle}
+        onBack={() => navigate(-1)}
+        onCancel={() => navigate(-1)}
+        onSave={() => document.getElementById('worker-form')?.requestSubmit()}
+        saveLabel={t('Save')}
+        extraActions={
+          <>
+            {!accountFromApi?.deleted ? (
+              <Button
+                variant="outlined"
+                color="error"
+                disabled={deleteLoading || passwordLoading}
+                onClick={() => setDeleteDialogOpen(true)}
+                startIcon={deleteLoading ? <CircularProgress size={16} color="inherit" /> : <Trash2 size={18} />}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  borderColor: 'rgba(244,67,54,0.45)',
+                  '&:hover': { borderColor: '#F44336', bgcolor: 'rgba(244,67,54,0.06)' },
+                }}
+              >
+                Supprimer
+              </Button>
+            ) : null}
+            <Button
+              variant="contained"
+              disabled={passwordLoading || deleteLoading || accountFromApi?.deleted}
+              onClick={handleOpenPasswordDialog}
+              startIcon={passwordLoading ? <CircularProgress size={16} color="inherit" /> : <VpnKeyOutlinedIcon />}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 700,
+                bgcolor: WF.primaryDeep,
+                boxShadow: '0 2px 8px rgba(255,96,52,0.35)',
+                '&:hover': { bgcolor: WF.primary },
+              }}
+            >
+              Mot de passe / identifiants
+            </Button>
+          </>
+        }
+      />
+
+      <Alert severity="info" sx={{ mb: 2, borderRadius: '12px' }}>
+        {accountFromApi?.deleted ? (
+          <>
+            Ce worker est <strong>supprimé</strong> — il ne peut plus se connecter. Retrouvez-le via le filtre
+            « Supprimés » dans la liste équipe.
+          </>
+        ) : (
+          <>
+            Pour définir ou modifier le mot de passe du worker, cliquez sur{' '}
+            <strong>Mot de passe / identifiants</strong> — vous pourrez le saisir manuellement ou le générer
+            automatiquement.
+          </>
+        )}
+      </Alert>
 
       <Formik innerRef={formikRef} enableReinitialize initialValues={{
       worker: initialWorker
@@ -539,546 +606,265 @@ export default function WorkerAccessForm() {
         touched
       }) => {
         const w = values.worker || EMPTY_WORKER;
-        const isAllSelected = w.ownerAccess || w.isOwnerAdmin || w.listingIds?.includes('*') || Array.isArray(w.listingIds) && allCurrentListingIds.length > 0 && allCurrentListingIds.every(id => w.listingIds.includes(id));
-        const handleAvatarUpload = async e => {
-          const file = e.currentTarget.files?.[0];
-          if (!file) return;
-          const localUrl = URL.createObjectURL(file);
-          setAvatarPreview(localUrl);
-          try {
-            const result = await dispatch(uploadImageToAPI({
-              file,
-              folder: 'other'
-            }));
-            if (result?.meta?.requestStatus == 'fulfilled') {
-              const url = result.payload.url;
-              setFieldValue('worker.avatar', url);
-              setAvatarPreview(url);
-            } else {}
-          } catch (err) {}
-        };
+        const listingAccessDisabled = w.isOwnerAdmin || w.listingIds?.includes('*') || w.ownerAccess;
         const toggleListing = id => {
-          if (w.ownerAccess || w.isOwnerAdmin || w.listingIds?.includes('*')) return;
-          const current = Array.isArray(w.listingIds) ? w.listingIds : [];
-          const exists = current.includes(id);
-          const next = exists ? current.filter(x => x !== id) : [...current, id];
+          if (listingAccessDisabled) return;
+          const current = Array.isArray(w.listingIds) ? w.listingIds.map(String) : [];
+          const sid = String(id);
+          const exists = current.includes(sid);
+          const next = exists ? current.filter(x => x !== sid) : [...current, sid];
           setFieldValue('worker.listingIds', next);
+          const row = listings.find((l) => String(l._id) === sid);
+          if (row?.name) setListingLabels((prev) => ({ ...prev, [sid]: row.name }));
         };
-        const selectAllOnPage = () => {
-          if (w.isOwnerAdmin) return;
-          const current = Array.isArray(w.listingIds) ? new Set(w.listingIds) : new Set();
-          allCurrentListingIds.forEach(id => current.add(id));
-          setFieldValue('worker.listingIds', Array.from(current));
+        const removeListing = (id) => {
+          const sid = String(id);
+          setFieldValue(
+            'worker.listingIds',
+            (Array.isArray(w.listingIds) ? w.listingIds : []).map(String).filter((x) => x !== sid),
+          );
         };
-        const unselectAllOnPage = () => {
-          if (w.isOwnerAdmin) return;
-          const next = (Array.isArray(w.listingIds) ? w.listingIds : []).filter(id => !allCurrentListingIds.includes(id));
-          setFieldValue('worker.listingIds', next);
+        const toggleCity = async (cityId) => {
+          if (listingAccessDisabled) return;
+          const cid = String(cityId);
+          const current = Array.isArray(w.listingCityIds) ? w.listingCityIds.map(String) : [];
+          if (current.includes(cid)) {
+            setFieldValue('worker.listingCityIds', current.filter((x) => x !== cid));
+            return;
+          }
+          try {
+            const result = await getListings({
+              page: 0,
+              limit: 500,
+              cityId: [cid],
+              staging,
+              useActiveFilter: true,
+              active: true,
+              compact: true,
+            });
+            const rows = Array.isArray(result?.data?.data) ? result.data.data : [];
+            const idsInCity = new Set(rows.map((l) => String(l._id)));
+            setFieldValue('worker.listingCityIds', [...current, cid]);
+            setFieldValue(
+              'worker.listingIds',
+              (Array.isArray(w.listingIds) ? w.listingIds : []).map(String).filter((id) => !idsInCity.has(id)),
+            );
+            setListingLabels((prev) => {
+              const next = { ...prev };
+              rows.forEach((l) => {
+                if (l?._id) next[String(l._id)] = l.name;
+              });
+              return next;
+            });
+          } catch {
+            setFieldValue('worker.listingCityIds', [...current, cid]);
+          }
+        };
+        const removeCity = (cityId) => {
+          const cid = String(cityId);
+          setFieldValue(
+            'worker.listingCityIds',
+            (Array.isArray(w.listingCityIds) ? w.listingCityIds : []).map(String).filter((x) => x !== cid),
+          );
         };
         const te = path => Boolean(path.split('.').reduce((a, k) => a && a[k] !== undefined ? a[k] : undefined, touched) && path.split('.').reduce((a, k) => a && a[k] !== undefined ? a[k] : undefined, errors));
         const he = path => path.split('.').reduce((a, k) => a && a[k] !== undefined ? a[k] : undefined, errors) || '';
-        const featureSections = groupFeaturesBySection(featureRows);
-        return <Form id="worker-form">
-              {/* Header avec gradient orange */}
-              <Paper sx={{
-            background: `linear-gradient(135deg, ${SOJORI_COLORS.primary} 0%, ${SOJORI_COLORS.primaryDark} 100%)`,
-            color: '#fff',
-            p: 2,
-            mb: 2,
-            borderRadius: 2
-          }}>
-                <Stack direction="row" alignItems="center" spacing={2} justifyContent="space-between">
-                  <Stack direction="row" alignItems="center" spacing={2}>
-                    <Avatar src={avatarPreview || w.avatar || undefined} sx={{
-                  width: 56,
-                  height: 56,
-                  border: '3px solid #fff'
-                }} />
-                    <Box>
-                      <Typography variant="h5" fontWeight={700}>
-                        {w.firstName} {w.lastName}
-                      </Typography>
-                      <Typography variant="body2" sx={{
-                    opacity: 0.9
-                  }}>
-                        {w.email}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                  <Stack direction="row" spacing={1}>
-                    {accountFromApi && !accountFromApi.initPassword && <Chip label={t('Invitation Pending')} size="small" sx={{
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  color: 'white !important',
-                  fontWeight: 600
-                }} />}
-                    {w.workerTypeOwner && <Chip label={t('is Owner')} size="small" sx={{
-                  bgcolor: 'rgba(255,255,255,0.3)',
-                  color: 'white !important',
-                  fontWeight: 600
-                }} />}
-                    {w.banned && <Chip label={t('Banned')} size="small" sx={{
-                  bgcolor: '#d32f2f',
-                  color: 'white !important',
-                  fontWeight: 600
-                }} />}
-                  </Stack>
-                </Stack>
-              </Paper>
-
-              {/* Tabs Navigation */}
-              <Paper sx={{
-            mb: 2
-          }}>
-                <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="fullWidth" sx={{
-              '& .MuiTab-root': {
-                textTransform: 'none',
-                fontWeight: 600,
-                fontSize: '0.875rem'
-              },
-              '& .Mui-selected': {
-                color: SOJORI_COLORS.primary
-              },
-              '& .MuiTabs-indicator': {
-                bgcolor: SOJORI_COLORS.primary,
-                height: 3
-              }
-            }}>
-                  <Tab label={t('Informations')} />
-                  <Tab label={t('Annonces')} />
-                  <Tab label={t('Permissions')} />
-                  <Tab label={t('Notifications')} />
-                </Tabs>
-              </Paper>
-
-              {/* TAB 0: Informations */}
-              <TabPanel value={activeTab} index={0}>
-                <Paper variant="outlined" sx={{
-              p: 2
-            }}>
-                  <Grid container spacing={2}>
-                    {/* Avatar Upload */}
-                    <Grid item xs={12}>
-                      <Stack alignItems="center" spacing={1}>
-                        <Avatar src={avatarPreview || w.avatar || undefined} sx={{
-                      width: 100,
-                      height: 100,
-                      cursor: 'pointer'
-                    }} component="label">
-                          <input hidden accept="image/*" type="file" onChange={handleAvatarUpload} />
-                        </Avatar>
-                        <Button size="small" component="label">
-                          {t('Change Avatar')}
-                          <input hidden accept="image/*" type="file" onChange={handleAvatarUpload} />
-                        </Button>
+        return (
+          <Form id="worker-form">
+            <WorkerFormLayout
+              main={
+                <>
+                  <WorkerFormSection id="basic-info" icon="👤" title="Identité" hint="Nom, email et contacts du collaborateur">
+                    {(accountFromApi && !accountFromApi.initPassword) || w.banned ? (
+                      <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }} useFlexGap>
+                        {accountFromApi && !accountFromApi.initPassword ? (
+                          <Chip label={t('Invitation Pending')} size="small" sx={{ fontWeight: 700 }} />
+                        ) : null}
+                        {w.banned ? (
+                          <Chip label={t('Banned')} size="small" color="error" sx={{ fontWeight: 700 }} />
+                        ) : null}
+                        {accountFromApi?.deleted ? (
+                          <Chip label={t('Deleted', 'Supprimé')} size="small" color="warning" sx={{ fontWeight: 700 }} />
+                        ) : null}
                       </Stack>
-                    </Grid>
-
-                    {/* Grid 2 colonnes compact */}
-                    <Grid item xs={12} sm={6}>
-                      <TextField size="small" label={t('First Name')} name="worker.firstName" value={w.firstName || ''} onChange={handleChange} onBlur={handleBlur} error={te('worker.firstName')} helperText={he('worker.firstName')} fullWidth />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField size="small" label={t('Last Name')} name="worker.lastName" value={w.lastName || ''} onChange={handleChange} onBlur={handleBlur} error={te('worker.lastName')} helperText={he('worker.lastName')} fullWidth />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField size="small" label="Email" name="worker.email" value={w.email || ''} onChange={handleChange} onBlur={handleBlur} error={te('worker.email')} helperText={he('worker.email')} fullWidth disabled />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField size="small" label={t('phone')} name="worker.phone" value={w.phone || ''} onChange={handleChange} fullWidth />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField size="small" label="Whatsapp" name="worker.whatsapp" value={w.whatsapp || ''} onChange={handleChange} fullWidth />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField size="small" label="Title" name="worker.title" value={w.title || ''} onChange={handleChange} fullWidth />
-                    </Grid>
-
-                    {/* Address fields */}
-                    <Grid item xs={12} sm={6}>
-                      <TextField size="small" label="Address" name="worker.address" value={w.address || ''} onChange={handleChange} fullWidth />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField size="small" label="Postal Code" name="worker.postalCode" value={w.postalCode || ''} onChange={handleChange} fullWidth />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField size="small" label="City" name="worker.city" value={w.city || ''} onChange={handleChange} fullWidth />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField size="small" label="Country" name="worker.country" value={w.country || ''} onChange={handleChange} fullWidth />
-                    </Grid>
-
-                    {/* Switches pour isOwner et banned */}
-                    <Grid item xs={12} sm={6}>
-                      <FormControlLabel control={<Switch checked={!!w.workerTypeOwner} onChange={(_, val) => {
-                    setFieldValue('worker.workerTypeOwner', val);
-                    if (!val) {
-                      setFieldValue('worker.contractType', '');
-                      setFieldValue('worker.commission', 0);
-                    }
-                  }} sx={{
-                    '& .MuiSwitch-switchBase.Mui-checked': {
-                      color: SOJORI_COLORS.primary
-                    },
-                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                      bgcolor: SOJORI_COLORS.primary
-                    }
-                  }} />} label={t('is Owner')} />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <FormControlLabel control={<Switch checked={!!w.banned} onChange={(_, v) => setFieldValue('worker.banned', v)} sx={{
-                    '& .MuiSwitch-switchBase.Mui-checked': {
-                      color: '#d32f2f'
-                    },
-                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                      bgcolor: '#d32f2f'
-                    }
-                  }} />} label={t('Banned')} />
-                    </Grid>
-
-                    {/* Contract type + Commission (si owner) */}
-                    {w.workerTypeOwner && <>
-                        <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth size="small">
-                            <InputLabel>{t('Contract type')}</InputLabel>
-                            <Select label={t('Contract type')} name="worker.contractType" value={w.contractType || ''} onChange={e => {
-                        const val = e.target.value;
-                        setFieldValue('worker.contractType', val);
-                        if (val === 'FIXED FEE') {
-                          setFieldValue('worker.commission', 0);
-                        }
-                      }} error={Boolean(touched.worker?.contractType && errors.worker?.contractType)}>
-                              <MenuItem value="GROSS REVENUE">
-                                GROSS REVENUE
-                              </MenuItem>
-                              <MenuItem value="NET REVENUE">NET REVENUE</MenuItem>
-                              <MenuItem value="NET-NET">NET-NET</MenuItem>
-                              <MenuItem value="FIXED FEE">FIXED FEE</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField size="small" label={t('Commission (%)')} name="worker.commission" type="number" value={w.commission ?? 0} onChange={e => setFieldValue('worker.commission', e.target.value)} fullWidth InputProps={{
-                      min: 0,
-                      max: 100,
-                      step: '5',
-                      endAdornment: <InputAdornment position="end">%</InputAdornment>
-                    }} disabled={w.contractType === 'FIXED FEE'} error={Boolean(touched.worker?.commission && errors.worker?.commission)} helperText={touched.worker?.commission && errors.worker?.commission ? errors.worker.commission : ''} />
-                        </Grid>
-                      </>}
-                  </Grid>
-                </Paper>
-              </TabPanel>
-
-              {/* TAB 1: Annonces */}
-              <TabPanel value={activeTab} index={1}>
-                <Paper variant="outlined" sx={{
-              p: 2
-            }}>
-                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{
-                mb: 2
-              }}>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <Typography variant="subtitle1" fontWeight={600}>
-                        {t('Listings access')}
-                      </Typography>
-                      <Tooltip title={t('Choose which listings this worker can access')}>
-                        <InfoOutlinedIcon sx={{
-                      fontSize: 18,
-                      color: 'text.secondary'
-                    }} />
-                      </Tooltip>
-                      {w.listingIds?.includes('*') || w.isOwnerAdmin || w.ownerAccess ? <Chip size="small" label={t('All listings (admin)')} sx={{
-                    bgcolor: SOJORI_COLORS.primary,
-                    color: 'white !important'
-                  }} /> : null}
-                    </Stack>
-
-                    {w.isOwnerAdmin || w.listingIds?.includes('*') ? <Button size="small" disabled>
-                        {t('All selected')}
-                      </Button> : isAllSelected ? <Button size="small" onClick={unselectAllOnPage} sx={{
-                  bgcolor: SOJORI_COLORS.gray[300],
-                  color: SOJORI_COLORS.gray[700],
-                  '&:hover': {
-                    bgcolor: SOJORI_COLORS.gray[400]
-                  }
-                }}>
-                        {t('Unselect all')}
-                      </Button> : <Button size="small" onClick={selectAllOnPage} sx={{
-                  bgcolor: SOJORI_COLORS.primary,
-                  color: 'white !important',
-                  '&:hover': {
-                    bgcolor: SOJORI_COLORS.primaryDark
-                  }
-                }}>
-                        {t('Select all')}
-                      </Button>}
-                  </Stack>
-
-                  <Box sx={{
-                mb: 2
-              }}>
-                    <TextField size="small" fullWidth placeholder={t('Type to search listings')} value={listingSearch} onChange={e => {
-                  setListingSearch(e.target.value);
-                  setListingsPage(0);
-                }} />
-                  </Box>
-
-                  <Box sx={{
-                display: 'grid',
-                gap: 2,
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: '1fr 1fr'
-                }
-              }}>
-                    {listingsLoading ? <Box sx={{
-                  p: 4,
-                  textAlign: 'center',
-                  color: 'text.secondary'
-                }}>
-                        {t('Loading...')}
-                      </Box> : listings.length === 0 ? <Box sx={{
-                  p: 3,
-                  color: 'text.secondary'
-                }}>
-                        {t('No listings found')}
-                      </Box> : listings.map(l => {
-                  const selected = w.isOwnerAdmin || w.listingIds?.includes('*') || Array.isArray(w.listingIds) && w.listingIds.includes(l._id);
-                  const img = l.listingImages?.[0]?.url || 'https://via.placeholder.com/240x160?text=Listing';
-                  return <Paper key={l._id} elevation={selected ? 3 : 0} sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '180px 1fr',
-                    alignItems: 'stretch',
-                    overflow: 'hidden',
-                    border: '1px solid',
-                    borderColor: selected ? SOJORI_COLORS.primary : 'divider',
-                    borderRadius: 2,
-                    cursor: w.isOwnerAdmin || w.listingIds?.includes('*') ? 'not-allowed' : 'pointer'
-                  }} onClick={() => toggleListing(l._id)}>
-                            <Box sx={{
-                      height: 120,
-                      backgroundImage: `url(${img})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center'
-                    }} />
-                            <Box sx={{
-                      p: 1.5,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}>
-                              <Box>
-                                <Typography variant="subtitle2" sx={{
-                          fontWeight: 600,
-                          fontSize: '0.875rem'
-                        }}>
-                                  {l.name}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {l?.propertyUnit}
-                                </Typography>
-                              </Box>
-                              <Box>
-                                {selected ? <CheckBoxIcon sx={{
-                          color: SOJORI_COLORS.primary
-                        }} /> : <CheckBoxOutlineBlankIcon color="disabled" />}
-                              </Box>
-                            </Box>
-                          </Paper>;
-                })}
-                  </Box>
-
-                  {listingsTotal > listingsLimit && <Stack direction="row" spacing={1} sx={{
-                mt: 2
-              }} justifyContent="flex-end" alignItems="center">
-                      <Button size="small" disabled={listingsPage === 0} onClick={() => setListingsPage(p => p - 1)}>
-                        {t('Prev')}
-                      </Button>
-                      <Typography variant="caption">
-                        {t('Page')} {listingsPage + 1}
-                      </Typography>
-                      <Button size="small" disabled={(listingsPage + 1) * listingsLimit >= listingsTotal} onClick={() => setListingsPage(p => p + 1)}>
-                        {t('Next')}
-                      </Button>
-                    </Stack>}
-                </Paper>
-              </TabPanel>
-
-              {/* TAB 2: Permissions (avec Accordions) */}
-              <TabPanel value={activeTab} index={2}>
-                <Paper variant="outlined" sx={{
-              p: 2
-            }}>
-                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{
-                mb: 2
-              }}>
-                    <Typography variant="subtitle1" fontWeight={600}>
-                      {t('Access permissions')}
-                    </Typography>
-                    <Autocomplete multiple size="small" options={[ADMIN_OPT, ...groups]} getOptionLabel={o => o?.name || ''} isOptionEqualToValue={(opt, val) => String(opt?._id) === String(val?._id)} value={selectedGroupOptions(w)} onChange={handleGroupsChange(w, setFieldValue, groups)} disableCloseOnSelect renderTags={(value, getTagProps) => value.map((opt, index) => <Chip {...getTagProps({
-                  index
-                })} key={opt._id} label={opt.name} size="small" />)} renderInput={params => <TextField {...params} label="Groups & roles" placeholder="Select groups..." size="small" />} sx={{
-                  minWidth: 320
-                }} />
-                  </Stack>
-
-                  {/* Switch Admin complet */}
-                  <Box sx={{
-                mb: 2
-              }}>
-                    <FormControlLabel control={<Switch checked={!!w.isOwnerAdmin || isWildcardGrants(w.featureGrants)} disabled sx={{
-                  '& .MuiSwitch-switchBase.Mui-checked': {
-                    color: SOJORI_COLORS.primary
-                  },
-                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                    bgcolor: SOJORI_COLORS.primary
-                  }
-                }} />} label={<Typography variant="body2" fontWeight={600}>
-                          {t('Admin complet (all permissions)')}
-                        </Typography>} />
-                  </Box>
-
-                  {/* Accordions par section */}
-                  {Object.entries(featureSections).map(([sectionName, features]) => <Accordion key={sectionName} defaultExpanded>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{
-                  bgcolor: SOJORI_COLORS.gray[50],
-                  '& .MuiAccordionSummary-content': {
-                    my: 0.5
-                  }
-                }}>
-                          <Typography variant="subtitle2" fontWeight={700}>
-                            {sectionName}
-                          </Typography>
-                        </AccordionSummary>
-                        <AccordionDetails sx={{
-                  p: 1
-                }}>
-                          {features.map((row, idx) => {
-                    const allowed = new Set(row.allowedActions || ACTIONS.map(a => a.key));
-                    const supportedKeys = ACTIONS.map(a => a.key).filter(k => allowed.has(k));
-                    const allChecked = supportedKeys.length > 0 && supportedKeys.every(k => hasAction(w.featureGrants, row.featureKey, k));
-                    const someChecked = supportedKeys.some(k => hasAction(w.featureGrants, row.featureKey, k));
-                    return <Box key={`feat-${row.featureKey}-${idx}`} sx={{
-                      borderBottom: '1px solid',
-                      borderColor: 'divider',
-                      py: 0.5
-                    }}>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                  <Typography variant="body2" sx={{
-                          fontSize: '0.75rem',
-                          fontWeight: 500,
-                          pl: row.indent ? 2 : 0
-                        }}>
-                                    {row.label}
-                                  </Typography>
-                                  <Stack direction="row" spacing={0.5}>
-                                    {ACTIONS.map(a => {
-                            const supported = allowed.has(a.key);
-                            return <Box key={a.key}>
-                                          {supported ? <FormControlLabel control={<Checkbox size="small" checked={hasAction(w.featureGrants, row.featureKey, a.key)} disabled={!!w.isOwnerAdmin} onChange={(_, v) => setFieldValue('worker.featureGrants', setAction(w.featureGrants, row.featureKey, a.key, v))} sx={{
-                                '&.Mui-checked': {
-                                  color: SOJORI_COLORS.primary
-                                }
-                              }} />} label={<Typography variant="caption" sx={{
-                                fontSize: '0.7rem'
-                              }}>
-                                                  {a.label}
-                                                </Typography>} sx={{
-                                mr: 0
-                              }} /> : null}
-                                        </Box>;
-                          })}
-                                    <FormControlLabel control={<Checkbox size="small" checked={allChecked} indeterminate={!allChecked && someChecked} disabled={!!w.isOwnerAdmin || supportedKeys.length === 0} onChange={(_, v) => setFieldValue('worker.featureGrants', setRowAllLimited(w.featureGrants, row.featureKey, v, supportedKeys))} sx={{
-                            '&.Mui-checked': {
-                              color: SOJORI_COLORS.primary
-                            }
-                          }} />} label={<Typography variant="caption" sx={{
-                            fontSize: '0.7rem',
-                            color: 'text.secondary'
-                          }}>
-                                          All
-                                        </Typography>} sx={{
-                            mr: 0
-                          }} />
-                                  </Stack>
-                                </Stack>
-                              </Box>;
-                  })}
-                        </AccordionDetails>
-                      </Accordion>)}
-                </Paper>
-              </TabPanel>
-
-              {/* TAB 3: Notifications (avec Accordions) */}
-              <TabPanel value={activeTab} index={3}>
-                <Paper variant="outlined" sx={{
-              p: 2
-            }}>
-                  <Typography variant="subtitle1" fontWeight={600} sx={{
-                mb: 2
-              }}>
-                    {t('Notifications')}
-                  </Typography>
-
-                  {Object.entries(groupEventsByCategory(NOTIFICATION_EVENTS)).map(([category, evts]) => <Accordion key={category} defaultExpanded>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{
-                  bgcolor: SOJORI_COLORS.gray[50],
-                  '& .MuiAccordionSummary-content': {
-                    my: 0.5
-                  }
-                }}>
-                          <Typography variant="subtitle2" fontWeight={700}>
-                            {t(category.charAt(0).toUpperCase() + category.slice(1))}
-                          </Typography>
-                        </AccordionSummary>
-                        <AccordionDetails sx={{
-                  p: 1
-                }}>
-                          <Grid container spacing={1}>
-                            {evts.map(ev => <Grid item xs={12} sm={6} md={4} key={ev.id}>
-                                <FormControlLabel control={<Checkbox size="small" checked={notifIsOn(w.notificationConfig, ev.key, 'dashboard', ev.defaultChannels)} onChange={(_, v) => setFieldValue('worker.notificationConfig', notifSet(w.notificationConfig, ev.key, 'dashboard', v, ev.defaultChannels))} sx={{
-                        '&.Mui-checked': {
-                          color: SOJORI_COLORS.primary
-                        }
-                      }} />} label={<Typography variant="body2" sx={{
-                        fontSize: '0.75rem'
-                      }}>
-                                      {t(ev.name)}
-                                    </Typography>} />
-                              </Grid>)}
+                    ) : null}
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <TextField sx={fieldSx} label={t('First Name')} name="worker.firstName" value={w.firstName || ''} onChange={handleChange} onBlur={handleBlur} error={te('worker.firstName')} helperText={he('worker.firstName')} fullWidth />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <TextField sx={fieldSx} label={t('Last Name')} name="worker.lastName" value={w.lastName || ''} onChange={handleChange} onBlur={handleBlur} error={te('worker.lastName')} helperText={he('worker.lastName')} fullWidth />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <TextField sx={fieldSx} label="Email" name="worker.email" value={w.email || ''} fullWidth disabled />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <TextField sx={fieldSx} label={t('Phone')} name="worker.phone" value={w.phone || ''} onChange={handleChange} onBlur={e => setFieldValue('worker.phone', normalizePhone(e.target.value))} error={te('worker.phone')} helperText={he('worker.phone')} fullWidth />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <TextField sx={fieldSx} label={t('Whatsapp')} name="worker.whatsapp" value={w.whatsapp || ''} onChange={handleChange} onBlur={e => setFieldValue('worker.whatsapp', normalizePhone(e.target.value))} error={te('worker.whatsapp')} helperText={he('worker.whatsapp')} fullWidth />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 6 }}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={!!w.banned}
+                              onChange={(_, v) => setFieldValue('worker.banned', v)}
+                              sx={{
+                                '& .MuiSwitch-switchBase.Mui-checked': { color: WF.error },
+                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: WF.error },
+                              }}
+                            />
+                          }
+                          label={t('Banned')}
+                        />
+                      </Grid>
+                      {w.workerTypeOwner ? (
+                        <>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField sx={fieldSx} select label={t('Contract type')} name="worker.contractType" value={w.contractType || ''} onChange={e => {
+                              const val = e.target.value;
+                              setFieldValue('worker.contractType', val);
+                              if (val === 'FIXED FEE') setFieldValue('worker.commission', 0);
+                            }} error={te('worker.contractType')} helperText={he('worker.contractType')} fullWidth>
+                              {CONTRACT_TYPES.map(opt => (
+                                <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+                              ))}
+                            </TextField>
                           </Grid>
-                        </AccordionDetails>
-                      </Accordion>)}
-                </Paper>
-              </TabPanel>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField sx={fieldSx} label={t('Commission (%)')} name="worker.commission" type="number" value={w.commission ?? 0} onChange={e => {
+                              const val = e.target.value;
+                              setFieldValue('worker.commission', val === '' ? '' : Number(val));
+                            }} slotProps={{
+                              input: {
+                                endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                              },
+                              htmlInput: { min: 0, max: 100, step: '5' },
+                            }} disabled={w.contractType === 'FIXED FEE'} error={te('worker.commission')} helperText={w.contractType === 'FIXED FEE' ? t('Commission not required for fixed fee') : he('worker.commission')} fullWidth />
+                          </Grid>
+                        </>
+                      ) : null}
+                    </Grid>
+                  </WorkerFormSection>
 
-              {/* Footer buttons */}
-              <Stack direction="row" spacing={1} sx={{
-            mt: 2
-          }} justifyContent="flex-end">
-                <Button variant="contained" onClick={() => navigate(-1)} sx={{
-              bgcolor: SOJORI_COLORS.gray[300],
-              color: SOJORI_COLORS.gray[700],
-              '&:hover': {
-                bgcolor: SOJORI_COLORS.gray[400]
-              },
-              textTransform: 'none'
-            }}>
-                  {t('Cancel')}
-                </Button>
-                <Button variant="contained" onClick={() => document.getElementById('worker-form')?.requestSubmit()} sx={{
-              bgcolor: SOJORI_COLORS.primary,
-              color: 'white !important',
-              '&:hover': {
-                bgcolor: SOJORI_COLORS.primaryDark
-              },
-              textTransform: 'none'
-            }}>
-                  {t('Save')}
-                </Button>
-              </Stack>
-            </Form>;
+                  <WorkerFormSection
+                    id="listings-access"
+                    icon="🏠"
+                    title="Accès annonces"
+                    hint="Par ville (toutes les annonces) ou annonce par annonce — sélections affichées en pastilles"
+                  >
+                    <WorkerListingPicker
+                      cities={cities}
+                      citiesLoading={citiesLoading}
+                      selectedCityIds={w.listingCityIds}
+                      onToggleCity={toggleCity}
+                      onRemoveCity={removeCity}
+                      listings={listings}
+                      loading={listingsLoading}
+                      selectedIds={w.listingIds}
+                      listingLabels={listingLabels}
+                      disabled={listingAccessDisabled}
+                      search={listingSearch}
+                      onSearchChange={(v) => {
+                        setListingSearch(v);
+                        setListingsPage(0);
+                      }}
+                      onToggle={toggleListing}
+                      onRemoveListing={removeListing}
+                      page={listingsPage}
+                      total={listingsTotal}
+                      limit={listingsLimit}
+                      onPrev={() => setListingsPage((p) => p - 1)}
+                      onNext={() => setListingsPage((p) => p + 1)}
+                      t={t}
+                    />
+                  </WorkerFormSection>
+
+                  <WorkerFormSection
+                    id="access-permissions"
+                    icon="🔐"
+                    title="Accès dashboard"
+                    hint="Admin complet ou toggles par section sidebar (ex. Réservations → Liste, Planning…)"
+                  >
+                    <WorkerDashboardAccessPanel
+                      worker={w}
+                      setFieldValue={setFieldValue}
+                      grants={w.featureGrants}
+                      onGrantsChange={(next) => setFieldValue('worker.featureGrants', next)}
+                    />
+                  </WorkerFormSection>
+
+                  <WorkerFormSection id="notifications" icon="🔔" title="Notifications" hint="Toutes les alertes ou sélection directe par événement">
+                    <WorkerNotificationsPanel
+                      events={NOTIFICATION_EVENTS}
+                      config={w.notificationConfig}
+                      notificationsAll={!!w.notificationsAll}
+                      onNotificationsAllChange={(on) => {
+                        if (on) {
+                          if (!w.notificationsAll) {
+                            setFieldValue('worker._previousNotificationConfig', w.notificationConfig || []);
+                          }
+                          setFieldValue('worker.notificationsAll', true);
+                          setFieldValue(
+                            'worker.notificationConfig',
+                            buildAllNotificationsConfig(NOTIFICATION_EVENTS, 'dashboard'),
+                          );
+                          return;
+                        }
+                        setFieldValue('worker.notificationsAll', false);
+                        setFieldValue('worker.notificationConfig', w._previousNotificationConfig || []);
+                        setFieldValue('worker._previousNotificationConfig', []);
+                      }}
+                      isOn={(key, ch, defaults) => notifIsOn(w.notificationConfig, key, ch, defaults)}
+                      onToggle={(key, ch, v, defaults) =>
+                        setFieldValue(
+                          'worker.notificationConfig',
+                          notifSet(w.notificationConfig, key, ch, v, defaults),
+                        )
+                      }
+                      t={t}
+                    />
+                  </WorkerFormSection>
+
+                  <WorkerFormActions
+                    onCancel={() => navigate(-1)}
+                    onSave={() => document.getElementById('worker-form')?.requestSubmit()}
+                    saveLabel={t('Save')}
+                  />
+                </>
+              }
+              nav={
+                <WorkerFormNav
+                  sections={WORKER_FORM_SECTIONS}
+                  activeId={active}
+                  onJump={jumpSection}
+                />
+              }
+            />
+          </Form>
+        );
       }}
       </Formik>
-    </Container>;
+
+      <WorkerPasswordDialog
+        open={passwordDialogOpen}
+        onClose={closePasswordDialog}
+        workerEmail={accountFromApi?.email}
+        loading={passwordLoading}
+        onSubmit={handlePasswordSubmit}
+        result={passwordResult}
+        onEditAgain={() => setPasswordResult(null)}
+      />
+
+      <DeleteUserDialog
+        open={deleteDialogOpen}
+        onClose={() => !deleteLoading && setDeleteDialogOpen(false)}
+        title="Supprimer le worker"
+        message={`Supprimer ${workerDisplayName} ? Le compte sera désactivé (suppression logique) et ne pourra plus se connecter.`}
+        btnTxt={deleteLoading ? 'Suppression…' : 'Supprimer'}
+        functionToExecute={handleDeleteWorker}
+      />
+    </WorkerFormPage>
+  );
 }

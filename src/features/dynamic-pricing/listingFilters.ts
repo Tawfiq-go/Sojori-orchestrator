@@ -31,7 +31,7 @@ export function getDataGapReason(row: PortfolioRow): DataGapReason {
 
 export const DATA_GAP_LABELS: Record<DataGapReason, string> = {
   ok: 'Complet',
-  no_airbnb: 'Airbnb à connecter',
+  no_airbnb: 'Annonce à connecter',
   no_snapshot: '⟳ snapshot requis',
   staging: 'Hors prod',
 };
@@ -77,7 +77,7 @@ export function computeDataMaturity(
     },
     {
       id: 'airbnb',
-      label: 'Airbnb',
+      label: 'Canal',
       num: withAirbnb,
       den: exploitableCount,
       hint: 'ID connecté (legacy channels)',
@@ -87,7 +87,7 @@ export function computeDataMaturity(
       label: 'Snapshots marché',
       num: withSnapshot,
       den: withAirbnb || exploitableCount,
-      hint: withAirbnb > 0 ? 'Parmi les biens Airbnb' : 'Aucun Airbnb dans la ville',
+      hint: withAirbnb > 0 ? 'Parmi les annonces connectées' : 'Aucune annonce connectée dans la ville',
     },
   ];
 

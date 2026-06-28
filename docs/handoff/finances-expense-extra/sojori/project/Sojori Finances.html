@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sojori · Finances · Atelier 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="finances/finances.css">
+</head>
+<body data-role="pm">
+
+<!-- ═══════════ TOPBAR ═══════════ -->
+<div class="topbar">
+  <div class="sb-brand" style="border:0;padding:0;width:230px">
+    <div class="mark">S</div>
+    <div class="nm">Sojori<span>Orchestrator</span></div>
+  </div>
+  <div class="tb-search"><span>🔎</span><input placeholder="Rechercher un propriétaire, une dépense, un rapport…"></div>
+  <div class="tb-right">
+    <div class="role-switch" id="roleSwitch">
+      <button class="on" data-role="pm"><span class="em">🏠</span>PM (Owner)</button>
+      <button data-role="landlord"><span class="em">👤</span>Propriétaire</button>
+    </div>
+    <button class="tb-ic">🔔</button>
+    <div class="tb-av" id="tbAv">K</div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- ═══════════ SIDEBAR ═══════════ -->
+  <aside class="sidebar">
+    <div class="sb-prop">
+      <div class="ic">🏠</div>
+      <div class="info"><div class="lbl">Portefeuille</div><div class="val">Tous les listings</div></div>
+      <span class="chev">▾</span>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-group pm-only">
+        <div class="sb-group-label"><span class="dot"></span>Pilotage</div>
+        <button class="sb-item"><span class="ic">◧</span><span class="lbl">Tableau de bord</span></button>
+        <button class="sb-item"><span class="ic">📅</span><span class="lbl">Réservations</span><span class="badge count">12</span></button>
+        <button class="sb-item"><span class="ic">✅</span><span class="lbl">Tâches</span><span class="badge alert">3</span></button>
+        <button class="sb-item"><span class="ic">🏡</span><span class="lbl">Annonces</span></button>
+      </div>
+      <div class="sb-group">
+        <div class="sb-group-label"><span class="dot"></span>Finances</div>
+        <button class="sb-item pm-only" data-nav="landlords"><span class="ic">👤</span><span class="lbl">Propriétaires</span></button>
+        <button class="sb-item" data-nav="ledger"><span class="ic">💸</span><span class="lbl">Dépenses &amp; extras</span></button>
+        <button class="sb-item on" data-nav="reports"><span class="ic">📊</span><span class="lbl">Rapports P&amp;L</span></button>
+        <button class="sb-item pm-only"><span class="ic">💰</span><span class="lbl">Revenus &amp; versements</span></button>
+      </div>
+      <div class="sb-group pm-only">
+        <div class="sb-group-label"><span class="dot"></span>Paramètres</div>
+        <button class="sb-item"><span class="ic">⚙️</span><span class="lbl">Configuration</span></button>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main">
+
+  <!-- ╔══════════ ÉCRAN 1 · PROPRIÉTAIRES ══════════╗ -->
+  <section class="page pm-only" data-page="landlords">
+    <div class="ph">
+      <div>
+        <div class="eyebrow">Finances · /finances/landlords</div>
+        <h1>Propriétaires</h1>
+        <p class="sub">Les propriétaires de vos biens, leur contrat de gestion et leurs accès en lecture.</p>
+      </div>
+      <div class="ph-actions"><button class="btn btn-prim" onclick="openLandlord()">+ Inviter un propriétaire</button></div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="k">👤 Propriétaires actifs</div><div class="v">9</div></div>
+      <div class="kpi gold"><div class="k">📄 Contrats au %</div><div class="v">6</div><div class="d" style="color:var(--t3)">3 au forfait fixe</div></div>
+      <div class="kpi"><div class="k">🏡 Listings rattachés</div><div class="v">47<small>/50</small></div><div class="d" style="color:var(--rose)">3 sans propriétaire</div></div>
+      <div class="kpi green"><div class="k">✉️ Invitations en attente</div><div class="v">2</div></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-in"><span>🔎</span><input placeholder="Nom ou email…"></div>
+      <div class="filter-sel">Contrat : tous</div>
+      <div class="filter-sel">Statut : tous</div>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th>Propriétaire</th><th>Contact</th><th>Contrat</th><th class="num">Listings</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          <tr class="clk" onclick="openLandlord('Mehdi Alaoui')">
+            <td><div class="who"><div class="av-init">MA</div><div><div class="cell-main">Mehdi Alaoui</div><div class="cell-sub">Riad Collection</div></div></div></td>
+            <td><div class="mono" style="font-size:11.5px">mehdi@…ma<br>+212 6 61 …</div></td>
+            <td><span class="bdg gold">% net après OTA · 18%</span></td>
+            <td class="num"><b>12</b></td>
+            <td><span class="bdg green"><span class="dot"></span>Actif</span></td>
+            <td><span style="color:var(--t4)">›</span></td>
+          </tr>
+          <tr class="clk" onclick="openLandlord('Sophie Bernard')">
+            <td><div class="who"><div class="av-init" style="background:linear-gradient(135deg,#9db4d4,#42618a)">SB</div><div><div class="cell-main">Sophie Bernard</div><div class="cell-sub">Investisseur · France</div></div></div></td>
+            <td><div class="mono" style="font-size:11.5px">sophie@…fr<br>+33 6 12 …</div></td>
+            <td><span class="bdg info">Forfait fixe · 4 500 MAD/mois</span></td>
+            <td class="num"><b>3</b></td>
+            <td><span class="bdg green"><span class="dot"></span>Actif</span></td>
+            <td><span style="color:var(--t4)">›</span></td>
+          </tr>
+          <tr class="clk" onclick="openLandlord('Karim Tazi')">
+            <td><div class="who"><div class="av-init" style="background:linear-gradient(135deg,#c9a87a,#8a6a42)">KT</div><div><div class="cell-main">Karim Tazi</div><div class="cell-sub">Particulier</div></div></div></td>
+            <td><div class="mono" style="font-size:11.5px">karim.t@…ma<br>+212 6 62 …</div></td>
+            <td><span class="bdg gold">% brut · 20%</span></td>
+            <td class="num"><b>8</b></td>
+            <td><span class="bdg green"><span class="dot"></span>Actif</span></td>
+            <td><span style="color:var(--t4)">›</span></td>
+          </tr>
+          <tr class="clk" onclick="openLandlord('Yasmine Cherkaoui')">
+            <td><div class="who"><div class="av-init" style="background:linear-gradient(135deg,#cda3c4,#7a4f74)">YC</div><div><div class="cell-main">Yasmine Cherkaoui</div><div class="cell-sub">Particulier</div></div></div></td>
+            <td><div class="mono" style="font-size:11.5px">yasmine@…ma<br>+212 6 63 …</div></td>
+            <td><span class="bdg gold">% net après OTA · 15%</span></td>
+            <td class="num"><b>5</b></td>
+            <td><span class="bdg green"><span class="dot"></span>Actif</span></td>
+            <td><span style="color:var(--t4)">›</span></td>
+          </tr>
+          <tr class="clk" onclick="openLandlord('Thomas Petit')">
+            <td><div class="who"><div class="av-init" style="background:linear-gradient(135deg,#a9c4a3,#4f7a52)">TP</div><div><div class="cell-main">Thomas Petit</div><div class="cell-sub">Investisseur · France</div></div></div></td>
+            <td><div class="mono" style="font-size:11.5px">thomas@…fr<br>+33 7 88 …</div></td>
+            <td><span class="bdg gray">— à définir</span></td>
+            <td class="num"><b>0</b></td>
+            <td><span class="bdg gold"><span class="dot"></span>Invité</span></td>
+            <td><span style="color:var(--t4)">›</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ╔══════════ ÉCRAN 2 · DÉPENSES & EXTRAS ══════════╗ -->
+  <section class="page" data-page="ledger">
+    <div class="ph">
+      <div>
+        <div class="eyebrow">Finances · /finances/ledger</div>
+        <h1>Dépenses &amp; extras</h1>
+        <p class="sub">Toutes les dépenses et recettes additionnelles, par listing et par réservation.</p>
+      </div>
+      <div class="ph-actions">
+        <button class="btn btn-ghost pm-only" onclick="openRecurring()">🔁 Récurrences</button>
+        <button class="btn btn-ghost pm-only" onclick="openBundle()">✨ Service avec marge</button>
+        <button class="btn btn-prim pm-only" onclick="openExpense()">+ Dépense / Extra</button>
+      </div>
+    </div>
+
+    <div class="ro-banner"><div class="ic">👁</div><div>Vous consultez vos finances en <b>lecture seule</b>. Les dépenses et extras sont saisis par votre gestionnaire.</div></div>
+
+    <div class="kpis">
+      <div class="kpi rose"><div class="k">💸 Dépenses · mars</div><div class="v">12 840</div><div class="d" style="color:var(--t3)">MAD · 34 lignes</div></div>
+      <div class="kpi green"><div class="k">✨ Extras encaissés</div><div class="v">8 600</div><div class="d" style="color:var(--t3)">MAD · 21 lignes</div></div>
+      <div class="kpi gold"><div class="k">📈 Marge services</div><div class="v">+3 200</div><div class="d" style="color:var(--t3)">MAD · bundles</div></div>
+      <div class="kpi"><div class="k">🔁 Récurrences actives</div><div class="v">4</div><div class="d" style="color:var(--t3)">prochaine : 1 avr.</div></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-in"><span>🔎</span><input placeholder="Libellé…"></div>
+      <div class="filter-sel act">Mars 2026</div>
+      <div class="filter-sel">Listing : tous</div>
+      <div class="filter-sel">Type : tous</div>
+      <div class="filter-sel">Catégorie</div>
+      <div class="filter-sel">Payé par</div>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th>Date</th><th>Libellé</th><th>Type</th><th class="num">Montant</th><th>Catégorie</th><th>Listing / Résa</th><th>Payé par</th></tr></thead>
+        <tbody id="ledgerRows">
+          <tr><td class="mono">28/03</td><td class="cell-main">Ménage payant — départ Villa Majorelle</td><td><span class="bdg green">Extra</span></td><td class="num amt pos">+300</td><td><span class="bdg gray">Ménage payant</span></td><td><div class="cell-main" style="font-size:12px">Villa Majorelle</div><div class="cell-sub">#RC-3391</div></td><td><span class="bdg gold">Voyageur</span></td></tr>
+          <tr><td class="mono">28/03</td><td class="cell-main">Prestation ménage — Fatima M.</td><td><span class="bdg rose">Dépense</span></td><td class="num amt neg">−200</td><td><span class="bdg gray">Ménage payant</span></td><td><div class="cell-main" style="font-size:12px">Villa Majorelle</div><div class="cell-sub">#RC-3391</div></td><td><span class="bdg info">PM</span></td></tr>
+          <tr><td class="mono">26/03</td><td class="cell-main">Navette aéroport — arrivée</td><td><span class="bdg green">Extra</span></td><td class="num amt pos">+450</td><td><span class="bdg gray">Navette</span></td><td><div class="cell-main" style="font-size:12px">Riad Yasmina</div><div class="cell-sub">#RC-3384</div></td><td><span class="bdg gold">Voyageur</span></td></tr>
+          <tr><td class="mono">25/03</td><td class="cell-main">Abonnement Internet — mars</td><td><span class="bdg rose">Dépense</span></td><td class="num amt neg">−320</td><td><span class="bdg gray">Internet</span></td><td><div class="cell-main" style="font-size:12px">Appart CFC</div><div class="cell-sub">récurrent</div></td><td><span class="bdg info">Propriétaire</span></td></tr>
+          <tr><td class="mono">22/03</td><td class="cell-main">Réparation chauffe-eau</td><td><span class="bdg rose">Dépense</span></td><td class="num amt neg">−780</td><td><span class="bdg gray">Maintenance</span></td><td><div class="cell-main" style="font-size:12px">Dar Essaouira</div><div class="cell-sub">—</div></td><td><span class="bdg info">PM</span></td></tr>
+          <tr><td class="mono">20/03</td><td class="cell-main">Courses d'accueil (panier bienvenue)</td><td><span class="bdg green">Extra</span></td><td class="num amt pos">+180</td><td><span class="bdg gray">Conciergerie</span></td><td><div class="cell-main" style="font-size:12px">Villa Majorelle</div><div class="cell-sub">#RC-3372</div></td><td><span class="bdg gold">Voyageur</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ╔══════════ ÉCRAN 3 · RAPPORTS P&L ══════════╗ -->
+  <section class="page on" data-page="reports">
+    <div class="ph">
+      <div>
+        <div class="eyebrow">Finances · /finances/reports</div>
+        <h1>Rapports P&amp;L</h1>
+        <p class="sub">Le compte de résultat par propriétaire et par période. Brouillon, puis publication figée.</p>
+      </div>
+      <div class="ph-actions"><button class="btn btn-prim pm-only" onclick="openWizard()">+ Générer un rapport</button></div>
+    </div>
+
+    <div class="ro-banner"><div class="ic">👁</div><div>Vous consultez les rapports <b>publiés</b> par votre gestionnaire. Lecture et téléchargement HTML uniquement.</div></div>
+
+    <div class="toolbar">
+      <div class="search-in"><span>🔎</span><input placeholder="Nom du rapport…"></div>
+      <div class="filter-sel">Statut : tous</div>
+      <div class="filter-sel pm-only">Propriétaire</div>
+      <div class="filter-sel">Période</div>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th>Rapport</th><th>Période</th><th class="pm-only">Propriétaire</th><th class="num">Listings</th><th>Statut</th><th class="num">Net propriétaire</th><th></th></tr></thead>
+        <tbody>
+          <tr class="clk" onclick="openReport('published')">
+            <td><div class="cell-main">Mars 2026 — Villa Majorelle</div><div class="cell-sub">publié le 02/04</div></td>
+            <td class="mono">01–31 mars</td>
+            <td class="pm-only">Mehdi Alaoui</td>
+            <td class="num"><b>1</b></td>
+            <td><span class="bdg green"><span class="dot"></span>Publié</span></td>
+            <td class="num amt" style="color:var(--pd)">18 240</td>
+            <td><span style="color:var(--t4)">›</span></td>
+          </tr>
+          <tr class="clk pm-only" onclick="openReport('draft')">
+            <td><div class="cell-main">Mars 2026 — Portefeuille Tazi</div><div class="cell-sub">modifié il y a 2 h</div></td>
+            <td class="mono">01–31 mars</td>
+            <td class="pm-only">Karim Tazi</td>
+            <td class="num"><b>8</b></td>
+            <td><span class="bdg gold"><span class="dot"></span>Brouillon</span></td>
+            <td class="num amt" style="color:var(--t3)">~ 64 100</td>
+            <td><span style="color:var(--t4)">›</span></td>
+          </tr>
+          <tr class="clk" onclick="openReport('published')">
+            <td><div class="cell-main">Février 2026 — Villa Majorelle</div><div class="cell-sub">publié le 03/03</div></td>
+            <td class="mono">01–28 févr.</td>
+            <td class="pm-only">Mehdi Alaoui</td>
+            <td class="num"><b>1</b></td>
+            <td><span class="bdg green"><span class="dot"></span>Publié</span></td>
+            <td class="num amt" style="color:var(--pd)">15 980</td>
+            <td><span style="color:var(--t4)">›</span></td>
+          </tr>
+          <tr class="clk" onclick="openReport('published')">
+            <td><div class="cell-main">T1 2026 — Appart CFC</div><div class="cell-sub">publié le 05/04</div></td>
+            <td class="mono">janv.–mars</td>
+            <td class="pm-only">Sophie Bernard</td>
+            <td class="num"><b>1</b></td>
+            <td><span class="bdg green"><span class="dot"></span>Publié</span></td>
+            <td class="num amt" style="color:var(--pd)">22 410</td>
+            <td><span style="color:var(--t4)">›</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ╔══════════ DÉTAIL RAPPORT (page pleine) ══════════╗ -->
+  <section class="page" data-page="report-detail">
+    <button class="btn btn-ghost" style="margin-bottom:16px" onclick="nav('reports')">← Retour aux rapports</button>
+    <div class="ph" style="align-items:center">
+      <div>
+        <div class="eyebrow">Finances · /finances/reports/<span id="rpId">vm-2026-03</span></div>
+        <h1 id="rpTitle">Mars 2026 — Villa Majorelle</h1>
+        <p class="sub" id="rpMeta">Mehdi Alaoui · 01–31 mars 2026 · 1 listing · MAD</p>
+      </div>
+      <div class="ph-actions">
+        <span class="bdg green lg" id="rpStatus" style="margin-right:4px"><span class="dot"></span>Publié</span>
+        <button class="btn btn-su pm-only" id="rpPublishBtn" style="display:none" onclick="nav('reports')">Publier ✓</button>
+        <a class="btn btn-ghost" href="Sojori Rapport P&L.html" target="_blank">↗ Voir HTML</a>
+        <a class="btn btn-ghost" href="Sojori Rapport P&L.html" target="_blank" download>⬇ Télécharger</a>
+        <button class="btn btn-dark" onclick="window.open('Sojori Rapport P&L.html','_blank')">🖨 Imprimer / PDF</button>
+      </div>
+    </div>
+
+    <div class="inote info" id="rpBanner" style="margin-bottom:18px"><span class="i">🔒</span><div>Rapport <b>publié le 02/04/2026</b> par votre gestionnaire. Les montants sont figés (snapshot).</div></div>
+
+    <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+      <div class="kpi green"><div class="k">🏠 Revenus + extras</div><div class="v">26 080 <small>MAD</small></div></div>
+      <div class="kpi rose"><div class="k">🔻 Total charges</div><div class="v">−7 840 <small>MAD</small></div></div>
+      <div class="kpi gold"><div class="k">★ Net propriétaire</div><div class="v">18 240 <small>MAD</small></div></div>
+    </div>
+
+    <div class="rp-cols">
+      <!-- synthèse -->
+      <div class="card">
+        <div class="card-h"><span class="ct">Synthèse P&amp;L</span><span class="sub">période figée</span></div>
+        <div class="card-b" style="padding:8px 18px"><div class="pl-lines">
+          <div class="pl-line plus"><span class="lbl"><span class="ic">🏠</span>Revenus bruts</span><span class="v">+24 800 MAD</span></div>
+          <div class="pl-line plus"><span class="lbl"><span class="ic">✨</span>Extras encaissés</span><span class="v">+1 280 MAD</span></div>
+          <div class="pl-line minus"><span class="lbl"><span class="ic">🔻</span>Commission OTA</span><span class="v">−3 720 MAD</span></div>
+          <div class="pl-line minus"><span class="lbl"><span class="ic">💸</span>Charges PM</span><span class="v">−980 MAD</span></div>
+          <div class="pl-line minus"><span class="lbl"><span class="ic">🧰</span>Charges propriétaire</span><span class="v">−640 MAD</span></div>
+          <div class="pl-line minus"><span class="lbl"><span class="ic">📊</span>Commission gestion PM (18%)</span><span class="v">−2 460 MAD</span></div>
+          <div class="pl-line net"><span class="lbl">Net propriétaire</span><span class="v">18 240 MAD</span></div>
+        </div></div>
+      </div>
+      <!-- parties / contrat -->
+      <div class="card">
+        <div class="card-h"><span class="ct">Parties &amp; contrat</span></div>
+        <div class="card-b">
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div><div class="flabel" style="margin-bottom:6px">Propriétaire</div><div class="who"><div class="av-init">MA</div><div><div class="cell-main">Mehdi Alaoui</div><div class="cell-sub">Riad Collection · Marrakech</div></div></div></div>
+            <div><div class="flabel" style="margin-bottom:6px">Gestionnaire (PM)</div><div class="who"><div class="av-init" style="background:linear-gradient(135deg,#c9a87a,#8a6a42)">KB</div><div><div class="cell-main">Karim Benali — Sojori</div><div class="cell-sub">karim@riad-collection.ma</div></div></div></div>
+            <div class="inote gold"><span class="i">📊</span><div>Contrat : <b>commission 18%</b> · base <b>net après OTA</b>. Calculée sur le revenu net des commissions plateformes.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- réservations -->
+    <div class="card">
+      <div class="card-h"><span class="ct">Détail des réservations</span><span class="sub">4 séjours · 19 nuits</span></div>
+      <table>
+        <thead><tr><th>Réf.</th><th>Voyageur</th><th>Canal</th><th>Séjour</th><th class="num">Nuits</th><th class="num">Brut</th><th class="num">Comm. OTA</th><th class="num">Net</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">RC-3391</td><td class="cell-main">Imane B.</td><td><span class="bdg rose">Airbnb</span></td><td class="mono">03–08 mars</td><td class="num">5</td><td class="num mono">7 200</td><td class="num mono" style="color:var(--rose)">−1 080</td><td class="num amt">6 120</td></tr>
+          <tr><td class="mono">RC-3372</td><td class="cell-main">Thomas &amp; Julie</td><td><span class="bdg info">Booking</span></td><td class="mono">11–15 mars</td><td class="num">4</td><td class="num mono">5 600</td><td class="num mono" style="color:var(--rose)">−840</td><td class="num amt">4 760</td></tr>
+          <tr><td class="mono">RC-3384</td><td class="cell-main">Sara E.</td><td><span class="bdg rose">Airbnb</span></td><td class="mono">18–24 mars</td><td class="num">6</td><td class="num mono">7 800</td><td class="num mono" style="color:var(--rose)">−1 170</td><td class="num amt">6 630</td></tr>
+          <tr><td class="mono">RC-3399</td><td class="cell-main">Marco R.</td><td><span class="bdg gold">Direct</span></td><td class="mono">27–31 mars</td><td class="num">4</td><td class="num mono">4 200</td><td class="num mono" style="color:var(--rose)">−630</td><td class="num amt">3 570</td></tr>
+        </tbody>
+        <tfoot><tr style="background:var(--alt)"><td colspan="4" style="padding:11px 16px;font-family:var(--mono);font-size:11px;font-weight:800">TOTAL</td><td class="num mono" style="padding:11px 16px;font-weight:800">19</td><td class="num mono" style="padding:11px 16px;font-weight:800">24 800</td><td class="num mono" style="padding:11px 16px;font-weight:800;color:var(--rose)">−3 720</td><td class="num mono" style="padding:11px 16px;font-weight:800">21 080</td></tr></tfoot>
+      </table>
+    </div>
+
+    <!-- dépenses & extras -->
+    <div class="card">
+      <div class="card-h"><span class="ct">Dépenses &amp; extras de la période</span><span class="sub">8 lignes</span></div>
+      <table>
+        <thead><tr><th>Date</th><th>Libellé</th><th>Type</th><th>Catégorie</th><th>Payé / encaissé par</th><th class="num">Montant</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">28/03</td><td class="cell-main">Ménage payant — départ</td><td><span class="bdg green">Extra</span></td><td>Ménage payant</td><td><span class="bdg gold">Voyageur</span></td><td class="num amt pos">+300</td></tr>
+          <tr><td class="mono">28/03</td><td class="cell-main">Prestation ménage — Fatima M.</td><td><span class="bdg rose">Dépense</span></td><td>Ménage payant</td><td><span class="bdg info">PM</span></td><td class="num amt neg">−200</td></tr>
+          <tr><td class="mono">26/03</td><td class="cell-main">Navette aéroport — arrivée</td><td><span class="bdg green">Extra</span></td><td>Navette</td><td><span class="bdg gold">Voyageur</span></td><td class="num amt pos">+450</td></tr>
+          <tr><td class="mono">25/03</td><td class="cell-main">Abonnement Internet — mars</td><td><span class="bdg rose">Dépense</span></td><td>Internet</td><td><span class="bdg gray">Propriétaire</span></td><td class="num amt neg">−320</td></tr>
+          <tr><td class="mono">20/03</td><td class="cell-main">Courses d'accueil</td><td><span class="bdg green">Extra</span></td><td>Conciergerie</td><td><span class="bdg gold">Voyageur</span></td><td class="num amt pos">+180</td></tr>
+          <tr><td class="mono">14/03</td><td class="cell-main">Maintenance — plomberie</td><td><span class="bdg rose">Dépense</span></td><td>Maintenance</td><td><span class="bdg gray">Propriétaire</span></td><td class="num amt neg">−320</td></tr>
+          <tr><td class="mono">09/03</td><td class="cell-main">Petit-déjeuner d'accueil</td><td><span class="bdg green">Extra</span></td><td>Conciergerie</td><td><span class="bdg gold">Voyageur</span></td><td class="num amt pos">+350</td></tr>
+          <tr><td class="mono">06/03</td><td class="cell-main">Produits ménagers &amp; linge</td><td><span class="bdg rose">Dépense</span></td><td>Ménage payant</td><td><span class="bdg info">PM</span></td><td class="num amt neg">−460</td></tr>
+        </tbody>
+        <tfoot><tr style="background:var(--alt)"><td colspan="5" style="padding:11px 16px;font-family:var(--mono);font-size:11px;font-weight:800">SOLDE · extras (+1 280) − dépenses (−1 620)</td><td class="num amt neg" style="padding:11px 16px;font-weight:800">−340</td></tr></tfoot>
+      </table>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<!-- ═══════════ DRAWERS / MODALS ═══════════ -->
+<div class="scrim" id="scrim" onclick="closeAll()"></div>
+
+<!-- Drawer: Invite/Edit Landlord -->
+<aside class="drawer" id="drLandlord">
+  <div class="dr-h">
+    <div class="dt"><h2 id="llTitle">Inviter un propriétaire</h2><div class="ds">Identité, périmètre de listings et contrat de gestion.</div></div>
+    <button class="dr-close" onclick="closeAll()">✕</button>
+  </div>
+  <div class="dr-b">
+    <div class="flabel">Identité</div>
+    <div class="frow c2"><div class="fgrp"><input class="fin" placeholder="Prénom"></div><div class="fgrp"><input class="fin" placeholder="Nom"></div></div>
+    <div class="fgrp"><input class="fin" placeholder="Email"></div>
+    <div class="frow c2"><div class="fgrp"><input class="fin" placeholder="Téléphone"></div><div class="fgrp"><input class="fin" placeholder="WhatsApp"></div></div>
+
+    <div class="flabel" style="margin-top:8px">Périmètre de listings</div>
+    <div class="seg" style="margin-bottom:12px"><button class="on" data-scope="listings">Par listings</button><button data-scope="cities">Par villes</button></div>
+    <div class="chips" data-scopegrp="listings">
+      <button class="chip on">Villa Majorelle <span class="x">✕</span></button>
+      <button class="chip on">Riad Yasmina <span class="x">✕</span></button>
+      <button class="chip">+ Ajouter un listing</button>
+    </div>
+    <div class="chips" data-scopegrp="cities" style="display:none">
+      <button class="chip on">Marrakech <span class="x">✕</span></button>
+      <button class="chip">Casablanca</button><button class="chip">Essaouira</button>
+    </div>
+
+    <div class="flabel" style="margin-top:18px">Contrat de gestion (PM)</div>
+    <div class="radio-cards" style="margin-bottom:14px">
+      <label class="rc" data-radio="contract" data-ct="fixed"><span class="r"></span><div><div class="nm">Forfait fixe</div><div class="ds">Un montant fixe par mois, par réservation ou par an</div></div></label>
+      <label class="rc on" data-radio="contract" data-ct="percent_ota"><span class="r"></span><div><div class="nm">Commission % — net après OTA</div><div class="ds">% calculé sur le revenu net des commissions Airbnb/Booking</div></div></label>
+      <label class="rc" data-radio="contract" data-ct="percent_gross"><span class="r"></span><div><div class="nm">Commission % — brut</div><div class="ds">% calculé sur le revenu brut, avant commissions OTA</div></div></label>
+    </div>
+
+    <!-- fixed config -->
+    <div data-ctcfg="fixed" style="display:none">
+      <div class="frow c2"><div class="fgrp"><div class="flabel">Montant</div><input class="fin" value="4 500"></div><div class="fgrp"><div class="flabel">Période</div><div class="fin sel">Par mois</div></div></div>
+    </div>
+    <!-- percent config -->
+    <div data-ctcfg="percent">
+      <div class="frow c2"><div class="fgrp"><div class="flabel">Commission %</div><input class="fin" value="18"></div><div class="fgrp"><div class="flabel">Base de calcul</div><div class="fin sel" id="pctBase">Net après OTA</div></div></div>
+    </div>
+
+    <div class="frow c3" style="margin-top:4px">
+      <div class="fgrp"><div class="flabel">Devise</div><div class="fin sel">MAD</div></div>
+      <div class="fgrp"><div class="flabel">Début</div><input class="fin" value="01/03/2026"></div>
+      <div class="fgrp"><div class="flabel">Fin <span class="opt">(option)</span></div><input class="fin" placeholder="—"></div>
+    </div>
+    <div class="fgrp"><div class="flabel">Notes internes <span class="opt">(non visibles par le propriétaire)</span></div><textarea class="fin" rows="2" placeholder="Ex. contrat signé, conditions particulières…"></textarea></div>
+  </div>
+  <div class="dr-f">
+    <button class="btn btn-ghost" onclick="closeAll()">Annuler</button>
+    <div style="flex:1"></div>
+    <button class="btn btn-prim" onclick="closeAll()">Envoyer l'invitation</button>
+  </div>
+</aside>
+
+<!-- Drawer: Expense / Extra -->
+<aside class="drawer" id="drExpense">
+  <div class="dr-h"><div class="dt"><h2>Nouvelle saisie</h2><div class="ds">Dépense ou recette additionnelle.</div></div><button class="dr-close" onclick="closeAll()">✕</button></div>
+  <div class="dr-b">
+    <div class="seg dark" style="margin-bottom:18px"><button class="on" data-xt="expense">💸 Dépense</button><button data-xt="extra">✨ Extra</button></div>
+    <div class="fgrp"><div class="flabel">Libellé <span class="req">*</span></div><input class="fin" placeholder="Ex. Réparation climatisation"></div>
+    <div class="frow c2"><div class="fgrp"><div class="flabel">Montant <span class="req">*</span></div><input class="fin" placeholder="0"></div><div class="fgrp"><div class="flabel">Devise</div><div class="fin sel">MAD</div></div></div>
+    <div class="frow c2"><div class="fgrp"><div class="flabel">Date</div><input class="fin" value="28/03/2026"></div><div class="fgrp"><div class="flabel">Catégorie</div><div class="fin sel">Maintenance</div><div class="fhint">Internet · Ménage payant · Navette · Conciergerie · <a style="color:var(--pd);font-weight:700">+ Autre</a></div></div></div>
+    <div class="fgrp"><div class="flabel">Payé par</div><div class="seg"><button class="on">PM</button><button>Propriétaire</button><button>Voyageur</button></div></div>
+    <div class="fgrp" data-extraonly style="display:none"><div class="flabel">Encaissé par</div><div class="seg"><button class="on">PM</button><button>Propriétaire</button></div></div>
+    <div class="fgrp"><div class="flabel">Rattachement</div><div class="seg" style="margin-bottom:10px"><button class="on" data-att="listing">À un listing</button><button data-att="resa">À une réservation</button></div><div class="fin sel">Villa Majorelle</div></div>
+    <div class="fgrp"><div class="flabel">Facture <span class="opt">(option)</span></div><div class="upload"><div class="em">📎</div><div style="margin-top:6px">Glisser une facture ici ou <b style="color:var(--pd)">parcourir</b></div></div></div>
+  </div>
+  <div class="dr-f"><button class="btn btn-ghost" onclick="closeAll()">Annuler</button><div style="flex:1"></div><button class="btn btn-prim" onclick="closeAll()">Enregistrer</button></div>
+</aside>
+
+<!-- Drawer: Bundle service with margin -->
+<aside class="drawer" id="drBundle">
+  <div class="dr-h"><div class="dt"><h2>Service avec marge</h2><div class="ds">Un service facturé au voyageur et payé à un prestataire — Sojori crée l'extra et la dépense liés.</div></div><button class="dr-close" onclick="closeAll()">✕</button></div>
+  <div class="dr-b">
+    <div class="fgrp"><div class="flabel">Service</div><div class="fin sel">Ménage payant</div></div>
+    <div class="frow c2">
+      <div class="fgrp"><div class="flabel" style="color:var(--su)">✨ Encaissé du client</div><input class="fin bnd" id="bndIn" value="300"></div>
+      <div class="fgrp"><div class="flabel" style="color:var(--rose)">💸 Payé au prestataire</div><input class="fin bnd" id="bndOut" value="200"></div>
+    </div>
+    <div class="margin-box">
+      <div class="leg"><div class="l">Encaissé</div><div class="v" style="color:var(--su)">+300 MAD</div></div>
+      <span class="eq">−</span>
+      <div class="leg"><div class="l">Payé</div><div class="v" style="color:var(--rose)">200 MAD</div></div>
+      <span class="eq">=</span>
+      <div class="res"><div class="l">Marge</div><div class="v" id="bndMargin">+100 MAD</div></div>
+    </div>
+    <div class="frow c2" style="margin-top:16px"><div class="fgrp"><div class="flabel">Fournisseur</div><input class="fin" value="Fatima M."></div><div class="fgrp"><div class="flabel">Devise</div><div class="fin sel">MAD</div></div></div>
+    <div class="fgrp"><div class="flabel">Rattachement</div><div class="seg" style="margin-bottom:10px"><button class="on">Réservation</button><button>Listing</button></div><div class="fin sel">#RC-3391 · Villa Majorelle</div></div>
+    <div class="inote gold"><span class="i">ℹ️</span><div>Deux lignes seront créées : un <b>extra</b> (+300, encaissé voyageur) et une <b>dépense</b> (−200, prestataire). Le propriétaire les voit séparément dans le journal.</div></div>
+  </div>
+  <div class="dr-f"><button class="btn btn-ghost" onclick="closeAll()">Annuler</button><div style="flex:1"></div><button class="btn btn-prim" onclick="closeAll()">Créer le service</button></div>
+</aside>
+
+<!-- Drawer: Recurring -->
+<aside class="drawer" id="drRecurring">
+  <div class="dr-h"><div class="dt"><h2>Dépenses récurrentes</h2><div class="ds">Créées automatiquement à la fréquence choisie.</div></div><button class="dr-close" onclick="closeAll()">✕</button></div>
+  <div class="dr-b">
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-h"><span class="ct">Récurrences actives</span><span class="sub">4</span></div>
+      <table><tbody>
+        <tr><td><div class="cell-main">Internet — Appart CFC</div><div class="cell-sub">mensuel · le 1er</div></td><td class="num amt neg">−320</td><td><span class="bdg gray">1 avr.</span></td><td><div class="toggle on"></div></td></tr>
+        <tr><td><div class="cell-main">Femme de ménage — Riad Yasmina</div><div class="cell-sub">hebdo · lundi</div></td><td class="num amt neg">−250</td><td><span class="bdg gray">31 mars</span></td><td><div class="toggle on"></div></td></tr>
+        <tr><td><div class="cell-main">Assurance — Villa Majorelle</div><div class="cell-sub">annuel · 15 juin</div></td><td class="num amt neg">−2 400</td><td><span class="bdg gray">15 juin</span></td><td><div class="toggle on"></div></td></tr>
+      </tbody></table>
+    </div>
+    <div class="flabel">Nouvelle récurrence</div>
+    <div class="fgrp"><input class="fin" placeholder="Nom (ex. Abonnement Internet)"></div>
+    <div class="frow c2"><div class="fgrp"><div class="flabel">Montant</div><input class="fin" placeholder="0"></div><div class="fgrp"><div class="flabel">Fréquence</div><div class="fin sel">Mensuel</div></div></div>
+    <div class="frow c2"><div class="fgrp"><div class="flabel">Jour</div><div class="fin sel">Le 1er du mois</div></div><div class="fgrp"><div class="flabel">Payé par</div><div class="fin sel">Propriétaire</div></div></div>
+    <div class="fgrp"><div class="flabel">Listings concernés</div><div class="chips"><button class="chip on">Appart CFC <span class="x">✕</span></button><button class="chip">+ Ajouter</button></div></div>
+  </div>
+  <div class="dr-f"><button class="btn btn-ghost" onclick="closeAll()">Fermer</button><div style="flex:1"></div><button class="btn btn-prim" onclick="closeAll()">Ajouter la récurrence</button></div>
+</aside>
+
+<!-- Modal: Report wizard -->
+<div class="modal" id="mdWizard">
+  <div class="modal-box wide">
+    <div class="dr-h"><div class="dt"><h2>Générer un rapport P&amp;L</h2><div class="ds">Compte de résultat propriétaire pour une période.</div></div><button class="dr-close" onclick="closeAll()">✕</button></div>
+    <div class="dr-b">
+      <div class="wiz-steps">
+        <div class="wiz-step active"><div class="bar"></div><div class="wl"><span class="no">1</span>Paramètres</div></div>
+        <div class="wiz-step"><div class="bar"></div><div class="wl"><span class="no">2</span>Aperçu</div></div>
+        <div class="wiz-step"><div class="bar"></div><div class="wl"><span class="no">3</span>Publication</div></div>
+      </div>
+      <div class="frow c2"><div class="fgrp"><div class="flabel">Nom du rapport</div><input class="fin" value="Mars 2026 — Villa Majorelle"></div><div class="fgrp"><div class="flabel">Propriétaire</div><div class="fin sel">Mehdi Alaoui</div></div></div>
+      <div class="frow c3"><div class="fgrp"><div class="flabel">Début</div><input class="fin" value="01/03/2026"></div><div class="fgrp"><div class="flabel">Fin</div><input class="fin" value="31/03/2026"></div><div class="fgrp"><div class="flabel">Listings</div><div class="fin sel">1 sélectionné</div></div></div>
+      <div class="card" style="margin-top:6px">
+        <div class="card-h"><span class="ct">Aperçu du brouillon</span><span class="bdg gold" style="margin-left:auto">calcul automatique</span></div>
+        <div class="card-b" style="padding:8px 18px">
+          <div class="pl-lines">
+            <div class="pl-line plus"><span class="lbl"><span class="ic">🏠</span>Revenus bruts</span><span class="v">+24 800 MAD</span></div>
+            <div class="pl-line plus"><span class="lbl"><span class="ic">✨</span>Extras</span><span class="v">+1 280 MAD</span></div>
+            <div class="pl-line minus"><span class="lbl"><span class="ic">🔻</span>Commission OTA</span><span class="v">−3 720 MAD</span></div>
+            <div class="pl-line minus"><span class="lbl"><span class="ic">💸</span>Charges PM</span><span class="v">−980 MAD</span></div>
+            <div class="pl-line minus"><span class="lbl"><span class="ic">🧰</span>Charges propriétaire</span><span class="v">−640 MAD</span></div>
+            <div class="pl-line minus"><span class="lbl"><span class="ic">📊</span>Commission gestion PM (18%)</span><span class="v">−2 460 MAD</span></div>
+            <div class="pl-line net"><span class="lbl">Net propriétaire</span><span class="v">18 240 MAD</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dr-f">
+      <button class="btn btn-ghost" onclick="closeAll()">Annuler</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeAll()">Enregistrer le brouillon</button>
+      <button class="btn btn-su" onclick="closeAll()">Publier ✓</button>
+    </div>
+  </div>
+</div>
+
+<script src="finances/finances.js"></script>
+</body></html>

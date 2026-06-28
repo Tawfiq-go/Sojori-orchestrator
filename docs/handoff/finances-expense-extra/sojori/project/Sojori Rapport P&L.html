@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rapport P&L · Mars 2026 — Villa Majorelle · Sojori</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --p:#b8851a;--pd:#876119;--ps:#e6c46a;--pt:rgba(184,133,26,0.10);--pt2:rgba(184,133,26,0.22);
+  --bg:#f6f5f1;--card:#fff;--alt:#fafaf7;
+  --t:#14110a;--t2:#55504a;--t3:#7a756c;--t4:#a8a299;
+  --b:rgba(20,17,10,0.09);--bs:rgba(20,17,10,0.16);
+  --su:#0a8f5e;--suT:rgba(10,143,94,0.10);--rose:#c81e1e;--roseT:rgba(200,30,30,0.10);
+  --info:#0673b3;
+  --sans:Geist,system-ui,sans-serif;--mono:'Geist Mono',ui-monospace,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);font-family:var(--sans);color:var(--t);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+/* screen toolbar */
+.toolbar{position:sticky;top:0;z-index:10;background:rgba(20,17,10,0.95);backdrop-filter:blur(10px);color:#fff;display:flex;align-items:center;gap:14px;padding:11px 22px}
+.toolbar .nm{font-weight:700;font-size:14px;letter-spacing:-0.01em}
+.toolbar .nm span{font-family:var(--mono);font-size:10px;color:var(--ps);text-transform:uppercase;letter-spacing:0.08em;margin-left:8px}
+.toolbar .sp{flex:1}
+.toolbar button{padding:8px 15px;border-radius:9px;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;gap:7px}
+.tb-print{background:linear-gradient(180deg,#cb9b2c,var(--p));color:#1a1408}
+.tb-ghost{background:rgba(255,255,255,0.12);color:#fff}
+
+/* page sheet (A4) */
+.sheet{background:#fff;width:210mm;min-height:297mm;margin:24px auto;padding:20mm 18mm;box-shadow:0 12px 50px -12px rgba(20,17,10,0.25);position:relative}
+
+/* header */
+.rp-head{display:flex;align-items:flex-start;gap:16px;padding-bottom:20px;border-bottom:2.5px solid var(--t)}
+.rp-brand{display:flex;align-items:center;gap:12px}
+.rp-brand .mark{width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,var(--ps),var(--pd));color:#1a1408;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center}
+.rp-brand .nm{font-weight:800;font-size:22px;letter-spacing:-0.03em}
+.rp-brand .nm span{display:block;font-family:var(--mono);font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:0.12em;font-weight:600;margin-top:1px}
+.rp-head .meta{margin-left:auto;text-align:right}
+.rp-head .meta .doc{font-family:var(--mono);font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:0.08em;font-weight:700}
+.rp-head .meta .big{font-size:19px;font-weight:800;letter-spacing:-0.02em;margin-top:3px}
+.rp-head .meta .pub{font-size:11px;color:var(--su);font-weight:700;margin-top:4px;display:inline-flex;align-items:center;gap:5px}
+
+/* parties block */
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:0;margin:22px 0;border:1px solid var(--b);border-radius:12px;overflow:hidden}
+.party{padding:15px 18px}
+.party + .party{border-left:1px solid var(--b)}
+.party .role{font-family:var(--mono);font-size:9px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
+.party .who{font-size:15px;font-weight:800;letter-spacing:-0.01em}
+.party .line{font-size:12px;color:var(--t2);margin-top:3px}
+.period-bar{display:flex;gap:0;border:1px solid var(--b);border-radius:11px;overflow:hidden;margin-bottom:24px}
+.period-bar .pb{flex:1;padding:12px 18px;text-align:center}
+.period-bar .pb + .pb{border-left:1px solid var(--b)}
+.period-bar .pb .l{font-family:var(--mono);font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:0.07em;font-weight:700}
+.period-bar .pb .v{font-size:15px;font-weight:800;margin-top:3px;letter-spacing:-0.01em}
+
+/* metric cards */
+.mcards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:26px}
+.mcard{border:1px solid var(--b);border-radius:13px;padding:16px 18px}
+.mcard.net{background:linear-gradient(135deg,#fff,var(--pt));border-color:var(--pt2)}
+.mcard .l{font-size:11px;color:var(--t3);font-weight:600;display:flex;align-items:center;gap:6px}
+.mcard .v{font-size:27px;font-weight:800;font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-0.03em;margin-top:8px;line-height:1}
+.mcard .v small{font-size:13px;color:var(--t3);font-weight:700}
+.mcard.green .v{color:var(--su)}.mcard.rose .v{color:var(--rose)}.mcard.net .v{color:var(--pd)}
+
+/* section */
+.sect{margin-bottom:26px}
+.sect-h{font-size:13px;font-weight:800;letter-spacing:-0.01em;text-transform:uppercase;font-family:var(--mono);letter-spacing:0.04em;color:var(--t);padding-bottom:9px;border-bottom:1.5px solid var(--b);margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sect-h .n{font-family:var(--mono);font-size:11px;color:var(--p);font-weight:800}
+
+/* P&L lines */
+.pl-line{display:flex;align-items:center;justify-content:space-between;padding:11px 4px;border-bottom:1px solid var(--b);font-size:13.5px}
+.pl-line .lbl{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--t2)}
+.pl-line .lbl .ic{width:24px;height:24px;border-radius:6px;background:var(--alt);display:flex;align-items:center;justify-content:center;font-size:12px}
+.pl-line .sub{font-size:11px;color:var(--t4);font-weight:500;margin-left:6px}
+.pl-line .v{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums}
+.pl-line.minus .v{color:var(--rose)}.pl-line.plus .v{color:var(--su)}
+.pl-line.subtotal{background:var(--alt);margin:0 -8px;padding:11px 12px;border-radius:8px;border-bottom:0}
+.pl-line.subtotal .lbl{font-weight:800;color:var(--t)}
+.pl-line.net{border-top:2.5px solid var(--t);border-bottom:0;margin-top:8px;padding-top:15px}
+.pl-line.net .lbl{font-size:17px;font-weight:800;color:var(--t)}
+.pl-line.net .v{font-size:25px;font-weight:800;color:var(--pd)}
+
+/* detail tables */
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+thead th{text-align:left;padding:8px 10px;font-family:var(--mono);font-size:8.5px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.05em;background:var(--alt);border-bottom:1px solid var(--b)}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+tbody td{padding:8px 10px;border-bottom:1px solid var(--b)}
+tbody tr:last-child td{border-bottom:0}
+tfoot td{padding:9px 10px;font-weight:800;border-top:2px solid var(--bs);font-family:var(--mono)}
+.tg{display:inline-block;font-family:var(--mono);font-size:8.5px;font-weight:700;padding:2px 7px;border-radius:99px}
+.tg.exp{background:var(--roseT);color:var(--rose)}.tg.ext{background:var(--suT);color:var(--su)}
+
+/* footer */
+.rp-foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--b);display:flex;gap:18px;align-items:flex-start}
+.rp-foot .legal{font-size:9.5px;color:var(--t4);line-height:1.5;flex:1}
+.rp-foot .sig{text-align:right;font-size:10px;color:var(--t3)}
+.rp-foot .sig .s{font-family:var(--mono);font-weight:700;color:var(--t2);margin-top:3px}
+.pagemark{position:absolute;bottom:10mm;right:18mm;font-family:var(--mono);font-size:9px;color:var(--t4)}
+
+@media print{
+  @page{size:A4;margin:0}
+  body{background:#fff}
+  .toolbar{display:none}
+  .sheet{margin:0;box-shadow:none;width:auto;min-height:auto;padding:14mm 14mm}
+  .sect{break-inside:avoid}
+  .mcards,.parties,.period-bar{break-inside:avoid}
+  tr{break-inside:avoid}
+}
+@media(max-width:760px){.sheet{width:auto;padding:22px 16px;margin:12px}.mcards{grid-template-columns:1fr}.parties{grid-template-columns:1fr}.party + .party{border-left:0;border-top:1px solid var(--b)}}
+</style></head>
+<body>
+
+<div class="toolbar">
+  <div class="nm">Sojori<span>Rapport P&amp;L</span></div>
+  <div class="sp"></div>
+  <button class="tb-ghost" onclick="history.length>1?history.back():window.close()">← Retour</button>
+  <button class="tb-print" onclick="window.print()">🖨 Imprimer / PDF</button>
+</div>
+
+<div class="sheet">
+  <!-- HEADER -->
+  <div class="rp-head">
+    <div class="rp-brand"><div class="mark">S</div><div class="nm">Sojori<span>Orchestrator</span></div></div>
+    <div class="meta">
+      <div class="doc">Compte de résultat · P&amp;L</div>
+      <div class="big">Mars 2026 — Villa Majorelle</div>
+      <div class="pub">● Publié le 02/04/2026</div>
+    </div>
+  </div>
+
+  <!-- PARTIES -->
+  <div class="parties">
+    <div class="party"><div class="role">Propriétaire</div><div class="who">Mehdi Alaoui</div><div class="line">Riad Collection · Marrakech</div><div class="line">mehdi@riad-collection.ma</div></div>
+    <div class="party"><div class="role">Gestionnaire (PM)</div><div class="who">Karim Benali — Sojori</div><div class="line">Contrat : commission 18% · net après OTA</div><div class="line">karim@riad-collection.ma</div></div>
+  </div>
+
+  <div class="period-bar">
+    <div class="pb"><div class="l">Période</div><div class="v">01 → 31 mars 2026</div></div>
+    <div class="pb"><div class="l">Listing</div><div class="v">Villa Majorelle</div></div>
+    <div class="pb"><div class="l">Réservations</div><div class="v">4 séjours · 19 nuits</div></div>
+    <div class="pb"><div class="l">Devise</div><div class="v">MAD (DH)</div></div>
+  </div>
+
+  <!-- METRIC CARDS -->
+  <div class="mcards">
+    <div class="mcard green"><div class="l">🏠 Revenus + extras</div><div class="v">26 080 <small>MAD</small></div></div>
+    <div class="mcard rose"><div class="l">🔻 Total charges</div><div class="v">−7 840 <small>MAD</small></div></div>
+    <div class="mcard net"><div class="l">★ Net propriétaire</div><div class="v">18 240 <small>MAD</small></div></div>
+  </div>
+
+  <!-- SYNTHÈSE -->
+  <div class="sect">
+    <div class="sect-h"><span class="n">01</span>Synthèse</div>
+    <div class="pl-line plus"><span class="lbl"><span class="ic">🏠</span>Revenus bruts <span class="sub">4 réservations</span></span><span class="v">+24 800 MAD</span></div>
+    <div class="pl-line plus"><span class="lbl"><span class="ic">✨</span>Extras encaissés <span class="sub">navette, ménage, courses</span></span><span class="v">+1 280 MAD</span></div>
+    <div class="pl-line subtotal"><span class="lbl">Total produits</span><span class="v">26 080 MAD</span></div>
+    <div class="pl-line minus"><span class="lbl"><span class="ic">🔻</span>Commission OTA <span class="sub">Airbnb / Booking</span></span><span class="v">−3 720 MAD</span></div>
+    <div class="pl-line minus"><span class="lbl"><span class="ic">💸</span>Charges PM <span class="sub">prestataires, achats</span></span><span class="v">−980 MAD</span></div>
+    <div class="pl-line minus"><span class="lbl"><span class="ic">🧰</span>Charges propriétaire <span class="sub">internet, maintenance</span></span><span class="v">−640 MAD</span></div>
+    <div class="pl-line minus"><span class="lbl"><span class="ic">📊</span>Commission de gestion PM <span class="sub">18% · net après OTA</span></span><span class="v">−2 460 MAD</span></div>
+    <div class="pl-line net"><span class="lbl">Net propriétaire</span><span class="v">18 240 MAD</span></div>
+  </div>
+
+  <!-- RÉSERVATIONS -->
+  <div class="sect">
+    <div class="sect-h"><span class="n">02</span>Détail des réservations</div>
+    <table>
+      <thead><tr><th>Réf.</th><th>Voyageur</th><th>Canal</th><th>Séjour</th><th class="num">Nuits</th><th class="num">Brut</th><th class="num">Comm. OTA</th><th class="num">Net</th></tr></thead>
+      <tbody>
+        <tr><td class="num">RC-3391</td><td>Imane B.</td><td>Airbnb</td><td>03–08 mars</td><td class="num">5</td><td class="num">7 200</td><td class="num">−1 080</td><td class="num">6 120</td></tr>
+        <tr><td class="num">RC-3372</td><td>Thomas &amp; Julie</td><td>Booking</td><td>11–15 mars</td><td class="num">4</td><td class="num">5 600</td><td class="num">−840</td><td class="num">4 760</td></tr>
+        <tr><td class="num">RC-3384</td><td>Sara E.</td><td>Airbnb</td><td>18–24 mars</td><td class="num">6</td><td class="num">7 800</td><td class="num">−1 170</td><td class="num">6 630</td></tr>
+        <tr><td class="num">RC-3399</td><td>Marco R.</td><td>Direct</td><td>27–31 mars</td><td class="num">4</td><td class="num">4 200</td><td class="num">−630</td><td class="num">3 570</td></tr>
+      </tbody>
+      <tfoot><tr><td colspan="4">Total</td><td class="num">19</td><td class="num">24 800</td><td class="num">−3 720</td><td class="num">21 080</td></tr></tfoot>
+    </table>
+  </div>
+
+  <!-- DÉPENSES & EXTRAS -->
+  <div class="sect">
+    <div class="sect-h"><span class="n">03</span>Dépenses &amp; extras</div>
+    <table>
+      <thead><tr><th>Date</th><th>Libellé</th><th>Type</th><th>Catégorie</th><th>Payé / encaissé par</th><th class="num">Montant</th></tr></thead>
+      <tbody>
+        <tr><td class="num">28/03</td><td>Ménage payant — départ</td><td><span class="tg ext">Extra</span></td><td>Ménage payant</td><td>Voyageur</td><td class="num" style="color:var(--su)">+300</td></tr>
+        <tr><td class="num">28/03</td><td>Prestation ménage — Fatima M.</td><td><span class="tg exp">Dépense</span></td><td>Ménage payant</td><td>PM</td><td class="num" style="color:var(--rose)">−200</td></tr>
+        <tr><td class="num">26/03</td><td>Navette aéroport — arrivée</td><td><span class="tg ext">Extra</span></td><td>Navette</td><td>Voyageur</td><td class="num" style="color:var(--su)">+450</td></tr>
+        <tr><td class="num">25/03</td><td>Abonnement Internet — mars</td><td><span class="tg exp">Dépense</span></td><td>Internet</td><td>Propriétaire</td><td class="num" style="color:var(--rose)">−320</td></tr>
+        <tr><td class="num">20/03</td><td>Courses d'accueil</td><td><span class="tg ext">Extra</span></td><td>Conciergerie</td><td>Voyageur</td><td class="num" style="color:var(--su)">+180</td></tr>
+        <tr><td class="num">14/03</td><td>Maintenance — plomberie</td><td><span class="tg exp">Dépense</span></td><td>Maintenance</td><td>Propriétaire</td><td class="num" style="color:var(--rose)">−320</td></tr>
+        <tr><td class="num">09/03</td><td>Petit-déjeuner d'accueil</td><td><span class="tg ext">Extra</span></td><td>Conciergerie</td><td>Voyageur</td><td class="num" style="color:var(--su)">+350</td></tr>
+        <tr><td class="num">06/03</td><td>Produits ménagers &amp; linge</td><td><span class="tg exp">Dépense</span></td><td>Ménage payant</td><td>PM</td><td class="num" style="color:var(--rose)">−460</td></tr>
+      </tbody>
+      <tfoot><tr><td colspan="5">Solde extras (+1 280) − dépenses (−1 620)</td><td class="num" style="color:var(--rose)">−340</td></tr></tfoot>
+    </table>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="rp-foot">
+    <div class="legal">
+      Document généré par Sojori Orchestrator le 02/04/2026. Montants en dirhams marocains (MAD), TTC sauf mention contraire.
+      Ce rapport reflète un instantané figé des opérations de la période indiquée et constitue un relevé de gestion entre le propriétaire et son gestionnaire.
+      Les commissions des plateformes (OTA) sont déduites au réel. La commission de gestion est calculée selon le contrat en vigueur (18% du net après OTA).
+    </div>
+    <div class="sig"><div>Établi par</div><div class="s">Karim Benali — Sojori</div><div style="margin-top:8px">Réf. rapport</div><div class="s">PNL-2026-03-VM-0042</div></div>
+  </div>
+  <div class="pagemark">Sojori · PNL-2026-03 · 1/1</div>
+</div>
+
+</body></html>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Typography, Button, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress, IconButton, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import WorkIcon from '@mui/icons-material/Work';
 import EditIcon from '@mui/icons-material/Edit';
@@ -18,7 +18,18 @@ import { useAdminOwnerFilter } from 'context/AdminOwnerFilterContext';
 import { teamRolesContentPaperSx, teamRolesTableHeaderCellSx, teamRolesTableHeaderCellSxCenter } from '../teamRolesLayout';
 import { useTeamViewMode } from '../../../context/TeamViewContext';
 import { WorkersHubView } from '../../../components/team/WorkersHubView';
+import { Roles } from '../../../constants/roles';
 import { TEAM_T } from '../../../components/team/teamHubTokens';
+import { summarizeWorkerRouteAccess, buildOwnerRouteRows } from '../../../utils/ownerRoutePermissions';
+import PersonAddAlt1OutlinedIcon from '@mui/icons-material/PersonAddAlt1Outlined';
+import { btnPrimarySx } from '../../../components/dashboard/DashboardV2.components';
+
+function canManageWorkers(user, action) {
+  if (!user) return false;
+  if ([Roles.SuperAdmin, Roles.Admin, Roles.Owner].includes(user.role)) return true;
+  return can(action);
+}
+
 const SOJORI_COLORS = {
   primary: '#E6B022',
   primaryDark: '#B8881A',
@@ -59,24 +70,55 @@ const PublicWorker = ({
   } = useSelector(state => state.auth);
   const { requestOwnerId: filterOwnerId } = useAdminOwnerFilter();
   const isAdmin = user && hasAdminAccess(user.role);
-  const [canCreate, setCanCreate] = useState(can('create'));
-  const [canUpdate, setCanUpdate] = useState(can('update'));
+  const canCreate = useMemo(() => canManageWorkers(user, 'create'), [user]);
+  const canUpdate = useMemo(() => canManageWorkers(user, 'update'), [user]);
   useEffect(() => {
+    if (embedded) return;
     fetchListings();
-  }, [workerTypeOwner]);
+  }, [workerTypeOwner, embedded]);
   useEffect(() => {
     fetchWorkers();
   }, [page, limit, deletedFilter, bannedFilter, searchText, selectedListings, workerTypeOwner, filterOwnerId]);
   useEffect(() => {
     onWorkersTotalChange?.(totalCount);
   }, [totalCount, onWorkersTotalChange]);
-  const { setTeamStats } = useTeamViewMode();
+  const { setTeamStats, setToolbarAction } = useTeamViewMode();
+  const ownerRoutes = useMemo(() => buildOwnerRouteRows(), []);
   useEffect(() => {
     if (!embedded) return;
+    const active = workers.filter((w) => !w.banned && !w.deleted).length;
+    const withRead = workers.filter((w) => summarizeWorkerRouteAccess(w, ownerRoutes).readCount > 0).length;
+    const fullWrite = workers.filter((w) => {
+      const s = summarizeWorkerRouteAccess(w, ownerRoutes);
+      return s.adminAccess || s.writeCount >= s.total;
+    }).length;
     setTeamStats([
-      { icon: '🔐', label: 'Workers', value: String(totalCount), iconColor: TEAM_T.primaryDeep },
+      { icon: '👥', label: 'Workers', value: String(totalCount), iconColor: TEAM_T.primaryDeep },
+      { icon: '✅', label: 'Actifs', value: String(active), iconColor: TEAM_T.primary },
+      { icon: '👁', label: 'Avec accès', value: String(withRead), iconColor: '#5B9BD5' },
+      { icon: '✏️', label: 'Écriture', value: String(fullWrite), iconColor: TEAM_T.primaryDeep },
     ]);
-  }, [embedded, totalCount, setTeamStats]);
+  }, [embedded, totalCount, workers, ownerRoutes, setTeamStats]);
+  useEffect(() => {
+    if (!embedded) return;
+    if (!canCreate) {
+      setToolbarAction(null);
+      return;
+    }
+    setToolbarAction(
+      <Button
+        size="small"
+        sx={{ ...btnPrimarySx, py: 0.625, px: 1.5, fontSize: 12 }}
+        startIcon={<PersonAddAlt1OutlinedIcon sx={{ fontSize: 16 }} />}
+        onClick={() =>
+          navigate(workerTypeOwner ? '/admin/User/create-owner-user' : '/admin/User/create-user')
+        }
+      >
+        Nouveau worker
+      </Button>,
+    );
+    return () => setToolbarAction(null);
+  }, [embedded, canCreate, navigate, setToolbarAction]);
   const fetchWorkers = async () => {
     setLoading(true);
     try {
@@ -154,7 +196,6 @@ const PublicWorker = ({
 
       {embedded ? (
         <WorkersHubView
-          t={t}
           workers={workers}
           loading={loading}
           totalCount={totalCount}
@@ -164,21 +205,17 @@ const PublicWorker = ({
           setLimit={setLimit}
           searchText={searchText}
           setSearchText={setSearchText}
-          listings={listings}
-          selectedListings={selectedListings}
-          setSelectedListings={setSelectedListings}
           deletedFilter={deletedFilter}
           bannedFilter={bannedFilter}
           onDeletedChange={setDeletedFilter}
           onBannedChange={setBannedFilter}
           onSearch={handleSearch}
           onReset={handleReset}
-          onFilterChange={handleFilterChange}
-          onCreate={() => setOpenCreateDialog(true)}
+          onCreate={() => navigate('/admin/User/create-user')}
           onEdit={handleUpdate}
           canCreate={canCreate}
           canUpdate={canUpdate}
-          isAdmin={isAdmin}
+          embedded
         />
       ) : (
       <>

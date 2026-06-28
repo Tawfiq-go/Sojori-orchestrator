@@ -143,7 +143,7 @@ export default function CompsTable({ rows }: CompsTableProps) {
                             fontWeight: 600,
                           }}
                         >
-                          ↗ Airbnb
+                          ↗ Voir l’annonce
                         </Box>
                       </Box>
                     ) : (

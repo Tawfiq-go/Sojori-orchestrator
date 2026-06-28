@@ -20,7 +20,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { getListings } from '../../listing/services/serverApi.listing';
 import { getNotificationEvent, getGroups, inviteWorker } from '../services/serverApi.task';
 import { uploadImageToAPI } from '../../../redux/slices/UploadSlice';
-import routes, { buildFeatureRows } from '../../../routes';
+import { buildOwnerPermissionRows } from '../../../utils/ownerRoutePermissions';
 const CONTRACT_TYPES = ['GROSS REVENUE', 'NET REVENUE', 'NET-NET', 'FIXED FEE'];
 const BRAND = {
   primary: '#0ea5a9'
@@ -267,7 +267,7 @@ export default function CreateWorkerForm() {
     }
     return Object.keys(errors.worker).length ? errors : {};
   };
-  const featureRows = useMemo(() => buildFeatureRows(routes, t, 'Owner'), [routes, t]);
+  const featureRows = useMemo(() => buildOwnerPermissionRows(), []);
   const allCurrentListingIds = useMemo(() => listings.map(l => l._id), [listings]);
   const selectedGroupOptions = w => {
     const arr = [];
@@ -410,7 +410,7 @@ export default function CreateWorkerForm() {
       // navigate(-1);
       // navigate('User/worker');
       const isOwner = !!payload.workerTypeOwner;
-      navigate(`/admin/User/${isOwner ? 'owners' : 'worker'}`, {
+      navigate('/admin/equipe?tab=worker', {
         replace: true
       });
     } catch (err) {
@@ -458,7 +458,7 @@ export default function CreateWorkerForm() {
       // navigate(-1);
       // navigate('User/worker');
       const isOwner = !!payload.workerTypeOwner;
-      navigate(`/admin/User/${isOwner ? 'owners' : 'worker'}`, {
+      navigate('/admin/equipe?tab=worker', {
         replace: true
       });
     } catch (err) {
@@ -897,7 +897,7 @@ export default function CreateWorkerForm() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {buildFeatureRows(routes, t, 'Owner').map((row, idx) => {
+                        {featureRows.map((row, idx) => {
                       if (row.kind === 'section') {
                         return <TableRow key={`sec-${row.key}-${idx}`} sx={{
                           bgcolor: 'action.hover'

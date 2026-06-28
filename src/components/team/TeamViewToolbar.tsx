@@ -1,4 +1,4 @@
-import { Box, Paper, Stack, Typography } from '@mui/material';
+import { Box, Paper, Typography } from '@mui/material';
 import GridViewIcon from '@mui/icons-material/GridView';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import { useTeamViewMode } from '../../context/TeamViewContext';
@@ -10,51 +10,53 @@ type TeamViewToolbarProps = {
 
 function KpiCompact({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <Paper
+    <Box
       sx={{
-        px: 1.25,
-        py: 0.75,
+        px: 1,
+        py: 0.5,
         border: `1px solid ${TEAM_T.border}`,
-        borderRadius: 1,
-        bgcolor: TEAM_T.bg1,
-        minWidth: 72,
+        borderRadius: 0.75,
+        bgcolor: TEAM_T.bg2,
+        minWidth: 64,
       }}
     >
       <Typography
         sx={{
-          fontSize: 9.5,
+          fontSize: 9,
           fontWeight: 700,
           textTransform: 'uppercase',
-          letterSpacing: '0.06em',
+          letterSpacing: '0.05em',
           color: TEAM_T.text3,
-          mb: 0.25,
+          lineHeight: 1.2,
         }}
       >
         {label}
       </Typography>
-      <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: accent, lineHeight: 1 }}>
+      <Typography sx={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em', color: accent, lineHeight: 1.1 }}>
         {value}
       </Typography>
-    </Paper>
+    </Box>
   );
 }
 
 export function TeamViewToolbar({ stats = [] }: TeamViewToolbarProps) {
-  const { viewMode, setViewMode } = useTeamViewMode();
+  const { viewMode, setViewMode, toolbarAction } = useTeamViewMode();
 
   return (
     <Paper
+      elevation={0}
       sx={{
-        p: 1.5,
-        mb: 1.5,
+        px: 1.25,
+        py: 0.875,
+        mb: 1,
         border: `1px solid ${TEAM_T.border}`,
-        borderRadius: 1.5,
+        borderRadius: 1.25,
         bgcolor: TEAM_T.bg1,
       }}
     >
-      <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.25}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
         {stats.length > 0 ? (
-          <Stack direction="row" spacing={0.75} flexWrap="wrap">
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.625 }}>
             {stats.map((s) => (
               <KpiCompact
                 key={s.label}
@@ -63,21 +65,22 @@ export function TeamViewToolbar({ stats = [] }: TeamViewToolbarProps) {
                 accent={s.iconColor || TEAM_T.primaryDeep}
               />
             ))}
-          </Stack>
+          </Box>
         ) : (
-          <Typography sx={{ fontSize: 12, color: TEAM_T.text3 }}>Vue équipe</Typography>
+          <Typography sx={{ fontSize: 11.5, color: TEAM_T.text3 }}>Vue équipe</Typography>
         )}
 
-        <Box
-          sx={{
-            display: 'inline-flex',
-            bgcolor: TEAM_T.bg2,
-            border: `1px solid ${TEAM_T.border}`,
-            borderRadius: '9px',
-            p: '3px',
-            gap: '2px',
-          }}
-        >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Box
+            sx={{
+              display: 'inline-flex',
+              bgcolor: TEAM_T.bg2,
+              border: `1px solid ${TEAM_T.border}`,
+              borderRadius: '8px',
+              p: '2px',
+              gap: '2px',
+            }}
+          >
           <Box
             component="button"
             type="button"
@@ -128,8 +131,10 @@ export function TeamViewToolbar({ stats = [] }: TeamViewToolbarProps) {
             <ViewListIcon sx={{ fontSize: 16 }} />
             Liste
           </Box>
+          </Box>
+          {toolbarAction}
         </Box>
-      </Stack>
+      </Box>
     </Paper>
   );
 }

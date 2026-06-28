@@ -31,12 +31,12 @@ function hint(
 }
 
 export const AIRROI_RAW_TABLE_INTRO =
-  'Mode test : colonnes = valeurs brutes du snapshot marché (API listings, USD) stockées en Mongo. Aucun potentiel / score / bornes calculés par Sojori.';
+  'Mode test : colonnes = valeurs brutes du snapshot marché Sojori stockées en Mongo. Aucun potentiel / score / bornes calculés par le moteur prix.';
 
 export const AIRROI_RAW_COLUMNS: AirroiColumnDef[] = [
   { id: 'check', label: '', kind: 'sojori' },
   { id: 'bien', label: 'Bien Sojori', kind: 'sojori' },
-  { id: 'airbnb', label: 'Airbnb', kind: 'sojori' },
+  { id: 'airbnb', label: 'Canal', kind: 'sojori' },
   { id: 'snapshot', label: 'Snapshot', kind: 'meta' },
   { id: 'currency', label: 'Devise', field: 'currency', kind: 'airroi', format: 'text', ...hint('Devise', 'Code devise du snapshot listing (souvent USD).') },
   { id: 'district', label: 'Zone', field: 'district', kind: 'airroi', format: 'text', ...hint('Quartier', 'District renvoyé par l’API marché — aligné carte zones quand disponible.') },

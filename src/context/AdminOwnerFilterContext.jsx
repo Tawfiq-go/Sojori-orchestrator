@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { canSelectOwnerInAdminFilter, getRequestOwnerIdParam } from 'utils/taskScope.utils';
-import { getOwnersAllPages } from 'features/staff/services/serverApi.task';
+import { getOwnersAllPages } from '../services/teamDashboardApi';
 import { useAuth } from '../hooks/useAuth';
 import { toLegacyAuthUser } from '../utils/legacyAuthUser';
 

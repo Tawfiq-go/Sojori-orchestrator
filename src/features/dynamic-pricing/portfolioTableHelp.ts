@@ -28,15 +28,15 @@ export const PORTFOLIO_COLUMNS: PortfolioColumnHelp[] = [
     id: 'bien',
     label: 'Bien',
     title: 'Bien Sojori',
-    body: 'Nom de l’annonce et clé RU (Rentals United) si connue. Clic → fiche bien.',
+    body: 'Nom de l’annonce Sojori. Clic → fiche bien.',
   },
   {
     id: 'airbnb',
-    label: 'Airbnb',
-    title: 'Connexion Airbnb',
+    label: 'Canal',
+    title: 'Canal de diffusion',
     body:
-      'Connecté = ID annonce présent dans otaChannelsSnapshot (dashboard legacy, bouton Vérifier). ' +
-      'Lien public = URL fiche voyageur Airbnb.',
+      'Connecté = annonce liée aux canaux de diffusion Sojori. ' +
+      'Lien public = URL fiche voyageur si disponible.',
   },
   {
     id: 'zone',

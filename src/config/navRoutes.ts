@@ -76,13 +76,17 @@ export const NAV_TO_ROUTE: Record<string, string> = {
 
   // Équipe
   staff: '/tasks/team',
+  'equipe/onboarding': '/admin/equipe?tab=onboarding',
   'my-tasks': '/tasks',
   'my-sched': '/tasks/planning',
   'admin/equipe/staff': '/tasks/team',
 
-  // Finances (pages dédiées à créer — placeholder)
-  revenue: '/reports',
-  statements: '/reports',
+  // Finances
+  'finances/landlords': '/finances/landlords',
+  'finances/ledger': '/finances/ledger',
+  'finances/reports': '/finances/reports',
+  revenue: '/finances/ledger',
+  statements: '/finances/reports',
 
   // Monitor
   monitor: '/monitor?tab=Summary',
