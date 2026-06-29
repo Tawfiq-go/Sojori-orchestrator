@@ -30,7 +30,7 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 import { analyticsService } from '../services/analyticsService';
 import { buildEmptyAnalyticsSnapshot } from '../services/analyticsSnapshotBuilder';
-import { AdminOwnerFilterProvider, useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import OwnerFilterField from '../components/OwnerFilterBar/OwnerFilterField';
 import { analyticsPeriodOptions } from '../types/analytics.types';
 import { runtimeLog } from '../utils/runtimeLog';
@@ -51,16 +51,12 @@ function isRequestCanceled(err: unknown): boolean {
 }
 
 export function AnalyticsPage() {
-  return (
-    <AdminOwnerFilterProvider>
-      <AnalyticsPageContent />
-    </AdminOwnerFilterProvider>
-  );
+  return <AnalyticsPageContent />;
 }
 
 function AnalyticsPageContent() {
-  const { showOwnerFilter, requestOwnerId } = useAdminOwnerFilter();
-  const ownerScopeBlocked = showOwnerFilter && !requestOwnerId;
+  const { showOwnerFilter, requestOwnerId, simulatedOwnerId } = useAdminOwnerFilter();
+  const ownerScopeBlocked = showOwnerFilter && !requestOwnerId && !simulatedOwnerId;
   const [period, setPeriod] = useState<(typeof analyticsPeriodOptions)[number]['value']>('30d');
   const [comparison, setComparison] = useState<'vs-last-period' | 'vs-last-year'>('vs-last-period');
   const [source, setSource] = useState<(typeof sourceOptions)[number]>('Tous');

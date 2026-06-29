@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { canSelectOwnerInAdminFilter, getRequestOwnerIdParam } from 'utils/taskScope.utils';
+import { usePmSimulation } from './PmSimulationContext';
 import { getOwnersAllPages } from '../services/teamDashboardApi';
 import { useAuth } from '../hooks/useAuth';
 import { toLegacyAuthUser } from '../utils/legacyAuthUser';
@@ -23,16 +24,22 @@ export function AdminOwnerFilterProvider({ children }) {
   const [selectedOwnerId, setSelectedOwnerIdState] = useState('');
   const [owners, setOwners] = useState([]);
   const [ownersLoading, setOwnersLoading] = useState(false);
-  const showOwnerFilter = canSelectOwnerInAdminFilter(user);
+  const { simulatedOwnerId: simulatedOwnerIdFromCtx } = usePmSimulation();
+  const simulatedOwnerId = simulatedOwnerIdFromCtx || '';
+  const showOwnerFilter = canSelectOwnerInAdminFilter(user) && !simulatedOwnerId;
+  const effectiveSelectedOwnerId = simulatedOwnerId || selectedOwnerId;
   const requestOwnerId = useMemo(
-    () => getRequestOwnerIdParam(user, selectedOwnerId),
-    [user, selectedOwnerId],
+    () => getRequestOwnerIdParam(user, effectiveSelectedOwnerId),
+    [user, effectiveSelectedOwnerId],
   );
 
   /** @type {string[]} for APIs that take filterOwnerId[]; mirrors single selection. */
   const selectedOwnerIds = useMemo(
-    () => (selectedOwnerId && String(selectedOwnerId).trim() ? [String(selectedOwnerId).trim()] : []),
-    [selectedOwnerId],
+    () =>
+      effectiveSelectedOwnerId && String(effectiveSelectedOwnerId).trim()
+        ? [String(effectiveSelectedOwnerId).trim()]
+        : [],
+    [effectiveSelectedOwnerId],
   );
 
   const setSelectedOwnerId = useCallback((id) => {
@@ -83,7 +90,8 @@ export function AdminOwnerFilterProvider({ children }) {
   const value = useMemo(
     () => ({
       showOwnerFilter,
-      selectedOwnerId,
+      simulatedOwnerId,
+      selectedOwnerId: effectiveSelectedOwnerId,
       setSelectedOwnerId,
       selectedOwnerIds,
       setSelectedOwnerIds,
@@ -94,7 +102,8 @@ export function AdminOwnerFilterProvider({ children }) {
     }),
     [
       showOwnerFilter,
-      selectedOwnerId,
+      simulatedOwnerId,
+      effectiveSelectedOwnerId,
       setSelectedOwnerId,
       selectedOwnerIds,
       setSelectedOwnerIds,
@@ -115,6 +124,7 @@ export function useAdminOwnerFilter() {
   if (ctx) return ctx;
   return {
     showOwnerFilter: false,
+    simulatedOwnerId: '',
     selectedOwnerId: '',
     setSelectedOwnerId: noop,
     selectedOwnerIds: EMPTY_OWNER_IDS,

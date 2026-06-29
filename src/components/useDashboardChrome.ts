@@ -175,6 +175,7 @@ export function useDashboardChrome() {
         template: 'admin/settings/template',
         'host-profile': 'admin/settings/host-profile',
         'admin-config': 'admin/settings/admin-config',
+        'pm-simulation': 'admin/settings/pm-simulation',
       };
       return map[tab] || 'admin/settings/template';
     }

@@ -1,9 +1,10 @@
 import axios, { AxiosHeaders } from 'axios';
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
-import { getToken, getRefreshToken, setTokens, clearTokens, isAppEmbeddedInIframe } from '../utils/authUtils';
+import { getToken, getRefreshToken, setTokens, isAppEmbeddedInIframe } from '../utils/authUtils';
 import { AUTH_CONFIG } from '../config/authConfig';
 import { dashboardDebugEnabled, logAuth, logAuthError, logAuthWarn, maskToken } from '../utils/dashboardDebug';
 import { runtimeLog } from '../utils/runtimeLog';
+import { invalidateSession } from '../utils/devApiAccess';
 
 /**
  * VITE_DISABLE_AUTH : ne concerne que le garde `ProtectedRoute` (éviter la redirection login).
@@ -105,6 +106,9 @@ apiClient.interceptors.request.use(
       config.headers['x-refresh-token'] = refreshToken;
     }
 
+    // Scope PM simulation via ownerId query param (AdminOwnerFilter) — pas de header custom
+    // (X-Sojori-View-As-Owner bloque le preflight CORS localhost → dev.sojori.com).
+
     if (dashboardDebugEnabled && config.url && !config.url.includes('/valid-token-check')) {
       const isDashboard =
         config.url.includes('/dashboard') ||
@@ -187,8 +191,7 @@ apiClient.interceptors.response.use(
         status: error.response?.status,
       });
       if (!isAppEmbeddedInIframe()) {
-        clearTokens();
-        window.location.href = AUTH_CONFIG.LOGOUT_REDIRECT;
+        invalidateSession('force_logout');
       }
       return Promise.reject(error);
     }
@@ -234,15 +237,21 @@ apiClient.interceptors.response.use(
           status: (refreshError as { response?: { status?: number } })?.response?.status,
         });
         if (!isAppEmbeddedInIframe()) {
-          clearTokens();
-          window.location.href = AUTH_CONFIG.LOGOUT_REDIRECT;
+          invalidateSession('refresh_failed');
         }
         return Promise.reject(refreshError);
       }
     }
 
-    if (error.response?.status === 401) {
-      logAuthWarn('HTTP 401', { url: originalRequest?.url, method: originalRequest?.method });
+    if (error.response?.status === 401 && !isAuthRoute) {
+      logAuthWarn('HTTP 401 — fin de session', {
+        url: originalRequest?.url,
+        method: originalRequest?.method,
+        retried: Boolean(originalRequest._retry),
+      });
+      if (!isAppEmbeddedInIframe()) {
+        invalidateSession('http_401');
+      }
     }
 
     return Promise.reject(error);

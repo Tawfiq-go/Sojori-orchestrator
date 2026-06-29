@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { RouteAccessGuard } from './components/RouteAccessGuard';
 import { DashboardShellLayout } from './components/DashboardShellLayout';
 import { AdminRoute } from './components/AdminRoute';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
@@ -10,13 +11,16 @@ import { DevRuntimeLogPanel } from './components/DevRuntimeLogPanel';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/monitoring-theme.css';
+import './styles/pm-simulation-theme.css';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import AcceptInvitePage from './pages/AcceptInvitePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import ForbiddenPage from './pages/ForbiddenPage';
 
 const ReservationsPage = lazy(() =>
   import('./pages/ReservationsPage').then((module) => ({ default: module.ReservationsPage }))
@@ -276,9 +280,11 @@ function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
             <Route element={<ProtectedRoute />}>
               <Route element={<DashboardShellLayout />}>
+              <Route element={<RouteAccessGuard />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
               <Route path="/dashboard" element={<DashboardPage />} />
@@ -421,7 +427,10 @@ function App() {
               <Route path="/finances/reports" element={<LazyRoute><FinancesReportsPage /></LazyRoute>} />
               <Route path="/finances/reports/:id" element={<LazyRoute><FinancesReportDetailPage /></LazyRoute>} />
 
+              <Route path="/forbidden" element={<ForbiddenPage />} />
+
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Route>
               </Route>
             </Route>
           </Routes>
