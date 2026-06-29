@@ -17,7 +17,7 @@ import {
 import { useFinancesOwnerScope } from '../useFinancesOwnerScope';
 import { getListings, getOneListing } from '../../listing/services/serverApi.listing';
 import type { ExpenseCategory, LandlordAccount, LedgerEntry, RecurringTemplate } from '../types';
-import { formatMoney, formatShortDate, paidByLabel } from '../utils/format';
+import { formatMoney, formatShortDate, ledgerSourceBadge, paidByLabel } from '../utils/format';
 import { listLandlords } from '../landlordApi';
 import { CategorySelect, categoryNameById } from '../utils/expenseCategories.tsx';
 import { SearchSelect } from '../utils/financesSearchSelect.tsx';
@@ -281,7 +281,12 @@ function FinancesLedgerPageContent() {
     }
     const q = search.trim().toLowerCase();
     if (!q) return rows;
-    return rows.filter((e) => e.name?.toLowerCase().includes(q) || e.categoryLabel?.toLowerCase().includes(q));
+    return rows.filter(
+      (e) =>
+        e.name?.toLowerCase().includes(q) ||
+        e.categoryLabel?.toLowerCase().includes(q) ||
+        e.entryCode?.toLowerCase().includes(q),
+    );
   }, [entries, search, sourceFilter]);
 
   const whatsappCount = useMemo(() => entries.filter((e) => e.source === 'whatsapp').length, [entries]);
@@ -413,7 +418,7 @@ function FinancesLedgerPageContent() {
         <div className="toolbar">
           <div className="search-in">
             <span>🔎</span>
-            <input placeholder="Libellé…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder="Libellé, réf. SE-…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <div className="ledger-source-filters" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <span className="sub" style={{ marginRight: 4 }}>
@@ -533,6 +538,7 @@ function FinancesLedgerPageContent() {
               <thead>
                 <tr>
                   <th>Date</th>
+                  <th>Réf.</th>
                   <th>Libellé</th>
                   <th>Type</th>
                   <th className="num">Montant</th>
@@ -540,6 +546,7 @@ function FinancesLedgerPageContent() {
                   <th>Listing</th>
                   <th>Résa.</th>
                   <th>Payé par</th>
+                  <th>Source</th>
                   <th>Justif.</th>
                   {canWrite ? <th className="num">Actions</th> : null}
                 </tr>
@@ -547,7 +554,7 @@ function FinancesLedgerPageContent() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={canWrite ? 10 : 9}>
+                    <td colSpan={canWrite ? 12 : 11}>
                       <div className="empty" style={{ padding: '32px 16px' }}>
                         <div>Aucune ligne pour la période en cours.</div>
                         {activeRecurring.length > 0 ? (
@@ -563,16 +570,14 @@ function FinancesLedgerPageContent() {
                   filtered.map((row) => (
                     <tr key={row._id}>
                       <td className="mono">{formatShortDate(row.date)}</td>
+                      <td className="mono ledger-truncate" title={row.entryCode || row._id}>
+                        {row.entryCode ? (
+                          <span className="bdg info">{row.entryCode}</span>
+                        ) : (
+                          <span className="sub">—</span>
+                        )}
+                      </td>
                       <td className="cell-main ledger-truncate" title={row.name}>
-                        {row.source === 'whatsapp' ? (
-                          <span className="bdg info" title="Saisie via WhatsApp (Flow E)" style={{ marginRight: 6 }}>
-                            📱
-                          </span>
-                        ) : row.source === 'recurring' || row.recurringTemplateId ? (
-                          <span className="bdg gray" title="Ligne issue d'une récurrence" style={{ marginRight: 6 }}>
-                            🔁
-                          </span>
-                        ) : null}
                         {row.name}
                       </td>
                       <td>
@@ -593,6 +598,16 @@ function FinancesLedgerPageContent() {
                       </td>
                       <td>
                         <span className="bdg info">{paidByLabel(row.paidBy)}</span>
+                      </td>
+                      <td>
+                        {(() => {
+                          const src = ledgerSourceBadge(row);
+                          return (
+                            <span className={`bdg ${src.tone}`} title={src.title}>
+                              {src.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td>
                         {(row.invoiceUrls?.length ?? 0) > 0 ? (
@@ -850,7 +865,7 @@ function ExpenseDrawer({
         );
         toast.success(`Récurrence créée — ${describeRecurringSchedule(schedule)}`);
       } else {
-        await createLedgerEntry(
+        const created = await createLedgerEntry(
           {
             type,
             name,
@@ -867,7 +882,7 @@ function ExpenseDrawer({
           },
           scope,
         );
-        toast.success('Ligne enregistrée');
+        toast.success(created?.entryCode ? `Ligne enregistrée · ${created.entryCode}` : 'Ligne enregistrée');
       }
       onSaved();
     } catch (err) {
@@ -1751,6 +1766,7 @@ function EntryAttachmentsDrawer({
               value={invoiceUrls}
               onChange={setInvoiceUrls}
               disabled={readOnly || needsOwnerPick || saving}
+              variant="gallery"
               hint={
                 entry.recurringTemplateId || entry.source === 'recurring'
                   ? 'Ligne issue d’une récurrence — ajoutez ici la facture ou la photo du mois.'
