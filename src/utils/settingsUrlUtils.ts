@@ -1,11 +1,17 @@
 /** URL Paramètres — aligné legacy sojori-dashboard /admin/Settings */
 
-export type SettingsSection = 'template' | 'host-profile' | 'admin-config' | 'currency';
+export type SettingsSection =
+  | 'template'
+  | 'host-profile'
+  | 'admin-config'
+  | 'currency'
+  | 'pm-simulation';
 
 export const SETTINGS_SECTION_TABS: Record<Exclude<SettingsSection, 'currency'>, string> = {
   template: 'template',
   'host-profile': 'host-profile',
   'admin-config': 'admin-config',
+  'pm-simulation': 'pm-simulation',
 };
 
 export function settingsSectionFromPath(pathname: string, tabParam: string | null): SettingsSection {
@@ -16,6 +22,7 @@ export function settingsSectionFromPath(pathname: string, tabParam: string | nul
   const tab = (tabParam || '').toLowerCase();
   if (tab === 'host-profile') return 'host-profile';
   if (tab === 'admin-config') return 'admin-config';
+  if (tab === 'pm-simulation') return 'pm-simulation';
   if (tab === 'template') return 'template';
   return 'template';
 }

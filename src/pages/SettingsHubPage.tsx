@@ -12,11 +12,13 @@ import { TemplateTab } from '../components/settings/TemplateTab';
 import { HostProfileTab } from '../components/settings/HostProfileTab';
 import { AdminConfigTab } from '../components/settings/AdminConfigTab';
 import { CurrencyTab } from '../components/settings/CurrencyTab';
+import { PmSimulationPanel } from '../components/simulation/PmSimulationPanel';
 
 const HUB_SECTIONS: Array<{ id: SettingsSection; label: string; icon: string }> = [
   { id: 'template', label: 'Templates', icon: '📧' },
   { id: 'host-profile', label: 'Profil hôte', icon: '🏠' },
   { id: 'admin-config', label: 'Pays & Villes', icon: '🌍' },
+  { id: 'pm-simulation', label: 'Simulation PM', icon: '🎭' },
   { id: 'currency', label: 'Devises', icon: '💱' },
 ];
 
@@ -110,6 +112,7 @@ export function SettingsHubPage() {
             {section === 'template' && <TemplateTab />}
             {section === 'host-profile' && <HostProfileTab />}
             {section === 'admin-config' && <AdminConfigTab />}
+            {section === 'pm-simulation' && <PmSimulationPanel />}
             {section === 'currency' && <CurrencyTab />}
           </div>
         </div>

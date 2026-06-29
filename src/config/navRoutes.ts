@@ -120,6 +120,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'admin/settings/template': '/admin/settings?tab=template',
   'admin/settings/host-profile': '/admin/settings?tab=host-profile',
   'admin/settings/admin-config': '/admin/settings?tab=admin-config',
+  'admin/settings/pm-simulation': '/admin/settings?tab=pm-simulation',
   'admin/setting/currency': '/admin/setting/currency',
 
   // Temp — pages legacy / placement à décider

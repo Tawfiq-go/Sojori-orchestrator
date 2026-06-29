@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
@@ -57,7 +57,8 @@ import {
   writeDashboardListingIdsHint,
   writeDashboardSnapshotCache,
 } from '../utils/dashboardSnapshotCache';
-import { AdminOwnerFilterProvider, useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import { usePmSimulation } from '../context/PmSimulationContext';
 import OwnerFilterField from '../components/OwnerFilterBar/OwnerFilterField';
 import { useAuth } from '../hooks/useAuth';
 import { dashboardDebugEnabled, logDashboard, logDashboardApiDetail, logDashboardKpisSummary } from '../utils/dashboardDebug';
@@ -82,17 +83,14 @@ const SCROLL_LIST_MAX_HEIGHT = 320;
 const VISIBLE_LIST_HINT = '4 visibles · scroll';
 
 export function DashboardPage() {
-  return (
-    <AdminOwnerFilterProvider>
-      <DashboardPageContent />
-    </AdminOwnerFilterProvider>
-  );
+  return <DashboardPageContent />;
 }
 
 function DashboardPageContent() {
   const { isAuthenticated, loading: authLoading, user, token, error: authError } = useAuth();
-  const { showOwnerFilter, requestOwnerId } = useAdminOwnerFilter();
-  const ownerScopeBlocked = showOwnerFilter && !requestOwnerId;
+  const { showOwnerFilter, requestOwnerId, simulatedOwnerId } = useAdminOwnerFilter();
+  const { dashboardDataRevision } = usePmSimulation();
+  const ownerScopeBlocked = showOwnerFilter && !requestOwnerId && !simulatedOwnerId;
   const [period, setPeriod] = useState<DashboardPeriod>('Mois');
   const [properties, setProperties] = useState<DashboardPropertyOption[]>([]);
   const [listingFilterOptions, setListingFilterOptions] = useState<DashboardPropertyOption[]>([]);
@@ -103,6 +101,15 @@ function DashboardPageContent() {
   const [dashboardReady, setDashboardReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const prevRequestOwnerIdRef = useRef<string | null | undefined>(requestOwnerId);
+
+  useEffect(() => {
+    if (prevRequestOwnerIdRef.current !== requestOwnerId) {
+      prevRequestOwnerIdRef.current = requestOwnerId;
+      setRefreshKey((k) => k + 1);
+      setSelectedPropertyIds([]);
+    }
+  }, [requestOwnerId]);
 
   /** Toujours visible (même `vite preview` / build prod sur :4174) pour confirmer que la page tourne. */
   useEffect(() => {
@@ -111,10 +118,6 @@ function DashboardPageContent() {
       dashboardDebugEnabled,
     });
   }, []);
-
-  useEffect(() => {
-    setSelectedPropertyIds([]);
-  }, [requestOwnerId]);
 
   const listingOptions = useMemo(() => {
     if (listingFilterOptions.length > 0) {
@@ -150,7 +153,7 @@ function DashboardPageContent() {
         return;
       }
 
-      const skipSessionCache = refreshKey > 0;
+      const skipSessionCache = refreshKey > 0 || dashboardDataRevision > 0;
       const cacheEntry = skipSessionCache
         ? null
         : readDashboardSnapshotCacheEntry(period, selectedPropertyIds, requestOwnerId, {
@@ -189,7 +192,9 @@ function DashboardPageContent() {
         cacheIsFresh,
       });
 
-      if (cacheIsFresh && refreshKey === 0) {
+      const cacheHasListings = (cached?.properties?.length ?? 0) > 0;
+
+      if (cacheIsFresh && refreshKey === 0 && dashboardDataRevision === 0 && cacheHasListings) {
         logDashboard('DashboardPage — cache frais (<3 min), skip refetch réseau', {
           cacheAgeMs: cacheEntry.ageMs,
         });
@@ -391,7 +396,7 @@ function DashboardPageContent() {
       cancelled = true;
       abort.abort();
     };
-  }, [period, refreshKey, selectedPropertyIds, authLoading, isAuthenticated, requestOwnerId, ownerScopeBlocked]);
+  }, [period, refreshKey, dashboardDataRevision, selectedPropertyIds, authLoading, isAuthenticated, requestOwnerId, ownerScopeBlocked]);
 
   const topLiveProperties = useMemo(
     () =>

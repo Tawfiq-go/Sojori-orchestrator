@@ -119,3 +119,22 @@ export function writeDashboardSnapshotCache(
     // quota / private mode
   }
 }
+
+/** Invalide les snapshots dashboard pour un owner (ex. démarrage simulation PM). */
+export function clearDashboardSnapshotCacheForOwner(ownerId?: string | null): void {
+  const owner = ownerId ? String(ownerId) : 'scoped';
+  const prefix = `${PREFIX}${owner}:`;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith(prefix)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => sessionStorage.removeItem(key));
+    sessionStorage.removeItem(hintsCacheKey(ownerId));
+  } catch {
+    // quota / private mode
+  }
+}

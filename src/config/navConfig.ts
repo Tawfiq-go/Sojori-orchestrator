@@ -220,6 +220,13 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
       { id: 'admin/roles', label: 'Rôles & groupes', iconType: 'shield', iconColor: '#C81E1E' },
       { id: 'admin/mapping', label: 'Mapping global', iconType: 'link', iconColor: '#6D9EEB' },
       { id: 'admin/settings', label: 'Paramètres', iconType: 'settings', iconColor: '#666666' },
+      {
+        id: 'admin/settings/pm-simulation',
+        label: 'Simulation PM',
+        icon: '🎭',
+        iconColor: '#B45309',
+        description: 'Voir l’application comme un Property Manager (mode audit)',
+      },
     ],
   },
   {
