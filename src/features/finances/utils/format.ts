@@ -1,4 +1,4 @@
-import type { LandlordContract } from '../types';
+import type { LandlordContract, LedgerEntry } from '../types';
 import { contractBaseShortLabel } from './contractCommissionBase';
 
 export function formatMoney(amount: number, currency = 'MAD'): string {
@@ -57,4 +57,25 @@ export function paidByLabel(paidBy?: string): string {
   if (paidBy === 'landlord') return 'Propriétaire';
   if (paidBy === 'guest') return 'Voyageur';
   return 'PM';
+}
+
+/** Libellé + ton badge pour la colonne Source du journal. */
+export function ledgerSourceBadge(entry: Pick<LedgerEntry, 'source' | 'recurringTemplateId'>): {
+  label: string;
+  tone: 'info' | 'gray' | 'gold' | 'rose';
+  title: string;
+} {
+  if (entry.source === 'whatsapp') {
+    return { label: '📱 WhatsApp', tone: 'info', title: 'Saisie via Flow E staff WhatsApp' };
+  }
+  if (entry.source === 'recurring' || entry.recurringTemplateId) {
+    return { label: '🔁 Récurrent', tone: 'gray', title: 'Ligne générée depuis une récurrence' };
+  }
+  if (entry.source === 'import') {
+    return { label: '📥 Import', tone: 'gold', title: 'Import externe' };
+  }
+  if (entry.source === 'task') {
+    return { label: '⚙️ Tâche', tone: 'rose', title: 'Créée automatiquement (tâche)' };
+  }
+  return { label: '✏️ Manuel', tone: 'gray', title: 'Saisie manuelle dashboard' };
 }

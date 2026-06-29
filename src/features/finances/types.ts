@@ -36,6 +36,7 @@ export type LedgerSource = 'manual' | 'recurring' | 'import' | 'task' | 'whatsap
 
 export type LedgerEntry = {
   _id: string;
+  entryCode?: string;
   type: LedgerEntryType;
   name: string;
   description?: string;
