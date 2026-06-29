@@ -76,6 +76,7 @@ export function ReportHeaderSection({
             canonicalUrl={value.logoUrl}
             className="report-header-bar-logo"
             empty={logoFallback(displayName, 'report-header-bar-logo report-header-bar-logo-fallback')}
+            brokenFallback={logoFallback(displayName, 'report-header-bar-logo report-header-bar-logo-fallback')}
           />
           <span className="report-header-bar-text">
             <span className="report-header-bar-kicker">En-tête PDF</span>
@@ -121,6 +122,7 @@ export function ReportHeaderSection({
               canonicalUrl={value.logoUrl}
               className="report-header-logo-preview"
               empty={<span className="report-header-logo-preview report-header-logo-empty">Aucun logo</span>}
+              brokenFallback={logoFallback(displayName, 'report-header-logo-preview report-header-bar-logo-fallback')}
             />
             <div className="report-header-logo-meta">
               {hasLogo ? (

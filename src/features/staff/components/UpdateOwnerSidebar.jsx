@@ -3,7 +3,14 @@ import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
-import { updateOwner, updateOwnerWhatsappAiTier, getCities, getCurrencies } from '../services/serverApi.task';
+import {
+  createOwner,
+  updateOwner,
+  updateOwnerWhatsappAiTier,
+  updateFillCompany,
+  getCities,
+  getCurrencies,
+} from '../services/serverApi.task';
 import { uploadImageToAPI, uploadMultipleImagesToAPI } from '../../../redux/slices/UploadSlice';
 import {
   extractUrlsFromUploadResult,
@@ -19,6 +26,18 @@ import { WHATSAPP_AI_TIER_OPTIONS, tierOptionDropdownLabel } from '../../../cons
 import SearchableSelect from './SearchableSelect';
 import { useChannelsFillCompanyPickers } from '../hooks/useChannelsFillCompanyPickers';
 import { sortCurrenciesByOrderedCodes } from '../utils/currencySort';
+import OwnerCapabilitiesActivationPanel from '../../orchestrationListingV3/OwnerCapabilitiesActivationPanel';
+import FillCompanyFormFields from './FillCompanyFormFields';
+import {
+  buildFillCompanyInitialValues,
+  buildFillCompanyApiPayload,
+  getSelectedCitiesFromOwner,
+  hasFillCompanyUserInput,
+} from '../utils/fillCompanyFormUtils';
+import {
+  defaultActivationsAllOff,
+  initializeOwnerOrchestrationFromActivations,
+} from '../../orchestrationListingV3/ownerCapabilityActivation';
 import '../../taskHub/staff-design/staffDesign.css';
 import './ownerFormDrawer.css';
 
@@ -30,8 +49,16 @@ function ownerInitials(owner) {
   return n.slice(0, 2).toUpperCase();
 }
 
-const buildValidationSchema = (t, owner) =>
+const buildValidationSchema = (t, owner, isCreate) =>
   Yup.object().shape({
+    ...(isCreate
+      ? {
+          email: Yup.string().email(t('Invalid email')).required(t('Email is required')),
+          password: Yup.string()
+            .required(t('Password is required'))
+            .min(6, t('Password must be at least 6 characters')),
+        }
+      : {}),
     firstName: Yup.string().required(t('First name is required')),
     lastName: Yup.string().required(t('Last name is required')),
     phone: Yup.string().required(t('Phone is required')),
@@ -45,6 +72,7 @@ const buildValidationSchema = (t, owner) =>
     banned: Yup.boolean(),
     deleted: Yup.boolean(),
     ruExtranetPassword: Yup.string().test('ru-extranet-when-needed', function (value) {
+      if (isCreate) return true;
       const { channelManager } = this.parent;
       const hasRuId = !!(owner?.ruOwnerId && String(owner.ruOwnerId).trim());
       const hasStoredRuPwd = !!owner?.hasRuExtranetPassword;
@@ -60,6 +88,42 @@ const buildValidationSchema = (t, owner) =>
     elevatedAuthPassword: Yup.string().notRequired(),
   });
 
+const CREATE_EMPTY_PM_PROFILE = {
+  publicName: '',
+  slug: '',
+  tagline: '',
+  description: '',
+  images: [],
+  brandColor: { from: '', to: '' },
+  verified: false,
+  published: false,
+  responseTime: '',
+};
+
+const CREATE_INITIAL_VALUES = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  password: '',
+  phone: '',
+  whatsapp: '',
+  channelManager: 'RU',
+  cityId: '',
+  banned: false,
+  deleted: false,
+  settings: { language: 'en', currency: 'USD' },
+  ruExtranetPassword: '',
+  elevatedAuthEmail: '',
+  elevatedAuthPassword: '',
+  whatsappConversationalTier: 2,
+  address: '',
+  postalCode: '',
+  city: '',
+  country: '',
+  pmProfile: { ...CREATE_EMPTY_PM_PROFILE },
+  fillCompany: buildFillCompanyInitialValues({}),
+};
+
 const OWNER_TABS = [
   { id: 'compte', label: 'Compte' },
   { id: 'rapports-pl', label: 'Rapports P&L' },
@@ -70,7 +134,43 @@ const OWNER_TABS = [
 const TabPanel = ({ active, id, children }) =>
   active === id ? <div className="form-section full owner-tab-panel">{children}</div> : null;
 
-const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = true }) => {
+function AccountToFillCompanySync({ values, setFieldValue, cities }) {
+  useEffect(() => {
+    const city = Array.isArray(cities) ? cities.find((c) => c._id === values.cityId) : null;
+    const cityName = city?.name || '';
+    if (cityName) {
+      setFieldValue('fillCompany.ContactInfo.City', cityName);
+      setFieldValue('fillCompany.CompanyInfo.CompanyCity', cityName);
+    }
+    setFieldValue('fillCompany.ContactInfo.FirstName', values.firstName || '');
+    setFieldValue('fillCompany.ContactInfo.LastName', values.lastName || '');
+    setFieldValue('fillCompany.ContactInfo.Email', values.email || '');
+    setFieldValue('fillCompany.ContactInfo.Phone', values.phone || '');
+    if (values.phone) {
+      setFieldValue('fillCompany.CompanyInfo.PhoneNumber', values.phone);
+    }
+  }, [
+    values.firstName,
+    values.lastName,
+    values.email,
+    values.phone,
+    values.cityId,
+    cities,
+    setFieldValue,
+  ]);
+  return null;
+}
+
+const UpdateOwnerSidebar = ({
+  open,
+  onClose,
+  owner,
+  onOwnerUpdated,
+  onOwnerCreated,
+  mode = 'edit',
+  inline = true,
+}) => {
+  const isCreate = mode === 'create';
   const { t } = useTranslation('common');
   const dispatch = useDispatch();
   const authRole = useSelector((state) => state.auth?.user?.role);
@@ -81,11 +181,16 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
   const [uploadingImages, setUploadingImages] = useState(false);
   const [activeTab, setActiveTab] = useState('compte');
   const drawerRef = useRef(null);
+  const [serviceActivations, setServiceActivations] = useState(() => defaultActivationsAllOff());
   const [cities, setCities] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [currencies, setCurrencies] = useState([]);
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
+  const [selectedCities, setSelectedCities] = useState([]);
   const {
+    countries: ruCountries,
+    languagesRu,
+    nationalities: ruNationalities,
     interfaceLanguageCodes,
     currencySortOrder,
     loading: loadingRefPickers,
@@ -97,11 +202,24 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
     () => sortCurrenciesByOrderedCodes(currencies, currencySortOrder),
     [currencies, currencySortOrder],
   );
-  const validationSchema = useMemo(() => buildValidationSchema(t, owner), [t, owner]);
+  const validationSchema = useMemo(() => buildValidationSchema(t, owner, isCreate), [t, owner, isCreate]);
   const showRuExtranetPasswordField = useMemo(() => {
+    if (isCreate) return false;
     const hasRuId = !!(owner?.ruOwnerId && String(owner.ruOwnerId).trim());
     return !hasRuId;
-  }, [owner?.ruOwnerId]);
+  }, [owner?.ruOwnerId, isCreate]);
+
+  useEffect(() => {
+    if (open && isCreate) setServiceActivations(defaultActivationsAllOff());
+  }, [open, isCreate]);
+
+  useEffect(() => {
+    if (open && !isCreate && owner) {
+      setSelectedCities(getSelectedCitiesFromOwner(owner));
+    } else if (open && isCreate) {
+      setSelectedCities([]);
+    }
+  }, [open, isCreate, owner?._id]);
 
   const currencyOptions = useMemo(
     () =>
@@ -118,12 +236,14 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
   }, [open, owner?._id]);
 
   useEffect(() => {
-    if (!open || !inline || !owner) return;
+    if (!open || !inline) return;
+    if (isCreate) return;
+    if (!owner) return;
     const id = window.requestAnimationFrame(() => {
       drawerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     return () => window.cancelAnimationFrame(id);
-  }, [open, inline, owner?._id]);
+  }, [open, inline, owner?._id, isCreate]);
 
   useEffect(() => {
     if (!open) return;
@@ -199,30 +319,142 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
       .replace(/[^a-z0-9-]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
+  const persistFillCompany = async (ownerId, values) => {
+    if (!hasFillCompanyUserInput(values.fillCompany)) return null;
+    const payload = buildFillCompanyApiPayload(values.fillCompany, selectedCities);
+    return updateFillCompany(ownerId, payload);
+  };
+
+  const buildUpdatePayload = (values, selectedCity) => ({
+    firstName: values.firstName,
+    lastName: values.lastName,
+    phone: values.phone,
+    whatsapp: values.whatsapp,
+    channelManager: values.channelManager,
+    cityId: values.cityId,
+    rentalCityId: selectedCity?.rentalCityId?.toString(),
+    settings: values.settings,
+    banned: values.banned,
+    deleted: values.deleted,
+    address: values.address,
+    postalCode: values.postalCode,
+    city: values.city,
+    country: values.country,
+    pmProfile: {
+      ...values.pmProfile,
+      slug: normalizePmSlug(values.pmProfile?.slug),
+      images: normalizePmImageList(values.pmProfile?.images),
+    },
+  });
+
   const handleSubmit = async (values, { setSubmitting, setErrors }) => {
     try {
       const selectedCity = cities.find((city) => city._id === values.cityId);
+
+      if (isCreate) {
+        const response = await createOwner({
+          firstName: values.firstName,
+          lastName: values.lastName,
+          email: values.email,
+          password: values.password,
+          phone: values.phone,
+          whatsapp: values.whatsapp,
+          channelManager: values.channelManager,
+          cityId: values.cityId,
+          rentalCityId: selectedCity?.rentalCityId?.toString(),
+          whatsappConversationalTier: Number(values.whatsappConversationalTier) || 2,
+          role: 'Owner',
+        });
+        const payload = response.data?.data ?? response.data;
+        const accountId = String(payload?.accountId ?? payload?._id ?? payload?.id ?? '').trim();
+        if (!accountId) {
+          setErrors({
+            submit: response.data?.error || response.data?.message || t('Failed to create owner'),
+          });
+          return;
+        }
+
+        try {
+          const fillRes = await persistFillCompany(accountId, values);
+          if (fillRes?.message && String(fillRes.message).toLowerCase().includes('synced')) {
+            toast.info('Entreprise enregistrée et synchronisée RU');
+          }
+        } catch (fillErr) {
+          setErrors({
+            submit:
+              fillErr?.response?.data?.message ||
+              fillErr?.response?.data?.error ||
+              fillErr?.message ||
+              'Compte créé mais échec enregistrement entreprise',
+          });
+          onOwnerCreated?.({
+            _id: accountId,
+            id: accountId,
+            email: values.email,
+            firstName: values.firstName,
+            lastName: values.lastName,
+          });
+          return;
+        }
+
+        try {
+          await initializeOwnerOrchestrationFromActivations(accountId, serviceActivations);
+        } catch (initErr) {
+          console.warn('[CreateOwner] orchestration init', initErr);
+        }
+
+        const profilePayload = buildUpdatePayload(
+          { ...values, banned: false, deleted: false },
+          selectedCity,
+        );
+        let createdAccount = {
+          _id: accountId,
+          id: accountId,
+          email: values.email,
+          firstName: values.firstName,
+          lastName: values.lastName,
+          phone: values.phone,
+          whatsapp: values.whatsapp,
+          channelManager: values.channelManager,
+          cityId: values.cityId,
+          ruOwnerId: payload?.ruOwnerId ?? null,
+          whatsappConversationalTier: Number(values.whatsappConversationalTier) || 2,
+          settings: values.settings,
+          pmProfile: profilePayload.pmProfile,
+          fillCompany: values.fillCompany,
+        };
+
+        try {
+          const upd = await updateOwner(accountId, profilePayload);
+          if (upd.data?.account) createdAccount = { ...createdAccount, ...upd.data.account };
+        } catch (updErr) {
+          console.warn('[CreateOwner] profile update after register', updErr);
+        }
+
+        if (isPlatformAdmin && values.whatsappConversationalTier) {
+          try {
+            const tier = Number(values.whatsappConversationalTier);
+            await updateOwnerWhatsappAiTier(accountId, tier);
+            try {
+              await fullchatbotApi.syncOwnerModelToWhitelist(accountId, tier);
+            } catch (syncErr) {
+              console.warn('[CreateOwner] whitelist model sync', syncErr);
+            }
+            createdAccount.whatsappConversationalTier = tier;
+          } catch (tierErr) {
+            console.warn('[CreateOwner] whatsapp tier', tierErr);
+          }
+        }
+
+        onOwnerCreated?.(createdAccount);
+        toast.success(t('Owner created successfully'));
+        onClose();
+        return;
+      }
+
       const ruPwd = (values.ruExtranetPassword || '').trim();
       const response = await updateOwner(owner._id, {
-        firstName: values.firstName,
-        lastName: values.lastName,
-        phone: values.phone,
-        whatsapp: values.whatsapp,
-        channelManager: values.channelManager,
-        cityId: values.cityId,
-        rentalCityId: selectedCity?.rentalCityId?.toString(),
-        settings: values.settings,
-        banned: values.banned,
-        deleted: values.deleted,
-        address: values.address,
-        postalCode: values.postalCode,
-        city: values.city,
-        country: values.country,
-        pmProfile: {
-          ...values.pmProfile,
-          slug: normalizePmSlug(values.pmProfile?.slug),
-          images: normalizePmImageList(values.pmProfile?.images),
-        },
+        ...buildUpdatePayload(values, selectedCity),
         ...(ruPwd.length >= 6 ? { ruExtranetPassword: ruPwd } : {}),
       });
       if (response.data?.account) {
@@ -250,12 +482,26 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
             return;
           }
         }
-        onOwnerUpdated(updatedAccount);
         const sync = response.data.ruOwnerSync;
         if (sync?.attempted && sync.ok === false) {
           setErrors({ submit: sync.message || t('Failed to update owner') });
           return;
         }
+
+        try {
+          await persistFillCompany(owner._id, values);
+        } catch (fillErr) {
+          setErrors({
+            submit:
+              fillErr?.response?.data?.message ||
+              fillErr?.response?.data?.error ||
+              fillErr?.message ||
+              'Compte mis à jour mais échec enregistrement entreprise',
+          });
+          return;
+        }
+
+        onOwnerUpdated({ ...updatedAccount, fillCompany: values.fillCompany });
         onClose();
       }
     } catch (error) {
@@ -271,42 +517,57 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
     }
   };
 
-  if (!open || !owner) return null;
+  if (!open) return null;
+  if (!isCreate && !owner) return null;
 
-  const initialValues = {
-    firstName: owner.firstName || '',
-    lastName: owner.lastName || '',
-    phone: owner.phone || '',
-    whatsapp: owner.whatsapp || '',
-    channelManager: owner.channelManager || '',
-    cityId: owner.cityId || '',
-    banned: owner.banned || false,
-    deleted: owner.deleted || false,
-    settings: owner.settings || { language: 'en', currency: 'USD' },
-    ruExtranetPassword: '',
-    elevatedAuthEmail: '',
-    elevatedAuthPassword: '',
-    whatsappConversationalTier: owner.whatsappConversationalTier || 2,
-    email: owner.email || '',
-    address: owner.address || '',
-    postalCode: owner.postalCode || '',
-    city: owner.city || '',
-    country: owner.country || '',
-    pmProfile: {
-      publicName: owner?.pmProfile?.publicName || '',
-      slug: owner?.pmProfile?.slug || '',
-      tagline: owner?.pmProfile?.tagline || '',
-      description: owner?.pmProfile?.description || '',
-      images: normalizePmImageList(owner?.pmProfile?.images),
-      brandColor: {
-        from: owner?.pmProfile?.brandColor?.from || '',
-        to: owner?.pmProfile?.brandColor?.to || '',
-      },
-      verified: owner?.pmProfile?.verified || false,
-      published: owner?.pmProfile?.published || false,
-      responseTime: owner?.pmProfile?.responseTime || '',
-    },
-  };
+  const initialValues = isCreate
+    ? {
+        ...CREATE_INITIAL_VALUES,
+        fillCompany: buildFillCompanyInitialValues({ cities }),
+      }
+    : {
+        firstName: owner.firstName || '',
+        lastName: owner.lastName || '',
+        phone: owner.phone || '',
+        whatsapp: owner.whatsapp || '',
+        channelManager: owner.channelManager || '',
+        cityId: owner.cityId || '',
+        banned: owner.banned || false,
+        deleted: owner.deleted || false,
+        settings: owner.settings || { language: 'en', currency: 'USD' },
+        ruExtranetPassword: '',
+        elevatedAuthEmail: '',
+        elevatedAuthPassword: '',
+        whatsappConversationalTier: owner.whatsappConversationalTier || 2,
+        email: owner.email || '',
+        address: owner.address || '',
+        postalCode: owner.postalCode || '',
+        city: owner.city || '',
+        country: owner.country || '',
+        fillCompany: buildFillCompanyInitialValues({ owner, cities }),
+        pmProfile: {
+          publicName: owner?.pmProfile?.publicName || '',
+          slug: owner?.pmProfile?.slug || '',
+          tagline: owner?.pmProfile?.tagline || '',
+          description: owner?.pmProfile?.description || '',
+          images: normalizePmImageList(owner?.pmProfile?.images),
+          brandColor: {
+            from: owner?.pmProfile?.brandColor?.from || '',
+            to: owner?.pmProfile?.brandColor?.to || '',
+          },
+          verified: owner?.pmProfile?.verified || false,
+          published: owner?.pmProfile?.published || false,
+          responseTime: owner?.pmProfile?.responseTime || '',
+        },
+      };
+
+  const drawerTitle = isCreate
+    ? 'Créer · nouveau property manager'
+    : `Modifier · ${owner?.firstName || owner?.lastName || 'Property manager'}`;
+
+  const drawerInitials = isCreate
+    ? '+'
+    : ownerInitials(isCreate ? null : owner);
 
   const drawerPanel = (
     <div
@@ -349,11 +610,9 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
                   fontWeight: 800,
                 }}
               >
-                {ownerInitials(owner)}
+                {drawerInitials}
               </div>
-              <h3>
-                Modifier · {values.firstName || values.lastName || 'Property manager'}
-              </h3>
+              <h3>{drawerTitle}</h3>
               <button type="button" className="close" onClick={onClose} aria-label="Fermer">
                 ✕
               </button>
@@ -387,7 +646,55 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
                 <div className="owner-form-hint" style={{ marginBottom: 12 }}>
                   Compte <b>Owner</b> (property manager). Prénom, nom et téléphone sont recopiés vers
                   Rental United si channel = RU.
+                  {isCreate ? (
+                    <>
+                      {' '}
+                      Le mot de passe RU est généré automatiquement à la création si channel = RU.
+                    </>
+                  ) : null}
                 </div>
+                {isCreate ? (
+                  <div className="owner-tab-grid" style={{ marginBottom: 12 }}>
+                    <div className="form-section">
+                      <div className="form-section-h">Connexion Sojori</div>
+                      <div className="field">
+                        <div className="field-label">
+                          Email<span className="req">*</span>
+                        </div>
+                        <input
+                          className="input"
+                          name="email"
+                          type="email"
+                          value={values.email}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                          autoComplete="off"
+                        />
+                        {touched.email && errors.email ? (
+                          <span className="owner-field-err">{errors.email}</span>
+                        ) : null}
+                      </div>
+                      <div className="field">
+                        <div className="field-label">
+                          Mot de passe<span className="req">*</span>
+                          <span className="hint">Min. 6 caractères</span>
+                        </div>
+                        <input
+                          className="input"
+                          name="password"
+                          type="password"
+                          value={values.password}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                          autoComplete="new-password"
+                        />
+                        {touched.password && errors.password ? (
+                          <span className="owner-field-err">{errors.password}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="owner-tab-grid">
                 <div className="form-section">
                   <div className="form-section-h">Identité</div>
@@ -568,6 +875,25 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
                   </div>
                 </div>
 
+                {isCreate ? (
+                  <div className="form-section full" style={{ marginTop: 14 }}>
+                    <div className="form-section-h">Activation des services</div>
+                    <div className="owner-form-hint" style={{ marginBottom: 10 }}>
+                      Désactivé = invisible dans le menu gauche. Par défaut tout est off pour un nouveau PM.
+                    </div>
+                    <OwnerCapabilitiesActivationPanel
+                      ownerKey=""
+                      rows={[]}
+                      orchestrationDoc={null}
+                      compact
+                      value={serviceActivations}
+                      onChange={setServiceActivations}
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                ) : null}
+
+                {!isCreate ? (
                 <div className="form-section full">
                   <div className="form-section-h">Statut compte</div>
                   <div className="admin-row">
@@ -599,6 +925,45 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
                     />
                   </div>
                 </div>
+                ) : null}
+                </div>
+
+                <div className="form-section full" style={{ marginTop: 8 }}>
+                  <div className="form-section-h">Entreprise · FillCompany (RU)</div>
+                  <div className="owner-form-hint" style={{ marginBottom: 8 }}>
+                    Enregistrée dans la même action que le compte : création owner → fiche entreprise
+                    {values.channelManager === 'RU' ? ' → sync RU si champs complets' : ''}.
+                  </div>
+                  <AccountToFillCompanySync
+                    values={values}
+                    setFieldValue={setFieldValue}
+                    cities={cities}
+                  />
+                  <FillCompanyFormFields
+                    namePrefix="fillCompany"
+                    values={values}
+                    errors={errors}
+                    touched={touched}
+                    handleChange={handleChange}
+                    handleBlur={handleBlur}
+                    setFieldValue={setFieldValue}
+                    cities={cities}
+                    ruCountries={ruCountries}
+                    languagesRu={languagesRu}
+                    ruNationalities={ruNationalities}
+                    loadingRefPickers={loadingRefPickers}
+                    refPickersFallback={refPickersFallback}
+                    refPickersError={refPickersError}
+                    selectedCities={selectedCities}
+                    onSelectedCitiesChange={setSelectedCities}
+                    mirrorAccountFields
+                    accountValues={{
+                      firstName: values.firstName,
+                      lastName: values.lastName,
+                      email: values.email,
+                      phone: values.phone,
+                    }}
+                  />
                 </div>
               </TabPanel>
 
@@ -704,10 +1069,23 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
                   </div>
                   <div className="field">
                     <div className="field-label">Email</div>
-                    <input className="input" name="email" value={values.email} readOnly disabled />
-                    <span className="owner-form-hint" style={{ display: 'block', marginTop: 6, padding: '6px 8px' }}>
-                      Modifiable côté compte utilisateur / admin comptes.
-                    </span>
+                    {isCreate ? (
+                      <input
+                        className="input"
+                        name="email"
+                        type="email"
+                        value={values.email}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                      />
+                    ) : (
+                      <>
+                        <input className="input" name="email" value={values.email} readOnly disabled />
+                        <span className="owner-form-hint" style={{ display: 'block', marginTop: 6, padding: '6px 8px' }}>
+                          Modifiable côté compte utilisateur / admin comptes.
+                        </span>
+                      </>
+                    )}
                   </div>
                   <div className="field">
                     <div className="field-label">Téléphone</div>
@@ -976,7 +1354,13 @@ const UpdateOwnerSidebar = ({ open, onClose, owner, onOwnerUpdated, inline = tru
                   disabled={isSubmitting}
                   onClick={() => void submitForm()}
                 >
-                  {isSubmitting ? 'Enregistrement…' : 'Enregistrer ⚡'}
+                  {isSubmitting
+                    ? isCreate
+                      ? 'Création…'
+                      : 'Enregistrement…'
+                    : isCreate
+                      ? 'Créer ⚡'
+                      : 'Enregistrer ⚡'}
                 </button>
               </div>
             </>

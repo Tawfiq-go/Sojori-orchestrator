@@ -300,8 +300,8 @@ export default function WhatsappAdminPageView({
                 Menus WhatsApp · lettre · N → R → W
               </div>
               <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 8 }}>
-                Contrôle l&apos;ouverture des flows (M messages, V avis, L leads, R résa, D arr/dép., T
-                tâches). Indépendant des notifications push ci-dessous.
+                Contrôle l&apos;ouverture des flows (M messages, V avis, L leads, R résa, D arr/dép., E
+                dépense/extra, T tâches). Indépendant des notifications push ci-dessous.
               </div>
               <div className="pill-group">
                 {form.permissions.map((p, idx) => {
