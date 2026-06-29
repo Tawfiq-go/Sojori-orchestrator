@@ -1,34 +1,22 @@
-import { fetchListingMediaBlob, isListingsBucketUrl } from '../services/listingMediaApi';
+import { getListingMediaDisplayUrl, isListingsBucketUrl } from '../services/listingMediaApi';
 
 const GCS_SRC_RE = /src="(https:\/\/storage\.googleapis\.com[^"]+)"/g;
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Lecture image impossible'));
-    reader.readAsDataURL(blob);
-  });
-}
-
-/** Remplace les URLs GCS du HTML par des data-URI (aperçu / PDF sans exposer le bucket). */
+/** Remplace les URLs GCS canoniques par des URLs signées (images visibles en aperçu / impression). */
 export async function sanitizeProfitReportHtmlForDisplay(html: string): Promise<string> {
   const urls = [...new Set([...html.matchAll(GCS_SRC_RE)].map((m) => m[1]).filter(Boolean))];
   if (!urls.length) return html;
 
   let out = html;
-  await Promise.all(
-    urls.map(async (canonical) => {
-      if (!isListingsBucketUrl(canonical)) return;
-      try {
-        const blob = await fetchListingMediaBlob(canonical);
-        const dataUrl = await blobToDataUrl(blob);
-        out = out.split(canonical).join(dataUrl);
-      } catch {
-        /* garde l’original si lecture impossible */
-      }
-    }),
-  );
+  for (const canonical of urls) {
+    if (!isListingsBucketUrl(canonical)) continue;
+    try {
+      const signed = await getListingMediaDisplayUrl(canonical);
+      out = out.split(canonical).join(signed);
+    } catch {
+      /* garde l’original si signature impossible */
+    }
+  }
   return out;
 }
 

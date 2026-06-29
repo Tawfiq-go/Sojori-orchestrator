@@ -5,7 +5,6 @@ import { toast } from 'react-toastify';
 import GlobalTable from 'components/GlobalTable/GlobalTable';
 import BusinessIcon from '@mui/icons-material/Business';
 import AdminFilter from './AdminFilter';
-import CreateOwnerSidebar from './CreateOwnerSidebar';
 import UpdateOwnerSidebar from './UpdateOwnerSidebar';
 import TableLoading from 'components/TableLoading/TableLoadign';
 import { getOwners } from '../../../services/teamDashboardApi';
@@ -515,7 +514,7 @@ const PublicOwner = ({
       cxOwnersOnPage: owners.filter(o => o.channelManager === 'Channex').length
     };
   }, [listings, owners]);
-  const { setTeamStats } = useTeamViewMode();
+  const { setTeamStats, setToolbarAction } = useTeamViewMode();
   useEffect(() => {
     if (!insidePageShell) return;
     setTeamStats([
@@ -526,8 +525,54 @@ const PublicOwner = ({
         value: String(portfolioKpis.listingsTotal),
         iconColor: TEAM_T.info,
       },
+      {
+        icon: '🔗',
+        label: 'RU',
+        value: String(portfolioKpis.listingsRu),
+        iconColor: TEAM_T.success,
+      },
+      {
+        icon: '📡',
+        label: 'Channex',
+        value: String(portfolioKpis.listingsChannex),
+        iconColor: '#7c3aed',
+      },
     ]);
-  }, [insidePageShell, totalCount, portfolioKpis.listingsTotal, setTeamStats]);
+  }, [
+    insidePageShell,
+    totalCount,
+    portfolioKpis.listingsTotal,
+    portfolioKpis.listingsRu,
+    portfolioKpis.listingsChannex,
+    setTeamStats,
+  ]);
+  useEffect(() => {
+    if (!insidePageShell) return;
+    if (!canCreate) {
+      setToolbarAction(null);
+      return;
+    }
+    setToolbarAction(
+      <Button
+        size="small"
+        variant="contained"
+        onClick={() => setOpenCreateDialog(true)}
+        sx={{
+          height: 32,
+          fontSize: 12,
+          fontWeight: 700,
+          textTransform: 'none',
+          bgcolor: TEAM_T.primary,
+          color: '#1a1408',
+          boxShadow: 'none',
+          '&:hover': { bgcolor: TEAM_T.primaryDeep, color: '#fff' },
+        }}
+      >
+        Nouveau PM
+      </Button>,
+    );
+    return () => setToolbarAction(null);
+  }, [insidePageShell, canCreate, setToolbarAction]);
   const cellSx = {
     fontFamily: FONT,
     fontSize: 12
@@ -972,14 +1017,18 @@ const PublicOwner = ({
                 onSearch={handleSearch}
                 onReset={handleReset}
                 onFilterChange={handleFilterChange}
-                onCreate={() => setOpenCreateDialog(true)}
                 onEdit={handleUpdate}
                 onSync={handleSyncOwners}
                 syncLoading={syncLoading}
-                canCreate={canCreate}
                 canUpdate={canUpdate}
                 listingStatsByOwner={listingStatsByOwner}
-                portfolioKpis={portfolioKpis}
+              />
+              <UpdateOwnerSidebar
+                inline
+                mode="create"
+                open={openCreateDialog}
+                onClose={() => setOpenCreateDialog(false)}
+                onOwnerCreated={onOwnerCreated}
               />
               <UpdateOwnerSidebar
                 inline
@@ -1107,7 +1156,13 @@ const PublicOwner = ({
             </>
             )}
 
-            <CreateOwnerSidebar open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} onOwnerCreated={onOwnerCreated} />
+            <UpdateOwnerSidebar
+              mode="create"
+              open={openCreateDialog}
+              onClose={() => setOpenCreateDialog(false)}
+              onOwnerCreated={onOwnerCreated}
+              inline={false}
+            />
 
             {!insidePageShell ? (
               <UpdateOwnerSidebar

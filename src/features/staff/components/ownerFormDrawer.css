@@ -1,3 +1,16 @@
+.owner-fill-company-fields {
+  width: 100%;
+}
+
+.owner-fill-company-fields .MuiCard-root {
+  background: var(--bg2, #fafbfc);
+}
+
+.owner-tab-panel .owner-fill-company-fields {
+  margin-left: -4px;
+  margin-right: -4px;
+}
+
 .owner-drawer-host {
   position: fixed;
   inset: 0;

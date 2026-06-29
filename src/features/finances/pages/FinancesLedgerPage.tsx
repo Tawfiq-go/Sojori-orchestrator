@@ -70,6 +70,7 @@ function FinancesLedgerPageContent() {
   const [landlordsLoading, setLandlordsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'whatsapp' | 'manual' | 'recurring'>('all');
   const [runDueLoading, setRunDueLoading] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
 
@@ -270,10 +271,20 @@ function FinancesLedgerPageContent() {
   };
 
   const filtered = useMemo(() => {
+    let rows = entries;
+    if (sourceFilter === 'whatsapp') {
+      rows = rows.filter((e) => e.source === 'whatsapp');
+    } else if (sourceFilter === 'manual') {
+      rows = rows.filter((e) => !e.source || e.source === 'manual');
+    } else if (sourceFilter === 'recurring') {
+      rows = rows.filter((e) => e.source === 'recurring' || !!e.recurringTemplateId);
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return entries;
-    return entries.filter((e) => e.name?.toLowerCase().includes(q) || e.categoryLabel?.toLowerCase().includes(q));
-  }, [entries, search]);
+    if (!q) return rows;
+    return rows.filter((e) => e.name?.toLowerCase().includes(q) || e.categoryLabel?.toLowerCase().includes(q));
+  }, [entries, search, sourceFilter]);
+
+  const whatsappCount = useMemo(() => entries.filter((e) => e.source === 'whatsapp').length, [entries]);
 
   const kpis = useMemo(() => {
     const expenses = filtered.filter((e) => e.type === 'expense');
@@ -404,6 +415,28 @@ function FinancesLedgerPageContent() {
             <span>🔎</span>
             <input placeholder="Libellé…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+          <div className="ledger-source-filters" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="sub" style={{ marginRight: 4 }}>
+              Origine :
+            </span>
+            {(
+              [
+                ['all', 'Toutes'],
+                ['whatsapp', `📱 WhatsApp${whatsappCount ? ` (${whatsappCount})` : ''}`],
+                ['manual', 'Manuel'],
+                ['recurring', '🔁 Récurrent'],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`btn btn-ghost btn-sm${sourceFilter === key ? ' on' : ''}`}
+                onClick={() => setSourceFilter(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {!loading && activeRecurring.length > 0 && (
@@ -531,6 +564,15 @@ function FinancesLedgerPageContent() {
                     <tr key={row._id}>
                       <td className="mono">{formatShortDate(row.date)}</td>
                       <td className="cell-main ledger-truncate" title={row.name}>
+                        {row.source === 'whatsapp' ? (
+                          <span className="bdg info" title="Saisie via WhatsApp (Flow E)" style={{ marginRight: 6 }}>
+                            📱
+                          </span>
+                        ) : row.source === 'recurring' || row.recurringTemplateId ? (
+                          <span className="bdg gray" title="Ligne issue d'une récurrence" style={{ marginRight: 6 }}>
+                            🔁
+                          </span>
+                        ) : null}
                         {row.name}
                       </td>
                       <td>

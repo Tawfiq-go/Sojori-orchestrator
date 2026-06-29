@@ -21,13 +21,9 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import SyncIcon from '@mui/icons-material/Sync';
 import ChipMultiSelect from 'components/ChipMultiSelect/ChipMultiSelect';
 import {
-  PageHeader,
-  StatCard,
   FilterBar,
   FilterChip,
-  btnPrimarySx,
   btnGhostSx,
-  tokens as dashT,
 } from '../dashboard/DashboardV2.components';
 import { useTeamViewMode } from '../../context/TeamViewContext';
 import { TeamHubMemberCard, TeamHubCardGrid } from './TeamHubMemberCard';
@@ -68,14 +64,11 @@ export function PropertyManagerHubView({
   onSearch,
   onReset,
   onFilterChange,
-  onCreate,
   onEdit,
   onSync,
   syncLoading,
-  canCreate,
   canUpdate,
   listingStatsByOwner,
-  portfolioKpis,
 }) {
   const { viewMode } = useTeamViewMode();
   const [inputValue, setInputValue] = useState(searchText || '');
@@ -199,33 +192,6 @@ export function PropertyManagerHubView({
 
   return (
     <Box>
-      <PageHeader title="Comptes Owner" count={String(totalCount)}>
-        {canCreate ? (
-          <Button sx={btnPrimarySx} onClick={onCreate}>
-            Nouveau PM
-          </Button>
-        ) : null}
-      </PageHeader>
-
-      <Typography sx={{ fontSize: 12.5, color: dashT.text3, mb: 2, maxWidth: 760 }}>
-        Gestionnaires de parc Sojori : identité, channel manager RU/Channex, annonces rattachées.
-        Réservé aux administrateurs plateforme.
-      </Typography>
-
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
-          gap: 1.25,
-          mb: 2,
-        }}
-      >
-        <StatCard icon="🏢" iconBg={dashT.primaryTint} iconColor={dashT.primaryDeep} value={String(totalCount)} label="PM" />
-        <StatCard icon="🏠" iconBg={dashT.infoTint} iconColor={dashT.info} value={String(portfolioKpis?.listingsTotal ?? 0)} label="Annonces" />
-        <StatCard icon="🔗" iconBg={dashT.successTint} iconColor={dashT.success} value={String(portfolioKpis?.listingsRu ?? 0)} label="RU" />
-        <StatCard icon="📡" iconBg={dashT.aiTint} iconColor={dashT.ai} value={String(portfolioKpis?.listingsChannex ?? 0)} label="Channex" />
-      </Box>
-
       <FilterBar>
         <FilterChip label="Actifs" active={statusFilter === 'active'} onClick={() => applyStatusFilter('active')} />
         <FilterChip label="Bannis" active={statusFilter === 'banned'} onClick={() => applyStatusFilter('banned')} />

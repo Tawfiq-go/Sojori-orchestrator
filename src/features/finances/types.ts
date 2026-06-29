@@ -32,6 +32,8 @@ export type LandlordAccount = {
 
 export type LedgerEntryType = 'expense' | 'extra';
 
+export type LedgerSource = 'manual' | 'recurring' | 'import' | 'task' | 'whatsapp';
+
 export type LedgerEntry = {
   _id: string;
   type: LedgerEntryType;
@@ -51,7 +53,7 @@ export type LedgerEntry = {
   status?: string;
   supplier?: string;
   invoiceUrls?: string[];
-  source?: string;
+  source?: LedgerSource;
   recurringTemplateId?: string;
 };
 
