@@ -3,6 +3,17 @@ import type { Message, QuickTemplate } from '../../types/unifiedInbox.types';
 import { formatInboxDaySeparator } from './inboxFormat';
 import { formatInboxMessageText } from './formatInboxMessageText';
 
+export function outboundInboxExchange(text: string): MessageExchange {
+  return {
+    user_message: '',
+    ai_response: text,
+    ai_response_content_type: 'text',
+    timestamp: new Date().toISOString(),
+    sent_by_admin: true,
+    ai_response_send_status: 'sent',
+  };
+}
+
 export function buildInboxMessages(exchanges: MessageExchange[], isOta = false): Message[] {
   const sorted = [...exchanges].sort(
     (a, b) =>

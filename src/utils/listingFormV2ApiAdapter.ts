@@ -14,6 +14,7 @@ import {
   type CancellationPolicyRow,
 } from './listingCancellationPolicyPresets';
 import { buildAdditionalFeesSavePayload } from './listingRuFeesDisplay';
+import { isMongoObjectId } from './listingId';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -382,6 +383,35 @@ function cloneDescriptionArray(raw: unknown): UnknownRecord[] {
   return raw.map((item) => (isRecord(item) ? { ...item } : {}));
 }
 
+/** Mongo rejette languageId: "" — ne garder que les ObjectId valides. */
+function cleanDescriptionForApiPayload(descriptions: UnknownRecord[]): UnknownRecord[] {
+  return descriptions.map((item) => {
+    const row = { ...item };
+    const languageId = asString(row.languageId).trim();
+    if (!isMongoObjectId(languageId)) {
+      delete row.languageId;
+    }
+    return row;
+  });
+}
+
+/** roomTypeConfigId optionnel — "" ou invalide → omis (évite Cast BSON à l’update). */
+function cleanRoomTypeRowForApi(row: UnknownRecord): UnknownRecord {
+  const out = { ...row };
+  const configId = asString(out.roomTypeConfigId).trim();
+  if (!isMongoObjectId(configId)) {
+    delete out.roomTypeConfigId;
+  } else {
+    out.roomTypeConfigId = configId;
+  }
+  return out;
+}
+
+function cleanRoomTypesForApiPayload(roomTypes: unknown): UnknownRecord[] | undefined {
+  if (!Array.isArray(roomTypes)) return undefined;
+  return roomTypes.map((rt) => cleanRoomTypeRowForApi(isRecord(rt) ? rt : {}));
+}
+
 export function findDescIndexForLang(
   descriptions: UnknownRecord[],
   langUi: DescLangUi,
@@ -436,7 +466,9 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     sqm: asNumber(rt.surface) ?? asNumber(hydrated.surface),
     floor: hydrated.floor != null ? asNumber(hydrated.floor) : null,
     totalFloor: hydrated.totalFloor != null ? asNumber(hydrated.totalFloor) : null,
-    roomTypeConfigId: asString(rt.roomTypeConfigId),
+    roomTypeConfigId: isMongoObjectId(asString(rt.roomTypeConfigId))
+      ? asString(rt.roomTypeConfigId)
+      : undefined,
     description: descriptions,
     _descLang: descLang,
     shortDescription: asString(fr.headline),
@@ -639,19 +671,22 @@ export function mergeFormV2ToUpdatePropertyPayload(
           }
           if (values.beds != null) row.bedsNumber = values.beds;
           if (values.sqm != null) row.surface = values.sqm;
-          if (values.roomTypeConfigId != null) {
-            row.roomTypeConfigId = values.roomTypeConfigId;
+          const configId = asString(values.roomTypeConfigId ?? row.roomTypeConfigId).trim();
+          if (isMongoObjectId(configId)) {
+            row.roomTypeConfigId = configId;
+          } else {
+            delete row.roomTypeConfigId;
           }
           const basePrice = asNumber(values.basePrice);
           if (basePrice != null) row.basePrice = basePrice;
         }
-        return row;
+        return cleanRoomTypeRowForApi(row);
       })
     : undefined;
 
   const payload: UnknownRecord = {
     name: values.name,
-    description: descriptions,
+    description: cleanDescriptionForApiPayload(descriptions),
     propertyUnit: values.propertyUnit,
     propertyType: propertyTypeToApi(values.propertyType),
     active: values.active,
@@ -677,7 +712,7 @@ export function mergeFormV2ToUpdatePropertyPayload(
     personCapacityMax: values.personCapacityMax ?? values.guests,
   };
 
-  if (roomTypes) payload.roomTypes = roomTypes;
+  if (roomTypes) payload.roomTypes = cleanRoomTypesForApiPayload(roomTypes);
   if (values.airbnbSummary != null) payload.airbnbSummary = values.airbnbSummary;
 
   if (Array.isArray(values.listingAmenitiesIds)) {
@@ -914,6 +949,146 @@ export function mergeFormV2ToUpdatePropertyPayload(
     if (values[key] !== undefined) payload[key] = values[key];
   }
 
+  return payload;
+}
+
+/** Defaults alignés dashboard legacy (NewListing formikInitialValues.roomTypes[0]). */
+function defaultCreateRoomTypeShell(): UnknownRecord {
+  return {
+    roomTypeConfigId: null,
+    roomTypeName: 'Standard Room',
+    basePrice: 0,
+    ratePlanIds: [],
+    amenitiesIds: [],
+    roomTypeImages: [],
+    bedTypes: [],
+    useAddress: true,
+    active: true,
+    personCapacity: 0,
+    personCapacityMax: 0,
+    bedroomsNumber: 0,
+    bedsNumber: 0,
+    bathroomsNumber: 0,
+    roomNumber: 1,
+    startCode: 0,
+    ranking: 0,
+    surface: 0,
+    roomAmenities: [],
+    rooms: [
+      {
+        roomNumber: 0,
+        roomName: '',
+        roomCode: '0',
+        address: '',
+        enabled: true,
+      },
+    ],
+  };
+}
+
+function cleanAmenitiesIdsForCreate(raw: unknown): UnknownRecord[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      const row = isRecord(item) ? item : {};
+      const id = asString(row._id);
+      if (!id) return null;
+      return { _id: id, count: asNumber(row.count) ?? 1 };
+    })
+    .filter(Boolean) as UnknownRecord[];
+}
+
+function cleanRoomAmenitiesForCreate(raw: unknown): UnknownRecord[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((ra) => {
+    const row = isRecord(ra) ? ra : {};
+    return {
+      ...row,
+      rooms: (Array.isArray(row.rooms) ? row.rooms : []).map((r) => {
+        const room = isRecord(r) ? r : {};
+        return {
+          ...room,
+          amenities: (Array.isArray(room.amenities) ? room.amenities : [])
+            .map((a) => {
+              const am = isRecord(a) ? a : {};
+              const id = asString(am._id);
+              if (!id) return null;
+              return { _id: id, count: asNumber(am.count) ?? 1 };
+            })
+            .filter(Boolean),
+        };
+      }),
+    };
+  });
+}
+
+/** Normalise roomTypes[0] pour POST /listings/create-property (Joi exige roomTypeName, basePrice, …). */
+function normalizeCreateRoomTypes(values: UnknownRecord, roomTypes: unknown): UnknownRecord[] {
+  const src = Array.isArray(roomTypes) && roomTypes.length > 0
+    ? roomTypes
+    : Array.isArray(values.roomTypes)
+      ? values.roomTypes
+      : [];
+  const first = isRecord(src[0]) ? { ...src[0] } : {};
+
+  const roomTypeName =
+    asString(first.roomTypeName)?.trim() ||
+    asString(values.name)?.trim() ||
+    'Standard Room';
+
+  const normalized: UnknownRecord = {
+    ...defaultCreateRoomTypeShell(),
+    ...first,
+    roomTypeName,
+    basePrice: asNumber(first.basePrice) ?? asNumber(values.basePrice) ?? 0,
+    personCapacity:
+      asNumber(first.personCapacity) ??
+      asNumber(values.personCapacity) ??
+      asNumber(values.guests) ??
+      0,
+    personCapacityMax:
+      asNumber(first.personCapacityMax) ??
+      asNumber(values.personCapacityMax) ??
+      asNumber(values.guests) ??
+      0,
+    bedroomsNumber: asNumber(first.bedroomsNumber) ?? asNumber(values.bedrooms) ?? 0,
+    bathroomsNumber: asNumber(first.bathroomsNumber) ?? asNumber(values.bathrooms) ?? 0,
+    bedsNumber: asNumber(first.bedsNumber) ?? asNumber(values.beds) ?? 0,
+    surface: asNumber(first.surface) ?? asNumber(values.sqm) ?? 0,
+    roomNumber: asNumber(first.roomNumber) ?? 1,
+    startCode: asNumber(first.startCode) ?? 0,
+    ranking: asNumber(first.ranking) ?? 0,
+    useAddress: first.useAddress !== false,
+    active: first.active !== false,
+    ratePlanIds: Array.isArray(first.ratePlanIds) ? first.ratePlanIds : [],
+    amenitiesIds: cleanAmenitiesIdsForCreate(first.amenitiesIds),
+    roomTypeImages: Array.isArray(first.roomTypeImages) ? first.roomTypeImages : [],
+    bedTypes: Array.isArray(first.bedTypes) ? first.bedTypes : [],
+    roomAmenities: cleanRoomAmenitiesForCreate(first.roomAmenities),
+  };
+
+  if (values.roomTypeConfigId != null) {
+    const configId = asString(values.roomTypeConfigId).trim();
+    if (isMongoObjectId(configId)) {
+      normalized.roomTypeConfigId = configId;
+    }
+  }
+
+  const rest = src.slice(1).map((rt) => cleanRoomTypeRowForApi(isRecord(rt) ? rt : {}));
+  return [normalized, ...rest];
+}
+
+/**
+ * Payload POST /listings/create-property — réutilise le mapping update + défauts roomTypes
+ * (le formulaire V2 stocke bedrooms/basePrice au niveau racine ; Rooms n’écrit que roomAmenities).
+ */
+export function mergeFormV2ToCreatePropertyPayload(values: UnknownRecord): UnknownRecord {
+  const payload = mergeFormV2ToUpdatePropertyPayload(values);
+  payload.roomTypes = normalizeCreateRoomTypes(values, payload.roomTypes);
+  if (!asString(payload.currencyCode)) payload.currencyCode = 'MAD';
+  if (!asString(payload.timeZoneName)) payload.timeZoneName = 'Africa/Casablanca';
+  if (payload.atSojori === undefined) payload.atSojori = true;
+  if (payload.active === undefined) payload.active = false;
   return payload;
 }
 

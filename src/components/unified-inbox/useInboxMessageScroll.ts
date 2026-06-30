@@ -17,6 +17,7 @@ export function useInboxMessageScroll(
   const endRef = useRef<HTMLDivElement>(null);
   const isFirstLoadRef = useRef(true);
   const prevCountRef = useRef(0);
+  const prevLoadingRef = useRef(false);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     const run = () => {
@@ -48,16 +49,34 @@ export function useInboxMessageScroll(
   useLayoutEffect(() => {
     isFirstLoadRef.current = true;
     prevCountRef.current = 0;
+    prevLoadingRef.current = false;
   }, [threadId, highlightKeyword]);
 
   useLayoutEffect(() => {
-    if (loadingMessages || messageCount === 0) return;
+    if (loadingMessages) {
+      prevLoadingRef.current = true;
+      return;
+    }
+    if (messageCount === 0) {
+      prevLoadingRef.current = false;
+      return;
+    }
+
+    const resumedFromLoad = prevLoadingRef.current;
+    prevLoadingRef.current = false;
 
     if (isFirstLoadRef.current) {
       if (!scrollToKeywordMatch()) {
         scrollToBottom('auto');
       }
       isFirstLoadRef.current = false;
+      prevCountRef.current = messageCount;
+      return;
+    }
+
+    // Reload finished (e.g. after send) — stay at bottom instead of stuck at top.
+    if (resumedFromLoad && !highlightKeyword?.trim()) {
+      scrollToBottom('auto');
       prevCountRef.current = messageCount;
       return;
     }
