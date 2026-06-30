@@ -393,12 +393,18 @@ export default function ConversationThread({
                 Aucun message dans la base Sojori
               </Typography>
               <Typography sx={{ fontSize: 11.5, lineHeight: 1.5, maxWidth: 320 }}>
-                {thread.preview
-                  ? `Aperçu Rental United : « ${thread.preview} »`
-                  : 'Le fil peut apparaître en tête à cause de lastMessageAt (sync RU) sans messages importés.'}
-                {messagesTotal > 0
+                {thread.isStaff
+                  ? thread.preview
+                    ? `Dernier message : « ${thread.preview} » — recharge le fil ou vérifie le numéro (+212 / 212).`
+                    : 'Aucun message enregistré pour ce contact staff.'
+                  : thread.preview
+                    ? `Aperçu Rental United : « ${thread.preview} »`
+                    : 'Le fil peut apparaître en tête à cause de lastMessageAt (sync RU) sans messages importés.'}
+                {!thread.isStaff && messagesTotal > 0
                   ? ` (${messagesTotal} en base — vérifie le mapping)`
-                  : ' Lance une sync messages RU pour ce compte.'}
+                  : !thread.isStaff
+                    ? ' Lance une sync messages RU pour ce compte.'
+                    : ''}
               </Typography>
             </Box>
           )}

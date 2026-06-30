@@ -37,6 +37,7 @@ import type { UploadBatchProgress } from './UploadDialog';
 import { getImageOtaTypesForListing, resolveImageOtaDisplayTypes, type ImageType } from '../../../services/imageTypesService';
 import listingsService from '../../../services/listingsService';
 import { cleanListingImagesForPayload } from '../../../utils/listingFormV2ApiAdapter';
+import { isPersistedListingId } from '../../../utils/listingId';
 import UploadDialog from './UploadDialog';
 import ImageTypeSelector from './ImageTypeSelector';
 import MediaGridPhotoCard from './MediaGridPhotoCard';
@@ -113,9 +114,11 @@ const MediaGrid: React.FC<MediaGridProps> = ({
   /** Enregistre listingImages sur le listing (update-property) — pas besoin du bouton Sauvegarder global. */
   const persistListingImages = useCallback(
     async (updatedImages: ListingImage[], action: string, successMessage?: string): Promise<void> => {
-      if (!listingId) {
+      if (!isPersistedListingId(listingId)) {
         onChange(updatedImages);
-        if (successMessage) toast.success(successMessage);
+        if (successMessage) {
+          toast.info('Photos en mémoire — sauvegardez le listing pour les enregistrer sur le serveur');
+        }
         return;
       }
 

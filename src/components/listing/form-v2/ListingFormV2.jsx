@@ -9,6 +9,7 @@ import { ListingFormStructureContext } from './ListingFormStructureContext';
 import { ListingFormImportedProvider } from './ListingFormImportedContext';
 import listingsService from '../../../services/listingsService';
 import { getListingImportOnboarding } from '../../../services/importOnboardingService';
+import { isPersistedListingId } from '../../../utils/listingId';
 import { toast } from 'react-toastify';
 
 import { GeneralTab, LocationTab }                          from './tabs/GeneralLocationTabs';
@@ -83,9 +84,9 @@ export default function ListingFormV2({
   const handlePublish = async () => {
     console.log('[ListingFormV2] handlePublish called, listingId:', listingId);
 
-    if (!listingId) {
-      console.error('[ListingFormV2] No listingId provided');
-      toast.error('Impossible de publier: listing ID manquant');
+    if (!isPersistedListingId(listingId)) {
+      console.error('[ListingFormV2] Listing not persisted yet:', listingId);
+      toast.error('Sauvegardez le listing d\'abord (bouton Sauvegarder), puis publiez vers Rentals United.');
       return;
     }
 
@@ -211,6 +212,7 @@ export default function ListingFormV2({
       onSave={() => onSave?.(values)}
       onPublish={handlePublish}
       publishLoading={publishLoading}
+      publishDisabled={!isPersistedListingId(listingId)}
       onPreview={() => window.open(`/listings/${listingId}/preview`)}
       onAiAssist={() => {}}
       renderTab={renderTab}

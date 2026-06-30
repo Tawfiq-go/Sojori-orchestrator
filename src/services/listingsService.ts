@@ -1356,31 +1356,54 @@ export const listingsService = {
 
   /**
    * Lits disponibles pour une pièce du catalogue composition (legacy RoomAmenitiesPopup).
+   * Si le filtre pièce (roomIds) ne retourne rien, repli sur tous les lits useBed (catalogue dev incomplet).
    */
   async getBedAmenitiesForCompositionRoom(
     rentalId: string | number,
   ): Promise<Record<string, unknown>[]> {
-    const params = new URLSearchParams();
-    params.set('page', '0');
-    params.set('limit', '300');
-    params.set('paged', 'true');
-    params.set('useBed', 'true');
-    params.append('roomIds', String(rentalId));
-    try {
-      const response = await apiClient.get(
-        `${LISTING_API_BASE_URL}/amenities?${params.toString()}`,
-      );
-      const payload = asRecord(response.data);
+    const parseBedAmenities = (payload: Record<string, unknown>): Record<string, unknown>[] => {
       if (payload.success === false) return [];
       const raw = payload.data;
       const arr = Array.isArray(raw) ? raw : [];
-      return arr
-        .map((row) => asRecord(row))
-        .filter((r) => r.useBed === true);
-    } catch (error) {
-      console.warn('[listings] getBedAmenitiesForCompositionRoom:', error);
-      return [];
+      return arr.map((row) => asRecord(row)).filter((r) => r.useBed === true);
+    };
+
+    const fetchUseBedAmenities = async (roomIds?: Array<string | number>): Promise<Record<string, unknown>[]> => {
+      const params = new URLSearchParams();
+      params.set('page', '0');
+      params.set('limit', '300');
+      params.set('paged', 'true');
+      params.set('useBed', 'true');
+      params.set('amenityStatus', 'Enabled');
+      if (roomIds?.length) {
+        roomIds.forEach((id) => params.append('roomIds', String(id)));
+      }
+      try {
+        const response = await apiClient.get(
+          `${LISTING_API_BASE_URL}/amenities?${params.toString()}`,
+        );
+        return parseBedAmenities(asRecord(response.data));
+      } catch (error) {
+        if (isAxiosError(error) && error.response?.status === 404) {
+          return [];
+        }
+        console.warn('[listings] fetchUseBedAmenities:', error);
+        return [];
+      }
+    };
+
+    const forRoom = await fetchUseBedAmenities([rentalId]);
+    if (forRoom.length > 0) return forRoom;
+
+    const allBeds = await fetchUseBedAmenities();
+    if (allBeds.length > 0) {
+      console.warn(
+        '[listings] Aucun lit mappé à la pièce',
+        rentalId,
+        '— affichage de tous les types de lit (catalogue composition incomplet).',
+      );
     }
+    return allBeds;
   },
 
   /**

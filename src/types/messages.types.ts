@@ -121,6 +121,8 @@ export interface Conversation {
   messages_count: number;
   exchanges_count: number;
   recent_exchanges: MessageExchange[];
+  /** Staff WA — tous les messages embarqués dans la liste (évite fil vide si 2e fetch échoue). */
+  staff_exchanges?: MessageExchange[];
   unread_count: number;
 }
 

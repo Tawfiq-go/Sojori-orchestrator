@@ -4,6 +4,7 @@ import { DashboardWrapper } from '../components/DashboardWrapper';
 import ListingFormV2 from '../components/listing/form-v2/ListingFormV2';
 import { useMutation } from '@tanstack/react-query';
 import listingsService from '../services/listingsService';
+import { mergeFormV2ToCreatePropertyPayload } from '../utils/listingFormV2ApiAdapter';
 import { toast } from 'react-toastify';
 import { btnGhostSx, btnPrimarySx, Panel, tokens as t } from '../components/dashboard/DashboardV2.components';
 
@@ -34,7 +35,25 @@ function buildEmptyCreateValues(propertyUnit: string): Record<string, unknown> {
     description: [],
     listingImages: [],
     listingAmenitiesIds: [],
-    roomTypes: [],
+    roomTypes: [{
+      roomTypeName: 'Standard Room',
+      basePrice: 0,
+      ratePlanIds: [],
+      amenitiesIds: [],
+      roomTypeImages: [],
+      bedTypes: [],
+      useAddress: true,
+      active: true,
+      personCapacity: 0,
+      bedroomsNumber: 0,
+      bedsNumber: 0,
+      bathroomsNumber: 0,
+      roomNumber: 1,
+      startCode: 0,
+      ranking: 0,
+      surface: 0,
+      roomAmenities: [],
+    }],
     rulesAndInfo: { Rules: [], InfoUtils: [] },
   };
 }
@@ -45,7 +64,8 @@ export function ListingCreatePage() {
   const propertyUnit = searchParams.get('propertyUnit');
 
   const { mutate: createListing, isPending: isSaving } = useMutation({
-    mutationFn: (values: Record<string, unknown>) => listingsService.createListingProperty(values),
+    mutationFn: (values: Record<string, unknown>) =>
+      listingsService.createListingProperty(mergeFormV2ToCreatePropertyPayload(values)),
     onSuccess: (data) => {
       const newId = String(data._id ?? data.id ?? '');
       if (!newId) {
@@ -108,7 +128,6 @@ export function ListingCreatePage() {
         </Button>
       </Box>
       <ListingFormV2
-        listingId="new"
         initialValues={buildEmptyCreateValues(propertyUnit)}
         onSave={(values) => createListing(values as Record<string, unknown>)}
         isSaving={isSaving}
