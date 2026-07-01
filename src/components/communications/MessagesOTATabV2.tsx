@@ -10,9 +10,12 @@ import messagesService from '../../services/messagesService';
 import type { Thread } from '../../types/unifiedInbox.types';
 import { useInboxOTAConversation } from '../../hooks/useInboxOTAConversation';
 import {
+  bumpOtaThreadAfterSend,
   filterOtaActiveReservationsOnly,
+  filterOtaInboxDefault,
   mapApiItemToOtaThread,
   mapOtaRowToThread,
+  mergeOtaThreadPages,
   type OtaThreadRow,
 } from '../unified-inbox/inboxOtaMappers';
 import {
@@ -40,7 +43,14 @@ import {
   setCachedOtaInbox,
 } from '../../utils/otaInboxCache';
 
-const OTA_INBOX_LIMIT = 100;
+const OTA_INBOX_PAGE_SIZE = 50;
+
+function inboxCursorFromRows(rows: OtaThreadRow[]): string | undefined {
+  if (!rows.length) return undefined;
+  const oldest = rows[rows.length - 1];
+  const t = oldest.lastMessageTime || oldest.threadUpdatedAt || oldest.threadCreatedAt;
+  return t ? new Date(t).toISOString() : undefined;
+}
 
 const EMPTY_ADVANCED: OtaAdvancedSearch = { stayPeriod: 'all' };
 
@@ -68,7 +78,10 @@ export default function MessagesOTATabV2() {
   const [loading, setLoading] = useState(() => !getCachedOtaInbox());
   const [tableReady, setTableReady] = useState(() => Boolean(getCachedOtaInbox()));
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [inboxHasMore, setInboxHasMore] = useState(false);
+  const [inboxLoadingMore, setInboxLoadingMore] = useState(false);
   const loadRequestIdRef = useRef(0);
+  const prevSearchTermRef = useRef('');
   const globalSearchRequestIdRef = useRef(0);
   const globalSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [globalSearchPending, setGlobalSearchPending] = useState(false);
@@ -107,15 +120,17 @@ export default function MessagesOTATabV2() {
     try {
       const response = await messagesService.getOTAThreads({
         page: 0,
-        limit: OTA_INBOX_LIMIT,
+        limit: OTA_INBOX_PAGE_SIZE,
       });
       if (requestId !== loadRequestIdRef.current) return;
 
-      const rows = filterOtaActiveReservationsOnly(mapApiThreads(response));
-      setInboxRows(rows);
+      const pageRows = filterOtaInboxDefault(mapApiThreads(response));
+      const hasMore = Boolean((response as { hasMore?: boolean })?.hasMore);
+      setInboxHasMore(hasMore);
+      setInboxRows(pageRows);
       setSearchRows([]);
       setSearchMode('none');
-      setCachedOtaInbox(rows);
+      setCachedOtaInbox(pageRows);
       setTableReady(true);
     } catch (err: unknown) {
       if (requestId !== loadRequestIdRef.current) return;
@@ -123,6 +138,7 @@ export default function MessagesOTATabV2() {
         console.error('❌ Erreur chargement threads OTA:', err);
         setLoadError(err instanceof Error ? err.message : 'Erreur de chargement');
         setInboxRows([]);
+        setInboxHasMore(false);
       }
     } finally {
       if (requestId === loadRequestIdRef.current) {
@@ -131,6 +147,35 @@ export default function MessagesOTATabV2() {
       }
     }
   }, []);
+
+  const loadMoreInbox = useCallback(async () => {
+    if (inboxLoadingMore || !inboxHasMore || searchMode !== 'none') return;
+    setInboxLoadingMore(true);
+    try {
+      let cursor: string | undefined;
+      setInboxRows((prev) => {
+        cursor = inboxCursorFromRows(prev);
+        return prev;
+      });
+      if (!cursor) {
+        setInboxHasMore(false);
+        return;
+      }
+      const response = await messagesService.getOTAThreads({
+        page: 0,
+        limit: OTA_INBOX_PAGE_SIZE,
+        cursor,
+      });
+      const pageRows = filterOtaInboxDefault(mapApiThreads(response));
+      const hasMore = Boolean((response as { hasMore?: boolean })?.hasMore);
+      setInboxHasMore(hasMore);
+      setInboxRows((prev) => mergeOtaThreadPages(prev, pageRows));
+    } catch (err) {
+      console.error('❌ Erreur pagination OTA:', err);
+    } finally {
+      setInboxLoadingMore(false);
+    }
+  }, [inboxHasMore, inboxLoadingMore, searchMode]);
 
   const loadServerSearch = useCallback(
     async (opts: {
@@ -167,7 +212,7 @@ export default function MessagesOTATabV2() {
 
         const response = await messagesService.getOTAThreads({
           page: 0,
-          limit: OTA_INBOX_LIMIT,
+          limit: OTA_INBOX_PAGE_SIZE,
           ownerId: requestOwnerId || undefined,
           ...apiParams,
         });
@@ -203,6 +248,9 @@ export default function MessagesOTATabV2() {
 
   useEffect(() => {
     const q = searchTerm.trim();
+    const prev = prevSearchTermRef.current.trim();
+    prevSearchTermRef.current = searchTerm;
+
     if (globalSearchDebounceRef.current) {
       clearTimeout(globalSearchDebounceRef.current);
       globalSearchDebounceRef.current = null;
@@ -210,13 +258,14 @@ export default function MessagesOTATabV2() {
 
     if (!q) {
       setGlobalSearchPending(false);
-      setSearchMode((mode) => {
-        if (mode === 'global') {
-          setSearchRows([]);
-          return 'none';
-        }
-        return mode;
-      });
+      if (prev.length >= GLOBAL_SEARCH_MIN_LEN) {
+        setSearchRows([]);
+        setSearchMode('none');
+        void loadInbox({ skipCache: true });
+      } else {
+        setSearchMode((mode) => (mode === 'global' ? 'none' : mode));
+        if (prev.length > 0) setSearchRows([]);
+      }
       return;
     }
 
@@ -243,7 +292,7 @@ export default function MessagesOTATabV2() {
         globalSearchDebounceRef.current = null;
       }
     };
-  }, [searchTerm, loadServerSearch]);
+  }, [searchTerm, loadServerSearch, loadInbox]);
 
   useEffect(() => {
     void loadInbox();
@@ -422,6 +471,11 @@ export default function MessagesOTATabV2() {
       inbox.appendOutboundMessage(trimmed);
       try {
         await messagesService.sendOTAMessage(row.threadId, trimmed);
+        setInboxRows((prev) => {
+          const bumped = bumpOtaThreadAfterSend(prev, row.threadId, trimmed, row);
+          setCachedOtaInbox(bumped);
+          return bumped;
+        });
         void inbox.refreshOtaMessages(row);
       } catch (err) {
         inbox.removeLastOutboundMessage();
@@ -492,6 +546,9 @@ export default function MessagesOTATabV2() {
           otaKeywordMatchTotal={keywordMatchTotal}
           otaFiltersActive={otaFiltersActive}
           onOtaResetAll={handleResetAllFilters}
+          onOtaLoadMore={() => void loadMoreInbox()}
+          otaHasMore={inboxHasMore && searchMode === 'none' && !otaGlobalQueryActive}
+          otaLoadingMore={inboxLoadingMore}
           onSelectThread={(thread) => {
             const row = displayRows.find((r) => r.threadId === thread.id);
             if (row) void handleSelect(row);
