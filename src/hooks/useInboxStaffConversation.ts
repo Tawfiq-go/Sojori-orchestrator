@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { format, addDays } from 'date-fns';
 import messagesService from '../services/messagesService';
 import tasksService from '../services/tasksService';
+import { staffOutboundExchange } from '../services/staffConversationMapper';
 import type { Conversation, MessageExchange } from '../types/messages.types';
 import type { ReservationTask } from '../types/reservationTask.types';
 import {
@@ -18,11 +19,88 @@ export function useInboxStaffConversation() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(false);
 
+  const appendOutboundMessage = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const exchange = staffOutboundExchange(trimmed);
+    setMessages((prev) => [...prev, exchange]);
+    setActiveConversation((prev) => {
+      if (!prev) return prev;
+      const staff = [...(prev.staff_exchanges || prev.recent_exchanges || []), exchange];
+      return {
+        ...prev,
+        last_message_time: exchange.timestamp,
+        messages_count: (prev.messages_count || 0) + 1,
+        exchanges_count: (prev.exchanges_count || 0) + 1,
+        staff_exchanges: staff,
+        recent_exchanges: staff.slice(-5),
+      };
+    });
+  }, []);
+
+  const removeLastOutboundMessage = useCallback(() => {
+    setMessages((prev) => {
+      if (!prev.length) return prev;
+      const last = prev[prev.length - 1];
+      if (!last.ai_response || last.user_message) return prev;
+      return prev.slice(0, -1);
+    });
+    setActiveConversation((prev) => {
+      if (!prev) return prev;
+      const staff = prev.staff_exchanges || prev.recent_exchanges || [];
+      if (!staff.length) return prev;
+      const trimmed = staff.slice(0, -1);
+      const last = trimmed[trimmed.length - 1];
+      return {
+        ...prev,
+        staff_exchanges: trimmed,
+        recent_exchanges: trimmed.slice(-5),
+        messages_count: Math.max(0, (prev.messages_count || 1) - 1),
+        exchanges_count: Math.max(0, (prev.exchanges_count || 1) - 1),
+        last_message_time: last?.timestamp || prev.last_message_time,
+      };
+    });
+  }, []);
+
+  const refreshStaffMessages = useCallback(async (phone?: string) => {
+    const targetPhone = phone || activeConversation?.phone;
+    if (!targetPhone) return;
+    try {
+      const messagesResponse = await messagesService.getConversationMessages(targetPhone, {
+        limit: 50,
+        inbox: 'staff',
+      });
+      const fetched = messagesResponse.data?.exchanges || [];
+      if (fetched.length > 0) {
+        setMessages((prev) => (fetched.length >= prev.length ? fetched : prev));
+        setActiveConversation((prev) => {
+          if (!prev || prev.phone !== targetPhone) return prev;
+          return {
+            ...prev,
+            staff_exchanges: fetched,
+            recent_exchanges: fetched.slice(-5),
+            messages_count: fetched.length,
+            exchanges_count: fetched.length,
+            last_message_time: fetched[fetched.length - 1]?.timestamp || prev.last_message_time,
+          };
+        });
+      }
+    } catch (err) {
+      console.error('❌ Erreur refresh staff messages:', err);
+    }
+  }, [activeConversation?.phone]);
+
   const selectStaffConversation = useCallback(async (conv: Conversation) => {
     setActiveConversation(conv);
     setLoadingMessages(true);
     setLoadingTasks(true);
-    setMessages([]);
+    const seed =
+      conv.staff_exchanges?.length
+        ? conv.staff_exchanges
+        : conv.recent_exchanges?.length
+          ? conv.recent_exchanges
+          : [];
+    setMessages(seed);
     setTasks([]);
     setMatchedStaff(null);
 
@@ -32,8 +110,14 @@ export function useInboxStaffConversation() {
         tasksService.getStaff({ limit: 500 }),
       ]);
 
-      if (messagesResponse.status === 'success') {
-        setMessages(messagesResponse.data.exchanges);
+      const fetched = messagesResponse.data?.exchanges || [];
+      if (fetched.length > 0) {
+        setMessages((prev) => {
+          if (fetched.length >= prev.length) return fetched;
+          return prev;
+        });
+      } else if (seed.length === 0) {
+        setMessages([]);
       }
 
       const staffMember = findStaffByPhone(staffResult.staff || [], conv.phone);
@@ -70,6 +154,9 @@ export function useInboxStaffConversation() {
     loadingMessages,
     loadingTasks,
     selectStaffConversation,
+    appendOutboundMessage,
+    removeLastOutboundMessage,
+    refreshStaffMessages,
     setActiveConversation,
   };
 }

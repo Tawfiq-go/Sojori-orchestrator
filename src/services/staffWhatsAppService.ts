@@ -1,10 +1,12 @@
 import axios from 'axios';
 import { MICROSERVICE_BASE_URL } from '../config/backendServer.config';
 
-const THREADS_ENDPOINT = `${MICROSERVICE_BASE_URL.SRV_TASK}/staff-whatsapp/get`;
+/** Via srv-admin → srv-fulltask (ingress /api/v1/admin always routé ; /api/v1/fulltask/staff-whatsapp peut manquer). */
+const STAFF_WA_BASE = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/fulltask/staff-whatsapp`;
+const THREADS_ENDPOINT = `${STAFF_WA_BASE}/get`;
 const UPDATE_MSG_ENDPOINT = (idOrWamid: string) =>
-  `${MICROSERVICE_BASE_URL.SRV_TASK}/staff-whatsapp/update-message/${idOrWamid}`;
-const SEND_MSG_ENDPOINT = `${MICROSERVICE_BASE_URL.SRV_TASK}/staff-whatsapp/send-message`;
+  `${STAFF_WA_BASE}/update-message/${idOrWamid}`;
+const SEND_MSG_ENDPOINT = `${STAFF_WA_BASE}/send-message`;
 
 const TASKS_BY_STAFF_ENDPOINT = (staffId: string) =>
   `${MICROSERVICE_BASE_URL.SRV_TASK}/tasks/get-tasks-by-staff?staffIds=${staffId}`;
@@ -16,6 +18,7 @@ interface GetThreadsParams {
   messagesLimit?: number;
   sortBy?: string;
   search_text?: string;
+  workerWaNumber?: string;
 }
 
 interface SendMessageParams {
@@ -24,13 +27,33 @@ interface SendMessageParams {
   workerWaName?: string;
 }
 
+function normalizeStaffWaPhone(phone?: string): string {
+  return String(phone || '').replace(/\D/g, '');
+}
+
+function parseStaffWaRows(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object' && Array.isArray((data as { data?: unknown[] }).data)) {
+    return (data as { data: unknown[] }).data;
+  }
+  return [];
+}
+
 export async function getStaffWaThreads(params: GetThreadsParams = {}) {
   const clean = Object.fromEntries(
-    Object.entries(params).filter(([, v]) => v !== undefined && v !== null)
-  );
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== null),
+  ) as Record<string, unknown>;
+  if (typeof clean.workerWaNumber === 'string') {
+    const digits = normalizeStaffWaPhone(clean.workerWaNumber);
+    if (digits) clean.workerWaNumber = digits;
+  }
   const { data } = await axios.get(THREADS_ENDPOINT, { params: clean });
-  const rows = data?.data || data || [];
-  return { total: data?.total ?? rows.length, rows };
+  const rows = parseStaffWaRows(data);
+  const total =
+    data && typeof data === 'object' && !Array.isArray(data)
+      ? Number((data as { total?: number }).total) || rows.length
+      : rows.length;
+  return { total, rows };
 }
 
 export async function updateStaffWaMessage(idOrWamid: string, payload: any) {

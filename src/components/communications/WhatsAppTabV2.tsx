@@ -12,7 +12,7 @@ import type { Thread } from '../../types/unifiedInbox.types';
 import { useInboxConversation } from '../../hooks/useInboxConversation';
 import { mapConversationToThread } from '../unified-inbox/inboxMappers';
 import { enrichThreadFromReservation } from '../unified-inbox/inboxReservationEnrichment';
-import { buildInboxMessages, WA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
+import { buildInboxMessages, outboundInboxExchange, WA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
 import { formatThreadWhen } from '../unified-inbox/inboxFormat';
 import {
   applyWaInboxFilters,
@@ -199,6 +199,67 @@ export default function WhatsAppTabV2() {
     await inbox.selectConversation(conv);
   };
 
+  const bumpConversationPreview = useCallback((phone: string, text: string) => {
+    const exchange = outboundInboxExchange(text);
+    const bump = (list: Conversation[]) => {
+      const idx = list.findIndex((c) => c.phone === phone);
+      if (idx < 0) return list;
+      const conv = list[idx];
+      const recent = [...(conv.recent_exchanges || []), exchange];
+      const updated: Conversation = {
+        ...conv,
+        last_message_time: exchange.timestamp,
+        messages_count: (conv.messages_count || 0) + 1,
+        exchanges_count: (conv.exchanges_count || 0) + 1,
+        recent_exchanges: recent.slice(-5),
+      };
+      return [updated, ...list.filter((_, i) => i !== idx)];
+    };
+    setInboxConversations((prev) => bump(prev));
+    setSearchConversations((prev) => bump(prev));
+  }, []);
+
+  const revertConversationPreview = useCallback((phone: string) => {
+    const revert = (list: Conversation[]) => {
+      const idx = list.findIndex((c) => c.phone === phone);
+      if (idx < 0) return list;
+      const conv = list[idx];
+      const recent = (conv.recent_exchanges || []).slice(0, -1);
+      const last = recent[recent.length - 1];
+      const updated: Conversation = {
+        ...conv,
+        recent_exchanges: recent,
+        messages_count: Math.max(0, (conv.messages_count || 1) - 1),
+        exchanges_count: Math.max(0, (conv.exchanges_count || 1) - 1),
+        last_message_time: last?.timestamp || conv.last_message_time,
+      };
+      return list.map((c, i) => (i === idx ? updated : c));
+    };
+    setInboxConversations((prev) => revert(prev));
+    setSearchConversations((prev) => revert(prev));
+  }, []);
+
+  const handleGuestSend = useCallback(
+    async (text: string) => {
+      if (!inbox.activeConversation) return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const phone = inbox.activeConversation.phone;
+      const conv = inbox.activeConversation;
+      inbox.appendOutboundMessage(trimmed);
+      bumpConversationPreview(phone, trimmed);
+      try {
+        await messagesService.sendMessage({ phone, message: trimmed });
+        void inbox.refreshMessages(conv);
+      } catch (err) {
+        inbox.removeLastOutboundMessage();
+        revertConversationPreview(phone);
+        throw err;
+      }
+    },
+    [inbox, bumpConversationPreview, revertConversationPreview],
+  );
+
   useEffect(() => {
     if (inbox.activeConversation) {
       setTaskCounts((prev) => ({
@@ -302,21 +363,9 @@ export default function WhatsAppTabV2() {
               messages={formattedMessages}
               loadingMessages={inbox.loadingMessages}
               quickTemplates={WA_QUICK_TEMPLATES}
-              onSendMessage={async (text) => {
-                if (!inbox.activeConversation) return;
-                await messagesService.sendMessage({
-                  phone: inbox.activeConversation.phone,
-                  message: text.trim(),
-                });
-                await handleSelect(inbox.activeConversation);
-              }}
+              onSendMessage={handleGuestSend}
               onSelectTemplate={async (tpl) => {
-                if (!tpl.text || !inbox.activeConversation) return;
-                await messagesService.sendMessage({
-                  phone: inbox.activeConversation.phone,
-                  message: tpl.text,
-                });
-                await handleSelect(inbox.activeConversation);
+                if (tpl.text) await handleGuestSend(tpl.text);
               }}
               onAISuggestion={() => setShowAIModal(true)}
             />
@@ -347,10 +396,9 @@ export default function WhatsAppTabV2() {
       <AISuggestionModal
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
-        onUseSuggestion={(text) => {
-          if (inbox.activeConversation) {
-            void messagesService.sendMessage({ phone: inbox.activeConversation.phone, message: text });
-          }
+        onUseSuggestion={async (text) => {
+          setShowAIModal(false);
+          await handleGuestSend(text);
         }}
         context={{
           conversationHistory: inbox.messages,

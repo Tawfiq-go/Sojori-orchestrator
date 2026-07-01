@@ -168,6 +168,7 @@ export default function ListingFormShell({
   onSave,
   onPublish,
   publishLoading = false,     // loading state pour le bouton Publier
+  publishDisabled = false,
   onPreview,
   onAiAssist,
   renderTab,                  // (tabKey, level) => ReactNode — branche tes vrais composants ici
@@ -508,7 +509,7 @@ export default function ListingFormShell({
               </Stack>
               <Box sx={{ flex: 1 }} />
               <Button onClick={onSave} sx={btnGhost} disabled={publishLoading}>Sauvegarder</Button>
-              <Button onClick={onPublish} sx={btnPrim} disabled={publishLoading}>
+              <Button onClick={onPublish} sx={btnPrim} disabled={publishLoading || publishDisabled}>
                 {publishLoading ? 'Synchronisation RU...' : 'Publier →'}
               </Button>
             </Stack>
