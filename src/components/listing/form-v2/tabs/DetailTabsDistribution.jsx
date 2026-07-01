@@ -8,6 +8,7 @@ import { sxInput, Field, Card, ToggleRow, ChipsRow, NumberInput, SelectField, Ru
 import {
   OtaChannelsSnapshotTable,
 } from '../utils/ruImportFieldHelpers';
+import ListingOwnerSelect from '../components/ListingOwnerSelect';
 import { RoomsTab } from './RoomsTabComposition';
 export { RoomsTab };
 
@@ -262,6 +263,8 @@ export function DistributionTab({ values = {}, onChange, listingId }) {
 
   return (
     <Box>
+      <RuFormLegend />
+      <ListingOwnerSelect values={values} onChange={onChange} />
       <DistributionSubTabs active={subTab} onChange={setSubTab} />
       {subTab === 'ota' ? <OtaDistributionTab {...common} /> : <DirectBookingTab {...common} />}
     </Box>

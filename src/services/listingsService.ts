@@ -1965,12 +1965,15 @@ export const listingsService = {
       const compact = options?.compact ?? false; // false pour avoir roomTypes
       const active = options?.active ?? undefined;
 
-      let url = `${LISTING_API_BASE_URL}/listings?staging=${staging}&compact=${compact}`;
+      let url = `${LISTING_API_BASE_URL}/listings?staging=${staging}&compact=${compact}&forReservation=true`;
 
       // ✅ Si active est défini, ajouter useActiveFilter=true + active=true/false
       if (active !== undefined) {
         url += `&useActiveFilter=true&active=${active}`;
       }
+
+      // Toutes les annonces actives (pas seulement la 1ère page)
+      url += '&limit=5000&page=0';
 
       const response = await apiClient.get(url);
 
