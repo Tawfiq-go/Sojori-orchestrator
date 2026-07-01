@@ -29,6 +29,10 @@ import {
 } from '../unified-inbox/otaThreadFilters';
 import { useAdminOwnerFilter } from '../../context/AdminOwnerFilterContext';
 import { OTA_QUICK_REPLIES, OTA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
+import {
+  buildOtaThreadContextForAi,
+  getLastGuestMessageFromInbox,
+} from '../../services/communicationsAi.helpers';
 import { formatThreadWhen, normalizeBookingSource } from '../unified-inbox/inboxFormat';
 import {
   getCachedOtaInbox,
@@ -399,6 +403,34 @@ export default function MessagesOTATabV2() {
     await inbox.selectOtaThread(row);
   };
 
+  const otaThreadContext = useMemo(
+    () => buildOtaThreadContextForAi(inbox.messages),
+    [inbox.messages],
+  );
+
+  const otaLastGuestMessage = useMemo(
+    () => getLastGuestMessageFromInbox(inbox.messages),
+    [inbox.messages],
+  );
+
+  const handleOtaSend = useCallback(
+    async (text: string) => {
+      if (!inbox.activeRow) return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const row = inbox.activeRow;
+      inbox.appendOutboundMessage(trimmed);
+      try {
+        await messagesService.sendOTAMessage(row.threadId, trimmed);
+        void inbox.refreshOtaMessages(row);
+      } catch (err) {
+        inbox.removeLastOutboundMessage();
+        throw err;
+      }
+    },
+    [inbox],
+  );
+
   const showBlockingSpinner = (loading && !tableReady) || (tableReady && isRefreshing);
 
   return (
@@ -478,15 +510,9 @@ export default function MessagesOTATabV2() {
               quickTemplates={OTA_QUICK_TEMPLATES}
               quickReplies={OTA_QUICK_REPLIES}
               otaPlatform={otaPlatform}
-              onSendMessage={async (text) => {
-                if (!inbox.activeRow) return;
-                await messagesService.sendOTAMessage(inbox.activeRow.threadId, text.trim());
-                await handleSelect(inbox.activeRow);
-              }}
-              onSelectTemplate={(tpl) => {
-                if (tpl.text && inbox.activeRow) {
-                  void messagesService.sendOTAMessage(inbox.activeRow.threadId, tpl.text);
-                }
+              onSendMessage={handleOtaSend}
+              onSelectTemplate={async (tpl) => {
+                if (tpl.text) await handleOtaSend(tpl.text);
               }}
               onAISuggestion={() => setShowAIModal(true)}
             />
@@ -529,15 +555,16 @@ export default function MessagesOTATabV2() {
       <AISuggestionModal
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
-        onUseSuggestion={(text) => {
-          if (inbox.activeRow) {
-            void messagesService.sendOTAMessage(inbox.activeRow.threadId, text);
-          }
+        onUseSuggestion={async (text) => {
+          setShowAIModal(false);
+          await handleOtaSend(text);
         }}
         context={{
-          conversationHistory: [],
+          threadContext: otaThreadContext,
+          lastGuestMessage: otaLastGuestMessage,
           guestName: inbox.activeRow?.guestName,
           reservationNumber: inbox.reservation?.reservationNumber,
+          channelName: otaPlatform,
           type: 'ota',
         }}
       />

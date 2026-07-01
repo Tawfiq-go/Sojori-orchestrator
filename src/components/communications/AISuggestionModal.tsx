@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -10,25 +10,43 @@ import {
   Typography,
   CircularProgress,
   Alert,
+  Chip,
 } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
+import {
+  generateCommunicationsAiDraft,
+  type CommunicationsAiKind,
+} from '../../services/communicationsAiService';
+import { i18nLanguageToApiCode } from '../../services/communicationsAi.helpers';
 
 interface AISuggestionModalProps {
   open: boolean;
   onClose: () => void;
   onUseSuggestion: (text: string) => void;
   context: {
-    conversationHistory?: any[];
+    conversationHistory?: unknown[];
     guestName?: string;
     reservationNumber?: string;
+    channelName?: string;
     type: 'whatsapp' | 'staff' | 'ota' | 'leads' | 'reviews';
+    /** Fil OTA / WhatsApp déjà formaté pour l'IA */
+    threadContext?: string;
+    /** Dernier message client (affiché en haut du popup) */
+    lastGuestMessage?: string;
+    draft?: string;
+    reviewContent?: string;
+    isRatingOnly?: boolean;
+    rating?: number;
   };
 }
 
-/**
- * Modal de suggestion de message par IA
- * Génère une suggestion de réponse basée sur le contexte de la conversation
- */
+function mapContextKind(type: AISuggestionModalProps['context']['type']): CommunicationsAiKind {
+  if (type === 'ota') return 'ota_message';
+  if (type === 'reviews') return 'review';
+  if (type === 'leads') return 'lead';
+  return 'whatsapp';
+}
+
 export default function AISuggestionModal({
   open,
   onClose,
@@ -36,41 +54,69 @@ export default function AISuggestionModal({
   context,
 }: AISuggestionModalProps) {
   const [suggestion, setSuggestion] = useState('');
+  const [staffPreview, setStaffPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [provider, setProvider] = useState<string | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
 
-  /**
-   * Générer une suggestion via l'API
-   */
-  const handleGenerate = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const handleGenerate = useCallback(
+    async (regenerate = false) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      // TODO: Remplacer par l'API réelle
-      // const response = await messagesService.generateAISuggestion(context);
+        const kind = mapContextKind(context.type);
+        const threadContext =
+          context.threadContext ||
+          (Array.isArray(context.conversationHistory)
+            ? context.conversationHistory
+                .map((line) => String(line || '').trim())
+                .filter(Boolean)
+                .join('\n')
+            : '');
 
-      // Mock pour démonstration
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+        const data = await generateCommunicationsAiDraft({
+          kind,
+          threadContext,
+          draft: context.draft,
+          targetLanguage: 'fr',
+          guestLanguage: 'fr',
+          dashboardLanguage: i18nLanguageToApiCode(
+            typeof navigator !== 'undefined' ? navigator.language : 'fr',
+          ),
+          reservationId: context.reservationNumber || '',
+          channelName: context.channelName,
+          guestName: context.guestName,
+          reviewContent: context.reviewContent,
+          isRatingOnly: context.isRatingOnly,
+          rating: context.rating,
+          regenerate,
+        });
 
-      const mockSuggestion = context.type === 'reviews'
-        ? 'Merci beaucoup pour votre avis ! Nous sommes ravis que votre séjour vous ait plu. Au plaisir de vous accueillir à nouveau !'
-        : 'Aucun problème, prenez le temps qu\'il vous faut pour réfléchir. N\'hésitez pas à nous recontacter dès que vous aurez pris votre décision concernant les nouvelles dates.\n\nCordialement';
+        if (!data.success || !data.responseClient?.trim()) {
+          throw new Error(data.message || 'Impossible de générer la suggestion.');
+        }
 
-      setSuggestion(mockSuggestion);
-      setHasGenerated(true);
-    } catch (err: any) {
-      console.error('❌ Erreur génération suggestion:', err);
-      setError(err.message || 'Erreur lors de la génération de la suggestion');
-    } finally {
-      setLoading(false);
-    }
-  };
+        setSuggestion(data.responseClient.trim());
+        setStaffPreview(data.responseAdmin?.trim() || '');
+        setProvider(data.provider || 'claude');
+        setHasGenerated(true);
+      } catch (err: unknown) {
+        console.error('❌ Erreur génération suggestion:', err);
+        const msg =
+          (err as { response?: { data?: { message?: string } }; message?: string })?.response
+            ?.data?.message ||
+          (err as Error)?.message ||
+          'Erreur lors de la génération de la suggestion';
+        setError(msg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [context],
+  );
 
-  /**
-   * Utiliser la suggestion (copier dans l'input principal)
-   */
   const handleUse = () => {
     if (suggestion.trim()) {
       onUseSuggestion(suggestion.trim());
@@ -78,25 +124,22 @@ export default function AISuggestionModal({
     }
   };
 
-  /**
-   * Fermer et réinitialiser
-   */
   const handleClose = () => {
     setSuggestion('');
+    setStaffPreview('');
     setHasGenerated(false);
     setError(null);
+    setProvider(null);
     onClose();
   };
 
-  /**
-   * Auto-générer à l'ouverture
-   */
   useEffect(() => {
     if (open && !hasGenerated && !loading) {
-      handleGenerate();
+      void handleGenerate(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, hasGenerated, loading, handleGenerate]);
+
+  const lastGuest = context.lastGuestMessage?.trim();
 
   return (
     <Dialog
@@ -117,9 +160,19 @@ export default function AISuggestionModal({
           fontWeight: 700,
           borderBottom: `1px solid ${t.border}`,
           pb: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
         }}
       >
         💡 Suggestion IA — Message client
+        {provider && (
+          <Chip
+            size="small"
+            label={provider === 'openai' ? 'OpenAI' : 'Claude'}
+            sx={{ height: 22, fontSize: 10, fontWeight: 700 }}
+          />
+        )}
       </DialogTitle>
 
       <DialogContent sx={{ pt: 3, pb: 2 }}>
@@ -127,6 +180,34 @@ export default function AISuggestionModal({
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
           </Alert>
+        )}
+
+        {lastGuest && (
+          <Box
+            sx={{
+              mb: 2.5,
+              p: 2,
+              borderRadius: '10px',
+              bgcolor: t.bg2,
+              border: `1px solid ${t.border}`,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: t.text3,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                mb: 1,
+              }}
+            >
+              Dernier message du client
+            </Typography>
+            <Typography sx={{ fontSize: 13, lineHeight: 1.6, color: t.text1, whiteSpace: 'pre-wrap' }}>
+              {lastGuest}
+            </Typography>
+          </Box>
         )}
 
         {loading ? (
@@ -147,18 +228,6 @@ export default function AISuggestionModal({
           </Box>
         ) : (
           <>
-            <Typography
-              sx={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: t.text3,
-                mb: 1,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}
-            >
-              Claude (fallback)
-            </Typography>
             <Typography
               sx={{
                 fontSize: 13,
@@ -188,6 +257,16 @@ export default function AISuggestionModal({
                 },
               }}
             />
+            {staffPreview && staffPreview !== suggestion && (
+              <Box sx={{ mt: 2 }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 600, color: t.text3, mb: 0.75 }}>
+                  Traduction tableau de bord
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: t.text2, whiteSpace: 'pre-wrap' }}>
+                  {staffPreview}
+                </Typography>
+              </Box>
+            )}
             <Typography
               sx={{
                 fontSize: 11,
@@ -223,7 +302,7 @@ export default function AISuggestionModal({
         </Button>
         {!loading && hasGenerated && (
           <Button
-            onClick={handleGenerate}
+            onClick={() => void handleGenerate(true)}
             sx={{
               textTransform: 'none',
               fontSize: 13,

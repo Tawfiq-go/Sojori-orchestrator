@@ -12,6 +12,7 @@ import type { Thread } from '../../types/unifiedInbox.types';
 import { useInboxConversation } from '../../hooks/useInboxConversation';
 import { mapConversationToThread } from '../unified-inbox/inboxMappers';
 import { enrichThreadFromReservation } from '../unified-inbox/inboxReservationEnrichment';
+import { buildWhatsappThreadContextForAi, getLastGuestMessageFromExchanges } from '../../services/communicationsAi.helpers';
 import { buildInboxMessages, outboundInboxExchange, WA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
 import { formatThreadWhen } from '../unified-inbox/inboxFormat';
 import {
@@ -401,7 +402,8 @@ export default function WhatsAppTabV2() {
           await handleGuestSend(text);
         }}
         context={{
-          conversationHistory: inbox.messages,
+          threadContext: buildWhatsappThreadContextForAi(inbox.messages),
+          lastGuestMessage: getLastGuestMessageFromExchanges(inbox.messages),
           guestName: inbox.activeConversation?.name,
           reservationNumber: inbox.reservation?.reservationNumber,
           type: 'whatsapp',
