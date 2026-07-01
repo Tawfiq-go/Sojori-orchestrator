@@ -76,6 +76,8 @@ export function mapConversationToThread(
         ? '#003580'
         : opts.channelColor;
   const preview =
+    conv.recent_exchanges[conv.recent_exchanges.length - 1]?.user_message ||
+    conv.recent_exchanges[conv.recent_exchanges.length - 1]?.ai_response ||
     conv.recent_exchanges[0]?.user_message ||
     conv.recent_exchanges[0]?.ai_response ||
     'Aucun message';

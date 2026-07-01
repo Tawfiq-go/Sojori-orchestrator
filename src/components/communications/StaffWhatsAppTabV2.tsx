@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
@@ -7,6 +7,7 @@ import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
 import messagesService from '../../services/messagesService';
+import { staffOutboundExchange } from '../../services/staffConversationMapper';
 import type { Conversation } from '../../types/messages.types';
 import type { Thread } from '../../types/unifiedInbox.types';
 import { useInboxStaffConversation } from '../../hooks/useInboxStaffConversation';
@@ -54,6 +55,60 @@ export default function StaffWhatsAppTabV2() {
   const handleSelect = async (conv: Conversation) => {
     await inbox.selectStaffConversation(conv);
   };
+
+  const bumpConversationPreview = useCallback((phone: string, text: string) => {
+    const exchange = staffOutboundExchange(text);
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => c.phone === phone);
+      if (idx < 0) return prev;
+      const conv = prev[idx];
+      const staff = [...(conv.staff_exchanges || conv.recent_exchanges || []), exchange];
+      const updated: Conversation = {
+        ...conv,
+        last_message_time: exchange.timestamp,
+        messages_count: (conv.messages_count || 0) + 1,
+        exchanges_count: (conv.exchanges_count || 0) + 1,
+        staff_exchanges: staff,
+        recent_exchanges: staff.slice(-5),
+      };
+      return [updated, ...prev.filter((_, i) => i !== idx)];
+    });
+  }, []);
+
+  const handleStaffSend = useCallback(
+    async (text: string) => {
+      if (!inbox.activeConversation) return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const phone = inbox.activeConversation.phone;
+      inbox.appendOutboundMessage(trimmed);
+      bumpConversationPreview(phone, trimmed);
+      try {
+        await messagesService.sendMessage({ phone, message: trimmed }, 'staff');
+        void inbox.refreshStaffMessages(phone);
+      } catch (err) {
+        inbox.removeLastOutboundMessage();
+        setConversations((prev) => {
+          const idx = prev.findIndex((c) => c.phone === phone);
+          if (idx < 0) return prev;
+          const conv = prev[idx];
+          const staff = (conv.staff_exchanges || conv.recent_exchanges || []).slice(0, -1);
+          const last = staff[staff.length - 1];
+          const updated: Conversation = {
+            ...conv,
+            staff_exchanges: staff,
+            recent_exchanges: staff.slice(-5),
+            messages_count: Math.max(0, (conv.messages_count || 1) - 1),
+            exchanges_count: Math.max(0, (conv.exchanges_count || 1) - 1),
+            last_message_time: last?.timestamp || conv.last_message_time,
+          };
+          return prev.map((c, i) => (i === idx ? updated : c));
+        });
+        throw err;
+      }
+    },
+    [inbox, bumpConversationPreview],
+  );
 
   useEffect(() => {
     if (inbox.activeConversation) {
@@ -162,28 +217,10 @@ export default function StaffWhatsAppTabV2() {
               messages={formattedMessages}
               loadingMessages={inbox.loadingMessages}
               quickTemplates={STAFF_TEMPLATES}
-              onSendMessage={async (text) => {
-                if (!inbox.activeConversation) return;
-                await messagesService.sendMessage(
-                  {
-                    phone: inbox.activeConversation.phone,
-                    message: text.trim(),
-                  },
-                  'staff',
-                );
-                await handleSelect(inbox.activeConversation);
+              onSendMessage={handleStaffSend}
+              onSelectTemplate={async (tpl) => {
+                if (tpl.text) await handleStaffSend(tpl.text);
               }}
-              onSelectTemplate={(tpl) =>
-                tpl.text &&
-                inbox.activeConversation &&
-                void messagesService.sendMessage(
-                  {
-                    phone: inbox.activeConversation.phone,
-                    message: tpl.text,
-                  },
-                  'staff',
-                )
-              }
               onAISuggestion={() => setShowAIModal(true)}
             />
             <ConversationDetails thread={activeThread} type="staff" />
@@ -211,16 +248,9 @@ export default function StaffWhatsAppTabV2() {
       <AISuggestionModal
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
-        onUseSuggestion={(text) => {
-          if (inbox.activeConversation) {
-            void messagesService.sendMessage(
-              {
-                phone: inbox.activeConversation.phone,
-                message: text,
-              },
-              'staff',
-            );
-          }
+        onUseSuggestion={async (text) => {
+          setShowAIModal(false);
+          await handleStaffSend(text);
         }}
         context={{
           conversationHistory: inbox.messages,

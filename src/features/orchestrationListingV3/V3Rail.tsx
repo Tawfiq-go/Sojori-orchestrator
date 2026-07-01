@@ -1,4 +1,4 @@
-import { Box, Typography } from '@mui/material';
+import { Box, Tooltip, Typography } from '@mui/material';
 import {
   CAPABILITY_GROUPS,
   CAPABILITY_REGISTRY,
@@ -7,7 +7,6 @@ import {
 } from '../serviceMatrix/capabilityRegistry';
 import type { CapabilityRowState } from '../serviceMatrix/types';
 import { V3 } from './theme';
-import { V3Badge } from './V3Primitives';
 import {
   syncHintLabel,
   syncHintTone,
@@ -45,6 +44,12 @@ function statusColor(status: CapabilityRowState['status']) {
   if (status === 'configured') return V3.su;
   if (status === 'incomplete') return V3.warn;
   return V3.bs;
+}
+
+function syncHintDotColor(tone: ReturnType<typeof syncHintTone>) {
+  if (tone === 'owner') return V3.client;
+  if (tone === 'todo') return V3.warn;
+  return V3.su;
 }
 
 export default function V3Rail({
@@ -174,6 +179,8 @@ export default function V3Rail({
                 : true;
             const disabled =
               !ownerTemplateMode && !effectivelyActive && row?.status === 'not_managed' && !row?.managed;
+            const hintLabel = syncHintLabel(syncHints[def.key]);
+            const hintTone = syncHintTone(syncHints[def.key]);
             return (
               <Box
                 key={def.key}
@@ -210,39 +217,32 @@ export default function V3Rail({
                 }}
               >
                 <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0 }}>{def.emoji}</span>
-                <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography
-                      sx={{
-                        fontSize: 12.5,
-                        fontWeight: active ? 700 : 600,
-                        color: active ? V3.pd : disabled ? V3.t4 : V3.t,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        lineHeight: 1.25,
-                      }}
-                    >
-                      {def.label}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        fontSize: 10,
-                        color: V3.t4,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      {capabilityShortHint(def)}
-                    </Typography>
-                  </Box>
-                  {syncHintLabel(syncHints[def.key]) ? (
-                    <V3Badge tone={syncHintTone(syncHints[def.key])}>
-                      {syncHintLabel(syncHints[def.key])}
-                    </V3Badge>
-                  ) : null}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography
+                    sx={{
+                      fontSize: 12.5,
+                      fontWeight: active ? 700 : 600,
+                      color: active ? V3.pd : disabled ? V3.t4 : V3.t,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    {def.label}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: 10,
+                      color: V3.t4,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {capabilityShortHint(def)}
+                  </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
                   {(['managed', 'clientEnabled', 'orchestrated', 'taskEnabled'] as const).map((f, i) => {
@@ -274,6 +274,22 @@ export default function V3Rail({
                     bgcolor: statusColor(row?.status ?? 'not_managed'),
                   }}
                 />
+                {hintLabel ? (
+                  <Tooltip title={hintLabel} arrow placement="right">
+                    <Box
+                      component="span"
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        bgcolor: syncHintDotColor(hintTone),
+                        opacity: 0.9,
+                        cursor: 'help',
+                      }}
+                    />
+                  </Tooltip>
+                ) : null}
               </Box>
             );
           })}

@@ -1,6 +1,11 @@
 import apiClient from './apiClient';
 import { extractHttpErrorMessage } from '../utils/extractHttpErrorMessage';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
+import { getStaffWaThreads, sendStaffWaText } from './staffWhatsAppService';
+import {
+  mapStaffThreadToConversation,
+  mapStaffThreadToDetail,
+} from './staffConversationMapper';
 import type {
   ConversationFilter,
   SendMessageRequest,
@@ -12,8 +17,8 @@ import type {
 } from '../types/messages.types';
 
 /**
- * Guest WhatsApp → srv-fullchatbot `conversation_messages`
- * Staff WhatsApp → srv-chatbot (unchanged)
+ * Guest WhatsApp → srv-fullchatbot (via srv-admin proxy)
+ * Staff WhatsApp → srv-fulltask /staff-whatsapp/*
  */
 function resolveGuestWhatsappDebugBase(): string {
   if (import.meta.env.DEV && typeof window !== 'undefined' && !import.meta.env.VITE_API_URL) {
@@ -22,14 +27,10 @@ function resolveGuestWhatsappDebugBase(): string {
   return `${MICROSERVICE_BASE_URL.SRV_ADMIN}/fullchatbot/debug`;
 }
 
-function resolveStaffWhatsappDebugBase(): string {
-  return `${MICROSERVICE_BASE_URL.SRV_CHATBOT}/debug`;
-}
-
 type WhatsappInboxKind = 'guest' | 'staff';
 
 function resolveWhatsappDebugBase(kind: WhatsappInboxKind): string {
-  return kind === 'staff' ? resolveStaffWhatsappDebugBase() : resolveGuestWhatsappDebugBase();
+  return resolveGuestWhatsappDebugBase();
 }
 
 class MessagesService {
@@ -69,12 +70,28 @@ class MessagesService {
       if (params?.search) requestParams.search = params.search;
       if (params?.owner_id) requestParams.owner_id = params.owner_id;
 
-      // X-Dev-Token is automatically added by apiClient interceptor (line 86)
-      // No need to add it manually here
+      if (params?.hasReservation === false) {
+        const pageNum = params?.page ?? (skip ? Math.floor(skip / limit) : 0);
+        const { rows, total } = await getStaffWaThreads({
+          paged: true,
+          page: pageNum,
+          limit,
+          messagesLimit: 50,
+          ...(params?.search ? { search_text: params.search } : {}),
+        });
+        return {
+          status: 'success',
+          data: {
+            conversations: rows.map(mapStaffThreadToConversation),
+            total,
+            limit,
+            skip,
+          },
+        };
+      }
 
-      const kind: WhatsappInboxKind = params?.hasReservation === false ? 'staff' : 'guest';
       const response = await apiClient.get<ConversationsResponse>(
-        `${resolveWhatsappDebugBase(kind)}/conversations`,
+        `${resolveWhatsappDebugBase('guest')}/conversations`,
         { params: requestParams }
       );
 
@@ -105,14 +122,41 @@ class MessagesService {
     }
   ): Promise<any> {
     try {
+      const inbox = options?.inbox ?? 'guest';
+
+      if (inbox === 'staff') {
+        const digits = (phone || '').replace(/\D/g, '');
+        const { rows } = await getStaffWaThreads({
+          workerWaNumber: digits || phone,
+          messagesLimit: options?.limit ?? 50,
+        });
+        const row =
+          rows[0] ||
+          rows.find((r: { workerWaNumber?: string }) =>
+            (r.workerWaNumber || '').replace(/\D/g, '') === digits,
+          );
+        const messages = row?.messages || (row?.lastMessage ? [row.lastMessage] : []);
+        return {
+          status: 'success',
+          data: {
+            messages: messages.map((m: Record<string, unknown>) => ({
+              phone,
+              role: m.isIncoming ? 'user' : 'assistant',
+              content: m.body,
+              timestamp: m.createdAt,
+              sent_by_admin: !m.isIncoming,
+            })),
+          },
+        };
+      }
+
       const params: any = {};
       if (options?.limit) params.limit = options.limit;
       if (options?.before) params.before = options.before;
       if (options?.before_message_id) params.before_message_id = options.before_message_id;
 
-      const base = resolveWhatsappDebugBase(options?.inbox ?? 'guest');
       const response = await apiClient.get(
-        `${base}/messages/${encodeURIComponent(phone)}`,
+        `${resolveWhatsappDebugBase('guest')}/messages/${encodeURIComponent(phone)}`,
         {
           params: Object.keys(params).length ? params : undefined,
           timeout: 60000,
@@ -139,13 +183,29 @@ class MessagesService {
       skip?: number;
       before?: string;
       before_message_id?: string;
-      /** staff = srv-chatbot, guest = srv-fullchatbot (+ legacy fallback) */
+      /** staff = srv-fulltask /staff-whatsapp, guest = srv-fullchatbot */
       inbox?: WhatsappInboxKind;
       /** Mongo reservationId — loads thread if phone variants miss */
       reservationId?: string;
     }
   ): Promise<ConversationDetailResponse> {
     try {
+      const inbox = options?.inbox ?? 'guest';
+
+      if (inbox === 'staff') {
+        const digits = (phone || '').replace(/\D/g, '');
+        const { rows } = await getStaffWaThreads({
+          workerWaNumber: digits || phone,
+          messagesLimit: options?.limit ?? 50,
+        });
+        const row =
+          rows[0] ||
+          rows.find((r: { workerWaNumber?: string }) =>
+            (r.workerWaNumber || '').replace(/\D/g, '') === digits,
+          );
+        return mapStaffThreadToDetail(phone, row);
+      }
+
       const params: Record<string, string | number> = {};
       if (options?.skip) params.skip = options.skip;
       if (options?.limit) params.limit = options.limit;
@@ -153,36 +213,14 @@ class MessagesService {
       if (options?.before_message_id) params.before_message_id = options.before_message_id;
       if (options?.reservationId) params.reservationId = options.reservationId;
 
-      const inbox = options?.inbox ?? 'guest';
-      const base = resolveWhatsappDebugBase(inbox);
-
       const response = await apiClient.get<ConversationDetailResponse>(
-        `${base}/conversations/${encodeURIComponent(phone)}`,
+        `${resolveWhatsappDebugBase('guest')}/conversations/${encodeURIComponent(phone)}`,
         {
           params: Object.keys(params).length ? params : undefined,
         }
       );
 
-      const data = response.data;
-      if (
-        inbox === 'guest' &&
-        data.status === 'success' &&
-        (!data.data?.exchanges?.length)
-      ) {
-        try {
-          const legacy = await apiClient.get<ConversationDetailResponse>(
-            `${resolveStaffWhatsappDebugBase()}/conversations/${encodeURIComponent(phone)}`,
-            { params: Object.keys(params).length ? params : undefined },
-          );
-          if (legacy.data?.data?.exchanges?.length) {
-            return legacy.data;
-          }
-        } catch {
-          /* fullchatbot-only thread */
-        }
-      }
-
-      return data;
+      return response.data;
     } catch (error: any) {
       console.error(`❌ Erreur récupération messages pour ${phone}:`, error);
       throw new Error(
@@ -204,8 +242,13 @@ class MessagesService {
     inbox: WhatsappInboxKind = 'guest',
   ): Promise<SendMessageResponse> {
     try {
+      if (inbox === 'staff') {
+        await sendStaffWaText({ to: data.phone, text: data.message });
+        return { success: true };
+      }
+
       const response = await apiClient.post<SendMessageResponse>(
-        `${resolveWhatsappDebugBase(inbox)}/send-message`,
+        `${resolveWhatsappDebugBase('guest')}/send-message`,
         {
           phone: data.phone,
           message: data.message,

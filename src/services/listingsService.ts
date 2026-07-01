@@ -1355,17 +1355,48 @@ export const listingsService = {
   },
 
   /**
-   * Lits disponibles pour une pièce du catalogue composition (legacy RoomAmenitiesPopup).
+   * Lits pour Rooms & Beds — GET /amenities/bed-amenities (existe en prod) ;
+   * repli GET /amenities?useBed=true si besoin filtre compositionRooms.
    */
   async getBedAmenitiesForCompositionRoom(
     rentalId: string | number,
   ): Promise<Record<string, unknown>[]> {
+    const roomId = String(rentalId);
+
+    const filterByCompositionRoom = (items: Record<string, unknown>[]): Record<string, unknown>[] => {
+      const forRoom = items.filter((a) => {
+        const comp = a.compositionRooms;
+        if (!Array.isArray(comp) || comp.length === 0) return false;
+        return comp.some((cr) => String(asRecord(cr).roomId) === roomId);
+      });
+      return forRoom.length > 0 ? forRoom : items;
+    };
+
+    try {
+      const bedResponse = await apiClient.get(
+        `${LISTING_API_BASE_URL}/amenities/bed-amenities`,
+      );
+      const bedPayload = asRecord(bedResponse.data);
+      if (bedPayload.success !== false) {
+        const bedData = asRecord(bedPayload.data);
+        const amenityIds = Array.isArray(bedData.amenityIds) ? bedData.amenityIds : [];
+        const beds = amenityIds
+          .map((row) => asRecord(row))
+          .filter((r) => r.useBed === true);
+        if (beds.length > 0) {
+          return filterByCompositionRoom(beds);
+        }
+      }
+    } catch (error) {
+      console.warn('[listings] bed-amenities:', error);
+    }
+
     const params = new URLSearchParams();
     params.set('page', '0');
     params.set('limit', '300');
     params.set('paged', 'true');
     params.set('useBed', 'true');
-    params.append('roomIds', String(rentalId));
+    params.append('roomIds', roomId);
     try {
       const response = await apiClient.get(
         `${LISTING_API_BASE_URL}/amenities?${params.toString()}`,
@@ -1374,10 +1405,11 @@ export const listingsService = {
       if (payload.success === false) return [];
       const raw = payload.data;
       const arr = Array.isArray(raw) ? raw : [];
-      return arr
-        .map((row) => asRecord(row))
-        .filter((r) => r.useBed === true);
+      return arr.map((row) => asRecord(row)).filter((r) => r.useBed === true);
     } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 404) {
+        return [];
+      }
       console.warn('[listings] getBedAmenitiesForCompositionRoom:', error);
       return [];
     }
