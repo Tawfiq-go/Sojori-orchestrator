@@ -699,6 +699,7 @@ class MessagesService {
     messageStatus?: string;
     unreplied?: boolean;
     otaChannel?: string;
+    cursor?: string;
   }): Promise<any> {
     try {
       const response = await apiClient.get(
@@ -711,6 +712,7 @@ class MessagesService {
             source: 'reservation',
             reservationNumber: params?.reservationNumber || params?.search || undefined,
             sortBy: params?.sortBy || undefined,
+            ...(params?.cursor ? { cursor: params.cursor } : {}),
             ...(params?.ownerId ? { ownerId: params.ownerId } : {}),
             ...(params?.otaSearch ? { otaSearch: '1' } : {}),
             ...(params?.q ? { q: params.q } : {}),
@@ -777,11 +779,12 @@ class MessagesService {
         error.response?.data?.error ||
         error.response?.data?.message ||
         error.response?.data?.detail;
+      const hint = error.response?.data?.hint;
       throw new Error(
-        ruError ||
+        [ruError, hint].filter(Boolean).join(' — ') ||
           (error.response?.status === 401
             ? 'Session expirée — reconnectez-vous.'
-            : 'Erreur lors de l\'envoi du message OTA (vérifiez les identifiants Rental United du compte).'),
+            : 'Erreur lors de l\'envoi du message OTA.'),
       );
     }
   }

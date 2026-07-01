@@ -60,6 +60,10 @@ interface ThreadsListProps {
   otaFiltersActive?: boolean;
   /** OTA : réinitialiser barre 🔍 + avancé + canaux */
   onOtaResetAll?: () => void;
+  /** OTA : charger la page suivante (scroll bas) */
+  onOtaLoadMore?: () => void;
+  otaHasMore?: boolean;
+  otaLoadingMore?: boolean;
   /** WhatsApp guest : recherche serveur active (pas de filtre client à chaque frappe) */
   waGlobalSearchActive?: boolean;
   /** WhatsApp guest : debounce en cours */
@@ -115,6 +119,9 @@ export default function ThreadsList({
   otaKeywordMatchTotal,
   otaFiltersActive,
   onOtaResetAll,
+  onOtaLoadMore,
+  otaHasMore = false,
+  otaLoadingMore = false,
   waGlobalSearchActive,
   waSearchPending,
   waChannelFilter = 'all',
@@ -134,6 +141,12 @@ export default function ThreadsList({
   const icon = listIcon || channel?.icon || '💬';
   const accentColor = channel?.color || (mode === 'ota' ? '#FF5A5F' : T.green);
   const waFiltersEnabled = mode === 'whatsapp' && Boolean(onWaChannelFilterChange);
+  const otaUsesServerSearch =
+    mode === 'ota' &&
+    (otaGlobalSearchActive ||
+      otaServerSearchActive ||
+      otaUnrepliedSearchActive ||
+      Boolean(otaActiveKeyword?.trim()));
 
   const [internalAdvancedExpanded, setInternalAdvancedExpanded] = useState(false);
   const showOtaAdvanced = otaAdvancedExpanded ?? internalAdvancedExpanded;
@@ -148,7 +161,7 @@ export default function ThreadsList({
 
   const filtered = useMemo(() => {
     let list = threads;
-    if (searchTerm.trim() && mode !== 'ota' && !waGlobalSearchActive && !waFiltersEnabled) {
+    if (searchTerm.trim() && !otaUsesServerSearch && !waGlobalSearchActive && !waFiltersEnabled) {
       const q = searchTerm.toLowerCase();
       list = list.filter(
         (t) =>
@@ -160,7 +173,7 @@ export default function ThreadsList({
       );
     }
     return list;
-  }, [threads, mode, searchTerm, waGlobalSearchActive, waFiltersEnabled]);
+  }, [threads, otaUsesServerSearch, searchTerm, waGlobalSearchActive, waFiltersEnabled]);
 
   const waCounts: WaFilterCounts = waFilterCounts ?? {
     all: threads.length,
@@ -451,6 +464,22 @@ export default function ThreadsList({
         className="ota-inbox-threads-scroll"
         wrapperSx={{ flex: 1, minHeight: 0, bgcolor: T.bg1 }}
         innerSx={{ px: '8px', py: '6px' }}
+        onScroll={
+          mode === 'ota' &&
+          onOtaLoadMore &&
+          otaHasMore &&
+          !otaGlobalSearchActive &&
+          !otaServerSearchActive &&
+          !otaUnrepliedSearchActive
+            ? (e) => {
+                const el = e.currentTarget;
+                if (otaLoadingMore) return;
+                if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+                  onOtaLoadMore();
+                }
+              }
+            : undefined
+        }
       >
         {((loading && filtered.length === 0) || (mode === 'ota' && otaSearchPending && filtered.length === 0)) && (
           <Box sx={{ py: 4, textAlign: 'center' }}>
@@ -668,6 +697,16 @@ export default function ThreadsList({
             </Box>
           );
         })}
+        {mode === 'ota' && otaLoadingMore && (
+          <Box sx={{ py: 1.5, textAlign: 'center' }}>
+            <Typography sx={{ fontSize: 11, color: T.text4 }}>Chargement…</Typography>
+          </Box>
+        )}
+        {mode === 'ota' && otaHasMore && !otaLoadingMore && filtered.length > 0 && (
+          <Box sx={{ py: 1, textAlign: 'center' }}>
+            <Typography sx={{ fontSize: 10, color: T.text4 }}>Faites défiler pour plus de fils</Typography>
+          </Box>
+        )}
       </ModalScrollColumn>
     </Box>
   );
