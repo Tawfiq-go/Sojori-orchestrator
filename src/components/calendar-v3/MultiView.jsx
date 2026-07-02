@@ -249,6 +249,8 @@ export default function MultiView({
               listing={listing}
               inventories={inventoriesByListing[listing._id] || {}}
               days={days}
+              leftW={LEFT_W}
+              cellW={CELL_W}
               expanded={!!expanded[listing._id]}
               onToggle={() => toggleListing(listing._id)}
               selectedColumns={selectedColumns.length ? selectedColumns : []}
@@ -390,7 +392,7 @@ const ListingLabel = memo(function ListingLabel({ listing, expanded, showChevron
 
 /* ─── Ligne d'un listing (Rate TOP + collapse) ─── */
 function ListingRow({
-  listing, inventories, days, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onReservationClick,
+  listing, inventories, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onReservationClick,
 }) {
   const showChevron = selectedColumns.length > 0;
   const getInv = (dateStr) => inventories[dateStr];
