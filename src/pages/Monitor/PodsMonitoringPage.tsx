@@ -90,7 +90,9 @@ interface ReadinessCondition {
 interface PodStartup {
   scheduledAt?: string;
   readyAt?: string;
+  containerStartedAt?: string | null;
   durationSeconds?: number | null;
+  anchorStale?: boolean;
   timeline: ReadinessCondition[];
 }
 
@@ -203,83 +205,141 @@ function formatClock(iso?: string): string {
   return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-function RestartHistoryTabs({ history }: { history: RestartCycle[] }) {
-  const [activeIdx, setActiveIdx] = useState(history.length - 1);
-  const active = history[activeIdx];
+interface TimelineStep {
+  key: string;
+  label: string;
+  at?: string;
+  elapsedSeconds?: number | null;
+  reached: boolean;
+  isFailurePoint?: boolean;
+}
 
-  if (history.length === 0) return <Typography sx={{ fontSize: 12, color: t.text3 }}>Aucun historique de démarrage disponible.</Typography>;
-
+function StepSegmentTimeline({ steps }: { steps: TimelineStep[] }) {
   return (
-    <Box>
-      <Stack direction="row" spacing={0.5} sx={{ mb: 1, flexWrap: 'wrap', rowGap: 0.5 }}>
-        {history.map((c, i) => {
-          const isActive = i === activeIdx;
-          const hasError = c.errorLines.length > 0;
-          const isLast = i === history.length - 1;
+    <Box sx={{ overflowX: 'auto' }}>
+      <Stack direction="row" alignItems="stretch" sx={{ minWidth: 'fit-content' }}>
+        {steps.map((step, i) => {
+          const isLast = i === steps.length - 1;
+          const color = step.isFailurePoint ? t.error : step.reached ? t.success : t.text3;
           return (
-            <Box
-              key={i}
-              onClick={() => setActiveIdx(i)}
-              sx={{
-                px: 1,
-                py: 0.375,
-                borderRadius: '6px',
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: 'pointer',
-                border: `1px solid ${isActive ? t.primaryDeep : t.border}`,
-                bgcolor: isActive ? t.primaryTint : hasError ? t.errorTint : t.bg2,
-                color: isActive ? t.primaryDeep : hasError ? t.error : t.text3,
-              }}
-            >
-              #{i + 1}{isLast ? ' (actuel)' : ''}{hasError ? ' ⚠' : ''}
-            </Box>
+            <Stack key={step.key} direction="row" alignItems="center">
+              <Stack alignItems="center" spacing={0.5} sx={{ minWidth: 84, px: 0.5 }}>
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: '50%',
+                    bgcolor: step.reached || step.isFailurePoint ? color : t.bg2,
+                    border: `2px solid ${color}`,
+                  }}
+                />
+                <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: step.reached || step.isFailurePoint ? t.text : t.text3, textAlign: 'center' }}>
+                  {step.label}
+                </Typography>
+                <Typography sx={{ fontSize: 9.5, color: t.text3, fontFamily: 'monospace', textAlign: 'center' }}>
+                  {step.at ? formatClock(step.at) : '—'}
+                </Typography>
+              </Stack>
+              {!isLast && (
+                <Stack alignItems="center" sx={{ minWidth: 56, px: 0.25 }}>
+                  <Box sx={{ width: '100%', height: 2, bgcolor: steps[i + 1]?.reached || steps[i + 1]?.isFailurePoint ? t.success : t.border }} />
+                  <Typography sx={{ fontSize: 9.5, color: t.text3, fontFamily: 'monospace', mt: 0.25 }}>
+                    {steps[i + 1]?.elapsedSeconds != null ? `+${formatDuration(steps[i + 1].elapsedSeconds)}` : '—'}
+                  </Typography>
+                </Stack>
+              )}
+            </Stack>
           );
         })}
       </Stack>
-
-      {active && (
-        <Box sx={{ border: `1px solid ${t.border}`, borderRadius: '8px', p: 1.25, bgcolor: t.bg1 }}>
-          <Stack spacing={0.6}>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography sx={{ fontSize: 11.5, color: t.text2 }}>Démarrage process</Typography>
-              <Typography sx={{ fontSize: 11.5, color: t.text3, fontFamily: 'monospace' }}>{formatClock(active.startedAt)}</Typography>
-            </Stack>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography sx={{ fontSize: 11.5, color: t.text2 }}>Connexion MongoDB</Typography>
-              <Typography sx={{ fontSize: 11.5, color: active.dbConnectedAt ? t.text3 : t.error, fontFamily: 'monospace' }}>
-                {active.dbConnectedAt ? `${formatClock(active.dbConnectedAt)} (+${formatDuration(active.timeToDbSeconds)})` : 'non atteint'}
-              </Typography>
-            </Stack>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography sx={{ fontSize: 11.5, color: t.text2 }}>Connexion RabbitMQ</Typography>
-              <Typography sx={{ fontSize: 11.5, color: active.rabbitmqConnectedAt ? t.text3 : t.error, fontFamily: 'monospace' }}>
-                {active.rabbitmqConnectedAt ? `${formatClock(active.rabbitmqConnectedAt)} (+${formatDuration(active.timeToRabbitmqSeconds)})` : 'non atteint'}
-              </Typography>
-            </Stack>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography sx={{ fontSize: 11.5, color: t.text2 }}>Prêt (HTTP listening)</Typography>
-              <Typography sx={{ fontSize: 11.5, color: active.readyAt ? t.success : t.error, fontFamily: 'monospace', fontWeight: 700 }}>
-                {active.readyAt ? `${formatClock(active.readyAt)} (+${formatDuration(active.timeToReadySeconds)})` : 'jamais atteint'}
-              </Typography>
-            </Stack>
-          </Stack>
-
-          {active.errorLines.length > 0 && (
-            <Box sx={{ mt: 1, pt: 1, borderTop: `1px solid ${t.border}` }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.error, mb: 0.5 }}>Erreurs de ce cycle</Typography>
-              <Box sx={{ bgcolor: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', p: 1, maxHeight: 180, overflowY: 'auto' }}>
-                {active.errorLines.map((line, i) => (
-                  <Typography key={i} sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                    {line}
-                  </Typography>
-                ))}
-              </Box>
-            </Box>
-          )}
-        </Box>
-      )}
     </Box>
+  );
+}
+
+function buildCycleSteps(cycle: RestartCycle, previousCycleError: boolean): TimelineStep[] {
+  const steps: TimelineStep[] = [];
+  if (previousCycleError) {
+    steps.push({ key: 'crash', label: 'Crash', reached: false, isFailurePoint: true });
+  }
+  steps.push({ key: 'start', label: 'Start', at: cycle.startedAt, reached: !!cycle.startedAt, elapsedSeconds: 0 });
+  steps.push({
+    key: 'db',
+    label: 'MongoDB',
+    at: cycle.dbConnectedAt,
+    reached: !!cycle.dbConnectedAt,
+    elapsedSeconds: cycle.timeToDbSeconds,
+  });
+  steps.push({
+    key: 'rabbitmq',
+    label: 'RabbitMQ',
+    at: cycle.rabbitmqConnectedAt,
+    reached: !!cycle.rabbitmqConnectedAt,
+    elapsedSeconds: cycle.timeToRabbitmqSeconds,
+  });
+  steps.push({
+    key: 'ready',
+    label: 'Ready',
+    at: cycle.readyAt,
+    reached: !!cycle.readyAt,
+    elapsedSeconds: cycle.timeToReadySeconds,
+  });
+  return steps;
+}
+
+function RestartHistoryTabs({ history }: { history: RestartCycle[] }) {
+  if (history.length === 0) return <Typography sx={{ fontSize: 12, color: t.text3 }}>Aucun historique de démarrage disponible.</Typography>;
+
+  return (
+    <Stack spacing={1}>
+      {history.map((cycle, i) => {
+        const isLast = i === history.length - 1;
+        const previousCycleError = i > 0 && history[i - 1].errorLines.length > 0;
+        const hasError = cycle.errorLines.length > 0;
+        return (
+          <Box
+            key={i}
+            sx={{
+              border: `1px solid ${hasError ? t.error : t.border}`,
+              borderRadius: '8px',
+              p: 1.25,
+              bgcolor: t.bg1,
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 0.75 }}>
+              <Box
+                sx={{
+                  px: 0.75,
+                  py: 0.25,
+                  borderRadius: '5px',
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  bgcolor: hasError ? t.errorTint : t.bg2,
+                  color: hasError ? t.error : t.text3,
+                }}
+              >
+                #{i + 1}{isLast ? ' (actuel)' : ''}
+              </Box>
+              {hasError && <Badge variant="error">⚠ erreur</Badge>}
+            </Stack>
+
+            <StepSegmentTimeline steps={buildCycleSteps(cycle, previousCycleError)} />
+
+            {cycle.errorLines.length > 0 && (
+              <Box sx={{ mt: 1.25, pt: 1, borderTop: `1px solid ${t.border}` }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.error, mb: 0.5 }}>Erreurs de ce cycle</Typography>
+                <Box sx={{ bgcolor: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', p: 1, maxHeight: 180, overflowY: 'auto' }}>
+                  {cycle.errorLines.map((line, li) => (
+                    <Typography key={li} sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                      {line}
+                    </Typography>
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
+    </Stack>
   );
 }
 
@@ -456,7 +516,12 @@ export default function PodsMonitoringPage() {
                         {/* Timeline de démarrage */}
                         <Box>
                           <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text2, mb: 0.5 }}>
-                            Démarrage {p.startup?.durationSeconds != null ? `— ${formatDuration(p.startup.durationSeconds)} jusqu'à healthy` : ''}
+                            Démarrage
+                            {p.startup?.anchorStale
+                              ? ' — délai non fiable (pod resynchronisé sans redémarrage réel, voir historique des cycles ci-dessous)'
+                              : p.startup?.durationSeconds != null
+                                ? ` — ${formatDuration(p.startup.durationSeconds)} jusqu'à healthy`
+                                : ''}
                           </Typography>
                           {p.startup?.timeline?.length > 0 ? (
                             <Stack spacing={0.4}>
