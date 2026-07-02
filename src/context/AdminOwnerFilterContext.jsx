@@ -1,11 +1,13 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { isPmBusinessPath } from '../config/routeAccessPolicy';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { canSelectOwnerInAdminFilter, getRequestOwnerIdParam } from 'utils/taskScope.utils';
 import { usePmSimulation } from './PmSimulationContext';
 import { getOwnersAllPages } from '../services/teamDashboardApi';
 import { useAuth } from '../hooks/useAuth';
 import { toLegacyAuthUser } from '../utils/legacyAuthUser';
+import {
+  persistAdminScope,
+  readPersistedAdminScope,
+} from '../utils/adminOwnerFilter.utils';
 
 const AdminOwnerFilterContext = createContext(null);
 
@@ -15,23 +17,32 @@ const noop = () => {};
 /** Stable empty array for useAdminOwnerFilter fallback (avoid new [] each render → effect loops). */
 const EMPTY_OWNER_IDS = Object.freeze([]);
 
-/** Admin métier : unset = écran vide jusqu’au choix explicite ; all = plateforme ; owner = un PM. */
+/** Admin métier : unset = écran vide (legacy) ; all = plateforme ; owner = un PM. */
 export const ADMIN_SCOPE_UNSET = 'unset';
 export const ADMIN_SCOPE_ALL = 'all';
 export const ADMIN_SCOPE_OWNER = 'owner';
 
+function scopeModeFromPersisted(mode) {
+  if (mode === 'owner') return ADMIN_SCOPE_OWNER;
+  if (mode === 'all') return ADMIN_SCOPE_ALL;
+  return ADMIN_SCOPE_ALL;
+}
+
 /**
  * Propriétaire filter for users who can work across owners (see canSelectOwnerInAdminFilter).
  * Property Owner accounts: no filter, scoped data only.
- * Pas de persistance sessionStorage — resélection obligatoire à chaque chargement de page.
+ * Admin default: Tous (plateforme). Persists in sessionStorage across pages until changed.
  */
 export function AdminOwnerFilterProvider({ children }) {
   const { user: authUser } = useAuth();
   const user = useMemo(() => toLegacyAuthUser(authUser), [authUser]);
-  const location = useLocation();
-  const prevPmPathRef = useRef('');
-  const [selectedOwnerId, setSelectedOwnerIdState] = useState('');
-  const [adminScopeMode, setAdminScopeMode] = useState(ADMIN_SCOPE_UNSET);
+  const [initialScope] = useState(() => readPersistedAdminScope());
+  const [selectedOwnerId, setSelectedOwnerIdState] = useState(
+    initialScope.mode === 'owner' ? initialScope.ownerId : '',
+  );
+  const [adminScopeMode, setAdminScopeMode] = useState(() =>
+    scopeModeFromPersisted(initialScope.mode),
+  );
   const [owners, setOwners] = useState([]);
   const [ownersLoading, setOwnersLoading] = useState(false);
   const { simulatedOwnerId: simulatedOwnerIdFromCtx } = usePmSimulation();
@@ -57,12 +68,22 @@ export function AdminOwnerFilterProvider({ children }) {
   );
 
   const setSelectedOwnerId = useCallback((id) => {
-    setSelectedOwnerIdState(id ? String(id).trim() : '');
+    const trimmed = id ? String(id).trim() : '';
+    if (!trimmed) {
+      setAdminScopeMode(ADMIN_SCOPE_ALL);
+      setSelectedOwnerIdState('');
+      persistAdminScope('all', '');
+      return;
+    }
+    setAdminScopeMode(ADMIN_SCOPE_OWNER);
+    setSelectedOwnerIdState(trimmed);
+    persistAdminScope('owner', trimmed);
   }, []);
 
   const setScopeAll = useCallback(() => {
     setAdminScopeMode(ADMIN_SCOPE_ALL);
     setSelectedOwnerIdState('');
+    persistAdminScope('all', '');
   }, []);
 
   const setScopeOwner = useCallback((id) => {
@@ -70,11 +91,13 @@ export function AdminOwnerFilterProvider({ children }) {
     if (!trimmed) return;
     setAdminScopeMode(ADMIN_SCOPE_OWNER);
     setSelectedOwnerIdState(trimmed);
+    persistAdminScope('owner', trimmed);
   }, []);
 
   const resetAdminScope = useCallback(() => {
-    setAdminScopeMode(ADMIN_SCOPE_UNSET);
+    setAdminScopeMode(ADMIN_SCOPE_ALL);
     setSelectedOwnerIdState('');
+    persistAdminScope('all', '');
   }, []);
 
   const setSelectedOwnerIds = useCallback(
@@ -88,28 +111,7 @@ export function AdminOwnerFilterProvider({ children }) {
     [setScopeAll, setScopeOwner],
   );
 
-  const clearSelection = useCallback(() => resetAdminScope(), [resetAdminScope]);
-
-  useEffect(() => {
-    try {
-      sessionStorage.removeItem('sojori.adminOwnerFilter.selectedOwnerId');
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  /** Chaque entrée sur une URL métier PM : écran vide jusqu’au choix explicite (Tous ou un PM). */
-  useEffect(() => {
-    if (!showOwnerFilter || simulatedOwnerId) return;
-    if (!isPmBusinessPath(location.pathname)) {
-      prevPmPathRef.current = location.pathname;
-      return;
-    }
-    if (prevPmPathRef.current !== location.pathname) {
-      resetAdminScope();
-    }
-    prevPmPathRef.current = location.pathname;
-  }, [location.pathname, showOwnerFilter, simulatedOwnerId, resetAdminScope]);
+  const clearSelection = useCallback(() => setScopeAll(), [setScopeAll]);
 
   useEffect(() => {
     if (!showOwnerFilter) return;

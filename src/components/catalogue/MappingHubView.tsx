@@ -277,7 +277,7 @@ export function MappingHubView({
                     }}
                   >
                     <Box>
-                      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                      <Typography component="span" sx={{ display: 'flex', alignItems: 'center', fontSize: 13, fontWeight: 700 }}>
                         {item.label}
                         {item.nativeSlug ? (
                           <Chip
@@ -288,7 +288,7 @@ export function MappingHubView({
                           />
                         ) : null}
                       </Typography>
-                      <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.25 }}>
+                      <Typography component="span" sx={{ display: 'block', fontSize: 10, color: T.text3, mt: 0.25 }}>
                         {DB_LABELS[item.database]} · {item.path}
                       </Typography>
                     </Box>

@@ -18,14 +18,31 @@ const MAX_ENTRIES = 200;
 let seq = 0;
 const entries: RuntimeLogEntry[] = [];
 const listeners = new Set<() => void>();
+let notifyScheduled = false;
 
-function notify(): void {
+function flushListeners(): void {
+  notifyScheduled = false;
   for (const listener of listeners) {
     try {
       listener();
     } catch {
       /* ignore */
     }
+  }
+}
+
+/**
+ * Notifie les abonnés de façon asynchrone : évite de déclencher un setState
+ * d'un abonné (ex. DevRuntimeLogPanel) pendant le render d'un autre composant
+ * qui logge (ex. AuthProvider) → warning React "Cannot update while rendering".
+ */
+function notify(): void {
+  if (notifyScheduled) return;
+  notifyScheduled = true;
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(flushListeners);
+  } else {
+    Promise.resolve().then(flushListeners);
   }
 }
 

@@ -69,6 +69,17 @@ function unwrapData<T>(res: unknown): T | null {
   return res as T;
 }
 
+function defaultListingCapabilityDecisions(
+  existing?: ListingCapabilityDoc['decisions'],
+): NonNullable<ListingCapabilityDoc['decisions']> {
+  return {
+    managed: existing?.managed ?? true,
+    clientEnabled: existing?.clientEnabled ?? true,
+    orchestrated: existing?.orchestrated ?? true,
+    taskEnabled: existing?.taskEnabled ?? true,
+  };
+}
+
 export function orchestrationFlagsFromDoc(
   doc: ListingOrchestrationEffective | ListingOrchestrationDoc,
 ): Record<string, unknown> {
@@ -260,12 +271,7 @@ export async function saveListingGestion(input: {
       [input.capabilityKey]: {
         key: input.capabilityKey,
         taskType: def.taskType,
-        decisions: existing?.decisions ?? {
-          managed: true,
-          clientEnabled: true,
-          orchestrated: true,
-          taskEnabled: true,
-        },
+        decisions: defaultListingCapabilityDecisions(existing?.decisions),
         gestion: input.gestion,
         taskBehavior: existing?.taskBehavior,
         execution: existing?.execution,
@@ -291,7 +297,7 @@ export async function saveListingWhatsappOption(input: {
       [input.capabilityKey]: {
         key: input.capabilityKey,
         taskType: def.taskType,
-        decisions: existing?.decisions,
+        decisions: defaultListingCapabilityDecisions(existing?.decisions),
         gestion: existing?.gestion,
         taskBehavior: existing?.taskBehavior,
         execution: existing?.execution,
@@ -356,7 +362,7 @@ export async function saveListingExecutionWorkflow(input: {
       [input.capabilityKey]: {
         key: input.capabilityKey,
         taskType: input.taskType,
-        decisions: existing?.decisions,
+        decisions: defaultListingCapabilityDecisions(existing?.decisions),
         taskBehavior: existing?.taskBehavior,
         gestion: existing?.gestion,
         whatsapp: existing?.whatsapp,
