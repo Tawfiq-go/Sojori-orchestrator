@@ -30,8 +30,8 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 import { analyticsService } from '../services/analyticsService';
 import { buildEmptyAnalyticsSnapshot } from '../services/analyticsSnapshotBuilder';
+import { useAdminScopeFetchReady } from '../hooks/useAdminScopeFetchReady';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
-import OwnerFilterField from '../components/OwnerFilterBar/OwnerFilterField';
 import { analyticsPeriodOptions } from '../types/analytics.types';
 import { runtimeLog } from '../utils/runtimeLog';
 import { createCurrencyFormatter } from '../utils/analyticsCurrency';
@@ -55,8 +55,8 @@ export function AnalyticsPage() {
 }
 
 function AnalyticsPageContent() {
-  const { showOwnerFilter, requestOwnerId, simulatedOwnerId } = useAdminOwnerFilter();
-  const ownerScopeBlocked = showOwnerFilter && !requestOwnerId && !simulatedOwnerId;
+  const { requestOwnerId, ownerScopeUnset } = useAdminOwnerFilter();
+  const scopeFetchReady = useAdminScopeFetchReady();
   const [period, setPeriod] = useState<(typeof analyticsPeriodOptions)[number]['value']>('30d');
   const [comparison, setComparison] = useState<'vs-last-period' | 'vs-last-year'>('vs-last-period');
   const [source, setSource] = useState<(typeof sourceOptions)[number]>('Tous');
@@ -97,8 +97,8 @@ function AnalyticsPageContent() {
       return;
     }
 
-    if (ownerScopeBlocked) {
-      runtimeLog('info', 'AnalyticsPage', 'Skip fetch: admin sans proprietaire', { loadId });
+    if (ownerScopeUnset) {
+      runtimeLog('info', 'AnalyticsPage', 'Skip fetch: admin sans choix de scope', { loadId });
       if (loadId === loadGenerationRef.current) {
         setSnapshot(buildEmptyAnalyticsSnapshot());
         setLoading(false);
@@ -210,7 +210,7 @@ function AnalyticsPageContent() {
     selectedProperties,
     source,
     requestOwnerId,
-    ownerScopeBlocked,
+    ownerScopeUnset,
   ]);
 
   const activeProperties = useMemo(
@@ -291,7 +291,7 @@ function AnalyticsPageContent() {
       : activeProperties.length || snapshot?.propertyPerformance.length || 0;
   const isCustomDateIncomplete = period === 'custom' && (!customStartDate || !customEndDate);
   const exportDisabled =
-    loading || !snapshot || isCustomDateIncomplete || exporting !== null || ownerScopeBlocked;
+    loading || !snapshot || isCustomDateIncomplete || exporting !== null || ownerScopeUnset;
 
   const handleExport = async (format: 'csv' | 'pdf') => {
     if (exportDisabled) return;
@@ -318,14 +318,9 @@ function AnalyticsPageContent() {
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Analytics']}>
       <PageHeader
-        title={
-          <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-            <span>Analytics</span>
-            <OwnerFilterField requireSelection sx={{ minWidth: 240, maxWidth: 320 }} />
-          </Box>
-        }
+        title="Analytics"
         count={
-          ownerScopeBlocked
+          ownerScopeUnset
             ? '—'
             : `${loading ? 'Actualisation' : snapshot?.periodLabel ?? 'Analytics'} · ${
                 comparison === 'vs-last-period' ? 'vs periode precedente' : 'vs annee precedente'
@@ -371,14 +366,6 @@ function AnalyticsPageContent() {
         </Button>
       </PageHeader>
 
-      {ownerScopeBlocked ? (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Sélectionnez un propriétaire pour afficher les analytics de son portefeuille.
-        </Alert>
-      ) : null}
-
-      {!ownerScopeBlocked ? (
-        <>
       <FilterBar>
         {analyticsPeriodOptions.map((item) => (
           <FilterChip
@@ -750,8 +737,6 @@ function AnalyticsPageContent() {
           </Stack>
         </Panel>
       )}
-        </>
-      ) : null}
     </DashboardWrapper>
   );
 }

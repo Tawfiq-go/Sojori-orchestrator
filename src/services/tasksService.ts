@@ -266,10 +266,25 @@ class TasksService {
     }
   }
 
-  async getListings(): Promise<TaskListingOption[]> {
+  /**
+   * `/api/v1/task/listings` (ancien srv-task) n'existe plus côté backend — srv-fulltask
+   * n'a pas de collection Listing locale. On repasse par srv-listing (source de vérité),
+   * déjà utilisé ailleurs dans l'app via listingsService.
+   */
+  async getListings(params?: { filterOwnerId?: string }): Promise<TaskListingOption[]> {
     try {
-      const response = await apiClient.get(`${TASKS_BASE_URL}/listings`);
-      return Array.isArray(response.data) ? response.data : [];
+      const { default: listingsService } = await import('./listingsService');
+      const result = await listingsService.getListingsForCalendar(0, 500, {
+        filterOwnerId: params?.filterOwnerId,
+      });
+      if (!result.success) return [];
+      return result.data.map((l: Record<string, unknown>) => ({
+        _id: String(l._id ?? l.id ?? ''),
+        name: String(l.name ?? l.title ?? ''),
+        address: l.address ? String(l.address) : undefined,
+        city: l.city ? String(l.city) : undefined,
+        country: l.country ? String(l.country) : undefined,
+      }));
     } catch (error) {
       throw new Error(getErrorMessage(error, 'Erreur lors du chargement des annonces'));
     }

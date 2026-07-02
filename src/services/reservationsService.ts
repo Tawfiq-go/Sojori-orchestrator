@@ -15,6 +15,7 @@ import {
   getCachedReservationDetail,
   setCachedReservationDetail,
 } from '../utils/reservationDetailCache';
+import { appendFilterOwnerIdsToSearchParams } from '../utils/adminOwnerFilter.utils';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4007';
 
@@ -90,6 +91,9 @@ class ReservationsService {
     reservationNumber?: string;
     sortField?: 'createdAt' | 'checkin' | 'checkout';
     sortOrder?: 'asc' | 'desc';
+    /** Admin : filtre par PM (backend: filterOwnerId répété). */
+    filterOwnerId?: string | string[];
+    ownerId?: string | null;
   }): Promise<{ success: boolean; data: Reservation[]; count: number; total: number }> {
     try {
       const queryParams = new URLSearchParams();
@@ -124,6 +128,15 @@ class ReservationsService {
 
       queryParams.append('sortField', params.sortField || 'createdAt');
       queryParams.append('sortOrder', params.sortOrder || 'desc');
+
+      const ownerFilter = params.filterOwnerId
+        ? Array.isArray(params.filterOwnerId)
+          ? params.filterOwnerId
+          : [params.filterOwnerId]
+        : params.ownerId
+          ? [params.ownerId]
+          : [];
+      appendFilterOwnerIdsToSearchParams(queryParams, ownerFilter);
 
       // ⚠️ FIX: Utiliser /reservations/reservations (pas /reservations seul)
       const url = `${BASE_URL}/api/v1/reservations/reservations?${queryParams.toString()}`;

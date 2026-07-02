@@ -8,9 +8,12 @@ import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
 import messagesService from '../../services/messagesService';
 import { staffOutboundExchange } from '../../services/staffConversationMapper';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
+import { findConversationByThreadId } from '../../utils/conversationThreadId';
 import type { Conversation } from '../../types/messages.types';
 import type { Thread } from '../../types/unifiedInbox.types';
 import { useInboxStaffConversation } from '../../hooks/useInboxStaffConversation';
+import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
 import { mapConversationToThread } from '../unified-inbox/inboxMappers';
 import { buildInboxMessages } from '../unified-inbox/inboxMessages';
 import { formatThreadWhen } from '../unified-inbox/inboxFormat';
@@ -24,6 +27,7 @@ const STAFF_TEMPLATES: QuickTemplate[] = [
 ];
 
 export default function StaffWhatsAppTabV2() {
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,25 +36,41 @@ export default function StaffWhatsAppTabV2() {
 
   const inbox = useInboxStaffConversation();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        const response = await messagesService.getConversations({
-          filter: 'smart',
-          hasReservation: false,
-          limit: 50,
-        });
-        if (response.status === 'success') {
-          setConversations(response.data.conversations);
-        }
-      } catch (err) {
-        console.error('❌ Erreur chargement staff:', err);
-      } finally {
-        setLoading(false);
+  const loadStaffConversations = useCallback(async () => {
+    if (!scopeFetchReady) {
+      setConversations([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const response = await messagesService.getConversations({
+        filter: 'smart',
+        hasReservation: false,
+        limit: 50,
+        owner_id: requestOwnerId || undefined,
+      });
+      if (response.status === 'success') {
+        setConversations(response.data.conversations);
       }
-    })();
-  }, []);
+    } catch (err) {
+      console.error('❌ Erreur chargement staff:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [scopeFetchReady, requestOwnerId]);
+
+  useEffect(() => {
+    void loadStaffConversations();
+  }, [loadStaffConversations]);
+
+  useInboxRealtimeRefresh(
+    'staff',
+    () => loadStaffConversations(),
+    () => {
+      if (inbox.activeConversation) void inbox.refreshStaffMessages();
+    },
+  );
 
   const handleSelect = async (conv: Conversation) => {
     await inbox.selectStaffConversation(conv);
@@ -205,7 +225,7 @@ export default function StaffWhatsAppTabV2() {
           activeThreadId={activeThread?.id ?? null}
           searchTerm={searchTerm}
           onSelectThread={(thread) => {
-            const conv = conversations.find((c) => c.phone === thread.id);
+            const conv = findConversationByThreadId(conversations, String(thread.id));
             if (conv) void handleSelect(conv);
           }}
           onSearchChange={setSearchTerm}
@@ -276,6 +296,7 @@ export default function StaffWhatsAppTabV2() {
     </>
   );
 }
+
 
 
 

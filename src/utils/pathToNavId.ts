@@ -109,6 +109,7 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
     return 'admin/channels/business';
   }
 
+  if (path.startsWith('/admin/pm-lifecycle')) return 'admin/pm-lifecycle';
   if (path.startsWith('/admin/mapping')) return 'admin/mapping';
   if (path.includes('/admin/setting/currency') || path.includes('/admin/settings/currency')) {
     return 'admin/setting/currency';

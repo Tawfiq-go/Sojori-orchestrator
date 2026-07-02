@@ -14,6 +14,23 @@ export const inboxShellSx = {
   boxShadow: '0 4px 12px -2px rgba(20,17,10,0.06), 0 2px 4px -1px rgba(20,17,10,0.04)',
 } as const;
 
+export const inboxShellFillSx = {
+  ...inboxShellSx,
+  height: { xs: 'auto', lg: '100%' },
+  minHeight: { xs: 420, lg: 0 },
+  maxHeight: { lg: '100%' },
+  flex: 1,
+} as const;
+
+export const inboxShellFullscreenSx = {
+  ...inboxShellSx,
+  height: '100%',
+  minHeight: 0,
+  maxHeight: 'none',
+  borderRadius: '12px',
+  flex: 1,
+} as const;
+
 export function DtCard({
   title,
   emoji,

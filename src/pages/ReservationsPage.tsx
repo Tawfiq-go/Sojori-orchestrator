@@ -40,6 +40,9 @@ import {
   ReservationRegistrationActions,
   type RegistrationFieldPatch,
 } from '../components/reservations/ReservationRegistrationActions';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
+import { useSocketIO } from '../hooks/useSocketIO';
+import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 import { PostImportListingIndicator } from '../components/reservations/PostImportListingIndicator';
 
 moment.locale('fr');
@@ -105,6 +108,19 @@ interface Reservation {
 }
 
 import { dashboardTokens as T } from '../design/sojoriBrandTokens';
+
+const TOOLBAR_SELECT_SX = {
+  minWidth: 0,
+  '& .MuiOutlinedInput-root': { height: 30 },
+  '& .MuiSelect-select': { py: 0.25, fontSize: 11.5, minHeight: 'unset !important' },
+} as const;
+
+const TOOLBAR_SEARCH_SX = {
+  flex: 1,
+  minWidth: 140,
+  maxWidth: 280,
+  '& .MuiOutlinedInput-root': { height: 30, fontSize: 12 },
+} as const;
 
 // ─── Helpers ───────────────────────────────────────────────────────
 const isReservationCancelled = (status: string) => {
@@ -209,6 +225,7 @@ export function ReservationsPage() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { scopeFetchReady, requestOwnerId, ownerScopeAll } = useAdminOwnerApiScope();
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -305,6 +322,13 @@ export function ReservationsPage() {
 
   // ─── Fetch (logique métier inchangée) ────────────────────────────
   const fetchReservations = useCallback(async () => {
+    if (!scopeFetchReady) {
+      setReservations([]);
+      setTotalReservations(0);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
@@ -316,6 +340,7 @@ export function ReservationsPage() {
         reservationNumber: sjSearch,
         sortField: 'createdAt',
         sortOrder: 'desc',
+        filterOwnerId: requestOwnerId || undefined,
       });
 
       const sorted = sortReservationsList(response.data as Reservation[]);
@@ -336,9 +361,37 @@ export function ReservationsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, limit, selectedStatuses, globalFilter]);
+  }, [page, limit, selectedStatuses, globalFilter, scopeFetchReady, requestOwnerId]);
+
+  useEffect(() => { setPage(0); }, [requestOwnerId]);
 
   useEffect(() => { fetchReservations(); }, [fetchReservations]);
+
+  // ─── Temps réel (socket.io) ───────────────────────────────────────
+  const socketRooms = useMemo(() => {
+    if (ownerScopeAll || !requestOwnerId) return [DEFAULT_ROOMS.RESERVATION_ADMIN_ROOM];
+    return [`room_reservation_${requestOwnerId}`];
+  }, [requestOwnerId, ownerScopeAll]);
+
+  useSocketIO({
+    rooms: socketRooms,
+    enabled: scopeFetchReady,
+    onReconnect: () => { fetchReservations(); },
+    handlers: {
+      [SOCKET_EVENTS.NEW_RESERVATION]: (reservation: Reservation) => {
+        setReservations(prev => {
+          if (prev.some(r => r._id === reservation._id)) return prev;
+          return [reservation, ...prev];
+        });
+        setTotalReservations(prev => prev + 1);
+      },
+      [SOCKET_EVENTS.UPDATE_RESERVATION]: (reservation: Reservation) => {
+        setReservations(prev =>
+          prev.map(r => (r._id === reservation._id ? { ...r, ...reservation } : r)),
+        );
+      },
+    },
+  });
 
   // ─── Liste listings disponibles ────────────────────────────────────
   const availableListings = useMemo(() => {

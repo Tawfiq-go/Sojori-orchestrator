@@ -12,6 +12,7 @@ import {
   setCachedChatbotListingSnapshots,
   type ChatbotListingSnapshotRow,
 } from '../../utils/chatbotListingSnapshotsCache';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -27,6 +28,7 @@ function avatarColor(seed: string): number {
 
 export default function ChatbotListingSnapshotView() {
   const [searchParams] = useSearchParams();
+  const { scopeFetchReady, filterOwnerIds } = useAdminOwnerApiScope();
   const queryClient = useQueryClient();
   const [rows, setRows] = useState<ChatbotListingSnapshotRow[]>(
     () => getCachedChatbotListingSnapshots() ?? [],
@@ -57,6 +59,7 @@ export default function ChatbotListingSnapshotView() {
   );
 
   const fetchSnapshotList = useCallback(async (opts?: { isBootstrap?: boolean }) => {
+    if (!scopeFetchReady) return;
     const requestId = ++loadRequestIdRef.current;
     const isBootstrap = opts?.isBootstrap ?? !listReady;
 
@@ -69,9 +72,23 @@ export default function ChatbotListingSnapshotView() {
     setError(null);
 
     try {
+      let scopedListingIds: Set<string> | null = null;
+      if (filterOwnerIds.length > 0) {
+        const listingsRes = await listingsService.getListings({
+          limit: 500,
+          compact: true,
+          useActiveFilter: false,
+          filterOwnerId: filterOwnerIds,
+        });
+        scopedListingIds = new Set(listingsRes.data.items.map((l) => l.id));
+      }
+
       const res = await fullchatbotApi.listListingSnapshots({ limit: 300, activeOnly: true });
       if (requestId !== loadRequestIdRef.current) return;
-      const data = Array.isArray(res?.data) ? (res.data as ChatbotListingSnapshotRow[]) : [];
+      let data = Array.isArray(res?.data) ? (res.data as ChatbotListingSnapshotRow[]) : [];
+      if (scopedListingIds) {
+        data = data.filter((row) => scopedListingIds!.has(String(row.listingId)));
+      }
       setRows(data);
       setCachedChatbotListingSnapshots(data);
       setListReady(true);
@@ -86,13 +103,13 @@ export default function ChatbotListingSnapshotView() {
         setIsRefreshing(false);
       }
     }
-  }, [listReady]);
+  }, [listReady, scopeFetchReady, filterOwnerIds.join(',')]);
 
   useEffect(() => {
-    const cached = getCachedChatbotListingSnapshots();
-    void fetchSnapshotList({ isBootstrap: !cached?.length });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap
-  }, []);
+    if (!scopeFetchReady) return;
+    invalidateChatbotListingSnapshotsCache();
+    void fetchSnapshotList({ isBootstrap: true });
+  }, [scopeFetchReady, filterOwnerIds.join(','), fetchSnapshotList]);
 
   useEffect(() => {
     const fromUrl = searchParams.get('listingId')?.trim();

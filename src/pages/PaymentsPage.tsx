@@ -36,6 +36,7 @@ import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
 import 'moment/locale/fr';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import paymentsService, { type PaymentAuditRow } from '../services/paymentsService';
 import {
   getCachedPaymentsList,
@@ -206,11 +207,14 @@ function DetailGrid({ row }: { row: PaymentAuditRow }) {
 
 export function PaymentsPage() {
   const navigate = useNavigate();
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
+  const ownerScopeKey = requestOwnerId || '__platform__';
   const initialCacheKey = paymentsCacheKey({
     page: 0,
     paymentStatus: 'UnPaid,Paid',
     cardOnly: true,
     search: '',
+    ownerScope: ownerScopeKey,
   });
   const initialCache = getCachedPaymentsList(initialCacheKey);
 
@@ -235,8 +239,9 @@ export function PaymentsPage() {
         paymentStatus,
         cardOnly,
         search: appliedSearch,
+        ownerScope: ownerScopeKey,
       }),
-    [page, paymentStatus, cardOnly, appliedSearch],
+    [page, paymentStatus, cardOnly, appliedSearch, ownerScopeKey],
   );
 
   const loadDetail = useCallback(async (row: PaymentAuditRow) => {
@@ -252,6 +257,16 @@ export function PaymentsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!scopeFetchReady) {
+      setRows([]);
+      setTotal(0);
+      setIsLoading(false);
+      setTableReady(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const cached = getCachedPaymentsList(queryKey);
     const isBootstrap = !cached;
 
@@ -276,6 +291,7 @@ export function PaymentsPage() {
           paymentStatus,
           reservationNumber: appliedSearch.trim() || undefined,
           cardOnly,
+          filterOwnerId: requestOwnerId || undefined,
         });
         if (cancelled || requestId !== loadRequestIdRef.current) return;
         if (!res.success) throw new Error('API error');
@@ -302,7 +318,12 @@ export function PaymentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [queryKey, page, paymentStatus, appliedSearch, cardOnly]);
+  }, [queryKey, page, paymentStatus, appliedSearch, cardOnly, scopeFetchReady, requestOwnerId]);
+
+  useEffect(() => {
+    setPage(0);
+    invalidatePaymentsListCache();
+  }, [requestOwnerId]);
 
   const applyFilters = () => {
     setAppliedSearch(searchInput.trim());
@@ -322,6 +343,7 @@ export function PaymentsPage() {
           paymentStatus,
           reservationNumber: appliedSearch.trim() || undefined,
           cardOnly,
+          filterOwnerId: requestOwnerId || undefined,
         });
         if (requestId !== loadRequestIdRef.current) return;
         if (!res.success) throw new Error('API error');

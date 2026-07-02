@@ -4,6 +4,7 @@
 import apiClient from './apiClient';
 import { isAxiosError } from 'axios';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
+import { filterOwnersForPmTab } from '../utils/ownerListFilters';
 
 const SRV_USER = MICROSERVICE_BASE_URL.SRV_USER;
 const SRV_FULLTASK = MICROSERVICE_BASE_URL.SRV_FULLTASK;
@@ -36,6 +37,7 @@ export async function deleteStaffSimplified(staffCode: string) {
 // ─── Owners (srv-user) ─────────────────────────────────────────────────────
 
 export async function getOwners(params: Record<string, unknown> = {}) {
+  const accountStatus = String(params.accountStatus ?? 'live');
   const q = new URLSearchParams({
     page: String(params.page ?? 0),
     limit: String(params.limit ?? 20),
@@ -45,7 +47,18 @@ export async function getOwners(params: Record<string, unknown> = {}) {
     banned: String(params.banned ?? false),
     search_text: String(params.search_text ?? ''),
   });
-  const { data } = await apiClient.get(`${SRV_USER}/user/get-account?${q}`);
+  if (accountStatus) {
+    q.set('accountStatus', accountStatus);
+  }
+  const listings = params.listings;
+  if (Array.isArray(listings) && listings.length > 0) {
+    for (const id of listings) {
+      q.append('listings[]', String(id));
+    }
+  }
+  const url = `${SRV_USER}/user/get-account?${q}`;
+  console.log('[PM-list] getOwners HTTP', { accountStatus, url });
+  const { data } = await apiClient.get(url);
   return data;
 }
 
@@ -75,7 +88,12 @@ export async function getOwnersAllPages(params: Record<string, unknown> = {}) {
     if (batch.length < pageSize) break;
     if (total != null && acc.length >= total) break;
   }
-  return acc;
+  const accountStatus = String(params.accountStatus ?? 'live');
+  return filterOwnersForPmTab(acc, {
+    accountStatus,
+    deleted: params.deleted ?? false,
+    banned: params.banned ?? false,
+  });
 }
 
 export async function deleteOwner(id: string) {

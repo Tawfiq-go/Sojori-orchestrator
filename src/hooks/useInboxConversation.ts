@@ -94,7 +94,7 @@ export function useInboxConversation() {
     const resaNum = getConversationReservationNumber(conv);
 
     try {
-      const [messagesResponse, tasksResponse, reservationRow] = await Promise.all([
+      const [messagesResult, tasksResult, reservationResult] = await Promise.allSettled([
         messagesService.getConversationMessages(conv.phone, {
           limit: 50,
           reservationId: conv.reservation_mongo_id ?? undefined,
@@ -105,7 +105,11 @@ export function useInboxConversation() {
         resaNum ? reservationsService.getByReservationNumber(resaNum) : Promise.resolve(null),
       ]);
 
-      if (messagesResponse.status === 'success') {
+      const messagesResponse = messagesResult.status === 'fulfilled' ? messagesResult.value : null;
+      const tasksResponse = tasksResult.status === 'fulfilled' ? tasksResult.value : null;
+      const reservationRow = reservationResult.status === 'fulfilled' ? reservationResult.value : null;
+
+      if (messagesResponse?.status === 'success') {
         const fetched = messagesResponse.data.exchanges || [];
         setMessages((prev) => {
           if (fetched.length >= prev.length || prev.length === 0) return fetched;
@@ -123,8 +127,12 @@ export function useInboxConversation() {
         }
       }
 
-      if (tasksResponse.success) {
+      if (tasksResponse?.success) {
         setTasks(tasksResponse.data.tasks);
+      }
+
+      if (reservationResult.status === 'rejected' && resaNum) {
+        console.warn('[inbox] reservation lookup failed (non-blocking)', resaNum, reservationResult.reason);
       }
 
       if (reservationRow) {

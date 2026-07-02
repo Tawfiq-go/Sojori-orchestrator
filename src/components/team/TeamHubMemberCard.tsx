@@ -12,6 +12,7 @@ type TeamHubMemberCardProps = {
   avatarClass?: string;
   onClick?: () => void;
   onEdit?: () => void;
+  onLifecycle?: () => void;
   onDelete?: () => void;
 };
 
@@ -27,6 +28,7 @@ export function TeamHubMemberCard({
   avatarClass = 'av',
   onClick,
   onEdit,
+  onLifecycle,
   onDelete,
 }: TeamHubMemberCardProps) {
   return (
@@ -50,6 +52,21 @@ export function TeamHubMemberCard({
           {subtitle ? <div className="role">{subtitle}</div> : null}
         </div>
         <div className="actions">
+          {onLifecycle ? (
+            <button
+              type="button"
+              className="edit-btn"
+              title="Suivi onboarding"
+              aria-label="Suivi onboarding"
+              style={{ borderColor: '#E6B022', color: '#B8881A' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onLifecycle();
+              }}
+            >
+              ◆
+            </button>
+          ) : null}
           {onEdit ? (
             <button
               type="button"

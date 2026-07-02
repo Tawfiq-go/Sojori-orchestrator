@@ -3,6 +3,8 @@ import { AUTH_CONFIG } from 'config/auth.config';
 import { MICROSERVICE_BASE_URL } from 'config/backendServer.config';
 import apiClient from '../../../services/apiClient';
 import { logWorkerCreate, errorWorkerCreate } from '../../../utils/workerCreateDebug';
+import { errorPmMail, logPmMail, warnPmMail } from '../../../utils/ownerMailDebug';
+import { filterOwnersForPmTab } from '../../../utils/ownerListFilters';
 
 const TEAM_API = MICROSERVICE_BASE_URL.SRV_FULLTASK;
 
@@ -378,7 +380,8 @@ export function getOwners(params = {}) {
     deleted = false,
     banned = false,
     search_text = '',
-    listings
+    listings,
+    accountStatus = 'live',
   } = params;
   const queryParams = new URLSearchParams({
     page,
@@ -387,12 +390,17 @@ export function getOwners(params = {}) {
     roles: 'Owner',
     deleted,
     banned,
-    search_text
+    search_text,
   });
+  if (accountStatus) {
+    queryParams.append('accountStatus', String(accountStatus));
+  }
   if (listings && Array.isArray(listings) && listings.length > 0) {
     listings.forEach(listing => queryParams.append('listings[]', listing));
   }
-  return axios.get(`${MICROSERVICE_BASE_URL.SRV_USER}/user/get-account?${queryParams.toString()}`).then(response => {
+  const url = `${MICROSERVICE_BASE_URL.SRV_USER}/user/get-account?${queryParams.toString()}`;
+  console.log('[PM-list] getOwners HTTP', { accountStatus, url });
+  return axios.get(url).then(response => {
     if (!response.data) {
       throw new Error('No data received from server');
     }
@@ -435,7 +443,12 @@ export async function getOwnersAllPages(params = {}) {
     if (batch.length < pageSize) break;
     if (total != null && acc.length >= total) break;
   }
-  return acc;
+  const accountStatus = rest.accountStatus ?? 'live';
+  return filterOwnersForPmTab(acc, {
+    accountStatus,
+    deleted: rest.deleted ?? false,
+    banned: rest.banned ?? false,
+  });
 }
 
 /**
@@ -496,6 +509,112 @@ export async function createOwner(data) {
     `${MICROSERVICE_BASE_URL.SRV_USER}/auth/register`,
     { ...ownerFields, role: 'Owner' },
   )
+}
+
+export async function saveOwnerDraft(data) {
+  const res = await axios.post(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/save-owner-draft`, data);
+  return res?.data;
+}
+
+/** Finalise brouillon : provision RU + invitation dashboard 24h. */
+export async function finalizeOwnerCreation(ownerId) {
+  const res = await axios.post(
+    `${MICROSERVICE_BASE_URL.SRV_USER}/auth/finalize-owner/${encodeURIComponent(String(ownerId))}`,
+  );
+  return res?.data;
+}
+
+export function updateFillCompanyLocal(id, data) {
+  return apiClient
+    .put(`${MICROSERVICE_BASE_URL.SRV_USER}/user/update-fill-company-local/${id}`, data)
+    .then((response) => {
+      if (!response.data) throw new Error('No data received from server');
+      return response.data;
+    });
+}
+
+export async function inviteOwner(data) {
+  logPmMail('api:invite-owner:request', {
+    email: data?.email,
+    ruEmail: data?.ruEmail,
+    firstName: data?.firstName,
+    lastName: data?.lastName,
+    channelManager: data?.channelManager,
+  });
+  try {
+    const res = await axios.post(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/invite-owner`, data);
+    const body = res?.data;
+    logPmMail('api:invite-owner:response', {
+      status: res?.status,
+      success: body?.success,
+      emailSent: body?.data?.emailSent,
+      emailError: body?.data?.emailError ?? null,
+      accountId: body?.data?.accountId,
+      inviteUrl: body?.data?.inviteUrl ? '(present)' : null,
+      message: body?.message,
+    });
+    if (body?.success && body?.data?.emailSent !== true) {
+      warnPmMail('api:invite-owner:email-not-delivered', {
+        email: body?.data?.email,
+        emailError: body?.data?.emailError,
+        inviteUrl: body?.data?.inviteUrl,
+      });
+    }
+    return body;
+  } catch (e) {
+    errorPmMail('api:invite-owner:error', {
+      status: e?.response?.status,
+      message: e?.response?.data?.message || e?.response?.data?.error || e?.message,
+      data: e?.response?.data,
+    });
+    throw e;
+  }
+}
+
+export async function resendOwnerInvite(ownerId) {
+  return axios
+    .post(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/resend-owner-invite/${encodeURIComponent(String(ownerId))}`)
+    .then((r) => r.data)
+}
+
+/** Admin : lien 24h pour choisir / réinitialiser le mot de passe dashboard (invite si pending, reset sinon). */
+export async function sendOwnerPasswordLink(ownerId) {
+  logPmMail('api:send-password-link:request', { ownerId: String(ownerId) });
+  try {
+    const res = await axios.post(
+      `${MICROSERVICE_BASE_URL.SRV_USER}/auth/send-owner-password-link/${encodeURIComponent(String(ownerId))}`,
+    );
+    const body = res?.data;
+    const d = body?.data || {};
+    logPmMail('api:send-password-link:response', {
+      status: res?.status,
+      success: body?.success,
+      email: d.email,
+      linkType: d.linkType,
+      emailSent: d.emailSent,
+      emailError: d.emailError ?? null,
+      url: d.inviteUrl || d.resetUrl || null,
+      message: body?.message,
+    });
+    if (body?.success && d.emailSent !== true) {
+      warnPmMail('api:send-password-link:email-not-delivered', {
+        ownerId: String(ownerId),
+        email: d.email,
+        emailError: d.emailError,
+        inviteUrl: d.inviteUrl,
+        resetUrl: d.resetUrl,
+      });
+    }
+    return body;
+  } catch (e) {
+    errorPmMail('api:send-password-link:error', {
+      ownerId: String(ownerId),
+      status: e?.response?.status,
+      message: e?.response?.data?.message || e?.response?.data?.error || e?.message,
+      data: e?.response?.data,
+    });
+    throw e;
+  }
 }
 
 /**

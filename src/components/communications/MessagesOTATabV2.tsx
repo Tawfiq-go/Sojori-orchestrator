@@ -9,6 +9,7 @@ import AISuggestionModal from './AISuggestionModal';
 import messagesService from '../../services/messagesService';
 import type { Thread } from '../../types/unifiedInbox.types';
 import { useInboxOTAConversation } from '../../hooks/useInboxOTAConversation';
+import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
 import {
   bumpOtaThreadAfterSend,
   filterOtaActiveReservationsOnly,
@@ -30,7 +31,7 @@ import {
   type OtaChannelFilter,
   type OtaStayQuickFilter,
 } from '../unified-inbox/otaThreadFilters';
-import { useAdminOwnerFilter } from '../../context/AdminOwnerFilterContext';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { OTA_QUICK_REPLIES, OTA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
 import {
   buildOtaThreadContextForAi,
@@ -86,7 +87,7 @@ export default function MessagesOTATabV2() {
   const globalSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [globalSearchPending, setGlobalSearchPending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const { requestOwnerId } = useAdminOwnerFilter();
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [searchTerm, setSearchTerm] = useState('');
   const [otaChannelFilter, setOtaChannelFilter] = useState<OtaChannelFilter>('all');
   const [otaStayQuickFilter, setOtaStayQuickFilter] = useState<OtaStayQuickFilter>('none');
@@ -100,6 +101,12 @@ export default function MessagesOTATabV2() {
   const inbox = useInboxOTAConversation();
 
   const loadInbox = useCallback(async (opts?: { skipCache?: boolean }) => {
+    if (!scopeFetchReady) {
+      setInboxRows([]);
+      setLoading(false);
+      setTableReady(false);
+      return;
+    }
     const requestId = ++loadRequestIdRef.current;
     const cached = !opts?.skipCache ? getCachedOtaInbox() : null;
     const hasCache = Boolean(cached);
@@ -121,6 +128,7 @@ export default function MessagesOTATabV2() {
       const response = await messagesService.getOTAThreads({
         page: 0,
         limit: OTA_INBOX_PAGE_SIZE,
+        ownerId: requestOwnerId || undefined,
       });
       if (requestId !== loadRequestIdRef.current) return;
 
@@ -146,7 +154,7 @@ export default function MessagesOTATabV2() {
         setIsRefreshing(false);
       }
     }
-  }, []);
+  }, [scopeFetchReady, requestOwnerId]);
 
   const loadMoreInbox = useCallback(async () => {
     if (inboxLoadingMore || !inboxHasMore || searchMode !== 'none') return;
@@ -165,6 +173,7 @@ export default function MessagesOTATabV2() {
         page: 0,
         limit: OTA_INBOX_PAGE_SIZE,
         cursor,
+        ownerId: requestOwnerId || undefined,
       });
       const pageRows = filterOtaInboxDefault(mapApiThreads(response));
       const hasMore = Boolean((response as { hasMore?: boolean })?.hasMore);
@@ -175,7 +184,7 @@ export default function MessagesOTATabV2() {
     } finally {
       setInboxLoadingMore(false);
     }
-  }, [inboxHasMore, inboxLoadingMore, searchMode]);
+  }, [inboxHasMore, inboxLoadingMore, requestOwnerId, searchMode]);
 
   const loadServerSearch = useCallback(
     async (opts: {
@@ -293,6 +302,14 @@ export default function MessagesOTATabV2() {
       }
     };
   }, [searchTerm, loadServerSearch, loadInbox]);
+
+  useInboxRealtimeRefresh(
+    'ota',
+    () => loadInbox({ skipCache: true }),
+    () => {
+      if (inbox.activeRow) void inbox.refreshOtaMessages();
+    },
+  );
 
   useEffect(() => {
     void loadInbox();

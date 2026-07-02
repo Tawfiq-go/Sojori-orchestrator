@@ -10,12 +10,12 @@ const HINTS_TTL_MS = 30 * 60_000;
 
 function cacheKey(period: DashboardPeriod, listingIds: string[], ownerId?: string | null) {
   const ids = [...listingIds].sort().join(',');
-  const owner = ownerId ? String(ownerId) : 'scoped';
+  const owner = ownerId ? String(ownerId) : '__platform__';
   return `${PREFIX}${owner}:${period}:${ids}`;
 }
 
 function hintsCacheKey(ownerId?: string | null) {
-  const owner = ownerId ? String(ownerId) : 'scoped';
+  const owner = ownerId ? String(ownerId) : '__platform__';
   return `${HINTS_PREFIX}${owner}`;
 }
 
@@ -122,7 +122,7 @@ export function writeDashboardSnapshotCache(
 
 /** Invalide les snapshots dashboard pour un owner (ex. démarrage simulation PM). */
 export function clearDashboardSnapshotCacheForOwner(ownerId?: string | null): void {
-  const owner = ownerId ? String(ownerId) : 'scoped';
+  const owner = ownerId ? String(ownerId) : '__platform__';
   const prefix = `${PREFIX}${owner}:`;
   try {
     const keysToRemove: string[] = [];
@@ -134,6 +134,22 @@ export function clearDashboardSnapshotCacheForOwner(ownerId?: string | null): vo
     }
     keysToRemove.forEach((key) => sessionStorage.removeItem(key));
     sessionStorage.removeItem(hintsCacheKey(ownerId));
+  } catch {
+    // quota / private mode
+  }
+}
+
+/** Changement de scope admin (Tous / PM) — purge tout le cache dashboard session. */
+export function clearAllDashboardSnapshotCaches(): void {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith(PREFIX) || key?.startsWith(HINTS_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => sessionStorage.removeItem(key));
   } catch {
     // quota / private mode
   }

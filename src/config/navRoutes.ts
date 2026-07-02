@@ -111,6 +111,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
 
   // Administration
   'admin/pms': '/admin/equipe/owners?tab=list',
+  'admin/pm-lifecycle': '/admin/pm-lifecycle',
   'admin/mapping': '/admin/mapping',
   'admin/roles': '/admin/equipe?tab=worker',
   'admin/settings': '/admin/settings?tab=host-profile',

@@ -2,9 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Outlet, useLocation } from 'react-router-dom';
 import { DashboardLayout } from './dashboard/DashboardV2.components';
 import { isListingCataloguePath } from '../constants/listingLayout';
+import { isPmBusinessPath } from '../config/routeAccessPolicy';
 import { useDashboardChrome } from './useDashboardChrome';
 import { PmSimulationProvider } from '../context/PmSimulationContext';
-import { AdminOwnerFilterProvider } from '../context/AdminOwnerFilterContext';
+import { AdminOwnerFilterProvider, useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import { useAuth } from '../hooks/useAuth';
+import { toLegacyAuthUser } from '../utils/legacyAuthUser';
+import { canSelectOwnerInAdminFilter } from '../utils/taskScope.utils';
 
 /** Layout persistant : sidebar + topbar ne se remontent pas à chaque changement de route. */
 export const DashboardShellContext = createContext(false);
@@ -16,7 +20,30 @@ export interface PageChromeContextValue {
 
 export const PageChromeContext = createContext<PageChromeContextValue | null>(null);
 
-export function DashboardShellLayout() {
+function ShellTopBarScope({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const { user: authUser } = useAuth();
+  const user = useMemo(() => toLegacyAuthUser(authUser), [authUser]);
+  const { simulatedOwnerId } = useAdminOwnerFilter();
+  const showAdminScopeInTopBar = useMemo(() => {
+    if (!canSelectOwnerInAdminFilter(user) || simulatedOwnerId) return false;
+    return isPmBusinessPath(location.pathname);
+  }, [user, simulatedOwnerId, location.pathname]);
+
+  return (
+    <DashboardShellInner adminScopeInTopBar={showAdminScopeInTopBar}>
+      {children}
+    </DashboardShellInner>
+  );
+}
+
+function DashboardShellInner({
+  children,
+  adminScopeInTopBar,
+}: {
+  children: ReactNode;
+  adminScopeInTopBar: boolean;
+}) {
   const [breadcrumb, setBreadcrumb] = useState<string[]>([]);
   const [compactMain, setCompactMain] = useState(false);
   const chrome = useDashboardChrome();
@@ -48,23 +75,32 @@ export function DashboardShellLayout() {
   }, [location.pathname, location.search]);
 
   return (
+    <PageChromeContext.Provider value={pageChromeValue}>
+      <DashboardLayout
+        activePath={chrome.activePath}
+        onNavigate={chrome.onNavigate}
+        onLogout={chrome.onLogout}
+        breadcrumb={breadcrumb}
+        compactMain={listingCompact}
+        adminScopeInTopBar={adminScopeInTopBar}
+        user={chrome.user}
+        mainRef={mainRef}
+        persistent
+      >
+        {children}
+      </DashboardLayout>
+    </PageChromeContext.Provider>
+  );
+}
+
+export function DashboardShellLayout() {
+  return (
     <DashboardShellContext.Provider value={true}>
       <PmSimulationProvider>
         <AdminOwnerFilterProvider>
-          <PageChromeContext.Provider value={pageChromeValue}>
-            <DashboardLayout
-              activePath={chrome.activePath}
-              onNavigate={chrome.onNavigate}
-              onLogout={chrome.onLogout}
-              breadcrumb={breadcrumb}
-              compactMain={listingCompact}
-              user={chrome.user}
-              mainRef={mainRef}
-              persistent
-            >
-              <Outlet />
-            </DashboardLayout>
-          </PageChromeContext.Provider>
+          <ShellTopBarScope>
+            <Outlet />
+          </ShellTopBarScope>
         </AdminOwnerFilterProvider>
       </PmSimulationProvider>
     </DashboardShellContext.Provider>

@@ -507,8 +507,10 @@ export async function getOnboardings(params?: {
  * Récupère les statistiques d'onboarding (KPIs)
  * GET /api/v1/crm/onboarding/stats/summary
  */
-export async function getOnboardingStats(): Promise<{ success: boolean; data: OnboardingStats }> {
-  const { data } = await apiClient.get(`${CRM_BASE}/onboarding/stats/summary`);
+export async function getOnboardingStats(params?: {
+  ownerId?: string;
+}): Promise<{ success: boolean; data: OnboardingStats }> {
+  const { data } = await apiClient.get(`${CRM_BASE}/onboarding/stats/summary`, { params });
   return data;
 }
 
@@ -527,6 +529,55 @@ export async function getOnboardingById(id: string): Promise<{ success: boolean;
  */
 export async function getOnboardingByOwnerId(ownerId: string): Promise<{ success: boolean; data: OwnerOnboarding & { events: any[] } }> {
   const { data } = await apiClient.get(`${CRM_BASE}/onboarding/by-owner/${ownerId}`);
+  return data;
+}
+
+export interface OwnerLifecycleMilestones {
+  accountCreatedAt: string | null;
+  invitedAt: string | null;
+  dashboardPasswordAt: string | null;
+  firstLoginAt: string | null;
+  lastLoginAt: string | null;
+  ruAccountAt: string | null;
+  ruCompanyAt: string | null;
+  wizardStartedAt: string | null;
+  wizardCompletedAt: string | null;
+  orchestrationActivatedAt: string | null;
+  onboardingCompletedAt: string | null;
+  firstImportDoneAt: string | null;
+  firstListingAt: string | null;
+  firstCalendarAt: string | null;
+  firstListingActivatedAt: string | null;
+  firstReservationAt: string | null;
+  staffTotal: number;
+  adminWhatsappTotal: number;
+  listingsTotal: number;
+  listingsImported: number;
+}
+
+export interface OwnerLifecycleData {
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
+  status: OwnerOnboarding['status'];
+  currentStep: string;
+  completedSteps: string[];
+  milestones: OwnerLifecycleMilestones;
+  account: Record<string, unknown> | null;
+  wizard: Record<string, unknown> | null;
+  listings: OwnerOnboarding['listings'];
+  events: unknown[];
+  progressPercent: number;
+}
+
+/**
+ * Vue agrégée onboarding PM A→Z
+ * GET /api/v1/crm/onboarding/by-owner/:ownerId/lifecycle
+ */
+export async function getOwnerLifecycle(
+  ownerId: string,
+): Promise<{ success: boolean; data?: OwnerLifecycleData; error?: string; code?: string }> {
+  const { data } = await apiClient.get(`${CRM_BASE}/onboarding/by-owner/${ownerId}/lifecycle`);
   return data;
 }
 

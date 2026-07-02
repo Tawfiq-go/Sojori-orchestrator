@@ -1,11 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Dialog, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { ModalScrollColumn } from '../common/ModalScrollColumn';
 import { T } from './_tokens';
 import type { Thread, Channel } from '../../types/unifiedInbox.types';
 import type { OtaAdvancedSearch, OtaChannelFilter, OtaFilterCounts, OtaStayQuickFilter, OtaStayQuickFilterCounts } from './otaThreadFilters';
 import OtaInboxFilters from './OtaInboxFilters';
-import WaInboxFilters from './WaInboxFilters';
+import WaInboxFilters, { countWaActiveFilters } from './WaInboxFilters';
 import type {
   WaChannelFilter,
   WaFilterCounts,
@@ -79,6 +80,11 @@ interface ThreadsListProps {
   waListTotalCount?: number;
   onWaResetAll?: () => void;
   waFiltersActive?: boolean;
+  /** Barre compacte : filtres canaux en modal, ligne rapide séjour */
+  compactToolbar?: boolean;
+  ultraCompact?: boolean;
+  onEnterFullscreen?: () => void;
+  showFullscreenEnter?: boolean;
 }
 
 export default function ThreadsList({
@@ -135,6 +141,10 @@ export default function ThreadsList({
   waListTotalCount,
   onWaResetAll,
   waFiltersActive,
+  compactToolbar = false,
+  ultraCompact = false,
+  onEnterFullscreen,
+  showFullscreenEnter = false,
 }: ThreadsListProps) {
   const channel = channels[0];
   const title = listTitle || channel?.label || 'Inbox';
@@ -149,6 +159,7 @@ export default function ThreadsList({
       Boolean(otaActiveKeyword?.trim()));
 
   const [internalAdvancedExpanded, setInternalAdvancedExpanded] = useState(false);
+  const [waFiltersModalOpen, setWaFiltersModalOpen] = useState(false);
   const showOtaAdvanced = otaAdvancedExpanded ?? internalAdvancedExpanded;
   const setShowOtaAdvanced = onOtaAdvancedExpandedChange ?? setInternalAdvancedExpanded;
 
@@ -192,6 +203,8 @@ export default function ThreadsList({
     unreplied: threads.filter((t) => t.needsReply).length,
   };
 
+  const waActiveFilterCount = countWaActiveFilters(waChannelFilter, waStayQuickFilter, waUnreadOnly);
+
   const getInitials = (name: string): string =>
     name
       .split(' ')
@@ -231,23 +244,23 @@ export default function ThreadsList({
     >
       <Box
         sx={{
-          px: '14px',
-          py: mode === 'ota' ? '10px' : '12px',
+          px: compactToolbar ? '10px' : '14px',
+          py: compactToolbar ? '8px' : mode === 'ota' ? '10px' : '12px',
           borderBottom: `1px solid ${T.border}`,
           bgcolor: T.bg2,
           flexShrink: 0,
         }}
       >
-        <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1 }}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: compactToolbar ? 0.625 : 1 }}>
           <Box
             sx={{
-              width: 24,
-              height: 24,
+              width: compactToolbar ? 20 : 24,
+              height: compactToolbar ? 20 : 24,
               borderRadius: '6px',
               bgcolor: accentColor,
               color: '#fff',
               fontFamily: '"Geist Mono", monospace',
-              fontSize: 13,
+              fontSize: compactToolbar ? 11 : 13,
               fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
@@ -256,11 +269,11 @@ export default function ThreadsList({
           >
             {mode === 'ota' ? 'A' : icon === '💬' ? 'W' : icon.charAt(0).toUpperCase()}
           </Box>
-          <Typography sx={{ fontSize: 13.5, fontWeight: 700, flex: 1 }}>{title}</Typography>
+          <Typography sx={{ fontSize: compactToolbar ? 12 : 13.5, fontWeight: 700, flex: 1 }}>{title}</Typography>
           <Box
             sx={{
               fontFamily: '"Geist Mono", monospace',
-              fontSize: 10,
+              fontSize: compactToolbar ? 9 : 10,
               color: T.text3,
               bgcolor: T.bg1,
               border: `1px solid ${T.border}`,
@@ -272,14 +285,46 @@ export default function ThreadsList({
           >
             {loading ? '…' : headerCount}
           </Box>
+          {showFullscreenEnter && onEnterFullscreen && (
+            <Box
+              component="button"
+              type="button"
+              title="Inbox plein écran"
+              aria-label="Inbox plein écran"
+              onClick={onEnterFullscreen}
+              sx={{
+                all: 'unset',
+                boxSizing: 'border-box',
+                flexShrink: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 26,
+                borderRadius: '6px',
+                border: `1px solid ${T.borderStrong}`,
+                bgcolor: T.bg1,
+                color: T.text2,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                lineHeight: 1,
+                boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
+                '&:hover': { bgcolor: T.bg2, borderColor: T.primary, color: T.primaryDeep },
+              }}
+            >
+              ⛶
+            </Box>
+          )}
         </Stack>
         <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 1,
-            px: '11px',
-            py: '7px',
+            gap: compactToolbar ? 0.5 : 1,
+            px: compactToolbar ? '8px' : '11px',
+            py: compactToolbar ? '5px' : '7px',
             bgcolor: T.bg1,
             border: `1px solid ${T.border}`,
             borderRadius: '8px',
@@ -336,7 +381,62 @@ export default function ThreadsList({
               ✕
             </Box>
           )}
-          {mode === 'whatsapp' && waFiltersActive && onWaResetAll && (
+          {mode === 'whatsapp' && waFiltersActive && onWaResetAll && !compactToolbar && (
+            <Box
+              component="button"
+              type="button"
+              onClick={onWaResetAll}
+              title="Réinitialiser tous les filtres"
+              sx={{
+                flexShrink: 0,
+                border: `1px solid ${T.border}`,
+                borderRadius: '6px',
+                px: '7px',
+                py: '3px',
+                bgcolor: T.bg2,
+                color: T.text3,
+                fontFamily: 'inherit',
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                lineHeight: 1.2,
+                '&:hover': { bgcolor: T.errorTint, color: T.error, borderColor: T.error },
+              }}
+            >
+              ✕
+            </Box>
+          )}
+          {mode === 'whatsapp' && compactToolbar && waFiltersEnabled && (
+            <Box
+              component="button"
+              type="button"
+              onClick={() => setWaFiltersModalOpen(true)}
+              title="Filtres canaux"
+              sx={{
+                flexShrink: 0,
+                border: `1px solid ${waActiveFilterCount > 0 ? T.primary : T.border}`,
+                borderRadius: '6px',
+                px: '7px',
+                py: '3px',
+                bgcolor: waActiveFilterCount > 0 ? T.primaryTint : T.bg2,
+                color: T.primaryDeep,
+                fontFamily: 'inherit',
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                lineHeight: 1.2,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.375,
+                whiteSpace: 'nowrap',
+                '&:hover': { borderColor: T.primary, bgcolor: T.primaryTint },
+              }}
+            >
+              <FilterListIcon sx={{ fontSize: 13 }} />
+              {waActiveFilterCount > 0 ? ` · ${waActiveFilterCount}` : ''}
+            </Box>
+          )}
+          {mode === 'whatsapp' && compactToolbar && waFiltersActive && onWaResetAll && (
             <Box
               component="button"
               type="button"
@@ -377,6 +477,36 @@ export default function ThreadsList({
             </Box>
           )}
         </Box>
+
+        {compactToolbar && waFiltersEnabled && onWaStayQuickFilterChange && waStayQuickCounts && (
+          <Box
+            sx={{
+              mt: 0.625,
+              display: 'flex',
+              flexWrap: 'nowrap',
+              gap: '3px',
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              pb: 0.125,
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
+            }}
+          >
+            <WaInboxFilters
+              variant="quickInline"
+              channelFilter={waChannelFilter}
+              counts={waCounts}
+              onChannelFilterChange={onWaChannelFilterChange ?? (() => {})}
+              unreadOnly={waUnreadOnly}
+              onUnreadOnlyChange={onWaUnreadOnlyChange ?? (() => {})}
+              stayQuickFilter={waStayQuickFilter}
+              onStayQuickFilterChange={onWaStayQuickFilterChange}
+              stayQuickCounts={waStayQuickCounts}
+              onResetAll={onWaResetAll}
+              filtersActive={waFiltersActive}
+            />
+          </Box>
+        )}
       </Box>
 
       {mode === 'ota' && onOtaAdvancedSearchChange && (
@@ -405,7 +535,7 @@ export default function ThreadsList({
         />
       )}
 
-      {waFiltersEnabled && (
+      {waFiltersEnabled && !compactToolbar && (
         <WaInboxFilters
           channelFilter={waChannelFilter}
           counts={waCounts}
@@ -418,6 +548,24 @@ export default function ThreadsList({
           onResetAll={onWaResetAll}
           filtersActive={waFiltersActive}
         />
+      )}
+
+      {compactToolbar && waFiltersEnabled && (
+        <Dialog open={waFiltersModalOpen} onClose={() => setWaFiltersModalOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ pb: 1, fontSize: 15 }}>Filtres canaux</DialogTitle>
+          <DialogContent sx={{ pt: 0 }}>
+            <WaInboxFilters
+              variant="channels"
+              channelFilter={waChannelFilter}
+              counts={waCounts}
+              onChannelFilterChange={onWaChannelFilterChange ?? (() => {})}
+              unreadOnly={waUnreadOnly}
+              onUnreadOnlyChange={onWaUnreadOnlyChange ?? (() => {})}
+              onResetAll={onWaResetAll}
+              filtersActive={waFiltersActive}
+            />
+          </DialogContent>
+        </Dialog>
       )}
 
       {loadError && (
@@ -516,10 +664,10 @@ export default function ThreadsList({
               key={thread.id}
               onClick={() => onSelectThread(thread)}
               sx={{
-                p: '10px 12px',
-                mb: '2px',
+                p: ultraCompact ? '6px 8px' : '10px 12px',
+                mb: ultraCompact ? '1px' : '2px',
                 display: 'flex',
-                gap: 1.375,
+                gap: ultraCompact ? 1 : 1.375,
                 cursor: 'pointer',
                 borderRadius: '9px',
                 position: 'relative',
@@ -547,13 +695,13 @@ export default function ThreadsList({
               <Box sx={{ position: 'relative', flexShrink: 0 }}>
                 <Box
                   sx={{
-                    width: 38,
-                    height: 38,
+                    width: ultraCompact ? 32 : 38,
+                    height: ultraCompact ? 32 : 38,
                     borderRadius: '50%',
                     background: thread.isStaff
                       ? 'linear-gradient(135deg,#fcd34d,#b45309)'
                       : avatarGradient(thread.channel),
-                    fontSize: 13,
+                    fontSize: ultraCompact ? 11 : 13,
                     fontWeight: 700,
                     color: '#fff',
                     fontFamily: '"Geist Mono", monospace',
@@ -606,7 +754,7 @@ export default function ThreadsList({
                 <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, mb: 0.25 }}>
                   <Typography
                     sx={{
-                      fontSize: 12.5,
+                      fontSize: ultraCompact ? 11.5 : 12.5,
                       fontWeight: 700,
                       flex: 1,
                       overflow: 'hidden',
@@ -629,6 +777,23 @@ export default function ThreadsList({
                     {thread.time}
                   </Typography>
                 </Stack>
+                {mode === 'whatsapp' && thread.phone && thread.phone !== thread.name && (
+                  <Typography
+                    sx={{
+                      fontFamily: '"Geist Mono", monospace',
+                      fontSize: 10,
+                      color: T.text4,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1.25,
+                      mb: 0.125,
+                    }}
+                    title={thread.phone}
+                  >
+                    📱 {thread.phone}
+                  </Typography>
+                )}
                 {mode === 'ota' && thread.listingName && thread.listingName !== '—' && (
                   <Typography
                     sx={{

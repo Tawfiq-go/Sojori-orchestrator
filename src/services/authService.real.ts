@@ -10,6 +10,7 @@ export interface LoginCredentials {
 }
 
 export interface ResetPasswordPayload {
+  token: string;
   email?: string;
   password: string;
 }
@@ -269,11 +270,13 @@ const authService = {
    * Complete password reset RÉEL
    */
   async completePasswordReset({
+    token,
     email,
-    password
+    password,
   }: ResetPasswordPayload): Promise<{ success: boolean; message: string }> {
     try {
       const response = await apiClient.post(AUTH_CONFIG.API_URL + '/complete-reset', {
+        token: token?.trim(),
         email: email?.trim().toLowerCase(),
         password: password.trim(),
       });

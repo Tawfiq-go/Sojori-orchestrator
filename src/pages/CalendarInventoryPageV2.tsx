@@ -20,6 +20,7 @@ import listingsService from '../services/listingsService';
 import calendarService from '../services/calendarService';
 import type { Listing } from '../types/listings.types';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import { ColumnFilters, type ColumnId } from '../components/calendar/ColumnFilters';
 import { InventoryGridV2, type InventoryData } from '../components/calendar/InventoryGridV2';
 import { UpdateInventoryModal } from '../components/calendar/UpdateInventoryModal';
@@ -91,6 +92,7 @@ interface InventoryData {
 
 export function CalendarInventoryPageV2() {
   const staging = JSON.parse(localStorage.getItem('isStaging') || 'false');
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
 
   // États principaux (même structure que InventoryCalendarNew.jsx)
   const [loading, setLoading] = useState(true);
@@ -231,6 +233,11 @@ export function CalendarInventoryPageV2() {
    * FETCH LISTINGS — PATTERN EXACT de InventoryCalendarNew.jsx:258-293
    */
   const fetchListings = useCallback(async () => {
+    if (!scopeFetchReady) {
+      setListings([]);
+      setLoading(false);
+      return;
+    }
     try {
       console.log('[CalendarV2] fetchListings started', { activeFilter, staging });
       setLoading(true);
@@ -239,6 +246,7 @@ export function CalendarInventoryPageV2() {
       const response = await listingsService.getListingsForCalendar(0, 100, {
         active: activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined,
         staging,
+        filterOwnerId: requestOwnerId || undefined,
       });
 
       console.log('[CalendarV2] fetchListings response', {
@@ -287,7 +295,7 @@ export function CalendarInventoryPageV2() {
     } finally {
       setLoading(false);
     }
-  }, [staging, activeFilter]);
+  }, [staging, activeFilter, scopeFetchReady, requestOwnerId]);
 
   // Effect 1: Charge les listings au montage (ligne 296-298)
   useEffect(() => {

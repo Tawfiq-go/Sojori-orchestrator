@@ -12,6 +12,7 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import { listingsService } from '../services/listingsService';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import type { ListingDetail, ListingSummary } from '../types/listings.types';
 
 function formatMoney(value: number | null, currency: string | null): string {
@@ -22,6 +23,7 @@ function formatMoney(value: number | null, currency: string | null): string {
 
 export function PricingSnapshotPage() {
   const navigate = useNavigate();
+  const { scopeFetchReady, filterOwnerIds } = useAdminOwnerApiScope();
   const [searchParams, setSearchParams] = useSearchParams();
   const [listings, setListings] = useState<ListingSummary[]>([]);
   const [selectedId, setSelectedId] = useState(searchParams.get('listingId') || '');
@@ -40,7 +42,13 @@ export function PricingSnapshotPage() {
   const loadListings = async () => {
     try {
       setLoading(true);
-      const result = await listingsService.getListings();
+      const result = await listingsService.getListings({
+        limit: 500,
+        useActiveFilter: true,
+        active: true,
+        compact: true,
+        filterOwnerId: filterOwnerIds.length ? filterOwnerIds : undefined,
+      });
       setListings(result.data.items);
       setSource(result.source);
       setWarning(result.warning || null);
@@ -78,8 +86,9 @@ export function PricingSnapshotPage() {
   };
 
   useEffect(() => {
+    if (!scopeFetchReady) return;
     void loadListings();
-  }, []);
+  }, [scopeFetchReady, filterOwnerIds.join(',')]);
 
   useEffect(() => {
     if (!selectedId) return;

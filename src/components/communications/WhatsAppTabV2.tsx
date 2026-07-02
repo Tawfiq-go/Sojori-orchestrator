@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
@@ -7,9 +8,11 @@ import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
 import messagesService from '../../services/messagesService';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import type { Conversation } from '../../types/messages.types';
 import type { Thread } from '../../types/unifiedInbox.types';
 import { useInboxConversation } from '../../hooks/useInboxConversation';
+import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
 import { mapConversationToThread } from '../unified-inbox/inboxMappers';
 import { enrichThreadFromReservation } from '../unified-inbox/inboxReservationEnrichment';
 import { buildWhatsappThreadContextForAi, getLastGuestMessageFromExchanges } from '../../services/communicationsAi.helpers';
@@ -22,6 +25,7 @@ import {
   type WaChannelFilter,
   type WaStayQuickFilter,
 } from '../unified-inbox/waThreadFilters';
+import { findConversationByThreadId } from '../../utils/conversationThreadId';
 
 const WA_INBOX_LIMIT = 100;
 const GLOBAL_SEARCH_MIN_LEN = 2;
@@ -43,10 +47,12 @@ function normalizeConversations(raw: Conversation[]): Conversation[] {
 }
 
 export default function WhatsAppTabV2() {
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [inboxConversations, setInboxConversations] = useState<Conversation[]>([]);
   const [searchConversations, setSearchConversations] = useState<Conversation[]>([]);
   const [searchMode, setSearchMode] = useState<'none' | 'global'>('none');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [globalSearchPending, setGlobalSearchPending] = useState(false);
@@ -55,6 +61,21 @@ export default function WhatsAppTabV2() {
   const [waUnreadOnly, setWaUnreadOnly] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
+  const [inboxFullscreen, setInboxFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!inboxFullscreen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setInboxFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [inboxFullscreen]);
 
   const globalSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const globalSearchRequestIdRef = useRef(0);
@@ -63,12 +84,19 @@ export default function WhatsAppTabV2() {
   const inbox = useInboxConversation();
 
   const loadInbox = useCallback(async () => {
+    if (!scopeFetchReady) {
+      setInboxConversations([]);
+      setLoading(false);
+      return;
+    }
     const requestId = ++loadRequestIdRef.current;
     try {
       setLoading(true);
+      setLoadError(null);
       const response = await messagesService.getConversations({
         filter: 'smart',
         limit: WA_INBOX_LIMIT,
+        owner_id: requestOwnerId || undefined,
       });
       if (requestId !== loadRequestIdRef.current) return;
       if (response.status === 'success') {
@@ -78,13 +106,16 @@ export default function WhatsAppTabV2() {
       }
     } catch (err) {
       if (requestId !== loadRequestIdRef.current) return;
+      const message = err instanceof Error ? err.message : 'Erreur chargement conversations';
+      setLoadError(message);
       console.error('❌ Erreur chargement conversations:', err);
     } finally {
       if (requestId === loadRequestIdRef.current) setLoading(false);
     }
-  }, []);
+  }, [scopeFetchReady, requestOwnerId]);
 
   const loadServerSearch = useCallback(async (query: string) => {
+    if (!scopeFetchReady) return;
     const requestId = ++globalSearchRequestIdRef.current;
     try {
       setSearchLoading(true);
@@ -92,6 +123,7 @@ export default function WhatsAppTabV2() {
         filter: 'smart',
         limit: WA_INBOX_LIMIT,
         search: query,
+        owner_id: requestOwnerId || undefined,
       });
       if (requestId !== globalSearchRequestIdRef.current) return;
       if (response.status === 'success') {
@@ -110,11 +142,19 @@ export default function WhatsAppTabV2() {
         setSearchLoading(false);
       }
     }
-  }, []);
+  }, [scopeFetchReady, requestOwnerId]);
 
   useEffect(() => {
     void loadInbox();
   }, [loadInbox]);
+
+  useInboxRealtimeRefresh(
+    'whatsapp',
+    () => loadInbox(),
+    () => {
+      if (inbox.activeConversation) void inbox.refreshMessages();
+    },
+  );
 
   useEffect(() => {
     const q = searchTerm.trim();
@@ -316,9 +356,138 @@ export default function WhatsAppTabV2() {
     );
   }
 
+  const inboxBody = (
+    <>
+      <ThreadsList
+        threads={formattedThreads}
+        channels={[{ id: 'wa', label: 'WhatsApp', icon: '💬', color: '#25D366', count: displayConversations.length }]}
+        listTitle="WhatsApp"
+        mode="whatsapp"
+        activeThreadId={activeThread?.id ?? null}
+        searchTerm={searchTerm}
+        loading={searchLoading || globalSearchPending}
+        waListTotalCount={displayConversations.length}
+        waGlobalSearchActive={waGlobalQueryActive}
+        waSearchPending={globalSearchPending}
+        waChannelFilter={waChannelFilter}
+        onWaChannelFilterChange={setWaChannelFilter}
+        waUnreadOnly={waUnreadOnly}
+        onWaUnreadOnlyChange={setWaUnreadOnly}
+        waFilterCounts={waFilterCounts}
+        waStayQuickFilter={waStayQuickFilter}
+        onWaStayQuickFilterChange={setWaStayQuickFilter}
+        waStayQuickCounts={waStayQuickCounts}
+        waFiltersActive={waFiltersActive}
+        onWaResetAll={handleResetAllFilters}
+        compactToolbar
+        ultraCompact
+        showFullscreenEnter={!inboxFullscreen}
+        onEnterFullscreen={() => setInboxFullscreen(true)}
+        onSelectThread={(thread) => {
+          const conv = findConversationByThreadId(displayConversations, String(thread.id));
+          if (conv) void handleSelect(conv);
+        }}
+        loadError={loadError}
+        onRetryLoad={() => void loadInbox()}
+        onSearchChange={setSearchTerm}
+      />
+      {activeThread ? (
+        <>
+          <ConversationThread
+            thread={activeThread}
+            messages={formattedMessages}
+            loadingMessages={inbox.loadingMessages}
+            quickTemplates={WA_QUICK_TEMPLATES}
+            onSendMessage={handleGuestSend}
+            onSelectTemplate={async (tpl) => {
+              if (tpl.text) await handleGuestSend(tpl.text);
+            }}
+            onAISuggestion={() => setShowAIModal(true)}
+          />
+          <ConversationDetails
+            thread={activeThread}
+            type="whatsapp"
+            reservation={inbox.reservation ?? undefined}
+            onAction={(action) => {
+              if (action === 'view-full-reservation' && inbox.reservation?.reservationNumber) {
+                window.open(`/reservations/${inbox.reservation.reservationNumber}`, '_blank');
+              }
+            }}
+          />
+        </>
+      ) : (
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 2, gridColumn: { xs: '1', lg: '2' } }}>
+          <Typography sx={{ fontSize: 48 }}>💬</Typography>
+          <Typography sx={{ fontSize: 15, fontWeight: 600, color: t.text2 }}>
+            Sélectionnez une conversation
+          </Typography>
+          <Typography sx={{ fontSize: 13, color: t.text3 }}>
+            {unreadTotal} non lues · choisissez un guest
+          </Typography>
+        </Box>
+      )}
+    </>
+  );
+
+  const inboxFullscreenLayer =
+    inboxFullscreen && typeof document !== 'undefined'
+      ? createPortal(
+          <Box
+            role="dialog"
+            aria-modal="true"
+            aria-label="Inbox WhatsApp plein écran"
+            sx={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              bgcolor: '#f6f5f1',
+              display: 'flex',
+              flexDirection: 'column',
+              p: { xs: 0.5, md: 0.75 },
+              boxSizing: 'border-box',
+            }}
+          >
+            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <InboxLayout fillViewport fullscreen>
+                {inboxBody}
+              </InboxLayout>
+            </Box>
+            <Box
+              component="button"
+              type="button"
+              onClick={() => setInboxFullscreen(false)}
+              title="Quitter le plein écran (Échap)"
+              aria-label="Quitter le plein écran"
+              sx={{
+                position: 'fixed',
+                right: { xs: 10, md: 14 },
+                bottom: { xs: 10, md: 14 },
+                zIndex: 10000,
+                width: 36,
+                height: 36,
+                borderRadius: '99px',
+                border: '1px solid rgba(20,17,10,0.12)',
+                bgcolor: 'rgba(255,255,255,0.94)',
+                boxShadow: '0 4px 16px rgba(20,17,10,0.14)',
+                color: '#7a756c',
+                fontSize: 22,
+                fontWeight: 300,
+                lineHeight: 1,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                p: 0,
+              }}
+            >
+              ×
+            </Box>
+          </Box>,
+          document.body,
+        )
+      : null;
+
   if (inboxConversations.length === 0 && searchMode === 'none' && !searchTerm.trim()) {
     return (
-      <InboxLayout>
+      <InboxLayout fillViewport>
         <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: 2, gridColumn: '1 / -1' }}>
           <Typography sx={{ fontSize: 48 }}>💬</Typography>
           <Typography sx={{ fontSize: 15, fontWeight: 600 }}>Aucune conversation</Typography>
@@ -328,71 +497,14 @@ export default function WhatsAppTabV2() {
   }
 
   return (
-    <>
-      <InboxLayout>
-        <ThreadsList
-          threads={formattedThreads}
-          channels={[{ id: 'wa', label: 'WhatsApp', icon: '💬', color: '#25D366', count: displayConversations.length }]}
-          listTitle="WhatsApp"
-          mode="whatsapp"
-          activeThreadId={activeThread?.id ?? null}
-          searchTerm={searchTerm}
-          loading={searchLoading || globalSearchPending}
-          waListTotalCount={displayConversations.length}
-          waGlobalSearchActive={waGlobalQueryActive}
-          waSearchPending={globalSearchPending}
-          waChannelFilter={waChannelFilter}
-          onWaChannelFilterChange={setWaChannelFilter}
-          waUnreadOnly={waUnreadOnly}
-          onWaUnreadOnlyChange={setWaUnreadOnly}
-          waFilterCounts={waFilterCounts}
-          waStayQuickFilter={waStayQuickFilter}
-          onWaStayQuickFilterChange={setWaStayQuickFilter}
-          waStayQuickCounts={waStayQuickCounts}
-          waFiltersActive={waFiltersActive}
-          onWaResetAll={handleResetAllFilters}
-          onSelectThread={(thread) => {
-            const conv = displayConversations.find((c) => c.phone === thread.id);
-            if (conv) void handleSelect(conv);
-          }}
-          onSearchChange={setSearchTerm}
-        />
-        {activeThread ? (
-          <>
-            <ConversationThread
-              thread={activeThread}
-              messages={formattedMessages}
-              loadingMessages={inbox.loadingMessages}
-              quickTemplates={WA_QUICK_TEMPLATES}
-              onSendMessage={handleGuestSend}
-              onSelectTemplate={async (tpl) => {
-                if (tpl.text) await handleGuestSend(tpl.text);
-              }}
-              onAISuggestion={() => setShowAIModal(true)}
-            />
-            <ConversationDetails
-              thread={activeThread}
-              type="whatsapp"
-              reservation={inbox.reservation ?? undefined}
-              onAction={(action) => {
-                if (action === 'view-full-reservation' && inbox.reservation?.reservationNumber) {
-                  window.open(`/reservations/${inbox.reservation.reservationNumber}`, '_blank');
-                }
-              }}
-            />
-          </>
-        ) : (
-          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 2, gridColumn: { xs: '1', lg: '2' } }}>
-            <Typography sx={{ fontSize: 48 }}>💬</Typography>
-            <Typography sx={{ fontSize: 15, fontWeight: 600, color: t.text2 }}>
-              Sélectionnez une conversation
-            </Typography>
-            <Typography sx={{ fontSize: 13, color: t.text3 }}>
-              {unreadTotal} non lues · choisissez un guest
-            </Typography>
-          </Box>
-        )}
-      </InboxLayout>
+    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {!inboxFullscreen && (
+        <InboxLayout fillViewport>
+          {inboxBody}
+        </InboxLayout>
+      )}
+
+      {inboxFullscreenLayer}
 
       <AISuggestionModal
         open={showAIModal}
@@ -409,6 +521,6 @@ export default function WhatsAppTabV2() {
           type: 'whatsapp',
         }}
       />
-    </>
+    </Box>
   );
 }

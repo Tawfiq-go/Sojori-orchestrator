@@ -25,5 +25,5 @@ body.sojori-pm-simulation .sojori-topbar-sim {
 }
 
 body.sojori-pm-simulation .sojori-main-sim {
-  box-shadow: inset 4px 0 0 var(--sojori-sim-accent-deep);
+  /* pas d’inset gauche — évite l’effet « double sidebar » */
 }

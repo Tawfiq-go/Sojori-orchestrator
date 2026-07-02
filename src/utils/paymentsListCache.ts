@@ -15,8 +15,9 @@ export function paymentsCacheKey(params: {
   paymentStatus: string;
   cardOnly: boolean;
   search: string;
+  ownerScope?: string;
 }): string {
-  return `${params.page}|${params.paymentStatus}|${params.cardOnly ? '1' : '0'}|${params.search.trim().toLowerCase()}`;
+  return `${params.ownerScope ?? '__all__'}|${params.page}|${params.paymentStatus}|${params.cardOnly ? '1' : '0'}|${params.search.trim().toLowerCase()}`;
 }
 
 export function getCachedPaymentsList(key: string): { rows: PaymentAuditRow[]; total: number } | null {

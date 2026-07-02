@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
@@ -8,6 +8,10 @@ import MessagesOTATabV2 from '../components/communications/MessagesOTATabV2';
 import LeadsTabV2 from '../components/communications/LeadsTabV2';
 import ReviewsTabV2 from '../components/communications/ReviewsTabV2';
 import InboxHubTabs, { type CommsHubTab } from '../components/unified-inbox/InboxHubTabs';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
+import { useSocketIO } from '../hooks/useSocketIO';
+import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
+import { scheduleInboxRealtimeDispatch } from '../utils/inboxRealtime';
 import messagesService from '../services/messagesService';
 import { getCachedOtaInbox } from '../utils/otaInboxCache';
 
@@ -23,6 +27,7 @@ function isWaGuestChannel(ch?: string): boolean {
 
 export default function CommunicationsHubPage() {
   const navigate = useNavigate();
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const activeTab = (tabParam === 'templates' ? 'whatsapp' : tabParam || 'whatsapp') as CommsHubTab;
@@ -36,11 +41,68 @@ export default function CommunicationsHubPage() {
   const [counts, setCounts] = useState<Partial<Record<CommsHubTab, number>>>({});
   const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
+  const refetchCounts = useCallback(async () => {
+    if (!scopeFetchReady) {
+      setCounts({});
+      setUnreadCount(0);
+      return;
+    }
     const cachedOta = getCachedOtaInbox();
     if (cachedOta) {
       setCounts((prev) => ({ ...prev, ota: cachedOta.length }));
     }
+
+    try {
+      const [guestRes, staffRes, leadsRes, reviewsRes] = await Promise.all([
+        messagesService.getConversations({
+          filter: 'smart',
+          hasReservation: true,
+          limit: 100,
+          owner_id: requestOwnerId || undefined,
+        }),
+        messagesService.getConversations({
+          filter: 'smart',
+          hasReservation: false,
+          limit: 50,
+          owner_id: requestOwnerId || undefined,
+        }),
+        messagesService.getLeads({ limit: 50, ownerId: requestOwnerId || undefined }).catch(() => ({ threads: [] })),
+        messagesService.getReviews({ limit: 50, ownerId: requestOwnerId || undefined }).catch(() => ({ threads: [] })),
+      ]);
+
+      let waGuest = 0;
+      let unread = 0;
+
+      if (guestRes.status === 'success') {
+        for (const c of guestRes.data.conversations) {
+          if (!isWaGuestChannel(c.channel_name)) continue;
+          unread += c.unread_count || 0;
+          waGuest += 1;
+        }
+      }
+
+      const ota = cachedOta?.length ?? 0;
+
+      const staffCount =
+        staffRes.status === 'success' ? staffRes.data.conversations.length : 0;
+      const leadsCount = leadsRes.threads?.length ?? 0;
+      const reviewsCount = (reviewsRes.threads || reviewsRes.data || []).length;
+
+      setCounts({
+        whatsapp: waGuest,
+        staff: staffCount,
+        ota,
+        leads: leadsCount,
+        reviews: reviewsCount,
+      });
+      setUnreadCount(unread);
+    } catch {
+      /* ignore */
+    }
+  }, [scopeFetchReady, requestOwnerId]);
+
+  useEffect(() => {
+    void refetchCounts();
 
     const onOtaUpdated = (event: Event) => {
       const count = (event as CustomEvent<{ count: number }>).detail?.count;
@@ -50,61 +112,59 @@ export default function CommunicationsHubPage() {
     };
     window.addEventListener('sojori:ota-inbox-updated', onOtaUpdated);
 
-    void (async () => {
-      try {
-        const [guestRes, staffRes, leadsRes, reviewsRes] = await Promise.all([
-          messagesService.getConversations({ filter: 'smart', hasReservation: true, limit: 100 }),
-          messagesService.getConversations({ filter: 'smart', hasReservation: false, limit: 50 }),
-          messagesService.getLeads({ limit: 50 }).catch(() => ({ threads: [] })),
-          messagesService.getReviews({ limit: 50 }).catch(() => ({ threads: [] })),
-        ]);
-
-        let waGuest = 0;
-        let unread = 0;
-
-        if (guestRes.status === 'success') {
-          for (const c of guestRes.data.conversations) {
-            if (!isWaGuestChannel(c.channel_name)) continue;
-            unread += c.unread_count || 0;
-            waGuest += 1;
-          }
-        }
-
-        const ota = cachedOta?.length ?? 0;
-
-        const staffCount =
-          staffRes.status === 'success' ? staffRes.data.conversations.length : 0;
-        const leadsCount = leadsRes.threads?.length ?? 0;
-        const reviewsCount = (reviewsRes.threads || reviewsRes.data || []).length;
-
-        setCounts({
-          whatsapp: waGuest,
-          staff: staffCount,
-          ota,
-          leads: leadsCount,
-          reviews: reviewsCount,
-        });
-        setUnreadCount(unread);
-      } catch {
-        /* ignore */
-      }
-    })();
-
     return () => {
       window.removeEventListener('sojori:ota-inbox-updated', onOtaUpdated);
     };
-  }, []);
+  }, [refetchCounts]);
+
+  // ─── Temps réel (socket.io) ───────────────────────────────────────
+  // Refetch ciblé des compteurs + notification aux sous-onglets actifs (pattern CustomEvent
+  // déjà utilisé par otaInboxCache) plutôt qu'un patch state fin par tab — cf. plan V1.
+  const notifyInboxRealtime = useCallback((socketEvent: string, payload?: unknown) => {
+    if (import.meta.env.DEV) {
+      console.warn('[CommsHub] socket', socketEvent, payload);
+    }
+    scheduleInboxRealtimeDispatch(socketEvent, payload, () => {
+      void refetchCounts();
+    });
+  }, [refetchCounts]);
+
+  useSocketIO({
+    rooms: [DEFAULT_ROOMS.CHAT, DEFAULT_ROOMS.CHANNEXMESSAGE, DEFAULT_ROOMS.RU_CHAT],
+    enabled: scopeFetchReady,
+    onReconnect: () => notifyInboxRealtime('reconnect'),
+    handlers: {
+      [SOCKET_EVENTS.NEW_SENDED_MSG]: (p) => notifyInboxRealtime(SOCKET_EVENTS.NEW_SENDED_MSG, p),
+      [SOCKET_EVENTS.NEW_RECIVED_MSG]: (p) => notifyInboxRealtime(SOCKET_EVENTS.NEW_RECIVED_MSG, p),
+      [SOCKET_EVENTS.CONVERSATION_CHANGED]: (p) => notifyInboxRealtime(SOCKET_EVENTS.CONVERSATION_CHANGED, p),
+      [SOCKET_EVENTS.READ_MSG]: (p) => notifyInboxRealtime(SOCKET_EVENTS.READ_MSG, p),
+      [SOCKET_EVENTS.MODIFIED_MSG]: (p) => notifyInboxRealtime(SOCKET_EVENTS.MODIFIED_MSG, p),
+    },
+  });
 
   return (
     <DashboardWrapper breadcrumb={['Communications', 'Inbox']}>
-      <Box sx={{ maxWidth: 1600, mx: 'auto', px: { xs: 2, md: 3 } }}>
-        <InboxHubTabs counts={counts} unreadCount={unreadCount} />
+      <Box
+        sx={{
+          maxWidth: 1600,
+          mx: 'auto',
+          px: { xs: 1.5, md: 2 },
+          minHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+          maxHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <InboxHubTabs counts={counts} unreadCount={unreadCount} compact />
 
-        {activeTab === 'whatsapp' && <WhatsAppTabV2 />}
-        {activeTab === 'staff' && <StaffWhatsAppTabV2 />}
-        {activeTab === 'ota' && <MessagesOTATabV2 />}
-        {activeTab === 'leads' && <LeadsTabV2 />}
-        {activeTab === 'reviews' && <ReviewsTabV2 />}
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {activeTab === 'whatsapp' && <WhatsAppTabV2 />}
+          {activeTab === 'staff' && <StaffWhatsAppTabV2 />}
+          {activeTab === 'ota' && <MessagesOTATabV2 />}
+          {activeTab === 'leads' && <LeadsTabV2 />}
+          {activeTab === 'reviews' && <ReviewsTabV2 />}
+        </Box>
       </Box>
     </DashboardWrapper>
   );

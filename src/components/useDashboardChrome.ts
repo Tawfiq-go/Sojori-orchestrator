@@ -163,6 +163,9 @@ export function useDashboardChrome() {
       return 'admin/channels/business';
     }
 
+    if (path.startsWith('/admin/pm-lifecycle')) {
+      return 'admin/pm-lifecycle';
+    }
     if (path.startsWith('/admin/mapping')) {
       return 'admin/mapping';
     }
@@ -237,14 +240,11 @@ export function useDashboardChrome() {
   };
 
   const handleNavigate = (navId: string) => {
-    console.log('🔴 handleNavigate called with navId:', navId);
     const route = navToRoute[navId];
-    console.log('   → Found route:', route);
     if (route) {
-      console.log('   ✅ Navigating to:', route);
       navigate(route);
-    } else {
-      console.warn('   ⚠️ NO ROUTE found for navId:', navId);
+    } else if (import.meta.env.DEV) {
+      console.warn('[nav] route inconnue pour navId:', navId);
     }
   };
 

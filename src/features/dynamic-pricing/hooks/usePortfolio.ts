@@ -39,8 +39,9 @@ const EMPTY_PORTFOLIO: PortfolioMockData = {
 };
 
 export function usePortfolio(
-  ownerId?: string,
+  ownerId?: string | null,
   cityScope?: string | null,
+  options?: { enabled?: boolean },
 ): PortfolioMockData & {
   loading: boolean;
   error: string | null;
@@ -151,8 +152,12 @@ export function usePortfolio(
   );
 
   useEffect(() => {
+    if (options?.enabled === false) {
+      setLoading(false);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [load, options?.enabled]);
 
   const refreshMarket = useCallback(
     async (city: string) => {

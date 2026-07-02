@@ -25,6 +25,7 @@ export interface LoginCredentials {
 }
 
 export interface ResetPasswordPayload {
+  token: string;
   email?: string;
   password: string;
 }
@@ -133,9 +134,13 @@ const authService = {
    * Finalise un reset mock.
    */
   async completePasswordReset({
+    token,
     email,
     password,
   }: ResetPasswordPayload): Promise<{ success: boolean; message: string }> {
+    if (!token) {
+      throw new Error('Token de réinitialisation manquant.');
+    }
     const targetEmail = (email || getResetEmail()).trim().toLowerCase();
     const users = getStoredUsers();
     const existingUser = users.find((user) => user.email === targetEmail);

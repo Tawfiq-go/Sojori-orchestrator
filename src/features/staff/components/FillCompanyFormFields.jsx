@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -14,12 +14,15 @@ import {
   Grid,
   Chip,
   Alert,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import { User, Building, Gavel } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import RuFieldBadge, { FieldLabelWithRuBadge } from './RuFieldBadge';
+import RuFieldBadge, { FieldLabelWithRuBadge, MirrorFieldRow, RuFieldBadgeLegend } from './RuFieldBadge';
 import SearchableSelect from './SearchableSelect';
 import CityFreeSoloAutocomplete from './CityFreeSoloAutocomplete';
+import { resolveRuLocationLabel, applyLegalFromContact } from '../utils/fillCompanyFormUtils';
 
 function resolveFc(namePrefix, path) {
   return namePrefix ? `${namePrefix}.${path}` : path;
@@ -62,6 +65,10 @@ export default function FillCompanyFormFields({
   onSelectedCitiesChange,
   mirrorAccountFields = false,
   accountValues = {},
+  /** Masque prénom/nom/email/tél. dupliqués — affiche un résumé « repris depuis Compte ». */
+  hideMirroredContactFields = false,
+  legalSameAsContact = false,
+  onLegalSameAsContactChange,
 }) {
   const { t } = useTranslation('common');
   const fc = (path) => resolveFc(namePrefix, path);
@@ -78,7 +85,8 @@ export default function FillCompanyFormFields({
 
   const handleCityChange = (event) => {
     const value = event.target.value;
-    onSelectedCitiesChange?.(typeof value === 'string' ? value.split(',') : value);
+    const next = typeof value === 'string' ? value.split(',') : value;
+    onSelectedCitiesChange?.(next.map((id) => String(id)));
   };
 
   const mirror = mirrorAccountFields
@@ -86,9 +94,48 @@ export default function FillCompanyFormFields({
         firstName: accountValues.firstName ?? contact.FirstName,
         lastName: accountValues.lastName ?? contact.LastName,
         email: accountValues.email ?? contact.Email,
+        ruEmail: accountValues.ruEmail ?? '',
         phone: accountValues.phone ?? contact.Phone,
+        cityName: accountValues.cityName ?? contact.City ?? company.CompanyCity ?? '',
       }
     : null;
+
+  const showMirrorSummary = Boolean(mirror && hideMirroredContactFields);
+  const showMirrorFields = Boolean(mirror && !hideMirroredContactFields);
+  const legalFieldsDisabled = Boolean(legalSameAsContact);
+
+  const handleLegalSameAsContactToggle = (checked) => {
+    onLegalSameAsContactChange?.(checked);
+    if (checked) {
+      applyLegalFromContact(setFieldValue, namePrefix, contact, mirror);
+    }
+  };
+
+  useEffect(() => {
+    if (!legalSameAsContact) return;
+    applyLegalFromContact(setFieldValue, namePrefix, contact, mirror);
+  }, [
+    legalSameAsContact,
+    contact.FirstName,
+    contact.LastName,
+    contact.Email,
+    contact.Phone,
+    contact.City,
+    contact.CountryId,
+    contact.Address,
+    contact.ZipCode,
+    contact.BirthDate,
+    contact.Nationality,
+    contact.Region,
+    contact.Area,
+    mirror?.firstName,
+    mirror?.lastName,
+    mirror?.email,
+    mirror?.phone,
+    mirror?.cityName,
+    namePrefix,
+    setFieldValue,
+  ]);
 
   return (
     <Box className="owner-fill-company-fields" sx={{ mt: 2 }}>
@@ -103,20 +150,7 @@ export default function FillCompanyFormFields({
           </Typography>
         </Alert>
       )}
-      <Alert severity="info" sx={{ mb: 2, alignItems: 'flex-start' }}>
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          {t('ruFieldBadge.formLegend', {
-            defaultValue: 'Badges : champs envoyés à Rental United vs Sojori uniquement.',
-          })}
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
-          <RuFieldBadge kind="ru" ruXmlPath="ContactInfo.*" />
-          <RuFieldBadge kind="nonRu" />
-          <RuFieldBadge kind="new" ruXmlPath="ContactInfo.Area" />
-          <RuFieldBadge kind="ruStoredNotPushed" ruXmlPath="CompanyInfo.ConfirmationEmail" />
-          <RuFieldBadge kind="ruMirror" ruXmlPath="Account → ContactInfo" />
-        </Box>
-      </Alert>
+      <RuFieldBadgeLegend />
 
       <Card sx={{ mb: 3, borderRadius: 2, border: '1px solid #e5e8ec' }}>
         <CardHeader
@@ -125,16 +159,69 @@ export default function FillCompanyFormFields({
               <User size={18} />
             </Avatar>
           }
-          title={<Typography variant="subtitle1" fontWeight={700}>{t('Contact Information')}</Typography>}
+          title={
+            <Typography variant="subtitle1" fontWeight={700}>
+              {showMirrorSummary
+                ? t('fillCompany_ruAddressExtras', {
+                    defaultValue: 'Compléments adresse R.U. (hors identité)',
+                  })
+                : t('Contact Information')}
+            </Typography>
+          }
         />
         <Divider />
         <CardContent>
+          {showMirrorSummary ? (
+            <Alert severity="info" sx={{ mb: 2 }} icon={false}>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.75 }}>
+                {t('fillCompany_fromAccountTitle', {
+                  defaultValue: 'Depuis l’onglet Compte (lecture seule)',
+                })}
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ lineHeight: 1.8 }}>
+                <MirrorFieldRow
+                  label={t('fillCompany_identity', { defaultValue: 'Identité' })}
+                  value={`${mirror.firstName || ''} ${mirror.lastName || ''}`.trim()}
+                  ruXmlPath="ContactInfo.FirstName + LastName"
+                />
+                <MirrorFieldRow
+                  label={t('fillCompany_dashboardEmail', { defaultValue: 'Email dashboard (fiche RU)' })}
+                  value={mirror.email}
+                  kind="sojoriLogin"
+                  ruXmlPath="Sojori + ContactInfo.Email"
+                />
+                <MirrorFieldRow
+                  label={t('fillCompany_ruLoginEmail', { defaultValue: 'Connexion extranet R.U.' })}
+                  value={mirror.ruEmail}
+                  kind="ruCreateUser"
+                  ruXmlPath="Push_CreateUser.Email"
+                />
+                <MirrorFieldRow
+                  label={t('Phone')}
+                  value={mirror.phone}
+                  ruXmlPath="ContactInfo.Phone + CompanyInfo.PhoneNumber"
+                />
+                <MirrorFieldRow
+                  label={t('City')}
+                  value={mirror.cityName}
+                  ruXmlPath="ContactInfo.City + CompanyInfo.CompanyCity"
+                />
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                {t('fillCompany_fromAccountHint', {
+                  defaultValue:
+                    'Ces champs se modifient uniquement dans l’onglet Compte. Ci-dessous : pays, adresse, etc.',
+                })}
+              </Typography>
+            </Alert>
+          ) : null}
           <Grid container spacing={2}>
+            {!showMirrorSummary ? (
             <Grid item xs={12} sm={6}>
-              <FieldLabelWithRuBadge kind={mirror ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.FirstName" required>
+              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.FirstName" required>
                 {t('First Name')}
               </FieldLabelWithRuBadge>
-              {mirror ? (
+              {showMirrorFields ? (
                 <TextField value={mirror.firstName} fullWidth size="small" disabled />
               ) : (
                 <TextField
@@ -149,11 +236,13 @@ export default function FillCompanyFormFields({
                 />
               )}
             </Grid>
+            ) : null}
+            {!showMirrorSummary ? (
             <Grid item xs={12} sm={6}>
-              <FieldLabelWithRuBadge kind={mirror ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.LastName" required>
+              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.LastName" required>
                 {t('Last Name')}
               </FieldLabelWithRuBadge>
-              {mirror ? (
+              {showMirrorFields ? (
                 <TextField value={mirror.lastName} fullWidth size="small" disabled />
               ) : (
                 <TextField
@@ -168,11 +257,13 @@ export default function FillCompanyFormFields({
                 />
               )}
             </Grid>
+            ) : null}
+            {!showMirrorSummary ? (
             <Grid item xs={12} sm={6}>
-              <FieldLabelWithRuBadge kind={mirror ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.Email" required>
+              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.Email" required>
                 {t('Email')}
               </FieldLabelWithRuBadge>
-              {mirror ? (
+              {showMirrorFields ? (
                 <TextField value={mirror.email} fullWidth size="small" disabled />
               ) : (
                 <TextField
@@ -187,11 +278,13 @@ export default function FillCompanyFormFields({
                 />
               )}
             </Grid>
+            ) : null}
+            {!showMirrorSummary ? (
             <Grid item xs={12} sm={6}>
-              <FieldLabelWithRuBadge kind={mirror ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.Phone" required>
+              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.Phone" required>
                 {t('Phone')}
               </FieldLabelWithRuBadge>
-              {mirror ? (
+              {showMirrorFields ? (
                 <TextField value={mirror.phone} fullWidth size="small" disabled />
               ) : (
                 <TextField
@@ -206,6 +299,8 @@ export default function FillCompanyFormFields({
                 />
               )}
             </Grid>
+            ) : null}
+            {!showMirrorSummary ? (
             <Grid item xs={12} sm={6}>
               <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.City" required>
                 {t('City')}
@@ -219,6 +314,7 @@ export default function FillCompanyFormFields({
                 helperText={tContact?.City && eContact?.City ? t(eContact.City) : ''}
               />
             </Grid>
+            ) : null}
             <Grid item xs={12} sm={6}>
               <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.CountryId" required>
                 {t('Country')}
@@ -386,6 +482,7 @@ export default function FillCompanyFormFields({
                 size="small"
               />
             </Grid>
+            {!showMirrorSummary ? (
             <Grid item xs={12} sm={6}>
               <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.CompanyCity" required>
                 {t('Company City')}
@@ -399,6 +496,7 @@ export default function FillCompanyFormFields({
                 helperText={tCompany?.CompanyCity && eCompany?.CompanyCity ? t(eCompany.CompanyCity) : ''}
               />
             </Grid>
+            ) : null}
             <Grid item xs={12} sm={6}>
               <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.CountryId" required>
                 {t('Company Country')}
@@ -487,8 +585,16 @@ export default function FillCompanyFormFields({
                 onBlur={handleBlur}
                 fullWidth
                 size="small"
+                placeholder={accountValues.email || ''}
               />
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                {t('ruFieldBadge.confirmationEmailHint', {
+                  defaultValue:
+                    'Copie interne Sojori (souvent = email dashboard). Jamais envoyée à Rental United.',
+                })}
+              </Typography>
             </Grid>
+            {!showMirrorSummary ? (
             <Grid item xs={12} sm={6}>
               <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.PhoneNumber" required>
                 {t('Company Phone Number')}
@@ -504,6 +610,7 @@ export default function FillCompanyFormFields({
                 size="small"
               />
             </Grid>
+            ) : null}
             <Grid item xs={12} sm={6}>
               <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.VATNumber" required>
                 {t('VAT Number')}
@@ -653,16 +760,29 @@ export default function FillCompanyFormFields({
                   renderValue={(selected) => (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                       {selected.map((value) => (
-                        <Chip key={value} label={value} size="small" />
+                        <Chip
+                          key={value}
+                          label={resolveRuLocationLabel(value, cities)}
+                          size="small"
+                          title={`RU LocationID: ${value}`}
+                        />
                       ))}
                     </Box>
                   )}
                 >
-                  {cities.map((city) => (
-                    <MenuItem key={city.rentalCityId || city._id} value={city.rentalCityId}>
-                      {city.name}
-                    </MenuItem>
-                  ))}
+                  {cities.map((city) => {
+                    const ruId = String(city.rentalCityId ?? city._id ?? '');
+                    return (
+                      <MenuItem key={ruId || city._id} value={ruId}>
+                        {city.name}
+                        {city.rentalCityId ? (
+                          <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                            (RU {city.rentalCityId})
+                          </Typography>
+                        ) : null}
+                      </MenuItem>
+                    );
+                  })}
                 </Select>
               </FormControl>
             </Grid>
@@ -678,13 +798,41 @@ export default function FillCompanyFormFields({
             </Avatar>
           }
           title={
-            <Typography variant="subtitle1" fontWeight={700}>
-              {t('Legal Representative Information')}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 2, flexWrap: 'wrap' }}>
+              <Typography variant="subtitle1" fontWeight={700}>
+                {t('Legal Representative Information')}
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={Boolean(legalSameAsContact)}
+                    onChange={(e) => handleLegalSameAsContactToggle(e.target.checked)}
+                  />
+                }
+                label={t('fillCompany_legalSameAsContact', { defaultValue: 'Même que le contact' })}
+                sx={{ m: 0 }}
+              />
+            </Box>
           }
         />
         <Divider />
         <CardContent>
+          {legalSameAsContact ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {t('fillCompany_legalSameAsContactHint', {
+                defaultValue:
+                  'Les champs représentant légal sont repris du contact (et de l’onglet Compte pour prénom, nom, email, ville). Décochez pour saisir un représentant différent.',
+              })}
+            </Alert>
+          ) : (
+            <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+              {t('fillCompany_legalRuOnlyHint', {
+                defaultValue:
+                  'Données légales Rental United — non affichées sur sojori-vente. Photos et slogan : onglet « Site sojori-vente ».',
+              })}
+            </Alert>
+          )}
           <Grid container spacing={2}>
             {[
               ['FirstName', 'First Name', 'LegalRepresentativeInfo.FirstName'],
@@ -704,6 +852,7 @@ export default function FillCompanyFormFields({
                   helperText={tLegal?.[key] && eLegal?.[key] ? t(eLegal[key]) : ''}
                   fullWidth
                   size="small"
+                  disabled={legalFieldsDisabled}
                 />
               </Grid>
             ))}
@@ -718,6 +867,7 @@ export default function FillCompanyFormFields({
                 onChange={(v) => setFieldValue(fc('LegalRepresentativeInfo.City'), v)}
                 error={Boolean(tLegal?.City && eLegal?.City)}
                 helperText={tLegal?.City && eLegal?.City ? t(eLegal.City) : ''}
+                disabled={legalFieldsDisabled}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -737,7 +887,7 @@ export default function FillCompanyFormFields({
                     ? t(eLegal.CountryOfResidenceId)
                     : ''
                 }
-                disabled={loadingRefPickers}
+                disabled={loadingRefPickers || legalFieldsDisabled}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -753,6 +903,7 @@ export default function FillCompanyFormFields({
                 helperText={tLegal?.Address && eLegal?.Address ? t(eLegal.Address) : ''}
                 fullWidth
                 size="small"
+                disabled={legalFieldsDisabled}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -768,6 +919,7 @@ export default function FillCompanyFormFields({
                 helperText={tLegal?.PostCode && eLegal?.PostCode ? t(eLegal.PostCode) : ''}
                 fullWidth
                 size="small"
+                disabled={legalFieldsDisabled}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -785,6 +937,7 @@ export default function FillCompanyFormFields({
                 fullWidth
                 size="small"
                 InputLabelProps={{ shrink: true }}
+                disabled={legalFieldsDisabled}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -802,7 +955,7 @@ export default function FillCompanyFormFields({
                 helperText={
                   tLegal?.NationalityId && eLegal?.NationalityId ? t(eLegal.NationalityId) : ''
                 }
-                disabled={loadingRefPickers}
+                disabled={loadingRefPickers || legalFieldsDisabled}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -819,6 +972,7 @@ export default function FillCompanyFormFields({
                 fullWidth
                 size="small"
                 placeholder="**"
+                disabled={legalFieldsDisabled}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -833,6 +987,7 @@ export default function FillCompanyFormFields({
                 fullWidth
                 size="small"
                 placeholder="**"
+                disabled={legalFieldsDisabled}
               />
             </Grid>
           </Grid>

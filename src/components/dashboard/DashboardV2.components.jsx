@@ -16,15 +16,20 @@
 // ════════════════════════════════════════════════════════════════════
 
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { NAV_DEFAULT_COLLAPSED } from '../../config/navConfig';
 import { useSidebarNav } from '../../hooks/useSidebarNav';
+import { usePmSimulation } from '../../context/PmSimulationContext';
+import { PmSimulationBanner } from '../simulation/PmSimulationBanner';
+import { AdminBusinessScopeTopFilter } from '../AdminOwnerScope/AdminBusinessScopeTopFilter';
 import { LISTING_LAYOUT } from '../../constants/listingLayout';
 import { IconColored } from './IconColored';
 import { SojoriBrandLockup } from '../brand/SojoriBrandLogo';
 import {
   Box, Stack, Typography, Button, IconButton, Avatar, Chip, Switch,
-  TextField, InputAdornment, Divider, Tooltip,
+  TextField, InputAdornment, Divider, Tooltip, Drawer,
 } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
 import AdminPanelSettingsOutlined from '@mui/icons-material/AdminPanelSettingsOutlined';
 import AnalyticsOutlined from '@mui/icons-material/AnalyticsOutlined';
 import BusinessOutlined from '@mui/icons-material/BusinessOutlined';
@@ -47,7 +52,6 @@ import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
 import ShoppingBagOutlined from '@mui/icons-material/ShoppingBagOutlined';
 import PublicOutlined from '@mui/icons-material/PublicOutlined';
 import PersonSearchOutlined from '@mui/icons-material/PersonSearchOutlined';
-import Search from '@mui/icons-material/Search';
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
 import ShowChartOutlined from '@mui/icons-material/ShowChartOutlined';
 import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined';
@@ -114,22 +118,95 @@ export function DashboardLayout({
   compactMain = false,
   mainRef,
   persistent = false,
+  adminScopeInTopBar = false,
 }) {
+  const { isActive: simulationActive } = usePmSimulation();
+  const location = useLocation();
+  const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+  const gridRows = simulationActive ? `auto ${t.topbarH}px 1fr` : `${t.topbarH}px 1fr`;
+  const gridAreas = simulationActive
+    ? {
+        xs: `"banner" "topbar" "main"`,
+        md: `"banner banner" "sidebar topbar" "sidebar main"`,
+      }
+    : { xs: `"topbar" "main"`, md: `"sidebar topbar" "sidebar main"` };
+
+  React.useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname, location.search]);
+
+  const handleNavigate = React.useCallback(
+    (id) => {
+      onNavigate?.(id);
+      setMobileNavOpen(false);
+    },
+    [onNavigate],
+  );
+
   return (
-    <Box sx={{
+    <Box
+      className="sojori-dashboard-root"
+      sx={{
       display: 'grid',
       gridTemplateColumns: { xs: '1fr', md: `${t.sidebarW}px 1fr` },
-      gridTemplateRows: `${t.topbarH}px 1fr`,
-      gridTemplateAreas: { xs: `"topbar" "main"`, md: `"sidebar topbar" "sidebar main"` },
+      gridTemplateRows: gridRows,
+      gridTemplateAreas: gridAreas,
       height: '100vh',
       fontFamily: 'Geist, system-ui, sans-serif',
       color: t.text, bgcolor: t.bg0,
     }}>
-      <AppSidebar user={user} activePath={activePath} onNavigate={onNavigate} onLogout={onLogout} />
-      <TopBar breadcrumb={breadcrumb} compact={compactMain} />
+      {simulationActive ? (
+        <Box sx={{ gridArea: 'banner' }}>
+          <PmSimulationBanner />
+        </Box>
+      ) : null}
+      <AppSidebar
+        user={user}
+        activePath={activePath}
+        onNavigate={handleNavigate}
+        onLogout={onLogout}
+        simulationActive={simulationActive}
+        sidebarRowSpan={simulationActive ? 2 : 1}
+        variant="rail"
+      />
+      <Drawer
+        anchor="left"
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: 'block', md: 'none' },
+          '& .MuiDrawer-paper': {
+            width: t.sidebarW,
+            boxSizing: 'border-box',
+            border: 'none',
+          },
+        }}
+      >
+        <AppSidebar
+          user={user}
+          activePath={activePath}
+          onNavigate={handleNavigate}
+          onLogout={onLogout}
+          simulationActive={simulationActive}
+          variant="drawer"
+        />
+      </Drawer>
+      <TopBar
+        breadcrumb={breadcrumb}
+        compact={compactMain}
+        simulationActive={simulationActive}
+        adminScopeInTopBar={adminScopeInTopBar}
+        onMenuClick={() => setMobileNavOpen(true)}
+      />
       <Box
         ref={mainRef}
-        className={persistent ? undefined : 'sojori-main-enter'}
+        className={[
+          persistent ? undefined : 'sojori-main-enter',
+          simulationActive ? 'sojori-main-sim' : undefined,
+        ]
+          .filter(Boolean)
+          .join(' ') || undefined}
         sx={{
           gridArea: 'main',
           overflow: 'auto',
@@ -298,7 +375,15 @@ function navItemMatchesPath(item, activePath) {
 
 const SIDEBAR_SCROLL_KEY = 'sojori-sidebar-scroll';
 
-export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogout }) {
+export function AppSidebar({
+  user,
+  activePath = 'dashboard',
+  onNavigate,
+  onLogout,
+  simulationActive = false,
+  sidebarRowSpan = 1,
+  variant = 'rail',
+}) {
   const navGroups = useSidebarNav(user);
   const navScrollRef = React.useRef(null);
 
@@ -376,16 +461,18 @@ export function AppSidebar({ user, activePath = 'dashboard', onNavigate, onLogou
   };
 
   return (
-    <Box sx={{
-      gridArea: 'sidebar',
-      display: { xs: 'none', md: 'flex' },
+    <Box
+      className={simulationActive ? 'sojori-sidebar-sim' : undefined}
+      sx={{
+      gridArea: variant === 'rail' ? 'sidebar' : undefined,
+      display: variant === 'drawer' ? 'flex' : { xs: 'none', md: 'flex' },
       flexDirection: 'column',
       bgcolor: 'rgba(255,255,255,0.85)',
       backdropFilter: 'blur(20px) saturate(1.4)',
-      borderRight: `1px solid rgba(23,19,13,0.08)`,
-      position: 'sticky',
-      top: 0,
-      height: '100vh',
+      borderRight: variant === 'drawer' ? 'none' : `1px solid rgba(23,19,13,0.08)`,
+      position: variant === 'drawer' ? 'relative' : 'sticky',
+      top: variant === 'drawer' ? undefined : 0,
+      height: variant === 'drawer' ? '100%' : '100vh',
       overflow: 'hidden',
       boxShadow: '4px 0 24px rgba(0,0,0,0.03)',
       // Gradient overlay subtil
@@ -674,16 +761,36 @@ function SideLink({ item, active, sub, disabled, onClick }) {
 // 3. TopBar
 // ════════════════════════════════════════════════════════════════════
 
-export function TopBar({ breadcrumb = [], onSearch, compact = false }) {
+export function TopBar({
+  breadcrumb = [],
+  compact = false,
+  simulationActive = false,
+  adminScopeInTopBar = false,
+  onMenuClick,
+}) {
   return (
-    <Box sx={{
+    <Box
+      className={simulationActive ? 'sojori-topbar-sim' : undefined}
+      sx={{
       gridArea: 'topbar',
       bgcolor: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(16px) saturate(1.2)',
       borderBottom: `1px solid ${t.border}`,
-      display: 'flex', alignItems: 'center', gap: 2, px: compact ? LISTING_LAYOUT.topBarPadX : 3,
+      display: 'flex', alignItems: 'center', gap: 1.5, px: compact ? LISTING_LAYOUT.topBarPadX : 3,
       position: 'sticky', top: 0, zIndex: 30,
+      flexWrap: { xs: 'wrap', lg: 'nowrap' },
+      minHeight: t.topbarH,
+      py: { xs: 0.75, lg: 0 },
     }}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0, fontSize: 12.5, color: t.text2 }}>
+      {onMenuClick ? (
+        <IconButton
+          onClick={onMenuClick}
+          aria-label="Ouvrir le menu de navigation"
+          sx={{ ...iconBtnSx, display: { xs: 'inline-flex', md: 'none' }, flexShrink: 0 }}
+        >
+          <MenuIcon sx={{ fontSize: 22 }} />
+        </IconButton>
+      ) : null}
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0, fontSize: 12.5, color: t.text2, flexShrink: 0 }}>
         {breadcrumb.map((b, i) => (
           <React.Fragment key={`breadcrumb-${i}-${b}`}>
             <Typography sx={{
@@ -696,27 +803,7 @@ export function TopBar({ breadcrumb = [], onSearch, compact = false }) {
         ))}
       </Stack>
 
-      <Box sx={{
-        flex: 1, maxWidth: 440, mx: 2,
-        bgcolor: t.bg2, border: `1px solid ${t.border}`, borderRadius: '10px',
-        py: 0.875, px: 1.5,
-        display: 'flex', alignItems: 'center', gap: 1,
-        fontSize: 12.5, color: t.text3, cursor: 'pointer',
-        transition: 'border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease',
-        '&:hover': {
-          borderColor: t.borderStrong,
-          bgcolor: t.bg1,
-          boxShadow: '0 2px 10px rgba(23,19,13,0.06)',
-        },
-      }} onClick={onSearch}>
-        <Search sx={{ fontSize: 18, opacity: 0.55 }} />
-        <Box>Rechercher voyageur, listing, réservation…</Box>
-        <Box sx={{
-          ml: 'auto', fontFamily: 'Geist Mono, monospace', fontSize: 10,
-          px: 0.75, py: 0.25, bgcolor: t.bg1, border: `1px solid ${t.border}`,
-          borderRadius: 1, color: t.text2,
-        }}>⌘K</Box>
-      </Box>
+      {adminScopeInTopBar ? <AdminBusinessScopeTopFilter /> : null}
 
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto' }}>
         <Tooltip title="Notifications">
@@ -756,13 +843,53 @@ const iconBtnSx = {
 // 4. PageHeader & buttons
 // ════════════════════════════════════════════════════════════════════
 
-export function PageHeader({ title, count, children }) {
+export const pageMetaChipSx = {
+  fontFamily: 'Geist Mono, monospace',
+  fontSize: 12,
+  color: t.text3,
+  fontWeight: 600,
+  bgcolor: t.bg2,
+  px: 1.25,
+  py: 0.375,
+  borderRadius: '999px',
+  border: `1px solid ${t.border}`,
+  letterSpacing: 0.02,
+  lineHeight: 1.45,
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
+  maxWidth: '100%',
+};
+
+export function PageMetaChip({ children }) {
+  return <Box component="span" sx={pageMetaChipSx}>{children}</Box>;
+}
+
+export function PageMetaRow({ children, sx }) {
   return (
     <Stack
       direction="row"
+      spacing={1}
+      sx={{
+        flexWrap: 'wrap',
+        rowGap: 0.75,
+        columnGap: 1,
+        mb: 1.5,
+        mt: -0.5,
+        ...sx,
+      }}
+    >
+      {children}
+    </Stack>
+  );
+}
+
+export function PageHeader({ title, count, children }) {
+  return (
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
       spacing={2}
       sx={{
-        alignItems: 'flex-start',
+        alignItems: { xs: 'stretch', sm: 'flex-start' },
         justifyContent: 'space-between',
         mb: 3,
         pb: 2,
@@ -788,17 +915,25 @@ export function PageHeader({ title, count, children }) {
         >
           {title}
           {count && (
-            <Box component="span" sx={{
-              fontFamily: 'Geist Mono, monospace', fontSize: 12, color: t.text3, fontWeight: 600,
-              bgcolor: t.bg2, px: 1.25, py: 0.375, borderRadius: '999px',
-              border: `1px solid ${t.border}`, letterSpacing: 0.02,
-            }}>{count}</Box>
+            <Box component="span" sx={pageMetaChipSx}>{count}</Box>
           )}
         </Box>
       </Box>
-      <Stack direction="row" spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
-        {children}
-      </Stack>
+      {children ? (
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            flexShrink: 0,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            rowGap: 1,
+            justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+          }}
+        >
+          {children}
+        </Stack>
+      ) : null}
     </Stack>
   );
 }
@@ -1032,6 +1167,8 @@ export function DataTable({
   tableMinWidth,
   /** Colonnes serrées, layout fixed, sans scroll horizontal forcé (liste tâches). */
   compact = false,
+  /** Lignes ultra-denses (liste tâches / réservations). */
+  ultraCompact = false,
   /** Style des en-têtes (partners = titres mixtes, pas tout en majuscules). */
   headerTextTransform = 'uppercase',
 }) {
@@ -1055,11 +1192,11 @@ export function DataTable({
           width: '100%',
           minWidth: tableMinWidth || '100%',
           borderCollapse: 'collapse',
-          fontSize: compact ? 12 : 12.5,
+          fontSize: ultraCompact ? 11 : compact ? 12 : 12.5,
           tableLayout: (tableMinWidth || compact) ? 'fixed' : 'auto',
         }}
       >
-        <Box component="thead">
+        <Box component="thead" sx={ultraCompact ? { position: 'sticky', top: 0, zIndex: 2 } : undefined}>
           <Box component="tr">
             {selectable && <Box component="th" sx={thSx} style={{ width: 36 }}><Checkbox /></Box>}
             {columns.map(col => (
@@ -1068,11 +1205,12 @@ export function DataTable({
                 key={col.key}
                 sx={{
                   ...thSx,
-                  ...(compact ? compactThSx : null),
+                  ...(ultraCompact ? ultraCompactThSx : compact ? compactThSx : null),
                   textAlign: col.align || 'left',
                   width: col.width,
                   maxWidth: col.width,
                   textTransform: col.headerTextTransform ?? headerTextTransform,
+                  ...(ultraCompact ? { bgcolor: t.bg2 } : {}),
                 }}
               >
                 {col.label} {col.sortable && <Box component="span" sx={{ opacity: 0.4, ml: 0.5, fontSize: 9 }}>↕</Box>}
@@ -1101,7 +1239,7 @@ export function DataTable({
                   </Box>
                 )}
                 {columns.map(col => (
-                  <Box component="td" key={col.key} sx={{ ...tdSx, ...(compact ? compactTdSx : null), textAlign: col.align || 'left', maxWidth: col.width, overflow: compact ? 'hidden' : undefined }}>
+                  <Box component="td" key={col.key} sx={{ ...tdSx, ...(ultraCompact ? ultraCompactTdSx : compact ? compactTdSx : null), textAlign: col.align || 'left', maxWidth: col.width, overflow: (compact || ultraCompact) ? 'hidden' : undefined }}>
                     {col.render ? col.render(row) : row[col.key]}
                   </Box>
                 ))}
@@ -1139,8 +1277,10 @@ const thSx = {
   borderBottom: `1px solid ${t.border}`, whiteSpace: 'nowrap',
 };
 const compactThSx = { p: '8px 6px', fontSize: 10, letterSpacing: 0.2 };
+const ultraCompactThSx = { p: '3px 5px', fontSize: 9, letterSpacing: 0.12, lineHeight: 1.1 };
 const tdSx = { p: '12px 14px', borderBottom: `1px solid ${t.border}`, verticalAlign: 'middle' };
 const compactTdSx = { p: '8px 6px' };
+const ultraCompactTdSx = { p: '2px 5px', fontSize: 10.5, lineHeight: 1.15 };
 const rowActionSx = {
   width: 26, height: 26, borderRadius: '6px',
   color: t.text3, fontSize: 14,

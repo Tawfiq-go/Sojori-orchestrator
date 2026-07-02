@@ -25,6 +25,13 @@ export function isPlatformAdminPath(pathname: string): boolean {
   });
 }
 
+/** Routes sidebar PM (hors infra `/admin/*`, monitor, channels admin…). */
+export function isPmBusinessPath(pathname: string): boolean {
+  const path = (pathname || '/').trim();
+  if (!path || path === '/' || path === '/forbidden') return false;
+  return !isPlatformAdminPath(path);
+}
+
 export function normalizeDashboardRole(role: string | null | undefined): string {
   if (role == null) return '';
   const r = String(role).trim();

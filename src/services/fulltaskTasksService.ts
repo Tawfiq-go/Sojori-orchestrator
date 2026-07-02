@@ -324,7 +324,7 @@ class FulltaskTasksService {
     };
   }
 
-  async getListings() {
+  async getListings(options?: { filterOwnerId?: string }) {
     console.log('📋 [getListings] START - Fetching with limit=100, compact=true');
     const startTime = performance.now();
 
@@ -334,6 +334,7 @@ class FulltaskTasksService {
       limit: 100, // ⚡ Réduit de 1000 → 100 (suffisant pour les filtres)
       page: 0,
       compact: true, // ⚡ Mode compact: uniquement {_id, name, city}
+      filterOwnerId: options?.filterOwnerId,
     });
 
     const elapsed = (performance.now() - startTime).toFixed(0);

@@ -5,10 +5,16 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { T, ALL_COLUMNS } from './_shared';
 
-export default function ColumnFilters({ selectedColumns = [], onChange }) {
+export default function ColumnFilters({
+  selectedColumns = [],
+  onChange,
+  compact = false,
+  ultraCompact = false,
+}) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef(null);
+  const tight = ultraCompact || compact;
 
   useEffect(() => {
     if (!open) return;
@@ -25,30 +31,49 @@ export default function ColumnFilters({ selectedColumns = [], onChange }) {
     onChange?.(next);
   };
 
-  const tagsVisible = selectedColumns.slice(0, 2);
+  const tagsVisible = selectedColumns.slice(0, ultraCompact ? 2 : 2);
   const overflow = selectedColumns.length - tagsVisible.length;
 
   return (
-    <div ref={ref} style={{ position: 'relative', minWidth: 200 }}>
+    <div
+      ref={ref}
+      style={{
+        position: 'relative',
+        minWidth: ultraCompact ? 0 : compact ? 0 : 200,
+        flex: tight ? '0 0 auto' : undefined,
+        width: tight ? 'auto' : undefined,
+        maxWidth: ultraCompact ? 108 : compact ? 148 : undefined,
+        flexShrink: 0,
+      }}
+    >
       <button onClick={() => setOpen(!open)}
         style={{
-          width: '100%', minHeight: 36, padding: '6px 12px',
-          display: 'flex', alignItems: 'center', gap: 8,
+          width: tight ? 'auto' : '100%',
+          minHeight: ultraCompact ? 24 : compact ? 32 : 36,
+          minWidth: ultraCompact ? 68 : compact ? 108 : undefined,
+          padding: ultraCompact ? '2px 5px' : compact ? '4px 8px' : '6px 12px',
+          display: 'flex', alignItems: 'center', gap: ultraCompact ? 3 : compact ? 5 : 8,
           background: selectedColumns.length ? T.primaryTint : T.bg1,
           border: `1px solid ${selectedColumns.length ? T.primary : T.border}`,
-          borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit',
+          borderRadius: ultraCompact ? 7 : 9,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
           transition: 'all 0.15s',
         }}>
         {selectedColumns.length === 0 ? (
-          <span style={{ color: T.text3, fontSize: 12.5 }}>Sélectionner colonnes…</span>
+          <span style={{ color: T.text3, fontSize: ultraCompact ? 9.5 : compact ? 11 : 12.5, whiteSpace: 'nowrap' }}>
+            {ultraCompact ? 'Col.' : compact ? 'Colonnes' : 'Sélectionner colonnes…'}
+          </span>
         ) : (
-          <div style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'nowrap', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', gap: ultraCompact ? 2 : 4, flex: 1, flexWrap: 'nowrap', overflow: 'hidden' }}>
             {tagsVisible.map(id => {
               const c = ALL_COLUMNS.find(x => x.id === id);
               return c && (
                 <span key={id} style={{
                   background: T.primaryTint2, color: T.primaryDeep,
-                  fontSize: 10.5, fontWeight: 600, padding: '1px 7px', borderRadius: 999,
+                  fontSize: ultraCompact ? 9 : 10.5, fontWeight: 600,
+                  padding: ultraCompact ? '0 4px' : '1px 7px',
+                  borderRadius: 999,
                   fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em',
                   whiteSpace: 'nowrap',
                 }}>{c.short}</span>
@@ -56,18 +81,24 @@ export default function ColumnFilters({ selectedColumns = [], onChange }) {
             })}
             {overflow > 0 && (
               <span style={{
-                background: T.bg2, color: T.text3, fontSize: 10, fontWeight: 700,
-                padding: '1px 7px', borderRadius: 999, fontFamily: '"Geist Mono", monospace',
+                background: T.bg2, color: T.text3, fontSize: ultraCompact ? 8 : 10, fontWeight: 700,
+                padding: ultraCompact ? '0 4px' : '1px 7px', borderRadius: 999, fontFamily: '"Geist Mono", monospace',
               }}>+{overflow}</span>
             )}
           </div>
         )}
-        <span style={{ fontSize: 9, color: T.text4, marginLeft: 'auto', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▾</span>
+        {!ultraCompact && (
+          <span style={{ fontSize: 9, color: T.text4, marginLeft: 'auto', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▾</span>
+        )}
       </button>
 
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          position: 'absolute', top: 'calc(100% + 4px)',
+          left: tight ? 'auto' : 0,
+          right: tight ? 0 : 0,
+          minWidth: tight ? 260 : undefined,
+          width: tight ? 'max(260px, 100%)' : undefined,
           background: T.bg1, border: `1px solid ${T.border}`,
           borderRadius: 10, boxShadow: '0 12px 32px rgba(20,17,10,0.14)',
           zIndex: 9999, animation: 'sojori-fade-up 0.18s both',
