@@ -524,6 +524,46 @@ export async function finalizeOwnerCreation(ownerId) {
   return res?.data;
 }
 
+function rejectSrvUserHealthStub(body, routeLabel) {
+  if (body?.message === 'Service OK' && body?.success !== true) {
+    const err = new Error(
+      `Route ${routeLabel} indisponible sur srv-user (health). Déployez la dernière version de srv-user.`,
+    );
+    err.code = 'SRV_USER_ROUTE_MISSING';
+    throw err;
+  }
+}
+
+/** Active un brouillon : invitation dashboard 24h, sans RU. */
+export async function activateOwnerDraft(ownerId) {
+  const res = await axios.post(
+    `${MICROSERVICE_BASE_URL.SRV_USER}/auth/activate-owner/${encodeURIComponent(String(ownerId))}`,
+  );
+  const body = res?.data;
+  rejectSrvUserHealthStub(body, 'POST /auth/activate-owner');
+  if (body?.success !== true) {
+    const err = new Error(body?.message || body?.error || 'Échec activation PM');
+    err.response = { data: body, status: res?.status };
+    throw err;
+  }
+  return body;
+}
+
+/** Sync RU par phase : provision | fill-company | full. */
+export async function syncOwnerRu(ownerId, { phase = 'full' } = {}) {
+  const res = await axios.post(
+    `${MICROSERVICE_BASE_URL.SRV_USER}/auth/sync-owner-ru/${encodeURIComponent(String(ownerId))}?phase=${encodeURIComponent(phase)}`,
+  );
+  const body = res?.data;
+  rejectSrvUserHealthStub(body, 'POST /auth/sync-owner-ru');
+  if (body?.success !== true) {
+    const err = new Error(body?.message || body?.error || 'Échec synchronisation RU');
+    err.response = { data: body, status: res?.status };
+    throw err;
+  }
+  return body;
+}
+
 export function updateFillCompanyLocal(id, data) {
   return apiClient
     .put(`${MICROSERVICE_BASE_URL.SRV_USER}/user/update-fill-company-local/${id}`, data)
