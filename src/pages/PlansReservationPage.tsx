@@ -20,6 +20,7 @@ import {
   type UiPlanListOrderCache,
 } from '../utils/uiPlanListOrderByOwner';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
 import { ownerDisplayNameFromId } from '../utils/ownerDisplay.utils';
 import { getOwnersAllPages } from '../features/staff/services/serverApi.task';
@@ -31,6 +32,7 @@ export default function PlansReservationPage() {
     [user],
   );
   const { owners: adminOwners } = useAdminOwnerFilter();
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const { ownerKey: scopedOwnerKey, ownerDisplayName: scopedOwnerName } = useFulltaskConfigOwner();
   const [ownerRows, setOwnerRows] = useState<Array<Record<string, unknown>>>([]);
 
@@ -161,6 +163,7 @@ export default function PlansReservationPage() {
             : undefined;
 
         const hasQuery = query.filters.length > 0 || Boolean(appliedSearch);
+        const ownerScope = requestOwnerId || undefined;
         const [plansRes, totalRes, staffRes, listingRows] = await Promise.all([
           fulltaskApi.listPlansSummary({
             limit: 300,
@@ -169,9 +172,10 @@ export default function PlansReservationPage() {
             listingIds: listingIdsForSearch?.length ? listingIdsForSearch.join(',') : undefined,
             sort: query.sort,
             includeReservationId: selectedId || undefined,
+            ownerId: ownerScope,
           }),
           hasQuery
-            ? fulltaskApi.listPlansSummary({ limit: 300 })
+            ? fulltaskApi.listPlansSummary({ limit: 300, ownerId: ownerScope })
             : Promise.resolve(null),
           fulltaskApi.listStaff(),
           (tasksService as { getListings: () => Promise<{ _id: string; name: string }[]> }).getListings(),
@@ -250,12 +254,13 @@ export default function PlansReservationPage() {
         }
       }
     },
-    [selectedId],
+    [selectedId, requestOwnerId],
   );
 
   useEffect(() => {
+    if (!scopeFetchReady) return;
     loadList(listQuery, { silent: hasLoadedRef.current });
-  }, [listQuery, loadList]);
+  }, [listQuery, loadList, scopeFetchReady]);
 
   useEffect(() => {
     if (!selectedId || plans[selectedId] || planLoadingId === selectedId) return;
