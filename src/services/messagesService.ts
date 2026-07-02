@@ -5,6 +5,8 @@ import { getStaffWaThreads, sendStaffWaText } from './staffWhatsAppService';
 import {
   mapStaffThreadToConversation,
   mapStaffThreadToDetail,
+  resolveThreadMessages,
+  type StaffWaThreadRow,
 } from './staffConversationMapper';
 import type {
   ConversationFilter,
@@ -132,10 +134,11 @@ class MessagesService {
         });
         const row =
           rows[0] ||
-          rows.find((r: { workerWaNumber?: string }) =>
-            (r.workerWaNumber || '').replace(/\D/g, '') === digits,
+          rows.find(
+            (r: StaffWaThreadRow) =>
+              (r.workerWaNumber || '').replace(/\D/g, '') === digits,
           );
-        const messages = row?.messages || (row?.lastMessage ? [row.lastMessage] : []);
+        const messages = resolveThreadMessages(row);
         return {
           status: 'success',
           data: {
@@ -200,8 +203,9 @@ class MessagesService {
         });
         const row =
           rows[0] ||
-          rows.find((r: { workerWaNumber?: string }) =>
-            (r.workerWaNumber || '').replace(/\D/g, '') === digits,
+          rows.find(
+            (r: StaffWaThreadRow) =>
+              (r.workerWaNumber || '').replace(/\D/g, '') === digits,
           );
         return mapStaffThreadToDetail(phone, row);
       }
@@ -559,7 +563,7 @@ class MessagesService {
         msgLimit: params?.msgLimit ?? 30,
       };
 
-      if (params?.page != null && params.page !== '') requestParams.page = params.page;
+      if (params?.page != null) requestParams.page = params.page;
       if (params?.cursor != null && params.cursor !== '') requestParams.cursor = params.cursor;
       if (params?.reservationNumber) requestParams.reservationNumber = params.reservationNumber;
       if (params?.reservationId) requestParams.reservationId = params.reservationId;
