@@ -147,10 +147,12 @@ export default function AISuggestionModal({
       onClose={handleClose}
       maxWidth="md"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '12px',
-          bgcolor: t.bg1,
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '12px',
+            bgcolor: t.bg1,
+          },
         },
       }}
     >

@@ -126,10 +126,10 @@ export default function OwnerFilterField({
       return;
     }
     if (!o || o === ALL_SENTINEL || o?.__all) {
-      setSelectedOwnerId('');
+      setScopeAll();
       return;
     }
-    setSelectedOwnerId(String(o._id ?? o.id));
+    setScopeOwner(String(o._id ?? o.id));
   };
 
   const popperSlot = useMemo(
