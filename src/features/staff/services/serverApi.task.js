@@ -662,6 +662,21 @@ export function getOwnerRuLoginCredentials(ownerId) {
       throw new Error(msg);
     });
 }
+/**
+ * Date création compte RU + date dernière sync entreprise RU pour une liste d'owners
+ * (une requête, pas une par carte). `null` par owner si jamais synchronisé, ou si
+ * l'audit RU a expiré (TTL 30j côté srv-channels) — pas un signal de "jamais créé".
+ */
+export function getOwnerRuStatusDatesBatch(ownerIds) {
+  return axios
+    .post(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/owner-ru-status-dates-batch`, { ownerIds })
+    .then((r) => r.data?.data || {})
+    .catch((e) => {
+      console.error('[getOwnerRuStatusDatesBatch] error:', e);
+      return {};
+    });
+}
+
 export function deleteOwner(id) {
   return axios.put(`${MICROSERVICE_BASE_URL.SRV_USER}/user/update-owner-status/${id}`).then(response => {
     if (!response.data) {
