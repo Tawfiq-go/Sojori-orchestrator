@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import reservationsService from './reservationsService';
+import { appendFilterOwnerIdsToSearchParams } from '../utils/adminOwnerFilter.utils';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4007';
 
@@ -144,6 +145,8 @@ class PaymentsService {
     cardOnly?: boolean;
     startDate?: string;
     endDate?: string;
+    filterOwnerId?: string | string[];
+    ownerId?: string | null;
   }): Promise<{ success: boolean; data: PaymentAuditRow[]; total: number; count: number }> {
     const end = params.endDate || new Date().toISOString().slice(0, 10);
     const start =
@@ -162,6 +165,15 @@ class PaymentsService {
     if (params.reservationNumber?.trim()) {
       query.set('reservationNumber', params.reservationNumber.trim());
     }
+
+    const ownerFilter = params.filterOwnerId
+      ? Array.isArray(params.filterOwnerId)
+        ? params.filterOwnerId
+        : [params.filterOwnerId]
+      : params.ownerId
+        ? [params.ownerId]
+        : [];
+    appendFilterOwnerIdsToSearchParams(query, ownerFilter);
 
     const url = `${BASE_URL}/api/v1/reservations/reservations/payments?${query.toString()}`;
     const headers: Record<string, string> = {};

@@ -76,12 +76,23 @@ const listingDevProxy = {
   },
 } as const
 
+/** Socket.io (srv-sockets) — nécessite ws: true pour l'upgrade WebSocket, doit précéder le catch-all /api */
+const socketsDevProxy = {
+  '/api/v1/sockets': {
+    target: devProxyTarget,
+    changeOrigin: true,
+    secure: false,
+    ws: true,
+  },
+} as const
+
 const apiDevProxy = {
   ...adminServiceProxy('fulltask', fulltaskTarget, '4015'),
   ...adminServiceProxy('fullchatbot', fullchatbotTarget, '4016'),
   ...monitoringDevProxy,
   /** Listing (amenities/image OTA catalog) — toujours prioritaire sur le catch-all /api */
   ...listingDevProxy,
+  ...socketsDevProxy,
   '/api': {
     target: devProxyTarget,
     changeOrigin: true,

@@ -11,9 +11,12 @@ import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
 import PopoverReservations from './PopoverReservations';
 import { normalizeCalendarReservations } from './reservationCalendarUtils';
+import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
 
-const CELL_W = 90;
-const LEFT_W = 200;
+const CELL_W_DESKTOP = 90;
+const CELL_W_MOBILE = 76;
+const LEFT_W_DESKTOP = 200;
+const LEFT_W_MOBILE = 132;
 
 export default function MultiView({
   startDate = new Date(),

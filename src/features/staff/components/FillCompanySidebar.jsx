@@ -10,6 +10,7 @@ import RuFieldBadge, { FieldLabelWithRuBadge } from './RuFieldBadge';
 import SearchableSelect from './SearchableSelect';
 import CityFreeSoloAutocomplete from './CityFreeSoloAutocomplete';
 import { useChannelsFillCompanyPickers } from '../hooks/useChannelsFillCompanyPickers';
+import { resolveRuLocationLabel } from '../utils/fillCompanyFormUtils';
 const SOJORI_COLORS = {
   primary: '#E6B022',
   primaryDark: '#B8881A',
@@ -633,9 +634,21 @@ const FillCompanySidebar = ({
                       flexWrap: 'wrap',
                       gap: 0.5
                     }}>
-                                                                    {selected.map(value => <Chip key={value} label={value} />)}
+                                                                    {selected.map(value => <Chip key={value} label={resolveRuLocationLabel(value, cities)} title={`RU LocationID: ${value}`} />)}
                                                                 </Box>}>
-                                                            {cities.map(city => <MenuItem key={city.rentalCityId} value={city.rentalCityId}>{city.name}</MenuItem>)}
+                                                            {cities.map(city => {
+                      const ruId = String(city.rentalCityId ?? city._id ?? '');
+                      return (
+                        <MenuItem key={ruId || city._id} value={ruId}>
+                          {city.name}
+                          {city.rentalCityId ? (
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                              (RU {city.rentalCityId})
+                            </Typography>
+                          ) : null}
+                        </MenuItem>
+                      );
+                    })}
                                                         </Select>
                                                         {touched.CompanyInfo?.Locations && errors.CompanyInfo?.Locations && <Typography variant="caption" color="error" className="!mt-1 !ml-3">
                                                                 {t(errors.CompanyInfo.Locations)}

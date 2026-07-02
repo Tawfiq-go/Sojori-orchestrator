@@ -37,6 +37,30 @@ export const STAY = {
   RES_TASK_GAP: 4,
 };
 
+/** Dimensions denses — planning résa / mobile */
+export const STAY_COMPACT = {
+  CELL_W: 52,
+  STICKY_W: 112,
+  ROW_H: 34,
+  TASK_ROW_H: 48,
+  MAX_CHIPS: 2,
+  LISTING_ICON_SIZE: 14,
+  LISTING_ICON_GAP: 4,
+  RES_BAR_TOP: 2,
+  RES_BAR_HEIGHT: 12,
+  RES_TASK_GAP: 2,
+};
+
+export type StayMetrics = typeof STAY;
+
+export function stayMetrics(compact?: boolean, narrow?: boolean): StayMetrics {
+  if (!compact) return STAY;
+  if (narrow) {
+    return { ...STAY_COMPACT, CELL_W: 46, STICKY_W: 100, ROW_H: 30 };
+  }
+  return STAY_COMPACT;
+}
+
 /** Barres réservation : arrivée à 14h (40% jour), départ ~11h (fin à 40%), 10% marge si 2 resa/jour */
 export const STAY_RES_BAR = {
   CHECKIN_OFFSET: 0.4,
@@ -159,24 +183,75 @@ export function channelFromName(n?: string): Channel {
   return 'direct';
 }
 
+function toLocalIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function genDays(start: Date, count: number) {
   const arr = [];
   const today = new Date(); today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  const anchor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   for (let i = 0; i < count; i++) {
-    const d = new Date(start); d.setDate(d.getDate() + i);
+    const d = new Date(anchor); d.setDate(anchor.getDate() + i);
     const months = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
+    const isToday = d.toDateString() === today.toDateString();
+    const isYesterday = d.toDateString() === yesterday.toDateString();
     arr.push({
       date: d,
-      iso: d.toISOString().slice(0, 10),
+      iso: toLocalIsoDate(d),
       day: d.getDate(),
       weekday: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][(d.getDay() + 6) % 7],
       month: months[d.getMonth()],
       frShort: `${d.getDate()} ${months[d.getMonth()]}`,
       isWeekend: d.getDay() === 0 || d.getDay() === 6,
-      isToday: d.toDateString() === today.toDateString(),
+      isToday,
+      isYesterday,
+      isPast: d < today && !isToday && !isYesterday,
     });
   }
   return arr;
+}
+
+export type PlanningDay = ReturnType<typeof genDays>[number];
+
+const PAST_SLATE = '100,116,139';
+
+/** Styles colonnes passées (planning résa + tâches). */
+export function planningDaySurfaceSx(day: PlanningDay) {
+  if (day.isToday) {
+    return {
+      bgcolor: T.primaryTint,
+      borderRight: `1px solid ${T.border}`,
+    };
+  }
+  if (day.isYesterday) {
+    return {
+      bgcolor: `rgba(${PAST_SLATE},0.14)`,
+      borderRight: `2px solid rgba(${PAST_SLATE},0.38)`,
+      boxShadow: `inset 0 0 0 1px rgba(${PAST_SLATE},0.1)`,
+    };
+  }
+  if (day.isPast) {
+    return {
+      bgcolor: `rgba(${PAST_SLATE},0.07)`,
+      borderRight: `1px solid rgba(${PAST_SLATE},0.2)`,
+      backgroundImage: `repeating-linear-gradient(
+        -45deg,
+        transparent,
+        transparent 5px,
+        rgba(${PAST_SLATE},0.06) 5px,
+        rgba(${PAST_SLATE},0.06) 10px
+      )`,
+    };
+  }
+  return {
+    bgcolor: day.isWeekend ? T.bg2 : T.bg1,
+    borderRight: `1px solid ${T.border}`,
+  };
 }
 
 export function initialsFrom(name?: string | null) {
@@ -219,30 +294,48 @@ export function KpiPill({ icon, count, label, tone = 'neutral', alert }: {
   );
 }
 
-export function DayHeader({ day, width }: { day: ReturnType<typeof genDays>[0]; width: number }) {
+export function DayHeader({ day, width, compact = false }: { day: ReturnType<typeof genDays>[0]; width: number; compact?: boolean }) {
+  const surface = planningDaySurfaceSx(day);
   return (
     <Box sx={{
-      width, py: 1, textAlign: 'center', borderRight: `1px solid ${T.border}`,
-      position: 'relative', bgcolor: day.isToday ? T.primaryTint : 'transparent',
+      width, py: compact ? 0.2 : 1, textAlign: 'center',
+      position: 'relative',
+      ...surface,
       ...(day.isToday ? {
         '&::after': {
           content: '""', position: 'absolute', left: '50%', bottom: 3,
           transform: 'translateX(-50%)', width: 20, height: 2, bgcolor: T.primary, borderRadius: 999,
         },
       } : {}),
+      ...(day.isYesterday ? {
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 6,
+          bottom: 6,
+          right: 0,
+          width: 3,
+          borderRadius: '3px 0 0 3px',
+          bgcolor: `rgba(${PAST_SLATE},0.35)`,
+        },
+      } : {}),
     }}>
       <Typography sx={{
-        fontFamily: '"Geist Mono", monospace', fontSize: 9.5, fontWeight: 700,
-        color: day.isToday ? T.primaryDeep : day.isWeekend ? T.warning : T.text3,
+        fontFamily: '"Geist Mono", monospace', fontSize: compact ? 8.5 : 9.5, fontWeight: 700,
+        color: day.isToday ? T.primaryDeep : day.isYesterday ? `rgba(${PAST_SLATE},1)` : day.isPast ? T.text4 : day.isWeekend ? T.warning : T.text3,
         letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1,
-      }}>{day.weekday}</Typography>
+      }}>{day.isYesterday ? 'Hier' : day.weekday}</Typography>
       <Typography sx={{
-        fontFamily: '"Geist Mono", monospace', fontSize: 13, fontWeight: 700,
-        color: day.isToday ? T.primaryDeep : T.text, mt: 0.375,
+        fontFamily: '"Geist Mono", monospace', fontSize: compact ? 11 : 13, fontWeight: 700,
+        color: day.isToday ? T.primaryDeep : day.isYesterday ? `rgba(${PAST_SLATE},0.95)` : day.isPast ? T.text3 : T.text, mt: compact ? 0 : 0.375,
+        opacity: day.isPast ? 0.85 : 1,
       }}>{day.day}</Typography>
+      {!compact && (
       <Typography sx={{
         fontFamily: '"Geist Mono", monospace', fontSize: 8.5, color: T.text4, mt: '1px',
+        opacity: day.isPast ? 0.75 : 1,
       }}>{day.month}</Typography>
+      )}
     </Box>
   );
 }
@@ -312,9 +405,9 @@ export function TaskChip({ item, compact }: { item: TimelineItem | TaskItem; com
   );
 }
 
-export function GanttBar({ channel, guestName, reservationNumber, confirmed, leftPct, widthPct }: {
+export function GanttBar({ channel, guestName, reservationNumber, confirmed, leftPct, widthPct, compact = false }: {
   channel: Channel; guestName: string; reservationNumber?: string; confirmed: boolean;
-  leftPct: number; widthPct: number;
+  leftPct: number; widthPct: number; compact?: boolean;
 }) {
   const grad = {
     airbnb:  `linear-gradient(180deg, #ff8084, ${T.airbnb})`,
@@ -325,17 +418,31 @@ export function GanttBar({ channel, guestName, reservationNumber, confirmed, lef
   const fg = channel === 'direct' ? '#1a1408' : '#fff';
   return (
     <Box sx={{
-      position: 'absolute', top: 6, height: 22, left: `${leftPct}%`, width: `${widthPct}%`,
-      borderRadius: '11px', background: grad, color: fg,
-      display: 'flex', alignItems: 'center', px: 1, gap: 0.625,
-      fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden',
-      boxShadow: '0 1px 3px rgba(20,17,10,0.10)', zIndex: 2, cursor: 'pointer',
+      position: 'absolute',
+      top: compact ? STAY_COMPACT.RES_BAR_TOP : 6,
+      height: compact ? STAY_COMPACT.RES_BAR_HEIGHT : 22,
+      left: `${leftPct}%`,
+      width: `${widthPct}%`,
+      borderRadius: compact ? '7px' : '11px',
+      background: grad,
+      color: fg,
+      display: 'flex',
+      alignItems: 'center',
+      px: compact ? 0.5 : 1,
+      gap: compact ? 0.35 : 0.625,
+      fontSize: compact ? 9 : 10.5,
+      fontWeight: 700,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      boxShadow: '0 1px 3px rgba(20,17,10,0.10)',
+      zIndex: 2,
+      cursor: 'pointer',
       transition: 'transform 0.12s, box-shadow 0.12s',
       '&:hover': { transform: 'translateY(-1px)', boxShadow: '0 4px 10px rgba(20,17,10,0.15)' },
     }}>
-      <Box component="span" sx={{ fontSize: 9, opacity: 0.85 }}>{confirmed ? '✓' : '⏳'}</Box>
+      <Box component="span" sx={{ fontSize: compact ? 8 : 9, opacity: 0.85 }}>{confirmed ? '✓' : '⏳'}</Box>
       <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{guestName}</Box>
-      {reservationNumber && (
+      {reservationNumber && !compact && (
         <Box component="span" sx={{
           fontFamily: '"Geist Mono", monospace', fontSize: 9.5, opacity: 0.85, ml: 'auto',
         }}>{reservationNumber}</Box>

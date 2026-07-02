@@ -7,6 +7,7 @@ import {
   type ListingEstimateDiffDto,
   type PortfolioEstimateDiffDto,
 } from '../../services/dynamicPricingApi';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { usePortfolio } from './hooks/usePortfolio';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 
@@ -28,7 +29,10 @@ function fmtMad(n: number | null | undefined) {
 
 export function PricingAuditView() {
   const [searchParams] = useSearchParams();
-  const portfolio = usePortfolio();
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
+  const portfolio = usePortfolio(requestOwnerId || undefined, undefined, {
+    enabled: scopeFetchReady,
+  });
   const [diffData, setDiffData] = useState<PortfolioEstimateDiffDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);

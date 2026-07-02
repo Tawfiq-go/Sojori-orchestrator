@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
@@ -7,6 +7,8 @@ import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
 import messagesService from '../../services/messagesService';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
+import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
 import type { Thread, Message } from '../../types/unifiedInbox.types';
 import type { InboxReservationData } from '../../types/inboxReservation.types';
 import { otaChannelColor, otaChannelFromName } from '../unified-inbox/inboxMappers';
@@ -42,6 +44,7 @@ interface LeadRow {
 }
 
 export default function LeadsTabV2() {
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [active, setActive] = useState<LeadRow | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -52,15 +55,21 @@ export default function LeadsTabV2() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAIModal, setShowAIModal] = useState(false);
   const [filter, setFilter] = useState('all');
+  const activeRef = useRef<LeadRow | null>(null);
+  activeRef.current = active;
 
-  useEffect(() => {
-    void loadLeads();
-  }, []);
-
-  const loadLeads = async () => {
+  const loadLeads = useCallback(async () => {
+    if (!scopeFetchReady) {
+      setLeads([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
-      const response = await messagesService.getLeads({ limit: 50 });
+      const response = await messagesService.getLeads({
+        limit: 50,
+        ownerId: requestOwnerId || undefined,
+      });
       if (!response.threads) return;
       const rows: LeadRow[] = response.threads.map((item: any) => {
         const threadData = item.thread || item;
@@ -93,7 +102,39 @@ export default function LeadsTabV2() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [scopeFetchReady, requestOwnerId]);
+
+  const refreshActiveLeadMessages = useCallback(async () => {
+    const lead = activeRef.current;
+    if (!lead) return;
+    try {
+      const response = await messagesService.getLeadMessages(String(lead.threadId));
+      const raw = extractOtaMessagesFromApiResponse(response);
+      const total =
+        typeof (response as { total?: number })?.total === 'number'
+          ? (response as { total: number }).total
+          : raw.length;
+      setMessagesTotal(total);
+      let mapped = mapOtaApiMessagesToInbox(raw, lead.guestName);
+      if (mapped.length === 0 && lead.lastMessage?.trim()) {
+        mapped = buildOtaPreviewFallbackMessages({
+          threadId: lead.threadId,
+          guestName: lead.guestName,
+          lastMessage: lead.lastMessage,
+          lastMessageTime: lead.lastMessageTime,
+        } as Parameters<typeof buildOtaPreviewFallbackMessages>[0]);
+      }
+      setMessages((prev) => (mapped.length >= prev.length ? mapped : prev));
+    } catch (err) {
+      console.error('❌ Erreur refresh messages lead:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLeads();
+  }, [loadLeads]);
+
+  useInboxRealtimeRefresh('leads', () => loadLeads(), () => refreshActiveLeadMessages());
 
   const filteredLeads = useMemo(() => {
     const now = Date.now();

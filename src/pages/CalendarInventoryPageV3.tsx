@@ -4,6 +4,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import moment from 'moment';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import listingsService from '../services/listingsService';
 import calendarService from '../services/calendarService';
 import type { Listing as ListingType } from '../types/listings.types';
@@ -18,12 +19,19 @@ import {
   type PortfolioApplySyncSummaryDto,
 } from '../services/dynamicPricingApi';
 
+export const CALENDAR_LISTINGS_PAGE_SIZE = 25;
+
 export function CalendarInventoryPageV3() {
   const staging = JSON.parse(localStorage.getItem('isStaging') || 'false');
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
 
   const [listingsLoading, setListingsLoading] = useState(true);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [listings, setListings] = useState<ListingType[]>([]);
+  const [listingsTotal, setListingsTotal] = useState(0);
+  const [listingsPage, setListingsPage] = useState(0);
+  const [listingsNameQuery, setListingsNameQuery] = useState('');
+  const [listingsNameFilter, setListingsNameFilter] = useState('');
   const [inventoryData, setInventoryData] = useState<ReturnType<typeof processInventoryResponse>>({});
   const [currentDate, setCurrentDate] = useState(() => moment(clampPivotDate(new Date())));
   const [roomTypeByListing, setRoomTypeByListing] = useState<Record<string, string>>({});
@@ -32,15 +40,28 @@ export function CalendarInventoryPageV3() {
   const [dpSyncSummary, setDpSyncSummary] = useState<PortfolioApplySyncSummaryDto | null>(null);
   const [dpSyncLoading, setDpSyncLoading] = useState(false);
 
-  /** Listings : une seule fois (ou si staging change) — colonne gauche stable */
+  /** Listings : refetch quand scope PM / staging change */
   useEffect(() => {
     let cancelled = false;
+    if (!scopeFetchReady) {
+      setListings([]);
+      setInventoryData({});
+      listingsReadyRef.current = false;
+      setListingsLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     (async () => {
       setListingsLoading(true);
+      setInventoryData({});
+      listingsReadyRef.current = false;
       try {
         const listingsResponse = await listingsService.getListingsForCalendar(0, 100, {
           active: true,
           staging,
+          filterOwnerId: requestOwnerId || undefined,
         });
 
         if (!listingsResponse?.success || !Array.isArray(listingsResponse?.data)) {
@@ -65,7 +86,7 @@ export function CalendarInventoryPageV3() {
     return () => {
       cancelled = true;
     };
-  }, [staging]);
+  }, [staging, scopeFetchReady, requestOwnerId]);
 
   useEffect(() => {
     if (listings.length === 0) return;
@@ -185,7 +206,7 @@ export function CalendarInventoryPageV3() {
 
   if (listingsLoading) {
     return (
-      <DashboardWrapper>
+      <DashboardWrapper breadcrumb={['Opérations', 'Calendrier']}>
         <div style={{ padding: '40px', textAlign: 'center', color: '#7a756c' }}>
           Chargement des propriétés…
         </div>
@@ -194,7 +215,7 @@ export function CalendarInventoryPageV3() {
   }
 
   return (
-    <DashboardWrapper>
+    <DashboardWrapper breadcrumb={['Opérations', 'Calendrier']}>
       <CalendarInventoryPage
         startDate={currentDate.toDate()}
         listingCatalog={listingCatalog}

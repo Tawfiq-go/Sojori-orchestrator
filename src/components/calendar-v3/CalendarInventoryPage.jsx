@@ -9,7 +9,9 @@ import ColumnFilters from './ColumnFilters';
 import UpdateInventoryModal from './UpdateInventoryModal';
 import CalendarDatePicker from './CalendarDatePicker';
 import DpSyncAuditStrip from './DpSyncAuditStrip';
+import CalendarLandscapeHint from './CalendarLandscapeHint';
 import ReservationCalendarDrawer from './ReservationCalendarDrawer';
+import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
 import { normalizeCalendarReservation, reservationRouteId } from './reservationCalendarUtils';
 import reservationsService from '../../services/reservationsService';
 import {

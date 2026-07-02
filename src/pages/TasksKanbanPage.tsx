@@ -4,75 +4,90 @@
 // Drag & drop natif HTML5 pour changer le statut des tâches
 // Intègre: sidebar, scope user, owner selection
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Box, CircularProgress, Alert } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import KanbanView from '../components/calendar-views/KanbanView';
 import type { TaskItem, TaskStatus } from '../components/calendar-views/_shared';
-import tasksService, { resolveTasksUserScope } from '../services/fulltaskTasksService';
+import tasksService from '../services/fulltaskTasksService';
+import { usePmTasksScope } from '../hooks/usePmTasksScope';
 import { toast } from 'react-toastify';
 import { useAuth } from '../hooks/useAuth';
-import { getStoredOwners } from '../data/catalogueMock';
+import { useSocketIO } from '../hooks/useSocketIO';
+import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 
 export default function TasksKanbanPage() {
-  const { user, loading: authLoading } = useAuth();
-  const scope = useMemo(() => resolveTasksUserScope(user), [user]);
+  const { loading: authLoading } = useAuth();
+  const scope = usePmTasksScope();
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rawTasks, setRawTasks] = useState<any[]>([]);
-  const [adminOwnerId, setAdminOwnerId] = useState('');
-
-  const ownerOptions = useMemo(
-    () =>
-      getStoredOwners()
-        .filter((o) => o.role === 'owner')
-        .map((o) => ({ id: o.id, name: o.name })),
-    [],
-  );
-
-  const planningOwnerId = useMemo(() => {
-    if (scope.canAccessAllOwners) {
-      return adminOwnerId.trim() === '' ? undefined : adminOwnerId;
-    }
-    return scope.ownerId;
-  }, [scope.canAccessAllOwners, scope.ownerId, adminOwnerId]);
 
   // Fetch all tasks (pas de filtre de date pour Kanban - vue globale)
-  useEffect(() => {
-    const fetchTasks = async () => {
+  const fetchTasks = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!scope.scopeFetchReady) {
+      setRawTasks([]);
+      if (!opts?.silent) setIsLoading(false);
+      return;
+    }
+    if (!opts?.silent) {
       setIsLoading(true);
       setError(null);
-      try {
-        if (!scope.canAccessAllOwners && !scope.ownerId) {
-          throw new Error('Impossible de déterminer le ownerId de la session.');
-        }
-
-        // Récupérer toutes les tâches non terminées + les complétées récentes
-        const result = await tasksService.getTasks({
-          limit: 500,
-          page: 0,
-          sortField: 'startDate',
-          sortDirection: 'asc',
-          ownerId: planningOwnerId,
-        });
-
-        if (result.success && result.data) {
-          setRawTasks(result.data);
-        } else {
-          setError('Erreur lors du chargement des tâches');
-        }
-      } catch (err: any) {
-        console.error('[TasksKanbanPage] Error fetching tasks:', err);
-        setError(err?.message || 'Erreur réseau');
-      } finally {
-        setIsLoading(false);
+    }
+    try {
+      if (!scope.canAccessAllOwners && !scope.ownerId) {
+        throw new Error('Impossible de déterminer le ownerId de la session.');
       }
-    };
 
+      const result = await tasksService.getTasks({
+        limit: 500,
+        page: 0,
+        sortField: 'startDate',
+        sortDirection: 'asc',
+        ownerId: scope.ownerId,
+      });
+
+      if (result.success && result.data) {
+        setRawTasks(result.data);
+      } else if (!opts?.silent) {
+        setError('Erreur lors du chargement des tâches');
+      }
+    } catch (err: any) {
+      console.error('[TasksKanbanPage] Error fetching tasks:', err);
+      if (!opts?.silent) setError(err?.message || 'Erreur réseau');
+    } finally {
+      if (!opts?.silent) setIsLoading(false);
+    }
+  }, [scope.ownerId, scope.canAccessAllOwners, scope.scopeFetchReady]);
+
+  useEffect(() => {
     if (authLoading) return;
-    fetchTasks();
-  }, [planningOwnerId, scope.canAccessAllOwners, scope.ownerId, authLoading]);
+    void fetchTasks();
+  }, [fetchTasks, authLoading]);
+
+  // ─── Temps réel (socket.io) ───────────────────────────────────────
+  const socketRooms = useMemo(() => {
+    if (!scope.ownerId) return [DEFAULT_ROOMS.TASK_ADMIN_ROOM];
+    return [`room_task_${scope.ownerId}`];
+  }, [scope.ownerId]);
+
+  useSocketIO({
+    rooms: socketRooms,
+    enabled: scope.scopeFetchReady && !authLoading,
+    onReconnect: () => { void fetchTasks({ silent: true }); },
+    handlers: {
+      [SOCKET_EVENTS.NEW_TASK]: (task: any) => {
+        setRawTasks(prev => {
+          if (prev.some((t) => t._id === task._id)) return prev;
+          return [task, ...prev];
+        });
+      },
+      [SOCKET_EVENTS.UPDATE_TASK]: (task: any) => {
+        setRawTasks(prev => prev.map((t) => (t._id === task._id ? { ...t, ...task } : t)));
+      },
+    },
+  });
 
   // Transform API data to TaskItem[] format
   const tasks: TaskItem[] = useMemo(() => {

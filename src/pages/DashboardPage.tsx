@@ -53,13 +53,12 @@ import {
 import { dashboardService } from '../services/dashboardService';
 import {
   readDashboardSnapshotCacheEntry,
-  readDashboardListingIdsHint,
   writeDashboardListingIdsHint,
   writeDashboardSnapshotCache,
+  clearAllDashboardSnapshotCaches,
 } from '../utils/dashboardSnapshotCache';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import { usePmSimulation } from '../context/PmSimulationContext';
-import OwnerFilterField from '../components/OwnerFilterBar/OwnerFilterField';
 import { useAuth } from '../hooks/useAuth';
 import { dashboardDebugEnabled, logDashboard, logDashboardApiDetail, logDashboardKpisSummary } from '../utils/dashboardDebug';
 import { hasLocalDevApiAccess } from '../utils/devApiAccess';
@@ -88,9 +87,17 @@ export function DashboardPage() {
 
 function DashboardPageContent() {
   const { isAuthenticated, loading: authLoading, user, token, error: authError } = useAuth();
-  const { showOwnerFilter, requestOwnerId, simulatedOwnerId } = useAdminOwnerFilter();
+  const { showOwnerFilter, requestOwnerId, simulatedOwnerId, ownerScopeUnset, ownerScopeAll, resetAdminScope, adminScopeMode } =
+    useAdminOwnerFilter();
   const { dashboardDataRevision } = usePmSimulation();
-  const ownerScopeBlocked = showOwnerFilter && !requestOwnerId && !simulatedOwnerId;
+  const prevSimulatedOwnerRef = useRef(simulatedOwnerId);
+
+  useEffect(() => {
+    if (prevSimulatedOwnerRef.current && !simulatedOwnerId && showOwnerFilter) {
+      resetAdminScope();
+    }
+    prevSimulatedOwnerRef.current = simulatedOwnerId;
+  }, [simulatedOwnerId, showOwnerFilter, resetAdminScope]);
   const [period, setPeriod] = useState<DashboardPeriod>('Mois');
   const [properties, setProperties] = useState<DashboardPropertyOption[]>([]);
   const [listingFilterOptions, setListingFilterOptions] = useState<DashboardPropertyOption[]>([]);
@@ -101,15 +108,21 @@ function DashboardPageContent() {
   const [dashboardReady, setDashboardReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const prevRequestOwnerIdRef = useRef<string | null | undefined>(requestOwnerId);
+  const prevScopeRef = useRef<string>(`${adminScopeMode}:${requestOwnerId ?? ''}`);
 
   useEffect(() => {
-    if (prevRequestOwnerIdRef.current !== requestOwnerId) {
-      prevRequestOwnerIdRef.current = requestOwnerId;
+    const scopeKey = `${adminScopeMode}:${requestOwnerId ?? ''}`;
+    if (prevScopeRef.current !== scopeKey) {
+      prevScopeRef.current = scopeKey;
+      clearAllDashboardSnapshotCaches();
       setRefreshKey((k) => k + 1);
       setSelectedPropertyIds([]);
+      setSnapshot(EMPTY_DASHBOARD_SNAPSHOT);
+      setProperties([]);
+      setListingFilterOptions([]);
+      setDashboardReady(false);
     }
-  }, [requestOwnerId]);
+  }, [adminScopeMode, requestOwnerId]);
 
   /** Toujours visible (même `vite preview` / build prod sur :4174) pour confirmer que la page tourne. */
   useEffect(() => {
@@ -143,11 +156,12 @@ function DashboardPageContent() {
         return;
       }
 
-      if (ownerScopeBlocked) {
+      if (ownerScopeUnset) {
         if (!cancelled) {
           setSnapshot(EMPTY_DASHBOARD_SNAPSHOT);
           setProperties([]);
-          setDashboardReady(true);
+          setListingFilterOptions([]);
+          setDashboardReady(false);
           setError(null);
         }
         return;
@@ -194,7 +208,7 @@ function DashboardPageContent() {
 
       const cacheHasListings = (cached?.properties?.length ?? 0) > 0;
 
-      if (cacheIsFresh && refreshKey === 0 && dashboardDataRevision === 0 && cacheHasListings) {
+      if (cacheIsFresh && refreshKey === 0 && dashboardDataRevision === 0 && cacheHasListings && !showOwnerFilter) {
         logDashboard('DashboardPage — cache frais (<3 min), skip refetch réseau', {
           cacheAgeMs: cacheEntry.ageMs,
         });
@@ -214,10 +228,6 @@ function DashboardPageContent() {
 
       try {
         let loaded = EMPTY_DASHBOARD_SNAPSHOT;
-        let listingIdsHint =
-          cached?.listingIdsHint?.length
-            ? [...cached.listingIdsHint]
-            : readDashboardListingIdsHint(requestOwnerId);
 
         setListingsLoading(true);
         const fastQueryBase = {
@@ -227,33 +237,40 @@ function DashboardPageContent() {
           signal: abort.signal,
         };
 
-        const directoryPromise = fetchDashboardListingDirectory(requestOwnerId, abort.signal)
-          .then((dirListings) => {
-            if (!cancelled) {
-              setListingFilterOptions(dirListings);
-            }
-            const ids = dirListings.map((property) => property.id).slice(0, 50);
-            if (ids.length > 0) {
-              writeDashboardListingIdsHint(requestOwnerId, ids);
-            }
-            return dirListings;
-          })
-          .catch((directoryError) => {
-            if (!cancelled) {
-              setListingFilterOptions([]);
-            }
-            if ((directoryError as { code?: string })?.code !== 'ERR_CANCELED') {
-              logDashboard('DashboardPage — directory échoué', {
-                message: (directoryError as Error)?.message,
-              });
-            }
-            return [] as Awaited<ReturnType<typeof fetchDashboardListingDirectory>>;
-          })
-          .finally(() => {
-            if (!cancelled) {
-              setListingsLoading(false);
-            }
-          });
+        logDashboard('DashboardPage — directory puis snapshot (scope owner)', {
+          ownerId: requestOwnerId ?? null,
+          adminScopeMode,
+        });
+
+        let dirListings: Awaited<ReturnType<typeof fetchDashboardListingDirectory>> = [];
+        try {
+          dirListings = await fetchDashboardListingDirectory(requestOwnerId, abort.signal);
+          if (!cancelled) {
+            setListingFilterOptions(dirListings);
+          }
+          const ids = dirListings.map((property) => property.id).slice(0, 50);
+          if (ids.length > 0) {
+            writeDashboardListingIdsHint(requestOwnerId, ids);
+          }
+        } catch (directoryError) {
+          if (!cancelled) {
+            setListingFilterOptions([]);
+          }
+          if ((directoryError as { code?: string })?.code !== 'ERR_CANCELED') {
+            logDashboard('DashboardPage — directory échoué', {
+              message: (directoryError as Error)?.message,
+            });
+          }
+        } finally {
+          if (!cancelled) {
+            setListingsLoading(false);
+          }
+        }
+
+        if (cancelled) return;
+
+        /** Hints uniquement depuis le directory du PM courant — jamais depuis un autre scope. */
+        let listingIdsHint = dirListings.map((property) => property.id).slice(0, 50);
 
         const mergeChartsIntoSnapshot = async (
           base: DashboardSnapshot,
@@ -266,70 +283,73 @@ function DashboardPageContent() {
           });
 
         try {
-          const initialHints = listingIdsHint;
-          const chartsPromise =
-            initialHints.length > 0
-              ? fetchDashboardV1Charts({ ...fastQueryBase, listingIdsHint: initialHints })
-              : null;
-
-          logDashboard('DashboardPage — fast + directory en parallèle', {
-            listingIdsHintCount: initialHints.length,
-            chartsParallel: !!chartsPromise,
+          logDashboard('DashboardPage — snapshot fast (après directory)', {
+            listingIdsHintCount: listingIdsHint.length,
+            ownerId: requestOwnerId ?? null,
           });
 
-          const [dirListings, fastResult] = await Promise.all([
-            directoryPromise,
-            fetchDashboardV1Fast({ ...fastQueryBase, listingIdsHint: initialHints }),
-          ]);
+          const fastResult = await fetchDashboardV1Fast({
+            ...fastQueryBase,
+            listingIdsHint,
+          });
           if (cancelled) return;
 
           loaded = fastResult;
-          if (dirListings.length > 0) {
-            listingIdsHint = dirListings.map((property) => property.id).slice(0, 50);
-          } else if (loaded.listingIdsHint?.length) {
-            listingIdsHint = [...loaded.listingIdsHint];
+          if (listingIdsHint.length === 0 && loaded.listingIdsHint?.length) {
+            listingIdsHint = loaded.listingIdsHint.filter(Boolean).slice(0, 50);
+          }
+
+          if (dirListings.length > 0 && loaded.properties.length === 0) {
+            loaded = {
+              ...loaded,
+              properties: dirListings.map(({ id, name, city, label, isActive }) => ({
+                id,
+                name,
+                city,
+                label,
+                isActive,
+              })),
+            };
           }
 
           setSnapshot(loaded);
-          setProperties(loaded.properties);
+          setProperties(loaded.properties.length > 0 ? loaded.properties : dirListings);
           setDashboardReady(true);
           setError(null);
           writeDashboardSnapshotCache(period, selectedPropertyIds, loaded, requestOwnerId, false);
 
           logDashboard('DashboardPage — KPIs affichés (mode fast)', {
             listingIdsHintCount: listingIdsHint.length,
-            chartsParallel: !!chartsPromise,
+            ownerId: requestOwnerId ?? null,
+            properties: loaded.properties.length,
+            reservations: loaded.kpis.totalReservations.value,
           });
 
           const fastQuery = { ...fastQueryBase, listingIdsHint };
 
-          const chartsTask =
-            chartsPromise ??
-            (listingIdsHint.length > 0
-              ? fetchDashboardV1Charts(fastQuery)
-              : Promise.resolve(null));
-
-          void chartsTask
-            .then(async (charts) => {
-              if (cancelled || !charts) return null;
-              return mergeChartsIntoSnapshot(loaded, charts);
-            })
-            .then((merged) => {
-              if (cancelled || !merged) return;
-              loaded = merged;
-              setSnapshot(merged);
-              writeDashboardSnapshotCache(period, selectedPropertyIds, merged, requestOwnerId);
-              logDashboard('DashboardPage — graphiques fusionnés', {
-                occupancyByProperty: merged.occupancyByProperty.length,
-                sourceDistribution: merged.sourceDistribution.length,
+          if (listingIdsHint.length > 0) {
+            void fetchDashboardV1Charts(fastQuery)
+              .then(async (charts) => {
+                if (cancelled || !charts) return null;
+                return mergeChartsIntoSnapshot(loaded, charts);
+              })
+              .then((merged) => {
+                if (cancelled || !merged) return;
+                loaded = merged;
+                setSnapshot(merged);
+                writeDashboardSnapshotCache(period, selectedPropertyIds, merged, requestOwnerId);
+                logDashboard('DashboardPage — graphiques fusionnés', {
+                  occupancyByProperty: merged.occupancyByProperty.length,
+                  sourceDistribution: merged.sourceDistribution.length,
+                });
+              })
+              .catch((chartsError) => {
+                if (cancelled || (chartsError as { code?: string })?.code === 'ERR_CANCELED') return;
+                logDashboard('DashboardPage — graphiques indisponibles, conservation fast', {
+                  message: (chartsError as Error)?.message,
+                });
               });
-            })
-            .catch((chartsError) => {
-              if (cancelled || (chartsError as { code?: string })?.code === 'ERR_CANCELED') return;
-              logDashboard('DashboardPage — graphiques indisponibles, conservation fast', {
-                message: (chartsError as Error)?.message,
-              });
-            });
+          }
         } catch (v1Error) {
           if (cancelled || (v1Error as { code?: string })?.code === 'ERR_CANCELED') {
             return;
@@ -396,7 +416,7 @@ function DashboardPageContent() {
       cancelled = true;
       abort.abort();
     };
-  }, [period, refreshKey, dashboardDataRevision, selectedPropertyIds, authLoading, isAuthenticated, requestOwnerId, ownerScopeBlocked]);
+  }, [period, refreshKey, dashboardDataRevision, selectedPropertyIds, authLoading, isAuthenticated, requestOwnerId, ownerScopeUnset, adminScopeMode]);
 
   const topLiveProperties = useMemo(
     () =>
@@ -441,27 +461,28 @@ function DashboardPageContent() {
   const ratingDisplay = formatDashboardRating(snapshot.kpis.averageRating.value);
 
   return (
-    <DashboardWrapper breadcrumb={['Pilotage', 'Dashboard']}>
+    <DashboardWrapper breadcrumb={['Pilotage', 'Dashboard']} disableScopeGate>
       <PageHeader
-        title={
-          <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-            <span>Dashboard principal</span>
-            <OwnerFilterField requireSelection sx={{ minWidth: 240, maxWidth: 320 }} />
-          </Box>
-        }
-        count={ownerScopeBlocked ? '—' : dashboardReady ? period : 'Chargement…'}
+        title="Dashboard principal"
+        count={ownerScopeUnset ? '—' : dashboardReady ? period : 'Chargement…'}
       >
-        <Button sx={btnGhostSx} onClick={() => setRefreshKey((value) => value + 1)}>
+        <Button sx={btnGhostSx} disabled={ownerScopeUnset} onClick={() => setRefreshKey((value) => value + 1)}>
           Actualiser
         </Button>
-        <Button sx={btnPrimarySx} onClick={() => setRefreshKey((value) => value + 1)}>
+        <Button sx={btnPrimarySx} disabled={ownerScopeUnset} onClick={() => setRefreshKey((value) => value + 1)}>
           Generer report
         </Button>
       </PageHeader>
 
-      {ownerScopeBlocked ? (
+      {ownerScopeUnset ? (
         <Alert severity="info" sx={{ mb: 2 }}>
-          Sélectionnez un propriétaire pour afficher les indicateurs de son portefeuille.
+          Choisissez <strong>Tous (plateforme)</strong> pour agréger tout le parc, ou sélectionnez un property
+          manager pour son portefeuille.
+        </Alert>
+      ) : ownerScopeAll ? (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Vue plateforme — indicateurs agrégés sur tous les PM (peut être lent ; certains KPIs sont moins
+          pertinents qu’en vue par PM).
         </Alert>
       ) : null}
 
@@ -484,7 +505,7 @@ function DashboardPageContent() {
         </Alert>
       ) : null}
 
-      {!dashboardReady && !ownerScopeBlocked ? (
+      {!dashboardReady && !ownerScopeUnset ? (
         <Box
           sx={{
             minHeight: 'min(70vh, 640px)',
@@ -500,7 +521,7 @@ function DashboardPageContent() {
             Chargement des indicateurs et graphiques…
           </Typography>
         </Box>
-      ) : ownerScopeBlocked ? null : (
+      ) : ownerScopeUnset ? null : (
         <>
       <FilterBar>
         {dashboardPeriods.map((item) => (

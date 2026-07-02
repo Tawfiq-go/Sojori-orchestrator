@@ -4,6 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense, memo, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -62,6 +63,9 @@ import { ModalPortal } from '../components/ModalPortal';
 import { createFulltaskFromFormData } from '../services/createFulltaskFromModal';
 import { useAuth } from '../hooks/useAuth';
 import tasksService, { resolveTasksUserScope } from '../services/fulltaskTasksService';
+import { usePmTasksScope } from '../hooks/usePmTasksScope';
+import { useSocketIO } from '../hooks/useSocketIO';
+import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 import type {
   TaskEmergency,
   TaskListItem,
@@ -97,7 +101,12 @@ const COLUMN_WIDTHS = {
   createdAt: '92px',
 } as const;
 
-const toolbarSelectSx = { minWidth: 0, '& .MuiSelect-select': { py: 0.875 } } as const;
+const toolbarSelectSx = { minWidth: 0, '& .MuiSelect-select': { py: 0.5, fontSize: 12 } } as const;
+const toolbarFieldSx = {
+  flex: 1,
+  minWidth: 0,
+  '& .MuiOutlinedInput-root': { height: 28, fontSize: 11.5 },
+} as const;
 
 const SORT_FIELD_LABELS: Record<string, string> = {
   createdAt: 'Date création',
@@ -125,12 +134,12 @@ function StaffAssignCell({
 
   const assignBtnSx = {
     textTransform: 'none' as const,
-    fontSize: 11,
-    px: 1.25,
+    fontSize: 10,
+    px: 0.75,
     py: 0,
-    minHeight: 22,
+    minHeight: 18,
     minWidth: 0,
-    lineHeight: '20px',
+    lineHeight: '16px',
     borderColor: T.primary,
     color: T.primaryDeep,
     '&:hover': {
@@ -229,6 +238,13 @@ const T = {
   info: '#0673b3',
 };
 
+const TABLE_VIEWPORT_HEIGHT = {
+  xs: 'calc(100dvh - 80px)',
+  md: 'calc(100dvh - 88px)',
+} as const;
+
+const TASKS_TABLE_MIN_WIDTH = 1280;
+
 type QuickFilterKey = 'none' | 'dueToday' | 'dueTomorrow' | 'due7d' | 'urgent';
 
 function Pill({
@@ -250,11 +266,11 @@ function Pill({
       onClick={onClick}
       sx={{
         textTransform: 'none',
-        fontSize: 12,
+        fontSize: 10,
         fontWeight: 600,
-        px: 1.25,
-        py: 0.5,
-        minHeight: 28,
+        px: 0.55,
+        py: 0.1,
+        minHeight: 20,
         borderRadius: 999,
         border: '1px solid',
         borderColor: active ? color : T.border,
@@ -264,14 +280,15 @@ function Pill({
           bgcolor: active ? `${color}22` : T.bg2,
           borderColor: active ? color : T.borderStrong,
         },
+        flexShrink: 0,
       }}
     >
       {label}
       <Box
         component="span"
         sx={{
-          ml: 0.75,
-          fontSize: 10.5,
+          ml: 0.5,
+          fontSize: 9.5,
           fontWeight: 700,
           lineHeight: 1,
           bgcolor: active ? `${color}28` : T.bg3,
@@ -299,38 +316,133 @@ function KpiCompact({
   onClick?: () => void;
 }) {
   return (
-    <Paper
+    <Box
+      component={onClick ? 'button' : 'div'}
+      type={onClick ? 'button' : undefined}
       onClick={onClick}
       sx={{
-        px: 1.25,
-        py: 0.75,
+        all: onClick ? 'unset' : undefined,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.35,
+        px: 0.6,
+        py: '1px',
+        borderRadius: 99,
         border: `1px solid ${T.border}`,
-        borderRadius: 1,
         bgcolor: T.bg1,
         cursor: onClick ? 'pointer' : 'default',
-        transition: 'all 100ms',
-        '&:hover': onClick
-          ? { bgcolor: T.bg2, borderColor: accent, transform: 'translateY(-1px)' }
-          : {},
-        minWidth: 72,
+        lineHeight: 1,
+        fontFamily: 'inherit',
+        flexShrink: 0,
+        '&:hover': onClick ? { bgcolor: T.bg2, borderColor: accent } : {},
       }}
     >
-      <Typography
-        sx={{
-          fontSize: 9.5,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          color: T.text3,
-          mb: 0.25,
-        }}
-      >
-        {label}
-      </Typography>
-      <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: accent, lineHeight: 1 }}>
+      <Box component="span" sx={{
+        fontFamily: '"Geist Mono", monospace', fontSize: 10, fontWeight: 700, color: accent,
+      }}>
         {value}
-      </Typography>
-    </Paper>
+      </Box>
+      <Box component="span" sx={{
+        fontSize: 8.5, fontWeight: 700, color: T.text3, textTransform: 'uppercase',
+      }}>
+        {label}
+      </Box>
+    </Box>
+  );
+}
+
+type TasksTableColumn = {
+  key: string;
+  label: string;
+  width?: string;
+  align?: string;
+  render?: (row: TaskListItem) => ReactNode;
+};
+
+function TasksScrollTable({
+  columns,
+  rows,
+  onRowClick,
+}: {
+  columns: TasksTableColumn[];
+  rows: TaskListItem[];
+  onRowClick: (task: TaskListItem) => void;
+}) {
+  return (
+    <Box sx={{
+      flex: 1,
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      minWidth: 0,
+      minHeight: 0,
+    }}>
+      <Box sx={{
+        overflowX: 'auto',
+        overflowY: 'auto',
+        flex: 1,
+        minHeight: 0,
+        WebkitOverflowScrolling: 'touch',
+        border: `1px solid ${T.border}`,
+        borderRadius: 1.25,
+        bgcolor: T.bg1,
+        '& > div': { border: 'none', boxShadow: 'none', borderRadius: 0 },
+      }}>
+        <DataTable
+          columns={columns}
+          rows={rows.map((task) => ({ ...task, id: task._id }))}
+          hideRowActions
+          compact
+          ultraCompact
+          tableMinWidth={TASKS_TABLE_MIN_WIDTH}
+          headerTextTransform="none"
+          onRowClick={(row) => onRowClick(row as TaskListItem)}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+function ListFullscreenEnterBtn({
+  onClick,
+  disabled = false,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      title="Liste plein écran"
+      aria-label="Liste plein écran"
+      disabled={disabled}
+      onClick={disabled ? undefined : onClick}
+      sx={{
+        all: 'unset',
+        boxSizing: 'border-box',
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 30,
+        height: 28,
+        borderRadius: '6px',
+        border: `1px solid ${T.borderStrong}`,
+        bgcolor: T.bg1,
+        color: disabled ? T.text4 : T.text2,
+        fontSize: 15,
+        fontWeight: 600,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontFamily: 'inherit',
+        lineHeight: 1,
+        opacity: disabled ? 0.5 : 1,
+        boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
+        '&:hover': disabled ? {} : { bgcolor: T.bg2, borderColor: T.primary, color: T.primaryDeep },
+      }}
+    >
+      ⛶
+    </Box>
   );
 }
 
@@ -867,7 +979,7 @@ function categorySubline(task: TaskListItem): ReactNode {
 
 export function TasksListPage() {
   const { user, loading: authLoading } = useAuth();
-  const scope = useMemo(() => resolveTasksUserScope(user), [user]);
+  const scope = usePmTasksScope();
 
   const [tasks, setTasks] = useState<TaskListItem[]>([]);
   const [pagination, setPagination] = useState({
@@ -915,7 +1027,10 @@ export function TasksListPage() {
     emergency: 'all' as 'all' | TaskEmergency,
   });
 
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [filtersModalOpen, setFiltersModalOpen] = useState(false);
+  const [tempListFilters, setTempListFilters] = useState(listFilters);
+  const [tempSortField, setTempSortField] = useState<TaskListSortField>('createdAt');
+  const [tempSortDirection, setTempSortDirection] = useState<'asc' | 'desc'>('desc');
   const [quickFilterKey, setQuickFilterKey] = useState<QuickFilterKey>('none');
   const [tempAdvanced, setTempAdvanced] = useState(advancedFilters);
   const [tempPayment, setTempPayment] = useState('all');
@@ -924,10 +1039,26 @@ export function TasksListPage() {
 
   const [showDescription, setShowDescription] = useState(false);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
+  const [listFullscreen, setListFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!listFullscreen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setListFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [listFullscreen]);
 
   // ⚡ PERFORMANCE: Fusion du chargement staff/listings/tasks en parallèle
   const fetchTasks = useCallback(async (opts?: { silent?: boolean; loadMetadata?: boolean }) => {
     try {
+      if (!scope.scopeFetchReady) return;
       if (!opts?.silent) {
         setLoading(true);
       }
@@ -1000,7 +1131,7 @@ export function TasksListPage() {
           isArchived,
         }),
         shouldLoadMetadata ? tasksService.getStaff({ ownerId: scope.ownerId, limit: 200 }) : null,
-        shouldLoadMetadata ? tasksService.getListings() : null,
+        shouldLoadMetadata ? tasksService.getListings({ filterOwnerId: scope.filterOwnerId }) : null,
       ];
 
       const [tasksResult, staffResult, listingResult] = await Promise.all(promises);
@@ -1024,6 +1155,8 @@ export function TasksListPage() {
   }, [
     scope.canAccessAllOwners,
     scope.ownerId,
+    scope.scopeFetchReady,
+    scope.filterOwnerId,
     page,
     rowsPerPage,
     activeSearchTerm,
@@ -1047,6 +1180,30 @@ export function TasksListPage() {
     if (authLoading) return;
     void fetchTasks();
   }, [fetchTasks, authLoading]);
+
+  // ─── Temps réel (socket.io) ───────────────────────────────────────
+  const socketRooms = useMemo(() => {
+    if (!scope.ownerId) return [DEFAULT_ROOMS.TASK_ADMIN_ROOM];
+    return [`room_task_${scope.ownerId}`];
+  }, [scope.ownerId]);
+
+  useSocketIO({
+    rooms: socketRooms,
+    enabled: scope.scopeFetchReady && !authLoading,
+    onReconnect: () => { void fetchTasks({ silent: true }); },
+    handlers: {
+      [SOCKET_EVENTS.NEW_TASK]: (task: TaskListItem) => {
+        setTasks(prev => {
+          if (prev.some(t => t._id === task._id)) return prev;
+          return [task, ...prev];
+        });
+        setPagination(p => ({ ...p, total: p.total + 1 }));
+      },
+      [SOCKET_EVENTS.UPDATE_TASK]: (task: TaskListItem) => {
+        setTasks(prev => prev.map(t => (t._id === task._id ? { ...t, ...task } : t)));
+      },
+    },
+  });
 
   const listingById = useMemo(
     () => Object.fromEntries(listings.map((l) => [String(l._id), l.name])),
@@ -1149,6 +1306,22 @@ export function TasksListPage() {
     };
   }, [tasks, pagination.total]);
 
+  const activeFiltersCount = useMemo(() => {
+    let n = 0;
+    if (listFilters.listingIds.length > 0) n += 1;
+    if (listFilters.subTypes.length > 0) n += 1;
+    const defaultStatuses = [...DEFAULT_TASK_STATUSES].sort().join(',');
+    if ([...listFilters.statuses].sort().join(',') !== defaultStatuses) n += 1;
+    if (listFilters.staffCodes.length > 0) n += 1;
+    if (listFilters.origin !== 'all') n += 1;
+    if (advancedFilters.dateType) n += 1;
+    if (advancedFilters.emergency !== 'all') n += 1;
+    if (listFilters.paymentStatus !== 'all') n += 1;
+    if (listFilters.hasAssociation !== 'all') n += 1;
+    if (listFilters.sources.length > 0) n += 1;
+    return n;
+  }, [listFilters, advancedFilters]);
+
   const toggleQuickFilter = (key: Exclude<QuickFilterKey, 'none'>) => {
     setQuickFilterKey((prev) => (prev === key ? 'none' : key));
     setPage(0);
@@ -1162,27 +1335,42 @@ export function TasksListPage() {
     return () => window.clearTimeout(timer);
   }, [searchInput]);
 
-  const openAdvancedDialog = () => {
-    setTempAdvanced(advancedFilters);
+  const openFiltersModal = () => {
+    setTempListFilters({ ...listFilters });
+    setTempAdvanced({ ...advancedFilters });
     setTempPayment(listFilters.paymentStatus);
     setTempHasAssociation(listFilters.hasAssociation);
-    setTempSources(listFilters.sources);
-    setAdvancedOpen(true);
+    setTempSources([...listFilters.sources]);
+    setTempSortField(sortField);
+    setTempSortDirection(sortDirection);
+    setFiltersModalOpen(true);
   };
 
-  const confirmAdvancedDialog = () => {
-    setAdvancedFilters(tempAdvanced);
-    setListFilters((prev) => ({
-      ...prev,
+  const confirmFiltersModal = () => {
+    setListFilters({
+      ...tempListFilters,
       paymentStatus: tempPayment,
       hasAssociation: tempHasAssociation,
       sources: tempSources,
-    }));
+    });
+    setAdvancedFilters({ ...tempAdvanced });
+    setSortField(tempSortField);
+    setSortDirection(tempSortDirection);
     setPage(0);
-    setAdvancedOpen(false);
+    setFiltersModalOpen(false);
   };
 
-  const resetAdvancedTemp = () => {
+  const resetFiltersModalTemp = () => {
+    setTempListFilters({
+      origin: 'all',
+      subTypes: [],
+      statuses: [...DEFAULT_TASK_STATUSES],
+      listingIds: [],
+      staffCodes: [],
+      paymentStatus: 'all',
+      hasAssociation: 'all',
+      sources: [],
+    });
     setTempAdvanced({
       dateType: '',
       startDate: null,
@@ -1192,6 +1380,8 @@ export function TasksListPage() {
     setTempPayment('all');
     setTempHasAssociation('all');
     setTempSources([]);
+    setTempSortField('createdAt');
+    setTempSortDirection('desc');
   };
 
   const resetAllListFilters = () => {
@@ -1666,6 +1856,66 @@ export function TasksListPage() {
 
   const optionalColumnsOn = showDescription ? 1 : 0;
 
+  const tasksTable =
+    displayTasks.length > 0 ? (
+      <TasksScrollTable
+        columns={visibleColumns}
+        rows={displayTasks}
+        onRowClick={openTaskDetail}
+      />
+    ) : null;
+
+  const listFullscreenLayer =
+    listFullscreen && tasksTable && typeof document !== 'undefined'
+      ? createPortal(
+          <Box
+            role="dialog"
+            aria-modal="true"
+            aria-label="Liste des tâches plein écran"
+            sx={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              bgcolor: T.bg0,
+              display: 'flex',
+              flexDirection: 'column',
+              p: { xs: 0.5, sm: 0.75 },
+              boxSizing: 'border-box',
+            }}
+          >
+            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              {tasksTable}
+            </Box>
+            <Tooltip title="Quitter le plein écran (Échap)" placement="left">
+              <IconButton
+                type="button"
+                onClick={() => setListFullscreen(false)}
+                aria-label="Quitter le plein écran"
+                sx={{
+                  position: 'fixed',
+                  right: { xs: 10, md: 14 },
+                  bottom: { xs: 10, md: 14 },
+                  zIndex: 10000,
+                  width: 36,
+                  height: 36,
+                  bgcolor: 'rgba(255,255,255,0.94)',
+                  border: `1px solid ${T.border}`,
+                  boxShadow: '0 4px 16px rgba(20,17,10,0.14)',
+                  color: T.text3,
+                  fontSize: 22,
+                  fontWeight: 300,
+                  lineHeight: 1,
+                  '&:hover': { bgcolor: T.bg1, color: T.text, borderColor: T.borderStrong },
+                }}
+              >
+                ×
+              </IconButton>
+            </Tooltip>
+          </Box>,
+          document.body,
+        )
+      : null;
+
   // ⚡ PERFORMANCE: Skeleton loading pour affichage immédiat
   if (loading && tasks.length === 0) {
     return (
@@ -1721,9 +1971,26 @@ export function TasksListPage() {
 
   return (
     <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
-      <Box sx={{ p: { xs: 2, md: 3 } }}>
-        <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+      <Box sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        px: { xs: 1, md: 1.25 },
+        py: { xs: 0.75, md: 0.75 },
+      }}>
+        {!listFullscreen && (
+        <Paper sx={{
+          p: '4px 6px',
+          mb: 0.5,
+          border: `1px solid ${T.border}`,
+          borderRadius: 1.25,
+          bgcolor: T.bg1,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+        }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', gap: 0.5, flexWrap: 'nowrap' }}>
             <TextField
               size="small"
               placeholder="Code, invité, logement, type…"
@@ -1733,12 +2000,12 @@ export function TasksListPage() {
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon sx={{ fontSize: 18, color: T.text3 }} />
+                      <SearchIcon sx={{ fontSize: 16, color: T.text3 }} />
                     </InputAdornment>
                   ),
                 },
               }}
-              sx={{ flex: 1, minWidth: 180, maxWidth: 320 }}
+              sx={toolbarFieldSx}
             />
             <Button
               variant="contained"
@@ -1752,365 +2019,429 @@ export function TasksListPage() {
                 bgcolor: T.primary,
                 color: '#fff',
                 fontWeight: 600,
-                px: 2,
+                px: 1.25,
+                minHeight: 28,
+                fontSize: 11,
                 whiteSpace: 'nowrap',
+                flexShrink: 0,
                 '&:hover': { bgcolor: T.primaryDeep },
               }}
             >
               + Tâche
             </Button>
-            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 168, flex: '1 1 140px', maxWidth: 220 }}>
-              <Select
-                multiple
-                displayEmpty
-                value={listFilters.listingIds}
-                onChange={(e) => {
-                  setListFilters((p) => ({ ...p, listingIds: e.target.value as string[] }));
-                  setPage(0);
-                }}
-                renderValue={(s) => `Propriété · ${(s as string[]).length || 'toutes'}`}
-              >
-                {listings.map((lst) => (
-                  <MenuItem key={lst._id} value={lst._id}>
-                    <Checkbox checked={listFilters.listingIds.indexOf(lst._id) > -1} size="small" />
-                    <ListItemText primary={lst.name} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 152, flex: '1 1 130px', maxWidth: 200 }}>
-              <Select
-                multiple
-                displayEmpty
-                value={listFilters.subTypes}
-                onChange={(e) => {
-                  setListFilters((p) => ({ ...p, subTypes: e.target.value as string[] }));
-                  setPage(0);
-                }}
-                renderValue={(s) => `Type · ${(s as string[]).length || 'tous'}`}
-              >
-                {CATEGORY_MULTI_OPTIONS.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    <Checkbox checked={listFilters.subTypes.indexOf(c.id) > -1} size="small" />
-                    <ListItemText primary={c.label} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 140, flex: '1 1 120px', maxWidth: 180 }}>
-              <Select
-                multiple
-                displayEmpty
-                value={listFilters.statuses}
-                onChange={(e) => {
-                  const v = e.target.value as string[];
-                  setListFilters((p) => ({ ...p, statuses: v.length ? v : [...DEFAULT_TASK_STATUSES] }));
-                  setPage(0);
-                }}
-                renderValue={(s) => `Statut · ${(s as string[]).length || 'tous'}`}
-              >
-                {STATUS_MULTI_OPTIONS.map((st) => (
-                  <MenuItem key={st.id} value={st.id}>
-                    <Checkbox checked={listFilters.statuses.indexOf(st.id) > -1} size="small" />
-                    <ListItemText primary={st.label} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 128, flex: '1 1 110px', maxWidth: 160 }}>
-              <Select
-                multiple
-                displayEmpty
-                value={listFilters.staffCodes}
-                onChange={(e) => {
-                  setListFilters((p) => ({ ...p, staffCodes: e.target.value as string[] }));
-                  setPage(0);
-                }}
-                renderValue={(s) => `Staff · ${(s as string[]).length || 'tous'}`}
-              >
-                {staff.map((m) => (
-                  <MenuItem key={m.staffCode} value={m.staffCode}>
-                    <Checkbox checked={listFilters.staffCodes.indexOf(m.staffCode) > -1} size="small" />
-                    <ListItemText primary={m.username} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 118, flex: '0 1 118px' }}>
-              <Select
-                value={listFilters.origin}
-                onChange={(e) => {
-                  setListFilters((p) => ({
-                    ...p,
-                    origin: e.target.value as typeof listFilters.origin,
-                  }));
-                  setPage(0);
-                }}
-                renderValue={(v) =>
-                  v === 'task' ? 'Origine · Internes' : v === 'client' ? 'Origine · Client' : 'Origine · toutes'
-                }
-              >
-                <MenuItem value="all">Toutes</MenuItem>
-                <MenuItem value="task">Internes</MenuItem>
-                <MenuItem value="client">Client</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ ...toolbarSelectSx, minWidth: 132, flex: '0 1 132px' }}>
-              <Select
-                value={sortField}
-                onChange={(e) => {
-                  setSortField(e.target.value as TaskListSortField);
-                  setPage(0);
-                }}
-                renderValue={(v) => `Tri · ${SORT_FIELD_LABELS[String(v)] || 'Date prévue'}`}
-              >
-                <MenuItem value="createdAt">Date création</MenuItem>
-                <MenuItem value="startDate">Date prévue</MenuItem>
-                <MenuItem value="reservationNumber">Réservation</MenuItem>
-              </Select>
-            </FormControl>
-            <Tooltip title={sortDirection === 'asc' ? 'Ordre croissant' : 'Ordre décroissant'}>
-              <IconButton
-                size="small"
-                onClick={() => {
-                  setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
-                  setPage(0);
-                }}
-              >
-                {sortDirection === 'asc' ? (
-                  <ArrowUpwardIcon sx={{ fontSize: 18 }} />
-                ) : (
-                  <ArrowDownwardIcon sx={{ fontSize: 18 }} />
-                )}
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Filtres avancés">
-              <IconButton
-                size="small"
-                onClick={openAdvancedDialog}
-                sx={{
-                  bgcolor:
-                    advancedFilters.dateType ||
-                    advancedFilters.emergency !== 'all' ||
-                    listFilters.paymentStatus !== 'all' ||
-                    listFilters.hasAssociation !== 'all' ||
-                    listFilters.sources.length > 0
-                      ? T.primaryTint
-                      : undefined,
-                }}
-              >
-                <FilterListIcon sx={{ fontSize: 18, color: T.primaryDeep }} />
-              </IconButton>
-            </Tooltip>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={openFiltersModal}
+              startIcon={<FilterListIcon sx={{ fontSize: 15 }} />}
+              sx={{
+                textTransform: 'none',
+                minHeight: 28,
+                fontSize: 11,
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+                borderColor: activeFiltersCount > 0 ? T.primary : T.border,
+                bgcolor: activeFiltersCount > 0 ? T.primaryTint : T.bg1,
+                color: T.primaryDeep,
+                '&:hover': { borderColor: T.primary, bgcolor: T.primaryTint },
+              }}
+            >
+              Filtres{activeFiltersCount > 0 ? ` · ${activeFiltersCount}` : ''}
+            </Button>
             <Tooltip title="Colonnes optionnelles">
               <IconButton
                 size="small"
                 onClick={(e) => setColumnMenuAnchor(e.currentTarget)}
-                sx={{ bgcolor: optionalColumnsOn > 0 ? T.primaryTint : undefined }}
+                sx={{ width: 28, height: 28, flexShrink: 0, bgcolor: optionalColumnsOn > 0 ? T.primaryTint : undefined }}
               >
-                <ViewColumnIcon sx={{ fontSize: 18, color: optionalColumnsOn > 0 ? T.primary : T.text3 }} />
+                <ViewColumnIcon sx={{ fontSize: 17, color: optionalColumnsOn > 0 ? T.primary : T.text3 }} />
               </IconButton>
             </Tooltip>
             <Tooltip title="Réinitialiser les filtres">
-              <IconButton size="small" onClick={resetAllListFilters}>
-                <RefreshIcon sx={{ fontSize: 18 }} />
+              <IconButton size="small" onClick={resetAllListFilters} sx={{ width: 28, height: 28, flexShrink: 0 }}>
+                <RefreshIcon sx={{ fontSize: 17 }} />
               </IconButton>
             </Tooltip>
           </Stack>
 
           <Stack
             direction="row"
-            sx={{ mt: 1.5, gap: 0.75, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}
+            sx={{
+              mt: 0.35,
+              gap: 0.35,
+              flexWrap: 'nowrap',
+              alignItems: 'center',
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              pb: 0.1,
+            }}
           >
-            <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
-              <Pill label="Éch. auj." count={filterCounts.dueToday} active={quickFilterKey === 'dueToday'} onClick={() => toggleQuickFilter('dueToday')} color={T.info} />
-              <Pill label="Demain" count={filterCounts.dueTomorrow} active={quickFilterKey === 'dueTomorrow'} onClick={() => toggleQuickFilter('dueTomorrow')} color={T.warning} />
-              <Pill label="7 j" count={filterCounts.due7d} active={quickFilterKey === 'due7d'} onClick={() => toggleQuickFilter('due7d')} color={T.primary} />
-              <Pill label="Urgent" count={filterCounts.urgent} active={quickFilterKey === 'urgent'} onClick={() => toggleQuickFilter('urgent')} color={T.error} />
-            </Stack>
-            <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
-              <KpiCompact label="À traiter" value={kpis.created} accent={T.info} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['CREATED'] })); setQuickFilterKey('none'); setPage(0); }} />
-              <KpiCompact label="En cours" value={kpis.inProgress} accent={T.warning} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] })); setQuickFilterKey('none'); setPage(0); }} />
-              <KpiCompact label="OK" value={kpis.completed} accent={T.success} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['COMPLETED'] })); setQuickFilterKey('none'); setPage(0); }} />
-              <KpiCompact label="Total" value={kpis.total} accent={T.primaryDeep} />
-            </Stack>
+            <Pill label="Auj." count={filterCounts.dueToday} active={quickFilterKey === 'dueToday'} onClick={() => toggleQuickFilter('dueToday')} color={T.info} />
+            <Pill label="Dem." count={filterCounts.dueTomorrow} active={quickFilterKey === 'dueTomorrow'} onClick={() => toggleQuickFilter('dueTomorrow')} color={T.warning} />
+            <Pill label="7j" count={filterCounts.due7d} active={quickFilterKey === 'due7d'} onClick={() => toggleQuickFilter('due7d')} color={T.primary} />
+            <Pill label="Urg." count={filterCounts.urgent} active={quickFilterKey === 'urgent'} onClick={() => toggleQuickFilter('urgent')} color={T.error} />
+            <Box sx={{ width: '1px', height: 14, bgcolor: T.border, flexShrink: 0, mx: 0.15 }} />
+            <KpiCompact label="À tr." value={kpis.created} accent={T.info} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['CREATED'] })); setQuickFilterKey('none'); setPage(0); }} />
+            <KpiCompact label="Cours" value={kpis.inProgress} accent={T.warning} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] })); setQuickFilterKey('none'); setPage(0); }} />
+            <KpiCompact label="OK" value={kpis.completed} accent={T.success} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['COMPLETED'] })); setQuickFilterKey('none'); setPage(0); }} />
+            <KpiCompact label="Tot." value={kpis.total} accent={T.primaryDeep} />
           </Stack>
-        </Paper>
-
-        {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
-
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress size={48} sx={{ color: T.primary }} />
           </Box>
-        ) : displayTasks.length === 0 ? (
-          <Paper sx={{ textAlign: 'center', py: 8, mt: 2, border: `1px solid ${T.border}`, bgcolor: T.bg1, borderRadius: 1.5 }}>
-            <InboxIcon sx={{ fontSize: 64, color: T.text4, mb: 2 }} />
-            <Typography sx={{ fontSize: 16, fontWeight: 600, color: T.text2 }}>Aucune tâche trouvée</Typography>
-            <Typography sx={{ fontSize: 13, color: T.text3, mt: 0.5 }}>
+
+          <Box sx={{
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            pl: 0.35,
+            borderLeft: `1px solid ${T.border}`,
+          }}>
+            <ListFullscreenEnterBtn
+              onClick={() => setListFullscreen(true)}
+              disabled={displayTasks.length === 0}
+            />
+          </Box>
+        </Paper>
+        )}
+
+        {error && !listFullscreen ? <Alert severity="error" sx={{ mb: 0.75, py: 0, flexShrink: 0 }}>{error}</Alert> : null}
+
+        {loading && tasks.length === 0 ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4, flexShrink: 0 }}>
+            <CircularProgress size={32} sx={{ color: T.primary }} />
+          </Box>
+        ) : null}
+
+        {!listFullscreen && tasksTable ? (
+          <Box sx={{
+            minHeight: TABLE_VIEWPORT_HEIGHT,
+            maxHeight: TABLE_VIEWPORT_HEIGHT,
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            {tasksTable}
+          </Box>
+        ) : null}
+
+        {!listFullscreen && !loading && displayTasks.length === 0 ? (
+          <Paper sx={{ textAlign: 'center', py: 6, border: `1px solid ${T.border}`, bgcolor: T.bg1, borderRadius: 1.25, flexShrink: 0 }}>
+            <InboxIcon sx={{ fontSize: 48, color: T.text4, mb: 1.5 }} />
+            <Typography sx={{ fontSize: 14, fontWeight: 600, color: T.text2 }}>Aucune tâche trouvée</Typography>
+            <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.5 }}>
               Essayez de modifier vos filtres ou réinitialisez-les.
             </Typography>
             <Button
               onClick={resetAllListFilters}
               variant="text"
-              sx={{ mt: 2, textTransform: 'none', color: T.primaryDeep }}
+              sx={{ mt: 1.5, textTransform: 'none', color: T.primaryDeep }}
             >
               ↻ Réinitialiser
             </Button>
           </Paper>
-        ) : (
-          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-            <DataTable
-              columns={visibleColumns}
-              rows={displayTasks.map((task) => ({ ...task, id: task._id }))}
-              hideRowActions
-              compact
-              headerTextTransform="none"
-              onRowClick={(row) => openTaskDetail(row as TaskListItem)}
-            />
-            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-              <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
-                {pagination.total > 0
-                  ? `${page * rowsPerPage + 1}–${Math.min((page + 1) * rowsPerPage, pagination.total)} sur ${pagination.total}`
-                  : '0 tâche'}
-              </Typography>
-              <TablePagination
-                component="div"
-                count={pagination.total}
-                page={page}
-                onPageChange={(_, newPage) => setPage(newPage)}
-                rowsPerPage={rowsPerPage}
-                onRowsPerPageChange={(e) => {
-                  setRowsPerPage(Number(e.target.value));
-                  setPage(0);
-                }}
-                rowsPerPageOptions={[50, 100, 200, 500]}
-                labelRowsPerPage="Par page"
-                labelDisplayedRows={() => ''}
-                sx={{
-                  border: 'none',
-                  '& .MuiTablePagination-toolbar': { minHeight: 36, px: 0 },
-                  '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                    fontSize: 12.5,
-                    color: T.text3,
-                  },
-                }}
-              />
-            </Stack>
-          </Stack>
-        )}
+        ) : null}
 
-          <Dialog open={advancedOpen} onClose={() => setAdvancedOpen(false)} fullWidth maxWidth="sm">
-            <DialogTitle>Filtres avancés</DialogTitle>
-            <DialogContent>
-              <Stack spacing={2} sx={{ pt: 1 }}>
-                <TextField
-                  select
-                  label="Type de date"
-                  value={tempAdvanced.dateType}
-                  onChange={(e) =>
-                    setTempAdvanced((a) => ({
-                      ...a,
-                      dateType: e.target.value as typeof tempAdvanced.dateType,
-                    }))
-                  }
-                  fullWidth
-                >
-                  <MenuItem value="">Aucun</MenuItem>
-                  <MenuItem value="startDate">Date d&apos;exécution</MenuItem>
-                  <MenuItem value="createdAt">Date de création</MenuItem>
-                </TextField>
-                {tempAdvanced.dateType ? (
-                  <>
+        {!listFullscreen && !loading && displayTasks.length > 0 ? (
+          <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
+            <Typography sx={{ fontSize: 11, color: T.text3 }}>
+              {pagination.total > 0
+                ? `${page * rowsPerPage + 1}–${Math.min((page + 1) * rowsPerPage, pagination.total)} / ${pagination.total}`
+                : '0 tâche'}
+            </Typography>
+            <TablePagination
+              component="div"
+              count={pagination.total}
+              page={page}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[50, 100, 200, 500]}
+              labelRowsPerPage="Par page"
+              labelDisplayedRows={() => ''}
+              sx={{
+                border: 'none',
+                '& .MuiTablePagination-toolbar': { minHeight: 32, px: 0 },
+                '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                  fontSize: 11,
+                  color: T.text3,
+                },
+              }}
+            />
+          </Stack>
+        ) : null}
+
+        {listFullscreenLayer}
+
+          <Dialog
+            open={filtersModalOpen}
+            onClose={() => setFiltersModalOpen(false)}
+            fullWidth
+            maxWidth="md"
+          >
+            <DialogTitle sx={{ pb: 1 }}>Filtres</DialogTitle>
+            <DialogContent dividers sx={{ maxHeight: '72vh' }}>
+              <Stack spacing={2.5}>
+                <Box>
+                  <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1 }}>
+                    Propriétés & types
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <FormControl fullWidth size="small">
+                      <Select
+                        multiple
+                        displayEmpty
+                        value={tempListFilters.listingIds}
+                        onChange={(e) => setTempListFilters((p) => ({ ...p, listingIds: e.target.value as string[] }))}
+                        renderValue={(s) => `Propriétés · ${(s as string[]).length || 'toutes'}`}
+                      >
+                        {listings.map((lst) => (
+                          <MenuItem key={lst._id} value={lst._id}>
+                            <Checkbox checked={tempListFilters.listingIds.indexOf(lst._id) > -1} size="small" />
+                            <ListItemText primary={lst.name} />
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth size="small">
+                      <Select
+                        multiple
+                        displayEmpty
+                        value={tempListFilters.subTypes}
+                        onChange={(e) => setTempListFilters((p) => ({ ...p, subTypes: e.target.value as string[] }))}
+                        renderValue={(s) => `Types · ${(s as string[]).length || 'tous'}`}
+                      >
+                        {CATEGORY_MULTI_OPTIONS.map((c) => (
+                          <MenuItem key={c.id} value={c.id}>
+                            <Checkbox checked={tempListFilters.subTypes.indexOf(c.id) > -1} size="small" />
+                            <ListItemText primary={c.label} />
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Stack>
+                </Box>
+
+                <Box>
+                  <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1 }}>
+                    Statut & équipe
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <FormControl fullWidth size="small">
+                      <Select
+                        multiple
+                        displayEmpty
+                        value={tempListFilters.statuses}
+                        onChange={(e) => {
+                          const v = e.target.value as string[];
+                          setTempListFilters((p) => ({ ...p, statuses: v.length ? v : [...DEFAULT_TASK_STATUSES] }));
+                        }}
+                        renderValue={(s) => `Statuts · ${(s as string[]).length || 'tous'}`}
+                      >
+                        {STATUS_MULTI_OPTIONS.map((st) => (
+                          <MenuItem key={st.id} value={st.id}>
+                            <Checkbox checked={tempListFilters.statuses.indexOf(st.id) > -1} size="small" />
+                            <ListItemText primary={st.label} />
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth size="small">
+                      <Select
+                        multiple
+                        displayEmpty
+                        value={tempListFilters.staffCodes}
+                        onChange={(e) => setTempListFilters((p) => ({ ...p, staffCodes: e.target.value as string[] }))}
+                        renderValue={(s) => `Staff · ${(s as string[]).length || 'tous'}`}
+                      >
+                        {staff.map((m) => (
+                          <MenuItem key={m.staffCode} value={m.staffCode}>
+                            <Checkbox checked={tempListFilters.staffCodes.indexOf(m.staffCode) > -1} size="small" />
+                            <ListItemText primary={m.username} />
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth size="small">
+                      <Select
+                        value={tempListFilters.origin}
+                        onChange={(e) => setTempListFilters((p) => ({
+                          ...p,
+                          origin: e.target.value as typeof tempListFilters.origin,
+                        }))}
+                        renderValue={(v) =>
+                          v === 'task' ? 'Origine · Internes' : v === 'client' ? 'Origine · Client' : 'Origine · toutes'
+                        }
+                      >
+                        <MenuItem value="all">Toutes</MenuItem>
+                        <MenuItem value="task">Internes</MenuItem>
+                        <MenuItem value="client">Client</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Stack>
+                </Box>
+
+                <Box>
+                  <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1 }}>
+                    Dates & urgence
+                  </Typography>
+                  <Stack spacing={1.5}>
                     <TextField
-                      type="date"
-                      label="Date début"
-                      value={tempAdvanced.startDate || ''}
+                      select
+                      size="small"
+                      label="Type de date"
+                      value={tempAdvanced.dateType}
                       onChange={(e) =>
-                        setTempAdvanced((a) => ({ ...a, startDate: e.target.value || null }))
+                        setTempAdvanced((a) => ({
+                          ...a,
+                          dateType: e.target.value as typeof tempAdvanced.dateType,
+                        }))
                       }
                       fullWidth
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    />
+                    >
+                      <MenuItem value="">Aucun</MenuItem>
+                      <MenuItem value="startDate">Date d&apos;exécution</MenuItem>
+                      <MenuItem value="createdAt">Date de création</MenuItem>
+                    </TextField>
+                    {tempAdvanced.dateType ? (
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                        <TextField
+                          type="date"
+                          size="small"
+                          label="Date début"
+                          value={tempAdvanced.startDate || ''}
+                          onChange={(e) =>
+                            setTempAdvanced((a) => ({ ...a, startDate: e.target.value || null }))
+                          }
+                          fullWidth
+                          slotProps={{ inputLabel: { shrink: true } }}
+                        />
+                        <TextField
+                          type="date"
+                          size="small"
+                          label="Date fin"
+                          value={tempAdvanced.endDate || ''}
+                          onChange={(e) =>
+                            setTempAdvanced((a) => ({ ...a, endDate: e.target.value || null }))
+                          }
+                          fullWidth
+                          slotProps={{ inputLabel: { shrink: true } }}
+                        />
+                      </Stack>
+                    ) : null}
                     <TextField
-                      type="date"
-                      label="Date fin"
-                      value={tempAdvanced.endDate || ''}
+                      select
+                      size="small"
+                      label="Urgence"
+                      value={tempAdvanced.emergency}
                       onChange={(e) =>
-                        setTempAdvanced((a) => ({ ...a, endDate: e.target.value || null }))
+                        setTempAdvanced((a) => ({
+                          ...a,
+                          emergency: e.target.value as 'all' | TaskEmergency,
+                        }))
                       }
                       fullWidth
-                      slotProps={{ inputLabel: { shrink: true } }}
+                    >
+                      <MenuItem value="all">Toutes</MenuItem>
+                      <MenuItem value="Normal">Normal</MenuItem>
+                      <MenuItem value="Urgent">Urgent</MenuItem>
+                      <MenuItem value="Critical">Critique</MenuItem>
+                    </TextField>
+                  </Stack>
+                </Box>
+
+                <Box>
+                  <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1 }}>
+                    Paiement & sources
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      select
+                      size="small"
+                      label="Statut de paiement"
+                      value={tempPayment}
+                      onChange={(e) => setTempPayment(e.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="all">Tous</MenuItem>
+                      <MenuItem value="NOT_REQUIRED">Non requis</MenuItem>
+                      <MenuItem value="PENDING">En attente</MenuItem>
+                      <MenuItem value="PAID">Payé</MenuItem>
+                      <MenuItem value="CANCELLED">Annulé</MenuItem>
+                    </TextField>
+                    <TextField
+                      select
+                      size="small"
+                      label="Association"
+                      value={tempHasAssociation}
+                      onChange={(e) =>
+                        setTempHasAssociation(e.target.value as 'all' | 'with' | 'without')
+                      }
+                      fullWidth
+                    >
+                      <MenuItem value="all">Toutes</MenuItem>
+                      <MenuItem value="with">Avec association</MenuItem>
+                      <MenuItem value="without">Sans association</MenuItem>
+                    </TextField>
+                    <Autocomplete
+                      multiple
+                      size="small"
+                      options={SOURCE_MULTI_OPTIONS}
+                      getOptionLabel={(o) => o.label}
+                      value={SOURCE_MULTI_OPTIONS.filter((s) => tempSources.includes(s.id))}
+                      onChange={(_, v) => setTempSources(v.map((x) => x.id))}
+                      renderInput={(params) => (
+                        <TextField {...params} label="Sources" placeholder="Toutes" />
+                      )}
+                      disableCloseOnSelect
+                      renderOption={(props, option, { selected }) => (
+                        <li {...props}>
+                          <Checkbox checked={selected} sx={{ mr: 1 }} size="small" />
+                          {option.label}
+                        </li>
+                      )}
                     />
-                  </>
-                ) : null}
-                <TextField
-                  select
-                  label="Urgence"
-                  value={tempAdvanced.emergency}
-                  onChange={(e) =>
-                    setTempAdvanced((a) => ({
-                      ...a,
-                      emergency: e.target.value as 'all' | TaskEmergency,
-                    }))
-                  }
-                  fullWidth
-                >
-                  <MenuItem value="all">Toutes</MenuItem>
-                  <MenuItem value="Normal">Normal</MenuItem>
-                  <MenuItem value="Urgent">Urgent</MenuItem>
-                  <MenuItem value="Critical">Critique</MenuItem>
-                </TextField>
-                <TextField
-                  select
-                  label="Statut de paiement"
-                  value={tempPayment}
-                  onChange={(e) => setTempPayment(e.target.value)}
-                  fullWidth
-                >
-                  <MenuItem value="all">Tous</MenuItem>
-                  <MenuItem value="NOT_REQUIRED">Non requis</MenuItem>
-                  <MenuItem value="PENDING">En attente</MenuItem>
-                  <MenuItem value="PAID">Payé</MenuItem>
-                  <MenuItem value="CANCELLED">Annulé</MenuItem>
-                </TextField>
-                <TextField
-                  select
-                  label="Association"
-                  value={tempHasAssociation}
-                  onChange={(e) =>
-                    setTempHasAssociation(e.target.value as 'all' | 'with' | 'without')
-                  }
-                  fullWidth
-                >
-                  <MenuItem value="all">Toutes</MenuItem>
-                  <MenuItem value="with">Avec association</MenuItem>
-                  <MenuItem value="without">Sans association</MenuItem>
-                </TextField>
-                <Autocomplete
-                  multiple
-                  options={SOURCE_MULTI_OPTIONS}
-                  getOptionLabel={(o) => o.label}
-                  value={SOURCE_MULTI_OPTIONS.filter((s) => tempSources.includes(s.id))}
-                  onChange={(_, v) => setTempSources(v.map((x) => x.id))}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Sources" placeholder="Toutes" />
-                  )}
-                  disableCloseOnSelect
-                  renderOption={(props, option, { selected }) => (
-                    <li {...props}>
-                      <Checkbox checked={selected} sx={{ mr: 1 }} size="small" />
-                      {option.label}
-                    </li>
-                  )}
-                />
+                  </Stack>
+                </Box>
+
+                <Box>
+                  <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1 }}>
+                    Tri
+                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <FormControl size="small" sx={{ flex: 1 }}>
+                      <Select
+                        value={tempSortField}
+                        onChange={(e) => setTempSortField(e.target.value as TaskListSortField)}
+                        renderValue={(v) => SORT_FIELD_LABELS[String(v)] || 'Date prévue'}
+                      >
+                        <MenuItem value="createdAt">Date création</MenuItem>
+                        <MenuItem value="startDate">Date prévue</MenuItem>
+                        <MenuItem value="reservationNumber">Réservation</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <Tooltip title={tempSortDirection === 'asc' ? 'Ordre croissant' : 'Ordre décroissant'}>
+                      <IconButton
+                        size="small"
+                        onClick={() => setTempSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                        sx={{ border: `1px solid ${T.border}`, borderRadius: 1 }}
+                      >
+                        {tempSortDirection === 'asc' ? (
+                          <ArrowUpwardIcon sx={{ fontSize: 18 }} />
+                        ) : (
+                          <ArrowDownwardIcon sx={{ fontSize: 18 }} />
+                        )}
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </Box>
               </Stack>
             </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setAdvancedOpen(false)}>Fermer</Button>
-              <Button onClick={resetAdvancedTemp}>Réinitialiser</Button>
-              <Button sx={btnPrimarySx} onClick={confirmAdvancedDialog}>
-                Confirmer
+            <DialogActions sx={{ px: 2, py: 1.25 }}>
+              <Button onClick={() => setFiltersModalOpen(false)}>Fermer</Button>
+              <Button onClick={resetFiltersModalTemp}>Réinitialiser</Button>
+              <Button sx={btnPrimarySx} onClick={confirmFiltersModal}>
+                Appliquer
               </Button>
             </DialogActions>
           </Dialog>

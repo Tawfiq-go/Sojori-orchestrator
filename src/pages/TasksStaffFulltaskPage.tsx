@@ -16,6 +16,7 @@ import { apiStaffToDesign, designStaffToApi, normalizeOwnerId } from '../utils/f
 import { useAuth } from '../hooks/useAuth';
 import { resolveTasksUserScope } from '../services/fulltaskTasksService';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import { useAdminScopeFetchReady } from '../hooks/useAdminScopeFetchReady';
 import TeamOwnerScopeBar from '../features/taskHub/staff-design/TeamOwnerScopeBar';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
 import { ownerDisplayNameFromId } from '../utils/ownerDisplay.utils';
@@ -65,6 +66,7 @@ function TasksStaffFulltaskPageInner() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { requestOwnerId, owners, showOwnerFilter } = useAdminOwnerFilter();
+  const scopeFetchReady = useAdminScopeFetchReady();
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
   const filterOwnerId = useMemo(
     () =>
@@ -92,6 +94,10 @@ function TasksStaffFulltaskPageInner() {
   }, [searchParams, navigate]);
 
   const loadListings = useCallback(async () => {
+    if (showOwnerFilter && !scopeFetchReady) {
+      setListings([]);
+      return;
+    }
     try {
       const response = await listingsService.getListings({
         useActiveFilter: true,
@@ -100,6 +106,7 @@ function TasksStaffFulltaskPageInner() {
         page: 0,
         forListingsOverview: true,
         compact: false,
+        filterOwnerId: filterOwnerId,
       });
       let mapped = (response.data?.items || [])
         .map((l) => ({
@@ -116,7 +123,7 @@ function TasksStaffFulltaskPageInner() {
       toast.error(err.message || 'Erreur chargement annonces');
       setListings([]);
     }
-  }, []);
+  }, [filterOwnerId, showOwnerFilter, scopeFetchReady]);
 
   const loadCities = useCallback(async () => {
     try {
@@ -132,6 +139,11 @@ function TasksStaffFulltaskPageInner() {
   }, []);
 
   const loadStaff = useCallback(async () => {
+    if (showOwnerFilter && !scopeFetchReady) {
+      setStaff([]);
+      setLoadingStaff(false);
+      return;
+    }
     setLoadingStaff(true);
     try {
       const params: Record<string, unknown> = {};
@@ -154,7 +166,7 @@ function TasksStaffFulltaskPageInner() {
     } finally {
       setLoadingStaff(false);
     }
-  }, [filterOwnerId]);
+  }, [filterOwnerId, showOwnerFilter, scopeFetchReady]);
 
   const loadAdmins = useCallback(async () => {
     setLoadingAdmins(true);

@@ -4,12 +4,14 @@
 // Intègre: sidebar, filtres actifs, scope user, owner selection
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Box, CircularProgress, Alert } from '@mui/material';
-import { format, addDays, subDays } from 'date-fns';
+import { format, addDays, startOfDay } from 'date-fns';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import StayView from '../components/calendar-views/StayView';
 import type { ListingRow, TimelineItem } from '../components/calendar-views/_shared';
 import { resolveTasksUserScope } from '../services/fulltaskTasksService';
+import { usePmTasksScope } from '../hooks/usePmTasksScope';
 import { fetchTaskNewPlanning } from '../services/planningFulltaskMerge';
 import listingsService from '../services/listingsService';
 import cleanlinessService from '../services/cleanlinessService';
@@ -26,6 +28,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import type { ListingSummary } from '../types/listings.types';
+import { useSocketIO } from '../hooks/useSocketIO';
+import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 
 /**
  * TaskNew planning :
@@ -34,18 +38,18 @@ import type { ListingSummary } from '../types/listings.types';
  * Pas d’appel srv-task / reservation/planning legacy.
  */
 
-/** Jours passés / futurs visibles (aligné /reservations/planning) */
-const PLANNING_LOOKBACK_DAYS = 30;
-const PLANNING_FORWARD_DAYS = 45;
-/** Décalage initial du curseur : on cadre J-2 → J+11 (14j visibles dont aujourd'hui en 3e position),
- *  l'utilisateur peut ensuite naviguer dans la fenêtre 75j. */
-const PLANNING_INITIAL_BACK_DAYS = 2;
+import {
+  getPlanningDefaultStartDate,
+  PLANNING_FORWARD_DAYS,
+  PLANNING_INITIAL_BACK_DAYS,
+  PLANNING_LOOKBACK_DAYS,
+} from '../utils/planningViewDates';
 
 export default function TasksPlanningPageV2() {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
-  const scope = useMemo(() => resolveTasksUserScope(user), [user]);
-  const listingsCacheKey = scope.ownerId || (scope.canAccessAllOwners ? 'admin' : 'unknown');
+  const { loading: authLoading } = useAuth();
+  const scope = usePmTasksScope();
+  const listingsCacheKey = scope.scopeCacheKey;
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -53,12 +57,8 @@ export default function TasksPlanningPageV2() {
   const [error, setError] = useState<string | null>(null);
   const windowRequestIdRef = useRef(0);
   const skipNextWindowOnlyFetchRef = useRef(false);
-  const [startDate, setStartDate] = useState<Date>(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - PLANNING_INITIAL_BACK_DAYS);
-    return d;
-  });
+  const initialViewAlignedRef = useRef(false);
+  const [startDate, setStartDate] = useState<Date>(() => getPlanningDefaultStartDate());
   const [daysCount] = useState(PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS);
 
   const [activeListings, setActiveListings] = useState<ListingSummary[]>(() => {
@@ -67,16 +67,23 @@ export default function TasksPlanningPageV2() {
   const [rawData, setRawData] = useState<{
     listings?: Array<Record<string, unknown>>;
   } | null>(null);
-  const [adminOwnerId, setAdminOwnerId] = useState('');
   const [opSyncTick, setOpSyncTick] = useState(0);
   const listingsHydratedRef = useRef(activeListings.length > 0);
+  const [listFullscreen, setListFullscreen] = useState(false);
 
-  const planningOwnerId = useMemo(() => {
-    if (scope.canAccessAllOwners) {
-      return adminOwnerId.trim() === '' ? undefined : adminOwnerId;
-    }
-    return scope.ownerId;
-  }, [scope.canAccessAllOwners, scope.ownerId, adminOwnerId]);
+  useEffect(() => {
+    if (!listFullscreen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setListFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [listFullscreen]);
 
   const windowRange = useCallback(() => {
     const startDateStr = format(startDate, 'yyyy-MM-dd');
@@ -97,10 +104,19 @@ export default function TasksPlanningPageV2() {
       compact: true,
       forListingsOverview: false,
       limit: 500,
+      filterOwnerId: scope.filterOwnerId,
     });
     setActiveListings(listingsResponse.data.items);
     setCachedPlanningListings(listingsCacheKey, listingsResponse.data.items);
     listingsHydratedRef.current = true;
+  }, [listingsCacheKey, scope.filterOwnerId]);
+
+  useEffect(() => {
+    setActiveListings([]);
+    setRawData(null);
+    listingsHydratedRef.current = false;
+    setCalendarReady(false);
+    invalidatePlanningListingsCache();
   }, [listingsCacheKey]);
 
   const fetchWindowData = useCallback(async () => {
@@ -117,7 +133,7 @@ export default function TasksPlanningPageV2() {
       const result = await fetchTaskNewPlanning({
         startDate: startDateStr,
         endDate: endDateStr,
-        ownerId: planningOwnerId,
+        ownerId: scope.ownerId,
       });
 
       if (requestId !== windowRequestIdRef.current) return;
@@ -135,7 +151,7 @@ export default function TasksPlanningPageV2() {
         setIsRefreshing(false);
       }
     }
-  }, [windowRange, planningOwnerId, scope.canAccessAllOwners, scope.ownerId]);
+  }, [windowRange, scope.ownerId, scope.canAccessAllOwners, scope.scopeFetchReady]);
 
   useEffect(() => {
     const onOperationalStatusChanged = () => setOpSyncTick((n) => n + 1);
@@ -145,7 +161,7 @@ export default function TasksPlanningPageV2() {
 
   /** Bootstrap : listings (cache) + planning en parallèle */
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || !scope.scopeFetchReady) return;
 
     let cancelled = false;
     const isBootstrap = !calendarReady;
@@ -180,7 +196,16 @@ export default function TasksPlanningPageV2() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading]);
+  }, [authLoading, scope.scopeFetchReady, listingsCacheKey]);
+
+  useEffect(() => {
+    if (!calendarReady || initialViewAlignedRef.current) return;
+    initialViewAlignedRef.current = true;
+    setStartDate((prev) => {
+      const next = getPlanningDefaultStartDate();
+      return startOfDay(prev).getTime() === next.getTime() ? prev : next;
+    });
+  }, [calendarReady]);
 
   /** Navigation dates / filtre owner admin : planning uniquement (listings inchangés) */
   useEffect(() => {
@@ -190,7 +215,25 @@ export default function TasksPlanningPageV2() {
       return;
     }
     void fetchWindowData();
-  }, [startDate, authLoading, calendarReady, fetchWindowData, planningOwnerId]);
+  }, [startDate, authLoading, calendarReady, fetchWindowData, scope.ownerId, scope.scopeFetchReady]);
+
+  // ─── Temps réel (socket.io) ───────────────────────────────────────
+  // Timeline multi-propriétés : refetch simple de la fenêtre visible plutôt qu'un
+  // patch fin (positionnement par date/listing trop complexe pour un event isolé).
+  const socketRooms = useMemo(() => {
+    if (!scope.ownerId) return [DEFAULT_ROOMS.TASK_ADMIN_ROOM];
+    return [`room_task_${scope.ownerId}`];
+  }, [scope.ownerId]);
+
+  useSocketIO({
+    rooms: socketRooms,
+    enabled: scope.scopeFetchReady && !authLoading && calendarReady,
+    onReconnect: () => { void fetchWindowData(); },
+    handlers: {
+      [SOCKET_EVENTS.NEW_TASK]: () => { void fetchWindowData(); },
+      [SOCKET_EVENTS.UPDATE_TASK]: () => { void fetchWindowData(); },
+    },
+  });
 
   const listings: ListingRow[] = useMemo(() => {
     if (activeListings.length === 0) return [];
@@ -260,23 +303,15 @@ export default function TasksPlanningPageV2() {
   );
 
   const goToday = useCallback(() => {
-    const d = subDays(new Date(), PLANNING_INITIAL_BACK_DAYS);
-    d.setHours(0, 0, 0, 0);
-    setStartDate(d);
+    setStartDate(getPlanningDefaultStartDate());
   }, []);
 
   const shiftDays = useCallback((delta: number) => {
-    setStartDate((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() + delta);
-      return d;
-    });
+    setStartDate((prev) => startOfDay(addDays(prev, delta)));
   }, []);
 
   const handleDateChange = useCallback((newDate: Date) => {
-    const d = new Date(newDate);
-    d.setHours(0, 0, 0, 0);
-    setStartDate(d);
+    setStartDate(startOfDay(newDate));
   }, []);
 
   const handleCleanlinessChange = useCallback(
@@ -324,29 +359,115 @@ export default function TasksPlanningPageV2() {
     [listingsCacheKey],
   );
 
+  const stayViewProps = {
+    startDate,
+    daysCount,
+    todayBackDays: PLANNING_INITIAL_BACK_DAYS,
+    listings,
+    onTaskClick: handleTaskClick,
+    onReservationClick: handleReservationClick,
+    onGoToday: goToday,
+    onPrevDay: () => shiftDays(-1),
+    onNextDay: () => shiftDays(1),
+    onPrevWeek: () => shiftDays(-7),
+    onNextWeek: () => shiftDays(7),
+    onDateChange: handleDateChange,
+    onCleanlinessChange: handleCleanlinessChange,
+  };
+
+  const planningGrid =
+    calendarReady ? (
+      <StayView
+        {...stayViewProps}
+        compactLayout
+        gridOnly={listFullscreen}
+        fillViewport
+        showFullscreenEnter={!listFullscreen}
+        onEnterFullscreen={() => setListFullscreen(true)}
+      />
+    ) : null;
+
+  const listFullscreenLayer =
+    listFullscreen && planningGrid && typeof document !== 'undefined'
+      ? createPortal(
+          <Box
+            role="dialog"
+            aria-modal="true"
+            aria-label="Planning tâches plein écran"
+            sx={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              bgcolor: '#f6f5f1',
+              display: 'flex',
+              flexDirection: 'column',
+              p: { xs: 0.5, md: 0.75 },
+              boxSizing: 'border-box',
+            }}
+          >
+            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              {planningGrid}
+            </Box>
+            <Box
+              component="button"
+              type="button"
+              onClick={() => setListFullscreen(false)}
+              title="Quitter le plein écran (Échap)"
+              aria-label="Quitter le plein écran"
+              sx={{
+                position: 'fixed',
+                right: { xs: 10, md: 14 },
+                bottom: { xs: 10, md: 14 },
+                zIndex: 10000,
+                width: 36,
+                height: 36,
+                borderRadius: '99px',
+                border: '1px solid rgba(20,17,10,0.12)',
+                bgcolor: 'rgba(255,255,255,0.94)',
+                boxShadow: '0 4px 16px rgba(20,17,10,0.14)',
+                color: '#7a756c',
+                fontSize: 22,
+                fontWeight: 300,
+                lineHeight: 1,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                p: 0,
+              }}
+            >
+              ×
+            </Box>
+          </Box>,
+          document.body,
+        )
+      : null;
+
   return (
-    <DashboardWrapper breadcrumb={[]}>
-      <Box sx={{ bgcolor: '#f6f5f1', minHeight: '100vh' }}>
+    <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Planning']}>
+      <Box sx={{ bgcolor: '#f6f5f1', minHeight: listFullscreen ? 0 : '100vh' }}>
         {isLoading && !calendarReady && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
             <CircularProgress />
           </Box>
         )}
 
-        {calendarReady && error && (
-          <Box sx={{ maxWidth: 800, mx: 'auto', mt: 2, px: 2 }}>
+        {calendarReady && error && !listFullscreen && (
+          <Box sx={{ maxWidth: 800, mx: 'auto', mt: 1, px: 1 }}>
             <Alert severity="error" onClose={() => setError(null)}>
               {error}
             </Alert>
           </Box>
         )}
 
-        {calendarReady && (
+        {calendarReady && !listFullscreen && (
           <Box
             sx={{
               position: 'relative',
               opacity: isRefreshing ? 0.92 : 1,
               transition: 'opacity 0.15s ease',
+              minHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+              maxHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             {isRefreshing && (
@@ -375,22 +496,13 @@ export default function TasksPlanningPageV2() {
               </Box>
             )}
 
-            <StayView
-              startDate={startDate}
-              daysCount={daysCount}
-              listings={listings}
-              onTaskClick={handleTaskClick}
-              onReservationClick={handleReservationClick}
-              onGoToday={goToday}
-              onPrevDay={() => shiftDays(-1)}
-              onNextDay={() => shiftDays(1)}
-              onPrevWeek={() => shiftDays(-7)}
-              onNextWeek={() => shiftDays(7)}
-              onDateChange={handleDateChange}
-              onCleanlinessChange={handleCleanlinessChange}
-            />
+            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              {planningGrid}
+            </Box>
           </Box>
         )}
+
+        {listFullscreenLayer}
 
         {!isLoading && !calendarReady && error && (
           <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, p: 3 }}>

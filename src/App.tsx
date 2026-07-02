@@ -12,6 +12,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/monitoring-theme.css';
 import './styles/pm-simulation-theme.css';
+import './styles/pm-lifecycle.css';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -60,11 +61,6 @@ const OrchestrationPlansPageV2 = lazy(() =>
 );
 const OrchestrationTimelinePageV2 = lazy(() =>
   import("./pages/OrchestrationTimelinePageV2").then((module) => ({ default: module.OrchestrationTimelinePageV2 }))
-);
-const OrchestrationReservationsPage = lazy(() =>
-  import('./pages/OrchestrationReservationsPage').then((module) => ({
-    default: module.OrchestrationReservationsPage,
-  }))
 );
 const CommsPage = lazy(() =>
   import('./pages/CommsPage').then((module) => ({ default: module.CommsPage }))
@@ -223,6 +219,12 @@ const OnboardingSuitePage = lazy(() =>
 const MonitoringHubPage = lazy(() =>
   import('./pages/Monitor/MonitoringHubPage').then((module) => ({ default: module.default }))
 );
+const PmLifecycleHubPage = lazy(() =>
+  import('./pages/PmLifecycleHubPage').then((module) => ({ default: module.PmLifecycleHubPage }))
+);
+const PmLifecycleDetailPage = lazy(() =>
+  import('./pages/PmLifecycleDetailPage').then((module) => ({ default: module.PmLifecycleDetailPage }))
+);
 const SojoriLogsAdminPage = lazy(() =>
   import('./pages/SojoriLogsAdminPage').then((module) => ({ default: module.default }))
 );
@@ -290,9 +292,12 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
-              {/* Route principale: système complet avec onglets (Plans, Chronologie, Config legacy) */}
-              <Route path="/orchestrator" element={<LazyRoute><OrchestrationReservationsPage /></LazyRoute>} />
-              <Route path="/orchestration" element={<LazyRoute><OrchestrationReservationsPage /></LazyRoute>} />
+              {/* /orchestrator, /orchestration: ancienne interface V2, appelait srv-orchestrator
+                  (service décommissionné, fusionné dans srv-fulltask — voir CLAUDE.md). Plus
+                  jamais liées depuis le menu (navRoutes.ts redirige déjà vers /tasks/*), gardées
+                  en redirection au cas où un favori/lien externe pointerait encore dessus. */}
+              <Route path="/orchestrator" element={<Navigate to="/tasks/plans" replace />} />
+              <Route path="/orchestration" element={<Navigate to="/tasks/plans" replace />} />
 
               {/* Routes alternatives */}
               <Route path="/orchestration/plans" element={<LazyRoute><OrchestrationPlansPageV2 /></LazyRoute>} />
@@ -406,6 +411,10 @@ function App() {
               <Route path="/admin/ChannelManager" element={<LazyRoute><ChannelManagerHubPage /></LazyRoute>} />
               <Route path="/admin/equipe" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
               <Route path="/admin/equipe/owners" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
+              <Route element={<AdminRoute />}>
+                <Route path="/admin/pm-lifecycle" element={<LazyRoute><PmLifecycleHubPage /></LazyRoute>} />
+                <Route path="/admin/pm-lifecycle/:ownerId" element={<LazyRoute><PmLifecycleDetailPage /></LazyRoute>} />
+              </Route>
               <Route path="/admin/User/create-user" element={<LazyRoute><WorkerCreatePage /></LazyRoute>} />
               <Route path="/admin/User/create-owner-user" element={<LazyRoute><WorkerCreateOwnerPage /></LazyRoute>} />
               <Route path="/admin/User/edit-user/:userId" element={<LazyRoute><WorkerEditPage /></LazyRoute>} />

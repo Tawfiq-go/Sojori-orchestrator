@@ -65,6 +65,8 @@ type Props = {
   mode?: StayActionMode;
   /** Si fourni (liste tâches), force-slot admin sur cette tâche précise. */
   taskId?: string;
+  /** Tableau réservations : une seule ligne date + créneaux. */
+  dense?: boolean;
   onStayUpdated?: (patch: StayFieldPatch) => void;
 };
 

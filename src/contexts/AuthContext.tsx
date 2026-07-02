@@ -21,6 +21,7 @@ import {
 import { clearPersistedUser, getPersistedUser, persistUser } from '../data/mockAuth';
 import { apiUserToMockUser } from '../utils/apiUserToMockUser';
 import { logAuth, logAuthError, logAuthWarn, maskToken } from '../utils/dashboardDebug';
+import { SESSION_EXPIRED_EVENT } from '../utils/devApiAccess';
 
 export type User = MockUser;
 
@@ -311,6 +312,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw error;
     }
   };
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      logAuthWarn('session-expired event — reset auth state');
+      clearPersistedUser();
+      setState({
+        user: null,
+        token: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        loading: false,
+        error: 'Session expirée — reconnectez-vous',
+      });
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+  }, []);
 
   useEffect(() => {
     const token = getToken();

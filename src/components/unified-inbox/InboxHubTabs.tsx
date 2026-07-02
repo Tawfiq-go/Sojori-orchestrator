@@ -29,9 +29,10 @@ interface InboxHubTabsProps {
   counts?: Partial<Record<CommsHubTab, number>>;
   unreadCount?: number;
   metaExtra?: string;
+  compact?: boolean;
 }
 
-export default function InboxHubTabs({ counts = {}, unreadCount = 0, metaExtra }: InboxHubTabsProps) {
+export default function InboxHubTabs({ counts = {}, unreadCount = 0, metaExtra, compact = false }: InboxHubTabsProps) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const active = (searchParams.get('tab') || 'whatsapp') as CommsHubTab;
@@ -39,26 +40,30 @@ export default function InboxHubTabs({ counts = {}, unreadCount = 0, metaExtra }
   const total = Object.values(counts).reduce((s, n) => s + (n || 0), 0);
 
   return (
-    <Box sx={{ mb: 1.75 }}>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.75, mb: 1.75, flexWrap: 'wrap' }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.025em', color: T.text }}>
+    <Box sx={{ mb: compact ? 0.75 : 1.75, flexShrink: 0 }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: compact ? 1 : 1.75, mb: compact ? 0.75 : 1.75, flexWrap: 'nowrap' }}>
+        <Typography sx={{ fontSize: compact ? 15 : 20, fontWeight: 700, letterSpacing: '-0.025em', color: T.text, flexShrink: 0 }}>
           Inbox
         </Typography>
-        <Typography sx={{ fontSize: 12, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
-          {total} conversations · {unreadCount} non lues{metaExtra ? ` · ${metaExtra}` : ''}
+        <Typography sx={{ fontSize: compact ? 10.5 : 12, color: T.text3, fontFamily: '"Geist Mono", monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {total} conv. · {unreadCount} NL{metaExtra ? ` · ${metaExtra}` : ''}
         </Typography>
       </Box>
 
       <Box
         sx={{
           display: 'flex',
-          flexWrap: 'wrap',
+          flexWrap: 'nowrap',
           gap: '3px',
           bgcolor: T.bg1,
           border: `1px solid ${T.border}`,
-          borderRadius: '11px',
+          borderRadius: compact ? '9px' : '11px',
           p: 0.5,
           boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
+          '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
         {HUB_TABS.map((tab) => {
@@ -70,13 +75,13 @@ export default function InboxHubTabs({ counts = {}, unreadCount = 0, metaExtra }
               component="button"
               onClick={() => navigate(`/communications?tab=${tab.id}`)}
               sx={{
-                px: 1.5,
-                py: 0.875,
+                px: compact ? 1.125 : 1.5,
+                py: compact ? 0.625 : 0.875,
                 borderRadius: '8px',
                 border: 0,
                 cursor: 'pointer',
                 fontFamily: 'inherit',
-                fontSize: 12,
+                fontSize: compact ? 11 : 12,
                 fontWeight: 700,
                 color: isActive ? (wa ? '#0e8c4d' : '#c0353a') : T.text3,
                 bgcolor: isActive ? T.bg2 : 'transparent',

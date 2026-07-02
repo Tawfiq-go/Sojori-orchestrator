@@ -7,6 +7,7 @@ import {
   resolveWaBookingPlatform,
   resolveWaBookingSourceKind,
 } from './inboxReservationSource';
+import { conversationThreadId } from '../../utils/conversationThreadId';
 import {
   checkInDaysLabel,
   flagFromPhone,
@@ -83,7 +84,7 @@ export function mapConversationToThread(
     'Aucun message';
   const isAuto = preview.startsWith('[Auto]');
   return {
-    id: conv.phone,
+    id: conversationThreadId(conv),
     name: conv.name || conv.phone,
     phone: conv.phone,
     channel: displayChannel,

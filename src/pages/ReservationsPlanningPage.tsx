@@ -5,7 +5,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { addDays, format } from 'date-fns';
+import { createPortal } from 'react-dom';
+import { addDays, format, startOfDay } from 'date-fns';
 import { Box, CircularProgress, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
@@ -13,7 +14,7 @@ import StayView from '../components/calendar-views/StayView';
 import type { ListingRow } from '../components/calendar-views/_shared';
 import reservationsService from '../services/reservationsService';
 import listingsService from '../services/listingsService';
-import tasksService, { resolveTasksUserScope } from '../services/tasksService';
+import { usePmTasksScope } from '../hooks/usePmTasksScope';
 import cleanlinessService from '../services/cleanlinessService';
 import type { DisplayCleanliness } from '../utils/cleanlinessDisplay';
 import {
@@ -29,9 +30,12 @@ import { useAuth } from '../hooks/useAuth';
 import type { Reservation } from '../types/reservations.types';
 import type { ListingSummary } from '../types/listings.types';
 
-const PLANNING_LOOKBACK_DAYS = 30;
-const PLANNING_FORWARD_DAYS = 45;
-const PLANNING_INITIAL_BACK_DAYS = 2;
+import {
+  getPlanningDefaultStartDate,
+  PLANNING_FORWARD_DAYS,
+  PLANNING_INITIAL_BACK_DAYS,
+  PLANNING_LOOKBACK_DAYS,
+} from '../utils/planningViewDates';
 
 function normalizeMongoId(value: unknown): string | undefined {
   if (value == null || value === '') return undefined;
@@ -75,17 +79,13 @@ function toIsoDate(d: Date | string | undefined): string {
 
 export function ReservationsPlanningPage() {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
-  const scope = useMemo(() => resolveTasksUserScope(user), [user]);
-  const listingsCacheKey = scope.ownerId || (scope.canAccessAllOwners ? 'admin' : 'unknown');
+  const { loading: authLoading } = useAuth();
+  const scope = usePmTasksScope();
+  const listingsCacheKey = scope.scopeCacheKey;
 
-  const [startDate, setStartDate] = useState<Date>(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - PLANNING_INITIAL_BACK_DAYS);
-    return d;
-  });
+  const [startDate, setStartDate] = useState<Date>(() => getPlanningDefaultStartDate());
   const [daysCount] = useState(PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS);
+  const initialViewAlignedRef = useRef(false);
 
   const [activeListings, setActiveListings] = useState<ListingSummary[]>(() => {
     return getCachedPlanningListings(listingsCacheKey) ?? [];
@@ -99,10 +99,24 @@ export function ReservationsPlanningPage() {
     new Map(),
   );
   const windowRequestIdRef = useRef(0);
-  const operationalRequestIdRef = useRef(0);
   const skipNextWindowOnlyFetchRef = useRef(false);
   const listingsHydratedRef = useRef(activeListings.length > 0);
   const [opSyncTick, setOpSyncTick] = useState(0);
+  const [listFullscreen, setListFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!listFullscreen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setListFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [listFullscreen]);
 
   const windowRange = useCallback(() => {
     const apiStart = format(startDate, 'yyyy-MM-dd');
@@ -123,6 +137,7 @@ export function ReservationsPlanningPage() {
       compact: true,
       forListingsOverview: false,
       limit: 500,
+      filterOwnerId: scope.filterOwnerId,
     });
     console.log('[ReservationsPlanning] fetchActiveListings', {
       count: res.data.items.length,
@@ -136,6 +151,14 @@ export function ReservationsPlanningPage() {
     setActiveListings(res.data.items);
     setCachedPlanningListings(listingsCacheKey, res.data.items);
     listingsHydratedRef.current = true;
+  }, [listingsCacheKey, scope.filterOwnerId]);
+
+  useEffect(() => {
+    setActiveListings([]);
+    setReservations([]);
+    listingsHydratedRef.current = false;
+    setCalendarReady(false);
+    invalidatePlanningListingsCache();
   }, [listingsCacheKey]);
 
   const fetchReservationsWindow = useCallback(async (): Promise<Reservation[]> => {
@@ -146,48 +169,18 @@ export function ReservationsPlanningPage() {
       dateType: 'arrival_or_departure',
       startDate: apiStart,
       endDate: apiEnd,
+      filterOwnerId: scope.filterOwnerId,
     });
     return reservationsResponse.data;
-  }, [windowRange]);
+  }, [windowRange, scope.filterOwnerId]);
 
-  /** srv-task planning — lent : badges propreté uniquement, non bloquant. */
-  const fetchOperationalStatus = useCallback(async () => {
-    const ownerId = scope.canAccessAllOwners ? undefined : scope.ownerId;
-    if (!ownerId && !scope.canAccessAllOwners) return;
-
-    const requestId = ++operationalRequestIdRef.current;
-    const { apiStart, apiEnd } = windowRange();
-
-    try {
-      const planning = await tasksService.getReservationPlanning({
-        startDate: apiStart,
-        endDate: apiEnd,
-        ownerId,
-      });
-      if (requestId !== operationalRequestIdRef.current) return;
-      if (!planning?.data?.listings) return;
-
-      const map = new Map<string, Record<string, unknown>>();
-      planning.data.listings.forEach((l: Record<string, unknown>) => {
-        const id = String(l.listingId || l._id || '');
-        if (id) map.set(id, l);
-      });
-      console.log('[ReservationsPlanning] fetchOperationalStatus (srv-task fallback)', {
-        listingsCount: map.size,
-        sample: [...map.entries()].slice(0, 3).map(([id, row]) => ({
-          id,
-          occupancyStatus: row.occupancyStatus,
-          cleanlinessStatus_v2: row.cleanlinessStatus_v2,
-        })),
-      });
-      setOperationalByListing(map);
-    } catch {
-      // Grille + résas restent utilisables sans badges opérationnels
-    }
-  }, [windowRange, scope.canAccessAllOwners, scope.ownerId]);
-
+  // Note : les badges propreté (occupancyStatus/cleanlinessStatus_v2) viennent déjà de
+  // fetchActiveListings() (source srv-listing). L'ancien enrichissement via
+  // tasksService.getReservationPlanning() (backend srv-task, supprimé) est retiré —
+  // route inexistante côté serveur, opérationalByListing reste vide (fallback géré par
+  // mergeListingOperationalRow via les champs déjà présents sur activeListings).
   const fetchWindowData = useCallback(
-    async (opts?: { includeOperational?: boolean }) => {
+    async () => {
       const requestId = ++windowRequestIdRef.current;
       setIsRefreshing(true);
       setError(null);
@@ -196,10 +189,6 @@ export function ReservationsPlanningPage() {
         const data = await fetchReservationsWindow();
         if (requestId !== windowRequestIdRef.current) return;
         setReservations(data);
-
-        if (opts?.includeOperational !== false) {
-          void fetchOperationalStatus();
-        }
       } catch (e) {
         if (requestId !== windowRequestIdRef.current) return;
         setError(e instanceof Error ? e.message : 'Erreur chargement données');
@@ -209,12 +198,12 @@ export function ReservationsPlanningPage() {
         }
       }
     },
-    [fetchReservationsWindow, fetchOperationalStatus],
+    [fetchReservationsWindow],
   );
 
   /** Bootstrap : listings (cache) + résas en parallèle → affichage ; propreté en async */
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || !scope.scopeFetchReady) return;
 
     let cancelled = false;
     const isBootstrap = !calendarReady;
@@ -228,9 +217,7 @@ export function ReservationsPlanningPage() {
 
         const tasks: Promise<void>[] = [];
         if (!skipListings) tasks.push(fetchActiveListings());
-        tasks.push(
-          fetchWindowData({ includeOperational: true }).then(() => undefined),
-        );
+        tasks.push(fetchWindowData());
 
         await Promise.all(tasks);
         if (cancelled) return;
@@ -251,17 +238,27 @@ export function ReservationsPlanningPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading]);
+  }, [authLoading, scope.scopeFetchReady, listingsCacheKey]);
+
+  /** Premier rendu grille : recaler J-2 (évite dérive fuseau / HMR). */
+  useEffect(() => {
+    if (!calendarReady || initialViewAlignedRef.current) return;
+    initialViewAlignedRef.current = true;
+    setStartDate((prev) => {
+      const next = getPlanningDefaultStartDate();
+      return startOfDay(prev).getTime() === next.getTime() ? prev : next;
+    });
+  }, [calendarReady]);
 
   /** Navigation dates : réservations + propreté (listings inchangés) */
   useEffect(() => {
-    if (authLoading || !calendarReady) return;
+    if (authLoading || !calendarReady || !scope.scopeFetchReady) return;
     if (skipNextWindowOnlyFetchRef.current) {
       skipNextWindowOnlyFetchRef.current = false;
       return;
     }
-    void fetchWindowData({ includeOperational: true });
-  }, [startDate, authLoading, calendarReady, fetchWindowData]);
+    void fetchWindowData();
+  }, [startDate, authLoading, calendarReady, fetchWindowData, scope.scopeFetchReady, scope.ownerId]);
 
   useEffect(() => {
     const onOperationalStatusChanged = () => setOpSyncTick((n) => n + 1);
@@ -368,24 +365,15 @@ export function ReservationsPlanningPage() {
   );
 
   const goToday = useCallback(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - PLANNING_INITIAL_BACK_DAYS);
-    setStartDate(d);
+    setStartDate(getPlanningDefaultStartDate());
   }, []);
 
   const shiftDays = useCallback((delta: number) => {
-    setStartDate((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() + delta);
-      return d;
-    });
+    setStartDate((prev) => startOfDay(addDays(prev, delta)));
   }, []);
 
   const handleDateChange = useCallback((newDate: Date) => {
-    const d = new Date(newDate);
-    d.setHours(0, 0, 0, 0);
-    setStartDate(d);
+    setStartDate(startOfDay(newDate));
   }, []);
 
   const handleReservationClick = useCallback(
@@ -396,29 +384,115 @@ export function ReservationsPlanningPage() {
     [navigate],
   );
 
+  const stayViewProps = {
+    variant: 'reservations' as const,
+    startDate,
+    daysCount,
+    todayBackDays: PLANNING_INITIAL_BACK_DAYS,
+    listings: listingRows,
+    onReservationClick: handleReservationClick,
+    onGoToday: goToday,
+    onPrevDay: () => shiftDays(-1),
+    onNextDay: () => shiftDays(1),
+    onPrevWeek: () => shiftDays(-7),
+    onNextWeek: () => shiftDays(7),
+    onDateChange: handleDateChange,
+    onCleanlinessChange: handleCleanlinessChange,
+  };
+
+  const planningGrid =
+    calendarReady ? (
+      <StayView
+        {...stayViewProps}
+        compactLayout
+        gridOnly={listFullscreen}
+        fillViewport
+        showFullscreenEnter={!listFullscreen}
+        onEnterFullscreen={() => setListFullscreen(true)}
+      />
+    ) : null;
+
+  const listFullscreenLayer =
+    listFullscreen && planningGrid && typeof document !== 'undefined'
+      ? createPortal(
+          <Box
+            role="dialog"
+            aria-modal="true"
+            aria-label="Planning réservations plein écran"
+            sx={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              bgcolor: '#f6f5f1',
+              display: 'flex',
+              flexDirection: 'column',
+              p: { xs: 0.5, md: 0.75 },
+              boxSizing: 'border-box',
+            }}
+          >
+            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              {planningGrid}
+            </Box>
+            <Box
+              component="button"
+              type="button"
+              onClick={() => setListFullscreen(false)}
+              title="Quitter le plein écran (Échap)"
+              aria-label="Quitter le plein écran"
+              sx={{
+                position: 'fixed',
+                right: { xs: 10, md: 14 },
+                bottom: { xs: 10, md: 14 },
+                zIndex: 10000,
+                width: 36,
+                height: 36,
+                borderRadius: '99px',
+                border: '1px solid rgba(20,17,10,0.12)',
+                bgcolor: 'rgba(255,255,255,0.94)',
+                boxShadow: '0 4px 16px rgba(20,17,10,0.14)',
+                color: '#7a756c',
+                fontSize: 22,
+                fontWeight: 300,
+                lineHeight: 1,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                p: 0,
+              }}
+            >
+              ×
+            </Box>
+          </Box>,
+          document.body,
+        )
+      : null;
+
   return (
     <DashboardWrapper breadcrumb={['Réservations', 'Planning']}>
-      <Box sx={{ bgcolor: '#f6f5f1', minHeight: '100vh' }}>
+      <Box sx={{ bgcolor: '#f6f5f1', minHeight: listFullscreen ? 0 : '100vh' }}>
         {isLoading && !calendarReady && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
             <CircularProgress />
           </Box>
         )}
 
-        {calendarReady && error && (
-          <Box sx={{ maxWidth: 800, mx: 'auto', mt: 2, px: 2 }}>
+        {calendarReady && error && !listFullscreen && (
+          <Box sx={{ maxWidth: 800, mx: 'auto', mt: 1, px: 1 }}>
             <Alert severity="error" onClose={() => setError(null)}>
               {error}
             </Alert>
           </Box>
         )}
 
-        {calendarReady && (
+        {calendarReady && !listFullscreen && (
           <Box
             sx={{
               position: 'relative',
               opacity: isRefreshing ? 0.92 : 1,
               transition: 'opacity 0.15s ease',
+              minHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+              maxHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             {isRefreshing && (
@@ -447,22 +521,13 @@ export function ReservationsPlanningPage() {
               </Box>
             )}
 
-            <StayView
-              variant="reservations"
-              startDate={startDate}
-              daysCount={daysCount}
-              listings={listingRows}
-              onReservationClick={handleReservationClick}
-              onGoToday={goToday}
-              onPrevDay={() => shiftDays(-1)}
-              onNextDay={() => shiftDays(1)}
-              onPrevWeek={() => shiftDays(-7)}
-              onNextWeek={() => shiftDays(7)}
-              onDateChange={handleDateChange}
-              onCleanlinessChange={handleCleanlinessChange}
-            />
+            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              {planningGrid}
+            </Box>
           </Box>
         )}
+
+        {listFullscreenLayer}
 
         {!isLoading && !calendarReady && error && (
           <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, p: 3 }}>

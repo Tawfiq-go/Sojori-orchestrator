@@ -26,6 +26,7 @@ import {
 import { listingsService } from '../services/listingsService';
 import { ImportAirbnbModalContainer } from '../components/listing/import-airbnb';
 import { useAuth } from '../hooks/useAuth';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import type { ListingStatus, ListingsStats, ListingSummary } from '../types/listings.types';
 import { ListingQuickEditDialog } from '../components/listing/ListingQuickEditDialog';
 import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
@@ -108,6 +109,7 @@ function initialStats(): ListingsStats {
 export function ListingsOverviewPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const isAdmin = isAdminRole(user?.role);
   const canCreate = canCreateListing(user?.role);
   /** Toujours afficher sur la liste — l’API quick-edit applique les droits côté srv-listing. */
@@ -142,8 +144,9 @@ export function ListingsOverviewPage() {
       useActiveFilter: true,
       active: statusFilter === 'active',
       name: search.trim() || undefined,
+      filterOwnerId: requestOwnerId || undefined,
     }),
-    [page, pageSize, statusFilter, search],
+    [page, pageSize, statusFilter, search, requestOwnerId],
   );
 
   const totalPages = Math.max(1, Math.ceil(totalListings / pageSize));
@@ -151,9 +154,10 @@ export function ListingsOverviewPage() {
   const pageEnd = Math.min(totalListings, (page + 1) * pageSize);
 
   const loadStats = async () => {
+    if (!scopeFetchReady) return;
     setStatsLoading(true);
     try {
-      const statsResult = await listingsService.getStats();
+      const statsResult = await listingsService.getStats({ ownerId: requestOwnerId });
       setStats(statsResult.data);
     } catch {
       /* KPI secondaires — ne bloque pas la liste */
@@ -163,6 +167,12 @@ export function ListingsOverviewPage() {
   };
 
   const loadListings = async () => {
+    if (!scopeFetchReady) {
+      setListings([]);
+      setTotalListings(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -190,11 +200,11 @@ export function ListingsOverviewPage() {
 
   useEffect(() => {
     void loadStats();
-  }, []);
+  }, [requestOwnerId, scopeFetchReady]);
 
   useEffect(() => {
     void loadListings();
-  }, [listingsQueryOptions]);
+  }, [listingsQueryOptions, scopeFetchReady]);
 
   useEffect(() => {
     void listingsService.getCities({ allCities: true, limit: 2000 }).then((rows) => {

@@ -162,6 +162,8 @@ function snapshotParams(
   }
   if (ownerId) {
     params.ownerId = ownerId;
+  } else {
+    params.scope = 'platform';
   }
   if (mode && mode !== 'complete') {
     params.mode = mode;

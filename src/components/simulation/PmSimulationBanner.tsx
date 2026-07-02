@@ -45,7 +45,13 @@ export function PmSimulationBanner() {
           >
             Mode simulation PM
           </Typography>
-          <Typography component="div" sx={{ fontSize: 12, opacity: 0.95 }} noWrap title={subtitle}>
+          <Typography
+            component="div"
+            className="sojori-pm-simulation-subtitle"
+            sx={{ fontSize: 12, opacity: 0.95 }}
+            noWrap
+            title={subtitle}
+          >
             Vous voyez les données de : <strong>{subtitle}</strong>
           </Typography>
         </Box>

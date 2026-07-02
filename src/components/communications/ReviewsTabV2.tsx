@@ -7,6 +7,8 @@ import ReviewCenterPanel from '../unified-inbox/ReviewCenterPanel';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
 import messagesService from '../../services/messagesService';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
+import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
 import type { Thread } from '../../types/unifiedInbox.types';
 import type { InboxReservationData } from '../../types/inboxReservation.types';
 import { otaChannelColor, otaChannelFromName } from '../unified-inbox/inboxMappers';
@@ -79,6 +81,7 @@ function mapReviewApiRows(threadsData: any[]): ReviewRow[] {
 }
 
 export default function ReviewsTabV2() {
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [active, setActive] = useState<ReviewRow | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -93,14 +96,26 @@ export default function ReviewsTabV2() {
   const prevSearchTermRef = useRef('');
 
   const loadReviews = useCallback(async (opts?: { search?: string; forSearch?: boolean }) => {
+    if (!scopeFetchReady) {
+      setRows([]);
+      setLoading(false);
+      setSearchPending(false);
+      return;
+    }
     const requestId = ++searchRequestIdRef.current;
     try {
       if (opts?.forSearch) setSearchPending(true);
       else setLoading(true);
 
-      const params: { limit: number; msgLimit: number; reservationNumber?: string } = {
+      const params: {
+        limit: number;
+        msgLimit: number;
+        reservationNumber?: string;
+        ownerId?: string;
+      } = {
         limit: 50,
         msgLimit: 30,
+        ownerId: requestOwnerId || undefined,
       };
       const q = opts?.search?.trim();
       if (q) params.reservationNumber = q;
@@ -120,11 +135,13 @@ export default function ReviewsTabV2() {
         else setLoading(false);
       }
     }
-  }, []);
+  }, [scopeFetchReady, requestOwnerId]);
 
   useEffect(() => {
     void loadReviews();
   }, [loadReviews]);
+
+  useInboxRealtimeRefresh('reviews', () => loadReviews());
 
   useEffect(() => {
     const q = searchTerm.trim();

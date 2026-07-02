@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import {
   BienView,
   DynamicPricingAirroiModal,
@@ -34,7 +35,11 @@ export function DynamicPricingPage() {
     return decodeURIComponent(p);
   }, [searchParams]);
 
-  const portfolio = usePortfolio(undefined, cityScope);
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
+
+  const portfolio = usePortfolio(requestOwnerId || undefined, cityScope, {
+    enabled: scopeFetchReady,
+  });
   const bienDetail = useBienDetail(listingId);
 
   const scopedModalStats = useMemo(() => {

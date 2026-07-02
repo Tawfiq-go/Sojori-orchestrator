@@ -13,6 +13,7 @@ const SKIP_PATHS = [
   '/register',
   '/forgot-password',
   '/reset-password',
+  '/accept-invite',
 ];
 
 /**

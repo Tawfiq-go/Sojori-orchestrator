@@ -1,4 +1,6 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { isPmBusinessPath } from '../config/routeAccessPolicy';
 import { canSelectOwnerInAdminFilter, getRequestOwnerIdParam } from 'utils/taskScope.utils';
 import { usePmSimulation } from './PmSimulationContext';
 import { getOwnersAllPages } from '../services/teamDashboardApi';
@@ -13,6 +15,11 @@ const noop = () => {};
 /** Stable empty array for useAdminOwnerFilter fallback (avoid new [] each render → effect loops). */
 const EMPTY_OWNER_IDS = Object.freeze([]);
 
+/** Admin métier : unset = écran vide jusqu’au choix explicite ; all = plateforme ; owner = un PM. */
+export const ADMIN_SCOPE_UNSET = 'unset';
+export const ADMIN_SCOPE_ALL = 'all';
+export const ADMIN_SCOPE_OWNER = 'owner';
+
 /**
  * Propriétaire filter for users who can work across owners (see canSelectOwnerInAdminFilter).
  * Property Owner accounts: no filter, scoped data only.
@@ -21,7 +28,10 @@ const EMPTY_OWNER_IDS = Object.freeze([]);
 export function AdminOwnerFilterProvider({ children }) {
   const { user: authUser } = useAuth();
   const user = useMemo(() => toLegacyAuthUser(authUser), [authUser]);
+  const location = useLocation();
+  const prevPmPathRef = useRef('');
   const [selectedOwnerId, setSelectedOwnerIdState] = useState('');
+  const [adminScopeMode, setAdminScopeMode] = useState(ADMIN_SCOPE_UNSET);
   const [owners, setOwners] = useState([]);
   const [ownersLoading, setOwnersLoading] = useState(false);
   const { simulatedOwnerId: simulatedOwnerIdFromCtx } = usePmSimulation();
@@ -32,6 +42,10 @@ export function AdminOwnerFilterProvider({ children }) {
     () => getRequestOwnerIdParam(user, effectiveSelectedOwnerId),
     [user, effectiveSelectedOwnerId],
   );
+  const ownerScopeUnset =
+    showOwnerFilter && !simulatedOwnerId && adminScopeMode === ADMIN_SCOPE_UNSET;
+  const ownerScopeAll =
+    showOwnerFilter && !simulatedOwnerId && adminScopeMode === ADMIN_SCOPE_ALL;
 
   /** @type {string[]} for APIs that take filterOwnerId[]; mirrors single selection. */
   const selectedOwnerIds = useMemo(
@@ -46,18 +60,35 @@ export function AdminOwnerFilterProvider({ children }) {
     setSelectedOwnerIdState(id ? String(id).trim() : '');
   }, []);
 
+  const setScopeAll = useCallback(() => {
+    setAdminScopeMode(ADMIN_SCOPE_ALL);
+    setSelectedOwnerIdState('');
+  }, []);
+
+  const setScopeOwner = useCallback((id) => {
+    const trimmed = id ? String(id).trim() : '';
+    if (!trimmed) return;
+    setAdminScopeMode(ADMIN_SCOPE_OWNER);
+    setSelectedOwnerIdState(trimmed);
+  }, []);
+
+  const resetAdminScope = useCallback(() => {
+    setAdminScopeMode(ADMIN_SCOPE_UNSET);
+    setSelectedOwnerIdState('');
+  }, []);
+
   const setSelectedOwnerIds = useCallback(
     (ids) => {
       if (!Array.isArray(ids) || !ids.length) {
-        setSelectedOwnerId('');
+        setScopeAll();
         return;
       }
-      setSelectedOwnerId(String(ids[0]));
+      setScopeOwner(String(ids[0]));
     },
-    [setSelectedOwnerId],
+    [setScopeAll, setScopeOwner],
   );
 
-  const clearSelection = useCallback(() => setSelectedOwnerId(''), [setSelectedOwnerId]);
+  const clearSelection = useCallback(() => resetAdminScope(), [resetAdminScope]);
 
   useEffect(() => {
     try {
@@ -67,11 +98,24 @@ export function AdminOwnerFilterProvider({ children }) {
     }
   }, []);
 
+  /** Chaque entrée sur une URL métier PM : écran vide jusqu’au choix explicite (Tous ou un PM). */
+  useEffect(() => {
+    if (!showOwnerFilter || simulatedOwnerId) return;
+    if (!isPmBusinessPath(location.pathname)) {
+      prevPmPathRef.current = location.pathname;
+      return;
+    }
+    if (prevPmPathRef.current !== location.pathname) {
+      resetAdminScope();
+    }
+    prevPmPathRef.current = location.pathname;
+  }, [location.pathname, showOwnerFilter, simulatedOwnerId, resetAdminScope]);
+
   useEffect(() => {
     if (!showOwnerFilter) return;
     let cancelled = false;
     setOwnersLoading(true);
-    getOwnersAllPages({ search_text: '' })
+    getOwnersAllPages({ search_text: '', accountStatus: 'live' })
       .then((rows) => {
         if (cancelled) return;
         setOwners(Array.isArray(rows) ? rows : []);
@@ -91,8 +135,14 @@ export function AdminOwnerFilterProvider({ children }) {
     () => ({
       showOwnerFilter,
       simulatedOwnerId,
+      adminScopeMode,
+      ownerScopeUnset,
+      ownerScopeAll,
       selectedOwnerId: effectiveSelectedOwnerId,
       setSelectedOwnerId,
+      setScopeAll,
+      setScopeOwner,
+      resetAdminScope,
       selectedOwnerIds,
       setSelectedOwnerIds,
       clearSelection,
@@ -103,8 +153,14 @@ export function AdminOwnerFilterProvider({ children }) {
     [
       showOwnerFilter,
       simulatedOwnerId,
+      adminScopeMode,
+      ownerScopeUnset,
+      ownerScopeAll,
       effectiveSelectedOwnerId,
       setSelectedOwnerId,
+      setScopeAll,
+      setScopeOwner,
+      resetAdminScope,
       selectedOwnerIds,
       setSelectedOwnerIds,
       clearSelection,
@@ -125,8 +181,14 @@ export function useAdminOwnerFilter() {
   return {
     showOwnerFilter: false,
     simulatedOwnerId: '',
+    adminScopeMode: ADMIN_SCOPE_OWNER,
+    ownerScopeUnset: false,
+    ownerScopeAll: false,
     selectedOwnerId: '',
     setSelectedOwnerId: noop,
+    setScopeAll: noop,
+    setScopeOwner: noop,
+    resetAdminScope: noop,
     selectedOwnerIds: EMPTY_OWNER_IDS,
     setSelectedOwnerIds: noop,
     clearSelection: noop,

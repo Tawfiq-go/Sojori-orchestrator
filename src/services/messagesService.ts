@@ -17,8 +17,8 @@ import type {
 } from '../types/messages.types';
 
 /**
- * Guest WhatsApp → srv-fullchatbot (via srv-admin proxy)
- * Staff WhatsApp → srv-fulltask /staff-whatsapp/*
+ * Guest WhatsApp → srv-fullchatbot via proxy srv-admin (/fullchatbot/debug/*).
+ * Staff WhatsApp → srv-fulltask (hasReservation=false dans getConversations).
  */
 function resolveGuestWhatsappDebugBase(): string {
   if (import.meta.env.DEV && typeof window !== 'undefined' && !import.meta.env.VITE_API_URL) {

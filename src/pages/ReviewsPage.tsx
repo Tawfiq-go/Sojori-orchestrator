@@ -32,6 +32,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import messagesService from '../services/messagesService';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 
 type ReviewRow = {
   id: string;
@@ -206,6 +207,7 @@ const AI_RESPONSE_TEMPLATES = [
 
 export function ReviewsPage() {
   const navigate = useNavigate();
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -244,10 +246,19 @@ export function ReviewsPage() {
   ]);
 
   const loadReviews = useCallback(async () => {
+    if (!scopeFetchReady) {
+      setReviews([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setLoadError(null);
-      const response = await messagesService.getReviews({ limit: 100, msgLimit: 30 });
+      const response = await messagesService.getReviews({
+        limit: 100,
+        msgLimit: 30,
+        ownerId: requestOwnerId || undefined,
+      });
       const threadsData = response.threads || response.data || [];
       setReviews((prev) => {
         const flagged = new Set(prev.filter((r) => r.flagged).map((r) => r.id));
@@ -260,7 +271,7 @@ export function ReviewsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scopeFetchReady, requestOwnerId]);
 
   useEffect(() => {
     void loadReviews();

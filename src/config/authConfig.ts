@@ -68,8 +68,11 @@ const API_BASE_URL = getApiBaseUrl();
 const useLocalMicroservicePorts = shouldUseLocalMicroservicePorts();
 
 // URL du service utilisateur (srv-user)
+// Ports locaux alignés sur docs/PORTS_REFERENCE.md (sojori-production) — vérité K8s, pas le
+// fallback du code source. Ne concerne que VITE_USE_LOCAL_MICROSERVICES=true (dev + port-forward
+// direct) ; en prod/preview normal ces valeurs ne sont jamais utilisées (proxy Vite ou gateway).
 const SRV_USER_URL = useLocalMicroservicePorts
-  ? `${API_BASE_URL}:4005/api/v1/user`
+  ? `${API_BASE_URL}:4008/api/v1/user`
   : `${API_BASE_URL}/api/v1/user`;
 
 export const AUTH_CONFIG = {
@@ -93,28 +96,28 @@ export const MICROSERVICE_BASE_URL = {
   API_BASE_URL,
   SRV_USER: SRV_USER_URL,
   SRV_LISTING: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4000/api/v1/listing`
+    ? `${API_BASE_URL}:4001/api/v1/listing`
     : `${API_BASE_URL}/api/v1/listing`,
   SRV_ADMIN: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4006/api/v1/admin`
+    ? `${API_BASE_URL}:4003/api/v1/admin`
     : `${API_BASE_URL}/api/v1/admin`,
   /** Villes (admin) — wizard import RU */
   CITY: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4006/api/v1/admin/city`
+    ? `${API_BASE_URL}:4003/api/v1/admin/city`
     : `${API_BASE_URL}/api/v1/admin/city`,
   SRV_RESERVATION: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4002/api/v1/reservations`
+    ? `${API_BASE_URL}:4004/api/v1/reservations`
     : `${API_BASE_URL}/api/v1/reservations`,
   /** Routes inter-services srv-reservations (for-profit-report, etc.) */
   SRV_RESERVATION_INTERNAL: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4002/api/v1/internal`
+    ? `${API_BASE_URL}:4004/api/v1/internal`
     : `${API_BASE_URL}/api/v1/internal`,
   /** Router Express `messageState` : `/api/v1/message/*` (pas sous `/reservations/`) */
   SRV_RESERVATION_MESSAGE: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4002/api/v1/message`
+    ? `${API_BASE_URL}:4004/api/v1/message`
     : `${API_BASE_URL}/api/v1/message`,
   SRV_CALENDAR: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4004/api/v1/calendar`
+    ? `${API_BASE_URL}:4005/api/v1/calendar`
     : `${API_BASE_URL}/api/v1/calendar`,
   SRV_TASK: useLocalMicroservicePorts
     ? `${API_BASE_URL}:4003/api/v1/task`
@@ -140,16 +143,16 @@ export const MICROSERVICE_BASE_URL = {
     : `${API_BASE_URL}/api/v1/become-host`,
   // Upload endpoints
   UPLOAD_IMAGE: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4006/api/v1/admin/upload/get_link`
+    ? `${API_BASE_URL}:4003/api/v1/admin/upload/get_link`
     : `${API_BASE_URL}/api/v1/admin/upload/get_link`,
   UPLOAD_IMAGE_MULTIPLE: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4006/api/v1/admin/upload/upload_multiple`
+    ? `${API_BASE_URL}:4003/api/v1/admin/upload/upload_multiple`
     : `${API_BASE_URL}/api/v1/admin/upload/upload_multiple`,
   LEDGER_ATTACHMENT_UPLOAD: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4006/api/v1/admin/ledger-attachments/upload`
+    ? `${API_BASE_URL}:4003/api/v1/admin/ledger-attachments/upload`
     : `${API_BASE_URL}/api/v1/admin/ledger-attachments/upload`,
   LEDGER_ATTACHMENT_SIGNED_URL: useLocalMicroservicePorts
-    ? `${API_BASE_URL}:4006/api/v1/admin/ledger-attachments/signed-url`
+    ? `${API_BASE_URL}:4003/api/v1/admin/ledger-attachments/signed-url`
     : `${API_BASE_URL}/api/v1/admin/ledger-attachments/signed-url`,
 };
 

@@ -8,7 +8,10 @@ import AdminFilter from './AdminFilter';
 import UpdateOwnerSidebar from './UpdateOwnerSidebar';
 import TableLoading from 'components/TableLoading/TableLoadign';
 import { getOwners } from '../../../services/teamDashboardApi';
-import { getCities, updateFillCompany, deleteOwner, getOwnerRuLoginCredentials, syncOwnersRuIds, applyOwnersRuIdsSync } from '../services/serverApi.task';
+import { getCities, updateFillCompany, deleteOwner, getOwnerRuLoginCredentials, syncOwnersRuIds, applyOwnersRuIdsSync, sendOwnerPasswordLink } from '../services/serverApi.task';
+import { parseOwnerPasswordLinkResponse } from '../utils/ownerPasswordLinkFeedback';
+import { logPmMail } from '../../../utils/ownerMailDebug';
+import OwnerPasswordLinkDialog from './OwnerPasswordLinkDialog';
 import { getListingsWithChannelMetrics } from 'features/tasks/services/serverApi.task';
 import { Chip, Popover, Tooltip, Checkbox, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { RemoveRedEye } from '@mui/icons-material';
@@ -22,9 +25,10 @@ import { useNavigate } from 'react-router-dom';
 import OwnerFilter from './OwnerFilter';
 import { useSelector } from 'react-redux';
 import { hasAdminAccess } from '../../../utils/rbac.utils';
-import { Users, Milestone } from 'lucide-react';
+import { Users, Milestone, Mail } from 'lucide-react';
 import { useTeamViewMode } from '../../../context/TeamViewContext';
 import { PropertyManagerHubView } from '../../../components/team/PropertyManagerHubView';
+import { filterOwnersForPmTab } from '../../../utils/ownerListFilters';
 import { TEAM_T } from '../../../components/team/teamHubTokens';
 const SOJORI = {
   orange: '#E6B022',
@@ -70,6 +74,7 @@ const PublicOwner = ({
   const [viewDialogData, setViewDialogData] = useState(null);
   const [deletedFilter, setDeletedFilter] = useState('false');
   const [bannedFilter, setBannedFilter] = useState('false');
+  const [accountStatusFilter, setAccountStatusFilter] = useState('live');
   const [statusAnchorEl, setStatusAnchorEl] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [searchText, setSearchText] = useState('');
@@ -78,6 +83,7 @@ const PublicOwner = ({
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [ownerToDelete, setOwnerToDelete] = useState(null);
   const [ruCredOpen, setRuCredOpen] = useState(false);
+  const [passwordLinkDialog, setPasswordLinkDialog] = useState(null);
   const [ruCredOwner, setRuCredOwner] = useState(null);
   const [ruCredData, setRuCredData] = useState(null);
   const [ruCredLoading, setRuCredLoading] = useState(false);
@@ -102,24 +108,47 @@ const PublicOwner = ({
     fetchOwners();
     fetchCities();
     fetchListings();
-  }, [page, limit, deletedFilter, bannedFilter, searchText, selectedListings]);
-  const fetchOwners = async () => {
+  }, [page, limit, deletedFilter, bannedFilter, searchText, selectedListings, accountStatusFilter]);
+  const fetchOwners = async (overrides = {}) => {
     setLoading(true);
     try {
       const params = {
-        page,
-        limit,
-        deleted: deletedFilter === 'true',
-        banned: bannedFilter === 'true',
-        search_text: searchText
+        page: overrides.page ?? page,
+        limit: overrides.limit ?? limit,
+        deleted: overrides.deleted ?? (deletedFilter === 'true'),
+        banned: overrides.banned ?? (bannedFilter === 'true'),
+        search_text: overrides.search_text ?? searchText,
+        accountStatus: overrides.accountStatus ?? accountStatusFilter,
       };
       if (selectedListings && selectedListings.length > 0) {
         params.listings = selectedListings;
       }
+      console.log('[PM-list] fetchOwners → request', params);
       const response = await getOwners(params);
+      const requestedAccountStatus = overrides.accountStatus ?? accountStatusFilter;
+      const rows = filterOwnersForPmTab(response?.data || [], {
+        accountStatus: requestedAccountStatus,
+        deleted: params.deleted,
+        banned: params.banned,
+      });
+      const statusBreakdown = rows.reduce((acc, o) => {
+        const s = o.status || '(sans status)';
+        acc[s] = (acc[s] || 0) + 1;
+        return acc;
+      }, {});
+      console.log('[PM-list] fetchOwners ← response', {
+        accountStatusFilter,
+        total: response?.total ?? 0,
+        rowCount: rows.length,
+        statusBreakdown,
+        emails: rows.map((o) => ({ email: o.email, status: o.status, id: o._id })),
+      });
       if (response && response.data) {
-        setOwners(response.data);
-        const total = response.total || 0;
+        setOwners(rows);
+        const apiTotal = response.total || 0;
+        const removedOnPage = (response.data?.length || 0) - rows.length;
+        const total =
+          removedOnPage > 0 ? Math.max(rows.length, apiTotal - removedOnPage) : apiTotal;
         setTotalCount(total);
         setIsNextDisabled(total === 0 || (page + 1) * limit >= total);
       } else {
@@ -128,6 +157,12 @@ const PublicOwner = ({
         setIsNextDisabled(true);
       }
     } catch (error) {
+      console.error('[PM-list] fetchOwners error', {
+        accountStatusFilter,
+        message: error?.message,
+        status: error?.response?.status,
+        data: error?.response?.data,
+      });
       setOwners([]);
       setTotalCount(0);
       setIsNextDisabled(true);
@@ -153,9 +188,40 @@ const PublicOwner = ({
       setListings(response || []);
     } catch (error) {}
   };
-  const onOwnerCreated = async newOwner => {
+  const onOwnerCreated = async (newOwner, meta) => {
+    if (meta?.isDraft === true) return;
     toast.success(t('Owner created successfully'));
+    setAccountStatusFilter('live');
+    setPage(0);
     await fetchOwners();
+  };
+  const handleDraftSaved = (draftAccount) => {
+    console.log('[PM-list] handleDraftSaved', {
+      accountId: draftAccount?._id,
+      email: draftAccount?.email,
+      status: draftAccount?.status,
+    });
+    setOwners((prev) => {
+      const id = String(draftAccount?._id ?? '');
+      if (!id) return prev;
+      const idx = prev.findIndex((o) => String(o._id) === id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...draftAccount };
+        return next;
+      }
+      return [draftAccount, ...prev];
+    });
+    setAccountStatusFilter('inactive');
+    setPage(0);
+    setOpenCreateDialog(false);
+    setSelectedOwner(draftAccount);
+    setOpenUpdateDialog(true);
+    void fetchOwners({ accountStatus: 'inactive', page: 0 });
+  };
+  const handleAccountStatusChange = (next) => {
+    console.log('[PM-list] accountStatusFilter change', { from: accountStatusFilter, to: next });
+    setAccountStatusFilter(next);
   };
   const onOwnerUpdated = updatedOwner => {
     setOwners(prevOwners => prevOwners.map(owner => owner._id === updatedOwner._id ? {
@@ -283,6 +349,27 @@ const PublicOwner = ({
     setRuCredOwner(null);
     setRuCredData(null);
     setRuCredError('');
+  };
+  const handleSendPasswordLink = async owner => {
+    const id = normalizeOwnerId(owner?._id);
+    if (!id) return;
+    logPmMail('ui:send-password-link:click', { ownerId: id, email: owner?.email });
+    try {
+      const res = await sendOwnerPasswordLink(id);
+      const parsed = parseOwnerPasswordLinkResponse(res);
+      if (!parsed.ok) {
+        toast.error(res?.message || res?.error || 'Échec envoi du lien');
+        return;
+      }
+      setPasswordLinkDialog(parsed);
+      if (parsed.emailSent) {
+        toast.success(`Email envoyé à ${parsed.email}`);
+      } else {
+        toast.warning('Email non envoyé — copiez le lien dans la fenêtre');
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.message || e?.message || 'Échec envoi du lien');
+    }
   };
   const handleSyncOwners = async () => {
     setSyncLoading(true);
@@ -910,7 +997,7 @@ const PublicOwner = ({
     },
     body: rowData => <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                 <Tooltip title="Suivi onboarding">
-                    <IconButton size="small" onClick={() => navigate(`/admin/crm?tab=onboarding&ownerId=${rowData._id}`)} sx={{
+                    <IconButton size="small" onClick={() => navigate(`/admin/pm-lifecycle/${rowData._id}`)} sx={{
           p: 0.35,
           borderRadius: 1,
           border: `1px solid ${SOJORI.orange}`,
@@ -922,6 +1009,23 @@ const PublicOwner = ({
                         <Milestone size={16} />
                       </IconButton>
                   </Tooltip>
+                {canUpdate && (
+                  <Tooltip title="Envoyer lien mot de passe (24h)">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSendPasswordLink(rowData)}
+                      sx={{
+                        p: 0.35,
+                        borderRadius: 1,
+                        border: `1px solid ${SOJORI.teal}`,
+                        color: SOJORI.teal,
+                        '&:hover': { bgcolor: 'rgba(0,180,180,0.08)' },
+                      }}
+                    >
+                      <Mail size={16} />
+                    </IconButton>
+                  </Tooltip>
+                )}
                 {canUpdate && <Tooltip title={t('owner_credentials_tooltip', {
         defaultValue: 'Identifiants (Sojori + R.U.)',
       })}>
@@ -996,47 +1100,56 @@ const PublicOwner = ({
             <ToastContainer position="top-right" autoClose={3000} />
             {insidePageShell ? (
               <div className="so-staff-root" style={{ padding: 0, minHeight: 0, background: 'transparent' }}>
-              <PropertyManagerHubView
-                t={t}
-                owners={owners}
-                loading={loading}
-                totalCount={totalCount}
-                page={page}
-                limit={limit}
-                setPage={setPage}
-                setLimit={setLimit}
-                searchText={searchText}
-                setSearchText={setSearchText}
-                listings={listings}
-                selectedListings={selectedListings}
-                setSelectedListings={setSelectedListings}
-                deletedFilter={deletedFilter}
-                bannedFilter={bannedFilter}
-                onDeletedChange={setDeletedFilter}
-                onBannedChange={setBannedFilter}
-                onSearch={handleSearch}
-                onReset={handleReset}
-                onFilterChange={handleFilterChange}
-                onEdit={handleUpdate}
-                onSync={handleSyncOwners}
-                syncLoading={syncLoading}
-                canUpdate={canUpdate}
-                listingStatsByOwner={listingStatsByOwner}
-              />
-              <UpdateOwnerSidebar
-                inline
-                mode="create"
-                open={openCreateDialog}
-                onClose={() => setOpenCreateDialog(false)}
-                onOwnerCreated={onOwnerCreated}
-              />
-              <UpdateOwnerSidebar
-                inline
-                open={openUpdateDialog}
-                onClose={() => setOpenUpdateDialog(false)}
-                owner={selectedOwner}
-                onOwnerUpdated={onOwnerUpdated}
-              />
+                {openCreateDialog ? (
+                  <UpdateOwnerSidebar
+                    inline
+                    mode="create"
+                    open
+                    onClose={() => setOpenCreateDialog(false)}
+                    onOwnerCreated={onOwnerCreated}
+                    onDraftSaved={handleDraftSaved}
+                  />
+                ) : (
+                  <>
+                    <PropertyManagerHubView
+                      t={t}
+                      owners={owners}
+                      loading={loading}
+                      totalCount={totalCount}
+                      page={page}
+                      limit={limit}
+                      setPage={setPage}
+                      setLimit={setLimit}
+                      searchText={searchText}
+                      setSearchText={setSearchText}
+                      listings={listings}
+                      selectedListings={selectedListings}
+                      setSelectedListings={setSelectedListings}
+                      deletedFilter={deletedFilter}
+                      bannedFilter={bannedFilter}
+                      onDeletedChange={setDeletedFilter}
+                      onBannedChange={setBannedFilter}
+                      onSearch={handleSearch}
+                      onReset={handleReset}
+                      onFilterChange={handleFilterChange}
+                      onEdit={handleUpdate}
+                      onLifecycle={(row) => navigate(`/admin/pm-lifecycle/${row._id}`)}
+                      onSync={handleSyncOwners}
+                      syncLoading={syncLoading}
+                      canUpdate={canUpdate}
+                      listingStatsByOwner={listingStatsByOwner}
+                      accountStatusFilter={accountStatusFilter}
+                      onAccountStatusChange={handleAccountStatusChange}
+                    />
+                    <UpdateOwnerSidebar
+                      inline
+                      open={openUpdateDialog}
+                      onClose={() => setOpenUpdateDialog(false)}
+                      owner={selectedOwner}
+                      onOwnerUpdated={onOwnerUpdated}
+                    />
+                  </>
+                )}
               </div>
             ) : (
             <>
@@ -1156,13 +1269,16 @@ const PublicOwner = ({
             </>
             )}
 
-            <UpdateOwnerSidebar
-              mode="create"
-              open={openCreateDialog}
-              onClose={() => setOpenCreateDialog(false)}
-              onOwnerCreated={onOwnerCreated}
-              inline={false}
-            />
+            {!insidePageShell ? (
+              <UpdateOwnerSidebar
+                mode="create"
+                open={openCreateDialog}
+                onClose={() => setOpenCreateDialog(false)}
+                onOwnerCreated={onOwnerCreated}
+                onDraftSaved={handleDraftSaved}
+                inline={false}
+              />
+            ) : null}
 
             {!insidePageShell ? (
               <UpdateOwnerSidebar
@@ -1597,7 +1713,10 @@ const PublicOwner = ({
                     {!ruCredLoading && ruCredData && <Stack spacing={2} sx={{
           mt: 0.5
         }}>
-                            <TextField label={t('Email')} value={ruCredData.email || ''} fullWidth size="small" InputProps={{
+                            <TextField label={t('Email dashboard')} value={ruCredData.email || ''} fullWidth size="small" InputProps={{
+            readOnly: true
+          }} />
+                            <TextField label="Email R.U. (extranet)" value={ruCredData.ruEmail || '—'} fullWidth size="small" InputProps={{
             readOnly: true
           }} />
 
@@ -1949,6 +2068,17 @@ const PublicOwner = ({
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <OwnerPasswordLinkDialog
+              open={!!passwordLinkDialog}
+              onClose={() => setPasswordLinkDialog(null)}
+              email={passwordLinkDialog?.email}
+              linkUrl={passwordLinkDialog?.url}
+              emailSent={passwordLinkDialog?.emailSent}
+              emailError={passwordLinkDialog?.emailError}
+              linkType={passwordLinkDialog?.linkType}
+              expiresAt={passwordLinkDialog?.expiresAt}
+            />
         </Box>;
 };
 export default PublicOwner;

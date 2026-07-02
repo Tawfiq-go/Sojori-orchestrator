@@ -19,6 +19,7 @@ import { PmOnboardingWizard } from '../features/onboarding/PmOnboardingWizard';
 import { canAccessPmOnboarding } from '../features/onboarding/resolveOwnerId';
 import { useAuth } from '../hooks/useAuth';
 import { hasAdminAccess } from '../utils/rbac.utils';
+import { canAccessProtectedRoutes } from '../utils/devApiAccess';
 
 function TeamViewToolbarSlot({ section }: { section: TeamSection }) {
   const { stats } = useTeamViewMode();
@@ -59,7 +60,7 @@ export function TeamRolesHubPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const isPlatformAdmin = hasAdminAccess(user?.role);
   const sections = useMemo(
     () =>
@@ -105,6 +106,10 @@ export function TeamRolesHubPage() {
   }, [pathname, searchParams, setSearchParams, legacyStaffTab, legacyAdminTab, legacyOnboardingTab, navigate, isPlatformAdmin, section]);
 
   if (legacyStaffTab || legacyAdminTab || legacyOnboardingTab) return null;
+
+  if (!authLoading && !canAccessProtectedRoutes(isAuthenticated)) {
+    return <Navigate to="/login" replace state={{ from: pathname }} />;
+  }
 
   const setSection = (id: TeamSection) => {
     if (id === 'property-manager') {

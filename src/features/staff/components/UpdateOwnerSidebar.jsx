@@ -4,21 +4,28 @@ import * as Yup from 'yup';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import {
-  createOwner,
+  saveOwnerDraft,
+  finalizeOwnerCreation,
   updateOwner,
+  sendOwnerPasswordLink,
   updateOwnerWhatsappAiTier,
   updateFillCompany,
+  updateFillCompanyLocal,
   getCities,
   getCurrencies,
 } from '../services/serverApi.task';
 import { uploadImageToAPI, uploadMultipleImagesToAPI } from '../../../redux/slices/UploadSlice';
 import {
   extractUrlsFromUploadResult,
-  getPmLogoUrl,
   normalizePmImageList,
   normalizePmImageUrl,
+  PM_VITRINE_MAX_PHOTOS,
+  PM_VITRINE_IMAGE_SPECS,
+  PM_VITRINE_IMAGE_HINT,
+  initialsFromPublicName,
 } from '../utils/pmProfileMediaUtils';
 import OwnerPmLogoImage from './OwnerPmLogoImage';
+import OwnerPmMonogramBadge from './OwnerPmMonogramBadge';
 import * as fullchatbotApi from '../../../services/fullchatbotApi';
 import { useTranslation } from 'react-i18next';
 import { hasAdminAccess } from '../../../utils/rbac.utils';
@@ -28,12 +35,24 @@ import { useChannelsFillCompanyPickers } from '../hooks/useChannelsFillCompanyPi
 import { sortCurrenciesByOrderedCodes } from '../utils/currencySort';
 import OwnerCapabilitiesActivationPanel from '../../orchestrationListingV3/OwnerCapabilitiesActivationPanel';
 import FillCompanyFormFields from './FillCompanyFormFields';
+import { CompteFieldLabel, RuFieldBadgeLegendNative } from './RuFieldBadge';
 import {
   buildFillCompanyInitialValues,
   buildFillCompanyApiPayload,
   getSelectedCitiesFromOwner,
+  mergeAccountMirrorIntoFillCompany,
+  resolveAccountCityName,
+  isLegalSameAsContact,
+  buildLegalRepresentativeFromContact,
+  resolveEffectiveContactForLegal,
   hasFillCompanyUserInput,
 } from '../utils/fillCompanyFormUtils';
+import { computeOwnerCreateReadiness } from '../utils/ownerCreateReadiness';
+import { buildDefaultRuEmail, resolveRuEmailDisplay } from '../utils/ruEmailUtils';
+import OwnerPasswordDialog from './OwnerPasswordDialog';
+import OwnerPasswordLinkDialog from './OwnerPasswordLinkDialog';
+import { parseOwnerPasswordLinkResponse } from '../utils/ownerPasswordLinkFeedback';
+import { logPmMail } from '../../../utils/ownerMailDebug';
 import {
   defaultActivationsAllOff,
   initializeOwnerOrchestrationFromActivations,
@@ -54,11 +73,11 @@ const buildValidationSchema = (t, owner, isCreate) =>
     ...(isCreate
       ? {
           email: Yup.string().email(t('Invalid email')).required(t('Email is required')),
-          password: Yup.string()
-            .required(t('Password is required'))
-            .min(6, t('Password must be at least 6 characters')),
+          ruEmail: Yup.string().email(t('Invalid email')).required('Email RU requis'),
         }
-      : {}),
+      : {
+          ruEmail: Yup.string().email(t('Invalid email')).optional(),
+        }),
     firstName: Yup.string().required(t('First name is required')),
     lastName: Yup.string().required(t('Last name is required')),
     phone: Yup.string().required(t('Phone is required')),
@@ -93,6 +112,8 @@ const CREATE_EMPTY_PM_PROFILE = {
   slug: '',
   tagline: '',
   description: '',
+  logoText: '',
+  logoImage: '',
   images: [],
   brandColor: { from: '', to: '' },
   verified: false,
@@ -104,7 +125,7 @@ const CREATE_INITIAL_VALUES = {
   firstName: '',
   lastName: '',
   email: '',
-  password: '',
+  ruEmail: '',
   phone: '',
   whatsapp: '',
   channelManager: 'RU',
@@ -122,32 +143,61 @@ const CREATE_INITIAL_VALUES = {
   country: '',
   pmProfile: { ...CREATE_EMPTY_PM_PROFILE },
   fillCompany: buildFillCompanyInitialValues({}),
+  legalSameAsContact: false,
 };
 
 const OWNER_TABS = [
   { id: 'compte', label: 'Compte' },
+  { id: 'entreprise', label: 'Entreprise RU' },
+  { id: 'sojori-web', label: 'Site sojori-vente' },
+  { id: 'orchestration', label: 'Orchestration' },
   { id: 'rapports-pl', label: 'Rapports P&L' },
-  { id: 'sojori-web', label: 'Sojori Web' },
   { id: 'config-ia', label: 'Config IA' },
 ];
 
-const TabPanel = ({ active, id, children }) =>
-  active === id ? <div className="form-section full owner-tab-panel">{children}</div> : null;
+const TabPanel = ({ active, id, render, children }) => {
+  const body = typeof render === 'function' ? render() : children;
+  return (
+    <div
+      className="form-section full owner-tab-panel"
+      hidden={active !== id}
+      style={active !== id ? { display: 'none' } : undefined}
+    >
+      {body}
+    </div>
+  );
+};
 
-function AccountToFillCompanySync({ values, setFieldValue, cities }) {
+function AccountToFillCompanySync({ values, setFieldValue, cities, owner }) {
   useEffect(() => {
-    const city = Array.isArray(cities) ? cities.find((c) => c._id === values.cityId) : null;
-    const cityName = city?.name || '';
-    if (cityName) {
-      setFieldValue('fillCompany.ContactInfo.City', cityName);
-      setFieldValue('fillCompany.CompanyInfo.CompanyCity', cityName);
-    }
-    setFieldValue('fillCompany.ContactInfo.FirstName', values.firstName || '');
-    setFieldValue('fillCompany.ContactInfo.LastName', values.lastName || '');
-    setFieldValue('fillCompany.ContactInfo.Email', values.email || '');
-    setFieldValue('fillCompany.ContactInfo.Phone', values.phone || '');
-    if (values.phone) {
-      setFieldValue('fillCompany.CompanyInfo.PhoneNumber', values.phone);
+    const cityName = resolveAccountCityName({
+      cityId: values.cityId,
+      cities,
+      fillCompany: values.fillCompany,
+      owner,
+      account: values,
+    });
+    const fc = values.fillCompany || {};
+    const contact = fc.ContactInfo || {};
+    const company = fc.CompanyInfo || {};
+
+    const pairs = [
+      ['fillCompany.ContactInfo.FirstName', values.firstName || ''],
+      ['fillCompany.ContactInfo.LastName', values.lastName || ''],
+      ['fillCompany.ContactInfo.Email', values.email || ''],
+      ['fillCompany.ContactInfo.Phone', values.phone || ''],
+      ['fillCompany.ContactInfo.City', cityName],
+      ['fillCompany.CompanyInfo.CompanyCity', cityName],
+      ['fillCompany.CompanyInfo.PhoneNumber', values.phone || ''],
+    ];
+
+    for (const [path, next] of pairs) {
+      const key = path.split('.').pop();
+      const block = path.includes('CompanyInfo') ? company : contact;
+      const cur = block[key];
+      if (cur !== next) {
+        setFieldValue(path, next);
+      }
     }
   }, [
     values.firstName,
@@ -156,8 +206,20 @@ function AccountToFillCompanySync({ values, setFieldValue, cities }) {
     values.phone,
     values.cityId,
     cities,
+    owner,
     setFieldValue,
   ]);
+  return null;
+}
+
+function RuEmailNameSync({ values, setFieldValue, isCreate, ruEmailTouchedRef }) {
+  useEffect(() => {
+    if (!isCreate || ruEmailTouchedRef.current) return;
+    const next = buildDefaultRuEmail(values.firstName, values.lastName);
+    if (next && values.ruEmail !== next) {
+      setFieldValue('ruEmail', next);
+    }
+  }, [values.firstName, values.lastName, isCreate, values.ruEmail, setFieldValue, ruEmailTouchedRef]);
   return null;
 }
 
@@ -167,6 +229,7 @@ const UpdateOwnerSidebar = ({
   owner,
   onOwnerUpdated,
   onOwnerCreated,
+  onDraftSaved,
   mode = 'edit',
   inline = true,
 }) => {
@@ -175,17 +238,33 @@ const UpdateOwnerSidebar = ({
   const dispatch = useDispatch();
   const authRole = useSelector((state) => state.auth?.user?.role);
   const isPlatformAdmin = hasAdminAccess(authRole);
-  const visibleTabs = isPlatformAdmin
-    ? OWNER_TABS
-    : OWNER_TABS.filter((tab) => tab.id !== 'config-ia');
+  const visibleTabs = useMemo(() => {
+    let tabs = OWNER_TABS;
+    if (!isCreate) {
+      tabs = tabs.filter((tab) => tab.id !== 'orchestration');
+    }
+    if (!isPlatformAdmin) {
+      tabs = tabs.filter((tab) => tab.id !== 'config-ia');
+    }
+    return tabs;
+  }, [isCreate, isPlatformAdmin]);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [activeTab, setActiveTab] = useState('compte');
   const drawerRef = useRef(null);
+  const formikRef = useRef(null);
   const [serviceActivations, setServiceActivations] = useState(() => defaultActivationsAllOff());
   const [cities, setCities] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [currencies, setCurrencies] = useState([]);
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
+  const ruEmailTouchedRef = useRef(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordDialogLoading, setPasswordDialogLoading] = useState(false);
+  const [sendLinkLoading, setSendLinkLoading] = useState(false);
+  const [passwordLinkDialog, setPasswordLinkDialog] = useState(null);
+  const [savedOwnerId, setSavedOwnerId] = useState(null);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [finalizeLoading, setFinalizeLoading] = useState(false);
   const [selectedCities, setSelectedCities] = useState([]);
   const {
     countries: ruCountries,
@@ -231,9 +310,11 @@ const UpdateOwnerSidebar = ({
     [sortedCurrencies],
   );
 
+  const resetTabOnOpenKey = open ? `${isCreate ? 'create' : 'edit'}-${owner?._id ?? 'new'}` : '';
+
   useEffect(() => {
     if (open) setActiveTab('compte');
-  }, [open, owner?._id]);
+  }, [resetTabOnOpenKey, open]);
 
   useEffect(() => {
     if (!open || !inline) return;
@@ -273,16 +354,25 @@ const UpdateOwnerSidebar = ({
   const handlePmImageUpload = async (fileList, currentImages, setFieldValue) => {
     const files = fileList ? Array.from(fileList) : [];
     if (files.length === 0) return;
+    const current = normalizePmImageList(currentImages);
+    const room = PM_VITRINE_MAX_PHOTOS - current.length;
+    if (room <= 0) {
+      toast.warning(`Maximum ${PM_VITRINE_MAX_PHOTOS} photos vitrine (sojori-vente)`);
+      return;
+    }
     setUploadingImages(true);
     try {
-      const result = await dispatch(uploadMultipleImagesToAPI({ files, folder: 'other' })).unwrap();
-      const urls = extractUrlsFromUploadResult(result);
+      const result = await dispatch(uploadMultipleImagesToAPI({ files: files.slice(0, room), folder: 'other' })).unwrap();
+      const urls = extractUrlsFromUploadResult(result).slice(0, room);
       if (urls.length === 0) {
         toast.error('Échec upload (réponse inattendue)');
         return;
       }
-      setFieldValue('pmProfile.images', [...normalizePmImageList(currentImages), ...urls]);
+      setFieldValue('pmProfile.images', [...current, ...urls]);
       toast.success(`${urls.length} photo(s) ajoutée(s)`);
+      if (files.length > room) {
+        toast.info(`Limite ${PM_VITRINE_MAX_PHOTOS} photos — ${files.length - room} fichier(s) ignoré(s)`);
+      }
     } catch (err) {
       toast.error(`Échec upload : ${err?.message || ''}`);
     } finally {
@@ -290,8 +380,8 @@ const UpdateOwnerSidebar = ({
     }
   };
 
-  /** Logo rapport P&L = 1ère image pmProfile */
-  const handlePmLogoUpload = async (fileList, currentImages, setFieldValue) => {
+  /** Logo image PDF P&L uniquement (pmProfile.logoImage — pas la galerie vitrine). */
+  const handlePmPlLogoUpload = async (fileList, setFieldValue) => {
     const file = fileList?.[0];
     if (!file) return;
     setUploadingImages(true);
@@ -302,15 +392,31 @@ const UpdateOwnerSidebar = ({
         toast.error('Échec upload logo (URL manquante)');
         return;
       }
-      const rest = normalizePmImageList(currentImages).filter((u, i) => i > 0 && u !== url);
-      setFieldValue('pmProfile.images', [url, ...rest]);
-      toast.info('Logo ajouté — cliquez Enregistrer ⚡ pour sauvegarder le profil');
+      setFieldValue('pmProfile.logoImage', url);
+      toast.info('Logo P&L ajouté — cliquez Enregistrer pour sauvegarder');
     } catch (err) {
       toast.error(`Échec upload logo : ${err?.message || ''}`);
     } finally {
       setUploadingImages(false);
     }
   };
+
+  useEffect(() => {
+    if (!open) {
+      setSavedOwnerId(null);
+      setSaveLoading(false);
+      setFinalizeLoading(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open && owner?._id && owner?.status === 'inactive') {
+      setSavedOwnerId(String(owner._id));
+    }
+  }, [open, owner?._id, owner?.status]);
+
+  const effectiveOwnerId = savedOwnerId || owner?._id;
+  const isDraftFlow = isCreate || owner?.status === 'inactive' || Boolean(savedOwnerId);
 
   const normalizePmSlug = (slug) =>
     (slug || '')
@@ -319,10 +425,49 @@ const UpdateOwnerSidebar = ({
       .replace(/[^a-z0-9-]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
-  const persistFillCompany = async (ownerId, values) => {
-    if (!hasFillCompanyUserInput(values.fillCompany)) return null;
-    const payload = buildFillCompanyApiPayload(values.fillCompany, selectedCities);
-    return updateFillCompany(ownerId, payload);
+  const persistFillCompany = async (ownerId, values, { localOnly = false } = {}) => {
+    if (!ownerId) return null;
+    const cityName = resolveAccountCityName({
+      cityId: values.cityId,
+      cities,
+      fillCompany: values.fillCompany,
+      owner,
+      account: values,
+    });
+    let merged = mergeAccountMirrorIntoFillCompany(values.fillCompany, values, cityName);
+    if (values.legalSameAsContact) {
+      const eff = resolveEffectiveContactForLegal(merged.ContactInfo, {
+        firstName: values.firstName,
+        lastName: values.lastName,
+        email: values.email,
+        phone: values.phone,
+        cityName,
+      });
+      merged = {
+        ...merged,
+        LegalRepresentativeInfo: buildLegalRepresentativeFromContact(eff),
+      };
+    }
+    const payload = buildFillCompanyApiPayload(merged, selectedCities);
+    const companyKeys = Object.entries(payload.CompanyInfo || {}).filter(
+      ([k, v]) => k !== 'Locations' && String(v ?? '').trim() !== '',
+    ).length;
+    const contactKeys = Object.entries(payload.ContactInfo || {}).filter(
+      ([, v]) => String(v ?? '').trim() !== '',
+    ).length;
+    console.info('[PM] persistFillCompany', {
+      ownerId,
+      localOnly,
+      contactKeys,
+      companyKeys,
+      legalKeys: Object.entries(payload.LegalRepresentativeInfo || {}).filter(
+        ([, v]) => String(v ?? '').trim() !== '',
+      ).length,
+    });
+    const apiRes = localOnly
+      ? await updateFillCompanyLocal(ownerId, payload)
+      : await updateFillCompany(ownerId, payload);
+    return { apiRes, fillCompany: merged };
   };
 
   const buildUpdatePayload = (values, selectedCity) => ({
@@ -333,6 +478,7 @@ const UpdateOwnerSidebar = ({
     channelManager: values.channelManager,
     cityId: values.cityId,
     rentalCityId: selectedCity?.rentalCityId?.toString(),
+    ...(values.ruEmail?.trim() ? { ruEmail: values.ruEmail.trim().toLowerCase() } : {}),
     settings: values.settings,
     banned: values.banned,
     deleted: values.deleted,
@@ -347,163 +493,265 @@ const UpdateOwnerSidebar = ({
     },
   });
 
-  const handleSubmit = async (values, { setSubmitting, setErrors }) => {
+  const buildDraftPayload = (values, selectedCity) => ({
+    ...(effectiveOwnerId ? { ownerId: String(effectiveOwnerId) } : {}),
+    firstName: values.firstName,
+    lastName: values.lastName,
+    email: values.email,
+    ruEmail: (values.ruEmail || buildDefaultRuEmail(values.firstName, values.lastName)).trim().toLowerCase(),
+    phone: values.phone,
+    whatsapp: values.whatsapp,
+    channelManager: values.channelManager,
+    cityId: values.cityId,
+    rentalCityId: selectedCity?.rentalCityId?.toString(),
+    whatsappConversationalTier: Number(values.whatsappConversationalTier) || 2,
+  });
+
+  const applyWhatsappTierIfAdmin = async (ownerId, values, accountBase) => {
+    let account = accountBase;
+    if (isPlatformAdmin && values.whatsappConversationalTier) {
+      try {
+        const tier = Number(values.whatsappConversationalTier);
+        await updateOwnerWhatsappAiTier(ownerId, tier);
+        try {
+          await fullchatbotApi.syncOwnerModelToWhitelist(ownerId, tier);
+        } catch (syncErr) {
+          console.warn('[Owner] whitelist model sync', syncErr);
+        }
+        account = { ...account, whatsappConversationalTier: tier };
+      } catch (tierErr) {
+        console.warn('[Owner] whatsapp tier', tierErr);
+      }
+    }
+    return account;
+  };
+
+  const handleSaveDraft = async (values, formikBag) => {
+    const liveValues = formikRef.current?.values ?? values ?? formikBag?.values;
+    const { setErrors, validateForm, setTouched } = formikBag;
+    const validationErrors = await validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setTouched(validationErrors, true);
+      setErrors(validationErrors);
+      return;
+    }
+    setSaveLoading(true);
     try {
-      const selectedCity = cities.find((city) => city._id === values.cityId);
-
-      if (isCreate) {
-        const response = await createOwner({
-          firstName: values.firstName,
-          lastName: values.lastName,
-          email: values.email,
-          password: values.password,
-          phone: values.phone,
-          whatsapp: values.whatsapp,
-          channelManager: values.channelManager,
-          cityId: values.cityId,
-          rentalCityId: selectedCity?.rentalCityId?.toString(),
-          whatsappConversationalTier: Number(values.whatsappConversationalTier) || 2,
-          role: 'Owner',
+      const selectedCity = cities.find((city) => city._id === liveValues.cityId);
+      const draftRes = await saveOwnerDraft(buildDraftPayload(liveValues, selectedCity));
+      const accountId = String(draftRes?.data?.accountId ?? effectiveOwnerId ?? '').trim();
+      if (!accountId || draftRes?.success === false) {
+        setErrors({
+          submit: draftRes?.message || draftRes?.error || 'Échec enregistrement brouillon',
         });
-        const payload = response.data?.data ?? response.data;
-        const accountId = String(payload?.accountId ?? payload?._id ?? payload?.id ?? '').trim();
-        if (!accountId) {
-          setErrors({
-            submit: response.data?.error || response.data?.message || t('Failed to create owner'),
-          });
-          return;
+        return;
+      }
+      setSavedOwnerId(accountId);
+
+      const profilePayload = buildUpdatePayload(
+        { ...liveValues, banned: false, deleted: false },
+        selectedCity,
+      );
+      try {
+        await updateOwner(accountId, profilePayload);
+      } catch (updErr) {
+        console.warn('[saveOwnerDraft] profile update', updErr);
+      }
+
+      let fillPersisted = null;
+      try {
+        fillPersisted = await persistFillCompany(accountId, liveValues, { localOnly: true });
+        if (!hasFillCompanyUserInput(fillPersisted?.fillCompany ?? liveValues.fillCompany)) {
+          toast.warning(
+            'Compte enregistré — entreprise vide en base. Remplissez Entreprise RU puis Enregistrer à nouveau.',
+          );
         }
-
-        try {
-          const fillRes = await persistFillCompany(accountId, values);
-          if (fillRes?.message && String(fillRes.message).toLowerCase().includes('synced')) {
-            toast.info('Entreprise enregistrée et synchronisée RU');
-          }
-        } catch (fillErr) {
-          setErrors({
-            submit:
-              fillErr?.response?.data?.message ||
-              fillErr?.response?.data?.error ||
-              fillErr?.message ||
-              'Compte créé mais échec enregistrement entreprise',
-          });
-          onOwnerCreated?.({
-            _id: accountId,
-            id: accountId,
-            email: values.email,
-            firstName: values.firstName,
-            lastName: values.lastName,
-          });
-          return;
-        }
-
-        try {
-          await initializeOwnerOrchestrationFromActivations(accountId, serviceActivations);
-        } catch (initErr) {
-          console.warn('[CreateOwner] orchestration init', initErr);
-        }
-
-        const profilePayload = buildUpdatePayload(
-          { ...values, banned: false, deleted: false },
-          selectedCity,
-        );
-        let createdAccount = {
-          _id: accountId,
-          id: accountId,
-          email: values.email,
-          firstName: values.firstName,
-          lastName: values.lastName,
-          phone: values.phone,
-          whatsapp: values.whatsapp,
-          channelManager: values.channelManager,
-          cityId: values.cityId,
-          ruOwnerId: payload?.ruOwnerId ?? null,
-          whatsappConversationalTier: Number(values.whatsappConversationalTier) || 2,
-          settings: values.settings,
-          pmProfile: profilePayload.pmProfile,
-          fillCompany: values.fillCompany,
-        };
-
-        try {
-          const upd = await updateOwner(accountId, profilePayload);
-          if (upd.data?.account) createdAccount = { ...createdAccount, ...upd.data.account };
-        } catch (updErr) {
-          console.warn('[CreateOwner] profile update after register', updErr);
-        }
-
-        if (isPlatformAdmin && values.whatsappConversationalTier) {
-          try {
-            const tier = Number(values.whatsappConversationalTier);
-            await updateOwnerWhatsappAiTier(accountId, tier);
-            try {
-              await fullchatbotApi.syncOwnerModelToWhitelist(accountId, tier);
-            } catch (syncErr) {
-              console.warn('[CreateOwner] whitelist model sync', syncErr);
-            }
-            createdAccount.whatsappConversationalTier = tier;
-          } catch (tierErr) {
-            console.warn('[CreateOwner] whatsapp tier', tierErr);
-          }
-        }
-
-        onOwnerCreated?.(createdAccount);
-        toast.success(t('Owner created successfully'));
-        onClose();
+      } catch (fillErr) {
+        const msg =
+          fillErr?.response?.data?.message ||
+          fillErr?.response?.data?.error ||
+          fillErr?.message ||
+          'Brouillon compte OK — échec entreprise locale';
+        console.error('[PM] persistFillCompany failed', fillErr?.response?.status, msg);
+        setErrors({ submit: msg });
+        toast.error(msg);
         return;
       }
 
+      const draftAccount = {
+        _id: accountId,
+        id: accountId,
+        ...liveValues,
+        status: draftRes?.data?.status || 'inactive',
+        fillCompany: fillPersisted?.fillCompany ?? liveValues.fillCompany,
+      };
+      onDraftSaved?.(draftAccount);
+      toast.success('Brouillon enregistré — complétez puis « Créer le PM » (vert) quand tout est prêt');
+    } catch (error) {
+      setErrors({
+        submit:
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          'Échec enregistrement',
+      });
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  const handleFinalizeCreate = async (values, formikBag) => {
+    const { setErrors } = formikBag;
+    const readiness = computeOwnerCreateReadiness(values);
+    if (!readiness.ready) {
+      toast.warning(`Champs manquants : ${readiness.missing.join(', ')}`);
+      return;
+    }
+    if (!effectiveOwnerId) {
+      toast.warning('Enregistrez d’abord le brouillon');
+      return;
+    }
+    setFinalizeLoading(true);
+    try {
+      const selectedCity = cities.find((city) => city._id === values.cityId);
+      await saveOwnerDraft(buildDraftPayload(values, selectedCity));
+
+      const profilePayload = buildUpdatePayload(
+        { ...values, banned: false, deleted: false },
+        selectedCity,
+      );
+      await updateOwner(effectiveOwnerId, profilePayload);
+
+      const finRes = await finalizeOwnerCreation(effectiveOwnerId);
+      const finData = finRes?.data ?? finRes;
+      if (finRes?.success === false) {
+        setErrors({ submit: finRes?.message || finRes?.error || 'Échec création PM' });
+        return;
+      }
+
+      if (finData?.emailSent === true) {
+        toast.success('PM créé — invitation envoyée (24h)');
+      } else if (finData?.inviteUrl) {
+        setPasswordLinkDialog({
+          ok: true,
+          email: values.email,
+          url: finData.inviteUrl,
+          emailSent: false,
+          emailError: finData.emailError || finRes?.message || null,
+          linkType: 'invite',
+          expiresAt: finData.inviteExpiresAt || '',
+        });
+        toast.warning('PM créé — email non envoyé, copiez le lien');
+      }
+
+      try {
+        const fillPersisted = await persistFillCompany(effectiveOwnerId, values, { localOnly: false });
+        if (fillPersisted?.apiRes?.message && String(fillPersisted.apiRes.message).toLowerCase().includes('synced')) {
+          toast.info('Entreprise synchronisée RU');
+        }
+      } catch (fillErr) {
+        setErrors({
+          submit:
+            fillErr?.response?.data?.message ||
+            fillErr?.response?.data?.error ||
+            fillErr?.message ||
+            'PM créé mais échec sync entreprise RU',
+        });
+        return;
+      }
+
+      if (isCreate) {
+        try {
+          await initializeOwnerOrchestrationFromActivations(effectiveOwnerId, serviceActivations);
+        } catch (initErr) {
+          console.warn('[finalizeOwner] orchestration init', initErr);
+        }
+      }
+
+      let createdAccount = {
+        _id: effectiveOwnerId,
+        id: effectiveOwnerId,
+        email: values.email,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        phone: values.phone,
+        whatsapp: values.whatsapp,
+        channelManager: values.channelManager,
+        cityId: values.cityId,
+        ruOwnerId: finData?.ruOwnerId ?? null,
+        status: finData?.status || 'pending',
+        whatsappConversationalTier: Number(values.whatsappConversationalTier) || 2,
+        settings: values.settings,
+        pmProfile: profilePayload.pmProfile,
+        fillCompany: values.fillCompany,
+      };
+      createdAccount = await applyWhatsappTierIfAdmin(effectiveOwnerId, values, createdAccount);
+
+      onOwnerCreated?.(createdAccount);
+      toast.success('Property manager créé');
+      onClose();
+    } catch (error) {
+      setErrors({
+        submit:
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          'Échec création PM',
+      });
+    } finally {
+      setFinalizeLoading(false);
+    }
+  };
+
+  const handleSaveEdit = async (values, formikBag) => {
+    const { setErrors, validateForm, setTouched } = formikBag;
+    const validationErrors = await validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setTouched(validationErrors, true);
+      setErrors(validationErrors);
+      return;
+    }
+    if (!owner?._id) return;
+    setSaveLoading(true);
+    try {
+      const selectedCity = cities.find((city) => city._id === values.cityId);
       const ruPwd = (values.ruExtranetPassword || '').trim();
       const response = await updateOwner(owner._id, {
         ...buildUpdatePayload(values, selectedCity),
         ...(ruPwd.length >= 6 ? { ruExtranetPassword: ruPwd } : {}),
       });
-      if (response.data?.account) {
-        let updatedAccount = response.data.account;
-        if (isPlatformAdmin && values.whatsappConversationalTier) {
-          try {
-            const tier = Number(values.whatsappConversationalTier);
-            await updateOwnerWhatsappAiTier(owner._id, tier);
-            try {
-              await fullchatbotApi.syncOwnerModelToWhitelist(owner._id, tier);
-            } catch (syncErr) {
-              console.warn('[UpdateOwner] whitelist model sync', syncErr);
-            }
-            updatedAccount = {
-              ...updatedAccount,
-              whatsappConversationalTier: tier,
-            };
-          } catch (tierErr) {
-            setErrors({
-              submit:
-                tierErr?.response?.data?.error ||
-                tierErr?.message ||
-                t('Failed to update owner'),
-            });
-            return;
-          }
-        }
-        const sync = response.data.ruOwnerSync;
-        if (sync?.attempted && sync.ok === false) {
-          setErrors({ submit: sync.message || t('Failed to update owner') });
-          return;
-        }
-
-        try {
-          await persistFillCompany(owner._id, values);
-        } catch (fillErr) {
-          setErrors({
-            submit:
-              fillErr?.response?.data?.message ||
-              fillErr?.response?.data?.error ||
-              fillErr?.message ||
-              'Compte mis à jour mais échec enregistrement entreprise',
-          });
-          return;
-        }
-
-        onOwnerUpdated({ ...updatedAccount, fillCompany: values.fillCompany });
-        onClose();
+      if (!response.data?.account) {
+        setErrors({ submit: t('Failed to update owner') });
+        return;
       }
+      let updatedAccount = response.data.account;
+      updatedAccount = await applyWhatsappTierIfAdmin(owner._id, values, updatedAccount);
+
+      const sync = response.data.ruOwnerSync;
+      if (sync?.attempted && sync.ok === false) {
+        setErrors({ submit: sync.message || t('Failed to update owner') });
+        return;
+      }
+
+      let fillPersisted = null;
+      try {
+        fillPersisted = await persistFillCompany(owner._id, values, { localOnly: true });
+      } catch (fillErr) {
+        setErrors({
+          submit:
+            fillErr?.response?.data?.message ||
+            fillErr?.response?.data?.error ||
+            fillErr?.message ||
+            'Compte mis à jour — échec entreprise locale',
+        });
+        return;
+      }
+
+      onOwnerUpdated?.({
+        ...updatedAccount,
+        fillCompany: fillPersisted?.fillCompany ?? values.fillCompany,
+      });
+      toast.success('Enregistré — vous pouvez continuer à modifier');
     } catch (error) {
       setErrors({
         submit:
@@ -513,7 +761,58 @@ const UpdateOwnerSidebar = ({
           t('Failed to update owner'),
       });
     } finally {
-      setSubmitting(false);
+      setSaveLoading(false);
+    }
+  };
+
+  const handleOwnerPasswordSubmit = async (payload) => {
+    if (!owner?._id) return;
+    setPasswordDialogLoading(true);
+    try {
+      const response = await updateOwner(owner._id, payload);
+      if (response.data?.account) {
+        toast.success('Mot de passe mis à jour');
+        onOwnerUpdated?.({ ...owner, ...response.data.account });
+        setPasswordDialogOpen(false);
+      }
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          'Échec mise à jour mot de passe',
+      );
+    } finally {
+      setPasswordDialogLoading(false);
+    }
+  };
+
+  const handleSendPasswordLink = async () => {
+    if (!owner?._id || sendLinkLoading) return;
+    logPmMail('ui:send-password-link:click', { ownerId: String(owner._id), email: owner?.email });
+    setSendLinkLoading(true);
+    try {
+      const res = await sendOwnerPasswordLink(owner._id);
+      const parsed = parseOwnerPasswordLinkResponse(res);
+      if (!parsed.ok) {
+        toast.error(res?.message || res?.error || 'Échec envoi du lien');
+        return;
+      }
+      setPasswordLinkDialog(parsed);
+      if (parsed.emailSent) {
+        toast.success(`Email envoyé à ${parsed.email}`);
+      } else {
+        toast.warning('Email non envoyé — copiez le lien dans la fenêtre');
+      }
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          'Échec envoi du lien',
+      );
+    } finally {
+      setSendLinkLoading(false);
     }
   };
 
@@ -525,7 +824,16 @@ const UpdateOwnerSidebar = ({
         ...CREATE_INITIAL_VALUES,
         fillCompany: buildFillCompanyInitialValues({ cities }),
       }
-    : {
+    : (() => {
+        const fillCompany = buildFillCompanyInitialValues({ owner, cities });
+        const cityName = resolveAccountCityName({
+          cityId: owner.cityId,
+          cities,
+          fillCompany,
+          owner,
+          account: owner,
+        });
+        return {
         firstName: owner.firstName || '',
         lastName: owner.lastName || '',
         phone: owner.phone || '',
@@ -540,16 +848,30 @@ const UpdateOwnerSidebar = ({
         elevatedAuthPassword: '',
         whatsappConversationalTier: owner.whatsappConversationalTier || 2,
         email: owner.email || '',
+        ruEmail: owner.ruEmail || resolveRuEmailDisplay(owner) || '',
         address: owner.address || '',
         postalCode: owner.postalCode || '',
         city: owner.city || '',
         country: owner.country || '',
-        fillCompany: buildFillCompanyInitialValues({ owner, cities }),
+        fillCompany,
+        legalSameAsContact: isLegalSameAsContact(
+          fillCompany.ContactInfo,
+          fillCompany.LegalRepresentativeInfo,
+          {
+            firstName: owner.firstName,
+            lastName: owner.lastName,
+            email: owner.email,
+            phone: owner.phone,
+            cityName,
+          },
+        ),
         pmProfile: {
           publicName: owner?.pmProfile?.publicName || '',
           slug: owner?.pmProfile?.slug || '',
           tagline: owner?.pmProfile?.tagline || '',
           description: owner?.pmProfile?.description || '',
+          logoText: owner?.pmProfile?.logoText || '',
+          logoImage: owner?.pmProfile?.logoImage || '',
           images: normalizePmImageList(owner?.pmProfile?.images),
           brandColor: {
             from: owner?.pmProfile?.brandColor?.from || '',
@@ -560,29 +882,34 @@ const UpdateOwnerSidebar = ({
           responseTime: owner?.pmProfile?.responseTime || '',
         },
       };
+      })();
+
+  const formikOwnerKey = isCreate ? 'create' : String(owner?._id || 'edit');
 
   const drawerTitle = isCreate
-    ? 'Créer · nouveau property manager'
-    : `Modifier · ${owner?.firstName || owner?.lastName || 'Property manager'}`;
-
-  const drawerInitials = isCreate
-    ? '+'
-    : ownerInitials(isCreate ? null : owner);
+    ? savedOwnerId
+      ? 'Créer · brouillon enregistré'
+      : 'Créer · nouveau property manager'
+    : owner?.status === 'inactive'
+      ? `Finaliser · ${owner?.firstName || 'PM'}`
+      : `Modifier · ${owner?.firstName || owner?.lastName || 'Property manager'}`;
 
   const drawerPanel = (
     <div
       ref={drawerRef}
-      className={`drawer owner-drawer-panel${inline ? ' owner-drawer-inline' : ''}`}
+      className={`so-staff-root drawer owner-drawer-panel${inline ? ' owner-drawer-inline' : ''}`}
       role="dialog"
       onClick={(e) => {
         if (!inline) e.stopPropagation();
       }}
     >
       <Formik
+        innerRef={formikRef}
+        key={open ? formikOwnerKey : 'closed'}
         initialValues={initialValues}
         validationSchema={validationSchema}
-        onSubmit={handleSubmit}
-        enableReinitialize
+        onSubmit={() => {}}
+        enableReinitialize={false}
       >
         {({
           values,
@@ -590,27 +917,44 @@ const UpdateOwnerSidebar = ({
           touched,
           handleChange,
           handleBlur,
-          isSubmitting,
           setFieldValue,
-          submitForm,
-        }) => (
+          validateForm,
+          setErrors,
+          setTouched,
+        }) => {
+          const formikBag = { setErrors, validateForm, setTouched, values };
+          const createReadiness = computeOwnerCreateReadiness(values);
+          const footBusy = saveLoading || finalizeLoading;
+          const headerInitials = isCreate
+            ? (() => {
+                const n = ownerInitials({
+                  firstName: values.firstName,
+                  lastName: values.lastName,
+                });
+                return n === '?' ? 'PM' : n;
+              })()
+            : ownerInitials(owner);
+
+          return (
           <>
             <div className="drawer-h">
               <div
+                className="owner-drawer-avatar"
                 style={{
                   width: 34,
                   height: 34,
                   borderRadius: 9,
-                  background: 'var(--pt)',
-                  color: 'var(--pd)',
+                  background: 'linear-gradient(135deg, var(--ps), var(--pd))',
+                  color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: 800,
+                  flexShrink: 0,
                 }}
               >
-                {drawerInitials}
+                {headerInitials}
               </div>
               <h3>{drawerTitle}</h3>
               <button type="button" className="close" onClick={onClose} aria-label="Fermer">
@@ -631,12 +975,33 @@ const UpdateOwnerSidebar = ({
               ))}
             </div>
 
+            <form
+              className="owner-drawer-form"
+              noValidate
+              onSubmit={(e) => e.preventDefault()}
+            >
+            <RuEmailNameSync
+              values={values}
+              setFieldValue={setFieldValue}
+              isCreate={isCreate}
+              ruEmailTouchedRef={ruEmailTouchedRef}
+            />
+            <AccountToFillCompanySync
+              values={values}
+              setFieldValue={setFieldValue}
+              cities={cities}
+              owner={owner}
+            />
             <div className="form-grid">
               {errors.submit ? (
                 <div className="form-section full owner-form-alert">{String(errors.submit)}</div>
               ) : null}
 
-              <TabPanel active={activeTab} id="compte">
+              <TabPanel
+                active={activeTab}
+                id="compte"
+                render={() => (
+                  <>
                 {(refPickersFallback || refPickersError) && (
                   <div className="owner-form-hint" style={{ marginBottom: 12 }}>
                     {refPickersError ? `${refPickersError} — ` : ''}
@@ -644,23 +1009,45 @@ const UpdateOwnerSidebar = ({
                   </div>
                 )}
                 <div className="owner-form-hint" style={{ marginBottom: 12 }}>
-                  Compte <b>Owner</b> (property manager). Prénom, nom et téléphone sont recopiés vers
-                  Rental United si channel = RU.
+                  <b>Compte PM</b> — seule saisie pour identité, emails, téléphone et ville (envoyés à R.U. à
+                  l’enregistrement). L’onglet <b>Entreprise RU</b> = société, représentant légal et compléments
+                  d’adresse uniquement — pas de double config.
                   {isCreate ? (
-                    <>
-                      {' '}
-                      Le mot de passe RU est généré automatiquement à la création si channel = RU.
-                    </>
+                    <> Invitation dashboard par email (24h).</>
                   ) : null}
                 </div>
-                {isCreate ? (
-                  <div className="owner-tab-grid" style={{ marginBottom: 12 }}>
-                    <div className="form-section">
-                      <div className="form-section-h">Connexion Sojori</div>
+                <RuFieldBadgeLegendNative />
+                {isDraftFlow ? (
+                  <div className="owner-form-hint owner-draft-flow-hint">
+                    <b>1. Enregistrer</b> — sauvegarde le brouillon (sans invitation, sans pression).
+                    <b> 2. Créer le PM</b> — bouton <span className="owner-ready-pill">vert</span> quand tout est
+                    complet : invitation dashboard + sync RU.
+                    {savedOwnerId ? (
+                      <> Brouillon ID : <code>{savedOwnerId}</code></>
+                    ) : null}
+                    {!createReadiness.ready && createReadiness.missing.length ? (
+                      <div style={{ marginTop: 6, color: '#b45309' }}>
+                        Manque pour Créer : {createReadiness.missing.join(' · ')}
+                      </div>
+                    ) : createReadiness.ready ? (
+                      <div style={{ marginTop: 6, color: '#15803d', fontWeight: 700 }}>
+                        Tout est prêt — vous pouvez créer le PM.
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="owner-tab-grid" style={{ marginBottom: 12 }}>
+                  <div className="form-section">
+                    <div className="form-section-h">{isCreate ? 'Connexion Sojori' : 'Emails & accès'}</div>
+                    {isCreate ? (
                       <div className="field">
-                        <div className="field-label">
-                          Email<span className="req">*</span>
-                        </div>
+                        <CompteFieldLabel
+                          kind="sojoriLogin"
+                          ruXmlPath="Sojori invite + ContactInfo.Email"
+                          required
+                        >
+                          Email dashboard
+                        </CompteFieldLabel>
                         <input
                           className="input"
                           name="email"
@@ -668,40 +1055,101 @@ const UpdateOwnerSidebar = ({
                           value={values.email}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          autoComplete="off"
+                          autoComplete="username"
                         />
                         {touched.email && errors.email ? (
                           <span className="owner-field-err">{errors.email}</span>
                         ) : null}
-                      </div>
-                      <div className="field">
-                        <div className="field-label">
-                          Mot de passe<span className="req">*</span>
-                          <span className="hint">Min. 6 caractères</span>
+                        <div className="owner-form-hint" style={{ marginTop: 6 }}>
+                          {t('ruFieldBadge.hintDashboardEmailCreate', {
+                            defaultValue:
+                              'Création du compte dashboard Sojori : invitation par email (24h). Si channel RU, recopié dans ContactInfo.Email (fiche entreprise).',
+                          })}
                         </div>
-                        <input
-                          className="input"
-                          name="password"
-                          type="password"
-                          value={values.password}
-                          onChange={handleChange}
-                          onBlur={handleBlur}
-                          autoComplete="new-password"
-                        />
-                        {touched.password && errors.password ? (
-                          <span className="owner-field-err">{errors.password}</span>
+                      </div>
+                    ) : (
+                      <div className="field">
+                        <CompteFieldLabel kind="sojoriLogin" ruXmlPath="Sojori login + ContactInfo.Email">
+                          Email dashboard
+                        </CompteFieldLabel>
+                        <input className="input" value={values.email || owner?.email || ''} readOnly disabled />
+                        {owner?.status === 'pending' ? (
+                          <div className="owner-form-hint" style={{ marginTop: 6, color: '#b45309' }}>
+                            Invitation en attente — le PM n’a pas encore activé son compte.
+                          </div>
                         ) : null}
+                        <div className="owner-form-hint" style={{ marginTop: 6 }}>
+                          {t('ruFieldBadge.hintDashboardEmailEdit', {
+                            defaultValue:
+                              'Connexion dashboard Sojori. Recopié dans ContactInfo.Email (fiche RU) à l’enregistrement Entreprise.',
+                          })}
+                        </div>
+                        <button
+                          type="button"
+                          className="owner-btn secondary"
+                          style={{ marginTop: 8 }}
+                          onClick={() => setPasswordDialogOpen(true)}
+                        >
+                          Modifier les mots de passe
+                        </button>
+                        <button
+                          type="button"
+                          className="owner-btn secondary"
+                          style={{ marginTop: 8, marginLeft: 8 }}
+                          disabled={sendLinkLoading}
+                          onClick={() => void handleSendPasswordLink()}
+                        >
+                          {sendLinkLoading ? 'Envoi…' : 'Envoyer lien mot de passe (24h)'}
+                        </button>
+                      </div>
+                    )}
+                    <div className="field">
+                      <CompteFieldLabel
+                        kind="ruCreateUser"
+                        ruXmlPath="Push_CreateUser.Email"
+                        required
+                      >
+                        Email R.U. (extranet)
+                      </CompteFieldLabel>
+                      <input
+                        className="input"
+                        name="ruEmail"
+                        type="email"
+                        value={values.ruEmail}
+                        onChange={(e) => {
+                          ruEmailTouchedRef.current = true;
+                          handleChange(e);
+                        }}
+                        onBlur={(e) => {
+                          if (!ruEmailTouchedRef.current && (values.firstName || values.lastName)) {
+                            setFieldValue(
+                              'ruEmail',
+                              buildDefaultRuEmail(values.firstName, values.lastName),
+                            );
+                          }
+                          handleBlur(e);
+                        }}
+                        autoComplete="off"
+                      />
+                      {touched.ruEmail && errors.ruEmail ? (
+                        <span className="owner-field-err">{errors.ruEmail}</span>
+                      ) : null}
+                      <div className="owner-form-hint" style={{ marginTop: 6 }}>
+                        {t('ruFieldBadge.hintRuEmail', {
+                          defaultValue:
+                            'Login sur extranet Rental United (Push_CreateUser) — distinct de l’email dashboard. Aucun email envoyé par Sojori à cette adresse.',
+                        })}
                       </div>
                     </div>
                   </div>
-                ) : null}
+                </div>
                 <div className="owner-tab-grid">
                 <div className="form-section">
                   <div className="form-section-h">Identité</div>
                   <div className="field">
-                    <div className="field-label">
-                      Prénom<span className="req">*</span>
-                    </div>
+                    <CompteFieldLabel kind="ruMirror" ruXmlPath="ContactInfo.FirstName" required>
+                      Prénom
+                    </CompteFieldLabel>
                     <input
                       className="input"
                       name="firstName"
@@ -714,9 +1162,9 @@ const UpdateOwnerSidebar = ({
                     ) : null}
                   </div>
                   <div className="field">
-                    <div className="field-label">
-                      Nom<span className="req">*</span>
-                    </div>
+                    <CompteFieldLabel kind="ruMirror" ruXmlPath="ContactInfo.LastName" required>
+                      Nom
+                    </CompteFieldLabel>
                     <input
                       className="input"
                       name="lastName"
@@ -733,9 +1181,9 @@ const UpdateOwnerSidebar = ({
                 <div className="form-section">
                   <div className="form-section-h">Contact</div>
                   <div className="field">
-                    <div className="field-label">
-                      Téléphone<span className="req">*</span>
-                    </div>
+                    <CompteFieldLabel kind="ruMirror" ruXmlPath="ContactInfo.Phone" required>
+                      Téléphone
+                    </CompteFieldLabel>
                     <input
                       className="input"
                       name="phone"
@@ -749,10 +1197,7 @@ const UpdateOwnerSidebar = ({
                     ) : null}
                   </div>
                   <div className="field">
-                    <div className="field-label">
-                      WhatsApp
-                      <span className="hint">Sojori uniquement</span>
-                    </div>
+                    <CompteFieldLabel kind="nonRu">WhatsApp</CompteFieldLabel>
                     <input
                       className="input"
                       name="whatsapp"
@@ -766,9 +1211,13 @@ const UpdateOwnerSidebar = ({
                 <div className="form-section">
                   <div className="form-section-h">Parc & channel</div>
                   <div className="field">
-                    <div className="field-label">
-                      Ville<span className="req">*</span>
-                    </div>
+                    <CompteFieldLabel
+                      kind="ruMirror"
+                      ruXmlPath="ContactInfo.City + CompanyInfo.CompanyCity"
+                      required
+                    >
+                      Ville
+                    </CompteFieldLabel>
                     <select
                       className="input"
                       name="cityId"
@@ -789,9 +1238,9 @@ const UpdateOwnerSidebar = ({
                     ) : null}
                   </div>
                   <div className="field">
-                    <div className="field-label">
-                      Channel manager<span className="req">*</span>
-                    </div>
+                    <CompteFieldLabel kind="nonRu" required>
+                      Channel manager
+                    </CompteFieldLabel>
                     <div className="seg">
                       {(['RU', 'Channex']).map((ch) => (
                         <button
@@ -814,9 +1263,11 @@ const UpdateOwnerSidebar = ({
                   <div className="form-section full">
                     <div className="form-section-h">Rental United</div>
                     <div className="field">
-                      <div className="field-label">
+                      <CompteFieldLabel kind="ruCreateUser" ruXmlPath="Push_CreateUser.Password">
                         Mot de passe extranet RU
-                        <span className="hint">Min. 6 caractères si pas encore enregistré</span>
+                      </CompteFieldLabel>
+                      <div className="owner-form-hint" style={{ marginBottom: 6 }}>
+                        Min. 6 caractères si pas encore enregistré
                       </div>
                       <input
                         className="input"
@@ -842,9 +1293,9 @@ const UpdateOwnerSidebar = ({
                 <div className="form-section">
                   <div className="form-section-h">Préférences dashboard</div>
                   <div className="field">
-                    <div className="field-label">
-                      Langue<span className="req">*</span>
-                    </div>
+                    <CompteFieldLabel kind="nonRu" required>
+                      Langue
+                    </CompteFieldLabel>
                     <SearchableSelect
                       label=""
                       options={interfaceLanguageCodes}
@@ -858,9 +1309,9 @@ const UpdateOwnerSidebar = ({
                     />
                   </div>
                   <div className="field">
-                    <div className="field-label">
-                      Devise<span className="req">*</span>
-                    </div>
+                    <CompteFieldLabel kind="nonRu" required>
+                      Devise
+                    </CompteFieldLabel>
                     <SearchableSelect
                       label=""
                       options={currencyOptions}
@@ -875,107 +1326,136 @@ const UpdateOwnerSidebar = ({
                   </div>
                 </div>
 
-                {isCreate ? (
-                  <div className="form-section full" style={{ marginTop: 14 }}>
-                    <div className="form-section-h">Activation des services</div>
-                    <div className="owner-form-hint" style={{ marginBottom: 10 }}>
-                      Désactivé = invisible dans le menu gauche. Par défaut tout est off pour un nouveau PM.
-                    </div>
-                    <OwnerCapabilitiesActivationPanel
-                      ownerKey=""
-                      rows={[]}
-                      orchestrationDoc={null}
-                      compact
-                      value={serviceActivations}
-                      onChange={setServiceActivations}
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                ) : null}
-
                 {!isCreate ? (
-                <div className="form-section full">
-                  <div className="form-section-h">Statut compte</div>
-                  <div className="admin-row">
-                    <span style={{ fontSize: 18 }}>⛔</span>
-                    <div style={{ flex: 1 }}>
-                      <div className="nm">Compte banni</div>
-                      <div className="ds">Le PM ne peut plus se connecter</div>
+                  <div className="form-section full">
+                    <div className="form-section-h">Statut compte</div>
+                    <div className="admin-row">
+                      <span style={{ fontSize: 18 }}>⛔</span>
+                      <div style={{ flex: 1 }}>
+                        <div className="nm">Compte banni</div>
+                        <div className="ds">Le PM ne peut plus se connecter</div>
+                      </div>
+                      <div
+                        className={`toggle${values.banned ? ' on' : ''}`}
+                        onClick={() => setFieldValue('banned', !values.banned)}
+                        onKeyDown={() => {}}
+                        role="switch"
+                        aria-checked={values.banned}
+                      />
                     </div>
-                    <div
-                      className={`toggle${values.banned ? ' on' : ''}`}
-                      onClick={() => setFieldValue('banned', !values.banned)}
-                      onKeyDown={() => {}}
-                      role="switch"
-                      aria-checked={values.banned}
-                    />
-                  </div>
-                  <div className="admin-row" style={{ marginTop: 10 }}>
-                    <span style={{ fontSize: 18 }}>🗑</span>
-                    <div style={{ flex: 1 }}>
-                      <div className="nm">Compte supprimé</div>
-                      <div className="ds">Archivé · masqué des listes actives</div>
+                    <div className="admin-row" style={{ marginTop: 10 }}>
+                      <span style={{ fontSize: 18 }}>🗑</span>
+                      <div style={{ flex: 1 }}>
+                        <div className="nm">Compte supprimé</div>
+                        <div className="ds">Archivé · masqué des listes actives</div>
+                      </div>
+                      <div
+                        className={`toggle${values.deleted ? ' on' : ''}`}
+                        onClick={() => setFieldValue('deleted', !values.deleted)}
+                        onKeyDown={() => {}}
+                        role="switch"
+                        aria-checked={values.deleted}
+                      />
                     </div>
-                    <div
-                      className={`toggle${values.deleted ? ' on' : ''}`}
-                      onClick={() => setFieldValue('deleted', !values.deleted)}
-                      onKeyDown={() => {}}
-                      role="switch"
-                      aria-checked={values.deleted}
-                    />
                   </div>
-                </div>
                 ) : null}
                 </div>
+                  </>
+                )}
+              />
 
-                <div className="form-section full" style={{ marginTop: 8 }}>
-                  <div className="form-section-h">Entreprise · FillCompany (RU)</div>
-                  <div className="owner-form-hint" style={{ marginBottom: 8 }}>
-                    Enregistrée dans la même action que le compte : création owner → fiche entreprise
-                    {values.channelManager === 'RU' ? ' → sync RU si champs complets' : ''}.
-                  </div>
-                  <AccountToFillCompanySync
-                    values={values}
-                    setFieldValue={setFieldValue}
-                    cities={cities}
-                  />
-                  <FillCompanyFormFields
-                    namePrefix="fillCompany"
-                    values={values}
-                    errors={errors}
-                    touched={touched}
-                    handleChange={handleChange}
-                    handleBlur={handleBlur}
-                    setFieldValue={setFieldValue}
-                    cities={cities}
-                    ruCountries={ruCountries}
-                    languagesRu={languagesRu}
-                    ruNationalities={ruNationalities}
-                    loadingRefPickers={loadingRefPickers}
-                    refPickersFallback={refPickersFallback}
-                    refPickersError={refPickersError}
-                    selectedCities={selectedCities}
-                    onSelectedCitiesChange={setSelectedCities}
-                    mirrorAccountFields
-                    accountValues={{
-                      firstName: values.firstName,
-                      lastName: values.lastName,
-                      email: values.email,
-                      phone: values.phone,
-                    }}
-                  />
-                </div>
-              </TabPanel>
+              <TabPanel
+                active={activeTab}
+                id="entreprise"
+                render={() => (
+                  <>
+                    <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+                      <b>Entreprise RU</b> — données légales et fiche société envoyées à <b>Rental United</b> uniquement.
+                      Ce n’est <b>pas</b> la vitrine sojori-vente (photos, slogan → onglet <b>Site sojori-vente</b>).
+                      Prénom, nom, emails, téléphone et ville : onglet <b>Compte</b> uniquement.
+                      {values.channelManager === 'RU'
+                        ? ' Enregistrer ⚡ envoie le tout à Rental United.'
+                        : ''}
+                    </div>
+                    <FillCompanyFormFields
+                      namePrefix="fillCompany"
+                      values={values}
+                      errors={errors}
+                      touched={touched}
+                      handleChange={handleChange}
+                      handleBlur={handleBlur}
+                      setFieldValue={setFieldValue}
+                      cities={cities}
+                      ruCountries={ruCountries}
+                      languagesRu={languagesRu}
+                      ruNationalities={ruNationalities}
+                      loadingRefPickers={loadingRefPickers}
+                      refPickersFallback={refPickersFallback}
+                      refPickersError={refPickersError}
+                      selectedCities={selectedCities}
+                      onSelectedCitiesChange={setSelectedCities}
+                      mirrorAccountFields
+                      hideMirroredContactFields
+                      accountValues={{
+                        firstName: values.firstName,
+                        lastName: values.lastName,
+                        email: values.email,
+                        ruEmail: values.ruEmail,
+                        phone: values.phone,
+                        cityName: resolveAccountCityName({
+                          cityId: values.cityId,
+                          cities,
+                          fillCompany: values.fillCompany,
+                          owner,
+                          account: values,
+                        }),
+                      }}
+                      legalSameAsContact={values.legalSameAsContact}
+                      onLegalSameAsContactChange={(checked) =>
+                        setFieldValue('legalSameAsContact', checked)
+                      }
+                    />
+                  </>
+                )}
+              />
 
-              <TabPanel active={activeTab} id="rapports-pl">
-                <div className="owner-form-hint owner-pl-source-hint">
+              {isCreate ? (
+                <TabPanel
+                  active={activeTab}
+                  id="orchestration"
+                  render={() => (
+                    <>
+                      <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+                        Services visibles dans le menu du PM et orchestration initiale. Par défaut tout
+                        est désactivé — activez ce dont le property manager a besoin.
+                      </div>
+                      <OwnerCapabilitiesActivationPanel
+                        ownerKey=""
+                        rows={[]}
+                        orchestrationDoc={null}
+                        compact
+                        value={serviceActivations}
+                        onChange={setServiceActivations}
+                        disabled={isSubmitting}
+                      />
+                    </>
+                  )}
+                />
+              ) : null}
+
+              <TabPanel
+                active={activeTab}
+                id="rapports-pl"
+                render={() => (
+                  <>
+                <div className="owner-form-hint" style={{ marginBottom: 12 }}>
                   <b>Source des en-têtes PDF/HTML</b> — Finances → Rapports P&L utilisent ces infos via « ↻ Profil ».
-                  Le logo est la <b>1ère image</b> ci-dessous. Email = compte (lecture seule).
+                  Logo image ci-dessous (<code>logoImage</code>) — distinct de la galerie vitrine et du badge initiales.
                 </div>
 
                 <div className="owner-pl-preview">
                   <OwnerPmLogoImage
-                    images={values.pmProfile.images}
+                    images={values.pmProfile.logoImage ? [values.pmProfile.logoImage] : []}
                     className="owner-pl-preview-logo"
                     emptyLabel={
                       (values.pmProfile.publicName || `${values.firstName} ${values.lastName}`)
@@ -1008,12 +1488,12 @@ const UpdateOwnerSidebar = ({
                 </div>
 
                 <div className="form-section full" style={{ marginTop: 14 }}>
-                  <div className="form-section-h">Logo rapport</div>
+                  <div className="form-section-h">Logo image (PDF P&L)</div>
                   <div className="owner-pl-logo-row">
                     <OwnerPmLogoImage
-                      images={values.pmProfile.images}
+                      images={values.pmProfile.logoImage ? [values.pmProfile.logoImage] : []}
                       className="owner-pl-logo-thumb"
-                      emptyLabel="Aucun logo"
+                      emptyLabel="Aucun"
                     />
                     <label className="btn btn-ghost owner-photo-btn">
                       {uploadingImages ? 'Envoi…' : '+ Ajouter / remplacer logo'}
@@ -1023,26 +1503,24 @@ const UpdateOwnerSidebar = ({
                         accept="image/*"
                         disabled={uploadingImages}
                         onChange={(e) => {
-                          handlePmLogoUpload(e.target.files, values.pmProfile.images, setFieldValue);
+                          handlePmPlLogoUpload(e.target.files, setFieldValue);
                           e.target.value = '';
                         }}
                       />
                     </label>
-                    {getPmLogoUrl(values.pmProfile.images) ? (
+                    {values.pmProfile.logoImage ? (
                       <button
                         type="button"
                         className="btn btn-ghost"
-                        onClick={() =>
-                          setFieldValue('pmProfile.images', normalizePmImageList(values.pmProfile.images).slice(1))
-                        }
+                        onClick={() => setFieldValue('pmProfile.logoImage', '')}
                       >
                         Retirer logo
                       </button>
                     ) : null}
                   </div>
                   <div className="owner-form-hint" style={{ marginTop: 8 }}>
-                    PNG ou JPG recommandé · fond transparent si possible. Photos marketplace dans l&apos;onglet
-                    Sojori Web (la 1ère photo sert aussi de logo si vous n&apos;en mettez pas ici).
+                    PNG ou JPG · fond transparent recommandé. Sans image, le PDF utilise les initiales (
+                    <code>logoText</code>) ou la 1re lettre du nom.
                   </div>
                 </div>
 
@@ -1125,12 +1603,35 @@ const UpdateOwnerSidebar = ({
                     <input className="input" name="country" value={values.country} onChange={handleChange} />
                   </div>
                 </div>
-              </TabPanel>
+                  </>
+                )}
+              />
 
-              <TabPanel active={activeTab} id="sojori-web">
+              <TabPanel
+                active={activeTab}
+                id="sojori-web"
+                render={() => (
+                  <>
                 <div className="owner-form-hint" style={{ marginBottom: 12 }}>
-                  Profil public sur sojori.com (page partenaires, bloc hôte). Activez « Publié » pour
-                  rendre visible sur le site.
+                  <b>Vitrine PM sur sojori-vente</b> — ce que voient les voyageurs :{' '}
+                  <b>photos</b>, <b>slogan</b> (accroche), description, couleurs de marque, page{' '}
+                  <code>/pm/votre-slug</code> et encart hôte sur la page d&apos;accueil.
+                  <br />
+                  Séparé de Rental United (onglet <b>Entreprise RU</b>) et des PDF finances (
+                  <b>Rapports P&L</b>). Activez <b>Publié</b> pour rendre le profil visible.
+                  {values.pmProfile?.slug ? (
+                    <>
+                      {' '}
+                      Aperçu :{' '}
+                      <a
+                        href={`/pm/${encodeURIComponent(String(values.pmProfile.slug).trim())}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        /pm/{values.pmProfile.slug}
+                      </a>
+                    </>
+                  ) : null}
                 </div>
                 <div className="admin-row" style={{ marginBottom: 14 }}>
                   <span style={{ fontSize: 18 }}>🌐</span>
@@ -1169,7 +1670,7 @@ const UpdateOwnerSidebar = ({
                   </div>
                 </div>
                 <div className="field" style={{ marginTop: 12 }}>
-                  <div className="field-label">Accroche</div>
+                  <div className="field-label">Slogan (accroche vitrine)</div>
                   <input
                     className="input"
                     name="pmProfile.tagline"
@@ -1188,24 +1689,57 @@ const UpdateOwnerSidebar = ({
                     rows={3}
                   />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr auto', gap: 12, marginTop: 12, alignItems: 'end' }}>
-                  <div>
-                    <div className="field-label">Logo marketplace</div>
-                    <OwnerPmLogoImage
-                      images={values.pmProfile.images}
-                      className="owner-pm-logo owner-pm-logo-img"
-                      emptyLabel={
-                        (values.pmProfile.publicName || `${values.firstName} ${values.lastName}`)
-                          .trim()
-                          .split(' ')
-                          .filter(Boolean)
-                          .map((w) => w[0])
-                          .join('')
-                          .slice(0, 2)
-                          .toUpperCase() || 'SJ'
-                      }
-                    />
+
+                <div className="owner-vitrine-section" style={{ marginTop: 16 }}>
+                  <div className="form-section-h">Logo vitrine (initiales)</div>
+                  <div className="owner-form-hint" style={{ marginBottom: 10 }}>
+                    Badge texte sur sojori-vente (encart hôtes + page <code>/pm/slug</code>) —{' '}
+                    <b>pas une image</b>. Si vide, calculé depuis le nom public.
                   </div>
+                  <div className="owner-vitrine-logo-row">
+                    <OwnerPmMonogramBadge
+                      logoText={values.pmProfile.logoText}
+                      publicName={
+                        values.pmProfile.publicName ||
+                        `${values.firstName || ''} ${values.lastName || ''}`.trim()
+                      }
+                      brandFrom={values.pmProfile.brandColor?.from}
+                      brandTo={values.pmProfile.brandColor?.to}
+                    />
+                    <div className="owner-vitrine-logo-fields">
+                      <div className="field">
+                        <div className="field-label">Initiales (2 lettres max)</div>
+                        <input
+                          className="input"
+                          name="pmProfile.logoText"
+                          value={values.pmProfile.logoText}
+                          onChange={handleChange}
+                          maxLength={4}
+                          placeholder="ex. SL"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() =>
+                          setFieldValue(
+                            'pmProfile.logoText',
+                            initialsFromPublicName(
+                              values.pmProfile.publicName ||
+                                `${values.firstName || ''} ${values.lastName || ''}`.trim(),
+                            ),
+                          )
+                        }
+                      >
+                        Depuis nom public
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="owner-vitrine-section" style={{ marginTop: 16 }}>
+                  <div className="form-section-h">Couleurs & confiance</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 8, alignItems: 'end' }}>
                   <div className="field">
                     <div className="field-label">Couleur début</div>
                     <input
@@ -1251,19 +1785,24 @@ const UpdateOwnerSidebar = ({
                     aria-checked={values.pmProfile.verified}
                   />
                 </div>
-                <div className="field" style={{ marginTop: 14 }}>
+                </div>
+
+                <div className="owner-vitrine-section" style={{ marginTop: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div className="field-label" style={{ margin: 0 }}>
-                      Photos du PM
+                    <div className="form-section-h" style={{ margin: 0 }}>
+                      Galerie photos vitrine
                     </div>
                     <label className="btn btn-ghost owner-photo-btn">
                       {uploadingImages ? 'Envoi…' : '+ Ajouter des photos'}
                       <input
                         hidden
                         type="file"
-                        accept="image/*"
+                        accept={PM_VITRINE_IMAGE_SPECS.accept}
                         multiple
-                        disabled={uploadingImages}
+                        disabled={
+                          uploadingImages ||
+                          normalizePmImageList(values.pmProfile.images).length >= PM_VITRINE_MAX_PHOTOS
+                        }
                         onChange={(e) => {
                           handlePmImageUpload(e.target.files, values.pmProfile.images, setFieldValue);
                           e.target.value = '';
@@ -1272,23 +1811,28 @@ const UpdateOwnerSidebar = ({
                     </label>
                   </div>
                   <div className="owner-form-hint" style={{ marginBottom: 8 }}>
-                    La 1re photo est principale (logo rapports P&L — voir onglet <b>Rapports P&L</b>).
+                    Max <b>{PM_VITRINE_MAX_PHOTOS}</b> photos (comme sur sojori-vente). La{' '}
+                    <b>1re photo</b> = bannière / couverture (<code>coverUrl</code>). La galerie
+                    s&apos;affiche seulement à partir de <b>2 photos</b>. Logo initiales = section
+                    ci-dessus — pas la 1re photo.
+                    <br />
+                    <span style={{ opacity: 0.9 }}>{PM_VITRINE_IMAGE_HINT}</span>
                   </div>
                   <div className="owner-pm-photos">
-                    {(values.pmProfile.images || []).length === 0 ? (
+                    {normalizePmImageList(values.pmProfile.images).length === 0 ? (
                       <span className="owner-pm-empty">Aucune photo</span>
                     ) : (
-                      (values.pmProfile.images || []).map((url, idx) => (
-                        <div key={`${normalizePmImageUrl(url)}-${idx}`} className={`owner-pm-thumb${idx === 0 ? ' main' : ''}`}>
-                          <img src={normalizePmImageUrl(url)} alt="" referrerPolicy="no-referrer" />
-                          {idx === 0 ? <span className="owner-pm-badge">Principale</span> : null}
+                      normalizePmImageList(values.pmProfile.images).map((url, idx) => (
+                        <div key={`${url}-${idx}`} className={`owner-pm-thumb${idx === 0 ? ' main' : ''}`}>
+                          <img src={url} alt="" referrerPolicy="no-referrer" />
+                          {idx === 0 ? <span className="owner-pm-badge">Couverture</span> : null}
                           <div className="owner-pm-actions">
                             {idx !== 0 ? (
                               <button
                                 type="button"
-                                title="Définir principale"
+                                title="Définir comme couverture"
                                 onClick={() => {
-                                  const arr = [...values.pmProfile.images];
+                                  const arr = [...normalizePmImageList(values.pmProfile.images)];
                                   const [m] = arr.splice(idx, 1);
                                   arr.unshift(m);
                                   setFieldValue('pmProfile.images', arr);
@@ -1303,7 +1847,7 @@ const UpdateOwnerSidebar = ({
                               onClick={() =>
                                 setFieldValue(
                                   'pmProfile.images',
-                                  values.pmProfile.images.filter((_, i) => i !== idx),
+                                  normalizePmImageList(values.pmProfile.images).filter((_, i) => i !== idx),
                                 )
                               }
                             >
@@ -1314,10 +1858,20 @@ const UpdateOwnerSidebar = ({
                       ))
                     )}
                   </div>
+                  <div className="owner-form-hint" style={{ marginTop: 6 }}>
+                    {normalizePmImageList(values.pmProfile.images).length}/{PM_VITRINE_MAX_PHOTOS}{' '}
+                    photos
+                  </div>
                 </div>
-              </TabPanel>
+                  </>
+                )}
+              />
 
-              <TabPanel active={activeTab} id="config-ia">
+              <TabPanel
+                active={activeTab}
+                id="config-ia"
+                render={() => (
+                  <>
                 <div className="owner-form-hint" style={{ marginBottom: 10 }}>
                   Modèle Claude pour les réponses automatiques aux voyageurs (du moins cher au plus
                   capable). Met à jour tous les séjours whitelist de ce propriétaire (sauf override par
@@ -1340,32 +1894,77 @@ const UpdateOwnerSidebar = ({
                     ))}
                   </select>
                 </div>
-              </TabPanel>
+                  </>
+                )}
+              />
             </div>
 
               <div className="drawer-foot">
                 <div className="drawer-foot-start" />
-                <button type="button" className="btn btn-ghost" disabled={isSubmitting} onClick={onClose}>
+                <button type="button" className="btn btn-ghost" disabled={footBusy} onClick={onClose}>
                   Annuler
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-prim"
-                  disabled={isSubmitting}
-                  onClick={() => void submitForm()}
-                >
-                  {isSubmitting
-                    ? isCreate
-                      ? 'Création…'
-                      : 'Enregistrement…'
-                    : isCreate
-                      ? 'Créer ⚡'
-                      : 'Enregistrer ⚡'}
-                </button>
+                {isDraftFlow ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-prim"
+                      disabled={footBusy}
+                      onClick={() => void handleSaveDraft(formikBag.values, formikBag)}
+                    >
+                      {saveLoading ? 'Enregistrement…' : 'Enregistrer'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${createReadiness.ready ? 'btn-create-ready' : 'btn-prim'}`}
+                      disabled={!createReadiness.ready || footBusy}
+                      title={
+                        createReadiness.ready
+                          ? 'Invitation dashboard + provision RU'
+                          : `Manque : ${createReadiness.missing.join(', ')}`
+                      }
+                      onClick={() => void handleFinalizeCreate(formikBag.values, formikBag)}
+                    >
+                      {finalizeLoading ? 'Création…' : 'Créer le PM'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-prim"
+                    disabled={footBusy}
+                    onClick={() => void handleSaveEdit(formikBag.values, formikBag)}
+                  >
+                    {saveLoading ? 'Enregistrement…' : 'Enregistrer'}
+                  </button>
+                )}
               </div>
+            </form>
             </>
-          )}
+          );
+        }}
       </Formik>
+      {!isCreate && owner ? (
+        <OwnerPasswordDialog
+          open={passwordDialogOpen}
+          onClose={() => setPasswordDialogOpen(false)}
+          ownerLabel={`${owner.firstName || ''} ${owner.lastName || ''}`.trim()}
+          sojoriEmail={owner.email}
+          ruEmail={resolveRuEmailDisplay(owner)}
+          loading={passwordDialogLoading}
+          onSubmit={handleOwnerPasswordSubmit}
+        />
+      ) : null}
+      <OwnerPasswordLinkDialog
+        open={!!passwordLinkDialog}
+        onClose={() => setPasswordLinkDialog(null)}
+        email={passwordLinkDialog?.email}
+        linkUrl={passwordLinkDialog?.url}
+        emailSent={passwordLinkDialog?.emailSent}
+        emailError={passwordLinkDialog?.emailError}
+        linkType={passwordLinkDialog?.linkType}
+        expiresAt={passwordLinkDialog?.expiresAt}
+      />
     </div>
   );
 

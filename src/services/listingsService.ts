@@ -1,5 +1,6 @@
 import { isAxiosError } from 'axios';
 import apiClient from './apiClient';
+import { appendFilterOwnerIdsToSearchParams } from '../utils/adminOwnerFilter.utils';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 import { monitoringAxiosConfig } from '../utils/channelsAxiosConfig';
 import {
@@ -712,6 +713,8 @@ export const listingsService = {
       active?: boolean;
       name?: string;
       staging?: boolean;
+      filterOwnerId?: string | string[];
+      ownerId?: string | null;
     }
   ): Promise<{ success: boolean; data: any[]; total: number }> {
     try {
@@ -749,6 +752,15 @@ export const listingsService = {
       if (filters?.staging !== undefined) {
         params.append('staging', filters.staging.toString());
       }
+
+      const ownerFilter = filters?.filterOwnerId
+        ? Array.isArray(filters.filterOwnerId)
+          ? filters.filterOwnerId
+          : [filters.filterOwnerId]
+        : filters?.ownerId
+          ? [filters.ownerId]
+          : [];
+      appendFilterOwnerIdsToSearchParams(params, ownerFilter);
 
       const url = `${LISTING_API_BASE_URL}/listings?${params.toString()}`;
 
@@ -1453,6 +1465,8 @@ export const listingsService = {
     name?: string;
     forListingsOverview?: boolean;
     compact?: boolean; // ⚡ Mode compact pour filtres/dropdowns
+    filterOwnerId?: string | string[];
+    ownerId?: string | null;
   }): Promise<ServiceResult<{ items: ListingSummary[]; total: number }>> {
     const page = options?.page ?? 0;
     const limit = options?.limit ?? 20;
@@ -1477,6 +1491,14 @@ export const listingsService = {
     if (compact) {
       query.set('compact', 'true'); // ⚡ Mode compact: uniquement {_id, name, city}
     }
+    const ownerFilter = options?.filterOwnerId
+      ? Array.isArray(options.filterOwnerId)
+        ? options.filterOwnerId
+        : [options.filterOwnerId]
+      : options?.ownerId
+        ? [options.ownerId]
+        : [];
+    appendFilterOwnerIdsToSearchParams(query, ownerFilter);
 
     const url = `${LISTING_API_BASE_URL}/listings/?${query.toString()}`;
 
@@ -1512,8 +1534,12 @@ export const listingsService = {
     return { data: listing.id ? listing : null, source: 'api' };
   },
 
-  async getStats(): Promise<ServiceResult<ListingsStats>> {
-    const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/stats`);
+  async getStats(options?: { ownerId?: string | null }): Promise<ServiceResult<ListingsStats>> {
+    const query = new URLSearchParams({ staging: 'false' });
+    if (options?.ownerId?.trim()) {
+      query.set('ownerId', options.ownerId.trim());
+    }
+    const response = await apiClient.get(`${LISTING_API_BASE_URL}/listings/stats?${query.toString()}`);
     const payload = asRecord(response.data);
     const total = asNumber(payload.totalListing) ?? 0;
     const active = asNumber(payload.totalActive) ?? 0;
