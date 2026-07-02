@@ -177,6 +177,7 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
         sub: [
           { id: 'admin/channels/summary', label: 'Summary' },
           { id: 'admin/channels/business', label: 'Business' },
+          { id: 'admin/channels/logapiru', label: 'LogApiRU' },
           { id: 'admin/channels/debug', label: 'Debug' },
         ],
       },

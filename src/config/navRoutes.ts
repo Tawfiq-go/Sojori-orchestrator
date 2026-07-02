@@ -48,6 +48,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'admin/channels': '/channels?tab=Business&biz=api&api=m',
   'admin/channels/business': '/admin/channels?tab=Business&biz=api&api=m',
   'admin/channels/debug': '/admin/channels?tab=Debug&type=pull',
+  'admin/channels/logapiru': '/channels?tab=LogApiRU',
   'admin/channels/summary': '/admin/channels?tab=Sum',
   'admin/ChannelManager/channel-manager': '/admin/ChannelManager?tab=channel-manager',
   'admin/ChannelManager/distribution': '/admin/ChannelManager?tab=distribution',
