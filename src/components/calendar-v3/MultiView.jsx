@@ -30,6 +30,9 @@ export default function MultiView({
   onOpenReservation,
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsLegacy || [];
+  const { isMobile } = useCalendarBreakpoint();
+  const LEFT_W = isMobile ? LEFT_W_MOBILE : LEFT_W_DESKTOP;
+  const CELL_W = isMobile ? CELL_W_MOBILE : CELL_W_DESKTOP;
   const days = useMemo(() => genDays(startDate, daysCount), [startDate, daysCount]);
   const headerRef = useRef(null);
   const bodyRef = useRef(null);

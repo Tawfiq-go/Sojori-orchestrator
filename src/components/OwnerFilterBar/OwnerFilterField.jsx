@@ -230,23 +230,16 @@ export default function OwnerFilterField({
         renderInput={(params) => (
           <TextField
             {...params}
-            hiddenLabel
             label={compactToolbar || explicitScope ? undefined : 'Propriétaire'}
             placeholder={
               explicitScope
                 ? t('Tous (plateforme) ou un PM…', 'Tous (plateforme) ou un PM…')
                 : compactToolbar
-                  ? undefined
+                  ? ownerAria
                   : requireSelection
                     ? t('Select owner', 'Choisir un propriétaire…')
                     : t('Search owner', 'Rechercher un propriétaire...')
             }
-            slotProps={{
-              htmlInput: {
-                ...params.inputProps,
-                'aria-label': ownerAria,
-              },
-            }}
           />
         )}
         {...rest}

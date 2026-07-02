@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import { MICROSERVICE_BASE_URL } from '../config/backendServer.config';
+import type { StaffWaThreadRow } from './staffConversationMapper';
 
 /** Via srv-admin → srv-fulltask (ingress /api/v1/admin always routé ; /api/v1/fulltask/staff-whatsapp peut manquer). */
 const STAFF_WA_BASE = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/fulltask/staff-whatsapp`;
@@ -31,10 +32,10 @@ function normalizeStaffWaPhone(phone?: string): string {
   return String(phone || '').replace(/\D/g, '');
 }
 
-function parseStaffWaRows(data: unknown): unknown[] {
-  if (Array.isArray(data)) return data;
+function parseStaffWaRows(data: unknown): StaffWaThreadRow[] {
+  if (Array.isArray(data)) return data as StaffWaThreadRow[];
   if (data && typeof data === 'object' && Array.isArray((data as { data?: unknown[] }).data)) {
-    return (data as { data: unknown[] }).data;
+    return (data as { data: StaffWaThreadRow[] }).data;
   }
   return [];
 }

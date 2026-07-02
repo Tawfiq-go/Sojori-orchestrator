@@ -1,0 +1,34 @@
+.pm-lifecycle-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pm-lifecycle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.pm-lifecycle-card {
+  border: 1px solid #e5e8ec;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px 16px;
+}
+
+.pm-lifecycle-milestones {
+  display: grid;
+  gap: 8px;
+}
+
+.pm-lifecycle-milestone {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.pm-lifecycle-milestone.done {
+  color: #0f766e;
+}

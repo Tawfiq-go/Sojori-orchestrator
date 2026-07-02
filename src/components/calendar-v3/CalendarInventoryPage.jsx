@@ -62,6 +62,7 @@ export default function CalendarInventoryPage({
   const [drawerReservation, setDrawerReservation] = useState(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
 
+  const { showLandscapeHint } = useCalendarBreakpoint();
   const { maxPivotStart, horizonEnd } = useMemo(() => getCalendarWindowBounds(), []);
   const atHorizonEnd = isAtHorizonEnd(pivotDate);
 
@@ -170,6 +171,7 @@ export default function CalendarInventoryPage({
         overflow: 'hidden',
       }}
     >
+      {showLandscapeHint && <CalendarLandscapeHint />}
       <div
         style={{
           display: 'flex',

@@ -8,7 +8,7 @@ type StaffWaMessage = {
   type?: string;
 };
 
-type StaffWaThreadRow = {
+export type StaffWaThreadRow = {
   workerWaNumber?: string;
   workerWaName?: string;
   workerRole?: string;
@@ -27,7 +27,7 @@ function sortStaffMessagesChronologically(messages: StaffWaMessage[]): StaffWaMe
 }
 
 /** API returns messages newest-first; normalize + include lastMessage when batch is empty. */
-function resolveThreadMessages(row: StaffWaThreadRow | null | undefined): StaffWaMessage[] {
+export function resolveThreadMessages(row: StaffWaThreadRow | null | undefined): StaffWaMessage[] {
   const raw = row?.messages || [];
   const sorted = sortStaffMessagesChronologically(raw);
   if (sorted.length > 0) return sorted;
