@@ -33,6 +33,7 @@ const MAIN_SECTIONS: Array<{
     defaults: { biz: 'api', api: 'r' },
   },
   { section: 'Mapping', label: 'Mapping', emoji: '🗺️', defaults: { mapSub: 'fields' } },
+  { section: 'LogApiRU', label: 'LogApiRU', emoji: '🛰️' },
   { section: 'Debug', label: 'Debug', emoji: '🐛', defaults: { type: 'pull' } },
   { section: 'Cron', label: 'Cron', emoji: '⏰' },
 ];

@@ -4,6 +4,7 @@ export const SECTION_VALID = new Set([
   'Sum',
   'Business',
   'Mapping',
+  'LogApiRU',
   'Debug',
   'Cron',
 ]);
@@ -12,6 +13,7 @@ export type SectionTab =
   | 'Sum'
   | 'Business'
   | 'Mapping'
+  | 'LogApiRU'
   | 'Debug'
   | 'Cron';
 
@@ -23,6 +25,7 @@ export function canonicalSectionTab(tabParam: string | null): SectionTab {
   if (lo === 'business' || lo === 'biz') return 'Business';
   if (lo === 'mapping' || lo === 'geo') return 'Mapping';
   if (lo === 'summary' || lo === 'sum' || lo === 'overview' || lo === 'kpi') return 'Sum';
+  if (lo === 'logapiru' || lo === 'logapi-ru' || lo === 'ru-logs') return 'LogApiRU';
   if (lo === 'debug' || lo === 'audit') return 'Debug';
   if (lo === 'cron' || lo === 'crons' || lo === 'jobs') return 'Cron';
   if (lo === 'import' || lo === 'onboard') return 'Sum';
@@ -41,6 +44,7 @@ export function sectionToUiTab(section: SectionTab): string {
     Sum: 'summary',
     Business: 'business',
     Mapping: 'mapping',
+    LogApiRU: 'logapiru',
     Debug: 'debug',
     Cron: 'cron',
   };
