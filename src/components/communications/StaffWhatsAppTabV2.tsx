@@ -253,7 +253,22 @@ export default function StaffWhatsAppTabV2() {
           await handleStaffSend(text);
         }}
         context={{
-          conversationHistory: inbox.messages,
+          threadContext: inbox.messages
+            .map((ex) => {
+              const parts: string[] = [];
+              if (ex.user_message?.trim()) {
+                parts.push(`${ex.sent_by_admin ? 'Staff' : 'Client'}: ${ex.user_message.trim()}`);
+              }
+              if (ex.ai_response?.trim()) {
+                parts.push(`Staff: ${ex.ai_response.trim()}`);
+              }
+              return parts.join('\n');
+            })
+            .filter(Boolean)
+            .join('\n'),
+          lastGuestMessage: [...inbox.messages]
+            .reverse()
+            .find((ex) => ex.user_message?.trim() && !ex.sent_by_admin)?.user_message,
           guestName: inbox.activeConversation?.name,
           type: 'staff',
         }}

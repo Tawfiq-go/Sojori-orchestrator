@@ -310,21 +310,50 @@ class TasksService {
     includeCompleted = false,
   ): Promise<ReservationTasksResult> {
     try {
-      const response = await apiClient.get<ReservationTasksResult>(
-        `${TASKS_BASE_URL}/internal/tasks/reservation/${reservationId}`,
-        {
-          params: { includeCompleted },
+      const fulltaskBase = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/fulltask/reservation-tasks`;
+      const response = await apiClient.get<{ success?: boolean; data?: unknown[] }>(fulltaskBase, {
+        params: {
+          reservationCode: reservationId,
+          limit: 100,
         },
-      );
+      });
 
-      if (!response.data?.success) {
-        throw new Error(response.data?.data || 'Erreur lors du chargement des tâches');
-      }
+      const rawTasks = Array.isArray(response.data?.data) ? response.data.data : [];
+      const tasks = rawTasks
+        .filter((task) => {
+          if (includeCompleted) return true;
+          const status = String((task as { status?: string }).status || '').toLowerCase();
+          return status !== 'done' && status !== 'cancelled';
+        })
+        .map((task) => {
+          const t = task as Record<string, unknown>;
+          const assigned = t.assignedTo as { username?: string; whatsappPhone?: string } | undefined;
+          return {
+            taskId: String(t._id || t.taskId || ''),
+            taskCode: String(t.taskCode || t.code || ''),
+            type: String(t.type || t.subType || 'other'),
+            status: String(t.status || 'new'),
+            scheduledFor: (t.scheduledDate || t.scheduledAt || t.startDate) as string | undefined,
+            deadline: (t.dueAt || t.deadline || t.endDate) as string | undefined,
+            assignedStaff: assigned?.username
+              ? {
+                  name: String(assigned.username),
+                  phone: String(assigned.whatsappPhone || ''),
+                }
+              : null,
+          };
+        });
 
-      return response.data;
+      return {
+        success: true,
+        data: {
+          reservationId,
+          total: tasks.length,
+          tasks,
+        },
+      };
     } catch (error) {
       console.error(`❌ Erreur récupération tâches pour réservation ${reservationId}:`, error);
-      // Retourner un résultat vide en cas d'erreur
       return {
         success: false,
         data: {

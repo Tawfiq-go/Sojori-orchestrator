@@ -699,6 +699,7 @@ class MessagesService {
     messageStatus?: string;
     unreplied?: boolean;
     otaChannel?: string;
+    cursor?: string;
   }): Promise<any> {
     try {
       const response = await apiClient.get(
@@ -711,6 +712,7 @@ class MessagesService {
             source: 'reservation',
             reservationNumber: params?.reservationNumber || params?.search || undefined,
             sortBy: params?.sortBy || undefined,
+            ...(params?.cursor ? { cursor: params.cursor } : {}),
             ...(params?.ownerId ? { ownerId: params.ownerId } : {}),
             ...(params?.otaSearch ? { otaSearch: '1' } : {}),
             ...(params?.q ? { q: params.q } : {}),
@@ -761,18 +763,29 @@ class MessagesService {
    */
   async sendOTAMessage(threadId: string, message: string): Promise<any> {
     try {
+      const numericThreadId = Number(String(threadId).replace(/\D/g, '')) || threadId;
       const response = await apiClient.post(
         `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/rentals/send-message`,
         {
-          threadId: threadId,
+          threadId: numericThreadId,
           messageBody: message,
-        }
+        },
       );
 
       return response.data;
     } catch (error: any) {
       console.error('❌ Erreur envoi message OTA:', error);
-      throw error;
+      const ruError =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.response?.data?.detail;
+      const hint = error.response?.data?.hint;
+      throw new Error(
+        [ruError, hint].filter(Boolean).join(' — ') ||
+          (error.response?.status === 401
+            ? 'Session expirée — reconnectez-vous.'
+            : 'Erreur lors de l\'envoi du message OTA.'),
+      );
     }
   }
 }

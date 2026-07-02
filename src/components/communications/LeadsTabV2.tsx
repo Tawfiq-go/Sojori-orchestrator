@@ -16,6 +16,10 @@ import {
   extractOtaMessagesFromApiResponse,
   mapOtaApiMessagesToInbox,
 } from '../unified-inbox/inboxOtaMappers';
+import {
+  buildOtaThreadContextForAi,
+  getLastGuestMessageFromInbox,
+} from '../../services/communicationsAi.helpers';
 import { formatThreadWhen, nightsBetween, normalizeBookingSource } from '../unified-inbox/inboxFormat';
 import { T } from '../unified-inbox/_tokens';
 
@@ -191,6 +195,21 @@ export default function LeadsTabV2() {
 
   const otaPlatform = active ? normalizeBookingSource(active.channel) : 'Airbnb';
 
+  const leadsThreadContext = useMemo(() => {
+    const built = buildOtaThreadContextForAi(messages);
+    if (built.trim()) return built;
+    if (active?.lastMessage?.trim()) {
+      return `Client: ${active.lastMessage.trim()}`;
+    }
+    return '';
+  }, [messages, active?.lastMessage]);
+
+  const leadsLastGuestMessage = useMemo(() => {
+    const fromThread = getLastGuestMessageFromInbox(messages);
+    if (fromThread) return fromThread;
+    return active?.lastMessage?.trim() || '';
+  }, [messages, active?.lastMessage]);
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -292,7 +311,14 @@ export default function LeadsTabV2() {
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
         onUseSuggestion={(text) => active && void messagesService.sendLeadMessage(active.threadId, text)}
-        context={{ guestName: active?.guestName, type: 'leads' }}
+        context={{
+          threadContext: leadsThreadContext,
+          lastGuestMessage: leadsLastGuestMessage,
+          guestName: active?.guestName,
+          reservationNumber: active?.reservationNumber,
+          channelName: otaPlatform,
+          type: 'leads',
+        }}
       />
     </>
   );

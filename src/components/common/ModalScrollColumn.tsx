@@ -10,12 +10,14 @@ export function ModalScrollColumn({
   className,
   wrapperSx,
   innerSx,
+  onScroll,
   children,
 }: {
   active: boolean;
   className?: string;
   wrapperSx?: Record<string, unknown>;
   innerSx?: Record<string, unknown>;
+  onScroll?: (e: React.UIEvent<HTMLDivElement>) => void;
   children: React.ReactNode;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -63,6 +65,7 @@ export function ModalScrollColumn({
         ref={scrollRef}
         className={className}
         tabIndex={-1}
+        onScroll={onScroll}
         sx={{
           flex: 1,
           minHeight: 0,
