@@ -32,6 +32,14 @@ import { TeamHubListTable } from './TeamHubListTable';
 import { TeamHubPagination } from './TeamHubPagination';
 import { TEAM_T } from './teamHubTokens';
 import { filterOwnersForPmTab } from '../../utils/ownerListFilters';
+import { getOwnerRuStatusDatesBatch } from '../../features/staff/services/serverApi.task';
+
+function formatRuStatusDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
 
 function ownerName(row) {
   const n = `${row.firstName || ''} ${row.lastName || ''}`.trim();
@@ -143,6 +151,30 @@ export function PropertyManagerHubView({
     [owners, accountStatusFilter, deletedFilter, bannedFilter],
   );
 
+  /** Date création compte RU + dernière sync entreprise RU, une requête pour toute la page affichée. */
+  const [ruStatusDatesByOwner, setRuStatusDatesByOwner] = useState({});
+  const ruOwnerIdsKey = useMemo(
+    () =>
+      displayOwners
+        .filter((o) => o.channelManager === 'RU')
+        .map((o) => String(o._id))
+        .join(','),
+    [displayOwners],
+  );
+  useEffect(() => {
+    if (!ruOwnerIdsKey) {
+      setRuStatusDatesByOwner({});
+      return;
+    }
+    let cancelled = false;
+    getOwnerRuStatusDatesBatch(ruOwnerIdsKey.split(',')).then((data) => {
+      if (!cancelled) setRuStatusDatesByOwner(data || {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ruOwnerIdsKey]);
+
   const hubColumns = useMemo(
     () => [
       {
@@ -201,6 +233,28 @@ export function PropertyManagerHubView({
           return `T ${st.total} · RU ${st.ruLinked} · CX ${st.channexLinked}`;
         },
       },
+      {
+        key: 'ruStatus',
+        label: t('Statut RU'),
+        render: (row) => {
+          if (row.channelManager !== 'RU') return '—';
+          const hasRuOwnerId = !!String(row.ruOwnerId || '').trim();
+          const ruDates = ruStatusDatesByOwner[String(row._id)] || {};
+          const hasCompanySynced = !!ruDates.companyLastSyncedAt;
+          const ownerDate = formatRuStatusDate(ruDates.ownerCreatedAt);
+          const companyDate = formatRuStatusDate(ruDates.companyLastSyncedAt);
+          return (
+            <Stack spacing={0.25}>
+              <Typography sx={{ fontSize: 11, color: hasRuOwnerId ? '#15803d' : '#c2410c' }}>
+                Compte : {hasRuOwnerId ? `Créé${ownerDate ? ` (${ownerDate})` : ''}` : 'Non créé'}
+              </Typography>
+              <Typography sx={{ fontSize: 11, color: hasCompanySynced ? '#15803d' : '#c2410c' }}>
+                Entreprise : {hasCompanySynced ? `Créée${companyDate ? ` (${companyDate})` : ''}` : 'Non créée'}
+              </Typography>
+            </Stack>
+          );
+        },
+      },
       ...(canUpdate
         ? [
             {
@@ -251,7 +305,7 @@ export function PropertyManagerHubView({
           ]
         : []),
     ],
-    [canUpdate, listingStatsByOwner, onEdit, onLifecycle, t],
+    [canUpdate, listingStatsByOwner, ruStatusDatesByOwner, onEdit, onLifecycle, t],
   );
 
   const handleSearchSubmit = () => {
@@ -364,6 +418,10 @@ export function PropertyManagerHubView({
           {displayOwners.map((row) => {
             const st = listingStatsByOwner[String(row._id)] || { total: 0, ruLinked: 0, channexLinked: 0 };
             const inactive = row.banned || row.deleted;
+            const isRu = row.channelManager === 'RU';
+            const hasRuOwnerId = isRu && !!String(row.ruOwnerId || '').trim();
+            const ruDates = ruStatusDatesByOwner[String(row._id)] || {};
+            const hasCompanySynced = isRu && !!ruDates.companyLastSyncedAt;
             return (
               <TeamHubMemberCard
                 key={row._id}
@@ -391,6 +449,22 @@ export function PropertyManagerHubView({
                     label: 'Annonces',
                     value: `T ${st.total} · RU ${st.ruLinked} · CX ${st.channexLinked}`,
                   },
+                  ...(isRu
+                    ? [
+                        {
+                          label: 'Compte RU',
+                          value: hasRuOwnerId
+                            ? `Créé${formatRuStatusDate(ruDates.ownerCreatedAt) ? ` · ${formatRuStatusDate(ruDates.ownerCreatedAt)}` : ` (ID ${row.ruOwnerId})`}`
+                            : 'Non créé',
+                        },
+                        {
+                          label: 'Entreprise RU',
+                          value: hasCompanySynced
+                            ? `Créée${formatRuStatusDate(ruDates.companyLastSyncedAt) ? ` · ${formatRuStatusDate(ruDates.companyLastSyncedAt)}` : ''}`
+                            : 'Non créée',
+                        },
+                      ]
+                    : []),
                 ]}
                 inactive={inactive}
                 onLifecycle={onLifecycle ? () => onLifecycle(row) : undefined}
