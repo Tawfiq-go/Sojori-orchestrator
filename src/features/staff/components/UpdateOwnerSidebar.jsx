@@ -151,6 +151,7 @@ const CREATE_EMPTY_PM_PROFILE = {
   description: '',
   logoText: '',
   logoImage: '',
+  vitrineLogoUrl: '',
   images: [],
   brandColor: { from: '', to: '' },
   verified: false,
@@ -360,6 +361,11 @@ const UpdateOwnerSidebar = ({
   }, [resetTabOnOpenKey, open]);
 
   useEffect(() => {
+    if (!open) return;
+    drawerRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
+  }, [activeTab, open]);
+
+  useEffect(() => {
     if (!open || !inline) return;
     if (isCreate) return;
     if (!owner) return;
@@ -418,6 +424,27 @@ const UpdateOwnerSidebar = ({
       }
     } catch (err) {
       toast.error(`Échec upload : ${err?.message || ''}`);
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  /** Logo image vitrine sojori-vente (pmProfile.vitrineLogoUrl — distinct initiales + P&L). */
+  const handlePmVitrineLogoUpload = async (fileList, setFieldValue) => {
+    const file = fileList?.[0];
+    if (!file) return;
+    setUploadingImages(true);
+    try {
+      const result = await dispatch(uploadImageToAPI({ file, folder: 'other' })).unwrap();
+      const url = normalizePmImageUrl(result?.url || result);
+      if (!url) {
+        toast.error('Échec upload logo vitrine (URL manquante)');
+        return;
+      }
+      setFieldValue('pmProfile.vitrineLogoUrl', url);
+      toast.info('Logo vitrine ajouté — cliquez Enregistrer pour sauvegarder');
+    } catch (err) {
+      toast.error(`Échec upload logo vitrine : ${err?.message || ''}`);
     } finally {
       setUploadingImages(false);
     }
@@ -1065,6 +1092,7 @@ const UpdateOwnerSidebar = ({
           description: owner?.pmProfile?.description || '',
           logoText: owner?.pmProfile?.logoText || '',
           logoImage: owner?.pmProfile?.logoImage || '',
+          vitrineLogoUrl: owner?.pmProfile?.vitrineLogoUrl || '',
           images: normalizePmImageList(owner?.pmProfile?.images),
           brandColor: {
             from: owner?.pmProfile?.brandColor?.from || '',
@@ -2031,10 +2059,51 @@ const UpdateOwnerSidebar = ({
                 </div>
 
                 <div className="owner-vitrine-section" style={{ marginTop: 16 }}>
+                  <div className="form-section-h">Logo vitrine (image)</div>
+                  <div className="owner-form-hint" style={{ marginBottom: 10 }}>
+                    Image affichée sur sojori-vente (<code>vitrineLogoUrl</code>) — distinct du badge
+                    initiales ci-dessous et du logo PDF (onglet <b>Rapports P&L</b>).
+                  </div>
+                  <div className="owner-pl-logo-row">
+                    <OwnerPmLogoImage
+                      images={
+                        values.pmProfile.vitrineLogoUrl ? [values.pmProfile.vitrineLogoUrl] : []
+                      }
+                      className="owner-pl-preview-logo"
+                      emptyLabel="Logo"
+                    />
+                    <div className="owner-vitrine-logo-fields">
+                      <label className="btn btn-ghost owner-photo-btn">
+                        {uploadingImages ? 'Envoi…' : '+ Ajouter logo image'}
+                        <input
+                          hidden
+                          type="file"
+                          accept={PM_VITRINE_IMAGE_SPECS.accept}
+                          disabled={uploadingImages}
+                          onChange={(e) => {
+                            handlePmVitrineLogoUpload(e.target.files, setFieldValue);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                      {values.pmProfile.vitrineLogoUrl ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => setFieldValue('pmProfile.vitrineLogoUrl', '')}
+                        >
+                          Retirer
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="owner-vitrine-section" style={{ marginTop: 16 }}>
                   <div className="form-section-h">Logo vitrine (initiales)</div>
                   <div className="owner-form-hint" style={{ marginBottom: 10 }}>
-                    Badge texte sur sojori-vente (encart hôtes + page <code>/pm/slug</code>) —{' '}
-                    <b>pas une image</b>. Si vide, calculé depuis le nom public.
+                    Badge texte sur sojori-vente si pas de logo image — encart hôtes + page{' '}
+                    <code>/pm/slug</code>. Si vide, calculé depuis le nom public.
                   </div>
                   <div className="owner-vitrine-logo-row">
                     <OwnerPmMonogramBadge
