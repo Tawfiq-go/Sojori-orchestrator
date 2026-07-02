@@ -476,6 +476,9 @@ const UpdateOwnerSidebar = ({
   const canActivateDraft = effectiveDraftStatus === 'inactive';
   /** Brouillon = status inactive uniquement. */
   const isDraftFlow = effectiveDraftStatus === 'inactive';
+  /** Email dashboard modifiable tant que le PM n’a pas finalisé son activation. */
+  const canEditDashboardEmail =
+    isCreate || effectiveDraftStatus === 'pending' || effectiveDraftStatus === 'inactive';
 
   const normalizePmSlug = (slug) =>
     (slug || '')
@@ -529,11 +532,14 @@ const UpdateOwnerSidebar = ({
     return { apiRes, fillCompany: merged };
   };
 
-  const buildUpdatePayload = (values, selectedCity) => {
+  const buildUpdatePayload = (values, selectedCity, { includeDashboardEmail = false } = {}) => {
     const flags = applyChannelFlagsToFormValues(values);
     return {
     firstName: values.firstName,
     lastName: values.lastName,
+    ...(includeDashboardEmail && values.email?.trim()
+      ? { email: values.email.trim().toLowerCase() }
+      : {}),
     phone: values.phone,
     whatsapp: values.whatsapp,
     channelManager: flags.channelManager,
@@ -623,6 +629,7 @@ const UpdateOwnerSidebar = ({
     const profilePayload = buildUpdatePayload(
       { ...liveValues, banned: false, deleted: false },
       selectedCity,
+      { includeDashboardEmail: canEditDashboardEmail },
     );
     try {
       await updateOwner(accountId, profilePayload);
@@ -771,7 +778,10 @@ const UpdateOwnerSidebar = ({
           return;
         }
         const selectedCity = cities.find((city) => city._id === values.cityId);
-        await updateOwner(owner._id, buildUpdatePayload(values, selectedCity));
+        await updateOwner(
+          owner._id,
+          buildUpdatePayload(values, selectedCity, { includeDashboardEmail: canEditDashboardEmail }),
+        );
         await persistFillCompany(owner._id, values, { localOnly: true });
         accountId = owner._id;
       }
@@ -836,6 +846,7 @@ const UpdateOwnerSidebar = ({
       const profilePayload = buildUpdatePayload(
         { ...liveValues, banned: false, deleted: false },
         selectedCity,
+        { includeDashboardEmail: canEditDashboardEmail },
       );
       try {
         await updateOwner(accountId, profilePayload);
@@ -886,7 +897,7 @@ const UpdateOwnerSidebar = ({
   };
 
   const handleSaveEdit = async (values, formikBag) => {
-    const { setErrors, validateForm, setTouched } = formikBag;
+    const { setErrors, validateForm, setTouched, setFieldValue } = formikBag;
     const validationErrors = await validateForm();
     if (Object.keys(validationErrors).length > 0) {
       setTouched(validationErrors, true);
@@ -899,7 +910,7 @@ const UpdateOwnerSidebar = ({
       const selectedCity = cities.find((city) => city._id === values.cityId);
       const ruPwd = (values.ruExtranetPassword || '').trim();
       const response = await updateOwner(owner._id, {
-        ...buildUpdatePayload(values, selectedCity),
+        ...buildUpdatePayload(values, selectedCity, { includeDashboardEmail: canEditDashboardEmail }),
         ...(ruPwd.length >= 6 ? { ruExtranetPassword: ruPwd } : {}),
       });
       if (!response.data?.account) {
@@ -927,6 +938,9 @@ const UpdateOwnerSidebar = ({
         ...updatedAccount,
         fillCompany: fillPersisted?.fillCompany ?? values.fillCompany,
       });
+      if (updatedAccount.email) {
+        setFieldValue('email', updatedAccount.email);
+      }
       toast.success('Enregistré — vous pouvez continuer à modifier');
     } catch (error) {
       setErrors({
@@ -1342,21 +1356,61 @@ const UpdateOwnerSidebar = ({
                           })}
                         </div>
                       </div>
+                    ) : canEditDashboardEmail ? (
+                      <div className="field">
+                        <CompteFieldLabel kind="sojoriLogin" ruXmlPath="Sojori login + ContactInfo.Email">
+                          Email dashboard
+                        </CompteFieldLabel>
+                        <input
+                          className="input"
+                          name="email"
+                          type="email"
+                          value={values.email}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                          autoComplete="username"
+                        />
+                        {touched.email && errors.email ? (
+                          <span className="owner-field-err">{errors.email}</span>
+                        ) : null}
+                        {owner?.status === 'pending' ? (
+                          <div className="owner-form-hint" style={{ marginTop: 6, color: '#b45309' }}>
+                            Invitation en attente — modifiez l’email puis Enregistrer, puis « Envoyer lien
+                            mot de passe (24h) » pour renvoyer l’invitation à la nouvelle adresse.
+                          </div>
+                        ) : (
+                          <div className="owner-form-hint" style={{ marginTop: 6 }}>
+                            Modifiable tant que le PM n’a pas activé son compte.
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          className="owner-btn secondary"
+                          style={{ marginTop: 8 }}
+                          onClick={() => setPasswordDialogOpen(true)}
+                        >
+                          Modifier les mots de passe
+                        </button>
+                        <button
+                          type="button"
+                          className="owner-btn secondary"
+                          style={{ marginTop: 8, marginLeft: 8 }}
+                          disabled={sendLinkLoading}
+                          onClick={() => void handleSendPasswordLink()}
+                        >
+                          {sendLinkLoading ? 'Envoi…' : 'Envoyer lien mot de passe (24h)'}
+                        </button>
+                      </div>
                     ) : (
                       <div className="field">
                         <CompteFieldLabel kind="sojoriLogin" ruXmlPath="Sojori login + ContactInfo.Email">
                           Email dashboard
                         </CompteFieldLabel>
                         <input className="input" value={values.email || owner?.email || ''} readOnly disabled />
-                        {owner?.status === 'pending' ? (
-                          <div className="owner-form-hint" style={{ marginTop: 6, color: '#b45309' }}>
-                            Invitation en attente — le PM n’a pas encore activé son compte.
-                          </div>
-                        ) : null}
                         <div className="owner-form-hint" style={{ marginTop: 6 }}>
                           {t('ruFieldBadge.hintDashboardEmailEdit', {
                             defaultValue:
-                              'Connexion dashboard Sojori. Recopié dans ContactInfo.Email (fiche RU) à l’enregistrement Entreprise.',
+                              'Compte activé — l’email dashboard n’est plus modifiable ici. Contactez le support pour un changement.',
                           })}
                         </div>
                         <button

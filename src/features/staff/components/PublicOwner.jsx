@@ -228,6 +228,9 @@ const PublicOwner = ({
       ...owner,
       ...updatedOwner
     } : owner));
+    setSelectedOwner(prev =>
+      prev && String(prev._id) === String(updatedOwner._id) ? { ...prev, ...updatedOwner } : prev,
+    );
     toast.success(t('Owner updated successfully'));
   };
   const handleUpdate = owner => {
