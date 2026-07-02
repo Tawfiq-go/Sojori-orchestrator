@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
@@ -48,56 +48,119 @@ function parseReview(messages: any[]) {
   return { rating, message, response };
 }
 
+const GLOBAL_SEARCH_MIN_LEN = 2;
+const GLOBAL_SEARCH_DEBOUNCE_MS = 500;
+
+function mapReviewApiRows(threadsData: any[]): ReviewRow[] {
+  return threadsData.map((item: any) => {
+    const threadData = item.thread || item;
+    const reservation = item.reservation || {};
+    const messages = item.messages || [];
+    const review = parseReview(messages);
+    let channel = threadData.communicationChannel || reservation.channelName || 'Airbnb';
+    if (channel.toLowerCase().includes('booking')) channel = 'Booking.com';
+    else if (channel.toLowerCase().includes('airbnb')) channel = 'Airbnb';
+    return {
+      id: threadData._id,
+      threadId: threadData.threadId,
+      guestName: reservation.guestName || threadData.recipientName || 'Guest',
+      listingName: reservation.listingName || 'Listing',
+      channel,
+      reservationNumber: reservation.reservationNumber || '—',
+      lastMessageTime: threadData.lastMessageAt,
+      rating: review.rating,
+      reviewText: review.message || threadData.preview || '',
+      response: review.response,
+      replied: !!review.response,
+      checkInDate: reservation.arrivalDate,
+      checkOutDate: reservation.departureDate,
+    };
+  });
+}
+
 export default function ReviewsTabV2() {
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [active, setActive] = useState<ReviewRow | null>(null);
   const [replyText, setReplyText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [searchPending, setSearchPending] = useState(false);
   const [sending, setSending] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
   const [showAIModal, setShowAIModal] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequestIdRef = useRef(0);
+  const prevSearchTermRef = useRef('');
+
+  const loadReviews = useCallback(async (opts?: { search?: string; forSearch?: boolean }) => {
+    const requestId = ++searchRequestIdRef.current;
+    try {
+      if (opts?.forSearch) setSearchPending(true);
+      else setLoading(true);
+
+      const params: { limit: number; msgLimit: number; reservationNumber?: string } = {
+        limit: 50,
+        msgLimit: 30,
+      };
+      const q = opts?.search?.trim();
+      if (q) params.reservationNumber = q;
+
+      const response = await messagesService.getReviews(params);
+      if (requestId !== searchRequestIdRef.current) return;
+
+      const threadsData = response.threads || response.data || [];
+      setRows(mapReviewApiRows(threadsData));
+    } catch (err) {
+      if (requestId === searchRequestIdRef.current) {
+        console.error('❌ reviews:', err);
+      }
+    } finally {
+      if (requestId === searchRequestIdRef.current) {
+        if (opts?.forSearch) setSearchPending(false);
+        else setLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     void loadReviews();
-  }, []);
+  }, [loadReviews]);
 
-  const loadReviews = async () => {
-    try {
-      setLoading(true);
-      const response = await messagesService.getReviews({ limit: 50, msgLimit: 30 });
-      const threadsData = response.threads || response.data || [];
-      const formatted: ReviewRow[] = threadsData.map((item: any) => {
-        const threadData = item.thread || item;
-        const reservation = item.reservation || {};
-        const messages = item.messages || [];
-        const review = parseReview(messages);
-        let channel = threadData.communicationChannel || reservation.channelName || 'Airbnb';
-        if (channel.toLowerCase().includes('booking')) channel = 'Booking.com';
-        else if (channel.toLowerCase().includes('airbnb')) channel = 'Airbnb';
-        return {
-          id: threadData._id,
-          threadId: threadData.threadId,
-          guestName: reservation.guestName || threadData.recipientName || 'Guest',
-          listingName: reservation.listingName || 'Listing',
-          channel,
-          reservationNumber: reservation.reservationNumber || '—',
-          lastMessageTime: threadData.lastMessageAt,
-          rating: review.rating,
-          reviewText: review.message || threadData.preview || '',
-          response: review.response,
-          replied: !!review.response,
-          checkInDate: reservation.arrivalDate,
-          checkOutDate: reservation.departureDate,
-        };
-      });
-      setRows(formatted);
-    } catch (err) {
-      console.error('❌ reviews:', err);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    const q = searchTerm.trim();
+    const prev = prevSearchTermRef.current.trim();
+    prevSearchTermRef.current = searchTerm;
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
     }
-  };
+
+    if (!q) {
+      setSearchPending(false);
+      if (prev.length >= GLOBAL_SEARCH_MIN_LEN) {
+        void loadReviews();
+      }
+      return;
+    }
+
+    if (q.length < GLOBAL_SEARCH_MIN_LEN) {
+      setSearchPending(false);
+      return;
+    }
+
+    setSearchPending(true);
+    searchDebounceRef.current = setTimeout(() => {
+      void loadReviews({ search: q, forSearch: true });
+    }, GLOBAL_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = null;
+      }
+    };
+  }, [searchTerm, loadReviews]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -133,6 +196,8 @@ export default function ReviewsTabV2() {
   );
 
   const activeThread = active ? threads.find((th) => th.id === active.threadId) ?? null : null;
+
+  const reviewsGlobalSearchActive = searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN;
 
   const reservation: InboxReservationData | undefined = active
     ? {
@@ -211,6 +276,9 @@ export default function ReviewsTabV2() {
           mode="ota"
           activeThreadId={activeThread?.id ?? null}
           searchTerm={searchTerm}
+          loading={loading}
+          otaGlobalSearchActive={reviewsGlobalSearchActive}
+          otaSearchPending={searchPending}
           onSelectThread={(th) => {
             const row = filtered.find((r) => r.threadId === th.id);
             if (row) {
@@ -253,7 +321,7 @@ export default function ReviewsTabV2() {
         onUseSuggestion={setReplyText}
         context={{
           guestName: active?.guestName,
-          reviewText: active?.reviewText,
+          reviewContent: active?.reviewText,
           rating: active?.rating,
           type: 'reviews',
         }}

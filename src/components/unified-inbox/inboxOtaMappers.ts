@@ -130,6 +130,8 @@ export function isInactiveOtaReservation(status?: string): boolean {
   return isCancelledReservationStatus(status) || isCompletedReservationStatus(status);
 }
 
+const RECENT_INACTIVE_THREAD_MS = 30 * 24 * 60 * 60 * 1000;
+
 function isWhatsappOnlyThread(
   row: Pick<OtaThreadRow, 'channelNameRaw' | 'channel' | 'source'>,
 ): boolean {
@@ -137,9 +139,31 @@ function isWhatsappOnlyThread(
   return raw.includes('whatsapp') && !raw.includes('airbnb') && !raw.includes('booking');
 }
 
+function threadActivityMs(row: Pick<OtaThreadRow, 'lastMessageTime' | 'threadUpdatedAt' | 'threadCreatedAt'>): number {
+  for (const c of [row.lastMessageTime, row.threadUpdatedAt, row.threadCreatedAt]) {
+    if (!c) continue;
+    const t = new Date(c).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  return 0;
+}
+
 /**
- * Inbox OTA par défaut (Tout, OTAs, Airbnb, Booking, Direct, Non répondu) :
- * réservations actives uniquement — jamais completed / annulée.
+ * Inbox OTA par défaut (Tout) :
+ * - réservations actives (en cours / à venir)
+ * - + séjours terminés/annulés **avec activité message récente** (30 j) pour le suivi post-départ
+ */
+export function filterOtaInboxDefault(rows: OtaThreadRow[]): OtaThreadRow[] {
+  const cutoff = Date.now() - RECENT_INACTIVE_THREAD_MS;
+  return rows.filter((thread) => {
+    if (isWhatsappOnlyThread(thread)) return false;
+    if (!isInactiveOtaReservation(thread.status)) return true;
+    return threadActivityMs(thread) >= cutoff;
+  });
+}
+
+/**
+ * Non répondu + canaux : actives uniquement (pas les « Parti » sauf recherche globale).
  */
 export function filterOtaActiveReservationsOnly(rows: OtaThreadRow[]): OtaThreadRow[] {
   return rows.filter((thread) => {
@@ -148,9 +172,48 @@ export function filterOtaActiveReservationsOnly(rows: OtaThreadRow[]): OtaThread
   });
 }
 
+/** Remonte un fil après envoi dashboard + met à jour l’aperçu. */
+export function bumpOtaThreadAfterSend(
+  rows: OtaThreadRow[],
+  threadId: string | number,
+  messageText: string,
+  fallbackRow?: OtaThreadRow | null,
+): OtaThreadRow[] {
+  const now = new Date().toISOString();
+  const key = String(threadId);
+  const idx = rows.findIndex((r) => String(r.threadId) === key);
+  const base =
+    idx >= 0
+      ? rows[idx]
+      : fallbackRow && String(fallbackRow.threadId) === key
+        ? fallbackRow
+        : null;
+  if (!base) return rows;
+
+  const updated: OtaThreadRow = {
+    ...base,
+    lastMessage: messageText.trim().slice(0, 200) || base.lastMessage,
+    lastMessageTime: now,
+    messageStatus: 'responded',
+    lastMessageIsIncoming: false,
+    unreadCount: 0,
+  };
+
+  const rest = rows.filter((r) => String(r.threadId) !== key);
+  const merged = [updated, ...rest];
+  merged.sort((a, b) => threadActivityMs(b) - threadActivityMs(a));
+  return merged;
+}
+
+export function mergeOtaThreadPages(existing: OtaThreadRow[], page: OtaThreadRow[]): OtaThreadRow[] {
+  const seen = new Set(existing.map((r) => String(r.threadId)));
+  const added = page.filter((r) => !seen.has(String(r.threadId)));
+  return [...existing, ...added];
+}
+
 /** @deprecated alias */
 export function filterOtaThreadsForInbox(rows: OtaThreadRow[]): OtaThreadRow[] {
-  return filterOtaActiveReservationsOnly(rows);
+  return filterOtaInboxDefault(rows);
 }
 
 export function mapApiItemToOtaThread(item: any): OtaThreadRow {

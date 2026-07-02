@@ -25,6 +25,46 @@ export function useInboxOTAConversation() {
   const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
   const [messagesTotal, setMessagesTotal] = useState(0);
 
+  const appendOutboundMessage = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const msg: Message = {
+      id: `local-${Date.now()}`,
+      from: 'you',
+      text: trimmed,
+      time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      status: 'sent',
+    };
+    setMessages((prev) => [...prev, msg]);
+  }, []);
+
+  const removeLastOutboundMessage = useCallback(() => {
+    setMessages((prev) => {
+      if (!prev.length) return prev;
+      const last = prev[prev.length - 1];
+      if (last.from !== 'you' || !String(last.id).startsWith('local-')) return prev;
+      return prev.slice(0, -1);
+    });
+  }, []);
+
+  const refreshOtaMessages = useCallback(async (row?: OtaThreadRow) => {
+    const target = row || activeRow;
+    if (!target) return;
+    try {
+      const msgRes = await messagesService.getOTAMessages(String(target.threadId));
+      const rawMessages = extractOtaMessagesFromApiResponse(msgRes);
+      let mapped = mapOtaApiMessagesToInbox(rawMessages, target.guestName);
+      if (mapped.length === 0 && target.lastMessage?.trim()) {
+        mapped = buildOtaPreviewFallbackMessages(target);
+      }
+      if (mapped.length > 0) {
+        setMessages((prev) => (mapped.length >= prev.length ? mapped : prev));
+      }
+    } catch (err) {
+      console.error('❌ Erreur refresh OTA messages:', err);
+    }
+  }, [activeRow]);
+
   const selectOtaThread = useCallback(async (row: OtaThreadRow) => {
     setActiveRow(row);
     setLoadingMessages(true);
@@ -98,6 +138,9 @@ export function useInboxOTAConversation() {
     messagesLoadError,
     messagesTotal,
     selectOtaThread,
+    appendOutboundMessage,
+    removeLastOutboundMessage,
+    refreshOtaMessages,
     setActiveRow,
   };
 }

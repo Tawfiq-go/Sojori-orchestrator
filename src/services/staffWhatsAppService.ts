@@ -1,4 +1,4 @@
-import axios from 'axios';
+import apiClient from './apiClient';
 import { MICROSERVICE_BASE_URL } from '../config/backendServer.config';
 
 /** Via srv-admin → srv-fulltask (ingress /api/v1/admin always routé ; /api/v1/fulltask/staff-whatsapp peut manquer). */
@@ -47,7 +47,7 @@ export async function getStaffWaThreads(params: GetThreadsParams = {}) {
     const digits = normalizeStaffWaPhone(clean.workerWaNumber);
     if (digits) clean.workerWaNumber = digits;
   }
-  const { data } = await axios.get(THREADS_ENDPOINT, { params: clean });
+  const { data } = await apiClient.get(THREADS_ENDPOINT, { params: clean });
   const rows = parseStaffWaRows(data);
   const total =
     data && typeof data === 'object' && !Array.isArray(data)
@@ -57,16 +57,16 @@ export async function getStaffWaThreads(params: GetThreadsParams = {}) {
 }
 
 export async function updateStaffWaMessage(idOrWamid: string, payload: any) {
-  const { data } = await axios.put(UPDATE_MSG_ENDPOINT(idOrWamid), payload);
+  const { data } = await apiClient.put(UPDATE_MSG_ENDPOINT(idOrWamid), payload);
   return data?.data || data;
 }
 
 export async function sendStaffWaText({ to, text, workerWaName }: SendMessageParams) {
-  return axios.put(SEND_MSG_ENDPOINT, { to, text, workerWaName });
+  return apiClient.put(SEND_MSG_ENDPOINT, { to, text, workerWaName });
 }
 
 export async function getTasksByStaff(staffId: string) {
-  const { data } = await axios.get(TASKS_BY_STAFF_ENDPOINT(staffId));
+  const { data } = await apiClient.get(TASKS_BY_STAFF_ENDPOINT(staffId));
   if (Array.isArray(data)) return data;
   if (data?.data && Array.isArray(data.data)) return data.data;
   return data?.[staffId] || [];

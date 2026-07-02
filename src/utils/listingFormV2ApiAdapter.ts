@@ -36,6 +36,17 @@ function isRecord(v: unknown): v is UnknownRecord {
 function asString(v: unknown): string {
   if (typeof v === 'string') return v;
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (v != null && typeof v === 'object') {
+    const rec = v as { toString?: () => string; _id?: unknown };
+    if (typeof rec.toString === 'function' && rec.toString !== Object.prototype.toString) {
+      const s = rec.toString();
+      if (s && s !== '[object Object]') return s;
+    }
+    if (typeof rec._id === 'string') return rec._id;
+    if (rec._id != null && typeof rec._id === 'object' && typeof (rec._id as { toString?: () => string }).toString === 'function') {
+      return String((rec._id as { toString: () => string }).toString());
+    }
+  }
   return '';
 }
 
@@ -469,6 +480,9 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     roomTypeConfigId: isMongoObjectId(asString(rt.roomTypeConfigId))
       ? asString(rt.roomTypeConfigId)
       : undefined,
+    ownerId: isMongoObjectId(asString(hydrated.ownerId))
+      ? asString(hydrated.ownerId)
+      : undefined,
     description: descriptions,
     _descLang: descLang,
     shortDescription: asString(fr.headline),
@@ -719,7 +733,10 @@ export function mergeFormV2ToUpdatePropertyPayload(
     payload.listingAmenitiesIds = values.listingAmenitiesIds
       .map((row) => {
         const r = isRecord(row) ? row : {};
-        const id = asString(r._id);
+        const rawId = r._id;
+        const id = isRecord(rawId)
+          ? asString(rawId._id ?? rawId.id)
+          : asString(rawId);
         if (!id) return null;
         return { _id: id, count: asNumber(r.count) ?? 1 };
       })
@@ -739,6 +756,15 @@ export function mergeFormV2ToUpdatePropertyPayload(
   if (values.country != null) payload.country = asString(values.country);
   if (values.countryCode != null) payload.countryCode = asString(values.countryCode);
   if (values.currencyCode != null) payload.currencyCode = asString(values.currencyCode);
+
+  const ownerId = asString(
+    values.ownerId ?? (isRecord(values.owner) ? values.owner._id : ''),
+  ).trim();
+  if (isMongoObjectId(ownerId)) {
+    payload.ownerId = ownerId;
+  } else if (values.ownerId === null) {
+    payload.ownerId = null;
+  }
 
   const minNights = asNumber(values.minNights);
   const maxNights = asNumber(values.maxNights);
