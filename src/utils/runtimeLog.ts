@@ -108,14 +108,15 @@ export function runtimeLog(
   }
   notify();
 
-  // Désactiver les logs console (gardé en buffer pour DevRuntimeLogPanel)
-  // Décommenter uniquement pour debug intensif
-  // const prefix = `[Sojori][${entry.ts}][${tag}]`;
-  // if (level === 'error') {
-  //   console.error(prefix, message, detail !== undefined ? detail : '');
-  // } else if (level === 'warn') {
-  //   console.warn(prefix, message, detail !== undefined ? detail : '');
-  // } else {
-  //   console.log(prefix, message, detail !== undefined ? detail : '');
-  // }
+  // Logs console limités au tag Auth — diagnostic déconnexion WhatsApp Guest (temporaire).
+  if (tag === 'Auth') {
+    const prefix = `[Sojori][${entry.ts}][${tag}]`;
+    if (level === 'error') {
+      console.error(prefix, message, detail !== undefined ? detail : '');
+    } else if (level === 'warn') {
+      console.warn(prefix, message, detail !== undefined ? detail : '');
+    } else {
+      console.log(prefix, message, detail !== undefined ? detail : '');
+    }
+  }
 }

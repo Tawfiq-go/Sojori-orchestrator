@@ -7,6 +7,7 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import messagesService from '../services/messagesService';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import type { Conversation } from '../types/messages.types';
 
 /**
@@ -20,10 +21,12 @@ export default function MessagesOTAPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
 
   useEffect(() => {
+    if (!scopeFetchReady) return;
     loadOTAMessages();
-  }, []);
+  }, [scopeFetchReady, requestOwnerId]);
 
   const loadOTAMessages = async () => {
     try {
@@ -33,6 +36,7 @@ export default function MessagesOTAPage() {
       const response = await messagesService.getConversations({
         filter: 'recent',
         limit: 100,
+        owner_id: requestOwnerId || undefined,
       });
 
       if (response.status === 'success') {

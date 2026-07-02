@@ -26,6 +26,8 @@ export function canAccessProtectedRoutes(isAuthenticated: boolean): boolean {
 
 export function invalidateSession(reason?: string): void {
   if (typeof window === 'undefined') return;
+  // Diagnostic déconnexion WhatsApp Guest (temporaire) — capture la raison et la page d'origine.
+  console.warn('[Sojori][invalidateSession]', { reason, fromPath: window.location.pathname + window.location.search });
   clearTokens();
   window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { reason } }));
   /** Dev local + X-Dev-Token : ne pas expulser l’UI (srv-reservations exige un vrai JWT). */
