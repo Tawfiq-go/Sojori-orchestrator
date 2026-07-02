@@ -12,6 +12,7 @@ import {
   tokens as t,
 } from '../dashboard/DashboardV2.components';
 import messagesService from '../../services/messagesService';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import AISuggestionModal from './AISuggestionModal';
 import type {
   Conversation,
@@ -47,11 +48,13 @@ export default function WhatsAppTab() {
   const [showAIModal, setShowAIModal] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
 
   // Charger les conversations au montage UNIQUEMENT (pas à chaque changement de filtre)
   useEffect(() => {
+    if (!scopeFetchReady) return;
     loadConversations();
-  }, []); // Pas de dépendances = une seule fois au montage
+  }, [scopeFetchReady, requestOwnerId]); // Pas de dépendances filtre = une seule fois au montage/scope
 
   // Scroll automatique vers le bas quand nouveaux messages
   useEffect(() => {
@@ -70,6 +73,7 @@ export default function WhatsAppTab() {
         filter: 'all', // Charger TOUT, filtrage côté client
         search: searchTerm || undefined,
         hasReservation: true, // Guests uniquement = avec réservation
+        owner_id: requestOwnerId || undefined,
         limit: 200, // Plus de résultats pour le filtrage client
       });
 

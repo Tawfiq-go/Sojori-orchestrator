@@ -11,6 +11,7 @@ import {
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
 import messagesService from '../services/messagesService';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import type {
   Conversation,
   MessageExchange,
@@ -36,11 +37,13 @@ export default function WhatsAppGuestsPage() {
 
   const [searchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<ConversationFilter>('smart');
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
 
   // Charger les conversations au montage
   useEffect(() => {
+    if (!scopeFetchReady) return;
     loadConversations();
-  }, [activeFilter, searchTerm]);
+  }, [activeFilter, searchTerm, scopeFetchReady, requestOwnerId]);
 
   /**
    * Charger la liste des conversations
@@ -55,6 +58,7 @@ export default function WhatsAppGuestsPage() {
         search: searchTerm || undefined,
         hasReservation: true, // Guests uniquement = avec réservation
         limit: 50,
+        owner_id: requestOwnerId || undefined,
       });
 
       if (response.status === 'success') {

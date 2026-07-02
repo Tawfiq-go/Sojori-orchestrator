@@ -6,6 +6,7 @@ import InboxLayout from '../components/unified-inbox/InboxLayout';
 import ThreadsList from '../components/unified-inbox/ThreadsList';
 import ConversationThread from '../components/unified-inbox/ConversationThread';
 import messagesService from '../services/messagesService';
+import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import type {
   Conversation,
   MessageExchange,
@@ -31,11 +32,13 @@ export default function WhatsAppGuestsPageV2() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<ConversationFilter>('smart');
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
 
   // Charger les conversations au montage
   useEffect(() => {
+    if (!scopeFetchReady) return;
     loadConversations();
-  }, [activeFilter, searchTerm]);
+  }, [activeFilter, searchTerm, scopeFetchReady, requestOwnerId]);
 
   const loadConversations = async () => {
     try {
@@ -47,6 +50,7 @@ export default function WhatsAppGuestsPageV2() {
         search: searchTerm || undefined,
         hasReservation: true, // Guests uniquement = avec réservation
         limit: 50,
+        owner_id: requestOwnerId || undefined,
       });
 
       if (response.status === 'success') {
