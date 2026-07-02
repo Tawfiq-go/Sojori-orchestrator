@@ -10,7 +10,9 @@ import RabbitMQPage from './RabbitMQPage';
 import WhatsAppMonitoringPage from './WhatsAppMonitoringPage';
 import AIMonitoringPage from './AIMonitoringPage';
 import InfrastructureMonitoringPage from './InfrastructureMonitoringPage';
+import PodsMonitoringPage from './PodsMonitoringPage';
 import ReservationSyncMonitorTab from './ReservationSyncMonitorTab';
+import SocketMonitoringPage from './SocketMonitoringPage';
 
 const TAB_OPTIONS = [
   { value: 'Summary', label: '📊 Summary' },
@@ -18,8 +20,10 @@ const TAB_OPTIONS = [
   { value: 'Metrics', label: '📈 Metrics' },
   { value: 'RabbitMQ', label: '🐰 RabbitMQ' },
   { value: 'WhatsApp', label: '💬 WhatsApp' },
+  { value: 'Sockets', label: '🔌 Sockets' },
   { value: 'AI', label: '🤖 IA' },
   { value: 'Infrastructure', label: '🏗️ Infra' },
+  { value: 'Pods', label: '🧩 Pods' },
   { value: 'ReservationSync', label: '🔄 Sync résa' },
 ] as const;
 
@@ -34,8 +38,10 @@ const TAB_BY_LOWER: Record<string, MonitorTab> = {
   metrics: 'Metrics',
   rabbitmq: 'RabbitMQ',
   whatsapp: 'WhatsApp',
+  sockets: 'Sockets',
   ai: 'AI',
   infrastructure: 'Infrastructure',
+  pods: 'Pods',
   'reservation-sync': 'ReservationSync',
 };
 
@@ -98,8 +104,10 @@ export default function MonitoringHubPage() {
           {tab === 'Metrics' && <MetricsPageUltra />}
           {tab === 'RabbitMQ' && <RabbitMQPage />}
           {tab === 'WhatsApp' && <WhatsAppMonitoringPage />}
+          {tab === 'Sockets' && <SocketMonitoringPage />}
           {tab === 'AI' && <AIMonitoringPage />}
           {tab === 'Infrastructure' && <InfrastructureMonitoringPage />}
+          {tab === 'Pods' && <PodsMonitoringPage />}
           {tab === 'ReservationSync' && <ReservationSyncMonitorTab />}
         </Box>
       </Box>
