@@ -80,6 +80,7 @@ class MessagesService {
           limit,
           messagesLimit: 50,
           ...(params?.search ? { search_text: params.search } : {}),
+          ...(params?.owner_id ? { ownerId: params.owner_id } : {}),
         });
         return {
           status: 'success',

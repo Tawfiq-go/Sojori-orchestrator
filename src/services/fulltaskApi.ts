@@ -444,6 +444,7 @@ export type ListPlansSummaryParams = {
   listingIds?: string;
   sort?: string;
   includeReservationId?: string;
+  ownerId?: string;
   status?: string;
   includeArchived?: boolean;
   includeCancelled?: boolean;

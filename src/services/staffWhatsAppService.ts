@@ -20,6 +20,7 @@ interface GetThreadsParams {
   sortBy?: string;
   search_text?: string;
   workerWaNumber?: string;
+  ownerId?: string;
 }
 
 interface SendMessageParams {
