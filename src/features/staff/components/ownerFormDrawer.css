@@ -453,6 +453,155 @@
   color: var(--t4);
 }
 
+
+.owner-pm-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px 0;
+}
+
+.owner-pm-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.owner-pm-status-pill--account.inactive {
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+.owner-pm-status-pill--account.pending {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.owner-pm-status-pill--account.active {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #047857;
+}
+
+.owner-pm-status-pill--ru.is-missing {
+  background: #fff7ed;
+  color: #c2410c;
+  border-color: #fdba74;
+}
+
+.owner-pm-status-pill--ru.is-linked {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: var(--ps, #ff6b35);
+}
+
+.owner-pm-status-pill--ru.is-off {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+
+.owner-pm-action-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--b, #e2e8f0);
+  background: linear-gradient(180deg, #fffaf5 0%, #ffffff 100%);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.owner-pm-missing-banner {
+  margin: 8px 16px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.owner-pm-missing-banner--ok {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.owner-pm-missing-banner--warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.owner-pm-missing-banner-h {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.owner-pm-missing-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.owner-pm-missing-action {
+  font-weight: 800;
+  min-width: 140px;
+}
+
+.owner-form-collapsible {
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.owner-form-collapsible-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.owner-form-collapsible-title {
+  font-weight: 700;
+  flex: 1;
+}
+
+.owner-form-collapsible-badge {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.owner-form-collapsible-chevron {
+  opacity: 0.6;
+}
+
+.owner-form-collapsible-body {
+  padding: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.owner-ru-field-off {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .owner-photo-btn {
   cursor: pointer;
 }
+

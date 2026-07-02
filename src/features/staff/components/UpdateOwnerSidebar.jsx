@@ -5,7 +5,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import {
   saveOwnerDraft,
-  finalizeOwnerCreation,
+  activateOwnerDraft,
+  syncOwnerRu,
   updateOwner,
   sendOwnerPasswordLink,
   updateOwnerWhatsappAiTier,
@@ -47,10 +48,30 @@ import {
   resolveEffectiveContactForLegal,
   hasFillCompanyUserInput,
 } from '../utils/fillCompanyFormUtils';
-import { computeOwnerCreateReadiness } from '../utils/ownerCreateReadiness';
+import {
+  computeOwnerActivateReadiness,
+  computeOwnerFormSaveReadiness,
+  computeOwnerRuProvisionReadiness,
+  computeOwnerRuFillCompanyReadiness,
+} from '../utils/ownerCreateReadiness';
+import {
+  applyChannelFlagsToFormValues,
+  channelFlagsFromOwner,
+  resolveOwnerChannelFlags,
+} from '../utils/ownerChannelFlags';
+import {
+  logPersistFillCompany,
+  logPmApiFail,
+  logPmApiOk,
+  logPmApiStart,
+  logPmFormValidationBlocked,
+  logPmReadiness,
+} from '../utils/pmFormDebug';
 import { buildDefaultRuEmail, resolveRuEmailDisplay } from '../utils/ruEmailUtils';
 import OwnerPasswordDialog from './OwnerPasswordDialog';
 import OwnerPasswordLinkDialog from './OwnerPasswordLinkDialog';
+import OwnerFormCollapsible from './OwnerFormCollapsible';
+import PmMissingFieldsBanner from './PmMissingFieldsBanner';
 import { parseOwnerPasswordLinkResponse } from '../utils/ownerPasswordLinkFeedback';
 import { logPmMail } from '../../../utils/ownerMailDebug';
 import {
@@ -68,16 +89,32 @@ function ownerInitials(owner) {
   return n.slice(0, 2).toUpperCase();
 }
 
+function pmAccountStatusLabel(status) {
+  if (status === 'inactive') return 'Brouillon';
+  if (status === 'pending') return 'Invitation envoyée';
+  if (status === 'active') return 'Actif';
+  return status || '—';
+}
+
 const buildValidationSchema = (t, owner, isCreate) =>
   Yup.object().shape({
     ...(isCreate
       ? {
           email: Yup.string().email(t('Invalid email')).required(t('Email is required')),
-          ruEmail: Yup.string().email(t('Invalid email')).required('Email RU requis'),
+          ruEmail: Yup.string().when('ruEnabled', {
+            is: true,
+            then: (s) => s.email(t('Invalid email')).required('Email RU requis'),
+            otherwise: (s) => s.optional(),
+          }),
         }
       : {
-          ruEmail: Yup.string().email(t('Invalid email')).optional(),
+          ruEmail: Yup.string().when('ruEnabled', {
+            is: true,
+            then: (s) => s.email(t('Invalid email')).optional(),
+            otherwise: (s) => s.optional(),
+          }),
         }),
+    ruEnabled: Yup.boolean(),
     firstName: Yup.string().required(t('First name is required')),
     lastName: Yup.string().required(t('Last name is required')),
     phone: Yup.string().required(t('Phone is required')),
@@ -92,10 +129,10 @@ const buildValidationSchema = (t, owner, isCreate) =>
     deleted: Yup.boolean(),
     ruExtranetPassword: Yup.string().test('ru-extranet-when-needed', function (value) {
       if (isCreate) return true;
-      const { channelManager } = this.parent;
+      const { channelManager, ruEnabled } = this.parent;
       const hasRuId = !!(owner?.ruOwnerId && String(owner.ruOwnerId).trim());
       const hasStoredRuPwd = !!owner?.hasRuExtranetPassword;
-      if (channelManager !== 'RU' || hasRuId) return true;
+      if (!ruEnabled || channelManager !== 'RU' || hasRuId) return true;
       if (hasStoredRuPwd) return true;
       const v = (value || '').trim();
       if (v.length < 6) {
@@ -129,6 +166,8 @@ const CREATE_INITIAL_VALUES = {
   phone: '',
   whatsapp: '',
   channelManager: 'RU',
+  ruEnabled: true,
+  channexEnabled: false,
   cityId: '',
   banned: false,
   deleted: false,
@@ -214,12 +253,12 @@ function AccountToFillCompanySync({ values, setFieldValue, cities, owner }) {
 
 function RuEmailNameSync({ values, setFieldValue, isCreate, ruEmailTouchedRef }) {
   useEffect(() => {
-    if (!isCreate || ruEmailTouchedRef.current) return;
+    if (!values.ruEnabled || !isCreate || ruEmailTouchedRef.current) return;
     const next = buildDefaultRuEmail(values.firstName, values.lastName);
     if (next && values.ruEmail !== next) {
       setFieldValue('ruEmail', next);
     }
-  }, [values.firstName, values.lastName, isCreate, values.ruEmail, setFieldValue, ruEmailTouchedRef]);
+  }, [values.firstName, values.lastName, values.ruEnabled, isCreate, values.ruEmail, setFieldValue, ruEmailTouchedRef]);
   return null;
 }
 
@@ -264,7 +303,11 @@ const UpdateOwnerSidebar = ({
   const [passwordLinkDialog, setPasswordLinkDialog] = useState(null);
   const [savedOwnerId, setSavedOwnerId] = useState(null);
   const [saveLoading, setSaveLoading] = useState(false);
-  const [finalizeLoading, setFinalizeLoading] = useState(false);
+  const [activateLoading, setActivateLoading] = useState(false);
+  const [ruSyncLoading, setRuSyncLoading] = useState(false);
+  const [ruSyncPhase, setRuSyncPhase] = useState(null);
+  const [localDraftStatus, setLocalDraftStatus] = useState(null);
+  const [localRuOwnerId, setLocalRuOwnerId] = useState(null);
   const [selectedCities, setSelectedCities] = useState([]);
   const {
     countries: ruCountries,
@@ -405,9 +448,20 @@ const UpdateOwnerSidebar = ({
     if (!open) {
       setSavedOwnerId(null);
       setSaveLoading(false);
-      setFinalizeLoading(false);
+      setActivateLoading(false);
+      setRuSyncLoading(false);
+      setRuSyncPhase(null);
+      setLocalDraftStatus(null);
+      setLocalRuOwnerId(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      setLocalDraftStatus(owner?.status ?? (isCreate ? 'inactive' : null));
+      setLocalRuOwnerId(owner?.ruOwnerId ?? null);
+    }
+  }, [open, owner?._id, owner?.status, owner?.ruOwnerId, isCreate]);
 
   useEffect(() => {
     if (open && owner?._id && owner?.status === 'inactive') {
@@ -416,7 +470,12 @@ const UpdateOwnerSidebar = ({
   }, [open, owner?._id, owner?.status]);
 
   const effectiveOwnerId = savedOwnerId || owner?._id;
-  const isDraftFlow = isCreate || owner?.status === 'inactive' || Boolean(savedOwnerId);
+  const effectiveDraftStatus = localDraftStatus ?? owner?.status ?? (isCreate ? 'inactive' : null);
+  const effectiveRuOwnerId = localRuOwnerId ?? owner?.ruOwnerId ?? null;
+  const hasRuOwnerId = Boolean(String(effectiveRuOwnerId || '').trim());
+  const canActivateDraft = effectiveDraftStatus === 'inactive';
+  /** Brouillon = status inactive uniquement. */
+  const isDraftFlow = effectiveDraftStatus === 'inactive';
 
   const normalizePmSlug = (slug) =>
     (slug || '')
@@ -470,15 +529,21 @@ const UpdateOwnerSidebar = ({
     return { apiRes, fillCompany: merged };
   };
 
-  const buildUpdatePayload = (values, selectedCity) => ({
+  const buildUpdatePayload = (values, selectedCity) => {
+    const flags = applyChannelFlagsToFormValues(values);
+    return {
     firstName: values.firstName,
     lastName: values.lastName,
     phone: values.phone,
     whatsapp: values.whatsapp,
-    channelManager: values.channelManager,
+    channelManager: flags.channelManager,
+    ruEnabled: flags.ruEnabled,
+    channexEnabled: flags.channexEnabled,
     cityId: values.cityId,
     rentalCityId: selectedCity?.rentalCityId?.toString(),
-    ...(values.ruEmail?.trim() ? { ruEmail: values.ruEmail.trim().toLowerCase() } : {}),
+    ...(flags.ruEnabled && values.ruEmail?.trim()
+      ? { ruEmail: values.ruEmail.trim().toLowerCase() }
+      : {}),
     settings: values.settings,
     banned: values.banned,
     deleted: values.deleted,
@@ -491,21 +556,29 @@ const UpdateOwnerSidebar = ({
       slug: normalizePmSlug(values.pmProfile?.slug),
       images: normalizePmImageList(values.pmProfile?.images),
     },
-  });
+  };
+  };
 
-  const buildDraftPayload = (values, selectedCity) => ({
+  const buildDraftPayload = (values, selectedCity) => {
+    const flags = applyChannelFlagsToFormValues(values);
+    return {
     ...(effectiveOwnerId ? { ownerId: String(effectiveOwnerId) } : {}),
     firstName: values.firstName,
     lastName: values.lastName,
     email: values.email,
-    ruEmail: (values.ruEmail || buildDefaultRuEmail(values.firstName, values.lastName)).trim().toLowerCase(),
+    ruEmail: flags.ruEnabled
+      ? (values.ruEmail || buildDefaultRuEmail(values.firstName, values.lastName)).trim().toLowerCase()
+      : '',
     phone: values.phone,
     whatsapp: values.whatsapp,
-    channelManager: values.channelManager,
+    channelManager: flags.channelManager,
+    ruEnabled: flags.ruEnabled,
+    channexEnabled: flags.channexEnabled,
     cityId: values.cityId,
     rentalCityId: selectedCity?.rentalCityId?.toString(),
     whatsappConversationalTier: Number(values.whatsappConversationalTier) || 2,
-  });
+  };
+  };
 
   const applyWhatsappTierIfAdmin = async (ownerId, values, accountBase) => {
     let account = accountBase;
@@ -524,6 +597,218 @@ const UpdateOwnerSidebar = ({
       }
     }
     return account;
+  };
+
+  const persistDraftBeforeAction = async (values, formikBag) => {
+    const liveValues = formikRef.current?.values ?? values ?? formikBag?.values;
+    const { setErrors, validateForm, setTouched } = formikBag;
+    const validationErrors = await validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      logPmFormValidationBlocked('pré-action (Activer / RU)', validationErrors);
+      setTouched(validationErrors, true);
+      setErrors(validationErrors);
+      return null;
+    }
+    const selectedCity = cities.find((city) => city._id === liveValues.cityId);
+    const draftRes = await saveOwnerDraft(buildDraftPayload(liveValues, selectedCity));
+    const accountId = String(draftRes?.data?.accountId ?? effectiveOwnerId ?? '').trim();
+    if (!accountId || draftRes?.success === false) {
+      setErrors({
+        submit: draftRes?.message || draftRes?.error || 'Échec enregistrement brouillon',
+      });
+      return null;
+    }
+    setSavedOwnerId(accountId);
+
+    const profilePayload = buildUpdatePayload(
+      { ...liveValues, banned: false, deleted: false },
+      selectedCity,
+    );
+    try {
+      await updateOwner(accountId, profilePayload);
+    } catch (updErr) {
+      console.warn('[persistDraftBeforeAction] profile update', updErr);
+    }
+
+    let fillPersisted = null;
+    try {
+      fillPersisted = await persistFillCompany(accountId, liveValues, { localOnly: true });
+    } catch (fillErr) {
+      const msg =
+        fillErr?.response?.data?.message ||
+        fillErr?.response?.data?.error ||
+        fillErr?.message ||
+        'Échec enregistrement entreprise locale';
+      setErrors({ submit: msg });
+      return null;
+    }
+
+    return { accountId, liveValues, fillPersisted, profilePayload, selectedCity };
+  };
+
+  const handleActivateDraft = async (values, formikBag) => {
+    const { setErrors } = formikBag;
+    const { activate: readiness } = logPmReadiness('Activer', values);
+    if (!readiness.ready) {
+      toast.warning(`Champs manquants pour Activer : ${readiness.missing.join(', ')}`);
+      return;
+    }
+    if (!canActivateDraft) {
+      toast.info('Ce PM est déjà activé (hors brouillon).');
+      return;
+    }
+    setActivateLoading(true);
+    try {
+      const saved = await persistDraftBeforeAction(values, formikBag);
+      if (!saved) return;
+
+      const { accountId, liveValues, fillPersisted, profilePayload } = saved;
+      logPmApiStart('POST /auth/activate-owner', { accountId });
+      const actRes = await activateOwnerDraft(accountId);
+      logPmApiOk('activate-owner', actRes);
+      const actData = actRes?.data ?? actRes;
+
+      if (actData?.emailSent === true) {
+        toast.success('PM activé — invitation envoyée (24h)');
+      } else if (actData?.inviteUrl) {
+        setPasswordLinkDialog({
+          ok: true,
+          email: liveValues.email,
+          url: actData.inviteUrl,
+          emailSent: false,
+          emailError: actData.emailError || actRes?.message || null,
+          linkType: 'invite',
+          expiresAt: actData.inviteExpiresAt || '',
+        });
+        toast.warning('PM activé — email non envoyé, copiez le lien');
+      } else {
+        toast.success('PM activé');
+      }
+
+      if (isCreate) {
+        try {
+          await initializeOwnerOrchestrationFromActivations(accountId, serviceActivations);
+        } catch (initErr) {
+          console.warn('[activateOwner] orchestration init', initErr);
+        }
+      }
+
+      setLocalDraftStatus('pending');
+      let activatedAccount = {
+        _id: accountId,
+        id: accountId,
+        ...applyChannelFlagsToFormValues(liveValues),
+        status: actData?.status || 'pending',
+        fillCompany: fillPersisted?.fillCompany ?? liveValues.fillCompany,
+        pmProfile: profilePayload.pmProfile,
+        ruOwnerId: effectiveRuOwnerId,
+      };
+      activatedAccount = await applyWhatsappTierIfAdmin(accountId, liveValues, activatedAccount);
+
+      if (isCreate) {
+        onOwnerCreated?.(activatedAccount);
+      } else {
+        onOwnerUpdated?.(activatedAccount, { activated: true });
+      }
+    } catch (error) {
+      const classification = logPmApiFail('activate-owner', error);
+      setErrors({
+        submit: `[${classification.type}] ${classification.message}`,
+      });
+    } finally {
+      setActivateLoading(false);
+    }
+  };
+
+  const handleOwnerRuSync = async (values, formikBag, phase = 'provision') => {
+    const { setErrors } = formikBag;
+    const actionLabel =
+      phase === 'provision'
+        ? 'Créer dans RU'
+        : phase === 'fill-company'
+          ? 'Créer entreprise RU'
+          : 'Sync RU';
+    const { ruProvision, ruFill, ruOn } = logPmReadiness(actionLabel, values);
+    if (!ruOn) {
+      toast.warning('Activez le channel RU avant de synchroniser avec Rentals United.');
+      return;
+    }
+    if (phase === 'provision') {
+      if (hasRuOwnerId) {
+        toast.info(`Compte RU déjà créé (ID ${effectiveRuOwnerId})`);
+        return;
+      }
+      if (!ruProvision.ready) {
+        toast.warning(`Champs manquants pour Créer dans RU : ${ruProvision.missing.join(', ')}`);
+        return;
+      }
+    }
+    if (phase === 'fill-company') {
+      if (!hasRuOwnerId) {
+        toast.warning('Créez d’abord le compte dans RU (bouton « Créer dans RU »).');
+        return;
+      }
+      if (!ruFill.ready) {
+        toast.warning(`Champs manquants Entreprise RU : ${ruFill.missing.join(', ')}`);
+        return;
+      }
+    }
+
+    setRuSyncLoading(true);
+    setRuSyncPhase(phase);
+    try {
+      let accountId = effectiveOwnerId;
+      if (isDraftFlow || isCreate) {
+        const saved = await persistDraftBeforeAction(values, formikBag);
+        if (!saved) return;
+        accountId = saved.accountId;
+      } else {
+        const validationErrors = await formikBag.validateForm();
+        if (Object.keys(validationErrors).length > 0) {
+          logPmFormValidationBlocked(actionLabel, validationErrors);
+          formikBag.setTouched(validationErrors, true);
+          setErrors(validationErrors);
+          return;
+        }
+        const selectedCity = cities.find((city) => city._id === values.cityId);
+        await updateOwner(owner._id, buildUpdatePayload(values, selectedCity));
+        await persistFillCompany(owner._id, values, { localOnly: true });
+        accountId = owner._id;
+      }
+
+      logPmApiStart(`POST /auth/sync-owner-ru?phase=${phase}`, { accountId, phase });
+      const ruRes = await syncOwnerRu(accountId, { phase });
+      logPmApiOk(`sync-owner-ru (${phase})`, ruRes, { accountId });
+
+      const newRuId = ruRes?.data?.ruOwnerId;
+      if (newRuId) {
+        setLocalRuOwnerId(String(newRuId));
+      }
+
+      toast.success(
+        phase === 'provision'
+          ? `Compte RU créé${newRuId ? ` — ID ${newRuId}` : ''}`
+          : 'Entreprise poussée dans Rentals United',
+      );
+
+      const updatedAccount = {
+        ...(owner || {}),
+        _id: accountId,
+        id: accountId,
+        ...applyChannelFlagsToFormValues(values),
+        ruOwnerId: newRuId || effectiveRuOwnerId,
+        fillCompany: values.fillCompany,
+      };
+      onOwnerUpdated?.(updatedAccount, { ruSync: phase });
+    } catch (error) {
+      const classification = logPmApiFail(`sync-owner-ru/${phase}`, error);
+      setErrors({
+        submit: `[${classification.type} · ${classification.couche}] ${classification.message}`,
+      });
+    } finally {
+      setRuSyncLoading(false);
+      setRuSyncPhase(null);
+    }
   };
 
   const handleSaveDraft = async (values, formikBag) => {
@@ -600,109 +885,6 @@ const UpdateOwnerSidebar = ({
     }
   };
 
-  const handleFinalizeCreate = async (values, formikBag) => {
-    const { setErrors } = formikBag;
-    const readiness = computeOwnerCreateReadiness(values);
-    if (!readiness.ready) {
-      toast.warning(`Champs manquants : ${readiness.missing.join(', ')}`);
-      return;
-    }
-    if (!effectiveOwnerId) {
-      toast.warning('Enregistrez d’abord le brouillon');
-      return;
-    }
-    setFinalizeLoading(true);
-    try {
-      const selectedCity = cities.find((city) => city._id === values.cityId);
-      await saveOwnerDraft(buildDraftPayload(values, selectedCity));
-
-      const profilePayload = buildUpdatePayload(
-        { ...values, banned: false, deleted: false },
-        selectedCity,
-      );
-      await updateOwner(effectiveOwnerId, profilePayload);
-
-      const finRes = await finalizeOwnerCreation(effectiveOwnerId);
-      const finData = finRes?.data ?? finRes;
-      if (finRes?.success === false) {
-        setErrors({ submit: finRes?.message || finRes?.error || 'Échec création PM' });
-        return;
-      }
-
-      if (finData?.emailSent === true) {
-        toast.success('PM créé — invitation envoyée (24h)');
-      } else if (finData?.inviteUrl) {
-        setPasswordLinkDialog({
-          ok: true,
-          email: values.email,
-          url: finData.inviteUrl,
-          emailSent: false,
-          emailError: finData.emailError || finRes?.message || null,
-          linkType: 'invite',
-          expiresAt: finData.inviteExpiresAt || '',
-        });
-        toast.warning('PM créé — email non envoyé, copiez le lien');
-      }
-
-      try {
-        const fillPersisted = await persistFillCompany(effectiveOwnerId, values, { localOnly: false });
-        if (fillPersisted?.apiRes?.message && String(fillPersisted.apiRes.message).toLowerCase().includes('synced')) {
-          toast.info('Entreprise synchronisée RU');
-        }
-      } catch (fillErr) {
-        setErrors({
-          submit:
-            fillErr?.response?.data?.message ||
-            fillErr?.response?.data?.error ||
-            fillErr?.message ||
-            'PM créé mais échec sync entreprise RU',
-        });
-        return;
-      }
-
-      if (isCreate) {
-        try {
-          await initializeOwnerOrchestrationFromActivations(effectiveOwnerId, serviceActivations);
-        } catch (initErr) {
-          console.warn('[finalizeOwner] orchestration init', initErr);
-        }
-      }
-
-      let createdAccount = {
-        _id: effectiveOwnerId,
-        id: effectiveOwnerId,
-        email: values.email,
-        firstName: values.firstName,
-        lastName: values.lastName,
-        phone: values.phone,
-        whatsapp: values.whatsapp,
-        channelManager: values.channelManager,
-        cityId: values.cityId,
-        ruOwnerId: finData?.ruOwnerId ?? null,
-        status: finData?.status || 'pending',
-        whatsappConversationalTier: Number(values.whatsappConversationalTier) || 2,
-        settings: values.settings,
-        pmProfile: profilePayload.pmProfile,
-        fillCompany: values.fillCompany,
-      };
-      createdAccount = await applyWhatsappTierIfAdmin(effectiveOwnerId, values, createdAccount);
-
-      onOwnerCreated?.(createdAccount);
-      toast.success('Property manager créé');
-      onClose();
-    } catch (error) {
-      setErrors({
-        submit:
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          'Échec création PM',
-      });
-    } finally {
-      setFinalizeLoading(false);
-    }
-  };
-
   const handleSaveEdit = async (values, formikBag) => {
     const { setErrors, validateForm, setTouched } = formikBag;
     const validationErrors = await validateForm();
@@ -726,12 +908,6 @@ const UpdateOwnerSidebar = ({
       }
       let updatedAccount = response.data.account;
       updatedAccount = await applyWhatsappTierIfAdmin(owner._id, values, updatedAccount);
-
-      const sync = response.data.ruOwnerSync;
-      if (sync?.attempted && sync.ok === false) {
-        setErrors({ submit: sync.message || t('Failed to update owner') });
-        return;
-      }
 
       let fillPersisted = null;
       try {
@@ -833,12 +1009,15 @@ const UpdateOwnerSidebar = ({
           owner,
           account: owner,
         });
+        const channelFlags = channelFlagsFromOwner(owner);
         return {
         firstName: owner.firstName || '',
         lastName: owner.lastName || '',
         phone: owner.phone || '',
         whatsapp: owner.whatsapp || '',
-        channelManager: owner.channelManager || '',
+        channelManager: channelFlags.channelManager,
+        ruEnabled: channelFlags.ruEnabled,
+        channexEnabled: channelFlags.channexEnabled,
         cityId: owner.cityId || '',
         banned: owner.banned || false,
         deleted: owner.deleted || false,
@@ -923,8 +1102,12 @@ const UpdateOwnerSidebar = ({
           setTouched,
         }) => {
           const formikBag = { setErrors, validateForm, setTouched, values };
-          const createReadiness = computeOwnerCreateReadiness(values);
-          const footBusy = saveLoading || finalizeLoading;
+          const saveReadiness = computeOwnerFormSaveReadiness(values);
+          const activateReadiness = computeOwnerActivateReadiness(values);
+          const ruProvisionReadiness = computeOwnerRuProvisionReadiness(values);
+          const ruFillCompanyReadiness = computeOwnerRuFillCompanyReadiness(values);
+          const isRuChannel = Boolean(values.ruEnabled);
+          const footBusy = saveLoading || activateLoading || ruSyncLoading;
           const headerInitials = isCreate
             ? (() => {
                 const n = ownerInitials({
@@ -975,6 +1158,109 @@ const UpdateOwnerSidebar = ({
               ))}
             </div>
 
+            <div className="owner-pm-status-row">
+              <span
+                className={`owner-pm-status-pill owner-pm-status-pill--account owner-pm-status-pill--${effectiveDraftStatus || 'unknown'}`}
+              >
+                Compte : {pmAccountStatusLabel(effectiveDraftStatus)}
+              </span>
+              {isRuChannel ? (
+                <span
+                  className={`owner-pm-status-pill owner-pm-status-pill--ru ${hasRuOwnerId ? 'is-linked' : 'is-missing'}`}
+                  title={
+                    hasRuOwnerId
+                      ? `Rentals United Owner ID ${effectiveRuOwnerId}`
+                      : 'Pas encore provisionné dans Rentals United'
+                  }
+                >
+                  RU : {hasRuOwnerId ? String(effectiveRuOwnerId) : 'Non créé'}
+                </span>
+              ) : (
+                <span className="owner-pm-status-pill owner-pm-status-pill--ru is-off">
+                  RU : désactivé
+                </span>
+              )}
+            </div>
+
+            <PmMissingFieldsBanner
+              saveReadiness={saveReadiness}
+              activateReadiness={activateReadiness}
+              ruProvisionReadiness={ruProvisionReadiness}
+              ruFillCompanyReadiness={ruFillCompanyReadiness}
+              hasRuOwnerId={hasRuOwnerId}
+              ruEnabled={isRuChannel}
+              canActivateDraft={canActivateDraft}
+            />
+
+            <div className="owner-pm-action-toolbar" role="toolbar" aria-label="Actions PM">
+              <button
+                type="button"
+                className="btn btn-prim"
+                disabled={footBusy}
+                onClick={() =>
+                  void (isDraftFlow
+                    ? handleSaveDraft(formikBag.values, formikBag)
+                    : handleSaveEdit(formikBag.values, formikBag))
+                }
+              >
+                {saveLoading ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+              <button
+                type="button"
+                className={`btn ${activateReadiness.ready && canActivateDraft ? 'btn-create-ready' : 'btn-prim'}`}
+                disabled={!canActivateDraft || !activateReadiness.ready || footBusy}
+                title={
+                  !canActivateDraft
+                    ? 'PM déjà activé (invitation envoyée ou compte actif)'
+                    : activateReadiness.ready
+                      ? 'Invitation dashboard (24h) — sans RU'
+                      : `Manque : ${activateReadiness.missing.join(', ')}`
+                }
+                onClick={() => void handleActivateDraft(formikBag.values, formikBag)}
+              >
+                {activateLoading ? 'Activation…' : 'Activer'}
+              </button>
+              {isRuChannel ? (
+                <>
+                  <button
+                    type="button"
+                    className={`btn ${ruProvisionReadiness.ready && !hasRuOwnerId ? 'btn-create-ready' : 'btn-prim'}`}
+                    disabled={
+                      footBusy ||
+                      hasRuOwnerId ||
+                      !ruProvisionReadiness.ready ||
+                      (!effectiveOwnerId && !savedOwnerId && !isCreate)
+                    }
+                    title={
+                      hasRuOwnerId
+                        ? `Compte RU déjà créé (ID ${effectiveRuOwnerId})`
+                        : ruProvisionReadiness.ready
+                          ? 'Push_CreateUser — crée le compte extranet RU'
+                          : `Manque : ${ruProvisionReadiness.missing.join(', ')}`
+                    }
+                    onClick={() => void handleOwnerRuSync(formikBag.values, formikBag, 'provision')}
+                  >
+                    {ruSyncLoading && ruSyncPhase === 'provision' ? 'RU…' : 'Créer dans RU'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${ruFillCompanyReadiness.ready && hasRuOwnerId ? 'btn-create-ready' : 'btn-prim'}`}
+                    disabled={footBusy || !hasRuOwnerId || !ruFillCompanyReadiness.ready}
+                    title={
+                      !hasRuOwnerId
+                        ? 'Créez d’abord le compte dans RU (bouton « Créer dans RU »)'
+                        : ruFillCompanyReadiness.ready
+                          ? 'Push_FillCompanyDetails — onglet Entreprise RU'
+                          : `Manque : ${ruFillCompanyReadiness.missing.join(', ')}`
+                    }
+                    onClick={() => void handleOwnerRuSync(formikBag.values, formikBag, 'fill-company')}
+                  >
+                    {ruSyncLoading && ruSyncPhase === 'fill-company' ? 'RU…' : 'Créer entreprise RU'}
+                  </button>
+                </>
+              ) : null}
+            </div>
+
             <form
               className="owner-drawer-form"
               noValidate
@@ -1008,6 +1294,7 @@ const UpdateOwnerSidebar = ({
                     Listes langue/devise réduites. Sync complète via Hub Channels si besoin.
                   </div>
                 )}
+                <OwnerFormCollapsible title="Aide — compte PM & badges RU" badge="ℹ️">
                 <div className="owner-form-hint" style={{ marginBottom: 12 }}>
                   <b>Compte PM</b> — seule saisie pour identité, emails, téléphone et ville (envoyés à R.U. à
                   l’enregistrement). L’onglet <b>Entreprise RU</b> = société, représentant légal et compléments
@@ -1017,25 +1304,13 @@ const UpdateOwnerSidebar = ({
                   ) : null}
                 </div>
                 <RuFieldBadgeLegendNative />
-                {isDraftFlow ? (
-                  <div className="owner-form-hint owner-draft-flow-hint">
-                    <b>1. Enregistrer</b> — sauvegarde le brouillon (sans invitation, sans pression).
-                    <b> 2. Créer le PM</b> — bouton <span className="owner-ready-pill">vert</span> quand tout est
-                    complet : invitation dashboard + sync RU.
-                    {savedOwnerId ? (
-                      <> Brouillon ID : <code>{savedOwnerId}</code></>
-                    ) : null}
-                    {!createReadiness.ready && createReadiness.missing.length ? (
-                      <div style={{ marginTop: 6, color: '#b45309' }}>
-                        Manque pour Créer : {createReadiness.missing.join(' · ')}
-                      </div>
-                    ) : createReadiness.ready ? (
-                      <div style={{ marginTop: 6, color: '#15803d', fontWeight: 700 }}>
-                        Tout est prêt — vous pouvez créer le PM.
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
+                <div className="owner-form-hint owner-draft-flow-hint" style={{ marginTop: 10 }}>
+                  <b>1. Enregistrer</b> — sauvegarde locale.
+                  <b> 2. Activer</b> — invitation dashboard (sans RU).
+                  <b> 3. Créer dans RU</b> — compte extranet (Push_CreateUser).
+                  <b> 4. Créer entreprise RU</b> — société (Push_FillCompanyDetails).
+                </div>
+                </OwnerFormCollapsible>
                 <div className="owner-tab-grid" style={{ marginBottom: 12 }}>
                   <div className="form-section">
                     <div className="form-section-h">{isCreate ? 'Connexion Sojori' : 'Emails & accès'}</div>
@@ -1247,7 +1522,18 @@ const UpdateOwnerSidebar = ({
                           key={ch}
                           type="button"
                           className={values.channelManager === ch ? 'on' : ''}
-                          onClick={() => setFieldValue('channelManager', ch)}
+                          onClick={() => {
+                            const flags = resolveOwnerChannelFlags({
+                              ruEnabled: ch === 'RU',
+                              channexEnabled: ch === 'Channex',
+                            });
+                            setFieldValue('channelManager', flags.channelManager);
+                            setFieldValue('ruEnabled', flags.ruEnabled);
+                            setFieldValue('channexEnabled', flags.channexEnabled);
+                            if (!flags.ruEnabled && activeTab === 'entreprise') {
+                              setActiveTab('compte');
+                            }
+                          }}
                         >
                           {ch === 'RU' ? '🟠 RU' : '🔵 Channex'}
                         </button>
@@ -1259,7 +1545,7 @@ const UpdateOwnerSidebar = ({
                   </div>
                 </div>
 
-                {values.channelManager === 'RU' && showRuExtranetPasswordField ? (
+                {values.ruEnabled && showRuExtranetPasswordField ? (
                   <div className="form-section full">
                     <div className="form-section-h">Rental United</div>
                     <div className="field">
@@ -1373,8 +1659,8 @@ const UpdateOwnerSidebar = ({
                       <b>Entreprise RU</b> — données légales et fiche société envoyées à <b>Rental United</b> uniquement.
                       Ce n’est <b>pas</b> la vitrine sojori-vente (photos, slogan → onglet <b>Site sojori-vente</b>).
                       Prénom, nom, emails, téléphone et ville : onglet <b>Compte</b> uniquement.
-                      {values.channelManager === 'RU'
-                        ? ' Enregistrer ⚡ envoie le tout à Rental United.'
+                      {values.ruEnabled
+                        ? ' Utilisez « Créer entreprise RU » pour pousser vers Rental United.'
                         : ''}
                     </div>
                     <FillCompanyFormFields
@@ -1901,43 +2187,9 @@ const UpdateOwnerSidebar = ({
 
               <div className="drawer-foot">
                 <div className="drawer-foot-start" />
-                <button type="button" className="btn btn-ghost" disabled={footBusy} onClick={onClose}>
-                  Annuler
+                <button type="button" className="btn btn-ghost" onClick={onClose}>
+                  Fermer
                 </button>
-                {isDraftFlow ? (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-prim"
-                      disabled={footBusy}
-                      onClick={() => void handleSaveDraft(formikBag.values, formikBag)}
-                    >
-                      {saveLoading ? 'Enregistrement…' : 'Enregistrer'}
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn ${createReadiness.ready ? 'btn-create-ready' : 'btn-prim'}`}
-                      disabled={!createReadiness.ready || footBusy}
-                      title={
-                        createReadiness.ready
-                          ? 'Invitation dashboard + provision RU'
-                          : `Manque : ${createReadiness.missing.join(', ')}`
-                      }
-                      onClick={() => void handleFinalizeCreate(formikBag.values, formikBag)}
-                    >
-                      {finalizeLoading ? 'Création…' : 'Créer le PM'}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-prim"
-                    disabled={footBusy}
-                    onClick={() => void handleSaveEdit(formikBag.values, formikBag)}
-                  >
-                    {saveLoading ? 'Enregistrement…' : 'Enregistrer'}
-                  </button>
-                )}
               </div>
             </form>
             </>
