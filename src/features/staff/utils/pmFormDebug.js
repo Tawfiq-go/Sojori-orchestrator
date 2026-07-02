@@ -134,6 +134,7 @@ export function logPersistFillCompany({ ownerId, localOnly, ruEnabled, payload, 
 
   console.group(`[PM-fillCompany] ${localOnly ? 'LOCAL' : 'LOCAL+RU'} — ${target}`);
   console.info('ownerId:', ownerId, '| RU toggle:', ruEnabled ? 'OUI' : 'NON');
+  console.info('ContactInfo.Email:', payload?.ContactInfo?.Email ?? '(absent)');
   console.info('Contact rempli:', resume.contactRempli.join(', ') || '(vide)');
   console.info('Société rempli:', resume.companyRempli.join(', ') || '(vide)');
   console.info('Légal rempli:', resume.legalRempli.join(', ') || '(vide)');
@@ -143,4 +144,42 @@ export function logPersistFillCompany({ ownerId, localOnly, ruEnabled, payload, 
     console.info('← réponse API:', apiRes);
   }
   console.groupEnd();
+}
+
+/** Trace complète Enregistrer compte (email dashboard inclus). */
+export function logPmSaveAccountStart(ctx) {
+  console.group('[PM-save] ▶ Enregistrer compte PM');
+  console.info('ownerId:', ctx.ownerId);
+  console.info('statut:', ctx.status);
+  console.info('canEditDashboardEmail:', ctx.canEditDashboardEmail);
+  console.info('email formulaire:', ctx.formEmail || '(vide)');
+  console.info('email owner (avant):', ctx.ownerEmail || '(vide)');
+  console.info('emailChanging:', ctx.emailChanging);
+  console.groupEnd();
+}
+
+export function logPmSaveAccountPayload(label, payload) {
+  console.info(`[PM-save] ${label}`, {
+    email: payload?.email ?? '(non envoyé)',
+    keys: Object.keys(payload || {}),
+  });
+}
+
+export function logPmSaveAccountResult({ wantedEmail, returnedEmail, draftEmail }) {
+  const wanted = String(wantedEmail || '').trim().toLowerCase();
+  const returned = String(returnedEmail || '').trim().toLowerCase();
+  const draft = String(draftEmail || '').trim().toLowerCase();
+  const ok = wanted && returned === wanted;
+  console.group(`[PM-save] ${ok ? '✓' : '✗'} Résultat email dashboard`);
+  console.info('demandé:', wanted || '(inchangé)');
+  if (draft) console.info('save-owner-draft:', draft);
+  console.info('update-account:', returned || '(vide)');
+  console.info('persisté:', ok ? 'OUI' : 'NON');
+  if (!ok && wanted) {
+    console.warn(
+      'ASTUCE: vérifiez que srv-user est ≥ main-1c851de et hard-refresh orchestrator (094945a+).',
+    );
+  }
+  console.groupEnd();
+  return ok;
 }
