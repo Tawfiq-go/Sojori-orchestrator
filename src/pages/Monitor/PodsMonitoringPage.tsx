@@ -287,61 +287,59 @@ function buildCycleSteps(cycle: RestartCycle, previousCycleError: boolean): Time
 }
 
 function RestartHistoryTabs({ history }: { history: RestartCycle[] }) {
-  const [activeIdx, setActiveIdx] = useState(history.length - 1);
-  const active = history[activeIdx];
-
   if (history.length === 0) return <Typography sx={{ fontSize: 12, color: t.text3 }}>Aucun historique de démarrage disponible.</Typography>;
 
-  const previousCycleError = activeIdx > 0 && history[activeIdx - 1].errorLines.length > 0;
-
   return (
-    <Box>
-      <Stack direction="row" spacing={0.5} sx={{ mb: 1, flexWrap: 'wrap', rowGap: 0.5 }}>
-        {history.map((c, i) => {
-          const isActive = i === activeIdx;
-          const hasError = c.errorLines.length > 0;
-          const isLast = i === history.length - 1;
-          return (
-            <Box
-              key={i}
-              onClick={() => setActiveIdx(i)}
-              sx={{
-                px: 1,
-                py: 0.375,
-                borderRadius: '6px',
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: 'pointer',
-                border: `1px solid ${isActive ? t.primaryDeep : t.border}`,
-                bgcolor: isActive ? t.primaryTint : hasError ? t.errorTint : t.bg2,
-                color: isActive ? t.primaryDeep : hasError ? t.error : t.text3,
-              }}
-            >
-              #{i + 1}{isLast ? ' (actuel)' : ''}{hasError ? ' ⚠' : ''}
-            </Box>
-          );
-        })}
-      </Stack>
-
-      {active && (
-        <Box sx={{ border: `1px solid ${t.border}`, borderRadius: '8px', p: 1.25, bgcolor: t.bg1 }}>
-          <StepSegmentTimeline steps={buildCycleSteps(active, previousCycleError)} />
-
-          {active.errorLines.length > 0 && (
-            <Box sx={{ mt: 1.25, pt: 1, borderTop: `1px solid ${t.border}` }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.error, mb: 0.5 }}>Erreurs de ce cycle</Typography>
-              <Box sx={{ bgcolor: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', p: 1, maxHeight: 180, overflowY: 'auto' }}>
-                {active.errorLines.map((line, i) => (
-                  <Typography key={i} sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                    {line}
-                  </Typography>
-                ))}
+    <Stack spacing={1}>
+      {history.map((cycle, i) => {
+        const isLast = i === history.length - 1;
+        const previousCycleError = i > 0 && history[i - 1].errorLines.length > 0;
+        const hasError = cycle.errorLines.length > 0;
+        return (
+          <Box
+            key={i}
+            sx={{
+              border: `1px solid ${hasError ? t.error : t.border}`,
+              borderRadius: '8px',
+              p: 1.25,
+              bgcolor: t.bg1,
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 0.75 }}>
+              <Box
+                sx={{
+                  px: 0.75,
+                  py: 0.25,
+                  borderRadius: '5px',
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  bgcolor: hasError ? t.errorTint : t.bg2,
+                  color: hasError ? t.error : t.text3,
+                }}
+              >
+                #{i + 1}{isLast ? ' (actuel)' : ''}
               </Box>
-            </Box>
-          )}
-        </Box>
-      )}
-    </Box>
+              {hasError && <Badge variant="error">⚠ erreur</Badge>}
+            </Stack>
+
+            <StepSegmentTimeline steps={buildCycleSteps(cycle, previousCycleError)} />
+
+            {cycle.errorLines.length > 0 && (
+              <Box sx={{ mt: 1.25, pt: 1, borderTop: `1px solid ${t.border}` }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.error, mb: 0.5 }}>Erreurs de ce cycle</Typography>
+                <Box sx={{ bgcolor: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', p: 1, maxHeight: 180, overflowY: 'auto' }}>
+                  {cycle.errorLines.map((line, li) => (
+                    <Typography key={li} sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                      {line}
+                    </Typography>
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
+    </Stack>
   );
 }
 
