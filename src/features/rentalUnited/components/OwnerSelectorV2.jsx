@@ -1,4 +1,5 @@
 import { tokens as T } from '../../../components/dashboard/DashboardV2.components';
+import { resolveRuEmailDisplay } from '../../staff/utils/ruEmailUtils';
 
 const selectStyle = {
   width: '100%',
@@ -25,6 +26,11 @@ const OwnerSelectorV2 = ({
   title = 'Compte property manager',
   subtitle,
 }) => {
+  const selectedOwner = owners.find(
+    (owner) => String(owner._id ?? owner.id) === String(selectedOwnerId),
+  );
+  const selectedRuEmail = selectedOwner ? resolveRuEmailDisplay(selectedOwner) : '';
+
   return (
     <div>
       <label
@@ -53,13 +59,43 @@ const OwnerSelectorV2 = ({
         <option disabled value="">
           Choisir un owner…
         </option>
-        {owners.map((owner) => (
-          <option key={owner._id} value={owner._id}>
-            {owner.firstName} {owner.lastName}
-            {owner.email ? ` — ${owner.email}` : ''}
-          </option>
-        ))}
+        {owners.map((owner) => {
+          const ruEmail = resolveRuEmailDisplay(owner);
+          return (
+            <option key={owner._id} value={owner._id}>
+              {owner.firstName} {owner.lastName}
+              {owner.email ? ` — dashboard: ${owner.email}` : ''}
+              {ruEmail && ruEmail !== owner.email ? ` · RU: ${ruEmail}` : ''}
+            </option>
+          );
+        })}
       </select>
+      {selectedOwner && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: '10px 12px',
+            background: T.bg2,
+            borderRadius: 8,
+            border: `1px solid ${T.border}`,
+            fontSize: 12,
+            lineHeight: 1.55,
+            color: T.text2,
+          }}
+        >
+          <div>
+            <strong style={{ color: T.text }}>Email dashboard :</strong>{' '}
+            {selectedOwner.email || '—'}
+          </div>
+          <div>
+            <strong style={{ color: T.text }}>Email R.U. (extranet) :</strong>{' '}
+            {selectedRuEmail || '—'}
+          </div>
+          <div style={{ marginTop: 4, color: T.text3 }}>
+            Le widget Channel Manager se connecte avec l’email R.U.
+          </div>
+        </div>
+      )}
     </div>
   );
 };

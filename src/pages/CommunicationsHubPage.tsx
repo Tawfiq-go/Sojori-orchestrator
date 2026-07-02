@@ -12,6 +12,7 @@ import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import { useSocketIO } from '../hooks/useSocketIO';
 import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 import { scheduleInboxRealtimeDispatch } from '../utils/inboxRealtime';
+import { hasJwtSession } from '../utils/devApiAccess';
 import messagesService from '../services/messagesService';
 import { getCachedOtaInbox } from '../utils/otaInboxCache';
 
@@ -53,27 +54,47 @@ export default function CommunicationsHubPage() {
     }
 
     try {
-      const [guestRes, staffRes, leadsRes, reviewsRes] = await Promise.all([
-        messagesService.getConversations({
+      const ownerScope = requestOwnerId || undefined;
+      const jwtReady = hasJwtSession();
+
+      const guestRes = await messagesService
+        .getConversations({
           filter: 'smart',
           hasReservation: true,
           limit: 100,
-          owner_id: requestOwnerId || undefined,
-        }),
-        messagesService.getConversations({
-          filter: 'smart',
-          hasReservation: false,
-          limit: 50,
-          owner_id: requestOwnerId || undefined,
-        }),
-        messagesService.getLeads({ limit: 50, ownerId: requestOwnerId || undefined }).catch(() => ({ threads: [] })),
-        messagesService.getReviews({ limit: 50, ownerId: requestOwnerId || undefined }).catch(() => ({ threads: [] })),
-      ]);
+          owner_id: ownerScope,
+          silent: true,
+        })
+        .catch(() => null);
+
+      let staffRes: Awaited<ReturnType<typeof messagesService.getConversations>> | null = null;
+      let leadsRes: { threads?: unknown[] } = { threads: [] };
+      let reviewsRes: { threads?: unknown[]; data?: unknown[] } = { threads: [] };
+
+      if (jwtReady) {
+        [staffRes, leadsRes, reviewsRes] = await Promise.all([
+          messagesService
+            .getConversations({
+              filter: 'smart',
+              hasReservation: false,
+              limit: 50,
+              owner_id: ownerScope,
+              silent: true,
+            })
+            .catch(() => null),
+          messagesService
+            .getLeads({ limit: 50, ownerId: ownerScope, silent: true })
+            .catch(() => ({ threads: [] })),
+          messagesService
+            .getReviews({ limit: 50, ownerId: ownerScope, silent: true })
+            .catch(() => ({ threads: [] })),
+        ]);
+      }
 
       let waGuest = 0;
       let unread = 0;
 
-      if (guestRes.status === 'success') {
+      if (guestRes?.status === 'success') {
         for (const c of guestRes.data.conversations) {
           if (!isWaGuestChannel(c.channel_name)) continue;
           unread += c.unread_count || 0;
@@ -84,7 +105,7 @@ export default function CommunicationsHubPage() {
       const ota = cachedOta?.length ?? 0;
 
       const staffCount =
-        staffRes.status === 'success' ? staffRes.data.conversations.length : 0;
+        staffRes?.status === 'success' ? staffRes.data.conversations.length : 0;
       const leadsCount = leadsRes.threads?.length ?? 0;
       const reviewsCount = (reviewsRes.threads || reviewsRes.data || []).length;
 

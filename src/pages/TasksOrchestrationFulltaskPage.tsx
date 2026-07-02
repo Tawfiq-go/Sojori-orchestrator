@@ -118,10 +118,10 @@ function TasksOrchestrationFulltaskPageInner() {
   const load = useCallback(
     async (options?: { background?: boolean }) => {
       const background = options?.background === true;
-      const strictOwner = effectiveOwnerKey !== 'global';
       if (!background) setLoading(true);
       try {
-        const raw = await fulltaskApi.getOrchestrationConfig(effectiveOwnerKey, { strictOwner });
+        // Héritage template global (comme modèle orchestration / messages planifiés).
+        const raw = await fulltaskApi.getOrchestrationConfig(effectiveOwnerKey);
         const meta = (raw as { meta?: OrchestrationConfigLoadMeta })?.meta;
         setConfigSource(meta?.configSource ?? null);
         const doc = unwrapFulltaskData<Record<string, unknown>>(raw);
@@ -329,7 +329,11 @@ function TasksOrchestrationFulltaskPageInner() {
           ownerConfigStatus={ownerConfigStatus}
         />
       ) : null}
-      {isAdminTemplate && adminScopeTab !== 'global' && loadState === 'empty' && !loadError ? (
+      {isAdminTemplate &&
+      adminScopeTab !== 'global' &&
+      configSource === 'global_template' &&
+      loadState === 'ok' &&
+      !loadError ? (
         <div
           className="orch-load-banner"
           style={{
@@ -341,8 +345,29 @@ function TasksOrchestrationFulltaskPageInner() {
             fontSize: 13,
           }}
         >
-          {effectiveDisplayName} n&apos;a pas encore de catalogue messages. Utilisez{' '}
-          <strong>Synchroniser PM {effectiveDisplayName}</strong> pour copier le template Admin.
+          {effectiveDisplayName} hérite du template Admin (aperçu).{' '}
+          <strong>Synchroniser PM {effectiveDisplayName}</strong> pour copier la config, ou{' '}
+          <strong>Enregistrer</strong> après modification pour créer un catalogue propre au PM.
+        </div>
+      ) : null}
+      {!isAdminTemplate &&
+      configSource === 'global_template' &&
+      effectiveOwnerKey !== 'global' &&
+      loadState === 'ok' &&
+      !loadError ? (
+        <div
+          className="orch-load-banner"
+          style={{
+            margin: '0 0 16px',
+            padding: '12px 16px',
+            borderRadius: 10,
+            background: 'rgba(6,115,179,0.08)',
+            border: '1px solid rgba(6,115,179,0.22)',
+            fontSize: 13,
+          }}
+        >
+          Catalogue hérité du template Admin (lecture). <strong>Enregistrer</strong> crée votre
+          catalogue PM ; contactez l&apos;admin pour une sync complète depuis le template.
         </div>
       ) : null}
       {!isAdminTemplate && loadState === 'empty' && !loadError ? (

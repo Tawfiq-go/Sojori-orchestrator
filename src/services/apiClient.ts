@@ -1,10 +1,10 @@
 import axios, { AxiosHeaders } from 'axios';
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
-import { getToken, getRefreshToken, setTokens, isAppEmbeddedInIframe } from '../utils/authUtils';
+import { clearTokens, getToken, getRefreshToken, setTokens, isAppEmbeddedInIframe } from '../utils/authUtils';
 import { AUTH_CONFIG } from '../config/authConfig';
 import { dashboardDebugEnabled, logAuth, logAuthError, logAuthWarn, maskToken } from '../utils/dashboardDebug';
 import { runtimeLog } from '../utils/runtimeLog';
-import { invalidateSession } from '../utils/devApiAccess';
+import { hasDevTokenBypass, invalidateSession } from '../utils/devApiAccess';
 
 /**
  * VITE_DISABLE_AUTH : ne concerne que le garde `ProtectedRoute` (éviter la redirection login).
@@ -180,17 +180,26 @@ apiClient.interceptors.response.use(
       return apiClient(originalRequest);
     }
 
-    // Gestion du forceLogout ou session expirée
-    if (
+    const isSessionInvalidResponse =
       error.response?.data?.forceLogout ||
-      error.response?.data?.error === "Session expired, please login again" ||
-      error.response?.data?.error === "Invalid token"
-    ) {
-      logAuthWarn('session invalidée — redirect login', {
+      error.response?.data?.error === 'Session expired, please login again' ||
+      error.response?.data?.error === 'Invalid token';
+
+    // Gestion du forceLogout ou session expirée
+    if (isSessionInvalidResponse) {
+      logAuthWarn(hasDevTokenBypass() ? 'session JWT expirée (dev bypass actif)' : 'session invalidée — redirect login', {
         url: originalRequest?.url,
         status: error.response?.status,
       });
       if (!isAppEmbeddedInIframe()) {
+        if (hasDevTokenBypass() && !originalRequest._devAuthRetry) {
+          originalRequest._devAuthRetry = true;
+          clearTokens();
+          delete originalRequest.headers?.Authorization;
+          delete originalRequest.headers?.authorization;
+          delete originalRequest.headers?.['x-refresh-token'];
+          return apiClient(originalRequest);
+        }
         invalidateSession('force_logout');
       }
       return Promise.reject(error);
@@ -214,6 +223,9 @@ apiClient.interceptors.response.use(
         const refreshToken = getRefreshToken();
 
         if (!token || !refreshToken) {
+          if (hasDevTokenBypass()) {
+            throw new Error('No tokens available (dev bypass — reservations/OTA require login)');
+          }
           throw new Error('No tokens available');
         }
 
@@ -236,7 +248,7 @@ apiClient.interceptors.response.use(
           url: originalRequest?.url,
           status: (refreshError as { response?: { status?: number } })?.response?.status,
         });
-        if (!isAppEmbeddedInIframe()) {
+        if (!isAppEmbeddedInIframe() && !hasDevTokenBypass()) {
           invalidateSession('refresh_failed');
         }
         return Promise.reject(refreshError);
@@ -249,7 +261,7 @@ apiClient.interceptors.response.use(
         method: originalRequest?.method,
         retried: Boolean(originalRequest._retry),
       });
-      if (!isAppEmbeddedInIframe()) {
+      if (!isAppEmbeddedInIframe() && !hasDevTokenBypass()) {
         invalidateSession('http_401');
       }
     }
