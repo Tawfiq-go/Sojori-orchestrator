@@ -66,6 +66,10 @@ import {
   logPmApiStart,
   logPmFormValidationBlocked,
   logPmReadiness,
+  logPmSaveAccountStart,
+  logPmSaveAccountPayload,
+  logPmSaveAccountResult,
+  logPersistFillCompany,
 } from '../utils/pmFormDebug';
 import { buildDefaultRuEmail, resolveRuEmailDisplay } from '../utils/ruEmailUtils';
 import OwnerPasswordDialog from './OwnerPasswordDialog';
@@ -547,15 +551,35 @@ const UpdateOwnerSidebar = ({
     console.info('[PM] persistFillCompany', {
       ownerId,
       localOnly,
+      contactEmail: payload?.ContactInfo?.Email ?? '(absent)',
       contactKeys,
       companyKeys,
       legalKeys: Object.entries(payload.LegalRepresentativeInfo || {}).filter(
         ([, v]) => String(v ?? '').trim() !== '',
       ).length,
     });
-    const apiRes = localOnly
-      ? await updateFillCompanyLocal(ownerId, payload)
-      : await updateFillCompany(ownerId, payload);
+    let apiRes;
+    try {
+      apiRes = localOnly
+        ? await updateFillCompanyLocal(ownerId, payload)
+        : await updateFillCompany(ownerId, payload);
+      logPersistFillCompany({
+        ownerId,
+        localOnly,
+        ruEnabled: values?.ruEnabled,
+        payload,
+        apiRes: apiRes?.data ?? apiRes,
+      });
+    } catch (fillErr) {
+      logPersistFillCompany({
+        ownerId,
+        localOnly,
+        ruEnabled: values?.ruEnabled,
+        payload,
+        error: fillErr,
+      });
+      throw fillErr;
+    }
     return { apiRes, fillCompany: merged };
   };
 
@@ -933,19 +957,69 @@ const UpdateOwnerSidebar = ({
     }
     if (!owner?._id) return;
     setSaveLoading(true);
+    const selectedCity = cities.find((city) => city._id === values.cityId);
+    const normalizedFormEmail = String(values.email || '').trim().toLowerCase();
+    const normalizedOwnerEmail = String(owner?.email || '').trim().toLowerCase();
+    const emailChanging =
+      canEditDashboardEmail &&
+      normalizedFormEmail &&
+      normalizedFormEmail !== normalizedOwnerEmail;
+
+    logPmSaveAccountStart({
+      ownerId: owner._id,
+      status: effectiveDraftStatus,
+      canEditDashboardEmail,
+      formEmail: normalizedFormEmail,
+      ownerEmail: normalizedOwnerEmail,
+      emailChanging,
+    });
+
     try {
-      const selectedCity = cities.find((city) => city._id === values.cityId);
       const ruPwd = (values.ruExtranetPassword || '').trim();
-      const response = await updateOwner(owner._id, {
+      let draftEmail = null;
+
+      if (canEditDashboardEmail) {
+        const draftPayload = { ...buildDraftPayload(values, selectedCity), ownerId: String(owner._id) };
+        logPmSaveAccountPayload('→ POST save-owner-draft', draftPayload);
+        logPmApiStart('POST /auth/save-owner-draft', {
+          ownerId: owner._id,
+          email: draftPayload.email,
+        });
+        const draftRes = await saveOwnerDraft(draftPayload);
+        draftEmail = draftRes?.data?.email ?? null;
+        logPmApiOk('save-owner-draft', draftRes, { email: draftEmail });
+        if (draftRes?.success === false) {
+          throw new Error(draftRes?.message || draftRes?.error || 'Échec save-owner-draft');
+        }
+      }
+
+      const updatePayload = {
         ...buildUpdatePayload(values, selectedCity, { includeDashboardEmail: canEditDashboardEmail }),
         ...(ruPwd.length >= 6 ? { ruExtranetPassword: ruPwd } : {}),
-      });
+      };
+      logPmSaveAccountPayload('→ PUT update-account', updatePayload);
+      logPmApiStart('PUT /auth/update-account', { ownerId: owner._id, email: updatePayload.email });
+      const response = await updateOwner(owner._id, updatePayload);
+      logPmApiOk('update-account', response, { email: response.data?.account?.email });
       if (!response.data?.account) {
         setErrors({ submit: t('Failed to update owner') });
         return;
       }
       let updatedAccount = response.data.account;
       updatedAccount = await applyWhatsappTierIfAdmin(owner._id, values, updatedAccount);
+
+      const emailOk = logPmSaveAccountResult({
+        wantedEmail: emailChanging ? normalizedFormEmail : normalizedOwnerEmail,
+        returnedEmail: updatedAccount?.email,
+        draftEmail,
+      });
+      if (emailChanging && !emailOk) {
+        setErrors({
+          submit: `Email dashboard non enregistré (attendu ${normalizedFormEmail}, reçu ${updatedAccount?.email || '?'})`,
+        });
+        toast.error('Email dashboard non enregistré — voir console [PM-save]');
+        return;
+      }
 
       let fillPersisted = null;
       try {
@@ -968,7 +1042,11 @@ const UpdateOwnerSidebar = ({
       if (updatedAccount.email) {
         setFieldValue('email', updatedAccount.email);
       }
-      toast.success('Enregistré — vous pouvez continuer à modifier');
+      if (emailChanging && emailOk) {
+        toast.success(`Email dashboard enregistré : ${updatedAccount.email}`);
+      } else {
+        toast.success('Enregistré — vous pouvez continuer à modifier');
+      }
     } catch (error) {
       setErrors({
         submit:
