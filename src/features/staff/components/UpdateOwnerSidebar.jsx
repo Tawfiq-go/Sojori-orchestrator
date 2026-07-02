@@ -1571,7 +1571,7 @@ const UpdateOwnerSidebar = ({
                       <div className="owner-form-hint" style={{ marginTop: 6 }}>
                         {t('ruFieldBadge.hintRuEmail', {
                           defaultValue:
-                            'Login sur extranet Rental United (Push_CreateUser) — distinct de l’email dashboard. Aucun email envoyé par Sojori à cette adresse.',
+                            'Login sur extranet Rental United (Push_CreateUser) — distinct de l’email dashboard. Utilisé pour le widget Channel Manager. Aucun email envoyé par Sojori à cette adresse.',
                         })}
                       </div>
                     </div>

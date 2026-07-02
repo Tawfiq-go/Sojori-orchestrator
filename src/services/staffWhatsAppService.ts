@@ -2,8 +2,15 @@ import apiClient from './apiClient';
 import { MICROSERVICE_BASE_URL } from '../config/backendServer.config';
 import type { StaffWaThreadRow } from './staffConversationMapper';
 
+function resolveStaffWaBase(): string {
+  if (import.meta.env.DEV && typeof window !== 'undefined' && !import.meta.env.VITE_API_URL) {
+    return '/api/v1/admin/fulltask/staff-whatsapp';
+  }
+  return `${MICROSERVICE_BASE_URL.SRV_ADMIN}/fulltask/staff-whatsapp`;
+}
+
 /** Via srv-admin → srv-fulltask (ingress /api/v1/admin always routé ; /api/v1/fulltask/staff-whatsapp peut manquer). */
-const STAFF_WA_BASE = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/fulltask/staff-whatsapp`;
+const STAFF_WA_BASE = resolveStaffWaBase();
 const THREADS_ENDPOINT = `${STAFF_WA_BASE}/get`;
 const UPDATE_MSG_ENDPOINT = (idOrWamid: string) =>
   `${STAFF_WA_BASE}/update-message/${idOrWamid}`;

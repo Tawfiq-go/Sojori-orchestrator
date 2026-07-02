@@ -31,6 +31,12 @@ function resolveGuestWhatsappDebugBase(): string {
 
 type WhatsappInboxKind = 'guest' | 'staff';
 
+function shouldLogServiceError(error: unknown, silent?: boolean): boolean {
+  if (silent) return false;
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return status !== 401;
+}
+
 function resolveWhatsappDebugBase(kind: WhatsappInboxKind): string {
   return resolveGuestWhatsappDebugBase();
 }
@@ -51,6 +57,8 @@ class MessagesService {
     hasReservation?: boolean;
     owner_id?: string;
     sortBy?: string;
+    /** Prefetch / badge counts: skip console.error on expected 401 */
+    silent?: boolean;
   }): Promise<ConversationsResponse> {
     try {
       // Comme sojori-dashboard: conversion page → skip
@@ -100,7 +108,9 @@ class MessagesService {
 
       return response.data;
     } catch (error: any) {
-      console.error('❌ Erreur récupération conversations:', error);
+      if (shouldLogServiceError(error, params?.silent)) {
+        console.error('❌ Erreur récupération conversations:', error);
+      }
       throw new Error(
         error.response?.data?.detail ||
         error.response?.data?.message ||
@@ -431,6 +441,7 @@ class MessagesService {
     search?: string;
     sortBy?: string;
     ownerId?: string;
+    silent?: boolean;
   }): Promise<any> {
     try {
       const response = await apiClient.get(
@@ -450,7 +461,9 @@ class MessagesService {
 
       return response.data;
     } catch (error: any) {
-      console.error('❌ Erreur récupération leads:', error);
+      if (shouldLogServiceError(error, params?.silent)) {
+        console.error('❌ Erreur récupération leads:', error);
+      }
       throw new Error(
         error.response?.data?.detail ||
         error.response?.data?.message ||
@@ -557,6 +570,7 @@ class MessagesService {
     reviewStatus?: string[];
     dateRangeType?: string;
     ownerId?: string;
+    silent?: boolean;
   }): Promise<any> {
     try {
       const requestParams: any = {
@@ -597,7 +611,9 @@ class MessagesService {
 
       return response.data;
     } catch (error: any) {
-      console.error('❌ Erreur récupération reviews:', error);
+      if (shouldLogServiceError(error, params?.silent)) {
+        console.error('❌ Erreur récupération reviews:', error);
+      }
       throw new Error(
         error.response?.data?.detail ||
         error.response?.data?.message ||

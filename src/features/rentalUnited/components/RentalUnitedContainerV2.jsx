@@ -1,7 +1,8 @@
 import OwnerSelectorV2 from './OwnerSelectorV2';
 import RentalUnitedIframe from './RentalUnitedIframe';
-import { CmSpinner } from './ChannelManagerUi';
+import { CmSpinner, CmHint } from './ChannelManagerUi';
 import { tokens as T } from '../../../components/dashboard/DashboardV2.components';
+import { resolveRuEmailDisplay } from '../../staff/utils/ruEmailUtils';
 
 const RentalUnitedContainerV2 = ({
   isAdmin,
@@ -10,7 +11,15 @@ const RentalUnitedContainerV2 = ({
   onOwnerChange,
   showOwnerSelector = true,
   scriptUrl,
+  tokenData,
 }) => {
+  const selectedOwner = owners.find(
+    (owner) => String(owner._id ?? owner.id) === String(selectedOwnerId),
+  );
+  const ruLoginEmail =
+    tokenData?.ruLoginEmail ||
+    (selectedOwner ? resolveRuEmailDisplay(selectedOwner) : '');
+
   return (
     <div style={{ width: '100%' }}>
       {isAdmin && owners.length > 0 && showOwnerSelector && (
@@ -23,6 +32,15 @@ const RentalUnitedContainerV2 = ({
             subtitle="Changez de compte sans quitter la page"
           />
         </div>
+      )}
+
+      {!isAdmin && ruLoginEmail && (
+        <CmHint>
+          Connexion widget R.U. : <strong>{ruLoginEmail}</strong>
+          {tokenData?.dashboardEmail && tokenData.dashboardEmail !== ruLoginEmail
+            ? ` (dashboard Sojori : ${tokenData.dashboardEmail})`
+            : ''}
+        </CmHint>
       )}
 
       <div

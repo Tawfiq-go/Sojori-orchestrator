@@ -12,6 +12,11 @@ export function hasActiveSession(): boolean {
   return Boolean(getToken()?.trim()) || hasDevTokenBypass();
 }
 
+/** Valid JWT only — srv-reservations / srv-fulltask staff inbox reject X-Dev-Token alone. */
+export function hasJwtSession(): boolean {
+  return Boolean(getToken()?.trim());
+}
+
 /** Routes protégées : session valide + checkAuth OK (ou bypass dev token explicite). */
 export function canAccessProtectedRoutes(isAuthenticated: boolean): boolean {
   if (!hasActiveSession()) return false;
@@ -23,6 +28,8 @@ export function invalidateSession(reason?: string): void {
   if (typeof window === 'undefined') return;
   clearTokens();
   window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { reason } }));
+  /** Dev local + X-Dev-Token : ne pas expulser l’UI (srv-reservations exige un vrai JWT). */
+  if (hasDevTokenBypass()) return;
   if (window.location.pathname !== '/login') {
     window.location.href = `/login?reason=${encodeURIComponent(reason || 'session_expired')}`;
   }

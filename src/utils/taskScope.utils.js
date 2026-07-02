@@ -1,17 +1,23 @@
 import { Roles } from 'constants/roles';
 
+/** Normalize API / mock roles (owner, Owner, staff…) to canonical Roles.* values. */
+export function normalizeUserRole(role) {
+  if (role == null) return '';
+  const r = String(role).trim();
+  const lower = r.toLowerCase();
+  if (r === Roles.SuperAdmin || lower === 'superadmin') return Roles.SuperAdmin;
+  if (r === Roles.Admin || lower === 'admin') return Roles.Admin;
+  if (r === Roles.Owner || lower === 'owner') return Roles.Owner;
+  if (r === Roles.Worker || lower === 'worker' || lower === 'staff') return Roles.Worker;
+  return r;
+}
+
 /**
  * SuperAdmin / Admin: full platform access — task APIs should not be scoped by property owner id.
  */
 export function isPlatformAdminRole(role) {
-  if (role == null) return false;
-  const r = String(role).trim();
-  return (
-    r === Roles.SuperAdmin ||
-    r === Roles.Admin ||
-    r.toLowerCase() === 'superadmin' ||
-    r.toLowerCase() === 'admin'
-  );
+  const r = normalizeUserRole(role);
+  return r === Roles.SuperAdmin || r === Roles.Admin;
 }
 
 /** featureGrants like dev bypass / platform staff: can act across owners (not a property Owner account). */
@@ -34,9 +40,10 @@ export function hasWildcardFeatureGrants(user) {
  */
 export function canSelectOwnerInAdminFilter(user) {
   if (!user) return false;
-  if (isPlatformAdminRole(user.role)) return true;
-  if (String(user.role).trim() === Roles.Owner) return false;
-  if (String(user.role).trim() === Roles.Worker) {
+  const role = normalizeUserRole(user.role);
+  if (isPlatformAdminRole(role)) return true;
+  if (role === Roles.Owner) return false;
+  if (role === Roles.Worker) {
     const o = user.ownerId;
     // Worker lié à un propriétaire : données scopées à ownerId — jamais le filtre cross-owner.
     if (o != null && String(o).trim() !== '') return false;
@@ -55,9 +62,22 @@ export function canSelectOwnerInAdminFilter(user) {
 export function getPropertyOwnerScopeId(user) {
   if (!user) return null;
   if (canSelectOwnerInAdminFilter(user)) return null;
-  if (String(user.role).trim() === Roles.Owner) return user._id || user.id || null;
-  if (String(user.role).trim() === Roles.Worker) return user.ownerId || null;
-  return user._id || user.id || null;
+  const role = normalizeUserRole(user.role);
+  if (role === Roles.Owner) {
+    const id = user._id || user.id || null;
+    return id != null && String(id).trim() !== '' ? String(id).trim() : null;
+  }
+  if (role === Roles.Worker) {
+    const o = user.ownerId;
+    return o != null && String(o).trim() !== '' ? String(o).trim() : null;
+  }
+  const fallback = user._id || user.id || null;
+  return fallback != null && String(fallback).trim() !== '' ? String(fallback).trim() : null;
+}
+
+/** PM / worker accounts that must never load cross-owner inbox data without owner_id. */
+export function isPropertyScopedUser(user) {
+  return getPropertyOwnerScopeId(user) != null;
 }
 
 /**
