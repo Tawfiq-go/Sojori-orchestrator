@@ -2,7 +2,7 @@
  * Pods Monitoring — détail par pod (démarrage, probes, crash, ressources, RabbitMQ)
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { Box, Collapse, LinearProgress, Stack, Typography } from '@mui/material';
 import apiClient from '../../services/apiClient';
 import {
@@ -13,10 +13,40 @@ import {
   MonitorPageFrame,
   MonitorPageHeader,
   MonitorSection,
-  StatCard,
-  StatsRow,
   monitorTokens as t,
 } from '../../features/monitoring/shared/MonitorDesign';
+
+function CompactStat({ icon, iconColor, value, label }: { icon: string; iconColor: string; value: string; label: string }) {
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center" sx={{ py: 0.25 }}>
+      <Box sx={{ fontSize: 14, color: iconColor, lineHeight: 1 }}>{icon}</Box>
+      <Typography sx={{ fontSize: 15, fontWeight: 800, color: t.text, lineHeight: 1 }}>{value}</Typography>
+      <Typography sx={{ fontSize: 11.5, color: t.text3, lineHeight: 1 }}>{label}</Typography>
+    </Stack>
+  );
+}
+
+function CompactStatsRow({ children }: { children: ReactNode }) {
+  return (
+    <Stack
+      direction="row"
+      divider={<Box sx={{ width: '1px', alignSelf: 'stretch', bgcolor: t.border }} />}
+      spacing={2}
+      sx={{
+        px: 1.75,
+        py: 1,
+        mb: 2,
+        borderRadius: '10px',
+        border: `1px solid ${t.border}`,
+        bgcolor: t.bg1,
+        flexWrap: 'wrap',
+        rowGap: 0.5,
+      }}
+    >
+      {children}
+    </Stack>
+  );
+}
 
 interface PodEvent {
   type?: string;
@@ -92,6 +122,17 @@ interface PodResources {
   memory: ResourceMetric;
 }
 
+interface RestartCycle {
+  startedAt?: string;
+  dbConnectedAt?: string;
+  rabbitmqConnectedAt?: string;
+  readyAt?: string;
+  timeToDbSeconds?: number | null;
+  timeToRabbitmqSeconds?: number | null;
+  timeToReadySeconds?: number | null;
+  errorLines: string[];
+}
+
 interface PodDetail {
   name: string;
   app: string;
@@ -106,6 +147,7 @@ interface PodDetail {
   crash: PodCrash | null;
   events: PodEvent[];
   rabbitmq: PodRabbitmq;
+  restartHistory: RestartCycle[];
 }
 
 function phaseBadgeVariant(phase?: string): 'success' | 'warning' | 'error' | 'neutral' {
@@ -152,6 +194,93 @@ function formatDuration(seconds?: number | null): string {
   if (seconds === undefined || seconds === null) return '—';
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
   return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+}
+
+function formatClock(iso?: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function RestartHistoryTabs({ history }: { history: RestartCycle[] }) {
+  const [activeIdx, setActiveIdx] = useState(history.length - 1);
+  const active = history[activeIdx];
+
+  if (history.length === 0) return <Typography sx={{ fontSize: 12, color: t.text3 }}>Aucun historique de démarrage disponible.</Typography>;
+
+  return (
+    <Box>
+      <Stack direction="row" spacing={0.5} sx={{ mb: 1, flexWrap: 'wrap', rowGap: 0.5 }}>
+        {history.map((c, i) => {
+          const isActive = i === activeIdx;
+          const hasError = c.errorLines.length > 0;
+          const isLast = i === history.length - 1;
+          return (
+            <Box
+              key={i}
+              onClick={() => setActiveIdx(i)}
+              sx={{
+                px: 1,
+                py: 0.375,
+                borderRadius: '6px',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                border: `1px solid ${isActive ? t.primaryDeep : t.border}`,
+                bgcolor: isActive ? t.primaryTint : hasError ? t.errorTint : t.bg2,
+                color: isActive ? t.primaryDeep : hasError ? t.error : t.text3,
+              }}
+            >
+              #{i + 1}{isLast ? ' (actuel)' : ''}{hasError ? ' ⚠' : ''}
+            </Box>
+          );
+        })}
+      </Stack>
+
+      {active && (
+        <Box sx={{ border: `1px solid ${t.border}`, borderRadius: '8px', p: 1.25, bgcolor: t.bg1 }}>
+          <Stack spacing={0.6}>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography sx={{ fontSize: 11.5, color: t.text2 }}>Démarrage process</Typography>
+              <Typography sx={{ fontSize: 11.5, color: t.text3, fontFamily: 'monospace' }}>{formatClock(active.startedAt)}</Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography sx={{ fontSize: 11.5, color: t.text2 }}>Connexion MongoDB</Typography>
+              <Typography sx={{ fontSize: 11.5, color: active.dbConnectedAt ? t.text3 : t.error, fontFamily: 'monospace' }}>
+                {active.dbConnectedAt ? `${formatClock(active.dbConnectedAt)} (+${formatDuration(active.timeToDbSeconds)})` : 'non atteint'}
+              </Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography sx={{ fontSize: 11.5, color: t.text2 }}>Connexion RabbitMQ</Typography>
+              <Typography sx={{ fontSize: 11.5, color: active.rabbitmqConnectedAt ? t.text3 : t.error, fontFamily: 'monospace' }}>
+                {active.rabbitmqConnectedAt ? `${formatClock(active.rabbitmqConnectedAt)} (+${formatDuration(active.timeToRabbitmqSeconds)})` : 'non atteint'}
+              </Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography sx={{ fontSize: 11.5, color: t.text2 }}>Prêt (HTTP listening)</Typography>
+              <Typography sx={{ fontSize: 11.5, color: active.readyAt ? t.success : t.error, fontFamily: 'monospace', fontWeight: 700 }}>
+                {active.readyAt ? `${formatClock(active.readyAt)} (+${formatDuration(active.timeToReadySeconds)})` : 'jamais atteint'}
+              </Typography>
+            </Stack>
+          </Stack>
+
+          {active.errorLines.length > 0 && (
+            <Box sx={{ mt: 1, pt: 1, borderTop: `1px solid ${t.border}` }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.error, mb: 0.5 }}>Erreurs de ce cycle</Typography>
+              <Box sx={{ bgcolor: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', p: 1, maxHeight: 180, overflowY: 'auto' }}>
+                {active.errorLines.map((line, i) => (
+                  <Typography key={i} sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                    {line}
+                  </Typography>
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
 }
 
 function ResourceBar({ label, metric, formatter }: { label: string; metric: ResourceMetric; formatter: (v?: number | null) => string }) {
@@ -246,37 +375,18 @@ export default function PodsMonitoringPage() {
 
       {error ? <MonitorError message={error} onRetry={() => void fetchPods()} /> : null}
 
-      <StatsRow>
-        <StatCard icon="📦" iconBg={t.bg2} iconColor={t.text2} value={String(pods.length)} label="Pods" />
-        <StatCard
-          icon="🔴"
-          iconBg={t.errorTint}
-          iconColor={t.error}
-          value={String(crashing.length)}
-          label="En crash"
-        />
-        <StatCard
-          icon="🧠"
-          iconBg={t.warningTint}
-          iconColor={t.warning}
-          value={String(highResourceUsage.length)}
-          label="CPU/RAM > 90%"
-        />
-        <StatCard
+      <CompactStatsRow>
+        <CompactStat icon="📦" iconColor={t.text2} value={String(pods.length)} label="Pods" />
+        <CompactStat icon="🔴" iconColor={t.error} value={String(crashing.length)} label="En crash" />
+        <CompactStat icon="🧠" iconColor={t.warning} value={String(highResourceUsage.length)} label="CPU/RAM > 90%" />
+        <CompactStat
           icon="🐰"
-          iconBg={t.successTint}
           iconColor={t.success}
           value={String(pods.filter((p) => p.rabbitmq?.status === 'connected').length)}
           label="RabbitMQ OK"
         />
-        <StatCard
-          icon="⚠️"
-          iconBg={t.warningTint}
-          iconColor={t.warning}
-          value={String(rabbitDisconnected.length)}
-          label="RabbitMQ déconnecté"
-        />
-      </StatsRow>
+        <CompactStat icon="⚠️" iconColor={t.warning} value={String(rabbitDisconnected.length)} label="RabbitMQ déconnecté" />
+      </CompactStatsRow>
 
       <MonitorSection title="Détail des pods" desc={`${pods.length} pod(s)`}>
         {pods.length === 0 ? (
@@ -365,6 +475,14 @@ export default function PodsMonitoringPage() {
                           ) : (
                             <Typography sx={{ fontSize: 12, color: t.text3 }}>Aucune donnée de démarrage.</Typography>
                           )}
+                        </Box>
+
+                        {/* Historique des cycles de démarrage (restarts) */}
+                        <Box>
+                          <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text2, mb: 0.5 }}>
+                            Historique des cycles {p.restartHistory?.length > 1 ? `(${p.restartHistory.length})` : ''}
+                          </Typography>
+                          <RestartHistoryTabs history={p.restartHistory || []} />
                         </Box>
 
                         {/* Probes configurées */}
