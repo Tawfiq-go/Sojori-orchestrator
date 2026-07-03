@@ -3,6 +3,7 @@ import { defineConfig, type ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import { execSync } from 'node:child_process'
 import { devSecurityHeaders, previewSecurityHeaders } from './security/csp'
 
 /** Ingress K8s prod (dev.sojori.com). sojori.com = vitrine sans /api. Override : VITE_DEV_PROXY_TARGET. */
@@ -106,9 +107,18 @@ const apiDevProxy = {
 const devPort = Number(process.env.VITE_DEV_PORT || 4174)
 const devHmrPort = Number(process.env.VITE_HMR_PORT || devPort)
 
+function readGitShaShort(): string | undefined {
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
 const appBuildSha =
   process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
   process.env.VITE_APP_BUILD_SHA?.slice(0, 7) ||
+  readGitShaShort() ||
   'local'
 const appBuildAt = new Date().toISOString()
 const appDeployEnv = process.env.VERCEL_ENV || process.env.NODE_ENV || 'development'

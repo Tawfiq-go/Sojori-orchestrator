@@ -16,6 +16,7 @@ import LanguageOutlinedIcon from '@mui/icons-material/LanguageOutlined';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
 import { tokens as t, pageMetaChipSx } from './dashboardTokens';
+import { FrontRuntimeTagChip } from './FrontRuntimeTagChip';
 import type { User } from '../../contexts/AuthContext';
 import type { AdminSessionViewModel } from './adminSessionDetails.shared';
 
@@ -27,30 +28,41 @@ type Props = {
 };
 
 export function AdminSessionDetailsDialog({ open, onClose, user, view }: Props) {
-  const { build, role, displayName, langCode, langLabel, deployedAt, scope, adminScopeMode, deployChip } = view;
+  const { build, frontTag, role, displayName, langCode, langLabel, deployedAt, scope, adminScopeMode, deployChip } = view;
+  const commitDisplay = build.commitSha === 'local' && frontTag.kind !== 'local'
+    ? `${build.commitSha} (SHA build manquant — relancer vercel build)`
+    : build.commitSha;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ pb: 1 }}>
-        <Stack direction="row" spacing={1.25} alignItems="center">
-          <Box
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: '10px',
-              display: 'grid',
-              placeItems: 'center',
-              bgcolor: 'rgba(230,176,34,0.12)',
-              border: `1px solid rgba(230,176,34,0.25)`,
-              color: t.primaryDeep,
-            }}
-          >
-            <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 20 }} />
-          </Box>
-          <Box>
-            <Typography sx={{ fontWeight: 700, fontSize: 16, lineHeight: 1.2 }}>Session admin</Typography>
-            <Typography sx={{ fontSize: 12, color: t.text3, mt: 0.25 }}>Compte, scope et statut front</Typography>
-          </Box>
+        <Stack direction="row" spacing={1.25} alignItems="flex-start" justifyContent="space-between">
+          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: '10px',
+                display: 'grid',
+                placeItems: 'center',
+                bgcolor: 'rgba(230,176,34,0.12)',
+                border: `1px solid rgba(230,176,34,0.25)`,
+                color: t.primaryDeep,
+                flexShrink: 0,
+              }}
+            >
+              <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 20 }} />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Typography sx={{ fontWeight: 700, fontSize: 16, lineHeight: 1.2 }}>Session admin</Typography>
+                <FrontRuntimeTagChip tag={frontTag} size="medium" />
+              </Stack>
+              <Typography sx={{ fontSize: 12, color: t.text3, mt: 0.25 }}>
+                {frontTag.label} · {build.host || '—'}
+              </Typography>
+            </Box>
+          </Stack>
         </Stack>
       </DialogTitle>
       <DialogContent dividers sx={{ pt: 2 }}>
@@ -81,12 +93,19 @@ export function AdminSessionDetailsDialog({ open, onClose, user, view }: Props) 
 
           <Section title="Déploiement front" icon={<CloudOutlinedIcon sx={{ fontSize: 16 }} />}>
             <Stack spacing={1}>
-              <Chip size="small" label={deployChip} sx={{ ...pageMetaChipSx, alignSelf: 'flex-start' }} />
-              <Row label="Commit" value={build.commitSha} />
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <FrontRuntimeTagChip tag={frontTag} />
+                <Chip size="small" label={deployChip} sx={{ ...pageMetaChipSx, maxWidth: '100%' }} />
+              </Stack>
+              <Row label="Origine front" value={frontTag.label} />
+              <Row label="Commit" value={commitDisplay} />
               <Row label="Déployé" value={deployedAt ?? '—'} />
               <Row label="Environnement" value={build.deployEnv || (import.meta.env.PROD ? 'production' : 'development')} />
               <Row label="API backend" value={build.apiOrigin} />
               <Row label="Hôte front" value={build.host || '—'} />
+              <Typography variant="caption" color="text.secondary">
+                LOCAL = machine de dev · VERCEL = app.sojori.com · PREVIEW = URL *.vercel.app
+              </Typography>
             </Stack>
           </Section>
         </Stack>

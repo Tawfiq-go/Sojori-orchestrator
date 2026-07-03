@@ -7,9 +7,64 @@ export type AppBuildInfo = {
   apiOrigin: string;
 };
 
+export type FrontRuntimeKind = 'local' | 'vercel-production' | 'vercel-preview' | 'other';
+
+export type FrontRuntimeTag = {
+  kind: FrontRuntimeKind;
+  label: string;
+  shortLabel: string;
+  color: string;
+  bg: string;
+  border: string;
+};
+
+const FRONT_RUNTIME_TAGS: Record<FrontRuntimeKind, Omit<FrontRuntimeTag, 'kind'>> = {
+  local: {
+    label: 'Développement local',
+    shortLabel: 'LOCAL',
+    color: '#c46506',
+    bg: 'rgba(196,101,6,0.12)',
+    border: 'rgba(196,101,6,0.35)',
+  },
+  'vercel-production': {
+    label: 'Vercel · Production',
+    shortLabel: 'VERCEL',
+    color: '#0a8f5e',
+    bg: 'rgba(10,143,94,0.12)',
+    border: 'rgba(10,143,94,0.35)',
+  },
+  'vercel-preview': {
+    label: 'Vercel · Preview',
+    shortLabel: 'PREVIEW',
+    color: '#0673b3',
+    bg: 'rgba(6,115,179,0.12)',
+    border: 'rgba(6,115,179,0.35)',
+  },
+  other: {
+    label: 'Autre hôte',
+    shortLabel: 'HOST',
+    color: '#7a756c',
+    bg: 'rgba(122,117,108,0.12)',
+    border: 'rgba(122,117,108,0.28)',
+  },
+};
+
 function readMeta(key: string): string {
   const v = (import.meta.env as Record<string, string | undefined>)[key];
   return typeof v === 'string' ? v.trim() : '';
+}
+
+export function getFrontRuntimeKind(host?: string): FrontRuntimeKind {
+  const h = (host ?? (typeof window !== 'undefined' ? window.location.hostname : '')).toLowerCase();
+  if (!h || h === 'localhost' || h === '127.0.0.1' || h.endsWith('.local')) return 'local';
+  if (h === 'app.sojori.com') return 'vercel-production';
+  if (h.endsWith('.vercel.app')) return 'vercel-preview';
+  return 'other';
+}
+
+export function getFrontRuntimeTag(host?: string): FrontRuntimeTag {
+  const kind = getFrontRuntimeKind(host);
+  return { kind, ...FRONT_RUNTIME_TAGS[kind] };
 }
 
 export function getAppBuildInfo(): AppBuildInfo {

@@ -1,4 +1,4 @@
-import { formatBuildDeployedAt, getAppBuildInfo } from '../../utils/appBuildInfo';
+import { formatBuildDeployedAt, getAppBuildInfo, getFrontRuntimeTag } from '../../utils/appBuildInfo';
 import { normalizeUserRole } from '../../utils/taskScope.utils';
 import type { User } from '../../contexts/AuthContext';
 
@@ -28,6 +28,7 @@ export function buildAdminSessionViewModel(input: {
 }) {
   const { user, langCode, ownerScopeUnset, ownerScopeAll, requestOwnerId, adminScopeMode } = input;
   const build = getAppBuildInfo();
+  const frontTag = getFrontRuntimeTag(build.host);
   const role = normalizeUserRole(user.role);
   const displayName =
     [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email || 'Admin';
@@ -37,6 +38,7 @@ export function buildAdminSessionViewModel(input: {
 
   return {
     build,
+    frontTag,
     role,
     displayName,
     langCode,
@@ -45,8 +47,8 @@ export function buildAdminSessionViewModel(input: {
     scope,
     adminScopeMode,
     deployChip: deployedAt
-      ? `Front · ${build.commitSha} · ${deployedAt}`
-      : `Build · ${build.commitSha} (local)`,
+      ? `${frontTag.shortLabel} · ${build.commitSha} · ${deployedAt}`
+      : `${frontTag.shortLabel} · ${build.commitSha}`,
     tooltip: `${displayName} · ${user.email} · ${langLabel}`,
   };
 }

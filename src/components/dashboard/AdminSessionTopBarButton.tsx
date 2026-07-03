@@ -8,6 +8,7 @@ import { isPlatformAdminRole } from '../../utils/taskScope.utils';
 import { buildAdminSessionViewModel } from './adminSessionDetails.shared';
 import { AdminSessionDetailsDialog } from './AdminSessionDetailsDialog';
 import { tokens as t } from './dashboardTokens';
+import { getFrontRuntimeTag } from '../../utils/appBuildInfo';
 
 const iconBtnSx = {
   width: 36,
@@ -43,24 +44,27 @@ export function AdminSessionTopBarButton() {
 
   if (!isAdmin || !user || !view) return null;
 
+  const frontTag = getFrontRuntimeTag();
+
   return (
     <>
-      <Tooltip title="Session admin · statut">
+      <Tooltip title={`Session admin · ${frontTag.shortLabel}`}>
         <IconButton
           onClick={() => setOpen(true)}
           aria-label="Ouvrir session admin et statut déploiement"
           sx={{
             ...iconBtnSx,
             color: t.primaryDeep,
-            bgcolor: 'rgba(230,176,34,0.08)',
-            border: `1px solid rgba(230,176,34,0.22)`,
+            bgcolor: frontTag.bg,
+            border: `1px solid ${frontTag.border}`,
             '&:hover': {
-              bgcolor: 'rgba(230,176,34,0.14)',
-              color: t.primaryDeep,
+              bgcolor: frontTag.bg,
+              color: frontTag.color,
+              filter: 'brightness(0.97)',
             },
           }}
         >
-          <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 20 }} />
+          <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 20, color: frontTag.color }} />
           {ownerScopeUnset ? (
             <Box
               sx={{
