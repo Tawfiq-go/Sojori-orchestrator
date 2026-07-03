@@ -6,12 +6,17 @@ function normRole(role?: string | null): string {
 
 /** Owner connecté : id compte ; staff : ownerId lié. */
 export function resolveOwnerId(user: MockUser | null | undefined): string | null {
-  const accountId = user?.id || (user as { _id?: string } | null | undefined)?._id;
+  const raw = user?.id || (user as { _id?: string } | null | undefined)?._id;
+  const accountId = raw != null ? String(raw).trim() : '';
   if (!accountId) return null;
   const role = normRole(user?.role);
-  if (role === 'owner') return String(accountId);
-  if (role === 'worker' || role === 'staff') return user?.ownerId || String(accountId);
-  return user?.ownerId || String(accountId);
+  if (role === 'owner') return accountId;
+  if (role === 'worker' || role === 'staff') {
+    const employer = user?.ownerId != null ? String(user.ownerId).trim() : '';
+    return employer || accountId;
+  }
+  const fallbackOwner = user?.ownerId != null ? String(user.ownerId).trim() : '';
+  return fallbackOwner || accountId;
 }
 
 export function isOwnerRole(user: MockUser | null | undefined): boolean {
