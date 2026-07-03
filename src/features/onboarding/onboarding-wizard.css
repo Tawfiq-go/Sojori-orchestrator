@@ -3316,6 +3316,20 @@
   font-size: 12px;
 }
 
+.ob-orch-tier-remove {
+  border: none;
+  background: transparent;
+  color: var(--ob-t3);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.ob-orch-tier-remove:hover {
+  color: var(--ob-danger, #d33);
+}
+
 .ob-orch-city-prices {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

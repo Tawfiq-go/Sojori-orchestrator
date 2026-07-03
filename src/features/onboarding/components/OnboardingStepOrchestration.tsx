@@ -106,6 +106,13 @@ export default function OnboardingStepOrchestration({ panel3, cities, onChange }
     setQuick({ ...quickConfig, cleaningFreeTiers: tiers });
   };
 
+  const removeCleaningTier = (index: number) => {
+    setQuick({
+      ...quickConfig,
+      cleaningFreeTiers: quickConfig.cleaningFreeTiers.filter((_, i) => i !== index),
+    });
+  };
+
   const addCleaningTier = () => {
     const last = quickConfig.cleaningFreeTiers[quickConfig.cleaningFreeTiers.length - 1];
     const startDay = last ? last.endDay + 1 : 11;
@@ -211,6 +218,14 @@ export default function OnboardingStepOrchestration({ panel3, cities, onChange }
                       />
                       ménage(s)
                     </label>
+                    <button
+                      type="button"
+                      className="ob-orch-tier-remove"
+                      title="Supprimer cet intervalle"
+                      onClick={() => removeCleaningTier(i)}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
               </div>
