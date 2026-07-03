@@ -150,6 +150,7 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
     return (
       <OnboardingStepDeadlines
         deadlines={p6.deadlines}
+        capabilities={p3.capabilities}
         onChange={(patch) => updatePanel('6', { deadlines: { ...p6.deadlines, ...patch } })}
       />
     );

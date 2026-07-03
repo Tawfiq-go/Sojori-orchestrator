@@ -160,12 +160,29 @@ export interface WizardConditions {
 
 export type WizardStaffAssignMode = 'with_client_choice' | 'last_minute' | 'standard';
 
+export type WizardWorkflowPreset = 'reactive' | 'balanced' | 'proactive';
+
+/** Surcharges par type de workflow (clé = taskType snake_case). */
+export type WizardServiceDeadlineOverride = {
+  clientReminderDays?: number[];
+  staffAssignStyle?: 'immediate' | 'days_before' | 'with_client' | 'none';
+  staffAssignDaysBefore?: number;
+  staffReminderDays?: number[];
+  escalationEnabled?: boolean;
+};
+
 export interface WizardDeadlines {
-  /** Quand créer / proposer la tâche au staff (défaut owner onboarding). */
+  /** Préréglage global délais & relances (défaut équilibré). */
+  workflowPreset?: WizardWorkflowPreset;
+  /** Surcharges ligne par ligne après personnalisation. */
+  perService?: Record<string, WizardServiceDeadlineOverride>;
+  /** Tolérance acceptation staff (heures) — défaut 3. */
+  acceptToleranceHours?: number;
+  /** @deprecated — conservé pour brouillons v1 ; dérivé du preset si absent */
   staffAssignMode: WizardStaffAssignMode;
-  /** Jours avant la tâche en mode standard (défaut 3). */
+  /** @deprecated */
   staffAssignDaysBefore: number;
-  /** Escalade admin la veille (J-1) si staff n'accepte pas. */
+  /** @deprecated — préférer escalationEnabled par service */
   escalateAdminJ1: boolean;
   /** Heure de relance / escalade admin le J-1. */
   adminEscalationHour: '11' | '14';

@@ -16,7 +16,7 @@ export const STAFF_ASSIGN_OPTIONS: Array<{
     id: 'last_minute',
     emoji: '⚡',
     title: 'Dernière minute',
-    desc: 'Assignation au plus tard avant l’exécution de la tâche.',
+    desc: 'Assignation au plus tard avant l'exécution de la tâche.',
   },
   {
     id: 'standard',
@@ -36,6 +36,9 @@ export const ADMIN_ESCALATION_HOURS: Array<{
 
 export function defaultDeadlines(): WizardDeadlines {
   return {
+    workflowPreset: 'balanced',
+    perService: {},
+    acceptToleranceHours: 3,
     staffAssignMode: 'standard',
     staffAssignDaysBefore: 3,
     escalateAdminJ1: true,
@@ -54,21 +57,29 @@ export function normalizeWizardDeadlines(
   const base = defaultDeadlines();
   if (!raw) return base;
 
-  if (raw.staffAssignMode) {
-    return {
-      staffAssignMode: raw.staffAssignMode,
-      staffAssignDaysBefore: raw.staffAssignDaysBefore ?? 3,
-      escalateAdminJ1: raw.escalateAdminJ1 ?? true,
-      adminEscalationHour: raw.adminEscalationHour === '14' ? '14' : '11',
-    };
+  let workflowPreset = raw.workflowPreset ?? base.workflowPreset;
+  let staffAssignMode = raw.staffAssignMode ?? base.staffAssignMode;
+
+  if (!raw.workflowPreset && raw.rhythmPreset) {
+    if (raw.rhythmPreset === 'reactive') {
+      workflowPreset = 'reactive';
+      staffAssignMode = 'with_client_choice';
+    } else if (raw.rhythmPreset === 'relaxed') {
+      workflowPreset = 'proactive';
+      staffAssignMode = 'last_minute';
+    }
   }
 
-  let staffAssignMode: WizardDeadlines['staffAssignMode'] = 'standard';
-  if (raw.rhythmPreset === 'reactive') staffAssignMode = 'with_client_choice';
-  if (raw.rhythmPreset === 'relaxed') staffAssignMode = 'last_minute';
+  if (raw.staffAssignMode === 'with_client_choice') workflowPreset = workflowPreset ?? 'reactive';
+  if (raw.staffAssignMode === 'last_minute') workflowPreset = workflowPreset ?? 'proactive';
 
   return {
-    ...base,
+    workflowPreset: workflowPreset ?? 'balanced',
+    perService: raw.perService ?? {},
+    acceptToleranceHours: raw.acceptToleranceHours ?? 3,
     staffAssignMode,
+    staffAssignDaysBefore: raw.staffAssignDaysBefore ?? 3,
+    escalateAdminJ1: raw.escalateAdminJ1 ?? true,
+    adminEscalationHour: raw.adminEscalationHour === '14' ? '14' : '11',
   };
 }
