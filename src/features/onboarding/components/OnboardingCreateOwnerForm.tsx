@@ -12,6 +12,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAdminOwnerFilter } from '../../../context/AdminOwnerFilterContext';
 import { createOwnerAccount, getCities } from '../../../services/teamDashboardApi';
@@ -20,6 +21,7 @@ import {
   initializeOwnerOrchestrationFromActivations,
 } from '../../orchestrationListingV3/ownerCapabilityActivation';
 import { WHATSAPP_AI_TIER_OPTIONS, tierOptionDropdownLabel } from '../../../constants/whatsappAiTier';
+import { applyOwnerIdToSearchParams } from '../onboardingOwnerUrl';
 
 type CityRow = { _id: string; name?: string; rentalCityId?: number | string };
 
@@ -48,6 +50,7 @@ const initialForm = {
 /** Création PM inline — même API que /admin/equipe/owners (register + provision RU si CM=RU). */
 export function OnboardingCreateOwnerForm({ onCreated }: Props) {
   const { setSelectedOwnerId } = useAdminOwnerFilter();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [form, setForm] = useState(initialForm);
   const [cities, setCities] = useState<CityRow[]>([]);
   const [loadingCities, setLoadingCities] = useState(false);
@@ -158,7 +161,10 @@ export function OnboardingCreateOwnerForm({ onCreated }: Props) {
 
   const startOnboardingForCreated = () => {
     const id = createdAccountId || ruResult?.accountId;
-    if (id) setSelectedOwnerId(id);
+    if (id) {
+      setSelectedOwnerId(id);
+      setSearchParams(applyOwnerIdToSearchParams(searchParams, id), { replace: true });
+    }
   };
 
   return (

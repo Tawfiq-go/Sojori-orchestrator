@@ -5,7 +5,7 @@ const normalizeEnvUrl = (raw: string | undefined): string | undefined => {
   return trimmed || undefined;
 };
 
-import { SOJORI_API_ORIGIN } from './sojoriApiOrigins';
+import { SOJORI_API_ORIGIN, SOJORI_K8S_API_ORIGIN, resolveSojoriApiOrigin } from './sojoriApiOrigins';
 
 const DEFAULT_REMOTE_API = SOJORI_API_ORIGIN;
 
@@ -56,7 +56,14 @@ const getApiBaseUrl = (): string => {
   }
 
   if (configured) {
-    return configured;
+    return resolveSojoriApiOrigin(configured);
+  }
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    // app.sojori.com (Vercel) ne sert pas les APIs — toujours l'ingress cluster.
+    if (host === 'app.sojori.com' || host.endsWith('.vercel.app')) {
+      return SOJORI_K8S_API_ORIGIN;
+    }
   }
   if (shouldUseLocalMicroservicePorts()) {
     return 'http://localhost';

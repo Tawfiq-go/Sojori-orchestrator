@@ -24,6 +24,7 @@ export function resolveSojoriApiOrigin(configured?: string): string {
   if (!raw) return SOJORI_K8S_API_ORIGIN;
   if (/^https?:\/\/(www\.)?sojori\.com$/i.test(raw)) return SOJORI_K8S_API_ORIGIN;
   if (/^https?:\/\/admin\.sojori\.com$/i.test(raw)) return SOJORI_K8S_API_ORIGIN;
+  if (/^https?:\/\/app\.sojori\.com$/i.test(raw)) return SOJORI_K8S_API_ORIGIN;
   return raw;
 }
 

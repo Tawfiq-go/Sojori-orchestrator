@@ -6,11 +6,12 @@ function normRole(role?: string | null): string {
 
 /** Owner connecté : id compte ; staff : ownerId lié. */
 export function resolveOwnerId(user: MockUser | null | undefined): string | null {
-  if (!user?.id) return null;
-  const role = normRole(user.role);
-  if (role === 'owner') return user.id;
-  if (role === 'worker' || role === 'staff') return user.ownerId || user.id;
-  return user.ownerId || user.id;
+  const accountId = user?.id || (user as { _id?: string } | null | undefined)?._id;
+  if (!accountId) return null;
+  const role = normRole(user?.role);
+  if (role === 'owner') return String(accountId);
+  if (role === 'worker' || role === 'staff') return user?.ownerId || String(accountId);
+  return user?.ownerId || String(accountId);
 }
 
 export function isOwnerRole(user: MockUser | null | undefined): boolean {
@@ -35,12 +36,11 @@ export function resolvePmOnboardingOwnerId(
   requestOwnerId: string | null | undefined,
   showOwnerFilter: boolean,
 ): string | null {
-  if (!user?.id) return null;
   if (showOwnerFilter) {
     const picked = requestOwnerId?.trim();
     return picked || null;
   }
-  if (isOwnerRole(user)) return user.id;
+  if (isOwnerRole(user)) return resolveOwnerId(user);
   return null;
 }
 
