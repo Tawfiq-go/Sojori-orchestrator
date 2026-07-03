@@ -76,7 +76,7 @@ export function PmOnboardingWizard({ embedded = false }: PmOnboardingWizardProps
         }
         return;
       }
-      toast.error(result.message ?? wizard.error || 'Impossible d’appliquer les délais au modèle owner');
+      toast.error(result.message ?? wizard.error ?? 'Impossible d’appliquer les délais au modèle owner');
       return;
     }
     const ok = await wizard.saveDraft();
