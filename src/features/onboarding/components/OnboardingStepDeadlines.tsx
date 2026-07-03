@@ -1,7 +1,9 @@
 import type { WizardCapabilities, WizardDeadlines, WizardServiceDeadlineOverride } from '../types';
 import {
+  defaultStaffReminderDaysForTask,
   formatClientReminderLabel,
   formatStaffAssignLabel,
+  formatStaffReminderDay,
   formatStaffReminderLabel,
   resolveServiceRhythmRows,
   WORKFLOW_PRESET_OPTIONS,
@@ -78,11 +80,13 @@ function ServiceRowEditor({
     );
   };
 
-  const toggleStaffReminderJ1 = () => {
-    const hasJ1 = row.staffReminderDays.includes(-1);
+  const staffReminderDefaultDays = defaultStaffReminderDaysForTask(row.taskType);
+
+  const toggleStaffReminder = () => {
+    const hasReminder = row.staffReminderDays.length > 0;
     onChange(
       patchServiceRow(deadlines, row.taskType, {
-        staffReminderDays: hasJ1 ? [] : [-1],
+        staffReminderDays: hasReminder ? [] : staffReminderDefaultDays,
       }),
     );
   };
@@ -124,7 +128,7 @@ function ServiceRowEditor({
           <select
             className="ob-field ob-rhythm-select"
             style={{ marginTop: 4 }}
-            value={Math.max(1, row.staffAssignDaysBefore)}
+            value={row.staffAssignDaysBefore}
             onChange={(e) =>
               onChange(
                 patchServiceRow(deadlines, row.taskType, {
@@ -133,6 +137,11 @@ function ServiceRowEditor({
               )
             }
           >
+            {row.staffAssignDaysBefore < 0 ? (
+              <option value={row.staffAssignDaysBefore}>
+                J+{Math.abs(row.staffAssignDaysBefore)} (après)
+              </option>
+            ) : null}
             {DAYS_BEFORE_OPTIONS.map((n) => (
               <option key={n} value={n}>
                 J-{n}
@@ -146,8 +155,12 @@ function ServiceRowEditor({
       </td>
       <td>
         <div className="ob-rhythm-staff-rem">
-          <Toggle on={row.staffReminderDays.includes(-1)} onChange={toggleStaffReminderJ1} />
-          <span>J-1</span>
+          <Toggle on={row.staffReminderDays.length > 0} onChange={toggleStaffReminder} />
+          <span>
+            {(row.staffReminderDays.length ? row.staffReminderDays : staffReminderDefaultDays)
+              .map(formatStaffReminderDay)
+              .join(', ')}
+          </span>
         </div>
         <div className="ob-rhythm-hint">
           {formatStaffReminderLabel(row.staffReminderDays, row.staffReminderTime)}
