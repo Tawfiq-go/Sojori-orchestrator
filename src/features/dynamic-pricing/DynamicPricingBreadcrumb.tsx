@@ -1,5 +1,5 @@
 import { Box, Typography } from '@mui/material';
-import { T } from './_tokens';
+import { T, DP_LAYOUT_SX } from './_tokens';
 
 interface Crumb {
   label: string;
@@ -19,9 +19,7 @@ export default function DynamicPricingBreadcrumb({ crumbs, embedded }: Props) {
         ...(embedded
           ? { pt: 0.5, pb: 0 }
           : {
-              maxWidth: 1440,
-              mx: 'auto',
-              px: { xs: 2, md: 3.5 },
+              ...DP_LAYOUT_SX,
               pt: 1,
               pb: 0.5,
             }),

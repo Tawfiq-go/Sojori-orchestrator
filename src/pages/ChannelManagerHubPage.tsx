@@ -39,7 +39,7 @@ export function ChannelManagerHubPage() {
     <DashboardWrapper breadcrumb={['Catalogue', 'Annonces', 'Channel Manager', tabLabel]}>
       <LegacyReduxProvider>
         <CatalogueAnnoncesTabs />
-        <div style={{ padding: '0 0 50px', maxWidth: 1680, margin: '0 auto' }}>
+        <div style={{ padding: '0 0 50px' }}>
           <div style={{ marginBottom: 20 }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: T.text, margin: 0 }}>Channel Manager</h1>
             <p style={{ fontSize: 13, color: T.text3, margin: '6px 0 0' }}>

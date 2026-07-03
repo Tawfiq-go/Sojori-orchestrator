@@ -4,6 +4,7 @@
 import React from 'react';
 import { Box, Stack, Typography } from '@mui/material';
 import { T } from './_tokens';
+import { DASHBOARD_PAGE_FILL_SX } from '../../constants/dashboardLayout';
 
 interface Props {
   /** Déclencheur discret (modal marché) */
@@ -13,8 +14,8 @@ interface Props {
 
 export default function DynamicPricingShell({ dataActions, children }: Props) {
   return (
-    <Box sx={{ maxWidth: 1500, mx: 'auto', px: { xs: 2, md: 3.5 } }}>
-      <Stack direction="row" sx={{ alignItems: 'baseline', gap: 2, pt: 2.5, pb: 1.75, flexWrap: 'wrap' }}>
+    <Box sx={{ ...DASHBOARD_PAGE_FILL_SX, pt: 2.5, pb: 1.75 }}>
+      <Stack direction="row" sx={{ alignItems: 'baseline', gap: 2, flexWrap: 'wrap' }}>
         <Box>
           <Typography sx={{
             fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace',

@@ -14,7 +14,7 @@ import {
   CartesianGrid,
   Tooltip as RechartsTooltip,
 } from 'recharts';
-import { T } from '../_tokens';
+import { T, DP_LAYOUT_SX } from '../_tokens';
 import { DP, marketCurveLegend } from '../clientLabels';
 import DataEmptyPlaceholder from '../DataEmptyPlaceholder';
 import {
@@ -488,8 +488,7 @@ export default function YearlyCalendar({
   return (
     <Box
       sx={{
-        maxWidth: 1380,
-        mx: 'auto',
+        ...DP_LAYOUT_SX,
         bgcolor: T.bg1,
         border: `1px solid ${T.border}`,
         borderRadius: 2.25,

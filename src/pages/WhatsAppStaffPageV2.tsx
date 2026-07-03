@@ -188,7 +188,7 @@ export default function WhatsAppStaffPageV2() {
 
   return (
     <DashboardWrapper breadcrumb={['Communications', 'WhatsApp Staff']}>
-    <Box sx={{ maxWidth: 1600, mx: 'auto', px: { xs: 2, md: 3 } }}>
+    <Box sx={{ width: '100%' }}>
       {/* Header */}
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>

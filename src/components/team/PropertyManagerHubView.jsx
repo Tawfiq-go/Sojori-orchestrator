@@ -320,7 +320,7 @@ export function PropertyManagerHubView({
   };
 
   return (
-    <Box>
+    <Box sx={{ width: '100%', minWidth: 0, overflow: 'hidden' }}>
       <FilterBar>
         <FilterChip label="Actifs" active={statusFilter === 'active'} onClick={() => applyStatusFilter('active')} />
         <FilterChip label="Brouillon" active={statusFilter === 'draft'} onClick={() => applyStatusFilter('draft')} />

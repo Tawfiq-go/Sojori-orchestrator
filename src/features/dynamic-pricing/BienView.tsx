@@ -4,7 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import { Box, Stack, Typography, Button } from '@mui/material';
-import { T, KEYFRAMES } from './_tokens';
+import { T, KEYFRAMES, DP_LAYOUT_SX } from './_tokens';
 import type { Listing, BienDetailPerformance, MarketData, CompListing, PriceFactor } from './_tokens';
 
 import StatsCards from './bien/StatsCards';
@@ -227,14 +227,14 @@ export default function BienView(props: BienViewProps) {
   };
 
   return (
-    <Box sx={{ maxWidth: 1440, mx: 'auto' }}>
+    <Box sx={{ ...DP_LAYOUT_SX }}>
       <style>{KEYFRAMES}</style>
       {/* ── Bandeau sticky ── */}
       <Box sx={{
         position: 'sticky', top: 0, zIndex: 30,
         bgcolor: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(16px) saturate(180%)',
         borderBottom: `1px solid ${T.border}`,
-        px: { xs: 2, md: 3.5 },
+        px: 0,
         py: 1.75,
         display: 'flex',
         flexWrap: 'wrap',
@@ -398,7 +398,7 @@ export default function BienView(props: BienViewProps) {
           px: 1.375, py: 0.625, borderRadius: '99px', letterSpacing: '0.04em',
         }}>★ SOJORI PRO</Box>
       </Box>
-      <Box sx={{ px: { xs: 2, md: 3.5 }, pb: 1.5, maxWidth: 1440, mx: 'auto', width: '100%' }}>
+      <Box sx={{ ...DP_LAYOUT_SX, pb: 1.5 }}>
         <SectionSourceBar
           compact
           items={[
@@ -886,12 +886,12 @@ function Section({
   return (
     <Box
       sx={{
-        px: { xs: 2, md: 3.5 },
+        px: 0,
         py: { xs: 3, md: 5 },
         animation: 'sj-fadeIn 0.5s both',
       }}
     >
-      <Stack sx={{ gap: 1,  mb: 2, maxWidth: 1380, mx: 'auto', width: '100%' }}>
+      <Stack sx={{ gap: 1, mb: 2, ...DP_LAYOUT_SX }}>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25,  minWidth: 0 }}>
           <Box
             sx={{
@@ -945,7 +945,7 @@ function Section({
           </Box>
         )}
       </Stack>
-      <Box sx={{ maxWidth: 1380, mx: 'auto', width: '100%' }}>{children}</Box>
+      <Box sx={{ ...DP_LAYOUT_SX }}>{children}</Box>
     </Box>
   );
 }

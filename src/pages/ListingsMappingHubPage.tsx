@@ -90,7 +90,7 @@ function MappingIndex() {
 export function ListingsMappingHubPage() {
   return (
     <DashboardWrapper breadcrumb={['Catalogue', 'Annonces', 'Mapping RU']}>
-      <Box sx={{ px: { xs: 2, md: 3 }, pb: 3, maxWidth: 1600 }}>
+      <Box sx={{ width: '100%', pb: 3 }}>
         <CatalogueAnnoncesTabs />
         <MappingUrlHint />
         <MappingSubNav />

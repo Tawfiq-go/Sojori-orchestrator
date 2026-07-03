@@ -666,7 +666,7 @@ export default function ReservationSyncMonitorTab() {
       : `Corriger tout — ${ISSUE_LABELS[codeFilter] || codeFilter} (${fixableCount})`;
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1600, mx: 'auto' }}>
+    <Box sx={{ width: '100%' }}>
       <Typography sx={{ fontSize: 20, fontWeight: 700, color: T.text, letterSpacing: '-0.02em' }}>
         Sync réservations
       </Typography>

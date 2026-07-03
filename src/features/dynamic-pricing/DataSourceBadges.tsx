@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { Box, Stack, Tooltip, Typography } from '@mui/material';
-import { T } from './_tokens';
+import { T, DP_LAYOUT_SX } from './_tokens';
 
 export type DataSourceKind = 'prod' | 'calc' | 'empty' | 'mix' | 'partial';
 
@@ -133,8 +133,7 @@ export function SectionSourceBar({
         flexWrap: 'wrap',
         alignItems: 'center',
         mb: compact ? 1 : 1.5,
-        maxWidth: 1380,
-        mx: 'auto',
+        ...DP_LAYOUT_SX,
         px: compact ? 0 : undefined,
       }}
     >

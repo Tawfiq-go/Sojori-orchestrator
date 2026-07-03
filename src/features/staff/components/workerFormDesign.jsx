@@ -22,6 +22,7 @@ import {
   btnGhostSx,
   tokens as T,
 } from '../../../components/dashboard/DashboardV2.components';
+import { DASHBOARD_PAGE_FILL_SX } from '../../../constants/dashboardLayout';
 import { TEAM_T } from '../../../components/team/teamHubTokens';
 import {
   buildOwnerPermissionGroups,
@@ -154,10 +155,10 @@ export function WorkerFormPage({ children }) {
   return (
     <Box
       sx={{
-        maxWidth: 1080,
-        mx: 'auto',
+        ...DASHBOARD_PAGE_FILL_SX,
+        maxWidth: 1200,
         py: { xs: 2, md: 3 },
-        px: { xs: 1.5, md: 2 },
+        px: 0,
         minHeight: '100%',
         background: `linear-gradient(180deg, ${WF.bg2} 0%, ${WF.bg0} 220px)`,
         borderRadius: { md: 3 },

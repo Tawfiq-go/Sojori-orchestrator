@@ -426,7 +426,7 @@ export default function ChatbotWhitelistView() {
   const showBlockingSpinner = (isLoading && !tableReady) || (tableReady && isRefreshing);
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ width: '100%' }}>
       {isLoading && !tableReady && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
           <CircularProgress size={48} sx={{ color: T.primary }} />

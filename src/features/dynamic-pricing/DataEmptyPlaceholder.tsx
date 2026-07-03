@@ -1,5 +1,5 @@
 import { Box, Typography } from '@mui/material';
-import { T } from './_tokens';
+import { T, DP_LAYOUT_SX } from './_tokens';
 
 export default function DataEmptyPlaceholder({
   title = 'Aucune donnée en production',
@@ -18,8 +18,7 @@ export default function DataEmptyPlaceholder({
         border: `1px dashed ${T.borderStrong}`,
         bgcolor: T.bg2,
         textAlign: 'center',
-        maxWidth: 1380,
-        mx: 'auto',
+        ...DP_LAYOUT_SX,
       }}
     >
       <Typography sx={{ fontSize: compact ? 13 : 14, fontWeight: 700, color: T.text2 }}>

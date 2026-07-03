@@ -159,7 +159,7 @@ export default function UnifiedInboxPage() {
   };
 
   return (
-    <Box sx={{ maxWidth: 1600, mx: 'auto', px: { xs: 2, md: 3 } }}>
+    <Box sx={{ width: '100%' }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
         <Typography sx={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, mb: 0.5 }}>

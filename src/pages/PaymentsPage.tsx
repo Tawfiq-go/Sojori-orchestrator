@@ -372,7 +372,7 @@ export function PaymentsPage() {
 
   return (
     <DashboardWrapper>
-      <Box sx={{ p: { xs: 2, md: 3 }, bgcolor: T.bg0, minHeight: '100vh' }}>
+      <Box sx={{ width: '100%', bgcolor: T.bg0, minHeight: '100vh' }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={2}

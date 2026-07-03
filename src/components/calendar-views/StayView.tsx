@@ -24,6 +24,7 @@ import {
   type DisplayCleanliness,
 } from '../../utils/cleanlinessDisplay';
 import { PLANNING_VISIBLE_DAYS, getPlanningGridScrollLeft } from '../../utils/planningViewDates';
+import { DASHBOARD_PAGE, DASHBOARD_PAGE_FILL_SX } from '../../constants/dashboardLayout';
 
 export type StayViewVariant = 'tasks' | 'reservations';
 
@@ -318,15 +319,14 @@ export default function StayView({
 
   return (
     <Box sx={{
-      maxWidth: fillViewport ? 'none' : 1440,
-      mx: fillViewport ? 0 : 'auto',
+      ...DASHBOARD_PAGE_FILL_SX,
       p: fillViewport
         ? 0
         : compactLayout
-          ? { xs: '2px 4px 4px', md: '4px 6px 6px' }
+          ? { xs: '2px 0 4px', md: '4px 0 6px' }
           : denseToolbar
-            ? { xs: 2, md: '8px 12px 16px' }
-            : { xs: 2, md: '20px 24px 50px' },
+            ? { xs: DASHBOARD_PAGE.padY.xs, md: '8px 0 16px' }
+            : { xs: DASHBOARD_PAGE.padY.xs, md: '20px 0 50px' },
       height: flexFill ? '100%' : undefined,
       minHeight: flexFill ? 0 : undefined,
       display: flexFill ? 'flex' : 'block',

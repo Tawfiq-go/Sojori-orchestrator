@@ -110,3 +110,31 @@ export function bookingSourceTone(
   if (s.includes('booking')) return 'booking';
   return 'default';
 }
+
+/** Airbnb : réponse aux avis possible pendant 14 jours après le départ (pas de limite Booking). */
+export const AIRBNB_REVIEW_REPLY_WINDOW_DAYS = 14;
+
+export function isAirbnbChannel(channelName?: string): boolean {
+  return (channelName || '').toLowerCase().includes('airbnb');
+}
+
+export function isAirbnbReviewReplyWindowExpired(
+  checkOutDate?: string,
+  channelName?: string,
+): boolean {
+  if (!isAirbnbChannel(channelName) || !checkOutDate) return false;
+  const departure = new Date(checkOutDate);
+  if (Number.isNaN(departure.getTime())) return false;
+  const deadline = new Date(departure);
+  deadline.setDate(deadline.getDate() + AIRBNB_REVIEW_REPLY_WINDOW_DAYS);
+  return Date.now() > deadline.getTime();
+}
+
+export function airbnbReviewReplyWindowLabel(checkOutDate?: string): string | undefined {
+  if (!checkOutDate) return undefined;
+  const departure = new Date(checkOutDate);
+  if (Number.isNaN(departure.getTime())) return undefined;
+  const deadline = new Date(departure);
+  deadline.setDate(deadline.getDate() + AIRBNB_REVIEW_REPLY_WINDOW_DAYS);
+  return deadline.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}

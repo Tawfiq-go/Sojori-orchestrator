@@ -12,7 +12,7 @@ import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
 import type { Thread } from '../../types/unifiedInbox.types';
 import type { InboxReservationData } from '../../types/inboxReservation.types';
 import { otaChannelColor, otaChannelFromName } from '../unified-inbox/inboxMappers';
-import { formatThreadWhen, normalizeBookingSource } from '../unified-inbox/inboxFormat';
+import { formatThreadWhen, normalizeBookingSource, isAirbnbReviewReplyWindowExpired, airbnbReviewReplyWindowLabel } from '../unified-inbox/inboxFormat';
 
 interface ReviewRow {
   id: string;
@@ -216,6 +216,12 @@ export default function ReviewsTabV2() {
 
   const reviewsGlobalSearchActive = searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN;
 
+  const airbnbReplyWindowClosed =
+    active != null && isAirbnbReviewReplyWindowExpired(active.checkOutDate, active.channel);
+  const airbnbReplyWindowReason = airbnbReplyWindowClosed
+    ? `La fenêtre de réponse Airbnb est terminée (14 jours après le départ, soit jusqu'au ${airbnbReviewReplyWindowLabel(active?.checkOutDate) || '—'}).`
+    : undefined;
+
   const reservation: InboxReservationData | undefined = active
     ? {
         reservationNumber: active.reservationNumber,
@@ -231,7 +237,7 @@ export default function ReviewsTabV2() {
     : undefined;
 
   const handlePublish = async () => {
-    if (!active || !replyText.trim()) return;
+    if (!active || !replyText.trim() || airbnbReplyWindowClosed) return;
     setSending(true);
     try {
       await messagesService.replyToReview(active.threadId, replyText.trim());
@@ -317,6 +323,8 @@ export default function ReviewsTabV2() {
               onAISuggestion={() => setShowAIModal(true)}
               sending={sending}
               otaPlatform={normalizeBookingSource(active.channel)}
+              replyDisabled={airbnbReplyWindowClosed}
+              replyDisabledReason={airbnbReplyWindowReason}
             />
             <ConversationDetails
               thread={activeThread}

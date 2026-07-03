@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import { DASHBOARD_PAGE_FILL_SX } from '../constants/dashboardLayout';
 import WhatsAppTabV2 from '../components/communications/WhatsAppTabV2';
 import StaffWhatsAppTabV2 from '../components/communications/StaffWhatsAppTabV2';
 import MessagesOTATabV2 from '../components/communications/MessagesOTATabV2';
@@ -167,9 +168,7 @@ export default function CommunicationsHubPage() {
     <DashboardWrapper breadcrumb={['Communications', 'Inbox']}>
       <Box
         sx={{
-          maxWidth: 1600,
-          mx: 'auto',
-          px: { xs: 1.5, md: 2 },
+          ...DASHBOARD_PAGE_FILL_SX,
           minHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
           maxHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
           display: 'flex',

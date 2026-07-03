@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { Box, Stack, Typography, Slider, Button, IconButton, Switch, FormControlLabel, TextField } from '@mui/material';
-import { T } from '../_tokens';
+import { T, DP_LAYOUT_SX } from '../_tokens';
 
 export type PricingMode = 'prudent' | 'equilibre' | 'agressif';
 
@@ -121,8 +121,7 @@ export default function PricingControls(props: PricingControlsProps) {
       display: 'grid',
       gridTemplateColumns: { xs: '1fr', md: '1.15fr 1fr' },
       gap: 2,
-      maxWidth: 1380,
-      mx: 'auto',
+      ...DP_LAYOUT_SX,
     }}>
       <CtrlBlock title="💰 Bornes de prix">
         {boundsContextHint ? (
