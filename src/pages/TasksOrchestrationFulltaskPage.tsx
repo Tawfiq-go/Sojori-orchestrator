@@ -18,9 +18,11 @@ import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwne
 import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
+import { useAuth } from '../hooks/useAuth';
 import { ORCHESTRATION_ADMIN_OWNER_ID, ORCHESTRATION_ADMIN_EMAIL } from '../constants/orchestrationAdmin';
 import type { OrchestrationConfigLoadMeta } from '../services/fulltaskApi';
 import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
+import { isPlatformAdminRole, normalizeUserRole } from '../utils/taskScope.utils';
 
 function newCatalogId(): string {
   return `msg_${Date.now()}`;
@@ -40,7 +42,20 @@ function isAdminOwnerRow(owner: { _id?: string; id?: string; email?: string }): 
 
 function TasksOrchestrationFulltaskPageInner() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
   const subTab = parseOrchestrationSubTab(searchParams.get('tab'));
+  const showWhatsAppConfigTab = useMemo(
+    () => isPlatformAdminRole(normalizeUserRole(user?.role)),
+    [user?.role],
+  );
+
+  useEffect(() => {
+    if (!showWhatsAppConfigTab && subTab === 'config') {
+      const next = new URLSearchParams(searchParams);
+      next.delete('tab');
+      setSearchParams(next, { replace: true });
+    }
+  }, [showWhatsAppConfigTab, subTab, searchParams, setSearchParams]);
 
   const ownerScope = useFulltaskConfigOwner();
   const { ownerKey, ownerDisplayName, ownerKeyDetail, isAdminTemplate, hideOwnerScopeLabels } =
@@ -127,10 +142,10 @@ function TasksOrchestrationFulltaskPageInner() {
         const doc = unwrapFulltaskData<Record<string, unknown>>(raw);
         if (!doc) {
           if (!background) {
-            setCatalog([]);
+            setCatalog(mergeCatalogWithClaudeDefaults([]));
             setLoadState('empty');
             setLoadError(null);
-            setConfigSource(null);
+            setConfigSource(meta?.configSource ?? 'global_template');
           }
         } else {
           const catN = (doc.messageCatalog as unknown[] | undefined)?.length ?? 0;
@@ -157,7 +172,8 @@ function TasksOrchestrationFulltaskPageInner() {
           } else if (err.response?.status === 404) {
             setLoadError(null);
             setLoadState('empty');
-            setConfigSource(null);
+            setConfigSource('global_template');
+            setCatalog(mergeCatalogWithClaudeDefaults([]));
           } else {
             setLoadError(
               err.response?.data?.error ||
@@ -427,6 +443,7 @@ function TasksOrchestrationFulltaskPageInner() {
       ) : null}
       <OrchestrationPageView
         hideOwnerScope={hideOwnerScopeLabels}
+        showWhatsAppConfigTab={showWhatsAppConfigTab}
         ownerDisplayName={hideOwnerScopeLabels ? undefined : effectiveDisplayName}
         ownerKeyDetail={hideOwnerScopeLabels ? undefined : effectiveKeyDetail}
         initialSubTab={subTab}

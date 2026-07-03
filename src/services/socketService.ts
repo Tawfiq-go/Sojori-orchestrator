@@ -1,9 +1,19 @@
 import { io, type Socket } from 'socket.io-client';
 import { getToken } from '../utils/authUtils';
+import { resolveDevApiOrigin } from '../config/resolveDevApiOrigin';
 
 const SOCKET_PATH = '/api/v1/sockets/connect';
 
 let socket: Socket | null = null;
+
+/**
+ * Origine socket.io : relatif en local (proxy Vite → dev.sojori.com), absolu en prod
+ * (app.sojori.com ne peut pas servir de WebSocket — Vercel renvoie index.html → HTTP 200).
+ */
+function resolveSocketOrigin(): string | undefined {
+  const origin = resolveDevApiOrigin();
+  return origin || undefined;
+}
 
 /**
  * Singleton par onglet navigateur : une seule connexion socket.io partagée
@@ -12,7 +22,7 @@ let socket: Socket | null = null;
 export function getSocket(): Socket {
   if (socket) return socket;
 
-  socket = io({
+  socket = io(resolveSocketOrigin(), {
     path: SOCKET_PATH,
     auth: (cb) => cb({ token: getToken() }),
     transports: ['websocket', 'polling'],

@@ -329,7 +329,7 @@ export default function PlansReservationPage() {
 
   return (
     <DashboardWrapper breadcrumb={['Tâches', 'Orchestration', 'Plans réservation']} compactMain>
-      {!loading && (
+      {!loading && showAdminConfigSource && (
         <div
           style={{
             margin: '0 0 10px',
@@ -365,9 +365,18 @@ export default function PlansReservationPage() {
       )}
       {!loading && !error && totalCount === 0 && reservations.length === 0 && !hasActiveQuery && (
         <div style={{ padding: 24, color: 'var(--t3, #7a756c)', fontSize: 13 }}>
-          Aucun plan en base. Configurez l&apos;orchestration sur{' '}
-          <Link to="/tasks/orchestration-config">Orchestration config</Link>, puis créez une réservation
-          (ou rejouez <code>create.reservation</code>) pour générer un plan.
+          {showAdminConfigSource ? (
+            <>
+              Aucun plan en base. Configurez l&apos;orchestration sur{' '}
+              <Link to="/tasks/orchestration-config">Orchestration config</Link>, puis créez une réservation
+              (ou rejouez <code>create.reservation</code>) pour générer un plan.
+            </>
+          ) : (
+            <>
+              Aucun plan pour le moment. Les plans de séjour apparaissent automatiquement lorsque vous
+              recevez une nouvelle réservation confirmée.
+            </>
+          )}
         </div>
       )}
       {showPlanLayout && (

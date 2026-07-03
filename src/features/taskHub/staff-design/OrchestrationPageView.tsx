@@ -33,6 +33,8 @@ interface Props {
   ownerKeyDetail?: string;
   /** Compte PM unique : ne pas répéter le nom / id propriétaire sous le hero. */
   hideOwnerScope?: boolean;
+  /** Admin plateforme : onglet Config WhatsApp Meta (templates srv-fulltask). */
+  showWhatsAppConfigTab?: boolean;
   ownerScopeExtra?: ReactNode;
 }
 
@@ -79,6 +81,7 @@ export default function OrchestrationPageView({
   ownerDisplayName,
   ownerKeyDetail,
   hideOwnerScope = false,
+  showWhatsAppConfigTab = false,
   ownerScopeExtra,
 }: Props) {
   const sortableSensors = useOrchSortableSensors();
@@ -87,6 +90,13 @@ export default function OrchestrationPageView({
   useEffect(() => {
     setSubTab(initialSubTab);
   }, [initialSubTab]);
+
+  useEffect(() => {
+    if (!showWhatsAppConfigTab && subTab === 'config') {
+      setSubTab('messages');
+      onSubTabChange?.('messages');
+    }
+  }, [showWhatsAppConfigTab, subTab, onSubTabChange]);
 
   const selectSubTab = (tab: OrchestrationSubTab) => {
     setSubTab(tab);
@@ -229,16 +239,18 @@ export default function OrchestrationPageView({
         >
           <span>💬</span> Messages <span className="ct">{catalog.length}</span>
         </button>
-        <button
-          type="button"
-          className={`sub-tab${subTab === 'config' ? ' on' : ''}`}
-          onClick={() => selectSubTab('config')}
-        >
-          <span>📲</span> Config <span className="ct">WA</span>
-        </button>
+        {showWhatsAppConfigTab ? (
+          <button
+            type="button"
+            className={`sub-tab${subTab === 'config' ? ' on' : ''}`}
+            onClick={() => selectSubTab('config')}
+          >
+            <span>📲</span> Config <span className="ct">WA</span>
+          </button>
+        ) : null}
       </div>
 
-      {subTab === 'config' && <OrchestrationWhatsAppTab />}
+      {showWhatsAppConfigTab && subTab === 'config' && <OrchestrationWhatsAppTab />}
 
       {subTab === 'messages' && (
         <div>
