@@ -41,11 +41,13 @@ function OnboardingWizardShell({
 }
 
 export function PmOnboardingWizard({ embedded = false }: PmOnboardingWizardProps) {
-  const { user } = useAuth();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { showOwnerFilter, requestOwnerId, setSelectedOwnerId } = useAdminOwnerFilter();
-  const targetOwnerId = resolvePmOnboardingOwnerId(user, requestOwnerId, showOwnerFilter);
+  const targetOwnerId = authLoading
+    ? null
+    : resolvePmOnboardingOwnerId(user, requestOwnerId, showOwnerFilter);
   const isOwnerSelfService = !showOwnerFilter && isOwnerRole(user);
   const wizard = usePmOnboardingWizard(user, targetOwnerId, { isOwnerSelfService });
   const { draft, loading, saving, error, progressPercent, onboarding, lastSavedAt } = wizard;
@@ -131,6 +133,19 @@ export function PmOnboardingWizard({ embedded = false }: PmOnboardingWizardProps
         <Alert severity="warning" sx={{ mx: embedded ? 0 : { xs: 2, md: 3 }, mt: embedded ? 0 : 1 }}>
           Compte propriétaire introuvable pour cet on-boarding.
         </Alert>
+      </OnboardingWizardShell>
+    );
+  }
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <OnboardingWizardShell embedded={embedded}>
+        <div
+          className="ob-wizard ob-wizard--embedded"
+          style={{ display: 'flex', justifyContent: 'center', padding: embedded ? 48 : 80 }}
+        >
+          <CircularProgress sx={{ color: '#b8851a' }} />
+        </div>
       </OnboardingWizardShell>
     );
   }

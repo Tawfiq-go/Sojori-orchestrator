@@ -17,7 +17,7 @@ export function formatOnboardingWizardError(
   }
   if (status === 403) {
     return opts?.isOwnerSelfService
-      ? 'Accès refusé — reconnectez-vous avec votre compte Owner (PM).'
+      ? 'Accès refusé — votre session ne correspond pas à ce compte PM. Déconnectez-vous puis reconnectez-vous avec le compte Owner (ex. gouacht@gmail.com).'
       : 'Accès refusé (403) — vérifiez que le PM est bien sélectionné dans le filtre propriétaire.';
   }
   if (status === 405) {
