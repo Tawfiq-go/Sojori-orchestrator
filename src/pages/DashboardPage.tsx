@@ -61,6 +61,7 @@ import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import { usePmSimulation } from '../context/PmSimulationContext';
 import { useAuth } from '../hooks/useAuth';
 import { dashboardDebugEnabled, logDashboard, logDashboardApiDetail, logDashboardKpisSummary } from '../utils/dashboardDebug';
+import { AdminSessionSummary } from '../components/dashboard/AdminSessionSummary';
 import { canAccessProtectedRoutes } from '../utils/devApiAccess';
 import { getToken } from '../utils/authUtils';
 import type {
@@ -473,6 +474,8 @@ function DashboardPageContent() {
           Generer report
         </Button>
       </PageHeader>
+
+      <AdminSessionSummary />
 
       {ownerScopeUnset ? (
         <Alert severity="info" sx={{ mb: 2 }}>

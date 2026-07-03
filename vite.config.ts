@@ -106,10 +106,23 @@ const apiDevProxy = {
 const devPort = Number(process.env.VITE_DEV_PORT || 4174)
 const devHmrPort = Number(process.env.VITE_HMR_PORT || devPort)
 
+const appBuildSha =
+  process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
+  process.env.VITE_APP_BUILD_SHA?.slice(0, 7) ||
+  'local'
+const appBuildAt = new Date().toISOString()
+const appDeployEnv = process.env.VERCEL_ENV || process.env.NODE_ENV || 'development'
+
 // https://vite.dev/config/
 export default defineConfig({
   appType: 'spa',
   plugins: [react(), tailwindcss()],
+
+  define: {
+    'import.meta.env.VITE_APP_BUILD_SHA': JSON.stringify(appBuildSha),
+    'import.meta.env.VITE_APP_BUILD_AT': JSON.stringify(appBuildAt),
+    'import.meta.env.VITE_APP_DEPLOY_ENV': JSON.stringify(appDeployEnv),
+  },
 
   // ⚡ OPTIMISATION PERFORMANCE - Pré-bundling agressif des dépendances
   optimizeDeps: {
