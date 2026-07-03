@@ -16,6 +16,7 @@ import {
   wizardVisibleProgressPercent,
 } from '../wizardNavigation';
 import { formatOnboardingWizardError } from '../onboardingOwnerUrl';
+import { applyWizardDeadlinesToOwnerModel } from '../apply/applyWizardDeadlinesToOwnerModel';
 
 export interface UsePmOnboardingWizardResult {
   loading: boolean;
@@ -34,6 +35,8 @@ export interface UsePmOnboardingWizardResult {
   setPath: (path: WizardDraft['path']) => void;
   /** Sauvegarde le brouillon sans changer d'étape */
   saveDraft: () => Promise<boolean>;
+  /** Étape 6 : pousse délais → fulltask + owner_orchestrations (srv-listing) */
+  applyDeadlinesToOwnerModel: () => Promise<{ ok: boolean; message?: string }>;
   /** Sauvegarde + valide l'étape courante + passe à la suivante */
   validateCurrentPanel: () => Promise<boolean>;
   saveAndExit: () => Promise<void>;
@@ -151,6 +154,40 @@ export function usePmOnboardingWizard(
     return persist({ emitEvent: true });
   }, [persist]);
 
+  const applyDeadlinesToOwnerModel = useCallback(async () => {
+    if (!ownerId) return { ok: false, message: 'Owner introuvable' };
+    if (draftRef.current.currentPanel !== 6) {
+      return { ok: false, message: 'Disponible sur l’étape Délais & relances' };
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await persist({ emitEvent: true });
+      if (!saved) return { ok: false, message: 'Brouillon non enregistré' };
+      const result = await applyWizardDeadlinesToOwnerModel(ownerId, draftRef.current);
+      if (result.warnings.length) {
+        console.info('[onboarding-deadlines-apply]', result.warnings);
+      }
+      const parts = [
+        result.deadlinesPatched > 0 ? `${result.deadlinesPatched} workflow(s) fulltask` : null,
+        result.executionReplaced > 0 ? `${result.executionReplaced} execution(s) owner` : null,
+        result.executionSynced > 0 ? `${result.executionSynced} sync fulltask→owner` : null,
+      ].filter(Boolean);
+      return {
+        ok: result.deadlinesPatched > 0 || result.executionReplaced > 0 || result.executionSynced > 0,
+        message: parts.length
+          ? `Modèle orchestration owner mis à jour · ${parts.join(' · ')}`
+          : result.warnings[0] ?? 'Aucune mise à jour — lancez d’abord l’étape Parcours client + Suite Plan',
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Apply délais impossible';
+      setError(msg);
+      return { ok: false, message: msg };
+    } finally {
+      setSaving(false);
+    }
+  }, [ownerId, persist]);
+
   const validateCurrentPanel = useCallback(async () => {
     const panel = draftRef.current.currentPanel;
     const next = nextWizardPanel(panel);
@@ -191,8 +228,16 @@ export function usePmOnboardingWizard(
     };
     draftRef.current = nextDraft;
     setDraft(nextDraft);
-    return persist({ emitEvent: true, panelValidated: panel });
-  }, [persist]);
+    const persisted = await persist({ emitEvent: true, panelValidated: panel });
+    if (persisted && panel === 6 && ownerId) {
+      try {
+        await applyWizardDeadlinesToOwnerModel(ownerId, nextDraft);
+      } catch (e) {
+        console.warn('[onboarding] apply deadlines on continue', e);
+      }
+    }
+    return persisted;
+  }, [persist, ownerId]);
 
   const saveAndExit = useCallback(async () => {
     await persist({ emitEvent: true });
@@ -232,6 +277,7 @@ export function usePmOnboardingWizard(
     updatePanel,
     setPath,
     saveDraft,
+    applyDeadlinesToOwnerModel,
     validateCurrentPanel,
     saveAndExit,
     completeOnboarding,

@@ -3,6 +3,7 @@ import { unwrapFulltaskData } from '../../../utils/unwrapFulltaskResponse';
 import { replaceOwnerOrchestrationCapabilities } from '../../orchestrationListingV3/ownerOrchestrationReplace';
 import type { WizardDraft, WizardPanel7 } from '../types';
 import { applyWizardDeadlines } from './applyWizardDeadlines';
+import { syncOwnerExecutionFromFulltask } from './syncOwnerExecutionFromFulltask';
 import { buildOwnerOrchestrationCapabilitiesFromWizard } from './buildOwnerOrchestrationFromWizard';
 import listingsService from '../../../services/listingsService';
 import { applyWithTimeout } from './applyWithTimeout';
@@ -182,6 +183,16 @@ export async function applyOnboardingOrchestration(
       );
       if (deadlinesPatched === 0) {
         warnings.push('Délais staff : aucun workflow mis à jour (seed fulltask manquant ?)');
+      }
+
+      const executionSynced = await applyWithTimeout('Sync execution fulltask → owner', 45_000, () =>
+        syncOwnerExecutionFromFulltask(ownerId),
+      );
+      if (executionSynced > 0) {
+        finalAuditLines = [
+          ...finalAuditLines,
+          `Execution orchestration synchronisée depuis fulltask (${executionSynced} service(s))`,
+        ];
       }
     } catch (e) {
       warnings.push(e instanceof Error ? e.message : 'Délais non appliqués');

@@ -174,9 +174,9 @@ export default function OnboardingStepDeadlines({ deadlines, capabilities, onCha
       <div className="eyebrow">Étape 5 · Délais & relances</div>
       <h1>Rythme opérationnel par service</h1>
       <p className="sub">
-        Relances client, assignation staff, rappels et escalade — alignés sur les services activés à
-        l&apos;étape précédente. Tolérance acceptation staff :{' '}
-        <strong>{deadlines.acceptToleranceHours ?? 3}h</strong>.
+        Relances client, assignation staff, rappels et escalade — enregistrés dans le{' '}
+        <strong>modèle orchestration owner</strong> (srv-listing) et les workflows fulltask.
+        Visible sur <strong>Annonces → Modèle orchestration</strong> après « Enregistrer → modèle owner ».
       </p>
 
       <div className="ob-team-config-lbl" style={{ marginBottom: 8 }}>
