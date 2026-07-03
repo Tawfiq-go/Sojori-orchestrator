@@ -17,7 +17,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { T } from '../_tokens';
+import { T, DP_LAYOUT_SX } from '../_tokens';
 import DataEmptyPlaceholder from '../DataEmptyPlaceholder';
 import { formatDistanceMeters } from '../utils/geoDistance';
 import type { CompsMarketStats, SelfVsComps } from '../utils/computeCompsMarketStats';
@@ -106,7 +106,7 @@ export default function MarketCharts(props: MarketChartsProps) {
   const cs = compsStats;
 
   return (
-    <Box sx={{ maxWidth: 1380, mx: 'auto' }}>
+    <Box sx={{ ...DP_LAYOUT_SX }}>
       <Typography sx={{ fontSize: 11, color: T.text3, mb: 2, lineHeight: 1.45 }}>
         Tendances ville en haut · <b>comps vs marché</b> en bas (avant le tableau §07).
       </Typography>

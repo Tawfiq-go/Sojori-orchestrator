@@ -13,6 +13,8 @@ interface ReviewCenterPanelProps {
   onAISuggestion?: () => void;
   sending?: boolean;
   otaPlatform?: string;
+  replyDisabled?: boolean;
+  replyDisabledReason?: string;
 }
 
 export default function ReviewCenterPanel({
@@ -25,6 +27,8 @@ export default function ReviewCenterPanel({
   onAISuggestion,
   sending,
   otaPlatform = 'Airbnb',
+  replyDisabled = false,
+  replyDisabledReason,
 }: ReviewCenterPanelProps) {
   const rating = reservation?.reviewRating ?? 5;
   const replied = reservation?.reviewReplied;
@@ -117,6 +121,24 @@ export default function ReviewCenterPanel({
           >
             <Typography sx={{ fontSize: 10, fontWeight: 700, mb: 1 }}>✅ Votre réponse publiée</Typography>
             {reservation.reviewResponse}
+          </Box>
+        ) : replyDisabled ? (
+          <Box
+            sx={{
+              bgcolor: T.bg2,
+              border: `1px solid ${T.border}`,
+              borderRadius: '11px',
+              p: 2,
+              opacity: 0.85,
+            }}
+          >
+            <Typography sx={{ fontSize: 12, fontWeight: 700, mb: 1, color: T.text3 }}>
+              Fenêtre de réponse expirée
+            </Typography>
+            <Typography sx={{ fontSize: 12.5, color: T.text3, lineHeight: 1.5 }}>
+              {replyDisabledReason ||
+                'La fenêtre de réponse Airbnb (14 jours après le départ) est terminée. Vous ne pouvez plus publier de réponse sur cette plateforme.'}
+            </Typography>
           </Box>
         ) : (
           <Box

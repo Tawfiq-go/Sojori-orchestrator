@@ -17,6 +17,14 @@ export const T = {
   info: '#0673b3', infoTint: 'rgba(6,115,179,0.10)',
 } as const;
 
+/** Pleine largeur contenu — pas de max-width centré (aligné shell dashboard). */
+export const DP_LAYOUT_SX = {
+  width: '100%',
+  maxWidth: 'none',
+  mx: 0,
+  minWidth: 0,
+} as const;
+
 /* ─── Types alignés API ──────────────────────────────────────── */
 export type PricingMode = 'prudent' | 'balanced' | 'aggressive';
 export type DayStatus = 'std' | 'prem' | 'clamp' | 'override' | 'anomaly' | 'blocked';

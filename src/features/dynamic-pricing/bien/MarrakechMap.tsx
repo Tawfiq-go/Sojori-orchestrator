@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Box, Stack, Typography } from '@mui/material';
-import { T } from '../_tokens';
+import { T, DP_LAYOUT_SX } from '../_tokens';
 import {
   DEFAULT_MAP_BASEMAP,
   MAP_BASEMAPS,
@@ -274,8 +274,7 @@ export default function MarrakechMap({
   return (
     <Box
       sx={{
-        maxWidth: 1380,
-        mx: 'auto',
+        ...DP_LAYOUT_SX,
         bgcolor: T.bg1,
         border: `1px solid ${T.border}`,
         borderRadius: 2.25,

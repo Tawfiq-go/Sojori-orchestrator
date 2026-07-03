@@ -2,7 +2,7 @@
  * Vue détail bien — mode test marché brut (snapshot Mongo, pas d’appel API au chargement).
  */
 import { Box, Stack, Typography } from '@mui/material';
-import { T } from './_tokens';
+import { T, DP_LAYOUT_SX } from './_tokens';
 import type { PortfolioRow } from './_tokens';
 import {
   AIRROI_RAW_COLUMNS,
@@ -48,7 +48,7 @@ export default function BienAirroiView({ row }: { row: PortfolioRow }) {
   const airroiCols = AIRROI_RAW_COLUMNS.filter((c) => c.field);
 
   return (
-    <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, md: 3.5 }, pb: 4 }}>
+    <Box sx={{ ...DP_LAYOUT_SX, pb: 4 }}>
       <Box
         sx={{
           p: 2,

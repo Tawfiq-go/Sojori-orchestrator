@@ -54,7 +54,7 @@ export function SettingsHubPage() {
   return (
     <DashboardWrapper breadcrumb={['Paramètres', sectionLabel]}>
       <LegacyReduxProvider>
-        <div style={{ padding: '22px 28px 50px', maxWidth: 1680, margin: '0 auto' }}>
+        <div style={{ padding: '22px 0 50px' }}>
           <div style={{ marginBottom: 20 }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: T.text, margin: 0 }}>Paramètres</h1>
             <p style={{ fontSize: 13, color: T.text3, margin: '6px 0 0' }}>

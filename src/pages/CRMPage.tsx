@@ -57,7 +57,7 @@ export function CRMPage() {
 
   return (
     <DashboardWrapper breadcrumb={['CRM', 'Sojori CRM']}>
-      <div style={{ padding: '22px 28px 50px', maxWidth: 1500, margin: '0 auto' }}>
+      <div style={{ padding: '22px 0 50px' }}>
         {/* Header */}
         <div style={{
           marginBottom: 20,

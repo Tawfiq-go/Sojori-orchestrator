@@ -157,7 +157,7 @@ const OrchestrationView = () => {
   }
 
   return (
-    <Box className="so-fade-in" sx={{ p: { xs: 2, md: 3 }, minHeight: '100%' }}>
+    <Box sx={{ width: '100%', minHeight: '100%' }}>
       {/* En-tête */}
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 2.25 }}>
         <Typography sx={{

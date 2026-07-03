@@ -502,7 +502,7 @@ export function ReservationsPage() {
   if (isLoading && reservations.length === 0) {
     return (
       <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
-        <Box sx={{ p: { xs: 2, md: 3 } }}>
+        <Box sx={{ width: '100%' }}>
           {/* Header skeleton */}
           <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
@@ -570,7 +570,7 @@ export function ReservationsPage() {
 
   return (
     <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
-      <Box sx={{ p: { xs: 2, md: 3 } }}>
+      <Box sx={{ width: '100%' }}>
         {/* Toolbar */}
         <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>

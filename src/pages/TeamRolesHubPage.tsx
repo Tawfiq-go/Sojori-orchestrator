@@ -143,7 +143,7 @@ export function TeamRolesHubPage() {
       <LegacyReduxProvider>
       <AdminOwnerScopeLayout inlineBar showTopBar={isPlatformAdmin}>
       <TeamViewProvider>
-      <div style={{ padding: '22px 28px 50px', maxWidth: 1680, margin: '0 auto', background: TEAM_T.bg0, minHeight: '100%' }}>
+      <div style={{ padding: '22px 0 50px', background: TEAM_T.bg0, minHeight: '100%' }}>
         <div style={{ marginBottom: 14 }}>
           <h1 style={{ fontSize: 26, fontWeight: 800, color: T.text, margin: 0 }}>Équipe & Rôles</h1>
           <p style={{ fontSize: 12.5, color: T.text3, margin: '4px 0 0' }}>
@@ -202,6 +202,10 @@ export function TeamRolesHubPage() {
             borderRadius: 14,
             padding: section === 'worker' || section === 'onboarding' ? 12 : 16,
             minHeight: 480,
+            width: '100%',
+            minWidth: 0,
+            boxSizing: 'border-box',
+            overflow: 'hidden',
           }}
         >
           {section === 'property-manager' && isPlatformAdmin ? <PropertyManagerTab /> : null}

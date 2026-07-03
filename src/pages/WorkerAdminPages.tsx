@@ -21,7 +21,7 @@ function WorkerFormShell({
     <DashboardWrapper breadcrumb={breadcrumb}>
       <LegacyReduxProvider>
         <AdminOwnerScopeLayout inlineBar={false} showTopBar={false}>
-          <Box sx={{ bgcolor: '#f6f5f1', minHeight: '100%' }}>{children}</Box>
+          <Box sx={{ bgcolor: '#f6f5f1', minHeight: '100%', width: '100%', minWidth: 0 }}>{children}</Box>
         </AdminOwnerScopeLayout>
       </LegacyReduxProvider>
     </DashboardWrapper>

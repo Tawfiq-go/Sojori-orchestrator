@@ -4,7 +4,7 @@ import ChatbotListingSnapshotView from '../features/chatbot/ChatbotListingSnapsh
 
 export default function ChatbotListingSnapshotPage() {
   return (
-    <DashboardWrapper breadcrumb={['Catalogue', 'Annonces', 'Listing chatbot']} compactMain>
+    <DashboardWrapper breadcrumb={['Catalogue', 'Annonces', 'Listing chatbot']}>
       <CatalogueAnnoncesTabs />
       <ChatbotListingSnapshotView />
     </DashboardWrapper>

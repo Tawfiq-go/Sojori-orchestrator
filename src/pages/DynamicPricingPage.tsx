@@ -19,6 +19,7 @@ import DynamicPricingBreadcrumb, {
 import { buildListingDataCoverage } from '../features/dynamic-pricing/bienDataCoverage';
 import { listingMatchesCityScope, normalizeCityKey } from '../features/dynamic-pricing/cityScope';
 import { applyPilotPricing, type PilotPricingConfigDto } from '../services/dynamicPricingApi';
+import { DP_LAYOUT_SX } from '../features/dynamic-pricing/_tokens';
 
 /**
  * Dynamic Pricing — portefeuille (tableau brut) + fiche bien (dashboard design Claude).
@@ -193,12 +194,13 @@ export function DynamicPricingPage() {
   ) : null;
 
   return (
-    <DashboardWrapper breadcrumb={['Dynamic Pricing']} compactMain>
+    <DashboardWrapper breadcrumb={['Dynamic Pricing']}>
       <Box
         sx={{
           bgcolor: T.bg0,
           minHeight: 'calc(100vh - 64px)',
-          mx: listingId ? 0 : { xs: -2, md: -3 },
+          width: '100%',
+          minWidth: 0,
         }}
       >
         <DynamicPricingShell dataActions={isBienPage ? bienAirroiModal : portfolioAirroiModal}>
@@ -235,9 +237,7 @@ export function DynamicPricingPage() {
               {bienDetail.row?.airroiSnapshotAt ? (
                 <Typography
                   sx={{
-                    maxWidth: 1440,
-                    mx: 'auto',
-                    px: { xs: 2, md: 3.5 },
+                    ...DP_LAYOUT_SX,
                     pb: 0.5,
                     fontSize: 11,
                     color: T.text3,
@@ -253,9 +253,7 @@ export function DynamicPricingPage() {
               ) : (
                 <Typography
                   sx={{
-                    maxWidth: 1440,
-                    mx: 'auto',
-                    px: { xs: 2, md: 3.5 },
+                    ...DP_LAYOUT_SX,
                     pb: 0.5,
                     fontSize: 11.5,
                     color: T.warning,

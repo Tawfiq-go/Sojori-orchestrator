@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Box, Container, Grid, Paper, Typography, TextField, Stack, Button, Avatar, List, ListItemButton, ListItemText, Table, TableHead, TableRow, TableCell, TableBody, Checkbox, FormControlLabel, Chip, useMediaQuery, Switch, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, MenuItem, InputAdornment } from '@mui/material';
+import { Box, Grid, Paper, Typography, TextField, Stack, Button, Avatar, List, ListItemButton, ListItemText, Table, TableHead, TableRow, TableCell, TableBody, Checkbox, FormControlLabel, Chip, useMediaQuery, Switch, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, MenuItem, InputAdornment } from '@mui/material';
 import Autocomplete from '@mui/material/Autocomplete';
 import { useTheme } from '@mui/material/styles';
 import { Tooltip } from '@mui/material';
@@ -465,8 +465,11 @@ export default function CreateWorkerForm() {
       consumeApiError(err, formikRef.current?.setFieldError);
     }
   };
-  return <Container maxWidth="lg" sx={{
-    py: 3
+  return <Box sx={{
+    width: '100%',
+    maxWidth: 1200,
+    py: 3,
+    minWidth: 0,
   }}>
       <ToastContainer position="top-right" autoClose={3000} />
       {/* header bar */}
@@ -1079,5 +1082,5 @@ export default function CreateWorkerForm() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>;
+    </Box>;
 }

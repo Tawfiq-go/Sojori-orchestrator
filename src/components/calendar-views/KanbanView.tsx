@@ -6,6 +6,7 @@
 import React, { useMemo, useState } from 'react';
 import { Box, Stack, Typography, Button, IconButton } from '@mui/material';
 import { T, type TaskItem, type TaskStatus, TASK_CHIP_STYLES, initialsFrom, SOJORI_KEYFRAMES } from './_shared';
+import { DASHBOARD_PAGE, DASHBOARD_PAGE_FILL_SX } from '../../constants/dashboardLayout';
 
 const STAFF_COLOR_BY_INDEX = [
   'linear-gradient(135deg,#a5f3fc,#0e7490)',
@@ -49,7 +50,7 @@ export default function KanbanView({ tasks, onTaskMove, onTaskClick, onNewTask }
   }, [tasks, grouped]);
 
   return (
-    <Box sx={{ maxWidth: 1500, mx: 'auto', p: { xs: 2, md: '20px 24px' } }}>
+    <Box sx={{ ...DASHBOARD_PAGE_FILL_SX, py: DASHBOARD_PAGE.padY, px: 0 }}>
       <style>{SOJORI_KEYFRAMES}</style>
 
       <Stack direction="row" gap={1.75} sx={{ alignItems: 'baseline',  mb: 1.75 }}>

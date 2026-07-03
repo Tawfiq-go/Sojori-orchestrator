@@ -1970,7 +1970,7 @@ export function TasksListPage() {
   if (loading && tasks.length === 0) {
     return (
       <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
-        <Box sx={{ p: { xs: 2, md: 3 } }}>
+        <Box sx={{ width: '100%' }}>
           {/* Header skeleton */}
           <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5 }}>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
@@ -2024,7 +2024,9 @@ export function TasksListPage() {
       <Box sx={{
         display: 'flex',
         flexDirection: 'column',
-        p: isMobile ? { xs: 1, md: 1.25 } : { xs: 2, md: 3 },
+        width: '100%',
+        px: 0,
+        py: isMobile ? { xs: 1, md: 1.25 } : { xs: 2, md: 3 },
       }}>
         {!listFullscreen && isMobile ? (
         <Paper sx={{

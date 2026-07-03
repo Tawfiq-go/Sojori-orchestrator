@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Box, Stack, Typography, Button, Collapse } from '@mui/material';
-import { T } from './_tokens';
+import { T, DP_LAYOUT_SX } from './_tokens';
 import {
   fetchPortfolioEstimateDiff,
   type ListingEstimateDiffDto,
@@ -102,7 +102,7 @@ export function PricingAuditView() {
 
   return (
     <DashboardWrapper>
-      <Box sx={{ maxWidth: 1100, mx: 'auto', py: 2, px: { xs: 2, md: 3 } }}>
+      <Box sx={{ ...DP_LAYOUT_SX, py: 2 }}>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
           <Typography sx={{ fontSize: 20, fontWeight: 800, color: T.text }}>
             Audit estimations Dynamic Pricing

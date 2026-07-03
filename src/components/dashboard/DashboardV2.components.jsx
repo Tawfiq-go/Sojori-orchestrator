@@ -25,6 +25,7 @@ import { AdminBusinessScopeTopFilter } from '../AdminOwnerScope/AdminBusinessSco
 import { AdminSessionTopBarButton } from './AdminSessionTopBarButton';
 import { SidebarUserProfileMenu } from './SidebarUserProfileMenu';
 import { LISTING_LAYOUT } from '../../constants/listingLayout';
+import { DASHBOARD_PAGE } from '../../constants/dashboardLayout';
 import { IconColored } from './IconColored';
 import { SojoriBrandLockup } from '../brand/SojoriBrandLogo';
 import {
@@ -188,7 +189,7 @@ export function DashboardLayout({
         `,
           pt: compactMain ? LISTING_LAYOUT.mainPadTop : { xs: 2, md: '24px' },
           pb: compactMain ? LISTING_LAYOUT.mainPadBottom : { xs: 2, md: '48px' },
-          px: compactMain ? LISTING_LAYOUT.mainPadX : 0,
+          px: compactMain ? LISTING_LAYOUT.mainPadX : DASHBOARD_PAGE.padX,
         }}
       >
         {children}

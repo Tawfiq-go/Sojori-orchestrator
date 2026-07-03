@@ -11,6 +11,7 @@ import {
   T, TEAM, type TaskItem, type StaffMember, genDays,
   KpiPill, DayHeader, TaskChip, LoadBar, SOJORI_KEYFRAMES, initialsFrom,
 } from './_shared';
+import { DASHBOARD_PAGE, DASHBOARD_PAGE_FILL_SX } from '../../constants/dashboardLayout';
 
 export interface TeamViewProps {
   startDate: Date;
@@ -90,7 +91,7 @@ export default function TeamView({
   }, [filtered]);
 
   return (
-    <Box sx={{ maxWidth: 1440, mx: 'auto', p: { xs: 2, md: '20px 24px 50px' } }}>
+    <Box sx={{ ...DASHBOARD_PAGE_FILL_SX, py: DASHBOARD_PAGE.padY, px: 0 }}>
       <style>{SOJORI_KEYFRAMES}</style>
 
       <Stack direction="row" gap={1.75} sx={{ alignItems: 'baseline',  mb: 1.75 }}>

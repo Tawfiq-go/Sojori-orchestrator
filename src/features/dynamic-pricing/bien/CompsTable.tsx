@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import { Box, Stack, Typography } from '@mui/material';
-import { T } from '../_tokens';
+import { T, DP_LAYOUT_SX } from '../_tokens';
 import DataEmptyPlaceholder from '../DataEmptyPlaceholder';
 import { formatDistanceMeters } from '../utils/geoDistance';
 
@@ -71,7 +71,7 @@ export default function CompsTable({ rows }: CompsTableProps) {
 
   return (
     <Box sx={{
-      maxWidth: 1380, mx: 'auto',
+      ...DP_LAYOUT_SX,
       bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
       overflow: 'hidden', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
     }}>

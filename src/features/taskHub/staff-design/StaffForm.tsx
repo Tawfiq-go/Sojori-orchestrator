@@ -65,7 +65,7 @@ export default function StaffForm({ initial, allListings, onSave, onCancel, onDe
   };
 
   return (
-    <Box sx={{ maxWidth: 720, mx: 'auto', p: 3 }}>
+    <Box sx={{ width: '100%', maxWidth: 1200, p: 3 }}>
       {/* Header */}
       <Stack direction="row" gap={1.5} sx={{ alignItems: 'center',  mb: 3 }}>
         <Typography sx={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.025em' }}>

@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { Box, Stack, Typography, Tooltip } from '@mui/material';
-import { T } from '../_tokens';
+import { T, DP_LAYOUT_SX } from '../_tokens';
 import DataEmptyPlaceholder from '../DataEmptyPlaceholder';
 
 export interface StatsCardsProps {
@@ -54,9 +54,7 @@ export default function StatsCards({
         display: 'grid',
         gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, 1fr)' },
         gap: 2.25,
-        maxWidth: 1380,
-        mx: 'auto',
-        width: '100%',
+        ...DP_LAYOUT_SX,
       }}
     >
       <StatCard label="POTENTIEL ANNUEL" emoji="⭐" tooltip={potentialHint ?? 'revenue-estimate marché non branché'}>

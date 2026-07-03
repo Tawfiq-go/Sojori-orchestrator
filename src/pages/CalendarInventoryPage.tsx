@@ -255,7 +255,7 @@ export function CalendarInventoryPage() {
 
   return (
     <DashboardWrapper breadcrumb={['Calendrier']}>
-      <Box sx={{ p: { xs: 2, md: '0' }, maxWidth: 1500, mx: 'auto' }} onMouseUp={onDayMouseUp}>
+      <Box sx={{ width: '100%' }} onMouseUp={onDayMouseUp}>
       <PageHeader title="Calendrier · Inventaire & Prix">
         <ViewToggle
           options={[

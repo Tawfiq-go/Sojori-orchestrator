@@ -216,7 +216,7 @@ export function InventoryPage() {
 
   return (
     <DashboardWrapper breadcrumb={['Catalogue', 'Inventaire']}>
-      <Box sx={{ p: { xs: 2, md: 0 }, maxWidth: 1600, mx: 'auto' }} onMouseUp={onDayMouseUp}>
+      <Box sx={{ width: '100%' }} onMouseUp={onDayMouseUp}>
         <PageHeader title="Inventaire & Disponibilités" count={`${stats.available}/${days.filter(d => d.inMonth).length} jours`}>
           <Select
             size="small"
