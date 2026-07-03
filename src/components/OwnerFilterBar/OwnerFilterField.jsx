@@ -9,6 +9,7 @@ import {
 } from 'context/AdminOwnerFilterContext';
 import { getOwners } from 'services/teamDashboardApi';
 import { getOwnerListLabel } from 'utils/ownerDisplay.utils';
+import { autocompleteOptionLiProps } from 'utils/autocompleteOptionLiProps';
 
 const ALL_SENTINEL = { __all: true, _id: '' };
 
@@ -201,21 +202,21 @@ export default function OwnerFilterField({
           ...inputSx,
         }}
         renderOption={(props, option) => {
-          const { key, ...restProps } = props;
+          const { key, liProps } = autocompleteOptionLiProps(props);
           if (option?.__all) {
             return (
-              <li key={key} {...restProps}>
+              <Box component="li" key={key} {...liProps}>
                 <Typography variant="body2" fontWeight={700}>
                   {allLabel}
                 </Typography>
-              </li>
+              </Box>
             );
           }
           const secondary = [option?.email, option?.fillCompany?.companyName || option?.companyName]
             .filter(Boolean)
             .join(' · ');
           return (
-            <li key={key} {...restProps}>
+            <Box component="li" key={key} {...liProps}>
               <Typography variant="body2" fontWeight={600}>
                 {getOwnerListLabel(option)}
               </Typography>
@@ -224,7 +225,7 @@ export default function OwnerFilterField({
                   {secondary}
                 </Typography>
               ) : null}
-            </li>
+            </Box>
           );
         }}
         renderInput={(params) => (

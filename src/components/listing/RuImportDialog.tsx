@@ -16,6 +16,7 @@ import { listingsService } from '../../services/listingsService';
 import { getOwners } from '../../services/teamDashboardApi';
 import { useRuImportProgress, getRuImportProgressPercent } from '../../hooks/useRuImportProgress';
 import { useAuth } from '../../hooks/useAuth';
+import { autocompleteOptionLiProps } from '../../utils/autocompleteOptionLiProps';
 
 interface RuImportDialogProps {
   open: boolean;
@@ -269,16 +270,19 @@ export function RuImportDialog({ open, onClose, cities: citiesProp = [], onImpor
               loading={loadingOwners}
               getOptionLabel={(o) => `${o.firstName || ''} ${o.lastName || ''} — ${o.email || ''}`.trim()}
               isOptionEqualToValue={(a, b) => a._id === b._id}
-              renderOption={(props, o) => (
-                <li {...props} key={o._id}>
+              renderOption={(props, o) => {
+                const { key, liProps } = autocompleteOptionLiProps(props);
+                return (
+                  <Box component="li" key={key ?? o._id} {...liProps}>
                   <Box>
                     <Typography variant="body2" fontWeight={600}>{o.firstName} {o.lastName}</Typography>
                     <Typography variant="caption" color="text.secondary">
                       {o.email} {o.ruOwnerId ? `· RU#${o.ruOwnerId}` : ''}
                     </Typography>
                   </Box>
-                </li>
-              )}
+                </Box>
+                );
+              }}
               renderInput={(params) => (
                 <TextField
                   {...params}

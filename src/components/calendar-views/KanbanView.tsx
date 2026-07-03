@@ -52,7 +52,7 @@ export default function KanbanView({ tasks, onTaskMove, onTaskClick, onNewTask }
     <Box sx={{ maxWidth: 1500, mx: 'auto', p: { xs: 2, md: '20px 24px' } }}>
       <style>{SOJORI_KEYFRAMES}</style>
 
-      <Stack direction="row" alignItems="baseline" gap={1.75} sx={{ mb: 1.75 }}>
+      <Stack direction="row" gap={1.75} sx={{ alignItems: 'baseline',  mb: 1.75 }}>
         <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.025em' }}>Kanban Tâches</Typography>
         <Typography sx={{ fontSize: 12, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
           {tasks.length} tâches · drag pour changer de statut
@@ -63,7 +63,7 @@ export default function KanbanView({ tasks, onTaskMove, onTaskClick, onNewTask }
         </Stack>
       </Stack>
 
-      <Stack direction="row" gap={1.5} flexWrap="wrap" sx={{ mb: 1.75, alignItems: 'center' }}>
+      <Stack direction="row" gap={1.5} sx={{ flexWrap: 'wrap',  mb: 1.75, alignItems: 'center' }}>
         <Typography sx={{ ml: 'auto', fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
           Glisser-déposer entre colonnes pour changer le statut
         </Typography>
@@ -89,7 +89,7 @@ export default function KanbanView({ tasks, onTaskMove, onTaskClick, onNewTask }
       </Box>
 
       {/* Stats footer */}
-      <Stack direction="row" gap={1.75} flexWrap="wrap" sx={{
+      <Stack direction="row" gap={1.75} sx={{ flexWrap: 'wrap', 
         mt: 1.75, p: '12px 16px', bgcolor: T.bg1, border: `1px solid ${T.border}`,
         borderRadius: 1.4,
       }}>
@@ -126,7 +126,7 @@ function Column({ col, tasks, isDropTarget, onDragOver, onDragLeave, onDrop, onT
       display: 'flex', flexDirection: 'column', minHeight: 580,
       boxShadow: '0 1px 2px rgba(20,17,10,0.04)', overflow: 'hidden',
     }}>
-      <Stack direction="row" alignItems="center" gap={1.125} sx={{
+      <Stack direction="row" gap={1.125} sx={{ alignItems: 'center', 
         p: '12px 14px', borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2, flexShrink: 0,
       }}>
         <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: toneMap.dot }} />
@@ -195,7 +195,7 @@ function TaskCard({ task, staffIndex, onDragStart, onClick }: {
         }} />
       )}
 
-      <Stack direction="row" alignItems="center" gap={0.875} sx={{ mb: 0.75 }}>
+      <Stack direction="row" gap={0.875} sx={{ alignItems: 'center',  mb: 0.75 }}>
         <Box sx={{ fontSize: 14, flexShrink: 0 }}>{style.emoji}</Box>
         <Typography sx={{
           fontSize: 9, fontFamily: '"Geist Mono", monospace', fontWeight: 700,
@@ -220,7 +220,7 @@ function TaskCard({ task, staffIndex, onDragStart, onClick }: {
         {task.reservationNumber && <> · #{task.reservationNumber}</>}
       </Typography>
 
-      <Stack direction="row" alignItems="center" gap={0.75} sx={{
+      <Stack direction="row" gap={0.75} sx={{ alignItems: 'center', 
         pt: 1, borderTop: `1px dashed ${T.border}`,
       }}>
         <Box sx={{

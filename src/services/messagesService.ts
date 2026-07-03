@@ -19,22 +19,20 @@ import type {
 } from '../types/messages.types';
 
 /**
- * Guest WhatsApp → srv-fullchatbot via proxy srv-admin (/fullchatbot/debug/*).
+ * Guest WhatsApp → srv-fullchatbot /api/v1/ai/debug/* (JWT direct, ingress).
+ * Ne pas passer par srv-admin/fullchatbot/debug : le proxy admin ne relayait pas
+ * Authorization → srv-fullchatbot renvoyait forceLogout → déconnexion inbox.
  * Staff WhatsApp → srv-fulltask (hasReservation=false dans getConversations).
  */
 function resolveGuestWhatsappDebugBase(): string {
-  if (import.meta.env.DEV && typeof window !== 'undefined' && !import.meta.env.VITE_API_URL) {
-    return '/api/v1/admin/fullchatbot/debug';
-  }
-  return `${MICROSERVICE_BASE_URL.SRV_ADMIN}/fullchatbot/debug`;
+  return `${MICROSERVICE_BASE_URL.SRV_CHATBOT}/debug`;
 }
 
 type WhatsappInboxKind = 'guest' | 'staff';
 
-function shouldLogServiceError(error: unknown, silent?: boolean): boolean {
-  if (silent) return false;
-  const status = (error as { response?: { status?: number } })?.response?.status;
-  return status !== 401;
+function shouldLogServiceError(_error: unknown, _silent?: boolean): boolean {
+  /* Échecs HTTP loggés une fois par apiClient (tag HTTP, dédupliqué). */
+  return false;
 }
 
 function resolveWhatsappDebugBase(kind: WhatsappInboxKind): string {

@@ -844,7 +844,7 @@ const CronMonitoringView = () => {
             </TextField>
 
             {(period === 'dayview-custom-day' || period === 'dayview-custom-range') && (
-              <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" sx={{ width: '100%' }}>
+              <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap',  width: '100%' }}>
                 {period === 'dayview-custom-day' && (
                   <TextField
                     label="Date"
@@ -882,7 +882,7 @@ const CronMonitoringView = () => {
               </Stack>
             )}
 
-            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ display: { xs: 'none', md: 'flex' } }}>
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center',  display: { xs: 'none', md: 'flex' } }}>
               {[
                 { label: 'Hier', offset: -1 },
                 { label: "Aujourd'hui", offset: 0 },

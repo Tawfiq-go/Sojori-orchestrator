@@ -46,7 +46,7 @@ export default function ImportProgressTimeline({ progress }: ImportProgressTimel
             borderRadius: '99px', transition: 'width 0.6s ease',
           }} />
         </Box>
-        <Stack direction="row" justifyContent="space-between" sx={{
+        <Stack direction="row" sx={{ justifyContent: 'space-between', 
           fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace',
           letterSpacing: '0.04em', fontWeight: 700, textTransform: 'uppercase',
         }}>
@@ -131,7 +131,7 @@ function StepRow({ step, meta, isLast }: { step: StepState; meta: { label: strin
         <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.25, lineHeight: 1.45 }}>{meta.sub}</Typography>
 
         {status === 'error' && step.errorMessage && (
-          <Stack direction="row" alignItems="center" gap={0.625} sx={{
+          <Stack direction="row" gap={0.625} sx={{ alignItems: 'center', 
             mt: 0.5, fontSize: 11, color: T.error, fontWeight: 600,
           }}>
             <Box>⚠</Box>{step.errorMessage}

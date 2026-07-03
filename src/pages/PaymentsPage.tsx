@@ -143,7 +143,7 @@ function DetailGrid({ row }: { row: PaymentAuditRow }) {
             <Typography sx={{ fontSize: 10, color: T.text3, textTransform: 'uppercase' }}>
               {f.label}
             </Typography>
-            <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
               <Typography
                 sx={{
                   fontSize: 12,

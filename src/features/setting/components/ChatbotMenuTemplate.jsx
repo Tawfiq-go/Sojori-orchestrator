@@ -274,7 +274,7 @@ const ChatbotMenuTemplate = ({
       }} justifyContent="space-between" spacing={2} sx={{
         mb: 3
       }}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Chip label={metadata.version ? t('menu_whatsapp_version', {
             defaultValue: 'Version v{{version}}',
             version: metadata.version

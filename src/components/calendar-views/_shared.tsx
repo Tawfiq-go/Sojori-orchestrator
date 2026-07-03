@@ -276,7 +276,7 @@ export function KpiPill({ icon, count, label, tone = 'neutral', alert }: {
   };
   const s = map[tone];
   return (
-    <Stack direction="row" alignItems="center" gap={1} sx={{
+    <Stack direction="row" gap={1} sx={{ alignItems: 'center', 
       px: 1.625, py: 1, borderRadius: '999px',
       bgcolor: T.bg1, border: `1px solid ${T.border}`, boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
     }}>

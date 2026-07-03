@@ -41,6 +41,7 @@ export default function ChatbotListingSnapshotView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | undefined>();
   const loadRequestIdRef = useRef(0);
+  const filterOwnerKey = filterOwnerIds.join(',');
 
   const prefetchListing = useCallback(
     (listingId: string) => {
@@ -58,12 +59,12 @@ export default function ChatbotListingSnapshotView() {
     [queryClient],
   );
 
-  const fetchSnapshotList = useCallback(async (opts?: { isBootstrap?: boolean }) => {
+  const fetchSnapshotList = useCallback(async (opts?: { bootstrap?: boolean }) => {
     if (!scopeFetchReady) return;
     const requestId = ++loadRequestIdRef.current;
-    const isBootstrap = opts?.isBootstrap ?? !listReady;
+    const bootstrap = opts?.bootstrap ?? false;
 
-    if (isBootstrap) {
+    if (bootstrap) {
       setIsLoading(true);
       setListReady(false);
     } else {
@@ -94,22 +95,28 @@ export default function ChatbotListingSnapshotView() {
       setListReady(true);
     } catch (e) {
       if (requestId !== loadRequestIdRef.current) return;
-      if (isBootstrap) setRows([]);
+      if (bootstrap) setRows([]);
       setError(e instanceof Error ? e.message : 'Erreur chargement');
-      if (!getCachedChatbotListingSnapshots()?.length) setListReady(true);
+      setListReady(true);
     } finally {
       if (requestId === loadRequestIdRef.current) {
         setIsLoading(false);
         setIsRefreshing(false);
       }
     }
-  }, [listReady, scopeFetchReady, filterOwnerIds.join(',')]);
+  }, [scopeFetchReady, filterOwnerKey]);
 
   useEffect(() => {
     if (!scopeFetchReady) return;
-    invalidateChatbotListingSnapshotsCache();
-    void fetchSnapshotList({ isBootstrap: true });
-  }, [scopeFetchReady, filterOwnerIds.join(','), fetchSnapshotList]);
+    const cached = getCachedChatbotListingSnapshots();
+    if (cached?.length) {
+      setRows(cached);
+      setListReady(true);
+      void fetchSnapshotList({ bootstrap: false });
+      return;
+    }
+    void fetchSnapshotList({ bootstrap: true });
+  }, [scopeFetchReady, filterOwnerKey, fetchSnapshotList]);
 
   useEffect(() => {
     const fromUrl = searchParams.get('listingId')?.trim();
@@ -143,10 +150,10 @@ export default function ChatbotListingSnapshotView() {
 
   const handleRefresh = () => {
     invalidateChatbotListingSnapshotsCache();
-    void fetchSnapshotList({ isBootstrap: false });
+    void fetchSnapshotList({ bootstrap: false });
   };
 
-  const showSidebarSpinner = (isLoading && !listReady) || (listReady && isRefreshing);
+  const showInitialSpinner = isLoading && !listReady;
 
   return (
     <ChatbotHubShell crumb="Listing sync">
@@ -166,10 +173,13 @@ export default function ChatbotListingSnapshotView() {
         </div>
 
         <div className="sb-list">
-          {showSidebarSpinner && (
-            <div className="cb-loading">{isRefreshing ? 'Mise à jour…' : 'Chargement…'}</div>
+          {showInitialSpinner && <div className="cb-loading">Chargement…</div>}
+          {isRefreshing && listReady && (
+            <div className="cb-loading" style={{ opacity: 0.85, padding: '6px 10px', fontSize: 12 }}>
+              Mise à jour…
+            </div>
           )}
-          {listReady && !showSidebarSpinner &&
+          {listReady &&
             filtered.map((r) => {
               const active = r.listingId === selectedId;
               const color = avatarColor(r.listingId);
@@ -201,7 +211,7 @@ export default function ChatbotListingSnapshotView() {
                 </div>
               );
             })}
-          {listReady && !showSidebarSpinner && !filtered.length && (
+          {listReady && !filtered.length && !showInitialSpinner && (
             <div className="cb-empty">
               <span className="em">📭</span>
               Aucun listing actif synchronisé — lancez Sync FullChatbot.

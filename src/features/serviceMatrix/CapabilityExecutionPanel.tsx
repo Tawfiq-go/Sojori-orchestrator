@@ -610,9 +610,9 @@ export default function CapabilityExecutionPanel({
     <Stack spacing={2}>
       {section === 'all' && (
         <Box sx={{ p: 1.5, bgcolor: T.bg2, borderRadius: 1.25, border: `1px solid ${T.border}` }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Workflow · {workflow.label}</Typography>
-            <Stack direction="row" alignItems="center" gap={0.75}>
+            <Stack direction="row" gap={0.75} sx={{ alignItems: 'center' }}>
               <Typography sx={{ fontSize: 12, color: T.text3 }}>Actif</Typography>
               <Switch
                 checked={workflow.enabled !== false}
@@ -779,7 +779,7 @@ function RelancesApercu({
           const msg = catalog.find(c => c.id === (r.catalogMessageId || r.template))?.label || '—';
           const ref = REF_OPTIONS.find(o => o.value === r.reference)?.label ?? r.reference;
           return (
-            <Stack key={r.id} direction="row" spacing={2} alignItems="baseline" sx={{ fontSize: 12 }}>
+            <Stack key={r.id} direction="row" spacing={2} sx={{ alignItems: 'baseline',  fontSize: 12 }}>
               <Typography sx={{ fontWeight: 800, color: T.primaryDeep, minWidth: 28 }}>#{i + 1}</Typography>
               <Typography sx={{ fontFamily: '"Geist Mono", monospace', color: T.text2, minWidth: 108 }}>
                 {formatRelanceTiming(r)}
@@ -1374,9 +1374,9 @@ function StaffAssignmentPanel({
                 <Typography sx={{ fontSize: 10, fontWeight: 800, color: T.text3, mb: 0.75 }}>
                   Créneaux find-another
                 </Typography>
-                <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap' }}>
                   {(assignment.attemptWindows || []).map((time, idx) => (
-                    <Stack key={`${idx}-${time}`} direction="row" alignItems="center" spacing={0.25}>
+                    <Stack key={`${idx}-${time}`} direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
                       <Box sx={{ width: 108 }}>
                         <HourSlotStepperDisplay
                           value={time}

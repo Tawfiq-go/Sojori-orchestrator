@@ -277,6 +277,7 @@ const NAV_ICON_BY_ID = {
   'comms/ota': MailOutlined,
   'comms/leads': PersonSearchOutlined,
   'comms/reviews': StarBorderOutlined,
+  crm: InboxOutlined,
   requests: InboxOutlined,
   reviews: StarBorderOutlined,
   listings: HomeWorkOutlined,

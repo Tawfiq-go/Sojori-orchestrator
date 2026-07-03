@@ -5,8 +5,6 @@ import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageHeader,
   DataTable,
-  StatCard,
-  StatsRow,
   Badge,
   SourcePill,
   AIChip,
@@ -196,6 +194,66 @@ const calculateStats = (reviews: ReviewRow[]) => {
 
   return { totalReviews, avgRating, replyRate, urgentCount, byOTA, byListing };
 };
+
+function ReviewsKpiPill({
+  emoji,
+  label,
+  value,
+  active,
+  urgent,
+  onClick,
+}: {
+  emoji: string;
+  label: string;
+  value: string;
+  active?: boolean;
+  urgent?: boolean;
+  onClick?: () => void;
+}) {
+  const clickable = Boolean(onClick);
+  return (
+    <Box
+      component={clickable ? 'button' : 'span'}
+      type={clickable ? 'button' : undefined}
+      onClick={onClick}
+      sx={{
+        all: clickable ? 'unset' : undefined,
+        boxSizing: 'border-box',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.5,
+        px: 1,
+        py: '3px',
+        borderRadius: 999,
+        border: `1px solid ${active ? t.primary : urgent ? 'rgba(239,68,68,0.35)' : t.border}`,
+        bgcolor: active ? t.primaryTint : urgent ? 'rgba(239,68,68,0.06)' : t.bg1,
+        color: urgent && !active ? t.error : t.text3,
+        fontFamily: 'inherit',
+        fontSize: 10.5,
+        fontWeight: 600,
+        lineHeight: 1.2,
+        cursor: clickable ? 'pointer' : 'default',
+        whiteSpace: 'nowrap',
+        transition: 'all 0.15s',
+        '&:hover': clickable ? { bgcolor: active ? t.primaryTint : t.bg2, color: t.text2 } : undefined,
+      }}
+    >
+      <span aria-hidden>{emoji}</span>
+      <span>{label}</span>
+      <Box
+        component="span"
+        sx={{
+          fontFamily: 'Geist Mono, monospace',
+          fontWeight: 800,
+          color: active ? t.primaryDeep : urgent ? t.error : t.text,
+          fontSize: 10,
+        }}
+      >
+        {value}
+      </Box>
+    </Box>
+  );
+}
 
 const AI_RESPONSE_TEMPLATES = [
   "Thank you for your wonderful feedback! We're delighted you enjoyed your stay. We hope to welcome you back soon!",
@@ -511,6 +569,11 @@ export function ReviewsPage() {
     [columnOrder, columns, visibleColumns],
   );
 
+  const airbnbStats = stats.byOTA['Airbnb'];
+  const bookingStats = stats.byOTA['Booking.com'];
+  const airbnbAvg = airbnbStats?.count ? (airbnbStats.totalRating / airbnbStats.count).toFixed(1) : '—';
+  const bookingAvg = bookingStats?.count ? (bookingStats.totalRating / bookingStats.count).toFixed(1) : '—';
+
   return (
     <DashboardWrapper breadcrumb={['CRM', 'Avis & Reviews']}>
       <PageHeader title="Avis & Reviews" count={`${filteredReviews.length}`}>
@@ -540,45 +603,96 @@ export function ReviewsPage() {
         </Button>
       </PageHeader>
 
-      <StatsRow>
-        <StatCard
-          label="Moyenne globale"
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 0.75,
+          mt: -1.5,
+          mb: 1.25,
+          px: 0.5,
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: 10.5,
+            color: t.text3,
+            fontFamily: 'Geist Mono, monospace',
+            mr: 0.25,
+            flexShrink: 0,
+          }}
+        >
+          {stats.totalReviews} avis · {stats.replyRate.toFixed(0)}% répondus
+        </Typography>
+        <ReviewsKpiPill
+          emoji="⭐"
+          label="Moy."
           value={`${stats.avgRating.toFixed(1)}/5`}
-          icon="⭐"
-          trend={`${stats.totalReviews} avis`}
         />
-        <StatCard
-          label="Taux de réponse"
+        <ReviewsKpiPill
+          emoji="💬"
+          label="Réponse"
           value={`${stats.replyRate.toFixed(0)}%`}
-          icon="💬"
-          trend={`${stats.totalReviews - stats.urgentCount} répondus`}
-          trendUp={stats.replyRate > 80}
+          active={filters.status === 'replied'}
+          onClick={() =>
+            setFilters((prev) => ({
+              ...prev,
+              status: prev.status === 'replied' ? 'all' : 'replied',
+            }))
+          }
         />
-        <StatCard label="À répondre" value={`${stats.urgentCount}`} icon="🔥" trend="Urgent" color="error" />
-        <StatCard
+        <ReviewsKpiPill
+          emoji="🔥"
+          label="Urgent"
+          value={`${stats.urgentCount}`}
+          urgent={stats.urgentCount > 0}
+          active={filters.status === 'urgent'}
+          onClick={() =>
+            setFilters((prev) => ({
+              ...prev,
+              status: prev.status === 'urgent' ? 'all' : 'urgent',
+            }))
+          }
+        />
+        <ReviewsKpiPill
+          emoji="🅰️"
           label="Airbnb"
-          value={`${stats.byOTA['Airbnb']?.count ? (stats.byOTA['Airbnb'].totalRating / stats.byOTA['Airbnb'].count).toFixed(1) : '—'}/5`}
-          icon="🅰️"
-          trend={`${stats.byOTA['Airbnb']?.count || 0} avis`}
+          value={`${airbnbAvg}/5`}
+          active={filters.ota === 'Airbnb'}
+          onClick={() =>
+            setFilters((prev) => ({
+              ...prev,
+              ota: prev.ota === 'Airbnb' ? 'all' : 'Airbnb',
+            }))
+          }
         />
-        <StatCard
-          label="Booking.com"
-          value={`${stats.byOTA['Booking.com']?.count ? (stats.byOTA['Booking.com'].totalRating / stats.byOTA['Booking.com'].count).toFixed(1) : '—'}/5`}
-          icon="🅱️"
-          trend={`${stats.byOTA['Booking.com']?.count || 0} avis`}
+        <ReviewsKpiPill
+          emoji="🅱️"
+          label="Booking"
+          value={`${bookingAvg}/5`}
+          active={filters.ota === 'Booking.com'}
+          onClick={() =>
+            setFilters((prev) => ({
+              ...prev,
+              ota: prev.ota === 'Booking.com' ? 'all' : 'Booking.com',
+            }))
+          }
         />
-      </StatsRow>
+      </Box>
 
       <Stack
         direction="row"
-        spacing={2}
+        spacing={1.25}
+        flexWrap="wrap"
+        useFlexGap
         sx={{
-          px: { xs: 2, md: 3 },
-          py: 2,
+          px: { xs: 1.25, md: 1.5 },
+          py: 1,
           bgcolor: t.bg1,
-          borderRadius: '12px',
+          borderRadius: '10px',
           border: `1px solid ${t.border}`,
-          mb: 2,
+          mb: 1.5,
         }}
       >
         <TextField

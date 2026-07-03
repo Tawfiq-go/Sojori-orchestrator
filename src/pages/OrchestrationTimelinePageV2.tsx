@@ -150,7 +150,7 @@ const ActionCard: React.FC<ActionCardProps> = ({ action, actionType, workflow, o
         },
       }}
     >
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center',  mb: 0.5 }}>
         <Typography sx={{ fontSize: 14 }}>{icon}</Typography>
         <Typography sx={{ fontSize: 12, fontWeight: 700, color: statusColor }}>
           {label}
@@ -249,7 +249,7 @@ const WorkflowColumn: React.FC<WorkflowColumnProps> = ({
           {workflow.categoryDisplayLabel || workflow.category}
         </Typography>
 
-        <Stack direction="row" alignItems="center" spacing={0.5}>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           <Chip
             size="small"
             label={getStatusLabel(workflow.status)}
@@ -358,7 +358,7 @@ const DetailDrawer: React.FC<DetailDrawerProps> = ({
       <Box sx={{ width: 450, height: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <Box sx={{ p: 2, borderBottom: `1px solid ${t.border}`, bgcolor: t.bg2 }}>
-          <Stack direction="row" alignItems="center" spacing={2}>
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
             <IconButton size="small" onClick={onClose}>
               <CloseIcon />
             </IconButton>
@@ -548,7 +548,7 @@ export const OrchestrationTimelinePageV2: React.FC = () => {
     <DashboardWrapper breadcrumb={['Pilotage', 'Orchestration', 'Timeline']}>
       <Box sx={{ p: 3 }}>
         {/* Header */}
-        <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center',  mb: 3 }}>
           <Button
             onClick={() => navigate('/admin/orchestrator')}
             startIcon={<ArrowBackIcon />}

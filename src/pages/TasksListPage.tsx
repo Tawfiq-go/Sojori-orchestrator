@@ -39,11 +39,14 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import moment from 'moment';
 import 'moment/locale/fr';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import { autocompleteOptionLiProps } from '../utils/autocompleteOptionLiProps';
 import {
   Badge,
   DataTable,
@@ -253,12 +256,14 @@ function Pill({
   active,
   onClick,
   color,
+  dense = false,
 }: {
   label: string;
   count: number;
   active: boolean;
   onClick: () => void;
   color: string;
+  dense?: boolean;
 }) {
   return (
     <Button
@@ -266,11 +271,11 @@ function Pill({
       onClick={onClick}
       sx={{
         textTransform: 'none',
-        fontSize: 10,
+        fontSize: dense ? 10 : 12,
         fontWeight: 600,
-        px: 0.55,
-        py: 0.1,
-        minHeight: 20,
+        px: dense ? 0.55 : 1.25,
+        py: dense ? 0.1 : 0.5,
+        minHeight: dense ? 20 : 28,
         borderRadius: 999,
         border: '1px solid',
         borderColor: active ? color : T.border,
@@ -287,8 +292,8 @@ function Pill({
       <Box
         component="span"
         sx={{
-          ml: 0.5,
-          fontSize: 9.5,
+          ml: dense ? 0.5 : 0.75,
+          fontSize: dense ? 9.5 : 10.5,
           fontWeight: 700,
           lineHeight: 1,
           bgcolor: active ? `${color}28` : T.bg3,
@@ -309,12 +314,40 @@ function KpiCompact({
   value,
   accent,
   onClick,
+  dense = false,
 }: {
   label: string;
   value: number;
   accent: string;
   onClick?: () => void;
+  dense?: boolean;
 }) {
+  if (!dense) {
+    return (
+      <Paper
+        sx={{
+          px: 1.25,
+          py: 0.75,
+          border: `1px solid ${T.border}`,
+          borderRadius: 1,
+          bgcolor: T.bg1,
+          cursor: onClick ? 'pointer' : 'default',
+          transition: 'all 100ms',
+          '&:hover': onClick ? { bgcolor: T.bg2, borderColor: accent, transform: 'translateY(-1px)' } : {},
+          minWidth: 70,
+        }}
+        onClick={onClick}
+      >
+        <Typography sx={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.text3, mb: 0.25 }}>
+          {label}
+        </Typography>
+        <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: accent, lineHeight: 1 }}>
+          {value}
+        </Typography>
+      </Paper>
+    );
+  }
+
   return (
     <Box
       component={onClick ? 'button' : 'div'}
@@ -363,11 +396,34 @@ function TasksScrollTable({
   columns,
   rows,
   onRowClick,
+  ultraCompact = false,
 }: {
   columns: TasksTableColumn[];
   rows: TaskListItem[];
   onRowClick: (task: TaskListItem) => void;
+  ultraCompact?: boolean;
 }) {
+  const table = (
+    <DataTable
+      columns={columns}
+      rows={rows.map((task) => ({ ...task, id: task._id }))}
+      hideRowActions
+      compact={ultraCompact}
+      ultraCompact={ultraCompact}
+      tableMinWidth={TASKS_TABLE_MIN_WIDTH}
+      headerTextTransform="none"
+      onRowClick={(row) => onRowClick(row as TaskListItem)}
+    />
+  );
+
+  if (!ultraCompact) {
+    return (
+      <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
+        <Box sx={{ overflowX: 'auto' }}>{table}</Box>
+      </Paper>
+    );
+  }
+
   return (
     <Box sx={{
       flex: 1,
@@ -388,16 +444,7 @@ function TasksScrollTable({
         bgcolor: T.bg1,
         '& > div': { border: 'none', boxShadow: 'none', borderRadius: 0 },
       }}>
-        <DataTable
-          columns={columns}
-          rows={rows.map((task) => ({ ...task, id: task._id }))}
-          hideRowActions
-          compact
-          ultraCompact
-          tableMinWidth={TASKS_TABLE_MIN_WIDTH}
-          headerTextTransform="none"
-          onRowClick={(row) => onRowClick(row as TaskListItem)}
-        />
+        {table}
       </Box>
     </Box>
   );
@@ -978,6 +1025,8 @@ function categorySubline(task: TaskListItem): ReactNode {
 }
 
 export function TasksListPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, loading: authLoading } = useAuth();
   const scope = usePmTasksScope();
 
@@ -1717,7 +1766,7 @@ export function TasksListPage() {
               >
                 {row.guestName || '—'}
               </Typography>
-              <Stack direction="row" spacing={0.5} alignItems="center">
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                 <OTABadge channel={channel} />
                 <Typography sx={{ fontSize: 14, lineHeight: 1 }} aria-label={countryLabel || 'Pays'}>
                   {flagFor(row.guestCountry)}
@@ -1862,6 +1911,7 @@ export function TasksListPage() {
         columns={visibleColumns}
         rows={displayTasks}
         onRowClick={openTaskDetail}
+        ultraCompact={isMobile}
       />
     ) : null;
 
@@ -1974,10 +2024,9 @@ export function TasksListPage() {
       <Box sx={{
         display: 'flex',
         flexDirection: 'column',
-        px: { xs: 1, md: 1.25 },
-        py: { xs: 0.75, md: 0.75 },
+        p: isMobile ? { xs: 1, md: 1.25 } : { xs: 2, md: 3 },
       }}>
-        {!listFullscreen && (
+        {!listFullscreen && isMobile ? (
         <Paper sx={{
           p: '4px 6px',
           mb: 0.5,
@@ -2076,15 +2125,15 @@ export function TasksListPage() {
               pb: 0.1,
             }}
           >
-            <Pill label="Auj." count={filterCounts.dueToday} active={quickFilterKey === 'dueToday'} onClick={() => toggleQuickFilter('dueToday')} color={T.info} />
-            <Pill label="Dem." count={filterCounts.dueTomorrow} active={quickFilterKey === 'dueTomorrow'} onClick={() => toggleQuickFilter('dueTomorrow')} color={T.warning} />
-            <Pill label="7j" count={filterCounts.due7d} active={quickFilterKey === 'due7d'} onClick={() => toggleQuickFilter('due7d')} color={T.primary} />
-            <Pill label="Urg." count={filterCounts.urgent} active={quickFilterKey === 'urgent'} onClick={() => toggleQuickFilter('urgent')} color={T.error} />
+            <Pill dense label="Auj." count={filterCounts.dueToday} active={quickFilterKey === 'dueToday'} onClick={() => toggleQuickFilter('dueToday')} color={T.info} />
+            <Pill dense label="Dem." count={filterCounts.dueTomorrow} active={quickFilterKey === 'dueTomorrow'} onClick={() => toggleQuickFilter('dueTomorrow')} color={T.warning} />
+            <Pill dense label="7j" count={filterCounts.due7d} active={quickFilterKey === 'due7d'} onClick={() => toggleQuickFilter('due7d')} color={T.primary} />
+            <Pill dense label="Urg." count={filterCounts.urgent} active={quickFilterKey === 'urgent'} onClick={() => toggleQuickFilter('urgent')} color={T.error} />
             <Box sx={{ width: '1px', height: 14, bgcolor: T.border, flexShrink: 0, mx: 0.15 }} />
-            <KpiCompact label="À tr." value={kpis.created} accent={T.info} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['CREATED'] })); setQuickFilterKey('none'); setPage(0); }} />
-            <KpiCompact label="Cours" value={kpis.inProgress} accent={T.warning} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] })); setQuickFilterKey('none'); setPage(0); }} />
-            <KpiCompact label="OK" value={kpis.completed} accent={T.success} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['COMPLETED'] })); setQuickFilterKey('none'); setPage(0); }} />
-            <KpiCompact label="Tot." value={kpis.total} accent={T.primaryDeep} />
+            <KpiCompact dense label="À tr." value={kpis.created} accent={T.info} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['CREATED'] })); setQuickFilterKey('none'); setPage(0); }} />
+            <KpiCompact dense label="Cours" value={kpis.inProgress} accent={T.warning} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] })); setQuickFilterKey('none'); setPage(0); }} />
+            <KpiCompact dense label="OK" value={kpis.completed} accent={T.success} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['COMPLETED'] })); setQuickFilterKey('none'); setPage(0); }} />
+            <KpiCompact dense label="Tot." value={kpis.total} accent={T.primaryDeep} />
           </Stack>
           </Box>
 
@@ -2101,17 +2150,211 @@ export function TasksListPage() {
             />
           </Box>
         </Paper>
-        )}
+        ) : null}
 
-        {error && !listFullscreen ? <Alert severity="error" sx={{ mb: 0.75, py: 0, flexShrink: 0 }}>{error}</Alert> : null}
+        {!listFullscreen && !isMobile ? (
+        <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+            <TextField
+              size="small"
+              placeholder="Code, invité, logement, type…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 18, color: T.text3 }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{ flex: 1, minWidth: 180, maxWidth: 320 }}
+            />
+            <Button
+              variant="contained"
+              size="small"
+              onClick={(e) => {
+                (e.currentTarget as HTMLElement).blur();
+                setAddTaskOpen(true);
+              }}
+              sx={{
+                textTransform: 'none',
+                bgcolor: T.primary,
+                color: '#fff',
+                fontWeight: 600,
+                px: 2,
+                '&:hover': { bgcolor: T.primaryDeep },
+                whiteSpace: 'nowrap',
+              }}
+            >
+              + Tâche
+            </Button>
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <Select
+                multiple
+                displayEmpty
+                value={listFilters.listingIds}
+                onChange={(e) => {
+                  setListFilters((p) => ({ ...p, listingIds: e.target.value as string[] }));
+                  setPage(0);
+                }}
+                renderValue={(s) => `Propriété · ${(s as string[]).length || 'toutes'}`}
+              >
+                {listings.map((lst) => (
+                  <MenuItem key={lst._id} value={lst._id}>
+                    <Checkbox checked={listFilters.listingIds.indexOf(lst._id) > -1} size="small" />
+                    <ListItemText primary={lst.name} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <Select
+                multiple
+                displayEmpty
+                value={listFilters.subTypes}
+                onChange={(e) => {
+                  setListFilters((p) => ({ ...p, subTypes: e.target.value as string[] }));
+                  setPage(0);
+                }}
+                renderValue={(s) => `Type · ${(s as string[]).length || 'tous'}`}
+              >
+                {CATEGORY_MULTI_OPTIONS.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    <Checkbox checked={listFilters.subTypes.indexOf(c.id) > -1} size="small" />
+                    <ListItemText primary={c.label} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <Select
+                multiple
+                displayEmpty
+                value={listFilters.statuses}
+                onChange={(e) => {
+                  const v = e.target.value as string[];
+                  setListFilters((p) => ({ ...p, statuses: v.length ? v : [...DEFAULT_TASK_STATUSES] }));
+                  setPage(0);
+                }}
+                renderValue={(s) => `Statut · ${(s as string[]).length || 'tous'}`}
+              >
+                {STATUS_MULTI_OPTIONS.map((st) => (
+                  <MenuItem key={st.id} value={st.id}>
+                    <Checkbox checked={listFilters.statuses.indexOf(st.id) > -1} size="small" />
+                    <ListItemText primary={st.label} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <Select
+                multiple
+                displayEmpty
+                value={listFilters.staffCodes}
+                onChange={(e) => {
+                  setListFilters((p) => ({ ...p, staffCodes: e.target.value as string[] }));
+                  setPage(0);
+                }}
+                renderValue={(s) => `Staff · ${(s as string[]).length || 'tous'}`}
+              >
+                {staff.map((m) => (
+                  <MenuItem key={m.staffCode} value={m.staffCode}>
+                    <Checkbox checked={listFilters.staffCodes.indexOf(m.staffCode) > -1} size="small" />
+                    <ListItemText primary={m.username} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 130 }}>
+              <Select
+                value={listFilters.origin}
+                onChange={(e) => {
+                  setListFilters((p) => ({ ...p, origin: e.target.value as typeof listFilters.origin }));
+                  setPage(0);
+                }}
+                renderValue={(v) =>
+                  v === 'task' ? 'Origine · Internes' : v === 'client' ? 'Origine · Client' : 'Origine · toutes'
+                }
+              >
+                <MenuItem value="all">Toutes</MenuItem>
+                <MenuItem value="task">Internes</MenuItem>
+                <MenuItem value="client">Client</MenuItem>
+              </Select>
+            </FormControl>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={openFiltersModal}
+              sx={{
+                textTransform: 'none',
+                borderColor: activeFiltersCount > 0 ? T.primary : T.border,
+                bgcolor: activeFiltersCount > 0 ? T.primaryTint : T.bg1,
+                color: T.primaryDeep,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Avancé{activeFiltersCount > 0 ? ` · ${activeFiltersCount}` : ''}
+            </Button>
+            <Tooltip title="Colonnes optionnelles">
+              <IconButton size="small" onClick={(e) => setColumnMenuAnchor(e.currentTarget)}>
+                <ViewColumnIcon sx={{ fontSize: 18, color: optionalColumnsOn > 0 ? T.primary : T.text3 }} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Réinitialiser les filtres">
+              <IconButton size="small" onClick={resetAllListFilters}>
+                <RefreshIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+            <ListFullscreenEnterBtn
+              onClick={() => setListFullscreen(true)}
+              disabled={displayTasks.length === 0}
+            />
+          </Stack>
+
+          <Stack direction="row" sx={{ mt: 1.5, gap: 0.75, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
+              <Pill label="Échéance auj." count={filterCounts.dueToday} active={quickFilterKey === 'dueToday'} onClick={() => toggleQuickFilter('dueToday')} color={T.info} />
+              <Pill label="Échéance demain" count={filterCounts.dueTomorrow} active={quickFilterKey === 'dueTomorrow'} onClick={() => toggleQuickFilter('dueTomorrow')} color={T.warning} />
+              <Pill label="Échéance 7 jours" count={filterCounts.due7d} active={quickFilterKey === 'due7d'} onClick={() => toggleQuickFilter('due7d')} color={T.primary} />
+              <Pill label="Urgent" count={filterCounts.urgent} active={quickFilterKey === 'urgent'} onClick={() => toggleQuickFilter('urgent')} color={T.error} />
+            </Stack>
+            <Stack direction="row" sx={{ gap: 0.75 }}>
+              <KpiCompact
+                label="À traiter"
+                value={kpis.created}
+                accent={T.info}
+                onClick={() => { setListFilters((p) => ({ ...p, statuses: ['CREATED'] })); setQuickFilterKey('none'); setPage(0); }}
+              />
+              <KpiCompact
+                label="En cours"
+                value={kpis.inProgress}
+                accent={T.warning}
+                onClick={() => { setListFilters((p) => ({ ...p, statuses: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] })); setQuickFilterKey('none'); setPage(0); }}
+              />
+              <KpiCompact
+                label="Terminé"
+                value={kpis.completed}
+                accent={T.success}
+                onClick={() => { setListFilters((p) => ({ ...p, statuses: ['COMPLETED'] })); setQuickFilterKey('none'); setPage(0); }}
+              />
+              <KpiCompact label="Total" value={kpis.total} accent={T.primaryDeep} />
+            </Stack>
+          </Stack>
+        </Paper>
+        ) : null}
+
+        {error && !listFullscreen ? <Alert severity="error" sx={{ mb: isMobile ? 0.75 : 2, py: isMobile ? 0 : undefined, flexShrink: 0 }}>{error}</Alert> : null}
 
         {loading && tasks.length === 0 ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4, flexShrink: 0 }}>
-            <CircularProgress size={32} sx={{ color: T.primary }} />
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: isMobile ? 4 : 8, flexShrink: 0 }}>
+            <CircularProgress size={isMobile ? 32 : 48} sx={{ color: T.primary }} />
           </Box>
         ) : null}
 
         {!listFullscreen && tasksTable ? (
+          isMobile ? (
           <Box sx={{
             minHeight: TABLE_VIEWPORT_HEIGHT,
             maxHeight: TABLE_VIEWPORT_HEIGHT,
@@ -2120,6 +2363,7 @@ export function TasksListPage() {
           }}>
             {tasksTable}
           </Box>
+          ) : tasksTable
         ) : null}
 
         {!listFullscreen && !loading && displayTasks.length === 0 ? (
@@ -2140,8 +2384,8 @@ export function TasksListPage() {
         ) : null}
 
         {!listFullscreen && !loading && displayTasks.length > 0 ? (
-          <Stack direction="row" sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
-            <Typography sx={{ fontSize: 11, color: T.text3 }}>
+          <Stack direction="row" sx={{ mt: isMobile ? 0.75 : 2, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
+            <Typography sx={{ fontSize: isMobile ? 11 : 13, color: T.text3 }}>
               {pagination.total > 0
                 ? `${page * rowsPerPage + 1}–${Math.min((page + 1) * rowsPerPage, pagination.total)} / ${pagination.total}`
                 : '0 tâche'}
@@ -2161,9 +2405,9 @@ export function TasksListPage() {
               labelDisplayedRows={() => ''}
               sx={{
                 border: 'none',
-                '& .MuiTablePagination-toolbar': { minHeight: 32, px: 0 },
+                '& .MuiTablePagination-toolbar': { minHeight: isMobile ? 32 : 52, px: 0 },
                 '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                  fontSize: 11,
+                  fontSize: isMobile ? 11 : 13,
                   color: T.text3,
                 },
               }}
@@ -2394,12 +2638,15 @@ export function TasksListPage() {
                         <TextField {...params} label="Sources" placeholder="Toutes" />
                       )}
                       disableCloseOnSelect
-                      renderOption={(props, option, { selected }) => (
-                        <li {...props}>
-                          <Checkbox checked={selected} sx={{ mr: 1 }} size="small" />
-                          {option.label}
-                        </li>
-                      )}
+                      renderOption={(props, option, { selected }) => {
+                        const { key, liProps } = autocompleteOptionLiProps(props);
+                        return (
+                          <Box component="li" key={key} {...liProps}>
+                            <Checkbox checked={selected} sx={{ mr: 1 }} size="small" />
+                            {option.label}
+                          </Box>
+                        );
+                      }}
                     />
                   </Stack>
                 </Box>
@@ -2408,7 +2655,7 @@ export function TasksListPage() {
                   <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1 }}>
                     Tri
                   </Typography>
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <FormControl size="small" sx={{ flex: 1 }}>
                       <Select
                         value={tempSortField}

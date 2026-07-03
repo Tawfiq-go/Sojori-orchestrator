@@ -42,12 +42,12 @@ const CustomServiceCard = ({
         alignItems: 'center',
         mb: 2
       }}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Typography variant="h6">💬 Service personnalisé</Typography>
             <Chip label="Sur devis" size="small" color="warning" variant="outlined" />
             {service.requiresPMValidation && <Chip label="Validation PM requise" size="small" color="error" variant="outlined" />}
           </Stack>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <FormControlLabel control={<Switch checked={service.enabled} onChange={e => handleChange('enabled', e.target.checked)} />} label={service.enabled ? 'Activé' : 'Désactivé'} />
             {onDelete && <IconButton onClick={onDelete} color="error" size="small" title="Supprimer">
                 <DeleteIcon />

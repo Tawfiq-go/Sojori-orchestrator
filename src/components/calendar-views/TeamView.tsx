@@ -93,14 +93,14 @@ export default function TeamView({
     <Box sx={{ maxWidth: 1440, mx: 'auto', p: { xs: 2, md: '20px 24px 50px' } }}>
       <style>{SOJORI_KEYFRAMES}</style>
 
-      <Stack direction="row" alignItems="baseline" gap={1.75} sx={{ mb: 1.75 }}>
+      <Stack direction="row" gap={1.75} sx={{ alignItems: 'baseline',  mb: 1.75 }}>
         <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.025em' }}>Vue Équipe</Typography>
         <Typography sx={{ fontSize: 12, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
           {staff.length} staff · {daysCount} jours · {filtered.length} tâches · {unassignedTasks.length} non assignées
         </Typography>
       </Stack>
 
-      <Stack direction="row" gap={1.25} flexWrap="wrap" sx={{ mb: 1.5 }}>
+      <Stack direction="row" gap={1.25} sx={{ flexWrap: 'wrap',  mb: 1.5 }}>
         <KpiPill icon="🏠" count={kpis.arr} label="Arrivées auj." tone="success" />
         <KpiPill icon="🚪" count={kpis.dep} label="Départs auj." tone="warning" />
         <KpiPill icon="🧹" count={kpis.cln} label="Ménages" tone="primary" />
@@ -181,7 +181,7 @@ export default function TeamView({
         )}
 
         {/* Type filters */}
-        <Stack direction="row" gap={0.625} flexWrap="wrap" sx={{ ml: 'auto' }}>
+        <Stack direction="row" gap={0.625} sx={{ flexWrap: 'wrap',  ml: 'auto' }}>
         {TYPE_FILTERS.map(tf => {
           const on = activeTypes.has(tf.key);
           return (
@@ -249,7 +249,7 @@ export default function TeamView({
       </Box>
 
       {/* Charge legend */}
-      <Stack direction="row" alignItems="center" gap={1.75} sx={{
+      <Stack direction="row" gap={1.75} sx={{ alignItems: 'center', 
         mt: 1.25, p: '10px 14px', bgcolor: T.bg1, border: `1px solid ${T.border}`,
         borderRadius: 1.4, fontSize: 11, color: T.text3,
       }}>
@@ -271,7 +271,7 @@ function ChargeLegend({ tone, label }: { tone: 'low' | 'med' | 'high'; label: st
                tone === 'med'  ? `linear-gradient(180deg, ${T.warning} 60%, ${T.bg3} 60%)` :
                                  `linear-gradient(180deg, ${T.primary} 30%, ${T.bg3} 30%)`;
   return (
-    <Stack direction="row" alignItems="center" gap={0.625}>
+    <Stack direction="row" gap={0.625} sx={{ alignItems: 'center' }}>
       <Box sx={{ width: 3, height: 18, borderRadius: '2px', background: grad }} />
       {label}
     </Stack>
@@ -299,7 +299,7 @@ function StaffRow({ staff, tasks, days, isUnassigned, collapsed, onToggleCollaps
       } : {}),
     }}>
       {/* Sticky left */}
-      <Stack direction="row" alignItems="center" gap={1.125} sx={{
+      <Stack direction="row" gap={1.125} sx={{ alignItems: 'center', 
         p: '8px 12px', borderRight: `1px solid ${T.border}`,
         bgcolor: isUnassigned ? `linear-gradient(135deg, rgba(200,30,30,0.06), ${T.bg1} 70%)` : T.bg1,
       }}>

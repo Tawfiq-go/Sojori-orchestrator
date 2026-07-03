@@ -50,7 +50,7 @@ export function DtCard({
         boxShadow: '0 1px 2px rgba(20,17,10,0.03)',
       }}
     >
-      <Stack direction="row" alignItems="center" gap={0.875} sx={{ mb: 1.125 }}>
+      <Stack direction="row" gap={0.875} sx={{ alignItems: 'center',  mb: 1.125 }}>
         <Box sx={{ fontSize: 13, lineHeight: 1 }}>{emoji}</Box>
         <Typography
           sx={{
@@ -216,7 +216,7 @@ export function DetailsHeader({
 
 export function PriceHero({ value, currency = 'EUR' }: { value: number; currency?: string }) {
   return (
-    <Stack direction="row" alignItems="baseline" gap={0.75} sx={{ mt: 0.625, mb: 0.25 }}>
+    <Stack direction="row" gap={0.75} sx={{ alignItems: 'baseline',  mt: 0.625, mb: 0.25 }}>
       <Typography
         sx={{
           fontFamily: '"Geist Mono", monospace',

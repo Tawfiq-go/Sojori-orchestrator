@@ -48,6 +48,8 @@ export interface StayViewProps {
   onCleanlinessChange?: (listingId: string, status: DisplayCleanliness) => void | Promise<void>;
   /** Toolbar compacte (planning résa / calendrier) */
   compactLayout?: boolean;
+  /** Toolbar 1–2 lignes sur desktop (grille taille normale) */
+  denseToolbar?: boolean;
   /** Grille seule — plein écran */
   gridOnly?: boolean;
   /** Occupe toute la hauteur du parent */
@@ -114,6 +116,7 @@ export default function StayView({
   onGoToday, onPrevDay, onNextDay, onPrevWeek, onNextWeek, onDateChange, onCleanlinessChange,
   todayBackDays = 2,
   compactLayout = false,
+  denseToolbar = false,
   gridOnly = false,
   fillViewport = false,
   showFullscreenEnter = false,
@@ -122,6 +125,7 @@ export default function StayView({
   const isReservations = variant === 'reservations';
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
+  const useDenseChrome = compactLayout || denseToolbar;
   const m = useMemo(() => stayMetrics(compactLayout, isNarrow), [compactLayout, isNarrow]);
   const minimapDays = useMemo(() => genDays(startDate, daysCount), [startDate, daysCount]);
   const days = useMemo(() => genDays(startDate, VISIBLE_DAYS), [startDate]);
@@ -244,7 +248,7 @@ export default function StayView({
   }, [displayListings]);
 
   const showChrome = !gridOnly;
-  const showMinimap = showChrome && !compactLayout;
+  const showMinimap = showChrome && !compactLayout && !denseToolbar;
   const flexFill = fillViewport || compactLayout;
 
   const activePlanningFiltersCount = useMemo(() => {
@@ -320,7 +324,9 @@ export default function StayView({
         ? 0
         : compactLayout
           ? { xs: '2px 4px 4px', md: '4px 6px 6px' }
-          : { xs: 2, md: '20px 24px 50px' },
+          : denseToolbar
+            ? { xs: 2, md: '8px 12px 16px' }
+            : { xs: 2, md: '20px 24px 50px' },
       height: flexFill ? '100%' : undefined,
       minHeight: flexFill ? 0 : undefined,
       display: flexFill ? 'flex' : 'block',
@@ -329,7 +335,7 @@ export default function StayView({
     }}>
       <style>{SOJORI_KEYFRAMES}</style>
 
-      {showChrome && !compactLayout && (
+      {showChrome && !useDenseChrome && (
         <Stack sx={{ flexDirection: 'row', alignItems: 'baseline', gap: 1.75, mb: 1.75 }}>
           <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.025em' }}>
             {isReservations ? 'Planning Réservations' : 'Vue Séjour'}
@@ -340,19 +346,48 @@ export default function StayView({
         </Stack>
       )}
 
-      {showChrome && !compactLayout && (
+      {showChrome && !useDenseChrome && (
         <Box sx={{ mb: 1.5 }}>{kpiRow}</Box>
       )}
 
-      {/* Toolbar compact — max 2 lignes, filtres en modal */}
-      {showChrome && compactLayout && (
+      {/* Toolbar dense — mobile compact ou desktop 1–2 lignes */}
+      {showChrome && useDenseChrome && (
       <Box sx={{
         bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.25,
         p: '4px 6px', mb: 0.5, boxShadow: '0 1px 2px rgba(20,17,10,0.04)', flexShrink: 0,
         display: 'flex', alignItems: 'center', gap: 0.5,
       }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', gap: 0.5, flexWrap: 'nowrap' }}>
+          <Stack direction="row" spacing={0.5} sx={{
+            alignItems: 'center', gap: 0.5, flexWrap: 'nowrap',
+            overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' },
+          }}>
+            {denseToolbar ? (
+              <>
+                <Typography sx={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {isReservations ? 'Planning Réservations' : 'Planning Tâches'}
+                </Typography>
+                <Typography sx={{ fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {displayListings.length} prop. · {daysCount}j · {VISIBLE_DAYS}j vis.
+                </Typography>
+                <Box sx={{ width: '1px', height: 16, bgcolor: T.border, flexShrink: 0 }} />
+                <MiniKpi count={kpis.arr} label="Arr" tone={T.success} />
+                <MiniKpi count={kpis.dep} label="Dép" tone={T.warning} />
+                {isReservations ? (
+                  <>
+                    <MiniKpi count={kpis.confirmed} label="Conf" tone={T.primaryDeep} />
+                    <MiniKpi count={kpis.pending} label="Att" tone={T.warning} />
+                  </>
+                ) : (
+                  <>
+                    <MiniKpi count={kpis.cln} label="Mén" tone={T.primaryDeep} />
+                    <MiniKpi count={kpis.na} label="NA" tone={T.error} />
+                  </>
+                )}
+                <Box sx={{ width: '1px', height: 16, bgcolor: T.border, flexShrink: 0 }} />
+              </>
+            ) : null}
             <Box sx={{
               display: 'inline-flex', alignItems: 'center', gap: '1px',
               bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: '7px', p: '2px', flexShrink: 0,
@@ -380,6 +415,72 @@ export default function StayView({
               <PlanningNavBtn dense title="+1 semaine" onClick={onNextWeek}>&gt;&gt;</PlanningNavBtn>
               <PlanningNavBtn dense title="Aujourd'hui" onClick={onGoToday}>⊙</PlanningNavBtn>
             </Box>
+            {denseToolbar ? (
+              <>
+                <Box sx={{ width: '1px', height: 16, bgcolor: T.border, flexShrink: 0 }} />
+                {(['clean', 'dirty', 'in_progress', 'occupied', 'emergency'] as CleanlinessFilter[]).map((f) => (
+                  <FilterTogglePill
+                    key={f}
+                    dense
+                    label={f === 'emergency' ? '⚠ Urg' : displayCleanlinessLabel(f as DisplayCleanliness).toUpperCase()}
+                    active={cleanlinessFilters.has(f)}
+                    onClick={() => toggleCleanlinessFilter(f)}
+                    color={
+                      f === 'clean' ? T.success : f === 'dirty' ? T.error
+                        : f === 'in_progress' ? T.warning : f === 'occupied' ? T.info : T.error
+                    }
+                  />
+                ))}
+                {cleanlinessFilters.size > 0 ? (
+                  <Box
+                    component="button"
+                    onClick={() => setCleanlinessFilters(new Set())}
+                    sx={{ all: 'unset', cursor: 'pointer', fontSize: 9, fontWeight: 700, color: T.text3, px: 0.5, flexShrink: 0 }}
+                  >
+                    ✕
+                  </Box>
+                ) : null}
+                <Box sx={{ width: '1px', height: 16, bgcolor: T.border, flexShrink: 0 }} />
+                <Box component="span" sx={{
+                  display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 22, px: 0.75, borderRadius: 1,
+                  bgcolor: T.bg2, border: `1px solid ${T.border}`, fontSize: 10, fontWeight: 600, color: T.text2, flexShrink: 0,
+                }}>
+                  🏘 {byCity.length}
+                </Box>
+                <Box component="span" sx={{
+                  display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 22, px: 0.75, borderRadius: 1,
+                  bgcolor: T.bg2, border: `1px solid ${T.border}`, fontSize: 10, fontWeight: 600, color: T.text2, flexShrink: 0,
+                }}>
+                  🏠 {listings.length}
+                </Box>
+                {isReservations ? (
+                  <>
+                    <FilterTogglePill dense label="Conf." active={statusFilters.has('confirmed')} onClick={() => toggleStatus('confirmed')} color={T.success} />
+                    <FilterTogglePill dense label="Att." active={statusFilters.has('pending')} onClick={() => toggleStatus('pending')} color={T.warning} />
+                    <ChannelLegendPill dense label="Ab" color={T.airbnb} />
+                    <ChannelLegendPill dense label="Bk" color={T.booking} />
+                    <ChannelLegendPill dense label="Vr" color={T.vrbo} />
+                    <ChannelLegendPill dense label="Di" color={T.primary} />
+                  </>
+                ) : (
+                  <>
+                    <LegendPill icon="🏠" label="Arr." dense />
+                    <LegendPill icon="🚪" label="Dép." dense />
+                    <LegendPill icon="🧹" label="Mén." dense />
+                  </>
+                )}
+                <PastDayLegendPill dense kind="past" label="Passé" />
+                <PastDayLegendPill dense kind="yesterday" label="Hier" />
+                <PastDayLegendPill dense kind="today" label="Auj." />
+                <Box component="span" sx={{
+                  fontFamily: '"Geist Mono", monospace', fontSize: 9, fontWeight: 700, color: T.text3,
+                  px: 0.625, py: '2px', borderRadius: 999, bgcolor: T.bg3, flexShrink: 0,
+                }}>
+                  {daysCount}j
+                </Box>
+              </>
+            ) : null}
+            {!denseToolbar ? (
             <Button
               variant="outlined"
               size="small"
@@ -400,8 +501,10 @@ export default function StayView({
             >
               Filtres{activePlanningFiltersCount > 0 ? ` · ${activePlanningFiltersCount}` : ''}
             </Button>
+            ) : null}
           </Stack>
 
+          {!denseToolbar ? (
           <Stack
             direction="row"
             sx={{
@@ -411,22 +514,24 @@ export default function StayView({
               alignItems: 'center',
               overflowX: 'auto',
               WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
             }}
           >
-            <MiniKpi count={kpis.arr} label="Arr" tone={T.success} />
-            <MiniKpi count={kpis.dep} label="Dép" tone={T.warning} />
-            {isReservations ? (
-              <>
-                <MiniKpi count={kpis.confirmed} label="Conf" tone={T.primaryDeep} />
-                <MiniKpi count={kpis.pending} label="Att" tone={T.warning} />
-              </>
-            ) : (
-              <>
-                <MiniKpi count={kpis.cln} label="Mén" tone={T.primaryDeep} />
-                <MiniKpi count={kpis.na} label="NA" tone={T.error} />
-              </>
-            )}
-            <Box sx={{ width: '1px', height: 14, bgcolor: T.border, flexShrink: 0, mx: 0.1 }} />
+                <MiniKpi count={kpis.arr} label="Arr" tone={T.success} />
+                <MiniKpi count={kpis.dep} label="Dép" tone={T.warning} />
+                {isReservations ? (
+                  <>
+                    <MiniKpi count={kpis.confirmed} label="Conf" tone={T.primaryDeep} />
+                    <MiniKpi count={kpis.pending} label="Att" tone={T.warning} />
+                  </>
+                ) : (
+                  <>
+                    <MiniKpi count={kpis.cln} label="Mén" tone={T.primaryDeep} />
+                    <MiniKpi count={kpis.na} label="NA" tone={T.error} />
+                  </>
+                )}
+                <Box sx={{ width: '1px', height: 14, bgcolor: T.border, flexShrink: 0, mx: 0.1 }} />
             <PastDayLegendPill dense kind="past" label="Passé" />
             <PastDayLegendPill dense kind="yesterday" label="Hier" />
             <PastDayLegendPill dense kind="today" label="Auj." />
@@ -439,6 +544,7 @@ export default function StayView({
               </>
             ) : null}
           </Stack>
+          ) : null}
         </Box>
 
         {showFullscreenEnter && onEnterFullscreen ? (
@@ -502,7 +608,7 @@ export default function StayView({
             <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1 }}>
               Propreté
             </Typography>
-            <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mb: 2 }}>
+            <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap',  mb: 2 }}>
               {(['clean', 'dirty', 'in_progress', 'occupied', 'emergency'] as CleanlinessFilter[]).map((f) => (
                 <FilterTogglePill
                   key={f}
@@ -523,7 +629,7 @@ export default function StayView({
                 <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1 }}>
                   Réservations
                 </Typography>
-                <Stack direction="row" gap={0.5} flexWrap="wrap">
+                <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap' }}>
                   <FilterTogglePill dense label="✓ Confirmées" active={tempStatusFilters.has('confirmed')} onClick={() => toggleTempStatus('confirmed')} color={T.success} />
                   <FilterTogglePill dense label="⏳ En attente" active={tempStatusFilters.has('pending')} onClick={() => toggleTempStatus('pending')} color={T.warning} />
                 </Stack>
@@ -541,8 +647,8 @@ export default function StayView({
       </Box>
       )}
 
-      {/* Toolbar complète (vue tâches) */}
-      {showChrome && !compactLayout && (
+      {/* Toolbar complète (legacy — désactivée si denseToolbar) */}
+      {showChrome && !compactLayout && !denseToolbar && (
       <Box sx={{
         bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5,
         p: '10px 14px', display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap',
@@ -643,7 +749,7 @@ export default function StayView({
         />
 
         {/* Filtres propreté */}
-        <Stack direction="row" gap={0.5} flexWrap="wrap" alignItems="center">
+        <Stack direction="row" gap={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           {(['clean', 'dirty', 'in_progress', 'occupied', 'emergency'] as CleanlinessFilter[]).map((f) => (
             <FilterTogglePill
               key={f}
@@ -699,7 +805,7 @@ export default function StayView({
         </Box>
 
         {isReservations ? (
-          <Stack direction="row" gap={0.625} flexWrap="wrap" sx={{ ml: 'auto' }}>
+          <Stack direction="row" gap={0.625} sx={{ flexWrap: 'wrap',  ml: 'auto' }}>
             <FilterTogglePill
               label="Confirmées"
               active={statusFilters.has('confirmed')}
@@ -718,7 +824,7 @@ export default function StayView({
             <ChannelLegendPill label="Direct" color={T.primary} />
           </Stack>
         ) : (
-          <Stack direction="row" gap={0.625} flexWrap="wrap" sx={{ ml: 'auto' }}>
+          <Stack direction="row" gap={0.625} sx={{ flexWrap: 'wrap',  ml: 'auto' }}>
             <LegendPill icon="🏠" label="Arrivée" />
             <LegendPill icon="🚪" label="Départ" />
             <LegendPill icon="🧹" label="Ménage" />
@@ -727,7 +833,7 @@ export default function StayView({
           </Stack>
         )}
 
-        <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ width: '100%', mt: 0.25 }}>
+        <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap',  width: '100%', mt: 0.25 }}>
           <PastDayLegendPill kind="past" label="Passé (aperçu)" />
           <PastDayLegendPill kind="yesterday" label="Hier" />
           <PastDayLegendPill kind="today" label="Aujourd'hui" />
@@ -1157,14 +1263,15 @@ function PastDayLegendPill({ kind, label, dense = false }: { kind: 'past' | 'yes
   );
 }
 
-function LegendPill({ icon, label }: { icon: string; label: string }) {
+function LegendPill({ icon, label, dense = false }: { icon: string; label: string; dense?: boolean }) {
   return (
     <Box sx={{
-      display: 'inline-flex', alignItems: 'center', gap: 0.625,
-      px: 1, py: '3px', borderRadius: 999, fontSize: 10.5, fontWeight: 600,
+      display: 'inline-flex', alignItems: 'center', gap: dense ? 0.35 : 0.625,
+      px: dense ? 0.5 : 1, py: dense ? '1px' : '3px', borderRadius: 999,
+      fontSize: dense ? 9 : 10.5, fontWeight: 600, flexShrink: 0,
       color: T.text2, bgcolor: T.bg2,
     }}>
-      <span style={{ fontSize: 11 }}>{icon}</span>{label}
+      <span style={{ fontSize: dense ? 9 : 11 }}>{icon}</span>{label}
     </Box>
   );
 }

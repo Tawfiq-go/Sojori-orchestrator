@@ -105,7 +105,7 @@ const ChatbotMenuConfig = ({ listingId, listingName, embedded = false }) => {
         )}
 
         {!isNotFound && (
-          <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 1.25 }}>
+          <Stack direction="row" sx={{ alignItems: 'center',  flexWrap: 'wrap', gap: 1.25 }}>
             <SyncStatusBanner
               syncStatus={syncStatus}
               loading={syncLoading}

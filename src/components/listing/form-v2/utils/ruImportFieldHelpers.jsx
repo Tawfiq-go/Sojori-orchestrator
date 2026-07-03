@@ -204,7 +204,7 @@ export function RuExternalListingDisplay({ value, ruField = 'ruExternalListing',
       ) : (
         <Paper variant="outlined" sx={{ p: 1.5 }}>
           <Stack spacing={1}>
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
               <Chip
                 size="small"
                 label={parsed.statusLabel}
@@ -334,7 +334,7 @@ export function OtaChannelsSnapshotTable({
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }} useFlexGap>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center',  mb: 1, flexWrap: 'wrap' }} useFlexGap>
         <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
           {connected.length} canal(aux) connecté(s) · {channels.length} au total
           {updatedAt && Number.isFinite(updatedAt.getTime())
@@ -377,7 +377,7 @@ export function OtaChannelsSnapshotTable({
                     </TableCell>
                     <TableCell>
                       {editable && editingChannelKey === channelKey ? (
-                        <Stack direction="row" spacing={0.75} alignItems="center">
+                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                           <TextField
                             size="small"
                             fullWidth
@@ -407,7 +407,7 @@ export function OtaChannelsSnapshotTable({
                           </Button>
                         </Stack>
                       ) : (
-                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                           {url ? (
                             <Link
                               href={url}
@@ -609,7 +609,7 @@ export function TimeFeesEditor({ label, rows, ruField, onChange, currency = 'MAD
   return (
     <Box sx={{ mb: hideHeader ? 0 : 1.5 }}>
       {!hideHeader && label ? (
-        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75 }}>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center',  mb: 0.75 }}>
           <SectionH>{label}</SectionH>
           {ruField ? <FieldIndicator field={ruField} listingStructure={listingStructure} dense /> : null}
         </Stack>

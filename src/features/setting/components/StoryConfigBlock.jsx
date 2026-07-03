@@ -115,8 +115,8 @@ function StoryConfigBlock() {
                   borderColor: "grey.200",
                   p: 3
                 }}>
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                      <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <AppsIcon sx={{
                         fontSize: 16,
                         color: "#12a190"
@@ -130,7 +130,7 @@ function StoryConfigBlock() {
                           {t("StoryConfigEditor")}
                         </Typography>
                       </Stack>
-                      <Stack direction="row" spacing={1} alignItems="center">
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <ToggleButtonGroup value={selectedLanguage} exclusive onChange={handleLanguageChange} size="small" sx={{
                         "& .MuiToggleButton-root": {
                           border: "1px solid",

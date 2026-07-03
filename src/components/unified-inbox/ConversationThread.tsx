@@ -239,7 +239,7 @@ export default function ConversationThread({
         </Box>
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack direction="row" alignItems="center" gap={0.875} sx={{ mb: '2px' }}>
+          <Stack direction="row" gap={0.875} sx={{ alignItems: 'center',  mb: '2px' }}>
             <Typography sx={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-0.015em' }}>
               {thread.name}
             </Typography>

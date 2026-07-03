@@ -16,6 +16,7 @@ export const ProtectedRoute: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
+    if (import.meta.env.VITE_DASHBOARD_DEBUG !== 'true') return;
     logAuth('ProtectedRoute', {
       path: location.pathname,
       loading,

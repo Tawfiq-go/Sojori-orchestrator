@@ -263,8 +263,8 @@ function CitiesBlock() {
                   borderColor: "grey.300",
                   p: 3
                 }}>
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                      <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <AppsIcon sx={{
                         fontSize: 16,
                         color: "#00B4B4"
@@ -278,7 +278,7 @@ function CitiesBlock() {
                           {t("Cities Editor")}
                         </Typography>
                       </Stack>
-                      <Stack direction="row" spacing={1} alignItems="center">
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <ToggleButtonGroup value={isFrench ? "fr" : "en"} exclusive onChange={handleLanguageChange} size="small" sx={{
                         "& .MuiToggleButton-root": {
                           border: "1px solid",
@@ -340,7 +340,7 @@ function CitiesBlock() {
                     boxShadow: "0 8px 32px rgba(0, 180, 180, 0.08)",
                     mb: 3
                   }}>
-                      <Stack direction="row" spacing={2} alignItems="center">
+                      <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                         <Box sx={{
                         flex: 1
                       }}>

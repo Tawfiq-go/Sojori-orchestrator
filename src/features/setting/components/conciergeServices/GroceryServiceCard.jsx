@@ -57,11 +57,11 @@ const GroceryServiceCard = ({
         alignItems: 'center',
         mb: 2
       }}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Typography variant="h6">🛒 Courses</Typography>
             <Chip label="Frais de service" size="small" color="success" variant="outlined" />
           </Stack>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <FormControlLabel control={<Switch checked={service.enabled} onChange={e => handleChange('enabled', e.target.checked)} />} label={service.enabled ? 'Activé' : 'Désactivé'} />
             {onDelete && <IconButton onClick={onDelete} color="error" size="small" title="Supprimer">
                 <DeleteIcon />

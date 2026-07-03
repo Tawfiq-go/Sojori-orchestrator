@@ -219,7 +219,7 @@ function ReservationRowLine({
         }}
       />
 
-      <Stack direction="row" spacing={0.75} alignItems="center" justifyContent="flex-end">
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
         {!expanded && messageCount > 0 ? (
           <Typography sx={{ fontSize: 10, color: T.text4, whiteSpace: 'nowrap' }}>
             {activeServices}s · {activeMessages}m
@@ -523,8 +523,8 @@ export function PostImportOnboardingTab({ listingId, onFinished }) {
           boxShadow: '0 1px 0 rgba(20,17,10,0.04)',
         }}
       >
-        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
-          <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap">
+        <Stack direction="row" mb={2} gap={1} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Typography sx={{ fontSize: 16, fontWeight: 800, color: T.text, letterSpacing: '-0.02em' }}>
               Réservations en attente
             </Typography>
@@ -570,7 +570,7 @@ export function PostImportOnboardingTab({ listingId, onFinished }) {
               </>
             )}
           </Stack>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Button
               size="small"
               variant="outlined"

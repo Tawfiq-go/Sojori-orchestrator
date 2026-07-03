@@ -128,8 +128,8 @@ const FooterBlock = () => {
                 borderColor: "grey.300",
                 p: 2
               }}>
-                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                    <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       <EditIcon sx={{
                       fontSize: 16,
                       color: "text.primary"
@@ -138,7 +138,7 @@ const FooterBlock = () => {
                         {t("Footer Editor")}
                       </Typography>
                     </Stack>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       <IconButton onClick={() => setOpenDialog(true)} sx={{
                       backgroundColor: "#12a190",
                       color: "#ffffff",
@@ -192,7 +192,7 @@ const FooterBlock = () => {
                     
                       <Grid item xs={6}>
                         <Stack spacing={1.5}>
-                          <Stack direction="row" spacing={1} alignItems="center">
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <BusinessIcon sx={{
                           fontSize: 16,
                           color: "text.primary"
@@ -212,8 +212,8 @@ const FooterBlock = () => {
                   
                       <Grid item xs={6}>
                         <Stack spacing={1.5}>
-                          <Stack direction="row" justifyContent="space-between" alignItems="center">
-                            <Stack direction="row" spacing={1} alignItems="center">
+                          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                               <ShareIcon sx={{
                             fontSize: 16,
                             color: "text.primary"
@@ -235,7 +235,7 @@ const FooterBlock = () => {
                               {socialLinksData.map((social, index) => {
                           const IconComponent = social.icon;
                           const socialLink = footerConfig.reseaux?.socialLinks?.find(link => link.type === social.type);
-                          return socialLink?.url && <Stack key={index} direction="row" spacing={1} alignItems="center">
+                          return socialLink?.url && <Stack key={index} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                       <IconComponent sx={{
                               fontSize: 18,
                               color: "text.secondary"
@@ -252,8 +252,8 @@ const FooterBlock = () => {
                  
                       <Grid item xs={6}>
                         <Stack spacing={1.5}>
-                          <Stack direction="row" justifyContent="space-between" alignItems="center">
-                            <Stack direction="row" spacing={1} alignItems="center">
+                          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                               <LanguageIcon sx={{
                             fontSize: 16,
                             color: "text.primary"
@@ -282,8 +282,8 @@ const FooterBlock = () => {
                  
                       <Grid item xs={6}>
                         <Stack spacing={1.5}>
-                          <Stack direction="row" justifyContent="space-between" alignItems="center">
-                            <Stack direction="row" spacing={1} alignItems="center">
+                          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                               <MonetizationOnIcon sx={{
                             fontSize: 16,
                             color: "text.primary"
@@ -312,7 +312,7 @@ const FooterBlock = () => {
                 
                       <Grid item xs={6}>
                         <Stack spacing={1.5}>
-                          <Stack direction="row" spacing={1} alignItems="center">
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <ImageIcon sx={{
                           fontSize: 16,
                           color: "text.primary"
@@ -333,8 +333,8 @@ const FooterBlock = () => {
                  
                       <Grid item xs={6}>
                         <Stack spacing={1.5}>
-                          <Stack direction="row" justifyContent="space-between" alignItems="center">
-                            <Stack direction="row" spacing={1} alignItems="center">
+                          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                               <CopyrightIcon sx={{
                             fontSize: 16,
                             color: "text.primary"
@@ -352,7 +352,7 @@ const FooterBlock = () => {
                           }
                         }} />
                           </Stack>
-                          {legalEnabled && <Stack direction="row" justifyContent="space-between" alignItems="center">
+                          {legalEnabled && <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                               <TextField value={renderTranslatedText(footerConfig.legal?.copyright)} variant="outlined" size="small" sx={{
                           flexGrow: 1,
                           mr: 2
@@ -374,8 +374,8 @@ const FooterBlock = () => {
                 
                       <Grid item xs={6}>
                         <Stack spacing={1.5}>
-                          <Stack direction="row" justifyContent="space-between" alignItems="center">
-                            <Stack direction="row" spacing={1} alignItems="center">
+                          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                               <HelpIcon sx={{
                             fontSize: 16,
                             color: "text.primary"

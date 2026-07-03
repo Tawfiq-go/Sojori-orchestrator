@@ -196,11 +196,11 @@ const MainContentSection = ({
       borderColor: "grey.300",
       p: 2
     }}>
-        <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="h6" fontWeight={600} color="text.primary">
             {t("Hero Slider Editor")}
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <ToggleButtonGroup value={isFrench ? "fr" : "en"} exclusive onChange={(e, value) => {
             if (value !== null) setIsFrench(value === "fr");
           }} size="small" sx={{
@@ -246,7 +246,7 @@ const MainContentSection = ({
           p: 2
         }}>
             <Stack spacing={2}>
-              <Stack direction="row" alignItems="center" spacing={1}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <DescriptionIcon sx={{
                 fontSize: 20,
                 color: "#00B4B4"
@@ -400,7 +400,7 @@ const MainContentSection = ({
           p: 2
         }}>
             <Stack spacing={1}>
-              <Stack direction="row" alignItems="center" spacing={1}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <ImageIcon sx={{
                 fontSize: 20,
                 color: "#00B4B4"

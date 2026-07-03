@@ -28,6 +28,7 @@ import {
   fetchWatchList,
   updateWatchList,
 } from '../../services/serverApi.watchField';
+import { autocompleteOptionLiProps } from '../../../../utils/autocompleteOptionLiProps';
 
 export default function FieldWatchConfigPanel() {
   const [loading, setLoading] = useState(true);
@@ -224,7 +225,7 @@ export default function FieldWatchConfigPanel() {
   if (loading) {
     return (
       <div className="w-full flex items-center justify-center bg-white" >
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <CircularProgress size={32} />
           <Typography variant="h6" className="text-gray-700 font-medium">
             Loading configuration…
@@ -338,17 +339,20 @@ export default function FieldWatchConfigPanel() {
                 value={reservationFields}
                 isOptionEqualToValue={(opt, val) => opt === val}
                 onChange={(_e, val) => setReservationFields(uniqueNormalized(val))}
-                renderOption={(props, option, { selected }) => (
-                  <li {...props} className="flex items-center hover:bg-blue-50">
-                    <Checkbox
-                      icon={icon}
-                      checkedIcon={checkedIcon}
-                      style={{ marginRight: 8 }}
-                      checked={selected}
-                    />
-                    <span className="text-sm">{option}</span>
-                  </li>
-                )}
+                renderOption={(props, option, { selected }) => {
+                  const { key, liProps } = autocompleteOptionLiProps(props);
+                  return (
+                    <Box component="li" key={key} className="flex items-center hover:bg-blue-50" {...liProps}>
+                      <Checkbox
+                        icon={icon}
+                        checkedIcon={checkedIcon}
+                        style={{ marginRight: 8 }}
+                        checked={selected}
+                      />
+                      <span className="text-sm">{option}</span>
+                    </Box>
+                  );
+                }}
                 renderTags={(value, getTagProps) =>
                   value.map((option, index) => (
                     <Chip
@@ -446,17 +450,20 @@ export default function FieldWatchConfigPanel() {
                 value={taskFields}
                 isOptionEqualToValue={(opt, val) => opt === val}
                 onChange={(_e, val) => setTaskFields(uniqueNormalized(val))}
-                renderOption={(props, option, { selected }) => (
-                  <li {...props} className="flex items-center hover:bg-purple-50">
-                    <Checkbox
-                      icon={icon}
-                      checkedIcon={checkedIcon}
-                      style={{ marginRight: 8 }}
-                      checked={selected}
-                    />
-                    <span className="text-sm">{option}</span>
-                  </li>
-                )}
+                renderOption={(props, option, { selected }) => {
+                  const { key, liProps } = autocompleteOptionLiProps(props);
+                  return (
+                    <Box component="li" key={key} className="flex items-center hover:bg-purple-50" {...liProps}>
+                      <Checkbox
+                        icon={icon}
+                        checkedIcon={checkedIcon}
+                        style={{ marginRight: 8 }}
+                        checked={selected}
+                      />
+                      <span className="text-sm">{option}</span>
+                    </Box>
+                  );
+                }}
                 renderTags={(value, getTagProps) =>
                   value.map((option, index) => (
                     <Chip

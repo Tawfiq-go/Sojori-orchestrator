@@ -278,7 +278,7 @@ export default function ImportAirbnbModal({
         )}
 
         {phase === 'A-owner' && !owner && (
-          <Stack alignItems="center" sx={{ py: 5 }}>
+          <Stack sx={{ alignItems: 'center',  py: 5 }}>
             <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
               {!authReady ? 'Connexion au compte hôte…' : 'Compte hôte introuvable'}
             </Typography>
@@ -291,7 +291,7 @@ export default function ImportAirbnbModal({
         )}
 
         {phase === 'A-owner' && owner && propsLoading && (
-          <Stack alignItems="center" sx={{ py: 5 }}>
+          <Stack sx={{ alignItems: 'center',  py: 5 }}>
             <Box sx={{
               width: 48, height: 48, borderRadius: '50%',
               border: `3px solid ${T.border}`, borderTopColor: T.primary,

@@ -153,7 +153,7 @@ const ReservationCard: React.FC<ReservationCardProps> = ({ plan, onSelect, selec
       }}
     >
       {/* Code réservation */}
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center',  mb: 1 }}>
         <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text3 }}>
           {plan.reservationNumber}
         </Typography>
@@ -255,7 +255,7 @@ const WorkflowColumn: React.FC<WorkflowColumnProps> = ({
         <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text, mb: 0.5 }}>
           {title}
         </Typography>
-        <Stack direction="row" flexWrap="wrap" gap={0.5}>
+        <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap' }}>
           {badge && (
             <Chip
               size="small"
@@ -308,7 +308,7 @@ const WorkflowColumn: React.FC<WorkflowColumnProps> = ({
                 },
               }}
             >
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center',  mb: 0.5 }}>
                 <Typography sx={{ fontSize: 12 }}>{action.icon}</Typography>
                 <Typography sx={{ fontSize: 11, fontWeight: 700, color: statusColor }}>
                   {action.label}
@@ -641,19 +641,19 @@ export default function OrchestrationPlansPageV2() {
 
                 {/* Légende */}
                 <Stack direction="row" spacing={2} sx={{ mb: 2, justifyContent: 'flex-end' }}>
-                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                     <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: t.success }} />
                     <Typography sx={{ fontSize: 10, color: t.text3 }}>Complété</Typography>
                   </Stack>
-                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                     <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: t.warning }} />
                     <Typography sx={{ fontSize: 10, color: t.text3 }}>En cours</Typography>
                   </Stack>
-                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                     <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: t.error }} />
                     <Typography sx={{ fontSize: 10, color: t.text3 }}>Retard</Typography>
                   </Stack>
-                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                     <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: t.info }} />
                     <Typography sx={{ fontSize: 10, color: t.text3 }}>Info</Typography>
                   </Stack>

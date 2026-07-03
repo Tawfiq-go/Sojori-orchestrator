@@ -2,6 +2,7 @@
 // CityAutocomplete.tsx — Phase B : ville Sojori (MUI Autocomplete + portal)
 // ════════════════════════════════════════════════════════════════════
 import { Autocomplete, Box, TextField, Typography } from '@mui/material';
+import { autocompleteOptionLiProps } from '../../../utils/autocompleteOptionLiProps';
 import type { SojoriCity } from './_tokens';
 import { T } from './_tokens';
 
@@ -88,8 +89,10 @@ export default function CityAutocomplete({
             }}
           />
         )}
-        renderOption={(props, option) => (
-          <li {...props} key={option._id}>
+        renderOption={(props, option) => {
+          const { key, liProps } = autocompleteOptionLiProps(props);
+          return (
+            <Box component="li" key={key ?? option._id} {...liProps}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
               <span>{option.flag || '📍'}</span>
               <span>{option.name}</span>
@@ -107,8 +110,9 @@ export default function CityAutocomplete({
                 </Typography>
               )}
             </Box>
-          </li>
-        )}
+          </Box>
+          );
+        }}
       />
 
       <Typography

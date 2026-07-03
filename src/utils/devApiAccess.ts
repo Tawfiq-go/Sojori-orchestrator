@@ -21,13 +21,22 @@ export function hasJwtSession(): boolean {
 export function canAccessProtectedRoutes(isAuthenticated: boolean): boolean {
   if (!hasActiveSession()) return false;
   if (isAuthenticated) return true;
+  /** JWT présent mais checkAuth pas encore terminé — les gardes attendent `loading` avant cet appel. */
+  if (hasJwtSession()) return true;
   return hasDevTokenBypass();
 }
 
 export function invalidateSession(reason?: string): void {
   if (typeof window === 'undefined') return;
-  // Diagnostic déconnexion WhatsApp Guest (temporaire) — capture la raison et la page d'origine.
-  console.warn('[Sojori][invalidateSession]', { reason, fromPath: window.location.pathname + window.location.search });
+  const fromPath = window.location.pathname + window.location.search;
+  const diag = { reason, fromPath, at: new Date().toISOString() };
+  // Persiste après redirect /login (console effacée) — lire sessionStorage.sojori_last_logout
+  try {
+    sessionStorage.setItem('sojori_last_logout', JSON.stringify(diag));
+  } catch {
+    /* ignore */
+  }
+  console.warn('[Sojori][invalidateSession]', diag);
   clearTokens();
   window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { reason } }));
   /** Dev local + X-Dev-Token : ne pas expulser l’UI (srv-reservations exige un vrai JWT). */

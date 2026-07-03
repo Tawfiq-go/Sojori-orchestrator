@@ -210,7 +210,7 @@ const VideoBlock = () => {
                 borderColor: "grey.300",
                 background: "linear-gradient(90deg, rgba(18,161,144,0.15) 0%, rgba(18,161,144,0.05) 50%, rgba(18,161,144,0) 100%)"
               }}>
-                  <Stack direction="row" alignItems="center" justifyContent="space-between">
+                  <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography variant="h6" sx={{
                     fontSize: "16.6px",
                     fontWeight: 600,
@@ -220,7 +220,7 @@ const VideoBlock = () => {
                   }}>
                       {t("VideoBlock Editor")}
                     </Typography>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       <ToggleButtonGroup value={isFrench ? "fr" : "en"} exclusive onChange={(e, value) => {
                       if (value !== null) setIsFrench(value === "fr");
                     }} size="small" sx={{
@@ -292,7 +292,7 @@ const VideoBlock = () => {
                     <TabPanel value={activeTab} index={0}>
                       <ContentWrapper>
                         <Stack spacing={2}>
-                          <Stack direction="row" alignItems="center" spacing={1}>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <DescriptionIcon sx={{
                             fontSize: 20,
                             color: "#00B4B4"
@@ -343,7 +343,7 @@ const VideoBlock = () => {
                     <TabPanel value={activeTab} index={1}>
                       <ContentWrapper>
                         <Stack spacing={2}>
-                          <Stack direction="row" alignItems="center" spacing={1}>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <DescriptionIcon sx={{
                             fontSize: 20,
                             color: "#00B4B4"
@@ -394,7 +394,7 @@ const VideoBlock = () => {
                     <TabPanel value={activeTab} index={2}>
                       <ContentWrapper>
                         <Stack spacing={2}>
-                          <Stack direction="row" alignItems="center" spacing={1}>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <ImageIcon sx={{
                             fontSize: 20,
                             color: "#00B4B4"
@@ -420,7 +420,7 @@ const VideoBlock = () => {
                     <TabPanel value={activeTab} index={3}>
                       <ContentWrapper>
                         <Stack spacing={2}>
-                          <Stack direction="row" alignItems="center" spacing={1}>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <ImageIcon sx={{
                             fontSize: 20,
                             color: "#00B4B4"
@@ -483,7 +483,7 @@ const VideoBlock = () => {
                     <TabPanel value={activeTab} index={4}>
                       <ContentWrapper>
                         <Stack spacing={2}>
-                          <Stack direction="row" alignItems="center" spacing={1}>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <ListIcon sx={{
                             fontSize: 20,
                             color: "#00B4B4"

@@ -57,7 +57,7 @@ function StringListEditor({
           </Typography>
         )}
         {items.map((item, index) => (
-          <Stack key={index} direction="row" spacing={1} alignItems="flex-start">
+          <Stack key={index} direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
             <TextField
               fullWidth
               size="small"

@@ -371,7 +371,7 @@ export default function TaskDetailDrawer({
           borderBottom: `1px solid ${T.border}`,
         }}
       >
-        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={1.5}>
+        <Stack direction="row" gap={1.5} sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography
               sx={{
@@ -385,7 +385,7 @@ export default function TaskDetailDrawer({
             >
               {isEditing ? 'Modifier la tâche' : 'Détail tâche'}
             </Typography>
-            <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ mt: 0.75 }}>
+            <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap',  mt: 0.75 }}>
               <MetaChip>
                 {typeEmoji} {task.itemNumber}
               </MetaChip>

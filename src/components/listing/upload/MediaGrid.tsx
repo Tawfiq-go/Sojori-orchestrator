@@ -691,7 +691,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
       <input {...getInputProps()} />
 
       {/* Barre compacte : galerie d’abord, upload à la demande */}
-      <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 1.25 }}>
+      <Stack direction="row" gap={1} sx={{ alignItems: 'center', flexWrap: 'wrap',  mb: 1.25 }}>
         <Button
           size="small"
           variant="contained"
@@ -942,7 +942,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
             background: 'linear-gradient(180deg, rgba(220,38,38,0.08) 0%, rgba(255,255,255,0) 100%)',
           }}
         >
-          <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
             <Box
               sx={{
                 width: 44,

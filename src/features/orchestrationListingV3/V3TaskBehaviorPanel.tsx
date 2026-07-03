@@ -115,7 +115,7 @@ export default function V3TaskBehaviorPanel({
         }}
       >
         <V3FormRow label="À la demande client" help="Tâche créée quand le client agit (WhatsApp), pas à la résa.">
-          <Stack direction="row" alignItems="center" gap={1}>
+          <Stack direction="row" gap={1} sx={{ alignItems: 'center' }}>
             <V3Toggle
               kind="task"
               checked={requiresClientAction}

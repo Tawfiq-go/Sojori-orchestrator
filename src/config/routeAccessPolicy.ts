@@ -15,6 +15,8 @@ export const PLATFORM_ADMIN_PATH_RULES: Array<{ prefix: string; exact?: boolean 
   { prefix: '/channels' },
   { prefix: '/temp/' },
   { prefix: '/listings/mapping' },
+  /** Hub CRM (demandes PMS / leads commerciaux) — pas les leads OTA inbox (/communications?tab=leads). */
+  { prefix: '/crm' },
 ];
 
 export function isPlatformAdminPath(pathname: string): boolean {

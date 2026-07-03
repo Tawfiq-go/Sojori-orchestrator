@@ -361,7 +361,7 @@ export default function V3ScheduledMessagesPanel({
                   : () => setRules(prev => prev.filter(r => r._id !== rule._id))
               }
               headerExtra={
-                <Stack direction="row" alignItems="center" spacing={0.75}>
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                   {statusChip}
                   <Switch
                     size="small"

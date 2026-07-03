@@ -2,14 +2,16 @@ import apiClient from './apiClient';
 import { MICROSERVICE_BASE_URL } from '../config/backendServer.config';
 import type { StaffWaThreadRow } from './staffConversationMapper';
 
-function resolveStaffWaBase(): string {
-  if (import.meta.env.DEV && typeof window !== 'undefined' && !import.meta.env.VITE_API_URL) {
-    return '/api/v1/admin/fulltask/staff-whatsapp';
-  }
-  return `${MICROSERVICE_BASE_URL.SRV_ADMIN}/fulltask/staff-whatsapp`;
-}
+import { FULLTASK_ADMIN_BASE } from '../config/microserviceBases';
 
-/** Via srv-admin → srv-fulltask (ingress /api/v1/admin always routé ; /api/v1/fulltask/staff-whatsapp peut manquer). */
+/**
+ * Staff WhatsApp → srv-admin/fulltask/staff-whatsapp → srv-fulltask (JWT relayé).
+ * Sur dev.sojori.com, /api/v1/fulltask/staff-whatsapp/* n’est pas exposé (404 ingress) —
+ * seul le proxy admin est routé.
+ */
+function resolveStaffWaBase(): string {
+  return `${FULLTASK_ADMIN_BASE}/staff-whatsapp`;
+}
 const STAFF_WA_BASE = resolveStaffWaBase();
 const THREADS_ENDPOINT = `${STAFF_WA_BASE}/get`;
 const UPDATE_MSG_ENDPOINT = (idOrWamid: string) =>

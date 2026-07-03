@@ -14,6 +14,7 @@ import { tokens as T } from '../dashboard/DashboardV2.components';
 import { usePmSimulation } from '../../context/PmSimulationContext';
 import { getOwners } from '../../services/teamDashboardApi';
 import { getOwnerListLabel } from '../../utils/ownerDisplay.utils';
+import { autocompleteOptionLiProps } from '../../utils/autocompleteOptionLiProps';
 
 type OwnerRow = {
   _id?: string;
@@ -187,10 +188,10 @@ export function PmSimulationPanel() {
           }}
           sx={{ width: '100%' }}
           renderOption={(props, option) => {
-            const { key, ...rest } = props as { key?: string };
+            const { key, liProps } = autocompleteOptionLiProps(props);
             const secondary = ownerRowSecondary(option);
             return (
-              <Box component="li" key={key ?? ownerRowId(option)} {...rest} sx={{ py: 1, px: 1.5 }}>
+              <Box component="li" key={key ?? ownerRowId(option)} {...liProps} sx={{ py: 1, px: 1.5 }}>
                 <Typography variant="body2" fontWeight={700} sx={{ lineHeight: 1.3 }}>
                   {getOwnerListLabel(option)}
                 </Typography>

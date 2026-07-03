@@ -53,8 +53,8 @@ export default function StaffWhatsAppTabV2() {
       if (response.status === 'success') {
         setConversations(response.data.conversations);
       }
-    } catch (err) {
-      console.error('❌ Erreur chargement staff:', err);
+    } catch {
+      /* échec déjà loggé par apiClient (HTTP) */
     } finally {
       setLoading(false);
     }

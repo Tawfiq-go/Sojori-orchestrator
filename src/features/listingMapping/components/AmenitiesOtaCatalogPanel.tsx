@@ -298,7 +298,7 @@ export function AmenitiesOtaCatalogPanel() {
             Pivot Airbnb + Booking + Vrbo — catégories, libellés Sojori, activation listing
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button
             variant="outlined"
             size="small"

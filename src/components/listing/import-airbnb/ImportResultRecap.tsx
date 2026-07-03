@@ -26,7 +26,7 @@ export default function ImportResultRecap({ results }: ImportResultRecapProps) {
 
   return (
     <Box>
-      <Stack alignItems="center" sx={{ py: 2.5, mb: 2 }}>
+      <Stack sx={{ alignItems: 'center',  py: 2.5, mb: 2 }}>
         <Box sx={{
           width: 72, height: 72, borderRadius: '50%',
           background: allSuccess

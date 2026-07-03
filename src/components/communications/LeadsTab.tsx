@@ -351,7 +351,7 @@ export default function LeadsTab() {
         {/* Colonne 1 : Liste des leads */}
         <Box sx={{ borderRight: `1px solid ${t.border}`, overflowY: 'auto' }}>
         <Box sx={{ p: '14px 16px', borderBottom: `1px solid ${t.border}`, bgcolor: t.bg2 }}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
             <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Demandes</Typography>
             <Badge variant="gold">{threads.length}</Badge>
           </Stack>
@@ -369,7 +369,7 @@ export default function LeadsTab() {
                 '&:hover': { bgcolor: t.bg2 },
               }}
             >
-              <Stack direction="row" spacing={1.5} alignItems="flex-start">
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
                 {/* Avatar */}
                 <Box
                   sx={{
@@ -392,7 +392,7 @@ export default function LeadsTab() {
                 {/* Contenu */}
                 <Stack spacing={0.5} flex={1} minWidth={0}>
                   {/* Nom + Platform Badge + DEMANDE chip */}
-                  <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
+                  <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                     <Typography
                       sx={{
                         fontSize: 14,

@@ -72,7 +72,7 @@ function ApplicationBlock() {
                   borderColor: "grey.200",
                   p: 3
                 }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       <AppsIcon sx={{
                       fontSize: 16,
                       color: "white"
