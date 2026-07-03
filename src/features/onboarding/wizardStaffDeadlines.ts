@@ -16,7 +16,7 @@ export const STAFF_ASSIGN_OPTIONS: Array<{
     id: 'last_minute',
     emoji: '⚡',
     title: 'Dernière minute',
-    desc: 'Assignation au plus tard avant l'exécution de la tâche.',
+    desc: "Assignation au plus tard avant l'exécution de la tâche.",
   },
   {
     id: 'standard',
