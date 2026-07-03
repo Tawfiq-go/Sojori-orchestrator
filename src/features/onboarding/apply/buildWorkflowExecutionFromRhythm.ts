@@ -87,6 +87,8 @@ export function buildStaffAssignment(
   const ref = def.dateRef === 'task_created' ? 'scheduledDate' : def.dateRef;
   const days = def.staffAssignDaysBefore;
 
+  // days < 0 = fenêtre à cheval sur la référence (checkout_cleaning : le ménage a lieu
+  // après le check-out). Fin J+4 alignée sur le seed srv-fulltask (defaultSeeds.ts).
   if (days < 0) {
     return {
       ...base,

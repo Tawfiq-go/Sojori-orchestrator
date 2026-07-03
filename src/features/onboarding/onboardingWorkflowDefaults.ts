@@ -263,6 +263,8 @@ function cloneDefs(defs: OnboardingServiceRhythmDef[]): OnboardingServiceRhythmD
 function applyReactivePreset(defs: OnboardingServiceRhythmDef[]): OnboardingServiceRhythmDef[] {
   return defs.map((d) => {
     if (d.staffAssignStyle === 'none' || d.staffAssignStyle === 'immediate') return d;
+    // Sans relance client (ex. checkout_cleaning), "au choix client" n'a pas de sens.
+    if (!CLIENT_RELANCE_MESSAGE_ID[d.taskType]) return d;
     return {
       ...d,
       staffAssignStyle: 'with_client' as const,
@@ -276,8 +278,14 @@ function applyProactivePreset(defs: OnboardingServiceRhythmDef[]): OnboardingSer
     if (d.staffAssignStyle === 'days_before') {
       return {
         ...d,
-        staffAssignDaysBefore: Math.min(7, d.staffAssignDaysBefore + 1),
-        clientReminderDays: [...new Set([...d.clientReminderDays, -4])].sort((a, b) => a - b),
+        // Négatif = fenêtre après la référence (checkout_cleaning) : ne pas décaler.
+        staffAssignDaysBefore:
+          d.staffAssignDaysBefore < 0
+            ? d.staffAssignDaysBefore
+            : Math.min(7, d.staffAssignDaysBefore + 1),
+        clientReminderDays: CLIENT_RELANCE_MESSAGE_ID[d.taskType]
+          ? [...new Set([...d.clientReminderDays, -4])].sort((a, b) => a - b)
+          : d.clientReminderDays,
       };
     }
     return d;
@@ -323,13 +331,27 @@ export function formatStaffAssignLabel(style: StaffAssignStyle, daysBefore: numb
   if (style === 'none') return '—';
   if (style === 'immediate') return 'Immédiat';
   if (style === 'with_client') return 'Au choix client';
-  const n = Math.max(1, daysBefore);
-  return n < 0 ? `J+${Math.abs(n)}` : `J-${n}`;
+  if (daysBefore < 0) return `J+${Math.abs(daysBefore)} (après)`;
+  return `J-${Math.max(1, daysBefore)}`;
+}
+
+/** Jours de rappel staff par défaut du service (ex. checkout_cleaning = [+1], le jour du ménage). */
+export function defaultStaffReminderDaysForTask(taskType: string): number[] {
+  const def = BALANCED.find((d) => d.taskType === taskType);
+  return def?.staffReminderDays.length ? [...def.staffReminderDays] : [-1];
+}
+
+export function formatStaffReminderDay(day: number): string {
+  return day < 0 ? `J${day}` : `J+${day}`;
 }
 
 export function formatStaffReminderLabel(days: number[], time: string): string {
   if (!days.length) return '—';
-  const label = formatClientReminderLabel(days);
+  const label = days
+    .slice()
+    .sort((a, b) => a - b)
+    .map(formatStaffReminderDay)
+    .join(', ');
   return `${label} @${time}`;
 }
 
