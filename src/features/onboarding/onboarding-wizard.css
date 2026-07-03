@@ -718,6 +718,84 @@
   color: #4a4640;
 }
 
+.ob-rhythm-preset-grid {
+  margin-bottom: 4px;
+}
+
+.ob-rhythm-table-wrap .ob-card-b {
+  border-radius: 12px;
+}
+
+.ob-rhythm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ob-rhythm-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ob-t3);
+  border-bottom: 1px solid var(--ob-b);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.ob-rhythm-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ob-b);
+  vertical-align: top;
+}
+
+.ob-rhythm-svc {
+  font-weight: 700;
+  min-width: 140px;
+  white-space: nowrap;
+}
+
+.ob-rhythm-emoji {
+  margin-right: 6px;
+}
+
+.ob-rhythm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ob-rhythm-chip {
+  padding: 4px 8px;
+  font-size: 10.5px;
+}
+
+.ob-rhythm-hint {
+  font-size: 10px;
+  color: var(--ob-t3);
+  margin-top: 4px;
+}
+
+.ob-rhythm-select {
+  font-size: 11.5px;
+  padding: 6px 8px;
+  min-width: 110px;
+}
+
+.ob-rhythm-staff-rem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.ob-rhythm-esc {
+  text-align: center;
+  width: 72px;
+}
+
 .ob-cond-row {
   display: flex;
   align-items: center;

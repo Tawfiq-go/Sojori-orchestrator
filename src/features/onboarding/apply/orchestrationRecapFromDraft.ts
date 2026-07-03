@@ -1,7 +1,13 @@
 import { CAPABILITY_REGISTRY } from '../../serviceMatrix/capabilityRegistry';
-import type { WizardConditions, WizardDeadlines, WizardDraft, WizardJxSettings } from '../types';
+import type { WizardCapabilities, WizardConditions, WizardDeadlines, WizardDraft, WizardJxSettings } from '../types';
 import { buildOwnerOrchestrationCapabilitiesFromWizard } from './buildOwnerOrchestrationFromWizard';
 import { detectWizardOrchestrationGaps } from './onboardingOrchestrationAudit';
+import {
+  formatClientReminderLabel,
+  formatStaffAssignLabel,
+  resolveServiceRhythmRows,
+  WORKFLOW_PRESET_OPTIONS,
+} from '../onboardingWorkflowDefaults';
 
 const JX_PRESET_LABELS: Record<WizardJxSettings['preset'], string> = {
   standard: 'Standard',
@@ -14,12 +20,6 @@ const CONDITIONS_PRESET_LABELS: Record<WizardConditions['preset'], string> = {
   secure: 'Sécurisé',
   flexible: 'Flexible',
   minimal: 'Minimal',
-};
-
-const STAFF_ASSIGN_LABELS: Record<WizardDeadlines['staffAssignMode'], string> = {
-  with_client_choice: 'Après choix client',
-  last_minute: 'Dernière minute',
-  standard: 'Standard J-N',
 };
 
 export type OrchestrationRecapStat = {
@@ -42,15 +42,20 @@ export type OrchestrationDraftRecap = {
   warnings: string[];
 };
 
-function formatDeadlinesLine(deadlines: WizardDeadlines): string {
-  const mode = STAFF_ASSIGN_LABELS[deadlines.staffAssignMode] ?? deadlines.staffAssignMode;
-  const parts = [`Délais staff : ${mode}`];
-  if (deadlines.staffAssignMode === 'standard') {
-    parts.push(`J-${Math.max(1, deadlines.staffAssignDaysBefore || 3)}`);
+function formatDeadlinesLine(deadlines: WizardDeadlines, capabilities?: WizardCapabilities): string {
+  const preset = WORKFLOW_PRESET_OPTIONS.find((p) => p.id === (deadlines.workflowPreset ?? 'balanced'));
+  const rows = resolveServiceRhythmRows(deadlines, capabilities);
+  const escalated = rows.filter((r) => r.escalationEnabled).length;
+  const parts = [`Préréglage : ${preset?.title ?? 'Équilibré'}`, `${rows.length} service(s)`];
+  if (escalated > 0) {
+    parts.push(`escalade J-1 à ${deadlines.adminEscalationHour}h (${escalated})`);
   }
-  if (deadlines.escalateAdminJ1) {
-    parts.push(`escalade admin J-1 à ${deadlines.adminEscalationHour}h`);
-  }
+  const sample = rows.slice(0, 2).map((r) => {
+    const rc = formatClientReminderLabel(r.clientReminderDays);
+    const assign = formatStaffAssignLabel(r.staffAssignStyle, r.staffAssignDaysBefore);
+    return `${r.emoji} ${assign}${rc !== '—' ? ` · RC ${rc}` : ''}`;
+  });
+  if (sample.length) parts.push(sample.join(' · '));
   return parts.join(' · ');
 }
 
@@ -127,7 +132,7 @@ export function buildOrchestrationRecapFromDraft(draft: WizardDraft): Orchestrat
     if (conditionsApplied && conditions) {
       extras.push(`Conditions accès : ${CONDITIONS_PRESET_LABELS[conditions.preset]}`);
     }
-    if (p6?.deadlines) extras.push(formatDeadlinesLine(p6.deadlines));
+    if (p6?.deadlines) extras.push(formatDeadlinesLine(p6.deadlines, p3.capabilities));
 
     const headline = [
       `${servicesOn} service${servicesOn > 1 ? 's' : ''} actif${servicesOn > 1 ? 's' : ''}`,

@@ -178,7 +178,7 @@ export async function applyOnboardingOrchestration(
 
       emitPhase(options, 'deadlines');
       deadlinesPatched = await applyWithTimeout('Délais staff fulltask', 60_000, () =>
-        applyWizardDeadlines(ownerId, p6),
+        applyWizardDeadlines(ownerId, p6.deadlines, draft.panels['3']?.capabilities),
       );
       if (deadlinesPatched === 0) {
         warnings.push('Délais staff : aucun workflow mis à jour (seed fulltask manquant ?)');
