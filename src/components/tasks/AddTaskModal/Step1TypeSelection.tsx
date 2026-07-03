@@ -26,6 +26,7 @@ import {
   FULLTASK_TYPE_SELECT_OPTIONS,
 } from '../../../utils/fulltaskAddTaskHelpers';
 import type { FulltaskTaskTypeId } from '../../../features/taskHub/staff-design/fulltaskTaskTypes';
+import { autocompleteOptionLiProps } from '../../../utils/autocompleteOptionLiProps';
 
 // Client task types that require listing-specific service config
 const CLIENT_TASK_TYPES: TaskType[] = ['TRANSPORT', 'GROCERIES', 'CUSTOM', 'SUPPORT'];
@@ -326,20 +327,23 @@ export function Step1TypeSelection({
                 }
               />
             )}
-            renderOption={(props, option) => (
-              <li {...props} key={option._id || option.id}>
-                <Box>
-                  <Typography variant="body1">
-                    🏠 {option.name || option.title}
-                  </Typography>
-                  {(option.city || option.address) && (
-                    <Typography variant="caption" color="text.secondary">
-                      {option.city || option.address}
+            renderOption={(props, option) => {
+              const { key, liProps } = autocompleteOptionLiProps(props);
+              return (
+                <Box component="li" key={key ?? option._id ?? option.id} {...liProps}>
+                  <Box>
+                    <Typography variant="body1">
+                      🏠 {option.name || option.title}
                     </Typography>
-                  )}
+                    {(option.city || option.address) && (
+                      <Typography variant="caption" color="text.secondary">
+                        {option.city || option.address}
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
-              </li>
-            )}
+              );
+            }}
             isOptionEqualToValue={(option, value) =>
               option._id === value._id || option.id === value.id
             }
@@ -442,28 +446,31 @@ export function Step1TypeSelection({
                 }
               />
             )}
-            renderOption={(props, option) => (
-              <li {...props} key={option._id || option.id}>
-                <Box>
-                  <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            mb: 0.5
-          }}>
-                    <Chip label={option.number || option.reservationNumber} size="small" />
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {option.guestName}
+            renderOption={(props, option) => {
+              const { key, liProps } = autocompleteOptionLiProps(props);
+              return (
+                <Box component="li" key={key ?? option._id ?? option.id} {...liProps}>
+                  <Box>
+                    <Box sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      mb: 0.5,
+                    }}>
+                      <Chip label={option.number || option.reservationNumber} size="small" />
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {option.guestName}
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      📅{' '}
+                      {new Date(option.checkIn || option.arrivalDate || '').toLocaleDateString()} -{' '}
+                      {new Date(option.checkOut || option.departureDate || '').toLocaleDateString()}
                     </Typography>
                   </Box>
-                  <Typography variant="caption" color="text.secondary">
-                    📅{' '}
-                    {new Date(option.checkIn || option.arrivalDate || '').toLocaleDateString()} -{' '}
-                    {new Date(option.checkOut || option.departureDate || '').toLocaleDateString()}
-                  </Typography>
                 </Box>
-              </li>
-            )}
+              );
+            }}
             filterOptions={(options, { inputValue }) => {
               const input = inputValue.toLowerCase();
               return options.filter(

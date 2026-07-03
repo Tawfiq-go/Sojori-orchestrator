@@ -115,7 +115,7 @@ export default function InfrastructureMonitoringPage() {
           : t.success;
     return (
       <Box sx={{ minWidth: 100 }}>
-        <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+        <Stack direction="row" sx={{ justifyContent: 'space-between',  mb: 0.5 }}>
           <Typography sx={{ fontSize: 11, fontWeight: 700 }}>{percent.toFixed(1)}%</Typography>
         </Stack>
         <LinearProgress
@@ -157,7 +157,7 @@ export default function InfrastructureMonitoringPage() {
                   bgcolor: t.bg2,
                 }}
               >
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.75 }}>
+                <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between',  mb: 0.75 }}>
                   <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text }} noWrap>
                       {c.container}
@@ -407,7 +407,7 @@ export default function InfrastructureMonitoringPage() {
                     key: 'issues',
                     label: 'Problèmes',
                     render: (r: PodRow & { id: string }) => (
-                      <Stack direction="row" flexWrap="wrap" gap={0.5}>
+                      <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap' }}>
                         {r.issues.map((issue, i) => (
                           <Badge key={i} variant="warning">
                             {issue.replace(/_/g, ' ')}

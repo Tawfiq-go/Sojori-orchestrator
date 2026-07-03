@@ -51,7 +51,7 @@ export default function TaskCard({ task, onContactStaff, onViewDetails, onAssign
       )}
 
       {/* Header: type + code */}
-      <Stack direction="row" alignItems="center" gap={0.875} sx={{ mb: 0.875 }}>
+      <Stack direction="row" gap={0.875} sx={{ alignItems: 'center',  mb: 0.875 }}>
         <Box sx={{ fontSize: 13, lineHeight: 1 }}>{meta.emoji}</Box>
         <Typography sx={{
           fontSize: 11.5, fontWeight: 700, color: T.text,
@@ -64,7 +64,7 @@ export default function TaskCard({ task, onContactStaff, onViewDetails, onAssign
       </Stack>
 
       {/* Progress 4 steps */}
-      <Stack direction="row" alignItems="center" gap={0.625} sx={{ mb: 0.875 }}>
+      <Stack direction="row" gap={0.625} sx={{ alignItems: 'center',  mb: 0.875 }}>
         <Stack direction="row" gap="2px" sx={{ flex: 1 }}>
           {[1,2,3,4].map(i => {
             const active = i <= status.step;
@@ -100,7 +100,7 @@ export default function TaskCard({ task, onContactStaff, onViewDetails, onAssign
       )}
 
       {/* Footer: staff + hover actions */}
-      <Stack direction="row" alignItems="center" gap={0.875} sx={{
+      <Stack direction="row" gap={0.875} sx={{ alignItems: 'center', 
         pt: 0.875, borderTop: `1px dashed ${T.border}`, minHeight: 22,
       }}>
         {task.assignedStaff ? (

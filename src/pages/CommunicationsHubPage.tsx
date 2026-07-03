@@ -118,7 +118,7 @@ export default function CommunicationsHubPage() {
       });
       setUnreadCount(unread);
     } catch {
-      /* ignore */
+      /* counts optionnels — échecs déjà loggés par apiClient */
     }
   }, [scopeFetchReady, requestOwnerId]);
 

@@ -223,7 +223,7 @@ export default function SupportCategoriesEditor({
                       sx={{ justifyContent: 'space-between', gap: 1 }}
                     >
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Stack direction="row" alignItems="center" gap={1} sx={{ mb: 0.75, flexWrap: 'wrap' }}>
+                        <Stack direction="row" gap={1} sx={{ alignItems: 'center',  mb: 0.75, flexWrap: 'wrap' }}>
                           <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
                             {category.icon} {category.name?.fr || category.id}
                           </Typography>
@@ -259,7 +259,7 @@ export default function SupportCategoriesEditor({
                           )}
                         </Stack>
                       </Box>
-                      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center',  flexShrink: 0 }}>
                         <Tooltip title="Modifier">
                           <IconButton
                             size="small"

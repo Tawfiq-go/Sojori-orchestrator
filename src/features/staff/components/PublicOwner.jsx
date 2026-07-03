@@ -790,7 +790,7 @@ const PublicOwner = ({
     headerStyle: {
       justifyContent: 'flex-start'
     },
-    body: rowData => <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{
+    body: rowData => <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', 
       maxWidth: 168
     }}>
           <Chip size="small" label={(rowData.settings?.language || '—').toUpperCase()} sx={{
@@ -998,7 +998,7 @@ const PublicOwner = ({
     headerStyle: {
       justifyContent: 'flex-end'
     },
-    body: rowData => <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+    body: rowData => <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
                 <Tooltip title="Suivi onboarding">
                     <IconButton size="small" onClick={() => navigate(`/admin/pm-lifecycle/${rowData._id}`)} sx={{
           p: 0.35,
@@ -1165,8 +1165,8 @@ const PublicOwner = ({
       border: `1px solid rgba(255,107,53,0.28)`,
       boxShadow: '0 2px 12px rgba(255, 107, 53, 0.08)'
     }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} flexWrap="wrap" useFlexGap>
-                    <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                         <Box sx={{
             width: 32,
             height: 32,

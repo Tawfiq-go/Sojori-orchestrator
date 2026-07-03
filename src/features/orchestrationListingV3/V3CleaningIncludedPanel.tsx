@@ -243,7 +243,7 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
             ))}
           </Stack>
 
-          <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ px: 2, pb: 2, pt: 0.5 }}>
+          <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap',  px: 2, pb: 2, pt: 0.5 }}>
             {PREVIEW_NIGHTS.map(n => (
               <Box
                 key={n}

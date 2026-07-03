@@ -165,7 +165,7 @@ export const PhotosTabReal = memo(function PhotosTabReal({
           <Typography sx={{ fontSize: 12, color: T.text3, mb: 1 }}>
             Ordre des photos spécifique Airbnb (optionnel), sans modifier l’ordre Sojori / RU.
           </Typography>
-          <Stack direction="row" alignItems="center" gap={1}>
+          <Stack direction="row" gap={1} sx={{ alignItems: 'center' }}>
             <Typography sx={{ fontSize: 11, fontFamily: 'monospace', color: T.text3, flexShrink: 0 }}>
               airbnbHeroOrder
             </Typography>

@@ -84,7 +84,7 @@ export default function AmenitiesTab({ values, onChange, listingId = '' }: Ameni
   return (
     <Box>
       <RuFormLegend />
-      <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.25 }}>
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center',  mb: 1.25 }}>
         <Typography sx={{ fontSize: 13, fontWeight: 700 }}>Équipements</Typography>
         <FieldIndicator field="listingAmenitiesIds" dense />
       </Stack>

@@ -339,7 +339,7 @@ export default function AIMonitoringPage() {
 
               {(summaryData.byProvider?.length ?? 0) > 0 && (
                 <MonitorSection title="Par fournisseur" desc="Cliquer pour filtrer les appels">
-                  <Stack direction="row" flexWrap="wrap" gap={1}>
+                  <Stack direction="row" gap={1} sx={{ flexWrap: 'wrap' }}>
                     {summaryData.byProvider!.map((ps) => (
                       <FilterChip
                         key={ps._id}
@@ -511,7 +511,7 @@ export default function AIMonitoringPage() {
                   key: 'message',
                   label: 'Message',
                   render: (row: AiCall & { id: string }) => (
-                    <Stack direction="row" spacing={0.75} alignItems="flex-start">
+                    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'flex-start' }}>
                       <Badge variant={severityBadgeVariant(row.severity)} dot>
                         {(row.severity || 'info').toUpperCase()}
                       </Badge>

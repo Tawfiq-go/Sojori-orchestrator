@@ -30,7 +30,7 @@ export default function ConfigPanelToolbar({
       {title && (
         <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.text, mb: 0.75 }}>{title}</Typography>
       )}
-      <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+      <Stack direction="row" sx={{ alignItems: 'center',  flexWrap: 'wrap', gap: 1 }}>
         <SyncStatusBanner syncStatus={syncStatus} loading={syncLoading} onSync={onSync} isSyncing={isSyncing} />
         <Box sx={{ flex: 1, minWidth: 8 }} />
         {onCopyOwner && (

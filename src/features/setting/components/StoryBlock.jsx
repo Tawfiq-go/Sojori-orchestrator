@@ -161,8 +161,8 @@ function StoryBlock() {
                   borderColor: "grey.300",
                   p: 3
                 }}>
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                      <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <AppsIcon sx={{
                         fontSize: 16,
                         color: "#00B4B4"
@@ -176,7 +176,7 @@ function StoryBlock() {
                           {t("StoryBlockEditor")}
                         </Typography>
                       </Stack>
-                      <Stack direction="row" spacing={1} alignItems="center">
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <ToggleButtonGroup value={isFrench ? "fr" : "en"} exclusive onChange={handleLanguageChange} size="small" sx={{
                         "& .MuiToggleButton-root": {
                           border: "1px solid",

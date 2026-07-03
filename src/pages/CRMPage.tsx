@@ -5,6 +5,8 @@
 import { useSearchParams, Navigate } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { tokens as T } from '../components/dashboard/DashboardV2.components';
+import { useAuth } from '../hooks/useAuth';
+import { hasAdminAccess } from '../utils/rbac.utils';
 import { RequestsTab } from '../components/crm/RequestsTab';
 import { HostsTab } from '../components/crm/HostsTab';
 import { LeadsTab } from '../components/crm/LeadsTab';
@@ -29,7 +31,13 @@ const TAB_ALIASES: Record<string, TabId> = {
 };
 
 export function CRMPage() {
+  const { user, loading } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  if (!loading && user?.role && !hasAdminAccess(user.role)) {
+    return <Navigate to="/forbidden" replace />;
+  }
+
   const rawTab = searchParams.get('tab');
   if (!rawTab) {
     return <Navigate to="/crm?tab=requests" replace />;

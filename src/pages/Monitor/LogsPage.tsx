@@ -97,7 +97,7 @@ export default function LogsPage() {
               stats={stats}
             />
           </Box>
-          <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ flexShrink: 0 }}>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap',  flexShrink: 0 }}>
             <Badge variant="error" dot>
               Critical {severityCounts.critical}
             </Badge>

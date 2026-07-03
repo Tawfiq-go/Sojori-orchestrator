@@ -57,6 +57,7 @@ import {
 import {
   applyChannelFlagsToFormValues,
   channelFlagsFromOwner,
+  isRuLinkedOwner,
   resolveOwnerChannelFlags,
 } from '../utils/ownerChannelFlags';
 import {
@@ -582,8 +583,9 @@ const UpdateOwnerSidebar = ({
     return { apiRes, fillCompany: merged };
   };
 
-  const buildUpdatePayload = (values, selectedCity, { includeDashboardEmail = false } = {}) => {
+  const buildUpdatePayload = (values, selectedCity, { includeDashboardEmail = false, ownerRef = null } = {}) => {
     const flags = applyChannelFlagsToFormValues(values);
+    const ruLinked = isRuLinkedOwner(ownerRef, flags);
     return {
     firstName: values.firstName,
     lastName: values.lastName,
@@ -597,7 +599,7 @@ const UpdateOwnerSidebar = ({
     channexEnabled: flags.channexEnabled,
     cityId: values.cityId,
     rentalCityId: selectedCity?.rentalCityId?.toString(),
-    ...(flags.ruEnabled && values.ruEmail?.trim()
+    ...(ruLinked && values.ruEmail?.trim()
       ? { ruEmail: values.ruEmail.trim().toLowerCase() }
       : {}),
     settings: values.settings,
@@ -615,14 +617,15 @@ const UpdateOwnerSidebar = ({
   };
   };
 
-  const buildDraftPayload = (values, selectedCity) => {
+  const buildDraftPayload = (values, selectedCity, ownerRef = null) => {
     const flags = applyChannelFlagsToFormValues(values);
+    const ruLinked = isRuLinkedOwner(ownerRef, flags);
     return {
     ...(effectiveOwnerId ? { ownerId: String(effectiveOwnerId) } : {}),
     firstName: values.firstName,
     lastName: values.lastName,
     email: values.email,
-    ruEmail: flags.ruEnabled
+    ruEmail: ruLinked
       ? (values.ruEmail || buildDefaultRuEmail(values.firstName, values.lastName)).trim().toLowerCase()
       : '',
     phone: values.phone,
@@ -666,7 +669,7 @@ const UpdateOwnerSidebar = ({
       return null;
     }
     const selectedCity = cities.find((city) => city._id === liveValues.cityId);
-    const draftRes = await saveOwnerDraft(buildDraftPayload(liveValues, selectedCity));
+    const draftRes = await saveOwnerDraft(buildDraftPayload(liveValues, selectedCity, owner));
     const accountId = String(draftRes?.data?.accountId ?? effectiveOwnerId ?? '').trim();
     if (!accountId || draftRes?.success === false) {
       setErrors({
@@ -679,7 +682,7 @@ const UpdateOwnerSidebar = ({
     const profilePayload = buildUpdatePayload(
       { ...liveValues, banned: false, deleted: false },
       selectedCity,
-      { includeDashboardEmail: canEditDashboardEmail },
+      { includeDashboardEmail: canEditDashboardEmail, ownerRef: owner },
     );
     try {
       await updateOwner(accountId, profilePayload);
@@ -830,7 +833,10 @@ const UpdateOwnerSidebar = ({
         const selectedCity = cities.find((city) => city._id === values.cityId);
         await updateOwner(
           owner._id,
-          buildUpdatePayload(values, selectedCity, { includeDashboardEmail: canEditDashboardEmail }),
+          buildUpdatePayload(values, selectedCity, {
+            includeDashboardEmail: canEditDashboardEmail,
+            ownerRef: owner,
+          }),
         );
         await persistFillCompany(owner._id, values, { localOnly: true });
         accountId = owner._id;
@@ -883,7 +889,7 @@ const UpdateOwnerSidebar = ({
     setSaveLoading(true);
     try {
       const selectedCity = cities.find((city) => city._id === liveValues.cityId);
-      const draftRes = await saveOwnerDraft(buildDraftPayload(liveValues, selectedCity));
+      const draftRes = await saveOwnerDraft(buildDraftPayload(liveValues, selectedCity, owner));
       const accountId = String(draftRes?.data?.accountId ?? effectiveOwnerId ?? '').trim();
       if (!accountId || draftRes?.success === false) {
         setErrors({
@@ -896,7 +902,7 @@ const UpdateOwnerSidebar = ({
       const profilePayload = buildUpdatePayload(
         { ...liveValues, banned: false, deleted: false },
         selectedCity,
-        { includeDashboardEmail: canEditDashboardEmail },
+        { includeDashboardEmail: canEditDashboardEmail, ownerRef: owner },
       );
       try {
         await updateOwner(accountId, profilePayload);
@@ -978,7 +984,7 @@ const UpdateOwnerSidebar = ({
       let draftEmail = null;
 
       if (canEditDashboardEmail) {
-        const draftPayload = { ...buildDraftPayload(values, selectedCity), ownerId: String(owner._id) };
+        const draftPayload = { ...buildDraftPayload(values, selectedCity, owner), ownerId: String(owner._id) };
         logPmSaveAccountPayload('→ POST save-owner-draft', draftPayload);
         logPmApiStart('POST /auth/save-owner-draft', {
           ownerId: owner._id,
@@ -993,7 +999,10 @@ const UpdateOwnerSidebar = ({
       }
 
       const updatePayload = {
-        ...buildUpdatePayload(values, selectedCity, { includeDashboardEmail: canEditDashboardEmail }),
+        ...buildUpdatePayload(values, selectedCity, {
+          includeDashboardEmail: canEditDashboardEmail,
+          ownerRef: owner,
+        }),
         ...(ruPwd.length >= 6 ? { ruExtranetPassword: ruPwd } : {}),
       };
       logPmSaveAccountPayload('→ PUT update-account', updatePayload);

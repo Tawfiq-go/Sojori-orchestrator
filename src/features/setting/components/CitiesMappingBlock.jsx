@@ -165,8 +165,8 @@ function CitiesMappingBlock() {
                   borderColor: "grey.300",
                   p: 3
                 }}>
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                      <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <AppsIcon sx={{
                         fontSize: 16,
                         color: "#00B4B4"
@@ -180,7 +180,7 @@ function CitiesMappingBlock() {
                           {t("Cities Mapping Editor")}
                         </Typography>
                       </Stack>
-                      <Stack direction="row" spacing={1} alignItems="center">
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <Tooltip title={t("Edit")}>
                           <IconButton sx={{
                           backgroundColor: "#12a190",
@@ -284,7 +284,7 @@ function CitiesMappingBlock() {
                             p: 2.5,
                             borderBottom: "1px solid rgba(0, 180, 180, 0.1)"
                           }}>
-                                  <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
+                                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                                     <Box sx={{
                                 display: "flex",
                                 alignItems: "center",

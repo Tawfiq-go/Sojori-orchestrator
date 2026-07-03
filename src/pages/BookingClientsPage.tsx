@@ -134,7 +134,7 @@ export function BookingClientsPage() {
         render: (row: BookingClientRecord) => {
           const name = bookingClientDisplayName(row);
           return (
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Avatar sx={{ width: 28, height: 28, bgcolor: TEAM_T.primary, fontSize: 11 }}>
                 {initialsFromName(name)}
               </Avatar>

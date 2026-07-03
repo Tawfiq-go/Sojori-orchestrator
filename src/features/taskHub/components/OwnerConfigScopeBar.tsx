@@ -36,7 +36,7 @@ export default function OwnerConfigScopeBar({
         ...(compact ? {} : { px: 2 }),
       }}
     >
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ flex: 1, minWidth: 0 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap',  flex: 1, minWidth: 0 }}>
         <Typography variant="caption" sx={{ fontWeight: 700, color: '#0673b3', letterSpacing: '0.04em' }}>
           PROPRIÉTAIRE
         </Typography>

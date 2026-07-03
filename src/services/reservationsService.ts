@@ -1,10 +1,11 @@
 // ════════════════════════════════════════════════════════════════════
 // Sojori — Reservations Service
 // Service pour interagir avec srv-reservations (port 4007)
-// Basé sur l'ancien dashboard: /api/v1/reservations/reservations avec query params
+// Basé sur srv-reservations : GET /api/v1/reservations?… (query params)
 // ════════════════════════════════════════════════════════════════════
 
 import apiClient from './apiClient';
+import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 import type {
   Reservation,
   ReservationFilter,
@@ -17,7 +18,50 @@ import {
 } from '../utils/reservationDetailCache';
 import { appendFilterOwnerIdsToSearchParams } from '../utils/adminOwnerFilter.utils';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4007';
+const RESERVATIONS_API = MICROSERVICE_BASE_URL.SRV_RESERVATION;
+
+type ReservationsListPayload = {
+  success?: boolean;
+  message?: string;
+  data?: Record<string, unknown>[];
+  unmappedReservation?: Record<string, unknown>[];
+  total?: number;
+  totalUnmapped?: number;
+};
+
+/** srv-reservations legacy : 404 + `{ message: "No data found", data: [] }` quand aucun résultat. */
+function parseReservationsListPayload(
+  status: number,
+  body: ReservationsListPayload | undefined,
+): { data: Reservation[]; total: number } {
+  const legacyEmpty404 =
+    status === 404 &&
+    body &&
+    (body.message === 'No data found' ||
+      (body.success === false && Array.isArray(body.data)));
+
+  if (legacyEmpty404) {
+    return { data: [], total: typeof body.total === 'number' ? body.total : 0 };
+  }
+
+  const mapRow = (r: Record<string, unknown>) =>
+    ({
+      ...r,
+      id: (r.id as string) || (r._id as string),
+    }) as Reservation;
+
+  const regular = (body?.data ?? []).map(mapRow);
+  const unmapped = (body?.unmappedReservation ?? []).map((r) =>
+    mapRow({ ...r, isUnmapped: true }),
+  );
+  const data = [...unmapped, ...regular];
+  const total =
+    typeof body?.total === 'number'
+      ? body.total + (body.totalUnmapped ?? 0)
+      : data.length;
+
+  return { data, total };
+}
 
 /** ObjectId MongoDB 24 hex — sinon on traite le param route comme SJ-XX / numéro résa */
 export function isMongoObjectId(id: string): boolean {
@@ -73,11 +117,10 @@ class ReservationsService {
   }
 
   /**
-   * GET /api/v1/reservations/reservations?dateType=arrival&startDate=...&endDate=...&limit=...&status=...
+   * GET /api/v1/reservations?dateType=arrival&startDate=...&endDate=...&limit=...&status=...
    * Récupère la liste des réservations avec filtres (authenticated with JWT)
    *
-   * ⚠️ IMPORTANT: Utilise le path legacy /reservations/reservations (comme sojori-dashboard ancien)
-   * Le nouveau path /reservations retourne 404
+   * Chemin canonique : GET /api/v1/reservations?dateType=… (aligné sojori-dashboard).
    */
   async getList(params: {
     filter?: ReservationFilter;
@@ -138,11 +181,9 @@ class ReservationsService {
           : [];
       appendFilterOwnerIdsToSearchParams(queryParams, ownerFilter);
 
-      // ⚠️ FIX: Utiliser /reservations/reservations (pas /reservations seul)
-      const url = `${BASE_URL}/api/v1/reservations/reservations?${queryParams.toString()}`;
+      // Chemin canonique aligné dashboard : /api/v1/reservations/?…
+      const url = `${RESERVATIONS_API}/?${queryParams.toString()}`;
 
-      // 🔑 CRITICAL FIX: Add X-Dev-Token for localhost → production CORS
-      // This must be done here because apiClient.ts interceptor is cached
       const headers: Record<string, string> = {};
 
       if (typeof window !== 'undefined') {
@@ -158,44 +199,22 @@ class ReservationsService {
         }
       }
 
-      // Backend returns 404 with JSON when no data found - we need to accept this
+      // Legacy prod : 404 « No data found » jusqu’au déploiement getReservations → 200.
       const response = await apiClient.get(url, {
         headers,
-        validateStatus: (status) => (status >= 200 && status < 300) || status === 404
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
       });
 
-      // Logs désactivés pour nettoyer la console
-      // console.log('📡 [ReservationsService] API Response:', {
-      //   status: response.status,
-      //   success: response.data?.success,
-      //   dataLength: response.data?.data?.length,
-      //   hasData: !!response.data?.data,
-      //   firstItem: response.data?.data?.[0],
-      // });
-
-      // ⚠️ Backend retourne { success, data[], unmappedReservation[] }
-      // Pas un array direct
-      // Note: Backend returns 404 with success: false when no data found
-      const reservations = (response.data.data || []).map((r: Record<string, unknown>) => ({
-        ...r,
-        id: (r.id as string) || (r._id as string),
-      })) as Reservation[];
-
-      // Logs désactivés pour nettoyer la console
-      // console.log('✅ [ReservationsService] Returning:', {
-      //   success: true,
-      //   count: reservations.length,
-      //   cancelled: reservations.filter((r: any) => /cancel/i.test(r.status)).length,
-      //   cancelledUnacked: reservations.filter((r: any) =>
-      //     /cancel/i.test(r.status) && r.cancellationAcknowledged !== true
-      //   ).length,
-      // });
+      const { data: reservations, total } = parseReservationsListPayload(
+        response.status,
+        response.data as ReservationsListPayload,
+      );
 
       return {
         success: true,
         data: reservations,
         count: reservations.length,
-        total: response.data.total ?? reservations.length,
+        total,
       };
     } catch (error) {
       console.error('Error fetching reservations:', error);
@@ -356,7 +375,7 @@ class ReservationsService {
         params.set('includeThreads', 'false');
       }
       const qs = params.toString();
-      const url = `${BASE_URL}/api/v1/reservations/by-id/${reservationId}${qs ? `?${qs}` : ''}`;
+      const url = `${RESERVATIONS_API}/by-id/${reservationId}${qs ? `?${qs}` : ''}`;
 
       const response = await apiClient.get(url);
 
@@ -390,7 +409,7 @@ class ReservationsService {
     console.log(`[ReservationsService] 🚀 Batch fetching ${ids.length} reservations...`);
 
     try {
-      const url = `${BASE_URL}/api/v1/reservations/batch?ids=${ids.join(',')}`;
+      const url = `${RESERVATIONS_API}/batch?ids=${ids.join(',')}`;
       const response = await apiClient.get(url);
 
       const duration = performance.now() - startTime;
@@ -449,7 +468,7 @@ class ReservationsService {
       // Nettoyage
       delete payload.skipPaymentLink;
 
-      const url = `${BASE_URL}/api/v1/reservations/create`;
+      const url = `${RESERVATIONS_API}/create`;
 
       // Logs désactivés pour nettoyer la console
       // console.log('[ReservationsService] 📤 Creating reservation:', payload);
@@ -484,11 +503,11 @@ class ReservationsService {
   // ════════════════════════════════════════════════════════════════════
 
   /**
-   * GET /api/v1/reservations/reservations/by-reservation-number/:reservationNumber
+   * GET /api/v1/reservations/by-reservation-number/:reservationNumber
    */
   async getByReservationNumber(reservationNumber: string): Promise<Reservation | null> {
     try {
-      const url = `${BASE_URL}/api/v1/reservations/reservations/by-reservation-number/${encodeURIComponent(reservationNumber.trim())}`;
+      const url = `${RESERVATIONS_API}/by-reservation-number/${encodeURIComponent(reservationNumber.trim())}`;
       const response = await apiClient.get(url);
       if (response.data?.success && response.data?.reservation) {
         return response.data.reservation as Reservation;
@@ -512,7 +531,7 @@ class ReservationsService {
    */
   async update(reservationId: string, data: any): Promise<{ success: boolean; data?: any; message?: string }> {
     try {
-      const url = `${BASE_URL}/api/v1/reservations/update/${reservationId}`;
+      const url = `${RESERVATIONS_API}/update/${reservationId}`;
 
       const response = await apiClient.put(url, data);
 
@@ -545,7 +564,7 @@ class ReservationsService {
         ...data,
       };
 
-      const url = `${BASE_URL}/api/v1/reservations/cancel/${encodeURIComponent(reservationId)}`;
+      const url = `${RESERVATIONS_API}/cancel/${encodeURIComponent(reservationId)}`;
 
       const response = await apiClient.put(url, payload);
 
@@ -569,7 +588,7 @@ class ReservationsService {
    */
   async updateReservationFields(reservationId: string, fields: Record<string, any>): Promise<{ success: boolean; data?: any; message?: string }> {
     try {
-      const url = `${BASE_URL}/api/v1/reservations/update-fields/${reservationId}`;
+      const url = `${RESERVATIONS_API}/update-fields/${reservationId}`;
 
       const response = await apiClient.put(url, fields);
 

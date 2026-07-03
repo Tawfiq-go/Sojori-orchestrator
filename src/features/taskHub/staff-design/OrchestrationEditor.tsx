@@ -46,7 +46,7 @@ export default function OrchestrationEditor({
   return (
     <Box>
       {/* Header */}
-      <Stack direction="row" alignItems="flex-start" gap={1.75} sx={{ mb: 3 }}>
+      <Stack direction="row" gap={1.75} sx={{ alignItems: 'flex-start',  mb: 3 }}>
         <Box sx={{
           width: 48, height: 48, borderRadius: 1.625,
           background: `linear-gradient(135deg, ${T.primarySoft}, ${T.primaryDeep})`,
@@ -132,7 +132,7 @@ function WorkflowCard({ wf, onUpdate, onAddRelance, onDeleteRelance }: {
       overflow: 'hidden', opacity: wf.enabled ? 1 : 0.6,
       boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
     }}>
-      <Stack direction="row" alignItems="center" gap={1.25} sx={{
+      <Stack direction="row" gap={1.25} sx={{ alignItems: 'center', 
         p: '14px 16px', bgcolor: T.bg2, cursor: 'pointer',
         borderBottom: expanded ? `1px solid ${T.border}` : 0,
       }} onClick={() => setExpanded(e => !e)}>
@@ -181,7 +181,7 @@ function WorkflowCard({ wf, onUpdate, onAddRelance, onDeleteRelance }: {
                 {Object.entries(REFERENCE_LABELS).map(([k, v]) => <MenuItem key={k} value={k}>{v}</MenuItem>)}
               </TextField>
             </Stack>
-            <Stack direction="row" gap={1.25} flexWrap="wrap" alignItems="center">
+            <Stack direction="row" gap={1.25} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
               <Box sx={{ fontSize: 10.5, fontFamily: '"Geist Mono", monospace', fontWeight: 800, color: T.text3, textTransform: 'uppercase' }}>Fenêtre</Box>
               <DelayInput value={wf.assignment.windowStart}
                 onChange={v => onUpdate({ assignment: { ...wf.assignment, windowStart: v } })} />
@@ -199,7 +199,7 @@ function WorkflowCard({ wf, onUpdate, onAddRelance, onDeleteRelance }: {
           {/* Deadline */}
           <SectionTitle sx={{ mt: 2.5 }}>⏰ Deadline</SectionTitle>
           <Box sx={{ p: 1.5, bgcolor: 'rgba(200,30,30,0.04)', border: `1px solid ${T.errorTint}`, borderRadius: 1.125 }}>
-            <Stack direction="row" gap={1.25} flexWrap="wrap" alignItems="center">
+            <Stack direction="row" gap={1.25} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
               <TextField select size="small" value={wf.deadline.reference}
                 onChange={e => onUpdate({ deadline: { ...wf.deadline, reference: e.target.value as ReferencePoint } })}
                 sx={{ ...inputSxSm, minWidth: 200 }}>
@@ -236,7 +236,7 @@ function RelanceRow({ relance, index, onChange, onDelete }: {
 }) {
   const ch = CHANNEL_META[relance.channel];
   return (
-    <Stack direction="row" alignItems="center" gap={1} sx={{
+    <Stack direction="row" gap={1} sx={{ alignItems: 'center', 
       p: '8px 11px', bgcolor: T.bg2, border: `1px solid ${T.border}`, borderRadius: 1,
     }}>
       <Box sx={{
@@ -268,7 +268,7 @@ function MessageRow({ msg, onUpdate, onDelete }: {
 }) {
   const ch = CHANNEL_META[msg.channel];
   return (
-    <Stack direction="row" alignItems="center" gap={1} sx={{
+    <Stack direction="row" gap={1} sx={{ alignItems: 'center', 
       p: '10px 12px', bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.125,
       opacity: msg.enabled ? 1 : 0.55,
     }}>

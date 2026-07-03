@@ -1,13 +1,24 @@
 /** Toggles RU / Channex — miroir de srv-user ownerChannelFlags.ts */
 
+function ownerHasRuId(owner) {
+  return Boolean(String(owner?.ruOwnerId || '').trim());
+}
+
+/** PM déjà lié à RU (toggle, channelManager ou ruOwnerId en base). */
+export function isRuLinkedOwner(source = {}, values = {}) {
+  const cm = String(values.channelManager ?? source.channelManager ?? '').trim();
+  if (values.ruEnabled === true || source.ruEnabled === true) return true;
+  if (cm === 'RU') return true;
+  return ownerHasRuId(source) || ownerHasRuId(values);
+}
+
 export function channelFlagsFromOwner(owner) {
-  const ruEnabled =
-    owner?.ruEnabled === true ||
-    (owner?.ruEnabled !== false && String(owner?.channelManager || '').trim() === 'RU');
+  const cm = String(owner?.channelManager || '').trim();
+  const ruEnabled = owner?.ruEnabled === true || cm === 'RU' || ownerHasRuId(owner);
   return {
     ruEnabled,
-    channexEnabled: false,
-    channelManager: ruEnabled ? 'RU' : '',
+    channexEnabled: !ruEnabled && cm === 'Channex',
+    channelManager: ruEnabled ? 'RU' : cm === 'Channex' ? 'Channex' : cm,
   };
 }
 

@@ -8,7 +8,7 @@ const formatDate = (value) =>
 const SyncStatusBanner = ({ syncStatus, loading, onSync, isSyncing }) => {
   if (loading) {
     return (
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <CircularProgress size={14} sx={{ color: T.primary }} />
         <Typography sx={{ fontSize: 12, color: T.text3 }}>Analyse…</Typography>
       </Stack>
@@ -26,7 +26,7 @@ const SyncStatusBanner = ({ syncStatus, loading, onSync, isSyncing }) => {
   }
 
   return (
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ flexWrap: 'wrap' }}>
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center',  flexWrap: 'wrap' }}>
       <Typography sx={{ fontSize: 12, color: T.warning, fontWeight: 600 }}>
         ⚠️ v{syncStatus.listingVersion} → v{syncStatus.adminVersion}
       </Typography>

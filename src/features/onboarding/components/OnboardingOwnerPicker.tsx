@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAdminOwnerFilter } from '../../../context/AdminOwnerFilterContext';
 import { getOwners } from '../../../services/teamDashboardApi';
 import { getOwnerListLabel } from '../../../utils/ownerDisplay.utils';
+import { autocompleteOptionLiProps } from '../../../utils/autocompleteOptionLiProps';
 
 type OwnerRow = {
   _id?: string;
@@ -118,10 +119,10 @@ export function OnboardingOwnerPicker() {
         }}
         sx={{ width: '100%' }}
         renderOption={(props, option) => {
-          const { key, ...rest } = props as { key?: string };
+          const { key, liProps } = autocompleteOptionLiProps(props);
           const secondary = ownerRowSecondary(option);
           return (
-            <Box component="li" key={key ?? ownerRowId(option)} {...rest} sx={{ py: 1, px: 1.5 }}>
+            <Box component="li" key={key ?? ownerRowId(option)} {...liProps} sx={{ py: 1, px: 1.5 }}>
               <Typography variant="body2" fontWeight={700} lineHeight={1.3}>
                 {getOwnerListLabel(option)}
               </Typography>

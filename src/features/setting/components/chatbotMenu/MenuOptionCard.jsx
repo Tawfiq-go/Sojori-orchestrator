@@ -51,7 +51,7 @@ const MenuOptionCard = ({ option, onChange }) => {
       }}
     >
       <Box sx={{ p: 1.5 }}>
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Chip
             label={option.code}
             size="small"
@@ -133,7 +133,7 @@ const MenuOptionCard = ({ option, onChange }) => {
                   }
                 />
               )}
-              <Stack direction="row" spacing={1} flexWrap="wrap">
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                 {option.createsTask && (
                   <Chip
                     size="small"

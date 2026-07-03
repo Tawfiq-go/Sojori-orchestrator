@@ -369,7 +369,7 @@ function SupportOpenTasksPanel({
                   bgcolor: '#fff',
                 }}
               >
-                <Stack direction="row" alignItems="flex-start" spacing={1} flexWrap="wrap">
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1, minWidth: 160 }}>
                     {catLabel}
                   </Typography>
@@ -379,7 +379,7 @@ function SupportOpenTasksPanel({
                     sx={{ height: 22, fontSize: 10, fontWeight: 700, bgcolor: st.bg, color: st.color }}
                   />
                 </Stack>
-                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mt: 0.75, flexWrap: 'wrap' }}>
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center',  mt: 0.75, flexWrap: 'wrap' }}>
                   <Typography
                     sx={{
                       fontFamily: 'Geist Mono, monospace',

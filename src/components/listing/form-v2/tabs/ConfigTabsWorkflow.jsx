@@ -202,7 +202,7 @@ export function CleaningTab({ values = {}, onChange }) {
             { id: 'complet', emoji: '🧼', name: 'Ménage Complet', price: 350, dur: 4, mode: '3 créneaux' },
           ].map(s => (
             <Box key={s.id} sx={{ p: 1.5, border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1, mb: 0.75 }}>
-              <Stack direction="row" alignItems="center" gap={1}>
+              <Stack direction="row" gap={1} sx={{ alignItems: 'center' }}>
                 <Box sx={{ fontSize: 18 }}>{s.emoji}</Box>
                 <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{s.name}</Typography>
                 <Box sx={{ ml: 'auto', display: 'flex', gap: 1.5, fontSize: 11, color: T.text3 }}>

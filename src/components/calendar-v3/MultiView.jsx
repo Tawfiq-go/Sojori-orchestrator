@@ -6,6 +6,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback, memo } from '
 import {
   T, ALL_COLUMNS, priceOf, cellKey, genDays, isArchiveDay, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   hasInventoryData, resolveInventoryCellState, formatInventoryRateLabel, OUT_OF_WINDOW_CELL_BG,
+  sortCalendarColumns,
 } from './_shared';
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
@@ -441,7 +442,7 @@ function ListingRow({
       </div>
 
       {/* Collapse rows */}
-      {expanded && selectedColumns.map(colId => {
+      {expanded && sortCalendarColumns(selectedColumns).map(colId => {
         const col = ALL_COLUMNS.find(c => c.id === colId);
         if (!col) return null;
         return (

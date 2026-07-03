@@ -189,3 +189,110 @@ export function maskToken(token: string | null | undefined): string {
   if (token.length <= 12) return '***';
   return `${token.slice(0, 6)}…${token.slice(-4)}`;
 }
+
+/** Chemin API court pour logs (sans origine, query tronquée). */
+export function shortApiPath(url: string | undefined): string {
+  if (!url) return '(unknown)';
+  let path = url;
+  try {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      path = new URL(url).pathname;
+    }
+  } catch {
+    /* garder url brut */
+  }
+  const noQuery = path.split('?')[0];
+  return noQuery.length > 120 ? `${noQuery.slice(0, 120)}…` : noQuery;
+}
+
+function isAxiosCanceled(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { code?: string; name?: string };
+  return e.code === 'ERR_CANCELED' || e.name === 'CanceledError';
+}
+
+export function logHttpError(message: string, data?: unknown): void {
+  runtimeLog('error', 'HTTP', message, data);
+}
+
+export function logHttpWarn(message: string, data?: unknown): void {
+  runtimeLog('warn', 'HTTP', message, data ?? '');
+}
+
+export function logHttpInfo(message: string, data?: unknown): void {
+  runtimeLog('info', 'HTTP', message, data);
+}
+
+export function logCommsError(message: string, data?: unknown): void {
+  runtimeLog('error', 'Comms', message, data ?? '');
+}
+
+export function logCommsWarn(message: string, data?: unknown): void {
+  runtimeLog('warn', 'Comms', message, data ?? '');
+}
+
+const recentHttpFailures = new Map<string, number>();
+const HTTP_FAILURE_DEDUPE_MS = 5000;
+
+function resolveAxiosLikeError(error: unknown): {
+  config?: { url?: string; method?: string; _internalTokenRefresh?: boolean };
+  response?: { status?: number; data?: unknown };
+  message?: string;
+  code?: string;
+  name?: string;
+} | null {
+  if (!error || typeof error !== 'object') return null;
+  const direct = error as {
+    config?: { url?: string; method?: string; _internalTokenRefresh?: boolean };
+    response?: { status?: number; data?: unknown };
+    message?: string;
+    code?: string;
+    name?: string;
+    cause?: unknown;
+  };
+  if (direct.config?.url || direct.response) return direct;
+  if (direct.cause && typeof direct.cause === 'object') {
+    return resolveAxiosLikeError(direct.cause);
+  }
+  return direct.config || direct.response ? direct : null;
+}
+
+/** Log un échec HTTP axios (console + DevRuntimeLogPanel). Ignore cancel / refresh interne / doublons. */
+export function logApiHttpFailure(error: unknown, meta?: Record<string, unknown>): void {
+  const e = resolveAxiosLikeError(error);
+  if (!e) return;
+
+  if (e.config?._internalTokenRefresh) return;
+  if (isAxiosCanceled(error) || isAxiosCanceled(e)) return;
+
+  const method = (e.config?.method ?? 'GET').toUpperCase();
+  const path = shortApiPath(e.config?.url);
+  const status = e.response?.status;
+  const body = e.response?.data as Record<string, unknown> | undefined;
+
+  const dedupeKey = `${method}|${path}|${status ?? 'net'}|${String(meta?.label ?? '')}`;
+  const now = Date.now();
+  const last = recentHttpFailures.get(dedupeKey);
+  if (last != null && now - last < HTTP_FAILURE_DEDUPE_MS) return;
+  recentHttpFailures.set(dedupeKey, now);
+
+  const statusPart =
+    status != null ? `HTTP ${status}` : (e.code ?? e.message ?? 'network error');
+  const message = `✗ ${method} ${path} → ${statusPart}`;
+
+  const detail = {
+    status,
+    body,
+    forceLogout: body?.forceLogout,
+    error: body?.error,
+    code: e.code,
+    axiosMessage: e.message,
+    ...meta,
+  };
+
+  if (status != null && status < 500) {
+    logHttpWarn(message, detail);
+  } else {
+    logHttpError(message, detail);
+  }
+}

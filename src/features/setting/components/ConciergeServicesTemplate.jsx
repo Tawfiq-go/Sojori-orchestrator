@@ -864,8 +864,8 @@ const ConciergeServicesTemplate = ({
       {isListingMode && listingHeaderActions ? <Box sx={{
       mb: 2
     }}>
-          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap columnGap={1} rowGap={1}>
-            <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" useFlexGap>
+          <Stack direction="row" spacing={1} useFlexGap columnGap={1} rowGap={1} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
               {listingHeaderActions}
             </Stack>
             {saveButton}
@@ -873,7 +873,7 @@ const ConciergeServicesTemplate = ({
         </Box> : <Box sx={{
       mb: 3
     }}>
-          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" flexWrap="wrap">
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
             <Box sx={{
           display: 'flex',
           alignItems: 'center',

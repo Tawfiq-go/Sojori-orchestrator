@@ -28,7 +28,7 @@ function OptionRow({ row }: { row: MenuOptionInterpretation }) {
         bgcolor: RING[row.listColor],
       }}
     >
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 52 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center',  minWidth: 52 }}>
         <Box
           sx={{
             width: 12,
@@ -114,7 +114,7 @@ export default function WhatsappMenuInterpretationPanel({
         </Box>
       )}
 
-      <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mb: 1.5 }}>
+      <Stack direction="row" gap={1} sx={{ flexWrap: 'wrap',  mb: 1.5 }}>
         <LegendDot color="green" label={`${counts.green} actives`} />
         <LegendDot color="yellow" label={`${counts.yellow} condition / bientôt`} />
         <LegendDot color="red" label={`${counts.red} inactives`} />
@@ -137,7 +137,7 @@ export default function WhatsappMenuInterpretationPanel({
 
 function LegendDot({ color, label }: { color: 'green' | 'red' | 'yellow'; label: string }) {
   return (
-    <Stack direction="row" alignItems="center" spacing={0.75}>
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
       <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: DOT[color] }} />
       <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: T.text2 }}>{label}</Typography>
     </Stack>

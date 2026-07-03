@@ -184,8 +184,13 @@ export default function CalendarInventoryPage({
           marginBottom: 14,
           boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
           flexWrap: 'wrap',
+          overflow: 'visible',
         }}
       >
+        {view === 'multi' && (
+          <ColumnFilters selectedColumns={selectedColumns} onChange={setSelectedColumns} />
+        )}
+
         <div
           style={{
             display: 'inline-flex',
@@ -393,9 +398,6 @@ export default function CalendarInventoryPage({
           loading={dpSyncLoading}
         />
 
-        {view === 'multi' && (
-          <ColumnFilters selectedColumns={selectedColumns} onChange={setSelectedColumns} />
-        )}
       </div>
 
       {view === 'multi' && (

@@ -73,7 +73,7 @@ export function CleaningSojoriSchedulePanel({
         border: `1px solid ${t.border}`,
       }}
     >
-      <Stack direction="row" flexWrap="wrap" gap={0.75} alignItems="center" sx={{ mb: 0.75 }}>
+      <Stack direction="row" gap={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap',  mb: 0.75 }}>
         <Typography sx={{ fontSize: 10, fontWeight: 700, color: t.text2 }}>Logement</Typography>
         {listingId ? (
           <CleanlinessBadgeInteractive
@@ -93,7 +93,7 @@ export function CleaningSojoriSchedulePanel({
 
       {hasSchedule && (
         <>
-          <Stack direction="row" flexWrap="wrap" gap={0.5} alignItems="center" sx={{ mb: 0.5 }}>
+          <Stack direction="row" gap={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap',  mb: 0.5 }}>
             <Typography sx={{ fontSize: 10, fontWeight: 700, color: t.text2 }}>Planification ménage</Typography>
             {Boolean(scheduling?.isUrgent ?? metadata?.isUrgent) && (
               <Chip

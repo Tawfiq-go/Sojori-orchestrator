@@ -34,12 +34,17 @@ const RentalUnitedContainerV2 = ({
         </div>
       )}
 
-      {!isAdmin && ruLoginEmail && (
+      {isAdmin && ruLoginEmail && (
         <CmHint>
           Connexion widget R.U. : <strong>{ruLoginEmail}</strong>
-          {tokenData?.dashboardEmail && tokenData.dashboardEmail !== ruLoginEmail
-            ? ` (dashboard Sojori : ${tokenData.dashboardEmail})`
-            : ''}
+          {(tokenData?.dashboardEmail || selectedOwner?.email) &&
+          (tokenData?.dashboardEmail || selectedOwner?.email) !== ruLoginEmail ? (
+            <>
+              {' '}
+              · Dashboard Sojori :{' '}
+              <strong>{tokenData?.dashboardEmail || selectedOwner?.email}</strong>
+            </>
+          ) : null}
         </CmHint>
       )}
 

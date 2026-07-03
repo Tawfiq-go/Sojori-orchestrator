@@ -18,7 +18,7 @@ import {
 
 function CompactStat({ icon, iconColor, value, label }: { icon: string; iconColor: string; value: string; label: string }) {
   return (
-    <Stack direction="row" spacing={0.75} alignItems="center" sx={{ py: 0.25 }}>
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center',  py: 0.25 }}>
       <Box sx={{ fontSize: 14, color: iconColor, lineHeight: 1 }}>{icon}</Box>
       <Typography sx={{ fontSize: 15, fontWeight: 800, color: t.text, lineHeight: 1 }}>{value}</Typography>
       <Typography sx={{ fontSize: 11.5, color: t.text3, lineHeight: 1 }}>{label}</Typography>
@@ -217,13 +217,13 @@ interface TimelineStep {
 function StepSegmentTimeline({ steps }: { steps: TimelineStep[] }) {
   return (
     <Box sx={{ overflowX: 'auto' }}>
-      <Stack direction="row" alignItems="stretch" sx={{ minWidth: 'fit-content' }}>
+      <Stack direction="row" sx={{ alignItems: 'stretch',  minWidth: 'fit-content' }}>
         {steps.map((step, i) => {
           const isLast = i === steps.length - 1;
           const color = step.isFailurePoint ? t.error : step.reached ? t.success : t.text3;
           return (
-            <Stack key={step.key} direction="row" alignItems="center">
-              <Stack alignItems="center" spacing={0.5} sx={{ minWidth: 84, px: 0.5 }}>
+            <Stack key={step.key} direction="row" sx={{ alignItems: 'center' }}>
+              <Stack spacing={0.5} sx={{ alignItems: 'center',  minWidth: 84, px: 0.5 }}>
                 <Box
                   sx={{
                     width: 12,
@@ -241,7 +241,7 @@ function StepSegmentTimeline({ steps }: { steps: TimelineStep[] }) {
                 </Typography>
               </Stack>
               {!isLast && (
-                <Stack alignItems="center" sx={{ minWidth: 56, px: 0.25 }}>
+                <Stack sx={{ alignItems: 'center',  minWidth: 56, px: 0.25 }}>
                   <Box sx={{ width: '100%', height: 2, bgcolor: steps[i + 1]?.reached || steps[i + 1]?.isFailurePoint ? t.success : t.border }} />
                   <Typography sx={{ fontSize: 9.5, color: t.text3, fontFamily: 'monospace', mt: 0.25 }}>
                     {steps[i + 1]?.elapsedSeconds != null ? `+${formatDuration(steps[i + 1].elapsedSeconds)}` : '—'}
@@ -305,7 +305,7 @@ function RestartHistoryTabs({ history }: { history: RestartCycle[] }) {
               bgcolor: t.bg1,
             }}
           >
-            <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 0.75 }}>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center',  mb: 0.75 }}>
               <Box
                 sx={{
                   px: 0.75,
@@ -352,7 +352,7 @@ function ResourceBar({ label, metric, formatter }: { label: string; metric: Reso
 
   return (
     <Box sx={{ minWidth: 140 }}>
-      <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+      <Stack direction="row" sx={{ justifyContent: 'space-between',  mb: 0.5 }}>
         <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text2 }}>{label}</Typography>
         <Typography sx={{ fontSize: 11, color: t.text3 }}>
           {formatter(usage)} / {formatter(limit)}
@@ -486,7 +486,7 @@ export default function PodsMonitoringPage() {
                       </Typography>
                     </Box>
 
-                    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
+                    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                       <Badge variant={phaseBadgeVariant(p.phase)} dot>
                         {p.phase || 'Unknown'}
                       </Badge>
@@ -526,7 +526,7 @@ export default function PodsMonitoringPage() {
                           {p.startup?.timeline?.length > 0 ? (
                             <Stack spacing={0.4}>
                               {p.startup.timeline.map((c, i) => (
-                                <Stack key={i} direction="row" spacing={1} alignItems="center">
+                                <Stack key={i} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                   <Badge variant={c.status === 'True' ? 'success' : 'error'} dot>
                                     {conditionLabel(c.type)}
                                   </Badge>
@@ -581,7 +581,7 @@ export default function PodsMonitoringPage() {
                             <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text2, mb: 0.75 }}>
                               Ressources
                             </Typography>
-                            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+                            <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
                               <ResourceBar label="CPU" metric={p.resources.cpu} formatter={formatCores} />
                               <ResourceBar label="Mémoire" metric={p.resources.memory} formatter={formatBytes} />
                             </Stack>
@@ -663,7 +663,7 @@ export default function PodsMonitoringPage() {
                           ) : (
                             <Stack spacing={0.5}>
                               {p.events.map((ev, i) => (
-                                <Stack key={i} direction="row" spacing={1} alignItems="baseline">
+                                <Stack key={i} direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
                                   <Badge variant={ev.type === 'Warning' ? 'warning' : 'neutral'}>
                                     {ev.reason || ev.type}
                                   </Badge>

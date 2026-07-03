@@ -113,7 +113,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       { id: 'comms/guests', label: 'WhatsApp Guest', iconType: 'chat', iconColor: '#6D9EEB' },
       { id: 'comms/ota', label: 'Messages OTA', iconType: 'chat', iconColor: '#6D9EEB' },
-      { id: 'crm/requests', label: 'Demandes', iconType: 'chat', iconColor: '#6D9EEB' },
+      { id: 'comms/leads', label: 'Demande', iconType: 'chat', iconColor: '#6D9EEB' },
       { id: 'reviews', label: 'Avis', iconType: 'chat', iconColor: '#6D9EEB' },
       { id: 'comms/staff', label: 'Staff WhatsApp', iconType: 'chat', iconColor: '#6D9EEB', badgeRed: true },
     ],
@@ -219,6 +219,13 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       { id: 'admin/pms', label: 'Owners · PMs', iconType: 'building', iconColor: '#A6A6A6' },
       { id: 'admin/pm-lifecycle', label: 'Suivi onboarding PM', icon: '📋', iconColor: '#0D9488' },
+      {
+        id: 'crm',
+        label: 'CRM Sojori',
+        iconType: 'chat',
+        iconColor: '#6D9EEB',
+        description: 'Demandes PMS, leads commerciaux, rendez-vous — admin uniquement',
+      },
       { id: 'admin/roles', label: 'Rôles & groupes', iconType: 'shield', iconColor: '#C81E1E' },
       { id: 'admin/mapping', label: 'Mapping global', iconType: 'link', iconColor: '#6D9EEB' },
       { id: 'admin/settings', label: 'Paramètres', iconType: 'settings', iconColor: '#666666' },

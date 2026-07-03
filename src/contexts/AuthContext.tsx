@@ -174,6 +174,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         message: err?.message || err?.error,
         body: err?.response?.data,
       });
+      if (err?.forceLogout === false) {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: err?.error || err?.message || 'Impossible de valider la session',
+        }));
+        return;
+      }
       clearTokens();
       clearPersistedUser();
       setState({

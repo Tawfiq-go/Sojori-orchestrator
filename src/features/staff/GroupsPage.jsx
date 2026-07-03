@@ -390,7 +390,7 @@ export default function GroupsPage({ embedded = false } = {}) {
             <Typography sx={{ mb: 1, fontWeight: 700, fontSize: 13 }}>
               {permRow.name} — {t('Permissions')}
             </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
               {(permRow.featureGrants || []).map((g, idx) => (
                 <Chip key={idx} size="small" variant="outlined" label={g.feature} />
               ))}

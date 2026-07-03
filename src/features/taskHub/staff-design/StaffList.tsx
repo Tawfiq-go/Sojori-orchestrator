@@ -46,7 +46,7 @@ export default function StaffList({ staff, loading, onCreate, onEdit, onDelete }
   return (
     <Box>
       {/* Header */}
-      <Stack direction="row" alignItems="flex-start" gap={1.75} sx={{ mb: 3 }}>
+      <Stack direction="row" gap={1.75} sx={{ alignItems: 'flex-start',  mb: 3 }}>
         <Box sx={{
           width: 48, height: 48, borderRadius: 1.625,
           background: `linear-gradient(135deg, ${T.primarySoft}, ${T.primaryDeep})`,
@@ -136,7 +136,7 @@ function StaffCard({ staff, onClick }: { staff: Staff; onClick: () => void }) {
         borderColor: T.primary,
       },
     }}>
-      <Stack direction="row" alignItems="center" gap={1.5} sx={{ mb: 1.5 }}>
+      <Stack direction="row" gap={1.5} sx={{ alignItems: 'center',  mb: 1.5 }}>
         <Box sx={{
           width: 44, height: 44, borderRadius: '50%',
           background: GRADIENTS[staff.avatarColor || 1],
@@ -150,7 +150,7 @@ function StaffCard({ staff, onClick }: { staff: Staff; onClick: () => void }) {
           },
         }}>{initials}</Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack direction="row" alignItems="center" gap={0.75}>
+          <Stack direction="row" gap={0.75} sx={{ alignItems: 'center' }}>
             <Typography sx={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.005em' }}>
               {staff.fullName}
             </Typography>
@@ -170,7 +170,7 @@ function StaffCard({ staff, onClick }: { staff: Staff; onClick: () => void }) {
       </Stack>
 
       {/* Task pills */}
-      <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mb: 1 }}>
+      <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap',  mb: 1 }}>
         {staff.allowedTaskTypes.slice(0, 4).map(t => (
           <Box key={t} sx={{
             fontSize: 10.5, fontFamily: '"Geist Mono", monospace', fontWeight: 700,
@@ -186,7 +186,7 @@ function StaffCard({ staff, onClick }: { staff: Staff; onClick: () => void }) {
         )}
       </Stack>
 
-      <Stack direction="row" alignItems="center" gap={1.5} sx={{
+      <Stack direction="row" gap={1.5} sx={{ alignItems: 'center', 
         pt: 1.25, borderTop: `1px dashed ${T.border}`,
         fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace',
       }}>

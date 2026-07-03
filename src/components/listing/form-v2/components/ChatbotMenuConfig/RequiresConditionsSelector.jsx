@@ -50,7 +50,7 @@ export default function RequiresConditionsSelector({ value = '', onChange }) {
         bgcolor: T.bg1,
       }}
     >
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between',  mb: 1 }}>
         <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: T.text2 }}>
           Conditions requises (toutes — ET)
         </Typography>
@@ -78,7 +78,7 @@ export default function RequiresConditionsSelector({ value = '', onChange }) {
           Aucune condition — cliquez sur « Ajouter une condition » (ex. E puis D1).
         </Typography>
       ) : (
-        <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mb: 0.75 }}>
+        <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap',  mb: 0.75 }}>
           {selected.map((code) => (
             <Chip
               key={code}

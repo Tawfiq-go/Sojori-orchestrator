@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/backendServer.config';
-import { getToken } from '../utils/authUtils';
+import { getRefreshToken, getToken } from '../utils/authUtils';
 import { guestContextStaySummary, logResaGuest } from '../utils/resaGuestActionDebug';
 
 /** En dev : proxy Vite relatif (évite CORS). Avec VITE_API_URL → API distante via srv-admin. */
@@ -18,8 +18,12 @@ function authHeaders() {
     'Content-Type': 'application/json',
   };
   const token = getToken();
+  const refreshToken = getRefreshToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
+  }
+  if (refreshToken) {
+    headers['x-refresh-token'] = refreshToken;
   }
   const isLocalhost =
     typeof window !== 'undefined' &&

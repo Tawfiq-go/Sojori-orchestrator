@@ -5,7 +5,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Box, CircularProgress, Alert } from '@mui/material';
+import { Box, CircularProgress, Alert, useMediaQuery, useTheme } from '@mui/material';
 import { format, addDays, startOfDay } from 'date-fns';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import StayView from '../components/calendar-views/StayView';
@@ -47,6 +47,8 @@ import {
 
 export default function TasksPlanningPageV2() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { loading: authLoading } = useAuth();
   const scope = usePmTasksScope();
   const listingsCacheKey = scope.scopeCacheKey;
@@ -379,9 +381,10 @@ export default function TasksPlanningPageV2() {
     calendarReady ? (
       <StayView
         {...stayViewProps}
-        compactLayout
+        compactLayout={isMobile}
+        denseToolbar={!isMobile}
         gridOnly={listFullscreen}
-        fillViewport
+        fillViewport={isMobile || listFullscreen}
         showFullscreenEnter={!listFullscreen}
         onEnterFullscreen={() => setListFullscreen(true)}
       />
@@ -464,10 +467,16 @@ export default function TasksPlanningPageV2() {
               position: 'relative',
               opacity: isRefreshing ? 0.92 : 1,
               transition: 'opacity 0.15s ease',
-              minHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
-              maxHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
-              display: 'flex',
-              flexDirection: 'column',
+              ...(isMobile
+                ? {
+                    minHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+                    maxHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }
+                : {
+                    minHeight: 'auto',
+                  }),
             }}
           >
             {isRefreshing && (
@@ -496,7 +505,12 @@ export default function TasksPlanningPageV2() {
               </Box>
             )}
 
-            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{
+              flex: isMobile ? 1 : undefined,
+              minHeight: isMobile ? 0 : undefined,
+              display: isMobile ? 'flex' : 'block',
+              flexDirection: 'column',
+            }}>
               {planningGrid}
             </Box>
           </Box>

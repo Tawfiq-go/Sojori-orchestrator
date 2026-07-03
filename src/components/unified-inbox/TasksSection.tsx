@@ -49,7 +49,7 @@ function Group({ label, emoji, tasks, defaultOpen, tone, ...handlers }: GroupPro
 
   return (
     <Box sx={{ mb: 1 }}>
-      <Stack direction="row" alignItems="center" gap={0.875} onClick={() => setOpen(o => !o)}
+      <Stack direction="row" gap={0.875} onClick={() => setOpen(o = sx={{ alignItems: 'center' }}> !o)}
         sx={{ py: 0.625, cursor: 'pointer', userSelect: 'none' }}>
         <Box sx={{
           fontSize: 9, color: T.text3, width: 10, textAlign: 'center', lineHeight: 1,
@@ -97,7 +97,7 @@ export default function TasksSection({
   const showHeader = title.trim().length > 0;
 
   const header = showHeader ? (
-    <Stack direction="row" alignItems="center" gap={0.875} sx={{ mb: 1.25 }}>
+    <Stack direction="row" gap={0.875} sx={{ alignItems: 'center',  mb: 1.25 }}>
       <Box sx={{ fontSize: 12 }}>📋</Box>
       <Typography sx={{
         fontSize: 10.5, fontWeight: 700, color: T.text2,

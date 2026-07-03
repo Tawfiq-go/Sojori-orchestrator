@@ -37,7 +37,7 @@ export default function RoomAssignModal({ open, amenity, rooms, selectedRoomRent
     <Dialog open={open} onClose={onClose} PaperProps={{
       sx: { width: 440, maxWidth: '90vw', borderRadius: 1.75, overflow: 'hidden' },
     }}>
-      <Stack direction="row" alignItems="center" gap={1.5} sx={{
+      <Stack direction="row" gap={1.5} sx={{ alignItems: 'center', 
         p: '16px 20px', borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2,
       }}>
         <Box sx={{ fontSize: 24 }}>{emojiFor(amenity)}</Box>
@@ -88,7 +88,7 @@ export default function RoomAssignModal({ open, amenity, rooms, selectedRoomRent
         })}
       </Box>
 
-      <Stack direction="row" justifyContent="flex-end" gap={1.125} sx={{
+      <Stack direction="row" gap={1.125} sx={{ justifyContent: 'flex-end', 
         p: '12px 20px', borderTop: `1px solid ${T.border}`, bgcolor: T.bg2,
       }}>
         <Button onClick={onClose} sx={{ textTransform: 'none', color: T.text2 }}>Annuler</Button>

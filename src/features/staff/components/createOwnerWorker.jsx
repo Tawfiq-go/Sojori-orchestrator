@@ -470,7 +470,7 @@ export default function CreateWorkerForm() {
   }}>
       <ToastContainer position="top-right" autoClose={3000} />
       {/* header bar */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', 
       mb: 2
     }}>
         <Button variant="text" onClick={() => navigate(-1)} className="!text-gray-500 hover:!bg-gray-100 !px-3 !py-2 !text-sm !font-medium !min-w-0 !normal-case !rounded-md !transition-colors !flex !items-center !gap-2" sx={{
@@ -605,7 +605,7 @@ export default function CreateWorkerForm() {
                 p: 3,
                 mb: 3
               }}>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{
+                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', 
                   mb: 2
                 }}>
                       <Typography variant="h6">{t('Basic info')}</Typography>
@@ -623,7 +623,7 @@ export default function CreateWorkerForm() {
                       justifyContent: 'center',
                       bgcolor: 'background.default'
                     }}>
-                          <Stack spacing={1} alignItems="center">
+                          <Stack spacing={1} sx={{ alignItems: 'center' }}>
                             <Avatar src={avatarPreview || w.avatar || undefined} sx={{
                           width: 90,
                           height: 90
@@ -743,10 +743,10 @@ export default function CreateWorkerForm() {
                 p: 3,
                 mb: 3
               }}>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{
+                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', 
                   mb: 1.5
                 }}>
-                      <Stack direction="row" alignItems="center" spacing={1}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <Typography variant="h6">
                           {t('Listings access')}
                         </Typography>
@@ -862,7 +862,7 @@ export default function CreateWorkerForm() {
                 p: 3,
                 mb: 8
               }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{
+                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', 
                   mb: 2
                 }}>
                       <Typography variant="h6">
@@ -943,7 +943,7 @@ export default function CreateWorkerForm() {
                 p: 3,
                 mb: 3
               }}>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{
+                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', 
                   mb: 2
                 }}>
                       <Typography variant="h6">{t('Notifications')}</Typography>

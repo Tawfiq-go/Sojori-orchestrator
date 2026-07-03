@@ -67,7 +67,7 @@ export default function StaffForm({ initial, allListings, onSave, onCancel, onDe
   return (
     <Box sx={{ maxWidth: 720, mx: 'auto', p: 3 }}>
       {/* Header */}
-      <Stack direction="row" alignItems="center" gap={1.5} sx={{ mb: 3 }}>
+      <Stack direction="row" gap={1.5} sx={{ alignItems: 'center',  mb: 3 }}>
         <Typography sx={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.025em' }}>
           {initial?._id ? 'Modifier le membre' : 'Nouveau membre'}
         </Typography>
@@ -140,7 +140,7 @@ export default function StaffForm({ initial, allListings, onSave, onCancel, onDe
 
       {/* Tâches autorisées */}
       <Section title="Types de tâches autorisés" help="Le staff ne sera assigné qu a ces types">
-        <Stack direction="row" gap={0.5} flexWrap="wrap">
+        <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap' }}>
           {(Object.keys(TASK_TYPE_META) as TaskType[]).map(t => {
             const on = s.allowedTaskTypes.includes(t);
             return (
@@ -172,7 +172,7 @@ export default function StaffForm({ initial, allListings, onSave, onCancel, onDe
 
       {/* Listings autorisés */}
       <Section title="Listings autorisés" help="Vide = tous les listings du PM">
-        <Stack direction="row" gap={0.5} flexWrap="wrap">
+        <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap' }}>
           {allListings.map(l => {
             const on = s.allowedListingIds.includes(l._id);
             return (
@@ -194,7 +194,7 @@ export default function StaffForm({ initial, allListings, onSave, onCancel, onDe
         </Field>
         <Field label="Horaires">
           {s.schedule.timeWindows.map((tw, i) => (
-            <Stack key={i} direction="row" alignItems="center" gap={0.75} sx={{ mb: 0.5 }}>
+            <Stack key={i} direction="row" gap={0.75} sx={{ alignItems: 'center',  mb: 0.5 }}>
               <TextField size="small" type="time" value={tw.start}
                 onChange={e => {
                   const next = [...s.schedule.timeWindows];
@@ -245,7 +245,7 @@ function Section({ title, help, children }: { title: string; help?: string; chil
     <Box sx={{
       mb: 2, p: 2, bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5,
     }}>
-      <Stack direction="row" alignItems="baseline" gap={1.25} sx={{ mb: 1.5 }}>
+      <Stack direction="row" gap={1.25} sx={{ alignItems: 'baseline',  mb: 1.5 }}>
         <Typography sx={{
           fontSize: 11, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
           color: T.text3, textTransform: 'uppercase', letterSpacing: '0.08em',

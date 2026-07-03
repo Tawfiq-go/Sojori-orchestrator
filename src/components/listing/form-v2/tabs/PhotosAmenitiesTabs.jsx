@@ -19,7 +19,7 @@ const T = {
 function Card({ title, meta, children }) {
   return (
     <Box sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.5, p: 2.25, mb: 1.75 }}>
-      <Stack direction="row" alignItems="center" sx={{ mb: 1.75 }}>
+      <Stack direction="row" sx={{ alignItems: 'center',  mb: 1.75 }}>
         <Typography sx={{ fontSize: 13.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>{title}</Typography>
         {meta && <Typography sx={{ ml: 'auto', fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>{meta}</Typography>}
       </Stack>
@@ -30,7 +30,7 @@ function Card({ title, meta, children }) {
 
 function AiBanner({ title, body, ctaLabel = 'Appliquer', onCta }) {
   return (
-    <Stack direction="row" alignItems="center" gap={1.5} sx={{
+    <Stack direction="row" gap={1.5} sx={{ alignItems: 'center', 
       background: 'linear-gradient(135deg, rgba(124,58,237,0.06), rgba(184,133,26,0.04))',
       border: `1px solid ${T.aiBorder}`, borderRadius: 1.5, p: '12px 14px', mb: 1.75,
     }}>
@@ -123,7 +123,7 @@ export function PhotosTab({ photos = [], onChange, airbnbHeroOrder = '', onAirbn
       </Box>
 
       <Card title="🗂 Galerie" meta="Glisser pour réordonner · 1ʳᵉ = cover OTA">
-        <Stack direction="row" gap={0.75} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+        <Stack direction="row" gap={0.75} useFlexGap sx={{ flexWrap: 'wrap',  mb: 1.5 }}>
           {PHOTO_CATEGORIES.map(c => {
             const active = filter === c.id;
             return (
@@ -206,7 +206,7 @@ export function PhotosTab({ photos = [], onChange, airbnbHeroOrder = '', onAirbn
         <Typography sx={{ fontSize: 12, color: T.text3, mb: 1.25 }}>
           Permet de réordonner les photos uniquement sur Airbnb sans modifier l'ordre Sojori.
         </Typography>
-        <Stack direction="row" alignItems="center" gap={1} sx={{ p: 1.25, bgcolor: T.bg2, borderRadius: 1 }}>
+        <Stack direction="row" gap={1} sx={{ alignItems: 'center',  p: 1.25, bgcolor: T.bg2, borderRadius: 1 }}>
           <Box sx={{ fontFamily: '"Geist Mono", monospace', fontWeight: 700, fontSize: 12 }}>airbnbHeroOrder</Box>
           <TextField size="small" fullWidth value={airbnbHeroOrder} onChange={e => onAirbnbChange?.(e.target.value)}
             placeholder="1, 3, 5, 7, 9"
@@ -328,7 +328,7 @@ export function AmenitiesTab({ amenitiesByRoom = {}, onChange }) {
           const onCount = group.items.filter(it => selected.has(it.id)).length;
           return (
             <Box key={group.id} sx={{ mb: 2.25 }}>
-              <Stack direction="row" alignItems="center" gap={1} sx={{
+              <Stack direction="row" gap={1} sx={{ alignItems: 'center', 
                 p: '8px 12px', bgcolor: T.bg2, borderRadius: 0.875, mb: 1.25,
               }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 700, flex: 1 }}>{group.label}</Typography>

@@ -135,11 +135,11 @@ const TransportServiceCard = ({
         alignItems: 'center',
         mb: 2
       }}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Typography variant="h6">🚗 Transport</Typography>
             <Chip label={service.pricing?.type === 'total' ? 'Prix fixe' : 'Par personne'} size="small" color="primary" variant="outlined" />
           </Stack>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <FormControlLabel control={<Switch checked={service.enabled} onChange={e => handleChange('enabled', e.target.checked)} />} label={service.enabled ? 'Activé' : 'Désactivé'} />
             {onDelete && <IconButton onClick={onDelete} color="error" size="small" title="Supprimer">
                 <DeleteIcon />

@@ -8,6 +8,7 @@ import SojoriPrimButton from '../../../components/ui/SojoriPrimButton';
 import { useState, useEffect } from 'react';
 import { useAdminOwnerFilter } from '../../../context/AdminOwnerFilterContext';
 import { getOwnerListLabel } from '../../../utils/ownerDisplay.utils';
+import { autocompleteOptionLiProps } from '../../../utils/autocompleteOptionLiProps';
 import { ORCHESTRATION_ADMIN_OWNER_ID, ORCHESTRATION_ADMIN_EMAIL } from '../../../constants/orchestrationAdmin';
 import type { FulltaskConfigOwnerScope } from '../../../hooks/useFulltaskConfigOwner';
 import { getOwnersAllPages } from '../../staff/services/serverApi.task';
@@ -296,9 +297,9 @@ export default function OwnerConfigScopeBarWithSync({
       getOptionLabel={(o) => (o.location ? `${o.name} · ${o.location}` : o.name)}
       isOptionEqualToValue={(a, b) => a.id === b.id}
       renderOption={(props, option, { selected }) => {
-        const { key, ...optionProps } = props;
+        const { key, liProps } = autocompleteOptionLiProps(props);
         return (
-          <li key={key} {...optionProps}>
+          <Box component="li" key={key} {...liProps}>
             <Checkbox
               icon={checkboxIcon}
               checkedIcon={checkboxCheckedIcon}
@@ -315,7 +316,7 @@ export default function OwnerConfigScopeBarWithSync({
                 </Typography>
               ) : null}
             </Box>
-          </li>
+          </Box>
         );
       }}
       sx={{
@@ -436,7 +437,7 @@ export default function OwnerConfigScopeBarWithSync({
                 border: '1px solid rgba(6,115,179,0.18)',
               }}
             >
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: '#0673b3', letterSpacing: '0.04em' }}>
                   PROPRIÉTAIRE
                 </Typography>

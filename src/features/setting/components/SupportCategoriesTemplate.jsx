@@ -410,7 +410,7 @@ const SupportCategoriesTemplate = ({
                   }} />}
                           {category.requiresPMValidation && <Chip label="✅ Validation PM requise" size="small" color="default" />}
                         </Box>
-                        <Stack direction="row" alignItems="center" spacing={1}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                           <Tooltip title="Modifier">
                             <IconButton size="small" onClick={() => handleEdit(category)} sx={{
                       color: SOJORI_COLORS.primary,

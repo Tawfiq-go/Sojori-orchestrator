@@ -214,7 +214,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
   {
     id: 'minStay',
     label: 'Séjour minimum',
-    short: 'Min',
+    short: '+1',
     excelSelectable: true,
   },
   {
@@ -266,6 +266,22 @@ export const ALL_COLUMNS: ColumnDef[] = [
     excelSelectable: true,
   },
 ];
+
+/** Colonnes prioritaires — affichées en tête (filtre + lignes collapse) */
+export const CALENDAR_COLUMN_PRIORITY = ['availableRoom', 'rate', 'minStay'] as const;
+
+export function sortCalendarColumns(ids: string[]): string[] {
+  const pinned = CALENDAR_COLUMN_PRIORITY.filter((id) => ids.includes(id));
+  const rest = ids.filter((id) => !(CALENDAR_COLUMN_PRIORITY as readonly string[]).includes(id));
+  return [...pinned, ...rest];
+}
+
+export function sortAllColumnsForPicker(columns: ColumnDef[] = ALL_COLUMNS): ColumnDef[] {
+  const byId = new Map(columns.map((c) => [c.id, c]));
+  const pinned = CALENDAR_COLUMN_PRIORITY.map((id) => byId.get(id)).filter(Boolean) as ColumnDef[];
+  const rest = columns.filter((c) => !(CALENDAR_COLUMN_PRIORITY as readonly string[]).includes(c.id));
+  return [...pinned, ...rest];
+}
 
 /** Type de réservation pour le jour donné (arrival / departure / rotation) */
 export function reservationDayType(

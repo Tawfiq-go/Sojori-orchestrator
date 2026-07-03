@@ -213,7 +213,7 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
           '&:last-child': { borderBottom: 'none' },
         }}
       >
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: instances.length ? 1.5 : 0 }}>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between',  mb: instances.length ? 1.5 : 0 }}>
           <Typography sx={{ fontWeight: 600, fontSize: 14, color: T.text }}>
             {label}
           </Typography>
@@ -262,8 +262,8 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
                     p: 1.25,
                   }}
                 >
-                  <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
-                    <Stack direction="row" alignItems="center" gap={0.75} flexWrap="wrap" sx={{ flex: 1, minWidth: 0 }}>
+                  <Stack direction="row" gap={1} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                    <Stack direction="row" gap={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap',  flex: 1, minWidth: 0 }}>
                       <Chip
                         size="small"
                         label={`${label} ${instanceIndex + 1}`}
@@ -282,7 +282,7 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
                           : Pas de lits
                         </Typography>
                       ) : bedAmenities.length > 0 ? (
-                        <Stack direction="row" alignItems="center" gap={0.5} flexWrap="wrap">
+                        <Stack direction="row" gap={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                           <Typography variant="caption" sx={{ color: T.text3 }}>
                             :
                           </Typography>
@@ -372,7 +372,7 @@ export function RoomsTab({ values = {}, onChange, listingId }) {
               <Typography sx={{ textAlign: 'center', color: T.text3, fontStyle: 'italic', mb: 2 }}>
                 Aucune pièce configurée pour le moment.
               </Typography>
-              <Stack direction="row" useFlexGap flexWrap="wrap" gap={1} justifyContent="center">
+              <Stack direction="row" useFlexGap gap={1} sx={{ justifyContent: 'center', flexWrap: 'wrap' }}>
                 {enabledRooms.map((room) => (
                   <Button
                     key={room.rentalId}

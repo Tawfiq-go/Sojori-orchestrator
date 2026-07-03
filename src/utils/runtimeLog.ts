@@ -108,8 +108,16 @@ export function runtimeLog(
   }
   notify();
 
-  // Logs console limités au tag Auth — diagnostic déconnexion WhatsApp Guest (temporaire).
-  if (tag === 'Auth') {
+  // Console : erreurs toujours ; HTTP/Comms warn (échecs API) ; Auth info/warn seulement si VITE_DASHBOARD_DEBUG.
+  const verboseAuth =
+    import.meta.env.VITE_DASHBOARD_DEBUG === 'true' ||
+    import.meta.env.VITE_RUNTIME_LOG_UI === 'true';
+  const printToConsole =
+    level === 'error' ||
+    ((tag === 'HTTP' || tag === 'Comms') && level === 'warn') ||
+    (tag === 'Auth' && level === 'warn' && verboseAuth);
+
+  if (printToConsole) {
     const prefix = `[Sojori][${entry.ts}][${tag}]`;
     if (level === 'error') {
       console.error(prefix, message, detail !== undefined ? detail : '');

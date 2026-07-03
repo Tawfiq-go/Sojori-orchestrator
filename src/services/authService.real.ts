@@ -329,9 +329,24 @@ const authService = {
         user: userFromValidTokenPayload(data),
       };
     } catch (error: any) {
+      const status = error?.response?.status as number | undefined;
+      const data = error?.response?.data as Record<string, unknown> | undefined;
+      const sessionDead =
+        data?.forceLogout ||
+        data?.error === 'Session expired, please login again' ||
+        data?.error === 'Invalid token';
+
+      if (!sessionDead && !status) {
+        throw {
+          success: false,
+          error: error?.message || 'Erreur réseau',
+          forceLogout: false,
+        };
+      }
+
       throw {
         success: false,
-        error: error.response?.data?.message || 'Session expirée',
+        error: (data?.message as string) || (data?.error as string) || 'Session expirée',
         forceLogout: true,
       };
     }

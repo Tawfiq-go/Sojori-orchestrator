@@ -2,7 +2,13 @@ import axios, { AxiosHeaders } from 'axios';
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { clearTokens, getToken, getRefreshToken, setTokens, isAppEmbeddedInIframe } from '../utils/authUtils';
 import { AUTH_CONFIG } from '../config/authConfig';
-import { dashboardDebugEnabled, logAuth, logAuthError, logAuthWarn, maskToken } from '../utils/dashboardDebug';
+import {
+  logApiHttpFailure,
+  logAuth,
+  logAuthError,
+  logAuthWarn,
+  maskToken,
+} from '../utils/dashboardDebug';
 import { runtimeLog } from '../utils/runtimeLog';
 import { hasDevTokenBypass, invalidateSession } from '../utils/devApiAccess';
 
@@ -11,6 +17,48 @@ import { hasDevTokenBypass, invalidateSession } from '../utils/devApiAccess';
  * Les appels API doivent TOUJOURS envoyer le JWT — sinon 401 sur listing / admin / etc.
  */
 const devBypassFrontendGuard = import.meta.env.VITE_DISABLE_AUTH === 'true';
+
+function isSessionInvalidBody(data: Record<string, unknown> | undefined): boolean {
+  return Boolean(
+    data?.forceLogout ||
+      data?.error === 'Session expired, please login again' ||
+      data?.error === 'Invalid token',
+  );
+}
+
+/** Inbox / comms : échec endpoint ≠ session morte — ne pas expulser tout le dashboard. */
+function isInboxSoftFailEndpoint(url: string): boolean {
+  const u = url.toLowerCase();
+  return (
+    u.includes('/api/v1/ai/debug') ||
+    u.includes('/fullchatbot/debug') ||
+    u.includes('/staff-whatsapp') ||
+    u.includes('/api/v1/fulltask/staff-whatsapp') ||
+    u.includes('/rentals/get-thread') ||
+    u.includes('/rentals/get-review') ||
+    u.includes('/rentals/get-messages-by-thread-id') ||
+    u.includes('/communications-ai/')
+  );
+}
+
+async function refreshSessionViaValidTokenCheck(): Promise<string | null> {
+  const token = getToken();
+  const refreshToken = getRefreshToken();
+  if (!token || !refreshToken) return null;
+
+  const response = await apiClient.get(`${AUTH_CONFIG.API_URL}/valid-token-check`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'x-refresh-token': refreshToken,
+    },
+    _internalTokenRefresh: true,
+  } as InternalAxiosRequestConfig);
+
+  const refreshedToken = response.data?.newToken as string | undefined;
+  const tokenForUse = refreshedToken || token;
+  setTokens(tokenForUse, refreshToken);
+  return tokenForUse;
+}
 // Logs désactivés pour nettoyer la console
 // let loggedDisableAuthApiClient = false;
 // if (devBypassFrontendGuard && !loggedDisableAuthApiClient) {
@@ -109,21 +157,16 @@ apiClient.interceptors.request.use(
     // Scope PM simulation via ownerId query param (AdminOwnerFilter) — pas de header custom
     // (X-Sojori-View-As-Owner bloque le preflight CORS localhost → dev.sojori.com).
 
-    if (dashboardDebugEnabled && config.url && !config.url.includes('/valid-token-check')) {
-      const isDashboard =
-        config.url.includes('/dashboard') ||
-        config.url.includes('/listings') ||
-        config.url.includes('/reservations') ||
-        config.url.includes('/message') ||
-        config.url.includes('/calendar') ||
-        config.url.includes('/analytics');
-      if (isDashboard) {
-        logAuth(`→ ${config.method?.toUpperCase() ?? 'GET'} ${config.url}`, {
-          hasAuth: !!token,
-          tokenPreview: maskToken(token),
-          hasRefresh: !!refreshToken,
-        });
-      }
+    if (
+      import.meta.env.VITE_DASHBOARD_DEBUG === 'true' &&
+      config.url &&
+      !config.url.includes('/valid-token-check')
+    ) {
+      logAuth(`→ ${config.method?.toUpperCase() ?? 'GET'} ${config.url}`, {
+        hasAuth: !!token,
+        tokenPreview: maskToken(token),
+        hasRefresh: !!refreshToken,
+      });
     }
 
     return config;
@@ -156,6 +199,11 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config;
     const url = typeof originalRequest?.url === 'string' ? originalRequest.url : '';
 
+    /** Appels internes refresh — ne pas re-déclencher logout / boucle. */
+    if (originalRequest?._internalTokenRefresh) {
+      return Promise.reject(error);
+    }
+
     if (url.includes('/analytics/')) {
       const canceled =
         axios.isCancel(error) ||
@@ -180,17 +228,20 @@ apiClient.interceptors.response.use(
       return apiClient(originalRequest);
     }
 
-    const isSessionInvalidResponse =
-      error.response?.data?.forceLogout ||
-      error.response?.data?.error === 'Session expired, please login again' ||
-      error.response?.data?.error === 'Invalid token';
+    const responseData = error.response?.data as Record<string, unknown> | undefined;
+    const isSessionInvalidResponse = isSessionInvalidBody(responseData);
 
     // Gestion du forceLogout ou session expirée
     if (isSessionInvalidResponse) {
-      logAuthWarn(hasDevTokenBypass() ? 'session JWT expirée (dev bypass actif)' : 'session invalidée — redirect login', {
-        url: originalRequest?.url,
-        status: error.response?.status,
-      });
+      const inboxSoftFail = isInboxSoftFailEndpoint(url);
+
+      if (!inboxSoftFail) {
+        logAuthWarn(
+          hasDevTokenBypass() ? 'session JWT expirée (dev bypass actif)' : 'session invalidée — redirect login',
+          { url: originalRequest?.url, status: error.response?.status },
+        );
+      }
+
       if (!isAppEmbeddedInIframe()) {
         if (hasDevTokenBypass() && !originalRequest._devAuthRetry) {
           originalRequest._devAuthRetry = true;
@@ -200,7 +251,28 @@ apiClient.interceptors.response.use(
           delete originalRequest.headers?.['x-refresh-token'];
           return apiClient(originalRequest);
         }
+        if (!originalRequest._sessionRefreshRetry && getToken() && getRefreshToken()) {
+          originalRequest._sessionRefreshRetry = true;
+          try {
+            const tokenForRetry = await refreshSessionViaValidTokenCheck();
+            if (tokenForRetry) {
+              originalRequest.headers = originalRequest.headers ?? {};
+              originalRequest.headers.Authorization = `Bearer ${tokenForRetry}`;
+              originalRequest.headers['x-refresh-token'] = getRefreshToken() || '';
+              return apiClient(originalRequest);
+            }
+          } catch {
+            /* refresh impossible — logout ci-dessous sauf inbox soft-fail */
+          }
+        }
+        if (inboxSoftFail) {
+          logApiHttpFailure(error, { inboxSoftFail: true });
+          return Promise.reject(error);
+        }
         invalidateSession('force_logout');
+      }
+      if (!inboxSoftFail) {
+        logApiHttpFailure(error);
       }
       return Promise.reject(error);
     }
@@ -218,54 +290,59 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        // Essayer de rafraîchir le token
-        const token = getToken();
-        const refreshToken = getRefreshToken();
-
-        if (!token || !refreshToken) {
-          if (hasDevTokenBypass()) {
-            throw new Error('No tokens available (dev bypass — reservations/OTA require login)');
-          }
+        const tokenForRetry = await refreshSessionViaValidTokenCheck();
+        if (!tokenForRetry) {
           throw new Error('No tokens available');
         }
-
-        const response = await apiClient.get(`${AUTH_CONFIG.API_URL}/valid-token-check`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'x-refresh-token': refreshToken
-          }
-        });
-
-        if (response.data.newToken) {
-          setTokens(response.data.newToken, refreshToken);
-          originalRequest.headers['Authorization'] = `Bearer ${response.data.newToken}`;
-          return apiClient(originalRequest);
-        } else {
-          throw new Error('No new token received');
-        }
+        originalRequest.headers = originalRequest.headers ?? {};
+        originalRequest.headers.Authorization = `Bearer ${tokenForRetry}`;
+        originalRequest.headers['x-refresh-token'] = getRefreshToken() || '';
+        return apiClient(originalRequest);
       } catch (refreshError) {
-        logAuthError('refresh token échoué — redirect login', {
+        const refreshErrData = (refreshError as { response?: { data?: Record<string, unknown> } })
+          ?.response?.data;
+        const refreshSessionDead = isSessionInvalidBody(refreshErrData);
+        const noTokens =
+          refreshError instanceof Error && refreshError.message === 'No tokens available';
+
+        logAuthError('refresh token échoué', {
           url: originalRequest?.url,
           status: (refreshError as { response?: { status?: number } })?.response?.status,
+          refreshSessionDead,
+          noTokens,
         });
-        if (!isAppEmbeddedInIframe() && !hasDevTokenBypass()) {
+        if (
+          !isAppEmbeddedInIframe() &&
+          !hasDevTokenBypass() &&
+          (refreshSessionDead || noTokens)
+        ) {
           invalidateSession('refresh_failed');
         }
+        logApiHttpFailure(refreshError, {
+          inboxSoftFail: isInboxSoftFailEndpoint(url),
+          refreshFailed: true,
+        });
         return Promise.reject(refreshError);
       }
     }
 
-    if (error.response?.status === 401 && !isAuthRoute) {
-      logAuthWarn('HTTP 401 — fin de session', {
+    // 401 après refresh OK = refus endpoint (scope / droits), pas fin de session globale.
+    if (
+      error.response?.status === 401 &&
+      !isAuthRoute &&
+      isSessionInvalidResponse &&
+      !isAppEmbeddedInIframe() &&
+      !hasDevTokenBypass()
+    ) {
+      logAuthWarn('HTTP 401 — session invalidée (corps explicite)', {
         url: originalRequest?.url,
         method: originalRequest?.method,
         retried: Boolean(originalRequest._retry),
       });
-      if (!isAppEmbeddedInIframe() && !hasDevTokenBypass()) {
-        invalidateSession('http_401');
-      }
+      invalidateSession('http_401');
     }
 
+    logApiHttpFailure(error, { inboxSoftFail: isInboxSoftFailEndpoint(url) });
     return Promise.reject(error);
   }
 );

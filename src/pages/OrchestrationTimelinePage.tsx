@@ -112,8 +112,8 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
     >
       <CardContent>
         {/* Header */}
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-          <Stack direction="row" alignItems="center" spacing={1.5}>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between',  mb: 2 }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
             {statusIcon}
             <Typography sx={{ fontSize: 15, fontWeight: 700, color: t.text }}>
               {workflow.categoryDisplayLabel || workflow.category}
@@ -155,19 +155,19 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
               📋 Voyageurs
             </Typography>
             <Stack direction="row" spacing={2}>
-              <Stack direction="row" alignItems="center" spacing={0.5}>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                 <Typography sx={{ fontSize: 11, color: t.success }}>✓</Typography>
                 <Typography sx={{ fontSize: 11, color: t.text3 }}>
                   {workflow.registrationStats.validated} validés
                 </Typography>
               </Stack>
-              <Stack direction="row" alignItems="center" spacing={0.5}>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                 <Typography sx={{ fontSize: 11, color: t.warning }}>◐</Typography>
                 <Typography sx={{ fontSize: 11, color: t.text3 }}>
                   {workflow.registrationStats.draft} brouillon
                 </Typography>
               </Stack>
-              <Stack direction="row" alignItems="center" spacing={0.5}>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                 <Typography sx={{ fontSize: 11, color: t.error }}>✕</Typography>
                 <Typography sx={{ fontSize: 11, color: t.text3 }}>
                   {workflow.registrationStats.notRegistered} non enregistrés
@@ -221,7 +221,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
                 }}
               >
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Typography sx={{ fontSize: 12, fontWeight: 600 }}>
                       📅 Demande Créneau
                     </Typography>
@@ -266,7 +266,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
                 }}
               >
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Typography sx={{ fontSize: 12, fontWeight: 600 }}>
                       👤 Assignation Staff
                     </Typography>
@@ -313,7 +313,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
                 }}
               >
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Typography sx={{ fontSize: 12, fontWeight: 600 }}>
                       ⏰ Escalade Deadline
                     </Typography>
@@ -360,7 +360,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
               }}
             >
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Stack direction="row" alignItems="center" spacing={1}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Typography sx={{ fontSize: 12, fontWeight: 600 }}>
                     {workflow.actions.sendNotification.config?.templateName || 'Message'}
                   </Typography>
@@ -466,7 +466,7 @@ export const OrchestrationTimelinePage: React.FC = () => {
     <DashboardWrapper breadcrumb={['Pilotage', 'Orchestration', 'Timeline']}>
       <Box sx={{ p: 3 }}>
         {/* Header */}
-        <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center',  mb: 3 }}>
           <Button
             onClick={() => navigate('/admin/orchestrator')}
             startIcon={<ArrowBackIcon />}

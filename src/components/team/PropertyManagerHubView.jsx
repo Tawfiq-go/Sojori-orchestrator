@@ -262,7 +262,7 @@ export function PropertyManagerHubView({
               label: t('Action'),
               align: 'center',
               render: (row) => (
-                <Stack direction="row" spacing={0.5} justifyContent="center">
+                <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'center' }}>
                   {onLifecycle ? (
                     <Tooltip title="Suivi onboarding">
                       <IconButton

@@ -246,7 +246,7 @@ export function ImagesOtaCatalogPanel() {
             lancez <strong>Bootstrap Image OTA</strong> (connexion admin requise — pas seulement
             VITE_DISABLE_AUTH).
           </Typography>
-          <Stack direction="row" spacing={1} justifyContent="center">
+          <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
             <Button variant="contained" size="small" onClick={() => void handleBootstrap()} disabled={bootstrapping}>
               Bootstrap Image OTA
             </Button>

@@ -91,7 +91,7 @@ function PropertyRow({
         >
           {p.name}
         </Typography>
-        <Stack direction="row" alignItems="center" gap={1} sx={{ mt: 0.375, fontSize: 11, color: T.text3, flexWrap: 'wrap' }}>
+        <Stack direction="row" gap={1} sx={{ alignItems: 'center',  mt: 0.375, fontSize: 11, color: T.text3, flexWrap: 'wrap' }}>
           <Box component="span" sx={{ fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em' }}>
             RU #{p.ruPropertyId}
           </Box>
@@ -221,7 +221,7 @@ export default function PropertyList({ properties, selectedIds, onToggle, onSele
 
   return (
     <Box>
-      <Stack direction="row" alignItems="baseline" gap={1.25} sx={{ mb: 1.25, flexWrap: 'wrap' }}>
+      <Stack direction="row" gap={1.25} sx={{ alignItems: 'baseline',  mb: 1.25, flexWrap: 'wrap' }}>
         <Typography sx={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.015em' }}>
           Annonces à importer
         </Typography>
