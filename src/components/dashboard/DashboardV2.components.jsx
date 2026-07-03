@@ -22,6 +22,8 @@ import { useSidebarNav } from '../../hooks/useSidebarNav';
 import { usePmSimulation } from '../../context/PmSimulationContext';
 import { PmSimulationBanner } from '../simulation/PmSimulationBanner';
 import { AdminBusinessScopeTopFilter } from '../AdminOwnerScope/AdminBusinessScopeTopFilter';
+import { AdminSessionTopBarButton } from './AdminSessionTopBarButton';
+import { SidebarUserProfileMenu } from './SidebarUserProfileMenu';
 import { LISTING_LAYOUT } from '../../constants/listingLayout';
 import { IconColored } from './IconColored';
 import { SojoriBrandLockup } from '../brand/SojoriBrandLogo';
@@ -64,43 +66,8 @@ import AutoGraphOutlined from '@mui/icons-material/AutoGraphOutlined';
 import InsightsOutlined from '@mui/icons-material/InsightsOutlined';
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined';
 import VillaOutlined from '@mui/icons-material/VillaOutlined';
-export const tokens = {
-  // ── Brand · or premium (Brand Kit v1.0 — #E6B022) ──
-  primary:      '#E6B022',
-  primaryDeep:  '#B8881A',
-  primarySoft:  '#F4CF5E',
-  primaryTint:  'rgba(230,176,34,0.10)',
-  primaryOnGold:'#1A1408',
-
-  // ── AI accent · violet ──
-  ai:           '#8B5CF6',
-  aiTint:       'rgba(139,92,246,0.10)',
-
-  // ── Sémantique ──
-  success:      '#0a8f5e',  successTint: 'rgba(10,143,94,0.10)',
-  warning:      '#c46506',  warningTint: 'rgba(196,101,6,0.10)',
-  error:        '#c81e1e',  errorTint:   'rgba(200,30,30,0.10)',
-  info:         '#0673b3',  infoTint:    'rgba(6,115,179,0.10)',
-
-  // ── Surfaces · neutres chauds ──
-  bg0: '#f6f5f1',
-  bg1: '#ffffff',
-  bg2: '#f0eee8',
-  bg3: '#e7e4dc',
-
-  // ── Texte ──
-  text:  '#14110a',
-  text2: '#55504a',
-  text3: '#7a756c',
-  text4: '#a8a299',
-
-  // ── Bordures ──
-  border:        'rgba(20,17,10,0.07)',
-  borderStrong:  'rgba(20,17,10,0.14)',
-
-  sidebarW: 248,
-  topbarH:  56,
-};
+import { tokens, pageMetaChipSx as pageMetaChipSxBase } from './dashboardTokens';
+export { tokens } from './dashboardTokens';
 
 const t = tokens;
 
@@ -628,73 +595,7 @@ export function AppSidebar({
         })}
       </Stack>
 
-      {user && (
-        <Box sx={{
-          p: '14px 18px',
-          borderTop: `1px solid ${t.border}`,
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0.8))',
-          backdropFilter: 'blur(10px)',
-        }}>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-            <Avatar sx={{
-              width: 32,
-              height: 32,
-              fontSize: 11,
-              fontWeight: 800,
-              background: 'linear-gradient(135deg, #c4b5fd, #8b5cf6)',
-              border: '2px solid rgba(255,255,255,0.5)',
-              boxShadow: '0 4px 12px rgba(139,92,246,0.3)',
-            }}>
-              {user.initials}
-            </Avatar>
-            <Box sx={{ lineHeight: 1.15, minWidth: 0, flex: 1 }}>
-              <Typography sx={{
-                fontSize: 12.5,
-                fontWeight: 700,
-                color: t.text,
-                letterSpacing: '-0.2px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}>{user.name}</Typography>
-              <Typography sx={{
-                fontSize: 10,
-                color: t.text3,
-                fontFamily: 'Geist Mono, monospace',
-                mt: 0.2,
-                fontWeight: 600,
-                letterSpacing: '0.3px',
-                textTransform: 'uppercase',
-              }}>
-                {user.role}
-              </Typography>
-            </Box>
-          </Stack>
-          {onLogout && (
-            <Button
-              onClick={onLogout}
-              sx={{
-                ...btnGhostSx,
-                ...btnSmSx,
-                width: '100%',
-                mt: 1.5,
-                fontSize: 11.5,
-                fontWeight: 600,
-                py: 0.75,
-                borderRadius: '8px',
-                border: `1px solid ${t.border}`,
-                '&:hover': {
-                  bgcolor: 'rgba(239,68,68,0.08)',
-                  borderColor: 'rgba(239,68,68,0.3)',
-                  color: '#dc2626',
-                },
-              }}
-            >
-              Se déconnecter
-            </Button>
-          )}
-        </Box>
-      )}
+      {user ? <SidebarUserProfileMenu user={user} onLogout={onLogout} /> : null}
     </Box>
   );
 }
@@ -807,6 +708,7 @@ export function TopBar({
       {adminScopeInTopBar ? <AdminBusinessScopeTopFilter /> : null}
 
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto' }}>
+        <AdminSessionTopBarButton />
         <Tooltip title="Notifications">
           <IconButton sx={iconBtnSx} aria-label="Notifications">
             <NotificationsNoneOutlined sx={{ fontSize: 20 }} />
@@ -844,22 +746,7 @@ const iconBtnSx = {
 // 4. PageHeader & buttons
 // ════════════════════════════════════════════════════════════════════
 
-export const pageMetaChipSx = {
-  fontFamily: 'Geist Mono, monospace',
-  fontSize: 12,
-  color: t.text3,
-  fontWeight: 600,
-  bgcolor: t.bg2,
-  px: 1.25,
-  py: 0.375,
-  borderRadius: '999px',
-  border: `1px solid ${t.border}`,
-  letterSpacing: 0.02,
-  lineHeight: 1.45,
-  whiteSpace: 'normal',
-  wordBreak: 'break-word',
-  maxWidth: '100%',
-};
+export const pageMetaChipSx = pageMetaChipSxBase;
 
 export function PageMetaChip({ children }) {
   return <Box component="span" sx={pageMetaChipSx}>{children}</Box>;
