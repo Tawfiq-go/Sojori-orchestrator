@@ -58,6 +58,14 @@ export function wizardJxLabelToAvailability(
     };
   }
 
+  if (t === 'Dès la veille du départ') {
+    return {
+      type: 'time_window',
+      from: daysBoundary(1, 'before_checkout'),
+      to: daysBoundary(0, 'on_checkout_day'),
+    };
+  }
+
   if (t.includes('Après enregistrement')) {
     const requires =
       opts?.codesAfterRegistration !== false ? 'E_completed,D1_completed' : 'E_completed';

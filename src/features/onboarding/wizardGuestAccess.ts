@@ -8,6 +8,7 @@ export type JxOptionGroup =
   | 'fromJ'
   | 'arrivalWindow'
   | 'departureWindow'
+  | 'declareDeparture'
   | 'always'
   | 'services'
   | 'accessCodes';
@@ -41,6 +42,11 @@ export const JX_OPTIONS: Record<JxOptionGroup, readonly string[]> = {
     'De la réservation à veille départ',
     'De J-7 à veille départ',
     'De J-3 à veille départ',
+    'Jour de départ uniquement',
+  ],
+  declareDeparture: [
+    'À la réservation',
+    'Dès la veille du départ',
     'Jour de départ uniquement',
   ],
   always: ['Toujours disponible', 'Dès la réservation', 'À partir de J-3', 'À partir de J-1', "Jour d'arrivée"],
@@ -123,7 +129,7 @@ export const JX_ROWS: JxRowDef[] = [
     key: 'departureDeclare',
     emoji: '🚪',
     label: 'Déclarer le départ',
-    optionGroup: 'fromJ',
+    optionGroup: 'declareDeparture',
     capability: 'departureDeclare',
   },
   {
@@ -210,7 +216,7 @@ const PRESET_STANDARD: Omit<WizardJxSettings, 'preset'> = {
   arrivalChoose: 'De J-7 à J-1',
   departureChoose: 'De J-7 à veille départ',
   arrivalDeclare: 'Jour d\'arrivée (J0)',
-  departureDeclare: 'Jour d\'arrivée (J0)',
+  departureDeclare: 'Jour de départ uniquement',
   support: 'Toujours disponible',
   serviceClient: 'Dès la réservation',
   transport: 'Dès la réservation',
@@ -229,8 +235,8 @@ const PRESET_EARLY: Omit<WizardJxSettings, 'preset'> = {
   registration: 'À la réservation',
   arrivalChoose: 'De la réservation à J-1',
   departureChoose: 'De la réservation à veille départ',
-  arrivalDeclare: 'À partir de J-1',
-  departureDeclare: 'À partir de J-1',
+  arrivalDeclare: "Jour d'arrivée (J0)",
+  departureDeclare: 'Dès la veille du départ',
   support: 'Toujours disponible',
   serviceClient: 'Dès la réservation',
   transport: 'Dès la réservation',
@@ -250,7 +256,7 @@ const PRESET_SECURE: Omit<WizardJxSettings, 'preset'> = {
   arrivalChoose: 'De J-3 à J-1',
   departureChoose: 'De J-3 à veille départ',
   arrivalDeclare: "Jour d'arrivée (J0)",
-  departureDeclare: "Jour d'arrivée (J0)",
+  departureDeclare: 'Jour de départ uniquement',
   support: 'Toujours disponible',
   serviceClient: 'À partir de J-3',
   transport: 'À partir de J-3',
