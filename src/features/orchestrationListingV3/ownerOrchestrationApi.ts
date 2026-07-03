@@ -13,6 +13,7 @@ import {
 } from '../serviceMatrix/matrixStateUtils';
 import type { CapabilityExecutionState, CapabilityRowState } from '../serviceMatrix/types';
 import {
+  mergeCapabilitiesExecutionFromWorkflows,
   orchestrationFlagsFromDoc,
   type ListingCapabilityDoc,
 } from './listingOrchestrationApi';
@@ -20,6 +21,33 @@ import { loadCapabilityMatrix, saveCapabilityRow } from '../serviceMatrix/capabi
 import { cleaningIncludedToGestion, parseCleaningIncludedGestion } from './cleaningGestionHelpers';
 import { isAxiosError } from 'axios';
 import { enrichOwnerDocGestionFromTemplate } from './enrichOwnerOrchestration';
+
+async function enrichOwnerDocFromFulltask(
+  ownerKey: string,
+  doc: OwnerOrchestrationEffective,
+): Promise<OwnerOrchestrationEffective> {
+  const needsFulltask = CAPABILITY_REGISTRY.some(def => {
+    if (!def.taskType) return false;
+    const cap = doc.capabilities?.[def.key];
+    return cap?.decisions?.orchestrated === true && !cap?.execution;
+  });
+  if (!needsFulltask) return doc;
+
+  try {
+    const templateKey = ownerKey === 'global' ? 'global' : ownerKey;
+    const raw = await fulltaskApi.getOrchestrationConfig(templateKey);
+    const ftDoc = unwrapFulltaskData<{ workflows?: Record<string, unknown>[] }>(raw);
+    const wfs = ftDoc?.workflows ?? [];
+    if (!wfs.length) return doc;
+    return {
+      ...doc,
+      capabilities: mergeCapabilitiesExecutionFromWorkflows(doc.capabilities ?? {}, wfs),
+      workflows: wfs,
+    };
+  } catch {
+    return doc;
+  }
+}
 
 export interface OwnerOrchestrationDoc {
   ownerId: string;
@@ -302,6 +330,13 @@ export async function loadOwnerOrchestrationMatrix(ownerKey: string): Promise<{
     }
 
     doc = await enrichOwnerDocGestionFromTemplate(ownerKey, doc);
+    doc = await enrichOwnerDocFromFulltask(ownerKey, doc);
+
+    const workflowsRaw = (doc.workflows ?? []) as Record<string, unknown>[];
+    doc = {
+      ...doc,
+      capabilities: mergeCapabilitiesExecutionFromWorkflows(doc.capabilities ?? {}, workflowsRaw),
+    };
 
     let menuOptions = mergeMenuOptionsFromDoc(doc);
     if (menuOptions.length === 0) {

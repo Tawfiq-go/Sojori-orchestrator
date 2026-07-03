@@ -358,29 +358,49 @@ export default function CapabilityExecutionPanel({
     if (!silent) setLoading(true);
     try {
       if ((listingMode || ownerMode) && orchestrationDoc) {
-        const cap = orchestrationDoc.capabilities?.[def.key];
-        const wf = normalizeWorkflow(
-          workflowFromCapabilityExecution(def.taskType, cap?.execution) ?? {
-            _id: def.taskType,
-            taskTypeId: def.taskType,
-            kind: def.taskType,
-            label: def.label,
-            enabled: true,
-            relances: [],
-            staffReminders: [],
-            assignment: null,
-            escalationEnabled: true,
-            deadline: defaultEscaladeDeadline(),
-          },
-        );
-        setRawDoc({ workflows: cap?.execution ? [{ type: def.taskType, ...cap.execution }] : [] });
-        setWorkflow(wf);
-        wfRef.current = wf;
-        setDirty(false);
         const raw = await fulltaskApi.getOrchestrationConfig(ownerId);
         const ownerDoc = unwrapFulltaskData<Record<string, unknown>>(raw);
         const mapped = ownerDoc ? apiOrchestrationToDesign(ownerDoc) : null;
         setCatalog((mapped?.catalog ?? []) as CatalogMessage[]);
+
+        const cap = orchestrationDoc.capabilities?.[def.key];
+        let execution = cap?.execution as Record<string, unknown> | undefined;
+        if (!execution && ownerDoc) {
+          const ftWf = ((ownerDoc.workflows as Record<string, unknown>[]) ?? []).find(
+            w => String(w.type) === def.taskType,
+          );
+          if (ftWf) {
+            const { type: _t, ...rest } = ftWf;
+            execution = { enabled: ftWf.enabled !== false, ...rest };
+          }
+        }
+
+        const wfFromExec = workflowFromCapabilityExecution(def.taskType, execution);
+        const wfFromFulltask = (mapped?.workflows ?? []).find(
+          w => w.taskTypeId === def.taskType,
+        ) as Workflow | undefined;
+
+        const wf = normalizeWorkflow(
+          wfFromExec ??
+            wfFromFulltask ?? {
+              _id: def.taskType,
+              taskTypeId: def.taskType,
+              kind: def.taskType,
+              label: def.label,
+              enabled: true,
+              relances: [],
+              staffReminders: [],
+              assignment: null,
+              escalationEnabled: true,
+              deadline: defaultEscaladeDeadline(),
+            },
+        );
+        setRawDoc({
+          workflows: execution ? [{ type: def.taskType, ...execution }] : [],
+        });
+        setWorkflow(wf);
+        wfRef.current = wf;
+        setDirty(false);
       } else {
         const raw = await fulltaskApi.getOrchestrationConfig(ownerId);
         const doc = unwrapFulltaskData<Record<string, unknown>>(raw);

@@ -1853,6 +1853,14 @@ export const listingsService = {
     return data;
   },
 
+  async syncOwnerOrchestrationExecutionFromFulltask(ownerKey: string) {
+    const { data } = await apiClient.post(
+      `${LISTING_API_BASE_URL}/owner-orchestration/${encodeURIComponent(ownerKey)}/sync-fulltask-execution`,
+      {},
+    );
+    return data;
+  },
+
   /** Admin global → modèle orchestration d'un PM (owner_orchestrations + template listing). */
   async syncOwnerOrchestrationFromAdminToOwner(
     ownerId: string,
