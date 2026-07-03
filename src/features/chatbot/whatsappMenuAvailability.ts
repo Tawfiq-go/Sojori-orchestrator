@@ -1,7 +1,7 @@
 /**
  * Calcul disponibilité options menu WhatsApp — aligné srv-chatbot/utils/availability_calculator.py
  */
-import { addDays, addHours, format, isAfter, isBefore, isWithinInterval, parseISO } from 'date-fns';
+import { addDays, addHours, format, isAfter, isBefore, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 /** Contexte séjour (aligné srv-fulltask guest_context) */
 export type GuestContextLike = {
@@ -134,24 +134,26 @@ function checkTimeWindow(
 ): { ok: boolean; reason: string | null; details: AvailabilityResult['timeWindow'] } {
   const from = availability.from;
   const to = availability.to;
-  if (!from || !to) return { ok: true, reason: null, details: null };
+  if (!from && !to) return { ok: true, reason: null, details: null };
 
-  const startTime = calculateBoundaryDatetime(from, checkIn, checkOut);
-  const endTime = calculateBoundaryDatetime(to, checkIn, checkOut);
-  const inWindow = isWithinInterval(now, { start: startTime, end: endTime });
+  // Borne absente = pas de limite de ce côté (ex. « dès la réservation » = pas de from).
+  const startTime = from ? calculateBoundaryDatetime(from, checkIn, checkOut) : null;
+  const endTime = to ? calculateBoundaryDatetime(to, checkIn, checkOut) : null;
+  const inWindow =
+    (!startTime || !isBefore(now, startTime)) && (!endTime || !isAfter(now, endTime));
 
   const details = {
-    startTime,
-    endTime,
-    startDisplay: formatBoundaryDisplay(from, checkIn, checkOut),
-    endDisplay: formatBoundaryDisplay(to, checkIn, checkOut),
+    startTime: startTime ?? new Date(0),
+    endTime: endTime ?? new Date(8640000000000000),
+    startDisplay: from ? formatBoundaryDisplay(from, checkIn, checkOut) : 'dès la réservation',
+    endDisplay: to ? formatBoundaryDisplay(to, checkIn, checkOut) : 'sans limite',
     inWindow,
   };
 
-  if (isBefore(now, startTime)) {
+  if (startTime && isBefore(now, startTime)) {
     return { ok: false, reason: `Disponible dès le ${format(startTime, 'dd MMM', { locale: fr })}`, details };
   }
-  if (isAfter(now, endTime)) {
+  if (endTime && isAfter(now, endTime)) {
     return { ok: false, reason: 'Fenêtre terminée', details };
   }
   return { ok: true, reason: null, details };
@@ -400,6 +402,12 @@ function describeConfigRule(option: MenuOptionLike, checkIn: Date, checkOut: Dat
     const to = availability.to;
     if (from && to) {
       return `Fenêtre : ${formatBoundaryDisplay(from, checkIn, checkOut)} → ${formatBoundaryDisplay(to, checkIn, checkOut)}`;
+    }
+    if (to) {
+      return `Fenêtre : dès la réservation → ${formatBoundaryDisplay(to, checkIn, checkOut)}`;
+    }
+    if (from) {
+      return `Fenêtre : dès ${formatBoundaryDisplay(from, checkIn, checkOut)}`;
     }
     return 'Fenêtre temporelle (dates check-in / check-out)';
   }
