@@ -128,6 +128,34 @@ export function workflowFromCapabilityExecution(
   return ((mapped.workflows ?? []) as Workflow[])[0] ?? null;
 }
 
+/** Complète capabilities.execution depuis workflows[] (fulltask / effective) — contenu relances, staff, escalade. */
+export function mergeCapabilitiesExecutionFromWorkflows(
+  capabilities: Record<string, ListingCapabilityDoc>,
+  workflows: Record<string, unknown>[],
+  options?: { replace?: boolean },
+): Record<string, ListingCapabilityDoc> {
+  const replace = options?.replace === true;
+  const wfByType = new Map(workflows.map(w => [String(w.type ?? ''), w]));
+  const out: Record<string, ListingCapabilityDoc> = { ...capabilities };
+  for (const def of CAPABILITY_REGISTRY) {
+    if (!def.taskType) continue;
+    const cap = out[def.key];
+    if (!cap) continue;
+    if (!replace && cap.execution) continue;
+    const wf = wfByType.get(def.taskType);
+    if (!wf) continue;
+    const { type: _t, ...execution } = wf as Record<string, unknown>;
+    out[def.key] = {
+      ...cap,
+      execution: {
+        enabled: wf.enabled !== false,
+        ...execution,
+      },
+    };
+  }
+  return out;
+}
+
 function executionFlagsFromStored(
   execution: Record<string, unknown> | undefined,
 ): CapabilityExecutionState | undefined {
@@ -180,15 +208,21 @@ export async function loadListingOrchestrationMatrix(listingId: string): Promise
     menuOptions = ensureMenuOptionsComplete([]);
   }
 
-  const workflows = workflowsFromEffective(doc);
+  const workflowsRaw = (doc.workflows ?? []) as Record<string, unknown>[];
+  const docWithExecution: ListingOrchestrationEffective = {
+    ...doc,
+    capabilities: mergeCapabilitiesExecutionFromWorkflows(doc.capabilities ?? {}, workflowsRaw),
+  };
+
+  const workflows = workflowsFromEffective(docWithExecution);
   const baseRows = buildMatrixFromSources({
-    orchestrationFlags: orchestrationFlagsFromDoc(doc),
+    orchestrationFlags: orchestrationFlagsFromDoc(docWithExecution),
     menuOptions,
     workflows,
   });
-  const rows = rowsFromListingDoc(baseRows, doc);
+  const rows = rowsFromListingDoc(baseRows, docWithExecution);
 
-  return { rows, doc, workflows, menuOptions };
+  return { rows, doc: docWithExecution, workflows, menuOptions };
 }
 
 export async function saveListingOrchestrationRow(input: {

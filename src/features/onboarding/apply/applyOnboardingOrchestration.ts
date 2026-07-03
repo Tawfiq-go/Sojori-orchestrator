@@ -3,6 +3,7 @@ import { unwrapFulltaskData } from '../../../utils/unwrapFulltaskResponse';
 import { replaceOwnerOrchestrationCapabilities } from '../../orchestrationListingV3/ownerOrchestrationReplace';
 import type { WizardDraft, WizardPanel7 } from '../types';
 import { applyWizardDeadlines } from './applyWizardDeadlines';
+import { replaceOwnerExecutionsFromWizard } from './replaceOwnerExecutionsFromWizard';
 import { syncOwnerExecutionFromFulltask } from './syncOwnerExecutionFromFulltask';
 import { buildOwnerOrchestrationCapabilitiesFromWizard } from './buildOwnerOrchestrationFromWizard';
 import listingsService from '../../../services/listingsService';
@@ -172,7 +173,7 @@ export async function applyOnboardingOrchestration(
   }
 
   let deadlinesPatched = 0;
-  if (p6) {
+  if (p6?.deadlines) {
     try {
       emitPhase(options, 'fulltask-seed');
       await ensureFulltaskWorkflowsFromGlobal(ownerId, warnings);
@@ -183,6 +184,16 @@ export async function applyOnboardingOrchestration(
       );
       if (deadlinesPatched === 0) {
         warnings.push('Délais staff : aucun workflow mis à jour (seed fulltask manquant ?)');
+      }
+
+      const executionReplaced = await applyWithTimeout('Execution owner depuis wizard', 45_000, () =>
+        replaceOwnerExecutionsFromWizard(ownerId, p6.deadlines, draft.panels['3']?.capabilities),
+      );
+      if (executionReplaced > 0) {
+        finalAuditLines = [
+          ...finalAuditLines,
+          `Execution owner remplacée depuis wizard (${executionReplaced} service(s))`,
+        ];
       }
 
       const executionSynced = await applyWithTimeout('Sync execution fulltask → owner', 45_000, () =>
