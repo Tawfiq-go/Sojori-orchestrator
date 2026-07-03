@@ -68,13 +68,10 @@ export function useInboxConversation() {
     try {
       const messagesResponse = await messagesService.getConversationMessages(target.phone, {
         limit: 50,
-        reservationId: target.reservation_mongo_id ?? undefined,
+        scope: 'phone',
       });
       if (messagesResponse.status === 'success') {
-        const fetched = messagesResponse.data.exchanges || [];
-        if (fetched.length > 0) {
-          setMessages((prev) => (fetched.length >= prev.length ? fetched : prev));
-        }
+        setMessages(messagesResponse.data.exchanges || []);
       }
     } catch (err) {
       console.error('❌ Erreur refresh messages:', err);
@@ -97,7 +94,7 @@ export function useInboxConversation() {
       const [messagesResult, tasksResult, reservationResult] = await Promise.allSettled([
         messagesService.getConversationMessages(conv.phone, {
           limit: 50,
-          reservationId: conv.reservation_mongo_id ?? undefined,
+          scope: 'phone',
         }),
         resaNum
           ? tasksService.getTasksByReservation(resaNum, false)
@@ -110,11 +107,7 @@ export function useInboxConversation() {
       const reservationRow = reservationResult.status === 'fulfilled' ? reservationResult.value : null;
 
       if (messagesResponse?.status === 'success') {
-        const fetched = messagesResponse.data.exchanges || [];
-        setMessages((prev) => {
-          if (fetched.length >= prev.length || prev.length === 0) return fetched;
-          return prev;
-        });
+        setMessages(messagesResponse.data.exchanges || []);
         if (messagesResponse.data.user_context) {
           const ctx = messagesResponse.data.user_context;
           setReservation((prev) => ({

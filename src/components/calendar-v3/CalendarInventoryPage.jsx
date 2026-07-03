@@ -28,13 +28,6 @@ function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-function toIso(d) {
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const da = String(d.getDate()).padStart(2, '0');
-  return `${y}-${mo}-${da}`;
-}
-
 export default function CalendarInventoryPage({
   startDate = new Date(),
   listingCatalog = [],
@@ -120,17 +113,6 @@ export default function CalendarInventoryPage({
     month: 'long',
     year: 'numeric',
   });
-
-  useEffect(() => {
-    if (!modalCells?.length) return;
-    const firstIso = [...modalCells].map((c) => c.dateStr).sort()[0];
-    if (!firstIso) return;
-    const [y, m, day] = firstIso.split('-').map(Number);
-    const d = new Date(y, m - 1, day);
-    if (toIso(d) === toIso(pivotDate)) return;
-    commitDate(d);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- pivotDate lu pour éviter boucle
-  }, [modalCells]);
 
   const openReservationDrawer = useCallback(async (rawRes) => {
     const shell = normalizeCalendarReservation(rawRes);

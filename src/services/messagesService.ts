@@ -197,8 +197,10 @@ class MessagesService {
       before_message_id?: string;
       /** staff = srv-fulltask /staff-whatsapp, guest = srv-fullchatbot */
       inbox?: WhatsappInboxKind;
-      /** Mongo reservationId — loads thread if phone variants miss */
+      /** Mongo reservationId — only used when scope=reservation */
       reservationId?: string;
+      /** guest inbox: phone = full WhatsApp history (default); reservation = current stay only */
+      scope?: 'phone' | 'reservation';
     }
   ): Promise<ConversationDetailResponse> {
     try {
@@ -225,6 +227,7 @@ class MessagesService {
       if (options?.before) params.before = String(options.before);
       if (options?.before_message_id) params.before_message_id = options.before_message_id;
       if (options?.reservationId) params.reservationId = options.reservationId;
+      if (options?.scope) params.scope = options.scope;
 
       const response = await apiClient.get<ConversationDetailResponse>(
         `${resolveWhatsappDebugBase('guest')}/conversations/${encodeURIComponent(phone)}`,
