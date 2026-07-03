@@ -15,6 +15,7 @@ import {
   prevWizardPanel,
   wizardVisibleProgressPercent,
 } from '../wizardNavigation';
+import { formatOnboardingWizardError } from '../onboardingOwnerUrl';
 
 export interface UsePmOnboardingWizardResult {
   loading: boolean;
@@ -44,8 +45,10 @@ export interface UsePmOnboardingWizardResult {
 export function usePmOnboardingWizard(
   user: MockUser | null | undefined,
   targetOwnerId: string | null | undefined,
+  opts?: { isOwnerSelfService?: boolean },
 ): UsePmOnboardingWizardResult {
   const ownerId = targetOwnerId ?? null;
+  const isOwnerSelfService = opts?.isOwnerSelfService ?? false;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,14 +83,14 @@ export function usePmOnboardingWizard(
         }));
         return true;
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Échec sauvegarde';
+        const msg = formatOnboardingWizardError(e, 'save', { isOwnerSelfService });
         setError(msg);
         return false;
       } finally {
         setSaving(false);
       }
     },
-    [ownerId, user],
+    [ownerId, user, isOwnerSelfService],
   );
 
   useEffect(() => {
@@ -109,8 +112,8 @@ export function usePmOnboardingWizard(
         setDraft({ ...merged, currentPanel: panel });
         setOnboarding(res.data.onboarding);
         setLastSavedAt(remote?.lastSavedAt ?? null);
-      } catch {
-        if (!cancelled) setError('Impossible de charger la progression');
+      } catch (e: unknown) {
+        if (!cancelled) setError(formatOnboardingWizardError(e, 'load', { isOwnerSelfService }));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -118,7 +121,7 @@ export function usePmOnboardingWizard(
     return () => {
       cancelled = true;
     };
-  }, [ownerId]);
+  }, [ownerId, isOwnerSelfService]);
 
   const setCurrentPanel = useCallback((panel: number) => {
     setDraft((prev) => ({ ...prev, currentPanel: panel }));

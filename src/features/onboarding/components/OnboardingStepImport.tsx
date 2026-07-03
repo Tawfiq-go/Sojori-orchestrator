@@ -83,7 +83,16 @@ export default function OnboardingStepImport({ ownerId, panel, onChange, onSkipL
       );
       setProperties(list);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur réseau');
+      const ax = e as { response?: { status?: number; data?: { error?: string; ruAuthHint?: unknown } }; message?: string };
+      const status = ax.response?.status;
+      let msg = ax.response?.data?.error || ax.message || 'Erreur réseau';
+      if (status === 405) {
+        msg =
+          'API inaccessible (405) — le front doit appeler dev.sojori.com, pas app.sojori.com. Rechargez après déploiement Vercel ou utilisez http://127.0.0.1:3001 en local.';
+      } else if (status === 403) {
+        msg = 'Accès refusé (403) — vérifiez votre session admin et le PM sélectionné dans le filtre owner.';
+      }
+      setError(msg);
       setProperties([]);
     } finally {
       setLoading(false);

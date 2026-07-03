@@ -5,6 +5,7 @@ import { useAdminOwnerFilter } from '../../../context/AdminOwnerFilterContext';
 import { getOwners } from '../../../services/teamDashboardApi';
 import { getOwnerListLabel } from '../../../utils/ownerDisplay.utils';
 import { autocompleteOptionLiProps } from '../../../utils/autocompleteOptionLiProps';
+import { applyOwnerIdToSearchParams } from '../onboardingOwnerUrl';
 
 type OwnerRow = {
   _id?: string;
@@ -29,7 +30,7 @@ function ownerRowSecondary(o: OwnerRow): string {
 
 /** Liste déroulante admin — recherche serveur par nom, email, société. */
 export function OnboardingOwnerPicker() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { setSelectedOwnerId, selectedOwnerId } = useAdminOwnerFilter();
   const [inputValue, setInputValue] = useState('');
   const [searchText, setSearchText] = useState('');
@@ -107,6 +108,7 @@ export function OnboardingOwnerPicker() {
           setSelectedOwnerId(id);
           setInputValue(option ? getOwnerListLabel(option) : '');
           if (!option) setSearchText('');
+          setSearchParams(applyOwnerIdToSearchParams(searchParams, id), { replace: true });
         }}
         filterOptions={(rows) => rows}
         getOptionLabel={(o) => getOwnerListLabel(o)}

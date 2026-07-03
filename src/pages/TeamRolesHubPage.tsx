@@ -15,6 +15,8 @@ import { GroupsTab } from '../components/team/GroupsTab';
 import { TeamViewProvider, useTeamViewMode } from '../context/TeamViewContext';
 import { TeamViewToolbar } from '../components/team/TeamViewToolbar';
 import { STAFF_DASHBOARD_LEGACY_TAB, ADMIN_WHATSAPP_LEGACY_TAB, ONBOARDING_LEGACY_TAB } from '../utils/teamUrlUtils';
+import { readPersistedAdminScope } from '../utils/adminOwnerFilter.utils';
+import { applyOwnerIdToSearchParams } from '../features/onboarding/onboardingOwnerUrl';
 import { PmOnboardingWizard } from '../features/onboarding/PmOnboardingWizard';
 import { canAccessPmOnboarding } from '../features/onboarding/resolveOwnerId';
 import { useAuth } from '../hooks/useAuth';
@@ -125,6 +127,14 @@ export function TeamRolesHubPage() {
       onboarding: 'onboarding',
     };
     next.set('tab', tabMap[id]);
+    if (id === 'onboarding') {
+      const fromUrl = searchParams.get('ownerId')?.trim();
+      const persisted = readPersistedAdminScope();
+      const ownerId = fromUrl || (persisted.mode === 'owner' ? persisted.ownerId : '');
+      if (ownerId) {
+        next.set('ownerId', ownerId);
+      }
+    }
     navigate(`/admin/equipe?${next.toString()}`);
   };
 

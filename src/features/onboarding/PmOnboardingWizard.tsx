@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CircularProgress, Alert, Button } from '@mui/material';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
@@ -13,10 +14,12 @@ import { OnboardingTrackingPanel } from './components/OnboardingTrackingPanel';
 import { OnboardingStepPanels } from './components/OnboardingStepPanels';
 import {
   canAccessPmOnboarding,
+  isOwnerRole,
   resolvePmOnboardingOwnerId,
   onboardingSuiteViewMode,
 } from './resolveOwnerId';
 import { panelToStepIndex, prevWizardPanel, WIZARD_STEP_COUNT, PM_ONBOARDING_WIZARD_PATH } from './wizardNavigation';
+import { applyOwnerIdToSearchParams } from './onboardingOwnerUrl';
 import './onboarding-wizard.css';
 
 type PmOnboardingWizardProps = {
@@ -40,20 +43,49 @@ function OnboardingWizardShell({
 export function PmOnboardingWizard({ embedded = false }: PmOnboardingWizardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { showOwnerFilter, requestOwnerId } = useAdminOwnerFilter();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { showOwnerFilter, requestOwnerId, setSelectedOwnerId } = useAdminOwnerFilter();
   const targetOwnerId = resolvePmOnboardingOwnerId(user, requestOwnerId, showOwnerFilter);
-  const wizard = usePmOnboardingWizard(user, targetOwnerId);
+  const isOwnerSelfService = !showOwnerFilter && isOwnerRole(user);
+  const wizard = usePmOnboardingWizard(user, targetOwnerId, { isOwnerSelfService });
   const { draft, loading, saving, error, progressPercent, onboarding, lastSavedAt } = wizard;
   const ownerScopeBlocked = showOwnerFilter && !requestOwnerId;
 
+  useEffect(() => {
+    if (!showOwnerFilter) return;
+    const fromUrl = searchParams.get('ownerId')?.trim();
+    if (fromUrl) setSelectedOwnerId(fromUrl);
+  }, [searchParams, setSelectedOwnerId, showOwnerFilter]);
+
+  useEffect(() => {
+    if (!showOwnerFilter || !targetOwnerId) return;
+    const inUrl = searchParams.get('ownerId')?.trim();
+    if (inUrl === targetOwnerId) return;
+    setSearchParams(applyOwnerIdToSearchParams(searchParams, targetOwnerId), { replace: true });
+  }, [targetOwnerId, searchParams, setSearchParams, showOwnerFilter]);
+
   const handleSave = async () => {
     const ok = await wizard.saveDraft();
-    if (ok) toast.success('Brouillon enregistré');
+    if (ok) {
+      if (showOwnerFilter && targetOwnerId) {
+        setSearchParams(applyOwnerIdToSearchParams(searchParams, targetOwnerId), { replace: true });
+      }
+      toast.success('Brouillon enregistré');
+    } else {
+      toast.error(wizard.error || 'Impossible d’enregistrer la progression');
+    }
   };
 
   const handleContinue = async () => {
     const ok = await wizard.validateCurrentPanel();
-    if (ok) toast.success('Étape enregistrée — étape suivante');
+    if (ok) {
+      if (showOwnerFilter && targetOwnerId) {
+        setSearchParams(applyOwnerIdToSearchParams(searchParams, targetOwnerId), { replace: true });
+      }
+      toast.success('Étape enregistrée — étape suivante');
+    } else {
+      toast.error(wizard.error || 'Impossible d’enregistrer l’étape');
+    }
   };
 
   const handleSaveAndExit = async () => {
