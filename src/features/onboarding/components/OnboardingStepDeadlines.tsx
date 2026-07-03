@@ -17,8 +17,7 @@ const CLIENT_DAY_OPTIONS = [-4, -3, -2, -1] as const;
 const STAFF_ASSIGN_OPTIONS: Array<{ id: StaffAssignStyle; label: string }> = [
   { id: 'none', label: '—' },
   { id: 'immediate', label: 'Immédiat' },
-  { id: 'with_client', label: 'Au choix client' },
-  { id: 'days_before', label: 'Jours avant' },
+  { id: 'days_before', label: 'J-X avant la tâche' },
 ];
 
 const DAYS_BEFORE_OPTIONS = [1, 2, 3, 4, 7] as const;
@@ -118,6 +117,9 @@ function ServiceRowEditor({
           value={row.staffAssignStyle === 'days_before' ? 'days_before' : row.staffAssignStyle}
           onChange={(e) => setAssignStyle(e.target.value as StaffAssignStyle)}
         >
+          {row.staffAssignStyle === 'with_client' ? (
+            <option value="with_client">Au choix client (ancien)</option>
+          ) : null}
           {STAFF_ASSIGN_OPTIONS.map((o) => (
             <option key={o.id} value={o.id}>
               {o.label}

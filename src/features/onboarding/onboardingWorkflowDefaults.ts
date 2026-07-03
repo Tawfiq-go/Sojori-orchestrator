@@ -263,11 +263,9 @@ function cloneDefs(defs: OnboardingServiceRhythmDef[]): OnboardingServiceRhythmD
 function applyReactivePreset(defs: OnboardingServiceRhythmDef[]): OnboardingServiceRhythmDef[] {
   return defs.map((d) => {
     if (d.staffAssignStyle === 'none' || d.staffAssignStyle === 'immediate') return d;
-    // Sans relance client (ex. checkout_cleaning), "au choix client" n'a pas de sens.
     if (!CLIENT_RELANCE_MESSAGE_ID[d.taskType]) return d;
     return {
       ...d,
-      staffAssignStyle: 'with_client' as const,
       clientReminderDays: d.clientReminderDays.filter((day) => day >= -2),
     };
   });
@@ -365,7 +363,7 @@ export const WORKFLOW_PRESET_OPTIONS: Array<{
     id: 'reactive',
     emoji: '🤝',
     title: 'Réactif',
-    desc: 'Staff au choix client · relances courtes',
+    desc: 'Relances courtes · assignation standard',
   },
   {
     id: 'balanced',
