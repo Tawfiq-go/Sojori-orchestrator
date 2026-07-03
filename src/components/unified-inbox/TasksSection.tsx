@@ -49,8 +49,12 @@ function Group({ label, emoji, tasks, defaultOpen, tone, ...handlers }: GroupPro
 
   return (
     <Box sx={{ mb: 1 }}>
-      <Stack direction="row" gap={0.875} onClick={() => setOpen(o = sx={{ alignItems: 'center' }}> !o)}
-        sx={{ py: 0.625, cursor: 'pointer', userSelect: 'none' }}>
+      <Stack
+        direction="row"
+        gap={0.875}
+        onClick={() => setOpen((o) => !o)}
+        sx={{ py: 0.625, cursor: 'pointer', userSelect: 'none', alignItems: 'center' }}
+      >
         <Box sx={{
           fontSize: 9, color: T.text3, width: 10, textAlign: 'center', lineHeight: 1,
           transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.18s',
