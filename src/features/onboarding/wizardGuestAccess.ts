@@ -30,6 +30,7 @@ export const JX_OPTIONS: Record<JxOptionGroup, readonly string[]> = {
     "Jour d'arrivée (J0)",
   ],
   arrivalWindow: [
+    'De la réservation à J-1',
     'De J-14 à J-1',
     'De J-7 à J-1',
     'De J-3 à J-1',
@@ -37,6 +38,7 @@ export const JX_OPTIONS: Record<JxOptionGroup, readonly string[]> = {
     "Jour d'arrivée uniquement",
   ],
   departureWindow: [
+    'De la réservation à veille départ',
     'De J-7 à veille départ',
     'De J-3 à veille départ',
     'Jour de départ uniquement',
@@ -224,8 +226,8 @@ const PRESET_EARLY: Omit<WizardJxSettings, 'preset'> = {
   menuActive: 'À la réservation',
   welcome: 'À la réservation',
   registration: 'À la réservation',
-  arrivalChoose: 'De J-14 à J-1',
-  departureChoose: 'De J-7 à veille départ',
+  arrivalChoose: 'De la réservation à J-1',
+  departureChoose: 'De la réservation à veille départ',
   arrivalDeclare: 'À partir de J-1',
   departureDeclare: 'À partir de J-1',
   support: 'Toujours disponible',

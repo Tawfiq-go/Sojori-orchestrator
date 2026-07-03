@@ -69,6 +69,21 @@ export function wizardJxLabelToAvailability(
     };
   }
 
+  // Fenêtre sans borne de début = disponible dès la réservation (le moteur chatbot
+  // n'applique que la borne `to` quand `from` est absent).
+  if (/^De la réservation à J-1$/i.test(t)) {
+    return {
+      type: 'time_window',
+      to: daysBoundary(1, 'before_checkin'),
+    };
+  }
+  if (/^De la réservation à veille départ$/i.test(t)) {
+    return {
+      type: 'time_window',
+      to: daysBoundary(1, 'before_checkout'),
+    };
+  }
+
   const deVeille = t.match(/De J-(\d+)\s+à veille départ/i);
   if (deVeille) {
     return {
