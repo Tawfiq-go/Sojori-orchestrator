@@ -52,6 +52,7 @@ export const JX_OPTIONS: Record<JxOptionGroup, readonly string[]> = {
     "Jour d'arrivée",
   ],
   accessCodes: [
+    'À la réservation',
     'Après enregistrement + créneau arrivée',
     'Après enregistrement uniquement',
     "Jour d'arrivée (J0)",
