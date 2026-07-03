@@ -1,6 +1,5 @@
-import axios from 'axios';
+import apiClient from './apiClient';
 import { API_BASE_URL } from '../config/backendServer.config';
-import { getRefreshToken, getToken } from '../utils/authUtils';
 import { guestContextStaySummary, logResaGuest } from '../utils/resaGuestActionDebug';
 
 /** En dev : proxy Vite relatif (évite CORS). Avec VITE_API_URL → API distante via srv-admin. */
@@ -13,114 +12,90 @@ function resolveFulltaskBase(): string {
 
 const BASE = resolveFulltaskBase();
 
-function authHeaders() {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  const token = getToken();
-  const refreshToken = getRefreshToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  if (refreshToken) {
-    headers['x-refresh-token'] = refreshToken;
-  }
-  const isLocalhost =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      window.location.hostname === '[::1]');
-  const devToken = import.meta.env.VITE_DEV_TOKEN;
-  if (isLocalhost && devToken) {
-    headers['X-Dev-Token'] = String(devToken);
-  }
-  return { headers };
-}
-
 export async function listTasks(params: Record<string, unknown> = {}) {
-  const { data } = await axios.get(`${BASE}/tasks`, { ...authHeaders(), params });
+  const { data } = await apiClient.get(`${BASE}/tasks`, { params });
   return data;
 }
 
 export async function createTask(body: Record<string, unknown>) {
-  const { data } = await axios.post(`${BASE}/tasks`, body, authHeaders());
+  const { data } = await apiClient.post(`${BASE}/tasks`, body);
   return data;
 }
 
 export async function getTask(id: string) {
-  const { data } = await axios.get(`${BASE}/tasks/${id}`, authHeaders());
+  const { data } = await apiClient.get(`${BASE}/tasks/${id}`);
   return data;
 }
 
 export async function patchTask(id: string, body: Record<string, unknown>) {
-  const { data } = await axios.patch(`${BASE}/tasks/${id}`, body, authHeaders());
+  const { data } = await apiClient.patch(`${BASE}/tasks/${id}`, body);
   return data;
 }
 
 export async function patchTaskStatus(id: string, status: string) {
-  const { data } = await axios.patch(`${BASE}/tasks/${id}/status`, { status }, authHeaders());
+  const { data } = await apiClient.patch(`${BASE}/tasks/${id}/status`, { status });
   return data;
 }
 
 /** Acceptation staff / admin (pending_partner → confirmed + sync plan). */
 export async function acceptTask(id: string, staffId?: string) {
   const body = staffId ? { staffId } : {};
-  const { data } = await axios.patch(`${BASE}/tasks/${id}/accept`, body, authHeaders());
+  const { data } = await apiClient.patch(`${BASE}/tasks/${id}/accept`, body);
   return data;
 }
 
 export async function assignTask(id: string, staffId: string) {
-  const { data } = await axios.patch(`${BASE}/tasks/${id}/assign`, { staffId }, authHeaders());
+  const { data } = await apiClient.patch(`${BASE}/tasks/${id}/assign`, { staffId });
   return data;
 }
 
 export async function deleteTask(id: string) {
-  const { data } = await axios.delete(`${BASE}/tasks/${id}`, authHeaders());
+  const { data } = await apiClient.delete(`${BASE}/tasks/${id}`);
   return data;
 }
 
 export async function listStaff(params: Record<string, unknown> = {}) {
-  const { data } = await axios.get(`${BASE}/staff`, { ...authHeaders(), params });
+  const { data } = await apiClient.get(`${BASE}/staff`, { params });
   return data;
 }
 
 export async function createStaff(body: Record<string, unknown>) {
-  const { data } = await axios.post(`${BASE}/staff`, body, authHeaders());
+  const { data } = await apiClient.post(`${BASE}/staff`, body);
   return data;
 }
 
 export async function updateStaff(id: string, body: Record<string, unknown>) {
-  const { data } = await axios.patch(`${BASE}/staff/${id}`, body, authHeaders());
+  const { data } = await apiClient.patch(`${BASE}/staff/${id}`, body);
   return data;
 }
 
 export async function deleteStaff(id: string) {
-  const { data } = await axios.delete(`${BASE}/staff/${id}`, authHeaders());
+  const { data } = await apiClient.delete(`${BASE}/staff/${id}`);
   return data;
 }
 
 export async function listWhatsappAdmins(params: Record<string, unknown> = {}) {
-  const { data } = await axios.get(`${BASE}/whatsapp-admins`, { ...authHeaders(), params });
+  const { data } = await apiClient.get(`${BASE}/whatsapp-admins`, { params });
   return data;
 }
 
 export async function createWhatsappAdmin(body: Record<string, unknown>) {
-  const { data } = await axios.post(`${BASE}/whatsapp-admins`, body, authHeaders());
+  const { data } = await apiClient.post(`${BASE}/whatsapp-admins`, body);
   return data;
 }
 
 export async function updateWhatsappAdmin(id: string, body: Record<string, unknown>) {
-  const { data } = await axios.patch(`${BASE}/whatsapp-admins/${id}`, body, authHeaders());
+  const { data } = await apiClient.patch(`${BASE}/whatsapp-admins/${id}`, body);
   return data;
 }
 
 export async function deleteWhatsappAdmin(id: string) {
-  const { data } = await axios.delete(`${BASE}/whatsapp-admins/${id}`, authHeaders());
+  const { data } = await apiClient.delete(`${BASE}/whatsapp-admins/${id}`);
   return data;
 }
 
 export async function getTaskConfigs(ownerId: string, params: Record<string, unknown> = {}) {
-  const { data } = await axios.get(`${BASE}/task-config/${ownerId}`, { ...authHeaders(), params });
+  const { data } = await apiClient.get(`${BASE}/task-config/${ownerId}`, { params });
   return data;
 }
 
@@ -133,7 +108,7 @@ export async function upsertTaskTypeConfig(
   const path = listingId
     ? `${BASE}/task-config/${ownerId}/${listingId}/${type}`
     : `${BASE}/task-config/${ownerId}/${type}`;
-  const { data } = await axios.put(path, body, authHeaders());
+  const { data } = await apiClient.put(path, body);
   return data;
 }
 
@@ -148,101 +123,96 @@ export async function getOrchestrationConfig(
   options?: { strictOwner?: boolean },
 ) {
   const params = options?.strictOwner ? { strictOwner: 'true' } : undefined;
-  const { data } = await axios.get(`${BASE}/orchestration/${ownerId}`, {
-    ...authHeaders(),
-    params,
+  const { data } = await apiClient.get(`${BASE}/orchestration/${ownerId}`, { params,
     timeout: ORCH_HTTP_TIMEOUT_MS,
   });
   return data;
 }
 
 export async function upsertOrchestrationConfig(ownerId: string, body: Record<string, unknown>) {
-  const { data } = await axios.put(`${BASE}/orchestration/${ownerId}`, body, {
-    ...authHeaders(),
-    timeout: ORCH_HTTP_TIMEOUT_MS,
+  const { data } = await apiClient.put(`${BASE}/orchestration/${ownerId}`, body, { timeout: ORCH_HTTP_TIMEOUT_MS,
   });
   return data;
 }
 
 /** Réinjecte 12 workflows + 10 messages catalogue + 4 messages plan (ownerId global). */
 export async function seedOrchestrationComplete(force = false) {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/orchestration/seed-complete`,
     force ? { force: true } : {},
-    { ...authHeaders(), params: force ? { force: 'true' } : undefined },
+    { params: force ? { force: 'true' } : undefined },
   );
   return data;
 }
 
 /** Templates WA staff + workflows.staffReminders uniquement (sans toucher catalogue voyageur). */
 export async function seedStaffRemindersOnly(force = false) {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/orchestration/seed-staff-reminders`,
     force ? { force: true } : {},
-    { ...authHeaders(), params: force ? { force: 'true' } : undefined },
+    { params: force ? { force: 'true' } : undefined },
   );
   return data;
 }
 
 export async function getPlan(reservationId: string) {
-  const { data } = await axios.get(`${BASE}/plans/${reservationId}`, authHeaders());
+  const { data } = await apiClient.get(`${BASE}/plans/${reservationId}`);
   return data;
 }
 
 export async function listWhatsAppMessages() {
-  const { data } = await axios.get(`${BASE}/whatsapp-messages`, authHeaders());
+  const { data } = await apiClient.get(`${BASE}/whatsapp-messages`);
   return data;
 }
 
 /** Insère / met à jour les corps templates voyageur depuis le seed srv-fulltask. */
 export async function mergeGuestWhatsAppSeeds() {
-  const { data } = await axios.post(`${BASE}/whatsapp-messages/merge-guest-seeds`, {}, authHeaders());
+  const { data } = await apiClient.post(`${BASE}/whatsapp-messages/merge-guest-seeds`, {});
   return data;
 }
 
 /** messageCatalog → whatsapp_messages (noms Meta + corps seed). */
 export async function syncWhatsAppFromCatalog(ownerId = 'global') {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/orchestration/sync-whatsapp-from-catalog`,
     { ownerId },
-    authHeaders(),
   );
   return data;
 }
 
 /** Insère / met à jour les templates staff_reminder_* dans whatsapp_messages. */
 export async function mergeStaffWhatsAppSeeds() {
-  const { data } = await axios.post(`${BASE}/whatsapp-messages/merge-staff-seeds`, {}, authHeaders());
+  const { data } = await apiClient.post(`${BASE}/whatsapp-messages/merge-staff-seeds`, {});
   return data;
 }
 
 export async function getWhatsAppMessage(slug: string) {
-  const { data } = await axios.get(`${BASE}/whatsapp-messages/${encodeURIComponent(slug)}`, authHeaders());
+  const { data } = await apiClient.get(`${BASE}/whatsapp-messages/${encodeURIComponent(slug)}`);
   return data;
 }
 
 export async function getWhatsAppMessagesConfigStatus() {
-  const { data } = await axios.get(`${BASE}/whatsapp-messages/config-status`, authHeaders());
+  const { data } = await apiClient.get(`${BASE}/whatsapp-messages/config-status`);
   return data;
 }
 
 export async function updateWhatsAppMessage(slug: string, body: Record<string, unknown>) {
-  const { data } = await axios.put(`${BASE}/whatsapp-messages/${slug}`, body, authHeaders());
+  const { data } = await apiClient.put(`${BASE}/whatsapp-messages/${slug}`, body);
   return data;
 }
 
 export async function submitWhatsAppMessageToMeta(slug: string) {
-  const { data } = await axios.post(`${BASE}/whatsapp-messages/${slug}/submit-meta`, {}, authHeaders());
+  const { data } = await apiClient.post(`${BASE}/whatsapp-messages/${slug}/submit-meta`, {});
   return data;
 }
 
 export async function syncWhatsAppMessageFromMeta(slug: string) {
-  const { data } = await axios.post(`${BASE}/whatsapp-messages/${slug}/sync-meta`, {}, authHeaders());
+  const { data } = await apiClient.post(`${BASE}/whatsapp-messages/${slug}/sync-meta`, {});
   return data;
 }
 
 export async function syncAllWhatsAppMessagesFromMeta(account: 'guest' | 'staff' = 'guest') {
-  const { data } = await axios.post(`${BASE}/whatsapp-messages/sync-all-meta`, { account }, authHeaders());
+  const { data } = await apiClient.post(`${BASE}/whatsapp-messages/sync-all-meta`, { account });
   return data;
 }
 
@@ -250,28 +220,25 @@ export async function archivePlan(
   reservationId: string,
   body: { reason?: string } = {},
 ) {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/archive`,
     body,
-    authHeaders(),
   );
   return data;
 }
 
 export async function deletePlan(reservationId: string) {
-  const { data } = await axios.delete(
+  const { data } = await apiClient.delete(
     `${BASE}/plans/${encodeURIComponent(reservationId)}`,
-    authHeaders(),
   );
   return data;
 }
 
 /** Tick cron horaire (`processPlanCronTick`) filtré sur une réservation. */
 export async function runPlanScheduler(reservationId: string) {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/run-scheduler`,
     {},
-    authHeaders(),
   );
   return data;
 }
@@ -290,9 +257,7 @@ async function postPlanDispatch(
 ): Promise<PlanDispatchApiResponse> {
   const t0 = performance.now();
   console.log('[dispatch-test] POST start', { url, body });
-  const res = await axios.post(url, body, {
-    ...authHeaders(),
-    validateStatus: () => true,
+  const res = await apiClient.post(url, body, { validateStatus: () => true,
   });
   const ms = Math.round(performance.now() - t0);
   const data = res.data as PlanDispatchApiResponse | string | undefined;
@@ -373,11 +338,9 @@ export async function listAssignationCandidates(
   reservationId: string,
   taskId: string,
 ): Promise<AssignationCandidatesResponse> {
-  const { data, status } = await axios.get(
+  const { data, status } = await apiClient.get(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/assignation/candidates`,
-    {
-      ...authHeaders(),
-      validateStatus: (s) => (s >= 200 && s < 300) || s === 404,
+    { validateStatus: (s) => (s >= 200 && s < 300) || s === 404,
     },
   );
   if (status === 404) {
@@ -429,9 +392,7 @@ export async function forcePlanGuestSlot(
 }
 
 export async function listPlans(params: Record<string, unknown> = {}) {
-  const { data, status } = await axios.get(`${BASE}/plans`, {
-    ...authHeaders(),
-    params,
+  const { data, status } = await apiClient.get(`${BASE}/plans`, { params,
     validateStatus: (s) => (s >= 200 && s < 300) || s === 404,
   });
   if (status === 404) {
@@ -505,19 +466,16 @@ export type OpsFeedResponse = {
 };
 
 export async function getOpsFeed(days = 2): Promise<OpsFeedResponse> {
-  const { data } = await axios.get(`${BASE}/plans/ops-feed`, {
-    ...authHeaders(),
-    params: { days },
+  const { data } = await apiClient.get(`${BASE}/plans/ops-feed`, { params: { days },
   });
   return data as OpsFeedResponse;
 }
 
 export async function chooseGuestArrival(reservationId: string, time: string) {
   logResaGuest('api:choose-arrival →', { reservationId, time });
-  const { data } = await axios.patch(
+  const { data } = await apiClient.patch(
     `${BASE}/guest-actions/choose-arrival`,
     { reservationId, time },
-    authHeaders(),
   );
   logResaGuest('api:choose-arrival ←', {
     reservationId,
@@ -530,10 +488,9 @@ export async function chooseGuestArrival(reservationId: string, time: string) {
 
 export async function chooseGuestDeparture(reservationId: string, time: string) {
   logResaGuest('api:choose-departure →', { reservationId, time });
-  const { data } = await axios.patch(
+  const { data } = await apiClient.patch(
     `${BASE}/guest-actions/choose-departure`,
     { reservationId, time },
-    authHeaders(),
   );
   logResaGuest('api:choose-departure ←', {
     reservationId,
@@ -548,10 +505,9 @@ export async function chooseGuestDeparture(reservationId: string, time: string) 
 export async function declareGuestArrival(reservationId: string, hour?: number) {
   const time = hour != null ? `${String(hour).padStart(2, '0')}:00` : null;
   logResaGuest('api:declare-arrival →', { reservationId, hour, time });
-  const { data } = await axios.patch(
+  const { data } = await apiClient.patch(
     `${BASE}/guest-actions/declare-arrival`,
     { reservationId, declared: true, time },
-    authHeaders(),
   );
   logResaGuest('api:declare-arrival ←', {
     reservationId,
@@ -565,10 +521,9 @@ export async function declareGuestArrival(reservationId: string, hour?: number) 
 export async function declareGuestDeparture(reservationId: string, hour?: number) {
   const time = hour != null ? `${String(hour).padStart(2, '0')}:00` : null;
   logResaGuest('api:declare-departure →', { reservationId, hour, time });
-  const { data } = await axios.patch(
+  const { data } = await apiClient.patch(
     `${BASE}/guest-actions/declare-departure`,
     { reservationId, declared: true, time },
-    authHeaders(),
   );
   logResaGuest('api:declare-departure ←', {
     reservationId,
@@ -599,9 +554,8 @@ export type GuestMemberInput = {
 
 export async function getRegistrationFlowState(reservationId: string) {
   logResaGuest('api:registration-state →', { reservationId });
-  const { data } = await axios.get(
+  const { data } = await apiClient.get(
     `${BASE}/guest-actions/registration/${encodeURIComponent(reservationId)}`,
-    authHeaders(),
   );
   logResaGuest('api:registration-state ←', {
     reservationId,
@@ -618,10 +572,9 @@ export async function registerGuestMember(
   member: GuestMemberInput,
 ) {
   logResaGuest('api:register-guest →', { reservationId, index, member });
-  const { data } = await axios.patch(
+  const { data } = await apiClient.patch(
     `${BASE}/guest-actions/register-guest`,
     { reservationId, index, member },
-    authHeaders(),
   );
   logResaGuest('api:register-guest ←', {
     reservationId,
@@ -648,10 +601,9 @@ export async function registerGuestMember(
  * @param targetOwnerId - ID du Owner cible
  */
 export async function copyTaskConfigToOwner(sourceOwnerId: string, targetOwnerId: string) {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/config/task-config/copy`,
     { sourceOwnerId, targetOwnerId },
-    authHeaders(),
   );
   return data;
 }
@@ -661,10 +613,9 @@ export async function copyTaskConfigToOwner(sourceOwnerId: string, targetOwnerId
  * @param sourceOwnerId - ID du Owner source (ORCHESTRATION_ADMIN_OWNER_ID pour templates admin)
  */
 export async function copyTaskConfigToAllOwners(sourceOwnerId: string) {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/config/task-config/copy-to-all`,
     { sourceOwnerId },
-    authHeaders(),
   );
   return data;
 }
@@ -675,10 +626,10 @@ export async function copyTaskConfigToAllOwners(sourceOwnerId: string) {
  * @param targetOwnerId - ID du Owner cible
  */
 export async function copyOrchestrationConfigToOwner(sourceOwnerId: string, targetOwnerId: string) {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/orchestration/copy`,
     { sourceOwnerId, targetOwnerId },
-    { ...authHeaders(), timeout: ORCH_HTTP_TIMEOUT_MS },
+    { timeout: ORCH_HTTP_TIMEOUT_MS },
   );
   return data;
 }
@@ -688,10 +639,9 @@ export async function copyOrchestrationConfigToOwner(sourceOwnerId: string, targ
  * @param sourceOwnerId - ID du Owner source (ORCHESTRATION_ADMIN_OWNER_ID pour templates admin)
  */
 export async function copyOrchestrationConfigToAllOwners(sourceOwnerId: string) {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/orchestration/copy-to-all`,
     { sourceOwnerId },
-    authHeaders(),
   );
   return data;
 }

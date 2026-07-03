@@ -61,7 +61,7 @@ import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import { usePmSimulation } from '../context/PmSimulationContext';
 import { useAuth } from '../hooks/useAuth';
 import { dashboardDebugEnabled, logDashboard, logDashboardApiDetail, logDashboardKpisSummary } from '../utils/dashboardDebug';
-import { hasLocalDevApiAccess } from '../utils/devApiAccess';
+import { canAccessProtectedRoutes } from '../utils/devApiAccess';
 import { getToken } from '../utils/authUtils';
 import type {
   DashboardPeriod,
@@ -149,9 +149,9 @@ function DashboardPageContent() {
         return;
       }
 
-      if (!hasLocalDevApiAccess()) {
-        logDashboard('⚠️ Pas de session — connectez-vous ou configurez VITE_DEV_TOKEN (.env.local)');
-        setError('Session requise — connectez-vous via /login (compte prod) ou vérifiez VITE_DEV_TOKEN.');
+      if (!canAccessProtectedRoutes(isAuthenticated)) {
+        logDashboard('⚠️ Pas de session — connectez-vous via /login');
+        setError('Session requise — connectez-vous via /login avec votre compte Sojori.');
         setDashboardReady(false);
         return;
       }

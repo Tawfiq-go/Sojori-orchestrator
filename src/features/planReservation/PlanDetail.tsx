@@ -304,9 +304,14 @@ export default function PlanDetail({
 
       <div className="plan-orch-toolbar">
         <p className="plan-orch-hint">
-          {planMessageCount} message(s) plan · {planWorkflowCount} workflow(s) · glisser ⠿ pour
-          réordonner sur{' '}
-          <Link to="/tasks/orchestration-config">orchestration-config</Link> · simulation à droite
+          {planMessageCount} message(s) plan · {planWorkflowCount} workflow(s)
+          {showAdminConfigSource ? (
+            <>
+              {' '}
+              · glisser ⠿ pour réordonner sur{' '}
+              <Link to="/tasks/orchestration-config">orchestration-config</Link> · simulation à droite
+            </>
+          ) : null}
         </p>
         <div className="filters">
           <button
@@ -382,11 +387,17 @@ export default function PlanDetail({
       >
         🛡 Vue lecture seule · <b>Séquence</b> = relances + assign + rappels staff. Les relances
         workflow ne sont pas dupliquées en message catalogue. <b>Messages</b> = Bienvenu, feedback,
-        etc.{' '}
-        <Link to="/tasks/orchestration-config" style={{ color: 'var(--pd)', fontWeight: 700 }}>
-          Config orchestration
-        </Link>
-        . <b style={{ color: 'var(--t2)' }}>Exécuter maintenant</b> = tick cron horaire sur cette
+        etc.
+        {showAdminConfigSource ? (
+          <>
+            {' '}
+            <Link to="/tasks/orchestration-config" style={{ color: 'var(--pd)', fontWeight: 700 }}>
+              Config orchestration
+            </Link>
+            .
+          </>
+        ) : null}{' '}
+        <b style={{ color: 'var(--t2)' }}>Exécuter maintenant</b> = tick cron horaire sur cette
         réservation uniquement (échéances passées, une fois par point).
       </div>
     </div>

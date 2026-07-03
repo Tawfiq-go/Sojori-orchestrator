@@ -115,7 +115,9 @@ export default function PlanReservationPage({
               : activeResa && !activePlan
                 ? 'Plan introuvable ou erreur de chargement.'
                 : initialId && !activeResa
-                  ? "Aucun plan pour cette réservation — vérifiez l'URL ou créez le plan via orchestration."
+                  ? showAdminConfigSource
+                    ? "Aucun plan pour cette réservation — vérifiez l'URL ou créez le plan via orchestration."
+                    : 'Aucun plan pour cette réservation.'
                   : 'Sélectionnez un plan dans la liste.'}
           </div>
         )}
