@@ -1,14 +1,17 @@
-import axios, { isAxiosError } from 'axios';
+import { isAxiosError } from 'axios';
 import type {
   GuestContextLike,
   MenuOptionLike,
 } from '../features/chatbot/whatsappMenuAvailability';
 import { API_BASE_URL } from '../config/backendServer.config';
-import { getToken } from '../utils/authUtils';
+import apiClient from './apiClient';
 
-/** En dev : proxy Vite relatif (évite CORS). Prod : API via srv-admin. */
+/**
+ * Whitelist / listing-snapshots : proxy srv-admin (chemins internes /api/whitelist…).
+ * Le proxy relaie Authorization + x-refresh-token (srv-admin fullchatbotDashboard).
+ */
 function resolveFullchatbotBase(): string {
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
+  if (import.meta.env.DEV && typeof window !== 'undefined' && !import.meta.env.VITE_API_URL) {
     return '/api/v1/admin/fullchatbot';
   }
   return `${API_BASE_URL}/api/v1/admin/fullchatbot`;
@@ -16,24 +19,9 @@ function resolveFullchatbotBase(): string {
 
 const BASE = resolveFullchatbotBase();
 
-function authHeaders() {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const isLocalhost =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      window.location.hostname === '[::1]');
-  const devToken = import.meta.env.VITE_DEV_TOKEN;
-  if (isLocalhost && devToken) headers['X-Dev-Token'] = String(devToken);
-  return { headers };
-}
-
+/** owner_id : forcé côté proxy srv-admin pour les Owner, mais transmis ici pour Admin/SuperAdmin en simulation. */
 export async function listWhitelist(params: Record<string, unknown> = {}) {
-  const { data } = await axios.get(`${BASE}/whitelist`, { ...authHeaders(), params });
+  const { data } = await apiClient.get(`${BASE}/whitelist`, { params });
   return data;
 }
 
@@ -47,11 +35,7 @@ export async function batchWhitelistPageEnrichment(payload: {
   reservationIds: string[];
   listingIds: string[];
 }): Promise<WhitelistPageEnrichmentResult> {
-  const { data } = await axios.post(
-    `${BASE}/whitelist/page-enrichment`,
-    payload,
-    authHeaders(),
-  );
+  const { data } = await apiClient.post(`${BASE}/whitelist/page-enrichment`, payload);
   const raw = data?.data ?? {};
   const guestContextByReservationId =
     (raw.guestContextByReservationId as Record<string, GuestContextLike>) ?? {};
@@ -77,8 +61,7 @@ export async function getWhitelistDetail(
   if (opts?.includeAiModel === false) {
     params.includeAiModel = 'false';
   }
-  const { data } = await axios.get(`${BASE}/whitelist/${encodeURIComponent(reservationId)}`, {
-    ...authHeaders(),
+  const { data } = await apiClient.get(`${BASE}/whitelist/${encodeURIComponent(reservationId)}`, {
     params: Object.keys(params).length ? params : undefined,
   });
   return data;
@@ -88,36 +71,32 @@ export async function patchWhitelistClaudeModelTier(
   reservationId: string,
   body: { tier?: number; useOwnerDefault?: boolean },
 ) {
-  const { data } = await axios.patch(
+  const { data } = await apiClient.patch(
     `${BASE}/whitelist/${encodeURIComponent(reservationId)}/claude-model-tier`,
     body,
-    authHeaders(),
   );
   return data;
 }
 
 /** After PM changes owner Claude tier — push to all whitelist rows for that owner. */
 export async function syncOwnerModelToWhitelist(ownerId: string, tier: number) {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/whitelist/sync-owner-model/${encodeURIComponent(String(ownerId))}`,
     { tier: Number(tier) },
-    authHeaders(),
   );
   return data;
 }
 
 export async function listListingSnapshots(params: Record<string, unknown> = {}) {
-  const { data } = await axios.get(`${BASE}/listing-snapshots`, {
-    ...authHeaders(),
+  const { data } = await apiClient.get(`${BASE}/listing-snapshots`, {
     params: { compact: 'true', ...params },
   });
   return data;
 }
 
 export async function getListingSnapshot(listingId: string) {
-  const { data } = await axios.get(
+  const { data } = await apiClient.get(
     `${BASE}/listing-snapshots/${encodeURIComponent(listingId)}`,
-    authHeaders(),
   );
   return data;
 }
@@ -156,18 +135,16 @@ export async function getListingMenuOptions(listingId: string): Promise<ListingM
 
 /** POST — sync un listing (projection Config Orch. NEW → Mongo fullchatbot). */
 export async function syncListingSnapshot(listingId: string) {
-  const { data } = await axios.post(
+  const { data } = await apiClient.post(
     `${BASE}/listing-snapshots/${encodeURIComponent(listingId)}/sync`,
     {},
-    authHeaders(),
   );
   return data;
 }
 
 /** POST — sync tous les listings actifs (backfill). */
 export async function syncAllListingSnapshots(options?: { activeOnly?: boolean; limit?: number }) {
-  const { data } = await axios.post(`${BASE}/listing-snapshots/sync`, options ?? {}, {
-    ...authHeaders(),
+  const { data } = await apiClient.post(`${BASE}/listing-snapshots/sync`, options ?? {}, {
     timeout: 300_000,
   });
   return data;

@@ -33,6 +33,7 @@ import moment from 'moment';
 import 'moment/locale/fr';
 import { useNavigate } from 'react-router-dom';
 import * as fullchatbotApi from '../../services/fullchatbotApi';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { CHATBOT_T as T } from './chatbotTokens';
 import {
   getCachedGuestContext,
@@ -173,6 +174,7 @@ export default function ChatbotWhitelistView() {
   const [guestCtxByResa, setGuestCtxByResa] = useState<Record<string, GuestContextLike>>({});
   const enrichRequestIdRef = useRef(0);
   const skipNextPageEnrichRef = useRef(false);
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
 
   const enrichVisiblePage = useCallback(async (pageRows: WhitelistRow[]) => {
     const requestId = ++enrichRequestIdRef.current;
@@ -270,6 +272,7 @@ export default function ChatbotWhitelistView() {
 
   /** Bootstrap : whitelist + enrichissement page 1 → affichage unique */
   useEffect(() => {
+    if (!scopeFetchReady) return;
     let cancelled = false;
 
     void (async () => {
@@ -278,7 +281,7 @@ export default function ChatbotWhitelistView() {
       setError(null);
       try {
         const [whitelistRes, snapListRes] = await Promise.all([
-          fullchatbotApi.listWhitelist({ limit: 500 }),
+          fullchatbotApi.listWhitelist({ limit: 500, owner_id: requestOwnerId || undefined }),
           fullchatbotApi.listListingSnapshots({ limit: 500, activeOnly: 'true' }).catch(() => ({ data: [] })),
         ]);
         if (cancelled) return;
@@ -314,8 +317,8 @@ export default function ChatbotWhitelistView() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap initial uniquement
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap initial + changement de scope owner
+  }, [scopeFetchReady, requestOwnerId]);
 
   const handleRefresh = useCallback(() => {
     invalidateWhitelistEnrichmentCache();
@@ -330,7 +333,7 @@ export default function ChatbotWhitelistView() {
       setError(null);
       try {
         const [whitelistRes, snapListRes] = await Promise.all([
-          fullchatbotApi.listWhitelist({ limit: 500 }),
+          fullchatbotApi.listWhitelist({ limit: 500, owner_id: requestOwnerId || undefined }),
           fullchatbotApi.listListingSnapshots({ limit: 500, activeOnly: 'true' }).catch(() => ({ data: [] })),
         ]);
         const data = Array.isArray(whitelistRes?.data) ? (whitelistRes.data as WhitelistRow[]) : [];
@@ -356,7 +359,7 @@ export default function ChatbotWhitelistView() {
         setIsLoading(false);
       }
     })();
-  }, [enrichVisiblePage, limit, page, quickFilter, search, sortField, sortDir]);
+  }, [enrichVisiblePage, limit, page, quickFilter, search, sortField, sortDir, requestOwnerId]);
 
   /** Changement page / filtres : attendre config WA + guest context puis réafficher */
   useEffect(() => {
