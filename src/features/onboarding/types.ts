@@ -312,8 +312,7 @@ export interface WizardDraft {
 export const WIZARD_STEP_LABELS = [
   'Profil',
   'Équipe',
-  'Parcours client',
-  'Délais',
+  'Orchestration',
   'Go live',
 ] as const;
 

@@ -317,12 +317,9 @@ export default function OnboardingStepOrchestration({ panel3, cities, onChange }
 
   return (
     <div className="ob-sh">
-      <div className="eyebrow">Étape 3 · Parcours client</div>
-      <h1>Menu WhatsApp & parcours voyageur</h1>
       <p className="sub">
-        <strong>Ici : ce que le voyageur voit</strong> — services actifs, moment d&apos;apparition
-        dans le menu (J-X), réglages métier. L&apos;étape suivante règle comment votre équipe
-        exécute. Affinage complet dans le{' '}
+        <strong>Ce que le voyageur voit</strong> — services actifs, moment d&apos;apparition dans le
+        menu (J-X), réglages métier. Affinage complet dans le{' '}
         <Link to="/listings/orchestration-model?section=activation">modèle orchestration</Link>.
       </p>
 
