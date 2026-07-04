@@ -165,10 +165,11 @@ export function usePmOnboardingWizard(
 
     let panels = draftRef.current.panels;
 
-    if (panel === 3 && !panelsValidated.includes(5)) {
+    if (panel === 3) {
       const caps = panels['3']?.capabilities ?? defaultCapabilities();
       const jx = normalizeJxSettings(panels['3']?.jx ?? panels['4']?.jx);
-      panelsValidated = [...panelsValidated, 5].sort((a, b) => a - b);
+      // Conditions dérivées (panel 5) + délais (panel 6, fusionné dans l'étape Orchestration).
+      panelsValidated = [...new Set([...panelsValidated, 5, 6])].sort((a, b) => a - b);
       panels = {
         ...panels,
         '5': { conditions: deriveConditionsFromJx(jx, caps) },

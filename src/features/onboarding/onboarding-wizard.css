@@ -3330,6 +3330,124 @@
   color: var(--ob-danger, #d33);
 }
 
+/* ── Orchestration express ── */
+.ob-x {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ob-x-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ob-t1);
+}
+
+.ob-x-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--ob-t3);
+}
+
+.ob-x-inline-choices {
+  display: inline-flex;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.ob-x-day {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.ob-x-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ob-x-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--ob-b);
+  font-size: 12.5px;
+}
+
+.ob-x-row:last-child {
+  border-bottom: 0;
+}
+
+.ob-x-row--off .ob-x-row-label {
+  opacity: 0.45;
+}
+
+.ob-x-row-label {
+  color: var(--ob-t2);
+  font-weight: 600;
+}
+
+.ob-x-seg {
+  display: inline-flex;
+  border: 1px solid var(--ob-b);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.ob-x-seg-btn {
+  border: none;
+  background: transparent;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  color: var(--ob-t3);
+  cursor: pointer;
+  border-right: 1px solid var(--ob-b);
+}
+
+.ob-x-seg-btn:last-child {
+  border-right: 0;
+}
+
+.ob-x-seg-btn.on {
+  background: var(--ob-accent, #b8851a);
+  color: #fff;
+  font-weight: 700;
+}
+
+.ob-x-auto {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--ob-t3);
+  font-style: italic;
+}
+
+.ob-x-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.ob-x-tab {
+  border: 1px solid var(--ob-b);
+  background: var(--ob-bg1);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--ob-t2);
+}
+
+.ob-x-tab.on {
+  background: var(--ob-accent, #b8851a);
+  border-color: var(--ob-accent, #b8851a);
+  color: #fff;
+  font-weight: 700;
+}
+
 .ob-orch-city-prices {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

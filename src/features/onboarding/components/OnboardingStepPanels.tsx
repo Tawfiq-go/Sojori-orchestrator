@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { UsePmOnboardingWizardResult } from '../hooks/usePmOnboardingWizard';
 import type { WizardDraft } from '../types';
@@ -7,6 +7,7 @@ import { deriveConditionsFromJx } from '../wizardGuestAccess';
 import { defaultJx } from '../defaults';
 import OnboardingStepTeam from './OnboardingStepTeam';
 import OnboardingStepOrchestration from './OnboardingStepOrchestration';
+import OnboardingStepOrchestrationExpress from './OnboardingStepOrchestrationExpress';
 import OnboardingStepDeadlines from './OnboardingStepDeadlines';
 import { staffDisplayName } from '../staffNormalize';
 import { formatStaffPersonRecap, staffApplyAccountCounts } from '../staffRecap';
@@ -21,6 +22,7 @@ interface StepPanelsProps {
 export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
   const { draft, updatePanel, setPath, setCurrentPanel } = wizard;
   const panel = draft.currentPanel;
+  const [orchView, setOrchView] = useState<'express' | 'parcours' | 'delais'>('express');
 
   const p0 = draft.panels['0']!;
   const p1 = draft.panels['1']!;
@@ -123,34 +125,75 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
     );
   }
 
-  if (panel === 3) {
+  if (panel === 3 || panel === 6) {
     const ownerCities = p0.cities?.length ? p0.cities : CITY_OPTIONS;
-    return (
-      <OnboardingStepOrchestration
-        panel3={{
-          ...p3,
-          jx: p3.jx ?? draft.panels['4']?.jx ?? defaultJx(),
-        }}
-        cities={ownerCities}
-        onChange={(patch) => {
-          const caps = patch.capabilities ?? p3.capabilities;
-          const jx = patch.jx ?? p3.jx ?? draft.panels['4']?.jx ?? defaultJx();
-          updatePanel('3', patch);
-          if (jx) {
-            updatePanel('5', { conditions: deriveConditionsFromJx(jx, caps) });
-          }
-        }}
-      />
-    );
-  }
+    const panel3WithJx = { ...p3, jx: p3.jx ?? draft.panels['4']?.jx ?? defaultJx() };
+    const handlePanel3Change = (patch: Partial<typeof p3>) => {
+      const caps = patch.capabilities ?? p3.capabilities;
+      const jx = patch.jx ?? p3.jx ?? draft.panels['4']?.jx ?? defaultJx();
+      updatePanel('3', patch);
+      if (jx) {
+        updatePanel('5', { conditions: deriveConditionsFromJx(jx, caps) });
+      }
+    };
+    const handleDeadlinesChange = (patch: Partial<typeof p6.deadlines>) =>
+      updatePanel('6', { deadlines: { ...p6.deadlines, ...patch } });
 
-  if (panel === 6) {
     return (
-      <OnboardingStepDeadlines
-        deadlines={p6.deadlines}
-        capabilities={p3.capabilities}
-        onChange={(patch) => updatePanel('6', { deadlines: { ...p6.deadlines, ...patch } })}
-      />
+      <div className="ob-sh">
+        <div className="eyebrow">Étape 3 · Orchestration</div>
+        <h1>Comment votre conciergerie fonctionne</h1>
+        <p className="sub">
+          Répondez en langage métier — quand proposer chaque service, quand assigner le staff,
+          quand relancer. Le mode <strong>Avancé</strong> ouvre le détail ligne par ligne.
+        </p>
+        <div className="ob-x-tabs">
+          <button
+            type="button"
+            className={`ob-x-tab${orchView === 'express' ? ' on' : ''}`}
+            onClick={() => setOrchView('express')}
+          >
+            ⚡ Express
+          </button>
+          <button
+            type="button"
+            className={`ob-x-tab${orchView === 'parcours' ? ' on' : ''}`}
+            onClick={() => setOrchView('parcours')}
+          >
+            Avancé · Parcours voyageur
+          </button>
+          <button
+            type="button"
+            className={`ob-x-tab${orchView === 'delais' ? ' on' : ''}`}
+            onClick={() => setOrchView('delais')}
+          >
+            Avancé · Délais équipe
+          </button>
+        </div>
+        {orchView === 'express' && (
+          <OnboardingStepOrchestrationExpress
+            panel3={panel3WithJx}
+            deadlines={p6.deadlines}
+            cities={ownerCities}
+            onChangePanel3={handlePanel3Change}
+            onChangeDeadlines={handleDeadlinesChange}
+          />
+        )}
+        {orchView === 'parcours' && (
+          <OnboardingStepOrchestration
+            panel3={panel3WithJx}
+            cities={ownerCities}
+            onChange={handlePanel3Change}
+          />
+        )}
+        {orchView === 'delais' && (
+          <OnboardingStepDeadlines
+            deadlines={p6.deadlines}
+            capabilities={p3.capabilities}
+            onChange={handleDeadlinesChange}
+          />
+        )}
+      </div>
     );
   }
 
@@ -341,9 +384,9 @@ function Step8GoLive({
         <button
           type="button"
           className="ob-btn-ghost"
-          onClick={() => wizard.setCurrentPanel(6)}
+          onClick={() => wizard.setCurrentPanel(3)}
         >
-          ← Retour · Délais
+          ← Retour · Orchestration
         </button>
       </div>
     </div>
