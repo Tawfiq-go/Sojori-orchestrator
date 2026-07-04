@@ -62,7 +62,7 @@ export const DEFAULT_TASK_BEHAVIOR_BY_TYPE: Record<
 > = {
   arrival_choose: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },
   departure_choose: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },
-  cleaning_free: { requiresClientAction: false, autoCompletionTrigger: 'manual' },
+  cleaning_free: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },
   arrival_declare: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },
   departure_declare: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },
   registration: { requiresClientAction: false, autoCompletionTrigger: 'status_complete' },

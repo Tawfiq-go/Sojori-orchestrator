@@ -28,21 +28,31 @@ export default function OnboardingStepTeamExpress({ p1, ownerCities, updatePanel
     updateRow(idx, { roles: { ...row.roles, [key]: !row.roles[key] } });
   };
 
-  /** Périmètre villes du staff terrain — « Toutes » = scopeAll. */
-  const setStaffAllCities = (idx: number) => {
-    const row = p1.staff[idx];
-    updateRow(idx, { taskStaff: { ...row.taskStaff, scopeAll: true, cities: [] } });
+  /** Config périmètre (scopeAll + cities) associée à chaque accès. */
+  const SCOPE_FIELD: Record<AccessKey, 'taskStaff' | 'adminWhatsapp' | 'dashboard'> = {
+    taskStaff: 'taskStaff',
+    adminWhatsapp: 'adminWhatsapp',
+    dashboardEmail: 'dashboard',
   };
 
-  const toggleStaffCity = (idx: number, city: string) => {
+  /** Périmètre villes d'un accès — « Toutes » = scopeAll. */
+  const setAllCities = (idx: number, key: AccessKey) => {
     const row = p1.staff[idx];
-    const current = row.taskStaff.scopeAll ? [] : row.taskStaff.cities;
+    const field = SCOPE_FIELD[key];
+    updateRow(idx, { [field]: { ...row[field], scopeAll: true, cities: [] } } as Partial<WizardStaffRow>);
+  };
+
+  const toggleCity = (idx: number, key: AccessKey, city: string) => {
+    const row = p1.staff[idx];
+    const field = SCOPE_FIELD[key];
+    const scope = row[field];
+    const current = scope.scopeAll ? [] : scope.cities;
     const cities = current.includes(city)
       ? current.filter((c) => c !== city)
       : [...current, city];
     updateRow(idx, {
-      taskStaff: { ...row.taskStaff, scopeAll: cities.length === 0, cities },
-    });
+      [field]: { ...scope, scopeAll: cities.length === 0, cities },
+    } as Partial<WizardStaffRow>);
   };
 
   const addPerson = () => updatePanel({ staff: [...p1.staff, defaultStaffRow()] });
@@ -96,47 +106,50 @@ export default function OnboardingStepTeamExpress({ p1, ownerCities, updatePanel
                 />
               </div>
               <div className="ob-x-rows" style={{ marginTop: 10 }}>
-                {ACCESS_DEFS.map((a) => (
-                  <div key={a.key}>
-                    <div className="ob-x-row">
-                      <span className="ob-x-row-label">
-                        {a.emoji} {a.label}
-                        <span className="ob-x-access-hint"> — {a.hint}</span>
-                      </span>
-                      <button
-                        type="button"
-                        className={`ob-toggle ${row.roles[a.key] ? 'on' : ''}`}
-                        aria-pressed={row.roles[a.key]}
-                        onClick={() => toggleAccess(idx, a.key)}
-                      />
-                    </div>
-                    {a.key === 'taskStaff' && row.roles.taskStaff && (
-                      <div className="ob-x-cities">
-                        <span className="ob-x-access-hint">Villes :</span>
+                {ACCESS_DEFS.map((a) => {
+                  const scope = row[SCOPE_FIELD[a.key]];
+                  return (
+                    <div key={a.key}>
+                      <div className="ob-x-row">
+                        <span className="ob-x-row-label">
+                          {a.emoji} {a.label}
+                          <span className="ob-x-access-hint"> — {a.hint}</span>
+                        </span>
                         <button
                           type="button"
-                          className={`ob-chip ob-x-day${row.taskStaff.scopeAll ? ' on' : ''}`}
-                          onClick={() => setStaffAllCities(idx)}
-                        >
-                          Toutes
-                        </button>
-                        {ownerCities.map((city) => {
-                          const on = !row.taskStaff.scopeAll && row.taskStaff.cities.includes(city);
-                          return (
-                            <button
-                              key={city}
-                              type="button"
-                              className={`ob-chip ob-x-day${on ? ' on' : ''}`}
-                              onClick={() => toggleStaffCity(idx, city)}
-                            >
-                              {city}
-                            </button>
-                          );
-                        })}
+                          className={`ob-toggle ${row.roles[a.key] ? 'on' : ''}`}
+                          aria-pressed={row.roles[a.key]}
+                          onClick={() => toggleAccess(idx, a.key)}
+                        />
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {row.roles[a.key] && (
+                        <div className="ob-x-cities">
+                          <span className="ob-x-access-hint">Villes :</span>
+                          <button
+                            type="button"
+                            className={`ob-chip ob-x-day${scope.scopeAll ? ' on' : ''}`}
+                            onClick={() => setAllCities(idx, a.key)}
+                          >
+                            Toutes
+                          </button>
+                          {ownerCities.map((city) => {
+                            const on = !scope.scopeAll && scope.cities.includes(city);
+                            return (
+                              <button
+                                key={city}
+                                type="button"
+                                className={`ob-chip ob-x-day${on ? ' on' : ''}`}
+                                onClick={() => toggleCity(idx, a.key, city)}
+                              >
+                                {city}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </section>
