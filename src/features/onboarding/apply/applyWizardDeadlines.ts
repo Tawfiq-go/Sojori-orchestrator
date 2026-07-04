@@ -1,6 +1,6 @@
 import * as fulltaskApi from '../../../services/fulltaskApi';
 import { unwrapFulltaskData } from '../../../utils/unwrapFulltaskResponse';
-import type { WizardCapabilities, WizardDeadlines } from '../types';
+import type { WizardCapabilities, WizardDeadlines, WizardScheduledMessageOverride } from '../types';
 import { isServiceRhythmEnabled, resolveServiceRhythmRows } from '../onboardingWorkflowDefaults';
 import { buildFulltaskWorkflowPatchFromRhythmRow } from './buildWorkflowExecutionFromRhythm';
 
@@ -8,6 +8,47 @@ type WorkflowRow = {
   type?: string;
   enabled?: boolean;
 };
+
+type ScheduledMessageRow = {
+  messageId?: string;
+  enabled?: boolean;
+  trigger?: { ref?: string; day?: number; hours?: number; time?: string };
+};
+
+/**
+ * Applique les réglages « quand envoyer chaque message » du wizard aux
+ * scheduledMessages fulltask (fusion par messageId — textes et canaux conservés).
+ */
+export async function applyWizardScheduledMessages(
+  ownerId: string,
+  overrides: WizardScheduledMessageOverride[] | undefined,
+): Promise<number> {
+  if (!overrides?.length) return 0;
+  const raw = await fulltaskApi.getOrchestrationConfig(ownerId, { strictOwner: true }).catch(() => null);
+  const doc = raw ? unwrapFulltaskData<{ scheduledMessages?: ScheduledMessageRow[] }>(raw) : null;
+  const messages = [...(doc?.scheduledMessages ?? [])];
+  if (!messages.length) return 0;
+
+  let patched = 0;
+  const next = messages.map((msg) => {
+    const ov = overrides.find((o) => o.messageId === msg.messageId);
+    if (!ov) return msg;
+    patched += 1;
+    const trigger = { ...(msg.trigger ?? {}) };
+    if (ov.day !== undefined) trigger.day = ov.day;
+    if (ov.hours !== undefined) trigger.hours = ov.hours;
+    if (ov.time !== undefined) trigger.time = ov.time;
+    return {
+      ...msg,
+      enabled: ov.enabled ?? msg.enabled,
+      trigger,
+    };
+  });
+
+  if (patched === 0) return 0;
+  await fulltaskApi.upsertOrchestrationConfig(ownerId, { scheduledMessages: next });
+  return patched;
+}
 
 /**
  * Met à jour reminders, staffAssignment, staffReminders et escalade sur les workflows.

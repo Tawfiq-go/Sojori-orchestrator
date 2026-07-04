@@ -5,6 +5,7 @@ import type {
   WizardDeadlines,
   WizardJxSettings,
   WizardPanel3,
+  WizardScheduledMessageOverride,
   WizardServiceDeadlineOverride,
 } from '../types';
 import { applyJxPreset } from '../wizardGuestAccess';
@@ -71,6 +72,45 @@ const REMINDER_DAY_CHOICES = [-3, -2, -1, 0] as const;
 
 /** Heures d'envoi proposées pour les relances client. */
 const REMINDER_HOUR_CHOICES = ['08:00', '09:00', '10:00', '11:00', '14:00', '16:00', '18:00'] as const;
+
+/** Messages planifiés PM — miroir du template fulltask (4 messages du plan). */
+type ScheduledMessageDef = {
+  messageId: string;
+  emoji: string;
+  label: string;
+  refLabel: string;
+  channel: string;
+} & (
+  | { kind: 'hours'; defaultHours: number; hourChoices: number[] }
+  | { kind: 'day'; defaultDay: number; defaultTime: string; dayChoices: number[] }
+);
+
+const SCHEDULED_MESSAGE_DEFS: ScheduledMessageDef[] = [
+  {
+    messageId: 'welcome_sojori_v2', emoji: '👋', label: 'Bienvenu',
+    refLabel: 'après la réservation', channel: 'OTA / Email',
+    kind: 'hours', defaultHours: 1, hourChoices: [0, 1, 2, 4],
+  },
+  {
+    messageId: 'checkin_feedback', emoji: '☺️', label: 'Comment ça va ?',
+    refLabel: 'après l’arrivée', channel: 'WhatsApp',
+    kind: 'day', defaultDay: 1, defaultTime: '15:00', dayChoices: [0, 1, 2],
+  },
+  {
+    messageId: 'departure_instructions', emoji: '⭐', label: 'Instructions départ',
+    refLabel: 'avant le départ', channel: 'WhatsApp',
+    kind: 'day', defaultDay: -1, defaultTime: '11:00', dayChoices: [-2, -1, 0],
+  },
+  {
+    messageId: 'checkout_feedback', emoji: '💌', label: 'Nouvelles après départ',
+    refLabel: 'après le départ', channel: 'OTA / Email',
+    kind: 'day', defaultDay: 2, defaultTime: '10:00', dayChoices: [1, 2, 3],
+  },
+];
+
+function scheduledDayLabel(day: number): string {
+  return day === 0 ? 'Jour J' : day > 0 ? `J+${day}` : `J${day}`;
+}
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -193,6 +233,18 @@ export default function OnboardingStepOrchestrationExpress({
     patchService(taskType, { clientReminderDays: next });
   };
 
+  /* ── messages planifiés PM (bienvenue, instructions…) ── */
+  const msgOverrideOf = (messageId: string): WizardScheduledMessageOverride | undefined =>
+    (panel3.scheduledMessages ?? []).find((m) => m.messageId === messageId);
+
+  const patchScheduledMessage = (messageId: string, patch: Partial<WizardScheduledMessageOverride>) => {
+    const list = [...(panel3.scheduledMessages ?? [])];
+    const i = list.findIndex((m) => m.messageId === messageId);
+    if (i >= 0) list[i] = { ...list[i], ...patch };
+    else list.push({ messageId, ...patch });
+    onChangePanel3({ scheduledMessages: list });
+  };
+
   /* ── rappel staff / escalade — globaux ── */
   const staffReminderGlobal = rows.some((r) => r.staffReminderDays.length > 0);
   const setStaffReminderGlobal = (on: boolean) => {
@@ -303,6 +355,7 @@ export default function OnboardingStepOrchestrationExpress({
                 <div key={svc.jxKey} className={`ob-x-row${state === 'off' ? ' ob-x-row--off' : ''}`}>
                   <span className="ob-x-row-label">
                     {svc.emoji} {svc.label}
+                    <span className="ob-x-tag">{svc.jxKey === 'welcome' ? 'Message' : 'Flow'}</span>
                   </span>
                   <span className="ob-x-seg">
                     {seg(state === 'resa', 'À la réservation', () => setAvailability(svc, 'resa'))}
@@ -575,7 +628,91 @@ export default function OnboardingStepOrchestrationExpress({
         </div>
       </section>
 
-      {/* ── 6 · Rappels & escalade ── */}
+      {/* ── 6 · Messages planifiés PM ── */}
+      <section className="ob-card ob-x-section">
+        <div className="ob-card-b">
+          <p className="ob-x-title">💬 Quand envoyer chaque message ?</p>
+          <p className="ob-x-hint">
+            Messages automatiques du séjour (textes modifiables dans Orchestration · Messages).
+            Chaque annonce hérite de la liste — désactivable par annonce.
+          </p>
+          <div className="ob-x-rows">
+            {SCHEDULED_MESSAGE_DEFS.map((def) => {
+              const ov = msgOverrideOf(def.messageId);
+              const enabled = ov?.enabled ?? true;
+              return (
+                <div key={def.messageId} className={`ob-x-row${enabled ? '' : ' ob-x-row--off'}`}>
+                  <span className="ob-x-row-label">
+                    {def.emoji} {def.label}
+                    <span className="ob-x-tag">Message</span>
+                    <span className="ob-x-access-hint"> — {def.refLabel} · {def.channel}</span>
+                  </span>
+                  <span className="ob-x-inline-choices">
+                    {enabled && def.kind === 'hours' && (
+                      <span className="ob-x-inline-choices">
+                        {def.hourChoices.map((h) => {
+                          const cur = ov?.hours ?? def.defaultHours;
+                          return (
+                            <button
+                              key={h}
+                              type="button"
+                              className={`ob-chip ob-x-day${cur === h ? ' on' : ''}`}
+                              onClick={() => patchScheduledMessage(def.messageId, { hours: h })}
+                            >
+                              {h === 0 ? 'Immédiat' : `+${h}h`}
+                            </button>
+                          );
+                        })}
+                      </span>
+                    )}
+                    {enabled && def.kind === 'day' && (
+                      <>
+                        <span className="ob-x-inline-choices">
+                          {def.dayChoices.map((d) => {
+                            const cur = ov?.day ?? def.defaultDay;
+                            return (
+                              <button
+                                key={d}
+                                type="button"
+                                className={`ob-chip ob-x-day${cur === d ? ' on' : ''}`}
+                                onClick={() => patchScheduledMessage(def.messageId, { day: d })}
+                              >
+                                {scheduledDayLabel(d)}
+                              </button>
+                            );
+                          })}
+                        </span>
+                        <select
+                          className="ob-field ob-field--dense ob-x-hour"
+                          value={ov?.time ?? def.defaultTime}
+                          onChange={(e) => patchScheduledMessage(def.messageId, { time: e.target.value })}
+                        >
+                          {[
+                            ...REMINDER_HOUR_CHOICES,
+                            ...(REMINDER_HOUR_CHOICES.includes((ov?.time ?? def.defaultTime) as (typeof REMINDER_HOUR_CHOICES)[number])
+                              ? []
+                              : [ov?.time ?? def.defaultTime]),
+                          ].map((h) => (
+                            <option key={h} value={h}>
+                              {Number(h.slice(0, 2))}h
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+                    <Toggle
+                      on={enabled}
+                      onChange={(v) => patchScheduledMessage(def.messageId, { enabled: v })}
+                    />
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── 7 · Rappels & escalade ── */}
       <section className="ob-card ob-x-section">
         <div className="ob-card-b">
           <p className="ob-x-title">🔔 Filet de sécurité</p>

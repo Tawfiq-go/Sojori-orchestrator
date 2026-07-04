@@ -3529,6 +3529,21 @@
   padding: 4px 0 8px 18px;
 }
 
+.ob-x-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--ob-b);
+  background: var(--ob-bg1);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ob-t3);
+  vertical-align: middle;
+}
+
 .ob-orch-city-prices {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

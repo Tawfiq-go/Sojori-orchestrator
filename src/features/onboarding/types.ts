@@ -228,12 +228,26 @@ export type WizardOrchestrationQuickConfig = {
   conciergeServiceIds: string[];
 };
 
+/** Surcharge d'un message planifié PM (clé = messageId du template). */
+export type WizardScheduledMessageOverride = {
+  messageId: string;
+  enabled?: boolean;
+  /** Jour relatif à la référence du message (checkin/checkout) */
+  day?: number;
+  /** Heures après la référence (ex. réservation créée) */
+  hours?: number;
+  /** Heure d'envoi HH:mm */
+  time?: string;
+};
+
 export interface WizardPanel3 {
   capabilities: WizardCapabilities;
   /** Fenêtres J-X + conditions dérivées — même écran que capabilities */
   jx?: WizardJxSettings;
   /** Réglages métier rapides (ménage, transport, conciergerie) */
   quickConfig?: WizardOrchestrationQuickConfig;
+  /** Quand envoyer chaque message planifié (bienvenue, instructions départ…) */
+  scheduledMessages?: WizardScheduledMessageOverride[];
   pack: 'essential' | 'standard' | 'complete' | 'premium';
   /** À l'apply : remplace entièrement le template orchestration owner */
   orchestrationApplyMode: 'replace';
