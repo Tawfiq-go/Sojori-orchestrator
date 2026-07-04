@@ -62,11 +62,12 @@ const CLIENT_REMINDER_SERVICES: Array<{ taskType: string; emoji: string; label: 
   { taskType: 'registration', emoji: '📝', label: 'Enregistrement', capAny: ['registration'] },
   { taskType: 'arrival_choose', emoji: '🕓', label: 'Heure d’arrivée', capAny: ['arrivalChoose'] },
   { taskType: 'departure_choose', emoji: '🕐', label: 'Heure de départ', capAny: ['departureChoose'] },
+  { taskType: 'arrival_declare', emoji: '📍', label: 'Déclarer l’arrivée', capAny: ['arrivalDeclare'] },
+  { taskType: 'departure_declare', emoji: '🚪', label: 'Déclarer le départ', capAny: ['departureDeclare'] },
   { taskType: 'cleaning_free', emoji: '🧹', label: 'Ménage inclus', capAny: ['cleaningFree'] },
-  { taskType: 'cleaning_paid', emoji: '🧹', label: 'Ménage payant', capAny: ['cleaningPaid'] },
 ];
 
-const REMINDER_START_CHOICES = [3, 2, 1] as const;
+const REMINDER_DAY_CHOICES = [-3, -2, -1] as const;
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -160,29 +161,16 @@ export default function OnboardingStepOrchestrationExpress({
     else patchService(taskType, { staffAssignStyle: 'days_before', staffAssignDaysBefore: days });
   };
 
-  /* ── relances client ── */
-  const reminderOn = (taskType: string) => (rowByType.get(taskType)?.clientReminderDays.length ?? 0) > 0;
-  const reminderStart: number = useMemo(() => {
-    const mins = rows
-      .filter((r) => r.clientReminderDays.length > 0)
-      .map((r) => Math.abs(Math.min(...r.clientReminderDays)));
-    const found = mins.filter((n) => REMINDER_START_CHOICES.includes(n as 1 | 2 | 3));
-    return found.length ? Math.max(...found) : 3;
-  }, [rows]);
+  /* ── relances client : jours multi-sélection par service ── */
+  const reminderDaysOf = (taskType: string): number[] =>
+    rowByType.get(taskType)?.clientReminderDays ?? [];
 
-  const reminderRange = (start: number): number[] =>
-    Array.from({ length: start }, (_, i) => -(start - i)); // ex. 3 → [-3, -2, -1]
-
-  const toggleReminder = (taskType: string) => {
-    patchService(taskType, { clientReminderDays: reminderOn(taskType) ? [] : reminderRange(reminderStart) });
-  };
-
-  const setReminderStartGlobal = (start: number) => {
-    const patches: Record<string, WizardServiceDeadlineOverride> = {};
-    for (const svc of CLIENT_REMINDER_SERVICES) {
-      if (reminderOn(svc.taskType)) patches[svc.taskType] = { clientReminderDays: reminderRange(start) };
-    }
-    patchServices(patches);
+  const toggleReminderDay = (taskType: string, day: number) => {
+    const current = reminderDaysOf(taskType);
+    const next = current.includes(day)
+      ? current.filter((d) => d !== day)
+      : [...current, day].sort((a, b) => a - b);
+    patchService(taskType, { clientReminderDays: next });
   };
 
   /* ── rappel staff / escalade — globaux ── */
@@ -457,32 +445,32 @@ export default function OnboardingStepOrchestrationExpress({
         <div className="ob-card-b">
           <p className="ob-x-title">💌 Relancer le voyageur s&apos;il n&apos;a pas répondu ?</p>
           <p className="ob-x-hint">
-            Première relance{' '}
-            <span className="ob-x-inline-choices">
-              {REMINDER_START_CHOICES.map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  className={`ob-chip ob-x-day${reminderStart === d ? ' on' : ''}`}
-                  onClick={() => setReminderStartGlobal(d)}
-                >
-                  J-{d}
-                </button>
-              ))}
-            </span>{' '}
-            puis chaque jour jusqu&apos;à la veille.
+            Choisissez les jours de relance par service — un seul ou plusieurs (J-3, J-2, J-1 avant
+            la date). Aucun jour = pas de relance.
           </p>
-          <div className="ob-chips">
-            {CLIENT_REMINDER_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => (
-              <button
-                key={svc.taskType}
-                type="button"
-                className={`ob-chip${reminderOn(svc.taskType) ? ' on' : ''}`}
-                onClick={() => toggleReminder(svc.taskType)}
-              >
-                {svc.emoji} {svc.label}
-              </button>
-            ))}
+          <div className="ob-x-rows">
+            {CLIENT_REMINDER_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => {
+              const days = reminderDaysOf(svc.taskType);
+              return (
+                <div key={svc.taskType} className={`ob-x-row${days.length === 0 ? ' ob-x-row--off' : ''}`}>
+                  <span className="ob-x-row-label">
+                    {svc.emoji} {svc.label}
+                  </span>
+                  <span className="ob-x-inline-choices">
+                    {REMINDER_DAY_CHOICES.map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        className={`ob-chip ob-x-day${days.includes(day) ? ' on' : ''}`}
+                        onClick={() => toggleReminderDay(svc.taskType, day)}
+                      >
+                        J{day}
+                      </button>
+                    ))}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
