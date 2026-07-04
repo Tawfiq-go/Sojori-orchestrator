@@ -20,7 +20,7 @@ interface StepPanelsProps {
 }
 
 export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
-  const { draft, updatePanel, setPath, setCurrentPanel } = wizard;
+  const { draft, updatePanel, setCurrentPanel } = wizard;
   const panel = draft.currentPanel;
   const [orchView, setOrchView] = useState<'express' | 'parcours' | 'delais'>('express');
   const [teamView, setTeamView] = useState<'express' | 'avance'>('express');
@@ -40,45 +40,18 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
     return (
       <div className="ob-sh">
         <div className="eyebrow">Étape 1 · Profil</div>
-        <h1>Votre parcours de configuration</h1>
-        <p className="sub">Quelques questions pour adapter le wizard à votre situation.</p>
+        <h1>Votre conciergerie</h1>
+        <p className="sub">
+          Deux questions pour adapter la configuration. L&apos;ajout des annonces se fait après
+          l&apos;onboarding, depuis <strong>Annonces</strong>.
+        </p>
         <div className="ob-cfg-banner">
-          Phase configuration : aucun message voyageur pendant l&apos;import silencieux. L&apos;orchestration se lance réservation par réservation.
+          Phase configuration : aucun message voyageur n&apos;est envoyé. L&apos;orchestration se
+          lance ensuite réservation par réservation.
         </div>
         <div className="ob-card">
           <div className="ob-card-b">
-            <p style={{ fontWeight: 700, marginBottom: 10 }}>Vos biens sont-ils sur Airbnb ?</p>
-            <div className="ob-radios">
-              <button
-                type="button"
-                className={`ob-rcard ${draft.path === 'A' ? 'on' : ''}`}
-                onClick={() => {
-                  setPath('A');
-                  updatePanel('0', { hasAirbnb: true });
-                }}
-              >
-                <span style={{ fontSize: 20 }}>🏠</span>
-                <div>
-                  <div style={{ fontWeight: 700 }}>Oui — import Rentals United</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ob-t3)' }}>Parcours A (recommandé)</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                className={`ob-rcard ${draft.path === 'B' ? 'on' : ''}`}
-                onClick={() => {
-                  setPath('B');
-                  updatePanel('0', { hasAirbnb: false });
-                }}
-              >
-                <span style={{ fontSize: 20 }}>✏️</span>
-                <div>
-                  <div style={{ fontWeight: 700 }}>Non — création manuelle</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ob-t3)' }}>Parcours B</div>
-                </div>
-              </button>
-            </div>
-            <p style={{ fontWeight: 700, margin: '16px 0 8px' }}>Villes</p>
+            <p style={{ fontWeight: 700, margin: '0 0 8px' }}>Dans quelles villes ?</p>
             <div className="ob-chips">
               {CITY_OPTIONS.map((city) => {
                 const on = p0.cities.includes(city);
@@ -294,8 +267,7 @@ function Step8GoLive({
           <div className="ob-recap-row ob-recap-row--go">
             <span>👤 Profil</span>
             <strong>
-              {draft.path === 'A' ? 'Airbnb / RU' : 'Manuel'} · {p0?.cities?.join(', ') || '—'} ·{' '}
-              {p0?.expectedListings ?? '—'} bien(s)
+              {p0?.cities?.join(', ') || '—'} · {p0?.expectedListings ?? '—'} bien(s)
             </strong>
             <button type="button" className="ob-recap-go-edit" onClick={() => wizard.setCurrentPanel(0)}>
               Modifier →
