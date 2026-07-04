@@ -141,7 +141,11 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
           </button>
         </div>
         {teamView === 'express' ? (
-          <OnboardingStepTeamExpress p1={p1} updatePanel={(patch) => updatePanel('1', patch)} />
+          <OnboardingStepTeamExpress
+            p1={p1}
+            ownerCities={ownerCities}
+            updatePanel={(patch) => updatePanel('1', patch)}
+          />
         ) : (
           <OnboardingStepTeam
             p1={p1}

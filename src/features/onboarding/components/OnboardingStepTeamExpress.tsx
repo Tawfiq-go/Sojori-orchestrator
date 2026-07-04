@@ -12,10 +12,11 @@ const ACCESS_DEFS: Array<{ key: AccessKey; emoji: string; label: string; hint: s
 
 type Props = {
   p1: WizardPanel1;
+  ownerCities: string[];
   updatePanel: (patch: Partial<WizardPanel1>) => void;
 };
 
-export default function OnboardingStepTeamExpress({ p1, updatePanel }: Props) {
+export default function OnboardingStepTeamExpress({ p1, ownerCities, updatePanel }: Props) {
   const updateRow = (idx: number, patch: Partial<WizardStaffRow>) => {
     const staff = [...p1.staff];
     staff[idx] = { ...staff[idx], ...patch };
@@ -25,6 +26,23 @@ export default function OnboardingStepTeamExpress({ p1, updatePanel }: Props) {
   const toggleAccess = (idx: number, key: AccessKey) => {
     const row = p1.staff[idx];
     updateRow(idx, { roles: { ...row.roles, [key]: !row.roles[key] } });
+  };
+
+  /** Périmètre villes du staff terrain — « Toutes » = scopeAll. */
+  const setStaffAllCities = (idx: number) => {
+    const row = p1.staff[idx];
+    updateRow(idx, { taskStaff: { ...row.taskStaff, scopeAll: true, cities: [] } });
+  };
+
+  const toggleStaffCity = (idx: number, city: string) => {
+    const row = p1.staff[idx];
+    const current = row.taskStaff.scopeAll ? [] : row.taskStaff.cities;
+    const cities = current.includes(city)
+      ? current.filter((c) => c !== city)
+      : [...current, city];
+    updateRow(idx, {
+      taskStaff: { ...row.taskStaff, scopeAll: cities.length === 0, cities },
+    });
   };
 
   const addPerson = () => updatePanel({ staff: [...p1.staff, defaultStaffRow()] });
@@ -79,17 +97,44 @@ export default function OnboardingStepTeamExpress({ p1, updatePanel }: Props) {
               </div>
               <div className="ob-x-rows" style={{ marginTop: 10 }}>
                 {ACCESS_DEFS.map((a) => (
-                  <div key={a.key} className="ob-x-row">
-                    <span className="ob-x-row-label">
-                      {a.emoji} {a.label}
-                      <span className="ob-x-access-hint"> — {a.hint}</span>
-                    </span>
-                    <button
-                      type="button"
-                      className={`ob-toggle ${row.roles[a.key] ? 'on' : ''}`}
-                      aria-pressed={row.roles[a.key]}
-                      onClick={() => toggleAccess(idx, a.key)}
-                    />
+                  <div key={a.key}>
+                    <div className="ob-x-row">
+                      <span className="ob-x-row-label">
+                        {a.emoji} {a.label}
+                        <span className="ob-x-access-hint"> — {a.hint}</span>
+                      </span>
+                      <button
+                        type="button"
+                        className={`ob-toggle ${row.roles[a.key] ? 'on' : ''}`}
+                        aria-pressed={row.roles[a.key]}
+                        onClick={() => toggleAccess(idx, a.key)}
+                      />
+                    </div>
+                    {a.key === 'taskStaff' && row.roles.taskStaff && (
+                      <div className="ob-x-cities">
+                        <span className="ob-x-access-hint">Villes :</span>
+                        <button
+                          type="button"
+                          className={`ob-chip ob-x-day${row.taskStaff.scopeAll ? ' on' : ''}`}
+                          onClick={() => setStaffAllCities(idx)}
+                        >
+                          Toutes
+                        </button>
+                        {ownerCities.map((city) => {
+                          const on = !row.taskStaff.scopeAll && row.taskStaff.cities.includes(city);
+                          return (
+                            <button
+                              key={city}
+                              type="button"
+                              className={`ob-chip ob-x-day${on ? ' on' : ''}`}
+                              onClick={() => toggleStaffCity(idx, city)}
+                            >
+                              {city}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

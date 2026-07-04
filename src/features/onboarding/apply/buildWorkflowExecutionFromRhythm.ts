@@ -54,7 +54,7 @@ export function buildStaffAssignment(
   def: OnboardingServiceRhythmDef,
   adminEscalationHour: WizardDeadlines['adminEscalationHour'],
 ): Record<string, unknown> | null {
-  const hour = adminEscalationHour === '14' ? '14:00' : '11:00';
+  const hour = `${String(adminEscalationHour || '11').padStart(2, '0')}:00`;
   const base = {
     releaseWindows: ['11:00', '16:00'],
     acceptToleranceHours: def.acceptToleranceHours,

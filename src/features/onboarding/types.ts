@@ -171,6 +171,8 @@ export type WizardServiceDeadlineOverride = {
   staffAssignDaysBefore?: number;
   /** Heure de la première tentative d'assignation (HH:mm) */
   staffAssignTime?: string;
+  /** Heure du rappel staff (HH:mm) — défaut 11:00 */
+  staffReminderTime?: string;
   /** Auto-accepté : tâche assignée sans acceptation staff (défaut : partenaires en immédiat) */
   staffAutoAssign?: boolean;
   staffReminderDays?: number[];
@@ -191,7 +193,8 @@ export interface WizardDeadlines {
   /** @deprecated — préférer escalationEnabled par service */
   escalateAdminJ1: boolean;
   /** Heure de relance / escalade admin le J-1. */
-  adminEscalationHour: '11' | '14';
+  /** Heure d'escalade admin (HH, ex. '11') — flexible, défaut 11h */
+  adminEscalationHour: string;
 }
 
 export interface WizardPanel0 {

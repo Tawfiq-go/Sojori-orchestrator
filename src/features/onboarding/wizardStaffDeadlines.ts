@@ -30,8 +30,13 @@ export const ADMIN_ESCALATION_HOURS: Array<{
   id: WizardDeadlines['adminEscalationHour'];
   label: string;
 }> = [
-  { id: '11', label: '11h (matin)' },
-  { id: '14', label: '14h (après-midi)' },
+  { id: '08', label: '8h' },
+  { id: '09', label: '9h' },
+  { id: '10', label: '10h' },
+  { id: '11', label: '11h' },
+  { id: '14', label: '14h' },
+  { id: '16', label: '16h' },
+  { id: '18', label: '18h' },
 ];
 
 export function defaultDeadlines(): WizardDeadlines {
@@ -80,6 +85,6 @@ export function normalizeWizardDeadlines(
     staffAssignMode,
     staffAssignDaysBefore: raw.staffAssignDaysBefore ?? 3,
     escalateAdminJ1: raw.escalateAdminJ1 ?? true,
-    adminEscalationHour: raw.adminEscalationHour === '14' ? '14' : '11',
+    adminEscalationHour: /^\d{1,2}$/.test(String(raw.adminEscalationHour ?? '')) ? String(raw.adminEscalationHour) : '11',
   };
 }

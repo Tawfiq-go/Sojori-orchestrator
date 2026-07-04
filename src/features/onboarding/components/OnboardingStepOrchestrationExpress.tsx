@@ -205,6 +205,20 @@ export default function OnboardingStepOrchestrationExpress({
     patchServices(patches);
   };
 
+  const staffReminderTime = useMemo(() => {
+    const withReminder = rows.find((r) => r.staffReminderDays.length > 0);
+    return withReminder?.staffReminderTime ?? '11:00';
+  }, [rows]);
+
+  const setStaffReminderTimeGlobal = (time: string) => {
+    const patches: Record<string, WizardServiceDeadlineOverride> = {};
+    for (const svc of STAFF_SERVICES) {
+      patches[svc.taskType] = { staffReminderTime: time };
+    }
+    patches.checkout_cleaning = { staffReminderTime: time };
+    patchServices(patches);
+  };
+
   const escalationGlobal = rows.some((r) => r.escalationEnabled);
   const setEscalationGlobal = (on: boolean) => {
     const patches: Record<string, WizardServiceDeadlineOverride> = {};
@@ -554,30 +568,50 @@ export default function OnboardingStepOrchestrationExpress({
       <section className="ob-card ob-x-section">
         <div className="ob-card-b">
           <p className="ob-x-title">🔔 Filet de sécurité</p>
+          <p className="ob-x-hint">Heures par défaut à 11h — modifiables.</p>
           <div className="ob-x-rows">
             <div className="ob-x-row">
               <span className="ob-x-row-label">Rappel au staff la veille de chaque tâche (J-1)</span>
-              <Toggle on={staffReminderGlobal} onChange={setStaffReminderGlobal} />
+              <span className="ob-x-inline-choices">
+                {staffReminderGlobal && (
+                  <select
+                    className="ob-field ob-field--dense ob-x-hour"
+                    value={staffReminderTime}
+                    onChange={(e) => setStaffReminderTimeGlobal(e.target.value)}
+                  >
+                    {[
+                      ...REMINDER_HOUR_CHOICES,
+                      ...(REMINDER_HOUR_CHOICES.includes(staffReminderTime as (typeof REMINDER_HOUR_CHOICES)[number])
+                        ? []
+                        : [staffReminderTime]),
+                    ].map((h) => (
+                      <option key={h} value={h}>
+                        {Number(h.slice(0, 2))}h
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <Toggle on={staffReminderGlobal} onChange={setStaffReminderGlobal} />
+              </span>
             </div>
             <div className="ob-x-row">
-              <span className="ob-x-row-label">
-                Alerter l&apos;admin si rien n&apos;est traité (escalade)
+              <span className="ob-x-row-label">Alerter l&apos;admin si rien n&apos;est traité (escalade)</span>
+              <span className="ob-x-inline-choices">
                 {escalationGlobal && (
-                  <span className="ob-x-inline-choices" style={{ marginLeft: 8 }}>
+                  <select
+                    className="ob-field ob-field--dense ob-x-hour"
+                    value={deadlines.adminEscalationHour ?? '11'}
+                    onChange={(e) => onChangeDeadlines({ adminEscalationHour: e.target.value })}
+                  >
                     {ADMIN_ESCALATION_HOURS.map((h) => (
-                      <button
-                        key={h.id}
-                        type="button"
-                        className={`ob-chip ob-x-day${(deadlines.adminEscalationHour ?? '11') === h.id ? ' on' : ''}`}
-                        onClick={() => onChangeDeadlines({ adminEscalationHour: h.id })}
-                      >
+                      <option key={h.id} value={h.id}>
                         {h.label}
-                      </button>
+                      </option>
                     ))}
-                  </span>
+                  </select>
                 )}
+                <Toggle on={escalationGlobal} onChange={setEscalationGlobal} />
               </span>
-              <Toggle on={escalationGlobal} onChange={setEscalationGlobal} />
             </div>
           </div>
         </div>
