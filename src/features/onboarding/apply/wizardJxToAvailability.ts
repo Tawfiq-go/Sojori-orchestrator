@@ -96,7 +96,7 @@ export function wizardJxLabelToAvailability(
   if (deVeille) {
     return {
       type: 'time_window',
-      from: daysBoundary(Number(deVeille[1]), 'before_checkin'),
+      from: daysBoundary(Number(deVeille[1]), 'before_checkout'),
       to: daysBoundary(1, 'before_checkout'),
     };
   }
