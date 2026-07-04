@@ -202,6 +202,10 @@ export default defineConfig({
     port: devPort,
     strictPort: true,
     headers: devSecurityHeaders,
+    watch: {
+      // vercel build --prebuilt écrit dans .vercel/output → évite reload en boucle
+      ignored: ['**/.vercel/**', '**/dist/**'],
+    },
     proxy: {
       ...apiDevProxy,
     },
