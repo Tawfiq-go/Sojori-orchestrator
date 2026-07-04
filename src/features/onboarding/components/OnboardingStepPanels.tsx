@@ -6,6 +6,7 @@ import { CITY_OPTIONS } from '../types';
 import { deriveConditionsFromJx } from '../wizardGuestAccess';
 import { defaultJx } from '../defaults';
 import OnboardingStepTeam from './OnboardingStepTeam';
+import OnboardingStepTeamExpress from './OnboardingStepTeamExpress';
 import OnboardingStepOrchestration from './OnboardingStepOrchestration';
 import OnboardingStepOrchestrationExpress from './OnboardingStepOrchestrationExpress';
 import OnboardingStepDeadlines from './OnboardingStepDeadlines';
@@ -22,6 +23,7 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
   const { draft, updatePanel, setPath, setCurrentPanel } = wizard;
   const panel = draft.currentPanel;
   const [orchView, setOrchView] = useState<'express' | 'parcours' | 'delais'>('express');
+  const [teamView, setTeamView] = useState<'express' | 'avance'>('express');
 
   const p0 = draft.panels['0']!;
   const p1 = draft.panels['1']!;
@@ -115,12 +117,40 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
       : CITY_OPTIONS;
 
     return (
-      <OnboardingStepTeam
-        p1={p1}
-        ownerCities={ownerCities}
-        ownerId={ownerId}
-        updatePanel={(patch) => updatePanel('1', patch)}
-      />
+      <div className="ob-sh">
+        <div className="eyebrow">Étape 2 · Équipe</div>
+        <h1>Qui fait quoi ?</h1>
+        <p className="sub">
+          Une personne = un contact + ses accès. Contrats, permissions fines et périmètres :
+          onglet <strong>Avancé</strong>.
+        </p>
+        <div className="ob-x-tabs">
+          <button
+            type="button"
+            className={`ob-x-tab${teamView === 'express' ? ' on' : ''}`}
+            onClick={() => setTeamView('express')}
+          >
+            ⚡ Express
+          </button>
+          <button
+            type="button"
+            className={`ob-x-tab${teamView === 'avance' ? ' on' : ''}`}
+            onClick={() => setTeamView('avance')}
+          >
+            Avancé · Détails par personne
+          </button>
+        </div>
+        {teamView === 'express' ? (
+          <OnboardingStepTeamExpress p1={p1} updatePanel={(patch) => updatePanel('1', patch)} />
+        ) : (
+          <OnboardingStepTeam
+            p1={p1}
+            ownerCities={ownerCities}
+            ownerId={ownerId}
+            updatePanel={(patch) => updatePanel('1', patch)}
+          />
+        )}
+      </div>
     );
   }
 

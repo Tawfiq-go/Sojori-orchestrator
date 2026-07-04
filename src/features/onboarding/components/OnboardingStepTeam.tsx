@@ -100,12 +100,10 @@ export default function OnboardingStepTeam({ p1, ownerCities, ownerId, updatePan
   };
 
   return (
-    <div className="ob-sh ob-team ob-team--simple">
-      <div className="eyebrow">Étape 2 · Équipe</div>
-      <h1>Qui fait quoi ?</h1>
+    <div className="ob-team ob-team--simple">
       <p className="sub">
-        Config compacte ici — granularité complète dans <strong>Task · Équipe</strong> ou{' '}
-        <strong>Workers</strong> après apply.
+        Granularité complète par personne — contrats, menus WhatsApp, périmètres. Aussi éditable
+        dans <strong>Task · Équipe</strong> ou <strong>Workers</strong> après apply.
       </p>
 
       {p1.staff.length === 0 ? (
