@@ -314,7 +314,6 @@ export const WIZARD_STEP_LABELS = [
   'Équipe',
   'Parcours client',
   'Délais',
-  'Import',
   'Go live',
 ] as const;
 

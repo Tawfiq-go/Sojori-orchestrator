@@ -1,8 +1,8 @@
 import type { WizardDraft } from './types';
 import { WIZARD_STEP_LABELS } from './types';
 
-/** Panels affichés (2 = owner auto, 4/5 = J-X/conditions fusionnés dans panel 3). */
-export const WIZARD_VISIBLE_PANELS = [0, 1, 3, 6, 7, 8] as const;
+/** Panels affichés (2 = owner auto, 4/5 = J-X/conditions fusionnés dans panel 3, 7 = import retiré du wizard). */
+export const WIZARD_VISIBLE_PANELS = [0, 1, 3, 6, 8] as const;
 
 export const WIZARD_STEP_COUNT = WIZARD_VISIBLE_PANELS.length;
 
@@ -15,18 +15,21 @@ export function panelToStepIndex(panel: number): number {
   if (idx >= 0) return idx;
   if (panel === 2) return 1;
   if (panel === 4 || panel === 5) return 2;
+  if (panel === 7) return 4;
   return 0;
 }
 
 export function nextWizardPanel(current: number): number {
   if (current === 1) return 3;
   if (current === 3) return 6;
+  if (current === 6) return 8;
   return Math.min(current + 1, 8);
 }
 
 export function prevWizardPanel(current: number): number {
   if (current === 3) return 1;
   if (current === 6) return 3;
+  if (current === 8) return 6;
   return Math.max(current - 1, 0);
 }
 

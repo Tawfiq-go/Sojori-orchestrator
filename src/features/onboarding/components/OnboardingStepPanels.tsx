@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import type { UsePmOnboardingWizardResult } from '../hooks/usePmOnboardingWizard';
 import type { WizardDraft } from '../types';
 import { CITY_OPTIONS } from '../types';
@@ -9,7 +8,6 @@ import { defaultJx } from '../defaults';
 import OnboardingStepTeam from './OnboardingStepTeam';
 import OnboardingStepOrchestration from './OnboardingStepOrchestration';
 import OnboardingStepDeadlines from './OnboardingStepDeadlines';
-import OnboardingStepImport from './OnboardingStepImport';
 import { staffDisplayName } from '../staffNormalize';
 import { formatStaffPersonRecap, staffApplyAccountCounts } from '../staffRecap';
 import { buildOrchestrationRecapFromDraft } from '../apply/orchestrationRecapFromDraft';
@@ -21,7 +19,7 @@ interface StepPanelsProps {
 }
 
 export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
-  const { draft, updatePanel, setPath, setCurrentPanel, validateCurrentPanel } = wizard;
+  const { draft, updatePanel, setPath, setCurrentPanel } = wizard;
   const panel = draft.currentPanel;
 
   const p0 = draft.panels['0']!;
@@ -32,13 +30,13 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
   useEffect(() => {
     if (panel === 2) setCurrentPanel(3);
     if (panel === 4 || panel === 5) setCurrentPanel(3);
-    if (panel === 5) setCurrentPanel(6);
+    if (panel === 7) setCurrentPanel(8);
   }, [panel, setCurrentPanel]);
 
   if (panel === 0) {
     return (
       <div className="ob-sh">
-        <div className="eyebrow">Étape 0 · Profil</div>
+        <div className="eyebrow">Étape 1 · Profil</div>
         <h1>Votre parcours de configuration</h1>
         <p className="sub">Quelques questions pour adapter le wizard à votre situation.</p>
         <div className="ob-cfg-banner">
@@ -156,41 +154,6 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
     );
   }
 
-  if (panel === 7) {
-    const p7 = draft.panels['7'] ?? { importSubtab: 'selection' as const };
-
-    const handleSkipImport = () => {
-      updatePanel('7', { importSkippedLater: true, selectedRuIds: [], selectedRuPreview: [] });
-      void validateCurrentPanel().then((ok) => {
-        if (ok) toast.success('Import reporté — visible dans le récap et l\'étape Suite');
-      });
-    };
-
-    return (
-      <div className="ob-sh">
-        <div className="eyebrow">Étape 6 · Import</div>
-        <h1>{draft.path === 'A' ? 'Sélection des annonces Airbnb' : 'Création de vos annonces'}</h1>
-        <p className="sub">
-          {draft.path === 'A'
-            ? 'Choisissez les annonces Rentals United à importer — l\'exécution se fera après le récapitulatif.'
-            : 'Créez vos listings manuellement depuis le catalogue.'}
-        </p>
-        {draft.path === 'A' ? (
-          <OnboardingStepImport
-            ownerId={ownerId}
-            panel={p7}
-            onChange={(patch) => updatePanel('7', patch)}
-            onSkipLater={handleSkipImport}
-          />
-        ) : (
-          <a href="/listings" className="ob-btn-primary" style={{ display: 'inline-block', textDecoration: 'none', marginTop: 16 }}>
-            Aller au catalogue annonces
-          </a>
-        )}
-      </div>
-    );
-  }
-
   return <Step8GoLive draft={draft} wizard={wizard} />;
 }
 
@@ -204,17 +167,8 @@ function Step8GoLive({
   const navigate = useNavigate();
   const p0 = draft.panels['0'];
   const p1 = draft.panels['1'];
-  const p7 = draft.panels['7'];
-  const importCount = p7?.selectedRuIds?.length ?? 0;
-  const importSkipped = p7?.importSkippedLater;
   const teamPeople = (p1?.staff ?? []).filter((s) => staffDisplayName(s));
   const teamAccounts = staffApplyAccountCounts(teamPeople);
-  const importCityLabel = useMemo(() => {
-    const names = [...new Set((p7?.selectedRuPreview ?? []).map((r) => r.cityName).filter(Boolean))];
-    if (names.length === 0) return '';
-    if (names.length === 1) return ` · ${names[0]}`;
-    return ` · ${names.join(', ')}`;
-  }, [p7?.selectedRuPreview]);
 
   const orchRecap = useMemo(() => buildOrchestrationRecapFromDraft(draft), [draft]);
 
@@ -227,7 +181,7 @@ function Step8GoLive({
 
   return (
     <div className="ob-sh">
-      <div className="eyebrow">Étape 7 · Go live</div>
+      <div className="eyebrow">Étape 5 · Go live</div>
       <h1>Récapitulatif</h1>
 
       <div className="ob-go-live-cta">
@@ -238,8 +192,8 @@ function Step8GoLive({
           Ordre automatique : <strong>admin WhatsApp</strong> ({teamAccounts.adminWhatsapp}) →{' '}
           <strong>staff OPS</strong> ({teamAccounts.staffSimplified}) →{' '}
           <strong>dashboard</strong> ({teamAccounts.dashboardWorkers}) →{' '}
-          <strong>plan orchestration</strong> → <strong>import Airbnb</strong> ({importCount}{' '}
-          annonce{importCount > 1 ? 's' : ''}, une par une).
+          <strong>plan orchestration</strong>. L&apos;import des annonces se fait ensuite depuis{' '}
+          <strong>Annonces → Importer</strong> — le plan s&apos;y applique automatiquement.
         </p>
         <div className="ob-go-live-cta-actions">
           <button
@@ -351,32 +305,8 @@ function Step8GoLive({
           </div>
           <div className="ob-recap-row">
             <span>Import Airbnb</span>
-            <strong>
-              {importSkipped
-                ? 'Reporté'
-                : importCount > 0
-                  ? `${importCount} annonce(s) sélectionnée(s)${importCityLabel}`
-                  : 'Aucune sélection'}
-            </strong>
+            <strong>Après l&apos;onboarding — Annonces → Importer</strong>
           </div>
-          {importCount > 0 && (p7?.selectedRuPreview?.length ?? 0) > 0 && (
-            <div className="ob-recap-import-list">
-              {(p7?.selectedRuPreview ?? []).slice(0, 6).map((row) => (
-                <span key={row.ruPropertyId} className="ob-recap-chip">
-                  {row.name}
-                  {(row.cityName || row.ruCity) && (
-                    <span className="ob-recap-chip-city">
-                      {' '}
-                      · {row.cityName || row.ruCity}
-                    </span>
-                  )}
-                </span>
-              ))}
-              {(p7?.selectedRuPreview?.length ?? 0) > 6 && (
-                <span className="ob-recap-chip muted">+{(p7?.selectedRuPreview?.length ?? 0) - 6}</span>
-              )}
-            </div>
-          )}
           <div className="ob-recap-row">
             <span>Étapes validées</span>
             <strong>
@@ -411,9 +341,9 @@ function Step8GoLive({
         <button
           type="button"
           className="ob-btn-ghost"
-          onClick={() => wizard.setCurrentPanel(7)}
+          onClick={() => wizard.setCurrentPanel(6)}
         >
-          ← Retour · Import
+          ← Retour · Délais
         </button>
       </div>
     </div>

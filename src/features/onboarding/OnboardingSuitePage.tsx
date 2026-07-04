@@ -1,23 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import OnboardingImportProgressView from './components/OnboardingImportProgressView';
-import {
-  adaptRuImportProgress,
-  createPendingImportProgress,
-  parseImportSuiteHeadline,
-} from '../../components/listing/import-airbnb/adaptRuImportProgress';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import { useAuth } from '../../hooks/useAuth';
 import { useAdminOwnerFilter } from '../../context/AdminOwnerFilterContext';
-import type { RuImportProgressData } from '../../hooks/useRuImportProgress';
 import { getWizardDraft, patchOnboarding, saveWizardDraft } from '../../services/crmService';
-import OnboardingSuiteImportSection from './components/OnboardingSuiteImportSection';
 import OnboardingSuiteApplySection from './components/OnboardingSuiteApplySection';
 import { resolvePmOnboardingOwnerId, onboardingSuiteViewMode } from './resolveOwnerId';
 import { suiteStepLinesForView, suiteRunningSubtitleText } from './suiteDisplayForView';
 import { PM_ONBOARDING_WIZARD_PATH } from './wizardNavigation';
-import type { WizardDraft, WizardPanel7 } from './types';
+import type { WizardDraft } from './types';
 import { staffDisplayName } from './staffNormalize';
 import { staffApplyAccountCounts } from './staffRecap';
 import {
@@ -45,14 +37,6 @@ type SuiteItem = {
   expandable?: boolean;
 };
 
-function isImportFullyDone(p7: WizardPanel7 | undefined): boolean {
-  const selected = p7?.selectedRuIds ?? [];
-  const imported = p7?.importedRuIds ?? [];
-  if (selected.length === 0) return false;
-  const importedSet = new Set(imported.map(Number));
-  return selected.every((id) => importedSet.has(Number(id)));
-}
-
 function applyLogRecap(
   id: SuiteItemId,
   applyLog: WizardDraft['applyLog'],
@@ -67,14 +51,12 @@ function applyLogRecap(
       return { headline: applyLog.dashboardSummary, lines: applyLog.dashboardRecapLines };
     case 'plan':
       return { headline: applyLog.orchestrationSummary, lines: applyLog.orchestrationRecapLines };
-    case 'import':
-      return { headline: applyLog.importSummary, lines: applyLog.importRecapLines };
     default:
       return {};
   }
 }
 
-function stepDesc(id: SuiteItemId, draft: WizardDraft | null, staffAccounts: ReturnType<typeof staffApplyAccountCounts>, selectedImport: number): string {
+function stepDesc(id: SuiteItemId, draft: WizardDraft | null, staffAccounts: ReturnType<typeof staffApplyAccountCounts>): string {
   switch (id) {
     case 'admin-wa':
       return `${staffAccounts.adminWhatsapp} admin(s) WhatsApp à créer`;
@@ -84,10 +66,8 @@ function stepDesc(id: SuiteItemId, draft: WizardDraft | null, staffAccounts: Ret
       return `${staffAccounts.dashboardWorkers} accès dashboard à créer`;
     case 'plan':
       return 'Template owner — capabilities, J-X, conditions, délais (remplace l\'existant)';
-    case 'import':
-      return `${selectedImport} annonce(s) — une par une, villes du wizard`;
     case 'orch-resa':
-      return 'Manuel — depuis chaque fiche listing après import';
+      return 'Après l\'onboarding — Annonces → Importer (le plan s\'applique automatiquement)';
     default:
       return '';
   }
@@ -103,8 +83,6 @@ function stepHref(id: SuiteItemId): string | undefined {
       return '/admin/equipe?tab=worker';
     case 'plan':
       return '/tasks/orchestration';
-    case 'import':
-      return undefined;
     case 'orch-resa':
       return '/listings';
     default:
@@ -126,7 +104,6 @@ export function OnboardingSuitePage() {
   const [suiteRunning, setSuiteRunning] = useState(false);
   const [runSteps, setRunSteps] = useState<SuiteStepState[] | null>(null);
   const [runPhase, setRunPhase] = useState<SuiteRunProgress['phase']>('idle');
-  const [importProgressData, setImportProgressData] = useState<RuImportProgressData | null>(null);
   const autoRunStarted = useRef(false);
 
   useEffect(() => {
@@ -141,50 +118,12 @@ export function OnboardingSuitePage() {
   }, [ownerId]);
 
   const p1 = draft?.panels['1'];
-  const p7 = draft?.panels['7'] as WizardPanel7 | undefined;
   const suiteCompleted = draft?.suiteCompleted ?? [];
   const applyLog = draft?.applyLog;
   const staffRows = (p1?.staff ?? []).filter((s) => staffDisplayName(s));
   const staffAccounts = staffApplyAccountCounts(staffRows);
-  const selectedImport = p7?.selectedRuIds?.length ?? 0;
 
   const suiteViewMode = onboardingSuiteViewMode(user, showOwnerFilter);
-
-  const importStepState = useMemo(
-    () => (runSteps ?? []).find((s) => s.id === 'import'),
-    [runSteps],
-  );
-  const importStepRunning = suiteRunning && importStepState?.status === 'running';
-
-  const importDisplayProgress = useMemo(() => {
-    const adapted = adaptRuImportProgress(importProgressData);
-    if (adapted) return adapted;
-    if (!importStepRunning) return null;
-    const parsed = parseImportSuiteHeadline(importStepState?.headline ?? '');
-    if (parsed) {
-      return createPendingImportProgress({
-        index: parsed.index,
-        total: parsed.total,
-        propertyName: parsed.name,
-      });
-    }
-    return createPendingImportProgress({
-      index: 0,
-      total: Math.max(1, selectedImport),
-      propertyName: 'Annonce Airbnb',
-    });
-  }, [importProgressData, importStepRunning, importStepState?.headline, selectedImport]);
-
-  const importBatchKeyRef = useRef('');
-
-  useEffect(() => {
-    const parsed = parseImportSuiteHeadline(importStepState?.headline ?? '');
-    const key = parsed ? `${parsed.index}:${parsed.total}` : '';
-    if (key && key !== importBatchKeyRef.current) {
-      importBatchKeyRef.current = key;
-      setImportProgressData(null);
-    }
-  }, [importStepState?.headline]);
 
   const persistDraft = useCallback(
     async (next: WizardDraft) => {
@@ -207,30 +146,6 @@ export function OnboardingSuitePage() {
       void persistDraft({ ...draft, ...extra, suiteCompleted: completed });
     },
     [draft, persistDraft, suiteCompleted],
-  );
-
-  const handleImportComplete = useCallback(
-    (importedRuIds: number[]) => {
-      if (!draft) return;
-      const panels = { ...draft.panels, '7': { ...p7, importedRuIds } };
-      const nextCompleted =
-        isImportFullyDone({ ...p7, importedRuIds }) && !suiteCompleted.includes('import')
-          ? [...suiteCompleted, 'import']
-          : suiteCompleted;
-      void persistDraft({
-        ...draft,
-        panels,
-        suiteCompleted: nextCompleted,
-      });
-      if (isImportFullyDone({ ...p7, importedRuIds })) {
-        setRunSteps((prev) =>
-          (prev ?? buildSuiteStepsFromDraft(draft)).map((s) =>
-            s.id === 'import' ? { ...s, status: 'done' as const } : s,
-          ),
-        );
-      }
-    },
-    [draft, p7, persistDraft, suiteCompleted],
   );
 
   const handlePlanApplied = useCallback(
@@ -261,19 +176,12 @@ export function OnboardingSuitePage() {
     if (!ownerId || !draft || suiteRunning) return;
     setSuiteRunning(true);
     setRunPhase('running');
-    setImportProgressData(null);
     setExpandedId(null);
 
     const draftForRun: WizardDraft = {
       ...draft,
       suiteCompleted: [],
       applyLog: {},
-      panels: {
-        ...draft.panels,
-        ...(draft.panels['7']
-          ? { '7': { ...draft.panels['7'], importedRuIds: [] } }
-          : {}),
-      },
     };
 
     try {
@@ -286,9 +194,6 @@ export function OnboardingSuitePage() {
           setRunPhase(p.phase);
           setDraft(p.draft);
         },
-        onImportProgress: (data) => {
-          if (data) setImportProgressData(data);
-        },
       });
 
       const nextDraft: WizardDraft = {
@@ -299,7 +204,6 @@ export function OnboardingSuitePage() {
         },
       };
 
-      setImportProgressData(null);
       await persistDraft(nextDraft);
       setRunSteps(result.steps);
 
@@ -308,7 +212,7 @@ export function OnboardingSuitePage() {
           await patchOnboarding(onboardingId, { status: 'completed' });
         }
         setRunPhase('done');
-        toast.success('Onboarding terminé — équipe, plan et import appliqués');
+        toast.success('Onboarding terminé — équipe et plan d\'orchestration appliqués');
       } else {
         setRunPhase('error');
         toast.error(result.fatalError ?? 'Suite interrompue');
@@ -318,7 +222,6 @@ export function OnboardingSuitePage() {
       toast.error(e instanceof Error ? e.message : 'Suite impossible');
     } finally {
       setSuiteRunning(false);
-      setImportProgressData(null);
       if (searchParams.get('run')) {
         searchParams.delete('run');
         setSearchParams(searchParams, { replace: true });
@@ -342,9 +245,9 @@ export function OnboardingSuitePage() {
       return {
         id: step.id,
         title: step.label,
-        desc: stepDesc(step.id, draft, staffAccounts, selectedImport),
+        desc: stepDesc(step.id, draft, staffAccounts),
         href: stepHref(step.id),
-        expandable: !suiteRunning && (step.id === 'plan' || step.id === 'import'),
+        expandable: !suiteRunning && step.id === 'plan',
         done,
         running: step.status === 'running',
         runHeadline: step.headline ?? step.detail ?? persisted.headline,
@@ -357,7 +260,7 @@ export function OnboardingSuitePage() {
         runError: step.error,
       };
     });
-  }, [draft, runSteps, applyLog, staffAccounts, selectedImport, suiteRunning, suiteViewMode]);
+  }, [draft, runSteps, applyLog, staffAccounts, suiteRunning, suiteViewMode]);
 
   const automatedDone = items.filter((i) => i.id !== 'orch-resa' && i.done).length;
   const automatedTotal = items.filter((i) => i.id !== 'orch-resa').length;
@@ -396,7 +299,7 @@ export function OnboardingSuitePage() {
               return (
                 <li
                   key={item.id}
-                  className={`ob-suite-item${item.done ? ' done' : ''}${item.running ? ' running' : ''}${item.runError ? ' error' : ''}${item.id === 'import' && importStepRunning ? ' ob-suite-item--import-live' : ''}`}
+                  className={`ob-suite-item${item.done ? ' done' : ''}${item.running ? ' running' : ''}${item.runError ? ' error' : ''}`}
                 >
                   <span className="ob-suite-num">
                     {item.running ? '…' : item.done ? '✓' : idx + 1}
@@ -404,21 +307,7 @@ export function OnboardingSuitePage() {
                   <div className="ob-suite-body">
                     <strong>{item.title}</strong>
                     <p>{item.desc}</p>
-                    {item.runLines && item.runLines.length > 0 && importStepRunning && item.id === 'import' && (
-                      <ul className="ob-suite-run-lines ob-suite-import-batch">
-                        {item.runLines.map((line, lineIdx) => (
-                          <li key={`${item.id}-batch-${lineIdx}`}>{line}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {importStepRunning && item.id === 'import' && importDisplayProgress && (
-                      <OnboardingImportProgressView
-                        key={`import-${importDisplayProgress.currentBatchIndex}-${importDisplayProgress.currentPropertyName ?? ''}`}
-                        progress={importDisplayProgress}
-                        mode={suiteViewMode}
-                      />
-                    )}
-                    {item.runLines && item.runLines.length > 0 && !(importStepRunning && item.id === 'import') && (
+                    {item.runLines && item.runLines.length > 0 && (
                       <ul className="ob-suite-run-lines">
                         {item.runLines.map((line, lineIdx) => (
                           <li key={`${item.id}-${lineIdx}`}>{line}</li>
@@ -436,11 +325,7 @@ export function OnboardingSuitePage() {
                             className="ob-btn-ghost ob-suite-link"
                             onClick={() => setExpandedId(expanded ? null : item.id)}
                           >
-                            {expanded
-                              ? 'Masquer'
-                              : item.id === 'import'
-                                ? "Import manuel →"
-                                : 'Apply manuel →'}
+                            {expanded ? 'Masquer' : 'Apply manuel →'}
                           </button>
                         )}
                         {item.href && (
@@ -458,14 +343,6 @@ export function OnboardingSuitePage() {
                           </button>
                         )}
                       </div>
-                    )}
-                    {expanded && item.id === 'import' && p7 && ownerId && (
-                      <OnboardingSuiteImportSection
-                        ownerId={ownerId}
-                        panel={p7}
-                        importProgressMode={suiteViewMode}
-                        onImportComplete={handleImportComplete}
-                      />
                     )}
                     {expanded && item.id === 'plan' && draft && ownerId && (
                       <OnboardingSuiteApplySection

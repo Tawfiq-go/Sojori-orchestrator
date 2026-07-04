@@ -31,9 +31,6 @@ function pmFriendlyLine(stepId: string, line: string): string {
       .replace(/listing\(s\)/gi, 'annonce(s)')
       .replace(/ synchronisé\(s\) avec le plan orchestration/g, ' reliée(s) à votre plan');
   }
-  if (stepId === 'import') {
-    out = out.replace(/RU #\d+/gi, 'Annonce');
-  }
   return out;
 }
 
