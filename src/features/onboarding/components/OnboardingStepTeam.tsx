@@ -101,7 +101,7 @@ export default function OnboardingStepTeam({ p1, ownerCities, ownerId, updatePan
 
   return (
     <div className="ob-sh ob-team ob-team--simple">
-      <div className="eyebrow">Étape 1 · Équipe</div>
+      <div className="eyebrow">Étape 2 · Équipe</div>
       <h1>Qui fait quoi ?</h1>
       <p className="sub">
         Config compacte ici — granularité complète dans <strong>Task · Équipe</strong> ou{' '}

@@ -330,6 +330,16 @@ export function ImportAirbnbModalContainer({
     [],
   );
 
+  /** Post-import : applique le plan orchestration owner aux annonces (best-effort). */
+  const applyOwnerPlanToListings = useCallback(async (ownerId: string) => {
+    try {
+      await listingsService.applyOwnerOrchestrationToAllListings(ownerId);
+      toast.info("Plan d'orchestration appliqué aux annonces importées");
+    } catch (e) {
+      console.warn('[import-ru] apply owner orchestration après import échoué', e);
+    }
+  }, []);
+
   const startImport = useCallback(
     async ({
       ownerId,
@@ -377,6 +387,7 @@ export function ImportAirbnbModalContainer({
             } else {
               toast.success('Annonce importée avec succès');
             }
+            await applyOwnerPlanToListings(ownerId);
           } else toast.error("Échec de l'import");
         } else {
           const { response, correlationId } = await runTrackedImport({
@@ -419,6 +430,7 @@ export function ImportAirbnbModalContainer({
             } else {
               toast.success(`${data.succeeded} annonce(s) importée(s)`);
             }
+            await applyOwnerPlanToListings(ownerId);
           }
           if (data?.failed > 0) toast.error(`${data.failed} annonce(s) en échec`);
         }
@@ -428,7 +440,7 @@ export function ImportAirbnbModalContainer({
         throw e;
       }
     },
-    [runTrackedImport, enrichImportResults],
+    [runTrackedImport, enrichImportResults, applyOwnerPlanToListings],
   );
 
   const handleClose = useCallback(() => {

@@ -186,12 +186,13 @@ export default function OnboardingStepDeadlines({ deadlines, capabilities, onCha
 
   return (
     <div className="ob-sh">
-      <div className="eyebrow">Étape 5 · Délais & relances</div>
+      <div className="eyebrow">Étape 4 · Délais & relances</div>
       <h1>Rythme opérationnel par service</h1>
       <p className="sub">
-        Relances client, assignation staff, rappels et escalade — enregistrés dans le{' '}
-        <strong>modèle orchestration owner</strong> (srv-listing) et les workflows fulltask.
-        Visible sur <strong>Annonces → Modèle orchestration</strong> après « Enregistrer → modèle owner ».
+        <strong>Ici : comment votre équipe exécute</strong> — relances client, assignation staff,
+        rappels et escalade. Rien n&apos;est écrit maintenant : tout s&apos;applique au{' '}
+        <strong>Go live</strong> (plan d&apos;orchestration), visible ensuite sur{' '}
+        <strong>Annonces → Modèle orchestration</strong>.
       </p>
 
       <div className="ob-team-config-lbl" style={{ marginBottom: 8 }}>

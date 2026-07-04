@@ -67,18 +67,6 @@ export function PmOnboardingWizard({ embedded = false }: PmOnboardingWizardProps
   }, [targetOwnerId, searchParams, setSearchParams, showOwnerFilter]);
 
   const handleSave = async () => {
-    if (draft.currentPanel === 6 && targetOwnerId) {
-      const result = await wizard.applyDeadlinesToOwnerModel();
-      if (result.ok) {
-        toast.success(result.message ?? 'Modèle orchestration owner enregistré');
-        if (showOwnerFilter && targetOwnerId) {
-          setSearchParams(applyOwnerIdToSearchParams(searchParams, targetOwnerId), { replace: true });
-        }
-        return;
-      }
-      toast.error(result.message ?? wizard.error ?? 'Impossible d’appliquer les délais au modèle owner');
-      return;
-    }
     const ok = await wizard.saveDraft();
     if (ok) {
       if (showOwnerFilter && targetOwnerId) {
@@ -238,7 +226,7 @@ export function PmOnboardingWizard({ embedded = false }: PmOnboardingWizardProps
                   disabled={saving}
                   onClick={() => void handleSave()}
                 >
-                  {saving ? 'Enregistrement…' : draft.currentPanel === 6 ? 'Enregistrer → modèle owner' : 'Enregistrer'}
+                  {saving ? 'Enregistrement…' : 'Enregistrer'}
                 </button>
                 <Button
                   sx={btnPrimarySx}
