@@ -123,13 +123,20 @@ export function buildStaffAssignment(
   };
 }
 
-export function buildDeadline(def: OnboardingServiceRhythmDef): Record<string, unknown> | null {
+export function buildDeadline(
+  def: OnboardingServiceRhythmDef,
+  adminEscalationHour?: string,
+): Record<string, unknown> | null {
   if (def.deadlineDay == null) return null;
   const ref = def.dateRef === 'task_created' ? 'task_created' : def.dateRef;
+  // L'heure d'escalade admin (Express « Alerter l'admin à Xh ») prime sur le défaut service.
+  const hour = adminEscalationHour
+    ? `${String(adminEscalationHour).padStart(2, '0')}:00`
+    : undefined;
   return {
     ref,
     day: def.deadlineDay,
-    time: def.deadlineTime ?? '14:00',
+    time: hour ?? def.deadlineTime ?? '14:00',
   };
 }
 
@@ -143,7 +150,7 @@ export function buildCapabilityExecutionFromRhythmRow(
     reminders: buildClientReminders(row),
     staffReminders: buildStaffReminders(row),
     staffAssignment: buildStaffAssignment(row, deadlines.adminEscalationHour),
-    deadline: buildDeadline(row),
+    deadline: buildDeadline(row, deadlines.adminEscalationHour),
   };
 }
 
@@ -159,6 +166,6 @@ export function buildFulltaskWorkflowPatchFromRhythmRow(
     reminders: buildClientReminders(row),
     staffReminders: buildStaffReminders(row),
     staffAssignment: buildStaffAssignment(row, deadlines.adminEscalationHour),
-    deadline: buildDeadline(row),
+    deadline: buildDeadline(row, deadlines.adminEscalationHour),
   };
 }

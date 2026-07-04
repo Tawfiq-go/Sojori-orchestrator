@@ -2,6 +2,7 @@ import { getCapabilityDefinition } from '../../serviceMatrix/capabilityRegistry'
 import type { ListingCapabilityDoc } from '../../orchestrationListingV3/listingOrchestrationApi';
 import { buildFreshCapabilitiesFromActivations } from '../../orchestrationListingV3/ownerOrchestrationReplace';
 import { deriveConditionsFromJx } from '../wizardGuestAccess';
+import { defaultTaskBehaviorForType } from '../../taskHub/taskConfig/taskCompletionLabels';
 import type { WizardConditions, WizardDraft, WizardJxSettings } from '../types';
 import { JX_KEY_TO_CAPABILITY, wizardJxLabelToAvailability } from './wizardJxToAvailability';
 import { applyOrchestrationQuickConfig } from './applyOrchestrationQuickConfig';
@@ -167,6 +168,14 @@ export function buildOwnerOrchestrationCapabilitiesFromWizard(draft: WizardDraft
     p3.capabilities,
     p0?.cities?.length ? p0.cities : ['Marrakech'],
   );
+
+  // Comportement tâche explicite (à la demande client / auto-complétion) —
+  // aligné DEFAULT_TASK_TYPE_CONFIGS srv-fulltask, sinon la page modèle retombe sur « Manuel ».
+  for (const [key, cap] of Object.entries(capabilities)) {
+    const def = getCapabilityDefinition(key);
+    if (!def?.taskType) continue;
+    capabilities[key] = { ...cap, taskBehavior: defaultTaskBehaviorForType(def.taskType) };
+  }
 
   const conditions =
     p5?.conditions ??
