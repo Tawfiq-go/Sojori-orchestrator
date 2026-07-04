@@ -498,137 +498,7 @@ export default function OnboardingStepOrchestrationExpress({
         </section>
       )}
 
-      {/* ── 4 · Assignation staff ── */}
-      <section className="ob-card ob-x-section">
-        <div className="ob-card-b">
-          <p className="ob-x-title">👷 Quand assigner votre staff ?</p>
-          <p className="ob-x-hint">
-            Vous choisissez le <strong>début de la fenêtre</strong> et l&apos;heure de la première
-            tentative — la fenêtre se termine la veille de la tâche (J-1) à l&apos;heure
-            d&apos;escalade ({(deadlines.adminEscalationHour ?? '11')}h). Immédiat = dès la création
-            de la tâche · J0 = le jour même (jusqu&apos;à 18h).{' '}
-            <strong>Auto-accepté</strong> = assigné directement, sans acceptation du staff.
-          </p>
-          <div className="ob-x-rows">
-            {STAFF_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => {
-              const state = assignStateOf(svc.taskType);
-              const auto = autoAssignOf(svc.taskType);
-              const windowHint =
-                typeof state !== 'number'
-                  ? null
-                  : state === 0
-                    ? '→ fin J0 18h'
-                    : `→ fin J-1 ${(deadlines.adminEscalationHour ?? '11')}h`;
-              return (
-                <div key={svc.taskType} className="ob-x-row">
-                  <span className="ob-x-row-label">
-                    {svc.emoji} {svc.label}
-                  </span>
-                  <span className="ob-x-inline-choices">
-                    <span className="ob-x-seg">
-                      {seg(state === 'immediate', 'Immédiat', () => setAssign(svc.taskType, 'immediate'))}
-                      {seg(state === 7, 'Dès J-7', () => setAssign(svc.taskType, 'days', 7))}
-                      {seg(state === 3, 'Dès J-3', () => setAssign(svc.taskType, 'days', 3))}
-                      {seg(state === 1, 'Dès J-1', () => setAssign(svc.taskType, 'days', 1))}
-                      {seg(state === 0, 'J0', () => setAssign(svc.taskType, 'days', 0))}
-                      {seg(state === 'none', '—', () => setAssign(svc.taskType, 'none'))}
-                    </span>
-                    {typeof state === 'number' && (
-                      <>
-                        <select
-                          className="ob-field ob-field--dense ob-x-hour"
-                          value={assignTimeOf(svc.taskType)}
-                          onChange={(e) => patchService(svc.taskType, { staffAssignTime: e.target.value })}
-                        >
-                          {[
-                            ...REMINDER_HOUR_CHOICES,
-                            ...(REMINDER_HOUR_CHOICES.includes(assignTimeOf(svc.taskType) as (typeof REMINDER_HOUR_CHOICES)[number])
-                              ? []
-                              : [assignTimeOf(svc.taskType)]),
-                          ].map((h) => (
-                            <option key={h} value={h}>
-                              {Number(h.slice(0, 2))}h
-                            </option>
-                          ))}
-                        </select>
-                        <span className="ob-x-access-hint">{windowHint}</span>
-                      </>
-                    )}
-                    {state !== 'none' && (
-                      <button
-                        type="button"
-                        className={`ob-chip ob-x-day${auto ? ' on' : ''}`}
-                        title="Auto-accepté : la tâche est assignée directement, sans acceptation du staff"
-                        onClick={() => toggleAutoAssign(svc.taskType)}
-                      >
-                        Auto-accepté {auto ? '✓' : '✗'}
-                      </button>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          {caps.cleaningSojori && (
-            <p className="ob-x-auto">Ménage Sojori : assigné automatiquement autour du check-out.</p>
-          )}
-        </div>
-      </section>
-
-      {/* ── 5 · Relances client ── */}
-      <section className="ob-card ob-x-section">
-        <div className="ob-card-b">
-          <p className="ob-x-title">💌 Relancer le voyageur s&apos;il n&apos;a pas répondu ?</p>
-          <p className="ob-x-hint">
-            Choisissez les jours de relance par service — un seul ou plusieurs (J0 = jour de la
-            tâche). Aucun jour = pas de relance. L&apos;heure = envoi des relances.
-          </p>
-          <div className="ob-x-rows">
-            {CLIENT_REMINDER_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => {
-              const days = reminderDaysOf(svc.taskType);
-              return (
-                <div key={svc.taskType} className={`ob-x-row${days.length === 0 ? ' ob-x-row--off' : ''}`}>
-                  <span className="ob-x-row-label">
-                    {svc.emoji} {svc.label}
-                  </span>
-                  <span className="ob-x-inline-choices">
-                    {REMINDER_DAY_CHOICES.map((day) => (
-                      <button
-                        key={day}
-                        type="button"
-                        className={`ob-chip ob-x-day${days.includes(day) ? ' on' : ''}`}
-                        onClick={() => toggleReminderDay(svc.taskType, day)}
-                      >
-                        {day === 0 ? 'J0' : `J${day}`}
-                      </button>
-                    ))}
-                    {days.length > 0 && (
-                      <select
-                        className="ob-field ob-field--dense ob-x-hour"
-                        value={reminderTimeOf(svc.taskType)}
-                        onChange={(e) => patchService(svc.taskType, { clientReminderTime: e.target.value })}
-                      >
-                        {[
-                          ...REMINDER_HOUR_CHOICES,
-                          ...(REMINDER_HOUR_CHOICES.includes(reminderTimeOf(svc.taskType) as (typeof REMINDER_HOUR_CHOICES)[number])
-                            ? []
-                            : [reminderTimeOf(svc.taskType)]),
-                        ].map((h) => (
-                          <option key={h} value={h}>
-                            {Number(h.slice(0, 2))}h
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ── 6 · Messages planifiés PM ── */}
+      {/* ── 4 · Messages planifiés PM ── */}
       <section className="ob-card ob-x-section">
         <div className="ob-card-b">
           <p className="ob-x-title">💬 Quand envoyer chaque message ?</p>
@@ -709,6 +579,136 @@ export default function OnboardingStepOrchestrationExpress({
               );
             })}
           </div>
+        </div>
+      </section>
+
+      {/* ── 5 · Relances client ── */}
+      <section className="ob-card ob-x-section">
+        <div className="ob-card-b">
+          <p className="ob-x-title">💌 Relancer le voyageur s&apos;il n&apos;a pas répondu ?</p>
+          <p className="ob-x-hint">
+            Choisissez les jours de relance par service — un seul ou plusieurs (J0 = jour de la
+            tâche). Aucun jour = pas de relance. L&apos;heure = envoi des relances.
+          </p>
+          <div className="ob-x-rows">
+            {CLIENT_REMINDER_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => {
+              const days = reminderDaysOf(svc.taskType);
+              return (
+                <div key={svc.taskType} className={`ob-x-row${days.length === 0 ? ' ob-x-row--off' : ''}`}>
+                  <span className="ob-x-row-label">
+                    {svc.emoji} {svc.label}
+                  </span>
+                  <span className="ob-x-inline-choices">
+                    {REMINDER_DAY_CHOICES.map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        className={`ob-chip ob-x-day${days.includes(day) ? ' on' : ''}`}
+                        onClick={() => toggleReminderDay(svc.taskType, day)}
+                      >
+                        {day === 0 ? 'J0' : `J${day}`}
+                      </button>
+                    ))}
+                    {days.length > 0 && (
+                      <select
+                        className="ob-field ob-field--dense ob-x-hour"
+                        value={reminderTimeOf(svc.taskType)}
+                        onChange={(e) => patchService(svc.taskType, { clientReminderTime: e.target.value })}
+                      >
+                        {[
+                          ...REMINDER_HOUR_CHOICES,
+                          ...(REMINDER_HOUR_CHOICES.includes(reminderTimeOf(svc.taskType) as (typeof REMINDER_HOUR_CHOICES)[number])
+                            ? []
+                            : [reminderTimeOf(svc.taskType)]),
+                        ].map((h) => (
+                          <option key={h} value={h}>
+                            {Number(h.slice(0, 2))}h
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── 6 · Assignation staff ── */}
+      <section className="ob-card ob-x-section">
+        <div className="ob-card-b">
+          <p className="ob-x-title">👷 Quand assigner votre staff ?</p>
+          <p className="ob-x-hint">
+            Vous choisissez le <strong>début de la fenêtre</strong> et l&apos;heure de la première
+            tentative — la fenêtre se termine la veille de la tâche (J-1) à l&apos;heure
+            d&apos;escalade ({(deadlines.adminEscalationHour ?? '11')}h). Immédiat = dès la création
+            de la tâche · J0 = le jour même (jusqu&apos;à 18h).{' '}
+            <strong>Auto-accepté</strong> = assigné directement, sans acceptation du staff.
+          </p>
+          <div className="ob-x-rows">
+            {STAFF_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => {
+              const state = assignStateOf(svc.taskType);
+              const auto = autoAssignOf(svc.taskType);
+              const windowHint =
+                typeof state !== 'number'
+                  ? null
+                  : state === 0
+                    ? '→ fin J0 18h'
+                    : `→ fin J-1 ${(deadlines.adminEscalationHour ?? '11')}h`;
+              return (
+                <div key={svc.taskType} className="ob-x-row">
+                  <span className="ob-x-row-label">
+                    {svc.emoji} {svc.label}
+                  </span>
+                  <span className="ob-x-inline-choices">
+                    <span className="ob-x-seg">
+                      {seg(state === 'immediate', 'Immédiat', () => setAssign(svc.taskType, 'immediate'))}
+                      {seg(state === 7, 'Dès J-7', () => setAssign(svc.taskType, 'days', 7))}
+                      {seg(state === 3, 'Dès J-3', () => setAssign(svc.taskType, 'days', 3))}
+                      {seg(state === 1, 'Dès J-1', () => setAssign(svc.taskType, 'days', 1))}
+                      {seg(state === 0, 'J0', () => setAssign(svc.taskType, 'days', 0))}
+                      {seg(state === 'none', '—', () => setAssign(svc.taskType, 'none'))}
+                    </span>
+                    {typeof state === 'number' && (
+                      <>
+                        <select
+                          className="ob-field ob-field--dense ob-x-hour"
+                          value={assignTimeOf(svc.taskType)}
+                          onChange={(e) => patchService(svc.taskType, { staffAssignTime: e.target.value })}
+                        >
+                          {[
+                            ...REMINDER_HOUR_CHOICES,
+                            ...(REMINDER_HOUR_CHOICES.includes(assignTimeOf(svc.taskType) as (typeof REMINDER_HOUR_CHOICES)[number])
+                              ? []
+                              : [assignTimeOf(svc.taskType)]),
+                          ].map((h) => (
+                            <option key={h} value={h}>
+                              {Number(h.slice(0, 2))}h
+                            </option>
+                          ))}
+                        </select>
+                        <span className="ob-x-access-hint">{windowHint}</span>
+                      </>
+                    )}
+                    {state !== 'none' && (
+                      <button
+                        type="button"
+                        className={`ob-chip ob-x-day${auto ? ' on' : ''}`}
+                        title="Auto-accepté : la tâche est assignée directement, sans acceptation du staff"
+                        onClick={() => toggleAutoAssign(svc.taskType)}
+                      >
+                        Auto-accepté {auto ? '✓' : '✗'}
+                      </button>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          {caps.cleaningSojori && (
+            <p className="ob-x-auto">Ménage Sojori : assigné automatiquement autour du check-out.</p>
+          )}
         </div>
       </section>
 
