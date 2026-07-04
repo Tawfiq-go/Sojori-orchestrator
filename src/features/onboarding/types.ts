@@ -165,6 +165,8 @@ export type WizardWorkflowPreset = 'reactive' | 'balanced' | 'proactive';
 /** Surcharges par type de workflow (clé = taskType snake_case). */
 export type WizardServiceDeadlineOverride = {
   clientReminderDays?: number[];
+  /** Heure d'envoi des relances client (HH:mm) */
+  clientReminderTime?: string;
   staffAssignStyle?: 'immediate' | 'days_before' | 'with_client' | 'none';
   staffAssignDaysBefore?: number;
   staffReminderDays?: number[];
