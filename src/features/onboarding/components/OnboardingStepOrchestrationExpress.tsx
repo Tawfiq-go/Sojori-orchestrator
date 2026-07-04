@@ -590,6 +590,9 @@ export default function OnboardingStepOrchestrationExpress({
             Choisissez les jours de relance par service — un seul ou plusieurs (J0 = jour de la
             tâche). Aucun jour = pas de relance. L&apos;heure = envoi des relances.
           </p>
+          {CLIENT_REMINDER_SERVICES.every((svc) => !svc.capAny.some((c) => caps[c])) && (
+            <p className="ob-x-auto">Activez des services dans « Quand proposer chaque service » pour régler les relances.</p>
+          )}
           <div className="ob-x-rows">
             {CLIENT_REMINDER_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => {
               const days = reminderDaysOf(svc.taskType);
@@ -646,6 +649,9 @@ export default function OnboardingStepOrchestrationExpress({
             de la tâche · J0 = le jour même (jusqu&apos;à 18h).{' '}
             <strong>Auto-accepté</strong> = assigné directement, sans acceptation du staff.
           </p>
+          {STAFF_SERVICES.every((svc) => !svc.capAny.some((c) => caps[c])) && (
+            <p className="ob-x-auto">Activez des services dans « Quand proposer chaque service » pour régler l'assignation.</p>
+          )}
           <div className="ob-x-rows">
             {STAFF_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => {
               const state = assignStateOf(svc.taskType);
