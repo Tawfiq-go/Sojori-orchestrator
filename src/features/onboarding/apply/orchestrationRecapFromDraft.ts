@@ -8,6 +8,7 @@ import {
   resolveServiceRhythmRows,
   WORKFLOW_PRESET_OPTIONS,
 } from '../onboardingWorkflowDefaults';
+import { formatAdminEscalationDayLabel } from '../wizardStaffDeadlines';
 
 const JX_PRESET_LABELS: Record<WizardJxSettings['preset'], string> = {
   standard: 'Standard',
@@ -48,7 +49,9 @@ function formatDeadlinesLine(deadlines: WizardDeadlines, capabilities?: WizardCa
   const escalated = rows.filter((r) => r.escalationEnabled).length;
   const parts = [`Préréglage : ${preset?.title ?? 'Équilibré'}`, `${rows.length} service(s)`];
   if (escalated > 0) {
-    parts.push(`escalade J-1 à ${deadlines.adminEscalationHour}h (${escalated})`);
+    parts.push(
+      `escalade ${formatAdminEscalationDayLabel(deadlines.adminEscalationDay ?? -1)} à ${deadlines.adminEscalationHour}h (${escalated})`,
+    );
   }
   const sample = rows.slice(0, 2).map((r) => {
     const rc = formatClientReminderLabel(r.clientReminderDays);

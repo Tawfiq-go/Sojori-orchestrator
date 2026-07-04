@@ -14,7 +14,7 @@ import {
   defaultTransportAirportPrices,
 } from '../onboardingOrchestrationDashboard';
 import { resolveServiceRhythmRows } from '../onboardingWorkflowDefaults';
-import { ADMIN_ESCALATION_HOURS } from '../wizardStaffDeadlines';
+import { ADMIN_ESCALATION_DAYS, ADMIN_ESCALATION_HOURS, formatAdminEscalationDayLabel } from '../wizardStaffDeadlines';
 
 /* ─────────────────────────── métadonnées services ─────────────────────────── */
 
@@ -645,7 +645,7 @@ export default function OnboardingStepOrchestrationExpress({
           <p className="ob-x-hint">
             Vous choisissez le <strong>début de la fenêtre</strong> et l&apos;heure de la première
             tentative — la fenêtre se termine la veille de la tâche (J-1) à l&apos;heure
-            d&apos;escalade ({(deadlines.adminEscalationHour ?? '11')}h). Immédiat = dès la création
+            d&apos;escalade ({formatAdminEscalationDayLabel(deadlines.adminEscalationDay ?? -1)} {(deadlines.adminEscalationHour ?? '11')}h). Immédiat = dès la création
             de la tâche · J0 = le jour même (jusqu&apos;à 18h).{' '}
             <strong>Auto-accepté</strong> = assigné directement, sans acceptation du staff.
           </p>
@@ -661,7 +661,7 @@ export default function OnboardingStepOrchestrationExpress({
                   ? null
                   : state === 0
                     ? '→ fin J0 18h'
-                    : `→ fin J-1 ${(deadlines.adminEscalationHour ?? '11')}h`;
+                    : `→ fin ${formatAdminEscalationDayLabel(deadlines.adminEscalationDay ?? -1)} ${(deadlines.adminEscalationHour ?? '11')}h`;
               return (
                 <div key={svc.taskType} className="ob-x-row">
                   <span className="ob-x-row-label">
@@ -722,7 +722,7 @@ export default function OnboardingStepOrchestrationExpress({
       <section className="ob-card ob-x-section">
         <div className="ob-card-b">
           <p className="ob-x-title">🔔 Filet de sécurité</p>
-          <p className="ob-x-hint">Heures par défaut à 11h — modifiables.</p>
+          <p className="ob-x-hint">Défaut : rappel staff J-1 à 11h · escalade admin J-1 à 11h — jour et heure modifiables.</p>
           <div className="ob-x-rows">
             <div className="ob-x-row">
               <span className="ob-x-row-label">Rappel au staff la veille de chaque tâche (J-1)</span>
@@ -752,17 +752,28 @@ export default function OnboardingStepOrchestrationExpress({
               <span className="ob-x-row-label">Alerter l&apos;admin si rien n&apos;est traité (escalade)</span>
               <span className="ob-x-inline-choices">
                 {escalationGlobal && (
-                  <select
-                    className="ob-field ob-field--dense ob-x-hour"
-                    value={deadlines.adminEscalationHour ?? '11'}
-                    onChange={(e) => onChangeDeadlines({ adminEscalationHour: e.target.value })}
-                  >
-                    {ADMIN_ESCALATION_HOURS.map((h) => (
-                      <option key={h.id} value={h.id}>
-                        {h.label}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <span className="ob-x-seg" style={{ marginRight: 4 }}>
+                      {ADMIN_ESCALATION_DAYS.map(({ day, label }) =>
+                        seg(
+                          (deadlines.adminEscalationDay ?? -1) === day,
+                          label,
+                          () => onChangeDeadlines({ adminEscalationDay: day }),
+                        ),
+                      )}
+                    </span>
+                    <select
+                      className="ob-field ob-field--dense ob-x-hour"
+                      value={deadlines.adminEscalationHour ?? '11'}
+                      onChange={(e) => onChangeDeadlines({ adminEscalationHour: e.target.value })}
+                    >
+                      {ADMIN_ESCALATION_HOURS.map((h) => (
+                        <option key={h.id} value={h.id}>
+                          {h.label}
+                        </option>
+                      ))}
+                    </select>
+                  </>
                 )}
                 <Toggle on={escalationGlobal} onChange={setEscalationGlobal} />
               </span>

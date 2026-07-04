@@ -39,6 +39,17 @@ export const ADMIN_ESCALATION_HOURS: Array<{
   { id: '18', label: '18h' },
 ];
 
+export const ADMIN_ESCALATION_DAYS: Array<{ day: number; label: string }> = [
+  { day: -2, label: 'J-2' },
+  { day: -1, label: 'J-1' },
+  { day: 0, label: 'J0' },
+];
+
+export function formatAdminEscalationDayLabel(day: number): string {
+  if (day === 0) return 'J0';
+  return day > 0 ? `J+${day}` : `J${day}`;
+}
+
 export function defaultDeadlines(): WizardDeadlines {
   return {
     workflowPreset: 'balanced',
@@ -48,6 +59,7 @@ export function defaultDeadlines(): WizardDeadlines {
     staffAssignDaysBefore: 3,
     escalateAdminJ1: true,
     adminEscalationHour: '11',
+    adminEscalationDay: -1,
   };
 }
 
@@ -86,5 +98,8 @@ export function normalizeWizardDeadlines(
     staffAssignDaysBefore: raw.staffAssignDaysBefore ?? 3,
     escalateAdminJ1: raw.escalateAdminJ1 ?? true,
     adminEscalationHour: /^\d{1,2}$/.test(String(raw.adminEscalationHour ?? '')) ? String(raw.adminEscalationHour) : '11',
+    adminEscalationDay: [-2, -1, 0].includes(Number(raw.adminEscalationDay))
+      ? Number(raw.adminEscalationDay)
+      : -1,
   };
 }

@@ -192,9 +192,10 @@ export interface WizardDeadlines {
   staffAssignDaysBefore: number;
   /** @deprecated — préférer escalationEnabled par service */
   escalateAdminJ1: boolean;
-  /** Heure de relance / escalade admin le J-1. */
   /** Heure d'escalade admin (HH, ex. '11') — flexible, défaut 11h */
   adminEscalationHour: string;
+  /** Jour d'alerte admin (-2 = J-2, -1 = J-1, 0 = J0) — défaut J-1 */
+  adminEscalationDay?: number;
 }
 
 export interface WizardPanel0 {
