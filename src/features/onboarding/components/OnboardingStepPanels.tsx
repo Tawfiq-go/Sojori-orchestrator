@@ -10,9 +10,8 @@ import OnboardingStepOrchestration from './OnboardingStepOrchestration';
 import OnboardingStepOrchestrationExpress from './OnboardingStepOrchestrationExpress';
 import OnboardingStepDeadlines from './OnboardingStepDeadlines';
 import { staffDisplayName } from '../staffNormalize';
-import { formatStaffPersonRecap, staffApplyAccountCounts } from '../staffRecap';
+import { staffApplyAccountCounts } from '../staffRecap';
 import { buildOrchestrationRecapFromDraft } from '../apply/orchestrationRecapFromDraft';
-import { WIZARD_EDIT_STEPS, WIZARD_STEP_COUNT, WIZARD_VISIBLE_PANELS } from '../wizardNavigation';
 
 interface StepPanelsProps {
   wizard: UsePmOnboardingWizardResult;
@@ -258,136 +257,46 @@ function Step8GoLive({
 
       <div className="ob-card">
         <div className="ob-card-b ob-recap-grid">
-          <div className="ob-recap-row">
-            <span>Parcours</span>
-            <strong>{draft.path === 'A' ? 'Airbnb / RU' : 'Manuel'}</strong>
-          </div>
-          <div className="ob-recap-row">
-            <span>Villes</span>
-            <strong>{p0?.cities?.join(', ') || '—'}</strong>
-          </div>
-          <div className="ob-recap-row">
-            <span>Biens estimés</span>
-            <strong>{p0?.expectedListings ?? '—'}</strong>
-          </div>
-          <div className="ob-recap-row ob-recap-row--team">
-            <span>Équipe</span>
-            <div className="ob-recap-team-detail">
-              {(p1?.staff ?? []).filter((s) => staffDisplayName(s)).length === 0 ? (
-                <strong>—</strong>
-              ) : (
-                <>
-                  <strong>
-                    {teamPeople.length} personne
-                    {teamPeople.length > 1 ? 's' : ''}
-                    {teamPeople.length > 0 && (
-                      <>
-                        {' '}
-                        · {teamAccounts.staffSimplified} staff · {teamAccounts.adminWhatsapp} admin
-                        WA · {teamAccounts.dashboardWorkers} dashboard
-                      </>
-                    )}
-                  </strong>
-                  <ul className="ob-recap-people">
-                    {teamPeople.map((row) => (
-                        <li key={row.id}>
-                          {formatStaffPersonRecap(row)}
-                        </li>
-                      ))}
-                  </ul>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="ob-recap-row ob-recap-row--orch">
-            <span>Orchestration owner</span>
-            <div className="ob-recap-orch-detail">
-              <strong className="ob-recap-orch-headline">{orchRecap.headline}</strong>
-              {orchRecap.stats.length > 0 && (
-                <div className="ob-recap-orch-stats">
-                  {orchRecap.stats.map((stat) => (
-                    <div key={stat.label} className="ob-recap-orch-stat" title={stat.label}>
-                      <span className="ob-recap-orch-stat-icon">{stat.icon}</span>
-                      <span className="ob-recap-orch-stat-value">{stat.value}</span>
-                      <span className="ob-recap-orch-stat-label">{stat.label}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {orchRecap.serviceGroups.length > 0 && (
-                <div className="ob-recap-orch-groups">
-                  {orchRecap.serviceGroups.map((g) => (
-                    <div key={g.group} className="ob-recap-orch-group">
-                      <span className="ob-recap-orch-group-title">{g.group}</span>
-                      <div className="ob-recap-orch-chips">
-                        {g.items.map((item) => (
-                          <span key={item} className="ob-recap-chip ob-recap-chip--orch">
-                            {item}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {orchRecap.extras.length > 0 && (
-                <ul className="ob-recap-orch-extras">
-                  {orchRecap.extras.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              )}
-              {orchRecap.warnings.length > 0 && (
-                <ul className="ob-recap-orch-warnings">
-                  {orchRecap.warnings.map((w) => (
-                    <li key={w}>⚠ {w}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-          <div className="ob-recap-row">
-            <span>Import Airbnb</span>
-            <strong>Après l&apos;onboarding — Annonces → Importer</strong>
-          </div>
-          <div className="ob-recap-row">
-            <span>Étapes validées</span>
+          <div className="ob-recap-row ob-recap-row--go">
+            <span>👤 Profil</span>
             <strong>
-              {WIZARD_VISIBLE_PANELS.filter((p) => draft.panelsValidated.includes(p)).length}/
-              {WIZARD_STEP_COUNT}
+              {draft.path === 'A' ? 'Airbnb / RU' : 'Manuel'} · {p0?.cities?.join(', ') || '—'} ·{' '}
+              {p0?.expectedListings ?? '—'} bien(s)
             </strong>
-          </div>
-        </div>
-      </div>
-
-      <div className="ob-recap-edit">
-        <p className="ob-recap-edit-title">Modifier la configuration initiale</p>
-        <p className="ob-recap-edit-hint">
-          Cliquez une étape pour revenir en arrière — vos réponses restent enregistrées dans le
-          brouillon.
-        </p>
-        <div className="ob-recap-edit-steps">
-          {WIZARD_EDIT_STEPS.map(({ label, panel }) => (
-            <button
-              key={panel}
-              type="button"
-              className="ob-recap-edit-btn"
-              onClick={() => wizard.setCurrentPanel(panel)}
-            >
-              {label}
+            <button type="button" className="ob-recap-go-edit" onClick={() => wizard.setCurrentPanel(0)}>
+              Modifier →
             </button>
-          ))}
+          </div>
+          <div className="ob-recap-row ob-recap-row--go">
+            <span>👥 Équipe</span>
+            <strong>
+              {teamPeople.length === 0
+                ? '—'
+                : `${teamPeople.map((row) => staffDisplayName(row)).join(', ')} — ${teamAccounts.staffSimplified} staff · ${teamAccounts.adminWhatsapp} admin WA · ${teamAccounts.dashboardWorkers} dashboard`}
+            </strong>
+            <button type="button" className="ob-recap-go-edit" onClick={() => wizard.setCurrentPanel(1)}>
+              Modifier →
+            </button>
+          </div>
+          <div className="ob-recap-row ob-recap-row--go">
+            <span>⚙️ Orchestration</span>
+            <strong>{orchRecap.headline}</strong>
+            <button type="button" className="ob-recap-go-edit" onClick={() => wizard.setCurrentPanel(3)}>
+              Modifier →
+            </button>
+          </div>
+          <div className="ob-recap-row ob-recap-row--go">
+            <span>🏠 Annonces</span>
+            <strong>Import après l&apos;onboarding — le plan s&apos;applique automatiquement</strong>
+          </div>
+          {orchRecap.warnings.length > 0 && (
+            <ul className="ob-recap-orch-warnings">
+              {orchRecap.warnings.map((w) => (
+                <li key={w}>⚠ {w}</li>
+              ))}
+            </ul>
+          )}
         </div>
-      </div>
-
-      <div className="ob-actions">
-        <button
-          type="button"
-          className="ob-btn-ghost"
-          onClick={() => wizard.setCurrentPanel(3)}
-        >
-          ← Retour · Orchestration
-        </button>
       </div>
     </div>
   );

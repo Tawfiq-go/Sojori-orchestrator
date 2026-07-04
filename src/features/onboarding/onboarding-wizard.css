@@ -3448,6 +3448,40 @@
   font-weight: 700;
 }
 
+.ob-recap-row--go {
+  align-items: center;
+  gap: 10px;
+}
+
+.ob-recap-row--go > span {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--ob-t1);
+}
+
+.ob-recap-row--go > strong {
+  flex: 1;
+  font-weight: 500;
+  color: var(--ob-t2);
+  text-align: left;
+}
+
+.ob-recap-go-edit {
+  border: 1px solid var(--ob-b);
+  background: transparent;
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  color: var(--ob-t2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ob-recap-go-edit:hover {
+  border-color: var(--ob-accent, #b8851a);
+  color: var(--ob-accent, #b8851a);
+}
+
 .ob-orch-city-prices {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
