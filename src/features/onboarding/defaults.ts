@@ -90,24 +90,26 @@ export const defaultMenuAccess = (): WizardMenuAccess => ({
   analytics: false,
 });
 
+/** Brouillon neuf = pack standard activé (l'utilisateur ajuste ensuite).
+ * Valeurs inlinées (import de wizardCapabilitiesToActivations = cycle → ReferenceError). */
 export const defaultCapabilities = (): WizardCapabilities => ({
-  welcome: false,
-  registration: false,
-  support: false,
-  serviceClient: false,
-  arrivalChoose: false,
-  departureChoose: false,
+  welcome: true,
+  registration: true,
+  support: true,
+  serviceClient: true,
+  arrivalChoose: true,
+  departureChoose: true,
   arrivalDeclare: false,
   departureDeclare: false,
-  transport: false,
+  transport: true,
   groceries: false,
   concierge: false,
-  cleaningFree: false,
-  cleaningPaid: false,
+  cleaningFree: true,
+  cleaningPaid: true,
   cleaningSojori: false,
-  accessCodes: false,
-  wifi: false,
-  rules: false,
+  accessCodes: true,
+  wifi: true,
+  rules: true,
 });
 
 export const defaultJx = (): WizardJxSettings => applyJxPreset('standard');
