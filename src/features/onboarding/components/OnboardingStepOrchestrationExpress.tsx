@@ -247,15 +247,28 @@ export default function OnboardingStepOrchestrationExpress({
 
   /* ── rappel staff / escalade — globaux ── */
   const staffReminderGlobal = rows.some((r) => r.staffReminderDays.length > 0);
-  const setStaffReminderGlobal = (on: boolean) => {
+
+  /** Jour du rappel relatif à la tâche (-2, -1, 0) — dérivé des rows (défaut J-1). */
+  const staffReminderDay = useMemo(() => {
+    const withReminder = rows.find(
+      (r) => r.taskType !== 'checkout_cleaning' && r.staffReminderDays.length > 0,
+    );
+    const d = withReminder?.staffReminderDays[0];
+    return d != null && [-2, -1, 0].includes(d) ? d : -1;
+  }, [rows]);
+
+  const writeStaffReminderDays = (on: boolean, day: number) => {
     const patches: Record<string, WizardServiceDeadlineOverride> = {};
     for (const svc of STAFF_SERVICES) {
-      patches[svc.taskType] = { staffReminderDays: on ? [-1] : [] };
+      patches[svc.taskType] = { staffReminderDays: on ? [day] : [] };
     }
-    // checkout_cleaning : rappel le jour du ménage (J+1 après check-out)
-    patches.checkout_cleaning = { staffReminderDays: on ? [1] : [] };
+    // checkout_cleaning : la tâche a lieu J+1 après check-out → décalage +1 (ex. veille = jour du check-out)
+    patches.checkout_cleaning = { staffReminderDays: on ? [day + 1] : [] };
     patchServices(patches);
   };
+
+  const setStaffReminderGlobal = (on: boolean) => writeStaffReminderDays(on, staffReminderDay);
+  const setStaffReminderDayGlobal = (day: number) => writeStaffReminderDays(true, day);
 
   const staffReminderTime = useMemo(() => {
     const withReminder = rows.find((r) => r.staffReminderDays.length > 0);
@@ -722,28 +735,38 @@ export default function OnboardingStepOrchestrationExpress({
       <section className="ob-card ob-x-section">
         <div className="ob-card-b">
           <p className="ob-x-title">🔔 Filet de sécurité</p>
-          <p className="ob-x-hint">Défaut : rappel staff J-1 à 11h · escalade admin J-1 à 11h — jour et heure modifiables.</p>
+          <p className="ob-x-hint">
+            Défaut : rappel staff J-1 à 11h · escalade admin J-1 à 11h — jour (par rapport à la
+            tâche) et heure modifiables pour les deux.
+          </p>
           <div className="ob-x-rows">
             <div className="ob-x-row">
-              <span className="ob-x-row-label">Rappel au staff la veille de chaque tâche (J-1)</span>
+              <span className="ob-x-row-label">Rappel au staff avant chaque tâche</span>
               <span className="ob-x-inline-choices">
                 {staffReminderGlobal && (
-                  <select
-                    className="ob-field ob-field--dense ob-x-hour"
-                    value={staffReminderTime}
-                    onChange={(e) => setStaffReminderTimeGlobal(e.target.value)}
-                  >
-                    {[
-                      ...REMINDER_HOUR_CHOICES,
-                      ...(REMINDER_HOUR_CHOICES.includes(staffReminderTime as (typeof REMINDER_HOUR_CHOICES)[number])
-                        ? []
-                        : [staffReminderTime]),
-                    ].map((h) => (
-                      <option key={h} value={h}>
-                        {Number(h.slice(0, 2))}h
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <span className="ob-x-seg" style={{ marginRight: 4 }}>
+                      {ADMIN_ESCALATION_DAYS.map(({ day, label }) =>
+                        seg(staffReminderDay === day, label, () => setStaffReminderDayGlobal(day)),
+                      )}
+                    </span>
+                    <select
+                      className="ob-field ob-field--dense ob-x-hour"
+                      value={staffReminderTime}
+                      onChange={(e) => setStaffReminderTimeGlobal(e.target.value)}
+                    >
+                      {[
+                        ...REMINDER_HOUR_CHOICES,
+                        ...(REMINDER_HOUR_CHOICES.includes(staffReminderTime as (typeof REMINDER_HOUR_CHOICES)[number])
+                          ? []
+                          : [staffReminderTime]),
+                      ].map((h) => (
+                        <option key={h} value={h}>
+                          {Number(h.slice(0, 2))}h
+                        </option>
+                      ))}
+                    </select>
+                  </>
                 )}
                 <Toggle on={staffReminderGlobal} onChange={setStaffReminderGlobal} />
               </span>
