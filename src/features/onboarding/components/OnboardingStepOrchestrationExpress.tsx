@@ -66,8 +66,6 @@ const CLIENT_REMINDER_SERVICES: Array<{ taskType: string; emoji: string; label: 
   { taskType: 'cleaning_paid', emoji: '🧹', label: 'Ménage payant', capAny: ['cleaningPaid'] },
 ];
 
-const BEFORE_DAY_CHOICES = [3, 7] as const;
-const ASSIGN_DAY_CHOICES = [3, 7] as const;
 const REMINDER_START_CHOICES = [3, 2, 1] as const;
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
@@ -100,24 +98,16 @@ export default function OnboardingStepOrchestrationExpress({
   const jx = panel3.jx ?? applyJxPreset('standard');
   const quickConfig = panel3.quickConfig ?? defaultOrchestrationQuickConfig(cities);
 
-  /* ── disponibilité : état courant dérivé du jx ── */
-  const availabilityOf = (svc: ExpressService): AvailabilityState => {
+  /* ── disponibilité : état courant dérivé du jx ('resa' | jour J-X | 'off') ── */
+  const availabilityOf = (svc: ExpressService): 'resa' | 'off' | number => {
     if (!svc.caps.some((c) => caps[c])) return 'off';
     const label = String(jx[svc.jxKey] ?? '');
     if (/réservation|toujours/i.test(label)) return 'resa';
-    return 'before';
+    const day = Number(label.match(/J-(\d+)/)?.[1] ?? 3);
+    return day;
   };
 
-  /** J global de la section « quelques jours avant » (majorité des lignes). */
-  const beforeDays: number = useMemo(() => {
-    const found = EXPRESS_SERVICES.map((s) => String(jx[s.jxKey] ?? '').match(/J-(\d+)/)?.[1])
-      .filter(Boolean)
-      .map(Number)
-      .filter((n) => BEFORE_DAY_CHOICES.includes(n as 3 | 7));
-    return found.length ? found[0] : 3;
-  }, [jx]);
-
-  const setAvailability = (svc: ExpressService, state: AvailabilityState, days = beforeDays) => {
+  const setAvailability = (svc: ExpressService, state: AvailabilityState, days = 3) => {
     const nextCaps = { ...caps };
     for (const c of svc.caps) {
       // Ménage : « on » ne force que cleaningFree (les modes se règlent dans la section Ménage)
@@ -133,14 +123,6 @@ export default function OnboardingStepOrchestrationExpress({
     if (state === 'resa') nextJx[svc.jxKey] = svc.resaLabel as never;
     if (state === 'before') nextJx[svc.jxKey] = svc.beforeLabel(days) as never;
     onChangePanel3({ capabilities: nextCaps, jx: nextJx });
-  };
-
-  const setBeforeDaysGlobal = (days: number) => {
-    const nextJx: WizardJxSettings = { ...jx, preset: 'custom' };
-    for (const svc of EXPRESS_SERVICES) {
-      if (availabilityOf(svc) === 'before') nextJx[svc.jxKey] = svc.beforeLabel(days) as never;
-    }
-    onChangePanel3({ jx: nextJx });
   };
 
   /* ── rythme équipe : dérivé des rows résolues ── */
@@ -164,35 +146,18 @@ export default function OnboardingStepOrchestrationExpress({
     onChangeDeadlines({ perService: merged });
   };
 
-  const assignStateOf = (taskType: string): 'immediate' | 'days' | 'none' => {
+  /** 'immediate' | jour J-X | 'none' */
+  const assignStateOf = (taskType: string): 'immediate' | 'none' | number => {
     const row = rowByType.get(taskType);
     if (!row || row.staffAssignStyle === 'none') return 'none';
     if (row.staffAssignStyle === 'immediate') return 'immediate';
-    return 'days';
+    return row.staffAssignDaysBefore || 3;
   };
 
-  const assignDays: number = useMemo(() => {
-    const found = rows
-      .filter((r) => r.staffAssignStyle === 'days_before' && r.staffAssignDaysBefore > 0)
-      .map((r) => r.staffAssignDaysBefore)
-      .filter((n) => ASSIGN_DAY_CHOICES.includes(n as 3 | 7));
-    return found.length ? found[0] : 3;
-  }, [rows]);
-
-  const setAssign = (taskType: string, state: 'immediate' | 'days' | 'none') => {
+  const setAssign = (taskType: string, state: 'immediate' | 'days' | 'none', days = 3) => {
     if (state === 'none') patchService(taskType, { staffAssignStyle: 'none', staffAssignDaysBefore: 0 });
     else if (state === 'immediate') patchService(taskType, { staffAssignStyle: 'immediate', staffAssignDaysBefore: 0 });
-    else patchService(taskType, { staffAssignStyle: 'days_before', staffAssignDaysBefore: assignDays });
-  };
-
-  const setAssignDaysGlobal = (days: number) => {
-    const patches: Record<string, WizardServiceDeadlineOverride> = {};
-    for (const svc of STAFF_SERVICES) {
-      if (assignStateOf(svc.taskType) === 'days') {
-        patches[svc.taskType] = { staffAssignStyle: 'days_before', staffAssignDaysBefore: days };
-      }
-    }
-    patchServices(patches);
+    else patchService(taskType, { staffAssignStyle: 'days_before', staffAssignDaysBefore: days });
   };
 
   /* ── relances client ── */
@@ -241,13 +206,21 @@ export default function OnboardingStepOrchestrationExpress({
     patchServices(patches);
   };
 
-  /* ── navette : villes ── */
+  /* ── navette : villes + prix ── */
   const transportCities = Object.keys(quickConfig.transportAirportByCity);
   const toggleTransportCity = (city: string) => {
     const next = { ...quickConfig.transportAirportByCity };
     if (next[city] != null) delete next[city];
     else next[city] = defaultTransportAirportPrices([city])[city] ?? 400;
     onChangePanel3({ quickConfig: { ...quickConfig, transportAirportByCity: next } });
+  };
+  const setTransportPrice = (city: string, price: number) => {
+    onChangePanel3({
+      quickConfig: {
+        ...quickConfig,
+        transportAirportByCity: { ...quickConfig.transportAirportByCity, [city]: price },
+      },
+    });
   };
 
   /* ── ménage : modes + paliers ── */
@@ -300,22 +273,7 @@ export default function OnboardingStepOrchestrationExpress({
       <section className="ob-card ob-x-section">
         <div className="ob-card-b">
           <p className="ob-x-title">📱 Quand proposer chaque service au voyageur ?</p>
-          <p className="ob-x-hint">
-            « Quelques jours avant » ={' '}
-            <span className="ob-x-inline-choices">
-              {BEFORE_DAY_CHOICES.map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  className={`ob-chip ob-x-day${beforeDays === d ? ' on' : ''}`}
-                  onClick={() => setBeforeDaysGlobal(d)}
-                >
-                  J-{d}
-                </button>
-              ))}
-            </span>{' '}
-            avant l&apos;arrivée.
-          </p>
+          <p className="ob-x-hint">J-7 / J-3 / Veille = jours avant l&apos;arrivée.</p>
           <div className="ob-x-rows">
             {EXPRESS_SERVICES.map((svc) => {
               const state = availabilityOf(svc);
@@ -326,7 +284,11 @@ export default function OnboardingStepOrchestrationExpress({
                   </span>
                   <span className="ob-x-seg">
                     {seg(state === 'resa', 'À la réservation', () => setAvailability(svc, 'resa'))}
-                    {seg(state === 'before', `J-${beforeDays}`, () => setAvailability(svc, 'before'))}
+                    {seg(state === 7, 'J-7', () => setAvailability(svc, 'before', 7))}
+                    {seg(state === 3, 'J-3', () => setAvailability(svc, 'before', 3))}
+                    {svc.jxKey === 'transport'
+                      ? seg(state === 1, 'Veille', () => setAvailability(svc, 'before', 1))
+                      : null}
                     {seg(state === 'off', 'Off', () => setAvailability(svc, 'off'))}
                   </span>
                 </div>
@@ -423,24 +385,40 @@ export default function OnboardingStepOrchestrationExpress({
       {caps.transport && (
         <section className="ob-card ob-x-section">
           <div className="ob-card-b">
-            <p className="ob-x-title">🚐 Navette aéroport — dans quelles villes ?</p>
-            <div className="ob-chips">
+            <p className="ob-x-title">🚐 Navette aéroport — dans quelles villes, à quel prix ?</p>
+            <div className="ob-x-rows">
               {[...new Set([...cities, ...transportCities])].map((city) => {
                 const on = quickConfig.transportAirportByCity[city] != null;
                 return (
-                  <button
-                    key={city}
-                    type="button"
-                    className={`ob-chip${on ? ' on' : ''}`}
-                    onClick={() => toggleTransportCity(city)}
-                  >
-                    {city}
-                    {on ? ` · ${quickConfig.transportAirportByCity[city]} MAD` : ''}
-                  </button>
+                  <div key={city} className={`ob-x-row${on ? '' : ' ob-x-row--off'}`}>
+                    <span className="ob-x-row-label">
+                      <button
+                        type="button"
+                        className={`ob-chip${on ? ' on' : ''}`}
+                        onClick={() => toggleTransportCity(city)}
+                      >
+                        {city}
+                      </button>
+                    </span>
+                    {on ? (
+                      <label className="ob-x-price">
+                        <input
+                          className="ob-field ob-field--dense"
+                          type="number"
+                          min={0}
+                          step={50}
+                          value={quickConfig.transportAirportByCity[city]}
+                          onChange={(e) => setTransportPrice(city, Number(e.target.value) || 0)}
+                        />
+                        MAD
+                      </label>
+                    ) : (
+                      <span className="ob-x-access-hint">non proposée</span>
+                    )}
+                  </div>
                 );
               })}
             </div>
-            <p className="ob-x-auto">Prix forfaitaires modifiables dans « Avancé ».</p>
           </div>
         </section>
       )}
@@ -449,22 +427,7 @@ export default function OnboardingStepOrchestrationExpress({
       <section className="ob-card ob-x-section">
         <div className="ob-card-b">
           <p className="ob-x-title">👷 Quand assigner votre staff ?</p>
-          <p className="ob-x-hint">
-            « À l&apos;avance » ={' '}
-            <span className="ob-x-inline-choices">
-              {ASSIGN_DAY_CHOICES.map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  className={`ob-chip ob-x-day${assignDays === d ? ' on' : ''}`}
-                  onClick={() => setAssignDaysGlobal(d)}
-                >
-                  J-{d}
-                </button>
-              ))}
-            </span>{' '}
-            avant la tâche.
-          </p>
+          <p className="ob-x-hint">J-7 / J-3 = jours avant la tâche.</p>
           <div className="ob-x-rows">
             {STAFF_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => {
               const state = assignStateOf(svc.taskType);
@@ -475,7 +438,8 @@ export default function OnboardingStepOrchestrationExpress({
                   </span>
                   <span className="ob-x-seg">
                     {seg(state === 'immediate', 'Immédiat', () => setAssign(svc.taskType, 'immediate'))}
-                    {seg(state === 'days', `J-${assignDays}`, () => setAssign(svc.taskType, 'days'))}
+                    {seg(state === 7, 'J-7', () => setAssign(svc.taskType, 'days', 7))}
+                    {seg(state === 3, 'J-3', () => setAssign(svc.taskType, 'days', 3))}
                     {seg(state === 'none', '—', () => setAssign(svc.taskType, 'none'))}
                   </span>
                 </div>
