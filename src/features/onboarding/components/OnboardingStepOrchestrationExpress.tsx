@@ -164,6 +164,17 @@ export default function OnboardingStepOrchestrationExpress({
     else patchService(taskType, { staffAssignStyle: 'days_before', staffAssignDaysBefore: days });
   };
 
+  /** Auto-accepté (assignation sans acceptation staff) — défaut : partenaires en Immédiat. */
+  const PARTNER_TYPES = ['transport', 'groceries', 'concierge'];
+  const autoAssignOf = (taskType: string): boolean => {
+    const row = rowByType.get(taskType);
+    if (!row) return false;
+    return row.staffAutoAssign ?? (row.staffAssignStyle === 'immediate' && PARTNER_TYPES.includes(taskType));
+  };
+  const toggleAutoAssign = (taskType: string) => {
+    patchService(taskType, { staffAutoAssign: !autoAssignOf(taskType) });
+  };
+
   /* ── relances client : jours multi-sélection + heure par service ── */
   const reminderDaysOf = (taskType: string): number[] =>
     rowByType.get(taskType)?.clientReminderDays ?? [];
@@ -421,20 +432,36 @@ export default function OnboardingStepOrchestrationExpress({
       <section className="ob-card ob-x-section">
         <div className="ob-card-b">
           <p className="ob-x-title">👷 Quand assigner votre staff ?</p>
-          <p className="ob-x-hint">J-7 / J-3 = jours avant la tâche.</p>
+          <p className="ob-x-hint">
+            J-7 / J-3 = jours avant la tâche. <strong>Auto</strong> = auto-accepté : la tâche est
+            assignée directement, sans acceptation du staff.
+          </p>
           <div className="ob-x-rows">
             {STAFF_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => {
               const state = assignStateOf(svc.taskType);
+              const auto = autoAssignOf(svc.taskType);
               return (
                 <div key={svc.taskType} className="ob-x-row">
                   <span className="ob-x-row-label">
                     {svc.emoji} {svc.label}
                   </span>
-                  <span className="ob-x-seg">
-                    {seg(state === 'immediate', 'Immédiat', () => setAssign(svc.taskType, 'immediate'))}
-                    {seg(state === 7, 'J-7', () => setAssign(svc.taskType, 'days', 7))}
-                    {seg(state === 3, 'J-3', () => setAssign(svc.taskType, 'days', 3))}
-                    {seg(state === 'none', '—', () => setAssign(svc.taskType, 'none'))}
+                  <span className="ob-x-inline-choices">
+                    <span className="ob-x-seg">
+                      {seg(state === 'immediate', 'Immédiat', () => setAssign(svc.taskType, 'immediate'))}
+                      {seg(state === 7, 'J-7', () => setAssign(svc.taskType, 'days', 7))}
+                      {seg(state === 3, 'J-3', () => setAssign(svc.taskType, 'days', 3))}
+                      {seg(state === 'none', '—', () => setAssign(svc.taskType, 'none'))}
+                    </span>
+                    {state !== 'none' && (
+                      <button
+                        type="button"
+                        className={`ob-chip ob-x-day${auto ? ' on' : ''}`}
+                        title="Auto-accepté : assigné sans acceptation staff"
+                        onClick={() => toggleAutoAssign(svc.taskType)}
+                      >
+                        Auto {auto ? '✓' : '✗'}
+                      </button>
+                    )}
                   </span>
                 </div>
               );
