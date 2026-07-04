@@ -67,7 +67,10 @@ const CLIENT_REMINDER_SERVICES: Array<{ taskType: string; emoji: string; label: 
   { taskType: 'cleaning_free', emoji: '🧹', label: 'Ménage inclus', capAny: ['cleaningFree'] },
 ];
 
-const REMINDER_DAY_CHOICES = [-3, -2, -1] as const;
+const REMINDER_DAY_CHOICES = [-3, -2, -1, 0] as const;
+
+/** Heures d'envoi proposées pour les relances client. */
+const REMINDER_HOUR_CHOICES = ['08:00', '09:00', '10:00', '11:00', '14:00', '16:00', '18:00'] as const;
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -161,9 +164,12 @@ export default function OnboardingStepOrchestrationExpress({
     else patchService(taskType, { staffAssignStyle: 'days_before', staffAssignDaysBefore: days });
   };
 
-  /* ── relances client : jours multi-sélection par service ── */
+  /* ── relances client : jours multi-sélection + heure par service ── */
   const reminderDaysOf = (taskType: string): number[] =>
     rowByType.get(taskType)?.clientReminderDays ?? [];
+
+  const reminderTimeOf = (taskType: string): string =>
+    rowByType.get(taskType)?.clientReminderTime ?? '10:00';
 
   const toggleReminderDay = (taskType: string, day: number) => {
     const current = reminderDaysOf(taskType);
@@ -445,8 +451,8 @@ export default function OnboardingStepOrchestrationExpress({
         <div className="ob-card-b">
           <p className="ob-x-title">💌 Relancer le voyageur s&apos;il n&apos;a pas répondu ?</p>
           <p className="ob-x-hint">
-            Choisissez les jours de relance par service — un seul ou plusieurs (J-3, J-2, J-1 avant
-            la date). Aucun jour = pas de relance.
+            Choisissez les jours de relance par service — un seul ou plusieurs (J0 = jour de la
+            tâche). Aucun jour = pas de relance. L&apos;heure = envoi des relances.
           </p>
           <div className="ob-x-rows">
             {CLIENT_REMINDER_SERVICES.filter((svc) => svc.capAny.some((c) => caps[c])).map((svc) => {
@@ -464,9 +470,27 @@ export default function OnboardingStepOrchestrationExpress({
                         className={`ob-chip ob-x-day${days.includes(day) ? ' on' : ''}`}
                         onClick={() => toggleReminderDay(svc.taskType, day)}
                       >
-                        J{day}
+                        {day === 0 ? 'J0' : `J${day}`}
                       </button>
                     ))}
+                    {days.length > 0 && (
+                      <select
+                        className="ob-field ob-field--dense ob-x-hour"
+                        value={reminderTimeOf(svc.taskType)}
+                        onChange={(e) => patchService(svc.taskType, { clientReminderTime: e.target.value })}
+                      >
+                        {[
+                          ...REMINDER_HOUR_CHOICES,
+                          ...(REMINDER_HOUR_CHOICES.includes(reminderTimeOf(svc.taskType) as (typeof REMINDER_HOUR_CHOICES)[number])
+                            ? []
+                            : [reminderTimeOf(svc.taskType)]),
+                        ].map((h) => (
+                          <option key={h} value={h}>
+                            {Number(h.slice(0, 2))}h
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </span>
                 </div>
               );

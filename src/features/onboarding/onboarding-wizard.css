@@ -3514,6 +3514,13 @@
   width: 80px;
 }
 
+.ob-x-hour {
+  width: auto;
+  min-width: 62px;
+  font-size: 11.5px;
+  padding: 2px 6px;
+}
+
 .ob-orch-city-prices {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
