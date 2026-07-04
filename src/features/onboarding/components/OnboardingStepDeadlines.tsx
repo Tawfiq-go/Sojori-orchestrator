@@ -10,7 +10,7 @@ import {
   type OnboardingServiceRhythmDef,
   type StaffAssignStyle,
 } from '../onboardingWorkflowDefaults';
-import { ADMIN_ESCALATION_HOURS } from '../wizardStaffDeadlines';
+import { ADMIN_ESCALATION_DAYS, ADMIN_ESCALATION_HOURS, formatAdminEscalationDayLabel } from '../wizardStaffDeadlines';
 
 const CLIENT_DAY_OPTIONS = [-4, -3, -2, -1] as const;
 
@@ -265,13 +265,25 @@ export default function OnboardingStepDeadlines({ deadlines, capabilities, onCha
         <div className="ob-card-b">
           <div className="ob-deadline-esc-hd">
             <div>
-              <div className="ob-deadline-esc-title">Heure escalade admin (J-1)</div>
+              <div className="ob-deadline-esc-title">Escalade admin</div>
               <div className="ob-deadline-esc-sub">
-                Appliquée aux services avec escalade activée
+                Jour et heure d&apos;alerte PM — appliqués aux services avec escalade activée
               </div>
             </div>
           </div>
           <div className="ob-deadline-hour-pick" style={{ marginTop: 8, paddingTop: 0, borderTop: 0 }}>
+            <div className="ob-deadline-hour-btns" style={{ marginBottom: 8 }}>
+              {ADMIN_ESCALATION_DAYS.map(({ day, label }) => (
+                <button
+                  key={day}
+                  type="button"
+                  className={`ob-deadline-hour-btn${(deadlines.adminEscalationDay ?? -1) === day ? ' on' : ''}`}
+                  onClick={() => onChange({ adminEscalationDay: day })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="ob-deadline-hour-btns">
               {ADMIN_ESCALATION_HOURS.map((h) => (
                 <button

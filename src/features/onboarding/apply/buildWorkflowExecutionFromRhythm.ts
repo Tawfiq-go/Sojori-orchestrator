@@ -52,9 +52,10 @@ export function buildStaffReminders(
 
 export function buildStaffAssignment(
   def: OnboardingServiceRhythmDef,
-  adminEscalationHour: WizardDeadlines['adminEscalationHour'],
+  deadlines: Pick<WizardDeadlines, 'adminEscalationHour' | 'adminEscalationDay'>,
 ): Record<string, unknown> | null {
-  const hour = `${String(adminEscalationHour || '11').padStart(2, '0')}:00`;
+  const hour = `${String(deadlines.adminEscalationHour || '11').padStart(2, '0')}:00`;
+  const escDay = deadlines.adminEscalationDay ?? -1;
   const base = {
     releaseWindows: ['11:00', '16:00'],
     acceptToleranceHours: def.acceptToleranceHours,
@@ -119,24 +120,28 @@ export function buildStaffAssignment(
     autoAssign,
     findAnotherStaff: !autoAssign,
     startAt: { ref, day: -days, time: startTime },
-    endAt: { ref, day: -1, time: hour },
+    endAt: { ref, day: escDay, time: hour },
   };
 }
 
 export function buildDeadline(
   def: OnboardingServiceRhythmDef,
-  adminEscalationHour?: string,
+  deadlines: Pick<WizardDeadlines, 'adminEscalationHour' | 'adminEscalationDay'>,
 ): Record<string, unknown> | null {
-  if (def.deadlineDay == null) return null;
+  if (!def.escalationEnabled && def.deadlineDay == null) return null;
   const ref = def.dateRef === 'task_created' ? 'task_created' : def.dateRef;
-  // L'heure d'escalade admin (Express « Alerter l'admin à Xh ») prime sur le défaut service.
-  const hour = adminEscalationHour
-    ? `${String(adminEscalationHour).padStart(2, '0')}:00`
-    : undefined;
+  const hour = `${String(deadlines.adminEscalationHour || '11').padStart(2, '0')}:00`;
+  if (def.escalationEnabled) {
+    return {
+      ref,
+      day: deadlines.adminEscalationDay ?? -1,
+      time: hour,
+    };
+  }
   return {
     ref,
-    day: def.deadlineDay,
-    time: hour ?? def.deadlineTime ?? '14:00',
+    day: def.deadlineDay!,
+    time: def.deadlineTime ?? '14:00',
   };
 }
 
@@ -149,8 +154,8 @@ export function buildCapabilityExecutionFromRhythmRow(
     escalationEnabled: row.escalationEnabled,
     reminders: buildClientReminders(row),
     staffReminders: buildStaffReminders(row),
-    staffAssignment: buildStaffAssignment(row, deadlines.adminEscalationHour),
-    deadline: buildDeadline(row, deadlines.adminEscalationHour),
+    staffAssignment: buildStaffAssignment(row, deadlines),
+    deadline: buildDeadline(row, deadlines),
   };
 }
 
@@ -165,7 +170,7 @@ export function buildFulltaskWorkflowPatchFromRhythmRow(
     escalationEnabled: row.escalationEnabled,
     reminders: buildClientReminders(row),
     staffReminders: buildStaffReminders(row),
-    staffAssignment: buildStaffAssignment(row, deadlines.adminEscalationHour),
-    deadline: buildDeadline(row, deadlines.adminEscalationHour),
+    staffAssignment: buildStaffAssignment(row, deadlines),
+    deadline: buildDeadline(row, deadlines),
   };
 }
