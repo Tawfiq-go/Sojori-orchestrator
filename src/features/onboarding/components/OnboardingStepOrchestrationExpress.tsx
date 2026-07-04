@@ -150,13 +150,16 @@ export default function OnboardingStepOrchestrationExpress({
     onChangeDeadlines({ perService: merged });
   };
 
-  /** 'immediate' | jour J-X | 'none' */
+  /** 'immediate' | jour J-X (0 = jour J) | 'none' */
   const assignStateOf = (taskType: string): 'immediate' | 'none' | number => {
     const row = rowByType.get(taskType);
     if (!row || row.staffAssignStyle === 'none') return 'none';
     if (row.staffAssignStyle === 'immediate') return 'immediate';
-    return row.staffAssignDaysBefore || 3;
+    return Number.isFinite(row.staffAssignDaysBefore) ? row.staffAssignDaysBefore : 3;
   };
+
+  const assignTimeOf = (taskType: string): string =>
+    rowByType.get(taskType)?.staffAssignTime ?? '09:00';
 
   const setAssign = (taskType: string, state: 'immediate' | 'days' | 'none', days = 3) => {
     if (state === 'none') patchService(taskType, { staffAssignStyle: 'none', staffAssignDaysBefore: 0 });
@@ -433,7 +436,8 @@ export default function OnboardingStepOrchestrationExpress({
         <div className="ob-card-b">
           <p className="ob-x-title">👷 Quand assigner votre staff ?</p>
           <p className="ob-x-hint">
-            J-7 / J-3 = jours avant la tâche. <strong>Auto</strong> = auto-accepté : la tâche est
+            J-7 / J-3 / J-1 = jours avant la tâche, J0 = le jour même. L&apos;heure = première
+            tentative d&apos;assignation. <strong>Auto</strong> = auto-accepté : la tâche est
             assignée directement, sans acceptation du staff.
           </p>
           <div className="ob-x-rows">
@@ -450,8 +454,28 @@ export default function OnboardingStepOrchestrationExpress({
                       {seg(state === 'immediate', 'Immédiat', () => setAssign(svc.taskType, 'immediate'))}
                       {seg(state === 7, 'J-7', () => setAssign(svc.taskType, 'days', 7))}
                       {seg(state === 3, 'J-3', () => setAssign(svc.taskType, 'days', 3))}
+                      {seg(state === 1, 'J-1', () => setAssign(svc.taskType, 'days', 1))}
+                      {seg(state === 0, 'J0', () => setAssign(svc.taskType, 'days', 0))}
                       {seg(state === 'none', '—', () => setAssign(svc.taskType, 'none'))}
                     </span>
+                    {typeof state === 'number' && (
+                      <select
+                        className="ob-field ob-field--dense ob-x-hour"
+                        value={assignTimeOf(svc.taskType)}
+                        onChange={(e) => patchService(svc.taskType, { staffAssignTime: e.target.value })}
+                      >
+                        {[
+                          ...REMINDER_HOUR_CHOICES,
+                          ...(REMINDER_HOUR_CHOICES.includes(assignTimeOf(svc.taskType) as (typeof REMINDER_HOUR_CHOICES)[number])
+                            ? []
+                            : [assignTimeOf(svc.taskType)]),
+                        ].map((h) => (
+                          <option key={h} value={h}>
+                            {Number(h.slice(0, 2))}h
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     {state !== 'none' && (
                       <button
                         type="button"

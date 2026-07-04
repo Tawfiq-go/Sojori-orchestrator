@@ -169,6 +169,8 @@ export type WizardServiceDeadlineOverride = {
   clientReminderTime?: string;
   staffAssignStyle?: 'immediate' | 'days_before' | 'with_client' | 'none';
   staffAssignDaysBefore?: number;
+  /** Heure de la première tentative d'assignation (HH:mm) */
+  staffAssignTime?: string;
   /** Auto-accepté : tâche assignée sans acceptation staff (défaut : partenaires en immédiat) */
   staffAutoAssign?: boolean;
   staffReminderDays?: number[];

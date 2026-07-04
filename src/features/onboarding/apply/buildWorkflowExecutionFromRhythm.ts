@@ -89,6 +89,7 @@ export function buildStaffAssignment(
   const ref = def.dateRef === 'task_created' ? 'scheduledDate' : def.dateRef;
   const days = def.staffAssignDaysBefore;
   const autoAssign = def.staffAutoAssign ?? false;
+  const startTime = def.staffAssignTime ?? '09:00';
 
   // days < 0 = fenêtre à cheval sur la référence (checkout_cleaning : le ménage a lieu
   // après le check-out). Fin J+4 alignée sur le seed srv-fulltask (defaultSeeds.ts).
@@ -97,8 +98,19 @@ export function buildStaffAssignment(
       ...base,
       autoAssign,
       findAnotherStaff: !autoAssign,
-      startAt: { ref, day: days, time: '09:00' },
+      startAt: { ref, day: days, time: startTime },
       endAt: { ref, day: 4, time: '09:00' },
+    };
+  }
+
+  // J0 = assignation le jour même de la tâche.
+  if (days === 0) {
+    return {
+      ...base,
+      autoAssign,
+      findAnotherStaff: !autoAssign,
+      startAt: { ref, day: 0, time: startTime },
+      endAt: { ref, day: 0, time: '18:00' },
     };
   }
 
@@ -106,7 +118,7 @@ export function buildStaffAssignment(
     ...base,
     autoAssign,
     findAnotherStaff: !autoAssign,
-    startAt: { ref, day: -Math.max(1, days), time: '09:00' },
+    startAt: { ref, day: -days, time: startTime },
     endAt: { ref, day: -1, time: hour },
   };
 }

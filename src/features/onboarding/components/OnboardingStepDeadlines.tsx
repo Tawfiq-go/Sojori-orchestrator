@@ -20,7 +20,7 @@ const STAFF_ASSIGN_OPTIONS: Array<{ id: StaffAssignStyle; label: string }> = [
   { id: 'days_before', label: 'J-X avant la tâche' },
 ];
 
-const DAYS_BEFORE_OPTIONS = [1, 2, 3, 4, 7] as const;
+const DAYS_BEFORE_OPTIONS = [0, 1, 2, 3, 4, 7] as const;
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -74,7 +74,12 @@ function ServiceRowEditor({
     onChange(
       patchServiceRow(deadlines, row.taskType, {
         staffAssignStyle: style,
-        staffAssignDaysBefore: style === 'days_before' ? row.staffAssignDaysBefore || 3 : 0,
+        staffAssignDaysBefore:
+          style === 'days_before'
+            ? Number.isFinite(row.staffAssignDaysBefore)
+              ? row.staffAssignDaysBefore
+              : 3
+            : 0,
       }),
     );
   };
@@ -146,7 +151,7 @@ function ServiceRowEditor({
             ) : null}
             {DAYS_BEFORE_OPTIONS.map((n) => (
               <option key={n} value={n}>
-                J-{n}
+                {n === 0 ? 'J0 (jour J)' : `J-${n}`}
               </option>
             ))}
           </select>
