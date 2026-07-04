@@ -2,7 +2,7 @@ import * as fulltaskApi from '../../../services/fulltaskApi';
 import { unwrapFulltaskData } from '../../../utils/unwrapFulltaskResponse';
 import { replaceOwnerOrchestrationCapabilities } from '../../orchestrationListingV3/ownerOrchestrationReplace';
 import type { WizardDraft, WizardPanel7 } from '../types';
-import { applyWizardDeadlines } from './applyWizardDeadlines';
+import { applyWizardDeadlines, applyWizardScheduledMessages } from './applyWizardDeadlines';
 import { replaceOwnerExecutionsFromWizard } from './replaceOwnerExecutionsFromWizard';
 import { syncOwnerExecutionFromFulltask } from './syncOwnerExecutionFromFulltask';
 import { buildOwnerOrchestrationCapabilitiesFromWizard } from './buildOwnerOrchestrationFromWizard';
@@ -184,6 +184,13 @@ export async function applyOnboardingOrchestration(
       );
       if (deadlinesPatched === 0) {
         warnings.push('Délais staff : aucun workflow mis à jour (seed fulltask manquant ?)');
+      }
+
+      const scheduledPatched = await applyWithTimeout('Messages planifiés', 45_000, () =>
+        applyWizardScheduledMessages(ownerId, draft.panels['3']?.scheduledMessages),
+      );
+      if (scheduledPatched > 0) {
+        finalAuditLines = [...finalAuditLines, `Messages planifiés ajustés : ${scheduledPatched}`];
       }
 
       const executionReplaced = await applyWithTimeout('Execution owner depuis wizard', 45_000, () =>
