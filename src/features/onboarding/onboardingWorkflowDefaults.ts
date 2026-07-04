@@ -15,6 +15,8 @@ export interface OnboardingServiceRhythmDef {
   clientReminderMessageId?: string;
   staffAssignStyle: StaffAssignStyle;
   staffAssignDaysBefore: number;
+  /** Auto-accepté (assigné sans acceptation staff) — undefined = défaut par style/partenaire */
+  staffAutoAssign?: boolean;
   staffReminderDays: number[];
   staffReminderTime: string;
   acceptToleranceHours: number;

@@ -66,19 +66,21 @@ export function buildStaffAssignment(
   const isPartner = PARTNER_TASK_TYPES.has(def.taskType);
 
   if (def.staffAssignStyle === 'immediate') {
+    const autoAssign = def.staffAutoAssign ?? isPartner;
     return {
       ...base,
-      autoAssign: isPartner,
-      findAnotherStaff: !isPartner,
+      autoAssign,
+      findAnotherStaff: !autoAssign,
       startAt: { ref: 'task_created' },
     };
   }
 
   if (def.staffAssignStyle === 'with_client') {
+    const autoAssign = def.staffAutoAssign ?? false;
     return {
       ...base,
-      autoAssign: false,
-      findAnotherStaff: true,
+      autoAssign,
+      findAnotherStaff: !autoAssign,
       startAt: { ref: 'client_timeslot_confirmed' },
       endAt: { ref: 'task_execution', hours: -2 },
     };
@@ -86,14 +88,15 @@ export function buildStaffAssignment(
 
   const ref = def.dateRef === 'task_created' ? 'scheduledDate' : def.dateRef;
   const days = def.staffAssignDaysBefore;
+  const autoAssign = def.staffAutoAssign ?? false;
 
   // days < 0 = fenêtre à cheval sur la référence (checkout_cleaning : le ménage a lieu
   // après le check-out). Fin J+4 alignée sur le seed srv-fulltask (defaultSeeds.ts).
   if (days < 0) {
     return {
       ...base,
-      autoAssign: false,
-      findAnotherStaff: true,
+      autoAssign,
+      findAnotherStaff: !autoAssign,
       startAt: { ref, day: days, time: '09:00' },
       endAt: { ref, day: 4, time: '09:00' },
     };
@@ -101,8 +104,8 @@ export function buildStaffAssignment(
 
   return {
     ...base,
-    autoAssign: false,
-    findAnotherStaff: true,
+    autoAssign,
+    findAnotherStaff: !autoAssign,
     startAt: { ref, day: -Math.max(1, days), time: '09:00' },
     endAt: { ref, day: -1, time: hour },
   };
