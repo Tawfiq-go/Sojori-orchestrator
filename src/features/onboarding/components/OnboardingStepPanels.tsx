@@ -12,6 +12,7 @@ import OnboardingStepOrchestrationExpress from './OnboardingStepOrchestrationExp
 import OnboardingStepDeadlines from './OnboardingStepDeadlines';
 import { staffDisplayName } from '../staffNormalize';
 import { staffApplyAccountCounts } from '../staffRecap';
+import { listingsService } from '../../../services/listingsService';
 import { buildOrchestrationRecapFromDraft } from '../apply/orchestrationRecapFromDraft';
 
 interface StepPanelsProps {
@@ -24,6 +25,26 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
   const panel = draft.currentPanel;
   const [orchView, setOrchView] = useState<'express' | 'parcours' | 'delais'>('express');
   const [teamView, setTeamView] = useState<'express' | 'avance'>('express');
+  // Référentiel villes Sojori (fallback : liste statique si API indisponible)
+  const [allCities, setAllCities] = useState<string[]>([...CITY_OPTIONS]);
+  const [citySearch, setCitySearch] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    void listingsService
+      .getCities({ allCities: true, limit: 2000 })
+      .then((rows) => {
+        if (cancelled) return;
+        const names = [...new Set(rows.map((c) => c.name).filter(Boolean))];
+        if (names.length) setAllCities(names);
+      })
+      .catch(() => {
+        /* fallback statique */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const p0 = draft.panels['0']!;
   const p1 = draft.panels['1']!;
@@ -52,8 +73,22 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
         <div className="ob-card">
           <div className="ob-card-b">
             <p style={{ fontWeight: 700, margin: '0 0 8px' }}>Dans quelles villes ?</p>
+            <input
+              className="ob-field ob-field--dense"
+              style={{ marginBottom: 8, maxWidth: 260 }}
+              placeholder="Rechercher une ville…"
+              value={citySearch}
+              onChange={(e) => setCitySearch(e.target.value)}
+            />
             <div className="ob-chips">
-              {CITY_OPTIONS.map((city) => {
+              {[...new Set([
+                ...p0.cities,
+                ...(citySearch.trim()
+                  ? allCities
+                      .filter((c) => c.toLowerCase().includes(citySearch.trim().toLowerCase()))
+                      .slice(0, 15)
+                  : allCities.filter((c) => (CITY_OPTIONS as readonly string[]).includes(c))),
+              ])].map((city) => {
                 const on = p0.cities.includes(city);
                 return (
                   <button
@@ -87,7 +122,7 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
   if (panel === 1) {
     const ownerCities = draft.panels['0']?.cities?.length
       ? draft.panels['0']!.cities
-      : CITY_OPTIONS;
+      : allCities;
 
     return (
       <div className="ob-sh">
@@ -132,7 +167,7 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
   }
 
   if (panel === 3 || panel === 6) {
-    const ownerCities = p0.cities?.length ? p0.cities : CITY_OPTIONS;
+    const ownerCities = p0.cities?.length ? p0.cities : allCities;
     const panel3WithJx = { ...p3, jx: p3.jx ?? draft.panels['4']?.jx ?? defaultJx() };
     const handlePanel3Change = (patch: Partial<typeof p3>) => {
       const caps = patch.capabilities ?? p3.capabilities;
