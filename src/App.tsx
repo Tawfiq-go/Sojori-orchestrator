@@ -1,4 +1,5 @@
-import { Suspense, lazy } from 'react';
+import { Suspense } from 'react';
+import { lazyWithReload } from './utils/lazyWithReload';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
@@ -23,227 +24,227 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import ForbiddenPage from './pages/ForbiddenPage';
 
-const ReservationsPage = lazy(() =>
+const ReservationsPage = lazyWithReload(() =>
   import('./pages/ReservationsPage').then((module) => ({ default: module.ReservationsPage }))
 );
-const ReservationSejourPage = lazy(() =>
+const ReservationSejourPage = lazyWithReload(() =>
   import('./pages/ReservationSejourPage').then((module) => ({ default: module.ReservationSejourPage }))
 );
-const ReservationsPlanningPage = lazy(() =>
+const ReservationsPlanningPage = lazyWithReload(() =>
   import('./pages/ReservationsPlanningPage').then((module) => ({ default: module.ReservationsPlanningPage }))
 );
-const PaymentsPage = lazy(() =>
+const PaymentsPage = lazyWithReload(() =>
   import('./pages/PaymentsPage').then((module) => ({ default: module.PaymentsPage }))
 );
-const CalendarInventoryPage = lazy(() =>
+const CalendarInventoryPage = lazyWithReload(() =>
   import('./pages/CalendarInventoryPageV2').then((module) => ({ default: module.CalendarInventoryPageV2 }))
 );
-const CalendarInventoryPageV3 = lazy(() =>
+const CalendarInventoryPageV3 = lazyWithReload(() =>
   import('./pages/CalendarInventoryPageV3').then((module) => ({ default: module.CalendarInventoryPageV3 }))
 );
-const TasksListPage = lazy(() =>
+const TasksListPage = lazyWithReload(() =>
   import('./pages/TasksListPage').then((module) => ({ default: module.TasksListPage }))
 );
-const OrchestrationPage = lazy(() =>
+const OrchestrationPage = lazyWithReload(() =>
   import('./pages/OrchestrationPage').then((module) => ({ default: module.OrchestrationPage }))
 );
-const OrchestrationEventsPage = lazy(() =>
+const OrchestrationEventsPage = lazyWithReload(() =>
   import('./pages/OrchestrationEventsPage').then((module) => ({ default: module.OrchestrationEventsPage }))
 );
-const OrchestrationConfigPage = lazy(() =>
+const OrchestrationConfigPage = lazyWithReload(() =>
   import('./pages/OrchestrationConfigPage').then((module) => ({ default: module.OrchestrationConfigPage }))
 );
-const OrchestrationDailyOpsPage = lazy(() =>
+const OrchestrationDailyOpsPage = lazyWithReload(() =>
   import('./pages/OrchestrationDailyOpsPage').then((module) => ({ default: module.default }))
 );
-const OrchestrationPlansPageV2 = lazy(() =>
+const OrchestrationPlansPageV2 = lazyWithReload(() =>
   import("./pages/OrchestrationPlansPageV2").then((module) => ({ default: module.default }))
 );
-const OrchestrationTimelinePageV2 = lazy(() =>
+const OrchestrationTimelinePageV2 = lazyWithReload(() =>
   import("./pages/OrchestrationTimelinePageV2").then((module) => ({ default: module.OrchestrationTimelinePageV2 }))
 );
-const CommsPage = lazy(() =>
+const CommsPage = lazyWithReload(() =>
   import('./pages/CommsPage').then((module) => ({ default: module.CommsPage }))
 );
-const ListingsPage = lazy(() =>
+const ListingsPage = lazyWithReload(() =>
   import('./pages/ListingsOverviewPage').then((module) => ({ default: module.ListingsOverviewPage }))
 );
-const ListingsMappingHubPage = lazy(() =>
+const ListingsMappingHubPage = lazyWithReload(() =>
   import('./pages/ListingsMappingHubPage').then((module) => ({
     default: module.ListingsMappingHubPage,
   }))
 );
-const AdminGlobalMappingHubPage = lazy(() =>
+const AdminGlobalMappingHubPage = lazyWithReload(() =>
   import('./pages/AdminGlobalMappingHubPage').then((module) => ({
     default: module.AdminGlobalMappingHubPage,
   }))
 );
-const ListingDetailPage = lazy(() =>
+const ListingDetailPage = lazyWithReload(() =>
   import('./pages/ListingDetailPage').then((module) => ({ default: module.ListingDetailPage }))
 );
-const NewListingFormPage = lazy(() =>
+const NewListingFormPage = lazyWithReload(() =>
   import('./pages/NewListingFormPage').then((module) => ({ default: module.NewListingFormPage }))
 );
-const ListingFormV2Page = lazy(() =>
+const ListingFormV2Page = lazyWithReload(() =>
   import('./pages/ListingFormV2Page').then((module) => ({ default: module.ListingFormV2Page }))
 );
-const ListingCreatePage = lazy(() =>
+const ListingCreatePage = lazyWithReload(() =>
   import('./pages/ListingCreatePage').then((module) => ({ default: module.ListingCreatePage }))
 );
-const ReviewsPage = lazy(() =>
+const ReviewsPage = lazyWithReload(() =>
   import('./pages/ReviewsPage').then((module) => ({ default: module.ReviewsPage }))
 );
-const TasksTeamPage = lazy(() =>
+const TasksTeamPage = lazyWithReload(() =>
   import('./pages/TasksTeamPage').then((module) => ({ default: module.TasksTeamPage }))
 );
-const TasksPlanningPage = lazy(() =>
+const TasksPlanningPage = lazyWithReload(() =>
   import('./pages/TasksPlanningPage').then((module) => ({ default: module.TasksPlanningPage }))
 );
-const TasksPlanningPageV2 = lazy(() =>
+const TasksPlanningPageV2 = lazyWithReload(() =>
   import('./pages/TasksPlanningPageV2').then((module) => ({ default: module.default }))
 );
-const TasksTeamPageV2 = lazy(() =>
+const TasksTeamPageV2 = lazyWithReload(() =>
   import('./pages/TasksTeamPageV2').then((module) => ({ default: module.default }))
 );
-const TasksKanbanPage = lazy(() =>
+const TasksKanbanPage = lazyWithReload(() =>
   import('./pages/TasksKanbanPage').then((module) => ({ default: module.default }))
 );
-const TasksStaffFulltaskPage = lazy(() =>
+const TasksStaffFulltaskPage = lazyWithReload(() =>
   import('./pages/TasksStaffFulltaskPage').then((module) => ({ default: module.default }))
 );
-const TasksOrchestrationFulltaskPage = lazy(() =>
+const TasksOrchestrationFulltaskPage = lazyWithReload(() =>
   import('./pages/TasksOrchestrationFulltaskPage').then((module) => ({ default: module.default }))
 );
-const OwnerOrchestrationModelPage = lazy(() =>
+const OwnerOrchestrationModelPage = lazyWithReload(() =>
   import('./pages/OwnerOrchestrationModelPage').then((module) => ({
     default: module.default,
   }))
 );
-const TasksWhatsAppMessagesPage = lazy(() =>
+const TasksWhatsAppMessagesPage = lazyWithReload(() =>
   import('./pages/TasksWhatsAppMessagesPage').then((module) => ({ default: module.default }))
 );
-const ChatbotWhitelistPage = lazy(() =>
+const ChatbotWhitelistPage = lazyWithReload(() =>
   import('./pages/ChatbotWhitelistPage').then((module) => ({ default: module.default }))
 );
-const ChatbotWhitelistDetailPage = lazy(() =>
+const ChatbotWhitelistDetailPage = lazyWithReload(() =>
   import('./pages/ChatbotWhitelistDetailPage').then((module) => ({ default: module.default }))
 );
-const ChatbotListingSnapshotPage = lazy(() =>
+const ChatbotListingSnapshotPage = lazyWithReload(() =>
   import('./pages/ChatbotListingSnapshotPage').then((module) => ({ default: module.default }))
 );
-const PlansReservationPage = lazy(() =>
+const PlansReservationPage = lazyWithReload(() =>
   import('./pages/PlansReservationPage').then((module) => ({ default: module.default }))
 );
-const StaffWhatsAppPage = lazy(() =>
+const StaffWhatsAppPage = lazyWithReload(() =>
   import('./pages/StaffWhatsAppPage').then((module) => ({ default: module.StaffWhatsAppPage }))
 );
-const OTAMessagesPage = lazy(() =>
+const OTAMessagesPage = lazyWithReload(() =>
   import('./pages/OTAMessagesPage').then((module) => ({ default: module.OTAMessagesPage }))
 );
-const PricingPage = lazy(() =>
+const PricingPage = lazyWithReload(() =>
   import('./pages/PricingSnapshotPage').then((module) => ({ default: module.PricingSnapshotPage }))
 );
-const DynamicPricingPage = lazy(() =>
+const DynamicPricingPage = lazyWithReload(() =>
   import('./pages/DynamicPricingPage').then((module) => ({ default: module.DynamicPricingPage }))
 );
-const PricingAuditPage = lazy(() =>
+const PricingAuditPage = lazyWithReload(() =>
   import('./features/dynamic-pricing/PricingAuditView').then((module) => ({
     default: module.PricingAuditView,
   }))
 );
-const ChannelsPage = lazy(() =>
+const ChannelsPage = lazyWithReload(() =>
   import('./pages/ChannelsPage').then((module) => ({ default: module.ChannelsPage }))
 );
-const ClientsPage = lazy(() =>
+const ClientsPage = lazyWithReload(() =>
   import('./pages/ClientsPage').then((module) => ({ default: module.ClientsPage }))
 );
-const BookingClientsPage = lazy(() =>
+const BookingClientsPage = lazyWithReload(() =>
   import('./pages/BookingClientsPage').then((module) => ({ default: module.BookingClientsPage }))
 );
-const WhatsAppContactsPage = lazy(() =>
+const WhatsAppContactsPage = lazyWithReload(() =>
   import('./pages/WhatsAppContactsPage').then((module) => ({ default: module.WhatsAppContactsPage }))
 );
-const WhatsAppGuestsPage = lazy(() =>
+const WhatsAppGuestsPage = lazyWithReload(() =>
   import('./pages/WhatsAppGuestsPageV2').then((module) => ({ default: module.default }))
 );
-const WhatsAppStaffPage = lazy(() =>
+const WhatsAppStaffPage = lazyWithReload(() =>
   import('./pages/WhatsAppStaffPageV2').then((module) => ({ default: module.default }))
 );
-const UnifiedInboxPage = lazy(() =>
+const UnifiedInboxPage = lazyWithReload(() =>
   import('./pages/UnifiedInboxPage').then((module) => ({ default: module.default }))
 );
-const CommunicationsHubPage = lazy(() =>
+const CommunicationsHubPage = lazyWithReload(() =>
   import('./pages/CommunicationsHubPage').then((module) => ({ default: module.default }))
 );
-const CRMPage = lazy(() =>
+const CRMPage = lazyWithReload(() =>
   import('./pages/CRMPage').then((module) => ({ default: module.CRMPage }))
 );
-const ChannelsAdminPage = lazy(() =>
+const ChannelsAdminPage = lazyWithReload(() =>
   import('./pages/ChannelsAdminPage').then((module) => ({ default: module.ChannelsAdminPage }))
 );
-const ChannelsLegacyRedirect = lazy(() =>
+const ChannelsLegacyRedirect = lazyWithReload(() =>
   import('./pages/ChannelsAdminPage').then((module) => ({ default: module.ChannelsLegacyRedirect }))
 );
-const ChannelManagerHubPage = lazy(() =>
+const ChannelManagerHubPage = lazyWithReload(() =>
   import('./pages/ChannelManagerHubPage').then((module) => ({
     default: module.ChannelManagerHubPage,
   }))
 );
-const TeamRolesHubPage = lazy(() =>
+const TeamRolesHubPage = lazyWithReload(() =>
   import('./pages/TeamRolesHubPage').then((module) => ({ default: module.TeamRolesHubPage }))
 );
-const TeamLegacyRedirect = lazy(() =>
+const TeamLegacyRedirect = lazyWithReload(() =>
   import('./pages/TeamRolesHubPage').then((module) => ({ default: module.TeamLegacyRedirect }))
 );
-const WorkerCreatePage = lazy(() =>
+const WorkerCreatePage = lazyWithReload(() =>
   import('./pages/WorkerAdminPages').then((module) => ({ default: module.WorkerCreatePage }))
 );
-const WorkerCreateOwnerPage = lazy(() =>
+const WorkerCreateOwnerPage = lazyWithReload(() =>
   import('./pages/WorkerAdminPages').then((module) => ({ default: module.WorkerCreateOwnerPage }))
 );
-const WorkerEditPage = lazy(() =>
+const WorkerEditPage = lazyWithReload(() =>
   import('./pages/WorkerAdminPages').then((module) => ({ default: module.WorkerEditPage }))
 );
-const SettingsHubPage = lazy(() =>
+const SettingsHubPage = lazyWithReload(() =>
   import('./pages/SettingsHubPage').then((module) => ({ default: module.SettingsHubPage }))
 );
-const SettingsLegacyRedirect = lazy(() =>
+const SettingsLegacyRedirect = lazyWithReload(() =>
   import('./pages/SettingsHubPage').then((module) => ({ default: module.SettingsLegacyRedirect }))
 );
-const OnboardingPage = lazy(() =>
+const OnboardingPage = lazyWithReload(() =>
   import('./pages/PmOnboardingPage').then((module) => ({ default: module.PmOnboardingPage }))
 );
-const OnboardingSuitePage = lazy(() =>
+const OnboardingSuitePage = lazyWithReload(() =>
   import('./features/onboarding/OnboardingSuitePage').then((module) => ({ default: module.OnboardingSuitePage }))
 );
-const MonitoringHubPage = lazy(() =>
+const MonitoringHubPage = lazyWithReload(() =>
   import('./pages/Monitor/MonitoringHubPage').then((module) => ({ default: module.default }))
 );
-const PmLifecycleHubPage = lazy(() =>
+const PmLifecycleHubPage = lazyWithReload(() =>
   import('./pages/PmLifecycleHubPage').then((module) => ({ default: module.PmLifecycleHubPage }))
 );
-const PmLifecycleDetailPage = lazy(() =>
+const PmLifecycleDetailPage = lazyWithReload(() =>
   import('./pages/PmLifecycleDetailPage').then((module) => ({ default: module.PmLifecycleDetailPage }))
 );
-const SojoriLogsAdminPage = lazy(() =>
+const SojoriLogsAdminPage = lazyWithReload(() =>
   import('./pages/SojoriLogsAdminPage').then((module) => ({ default: module.default }))
 );
-const FinancesLandlordsPage = lazy(() =>
+const FinancesLandlordsPage = lazyWithReload(() =>
   import('./features/finances/pages/FinancesLandlordsPage').then((module) => ({ default: module.default }))
 );
-const FinancesLedgerPage = lazy(() =>
+const FinancesLedgerPage = lazyWithReload(() =>
   import('./features/finances/pages/FinancesLedgerPage').then((module) => ({ default: module.default }))
 );
-const FinancesReportsPage = lazy(() =>
+const FinancesReportsPage = lazyWithReload(() =>
   import('./features/finances/pages/FinancesReportsPage').then((module) => ({ default: module.default }))
 );
-const FinancesReportDetailPage = lazy(() =>
+const FinancesReportDetailPage = lazyWithReload(() =>
   import('./features/finances/pages/FinancesReportDetailPage').then((module) => ({ default: module.default }))
 );
-const LandlordCreatePage = lazy(() =>
+const LandlordCreatePage = lazyWithReload(() =>
   import('./pages/LandlordAdminPages').then((module) => ({ default: module.LandlordCreatePage }))
 );
-const LandlordEditPage = lazy(() =>
+const LandlordEditPage = lazyWithReload(() =>
   import('./pages/LandlordAdminPages').then((module) => ({ default: module.LandlordEditPage }))
 );
 

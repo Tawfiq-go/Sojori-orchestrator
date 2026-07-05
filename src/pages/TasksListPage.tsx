@@ -3,7 +3,8 @@
 // Route: /tasks — toolbar, pills échéances, KPI compacts, tableau premium.
 // ════════════════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useMemo, useState, lazy, Suspense, memo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, Suspense, memo, type ReactNode } from 'react';
+import { lazyWithReload } from '../utils/lazyWithReload';
 import { createPortal } from 'react-dom';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -56,9 +57,9 @@ import {
 
 moment.locale('fr');
 // ⚡ PERFORMANCE: Lazy load des modals/drawers lourds (chargés uniquement quand ouverts)
-const AddTaskModal = lazy(() => import('../components/tasks/AddTaskModal').then(m => ({ default: m.AddTaskModal })));
-const AssignStaffDialog = lazy(() => import('../features/tasksNew/components/AssignStaffDialog.jsx'));
-const TaskDetailDrawer = lazy(() => import('../features/tasksNew/components/TaskDetailDrawer'));
+const AddTaskModal = lazyWithReload(() => import('../components/tasks/AddTaskModal').then(m => ({ default: m.AddTaskModal })));
+const AssignStaffDialog = lazyWithReload(() => import('../features/tasksNew/components/AssignStaffDialog.jsx'));
+const TaskDetailDrawer = lazyWithReload(() => import('../features/tasksNew/components/TaskDetailDrawer'));
 import { TaskPlannedCell } from '../components/tasks/TaskPlannedCell';
 import type { RegistrationFieldPatch } from '../components/reservations/ReservationRegistrationActions';
 import type { StayFieldPatch } from '../components/reservations/ReservationStayActions';
