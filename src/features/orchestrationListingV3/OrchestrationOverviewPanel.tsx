@@ -124,10 +124,10 @@ function SegChip({ on, label, onClick }: { on: boolean; label: string; onClick: 
         height: 24,
         fontSize: 11.5,
         fontWeight: on ? 800 : 500,
-        bgcolor: on ? V3.t1 : 'transparent',
+        bgcolor: on ? V3.p : 'transparent',
         color: on ? '#fff' : V3.t2,
-        border: `1px solid ${on ? V3.t1 : V3.border}`,
-        '&:hover': { bgcolor: on ? V3.t1 : V3.bg2 },
+        border: `1px solid ${on ? V3.p : V3.bs}`,
+        '&:hover': { bgcolor: on ? V3.pd : V3.pt },
       }}
     />
   );
@@ -512,7 +512,7 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
         <Box sx={{ p: 1.5, maxWidth: 380 }}>
-          <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t1, mb: 1 }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t, mb: 1 }}>
             {def.emoji} {def.label}
           </Typography>
           {body}
@@ -576,7 +576,7 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
     cursor: 'pointer',
     borderRadius: 1,
     px: 0.5,
-    '&:hover': { bgcolor: V3.bg2, outline: `1px solid ${V3.border}` },
+    '&:hover': { bgcolor: V3.alt, outline: `1px solid ${V3.b}` },
   } as const;
   const head = { fontSize: 11, fontWeight: 800, color: V3.t3, textTransform: 'uppercase' as const, letterSpacing: '0.04em' };
 
@@ -590,8 +590,8 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
         modèle owner. Détail complet dans « Services &amp; workflows ».
       </Alert>
 
-      <Box sx={{ border: `1px solid ${V3.border}`, borderRadius: 2, p: 2, bgcolor: V3.bg1, overflowX: 'auto' }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 800, color: V3.t1, mb: 1 }}>
+      <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card, overflowX: 'auto' }}>
+        <Typography sx={{ fontSize: 14, fontWeight: 800, color: V3.t, mb: 1 }}>
           📱 Services — quand ils sont proposés et comment l&apos;équipe exécute
         </Typography>
         <Box
@@ -611,7 +611,7 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
           <Typography sx={head}>Escalade</Typography>
           {rows.map((r) => (
             <Box key={r.key} sx={{ display: 'contents' }}>
-              <Typography sx={{ ...cell, fontWeight: 700, color: r.on ? V3.t1 : V3.t4 }}>
+              <Typography sx={{ ...cell, fontWeight: 700, color: r.on ? V3.t : V3.t4 }}>
                 {r.emoji} {r.label}
                 {!r.on && <Chip label="Off" size="small" sx={{ ml: 0.75, height: 16, fontSize: 10 }} />}
               </Typography>
@@ -640,8 +640,8 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
         </Box>
       </Box>
 
-      <Box sx={{ border: `1px solid ${V3.border}`, borderRadius: 2, p: 2, bgcolor: V3.bg1 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 800, color: V3.t1, mb: 1 }}>
+      <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card }}>
+        <Typography sx={{ fontSize: 14, fontWeight: 800, color: V3.t, mb: 1 }}>
           💬 Messages automatiques du séjour
         </Typography>
         {messages.length === 0 ? (
