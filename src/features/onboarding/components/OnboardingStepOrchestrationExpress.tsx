@@ -28,12 +28,16 @@ type ExpressService = {
   /** libellé J-X « dès la réservation » propre au groupe d'options */
   resaLabel: string;
   beforeLabel: (d: number) => string;
+  /** Proposition unique (ex. « Jour d'arrivée ») — pas de choix J-7/J-3 */
+  soloLabel?: string;
 };
 
 const EXPRESS_SERVICES: ExpressService[] = [
   { jxKey: 'registration', caps: ['registration'], emoji: '📝', label: 'Enregistrement voyageurs', resaLabel: 'À la réservation', beforeLabel: (d) => `À partir de J-${d}` },
   { jxKey: 'arrivalChoose', caps: ['arrivalChoose'], emoji: '🕓', label: "Choisir l'heure d'arrivée", resaLabel: 'De la réservation à J-1', beforeLabel: (d) => `De J-${d} à J-1` },
   { jxKey: 'departureChoose', caps: ['departureChoose'], emoji: '🕐', label: "Choisir l'heure de départ", resaLabel: 'De la réservation à veille départ', beforeLabel: (d) => `De J-${d} à veille départ` },
+  { jxKey: 'arrivalDeclare', caps: ['arrivalDeclare'], emoji: '📍', label: "Déclarer l'arrivée", resaLabel: "Jour d'arrivée (J0)", beforeLabel: () => "Jour d'arrivée (J0)", soloLabel: "Jour d'arrivée (J0)" },
+  { jxKey: 'departureDeclare', caps: ['departureDeclare'], emoji: '🚪', label: 'Déclarer le départ', resaLabel: 'Jour de départ uniquement', beforeLabel: () => 'Jour de départ uniquement', soloLabel: 'Jour du départ (J0)' },
   { jxKey: 'support', caps: ['support'], emoji: '🆘', label: 'Support urgence', resaLabel: 'Toujours disponible', beforeLabel: (d) => `À partir de J-${d}` },
   { jxKey: 'serviceClient', caps: ['serviceClient'], emoji: '🛎', label: 'Service client', resaLabel: 'Dès la réservation', beforeLabel: (d) => `À partir de J-${d}` },
   { jxKey: 'transport', caps: ['transport'], emoji: '🚐', label: 'Navette aéroport', resaLabel: 'Dès la réservation', beforeLabel: (d) => `À partir de J-${d}` },
@@ -370,21 +374,30 @@ export default function OnboardingStepOrchestrationExpress({
                     <span className="ob-x-tag">Flow</span>
                   </span>
                   <span className="ob-x-seg">
-                    {seg(state === 'resa', 'À la réservation', () => setAvailability(svc, 'resa'))}
-                    {seg(state === 7, 'J-7', () => setAvailability(svc, 'before', 7))}
-                    {seg(state === 3, 'J-3', () => setAvailability(svc, 'before', 3))}
-                    {svc.jxKey === 'transport'
-                      ? seg(state === 1, 'Veille', () => setAvailability(svc, 'before', 1))
-                      : null}
-                    {seg(state === 'off', 'Off', () => setAvailability(svc, 'off'))}
+                    {svc.soloLabel ? (
+                      <>
+                        {seg(state !== 'off', svc.soloLabel, () => setAvailability(svc, 'resa'))}
+                        {seg(state === 'off', 'Off', () => setAvailability(svc, 'off'))}
+                      </>
+                    ) : (
+                      <>
+                        {seg(state === 'resa', 'À la réservation', () => setAvailability(svc, 'resa'))}
+                        {seg(state === 7, 'J-7', () => setAvailability(svc, 'before', 7))}
+                        {seg(state === 3, 'J-3', () => setAvailability(svc, 'before', 3))}
+                        {svc.jxKey === 'transport'
+                          ? seg(state === 1, 'Veille', () => setAvailability(svc, 'before', 1))
+                          : null}
+                        {seg(state === 'off', 'Off', () => setAvailability(svc, 'off'))}
+                      </>
+                    )}
                   </span>
                 </div>
               );
             })}
           </div>
           <p className="ob-x-auto">
-            Réglé automatiquement : déclaration d&apos;arrivée le jour J · déclaration de départ la veille ·
-            codes d&apos;accès après enregistrement + créneau. Modifiable dans « Avancé ».
+            Réglé automatiquement : codes d&apos;accès après enregistrement + créneau. Modifiable
+            dans « Avancé ».
           </p>
         </div>
       </section>
