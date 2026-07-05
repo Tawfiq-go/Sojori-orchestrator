@@ -1,6 +1,7 @@
-import { useContext } from 'react';
+import { useContext, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
+import { resolvePageChrome } from '../config/pageChromeRegistry';
 import { isListingCataloguePath } from '../constants/listingLayout';
 import { isPmBusinessPath } from '../config/routeAccessPolicy';
 import {
@@ -8,6 +9,7 @@ import {
   AdminBusinessScopeUnsetAlert,
 } from './AdminOwnerScope/AdminBusinessScopeAlerts';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import { PageHeader } from './dashboard/DashboardV2.components';
 import {
   DashboardChrome,
   DashboardShellContext,
@@ -18,6 +20,14 @@ import {
 interface DashboardWrapperProps {
   children: React.ReactNode;
   breadcrumb?: string[];
+  /** Titre H1 — défaut : registre sidebar ou dernier segment du fil d’Ariane */
+  title?: string;
+  /** Chip à droite du titre (ex. période, mois courant) */
+  titleMeta?: ReactNode;
+  /** Actions alignées à droite du titre (boutons, toggles…) */
+  headerActions?: ReactNode;
+  /** Ne pas afficher l’en-tête standard (page avec PageHeader custom) */
+  hidePageHeader?: boolean;
   /** Formulaire listing plein écran : marges main réduites, hauteur utile maximale */
   compactMain?: boolean;
   /**
@@ -36,6 +46,10 @@ interface DashboardWrapperProps {
 export function DashboardWrapper({
   children,
   breadcrumb = [],
+  title,
+  titleMeta,
+  headerActions,
+  hidePageHeader = false,
   compactMain = false,
   disableScopeGate = false,
 }: DashboardWrapperProps) {
@@ -48,12 +62,31 @@ export function DashboardWrapper({
   const pmBusiness = isPmBusinessPath(location.pathname);
   const scopeGate = !disableScopeGate && showOwnerFilter && pmBusiness && ownerScopeUnset;
 
-  usePageChromeUpdater(breadcrumb, listingCompact);
+  const registryChrome = resolvePageChrome(location.pathname);
+  const effectiveBreadcrumb =
+    breadcrumb.length > 0 ? breadcrumb : (registryChrome?.breadcrumb ?? []);
+  const effectiveTitle =
+    title ??
+    registryChrome?.title ??
+    (effectiveBreadcrumb.length > 0
+      ? effectiveBreadcrumb[effectiveBreadcrumb.length - 1]
+      : undefined);
+
+  const showPageHeader =
+    !hidePageHeader && !!effectiveTitle && !isListingCataloguePath(location.pathname);
+
+  usePageChromeUpdater(effectiveBreadcrumb, listingCompact);
 
   const scopeAlerts =
     showOwnerFilter && pmBusiness && !disableScopeGate && ownerScopeAll ? (
       <AdminBusinessScopeAllAlert />
     ) : null;
+
+  const pageHeader = showPageHeader ? (
+    <PageHeader title={effectiveTitle} count={titleMeta}>
+      {headerActions}
+    </PageHeader>
+  ) : null;
 
   if (inShell) {
     if (scopeGate) {
@@ -62,18 +95,20 @@ export function DashboardWrapper({
     return (
       <>
         {scopeAlerts}
+        {pageHeader}
         {children}
       </>
     );
   }
 
   return (
-    <DashboardChrome breadcrumb={breadcrumb} compactMain={listingCompact}>
+    <DashboardChrome breadcrumb={effectiveBreadcrumb} compactMain={listingCompact}>
       {scopeGate ? (
         <AdminBusinessScopeUnsetAlert />
       ) : (
         <Box>
           {scopeAlerts}
+          {pageHeader}
           {children}
         </Box>
       )}

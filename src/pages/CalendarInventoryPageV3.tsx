@@ -3,6 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo, useRef } from 'react';
 import moment from 'moment';
+import 'moment/locale/fr';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import listingsService from '../services/listingsService';
@@ -20,6 +21,8 @@ import {
 } from '../services/dynamicPricingApi';
 
 export const CALENDAR_LISTINGS_PAGE_SIZE = 25;
+
+moment.locale('fr');
 
 export function CalendarInventoryPageV3() {
   const staging = JSON.parse(localStorage.getItem('isStaging') || 'false');
@@ -204,9 +207,14 @@ export function CalendarInventoryPageV3() {
     setCurrentDate(moment(clampPivotDate(newDate)));
   };
 
+  const monthLabel = useMemo(() => {
+    const raw = currentDate.format('MMMM YYYY');
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }, [currentDate]);
+
   if (listingsLoading) {
     return (
-      <DashboardWrapper breadcrumb={['Opérations', 'Calendrier']}>
+      <DashboardWrapper titleMeta={monthLabel}>
         <div style={{ padding: '40px', textAlign: 'center', color: '#7a756c' }}>
           Chargement des propriétés…
         </div>
@@ -215,7 +223,7 @@ export function CalendarInventoryPageV3() {
   }
 
   return (
-    <DashboardWrapper breadcrumb={['Opérations', 'Calendrier']}>
+    <DashboardWrapper titleMeta={monthLabel}>
       <CalendarInventoryPage
         startDate={currentDate.toDate()}
         listingCatalog={listingCatalog}
