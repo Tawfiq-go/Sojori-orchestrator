@@ -193,7 +193,7 @@ export default function OnboardingStepOrchestrationExpress({
 
   const END_SEGS: Record<'arrival' | 'departure' | 'generic', Array<{ ui: string; fin: string }>> = {
     arrival: [{ ui: '→ J-1', fin: 'J-1' }, { ui: '→ J0', fin: 'J0' }],
-    departure: [{ ui: '→ veille', fin: 'veille' }, { ui: '→ jour J', fin: 'jourJ' }],
+    departure: [{ ui: '→ J-1', fin: 'veille' }, { ui: '→ J0', fin: 'jourJ' }],
     generic: [{ ui: '→ J-1', fin: 'J-1' }, { ui: '→ J0', fin: 'J0' }, { ui: '→ départ', fin: 'depart' }],
   };
 
@@ -422,7 +422,8 @@ export default function OnboardingStepOrchestrationExpress({
           <p className="ob-x-title">📱 Quand proposer chaque service au voyageur ?</p>
           <p className="ob-x-hint">
             <strong>Toujours</strong> = de la réservation au départ du client. Sinon : début
-            (À la réservation ou J-X avant l&apos;arrivée) → fin (J-1, J0 ou départ).
+            (À la réservation ou J-X) → fin (J-1, J0 ou départ). Pour l&apos;heure de départ,
+            J-1/J0 = veille et jour du départ.
           </p>
           <div className="ob-x-rows">
             {EXPRESS_SERVICES.map((svc) => {
