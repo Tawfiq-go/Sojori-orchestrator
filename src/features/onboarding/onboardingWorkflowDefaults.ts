@@ -155,7 +155,9 @@ const BALANCED: OnboardingServiceRhythmDef[] = [
     emoji: '🧹',
     capabilityKey: 'cleaningPaid',
     dateRef: 'scheduledDate',
-    clientReminderDays: [-1],
+    // Pas de relance par défaut : service à la demande client, non exposé dans
+    // la section Relances de l'Express.
+    clientReminderDays: [],
     clientReminderTime: '10:00',
     staffAssignStyle: 'days_before',
     staffAssignDaysBefore: 3,
