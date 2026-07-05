@@ -524,7 +524,7 @@ function IncludedExtraRow({
             type="number"
             value={extra.price}
             onChange={e => onUpdate({ price: Number(e.target.value) || 0 })}
-            inputProps={{ min: 0 }}
+            slotProps={{ htmlInput: { min: 0 } }}
             sx={fieldSx}
           />
           <TextField
@@ -579,16 +579,16 @@ function NumField({
         if (!Number.isFinite(n)) return;
         onChange(Math.min(max, Math.max(min, n)));
       }}
-      inputProps={{ min, max }}
-      InputProps={
-        suffix
+      slotProps={{
+        htmlInput: { min, max },
+        input: suffix
           ? {
               endAdornment: (
                 <Typography sx={{ fontSize: 11, fontWeight: 700, color: V3.t4, pr: 0.5 }}>{suffix}</Typography>
               ),
             }
-          : undefined
-      }
+          : undefined,
+      }}
       sx={{
         ...fieldSx,
         '& .MuiOutlinedInput-input': {
