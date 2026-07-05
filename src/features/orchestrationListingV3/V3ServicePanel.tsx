@@ -130,34 +130,12 @@ export default function V3ServicePanel({
 
   const selectPanel = (id: PanelId) => {
     setActivePanel(id);
-    const patch: Partial<CapabilityRowState> = {};
-    if (id === 'gestion') {
-      if (!row.managed) patch.managed = true;
-    } else {
-      if (!row.managed) patch.managed = true;
-      const field = PANEL_META[id].field;
-      if (!row[field as keyof CapabilityRowState]) {
-        (patch as Record<string, boolean>)[field as string] = true;
-      }
-    }
-    logV3Orch('panel.select', { key: def.key, panel: id, patch, rowBefore: {
-      managed: row.managed,
-      orchestrated: row.orchestrated,
-      taskEnabled: row.taskEnabled,
-    }});
-    if (Object.keys(patch).length > 0) onRowChange(patch);
+    logV3Orch('panel.select', { key: def.key, panel: id, viewOnly: true });
   };
 
   const selectExecTab = (p: (typeof EXEC_PILLS)[number]) => {
     setExecTab(p.tab);
-    const patch: Partial<CapabilityRowState> = {};
-    if (!row.managed) patch.managed = true;
-    if (!row.orchestrated) patch.orchestrated = true;
-    if (!row.execution[p.field]) {
-      patch.execution = { ...row.execution, [p.field]: true };
-    }
-    logV3Orch('exec.select', { key: def.key, tab: p.tab, field: p.field, patch });
-    if (Object.keys(patch).length > 0) onRowChange(patch);
+    logV3Orch('exec.select', { key: def.key, tab: p.tab, field: p.field, viewOnly: true });
   };
 
   const isMenuNav = def.key === 'menu_navigation';

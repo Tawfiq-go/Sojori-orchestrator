@@ -1,9 +1,10 @@
 import { Box, Tab, Tabs } from '@mui/material';
 
-export type OrchestrationModelSection = 'activation' | 'services' | 'messages';
+export type OrchestrationModelSection = 'activation' | 'apercu' | 'services' | 'messages';
 
 const TAB_DEFS: { id: OrchestrationModelSection; label: string; emoji: string }[] = [
   { id: 'activation', label: 'Activation des services', emoji: '🔌' },
+  { id: 'apercu', label: "Vue d'ensemble", emoji: '👁' },
   { id: 'services', label: 'Services & workflows', emoji: '⚙️' },
   { id: 'messages', label: 'Messages planifiés', emoji: '📨' },
 ];
