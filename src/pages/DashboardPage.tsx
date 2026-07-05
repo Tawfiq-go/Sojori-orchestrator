@@ -461,7 +461,7 @@ function DashboardPageContent() {
   const ratingDisplay = formatDashboardRating(snapshot.kpis.averageRating.value);
 
   return (
-    <DashboardWrapper breadcrumb={['Pilotage', 'Dashboard']} disableScopeGate>
+    <DashboardWrapper hidePageHeader disableScopeGate>
       <PageHeader
         title="Dashboard principal"
         count={ownerScopeUnset ? '—' : dashboardReady ? period : 'Chargement…'}

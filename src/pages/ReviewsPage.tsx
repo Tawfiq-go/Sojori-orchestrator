@@ -575,7 +575,7 @@ export function ReviewsPage() {
   const bookingAvg = bookingStats?.count ? (bookingStats.totalRating / bookingStats.count).toFixed(1) : '—';
 
   return (
-    <DashboardWrapper breadcrumb={['CRM', 'Avis & Reviews']}>
+    <DashboardWrapper hidePageHeader breadcrumb={['CRM', 'Avis & Reviews']}>
       <PageHeader title="Avis & Reviews" count={`${filteredReviews.length}`}>
         <ColumnSelector
           columns={columnDefs}

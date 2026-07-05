@@ -165,7 +165,7 @@ export default function CommunicationsHubPage() {
   });
 
   return (
-    <DashboardWrapper breadcrumb={['Communications', 'Inbox']}>
+    <DashboardWrapper hidePageHeader breadcrumb={['Communications', 'Inbox']}>
       <Box
         sx={{
           ...DASHBOARD_PAGE_FILL_SX,
