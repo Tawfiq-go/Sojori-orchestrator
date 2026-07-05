@@ -246,9 +246,7 @@ export default function V3ScheduledMessagesPanel({
 
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}
+        sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}
       >
         <Typography sx={{ fontSize: 14, color: V3.t2 }}>
           {rules.length} message(s) ·{' '}

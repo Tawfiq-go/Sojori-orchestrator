@@ -87,8 +87,7 @@ function CompactNumericStepper({
   return (
     <Stack
       direction="row"
-      alignItems="center"
-      sx={{
+      sx={{ alignItems: 'center',
         border: `1px solid ${T.border}`,
         borderRadius: 1,
         bgcolor: T.bg1,
@@ -145,8 +144,7 @@ function HourSlotStepperDisplay({
   return (
     <Stack
       direction="row"
-      alignItems="center"
-      sx={{
+      sx={{ alignItems: 'center',
         border: `1px solid ${T.border}`,
         borderRadius: 1,
         bgcolor: T.bg1,
