@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { runtimeLog } from '../utils/runtimeLog';
+import { isStaleChunkError, reloadOnceForStaleChunk } from '../utils/lazyWithReload';
 
 interface AppErrorBoundaryProps {
   children: React.ReactNode;
@@ -29,6 +30,11 @@ export class AppErrorBoundary extends React.Component<
       stack: error.stack?.slice(0, 500),
       componentStack: errorInfo.componentStack?.slice(0, 500),
     });
+    // Onglet resté sur une ancienne version après un déploiement : les chunks
+    // hashés n'existent plus — on recharge une fois au lieu d'afficher l'erreur.
+    if (isStaleChunkError(error)) {
+      reloadOnceForStaleChunk();
+    }
   }
 
   private handleReload = () => {
