@@ -31,7 +31,6 @@ type ExpressService = {
 };
 
 const EXPRESS_SERVICES: ExpressService[] = [
-  { jxKey: 'welcome', caps: ['welcome'], emoji: '👋', label: 'Message de bienvenue', resaLabel: 'À la réservation', beforeLabel: (d) => `J-${d} avant arrivée` },
   { jxKey: 'registration', caps: ['registration'], emoji: '📝', label: 'Enregistrement voyageurs', resaLabel: 'À la réservation', beforeLabel: (d) => `À partir de J-${d}` },
   { jxKey: 'arrivalChoose', caps: ['arrivalChoose'], emoji: '🕓', label: "Choisir l'heure d'arrivée", resaLabel: 'De la réservation à J-1', beforeLabel: (d) => `De J-${d} à J-1` },
   { jxKey: 'departureChoose', caps: ['departureChoose'], emoji: '🕐', label: "Choisir l'heure de départ", resaLabel: 'De la réservation à veille départ', beforeLabel: (d) => `De J-${d} à veille départ` },
@@ -368,7 +367,7 @@ export default function OnboardingStepOrchestrationExpress({
                 <div key={svc.jxKey} className={`ob-x-row${state === 'off' ? ' ob-x-row--off' : ''}`}>
                   <span className="ob-x-row-label">
                     {svc.emoji} {svc.label}
-                    <span className="ob-x-tag">{svc.jxKey === 'welcome' ? 'Message' : 'Flow'}</span>
+                    <span className="ob-x-tag">Flow</span>
                   </span>
                   <span className="ob-x-seg">
                     {seg(state === 'resa', 'À la réservation', () => setAvailability(svc, 'resa'))}
@@ -585,7 +584,16 @@ export default function OnboardingStepOrchestrationExpress({
                     )}
                     <Toggle
                       on={enabled}
-                      onChange={(v) => patchScheduledMessage(def.messageId, { enabled: v })}
+                      onChange={(v) => {
+                        patchScheduledMessage(def.messageId, { enabled: v });
+                        // Bienvenu = capability welcome du modèle owner
+                        if (def.messageId === 'welcome_sojori_v2') {
+                          onChangePanel3({
+                            capabilities: { ...caps, welcome: v },
+                            jx: { ...jx, welcome: 'À la réservation', preset: 'custom' },
+                          });
+                        }
+                      }}
                     />
                   </span>
                 </div>
