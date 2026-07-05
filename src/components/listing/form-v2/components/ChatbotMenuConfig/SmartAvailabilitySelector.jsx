@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import {
   Alert,
   Box,
+  Checkbox,
   FormControl,
   FormControlLabel,
   IconButton,
@@ -159,6 +160,8 @@ function BoundaryRow({ title, boundary, onUnit, onMoment, onEvent, onValue, mome
 const SmartAvailabilitySelector = ({ value = { type: 'always' }, onChange }) => {
   const type = resolveAvailabilityType(value);
   const requiresWindow = type === 'time_window' || type === 'conditional_and_time';
+  /** Fenêtre sans borne de début = disponible dès la réservation (le moteur n'applique que `to`). */
+  const hasFrom = Boolean(value.from);
   const fromBoundary = useMemo(() => ensureBoundary(value.from, defaultFrom), [value.from]);
   const toBoundary = useMemo(() => ensureBoundary(value.to, defaultTo), [value.to]);
   const fromMomentOptions = filterMoments(fromBoundary.unit);
@@ -228,15 +231,39 @@ const SmartAvailabilitySelector = ({ value = { type: 'always' }, onChange }) => 
 
       {requiresWindow && (
         <Stack spacing={1.25} sx={{ mt: 1.25 }}>
-          <BoundaryRow
-            title="Début"
-            boundary={fromBoundary}
-            momentOpts={fromMomentOptions}
-            onValue={(v) => updateBoundary('from', { value: Math.max(0, Number(v) || 0) })}
-            onUnit={(u) => handleUnitChange('from', u)}
-            onMoment={(m) => updateBoundary('from', { moment: m })}
-            onEvent={(ev) => updateBoundary('from', { event: ev })}
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={!hasFrom}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    const next = { ...value };
+                    delete next.from;
+                    onChange(next);
+                  } else {
+                    updateBoundary('from', {});
+                  }
+                }}
+              />
+            }
+            label={
+              <Typography sx={{ fontSize: 12.5 }}>
+                Dès la réservation (pas de borne de début)
+              </Typography>
+            }
           />
+          {hasFrom && (
+            <BoundaryRow
+              title="Début"
+              boundary={fromBoundary}
+              momentOpts={fromMomentOptions}
+              onValue={(v) => updateBoundary('from', { value: Math.max(0, Number(v) || 0) })}
+              onUnit={(u) => handleUnitChange('from', u)}
+              onMoment={(m) => updateBoundary('from', { moment: m })}
+              onEvent={(ev) => updateBoundary('from', { event: ev })}
+            />
+          )}
           <BoundaryRow
             title="Fin"
             boundary={toBoundary}
