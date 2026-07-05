@@ -156,46 +156,45 @@ export default function OnboardingStepOrchestrationExpress({
 
   const AVAILABILITY_DAYS = [7, 3, 2, 1] as const;
 
-  /** Segments début pour une ligne (libellé UI + libellé jx écrit). */
-  const startSegsFor = (svc: ExpressService): Array<{ ui: string; jxLabel: string }> => {
-    if (svc.jxKey === 'arrivalChoose') {
-      const finJ0 = String(jx[svc.jxKey] ?? '').includes('à J0');
-      const fin = finJ0 ? 'J0' : 'J-1';
-      return [
-        { ui: 'À la réservation', jxLabel: `De la réservation à ${fin}` },
-        ...AVAILABILITY_DAYS.map((d) => ({ ui: `J-${d}`, jxLabel: `De J-${d} à ${fin}` })),
-      ];
+  /** Genre de fin selon le service : arrivée (J-1/J0), départ (veille/jour J) ou générique (J-1/J0/départ). */
+  const endKindOf = (svc: ExpressService): 'arrival' | 'departure' | 'generic' =>
+    svc.jxKey === 'arrivalChoose' ? 'arrival' : svc.jxKey === 'departureChoose' ? 'departure' : 'generic';
+
+  /** Construit le libellé jx pour un début (resa | J-X) et une fin. */
+  const mkJxLabel = (svc: ExpressService, start: 'resa' | number, fin: string): string => {
+    const kind = endKindOf(svc);
+    if (kind === 'arrival') {
+      return start === 'resa' ? `De la réservation à ${fin}` : `De J-${start} à ${fin}`;
     }
-    if (svc.jxKey === 'departureChoose') {
-      const finJour = String(jx[svc.jxKey] ?? '').includes('au jour du départ');
-      const fin = finJour ? 'au jour du départ' : 'à veille départ';
-      return [
-        { ui: 'À la réservation', jxLabel: `De la réservation ${fin}` },
-        ...AVAILABILITY_DAYS.map((d) => ({ ui: `J-${d}`, jxLabel: `De J-${d} ${fin}` })),
-      ];
+    if (kind === 'departure') {
+      const suffix = fin === 'jourJ' ? 'au jour du départ' : 'à veille départ';
+      return start === 'resa' ? `De la réservation ${suffix}` : `De J-${start} ${suffix}`;
     }
-    return [
-      { ui: 'Toujours', jxLabel: 'Toujours disponible' },
-      { ui: 'À la réservation', jxLabel: svc.resaLabel },
-      ...AVAILABILITY_DAYS.map((d) => ({ ui: `J-${d}`, jxLabel: svc.beforeLabel(d) })),
-    ];
+    // générique : fin départ = libellés historiques (résa / À partir de J-X)
+    if (fin === 'depart') return start === 'resa' ? svc.resaLabel : svc.beforeLabel(start as number);
+    return start === 'resa' ? `De la réservation à ${fin}` : `De J-${start} à ${fin}`;
   };
 
-  /** Segments fin (créneaux uniquement). */
-  const endSegsFor = (svc: ExpressService): Array<{ ui: string; makeLabel: (cur: string) => string }> | null => {
-    if (svc.jxKey === 'arrivalChoose') {
-      return [
-        { ui: '→ J-1', makeLabel: (cur) => cur.replace(/à J(0|-1)$/, 'à J-1') },
-        { ui: '→ J0', makeLabel: (cur) => cur.replace(/à J(0|-1)$/, 'à J0') },
-      ];
-    }
-    if (svc.jxKey === 'departureChoose') {
-      return [
-        { ui: '→ veille', makeLabel: (cur) => cur.replace(/ (à veille départ|au jour du départ)$/, ' à veille départ') },
-        { ui: '→ jour J', makeLabel: (cur) => cur.replace(/ (à veille départ|au jour du départ)$/, ' au jour du départ') },
-      ];
-    }
-    return null;
+  /** État courant (toujours | début, fin) dérivé du libellé jx. */
+  const parseJxState = (svc: ExpressService, label: string): { toujours: boolean; start: 'resa' | number | null; fin: string } => {
+    const kind = endKindOf(svc);
+    const defFin = kind === 'departure' ? 'veille' : kind === 'arrival' ? 'J-1' : 'depart';
+    if (/^Toujours/i.test(label)) return { toujours: true, start: null, fin: defFin };
+    let fin = defFin;
+    if (kind === 'departure') fin = /au jour du départ$/i.test(label) ? 'jourJ' : 'veille';
+    else if (/à J0$/i.test(label)) fin = 'J0';
+    else if (kind === 'generic' && /à J-1$/i.test(label)) fin = 'J-1';
+    else if (kind === 'arrival') fin = 'J-1';
+    const day = label.match(/(?:De|À partir de) J-(\d+)/i)?.[1];
+    if (day) return { toujours: false, start: Number(day), fin };
+    if (/réservation/i.test(label)) return { toujours: false, start: 'resa', fin };
+    return { toujours: false, start: null, fin };
+  };
+
+  const END_SEGS: Record<'arrival' | 'departure' | 'generic', Array<{ ui: string; fin: string }>> = {
+    arrival: [{ ui: '→ J-1', fin: 'J-1' }, { ui: '→ J0', fin: 'J0' }],
+    departure: [{ ui: '→ veille', fin: 'veille' }, { ui: '→ jour J', fin: 'jourJ' }],
+    generic: [{ ui: '→ J-1', fin: 'J-1' }, { ui: '→ J0', fin: 'J0' }, { ui: '→ départ', fin: 'depart' }],
   };
 
   const setJxLabel = (svc: ExpressService, jxLabel: string) => {
@@ -422,17 +421,16 @@ export default function OnboardingStepOrchestrationExpress({
         <div className="ob-card-b">
           <p className="ob-x-title">📱 Quand proposer chaque service au voyageur ?</p>
           <p className="ob-x-hint">
-            <strong>Toujours</strong> = de la réservation au départ du client · J-X = jours avant
-            l&apos;arrivée · créneaux : fin → J-1 ou J0 (arrivée), veille ou jour J (départ).
+            <strong>Toujours</strong> = de la réservation au départ du client. Sinon : début
+            (À la réservation ou J-X avant l&apos;arrivée) → fin (J-1, J0 ou départ).
           </p>
           <div className="ob-x-rows">
             {EXPRESS_SERVICES.map((svc) => {
               const state = availabilityOf(svc);
               const isOn = state !== 'off';
               const curLabel = String(jx[svc.jxKey] ?? '');
-              const startSegs = startSegsFor(svc);
-              const exactMatch = startSegs.some((g) => g.jxLabel === curLabel);
-              const endSegs = endSegsFor(svc);
+              const st = parseJxState(svc, curLabel);
+              const kind = endKindOf(svc);
               return (
                 <div key={svc.jxKey} className={`ob-x-row${isOn ? '' : ' ob-x-row--off'}`}>
                   <span className="ob-x-row-label">
@@ -444,20 +442,24 @@ export default function OnboardingStepOrchestrationExpress({
                       {svc.soloLabel ? (
                         seg(isOn, svc.soloLabel, () => setAvailability(svc, 'resa'))
                       ) : (
-                        startSegs.map((g) => {
-                          const active = isOn && (g.jxLabel === curLabel
-                            || (!exactMatch && g.ui === 'À la réservation' && /réservation|toujours/i.test(curLabel) && !/^Toujours/.test(g.jxLabel)));
-                          return seg(active, g.ui, () => setJxLabel(svc, g.jxLabel));
-                        })
+                        <>
+                          {seg(isOn && st.toujours, 'Toujours', () => setJxLabel(svc, 'Toujours disponible'))}
+                          {seg(isOn && !st.toujours && st.start === 'resa', 'À la réservation', () =>
+                            setJxLabel(svc, mkJxLabel(svc, 'resa', st.fin)))}
+                          {AVAILABILITY_DAYS.map((d) =>
+                            seg(isOn && !st.toujours && st.start === d, `J-${d}`, () =>
+                              setJxLabel(svc, mkJxLabel(svc, d, st.fin))),
+                          )}
+                        </>
                       )}
                       {seg(!isOn, 'Off', () => setAvailability(svc, 'off'))}
                     </span>
-                    {isOn && endSegs && (
+                    {isOn && !svc.soloLabel && !st.toujours && st.start !== null && (
                       <span className="ob-x-seg">
-                        {endSegs.map((e) => {
-                          const next = e.makeLabel(curLabel || startSegs[0].jxLabel);
-                          return seg(next === curLabel, e.ui, () => setJxLabel(svc, next));
-                        })}
+                        {END_SEGS[kind].map((e) =>
+                          seg(st.fin === e.fin, e.ui, () =>
+                            setJxLabel(svc, mkJxLabel(svc, st.start as 'resa' | number, e.fin))),
+                        )}
                       </span>
                     )}
                   </span>
