@@ -36,11 +36,34 @@ function boundaryHuman(b: Boundary, side: 'from' | 'to'): string {
   return `${v} ${b.unit ?? ''} ${ref}`;
 }
 
+const REQUIRE_EVENTS: Array<{ id: string; label: string; short: string }> = [
+  { id: 'E_completed', label: 'Enregistrement (E)', short: 'E' },
+  { id: 'D1_completed', label: 'Créneau arrivée (D1)', short: 'D1' },
+  { id: 'D2_completed', label: 'Créneau départ (D2)', short: 'D2' },
+  { id: 'D3_completed', label: 'Arrivée déclarée (D3)', short: 'D3' },
+  { id: 'D4_completed', label: 'Départ déclaré (D4)', short: 'D4' },
+];
+
+function requiresList(av: Availability): string[] {
+  return String(av?.requires ?? '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
 function availabilityHuman(av: Availability): string {
   const type = av?.type ?? 'always';
   if (type === 'always') return 'Toujours';
   if (type === 'after_booking_confirmed') return 'À la réservation';
-  if (type === 'conditional_and_time') return 'Après enregistrement + créneau';
+  if (type === 'conditional_and_time') {
+    const reqs = requiresList(av)
+      .map((r) => REQUIRE_EVENTS.find((e) => e.id === r)?.short ?? r)
+      .join(' + ');
+    const win = av?.from || av?.to
+      ? ` · ${av?.from ? `de ${boundaryHuman(av.from, 'from')}` : 'de la réservation'} → ${boundaryHuman(av?.to, 'to')}`
+      : '';
+    return `Si ${reqs || 'conditions'}${win}`;
+  }
   if (type === 'time_window') {
     const start = av?.from ? `De ${boundaryHuman(av.from, 'from')}` : 'De la réservation';
     return `${start} → ${boundaryHuman(av.to, 'to')}`;
@@ -276,8 +299,9 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
       const dayRef = (av?.from?.reference ?? '') as string;
       const curStart: 'toujours' | 'resa' | number =
         av?.type === 'always' ? 'toujours'
-        : av?.type === 'after_booking_confirmed' || (av?.type === 'time_window' && !av?.from) ? 'resa'
-        : Number(av?.from?.value ?? 3);
+        : av?.type === 'after_booking_confirmed' || (!av?.from && (av?.type === 'time_window' || av?.type === 'conditional_and_time'))
+          ? 'resa'
+          : Number(av?.from?.value ?? 3);
       const curEnd = av?.to;
       const mkTo = (fin: 'J-1' | 'J0' | 'depart') =>
         fin === 'depart'
@@ -289,35 +313,34 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
         (curEnd?.reference ?? '').startsWith('on_') ? 'J0'
         : curEnd?.reference === 'after_checkout' || !curEnd ? 'depart'
         : 'J-1';
-      const setStart = (start: 'toujours' | 'resa' | number) => {
-        if (start === 'toujours') return patchAvailability(editor.capKey, { type: 'always' });
-        if (start === 'resa') {
-          return patchAvailability(
-            editor.capKey,
-            curFin === 'depart'
-              ? { type: 'after_booking_confirmed' }
-              : { type: 'time_window', to: mkTo(curFin) },
-          );
+      const curReqs = requiresList(av);
+      /** Construit l'availability : base début/fin, puis conditions (ET) si présentes. */
+      const writeAv = (start: 'toujours' | 'resa' | number, fin: 'J-1' | 'J0' | 'depart', reqs: string[]) => {
+        let base: Record<string, unknown>;
+        if (start === 'toujours') base = { type: 'always' };
+        else if (start === 'resa') {
+          base = fin === 'depart' ? { type: 'after_booking_confirmed' } : { type: 'time_window', to: mkTo(fin) };
+        } else {
+          base = { type: 'time_window', from: { unit: 'days', value: start, reference: refBase }, to: mkTo(fin) };
         }
-        return patchAvailability(editor.capKey, {
-          type: 'time_window',
-          from: { unit: 'days', value: start, reference: refBase },
-          to: mkTo(curFin),
-        });
+        if (reqs.length) {
+          base = {
+            type: 'conditional_and_time',
+            requires: reqs.join(','),
+            ...(base.from ? { from: base.from } : {}),
+            ...(base.to ? { to: base.to } : {}),
+          };
+        }
+        patchAvailability(editor.capKey, base);
       };
+      const setStart = (start: 'toujours' | 'resa' | number) => writeAv(start, curFin, curReqs);
       const setFin = (fin: 'J-1' | 'J0' | 'depart') => {
         if (curStart === 'toujours') return;
-        if (curStart === 'resa') {
-          return patchAvailability(
-            editor.capKey,
-            fin === 'depart' ? { type: 'after_booking_confirmed' } : { type: 'time_window', to: mkTo(fin) },
-          );
-        }
-        patchAvailability(editor.capKey, {
-          type: 'time_window',
-          from: { unit: 'days', value: curStart, reference: refBase },
-          to: mkTo(fin),
-        });
+        writeAv(curStart, fin, curReqs);
+      };
+      const toggleReq = (id: string) => {
+        const next = curReqs.includes(id) ? curReqs.filter((r) => r !== id) : [...curReqs, id];
+        writeAv(curStart, curFin, next);
       };
       body = (
         <Box sx={{ display: 'grid', gap: 1 }}>
@@ -339,6 +362,18 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
               </Box>
             </>
           )}
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>
+            CONDITIONS REQUISES (toutes — ET)
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            {REQUIRE_EVENTS.map((ev) => (
+              <SegChip key={ev.id} on={curReqs.includes(ev.id)} label={ev.label} onClick={() => toggleReq(ev.id)} />
+            ))}
+          </Box>
+          <Typography sx={{ fontSize: 11, color: V3.t4 }}>
+            Le voyageur doit avoir complété chaque condition cochée avant de voir l&apos;option
+            (ex. codes d&apos;accès : E + D1). Aucune coche = pas de condition.
+          </Typography>
         </Box>
       );
     }
