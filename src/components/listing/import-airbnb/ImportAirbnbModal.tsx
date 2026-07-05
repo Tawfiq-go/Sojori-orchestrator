@@ -191,7 +191,6 @@ export default function ImportAirbnbModal({
     <Dialog
       open={open}
       onClose={isImporting ? undefined : onClose}
-      disableEscapeKeyDown={isImporting}
       maxWidth={false}
       slotProps={{
         paper: {
