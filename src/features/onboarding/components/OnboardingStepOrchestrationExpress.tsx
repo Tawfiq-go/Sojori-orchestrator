@@ -154,6 +154,64 @@ export default function OnboardingStepOrchestrationExpress({
     return day;
   };
 
+  const AVAILABILITY_DAYS = [7, 3, 2, 1] as const;
+
+  /** Segments début pour une ligne (libellé UI + libellé jx écrit). */
+  const startSegsFor = (svc: ExpressService): Array<{ ui: string; jxLabel: string }> => {
+    if (svc.jxKey === 'arrivalChoose') {
+      const finJ0 = String(jx[svc.jxKey] ?? '').includes('à J0');
+      const fin = finJ0 ? 'J0' : 'J-1';
+      return [
+        { ui: 'À la réservation', jxLabel: `De la réservation à ${fin}` },
+        ...AVAILABILITY_DAYS.map((d) => ({ ui: `J-${d}`, jxLabel: `De J-${d} à ${fin}` })),
+      ];
+    }
+    if (svc.jxKey === 'departureChoose') {
+      const finJour = String(jx[svc.jxKey] ?? '').includes('au jour du départ');
+      const fin = finJour ? 'au jour du départ' : 'à veille départ';
+      return [
+        { ui: 'À la réservation', jxLabel: `De la réservation ${fin}` },
+        ...AVAILABILITY_DAYS.map((d) => ({ ui: `J-${d}`, jxLabel: `De J-${d} ${fin}` })),
+      ];
+    }
+    return [
+      { ui: 'Toujours', jxLabel: 'Toujours disponible' },
+      { ui: 'À la réservation', jxLabel: svc.resaLabel },
+      ...AVAILABILITY_DAYS.map((d) => ({ ui: `J-${d}`, jxLabel: svc.beforeLabel(d) })),
+    ];
+  };
+
+  /** Segments fin (créneaux uniquement). */
+  const endSegsFor = (svc: ExpressService): Array<{ ui: string; makeLabel: (cur: string) => string }> | null => {
+    if (svc.jxKey === 'arrivalChoose') {
+      return [
+        { ui: '→ J-1', makeLabel: (cur) => cur.replace(/à J(0|-1)$/, 'à J-1') },
+        { ui: '→ J0', makeLabel: (cur) => cur.replace(/à J(0|-1)$/, 'à J0') },
+      ];
+    }
+    if (svc.jxKey === 'departureChoose') {
+      return [
+        { ui: '→ veille', makeLabel: (cur) => cur.replace(/ (à veille départ|au jour du départ)$/, ' à veille départ') },
+        { ui: '→ jour J', makeLabel: (cur) => cur.replace(/ (à veille départ|au jour du départ)$/, ' au jour du départ') },
+      ];
+    }
+    return null;
+  };
+
+  const setJxLabel = (svc: ExpressService, jxLabel: string) => {
+    const nextCaps = { ...caps };
+    for (const c of svc.caps) {
+      if (svc.jxKey === 'cleaning') {
+        nextCaps.cleaningFree = quickConfig.cleaningModes.free || (!quickConfig.cleaningModes.paid && !quickConfig.cleaningModes.sojori) ? true : nextCaps.cleaningFree;
+        nextCaps.cleaningPaid = quickConfig.cleaningModes.paid;
+        nextCaps.cleaningSojori = quickConfig.cleaningModes.sojori;
+      } else {
+        nextCaps[c] = true;
+      }
+    }
+    onChangePanel3({ capabilities: nextCaps, jx: { ...jx, [svc.jxKey]: jxLabel, preset: 'custom' } as WizardJxSettings });
+  };
+
   const setAvailability = (svc: ExpressService, state: AvailabilityState, days = 3) => {
     const nextCaps = { ...caps };
     for (const c of svc.caps) {
@@ -363,32 +421,44 @@ export default function OnboardingStepOrchestrationExpress({
       <section className="ob-card ob-x-section">
         <div className="ob-card-b">
           <p className="ob-x-title">📱 Quand proposer chaque service au voyageur ?</p>
-          <p className="ob-x-hint">J-7 / J-3 / Veille = jours avant l&apos;arrivée.</p>
+          <p className="ob-x-hint">
+            <strong>Toujours</strong> = de la réservation au départ du client · J-X = jours avant
+            l&apos;arrivée · créneaux : fin → J-1 ou J0 (arrivée), veille ou jour J (départ).
+          </p>
           <div className="ob-x-rows">
             {EXPRESS_SERVICES.map((svc) => {
               const state = availabilityOf(svc);
+              const isOn = state !== 'off';
+              const curLabel = String(jx[svc.jxKey] ?? '');
+              const startSegs = startSegsFor(svc);
+              const exactMatch = startSegs.some((g) => g.jxLabel === curLabel);
+              const endSegs = endSegsFor(svc);
               return (
-                <div key={svc.jxKey} className={`ob-x-row${state === 'off' ? ' ob-x-row--off' : ''}`}>
+                <div key={svc.jxKey} className={`ob-x-row${isOn ? '' : ' ob-x-row--off'}`}>
                   <span className="ob-x-row-label">
                     {svc.emoji} {svc.label}
                     <span className="ob-x-tag">Flow</span>
                   </span>
-                  <span className="ob-x-seg">
-                    {svc.soloLabel ? (
-                      <>
-                        {seg(state !== 'off', svc.soloLabel, () => setAvailability(svc, 'resa'))}
-                        {seg(state === 'off', 'Off', () => setAvailability(svc, 'off'))}
-                      </>
-                    ) : (
-                      <>
-                        {seg(state === 'resa', 'À la réservation', () => setAvailability(svc, 'resa'))}
-                        {seg(state === 7, 'J-7', () => setAvailability(svc, 'before', 7))}
-                        {seg(state === 3, 'J-3', () => setAvailability(svc, 'before', 3))}
-                        {svc.jxKey === 'transport'
-                          ? seg(state === 1, 'Veille', () => setAvailability(svc, 'before', 1))
-                          : null}
-                        {seg(state === 'off', 'Off', () => setAvailability(svc, 'off'))}
-                      </>
+                  <span className="ob-x-inline-choices">
+                    <span className="ob-x-seg">
+                      {svc.soloLabel ? (
+                        seg(isOn, svc.soloLabel, () => setAvailability(svc, 'resa'))
+                      ) : (
+                        startSegs.map((g) => {
+                          const active = isOn && (g.jxLabel === curLabel
+                            || (!exactMatch && g.ui === 'À la réservation' && /réservation|toujours/i.test(curLabel) && !/^Toujours/.test(g.jxLabel)));
+                          return seg(active, g.ui, () => setJxLabel(svc, g.jxLabel));
+                        })
+                      )}
+                      {seg(!isOn, 'Off', () => setAvailability(svc, 'off'))}
+                    </span>
+                    {isOn && endSegs && (
+                      <span className="ob-x-seg">
+                        {endSegs.map((e) => {
+                          const next = e.makeLabel(curLabel || startSegs[0].jxLabel);
+                          return seg(next === curLabel, e.ui, () => setJxLabel(svc, next));
+                        })}
+                      </span>
                     )}
                   </span>
                 </div>
