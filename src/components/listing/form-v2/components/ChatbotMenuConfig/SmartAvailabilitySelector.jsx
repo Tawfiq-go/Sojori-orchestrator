@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import {
   Alert,
   Box,
-  Checkbox,
   FormControl,
   FormControlLabel,
   IconButton,
@@ -231,28 +230,36 @@ const SmartAvailabilitySelector = ({ value = { type: 'always' }, onChange }) => 
 
       {requiresWindow && (
         <Stack spacing={1.25} sx={{ mt: 1.25 }}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                size="small"
-                checked={!hasFrom}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    const next = { ...value };
-                    delete next.from;
-                    onChange(next);
-                  } else {
-                    updateBoundary('from', {});
-                  }
-                }}
+          <Box>
+            <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2, mb: 0.5 }}>
+              Début
+            </Typography>
+            <RadioGroup
+              row
+              value={hasFrom ? 'jx' : 'booking'}
+              onChange={(e) => {
+                if (e.target.value === 'booking') {
+                  const next = { ...value };
+                  delete next.from;
+                  onChange(next);
+                } else {
+                  updateBoundary('from', {});
+                }
+              }}
+              sx={{ gap: 0.5 }}
+            >
+              <FormControlLabel
+                value="booking"
+                control={<Radio size="small" sx={{ color: T.text4, '&.Mui-checked': { color: T.primary } }} />}
+                label={<Typography sx={{ fontSize: 12.5 }}>À la réservation</Typography>}
               />
-            }
-            label={
-              <Typography sx={{ fontSize: 12.5 }}>
-                Dès la réservation (pas de borne de début)
-              </Typography>
-            }
-          />
+              <FormControlLabel
+                value="jx"
+                control={<Radio size="small" sx={{ color: T.text4, '&.Mui-checked': { color: T.primary } }} />}
+                label={<Typography sx={{ fontSize: 12.5 }}>J-X (décalé)</Typography>}
+              />
+            </RadioGroup>
+          </Box>
           {hasFrom && (
             <BoundaryRow
               title="Début"
