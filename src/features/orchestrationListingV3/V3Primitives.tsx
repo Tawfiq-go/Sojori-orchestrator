@@ -99,7 +99,7 @@ export function V3Toggle({
   );
 }
 
-/** Pill décision : clic = afficher le panneau · toggle = ON/OFF · sélection = or Sojori. */
+/** Pill décision : zone gauche = voir le contenu · zone droite = toggle ON/OFF uniquement. */
 export function V3DecisionPill({
   icon,
   label,
@@ -149,59 +149,90 @@ export function V3DecisionPill({
 
   return (
     <Box
-      component="button"
-      type="button"
-      disabled={locked}
-      onClick={onSelect}
       sx={{
         flex: 1,
         minWidth: 0,
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'stretch',
-        gap: 0.5,
-        p: '8px 10px',
         borderRadius: '11px',
-        cursor: locked ? 'not-allowed' : 'pointer',
+        overflow: 'hidden',
         opacity: locked ? 0.42 : 1,
         transition: 'all .18s ease',
-        textAlign: 'left',
         ...visual,
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-        <Typography sx={{ fontSize: 15, lineHeight: 1 }}>{icon}</Typography>
-        <Typography
-          sx={{
-            flex: 1,
-            fontSize: 11.5,
-            fontWeight: 800,
-            letterSpacing: '-0.01em',
-            lineHeight: 1.15,
-            color: 'inherit',
-          }}
-        >
-          {label}
-        </Typography>
-        <Box onClick={e => e.stopPropagation()} sx={{ flexShrink: 0 }}>
-          {!hideToggle ? (
-            <V3Toggle kind={kind} checked={enabled} disabled={locked} onChange={onEnabledChange} />
-          ) : null}
+      <Box
+        component="button"
+        type="button"
+        disabled={locked}
+        onClick={onSelect}
+        title="Afficher le contenu"
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          gap: 0.5,
+          p: '8px 10px',
+          border: 0,
+          bgcolor: 'transparent',
+          cursor: locked ? 'not-allowed' : 'pointer',
+          textAlign: 'left',
+          color: 'inherit',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <Typography sx={{ fontSize: 15, lineHeight: 1 }}>{icon}</Typography>
+          <Typography
+            sx={{
+              flex: 1,
+              fontSize: 11.5,
+              fontWeight: 800,
+              letterSpacing: '-0.01em',
+              lineHeight: 1.15,
+              color: 'inherit',
+            }}
+          >
+            {label}
+          </Typography>
         </Box>
+        {hint && (
+          <Typography
+            sx={{
+              fontSize: 9,
+              fontWeight: selected ? 700 : 500,
+              color: selected ? 'rgba(26,20,8,0.72)' : enabled ? V3.t3 : V3.t4,
+              lineHeight: 1.2,
+              pl: '22px',
+            }}
+          >
+            {enabled ? hint : 'OFF — activer avec le switch →'}
+          </Typography>
+        )}
       </Box>
-      {hint && (
-        <Typography
+
+      {!hideToggle ? (
+        <Box
           sx={{
-            fontSize: 9,
-            fontWeight: selected ? 700 : 500,
-            color: selected ? 'rgba(26,20,8,0.72)' : enabled ? V3.t3 : V3.t4,
-            lineHeight: 1.2,
-            pl: '22px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 0.35,
+            px: 1,
+            py: 0.75,
+            borderLeft: `1px solid ${selected ? 'rgba(26,20,8,0.12)' : enabled ? V3.pt2 : V3.b}`,
+            bgcolor: selected ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.55)',
+            flexShrink: 0,
           }}
         >
-          {enabled ? hint : 'OFF'}
-        </Typography>
-      )}
+          <Typography sx={{ fontSize: 8, fontWeight: 800, color: V3.t4, letterSpacing: '0.06em', lineHeight: 1 }}>
+            {enabled ? 'ON' : 'OFF'}
+          </Typography>
+          <V3Toggle kind={kind} checked={enabled} disabled={locked} onChange={onEnabledChange} />
+        </Box>
+      ) : null}
     </Box>
   );
 }

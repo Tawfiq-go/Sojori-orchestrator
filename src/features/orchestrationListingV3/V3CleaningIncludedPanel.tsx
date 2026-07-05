@@ -9,7 +9,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import type { FrequencyTier, TimeSlot } from '../listing/components/ConfigOrchestration/cleaningConfigTypes';
+import type {
+  FrequencyTier,
+  IncludedCleaningExtra,
+  TimeSlot,
+} from '../listing/components/ConfigOrchestration/cleaningConfigTypes';
+import AddIncludedExtraDialog from '../listing/components/ConfigOrchestration/AddIncludedExtraDialog';
 import { V3 } from './theme';
 import { V3BlockSaveBar } from './V3BlockSaveBar';
 import {
@@ -56,6 +61,7 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
     parseCleaningIncludedGestion(gestion, listingValues),
   );
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [extraDialogOpen, setExtraDialogOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
   const stateRef = useRef(state);
@@ -113,23 +119,6 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
 
   return (
     <Box sx={{ width: '100%', maxWidth: 'none' }}>
-      <Box sx={{ mb: 2.5 }}>
-        <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t, mb: 0.75 }}>Message voyageur</Typography>
-        <TextField
-          fullWidth
-          multiline
-          minRows={2}
-          maxRows={4}
-          value={state.descriptionFr}
-          onChange={e => patch(s => ({ ...s, descriptionFr: e.target.value }))}
-          placeholder="Ex. : Ménages inclus selon la durée de votre séjour. Vous choisirez vos créneaux sur WhatsApp."
-          sx={fieldSx}
-        />
-        <Typography sx={{ fontSize: 10.5, color: V3.t4, mt: 0.75 }}>
-          Affiché au client dans le menu ménage inclus · descriptionFr
-        </Typography>
-      </Box>
-
       <Box
         sx={{
           display: 'grid',
@@ -406,12 +395,161 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
         </Box>
       </Box>
 
+      <Box sx={{ ...sectionSx, mt: 2.5 }}>
+        <Box
+          sx={{
+            px: 2,
+            py: 1.25,
+            borderBottom: `1px solid ${V3.b}`,
+            bgcolor: V3.alt,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 1,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Box>
+            <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t }}>Compléments payants</Typography>
+            <Typography sx={{ fontSize: 11, color: V3.t3 }}>
+              Extras proposés en plus du ménage inclus (serviettes, draps…)
+            </Typography>
+          </Box>
+          <Button
+            size="small"
+            onClick={() => setExtraDialogOpen(true)}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: 12,
+              borderRadius: '8px',
+              color: V3.pd,
+              border: `1px dashed ${V3.pt2}`,
+            }}
+          >
+            + Extra
+          </Button>
+        </Box>
+
+        <Stack sx={{ px: 2, py: 1.5, gap: 0.75 }}>
+          {state.extras.filter(e => e.enabled).length === 0 && (
+            <Typography sx={{ fontSize: 12, color: V3.t3, py: 1, textAlign: 'center' }}>
+              Aucun complément — ajoutez depuis la bibliothèque ou créez le vôtre.
+            </Typography>
+          )}
+          {state.extras
+            .filter(e => e.enabled)
+            .map(extra => (
+              <IncludedExtraRow
+                key={extra.id}
+                extra={extra}
+                onUpdate={updates =>
+                  patch(s => ({
+                    ...s,
+                    extras: s.extras.map(x => (x.id === extra.id ? { ...x, ...updates } : x)),
+                  }))
+                }
+                onRemove={() =>
+                  patch(s => ({
+                    ...s,
+                    extras: s.extras.filter(x => x.id !== extra.id),
+                  }))
+                }
+              />
+            ))}
+        </Stack>
+      </Box>
+
+      <AddIncludedExtraDialog
+        open={extraDialogOpen}
+        onClose={() => setExtraDialogOpen(false)}
+        existingIds={state.extras.map(e => e.id)}
+        onAdd={draft =>
+          patch(s => ({
+            ...s,
+            extras: [...s.extras, { ...draft, enabled: true }],
+          }))
+        }
+      />
+
       <V3BlockSaveBar
         label="Ménage inclus · gestion owner_orchestrations"
         dirty={dirty}
         saving={saving === 'saving'}
         onSave={() => void persist()}
       />
+    </Box>
+  );
+}
+
+function IncludedExtraRow({
+  extra,
+  onUpdate,
+  onRemove,
+}: {
+  extra: IncludedCleaningExtra;
+  onUpdate: (u: Partial<IncludedCleaningExtra>) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <Box
+      sx={{
+        p: 1.25,
+        borderRadius: '10px',
+        border: `1px solid ${V3.b}`,
+        bgcolor: '#fff',
+      }}
+    >
+      <Stack direction="row" sx={{ alignItems: 'flex-start', gap: 1.25 }}>
+        <Typography sx={{ fontSize: 22, lineHeight: 1, pt: 0.5 }}>{extra.icon}</Typography>
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr minmax(96px, 120px)' },
+            gap: 1,
+          }}
+        >
+          <TextField
+            size="small"
+            label="Nom"
+            value={extra.labelFr}
+            onChange={e => onUpdate({ labelFr: e.target.value })}
+            sx={fieldSx}
+          />
+          <TextField
+            size="small"
+            label="Prix (MAD)"
+            type="number"
+            value={extra.price}
+            onChange={e => onUpdate({ price: Number(e.target.value) || 0 })}
+            inputProps={{ min: 0 }}
+            sx={fieldSx}
+          />
+          <TextField
+            size="small"
+            label="Description"
+            value={extra.descriptionFr}
+            onChange={e => onUpdate({ descriptionFr: e.target.value })}
+            multiline
+            minRows={1}
+            sx={{ ...fieldSx, gridColumn: { sm: '1 / -1' } }}
+          />
+        </Box>
+        <Typography
+          component="button"
+          type="button"
+          onClick={onRemove}
+          sx={{ all: 'unset', cursor: 'pointer', fontSize: 18, color: V3.er, lineHeight: 1, px: 0.5 }}
+          title="Retirer"
+        >
+          ×
+        </Typography>
+      </Stack>
+      <Typography sx={{ fontSize: 10, color: V3.t4, mt: 0.75, fontFamily: 'monospace' }}>
+        +{extra.price} MAD · {extra.id}
+      </Typography>
     </Box>
   );
 }

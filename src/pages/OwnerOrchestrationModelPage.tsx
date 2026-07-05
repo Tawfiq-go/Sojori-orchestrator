@@ -8,6 +8,7 @@ import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs
 import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
 import OrchestrationListingV3View from '../features/orchestrationListingV3/OrchestrationListingV3View';
 import OwnerActivationSection from '../features/orchestrationListingV3/OwnerActivationSection';
+import OrchestrationOverviewPanel from '../features/orchestrationListingV3/OrchestrationOverviewPanel';
 import OrchestrationModelSubTabs, {
   type OrchestrationModelSection,
 } from '../features/orchestrationListingV3/OrchestrationModelSubTabs';
@@ -37,27 +38,16 @@ function apiErrorMessage(e: unknown): string {
 
 type ListingPick = { id: string; name: string };
 
-function parseModelSection(raw: string | null): OrchestrationModelSection {
+function parseExplicitSection(raw: string | null): OrchestrationModelSection | null {
   if (raw === 'messages') return 'messages';
   if (raw === 'activation') return 'activation';
-  return 'services';
+  if (raw === 'services') return 'services';
+  if (raw === 'apercu') return 'apercu';
+  return null;
 }
 
 function OwnerModelPageInner() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const section = useMemo(
-    () => parseModelSection(searchParams.get('section')),
-    [searchParams],
-  );
-  const setSection = useCallback(
-    (next: OrchestrationModelSection) => {
-      const params = new URLSearchParams(searchParams);
-      if (next === 'services') params.delete('section');
-      else params.set('section', next);
-      setSearchParams(params, { replace: true });
-    },
-    [searchParams, setSearchParams],
-  );
 
   const { user } = useAuth();
   const isAdmin = isAdminRole(user?.role);
@@ -124,6 +114,23 @@ function OwnerModelPageInner() {
 
   const showActivationTab = !isAdminTemplate && ownerKey !== 'global';
 
+  const section = useMemo(() => {
+    const parsed = parseExplicitSection(searchParams.get('section'));
+    if (parsed) return parsed;
+    return showActivationTab ? 'activation' : 'services';
+  }, [searchParams, showActivationTab]);
+
+  const setSection = useCallback(
+    (next: OrchestrationModelSection) => {
+      const params = new URLSearchParams(searchParams);
+      const defaultSection: OrchestrationModelSection = showActivationTab ? 'activation' : 'services';
+      if (next === defaultSection) params.delete('section');
+      else params.set('section', next);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams, showActivationTab],
+  );
+
   useEffect(() => {
     if (!showActivationTab && section === 'activation') {
       setSection('services');
@@ -132,9 +139,9 @@ function OwnerModelPageInner() {
 
   useEffect(() => {
     if (!ownerServicesActive && section === 'messages') {
-      setSection('services');
+      setSection(showActivationTab ? 'activation' : 'services');
     }
-  }, [ownerServicesActive, section, setSection]);
+  }, [ownerServicesActive, section, setSection, showActivationTab]);
 
   const handleSyncToOwner = async (targetOwnerId: string, targetOwnerName: string) => {
     const result = await syncAdminTemplateToOwnerSimple(targetOwnerId);
@@ -244,13 +251,8 @@ function OwnerModelPageInner() {
         />
       )}
 
-      {!isAdminTemplate && ownerKey !== 'global' && (
-        <Alert severity="info" sx={{ mb: 1.5, fontSize: 13 }}>
-          <strong>Modèle PM → annonces.</strong> Chaque enregistrement met d&apos;abord à jour le
-          modèle propriétaire (<code>owner_orchestrations</code>), puis synchronise les annonces qui
-          héritent de ce modèle — comme à l&apos;onboarding (pas d&apos;écriture directe listing
-          depuis le wizard).
-        </Alert>
+      {section === 'apercu' && (
+        <OrchestrationOverviewPanel ownerKey={ownerKey} />
       )}
 
       {section === 'services' && isAdmin && isAdminTemplate && (
@@ -319,7 +321,7 @@ function OwnerModelPageInner() {
 
 export default function OwnerOrchestrationModelPage() {
   return (
-    <DashboardWrapper breadcrumb={['Listings', 'Modèle orchestration']}>
+    <DashboardWrapper breadcrumb={['Annonces', 'Modèle orchestration']}>
       <AdminOwnerScopeLayout showTopBar={false}>
         <OwnerModelPageInner />
       </AdminOwnerScopeLayout>

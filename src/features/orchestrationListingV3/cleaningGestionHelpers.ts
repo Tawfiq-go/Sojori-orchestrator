@@ -1,8 +1,8 @@
 import {
   DEFAULT_FREQUENCY,
   DEFAULT_TS_CLEAN,
-  type CleaningListingConfig,
   type FrequencyTier,
+  type IncludedCleaningExtra,
   type TimeSlot,
 } from '../listing/components/ConfigOrchestration/cleaningConfigTypes';
 
@@ -10,7 +10,7 @@ export type CleaningIncludedGestion = {
   frequency: FrequencyTier[];
   timeSlots: TimeSlot[];
   descriptionFr: string;
-  extras: unknown[];
+  extras: IncludedCleaningExtra[];
 };
 
 /** Heures entières 0h → 24h (fin de journée). */
@@ -34,6 +34,11 @@ export function parseCleaningIncludedGestion(
     hasGestionSlots ? (g.timeSlots ?? g.TS_CLEAN) : listingValues.TS_CLEAN
   ) as TimeSlot[] | undefined;
 
+  const hasGestionExtras = g.extras !== undefined;
+  const rawExtras = (
+    hasGestionExtras ? g.extras : listingValues.includedCleaningExtras
+  ) as IncludedCleaningExtra[] | undefined;
+
   return {
     frequency:
       Array.isArray(rawFreq) && rawFreq.length > 0
@@ -46,7 +51,7 @@ export function parseCleaningIncludedGestion(
       descFromG ||
       descFromListing ||
       'Ménage inclus pendant votre séjour selon la durée de votre réservation.',
-    extras: Array.isArray(g.extras) ? g.extras : [],
+    extras: Array.isArray(rawExtras) ? rawExtras.map(normalizeIncludedExtra) : [],
   };
 }
 
@@ -58,6 +63,17 @@ export function cleaningIncludedToGestion(state: CleaningIncludedGestion): Recor
     TS_CLEAN: slots,
     descriptionFr: state.descriptionFr,
     extras: state.extras,
+  };
+}
+
+function normalizeIncludedExtra(e: IncludedCleaningExtra): IncludedCleaningExtra {
+  return {
+    id: String(e.id || `extra_${Date.now()}`),
+    enabled: e.enabled !== false,
+    labelFr: String(e.labelFr ?? ''),
+    descriptionFr: String(e.descriptionFr ?? ''),
+    price: Math.max(0, Number(e.price) || 0),
+    icon: String(e.icon || '✨'),
   };
 }
 
