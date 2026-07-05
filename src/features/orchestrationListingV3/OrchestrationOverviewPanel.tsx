@@ -646,17 +646,17 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
           <Typography sx={head}>Escalade</Typography>
           {rows.map((r) => (
             <Box key={r.key} sx={{ display: 'contents' }}>
-              <Typography sx={{ ...cell, fontWeight: 700, color: r.on ? V3.t : V3.t4 }}>
+              <Typography component="div" sx={{ ...cell, fontWeight: 700, color: r.on ? V3.t : V3.t4 }}>
                 {r.emoji} {r.label}
                 {!r.on && <Chip label="Off" size="small" sx={{ ml: 0.75, height: 16, fontSize: 10 }} />}
               </Typography>
-              <Typography sx={r.on ? editCell : { ...cell, opacity: 0.5 }} onClick={r.on ? open('availability', r.key) : undefined}>
+              <Typography component="div" sx={r.on ? editCell : { ...cell, opacity: 0.5 }} onClick={r.on ? open('availability', r.key) : undefined}>
                 {r.availability}
               </Typography>
-              <Typography sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('reminders', r.key) : undefined}>
+              <Typography component="div" sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('reminders', r.key) : undefined}>
                 {r.reminders}
               </Typography>
-              <Typography sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('assign', r.key) : undefined}>
+              <Typography component="div" sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('assign', r.key) : undefined}>
                 {r.assign}
                 {r.autoAssign != null && r.assign !== '—' && (
                   <Box component="span" sx={{ ml: 0.5, fontSize: 11, color: r.autoAssign ? V3.task : V3.t4 }}>
@@ -664,10 +664,10 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
                   </Box>
                 )}
               </Typography>
-              <Typography sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('staffRem', r.key) : undefined}>
+              <Typography component="div" sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('staffRem', r.key) : undefined}>
                 {r.staffReminder}
               </Typography>
-              <Typography sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('escalation', r.key) : undefined}>
+              <Typography component="div" sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('escalation', r.key) : undefined}>
                 {r.escalation}
               </Typography>
             </Box>
