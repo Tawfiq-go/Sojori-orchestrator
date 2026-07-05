@@ -79,6 +79,34 @@ export function wizardJxLabelToAvailability(
 
   // Fenêtre sans borne de début = disponible dès la réservation (le moteur chatbot
   // n'applique que la borne `to` quand `from` est absent).
+  if (/^De la réservation à J0$/i.test(t)) {
+    return {
+      type: 'time_window',
+      to: daysBoundary(0, 'on_checkin_day'),
+    };
+  }
+  if (/^De la réservation au jour du départ$/i.test(t)) {
+    return {
+      type: 'time_window',
+      to: daysBoundary(0, 'on_checkout_day'),
+    };
+  }
+  const deJ0 = t.match(/^De J-(\d+) à J0$/i);
+  if (deJ0) {
+    return {
+      type: 'time_window',
+      from: daysBoundary(Number(deJ0[1]), 'before_checkin'),
+      to: daysBoundary(0, 'on_checkin_day'),
+    };
+  }
+  const deJourDepart = t.match(/^De J-(\d+) au jour du départ$/i);
+  if (deJourDepart) {
+    return {
+      type: 'time_window',
+      from: daysBoundary(Number(deJourDepart[1]), 'before_checkout'),
+      to: daysBoundary(0, 'on_checkout_day'),
+    };
+  }
   if (/^De la réservation à J-1$/i.test(t)) {
     return {
       type: 'time_window',
