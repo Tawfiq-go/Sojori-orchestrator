@@ -1039,7 +1039,10 @@ function PortfolioOperationalRow({
   const calT = row.calendarAppliedAt ? new Date(row.calendarAppliedAt).getTime() : 0;
   const otaT = row.otaPushedAt ? new Date(row.otaPushedAt).getTime() : 0;
   const calStale = snapT > 0 && calT > 0 && calT < snapT;
-  const otaStale = calT > 0 && otaT > 0 && otaT < calT;
+  // OTA « en retard » seulement si le dernier apply a réellement modifié des jours :
+  // un apply à 0 changement ne publie rien (rien à envoyer), OTA reste en phase.
+  const otaStale =
+    calT > 0 && otaT > 0 && otaT < calT && (row.lastApplyDaysChanged ?? 1) > 0;
 
   return (
     <Box component="tr" sx={{
