@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
@@ -11,6 +11,7 @@ import {
   T,
 } from '../features/dynamic-pricing';
 import { useBienDetail } from '../features/dynamic-pricing/hooks/useBienDetail';
+import BienExpressBar from '../features/dynamic-pricing/bien/BienExpressBar';
 import { usePortfolio } from '../features/dynamic-pricing/hooks/usePortfolio';
 import DynamicPricingBreadcrumb, {
   bienHref,
@@ -42,6 +43,16 @@ export function DynamicPricingPage() {
     enabled: scopeFetchReady,
   });
   const bienDetail = useBienDetail(listingId);
+  // Express d'abord : l'étude de marché complète est repliée par défaut.
+  const [bienAdvancedOpen, setBienAdvancedOpen] = useState<boolean>(
+    () => localStorage.getItem('dp-bien-advanced') === '1',
+  );
+  const toggleBienAdvanced = () => {
+    setBienAdvancedOpen((v) => {
+      localStorage.setItem('dp-bien-advanced', v ? '0' : '1');
+      return !v;
+    });
+  };
 
   const scopedModalStats = useMemo(() => {
     const scoped = portfolio.rows.filter((r) =>
@@ -263,7 +274,17 @@ export function DynamicPricingPage() {
                   Pas de snapshot marché — utiliser ⟳ sur cette fiche
                 </Typography>
               )}
-              <BienView {...bienDetail.view} />
+              <BienExpressBar
+                view={bienDetail.view}
+                hasMarketData={Boolean(
+                  bienDetail.row?.hasRevenueEstimate || bienDetail.row?.hasAirroiSnapshot,
+                )}
+                snapshotAt={bienDetail.row?.airroiSnapshotAt ?? null}
+                onFetchMarket={() => bienDetail.refreshAirroi()}
+                advancedOpen={bienAdvancedOpen}
+                onToggleAdvanced={toggleBienAdvanced}
+              />
+              {bienAdvancedOpen ? <BienView {...bienDetail.view} /> : null}
             </>
           ) : portfolio.fetchFailed && !portfolio.loading ? (
             <Box sx={{ px: { xs: 2, md: 3 }, py: 4, maxWidth: 720, mx: 'auto' }}>
