@@ -957,12 +957,14 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
                           type="number"
                           value={value}
                           onChange={e => setDailyPrices(p => ({ ...p, [date]: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start" sx={{ '& p': { fontSize: 11, color: t.text3 } }}>
-                                {getCurrencySymbol(currency)}
-                              </InputAdornment>
-                            ),
+                          slotProps={{
+                            input: {
+                              startAdornment: (
+                                <InputAdornment position="start" sx={{ '& p': { fontSize: 11, color: t.text3 } }}>
+                                  {getCurrencySymbol(currency)}
+                                </InputAdornment>
+                              ),
+                            },
                           }}
                           sx={{ flex: 1, '& input': { fontFamily: '"Geist Mono", monospace', fontWeight: 700, fontSize: 13 } }}
                         />
@@ -1051,9 +1053,11 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
                     placeholder="Ex: 1500"
                     value={totalPrice || ''}
                     onChange={e => setTotalPrice(e.target.value === '' ? 0 : Number(e.target.value))}
-                    InputProps={{
-                      disableUnderline: true,
-                      sx: { fontSize: 22, fontWeight: 800, fontFamily: '"Geist Mono", monospace', letterSpacing: '-0.02em' },
+                    slotProps={{
+                      input: {
+                        disableUnderline: true,
+                        sx: { fontSize: 22, fontWeight: 800, fontFamily: '"Geist Mono", monospace', letterSpacing: '-0.02em' },
+                      },
                     }}
                   />
                   <Box

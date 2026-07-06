@@ -420,8 +420,10 @@ const ChatbotMenuTemplate = ({
             <Stack spacing={2} sx={{
             mt: 1
           }}>
-              <TextField label="Code (max 4 car.)" value={addCode} onChange={e => setAddCode(e.target.value.toUpperCase())} placeholder="Z1" size="small" inputProps={{
-              maxLength: 4
+              <TextField label="Code (max 4 car.)" value={addCode} onChange={e => setAddCode(e.target.value.toUpperCase())} placeholder="Z1" size="small" slotProps={{
+              htmlInput: {
+                maxLength: 4
+              }
             }} />
               <TextField label="Libellé" value={addLabel} onChange={e => setAddLabel(e.target.value)} placeholder="Libellé affiché dans le menu" size="small" fullWidth />
             </Stack>

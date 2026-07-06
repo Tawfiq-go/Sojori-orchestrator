@@ -264,9 +264,11 @@ const TransportServiceCard = ({
               <TextField label="Prix (MAD)" type="text" value={service.pricing?.amount ?? ''} onChange={e => {
             const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
             handlePricingChange('amount', isNaN(val) ? 0 : val);
-          }} size="small" fullWidth inputProps={{
-            inputMode: 'numeric',
-            pattern: '[0-9]*'
+          }} size="small" fullWidth slotProps={{
+            htmlInput: {
+              inputMode: 'numeric',
+              pattern: '[0-9]*'
+            }
           }} />
               <TextField label="Max passagers" type="text" value={service.capacity?.maxPassengers ?? ''} onChange={e => {
             const val = e.target.value === '' ? 1 : parseInt(e.target.value);
@@ -277,24 +279,30 @@ const TransportServiceCard = ({
                 maxPassengers: isNaN(val) ? 1 : val
               }
             });
-          }} size="small" fullWidth inputProps={{
-            inputMode: 'numeric',
-            pattern: '[0-9]*'
+          }} size="small" fullWidth slotProps={{
+            htmlInput: {
+              inputMode: 'numeric',
+              pattern: '[0-9]*'
+            }
           }} />
             </> : <>
               <TextField label="Prix par personne (MAD)" type="text" value={service.pricing?.pricePerPerson ?? ''} onChange={e => {
             const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
             handlePricingChange('pricePerPerson', isNaN(val) ? 0 : val);
-          }} size="small" fullWidth inputProps={{
-            inputMode: 'numeric',
-            pattern: '[0-9]*'
+          }} size="small" fullWidth slotProps={{
+            htmlInput: {
+              inputMode: 'numeric',
+              pattern: '[0-9]*'
+            }
           }} />
               <TextField label="Nombre de personnes" type="text" value={service.pricing?.numberOfPeople ?? ''} onChange={e => {
             const val = e.target.value === '' ? 1 : parseInt(e.target.value);
             handlePricingChange('numberOfPeople', isNaN(val) ? 1 : val);
-          }} size="small" fullWidth inputProps={{
-            inputMode: 'numeric',
-            pattern: '[0-9]*'
+          }} size="small" fullWidth slotProps={{
+            htmlInput: {
+              inputMode: 'numeric',
+              pattern: '[0-9]*'
+            }
           }} />
             </>}
         </Box>
@@ -317,9 +325,11 @@ const TransportServiceCard = ({
               maxPassengers: isNaN(val) ? 1 : val
             }
           });
-        }} size="small" fullWidth helperText="Nombre maximum de passagers autorisés (indépendant du calcul du prix)" inputProps={{
-          inputMode: 'numeric',
-          pattern: '[0-9]*'
+        }} size="small" fullWidth helperText="Nombre maximum de passagers autorisés (indépendant du calcul du prix)" slotProps={{
+          htmlInput: {
+            inputMode: 'numeric',
+            pattern: '[0-9]*'
+          }
         }} />
           </Box>}
       </CardContent>

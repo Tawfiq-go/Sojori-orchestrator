@@ -72,7 +72,7 @@ export default function StaffList({ staff, loading, onCreate, onEdit, onDelete }
       <Stack direction="row" gap={1.25} sx={{ mb: 2.5, flexWrap: 'wrap' }}>
         <TextField size="small" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Rechercher un membre…"
-          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" sx={{ color: T.text3 }} /></InputAdornment> }}
+          slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" sx={{ color: T.text3 }} /></InputAdornment> } }}
           sx={{
             minWidth: 240,
             '& .MuiOutlinedInput-root': {

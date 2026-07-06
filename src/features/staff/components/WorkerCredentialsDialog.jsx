@@ -62,13 +62,15 @@ export default function WorkerCredentialsDialog({
             label="Email"
             value={email || ''}
             fullWidth
-            InputProps={{
-              readOnly: true,
-              endAdornment: (
-                <IconButton size="small" onClick={() => copyText(email, setCopiedKey, 'email')} aria-label="Copier email">
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              ),
+            slotProps={{
+              input: {
+                readOnly: true,
+                endAdornment: (
+                  <IconButton size="small" onClick={() => copyText(email, setCopiedKey, 'email')} aria-label="Copier email">
+                    <ContentCopyIcon fontSize="small" />
+                  </IconButton>
+                ),
+              },
             }}
             helperText={copiedKey === 'email' ? 'Copié' : ' '}
           />
@@ -76,17 +78,19 @@ export default function WorkerCredentialsDialog({
             label="Mot de passe temporaire"
             value={temporaryPassword || ''}
             fullWidth
-            InputProps={{
-              readOnly: true,
-              endAdornment: (
-                <IconButton
-                  size="small"
-                  onClick={() => copyText(temporaryPassword, setCopiedKey, 'password')}
-                  aria-label="Copier mot de passe"
-                >
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              ),
+            slotProps={{
+              input: {
+                readOnly: true,
+                endAdornment: (
+                  <IconButton
+                    size="small"
+                    onClick={() => copyText(temporaryPassword, setCopiedKey, 'password')}
+                    aria-label="Copier mot de passe"
+                  >
+                    <ContentCopyIcon fontSize="small" />
+                  </IconButton>
+                ),
+              },
             }}
             helperText={copiedKey === 'password' ? 'Copié' : ' '}
           />

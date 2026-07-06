@@ -228,8 +228,10 @@ const UsefulNumber = () => {
                                     autoFocus
                                     variant="standard"
                                     className="!text-white"
-                                    InputProps={{
-                                        style: { color: 'white' }
+                                    slotProps={{
+                                        input: {
+                                            style: { color: 'white' }
+                                        }
                                     }}
                                 />
                             ) : (

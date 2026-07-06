@@ -455,13 +455,15 @@ const AssignStaffDialog = ({
             </Typography>
           ) : null}
 
-          <TextField fullWidth size="small" placeholder="Rechercher un staff..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} InputProps={{
-          startAdornment: <InputAdornment position="start">
+          <TextField fullWidth size="small" placeholder="Rechercher un staff..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} slotProps={{
+          input: {
+            startAdornment: <InputAdornment position="start">
                   <SearchIcon style={{
               color: SOJORI_COLORS.primary,
               fontSize: 18
             }} />
                 </InputAdornment>
+          }
         }} sx={{
           mb: 1.5,
           '& .MuiOutlinedInput-root': {

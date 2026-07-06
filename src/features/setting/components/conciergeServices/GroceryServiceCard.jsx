@@ -111,9 +111,11 @@ const GroceryServiceCard = ({
           <TextField label="Frais de service (MAD)" type="text" value={service.pricing?.serviceFee ?? ''} onChange={e => {
           const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
           handlePricingChange('serviceFee', isNaN(val) ? 0 : val);
-        }} size="small" fullWidth inputProps={{
-          inputMode: 'numeric',
-          pattern: '[0-9]*'
+        }} size="small" fullWidth slotProps={{
+          htmlInput: {
+            inputMode: 'numeric',
+            pattern: '[0-9]*'
+          }
         }} />
           <TextField label="Devise" value={service.pricing?.currency || 'MAD'} onChange={e => handlePricingChange('currency', e.target.value)} size="small" fullWidth />
         </Box>

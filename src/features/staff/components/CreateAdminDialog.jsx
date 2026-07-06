@@ -81,25 +81,31 @@ const CreateAdminDialog = ({
         }) => <Form className="space-y-4">
               <Box className="flex flex-col gap-3 mt-3">
                 <Box>
-                  <Field as={TextField} fullWidth name="username" label="Username" variant="outlined" InputProps={{
-                startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                  <Field as={TextField} fullWidth name="username" label="Username" variant="outlined" slotProps={{
+                input: {
+                  startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                }
               }} />
                   <ErrorMessage name="username" component={Typography} className="text-red-500 !text-xs" />
                 </Box>
                 <Box className="w-full">
-                  <Field as={TextField} fullWidth name="email" label="Email" variant="outlined" type="email" InputProps={{
-                startAdornment: <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                  <Field as={TextField} fullWidth name="email" label="Email" variant="outlined" type="email" slotProps={{
+                input: {
+                  startAdornment: <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                }
               }} />
                   <ErrorMessage name="email" component={Typography} className="text-red-500 !text-xs" />
                 </Box>
                 <Box className="w-full">
-                  <Field as={TextField} fullWidth name="password" label="Password" variant="outlined" type={showPassword ? 'text' : 'password'} InputProps={{
-                startAdornment: <Lock className="w-4 h-4 mr-2 text-gray-500" />,
-                endAdornment: <InputAdornment position="end">
+                  <Field as={TextField} fullWidth name="password" label="Password" variant="outlined" type={showPassword ? 'text' : 'password'} slotProps={{
+                input: {
+                  startAdornment: <Lock className="w-4 h-4 mr-2 text-gray-500" />,
+                  endAdornment: <InputAdornment position="end">
                           <IconButton aria-label="toggle password visibility" onClick={handleTogglePassword} edge="end" className="focus:outline-none" size="small">
                             {showPassword ? <EyeOff className="w-4 h-4 text-gray-500 hover:text-gray-700 transition-colors" /> : <Eye className="w-4 h-4 text-gray-500 hover:text-gray-700 transition-colors" />}
                           </IconButton>
                         </InputAdornment>
+                }
               }} />
                   <ErrorMessage name="password" component={Typography} className="text-red-500 !text-xs" />
                 </Box>

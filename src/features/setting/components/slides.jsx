@@ -256,8 +256,8 @@ const SlidesTable = () => {
                 </IconButton>
               </Tooltip>
               <Tooltip title={item.isMain ? t("Set as secondary") : t("Set as main")}>
-                <Switch checked={item.isMain} onChange={() => handleIsMainToggle(item, index)} inputProps={{
-              'aria-label': t('Set as main')
+                <Switch checked={item.isMain} onChange={() => handleIsMainToggle(item, index)} slotProps={{
+              htmlInput: { 'aria-label': t('Set as main') }
             }} />
               </Tooltip>
               </Box>

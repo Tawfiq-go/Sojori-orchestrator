@@ -42,12 +42,14 @@ const OrchestrationFilters = ({
             '&.Mui-focused fieldset':              { borderColor: 'var(--accent)', borderWidth: 1.5, boxShadow: '0 0 0 3px rgba(184,133,26,0.16)' },
           },
         }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon sx={{ fontSize: 16, color: 'var(--text-muted)' }} />
-            </InputAdornment>
-          ),
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ fontSize: 16, color: 'var(--text-muted)' }} />
+              </InputAdornment>
+            ),
+          },
         }}
       />
 

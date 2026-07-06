@@ -168,6 +168,8 @@ export interface PortfolioRow {
   calendarAppliedAt?: string | null;
   /** Dernière publication réussie du calendrier vers les canaux (OTA). */
   otaPushedAt?: string | null;
+  /** Jours modifiés par le dernier apply (0 = OTA déjà en phase). */
+  lastApplyDaysChanged?: number | null;
   airroiSnapshotCostUsd?: number | null;
   airroiComps?: Array<{
     airbnbListingId: string | null;

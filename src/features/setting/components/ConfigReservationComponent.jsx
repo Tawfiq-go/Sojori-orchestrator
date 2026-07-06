@@ -69,8 +69,10 @@ const ConfigReservationComponent = () => {
             field,
             form
           }) => <div>
-                                        <TextField type="number" {...field} error={Boolean(form.errors.beforeCheckinDays && form.touched.beforeCheckinDays)} helperText={<ErrorMessage name="beforeCheckinDays" />} inputProps={{
-              min: 1
+                                        <TextField type="number" {...field} error={Boolean(form.errors.beforeCheckinDays && form.touched.beforeCheckinDays)} helperText={<ErrorMessage name="beforeCheckinDays" />} slotProps={{
+              htmlInput: {
+                min: 1
+              }
             }} onChange={e => setFieldValue('beforeCheckinDays', e.target.value)} />
                                     </div>}
                             </Field>

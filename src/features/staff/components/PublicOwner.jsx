@@ -1716,24 +1716,32 @@ const PublicOwner = ({
                     {!ruCredLoading && ruCredData && <Stack spacing={2} sx={{
           mt: 0.5
         }}>
-                            <TextField label={t('Email dashboard')} value={ruCredData.email || ''} fullWidth size="small" InputProps={{
-            readOnly: true
+                            <TextField label={t('Email dashboard')} value={ruCredData.email || ''} fullWidth size="small" slotProps={{
+            input: {
+              readOnly: true
+            }
           }} />
-                            <TextField label="Email R.U. (extranet)" value={ruCredData.ruEmail || '—'} fullWidth size="small" InputProps={{
-            readOnly: true
+                            <TextField label="Email R.U. (extranet)" value={ruCredData.ruEmail || '—'} fullWidth size="small" slotProps={{
+            input: {
+              readOnly: true
+            }
           }} />
 
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <LockOpenIcon sx={{ fontSize: 18, color: SOJORI.teal }} />
-                              <TextField label="Mot de passe Sojori (dashboard)" value={ruCredData.sojoriPassword || '—'} fullWidth size="small" type="text" InputProps={{
-                readOnly: true
+                              <TextField label="Mot de passe Sojori (dashboard)" value={ruCredData.sojoriPassword || '—'} fullWidth size="small" type="text" slotProps={{
+                input: {
+                  readOnly: true
+                }
               }} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(0,180,180,0.04)' } }} />
                             </Box>
 
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <VpnKeyIcon sx={{ fontSize: 18, color: SOJORI.orange }} />
-                              <TextField label="Mot de passe R.U. (extranet)" value={ruCredData.password || '—'} fullWidth size="small" type="text" InputProps={{
-                readOnly: true
+                              <TextField label="Mot de passe R.U. (extranet)" value={ruCredData.password || '—'} fullWidth size="small" type="text" slotProps={{
+                input: {
+                  readOnly: true
+                }
               }} sx={{ '& .MuiOutlinedInput-root': { bgcolor: SOJORI.orangeSoft } }} />
                             </Box>
 

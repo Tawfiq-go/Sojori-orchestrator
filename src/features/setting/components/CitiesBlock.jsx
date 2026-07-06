@@ -384,12 +384,14 @@ function CitiesBlock() {
                         }}>
                             {t("Search by city name")}
                           </Typography>
-                          <TextField fullWidth variant="outlined" size="small" onChange={handleSearchChange} InputProps={{
-                          startAdornment: <InputAdornment position="start">
+                          <TextField fullWidth variant="outlined" size="small" onChange={handleSearchChange} slotProps={{
+                          input: {
+                            startAdornment: <InputAdornment position="start">
                                   <SearchIcon sx={{
                               color: "#00B4B4"
                             }} />
                                 </InputAdornment>
+                          }
                         }} sx={{
                           "& .MuiOutlinedInput-root": {
                             borderRadius: 2
