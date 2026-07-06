@@ -12,6 +12,7 @@ import { applyJxPreset } from '../wizardGuestAccess';
 import {
   defaultOrchestrationQuickConfig,
   defaultTransportAirportPrices,
+  defaultTransportAirportRoutes,
 } from '../onboardingOrchestrationDashboard';
 import { resolveServiceRhythmRows } from '../onboardingWorkflowDefaults';
 import { ADMIN_ESCALATION_DAYS, ADMIN_ESCALATION_HOURS, formatAdminEscalationDayLabel } from '../wizardStaffDeadlines';
@@ -354,18 +355,56 @@ export default function OnboardingStepOrchestrationExpress({
   };
 
   /* ── navette : villes + prix ── */
-  const transportCities = Object.keys(quickConfig.transportAirportByCity);
-  const toggleTransportCity = (city: string) => {
-    const next = { ...quickConfig.transportAirportByCity };
-    if (next[city] != null) delete next[city];
-    else next[city] = defaultTransportAirportPrices([city])[city] ?? 400;
-    onChangePanel3({ quickConfig: { ...quickConfig, transportAirportByCity: next } });
+  const transportRoutesByCity =
+    quickConfig.transportAirportRoutesByCity ?? defaultTransportAirportRoutes(cities);
+  const transportCities = Object.keys(transportRoutesByCity);
+  const transportRouteForCity = (city: string) => {
+    const legacyAmount = quickConfig.transportAirportByCity[city] ?? defaultTransportAirportPrices([city])[city] ?? 400;
+    return transportRoutesByCity[city] ?? {
+      airportToListing: legacyAmount,
+      listingToAirport: legacyAmount,
+    };
   };
-  const setTransportPrice = (city: string, price: number) => {
+  const toggleTransportCity = (city: string) => {
+    const nextLegacy = { ...quickConfig.transportAirportByCity };
+    const nextRoutes = { ...transportRoutesByCity };
+    if (nextRoutes[city] != null) {
+      delete nextRoutes[city];
+      delete nextLegacy[city];
+    } else {
+      const amount = defaultTransportAirportPrices([city])[city] ?? 400;
+      nextLegacy[city] = amount;
+      nextRoutes[city] = {
+        airportToListing: amount,
+        listingToAirport: amount,
+      };
+    }
     onChangePanel3({
       quickConfig: {
         ...quickConfig,
-        transportAirportByCity: { ...quickConfig.transportAirportByCity, [city]: price },
+        transportAirportByCity: nextLegacy,
+        transportAirportRoutesByCity: nextRoutes,
+      },
+    });
+  };
+  const setTransportPrice = (
+    city: string,
+    direction: 'airportToListing' | 'listingToAirport',
+    price: number,
+  ) => {
+    const current = transportRouteForCity(city);
+    const nextRoute = { ...current, [direction]: price };
+    onChangePanel3({
+      quickConfig: {
+        ...quickConfig,
+        transportAirportByCity: {
+          ...quickConfig.transportAirportByCity,
+          [city]: Math.max(nextRoute.airportToListing, nextRoute.listingToAirport),
+        },
+        transportAirportRoutesByCity: {
+          ...transportRoutesByCity,
+          [city]: nextRoute,
+        },
       },
     });
   };
@@ -561,7 +600,8 @@ export default function OnboardingStepOrchestrationExpress({
             <p className="ob-x-title">🚐 Navette aéroport — dans quelles villes, à quel prix ?</p>
             <div className="ob-x-rows">
               {[...new Set([...cities, ...transportCities])].map((city) => {
-                const on = quickConfig.transportAirportByCity[city] != null;
+                const on = transportRoutesByCity[city] != null;
+                const route = transportRouteForCity(city);
                 return (
                   <div key={city} className={`ob-x-row${on ? '' : ' ob-x-row--off'}`}>
                     <span className="ob-x-row-label">
@@ -574,17 +614,32 @@ export default function OnboardingStepOrchestrationExpress({
                       </button>
                     </span>
                     {on ? (
-                      <label className="ob-x-price">
-                        <input
-                          className="ob-field ob-field--dense"
-                          type="number"
-                          min={0}
-                          step={50}
-                          value={quickConfig.transportAirportByCity[city]}
-                          onChange={(e) => setTransportPrice(city, Number(e.target.value) || 0)}
-                        />
-                        MAD
-                      </label>
+                      <div className="ob-x-price ob-x-price--split">
+                        <label>
+                          <span>Aeroport {'->'} listing</span>
+                          <input
+                            className="ob-field ob-field--dense"
+                            type="number"
+                            min={0}
+                            step={50}
+                            value={route.airportToListing}
+                            onChange={(e) => setTransportPrice(city, 'airportToListing', Number(e.target.value) || 0)}
+                          />
+                          MAD
+                        </label>
+                        <label>
+                          <span>Listing {'->'} aeroport</span>
+                          <input
+                            className="ob-field ob-field--dense"
+                            type="number"
+                            min={0}
+                            step={50}
+                            value={route.listingToAirport}
+                            onChange={(e) => setTransportPrice(city, 'listingToAirport', Number(e.target.value) || 0)}
+                          />
+                          MAD
+                        </label>
+                      </div>
                     ) : (
                       <span className="ob-x-access-hint">non proposée</span>
                     )}

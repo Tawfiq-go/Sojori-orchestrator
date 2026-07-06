@@ -18,6 +18,8 @@ import {
   capabilityKeysForDashboardRow,
   CONCIERGE_QUICK_PICKS,
   dashboardRowDef,
+  defaultTransportAirportPrices,
+  defaultTransportAirportRoutes,
   defaultOrchestrationQuickConfig,
   groupHasEnabledQuickConfig,
   isDashboardRowServiceEnabled,
@@ -140,9 +142,40 @@ export default function OnboardingStepOrchestration({ panel3, cities, onChange }
   };
 
   const transportCities = useMemo(() => {
-    const keys = Object.keys(quickConfig.transportAirportByCity);
+    const keys = Object.keys(quickConfig.transportAirportRoutesByCity ?? quickConfig.transportAirportByCity);
     return keys.length ? keys : cities;
-  }, [quickConfig.transportAirportByCity, cities]);
+  }, [quickConfig.transportAirportByCity, quickConfig.transportAirportRoutesByCity, cities]);
+
+  const transportRoutesByCity =
+    quickConfig.transportAirportRoutesByCity ?? defaultTransportAirportRoutes(cities);
+
+  const transportRouteForCity = (city: string) => {
+    const fallbackAmount = quickConfig.transportAirportByCity[city] ?? defaultTransportAirportPrices([city])[city] ?? 400;
+    return transportRoutesByCity[city] ?? {
+      airportToListing: fallbackAmount,
+      listingToAirport: fallbackAmount,
+    };
+  };
+
+  const setTransportPrice = (
+    city: string,
+    direction: 'airportToListing' | 'listingToAirport',
+    amount: number,
+  ) => {
+    const current = transportRouteForCity(city);
+    const nextRoute = { ...current, [direction]: amount };
+    setQuick({
+      ...quickConfig,
+      transportAirportByCity: {
+        ...quickConfig.transportAirportByCity,
+        [city]: Math.max(nextRoute.airportToListing, nextRoute.listingToAirport),
+      },
+      transportAirportRoutesByCity: {
+        ...transportRoutesByCity,
+        [city]: nextRoute,
+      },
+    });
+  };
 
   const renderQuickConfig = (kind: 'cleaning' | 'transport' | 'concierge') => {
     if (kind === 'cleaning') {
@@ -243,28 +276,42 @@ export default function OnboardingStepOrchestration({ panel3, cities, onChange }
         <div className="ob-orch-quick-body">
           <p className="ob-orch-quick-lead">Navette aéroport — prix forfaitaire (MAD)</p>
           <div className="ob-orch-city-prices">
-            {transportCities.map((city) => (
-              <label key={city} className="ob-orch-city-price">
-                <span>{city}</span>
-                <input
-                  className="ob-field ob-field--dense"
-                  type="number"
-                  min={0}
-                  step={50}
-                  value={quickConfig.transportAirportByCity[city] ?? ''}
-                  onChange={(e) =>
-                    setQuick({
-                      ...quickConfig,
-                      transportAirportByCity: {
-                        ...quickConfig.transportAirportByCity,
-                        [city]: Number(e.target.value) || 0,
-                      },
-                    })
-                  }
-                />
-                <span className="ob-orch-city-unit">MAD</span>
-              </label>
-            ))}
+            {transportCities.map((city) => {
+              const route = transportRouteForCity(city);
+              return (
+                <div key={city} className="ob-orch-city-price ob-orch-city-price--split">
+                  <span className="ob-orch-city-name">{city}</span>
+                  <label>
+                    <span>Aeroport {'->'} listing</span>
+                    <input
+                      className="ob-field ob-field--dense"
+                      type="number"
+                      min={0}
+                      step={50}
+                      value={route.airportToListing}
+                      onChange={(e) =>
+                        setTransportPrice(city, 'airportToListing', Number(e.target.value) || 0)
+                      }
+                    />
+                    <span className="ob-orch-city-unit">MAD</span>
+                  </label>
+                  <label>
+                    <span>Listing {'->'} aeroport</span>
+                    <input
+                      className="ob-field ob-field--dense"
+                      type="number"
+                      min={0}
+                      step={50}
+                      value={route.listingToAirport}
+                      onChange={(e) =>
+                        setTransportPrice(city, 'listingToAirport', Number(e.target.value) || 0)
+                      }
+                    />
+                    <span className="ob-orch-city-unit">MAD</span>
+                  </label>
+                </div>
+              );
+            })}
           </div>
         </div>
       );

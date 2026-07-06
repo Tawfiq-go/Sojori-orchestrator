@@ -17,6 +17,7 @@ function splitLegacyName(fullName: string): { firstName: string; lastName: strin
 export function normalizeWizardStaffRow(raw: Partial<WizardStaffRow> & Record<string, unknown>): WizardStaffRow {
   const base = defaultStaffRow();
   if (!raw || typeof raw !== 'object') return base;
+  const advancedDefaultsApplied = raw.advancedDefaultsApplied === true;
 
   const legacyName =
     (typeof raw.fullName === 'string' && raw.fullName) ||
@@ -47,10 +48,10 @@ export function normalizeWizardStaffRow(raw: Partial<WizardStaffRow> & Record<st
     Dim: 6,
   };
 
-  const roles = raw.roles ?? {
-    taskStaff: Boolean(legacyName || raw.whatsapp),
-    adminWhatsapp: false,
-    dashboardEmail: Boolean(email),
+  const roles = advancedDefaultsApplied && raw.roles ? raw.roles : {
+    taskStaff: Boolean(legacyName || raw.whatsapp) || base.roles.taskStaff,
+    adminWhatsapp: base.roles.adminWhatsapp,
+    dashboardEmail: Boolean(email) || base.roles.dashboardEmail,
   };
 
   const taskStaffRaw = (raw.taskStaff as Record<string, unknown>) ?? {};
@@ -66,6 +67,12 @@ export function normalizeWizardStaffRow(raw: Partial<WizardStaffRow> & Record<st
     allowedTaskTypes: Array.isArray(taskStaffRaw.allowedTaskTypes)
       ? (taskStaffRaw.allowedTaskTypes as string[])
       : base.taskStaff.allowedTaskTypes,
+    ...(!advancedDefaultsApplied &&
+    Array.isArray(taskStaffRaw.allowedTaskTypes) &&
+    taskStaffRaw.allowedTaskTypes.length === 0
+      ? { allowedTaskTypes: base.taskStaff.allowedTaskTypes }
+      : {}),
+    ...(!advancedDefaultsApplied ? { isOpsAdmin: base.taskStaff.isOpsAdmin } : {}),
     ...(legacyDays
       ? {
           daysOfWeek: legacyDays
@@ -82,13 +89,21 @@ export function normalizeWizardStaffRow(raw: Partial<WizardStaffRow> & Record<st
     alertMessages?: boolean;
     alertReviews?: boolean;
   };
+  const rawPush = (rawAdmin.pushNotifications as Record<string, boolean> | undefined) ?? {};
+  const rawNotifCategories =
+    (rawAdmin.notifCategories as Record<string, boolean> | undefined) ?? {};
+  const rawMenus = (rawAdmin.menuPermissions as Record<string, string> | undefined) ?? {};
+  const allPushOff = Object.keys(rawPush).length > 0 && Object.values(rawPush).every((v) => v === false);
+  const allNotifCategoriesOff =
+    Object.keys(rawNotifCategories).length > 0 && Object.values(rawNotifCategories).every((v) => v === false);
+  const allMenusOff = Object.keys(rawMenus).length > 0 && Object.values(rawMenus).every((v) => v === 'none');
   const pushNotifications = {
     ...base.adminWhatsapp.pushNotifications,
-    ...(rawAdmin.pushNotifications as object),
+    ...(!advancedDefaultsApplied && allPushOff ? {} : rawPush),
   };
   const notifCategories = {
     ...base.adminWhatsapp.notifCategories,
-    ...(rawAdmin.notifCategories as object),
+    ...(!advancedDefaultsApplied && allNotifCategoriesOff ? {} : rawNotifCategories),
   };
   if (
     !rawAdmin.notifCategories &&
@@ -109,7 +124,7 @@ export function normalizeWizardStaffRow(raw: Partial<WizardStaffRow> & Record<st
     pushNotifications,
     menuPermissions: {
       ...base.adminWhatsapp.menuPermissions,
-      ...(rawAdmin.menuPermissions as object),
+      ...(!advancedDefaultsApplied && allMenusOff ? {} : rawMenus),
     },
   };
 
@@ -121,17 +136,22 @@ export function normalizeWizardStaffRow(raw: Partial<WizardStaffRow> & Record<st
     ...rawDash,
     ...dashScope,
     isAdmin:
-      typeof rawDash.isAdmin === 'boolean'
-        ? rawDash.isAdmin
-        : legacyPreset === 'exploitation',
+      !advancedDefaultsApplied
+        ? base.dashboard.isAdmin
+        : typeof rawDash.isAdmin === 'boolean'
+          ? rawDash.isAdmin
+          : legacyPreset === 'exploitation',
     featureGrants: Array.isArray(rawDash.featureGrants)
-      ? (rawDash.featureGrants as typeof base.dashboard.featureGrants)
+      ? (!advancedDefaultsApplied && rawDash.featureGrants.length === 0
+          ? base.dashboard.featureGrants
+          : (rawDash.featureGrants as typeof base.dashboard.featureGrants))
       : base.dashboard.featureGrants,
   };
 
   return {
     ...base,
     id: typeof raw.id === 'string' ? raw.id : base.id,
+    advancedDefaultsApplied: true,
     firstName,
     lastName,
     whatsapp: typeof raw.whatsapp === 'string' ? raw.whatsapp : base.whatsapp,

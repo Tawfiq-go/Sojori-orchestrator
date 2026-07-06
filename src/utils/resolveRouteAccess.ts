@@ -83,6 +83,16 @@ export function resolveRouteAccess(input: RouteAccessInput): RouteAccessResult {
   const platformPath = isPlatformAdminPath(pathname);
   const navId = resolveNavIdFromPath(pathname, search);
 
+  if (platformPath && navRole === Roles.Owner && (navId === 'staff' || navId === 'equipe/onboarding')) {
+    const allowed = roleAllowedOnNavItem(navId, Roles.Owner);
+    return {
+      allowed,
+      zone: 'pm',
+      reason: allowed ? 'owner_allowed' : 'owner_denied',
+      navId,
+    };
+  }
+
   if (platformPath) {
     const allowed = hasAdminAccess(navRole);
     return {

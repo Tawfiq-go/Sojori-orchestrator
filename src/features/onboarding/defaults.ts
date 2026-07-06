@@ -11,10 +11,12 @@ import type {
   WizardStaffRow,
 } from './types';
 import {
-  ONBOARDING_WA_MENU_PERMISSIONS,
-  defaultWaNotifCategoriesOff,
-  defaultWizardWaPushNotificationsOff,
+  DEFAULT_WA_MENU_PERMISSIONS,
+  defaultWaNotifCategories,
+  defaultWizardWaPushNotifications,
 } from './wizardAdminWhatsapp';
+import { STAFF_TASK_PILLS } from '../taskHub/staff-design/staffDesignConstants';
+import { applyWizardDashboardAdmin } from './wizardDashboardAccess';
 import { applyJxPreset, normalizeJxSettings } from './wizardGuestAccess';
 import {
   defaultOrchestrationQuickConfig,
@@ -26,39 +28,42 @@ import { defaultDeadlines as buildDefaultDeadlines, normalizeWizardDeadlines } f
 
 export const defaultDeadlines = buildDefaultDeadlines;
 
+const defaultStaffTaskTypes = () => STAFF_TASK_PILLS.map((pill) => pill.key);
+
 export const defaultStaffRow = (): WizardStaffRow => ({
   id: `staff-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  advancedDefaultsApplied: true,
   firstName: '',
   lastName: '',
   whatsapp: '',
   email: '',
   roles: {
-    taskStaff: false,
-    adminWhatsapp: false,
-    dashboardEmail: false,
+    taskStaff: true,
+    adminWhatsapp: true,
+    dashboardEmail: true,
   },
   taskStaff: {
     contractType: 'employee',
-    allowedTaskTypes: [],
-    isOpsAdmin: false,
+    allowedTaskTypes: defaultStaffTaskTypes(),
+    isOpsAdmin: true,
     maxTasksPerDay: 5,
     ...emptyWizardScope(),
-    daysOfWeek: [0, 1, 2, 3, 4],
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
     timeStart: '09:00',
     timeEnd: '18:00',
   },
   adminWhatsapp: {
     language: 'French',
     banned: false,
-    menuPermissions: { ...ONBOARDING_WA_MENU_PERMISSIONS },
-    notifCategories: defaultWaNotifCategoriesOff(),
-    pushNotifications: defaultWizardWaPushNotificationsOff(),
+    menuPermissions: { ...DEFAULT_WA_MENU_PERMISSIONS },
+    notifCategories: defaultWaNotifCategories(),
+    pushNotifications: defaultWizardWaPushNotifications(),
     ...emptyWizardScope(),
   },
   dashboard: {
-    isAdmin: false,
+    isAdmin: true,
     ...emptyWizardScope(),
-    featureGrants: [],
+    featureGrants: applyWizardDashboardAdmin(true, []),
   },
 });
 
