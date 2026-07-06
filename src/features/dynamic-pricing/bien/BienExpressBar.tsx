@@ -90,14 +90,14 @@ export default function BienExpressBar({
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>
-              Prix du marché (AirROI)
+              Snapshot prix AirROI
             </Typography>
             <Typography sx={{ fontSize: 11.5, color: T.text3 }} noWrap>
               {hasMarketData
                 ? snapshotAt
-                  ? `À jour · ${new Date(snapshotAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`
-                  : 'Données présentes'
-                : 'Aucune donnée — récupérez les prix estimés du marché'}
+                  ? `Snapshot du ${new Date(snapshotAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`
+                  : 'Snapshot présent'
+                : 'Aucun snapshot — récupérez les prix estimés du marché'}
               {fetchCost != null ? ` · coût $${fetchCost.toFixed(3)}` : ''}
             </Typography>
             {fetchError ? (
@@ -122,7 +122,7 @@ export default function BienExpressBar({
                 : { bgcolor: T.goldDeep, '&:hover': { bgcolor: T.gold } }),
             }}
           >
-            {fetching ? 'Récupération…' : hasMarketData ? 'Actualiser' : 'Récupérer les prix'}
+            {fetching ? 'Mise à jour…' : hasMarketData ? 'Mettre à jour le snapshot' : 'Récupérer le snapshot'}
           </Button>
         </Stack>
 
@@ -139,7 +139,7 @@ export default function BienExpressBar({
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>
-              Appliquer au calendrier
+              Snapshot → calendrier
             </Typography>
             <Typography sx={{ fontSize: 11.5, color: T.text3 }} noWrap>
               Mode {modeLabel} · plancher {view.floor} · plafond {view.ceiling} MAD
@@ -169,7 +169,7 @@ export default function BienExpressBar({
               '&:hover': { bgcolor: T.gold },
             }}
           >
-            {view.pilotApplyLoading ? 'Mise à jour…' : 'Mettre à jour le calendrier'}
+            {view.pilotApplyLoading ? 'Propagation…' : 'Propager vers le calendrier'}
           </Button>
         </Stack>
 
