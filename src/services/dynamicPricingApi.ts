@@ -55,6 +55,8 @@ export type PortfolioListingDto = {
   calendarAppliedAt?: string | null;
   /** Dernière publication calendrier → canaux réussie. */
   otaPushedAt?: string | null;
+  /** Jours modifiés par le dernier apply (0 = rien à publier vers OTA). */
+  lastApplyDaysChanged?: number | null;
   airroiSnapshotCostUsd?: number | null;
   airroiRaw?: AirroiRawFields | null;
   airroiComps?: Array<{
