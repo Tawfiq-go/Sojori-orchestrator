@@ -1,9 +1,10 @@
 // ════════════════════════════════════════════════════════════════════
 // CalendarInventoryPageV3 — wrapper avec nouveau design Atelier 2026
 // ════════════════════════════════════════════════════════════════════
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import moment from 'moment';
 import 'moment/locale/fr';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import listingsService from '../services/listingsService';
@@ -14,7 +15,7 @@ import {
   computeInventoryFetchRange,
   clampPivotDate,
 } from '../components/calendar-v3/inventoryCalendarConstants';
-import { processInventoryResponse } from '../components/calendar-v3/processInventoryResponse';
+import { processInventoryResponse, type ProcessedInventoryData } from '../components/calendar-v3/processInventoryResponse';
 import {
   fetchApplySyncSummary,
   type PortfolioApplySyncSummaryDto,
@@ -23,6 +24,10 @@ import {
 export const CALENDAR_LISTINGS_PAGE_SIZE = 25;
 
 moment.locale('fr');
+
+function inventoryCacheKey(from: string, to: string, listingIds: string[]): string {
+  return `${from}|${to}|${[...listingIds].sort().join(',')}`;
+}
 
 export function CalendarInventoryPageV3() {
   const staging = JSON.parse(localStorage.getItem('isStaging') || 'false');
@@ -33,23 +38,32 @@ export function CalendarInventoryPageV3() {
   const [listings, setListings] = useState<ListingType[]>([]);
   const [listingsTotal, setListingsTotal] = useState(0);
   const [listingsPage, setListingsPage] = useState(0);
-  const [listingsNameQuery, setListingsNameQuery] = useState('');
-  const [listingsNameFilter, setListingsNameFilter] = useState('');
-  const [inventoryData, setInventoryData] = useState<ReturnType<typeof processInventoryResponse>>({});
+  const [inventoryData, setInventoryData] = useState<ProcessedInventoryData>({});
   const [currentDate, setCurrentDate] = useState(() => moment(clampPivotDate(new Date())));
   const [roomTypeByListing, setRoomTypeByListing] = useState<Record<string, string>>({});
-  const listingsReadyRef = useRef(false);
   const inventorySeqRef = useRef(0);
+  const inventoryCacheRef = useRef<Map<string, ProcessedInventoryData>>(new Map());
   const [dpSyncSummary, setDpSyncSummary] = useState<PortfolioApplySyncSummaryDto | null>(null);
   const [dpSyncLoading, setDpSyncLoading] = useState(false);
 
-  /** Listings : refetch quand scope PM / staging change */
+  const fetchRange = useMemo(
+    () => computeInventoryFetchRange(currentDate),
+    [currentDate.format('YYYY-MM')],
+  );
+
+  const visibleListingIds = useMemo(
+    () => listings.map((listing) => listing._id),
+    [listings],
+  );
+
+  /** Listings paginés — refetch quand scope / page change */
   useEffect(() => {
     let cancelled = false;
     if (!scopeFetchReady) {
       setListings([]);
+      setListingsTotal(0);
       setInventoryData({});
-      listingsReadyRef.current = false;
+      inventoryCacheRef.current.clear();
       setListingsLoading(false);
       return () => {
         cancelled = true;
@@ -59,29 +73,36 @@ export function CalendarInventoryPageV3() {
     (async () => {
       setListingsLoading(true);
       setInventoryData({});
-      listingsReadyRef.current = false;
+      inventoryCacheRef.current.clear();
       try {
-        const listingsResponse = await listingsService.getListingsForCalendar(0, 100, {
-          active: true,
-          staging,
-          filterOwnerId: requestOwnerId || undefined,
-        });
+        const listingsResponse = await listingsService.getListingsForCalendar(
+          listingsPage,
+          CALENDAR_LISTINGS_PAGE_SIZE,
+          {
+            active: true,
+            staging,
+            filterOwnerId: requestOwnerId || undefined,
+          },
+        );
 
         if (!listingsResponse?.success || !Array.isArray(listingsResponse?.data)) {
           if (!cancelled) {
             setListings([]);
-            setInventoryData({});
+            setListingsTotal(0);
           }
           return;
         }
 
         if (!cancelled) {
           setListings(listingsResponse.data);
-          listingsReadyRef.current = listingsResponse.data.length > 0;
+          setListingsTotal(listingsResponse.total || listingsResponse.data.length);
         }
       } catch (error) {
         console.error('[CalendarV3] Erreur chargement listings:', error);
-        if (!cancelled) setListings([]);
+        if (!cancelled) {
+          setListings([]);
+          setListingsTotal(0);
+        }
       } finally {
         if (!cancelled) setListingsLoading(false);
       }
@@ -89,86 +110,115 @@ export function CalendarInventoryPageV3() {
     return () => {
       cancelled = true;
     };
-  }, [staging, scopeFetchReady, requestOwnerId]);
+  }, [staging, scopeFetchReady, requestOwnerId, listingsPage]);
 
+  /** DP sync — basse priorité, après le premier paint inventaire */
   useEffect(() => {
-    if (listings.length === 0) return;
+    if (visibleListingIds.length === 0) return;
     let cancelled = false;
-    (async () => {
-      setDpSyncLoading(true);
-      try {
-        const res = await fetchApplySyncSummary(listings.map((l) => l._id));
-        if (!cancelled && res.data?.success) setDpSyncSummary(res.data);
-      } catch (e) {
-        console.error('[CalendarV3] DP sync summary:', e);
-        if (!cancelled) setDpSyncSummary(null);
-      } finally {
-        if (!cancelled) setDpSyncLoading(false);
-      }
-    })();
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        setDpSyncLoading(true);
+        try {
+          const res = await fetchApplySyncSummary(visibleListingIds);
+          if (!cancelled && res.data?.success) setDpSyncSummary(res.data);
+        } catch (e) {
+          console.error('[CalendarV3] DP sync summary:', e);
+          if (!cancelled) setDpSyncSummary(null);
+        } finally {
+          if (!cancelled) setDpSyncLoading(false);
+        }
+      })();
+    }, 400);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [listings]);
+  }, [visibleListingIds.join(',')]);
 
   const listingNameById = useMemo(() => {
     const m: Record<string, string> = {};
-    listings.forEach((l) => {
-      m[l._id] = l.name;
+    listings.forEach((listing) => {
+      m[listing._id] = listing.name;
     });
     return m;
   }, [listings]);
 
-  /** Inventaire : uniquement quand la date change — pas de rechargement page entière */
-  useEffect(() => {
-    if (!listingsReadyRef.current || listings.length === 0) return;
+  const loadInventory = useCallback(
+    async (listingIds: string[], from: string, to: string, seq: number) => {
+      if (listingIds.length === 0) {
+        setInventoryData({});
+        setInventoryLoading(false);
+        return;
+      }
 
-    const seq = ++inventorySeqRef.current;
-    let cancelled = false;
+      const cacheKey = inventoryCacheKey(from, to, listingIds);
+      const cached = inventoryCacheRef.current.get(cacheKey);
+      if (cached) {
+        if (seq === inventorySeqRef.current) {
+          setInventoryData(cached);
+          setInventoryLoading(false);
+        }
+        return;
+      }
 
-    (async () => {
       setInventoryLoading(true);
       try {
-        const listingIds = listings.map((l) => l._id);
-        const { from, to } = computeInventoryFetchRange(currentDate);
-
         const inventory = await calendarService.getInventoryForListings(
           listingIds,
           from,
           to,
           true,
-          true,
+          false,
         );
 
-        if (cancelled || seq !== inventorySeqRef.current) return;
+        if (seq !== inventorySeqRef.current) return;
 
         const processed = processInventoryResponse(inventory);
+        inventoryCacheRef.current.set(cacheKey, processed);
         setInventoryData(processed);
 
         setRoomTypeByListing((prev) => {
           const next = { ...prev };
-          listings.forEach((l) => {
-            if (next[l._id]) return;
-            const keys = processed[l._id] ? Object.keys(processed[l._id]) : [];
-            if (keys[0]) next[l._id] = keys[0];
+          listingIds.forEach((id) => {
+            if (next[id]) return;
+            const keys = processed[id] ? Object.keys(processed[id]) : [];
+            if (keys[0]) next[id] = keys[0];
           });
           return next;
         });
       } catch (error) {
         console.error('[CalendarV3] Erreur chargement inventaire:', error);
       } finally {
-        if (!cancelled && seq === inventorySeqRef.current) {
+        if (seq === inventorySeqRef.current) {
           setInventoryLoading(false);
         }
       }
-    })();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    setListingsPage(0);
+  }, [requestOwnerId]);
+
+  /** Inventaire : plage stable par mois + page listings (pas à chaque jour) */
+  useEffect(() => {
+    if (listings.length === 0) return;
+
+    const seq = ++inventorySeqRef.current;
+    let cancelled = false;
+
+    void loadInventory(visibleListingIds, fetchRange.from, fetchRange.to, seq);
 
     return () => {
       cancelled = true;
+      if (cancelled) {
+        // noop — seq guard inside loadInventory
+      }
     };
-  }, [currentDate, listings]);
+  }, [fetchRange.from, fetchRange.to, visibleListingIds.join(','), listings.length, loadInventory]);
 
-  /** Métadonnées listings — indépendantes de l’inventaire (colonne gauche stable) */
   const listingCatalog = useMemo(
     () =>
       listings.map((listing) => ({
@@ -194,13 +244,13 @@ export function CalendarInventoryPageV3() {
     return result;
   }, [listings, inventoryData, roomTypeByListing]);
 
-  const handleUpdateInventory = async (payloads: any[]) => {
-    await Promise.all(payloads.map((payload) => calendarService.updateCalendar(payload)));
+  const handleUpdateInventory = async (payloads: unknown[]) => {
+    if (payloads.length === 0) return;
+    await calendarService.updateCalendar(payloads as never);
 
-    const listingIds = listings.map((l) => l._id);
-    const { from, to } = computeInventoryFetchRange(currentDate);
-    const inventory = await calendarService.getInventoryForListings(listingIds, from, to, true, true);
-    setInventoryData(processInventoryResponse(inventory));
+    inventoryCacheRef.current.clear();
+    const seq = ++inventorySeqRef.current;
+    await loadInventory(visibleListingIds, fetchRange.from, fetchRange.to, seq);
   };
 
   const handleDateChange = (newDate: Date) => {
@@ -212,7 +262,9 @@ export function CalendarInventoryPageV3() {
     return raw.charAt(0).toUpperCase() + raw.slice(1);
   }, [currentDate]);
 
-  if (listingsLoading) {
+  const totalPages = Math.max(1, Math.ceil(listingsTotal / CALENDAR_LISTINGS_PAGE_SIZE));
+
+  if (listingsLoading && listings.length === 0) {
     return (
       <DashboardWrapper titleMeta={monthLabel}>
         <div style={{ padding: '40px', textAlign: 'center', color: '#7a756c' }}>
@@ -224,12 +276,42 @@ export function CalendarInventoryPageV3() {
 
   return (
     <DashboardWrapper titleMeta={monthLabel}>
+      {listingsTotal > CALENDAR_LISTINGS_PAGE_SIZE ? (
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ mb: 1.5, px: 0.5 }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            {listingsTotal} propriété(s) · page {listingsPage + 1}/{totalPages}
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={listingsPage <= 0 || listingsLoading}
+              onClick={() => setListingsPage((p) => Math.max(0, p - 1))}
+            >
+              Précédent
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={listingsPage >= totalPages - 1 || listingsLoading}
+              onClick={() => setListingsPage((p) => p + 1)}
+            >
+              Suivant
+            </Button>
+          </Box>
+        </Stack>
+      ) : null}
       <CalendarInventoryPage
         startDate={currentDate.toDate()}
         listingCatalog={listingCatalog}
         inventoriesByListing={inventoriesByListing}
         inventoryData={inventoryData}
-        inventoryLoading={inventoryLoading}
+        inventoryLoading={inventoryLoading || listingsLoading}
         defaultView="multi"
         onUpdateInventory={handleUpdateInventory}
         onDateChange={handleDateChange}

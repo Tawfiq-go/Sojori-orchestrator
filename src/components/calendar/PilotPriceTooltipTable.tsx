@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, Stack } from '@mui/material';
 import { T } from '../../features/dynamic-pricing/_tokens';
+import { priceOf, resolvePriceMode, PRICE_MODE_LABEL } from '../calendar-v3/_shared';
 
 type PilotFactorRow = {
   key?: string;
@@ -25,6 +26,8 @@ type InvSlice = {
   manualPrice?: number | null;
   applyManual?: boolean;
   useDynamicPrice?: boolean;
+  priceMode?: 'manual' | 'dynamic' | 'base';
+  setUseDynamicPriceManual?: boolean;
 };
 
 function normalizeFactorLabel(label: string) {
@@ -32,10 +35,7 @@ function normalizeFactorLabel(label: string) {
 }
 
 function priceOfInv(inv: InvSlice): number {
-  if (inv.applyManual && inv.manualPrice != null) return inv.manualPrice;
-  if (inv.useDynamicPrice) return inv.calculatedPrice ?? inv.basePrice ?? 0;
-  if (inv.manualPrice != null) return inv.manualPrice;
-  return inv.basePrice ?? 0;
+  return priceOf(inv);
 }
 
 export default function PilotPriceTooltipTable({
@@ -54,8 +54,9 @@ export default function PilotPriceTooltipTable({
 
   const calc = inv?.calculatedPrice;
   const man = inv?.manualPrice;
-  const manualActive = Boolean(inv?.applyManual && man != null);
-  const dynamicActive = !manualActive && Boolean(inv?.useDynamicPrice);
+  const mode = inv ? resolvePriceMode(inv) : 'base';
+  const manualActive = mode === 'manual';
+  const dynamicActive = mode === 'dynamic';
   const total = inv ? priceOfInv(inv) : (history.calculated ?? 0);
 
   return (
@@ -92,7 +93,7 @@ export default function PilotPriceTooltipTable({
             Prix affiché calendrier
           </Typography>
           {calc != null ? (
-            <ModeRow label="⚡ Dynamique" value={`${calc} ${currency}`} active={dynamicActive} color={T.ai} />
+            <ModeRow label="Prix dynamique" value={`${calc} ${currency}`} active={dynamicActive} color={T.ai} />
           ) : null}
           {man != null ? (
             <ModeRow label="✏ Manuel" value={`${man} ${currency}`} active={manualActive} color={T.warning} />
@@ -102,7 +103,7 @@ export default function PilotPriceTooltipTable({
 
       <Box sx={{ mt: 1, pt: 1, borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between' }}>
         <Typography sx={{ fontSize: 12, fontWeight: 800 }}>
-          Prix final{manualActive ? ' · manuel' : dynamicActive ? ' · dynamique' : ''}
+          Prix final · {PRICE_MODE_LABEL[mode]}
         </Typography>
         <Typography sx={{ fontSize: 13, fontWeight: 800, color: T.goldDeep, fontFamily: '"Geist Mono", monospace' }}>
           {Math.round(total)} {currency}

@@ -707,7 +707,7 @@ export function UpdateInventoryModal({
               </ToggleButtonGroup>
 
               <Typography sx={{ fontSize: 12, color: COLORS.gray[600], mt: 1, lineHeight: 1.45 }}>
-                Les tarifs journaliers viennent du service Dynamic Pricing (pilot G7). Activez ou
+                Les tarifs journaliers viennent du service Dynamic Pricing Sojori. Activez ou
                 désactivez le mode dynamique sur la période — sans saisie de prix de base.
               </Typography>
             </AccordionDetails>

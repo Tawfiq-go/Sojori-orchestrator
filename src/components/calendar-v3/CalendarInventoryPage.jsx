@@ -46,7 +46,7 @@ export default function CalendarInventoryPage({
 
   const [view, setView] = useState(defaultView);
   const [selectedListingId, setSelectedListingId] = useState(listings[0]?._id);
-  const [selectedColumns, setSelectedColumns] = useState(['availableRoom', 'rate', 'minStay']);
+  const [selectedColumns, setSelectedColumns] = useState(['availableRoom', 'rate']);
   const [pivotDate, setPivotDate] = useState(() => startOfDay(startDate));
   const [modalCells, setModalCells] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);

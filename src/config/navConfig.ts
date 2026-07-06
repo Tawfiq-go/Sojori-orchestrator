@@ -131,6 +131,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
       { id: 'staff', label: 'Staff', iconType: 'worker', iconColor: '#D4A574', roles: PM_ROLES },
       { id: 'chatbot/whitelist', label: 'Whitelist', iconType: 'robot', iconColor: '#7C3AED', roles: PM_ROLES },
       {
+        id: 'equipe/mon-profil',
+        label: 'Mon profil PM',
+        icon: '👤',
+        roles: [Roles.Owner],
+        description: 'Coordonnées, entreprise et vitrine sojori.com',
+      },
+      {
         id: 'equipe/onboarding',
         label: 'On-boarding',
         icon: '🚀',

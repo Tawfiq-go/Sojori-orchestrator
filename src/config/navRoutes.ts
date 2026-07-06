@@ -78,6 +78,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   // Équipe
   staff: '/tasks/team',
   'equipe/onboarding': '/admin/equipe?tab=onboarding',
+  'equipe/mon-profil': '/admin/equipe/mon-profil',
   'my-tasks': '/tasks',
   'my-sched': '/tasks/planning',
   'admin/equipe/staff': '/tasks/team',

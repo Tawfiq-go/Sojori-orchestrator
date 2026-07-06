@@ -226,6 +226,13 @@
   cursor: pointer;
 }
 
+.owner-input-readonly {
+  opacity: 0.72;
+  background: #f1f5f9 !important;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 .owner-form-hint {
   font-size: 12px;
   line-height: 1.45;

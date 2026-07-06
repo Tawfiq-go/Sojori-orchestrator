@@ -1,12 +1,13 @@
 // ════════════════════════════════════════════════════════════════════
-// MultiView.jsx — grille Multi-listing · Rate TOP + collapse
+// MultiView.jsx — grille Multi-listing · ligne principale (prix + dispo) + détail optionnel
 // Excel selection drag · scroll sync · tooltip breakdown · popover rotations
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import {
   T, ALL_COLUMNS, priceOf, cellKey, genDays, isArchiveDay, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   hasInventoryData, resolveInventoryCellState, formatInventoryRateLabel, OUT_OF_WINDOW_CELL_BG,
-  sortCalendarColumns,
+  sortCalendarColumns, resolvePriceMode, PRICE_MODE_LABEL,
+  calendarPrimaryColumns, calendarSelectableColumns,
 } from './_shared';
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
@@ -257,7 +258,7 @@ export default function MultiView({
               cellW={CELL_W}
               expanded={!!expanded[listing._id]}
               onToggle={() => toggleListing(listing._id)}
-              selectedColumns={selectedColumns.length ? selectedColumns : []}
+              selectedColumns={selectedColumns}
               isSelected={isSelected}
               onMouseDown={onMouseDown}
               onMouseEnter={onMouseEnter}
@@ -394,11 +395,15 @@ const ListingLabel = memo(function ListingLabel({ listing, expanded, showChevron
   );
 });
 
-/* ─── Ligne d'un listing (Rate TOP + collapse) ─── */
+/* ─── Ligne d'un listing (prix + dispo sur une ligne, détail en collapse) ─── */
 function ListingRow({
   listing, inventories, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onReservationClick,
 }) {
-  const showChevron = selectedColumns.length > 0;
+  const primaryCols = calendarPrimaryColumns(selectedColumns);
+  const selectableColumns = calendarSelectableColumns(selectedColumns);
+  const showChevron = selectableColumns.length > 0;
+  const showDispo = primaryCols.includes('availableRoom');
+  const showRate = primaryCols.includes('rate');
   const getInv = (dateStr) => inventories[dateStr];
 
   /* ─── Audit jours bloqués sans réservation — modal résultat en tableau ─── */
@@ -441,7 +446,7 @@ function ListingRow({
 
   return (
     <div>
-      {/* Rate TOP — toujours visible */}
+      {/* Ligne principale — prix + dispo (filtre par défaut) */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: `${LEFT_W}px repeat(${days.length}, ${CELL_W}px)`,
@@ -458,18 +463,20 @@ function ListingRow({
         {days.map(d => {
           const inv = getInv(d.iso);
           return (
-            <RateTopCell
+            <PrimaryInventoryCell
               key={d.iso}
               day={d}
               inv={inv}
-              currency={listing.currencyCode || 'EUR'}
+              listing={listing}
+              showRate={showRate}
+              showDispo={showDispo}
             />
           );
         })}
       </div>
 
-      {/* Collapse rows */}
-      {expanded && sortCalendarColumns(selectedColumns).map(colId => {
+      {/* Lignes sélection Excel — collapse (comme avant : pas la ligne résumé) */}
+      {expanded && selectableColumns.map(colId => {
         const col = ALL_COLUMNS.find(c => c.id === colId);
         if (!col) return null;
         return (
@@ -500,10 +507,7 @@ function ListingRow({
                   style={{
                     background: 'none', border: 0, padding: '0 2px', marginLeft: 2,
                     color: T.text4, fontSize: 10, fontWeight: 600, cursor: 'pointer', lineHeight: 1,
-                    opacity: 0.7, transition: 'opacity 0.15s, color 0.15s',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = T.primary; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.color = T.text4; }}
                 >
                   ▶ audit
                 </button>
@@ -572,68 +576,90 @@ function ListingRow({
   );
 }
 
-/* ─── Rate TOP cell (lecture seule, pas de sélection Excel) ─── */
-function RateTopCell({ day, inv, currency }) {
+/* ─── Ligne principale : prix + dispo — lecture seule (scroll / survol sans sélection) ─── */
+function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
+  const [showTip, setShowTip] = useState(false);
+  const currency = listing.currencyCode || 'EUR';
   const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
   const rate = formatInventoryRateLabel(state, inv);
   const archived = state === 'archive';
   const noData = state === 'out_of_window' || state === 'missing';
-  const isDynamic = hasInventoryData(inv) && !!inv.useDynamicPrice;
+  const isDynamic = hasInventoryData(inv) && resolvePriceMode(inv) === 'dynamic';
   const isStop = hasInventoryData(inv) && !!inv.stopSell;
   const isBooked = (inv?.reservations?.length ?? 0) > 0;
   const isWeekend = day.isWeekend;
+  const mode = resolvePriceMode(inv);
+  const modeColor = mode === 'manual' ? T.warning : mode === 'dynamic' ? T.ai : T.text;
 
   let background = T.bg1;
-  if (state === 'out_of_window') {
-    background = OUT_OF_WINDOW_CELL_BG;
-  } else if (archived) {
-    background = ARCHIVE_CELL_BG;
-  } else if (noData) {
-    background = T.bg2;
-  } else if (isStop) {
-    background = 'rgba(200,30,30,0.05)'; // Rouge léger
-  } else if (isBooked) {
-    background = 'rgba(6,115,179,0.06)'; // Bleu léger
-  } else if (isWeekend) {
-    background = T.bg2; // Gris clair
-  } else if (day.isToday) {
-    background = 'rgba(184,133,26,0.04)'; // Jaune/gold léger
-  } else if (isDynamic) {
-    background = 'rgba(124,58,237,0.04)'; // Violet très léger
-  }
+  if (state === 'out_of_window') background = OUT_OF_WINDOW_CELL_BG;
+  else if (archived) background = ARCHIVE_CELL_BG;
+  else if (noData) background = T.bg2;
+  else if (isStop) background = 'rgba(200,30,30,0.05)';
+  else if (isBooked) background = 'rgba(6,115,179,0.06)';
+  else if (isWeekend) background = T.bg2;
+  else if (day.isToday) background = 'rgba(184,133,26,0.04)';
+  else if (isDynamic) background = 'rgba(124,58,237,0.04)';
+
+  const dash = '—';
+  const dispoVal = inv?.stopSell ? '🚫' : (inv?.availableRoom != null ? inv.availableRoom : dash);
 
   return (
     <div
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: '8px 4px', minHeight: 54, position: 'relative',
+        alignItems: 'stretch', justifyContent: 'center',
+        padding: '4px 2px', minHeight: 54, position: 'relative',
         fontFamily: '"Geist Mono", monospace',
         background,
         transition: 'all 0.15s',
-      }}>
-      {isDynamic && state === 'data' && (
-        <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, color: T.ai }}>⚡</span>
+        cursor: 'default',
+        userSelect: 'none',
+      }}
+      onMouseLeave={() => setShowTip(false)}
+    >
+      {showRate && (
+        <div
+          onMouseEnter={() => setShowTip(true)}
+          style={{
+            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: '2px 0',
+          }}
+        >
+          {isDynamic && state === 'data' && (
+            <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, color: T.ai }}>⚡</span>
+          )}
+          <span
+            title={rate.hint}
+            style={{
+              fontSize: state === 'data' ? 13 : 12,
+              fontWeight: 700,
+              color: archived ? ARCHIVE_CELL_TEXT : noData ? T.text4 : isDynamic ? T.ai : modeColor,
+              letterSpacing: '-0.01em',
+            }}
+          >
+            {rate.main}
+          </span>
+          {rate.showCurrency && (
+            <span style={{ fontSize: 9, color: T.text3, fontWeight: 600, letterSpacing: '0.04em' }}>{currency}</span>
+          )}
+        </div>
       )}
-      <span
-        title={rate.hint}
-        style={{
-          fontSize: state === 'data' ? 13 : 12,
-          fontWeight: 700,
-          color: archived ? ARCHIVE_CELL_TEXT : noData ? T.text4 : isDynamic ? T.ai : T.text,
-          letterSpacing: '-0.01em',
-        }}
-      >
-        {rate.main}
-      </span>
-      {rate.showCurrency && (
-        <span style={{ fontSize: 9, color: T.text3, fontWeight: 600, letterSpacing: '0.04em' }}>{currency}</span>
+      {showDispo && (
+        <div
+          style={{
+            fontSize: 10, fontWeight: 700, textAlign: 'center', color: inv?.stopSell ? T.error : T.text2,
+            borderTop: showRate ? `1px dashed ${T.border}` : 'none',
+            marginTop: showRate ? 2 : 0,
+            padding: '1px 0',
+          }}
+        >
+          {showRate ? `${dispoVal} dispo` : dispoVal}
+        </div>
       )}
-      {rate.hint && state !== 'data' && (
-        <span style={{ fontSize: 7.5, color: T.text4, fontWeight: 600, marginTop: 2, textAlign: 'center', lineHeight: 1.1 }}>
-          {state === 'out_of_window' ? 'hors fen.' : state === 'archive' ? 'hist.' : 'n/d'}
-        </span>
+      {showTip && showRate && hasInventoryData(inv) && (
+        <TooltipBreakdown inv={inv} dateStr={day.iso} currency={currency} />
       )}
     </div>
   );
@@ -651,7 +677,7 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   const archived = state === 'archive';
   const isStopSell = hasInventoryData(inv) && !!inv.stopSell;
   const isBooked = (inv?.reservations?.length ?? 0) > 0;
-  const isDynamic = hasInventoryData(inv) && !!inv.useDynamicPrice;
+  const isDynamic = hasInventoryData(inv) && resolvePriceMode(inv) === 'dynamic';
   const isWeekend = day.isWeekend;
 
   let background = 'transparent';
@@ -680,12 +706,27 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   } else if (col.id === 'availableRoom') content = inv.availableRoom ?? dash;
   else if (col.id === 'rate') {
     const rate = formatInventoryRateLabel(state, inv);
+    const mode = resolvePriceMode(inv);
+    const modeColor = mode === 'manual' ? T.warning : mode === 'dynamic' ? T.ai : T.text;
     content = rate.showCurrency
-      ? <span style={{ color: inv.useDynamicPrice ? T.ai : T.text }}>{rate.main}</span>
+      ? (
+        <span style={{ color: modeColor }} title={`Mode: ${PRICE_MODE_LABEL[mode]}`}>
+          {rate.main}
+        </span>
+      )
       : <span style={{ color: T.text4 }}>{rate.main}</span>;
   } else if (col.id === 'basePrice') content = inv.basePrice ?? dash;
   else if (col.id === 'manualPrice') content = inv.manualPrice ?? dash;
   else if (col.id === 'dynamicPrice') content = inv.calculatedPrice ?? dash;
+  else if (col.id === 'priceMode') {
+    const mode = resolvePriceMode(inv);
+    const color = mode === 'manual' ? T.warning : mode === 'dynamic' ? T.ai : T.text3;
+    content = (
+      <span style={{ color, fontSize: 11, fontWeight: 600 }}>
+        {PRICE_MODE_LABEL[mode]}
+      </span>
+    );
+  }
   else if (col.id === 'stopSell')  content = inv.stopSell ? <span style={{ color: T.error }}>🚫</span> : <span style={{ color: T.success }}>✅</span>;
   else if (col.id === 'minStay')   content = inv.minStay ?? dash;
   else if (col.id === 'maxStay')   content = inv.maxStay ?? dash;

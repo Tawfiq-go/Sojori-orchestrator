@@ -22,8 +22,10 @@ import {
   normalizePmImageUrl,
   PM_VITRINE_MAX_PHOTOS,
   PM_VITRINE_IMAGE_SPECS,
-  PM_VITRINE_IMAGE_HINT,
+  PM_VITRINE_COVER_HINT,
+  PM_VITRINE_GALLERY_HINT,
   initialsFromPublicName,
+  splitPmCoverAndGallery,
 } from '../utils/pmProfileMediaUtils';
 import OwnerPmLogoImage from './OwnerPmLogoImage';
 import OwnerPmMonogramBadge from './OwnerPmMonogramBadge';
@@ -210,6 +212,7 @@ const CREATE_EMPTY_PM_PROFILE = {
   logoText: '',
   logoImage: '',
   vitrineLogoUrl: '',
+  coverUrl: '',
   images: [],
   brandColor: { from: '', to: '' },
   verified: false,
@@ -330,13 +333,31 @@ const UpdateOwnerSidebar = ({
   onDraftSaved,
   mode = 'edit',
   inline = true,
+  selfService = false,
 }) => {
   const isCreate = mode === 'create';
   const { t } = useTranslation('common');
   const dispatch = useDispatch();
-  const authRole = useSelector((state) => state.auth?.user?.role);
+  const authUser = useSelector((state) => state.auth?.user);
+  const authRole = authUser?.role;
+  const authUserId = authUser?._id || authUser?.id;
   const isPlatformAdmin = hasAdminAccess(authRole);
+  const isPmSelfService =
+    Boolean(selfService) ||
+    (!isCreate &&
+      !isPlatformAdmin &&
+      String(authRole || '').toLowerCase() === 'owner' &&
+      owner?._id &&
+      authUserId &&
+      String(owner._id) === String(authUserId));
   const visibleTabs = useMemo(() => {
+    if (isPmSelfService) {
+      return OWNER_TABS.filter((tab) =>
+        ['compte', 'entreprise', 'sojori-web', 'rapports-pl'].includes(tab.id),
+      ).map((tab) =>
+        tab.id === 'entreprise' ? { ...tab, label: 'Entreprise' } : tab,
+      );
+    }
     let tabs = OWNER_TABS;
     if (!isCreate) {
       tabs = tabs.filter((tab) => tab.id !== 'orchestration');
@@ -345,7 +366,7 @@ const UpdateOwnerSidebar = ({
       tabs = tabs.filter((tab) => tab.id !== 'config-ia');
     }
     return tabs;
-  }, [isCreate, isPlatformAdmin]);
+  }, [isCreate, isPlatformAdmin, isPmSelfService]);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [activeTab, setActiveTab] = useState('compte');
   const drawerRef = useRef(null);
@@ -437,6 +458,12 @@ const UpdateOwnerSidebar = ({
   }, [resetTabOnOpenKey, open]);
 
   useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0]?.id || 'compte');
+    }
+  }, [visibleTabs, activeTab]);
+
+  useEffect(() => {
     if (!open) return;
     drawerRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
   }, [activeTab, open]);
@@ -500,6 +527,27 @@ const UpdateOwnerSidebar = ({
       }
     } catch (err) {
       toast.error(`Échec upload : ${err?.message || ''}`);
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  /** Bannière hero sojori-vente (pmProfile.coverUrl — 16:9, distinct galerie). */
+  const handlePmCoverUpload = async (fileList, setFieldValue) => {
+    const file = fileList?.[0];
+    if (!file) return;
+    setUploadingImages(true);
+    try {
+      const result = await dispatch(uploadImageToAPI({ file, folder: 'other' })).unwrap();
+      const url = normalizePmImageUrl(result?.url || result);
+      if (!url) {
+        toast.error('Échec upload bannière vitrine (URL manquante)');
+        return;
+      }
+      setFieldValue('pmProfile.coverUrl', url);
+      toast.info('Bannière vitrine ajoutée — cliquez Enregistrer pour sauvegarder');
+    } catch (err) {
+      toast.error(`Échec upload bannière : ${err?.message || ''}`);
     } finally {
       setUploadingImages(false);
     }
@@ -579,9 +627,10 @@ const UpdateOwnerSidebar = ({
   const canActivateDraft = effectiveDraftStatus === 'inactive';
   /** Brouillon = status inactive uniquement. */
   const isDraftFlow = effectiveDraftStatus === 'inactive';
-  /** Email dashboard modifiable tant que le PM n’a pas finalisé son activation. */
+  /** Email dashboard modifiable tant que le PM n’a pas finalisé son activation (admin uniquement). */
   const canEditDashboardEmail =
-    isCreate || effectiveDraftStatus === 'pending' || effectiveDraftStatus === 'inactive';
+    !isPmSelfService &&
+    (isCreate || effectiveDraftStatus === 'pending' || effectiveDraftStatus === 'inactive');
 
   const normalizePmSlug = (slug) =>
     (slug || '')
@@ -684,6 +733,7 @@ const UpdateOwnerSidebar = ({
     pmProfile: {
       ...values.pmProfile,
       slug: normalizePmSlug(values.pmProfile?.slug),
+      coverUrl: normalizePmImageUrl(values.pmProfile?.coverUrl),
       images: normalizePmImageList(values.pmProfile?.images),
     },
   };
@@ -1258,7 +1308,9 @@ const UpdateOwnerSidebar = ({
             cityName,
           },
         ),
-        pmProfile: {
+        pmProfile: (() => {
+          const { coverUrl, images } = splitPmCoverAndGallery(owner?.pmProfile);
+          return {
           publicName: owner?.pmProfile?.publicName || '',
           slug: owner?.pmProfile?.slug || '',
           tagline: owner?.pmProfile?.tagline || '',
@@ -1266,7 +1318,8 @@ const UpdateOwnerSidebar = ({
           logoText: owner?.pmProfile?.logoText || '',
           logoImage: owner?.pmProfile?.logoImage || '',
           vitrineLogoUrl: owner?.pmProfile?.vitrineLogoUrl || '',
-          images: normalizePmImageList(owner?.pmProfile?.images),
+          coverUrl,
+          images,
           brandColor: {
             from: owner?.pmProfile?.brandColor?.from || '',
             to: owner?.pmProfile?.brandColor?.to || '',
@@ -1274,13 +1327,16 @@ const UpdateOwnerSidebar = ({
           verified: owner?.pmProfile?.verified || false,
           published: owner?.pmProfile?.published || false,
           responseTime: owner?.pmProfile?.responseTime || '',
-        },
+        };
+        })(),
       };
       })();
 
   const formikOwnerKey = isCreate ? 'create' : String(owner?._id || 'edit');
 
-  const drawerTitle = isCreate
+  const drawerTitle = isPmSelfService
+    ? `Mon profil · ${owner?.firstName || owner?.lastName || 'Property manager'}`
+    : isCreate
     ? savedOwnerId
       ? 'Créer · brouillon enregistré'
       : 'Créer · nouveau property manager'
@@ -1380,7 +1436,7 @@ const UpdateOwnerSidebar = ({
               >
                 Compte : {pmAccountStatusLabel(effectiveDraftStatus)}
               </span>
-              {isRuChannel ? (
+              {!isPmSelfService && isRuChannel ? (
                 <span
                   className={`owner-pm-status-pill owner-pm-status-pill--ru ${hasRuOwnerId ? 'is-linked' : 'is-missing'}`}
                   title={
@@ -1391,11 +1447,11 @@ const UpdateOwnerSidebar = ({
                 >
                   RU : {hasRuOwnerId ? String(effectiveRuOwnerId) : 'Non créé'}
                 </span>
-              ) : (
+              ) : !isPmSelfService ? (
                 <span className="owner-pm-status-pill owner-pm-status-pill--ru is-off">
                   RU : désactivé
                 </span>
-              )}
+              ) : null}
             </div>
 
             <PmMissingFieldsBanner
@@ -1406,6 +1462,7 @@ const UpdateOwnerSidebar = ({
               hasRuOwnerId={hasRuOwnerId}
               ruEnabled={isRuChannel}
               canActivateDraft={canActivateDraft}
+              selfService={isPmSelfService}
             />
 
             <div className="owner-pm-action-toolbar" role="toolbar" aria-label="Actions PM">
@@ -1421,6 +1478,8 @@ const UpdateOwnerSidebar = ({
               >
                 {saveLoading ? 'Enregistrement…' : 'Enregistrer'}
               </button>
+              {!isPmSelfService ? (
+                <>
               <button
                 type="button"
                 className={`btn ${activateReadiness.ready && canActivateDraft ? 'btn-create-ready' : 'btn-prim'}`}
@@ -1475,6 +1534,8 @@ const UpdateOwnerSidebar = ({
                   </button>
                 </>
               ) : null}
+                </>
+              ) : null}
             </div>
 
             <form
@@ -1482,12 +1543,14 @@ const UpdateOwnerSidebar = ({
               noValidate
               onSubmit={(e) => e.preventDefault()}
             >
+            {!isPmSelfService ? (
             <RuEmailNameSync
               values={values}
               setFieldValue={setFieldValue}
               isCreate={isCreate}
               ruEmailTouchedRef={ruEmailTouchedRef}
             />
+            ) : null}
             <AccountToFillCompanySync
               values={values}
               setFieldValue={setFieldValue}
@@ -1510,6 +1573,7 @@ const UpdateOwnerSidebar = ({
                     Listes langue/devise réduites. Sync complète via Hub Channels si besoin.
                   </div>
                 )}
+                {!isPmSelfService ? (
                 <OwnerFormCollapsible title="Aide — compte PM & badges RU" badge="ℹ️">
                 <div className="owner-form-hint" style={{ marginBottom: 12 }}>
                   <b>Compte PM</b> — seule saisie pour identité, emails, téléphone et ville (envoyés à R.U. à
@@ -1527,12 +1591,31 @@ const UpdateOwnerSidebar = ({
                   <b> 4. Créer entreprise RU</b> — société (Push_FillCompanyDetails).
                 </div>
                 </OwnerFormCollapsible>
+                ) : (
+                  <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+                    Mettez à jour vos coordonnées et préférences. L’email dashboard et le channel manager
+                    ne sont modifiables que par l’admin Sojori.
+                  </div>
+                )}
                 <div className="owner-tab-grid" style={{ marginBottom: 12 }}>
                   <div className="form-section">
-                    <div className="form-section-h">{isCreate ? 'Connexion Sojori' : 'Emails & accès'}</div>
-                    {isCreate ? (
+                    <div className="form-section-h">{isCreate ? 'Connexion Sojori' : isPmSelfService ? 'Coordonnées' : 'Emails & accès'}</div>
+                    {isPmSelfService && !isCreate ? (
                       <div className="field">
-                        <CompteFieldLabel
+                        <CompteFieldLabel plain>Email dashboard</CompteFieldLabel>
+                        <input
+                          className="input owner-input-readonly"
+                          value={values.email || owner?.email || ''}
+                          readOnly
+                          disabled
+                        />
+                        <div className="owner-form-hint" style={{ marginTop: 6 }}>
+                          Non modifiable ici — contactez le support Sojori pour un changement.
+                        </div>
+                      </div>
+                    ) : isCreate ? (
+                      <div className="field">
+                        <CompteFieldLabel plain={isPmSelfService}
                           kind="sojoriLogin"
                           ruXmlPath="Sojori invite + ContactInfo.Email"
                           required
@@ -1560,7 +1643,7 @@ const UpdateOwnerSidebar = ({
                       </div>
                     ) : canEditDashboardEmail ? (
                       <div className="field">
-                        <CompteFieldLabel kind="sojoriLogin" ruXmlPath="Sojori login + ContactInfo.Email">
+                        <CompteFieldLabel plain={isPmSelfService} kind="sojoriLogin" ruXmlPath="Sojori login + ContactInfo.Email">
                           Email dashboard
                         </CompteFieldLabel>
                         <input
@@ -1605,16 +1688,20 @@ const UpdateOwnerSidebar = ({
                       </div>
                     ) : (
                       <div className="field">
-                        <CompteFieldLabel kind="sojoriLogin" ruXmlPath="Sojori login + ContactInfo.Email">
+                        <CompteFieldLabel plain={isPmSelfService} kind="sojoriLogin" ruXmlPath="Sojori login + ContactInfo.Email">
                           Email dashboard
                         </CompteFieldLabel>
-                        <input className="input" value={values.email || owner?.email || ''} readOnly disabled />
+                        <input className="input owner-input-readonly" value={values.email || owner?.email || ''} readOnly disabled />
                         <div className="owner-form-hint" style={{ marginTop: 6 }}>
-                          {t('ruFieldBadge.hintDashboardEmailEdit', {
-                            defaultValue:
-                              'Compte activé — l’email dashboard n’est plus modifiable ici. Contactez le support pour un changement.',
-                          })}
+                          {isPmSelfService
+                            ? 'Non modifiable ici — contactez le support Sojori pour un changement.'
+                            : t('ruFieldBadge.hintDashboardEmailEdit', {
+                                defaultValue:
+                                  'Compte activé — l’email dashboard n’est plus modifiable ici. Contactez le support pour un changement.',
+                              })}
                         </div>
+                        {!isPmSelfService ? (
+                        <>
                         <button
                           type="button"
                           className="owner-btn secondary"
@@ -1632,10 +1719,13 @@ const UpdateOwnerSidebar = ({
                         >
                           {sendLinkLoading ? 'Envoi…' : 'Envoyer lien mot de passe (24h)'}
                         </button>
+                        </>
+                        ) : null}
                       </div>
                     )}
+                    {!isPmSelfService ? (
                     <div className="field">
-                      <CompteFieldLabel
+                      <CompteFieldLabel plain={isPmSelfService}
                         kind="ruCreateUser"
                         ruXmlPath="Push_CreateUser.Email"
                         required
@@ -1672,13 +1762,14 @@ const UpdateOwnerSidebar = ({
                         })}
                       </div>
                     </div>
+                    ) : null}
                   </div>
                 </div>
                 <div className="owner-tab-grid">
                 <div className="form-section">
                   <div className="form-section-h">Identité</div>
                   <div className="field">
-                    <CompteFieldLabel kind="ruMirror" ruXmlPath="ContactInfo.FirstName" required>
+                    <CompteFieldLabel plain={isPmSelfService} kind="ruMirror" ruXmlPath="ContactInfo.FirstName" required>
                       Prénom
                     </CompteFieldLabel>
                     <input
@@ -1693,7 +1784,7 @@ const UpdateOwnerSidebar = ({
                     ) : null}
                   </div>
                   <div className="field">
-                    <CompteFieldLabel kind="ruMirror" ruXmlPath="ContactInfo.LastName" required>
+                    <CompteFieldLabel plain={isPmSelfService} kind="ruMirror" ruXmlPath="ContactInfo.LastName" required>
                       Nom
                     </CompteFieldLabel>
                     <input
@@ -1712,7 +1803,7 @@ const UpdateOwnerSidebar = ({
                 <div className="form-section">
                   <div className="form-section-h">Contact</div>
                   <div className="field">
-                    <CompteFieldLabel kind="ruMirror" ruXmlPath="ContactInfo.Phone" required>
+                    <CompteFieldLabel plain={isPmSelfService} kind="ruMirror" ruXmlPath="ContactInfo.Phone" required>
                       Téléphone
                     </CompteFieldLabel>
                     <input
@@ -1728,7 +1819,7 @@ const UpdateOwnerSidebar = ({
                     ) : null}
                   </div>
                   <div className="field">
-                    <CompteFieldLabel kind="nonRu">WhatsApp</CompteFieldLabel>
+                    <CompteFieldLabel plain={isPmSelfService} kind="nonRu">WhatsApp</CompteFieldLabel>
                     <input
                       className="input"
                       name="whatsapp"
@@ -1740,9 +1831,9 @@ const UpdateOwnerSidebar = ({
                 </div>
 
                 <div className="form-section">
-                  <div className="form-section-h">Parc & channel</div>
+                  <div className="form-section-h">{isPmSelfService ? 'Localisation' : 'Parc & channel'}</div>
                   <div className="field">
-                    <CompteFieldLabel
+                    <CompteFieldLabel plain={isPmSelfService}
                       kind="ruMirror"
                       ruXmlPath="ContactInfo.City + CompanyInfo.CompanyCity"
                       required
@@ -1768,8 +1859,9 @@ const UpdateOwnerSidebar = ({
                       <span className="owner-field-err">{errors.cityId}</span>
                     ) : null}
                   </div>
+                  {!isPmSelfService ? (
                   <div className="field">
-                    <CompteFieldLabel kind="nonRu" required>
+                    <CompteFieldLabel plain={isPmSelfService} kind="nonRu" required>
                       Channel manager
                     </CompteFieldLabel>
                     <div className="seg">
@@ -1799,13 +1891,14 @@ const UpdateOwnerSidebar = ({
                       <span className="owner-field-err">{errors.channelManager}</span>
                     ) : null}
                   </div>
+                  ) : null}
                 </div>
 
-                {values.ruEnabled && showRuExtranetPasswordField ? (
+                {!isPmSelfService && values.ruEnabled && showRuExtranetPasswordField ? (
                   <div className="form-section full">
                     <div className="form-section-h">Rental United</div>
                     <div className="field">
-                      <CompteFieldLabel kind="ruCreateUser" ruXmlPath="Push_CreateUser.Password">
+                      <CompteFieldLabel plain={isPmSelfService} kind="ruCreateUser" ruXmlPath="Push_CreateUser.Password">
                         Mot de passe extranet RU
                       </CompteFieldLabel>
                       <div className="owner-form-hint" style={{ marginBottom: 6 }}>
@@ -1835,7 +1928,7 @@ const UpdateOwnerSidebar = ({
                 <div className="form-section">
                   <div className="form-section-h">Préférences dashboard</div>
                   <div className="field">
-                    <CompteFieldLabel kind="nonRu" required>
+                    <CompteFieldLabel plain={isPmSelfService} kind="nonRu" required>
                       Langue
                     </CompteFieldLabel>
                     <SearchableSelect
@@ -1851,7 +1944,7 @@ const UpdateOwnerSidebar = ({
                     />
                   </div>
                   <div className="field">
-                    <CompteFieldLabel kind="nonRu" required>
+                    <CompteFieldLabel plain={isPmSelfService} kind="nonRu" required>
                       Devise
                     </CompteFieldLabel>
                     <SearchableSelect
@@ -1868,7 +1961,7 @@ const UpdateOwnerSidebar = ({
                   </div>
                 </div>
 
-                {!isCreate ? (
+                {!isPmSelfService && !isCreate ? (
                   <div className="form-section full">
                     <div className="form-section-h">Statut compte</div>
                     <div className="admin-row">
@@ -1912,14 +2005,25 @@ const UpdateOwnerSidebar = ({
                 render={() => (
                   <>
                     <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+                      {isPmSelfService ? (
+                        <>
+                          <b>Entreprise</b> — informations légales et fiche société (sauvegarde locale).
+                          Identité et coordonnées : onglet <b>Compte</b>. Vitrine publique : onglet{' '}
+                          <b>Site sojori-vente</b>.
+                        </>
+                      ) : (
+                        <>
                       <b>Entreprise RU</b> — données légales et fiche société envoyées à <b>Rental United</b> uniquement.
                       Ce n’est <b>pas</b> la vitrine sojori-vente (photos, slogan → onglet <b>Site sojori-vente</b>).
                       Prénom, nom, emails, téléphone et ville : onglet <b>Compte</b> uniquement.
                       {values.ruEnabled
                         ? ' Utilisez « Créer entreprise RU » pour pousser vers Rental United.'
                         : ''}
+                        </>
+                      )}
                     </div>
                     <FillCompanyFormFields
+                      hideRuBadges={isPmSelfService}
                       namePrefix="fillCompany"
                       values={values}
                       errors={errors}
@@ -2158,9 +2262,14 @@ const UpdateOwnerSidebar = ({
                   <b>Vitrine PM sur sojori-vente</b> — ce que voient les voyageurs :{' '}
                   <b>photos</b>, <b>slogan</b> (accroche), description, couleurs de marque, page{' '}
                   <code>/pm/votre-slug</code> et encart hôte sur la page d&apos;accueil.
-                  <br />
-                  Séparé de Rental United (onglet <b>Entreprise RU</b>) et des PDF finances (
-                  <b>Rapports P&L</b>). Activez <b>Publié</b> pour rendre le profil visible.
+                  {!isPmSelfService ? (
+                    <>
+                      <br />
+                      Séparé de Rental United (onglet <b>Entreprise RU</b>) et des PDF finances (
+                      <b>Rapports P&L</b>).
+                    </>
+                  ) : null}{' '}
+                  Activez <b>Publié</b> pour rendre le profil visible.
                   {values.pmProfile?.slug ? (
                     <>
                       {' '}
@@ -2371,12 +2480,53 @@ const UpdateOwnerSidebar = ({
                 </div>
 
                 <div className="owner-vitrine-section" style={{ marginTop: 16 }}>
+                  <div className="form-section-h">Bannière vitrine (couverture)</div>
+                  <div className="owner-form-hint" style={{ marginBottom: 10 }}>
+                    Hero en haut de la page <code>/pm/slug</code> (<code>coverUrl</code>) — format{' '}
+                    <b>16:9</b>, distinct du logo image et de la galerie ci-dessous.
+                    <br />
+                    <span style={{ opacity: 0.9 }}>{PM_VITRINE_COVER_HINT}</span>
+                  </div>
+                  <div className="owner-pl-logo-row">
+                    <OwnerPmLogoImage
+                      images={values.pmProfile.coverUrl ? [values.pmProfile.coverUrl] : []}
+                      className="owner-pl-preview-logo owner-pl-preview-cover"
+                      emptyLabel="Bannière"
+                    />
+                    <div className="owner-vitrine-logo-fields">
+                      <label className="btn btn-ghost owner-photo-btn">
+                        {uploadingImages ? 'Envoi…' : '+ Ajouter bannière vitrine'}
+                        <input
+                          hidden
+                          type="file"
+                          accept={PM_VITRINE_IMAGE_SPECS.accept}
+                          disabled={uploadingImages}
+                          onChange={(e) => {
+                            handlePmCoverUpload(e.target.files, setFieldValue);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                      {values.pmProfile.coverUrl ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => setFieldValue('pmProfile.coverUrl', '')}
+                        >
+                          Retirer
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="owner-vitrine-section" style={{ marginTop: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div className="form-section-h" style={{ margin: 0 }}>
                       Galerie photos vitrine
                     </div>
                     <label className="btn btn-ghost owner-photo-btn">
-                      {uploadingImages ? 'Envoi…' : '+ Ajouter des photos'}
+                      {uploadingImages ? 'Envoi…' : '+ Ajouter des photos galerie'}
                       <input
                         hidden
                         type="file"
@@ -2394,36 +2544,20 @@ const UpdateOwnerSidebar = ({
                     </label>
                   </div>
                   <div className="owner-form-hint" style={{ marginBottom: 8 }}>
-                    Max <b>{PM_VITRINE_MAX_PHOTOS}</b> photos (comme sur sojori-vente). La{' '}
-                    <b>1re photo</b> = bannière / couverture (<code>coverUrl</code>). La galerie
-                    s&apos;affiche seulement à partir de <b>2 photos</b>. Logo initiales = section
-                    ci-dessus — pas la 1re photo.
+                    Photos de la grille sur sojori-vente (<code>pmProfile.images</code>) —{' '}
+                    <b>pas</b> la bannière ni le logo. Affichées à partir de <b>1 photo</b> si une
+                    bannière est définie, sinon la galerie commence après la couverture legacy.
                     <br />
-                    <span style={{ opacity: 0.9 }}>{PM_VITRINE_IMAGE_HINT}</span>
+                    <span style={{ opacity: 0.9 }}>{PM_VITRINE_GALLERY_HINT}</span>
                   </div>
                   <div className="owner-pm-photos">
                     {normalizePmImageList(values.pmProfile.images).length === 0 ? (
-                      <span className="owner-pm-empty">Aucune photo</span>
+                      <span className="owner-pm-empty">Aucune photo galerie</span>
                     ) : (
                       normalizePmImageList(values.pmProfile.images).map((url, idx) => (
-                        <div key={`${url}-${idx}`} className={`owner-pm-thumb${idx === 0 ? ' main' : ''}`}>
+                        <div key={`${url}-${idx}`} className="owner-pm-thumb">
                           <img src={url} alt="" referrerPolicy="no-referrer" />
-                          {idx === 0 ? <span className="owner-pm-badge">Couverture</span> : null}
                           <div className="owner-pm-actions">
-                            {idx !== 0 ? (
-                              <button
-                                type="button"
-                                title="Définir comme couverture"
-                                onClick={() => {
-                                  const arr = [...normalizePmImageList(values.pmProfile.images)];
-                                  const [m] = arr.splice(idx, 1);
-                                  arr.unshift(m);
-                                  setFieldValue('pmProfile.images', arr);
-                                }}
-                              >
-                                ★
-                              </button>
-                            ) : null}
                             <button
                               type="button"
                               title="Supprimer"
@@ -2443,7 +2577,7 @@ const UpdateOwnerSidebar = ({
                   </div>
                   <div className="owner-form-hint" style={{ marginTop: 6 }}>
                     {normalizePmImageList(values.pmProfile.images).length}/{PM_VITRINE_MAX_PHOTOS}{' '}
-                    photos
+                    photos galerie
                   </div>
                 </div>
                   </>

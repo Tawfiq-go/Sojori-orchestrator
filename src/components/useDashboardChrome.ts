@@ -217,6 +217,10 @@ export function useDashboardChrome() {
       return 'orch/plans';
     }
 
+    if (path.startsWith('/admin/equipe/mon-profil')) {
+      return 'equipe/mon-profil';
+    }
+
     if (path.startsWith('/admin/equipe')) {
       const tab = new URLSearchParams(location.search).get('tab') || 'list';
       if (tab === 'admin-whatsapp') return 'tasks/team';

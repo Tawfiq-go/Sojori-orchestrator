@@ -237,6 +237,7 @@ const NAV_ICON_BY_ID = {
   'pricing/audit': HistoryOutlined,
   staff: GroupsOutlined,
   'equipe/onboarding': AssignmentOutlined,
+  'equipe/mon-profil': PeopleOutlined,
   'my-tasks': AssignmentTurnedInOutlined,
   'my-sched': TodayOutlined,
   revenue: ShowChartOutlined,
