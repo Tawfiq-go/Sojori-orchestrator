@@ -70,6 +70,8 @@ interface Reservation {
   guestCountry?: string;
   guestCountryCode?: string;
   guestLanguage?: string;
+  phone?: string;
+  nationality?: string;
   createdAt: string;
   arrivalDate: string;
   departureDate: string;
@@ -179,12 +181,20 @@ const GuestCountryCell = ({
   guestCountry,
   guestCountryCode,
   guestLanguage,
+  phone,
+  nationality,
 }: {
   guestCountry?: string;
   guestCountryCode?: string;
   guestLanguage?: string;
+  phone?: string;
+  nationality?: string;
 }) => {
-  const { flag, label } = formatGuestCountryDisplay(guestCountry, guestCountryCode);
+  const { flag, label } = formatGuestCountryDisplay(guestCountry, guestCountryCode, {
+    guestLanguage,
+    phone,
+    nationality,
+  });
   return (
     <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -939,6 +949,8 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                       guestCountry={r.guestCountry}
                       guestCountryCode={r.guestCountryCode}
                       guestLanguage={r.guestLanguage}
+                      phone={r.phone}
+                      nationality={r.nationality}
                     />
                   </Box>
                   <Box component="td">
@@ -1145,7 +1157,11 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpd
         </Stack>
         <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1.25 }}>
           {(() => {
-            const { flag, label } = formatGuestCountryDisplay(r.guestCountry, r.guestCountryCode);
+            const { flag, label } = formatGuestCountryDisplay(r.guestCountry, r.guestCountryCode, {
+              guestLanguage: r.guestLanguage,
+              phone: r.phone,
+              nationality: r.nationality,
+            });
             return `${flag ? `${flag} ` : ''}${r.guestName}${label && label !== '—' ? ` · ${label}` : ''}`;
           })()}
         </Typography>
