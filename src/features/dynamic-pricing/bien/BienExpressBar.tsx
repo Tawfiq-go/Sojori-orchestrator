@@ -294,23 +294,29 @@ export default function BienExpressBar({
       <Typography sx={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '0.08em', color: T.text3, mt: 2, mb: 1 }}>
         📊 DERNIÈRE MISE À JOUR DU CALENDRIER
       </Typography>
-      {lastAudit && summary ? (
+      {lastAudit ? (
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}>
           <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2 }}>
             {fmtDate(lastAudit.appliedAt)}
           </Typography>
-          <StatChip label="jours mis à jour" value={summary.daysCalendarDatesUpdated ?? summary.daysChanged} tone="ok" />
+          <StatChip
+            label="jours mis à jour"
+            value={summary?.daysCalendarDatesUpdated ?? summary?.daysChanged ?? lastAudit.daysChanged}
+            tone="ok"
+          />
           {protectedDays > 0 ? (
             <StatChip label="protégés (prix manuel / résa)" value={protectedDays} tone="warn" />
           ) : null}
-          {(summary.daysSkippedUnavailable ?? 0) > 0 ? (
-            <StatChip label="indispo" value={summary.daysSkippedUnavailable ?? 0} tone="muted" />
+          {(summary?.daysSkippedUnavailable ?? 0) > 0 ? (
+            <StatChip label="indispo" value={summary?.daysSkippedUnavailable ?? 0} tone="muted" />
           ) : null}
-          <StatChip
-            label={summary.ruPublishQueued ? 'push Airbnb envoyé' : 'push Airbnb non déclenché'}
-            value={summary.ruPublishQueued ? '✓' : '✗'}
-            tone={summary.ruPublishQueued ? 'ok' : 'muted'}
-          />
+          {summary ? (
+            <StatChip
+              label={summary.ruPublishQueued ? 'push Airbnb envoyé' : 'push Airbnb non déclenché'}
+              value={summary.ruPublishQueued ? '✓' : '✗'}
+              tone={summary.ruPublishQueued ? 'ok' : 'muted'}
+            />
+          ) : null}
         </Stack>
       ) : (
         <Typography sx={{ fontSize: 12, color: T.text3 }}>
