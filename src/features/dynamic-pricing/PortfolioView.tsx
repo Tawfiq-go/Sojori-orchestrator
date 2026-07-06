@@ -769,8 +769,18 @@ function PortfolioTable({
                 <Box component="th" sx={tableHeadSx(T.text3)}>Canal</Box>
                 <SnapshotHeaderCell
                   label="Snapshot"
-                  hintTitle="Date snapshot"
-                  hintBody="Dernière récupération ⟳ enregistrée en base pour ce bien."
+                  hintTitle="Prix estimés · création"
+                  hintBody="Date de création du snapshot de prix estimés du marché pour ce bien."
+                />
+                <SnapshotHeaderCell
+                  label="Calendrier"
+                  hintTitle="Calendrier · mise à jour"
+                  hintBody="Dernière application des prix au calendrier Sojori (propagation manuelle ou nocturne)."
+                />
+                <SnapshotHeaderCell
+                  label="Publié OTA"
+                  hintTitle="Canaux · publication"
+                  hintBody="Dernier envoi réussi du calendrier vers les canaux (Airbnb, Booking…)."
                 />
                 {snapshotCols.map((col) => (
                   <SnapshotHeaderCell
@@ -1021,9 +1031,15 @@ function PortfolioOperationalRow({
   onPatchPilotConfig?: (listingId: string, partial: Partial<PilotPricingConfigDto>) => Promise<void>;
 }) {
   const gap = getDataGapReason(row);
-  const snapLabel = row.airroiSnapshotAt
-    ? new Date(row.airroiSnapshotAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
-    : '—';
+  const fmtPipelineDate = (v?: string | null) =>
+    v ? new Date(v).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  const snapLabel = fmtPipelineDate(row.airroiSnapshotAt);
+  // Fraîcheur pipeline : une étape plus vieille que la précédente = à re-propager
+  const snapT = row.airroiSnapshotAt ? new Date(row.airroiSnapshotAt).getTime() : 0;
+  const calT = row.calendarAppliedAt ? new Date(row.calendarAppliedAt).getTime() : 0;
+  const otaT = row.otaPushedAt ? new Date(row.otaPushedAt).getTime() : 0;
+  const calStale = snapT > 0 && calT > 0 && calT < snapT;
+  const otaStale = calT > 0 && otaT > 0 && otaT < calT;
 
   return (
     <Box component="tr" sx={{
@@ -1049,6 +1065,14 @@ function PortfolioOperationalRow({
         <AirbnbConnectCell listing={row.listing} />
       </Box>
       <RawCell value={snapLabel} muted={!row.hasAirroiSnapshot} />
+      <RawCell
+        value={fmtPipelineDate(row.calendarAppliedAt) + (calStale ? ' ⚠' : '')}
+        muted={!row.calendarAppliedAt}
+      />
+      <RawCell
+        value={fmtPipelineDate(row.otaPushedAt) + (otaStale ? ' ⚠' : '')}
+        muted={!row.otaPushedAt}
+      />
       {snapshotCols.map((col) => {
         if (!col.field) return null;
         const v = formatAirroiRawValue(col.field, row.airroiRaw);

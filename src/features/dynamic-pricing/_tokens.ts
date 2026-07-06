@@ -164,6 +164,10 @@ export interface PortfolioRow {
     guests: number;
   } | null;
   airroiSnapshotAt?: string | null;
+  /** Dernière application des prix au calendrier (audit apply). */
+  calendarAppliedAt?: string | null;
+  /** Dernière publication réussie du calendrier vers les canaux (OTA). */
+  otaPushedAt?: string | null;
   airroiSnapshotCostUsd?: number | null;
   airroiComps?: Array<{
     airbnbListingId: string | null;

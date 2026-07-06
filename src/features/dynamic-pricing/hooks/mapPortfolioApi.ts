@@ -40,6 +40,10 @@ function toListingRow(dto: PortfolioListingDto, index: number): PortfolioRow {
     airroiSnapshotAt: dto.airroiSnapshotAt
       ? new Date(dto.airroiSnapshotAt).toISOString()
       : null,
+    calendarAppliedAt: dto.calendarAppliedAt
+      ? new Date(dto.calendarAppliedAt).toISOString()
+      : null,
+    otaPushedAt: dto.otaPushedAt ? new Date(dto.otaPushedAt).toISOString() : null,
     airroiSnapshotCostUsd: dto.airroiSnapshotCostUsd ?? null,
     airroiComps: dto.airroiComps ?? [],
     airroiCompsCount: dto.airroiCompsCount ?? dto.airroiComps?.length ?? 0,

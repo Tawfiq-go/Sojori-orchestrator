@@ -51,6 +51,10 @@ export type PortfolioListingDto = {
     guests: number;
   } | null;
   airroiSnapshotAt?: string | null;
+  /** Dernière application des prix au calendrier. */
+  calendarAppliedAt?: string | null;
+  /** Dernière publication calendrier → canaux réussie. */
+  otaPushedAt?: string | null;
   airroiSnapshotCostUsd?: number | null;
   airroiRaw?: AirroiRawFields | null;
   airroiComps?: Array<{
