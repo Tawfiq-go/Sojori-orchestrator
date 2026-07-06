@@ -380,6 +380,9 @@ export interface PilotPricingConfigDto {
   gapBlockMinNights?: number;
   events: PilotPricingEventDto[];
   fxUsdMad?: number;
+  /** Refresh hebdo automatique du snapshot AirROI (payant ~0,40 $/sem). */
+  autoSnapshotEnabled?: boolean;
+  lastAutoSnapshotAt?: string;
   lastAppliedAt?: string;
   lastPreviewAt?: string;
 }
@@ -512,6 +515,8 @@ export type ApplyReportSummaryDto = {
   daysGapMinStayReleased: number;
   daysGapSignaled: number;
   daysSkippedReserved: number;
+  daysSkippedManual?: number;
+  daysSkippedUnavailable?: number;
   daysPayloadMissingInventory: number;
   ruPublishQueued: boolean;
 };
