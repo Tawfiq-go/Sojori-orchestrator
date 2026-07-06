@@ -221,8 +221,10 @@ const CreateWorkerSidebar = ({
                   }}>
                                                 {t('First Name')} :
                                             </label>
-                                            <Field as={TextField} fullWidth name="firstName" variant="outlined" size="small" InputProps={{
-                    startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                                            <Field as={TextField} fullWidth name="firstName" variant="outlined" size="small" slotProps={{
+                    input: {
+                      startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                    }
                   }} />
                                             <ErrorMessage name="firstName" component={Typography} className="text-red-500 !text-xs" />
                                         </div>
@@ -237,8 +239,10 @@ const CreateWorkerSidebar = ({
                   }}>
                                                 {t('Last Name')} :
                                             </label>
-                                            <Field as={TextField} fullWidth name="lastName" variant="outlined" size="small" InputProps={{
-                    startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                                            <Field as={TextField} fullWidth name="lastName" variant="outlined" size="small" slotProps={{
+                    input: {
+                      startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                    }
                   }} />
                                             <ErrorMessage name="lastName" component={Typography} className="text-red-500 !text-xs" />
                                         </div>
@@ -260,8 +264,10 @@ const CreateWorkerSidebar = ({
                   }}>
                                                 {t('Email')} :
                                             </label>
-                                            <Field as={TextField} fullWidth name="email" variant="outlined" type="email" size="small" InputProps={{
-                    startAdornment: <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                                            <Field as={TextField} fullWidth name="email" variant="outlined" type="email" size="small" slotProps={{
+                    input: {
+                      startAdornment: <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                    }
                   }} />
                                             <ErrorMessage name="email" component={Typography} className="text-red-500 !text-xs" />
                                         </div>
@@ -276,8 +282,10 @@ const CreateWorkerSidebar = ({
                   }}>
                                                 {t('Phone')} :
                                             </label>
-                                            <Field as={TextField} fullWidth name="phone" variant="outlined" size="small" InputProps={{
-                    startAdornment: <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                                            <Field as={TextField} fullWidth name="phone" variant="outlined" size="small" slotProps={{
+                    input: {
+                      startAdornment: <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                    }
                   }} />
                                             <ErrorMessage name="phone" component={Typography} className="text-red-500 !text-xs" />
                                         </div>
@@ -299,8 +307,10 @@ const CreateWorkerSidebar = ({
                   }}>
                                                 {t('WhatsApp')} :
                                             </label>
-                                            <Field as={TextField} fullWidth name="whatsapp" variant="outlined" size="small" InputProps={{
-                    startAdornment: <MessageSquare className="w-4 h-4 mr-2 text-gray-500" />
+                                            <Field as={TextField} fullWidth name="whatsapp" variant="outlined" size="small" slotProps={{
+                    input: {
+                      startAdornment: <MessageSquare className="w-4 h-4 mr-2 text-gray-500" />
+                    }
                   }} />
                                             <ErrorMessage name="whatsapp" component={Typography} className="text-red-500 !text-xs" />
                                         </div>

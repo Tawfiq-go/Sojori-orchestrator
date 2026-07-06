@@ -181,14 +181,18 @@ const AddCityDialog = ({
                 <label className="form-label">{t('GPS Position')}</label>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Field as={TextField} fullWidth label={t('Latitude')} name="gpsPosition.lat" type="number" inputProps={{
-                  step: "any"
+                    <Field as={TextField} fullWidth label={t('Latitude')} name="gpsPosition.lat" type="number" slotProps={{
+                  htmlInput: {
+                    step: "any"
+                  }
                 }} />
                     <ErrorMessage name="gpsPosition.lat" component="div" className="text-danger" />
                   </div>
                   <div>
-                    <Field as={TextField} fullWidth label={t('Longitude')} name="gpsPosition.lng" type="number" inputProps={{
-                  step: "any"
+                    <Field as={TextField} fullWidth label={t('Longitude')} name="gpsPosition.lng" type="number" slotProps={{
+                  htmlInput: {
+                    step: "any"
+                  }
                 }} />
                     <ErrorMessage name="gpsPosition.lng" component="div" className="text-danger" />
                   </div>

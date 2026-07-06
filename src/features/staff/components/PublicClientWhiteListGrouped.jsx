@@ -536,18 +536,20 @@ const PublicClientWhiteListGrouped = () => {
               if (e.key === 'Enter') {
                 handleApplySearch();
               }
-            }} size="small" InputProps={{
-              startAdornment: <InputAdornment position="start">
+            }} size="small" slotProps={{
+              input: {
+                startAdornment: <InputAdornment position="start">
                         <SearchIcon style={{
                   color: searchText ? '#dc2626' : SOJORI_COLORS.primary,
                   fontSize: 20
                 }} />
                       </InputAdornment>,
-              endAdornment: searchInput && <InputAdornment position="end">
+                endAdornment: searchInput && <InputAdornment position="end">
                         <IconButton size="small" onClick={() => setSearchInput('')}>
                           <CloseIcon fontSize="small" />
                         </IconButton>
                       </InputAdornment>
+              }
             }} sx={{
               width: 280,
               ...(searchText && {
@@ -621,19 +623,21 @@ const PublicClientWhiteListGrouped = () => {
                   <TextField label="Propriété" value={selectedListings.length === 0 ? 'Toutes' : `${selectedListings.length} sélectionné${selectedListings.length > 1 ? 's' : ''}`} onClick={() => {
                 setPendingListings([...selectedListings]);
                 setIsListingFilterOpen(!isListingFilterOpen);
-              }} size="small" InputProps={{
-                readOnly: true,
-                startAdornment: <InputAdornment position="start">
+              }} size="small" slotProps={{
+                input: {
+                  readOnly: true,
+                  startAdornment: <InputAdornment position="start">
                           <HomeIcon style={{
                     fontSize: 20,
                     color: selectedListings.length > 0 ? '#dc2626' : SOJORI_COLORS.primary
                   }} />
                         </InputAdornment>,
-                endAdornment: <InputAdornment position="end">
+                  endAdornment: <InputAdornment position="end">
                           <ArrowDropDownIcon style={{
                     color: selectedListings.length > 0 ? '#dc2626' : SOJORI_COLORS.primary
                   }} />
                         </InputAdornment>
+                }
               }} sx={{
                 width: 180,
                 '& .MuiOutlinedInput-root': {
@@ -704,19 +708,21 @@ const PublicClientWhiteListGrouped = () => {
                   <TextField label="Langue" value={selectedLanguages.length === 0 ? 'Toutes' : `${selectedLanguages.length}`} onClick={() => {
                 setPendingLanguages([...selectedLanguages]);
                 setIsLanguageFilterOpen(!isLanguageFilterOpen);
-              }} size="small" InputProps={{
-                readOnly: true,
-                startAdornment: <InputAdornment position="start">
+              }} size="small" slotProps={{
+                input: {
+                  readOnly: true,
+                  startAdornment: <InputAdornment position="start">
                           <LanguageIcon style={{
                     fontSize: 20,
                     color: selectedLanguages.length > 0 ? '#dc2626' : SOJORI_COLORS.primary
                   }} />
                         </InputAdornment>,
-                endAdornment: <InputAdornment position="end">
+                  endAdornment: <InputAdornment position="end">
                           <ArrowDropDownIcon style={{
                     color: selectedLanguages.length > 0 ? '#dc2626' : SOJORI_COLORS.primary
                   }} />
                         </InputAdornment>
+                }
               }} sx={{
                 width: 140,
                 '& .MuiOutlinedInput-root': {
@@ -770,16 +776,18 @@ const PublicClientWhiteListGrouped = () => {
                   <TextField label="Statut" value={blockedOptions.find(o => o.value === blockedFilter)?.label || 'Tous'} onClick={() => {
                 setTempBlockedFilter(blockedFilter);
                 setIsBlockedFilterOpen(!isBlockedFilterOpen);
-              }} size="small" InputProps={{
-                readOnly: true,
-                startAdornment: <InputAdornment position="start">
+              }} size="small" slotProps={{
+                input: {
+                  readOnly: true,
+                  startAdornment: <InputAdornment position="start">
                           {blockedOptions.find(o => o.value === blockedFilter)?.icon || <BlockIcon fontSize="small" />}
                         </InputAdornment>,
-                endAdornment: <InputAdornment position="end">
+                  endAdornment: <InputAdornment position="end">
                           <ArrowDropDownIcon style={{
                     color: blockedFilter !== 'all' ? '#dc2626' : SOJORI_COLORS.primary
                   }} />
                         </InputAdornment>
+                }
               }} sx={{
                 width: 130,
                 '& .MuiOutlinedInput-root': {
@@ -828,19 +836,21 @@ const PublicClientWhiteListGrouped = () => {
                   <TextField label="Communication" value={communicationOptions.find(o => o.value === communicationFilter)?.label || 'Tous'} onClick={() => {
                 setTempCommunicationFilter(communicationFilter);
                 setIsCommunicationFilterOpen(!isCommunicationFilterOpen);
-              }} size="small" InputProps={{
-                readOnly: true,
-                startAdornment: <InputAdornment position="start">
+              }} size="small" slotProps={{
+                input: {
+                  readOnly: true,
+                  startAdornment: <InputAdornment position="start">
                           <ChatIcon style={{
                     fontSize: 20,
                     color: communicationFilter !== 'all' ? '#dc2626' : SOJORI_COLORS.primary
                   }} />
                         </InputAdornment>,
-                endAdornment: <InputAdornment position="end">
+                  endAdornment: <InputAdornment position="end">
                           <ArrowDropDownIcon style={{
                     color: communicationFilter !== 'all' ? '#dc2626' : SOJORI_COLORS.primary
                   }} />
                         </InputAdornment>
+                }
               }} sx={{
                 width: 170,
                 '& .MuiOutlinedInput-root': {
@@ -889,16 +899,18 @@ const PublicClientWhiteListGrouped = () => {
                   <TextField label="Statut Réservation" value={reservationStatusOptions.find(o => o.value === reservationStatusFilter)?.label || 'Tous'} onClick={() => {
                 setTempReservationStatusFilter(reservationStatusFilter);
                 setIsReservationStatusFilterOpen(!isReservationStatusFilterOpen);
-              }} size="small" InputProps={{
-                readOnly: true,
-                startAdornment: <InputAdornment position="start">
+              }} size="small" slotProps={{
+                input: {
+                  readOnly: true,
+                  startAdornment: <InputAdornment position="start">
                           {reservationStatusOptions.find(o => o.value === reservationStatusFilter)?.icon || <DateRangeIcon fontSize="small" />}
                         </InputAdornment>,
-                endAdornment: <InputAdornment position="end">
+                  endAdornment: <InputAdornment position="end">
                           <ArrowDropDownIcon style={{
                     color: reservationStatusFilter !== 'all' ? '#dc2626' : SOJORI_COLORS.primary
                   }} />
                         </InputAdornment>
+                }
               }} sx={{
                 width: 190,
                 '& .MuiOutlinedInput-root': {

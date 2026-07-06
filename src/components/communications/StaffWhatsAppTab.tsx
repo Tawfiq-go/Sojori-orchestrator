@@ -750,15 +750,17 @@ export default function StaffWhatsAppTab() {
             placeholder="Rechercher staff (nom, téléphone, rôle)..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: COLORS.text.tertiary }} />
-                </InputAdornment>
-              ),
-              sx: {
-                borderRadius: 3,
-                bgcolor: COLORS.background.tertiary,
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: COLORS.text.tertiary }} />
+                  </InputAdornment>
+                ),
+                sx: {
+                  borderRadius: 3,
+                  bgcolor: COLORS.background.tertiary,
+                },
               },
             }}
           />

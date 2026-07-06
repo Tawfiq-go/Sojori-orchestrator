@@ -305,19 +305,21 @@ const PublicClientWhiteList = () => {
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyPress={handleSearchKeyPress}
                 size="small"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon style={{ color: activeSearchTerm ? '#dc2626' : SOJORI_COLORS.primary, fontSize: 20 }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: searchInput && (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={handleClearSearch}>
-                        <CloseIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon style={{ color: activeSearchTerm ? '#dc2626' : SOJORI_COLORS.primary, fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: searchInput && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={handleClearSearch}>
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
                 }}
                 sx={{
                   width: 350,
@@ -355,13 +357,15 @@ const PublicClientWhiteList = () => {
                     setIsReservationFilterOpen(!isReservationFilterOpen);
                   }}
                   size="small"
-                  InputProps={{
-                    readOnly: true,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <EventAvailableIcon style={{ fontSize: 20, color: reservationFilter !== 'all' ? '#dc2626' : SOJORI_COLORS.primary }} />
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      readOnly: true,
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <EventAvailableIcon style={{ fontSize: 20, color: reservationFilter !== 'all' ? '#dc2626' : SOJORI_COLORS.primary }} />
+                        </InputAdornment>
+                      ),
+                    },
                   }}
                   sx={{
                     width: 160,
@@ -441,13 +445,15 @@ const PublicClientWhiteList = () => {
                     setIsCommunicationFilterOpen(!isCommunicationFilterOpen);
                   }}
                   size="small"
-                  InputProps={{
-                    readOnly: true,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <ChatIcon style={{ fontSize: 20, color: communicationFilter !== 'all' ? '#dc2626' : SOJORI_COLORS.primary }} />
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      readOnly: true,
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <ChatIcon style={{ fontSize: 20, color: communicationFilter !== 'all' ? '#dc2626' : SOJORI_COLORS.primary }} />
+                        </InputAdornment>
+                      ),
+                    },
                   }}
                   sx={{
                     width: 180,
@@ -527,13 +533,15 @@ const PublicClientWhiteList = () => {
                     setIsStatusFilterOpen(!isStatusFilterOpen);
                   }}
                   size="small"
-                  InputProps={{
-                    readOnly: true,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <ToggleOnIcon style={{ fontSize: 20, color: activeFilter !== 'all' ? '#dc2626' : SOJORI_COLORS.primary }} />
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      readOnly: true,
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <ToggleOnIcon style={{ fontSize: 20, color: activeFilter !== 'all' ? '#dc2626' : SOJORI_COLORS.primary }} />
+                        </InputAdornment>
+                      ),
+                    },
                   }}
                   sx={{
                     width: 160,
@@ -613,13 +621,15 @@ const PublicClientWhiteList = () => {
                     setIsListingFilterOpen(!isListingFilterOpen);
                   }}
                   size="small"
-                  InputProps={{
-                    readOnly: true,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <HomeIcon style={{ fontSize: 20, color: selectedListings.length > 0 ? '#dc2626' : SOJORI_COLORS.primary }} />
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      readOnly: true,
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <HomeIcon style={{ fontSize: 20, color: selectedListings.length > 0 ? '#dc2626' : SOJORI_COLORS.primary }} />
+                        </InputAdornment>
+                      ),
+                    },
                   }}
                   sx={{
                     width: 180,

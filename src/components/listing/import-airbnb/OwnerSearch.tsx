@@ -45,17 +45,19 @@ export default function OwnerSearch({ searchOwners, selectedOwner, onSelect }: O
       <TextField
         fullWidth autoFocus value={query} onChange={e => setQuery(e.target.value)}
         placeholder="Rechercher un propriétaire (nom, email)…"
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start" sx={{ ml: 0.5 }}>
-              <SearchIcon sx={{ fontSize: 18, color: T.text3 }} />
-            </InputAdornment>
-          ),
-          endAdornment: loading && (
-            <InputAdornment position="end">
-              <CircularProgress size={16} sx={{ color: T.primary }} />
-            </InputAdornment>
-          ),
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start" sx={{ ml: 0.5 }}>
+                <SearchIcon sx={{ fontSize: 18, color: T.text3 }} />
+              </InputAdornment>
+            ),
+            endAdornment: loading && (
+              <InputAdornment position="end">
+                <CircularProgress size={16} sx={{ color: T.primary }} />
+              </InputAdornment>
+            ),
+          },
         }}
         sx={{
           mb: 2.25,

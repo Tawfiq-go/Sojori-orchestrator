@@ -431,7 +431,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
                 value={formData.duration}
                 onChange={(e) => handleChange('duration', parseFloat(e.target.value))}
                 fullWidth
-                InputProps={{ inputProps: { min: 0, step: 0.5 } }}
+                slotProps={{ htmlInput: { min: 0, step: 0.5 } }}
               />
               <FormControlLabel
                 control={
@@ -499,7 +499,7 @@ export function CreateTaskModal({ open, onClose, onSave, existingTask }: CreateT
                   value={formData.price}
                   onChange={(e) => handleChange('price', parseFloat(e.target.value))}
                   fullWidth
-                  InputProps={{ inputProps: { min: 0, step: 1 } }}
+                  slotProps={{ htmlInput: { min: 0, step: 1 } }}
                 />
                 <FormControl fullWidth>
                   <InputLabel>Devise</InputLabel>

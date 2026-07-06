@@ -57,13 +57,15 @@ export function GuestInfoTab({ reservationDetails, isEditMode }: GuestInfoTabPro
         value={value || ''}
         name={name}
         disabled={!isEditMode}
-        InputProps={{
-          readOnly: !isEditMode,
-          sx: {
-            bgcolor: isEditMode ? COLORS.bg : COLORS.bgDisabled,
-            fontSize: 14,
-            '& .MuiInputBase-input': {
-              color: COLORS.text1,
+        slotProps={{
+          input: {
+            readOnly: !isEditMode,
+            sx: {
+              bgcolor: isEditMode ? COLORS.bg : COLORS.bgDisabled,
+              fontSize: 14,
+              '& .MuiInputBase-input': {
+                color: COLORS.text1,
+              },
             },
           },
         }}

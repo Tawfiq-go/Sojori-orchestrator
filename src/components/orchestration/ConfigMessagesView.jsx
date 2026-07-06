@@ -446,13 +446,15 @@ const ConfigMessagesView = () => {
             bgcolor: T.bg1,
             '&.Mui-focused fieldset': { borderColor: T.primary },
           },
-        }} InputProps={{
-          startAdornment: <InputAdornment position="start">
+        }} slotProps={{
+          input: {
+            startAdornment: <InputAdornment position="start">
                   <SearchIcon sx={{
               color: T.text3,
               fontSize: '1.3rem'
             }} />
                 </InputAdornment>
+          }
         }} />
           
           {/* Status Filter */}

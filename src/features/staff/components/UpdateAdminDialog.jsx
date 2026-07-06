@@ -109,14 +109,18 @@ const ModifyStaff = ({
               <Box className="flex flex-col gap-4 mt-4">
                 <Box className="flex gap-2">
                   <Box className="w-full">
-                    <Field as={TextField} fullWidth name="callPhone" label="Call Phone" variant="outlined" InputProps={{
-                  startAdornment: <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                    <Field as={TextField} fullWidth name="callPhone" label="Call Phone" variant="outlined" slotProps={{
+                  input: {
+                    startAdornment: <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                  }
                 }} />
                     <ErrorMessage name="callPhone" component={Typography} className="text-red-500 !text-xs" />
                   </Box>
                   <Box className="w-full">
-                    <Field as={TextField} fullWidth name="whatsappPhone" label="WhatsApp Phone" variant="outlined" InputProps={{
-                  startAdornment: <MessageSquare className="w-4 h-4 mr-2 text-gray-500" />
+                    <Field as={TextField} fullWidth name="whatsappPhone" label="WhatsApp Phone" variant="outlined" slotProps={{
+                  input: {
+                    startAdornment: <MessageSquare className="w-4 h-4 mr-2 text-gray-500" />
+                  }
                 }} />
                     <ErrorMessage name="whatsappPhone" component={Typography} className="text-red-500 !text-xs" />
                   </Box>

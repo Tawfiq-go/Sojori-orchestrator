@@ -392,8 +392,10 @@ export function TeamPage() {
                 placeholder="Rechercher..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">🔍</InputAdornment>,
+                slotProps={{
+                  input: {
+                    startAdornment: <InputAdornment position="start">🔍</InputAdornment>,
+                  },
                 }}
                 sx={{ flex: 1 }}
               />

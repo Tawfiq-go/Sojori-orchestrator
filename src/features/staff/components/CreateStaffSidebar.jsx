@@ -271,8 +271,10 @@ const CreateStaffSidebar = ({
                   }}>
                         {t('Username')} :
                       </label>
-                      <Field as={TextField} fullWidth name="username" variant="outlined" size="small" InputProps={{
-                    startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                      <Field as={TextField} fullWidth name="username" variant="outlined" size="small" slotProps={{
+                    input: {
+                      startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                    }
                   }} />
                       <ErrorMessage name="username" component={Typography} className="text-red-500 !text-xs" />
                     </div>
@@ -287,8 +289,10 @@ const CreateStaffSidebar = ({
                   }}>
                         {t('Email')} :
                       </label>
-                      <Field as={TextField} fullWidth name="email" variant="outlined" type="email" size="small" InputProps={{
-                    startAdornment: <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                      <Field as={TextField} fullWidth name="email" variant="outlined" type="email" size="small" slotProps={{
+                    input: {
+                      startAdornment: <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                    }
                   }} />
                       <ErrorMessage name="email" component={Typography} className="text-red-500 !text-xs" />
                     </div>
@@ -442,8 +446,10 @@ const CreateStaffSidebar = ({
                   }}>
                         {t('Call Phone')} :
                       </label>
-                      <Field as={TextField} fullWidth name="callPhone" variant="outlined" size="small" InputProps={{
-                    startAdornment: <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                      <Field as={TextField} fullWidth name="callPhone" variant="outlined" size="small" slotProps={{
+                    input: {
+                      startAdornment: <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                    }
                   }} />
                       <ErrorMessage name="callPhone" component={Typography} className="text-red-500 !text-xs" />
                     </div>
@@ -458,8 +464,10 @@ const CreateStaffSidebar = ({
                   }}>
                         {t('WhatsApp Phone')} :
                       </label>
-                      <Field as={TextField} fullWidth name="whatsappPhone" variant="outlined" size="small" InputProps={{
-                    startAdornment: <MessageSquare className="w-4 h-4 mr-2 text-gray-500" />
+                      <Field as={TextField} fullWidth name="whatsappPhone" variant="outlined" size="small" slotProps={{
+                    input: {
+                      startAdornment: <MessageSquare className="w-4 h-4 mr-2 text-gray-500" />
+                    }
                   }} />
                       <ErrorMessage name="whatsappPhone" component={Typography} className="text-red-500 !text-xs" />
                     </div>
@@ -594,9 +602,11 @@ const CreateStaffSidebar = ({
                       }}>
                                   {taskKey}
                                 </Typography>
-                                <TextField size="small" type="number" inputProps={{
-                        step: '0.01',
-                        min: '0'
+                                <TextField size="small" type="number" slotProps={{
+                        htmlInput: {
+                          step: '0.01',
+                          min: '0'
+                        }
                       }} placeholder={t('Price')} value={values.pricingPerTaskType?.[taskKey] === 0 || values.pricingPerTaskType?.[taskKey] === '' ? values.pricingPerTaskType?.[taskKey] : values.pricingPerTaskType?.[taskKey] ?? ''} onChange={e => {
                         const raw = e.target.value;
                         const next = raw === '' ? '' : Number.isNaN(Number(raw)) ? '' : Number(raw);

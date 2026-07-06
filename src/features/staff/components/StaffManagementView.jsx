@@ -519,8 +519,8 @@ const StaffManagementView = ({
                 </Select>
               </FormControl>
               {/* Priorité, Max tâches, Max heures */}
-              <TextField fullWidth name="priority" label="Priorité (1-5)" type="number" InputProps={{
-              inputProps: {
+              <TextField fullWidth name="priority" label="Priorité (1-5)" type="number" slotProps={{
+              htmlInput: {
                 min: 1,
                 max: 5
               }

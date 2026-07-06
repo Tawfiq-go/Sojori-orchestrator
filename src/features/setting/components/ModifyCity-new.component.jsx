@@ -322,8 +322,10 @@ const ModifyCityDialog = ({
                   gap: '16px'
                 }}>
                       <div>
-                        <Field as={TextField} fullWidth size="small" label={t('Latitude')} name="gpsPosition.lat" type="number" inputProps={{
-                      step: 'any'
+                        <Field as={TextField} fullWidth size="small" label={t('Latitude')} name="gpsPosition.lat" type="number" slotProps={{
+                      htmlInput: {
+                        step: 'any'
+                      }
                     }} />
                         <ErrorMessage name="gpsPosition.lat" component="div" style={{
                       color: '#EF4444',
@@ -332,8 +334,10 @@ const ModifyCityDialog = ({
                     }} />
                       </div>
                       <div>
-                        <Field as={TextField} fullWidth size="small" label={t('Longitude')} name="gpsPosition.lng" type="number" inputProps={{
-                      step: 'any'
+                        <Field as={TextField} fullWidth size="small" label={t('Longitude')} name="gpsPosition.lng" type="number" slotProps={{
+                      htmlInput: {
+                        step: 'any'
+                      }
                     }} />
                         <ErrorMessage name="gpsPosition.lng" component="div" style={{
                       color: '#EF4444',

@@ -67,14 +67,16 @@ const TitleDescriptionEditor = ({ open, onClose, onSave, initialData, languages 
                       {...params} 
                       label={t('Language')} 
                       fullWidth 
-                      InputProps={{
-                        ...params.InputProps,
-                        startAdornment: (
-                          <>
-                            <Languages size={20} style={{ marginRight: 8 }} />
-                            {params.InputProps.startAdornment}
-                          </>
-                        )
+                      slotProps={{
+                        input: {
+                          ...params.InputProps,
+                          startAdornment: (
+                            <>
+                              <Languages size={20} style={{ marginRight: 8 }} />
+                              {params.InputProps.startAdornment}
+                            </>
+                          )
+                        }
                       }}
                     />
                   )}
@@ -87,8 +89,10 @@ const TitleDescriptionEditor = ({ open, onClose, onSave, initialData, languages 
                   label={t('Title')}
                   value={titleDesc.title[langId] || ''}
                   onChange={(e) => handleChange(langId, 'title', e.target.value)}
-                  InputProps={{
-                    startAdornment: <Type size={20} style={{ marginRight: 8 }} />
+                  slotProps={{
+                    input: {
+                      startAdornment: <Type size={20} style={{ marginRight: 8 }} />
+                    }
                   }}
                 />
               </Grid>
@@ -100,8 +104,10 @@ const TitleDescriptionEditor = ({ open, onClose, onSave, initialData, languages 
                   onChange={(e) => handleChange(langId, 'description', e.target.value)}
                   multiline
                   rows={4}
-                  InputProps={{
-                    startAdornment: <FileText className='text-gray-200' size={20} style={{ marginRight: 8, marginTop: 16 }} />
+                  slotProps={{
+                    input: {
+                      startAdornment: <FileText className='text-gray-200' size={20} style={{ marginRight: 8, marginTop: 16 }} />
+                    }
                   }}
                 />
               </Grid>

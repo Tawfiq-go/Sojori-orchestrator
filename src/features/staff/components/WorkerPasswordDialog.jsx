@@ -138,13 +138,15 @@ export default function WorkerPasswordDialog({
               label="Email"
               value={result.email || ''}
               fullWidth
-              InputProps={{
-                readOnly: true,
-                endAdornment: (
-                  <IconButton size="small" onClick={() => copyText(result.email, setCopiedKey, 'email')}>
-                    <ContentCopyIcon fontSize="small" />
-                  </IconButton>
-                ),
+              slotProps={{
+                input: {
+                  readOnly: true,
+                  endAdornment: (
+                    <IconButton size="small" onClick={() => copyText(result.email, setCopiedKey, 'email')}>
+                      <ContentCopyIcon fontSize="small" />
+                    </IconButton>
+                  ),
+                },
               }}
               helperText={copiedKey === 'email' ? 'Copié' : ' '}
             />
@@ -152,13 +154,15 @@ export default function WorkerPasswordDialog({
               label="Mot de passe"
               value={result.temporaryPassword || ''}
               fullWidth
-              InputProps={{
-                readOnly: true,
-                endAdornment: (
-                  <IconButton size="small" onClick={() => copyText(result.temporaryPassword, setCopiedKey, 'pwd')}>
-                    <ContentCopyIcon fontSize="small" />
-                  </IconButton>
-                ),
+              slotProps={{
+                input: {
+                  readOnly: true,
+                  endAdornment: (
+                    <IconButton size="small" onClick={() => copyText(result.temporaryPassword, setCopiedKey, 'pwd')}>
+                      <ContentCopyIcon fontSize="small" />
+                    </IconButton>
+                  ),
+                },
               }}
               helperText={copiedKey === 'pwd' ? 'Copié' : ' '}
             />
@@ -211,12 +215,14 @@ export default function WorkerPasswordDialog({
               fullWidth
               autoComplete="new-password"
               name="worker-new-password"
-              InputProps={{
-                endAdornment: (
-                  <IconButton size="small" onClick={() => setShowPassword((v) => !v)} edge="end">
-                    {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                  </IconButton>
-                ),
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <IconButton size="small" onClick={() => setShowPassword((v) => !v)} edge="end">
+                      {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                    </IconButton>
+                  ),
+                },
               }}
               helperText={
                 passwordLen > 0

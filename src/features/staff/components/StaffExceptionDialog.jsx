@@ -108,8 +108,10 @@ const StaffExceptionDialog = ({
           shrink: true
         }} />
 
-          <TextField label="Date de fin" type="date" value={formData.endDate} onChange={e => handleChange('endDate', e.target.value)} inputProps={{
-          min: formData.startDate
+          <TextField label="Date de fin" type="date" value={formData.endDate} onChange={e => handleChange('endDate', e.target.value)} slotProps={{
+          htmlInput: {
+            min: formData.startDate
+          }
         }} fullWidth InputLabelProps={{
           shrink: true
         }} />

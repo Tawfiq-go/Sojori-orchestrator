@@ -99,7 +99,7 @@ export function CompactImportMessagesGrid({
               checked={effectiveEnabled}
               disabled={disabled}
               onChange={(_, checked) => onToggle?.(messageId, checked)}
-              inputProps={{ 'aria-label': rule.label || cat?.label }}
+              slotProps={{ htmlInput: { 'aria-label': rule.label || cat?.label } }}
               sx={switchSx}
             />
           </Box>

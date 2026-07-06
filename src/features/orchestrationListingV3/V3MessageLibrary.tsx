@@ -194,7 +194,7 @@ export default function V3MessageLibrary({ ownerKey }: Props) {
       })}
 
       {catalog.length === 0 && (
-        <Typography sx={{ color: V3.t3, fontSize: 13 }}>
+        <Typography component="div" sx={{ color: V3.t3, fontSize: 13 }}>
           Catalogue vide — seed via{' '}
           <Button component={RouterLink} to={expertUrl} size="small">
             orchestration-config
