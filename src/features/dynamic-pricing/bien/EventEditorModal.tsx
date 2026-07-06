@@ -135,7 +135,7 @@ export default function EventEditorModal({ open, initial, onClose, onSave }: Eve
               value={marketPercent}
               onChange={(e) => setMarketPercent(Number(e.target.value))}
               helperText="Ex. 115 = 115 % du (marché estimate × coefficient occupation)"
-              inputProps={{ min: 50, max: 300 }}
+              slotProps={{ htmlInput: { min: 50, max: 300 } }}
             />
           )}
           <TextField label="Min. nuits" type="number" size="small" sx={{ maxWidth: 160 }} value={minNights}

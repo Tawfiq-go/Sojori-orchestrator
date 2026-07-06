@@ -249,6 +249,62 @@ class CalendarService {
     }
   }
 
+  /**
+   * GET /api/v1/calendar/inventory/audit-blocked-days
+   * Audit à la demande : jours bloqués (Dispo=0) sans réservation confirmée/pending,
+   * groupés en plages avec une classification de cause probable.
+   */
+  async auditBlockedDays(
+    listingId: string,
+    roomTypeId?: string,
+    from?: string,
+    to?: string,
+  ): Promise<{
+    listingId: string;
+    from: string;
+    to: string;
+    roomTypes: Array<{
+      roomTypeId: string;
+      roomTypeName: string;
+      ranges: Array<{
+        from: string;
+        to: string;
+        classification: 'cancelled_reservation' | 'ota_stop_sell' | 'unknown';
+        dayCount: number;
+      }>;
+    }>;
+  }> {
+    try {
+      const params: Record<string, string> = { listingId };
+      if (roomTypeId) params.roomTypeId = roomTypeId;
+      if (from) params.from = from;
+      if (to) params.to = to;
+
+      const response = await apiClient.get<{
+        success: boolean;
+        message?: string;
+        listingId: string;
+        from: string;
+        to: string;
+        roomTypes: any[];
+      }>(`${CALENDAR_BASE}/inventory/audit-blocked-days`, { params });
+
+      const result = response.data;
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to audit blocked days');
+      }
+      return {
+        listingId: result.listingId,
+        from: result.from,
+        to: result.to,
+        roomTypes: result.roomTypes || [],
+      };
+    } catch (error) {
+      console.error('Error auditing blocked days:', error);
+      throw error;
+    }
+  }
+
   /** GET /api/v1/calendar/dynamic-price/get?listingId= */
   async getDynamicPricingRule(listingId: string): Promise<Record<string, unknown> | null> {
     const response = await apiClient.get<{ success: boolean; rule?: Record<string, unknown> }>(

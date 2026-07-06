@@ -145,7 +145,7 @@ const OwnerFilter = ({
                   variant="outlined"
                   size="small"
                   sx={{ width: compact ? 'min(200px, 42vw)' : '200px' }}
-                  InputProps={{ style: { paddingRight: 0 } }}
+                  slotProps={{ input: { style: { paddingRight: 0 } } }}
                 />
                 <SearchButton onClick={handleSearchClick} className="!text-white">
                   <SearchIcon className="!text-white" />

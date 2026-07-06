@@ -103,8 +103,10 @@ const ReservationNumberFilter = ({
           minWidth: { xs: '100%', sm: '200px' },
           maxWidth: { xs: '100%', sm: '250px' }
         }}
-        InputProps={{
-          style: { paddingRight: 0 },
+        slotProps={{
+          input: {
+            style: { paddingRight: 0 },
+          },
         }}
       />
       <SearchButton onClick={handleSearchClick} className="!text-white">

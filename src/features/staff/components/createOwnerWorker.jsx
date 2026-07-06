@@ -698,14 +698,17 @@ export default function CreateWorkerForm() {
                                 <TextField label={t('Commission (%)')} name="worker.commission" type="number" value={w.commission ?? 0} onChange={e => {
                             const val = e.target.value;
                             setFieldValue('worker.commission', val === '' ? '' : Number(val));
-                          }} InputProps={{
-                            endAdornment: <InputAdornment position="end">
+                          }} slotProps={{
+                            input: {
+                              endAdornment: <InputAdornment position="end">
                                         %
                                       </InputAdornment>
-                          }} inputProps={{
-                            min: 0,
-                            max: 100,
-                            step: '5'
+                            },
+                            htmlInput: {
+                              min: 0,
+                              max: 100,
+                              step: '5'
+                            }
                           }} disabled={w.contractType === 'FIXED FEE'} // not required then
                           error={te('worker.commission')} helperText={w.contractType === 'FIXED FEE' ? t('Commission not required for fixed fee') : he('worker.commission')} fullWidth />
                               </Grid>

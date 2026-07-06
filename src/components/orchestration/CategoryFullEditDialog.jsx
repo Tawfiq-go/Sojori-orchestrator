@@ -865,8 +865,10 @@ const CategoryFullEditDialog = ({
               }}>Rappels activés</Typography>} />
               </Grid>
               <Grid item xs={12} sm={2}>
-                <TextField fullWidth size="small" type="number" label="Début rappel (j avant)" value={orchestration.clientReminder?.daysBeforeDeadline ?? orchestration.clientReminder?.startDaysBefore ?? 2} onChange={e => handleClientReminderChange('daysBeforeDeadline', parseInt(e.target.value) || 0)} inputProps={{
-                min: 0
+                <TextField fullWidth size="small" type="number" label="Début rappel (j avant)" value={orchestration.clientReminder?.daysBeforeDeadline ?? orchestration.clientReminder?.startDaysBefore ?? 2} onChange={e => handleClientReminderChange('daysBeforeDeadline', parseInt(e.target.value) || 0)} slotProps={{
+                htmlInput: {
+                  min: 0
+                }
               }} sx={{
                 '& .MuiOutlinedInput-root': {
                   bgcolor: 'white',
@@ -878,8 +880,10 @@ const CategoryFullEditDialog = ({
               }} />
               </Grid>
               <Grid item xs={12} sm={2}>
-                <TextField fullWidth size="small" type="number" label="Deadline fin rappel (j avant)" value={orchestration.clientReminder?.deadline ?? orchestration.clientReminder?.deadlineDaysBefore ?? 1} onChange={e => handleClientReminderChange('deadline', parseInt(e.target.value) || 0)} inputProps={{
-                min: 0
+                <TextField fullWidth size="small" type="number" label="Deadline fin rappel (j avant)" value={orchestration.clientReminder?.deadline ?? orchestration.clientReminder?.deadlineDaysBefore ?? 1} onChange={e => handleClientReminderChange('deadline', parseInt(e.target.value) || 0)} slotProps={{
+                htmlInput: {
+                  min: 0
+                }
               }} sx={{
                 '& .MuiOutlinedInput-root': {
                   bgcolor: 'white',
@@ -1186,8 +1190,10 @@ const CategoryFullEditDialog = ({
                 }}>Rappels activés</Typography>} />
                   </Grid>
                   <Grid item xs={12} sm={3}>
-                    <TextField fullWidth size="small" type="number" label="Début rappels (j avant)" value={orchestration.clientReminder?.daysBeforeDeadline ?? orchestration.clientReminder?.startDaysBefore ?? 2} onChange={e => handleClientReminderChange('daysBeforeDeadline', parseInt(e.target.value) || 0)} inputProps={{
-                  min: 0
+                    <TextField fullWidth size="small" type="number" label="Début rappels (j avant)" value={orchestration.clientReminder?.daysBeforeDeadline ?? orchestration.clientReminder?.startDaysBefore ?? 2} onChange={e => handleClientReminderChange('daysBeforeDeadline', parseInt(e.target.value) || 0)} slotProps={{
+                  htmlInput: {
+                    min: 0
+                  }
                 }} sx={{
                   '& .MuiOutlinedInput-root': {
                     bgcolor: 'white',
@@ -1199,8 +1205,10 @@ const CategoryFullEditDialog = ({
                 }} />
                   </Grid>
                   <Grid item xs={12} sm={3}>
-                    <TextField fullWidth size="small" type="number" label="Deadline réponse (j avant)" value={orchestration.clientReminder?.deadline ?? orchestration.clientReminder?.deadlineDaysBefore ?? 1} onChange={e => handleClientReminderChange('deadline', parseInt(e.target.value) || 0)} inputProps={{
-                  min: 0
+                    <TextField fullWidth size="small" type="number" label="Deadline réponse (j avant)" value={orchestration.clientReminder?.deadline ?? orchestration.clientReminder?.deadlineDaysBefore ?? 1} onChange={e => handleClientReminderChange('deadline', parseInt(e.target.value) || 0)} slotProps={{
+                  htmlInput: {
+                    min: 0
+                  }
                 }} sx={{
                   '& .MuiOutlinedInput-root': {
                     bgcolor: 'white',
@@ -1235,9 +1243,11 @@ const CategoryFullEditDialog = ({
                 }}>Timeslot calculé</Typography>
                   </Grid>
                   <Grid item xs={12} sm={3}>
-                    <TextField fullWidth size="small" type="number" label="Date tâche par défaut (J+x)" value={orchestration.defaultTaskDateAfterCheckout ?? 1} onChange={e => handleOrchChange('defaultTaskDateAfterCheckout', parseInt(e.target.value) || 1)} inputProps={{
-                  min: 0,
-                  max: 3
+                    <TextField fullWidth size="small" type="number" label="Date tâche par défaut (J+x)" value={orchestration.defaultTaskDateAfterCheckout ?? 1} onChange={e => handleOrchChange('defaultTaskDateAfterCheckout', parseInt(e.target.value) || 1)} slotProps={{
+                  htmlInput: {
+                    min: 0,
+                    max: 3
+                  }
                 }} placeholder="1" helperText="Jours après checkout" sx={{
                   '& .MuiOutlinedInput-root': {
                     bgcolor: 'white',
@@ -1270,8 +1280,10 @@ const CategoryFullEditDialog = ({
                     <TextField fullWidth size="small" type="number" label="Assigner staff (valeur)" value={orchestration.assignStaffBefore?.value ?? ''} onChange={e => handleOrchChange('assignStaffBefore', {
                   ...orchestration.assignStaffBefore,
                   value: e.target.value === '' ? undefined : parseInt(e.target.value, 10)
-                })} placeholder="N/A si pas en BD" inputProps={{
-                  'data-slug': 'assign-staff-value'
+                })} placeholder="N/A si pas en BD" slotProps={{
+                  htmlInput: {
+                    'data-slug': 'assign-staff-value'
+                  }
                 }} sx={{
                   '& .MuiOutlinedInput-root': {
                     bgcolor: 'white',
@@ -1293,8 +1305,10 @@ const CategoryFullEditDialog = ({
                   }
                 }}>
                       <InputLabel>Unité</InputLabel>
-                      <Select inputProps={{
-                    'data-slug': 'assign-staff-unit'
+                      <Select slotProps={{
+                    htmlInput: {
+                      'data-slug': 'assign-staff-unit'
+                    }
                   }} value={orchestration.assignStaffBefore?.unit ?? ''} onChange={e => handleOrchChange('assignStaffBefore', {
                     ...orchestration.assignStaffBefore,
                     unit: e.target.value || undefined
@@ -1409,8 +1423,10 @@ const CategoryFullEditDialog = ({
                 {/* Champs conditionnels si scheduledEnabled */}
                 {(orchestration.assignmentTiming?.scheduledEnabled ?? true) && <>
                   <Grid item xs={12} sm={3}>
-                    <TextField fullWidth size="small" type="number" label="Valeur" value={orchestration.assignmentTiming?.scheduledValue ?? orchestration.createTaskBefore?.value ?? 2} onChange={e => handleAssignmentTimingChange('scheduledValue', parseInt(e.target.value) || 1)} inputProps={{
-                    min: 0
+                    <TextField fullWidth size="small" type="number" label="Valeur" value={orchestration.assignmentTiming?.scheduledValue ?? orchestration.createTaskBefore?.value ?? 2} onChange={e => handleAssignmentTimingChange('scheduledValue', parseInt(e.target.value) || 1)} slotProps={{
+                    htmlInput: {
+                      min: 0
+                    }
                   }} placeholder="2" sx={{
                     '& .MuiOutlinedInput-root': {
                       bgcolor: 'white',
@@ -1446,9 +1462,11 @@ const CategoryFullEditDialog = ({
                     <TextField fullWidth size="small" type="number" label="Heure (0–23)" value={orchestration.assignmentTiming?.scheduledHour ?? orchestration.assignStaffBefore?.preferredHour ?? ''} onChange={e => {
                     const v = e.target.value;
                     handleAssignmentTimingChange('scheduledHour', v === '' ? undefined : Math.min(23, Math.max(0, parseInt(v, 10) || 0)));
-                  }} inputProps={{
-                    min: 0,
-                    max: 23
+                  }} slotProps={{
+                    htmlInput: {
+                      min: 0,
+                      max: 23
+                    }
                   }} placeholder="9" helperText="Heure locale préférée" sx={{
                     '& .MuiOutlinedInput-root': {
                       bgcolor: 'white',
@@ -1520,9 +1538,11 @@ const CategoryFullEditDialog = ({
                 </FormControl>
               </Grid>
               <Grid item xs={12} sm={3}>
-                <TextField fullWidth size="small" type="number" label="Max relances/jour (J)" value={orchestration.dayJLogic?.maxRetriesPerDay ?? 2} onChange={e => handleDayJChange('maxRetriesPerDay', parseInt(e.target.value) || 0)} inputProps={{
-                min: 1,
-                max: 10
+                <TextField fullWidth size="small" type="number" label="Max relances/jour (J)" value={orchestration.dayJLogic?.maxRetriesPerDay ?? 2} onChange={e => handleDayJChange('maxRetriesPerDay', parseInt(e.target.value) || 0)} slotProps={{
+                htmlInput: {
+                  min: 1,
+                  max: 10
+                }
               }} sx={{
                 '& .MuiOutlinedInput-root': {
                   bgcolor: 'white',
@@ -1534,9 +1554,11 @@ const CategoryFullEditDialog = ({
               }} disabled={(orchestration.assignmentType || 'STAFF') === 'MANAGER'} />
               </Grid>
               <Grid item xs={12} sm={3}>
-                <TextField fullWidth size="small" type="number" label="Intervalle (h)" value={orchestration.dayJLogic?.retryIntervalHours ?? 2} onChange={e => handleDayJChange('retryIntervalHours', parseInt(e.target.value) || 0)} inputProps={{
-                min: 1,
-                max: 24
+                <TextField fullWidth size="small" type="number" label="Intervalle (h)" value={orchestration.dayJLogic?.retryIntervalHours ?? 2} onChange={e => handleDayJChange('retryIntervalHours', parseInt(e.target.value) || 0)} slotProps={{
+                htmlInput: {
+                  min: 1,
+                  max: 24
+                }
               }} sx={{
                 '& .MuiOutlinedInput-root': {
                   bgcolor: 'white',
@@ -1661,9 +1683,11 @@ const CategoryFullEditDialog = ({
                     '& .MuiInputLabel-root': {
                       fontSize: 12
                     }
-                  }} type="number" label="Jours avant la tâche" value={orchestration.taskReminder?.daysBefore ?? 1} onChange={e => handleTaskReminderChange('daysBefore', parseInt(e.target.value) || 1)} inputProps={{
-                    min: 1,
-                    max: 30
+                  }} type="number" label="Jours avant la tâche" value={orchestration.taskReminder?.daysBefore ?? 1} onChange={e => handleTaskReminderChange('daysBefore', parseInt(e.target.value) || 1)} slotProps={{
+                    htmlInput: {
+                      min: 1,
+                      max: 30
+                    }
                   }} helperText="Ex. 1 = veille de la tâche" />
                   </Grid>
                   <Grid item xs={12} sm={6}>
@@ -1675,9 +1699,11 @@ const CategoryFullEditDialog = ({
                     '& .MuiInputLabel-root': {
                       fontSize: 12
                     }
-                  }} type="number" label="Heure envoi (0–23)" value={orchestration.taskReminder?.preferredHour ?? 9} onChange={e => handleTaskReminderChange('preferredHour', parseInt(e.target.value) || 9)} inputProps={{
-                    min: 0,
-                    max: 23
+                  }} type="number" label="Heure envoi (0–23)" value={orchestration.taskReminder?.preferredHour ?? 9} onChange={e => handleTaskReminderChange('preferredHour', parseInt(e.target.value) || 9)} slotProps={{
+                    htmlInput: {
+                      min: 0,
+                      max: 23
+                    }
                   }} helperText="Heure locale" />
                   </Grid>
                 </>}
@@ -1728,8 +1754,10 @@ const CategoryFullEditDialog = ({
                   type: orchestration.createTaskBefore?.deadline?.type || 'DAYS',
                   value: parseInt(e.target.value) || 1
                 }
-              })} inputProps={{
-                min: 1
+              })} slotProps={{
+                htmlInput: {
+                  min: 1
+                }
               }} sx={{
                 '& .MuiOutlinedInput-root': {
                   bgcolor: 'white',
@@ -1747,9 +1775,11 @@ const CategoryFullEditDialog = ({
                   ...(orchestration.createTaskBefore?.deadline || {}),
                   hour: e.target.value === '' ? undefined : parseInt(e.target.value, 10)
                 }
-              })} inputProps={{
-                min: 0,
-                max: 23
+              })} slotProps={{
+                htmlInput: {
+                  min: 0,
+                  max: 23
+                }
               }} placeholder="8" helperText="Ex. 8h" sx={{
                 '& .MuiOutlinedInput-root': {
                   bgcolor: 'white',
@@ -1967,8 +1997,10 @@ const CategoryFullEditDialog = ({
                 }} type="number" label="Valeur" value={orchestration.createTaskBefore?.value || 0} onChange={e => handleOrchChange('createTaskBefore', {
                   ...orchestration.createTaskBefore,
                   value: parseInt(e.target.value) || 0
-                })} inputProps={{
-                  min: 0
+                })} slotProps={{
+                  htmlInput: {
+                    min: 0
+                  }
                 }} />
                     </Grid>
                     <Grid item xs={6} sm={3}>
@@ -2051,9 +2083,11 @@ const CategoryFullEditDialog = ({
                   "& .MuiInputLabel-root": {
                     fontSize: 14
                   }
-                }} type="number" label="Max relances/jour" value={orchestration.dayJLogic?.maxRetriesPerDay || 3} onChange={e => handleDayJChange('maxRetriesPerDay', parseInt(e.target.value) || 0)} inputProps={{
-                  min: 1,
-                  max: 10
+                }} type="number" label="Max relances/jour" value={orchestration.dayJLogic?.maxRetriesPerDay || 3} onChange={e => handleDayJChange('maxRetriesPerDay', parseInt(e.target.value) || 0)} slotProps={{
+                  htmlInput: {
+                    min: 1,
+                    max: 10
+                  }
                 }} helperText="Par staff/J" disabled={(orchestration.assignmentType || 'STAFF') === 'MANAGER'} />
                     </Grid>
                     <Grid item xs={12} sm={4}>
@@ -2064,9 +2098,11 @@ const CategoryFullEditDialog = ({
                   "& .MuiInputLabel-root": {
                     fontSize: 14
                   }
-                }} type="number" label="Intervalle (heures)" value={orchestration.dayJLogic?.retryIntervalHours || 1} onChange={e => handleDayJChange('retryIntervalHours', parseInt(e.target.value) || 0)} inputProps={{
-                  min: 1,
-                  max: 24
+                }} type="number" label="Intervalle (heures)" value={orchestration.dayJLogic?.retryIntervalHours || 1} onChange={e => handleDayJChange('retryIntervalHours', parseInt(e.target.value) || 0)} slotProps={{
+                  htmlInput: {
+                    min: 1,
+                    max: 24
+                  }
                 }} helperText="Entre relances" disabled={(orchestration.assignmentType || 'STAFF') === 'MANAGER'} />
                     </Grid>
                     <Grid item xs={12} sm={4}>
@@ -2149,9 +2185,11 @@ const CategoryFullEditDialog = ({
                   "& .MuiInputLabel-root": {
                     fontSize: 14
                   }
-                }} type="number" label="Valeur" value={orchestration.deadline?.value || -1} onChange={e => handleDeadlineChange('value', parseInt(e.target.value) || 0)} inputProps={{
-                  min: -30,
-                  max: 30
+                }} type="number" label="Valeur" value={orchestration.deadline?.value || -1} onChange={e => handleDeadlineChange('value', parseInt(e.target.value) || 0)} slotProps={{
+                  htmlInput: {
+                    min: -30,
+                    max: 30
+                  }
                 }} helperText="-1=1j avant" />
                     </Grid>
                     <Grid item xs={12} sm={4}>
@@ -2162,9 +2200,11 @@ const CategoryFullEditDialog = ({
                   "& .MuiInputLabel-root": {
                     fontSize: 14
                   }
-                }} type="number" label="Heure (0–23)" value={orchestration.deadline?.hour ?? ''} onChange={e => handleDeadlineChange('hour', e.target.value === '' ? undefined : parseInt(e.target.value, 10))} inputProps={{
-                  min: 0,
-                  max: 23
+                }} type="number" label="Heure (0–23)" value={orchestration.deadline?.hour ?? ''} onChange={e => handleDeadlineChange('hour', e.target.value === '' ? undefined : parseInt(e.target.value, 10))} slotProps={{
+                  htmlInput: {
+                    min: 0,
+                    max: 23
+                  }
                 }} placeholder="8" helperText="Ex. 8h" />
                     </Grid>
                     <Grid item xs={12} sm={4}>
@@ -2235,8 +2275,10 @@ const CategoryFullEditDialog = ({
                   "& .MuiInputLabel-root": {
                     fontSize: 14
                   }
-                }} type="number" label="Jours avant événement" value={orchestration.clientReminder?.daysBeforeEvent || 1} onChange={e => handleClientReminderChange('daysBeforeEvent', parseInt(e.target.value) || 0)} inputProps={{
-                  min: 0
+                }} type="number" label="Jours avant événement" value={orchestration.clientReminder?.daysBeforeEvent || 1} onChange={e => handleClientReminderChange('daysBeforeEvent', parseInt(e.target.value) || 0)} slotProps={{
+                  htmlInput: {
+                    min: 0
+                  }
                 }} />
                         </Grid>
                       </Grid>}

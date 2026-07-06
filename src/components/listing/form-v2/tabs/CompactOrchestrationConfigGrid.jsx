@@ -62,7 +62,7 @@ export function CompactOrchestrationConfigGrid({ activations, onToggle, disabled
               checked={on}
               disabled={disabled}
               onChange={(_, checked) => onToggle?.(def.key, checked)}
-              inputProps={{ 'aria-label': def.label }}
+              slotProps={{ htmlInput: { 'aria-label': def.label } }}
               sx={switchSx}
             />
           </Box>

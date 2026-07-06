@@ -153,16 +153,20 @@ const CreateStaffDialog = ({
         }) => <Form className="space-y-4">
               <Box className="flex flex-col gap-3 mt-3">
                 <Box>
-                  <Field as={TextField} fullWidth name="username" label={t('Username')} variant="outlined" InputProps={{
-                startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                  <Field as={TextField} fullWidth name="username" label={t('Username')} variant="outlined" slotProps={{
+                input: {
+                  startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                }
               }} />
                   <ErrorMessage name="username" component={Typography} className="text-red-500 !text-xs" />
                 </Box>
                 
                 <Box className="flex gap-2">
                   <Box className="w-full">
-                    <Field as={TextField} fullWidth name="email" label={t('Email')} variant="outlined" type="email" InputProps={{
-                  startAdornment: <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                    <Field as={TextField} fullWidth name="email" label={t('Email')} variant="outlined" type="email" slotProps={{
+                  input: {
+                    startAdornment: <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                  }
                 }} />
                     <ErrorMessage name="email" component={Typography} className="text-red-500 !text-xs" />
                   </Box>
@@ -174,8 +178,10 @@ const CreateStaffDialog = ({
                       label="Password"
                       variant="outlined"
                       type="password"
-                      InputProps={{
-                        startAdornment: <Lock className="w-4 h-4 mr-2 text-gray-500" />,
+                      slotProps={{
+                        input: {
+                          startAdornment: <Lock className="w-4 h-4 mr-2 text-gray-500" />,
+                        }
                       }}
                     />
                     <ErrorMessage name="password" component={Typography} className="text-red-500 !text-xs" />
@@ -205,14 +211,18 @@ const CreateStaffDialog = ({
 
                 <Box className="flex gap-2">
                   <Box className="w-full">
-                    <Field as={TextField} fullWidth name="callPhone" label={t('Call Phone')} variant="outlined" InputProps={{
-                  startAdornment: <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                    <Field as={TextField} fullWidth name="callPhone" label={t('Call Phone')} variant="outlined" slotProps={{
+                  input: {
+                    startAdornment: <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                  }
                 }} />
                     <ErrorMessage name="callPhone" component={Typography} className="text-red-500 !text-xs" />
                   </Box>
                   <Box className="w-full">
-                    <Field as={TextField} fullWidth name="whatsappPhone" label={t('WhatsApp Phone')} variant="outlined" InputProps={{
-                  startAdornment: <MessageSquare className="w-4 h-4 mr-2 text-gray-500" />
+                    <Field as={TextField} fullWidth name="whatsappPhone" label={t('WhatsApp Phone')} variant="outlined" slotProps={{
+                  input: {
+                    startAdornment: <MessageSquare className="w-4 h-4 mr-2 text-gray-500" />
+                  }
                 }} />
                     <ErrorMessage name="whatsappPhone" component={Typography} className="text-red-500 !text-xs" />
                   </Box>

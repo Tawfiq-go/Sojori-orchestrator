@@ -354,7 +354,7 @@ export function Step2ClientRequest({ formData, onChange }: Step2Props) {
                 value={clientRequest.price || 0}
                 onChange={(e) => handleChange('price', parseFloat(e.target.value) || 0)}
                 fullWidth
-                inputProps={{ min: 0, step: 10 }}
+                slotProps={{ htmlInput: { min: 0, step: 10 } }}
               />
             </Grid>
           )}
@@ -430,7 +430,7 @@ export function Step2ClientRequest({ formData, onChange }: Step2Props) {
               value={clientRequest.passengers || 1}
               onChange={(e) => handleChange('passengers', parseInt(e.target.value) || 1)}
               fullWidth
-              inputProps={{ min: 1, max: 20 }}
+              slotProps={{ htmlInput: { min: 1, max: 20 } }}
             />
           </Grid>
 
@@ -495,7 +495,7 @@ export function Step2ClientRequest({ formData, onChange }: Step2Props) {
               value={clientRequest.budget || 0}
               onChange={(e) => handleChange('budget', parseFloat(e.target.value) || 0)}
               fullWidth
-              inputProps={{ min: 0, step: 10 }}
+              slotProps={{ htmlInput: { min: 0, step: 10 } }}
             />
           </Grid>
         </Grid>

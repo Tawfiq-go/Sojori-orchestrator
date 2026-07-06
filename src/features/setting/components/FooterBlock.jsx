@@ -202,8 +202,10 @@ const FooterBlock = () => {
                             </Typography>
                           </Stack>
                           <Stack spacing={1}>
-                            {companyLinksData.map((link, index) => footerConfig.company?.[link.key]?.[selectedLanguage] && <TextField key={index} value={renderTranslatedText(footerConfig.company[link.key])} variant="outlined" size="small" fullWidth InputProps={{
-                          readOnly: true
+                            {companyLinksData.map((link, index) => footerConfig.company?.[link.key]?.[selectedLanguage] && <TextField key={index} value={renderTranslatedText(footerConfig.company[link.key])} variant="outlined" size="small" fullWidth slotProps={{
+                          input: {
+                            readOnly: true
+                          }
                         }} />)}
                           </Stack>
                         </Stack>
@@ -240,8 +242,10 @@ const FooterBlock = () => {
                               fontSize: 18,
                               color: "text.secondary"
                             }} />
-                                      <TextField value={socialLink.url} variant="outlined" size="small" fullWidth type="url" InputProps={{
-                              readOnly: true
+                                      <TextField value={socialLink.url} variant="outlined" size="small" fullWidth type="url" slotProps={{
+                              input: {
+                                readOnly: true
+                              }
                             }} />
                                     </Stack>;
                         })}
@@ -272,8 +276,10 @@ const FooterBlock = () => {
                         }} />
                           </Stack>
                           {languageEnabled && <Stack spacing={1}>
-                              {footerConfig.lang?.languages?.map((lang, index) => <TextField key={index} value={`${lang.name} (${lang.languageCode})`} variant="outlined" size="small" fullWidth InputProps={{
-                          readOnly: true
+                              {footerConfig.lang?.languages?.map((lang, index) => <TextField key={index} value={`${lang.name} (${lang.languageCode})`} variant="outlined" size="small" fullWidth slotProps={{
+                          input: {
+                            readOnly: true
+                          }
                         }} />)}
                             </Stack>}
                         </Stack>
@@ -302,8 +308,10 @@ const FooterBlock = () => {
                         }} />
                           </Stack>
                           {currencyEnabled && <Stack spacing={1}>
-                              {footerConfig.curr?.currencies?.map((curr, index) => <TextField key={index} value={`${curr.currencyCode} (${curr.currencySymbol})`} variant="outlined" size="small" fullWidth InputProps={{
-                          readOnly: true
+                              {footerConfig.curr?.currencies?.map((curr, index) => <TextField key={index} value={`${curr.currencyCode} (${curr.currencySymbol})`} variant="outlined" size="small" fullWidth slotProps={{
+                          input: {
+                            readOnly: true
+                          }
                         }} />)}
                             </Stack>}
                         </Stack>
@@ -321,11 +329,15 @@ const FooterBlock = () => {
                               {t("General")}
                             </Typography>
                           </Stack>
-                          {footerConfig.logoUrl && <TextField value={footerConfig.logoUrl} variant="outlined" size="small" fullWidth type="url" InputProps={{
-                        readOnly: true
+                          {footerConfig.logoUrl && <TextField value={footerConfig.logoUrl} variant="outlined" size="small" fullWidth type="url" slotProps={{
+                        input: {
+                          readOnly: true
+                        }
                       }} />}
-                          {footerConfig.currentYear && <TextField value={footerConfig.currentYear} variant="outlined" size="small" fullWidth InputProps={{
-                        readOnly: true
+                          {footerConfig.currentYear && <TextField value={footerConfig.currentYear} variant="outlined" size="small" fullWidth slotProps={{
+                        input: {
+                          readOnly: true
+                        }
                       }} />}
                         </Stack>
                       </Grid>
@@ -356,8 +368,10 @@ const FooterBlock = () => {
                               <TextField value={renderTranslatedText(footerConfig.legal?.copyright)} variant="outlined" size="small" sx={{
                           flexGrow: 1,
                           mr: 2
-                        }} InputProps={{
-                          readOnly: true
+                        }} slotProps={{
+                          input: {
+                            readOnly: true
+                          }
                         }} />
                               <Stack direction="row" spacing={2}>
                                 {footerConfig.termsOfServiceUrl && <Link href={footerConfig.termsOfServiceUrl} underline="always" color="#12a190" variant="body2" fontSize="12.5px">
@@ -393,8 +407,10 @@ const FooterBlock = () => {
                           }
                         }} />
                           </Stack>
-                          {assistanceEnabled && footerConfig.assistance?.aide?.[selectedLanguage] && <TextField value={renderTranslatedText(footerConfig.assistance.aide)} variant="outlined" size="small" fullWidth InputProps={{
-                        readOnly: true
+                          {assistanceEnabled && footerConfig.assistance?.aide?.[selectedLanguage] && <TextField value={renderTranslatedText(footerConfig.assistance.aide)} variant="outlined" size="small" fullWidth slotProps={{
+                        input: {
+                          readOnly: true
+                        }
                       }} />}
                         </Stack>
                       </Grid>

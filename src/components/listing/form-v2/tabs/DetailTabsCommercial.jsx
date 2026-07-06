@@ -296,7 +296,7 @@ export function AvailabilityTab({ values = {}, onChange }) {
               value={hourNumberToTimeInput(values.checkInTime ?? values.checkInTimeStart)}
               onChange={(e) => upd('checkInTime', e.target.value)}
               sx={sxInput}
-              inputProps={{ step: 3600 }}
+              slotProps={{ htmlInput: { step: 3600 } }}
             />
           </Field>
           <Field
@@ -310,7 +310,7 @@ export function AvailabilityTab({ values = {}, onChange }) {
               value={hourNumberToTimeInput(values.checkInTimeEnd)}
               onChange={(e) => upd('checkInTimeEnd', e.target.value)}
               sx={sxInput}
-              inputProps={{ step: 3600 }}
+              slotProps={{ htmlInput: { step: 3600 } }}
             />
           </Field>
           <Field label="Check-out avant" required ruField="checkOutTime">
@@ -320,7 +320,7 @@ export function AvailabilityTab({ values = {}, onChange }) {
               value={hourNumberToTimeInput(values.checkOutTime)}
               onChange={(e) => upd('checkOutTime', e.target.value)}
               sx={sxInput}
-              inputProps={{ step: 3600 }}
+              slotProps={{ htmlInput: { step: 3600 } }}
             />
           </Field>
         </Box>

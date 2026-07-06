@@ -603,8 +603,10 @@ const ConfigOrchestrationView = () => {
                   '& input': {
                     fontSize: '0.875rem'
                   }
-                }} inputProps={{
-                  min: 0
+                }} slotProps={{
+                  htmlInput: {
+                    min: 0
+                  }
                 }} /> : <span className="text-gray-400 text-sm">N/A</span>}
                   </TableCell>
 
@@ -725,8 +727,10 @@ const ConfigOrchestrationView = () => {
                   '& input': {
                     fontSize: '0.875rem'
                   }
-                }} inputProps={{
-                  min: 0
+                }} slotProps={{
+                  htmlInput: {
+                    min: 0
+                  }
                 }} /> : <span className="text-gray-400 text-sm">N/A</span>}
                   </TableCell>
 
@@ -746,8 +750,10 @@ const ConfigOrchestrationView = () => {
                   '& input': {
                     fontSize: '0.875rem'
                   }
-                }} inputProps={{
-                  min: 0
+                }} slotProps={{
+                  htmlInput: {
+                    min: 0
+                  }
                 }} /> : <span className="text-gray-400 text-sm">N/A</span>}
                   </TableCell>
                 </TableRow>;
@@ -790,10 +796,12 @@ const ConfigOrchestrationView = () => {
       <div className="w-1/3 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         {/* Search header */}
         <div className="sticky top-0 bg-white z-10 p-4 border-b border-slate-200">
-          <TextField placeholder="Rechercher SJ-XXX..." fullWidth size="small" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} InputProps={{
-          startAdornment: <InputAdornment position="start">
+          <TextField placeholder="Rechercher SJ-XXX..." fullWidth size="small" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} slotProps={{
+          input: {
+            startAdornment: <InputAdornment position="start">
                   <SearchIcon className="text-gray-400" />
                 </InputAdornment>
+          }
         }} />
           <div className="mt-2 text-xs text-gray-500">
             {filteredReservations.length} réservation{filteredReservations.length > 1 ? 's' : ''}

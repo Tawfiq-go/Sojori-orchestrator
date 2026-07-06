@@ -873,7 +873,7 @@ const CronMonitoringView = () => {
                       size="small"
                       value={customDateTo}
                       onChange={e => setCustomDateTo(e.target.value)}
-                      inputProps={{ min: customDateFrom }}
+                      slotProps={{ htmlInput: { min: customDateFrom } }}
                       InputLabelProps={{ shrink: true }}
                       sx={{ ...FILTER_FIELD_SX, minWidth: 150 }}
                     />

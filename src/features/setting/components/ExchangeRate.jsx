@@ -100,8 +100,10 @@ const ExchangeRateComponent = () => {
             field,
             form
           }) => <div>
-                                    <TextField type="number" {...field} error={Boolean(form.errors.rate && form.touched.rate)} helperText={<ErrorMessage name="rate" />} inputProps={{
-              min: 1
+                                    <TextField type="number" {...field} error={Boolean(form.errors.rate && form.touched.rate)} helperText={<ErrorMessage name="rate" />} slotProps={{
+              htmlInput: {
+                min: 1
+              }
             }} onChange={e => setFieldValue('rate', e.target.value)} />
                                 </div>}
                         </Field>

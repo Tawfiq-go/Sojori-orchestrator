@@ -722,29 +722,35 @@ const TeamMembersView = () => {
                     <div className="grid grid-cols-3 gap-3">
                       {/* Username */}
                       <Box>
-                        <Field as={TextField} fullWidth size="small" name="username" label="Username *" variant="outlined" InputProps={{
-                    startAdornment: <User className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
+                        <Field as={TextField} fullWidth size="small" name="username" label="Username *" variant="outlined" slotProps={{
+                    input: {
+                      startAdornment: <User className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
+                    }
                   }} />
                         <ErrorMessage name="username" component={Typography} className="text-red-500 !text-xs mt-0.5" />
                       </Box>
 
                       {/* Email */}
                       <Box>
-                        <Field as={TextField} fullWidth size="small" name="email" label="Email *" type="email" variant="outlined" InputProps={{
-                    startAdornment: <Mail className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
+                        <Field as={TextField} fullWidth size="small" name="email" label="Email *" type="email" variant="outlined" slotProps={{
+                    input: {
+                      startAdornment: <Mail className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
+                    }
                   }} />
                         <ErrorMessage name="email" component={Typography} className="text-red-500 !text-xs mt-0.5" />
                       </Box>
 
                       {/* Password */}
                       <Box>
-                        <Field as={TextField} fullWidth size="small" name="password" label="Password *" type={showPassword ? 'text' : 'password'} variant="outlined" InputProps={{
-                    startAdornment: <Lock className="w-3.5 h-3.5 mr-1.5 text-gray-500" />,
-                    endAdornment: <InputAdornment position="end">
+                        <Field as={TextField} fullWidth size="small" name="password" label="Password *" type={showPassword ? 'text' : 'password'} variant="outlined" slotProps={{
+                    input: {
+                      startAdornment: <Lock className="w-3.5 h-3.5 mr-1.5 text-gray-500" />,
+                      endAdornment: <InputAdornment position="end">
                                 <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">
                                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                 </IconButton>
                               </InputAdornment>
+                    }
                   }} />
                         <ErrorMessage name="password" component={Typography} className="text-red-500 !text-xs mt-0.5" />
                       </Box>
@@ -753,15 +759,19 @@ const TeamMembersView = () => {
                     <div className="grid grid-cols-3 gap-3">
                       {/* Call Phone */}
                       <Box>
-                        <Field as={TextField} fullWidth size="small" name="callPhone" label="Call Phone" variant="outlined" InputProps={{
-                    startAdornment: <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
+                        <Field as={TextField} fullWidth size="small" name="callPhone" label="Call Phone" variant="outlined" slotProps={{
+                    input: {
+                      startAdornment: <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
+                    }
                   }} />
                       </Box>
 
                       {/* WhatsApp Phone */}
                       <Box>
-                        <Field as={TextField} fullWidth size="small" name="whatsappPhone" label="WhatsApp" variant="outlined" InputProps={{
-                    startAdornment: <MessageSquare className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
+                        <Field as={TextField} fullWidth size="small" name="whatsappPhone" label="WhatsApp" variant="outlined" slotProps={{
+                    input: {
+                      startAdornment: <MessageSquare className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
+                    }
                   }} />
                       </Box>
 
@@ -1105,24 +1115,30 @@ const TeamMembersView = () => {
                       <div className="grid grid-cols-3 gap-3">
                         {/* Username */}
                         <Box>
-                          <Field as={TextField} fullWidth name="username" label="Username *" variant="outlined" size="small" InputProps={{
-                    startAdornment: <User className="w-3.5 h-3.5 mr-2 text-gray-500" />
+                          <Field as={TextField} fullWidth name="username" label="Username *" variant="outlined" size="small" slotProps={{
+                    input: {
+                      startAdornment: <User className="w-3.5 h-3.5 mr-2 text-gray-500" />
+                    }
                   }} />
                           <ErrorMessage name="username" component={Typography} className="text-red-500 !text-xs mt-1" />
                         </Box>
 
                         {/* Call Phone */}
                         <Box>
-                          <Field as={TextField} fullWidth name="callPhone" label="Call Phone *" variant="outlined" size="small" InputProps={{
-                    startAdornment: <Phone className="w-3.5 h-3.5 mr-2 text-gray-500" />
+                          <Field as={TextField} fullWidth name="callPhone" label="Call Phone *" variant="outlined" size="small" slotProps={{
+                    input: {
+                      startAdornment: <Phone className="w-3.5 h-3.5 mr-2 text-gray-500" />
+                    }
                   }} />
                           <ErrorMessage name="callPhone" component={Typography} className="text-red-500 !text-xs mt-1" />
                         </Box>
 
                         {/* WhatsApp Phone */}
                         <Box>
-                          <Field as={TextField} fullWidth name="whatsappPhone" label="WhatsApp Phone *" variant="outlined" size="small" InputProps={{
-                    startAdornment: <MessageSquare className="w-3.5 h-3.5 mr-2 text-gray-500" />
+                          <Field as={TextField} fullWidth name="whatsappPhone" label="WhatsApp Phone *" variant="outlined" size="small" slotProps={{
+                    input: {
+                      startAdornment: <MessageSquare className="w-3.5 h-3.5 mr-2 text-gray-500" />
+                    }
                   }} />
                           <ErrorMessage name="whatsappPhone" component={Typography} className="text-red-500 !text-xs mt-1" />
                         </Box>

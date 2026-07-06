@@ -641,7 +641,7 @@ export function TimeFeesEditor({ label, rows, ruField, onChange, currency = 'MAD
                         updateRow(idx, { fromHour: e.target.value === '' ? null : Number(e.target.value) })
                       }
                       sx={{ ...sxInput, width: 72 }}
-                      inputProps={{ min: 0, max: 23 }}
+                      slotProps={{ htmlInput: { min: 0, max: 23 } }}
                     />
                   </TableCell>
                   <TableCell sx={{ py: 0.75 }}>
@@ -653,7 +653,7 @@ export function TimeFeesEditor({ label, rows, ruField, onChange, currency = 'MAD
                         updateRow(idx, { toHour: e.target.value === '' ? null : Number(e.target.value) })
                       }
                       sx={{ ...sxInput, width: 72 }}
-                      inputProps={{ min: 0, max: 23 }}
+                      slotProps={{ htmlInput: { min: 0, max: 23 } }}
                     />
                   </TableCell>
                   <TableCell align="right" sx={{ py: 0.75 }}>

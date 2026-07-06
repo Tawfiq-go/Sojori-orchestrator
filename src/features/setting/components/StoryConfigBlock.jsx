@@ -199,32 +199,40 @@ function StoryConfigBlock() {
                       }}>
                             {t("StorySection")}
                           </Typography>
-                          <TextField fullWidth label={t("Title")} value={renderTranslatedText(storySectionConfig.storySection.title)} size="small" InputProps={{
-                        readOnly: true
+                          <TextField fullWidth label={t("Title")} value={renderTranslatedText(storySectionConfig.storySection.title)} size="small" slotProps={{
+                        input: {
+                          readOnly: true
+                        }
                       }} sx={{
                         "& .MuiOutlinedInput-root": {
                           fontSize: 13.2,
                           color: "grey.400"
                         }
                       }} />
-                          <TextField fullWidth multiline rows={4} label={t("Description")} value={renderTranslatedText(storySectionConfig.storySection.description)} InputProps={{
-                        readOnly: true
+                          <TextField fullWidth multiline rows={4} label={t("Description")} value={renderTranslatedText(storySectionConfig.storySection.description)} slotProps={{
+                        input: {
+                          readOnly: true
+                        }
                       }} sx={{
                         "& .MuiOutlinedInput-root": {
                           fontSize: 12.9,
                           color: "grey.400"
                         }
                       }} />
-                          <TextField fullWidth label={t("ButtonText")} value={renderTranslatedText(storySectionConfig.storySection.btn)} size="small" InputProps={{
-                        readOnly: true
+                          <TextField fullWidth label={t("ButtonText")} value={renderTranslatedText(storySectionConfig.storySection.btn)} size="small" slotProps={{
+                        input: {
+                          readOnly: true
+                        }
                       }} sx={{
                         "& .MuiOutlinedInput-root": {
                           fontSize: 13.2,
                           color: "grey.400"
                         }
                       }} />
-                          <TextField fullWidth label={t("ButtonURL")} value={storySectionConfig.storySection.btnUrl} size="small" InputProps={{
-                        readOnly: true
+                          <TextField fullWidth label={t("ButtonURL")} value={storySectionConfig.storySection.btnUrl} size="small" slotProps={{
+                        input: {
+                          readOnly: true
+                        }
                       }} sx={{
                         "& .MuiOutlinedInput-root": {
                           fontSize: 13.2,
@@ -244,8 +252,10 @@ function StoryConfigBlock() {
                             {t("Listings")}
                           </Typography>
                           {storySectionConfig.listings.map(listing => <Stack key={listing.id} spacing={2}>
-                              <TextField fullWidth label={t("ListingTitle")} value={renderTranslatedText(listing.title)} size="small" InputProps={{
-                          readOnly: true
+                              <TextField fullWidth label={t("ListingTitle")} value={renderTranslatedText(listing.title)} size="small" slotProps={{
+                          input: {
+                            readOnly: true
+                          }
                         }} sx={{
                           "& .MuiOutlinedInput-root": {
                             fontSize: 13.2,
@@ -267,24 +277,30 @@ function StoryConfigBlock() {
                                   {t("ImageURL")}
                                 </Typography>
                               </Box>
-                              <TextField fullWidth label={t("ImageURL")} value={listing.imageUrl} size="small" InputProps={{
-                          readOnly: true
+                              <TextField fullWidth label={t("ImageURL")} value={listing.imageUrl} size="small" slotProps={{
+                          input: {
+                            readOnly: true
+                          }
                         }} sx={{
                           "& .MuiOutlinedInput-root": {
                             fontSize: 13.2,
                             color: "grey.400"
                           }
                         }} />
-                              <TextField fullWidth label={t("LinkText")} value={renderTranslatedText(listing.linkText)} size="small" InputProps={{
-                          readOnly: true
+                              <TextField fullWidth label={t("LinkText")} value={renderTranslatedText(listing.linkText)} size="small" slotProps={{
+                          input: {
+                            readOnly: true
+                          }
                         }} sx={{
                           "& .MuiOutlinedInput-root": {
                             fontSize: 13.2,
                             color: "grey.400"
                           }
                         }} />
-                              <TextField fullWidth label={t("LinkURL")} value={listing.linkUrl} size="small" InputProps={{
-                          readOnly: true
+                              <TextField fullWidth label={t("LinkURL")} value={listing.linkUrl} size="small" slotProps={{
+                          input: {
+                            readOnly: true
+                          }
                         }} sx={{
                           "& .MuiOutlinedInput-root": {
                             fontSize: 13.2,

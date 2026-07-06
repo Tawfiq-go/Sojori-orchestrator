@@ -118,12 +118,14 @@ const FilterSearch = ({
             onChange={(e) => setSearchQuery(e.target.value)}
             fullWidth
             sx={{ p: 1 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search fontSize="small" />
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
             }}
           />
           <List

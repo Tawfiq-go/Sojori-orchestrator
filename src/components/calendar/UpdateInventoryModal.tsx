@@ -471,8 +471,10 @@ export function UpdateInventoryModal({
               onChange={(e) => setManualPrice(e.target.value)}
               size="small"
               fullWidth
-              InputProps={{
-                endAdornment: <Typography sx={{ fontSize: 13 }}>MAD</Typography>,
+              slotProps={{
+                input: {
+                  endAdornment: <Typography sx={{ fontSize: 13 }}>MAD</Typography>,
+                },
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
@@ -497,8 +499,10 @@ export function UpdateInventoryModal({
               onChange={(e) => setAvailability(e.target.value)}
               size="small"
               fullWidth
-              InputProps={{
-                endAdornment: <Typography sx={{ fontSize: 13 }}>chambres</Typography>,
+              slotProps={{
+                input: {
+                  endAdornment: <Typography sx={{ fontSize: 13 }}>chambres</Typography>,
+                },
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
@@ -578,8 +582,10 @@ export function UpdateInventoryModal({
                   onChange={(e) => setMinStay(e.target.value)}
                   size="small"
                   fullWidth
-                  InputProps={{
-                    endAdornment: <Typography sx={{ fontSize: 13 }}>nuits</Typography>,
+                  slotProps={{
+                    input: {
+                      endAdornment: <Typography sx={{ fontSize: 13 }}>nuits</Typography>,
+                    },
                   }}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -604,8 +610,10 @@ export function UpdateInventoryModal({
                   onChange={(e) => setMaxStay(e.target.value)}
                   size="small"
                   fullWidth
-                  InputProps={{
-                    endAdornment: <Typography sx={{ fontSize: 13 }}>nuits</Typography>,
+                  slotProps={{
+                    input: {
+                      endAdornment: <Typography sx={{ fontSize: 13 }}>nuits</Typography>,
+                    },
                   }}
                   sx={{
                     '& .MuiOutlinedInput-root': {

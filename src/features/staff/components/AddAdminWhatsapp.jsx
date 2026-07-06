@@ -228,8 +228,10 @@ const CreateStaffDialog = ({
               {/* === your existing fields, unchanged === */}
               <Box className="flex flex-col gap-3 mt-3">
                 <Box>
-                  <Field as={TextField} fullWidth name="username" label={t('Username')} InputProps={{
-                  startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                  <Field as={TextField} fullWidth name="username" label={t('Username')} slotProps={{
+                  input: {
+                    startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                  }
                 }} />
                   <ErrorMessage name="username" component={Typography} className="text-red-500 !text-xs" />
                 </Box>
@@ -253,8 +255,10 @@ const CreateStaffDialog = ({
 
                 <Box className="flex gap-2">
                   <Box className="w-full">
-                    <Field as={TextField} fullWidth name="whatsappPhone" label={t('WhatsApp Phone')} InputProps={{
-                    startAdornment: <MessageSquare className="w-4 h-4 mr-2 text-gray-500" />
+                    <Field as={TextField} fullWidth name="whatsappPhone" label={t('WhatsApp Phone')} slotProps={{
+                    input: {
+                      startAdornment: <MessageSquare className="w-4 h-4 mr-2 text-gray-500" />
+                    }
                   }} />
                     <ErrorMessage name="whatsappPhone" component={Typography} className="text-red-500 !text-xs" />
                   </Box>

@@ -143,7 +143,7 @@ export default function RoomBedAmenitiesDialog({
                         const n = parseInt(e.target.value, 10) || 0;
                         setQuantities((prev) => ({ ...prev, [id]: n }));
                       }}
-                      inputProps={{ min: 0, style: { textAlign: 'center', width: 36 } }}
+                      slotProps={{ htmlInput: { min: 0, style: { textAlign: 'center', width: 36 } } }}
                       sx={{ width: 56, mx: 0.5 }}
                     />
                     <IconButton size="small" onClick={() => changeQty(id, 1)}>
