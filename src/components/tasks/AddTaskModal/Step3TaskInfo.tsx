@@ -231,15 +231,19 @@ export function Step3TaskInfo({
         <Grid item xs={12} md={6}>
           <TextField label="Fin" type="datetime-local" value={taskInfo.endDate ? new Date(taskInfo.endDate).toISOString().slice(0, 16) : ''} onChange={e => handleChange('endDate', new Date(e.target.value))} fullWidth InputLabelProps={{
           shrink: true
-        }} required inputProps={{
-          min: taskInfo.startDate ? new Date(taskInfo.startDate).toISOString().slice(0, 16) : undefined
+        }} required slotProps={{
+          htmlInput: {
+            min: taskInfo.startDate ? new Date(taskInfo.startDate).toISOString().slice(0, 16) : undefined
+          }
         }} />
         </Grid>
 
         <Grid item xs={12}>
-          <TextField label="Durée (heures)" type="number" value={taskInfo.duration} onChange={e => handleChange('duration', parseFloat(e.target.value) || 0.5)} fullWidth inputProps={{
-          min: 0.5,
-          step: 0.5
+          <TextField label="Durée (heures)" type="number" value={taskInfo.duration} onChange={e => handleChange('duration', parseFloat(e.target.value) || 0.5)} fullWidth slotProps={{
+          htmlInput: {
+            min: 0.5,
+            step: 0.5
+          }
         }} helperText={taskInfo.startDate && taskInfo.endDate ? `Auto-calculé: ${taskInfo.duration}h` : 'Durée estimée de la tâche'} />
         </Grid>
 
@@ -458,9 +462,11 @@ export function Step3TaskInfo({
 
         {taskInfo.paid && <>
             <Grid item xs={12} md={4}>
-              <TextField label="Prix (€)" type="number" value={taskInfo.price} onChange={e => handleChange('price', parseFloat(e.target.value) || 0)} fullWidth inputProps={{
-            min: 0,
-            step: 10
+              <TextField label="Prix (€)" type="number" value={taskInfo.price} onChange={e => handleChange('price', parseFloat(e.target.value) || 0)} fullWidth slotProps={{
+            htmlInput: {
+              min: 0,
+              step: 10
+            }
           }} />
             </Grid>
 

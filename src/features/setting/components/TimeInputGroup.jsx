@@ -76,7 +76,7 @@ const TimeInputGroup = ({
         label={t('Day')}
         value={values?.day || ''} 
         onChange={(e) => handleFieldChange('day', e.target.value)}
-        inputProps={{ min: dayMin, max: dayMax }}
+        slotProps={{ htmlInput: { min: dayMin, max: dayMax } }}
         sx={{ width: 100 }}
         disabled={!enabled}
       />
@@ -103,7 +103,7 @@ const TimeInputGroup = ({
             label={t('Hours')}
             value={values?.hours || ''}
             onChange={e => handleFieldChange('hours', e.target.value)}
-            inputProps={{ min: hoursMin, max: hoursMax }}
+            slotProps={{ htmlInput: { min: hoursMin, max: hoursMax } }}
             sx={{ width: 100 }}
             disabled={!enabled}
           />
@@ -115,7 +115,7 @@ const TimeInputGroup = ({
             label={t('Minutes')}
             value={values?.minutes || ''}
             onChange={e => handleFieldChange('minutes', e.target.value)}
-            inputProps={{ min: minutesMin, max: minutesMax }}
+            slotProps={{ htmlInput: { min: minutesMin, max: minutesMax } }}
             sx={{ width: 100 }}
             disabled={!enabled}
           />

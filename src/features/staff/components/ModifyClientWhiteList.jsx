@@ -185,28 +185,36 @@ const ModifyClientWhiteList = ({
               <Box className="flex flex-col gap-4 mt-4">
                 <Box className="flex gap-2">
                   <Box className="w-full">
-                    <Field as={TextField} fullWidth name="phone" label={t('phone')} variant="outlined" InputProps={{
-                  startAdornment: <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                    <Field as={TextField} fullWidth name="phone" label={t('phone')} variant="outlined" slotProps={{
+                  input: {
+                    startAdornment: <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                  }
                 }} />
                     <ErrorMessage name="phone" component={Typography} className="text-red-500 !text-xs" />
                   </Box>
                   <Box className="w-full">
-                    <Field as={TextField} fullWidth name="language" label={t('language')} variant="outlined" InputProps={{
-                  startAdornment: <Languages className="w-4 h-4 mr-2 text-gray-500" />
+                    <Field as={TextField} fullWidth name="language" label={t('language')} variant="outlined" slotProps={{
+                  input: {
+                    startAdornment: <Languages className="w-4 h-4 mr-2 text-gray-500" />
+                  }
                 }} />
                     <ErrorMessage name="language" component={Typography} className="text-red-500 !text-xs" />
                   </Box>
                 </Box>
                 <Box className="flex gap-2">
                   <Box className="w-full">
-                    <Field as={TextField} fullWidth name="name" label={t('name')} variant="outlined" InputProps={{
-                  startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                    <Field as={TextField} fullWidth name="name" label={t('name')} variant="outlined" slotProps={{
+                  input: {
+                    startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                  }
                 }} />
                     <ErrorMessage name="name" component={Typography} className="text-red-500 !text-xs" />
                   </Box>
                   <Box className="w-full">
-                    <Field as={TextField} fullWidth name="country" label={t('country')} variant="outlined" InputProps={{
-                  startAdornment: <Earth className="w-4 h-4 mr-2 text-gray-500" />
+                    <Field as={TextField} fullWidth name="country" label={t('country')} variant="outlined" slotProps={{
+                  input: {
+                    startAdornment: <Earth className="w-4 h-4 mr-2 text-gray-500" />
+                  }
                 }} />
                     <ErrorMessage name="country" component={Typography} className="text-red-500 !text-xs" />
                   </Box>
@@ -243,8 +251,10 @@ const ModifyClientWhiteList = ({
 
               </Box>
               <Box className="mt-4 flex gap-2">
-                <TextField fullWidth variant="outlined" label={t('Search Reservation Number')} value={searchReservationNumber} onChange={e => setSearchReservationNumber(e.target.value)} InputProps={{
-              startAdornment: <Search className="w-4 h-4 mr-2 text-gray-500" />
+                <TextField fullWidth variant="outlined" label={t('Search Reservation Number')} value={searchReservationNumber} onChange={e => setSearchReservationNumber(e.target.value)} slotProps={{
+              input: {
+                startAdornment: <Search className="w-4 h-4 mr-2 text-gray-500" />
+              }
             }} />
                 <Button variant="contained" onClick={handleReservationSearch} disabled={isLoadingReservations} className="!bg-medium-aquamarine !text-white">
                   {t('Search')}

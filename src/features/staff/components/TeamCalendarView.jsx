@@ -833,9 +833,11 @@ const TeamCalendarView = ({
                   <TextField label="Heure de début" type="number" value={quickAddData.start} onChange={e => setQuickAddData({
                 ...quickAddData,
                 start: parseInt(e.target.value)
-              })} inputProps={{
-                min: 0,
-                max: 24
+              })} slotProps={{
+                htmlInput: {
+                  min: 0,
+                  max: 24
+                }
               }} fullWidth sx={{
                 '& .MuiOutlinedInput-root': {
                   '&.Mui-focused fieldset': {
@@ -846,9 +848,11 @@ const TeamCalendarView = ({
                   <TextField label="Heure de fin" type="number" value={quickAddData.end} onChange={e => setQuickAddData({
                 ...quickAddData,
                 end: parseInt(e.target.value)
-              })} inputProps={{
-                min: 0,
-                max: 24
+              })} slotProps={{
+                htmlInput: {
+                  min: 0,
+                  max: 24
+                }
               }} fullWidth sx={{
                 '& .MuiOutlinedInput-root': {
                   '&.Mui-focused fieldset': {

@@ -1877,8 +1877,10 @@ const ConfigTaskTemplateView = ({
                     })} fullWidth sx={{
                       backgroundColor: 'white',
                       borderRadius: '6px'
-                    }} inputProps={{
-                      min: 0
+                    }} slotProps={{
+                      htmlInput: {
+                        min: 0
+                      }
                     }} />
                         </Grid>
                         <Grid item xs={12} sm={3}>
@@ -1968,18 +1970,22 @@ const ConfigTaskTemplateView = ({
                           <TextField label="Max relances/jour" type="number" size="small" value={categoryConfig.orchestration.dayJLogic?.maxRetriesPerDay ?? 3} onChange={e => handleDayJLogicChange(categoryKey, 'maxRetriesPerDay', parseInt(e.target.value, 10))} fullWidth sx={{
                       backgroundColor: 'white',
                       borderRadius: '6px'
-                    }} helperText="Par staff sur J" inputProps={{
-                      min: 1,
-                      max: 10
+                    }} helperText="Par staff sur J" slotProps={{
+                      htmlInput: {
+                        min: 1,
+                        max: 10
+                      }
                     }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                           <TextField label="Intervalle (heures)" type="number" size="small" value={categoryConfig.orchestration.dayJLogic?.retryIntervalHours ?? 1} onChange={e => handleDayJLogicChange(categoryKey, 'retryIntervalHours', parseInt(e.target.value, 10))} fullWidth sx={{
                       backgroundColor: 'white',
                       borderRadius: '6px'
-                    }} helperText="Entre relances" inputProps={{
-                      min: 1,
-                      max: 24
+                    }} helperText="Entre relances" slotProps={{
+                      htmlInput: {
+                        min: 1,
+                        max: 24
+                      }
                     }} />
                         </Grid>
                         <Grid item xs={12} sm={4}>
@@ -2121,9 +2127,11 @@ const ConfigTaskTemplateView = ({
 
                         {categoryConfig.orchestration.escalation.flexible && <Grid container spacing={2}>
                             <Grid item xs={12} sm={4}>
-                              <TextField label="Tolérance (±)" type="number" size="small" value={categoryConfig.orchestration.escalation.toleranceHours || 2} onChange={e => handleEscalationChange(categoryKey, 'toleranceHours', parseInt(e.target.value) || 2)} inputProps={{
-                      min: 1,
-                      max: 12
+                              <TextField label="Tolérance (±)" type="number" size="small" value={categoryConfig.orchestration.escalation.toleranceHours || 2} onChange={e => handleEscalationChange(categoryKey, 'toleranceHours', parseInt(e.target.value) || 2)} slotProps={{
+                      htmlInput: {
+                        min: 1,
+                        max: 12
+                      }
                     }} fullWidth sx={{
                       backgroundColor: 'white',
                       borderRadius: '6px'
@@ -2177,18 +2185,22 @@ const ConfigTaskTemplateView = ({
                           <TextField label="Valeur" type="number" size="small" value={categoryConfig.orchestration.deadline?.value ?? -1} onChange={e => handleDeadlineChange(categoryKey, 'value', parseInt(e.target.value, 10))} fullWidth sx={{
                       backgroundColor: 'white',
                       borderRadius: '6px'
-                    }} helperText="-1 = 1 jour avant" inputProps={{
-                      min: -30,
-                      max: 30
+                    }} helperText="-1 = 1 jour avant" slotProps={{
+                      htmlInput: {
+                        min: -30,
+                        max: 30
+                      }
                     }} />
                         </Grid>
                         <Grid item xs={12} sm={3}>
                           <TextField label="Heure (0-23)" type="number" size="small" value={categoryConfig.orchestration.deadline?.hour ?? ''} onChange={e => handleDeadlineChange(categoryKey, 'hour', e.target.value === '' ? undefined : parseInt(e.target.value, 10))} fullWidth sx={{
                       backgroundColor: 'white',
                       borderRadius: '6px'
-                    }} placeholder="8" helperText="Heure exécution deadline" inputProps={{
-                      min: 0,
-                      max: 23
+                    }} placeholder="8" helperText="Heure exécution deadline" slotProps={{
+                      htmlInput: {
+                        min: 0,
+                        max: 23
+                      }
                     }} />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2261,15 +2273,19 @@ const ConfigTaskTemplateView = ({
                                 {['arrival_declare', 'departure_declare'].includes(categoryKey) ? <TextField label="X heures après le choix" type="number" size="small" value={categoryConfig.orchestration.clientReminder?.hoursAfterChoice ?? 2} onChange={e => handleClientReminderChange(categoryKey, 'hoursAfterChoice', parseInt(e.target.value, 10))} fullWidth sx={{
                         backgroundColor: 'white',
                         borderRadius: '6px'
-                      }} helperText="Heures après que le client ait choisi l'heure" inputProps={{
-                        min: 0,
-                        max: 48
+                      }} helperText="Heures après que le client ait choisi l'heure" slotProps={{
+                        htmlInput: {
+                          min: 0,
+                          max: 48
+                        }
                       }} /> : <TextField label="Rappeler X jours avant" type="number" size="small" value={categoryConfig.orchestration.clientReminder?.daysBeforeDeadline ?? 3} onChange={e => handleClientReminderChange(categoryKey, 'daysBeforeDeadline', parseInt(e.target.value, 10))} fullWidth sx={{
                         backgroundColor: 'white',
                         borderRadius: '6px'
-                      }} helperText="Début rappel (ex. 3 = J-3)" inputProps={{
-                        min: 0,
-                        max: 30
+                      }} helperText="Début rappel (ex. 3 = J-3)" slotProps={{
+                        htmlInput: {
+                          min: 0,
+                          max: 30
+                        }
                       }} />}
                               </Grid>
 
@@ -2278,9 +2294,11 @@ const ConfigTaskTemplateView = ({
                                   <TextField label="Deadline fin rappel (j avant)" type="number" size="small" value={categoryConfig.orchestration.clientReminder?.deadline ?? categoryConfig.orchestration.clientReminder?.deadlineDaysBefore ?? 1} onChange={e => handleClientReminderChange(categoryKey, 'deadline', parseInt(e.target.value, 10))} fullWidth sx={{
                         backgroundColor: 'white',
                         borderRadius: '6px'
-                      }} helperText="Dernier jour d'envoi (ex. 1 = J-1)" inputProps={{
-                        min: 1,
-                        max: 30
+                      }} helperText="Dernier jour d'envoi (ex. 1 = J-1)" slotProps={{
+                        htmlInput: {
+                          min: 1,
+                          max: 30
+                        }
                       }} />
                                 </Grid>}
 
@@ -2289,9 +2307,11 @@ const ConfigTaskTemplateView = ({
                                 <TextField label="Nombre de relances par jour" type="number" size="small" value={categoryConfig.orchestration.clientReminder?.maxRemindersPerDay ?? 3} onChange={e => handleClientReminderChange(categoryKey, 'maxRemindersPerDay', parseInt(e.target.value, 10))} fullWidth sx={{
                         backgroundColor: 'white',
                         borderRadius: '6px'
-                      }} helperText="Nombre maximum de relances par jour (ex: 3)" inputProps={{
-                        min: 1,
-                        max: 10
+                      }} helperText="Nombre maximum de relances par jour (ex: 3)" slotProps={{
+                        htmlInput: {
+                          min: 1,
+                          max: 10
+                        }
                       }} />
                               </Grid>
 
@@ -2310,9 +2330,11 @@ const ConfigTaskTemplateView = ({
                                 <TextField label="X heures avant l'exécution" type="number" size="small" value={categoryConfig.orchestration.clientReminder?.hoursBeforeExecution ?? ''} onChange={e => handleClientReminderChange(categoryKey, 'hoursBeforeExecution', e.target.value ? parseInt(e.target.value, 10) : undefined)} fullWidth sx={{
                         backgroundColor: 'white',
                         borderRadius: '6px'
-                      }} helperText="Rappel anticipé avant le timeslot (ex: 2h avant départ)" inputProps={{
-                        min: 0,
-                        max: 48
+                      }} helperText="Rappel anticipé avant le timeslot (ex: 2h avant départ)" slotProps={{
+                        htmlInput: {
+                          min: 0,
+                          max: 48
+                        }
                       }} placeholder="Ex: 2" />
                               </Grid>
 
@@ -2321,9 +2343,11 @@ const ConfigTaskTemplateView = ({
                                 <TextField label="X heures après l'exécution" type="number" size="small" value={categoryConfig.orchestration.clientReminder?.hoursAfterExecution ?? ''} onChange={e => handleClientReminderChange(categoryKey, 'hoursAfterExecution', e.target.value ? parseInt(e.target.value, 10) : undefined)} fullWidth sx={{
                         backgroundColor: 'white',
                         borderRadius: '6px'
-                      }} helperText="Rappel si retard après le timeslot (ex: 2h après départ prévu)" inputProps={{
-                        min: 0,
-                        max: 48
+                      }} helperText="Rappel si retard après le timeslot (ex: 2h après départ prévu)" slotProps={{
+                        htmlInput: {
+                          min: 0,
+                          max: 48
+                        }
                       }} placeholder="Ex: 2" />
                               </Grid>
                             </>}
@@ -2352,9 +2376,11 @@ const ConfigTaskTemplateView = ({
                             <TextField label="Max jours sans ménage après départ" type="number" size="small" value={categoryConfig.cleaningSojori.daysAfterCheckout ?? 1} onChange={e => handleCleaningSojoriChange(categoryKey, 'daysAfterCheckout', parseInt(e.target.value, 10))} fullWidth sx={{
                       backgroundColor: 'white',
                       borderRadius: '6px'
-                    }} helperText="0 = immédiat, 1 = max 1j après, 2 = max 2j après..." inputProps={{
-                      min: 0,
-                      max: 7
+                    }} helperText="0 = immédiat, 1 = max 1j après, 2 = max 2j après..." slotProps={{
+                      htmlInput: {
+                        min: 0,
+                        max: 7
+                      }
                     }} />
                           </Grid>
 
@@ -2370,9 +2396,11 @@ const ConfigTaskTemplateView = ({
                             <TextField label="Jours avant arrivée" type="number" size="small" value={categoryConfig.cleaningSojori.daysBeforeCheckin ?? 1} onChange={e => handleCleaningSojoriChange(categoryKey, 'daysBeforeCheckin', parseInt(e.target.value, 10))} fullWidth sx={{
                       backgroundColor: 'white',
                       borderRadius: '6px'
-                    }} helperText="0 = même jour, 1 = 1j avant (défaut), 2 = 2j avant..." inputProps={{
-                      min: 0,
-                      max: 7
+                    }} helperText="0 = même jour, 1 = 1j avant (défaut), 2 = 2j avant..." slotProps={{
+                      htmlInput: {
+                        min: 0,
+                        max: 7
+                      }
                     }} />
                           </Grid>
 
@@ -2388,9 +2416,11 @@ const ConfigTaskTemplateView = ({
                             <TextField label="Marge avant checkin" type="number" size="small" value={categoryConfig.cleaningSojori.securityMarginBeforeCheckin ?? 2} onChange={e => handleCleaningSojoriChange(categoryKey, 'securityMarginBeforeCheckin', parseInt(e.target.value, 10))} fullWidth sx={{
                       backgroundColor: 'white',
                       borderRadius: '6px'
-                    }} helperText="Heures de sécurité" inputProps={{
-                      min: 0,
-                      max: 24
+                    }} helperText="Heures de sécurité" slotProps={{
+                      htmlInput: {
+                        min: 0,
+                        max: 24
+                      }
                     }} />
                           </Grid>
 
@@ -3768,9 +3798,11 @@ const ConfigTaskTemplateView = ({
               });
             }} sx={{
               width: 90
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               }
             }} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
@@ -3812,9 +3844,11 @@ const ConfigTaskTemplateView = ({
               });
             }} sx={{
               width: 110
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               }
             }} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
@@ -3877,12 +3911,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryConfig.enabled ? <TextField type="number" size="small" value={categoryConfig.orchestration?.dayJLogic?.maxRetriesPerDay ?? 3} onChange={e => handleDayJLogicChange(categoryKey, 'maxRetriesPerDay', parseInt(e.target.value, 10))} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 0,
-              max: 10
+              htmlInput: {
+                min: 0,
+                max: 10
+              }
             }} disabled={categoryConfig.mode !== 'ORCHESTRATION'} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -3895,12 +3933,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryConfig.enabled ? <TextField type="number" size="small" value={categoryConfig.orchestration?.dayJLogic?.retryIntervalHours ?? 2} onChange={e => handleDayJLogicChange(categoryKey, 'retryIntervalHours', parseInt(e.target.value, 10))} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 1,
-              max: 12
+              htmlInput: {
+                min: 1,
+                max: 12
+              }
             }} disabled={categoryConfig.mode !== 'ORCHESTRATION'} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -3943,9 +3985,11 @@ const ConfigTaskTemplateView = ({
                 handleDayJLogicChange(categoryKey, 'contactHours', slots);
               }} sx={{
                 mt: 0.5
-              }} inputProps={{
-                style: {
-                  fontSize: 11
+              }} slotProps={{
+                input: {
+                  style: {
+                    fontSize: 11
+                  }
                 }
               }} placeholder="9-12,14-18" disabled={categoryConfig.mode !== 'ORCHESTRATION'} />}
                   </Box> : <Typography variant="caption" sx={{
@@ -4036,12 +4080,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryConfig.enabled ? <TextField type="number" size="small" value={categoryConfig.orchestration?.deadline?.value ?? 2} onChange={e => handleDeadlineChange(categoryKey, 'value', parseInt(e.target.value, 10))} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 1,
-              max: 48
+              htmlInput: {
+                min: 1,
+                max: 48
+              }
             }} disabled={categoryConfig.mode !== 'ORCHESTRATION'} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -4054,12 +4102,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryConfig.enabled ? <TextField type="number" size="small" value={categoryConfig.orchestration?.deadline?.hour ?? ''} onChange={e => handleDeadlineChange(categoryKey, 'hour', e.target.value === '' ? undefined : parseInt(e.target.value, 10))} sx={{
               width: 60
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 0,
-              max: 23
+              htmlInput: {
+                min: 0,
+                max: 23
+              }
             }} placeholder="8" disabled={categoryConfig.mode !== 'ORCHESTRATION'} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -4102,12 +4154,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryConfig.enabled ? categoryConfig.orchestration?.escalation?.flexible === true ? <TextField type="number" size="small" value={categoryConfig.orchestration?.escalation?.toleranceHours ?? 2} onChange={e => handleEscalationChange(categoryKey, 'toleranceHours', parseInt(e.target.value, 10))} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 0,
-              max: 12
+              htmlInput: {
+                min: 0,
+                max: 12
+              }
             }} disabled={categoryConfig.mode !== 'ORCHESTRATION'} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography> : <Typography variant="caption" sx={{
@@ -4189,20 +4245,28 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryConfig.enabled && ['registration', 'arrival_choose', 'arrival_declare', 'departure_choose', 'departure_declare', 'cleaning_paid'].includes(categoryKey) ? ['arrival_declare', 'departure_declare'].includes(categoryKey) ? <TextField type="number" size="small" value={categoryConfig.orchestration?.clientReminder?.hoursAfterChoice ?? 2} onChange={e => handleClientReminderChange(categoryKey, 'hoursAfterChoice', parseInt(e.target.value, 10))} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 0,
-              max: 48
+              htmlInput: {
+                min: 0,
+                max: 48
+              }
             }} disabled={!categoryConfig.orchestration?.clientReminder?.enabled} placeholder="h après" /> : <TextField type="number" size="small" value={categoryConfig.orchestration?.clientReminder?.daysBeforeDeadline ?? 3} onChange={e => handleClientReminderChange(categoryKey, 'daysBeforeDeadline', parseInt(e.target.value, 10))} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 1,
-              max: 14
+              htmlInput: {
+                min: 1,
+                max: 14
+              }
             }} disabled={!categoryConfig.orchestration?.clientReminder?.enabled} placeholder="j avant" /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -4215,12 +4279,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryConfig.enabled && ['registration', 'arrival_declare', 'departure_declare'].includes(categoryKey) ? <TextField type="number" size="small" value={categoryConfig.orchestration?.clientReminder?.deadline ?? categoryConfig.orchestration?.clientReminder?.deadlineDaysBefore ?? 1} onChange={e => handleClientReminderChange(categoryKey, 'deadline', parseInt(e.target.value, 10))} sx={{
               width: 70
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 1,
-              max: 14
+              htmlInput: {
+                min: 1,
+                max: 14
+              }
             }} disabled={!categoryConfig.orchestration?.clientReminder?.enabled} placeholder="1" /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -4233,12 +4301,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryConfig.enabled && ['registration', 'arrival_choose', 'arrival_declare', 'departure_choose', 'departure_declare', 'cleaning_paid'].includes(categoryKey) ? <TextField type="number" size="small" value={categoryConfig.orchestration?.clientReminder?.maxRemindersPerDay ?? 3} onChange={e => handleClientReminderChange(categoryKey, 'maxRemindersPerDay', parseInt(e.target.value, 10))} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 1,
-              max: 10
+              htmlInput: {
+                min: 1,
+                max: 10
+              }
             }} disabled={!categoryConfig.orchestration?.clientReminder?.enabled} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -4253,9 +4325,11 @@ const ConfigTaskTemplateView = ({
               handleClientReminderChange(categoryKey, 'preferredHours', e.target.value);
             }} sx={{
               width: 120
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               }
             }} disabled={!categoryConfig.orchestration?.clientReminder?.enabled} placeholder="9-15-19" /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
@@ -4269,12 +4343,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryConfig.enabled && ['registration', 'arrival_choose', 'arrival_declare', 'departure_choose', 'departure_declare', 'cleaning_paid'].includes(categoryKey) ? <TextField type="number" size="small" value={categoryConfig.orchestration?.clientReminder?.hoursBeforeExecution ?? ''} onChange={e => handleClientReminderChange(categoryKey, 'hoursBeforeExecution', e.target.value ? parseInt(e.target.value, 10) : undefined)} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 0,
-              max: 48
+              htmlInput: {
+                min: 0,
+                max: 48
+              }
             }} disabled={!categoryConfig.orchestration?.clientReminder?.enabled} placeholder="Ex: 2" /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -4287,12 +4365,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryConfig.enabled && ['registration', 'arrival_choose', 'arrival_declare', 'departure_choose', 'departure_declare', 'cleaning_paid'].includes(categoryKey) ? <TextField type="number" size="small" value={categoryConfig.orchestration?.clientReminder?.hoursAfterExecution ?? ''} onChange={e => handleClientReminderChange(categoryKey, 'hoursAfterExecution', e.target.value ? parseInt(e.target.value, 10) : undefined)} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 0,
-              max: 48
+              htmlInput: {
+                min: 0,
+                max: 48
+              }
             }} disabled={!categoryConfig.orchestration?.clientReminder?.enabled} placeholder="Ex: 2" /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -4357,12 +4439,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryKey === 'cleaning_sojori' && categoryConfig.cleaningSojori ? <TextField type="number" size="small" value={categoryConfig.cleaningSojori.daysAfterCheckout ?? 1} onChange={e => handleCleaningSojoriChange(categoryKey, 'daysAfterCheckout', parseInt(e.target.value, 10))} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 0,
-              max: 7
+              htmlInput: {
+                min: 0,
+                max: 7
+              }
             }} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -4375,12 +4461,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryKey === 'cleaning_sojori' && categoryConfig.cleaningSojori ? <TextField type="number" size="small" value={categoryConfig.cleaningSojori.daysBeforeCheckin ?? 1} onChange={e => handleCleaningSojoriChange(categoryKey, 'daysBeforeCheckin', parseInt(e.target.value, 10))} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 0,
-              max: 7
+              htmlInput: {
+                min: 0,
+                max: 7
+              }
             }} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -4393,12 +4483,16 @@ const ConfigTaskTemplateView = ({
           }}>
                 {categoryKey === 'cleaning_sojori' && categoryConfig.cleaningSojori ? <TextField type="number" size="small" value={categoryConfig.cleaningSojori.securityMarginBeforeCheckin ?? 2} onChange={e => handleCleaningSojoriChange(categoryKey, 'securityMarginBeforeCheckin', parseInt(e.target.value, 10))} sx={{
               width: 80
-            }} inputProps={{
-              style: {
-                fontSize: 12
+            }} slotProps={{
+              input: {
+                style: {
+                  fontSize: 12
+                }
               },
-              min: 0,
-              max: 24
+              htmlInput: {
+                min: 0,
+                max: 24
+              }
             }} /> : <Typography variant="caption" sx={{
               color: DS.neutral[400]
             }}>-</Typography>}
@@ -4961,12 +5055,14 @@ const ConfigTaskTemplateView = ({
           <Grid container spacing={2}>
             {/* Champ Source de la catégorie (obligatoire, en premier) */}
             <Grid item xs={12}>
-              <TextField label="Source de la catégorie" fullWidth value={templateFormData.sourceCategory ? editedCategories[templateFormData.sourceCategory]?.label || editedCategories[templateFormData.sourceCategory]?.categoryDisplayLabel || 'Manuel' : 'Manuel'} disabled InputProps={{
-              readOnly: true,
-              sx: {
-                backgroundColor: DS.neutral[50],
-                fontWeight: 600,
-                color: templateFormData.sourceCategory ? DS.primary[700] : DS.neutral[700]
+              <TextField label="Source de la catégorie" fullWidth value={templateFormData.sourceCategory ? editedCategories[templateFormData.sourceCategory]?.label || editedCategories[templateFormData.sourceCategory]?.categoryDisplayLabel || 'Manuel' : 'Manuel'} disabled slotProps={{
+              input: {
+                readOnly: true,
+                sx: {
+                  backgroundColor: DS.neutral[50],
+                  fontWeight: 600,
+                  color: templateFormData.sourceCategory ? DS.primary[700] : DS.neutral[700]
+                }
               }
             }} helperText={templateFormData.sourceCategory ? `Configuration copiée depuis: ${editedCategories[templateFormData.sourceCategory]?.label || editedCategories[templateFormData.sourceCategory]?.categoryDisplayLabel || '—'}` : 'Aucune catégorie source sélectionnée'} />
             </Grid>

@@ -201,12 +201,14 @@ const ChipMultiSelect = ({
                   '&.Mui-focused': { '& fieldset': { borderColor: SOJORI_COLORS.primary, borderWidth: '2px' } },
                 },
               }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search fontSize="small" style={{ color: SOJORI_COLORS.gray[600] }} />
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search fontSize="small" style={{ color: SOJORI_COLORS.gray[600] }} />
+                    </InputAdornment>
+                  ),
+                },
               }}
             />
 

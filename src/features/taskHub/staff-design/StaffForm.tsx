@@ -163,7 +163,7 @@ export default function StaffForm({ initial, allListings, onSave, onCancel, onDe
             <Field key={t} label={`${TASK_TYPE_META[t].emoji} ${TASK_TYPE_META[t].label}`}>
               <TextField size="small" type="number" value={s.rates?.[t] || ''}
                 onChange={e => patch({ rates: { ...s.rates, [t]: Number(e.target.value) } })}
-                InputProps={{ endAdornment: <Box sx={{ fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 700, letterSpacing: '0.04em' }}>MAD</Box> }}
+                slotProps={{ input: { endAdornment: <Box sx={{ fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 700, letterSpacing: '0.04em' }}>MAD</Box> } }}
                 sx={{ ...inputSx, maxWidth: 200 }} />
             </Field>
           ))}

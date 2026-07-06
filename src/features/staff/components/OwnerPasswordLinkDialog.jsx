@@ -76,13 +76,15 @@ export default function OwnerPasswordLinkDialog({
                 size="small"
                 label="Lien (24h)"
                 value={linkUrl}
-                InputProps={{
-                  readOnly: true,
-                  endAdornment: (
-                    <IconButton onClick={() => void handleCopy()} size="small" aria-label="Copier">
-                      <ContentCopyIcon fontSize="small" />
-                    </IconButton>
-                  ),
+                slotProps={{
+                  input: {
+                    readOnly: true,
+                    endAdornment: (
+                      <IconButton onClick={() => void handleCopy()} size="small" aria-label="Copier">
+                        <ContentCopyIcon fontSize="small" />
+                      </IconButton>
+                    ),
+                  },
                 }}
               />
               {copied && (

@@ -162,14 +162,18 @@ const StayMore = () => {
           mb: 2
         }}>
                             <Grid item xs={12} sm={4}>
-                                <TextField fullWidth type="number" label={t('Nights')} variant="outlined" value={discount.night} onChange={e => handleStayMoreDiscountChange(index, 'night', e.target.value)} inputProps={{
-              min: 0
+                                <TextField fullWidth type="number" label={t('Nights')} variant="outlined" value={discount.night} onChange={e => handleStayMoreDiscountChange(index, 'night', e.target.value)} slotProps={{
+              htmlInput: {
+                min: 0
+              }
             }} />
                             </Grid>
                             <Grid item xs={12} sm={4}>
-                                <TextField fullWidth type="number" label={t('Discount (%)')} variant="outlined" value={discount.discount} onChange={e => handleStayMoreDiscountChange(index, 'discount', e.target.value)} inputProps={{
-              min: 0,
-              max: 100
+                                <TextField fullWidth type="number" label={t('Discount (%)')} variant="outlined" value={discount.discount} onChange={e => handleStayMoreDiscountChange(index, 'discount', e.target.value)} slotProps={{
+              htmlInput: {
+                min: 0,
+                max: 100
+              }
             }} />
                             </Grid>
                             <Grid item xs={12} sm={2}>

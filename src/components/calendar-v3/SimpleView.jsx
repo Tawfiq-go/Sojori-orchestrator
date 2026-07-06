@@ -9,7 +9,9 @@ import {
 } from './_shared';
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import PopoverReservations from './PopoverReservations';
+import AuditBlockedDaysModal from './AuditBlockedDaysModal';
 import { normalizeCalendarReservations } from './reservationCalendarUtils';
+import calendarService from '../../services/calendarService';
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -42,6 +44,30 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
   /* ─── Sélection multi-jours ─── */
   const [selected, setSelected] = useState([]);
   const [popover, setPopover] = useState(null);
+
+  /* ─── Audit jours bloqués sans réservation — modal résultat en tableau ─── */
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditResult, setAuditResult] = useState({ loading: false, error: null, roomTypes: [] });
+
+  const handleAuditClick = () => {
+    setAuditOpen(true);
+    setAuditResult({ loading: true, error: null, roomTypes: [] });
+  };
+
+  React.useEffect(() => {
+    if (!auditOpen || !auditResult.loading) return;
+    let cancelled = false;
+    const roomTypeId = listing.roomTypeId || listing.roomTypes?.[0]?._id || undefined;
+    (async () => {
+      try {
+        const result = await calendarService.auditBlockedDays(listing._id, roomTypeId);
+        if (!cancelled) setAuditResult({ loading: false, error: null, roomTypes: result.roomTypes });
+      } catch (err) {
+        if (!cancelled) setAuditResult({ loading: false, error: err?.message || 'Erreur inconnue', roomTypes: [] });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [auditOpen, auditResult.loading, listing._id, listing.roomTypeId]);
 
   const toggleDay = (iso, e) => {
     const inv = inventories[iso];
@@ -129,8 +155,22 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
           padding: '12px 18px', borderBottom: `1px solid ${T.border}`, background: T.bg2,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 6 }}>
             {listing.name} · {MONTHS[month]} {year}
+            <button
+              type="button"
+              title="Audit disponibilité — jours bloqués sans réservation (365 j.)"
+              onClick={handleAuditClick}
+              style={{
+                background: 'none', border: 0, padding: '0 2px',
+                color: T.text4, fontSize: 10, fontWeight: 600, cursor: 'pointer', lineHeight: 1,
+                opacity: 0.7, transition: 'opacity 0.15s, color 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = T.primary; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.color = T.text4; }}
+            >
+              ▶ audit
+            </button>
           </h3>
           <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3 }}>
             <Legend dot={T.success} label="Disponible" />
@@ -278,6 +318,16 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
           }}
         />
       )}
+
+      <AuditBlockedDaysModal
+        open={auditOpen}
+        onClose={() => setAuditOpen(false)}
+        listingName={listing.name || 'Listing'}
+        roomTypeName={listing.roomTypeName || listing.roomTypes?.[0]?.name || null}
+        loading={auditResult.loading}
+        error={auditResult.error}
+        roomTypes={auditResult.roomTypes}
+      />
     </div>
   );
 }

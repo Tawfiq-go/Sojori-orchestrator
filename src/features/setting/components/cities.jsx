@@ -267,10 +267,12 @@ function CitiesTable() {
           </Select>
         </FormControl>
 
-        <TextField className="w-full md:w-64" label={t('Search by city name')} variant="outlined" onChange={handleSearchChange} InputProps={{
-        startAdornment: <InputAdornment position="start">
+        <TextField className="w-full md:w-64" label={t('Search by city name')} variant="outlined" onChange={handleSearchChange} slotProps={{
+        input: {
+          startAdornment: <InputAdornment position="start">
                 <SearchIcon />
               </InputAdornment>
+        }
       }} />
 
         <Button startIcon={<AddIcon />} onClick={handleOpenAddDialog} className="!bg-medium-aquamarine text-white">

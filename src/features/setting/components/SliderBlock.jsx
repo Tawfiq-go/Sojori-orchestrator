@@ -317,8 +317,10 @@ const MainContentSection = ({
                   "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
                     backgroundColor: "#00B4B4"
                   }
-                }} icon={<EyeOff size={20} />} checkedIcon={<Eye size={20} />} inputProps={{
-                  'aria-label': t('Set as main')
+                }} icon={<EyeOff size={20} />} checkedIcon={<Eye size={20} />} slotProps={{
+                  htmlInput: {
+                    'aria-label': t('Set as main')
+                  }
                 }} />
                 </Tooltip>
               </Box>
@@ -337,8 +339,13 @@ const MainContentSection = ({
                   flexGrow: 1,
                   maxWidth: 600
                 }}>
-                    <TextField value={renderMultiLanguageContent(title, "")} variant="outlined" size="small" multiline maxRows={4} InputProps={{
-                    readOnly: true
+                    <TextField value={renderMultiLanguageContent(title, "")} variant="outlined" size="small" multiline maxRows={4} slotProps={{
+                    input: {
+                      readOnly: true
+                    },
+                    htmlInput: {
+                      'aria-label': t('Title')
+                    }
                   }} sx={{
                     width: '100%',
                     '& .MuiInputBase-root': {
@@ -351,8 +358,6 @@ const MainContentSection = ({
                     '& .MuiOutlinedInput-notchedOutline': {
                       borderColor: 'grey.300'
                     }
-                  }} inputProps={{
-                    'aria-label': t('Title')
                   }} />
                   </Box>
                 </Box>
@@ -370,8 +375,13 @@ const MainContentSection = ({
                   flexGrow: 1,
                   maxWidth: 600
                 }}>
-                    <TextField value={renderMultiLanguageContent(description, "")} variant="outlined" size="small" multiline maxRows={4} InputProps={{
-                    readOnly: true
+                    <TextField value={renderMultiLanguageContent(description, "")} variant="outlined" size="small" multiline maxRows={4} slotProps={{
+                    input: {
+                      readOnly: true
+                    },
+                    htmlInput: {
+                      'aria-label': t('Description')
+                    }
                   }} sx={{
                     width: '100%',
                     '& .MuiInputBase-root': {
@@ -384,8 +394,6 @@ const MainContentSection = ({
                     '& .MuiOutlinedInput-notchedOutline': {
                       borderColor: 'grey.300'
                     }
-                  }} inputProps={{
-                    'aria-label': t('Description')
                   }} />
                   </Box>
                 </Box>

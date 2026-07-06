@@ -126,7 +126,7 @@ const ClientFilters = ({
                   variant="outlined"
                   size="small"
                   sx={{ width: '200px' }}
-                  InputProps={{ style: { paddingRight: 0 } }}
+                  slotProps={{ input: { style: { paddingRight: 0 } } }}
                 />
                 <SearchButton onClick={handleSearchClick} className="!text-white">
                   <SearchIcon className="!text-white" />

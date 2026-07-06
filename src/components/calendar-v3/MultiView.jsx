@@ -11,8 +11,10 @@ import {
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
 import PopoverReservations from './PopoverReservations';
+import AuditBlockedDaysModal from './AuditBlockedDaysModal';
 import { normalizeCalendarReservations } from './reservationCalendarUtils';
 import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
+import calendarService from '../../services/calendarService';
 
 const CELL_W_DESKTOP = 90;
 const CELL_W_MOBILE = 76;
@@ -168,6 +170,7 @@ export default function MultiView({
     }
     setPopover({ rect, dateStr, reservations });
   }, [onOpenReservation]);
+
 
   return (
     <div style={{
@@ -398,6 +401,30 @@ function ListingRow({
   const showChevron = selectedColumns.length > 0;
   const getInv = (dateStr) => inventories[dateStr];
 
+  /* ─── Audit jours bloqués sans réservation — modal résultat en tableau ─── */
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditResult, setAuditResult] = useState({ loading: false, error: null, roomTypes: [] });
+
+  const handleAuditClick = useCallback(() => {
+    setAuditOpen(true);
+    setAuditResult({ loading: true, error: null, roomTypes: [] });
+  }, []);
+
+  useEffect(() => {
+    if (!auditOpen || !auditResult.loading) return;
+    let cancelled = false;
+    const roomTypeId = listing.roomTypeId || undefined;
+    (async () => {
+      try {
+        const result = await calendarService.auditBlockedDays(listing._id, roomTypeId);
+        if (!cancelled) setAuditResult({ loading: false, error: null, roomTypes: result.roomTypes });
+      } catch (err) {
+        if (!cancelled) setAuditResult({ loading: false, error: err?.message || 'Erreur inconnue', roomTypes: [] });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [auditOpen, auditResult.loading, listing._id, listing.roomTypeId]);
+
   const avgPrice = useMemo(() => {
     const prices = days
       .map((d) => {
@@ -446,7 +473,8 @@ function ListingRow({
         const col = ALL_COLUMNS.find(c => c.id === colId);
         if (!col) return null;
         return (
-          <div key={colId} style={{
+          <React.Fragment key={colId}>
+          <div style={{
             display: 'grid',
             gridTemplateColumns: `${LEFT_W}px repeat(${days.length}, ${CELL_W}px)`,
             borderBottom: `1px dashed ${T.border}`,
@@ -464,6 +492,22 @@ function ListingRow({
             }}>
               {col.short}
               {col.hasTooltip && <span style={{ fontSize: 11, color: T.ai, cursor: 'help' }} title="Tooltip breakdown au hover">ⓘ</span>}
+              {colId === 'availableRoom' && (
+                <button
+                  type="button"
+                  title="Audit disponibilité — jours bloqués sans réservation (365 j.)"
+                  onClick={handleAuditClick}
+                  style={{
+                    background: 'none', border: 0, padding: '0 2px', marginLeft: 2,
+                    color: T.text4, fontSize: 10, fontWeight: 600, cursor: 'pointer', lineHeight: 1,
+                    opacity: 0.7, transition: 'opacity 0.15s, color 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = T.primary; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.color = T.text4; }}
+                >
+                  ▶ audit
+                </button>
+              )}
             </div>
 
             {days.map(d => {
@@ -494,8 +538,19 @@ function ListingRow({
               );
             })}
           </div>
+          </React.Fragment>
         );
       })}
+
+      <AuditBlockedDaysModal
+        open={auditOpen}
+        onClose={() => setAuditOpen(false)}
+        listingName={listing.name || listing.title || 'Listing'}
+        roomTypeName={listing.roomTypeName || null}
+        loading={auditResult.loading}
+        error={auditResult.error}
+        roomTypes={auditResult.roomTypes}
+      />
     </div>
   );
 }

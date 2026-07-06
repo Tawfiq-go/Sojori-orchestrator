@@ -213,8 +213,10 @@ const CreateOwnerSidebar = ({
               }}>
                                                 {t('First Name')} :
                                             </label>
-                                            <Field as={TextField} fullWidth name="firstName" variant="outlined" size="small" InputProps={{
-                startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                                            <Field as={TextField} fullWidth name="firstName" variant="outlined" size="small" slotProps={{
+                input: {
+                  startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                }
               }} />
                                             <ErrorMessage name="firstName" component={Typography} className="text-red-500 !text-xs" />
                                         </div>
@@ -229,8 +231,10 @@ const CreateOwnerSidebar = ({
               }}>
                                                 {t('Last Name')} :
                                             </label>
-                                            <Field as={TextField} fullWidth name="lastName" variant="outlined" size="small" InputProps={{
-                startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                                            <Field as={TextField} fullWidth name="lastName" variant="outlined" size="small" slotProps={{
+                input: {
+                  startAdornment: <User className="w-4 h-4 mr-2 text-gray-500" />
+                }
               }} />
                                             <ErrorMessage name="lastName" component={Typography} className="text-red-500 !text-xs" />
                                         </div>
