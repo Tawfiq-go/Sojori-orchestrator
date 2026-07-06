@@ -478,8 +478,15 @@ export default function FillCompanyFormFields({
                 value={company.WebsiteAddress}
                 onChange={handleChange}
                 onBlur={handleBlur}
+                error={tCompany?.WebsiteAddress && Boolean(eCompany?.WebsiteAddress)}
+                helperText={
+                  tCompany?.WebsiteAddress && eCompany?.WebsiteAddress
+                    ? t(eCompany.WebsiteAddress)
+                    : ''
+                }
                 fullWidth
                 size="small"
+                placeholder="https://sojori.com"
               />
             </Grid>
             {!showMirrorSummary ? (

@@ -129,6 +129,16 @@ const buildValidationSchema = (t, owner, isCreate) =>
       language: Yup.string().required(t('Language is required')),
       currency: Yup.string().required(t('Currency is required')),
     }),
+    fillCompany: Yup.object().shape({
+      CompanyInfo: Yup.object().shape({
+        WebsiteAddress: Yup.string()
+          .trim()
+          .transform((value) => (value === '' ? null : value))
+          .url('Adresse site invalide : utilisez une URL complete, ex. https://sojori.com')
+          .nullable()
+          .optional(),
+      }),
+    }),
     banned: Yup.boolean(),
     deleted: Yup.boolean(),
     ruExtranetPassword: Yup.string().test('ru-extranet-when-needed', function (value) {
@@ -147,6 +157,50 @@ const buildValidationSchema = (t, owner, isCreate) =>
     elevatedAuthEmail: Yup.string().notRequired(),
     elevatedAuthPassword: Yup.string().notRequired(),
   });
+
+const FILL_COMPANY_SERVER_FIELD_MAP = {
+  'CompanyInfo.WebsiteAddress': 'fillCompany.CompanyInfo.WebsiteAddress',
+};
+
+const FILL_COMPANY_FIELD_LABELS = {
+  'fillCompany.CompanyInfo.WebsiteAddress':
+    'Adresse site invalide : utilisez une URL complete, ex. https://sojori.com',
+};
+
+function getApiErrorMessage(error, fallback = 'Echec enregistrement') {
+  return error?.response?.data?.message || error?.response?.data?.error || error?.message || fallback;
+}
+
+function nestedObjectFromPath(path, value) {
+  return String(path || '')
+    .split('.')
+    .filter(Boolean)
+    .reverse()
+    .reduce((acc, key) => ({ [key]: acc }), value);
+}
+
+function resolveFillCompanyServerError(error) {
+  const data = error?.response?.data;
+  const message = getApiErrorMessage(error, '');
+  const rawCandidates = [
+    data?.field,
+    data?.path,
+    data?.details?.[0]?.path,
+    data?.details?.[0]?.context?.key,
+    message?.match(/"([^"]+)"/)?.[1],
+  ];
+  const candidates = rawCandidates
+    .flatMap((item) => (Array.isArray(item) ? [item.join('.')] : [item]))
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+  const serverPath = candidates.find((item) => FILL_COMPANY_SERVER_FIELD_MAP[item]);
+  if (!serverPath) return null;
+  const formPath = FILL_COMPANY_SERVER_FIELD_MAP[serverPath];
+  return {
+    formPath,
+    message: FILL_COMPANY_FIELD_LABELS[formPath] || message || 'Champ entreprise invalide',
+  };
+}
 
 const CREATE_EMPTY_PM_PROFILE = {
   publicName: '',
@@ -335,6 +389,24 @@ const UpdateOwnerSidebar = ({
     const hasRuId = !!(owner?.ruOwnerId && String(owner.ruOwnerId).trim());
     return !hasRuId;
   }, [owner?.ruOwnerId, isCreate]);
+
+  const focusValidationTab = (validationErrors) => {
+    if (validationErrors?.fillCompany) {
+      setActiveTab('entreprise');
+    }
+  };
+
+  const applyFillCompanyServerError = (error, formikBag) => {
+    const mapped = resolveFillCompanyServerError(error);
+    if (!mapped) return false;
+    const fieldError = nestedObjectFromPath(mapped.formPath, mapped.message);
+    const fieldTouched = nestedObjectFromPath(mapped.formPath, true);
+    setActiveTab('entreprise');
+    formikBag?.setTouched?.(fieldTouched, false);
+    formikBag?.setErrors?.(fieldError);
+    toast.error(mapped.message);
+    return true;
+  };
 
   useEffect(() => {
     if (open && isCreate) setServiceActivations(defaultActivationsAllOff());
@@ -664,6 +736,7 @@ const UpdateOwnerSidebar = ({
     const validationErrors = await validateForm();
     if (Object.keys(validationErrors).length > 0) {
       logPmFormValidationBlocked('pré-action (Activer / RU)', validationErrors);
+      focusValidationTab(validationErrors);
       setTouched(validationErrors, true);
       setErrors(validationErrors);
       return null;
@@ -699,6 +772,7 @@ const UpdateOwnerSidebar = ({
         fillErr?.response?.data?.error ||
         fillErr?.message ||
         'Échec enregistrement entreprise locale';
+      if (applyFillCompanyServerError(fillErr, formikBag)) return null;
       setErrors({ submit: msg });
       return null;
     }
@@ -826,6 +900,7 @@ const UpdateOwnerSidebar = ({
         const validationErrors = await formikBag.validateForm();
         if (Object.keys(validationErrors).length > 0) {
           logPmFormValidationBlocked(actionLabel, validationErrors);
+          focusValidationTab(validationErrors);
           formikBag.setTouched(validationErrors, true);
           setErrors(validationErrors);
           return;
@@ -838,7 +913,12 @@ const UpdateOwnerSidebar = ({
             ownerRef: owner,
           }),
         );
-        await persistFillCompany(owner._id, values, { localOnly: true });
+        try {
+          await persistFillCompany(owner._id, values, { localOnly: true });
+        } catch (fillErr) {
+          if (applyFillCompanyServerError(fillErr, formikBag)) return;
+          throw fillErr;
+        }
         accountId = owner._id;
       }
 
@@ -868,6 +948,7 @@ const UpdateOwnerSidebar = ({
       onOwnerUpdated?.(updatedAccount, { ruSync: phase });
     } catch (error) {
       const classification = logPmApiFail(`sync-owner-ru/${phase}`, error);
+      if (applyFillCompanyServerError(error, formikBag)) return;
       setErrors({
         submit: `[${classification.type} · ${classification.couche}] ${classification.message}`,
       });
@@ -882,6 +963,7 @@ const UpdateOwnerSidebar = ({
     const { setErrors, validateForm, setTouched } = formikBag;
     const validationErrors = await validateForm();
     if (Object.keys(validationErrors).length > 0) {
+      focusValidationTab(validationErrors);
       setTouched(validationErrors, true);
       setErrors(validationErrors);
       return;
@@ -925,6 +1007,7 @@ const UpdateOwnerSidebar = ({
           fillErr?.message ||
           'Brouillon compte OK — échec entreprise locale';
         console.error('[PM] persistFillCompany failed', fillErr?.response?.status, msg);
+        if (applyFillCompanyServerError(fillErr, formikBag)) return;
         setErrors({ submit: msg });
         toast.error(msg);
         return;
@@ -940,6 +1023,7 @@ const UpdateOwnerSidebar = ({
       onDraftSaved?.(draftAccount);
       toast.success('Brouillon enregistré — complétez puis « Créer le PM » (vert) quand tout est prêt');
     } catch (error) {
+      if (applyFillCompanyServerError(error, formikBag)) return;
       setErrors({
         submit:
           error.response?.data?.message ||
@@ -956,6 +1040,7 @@ const UpdateOwnerSidebar = ({
     const { setErrors, validateForm, setTouched, setFieldValue } = formikBag;
     const validationErrors = await validateForm();
     if (Object.keys(validationErrors).length > 0) {
+      focusValidationTab(validationErrors);
       setTouched(validationErrors, true);
       setErrors(validationErrors);
       return;
@@ -1033,6 +1118,7 @@ const UpdateOwnerSidebar = ({
       try {
         fillPersisted = await persistFillCompany(owner._id, values, { localOnly: true });
       } catch (fillErr) {
+        if (applyFillCompanyServerError(fillErr, formikBag)) return;
         setErrors({
           submit:
             fillErr?.response?.data?.message ||
@@ -1056,6 +1142,7 @@ const UpdateOwnerSidebar = ({
         toast.success('Enregistré — vous pouvez continuer à modifier');
       }
     } catch (error) {
+      if (applyFillCompanyServerError(error, formikBag)) return;
       setErrors({
         submit:
           error.response?.data?.message ||
@@ -1230,7 +1317,7 @@ const UpdateOwnerSidebar = ({
           setTouched,
           isSubmitting,
         }) => {
-          const formikBag = { setErrors, validateForm, setTouched, values };
+          const formikBag = { setErrors, validateForm, setTouched, setFieldValue, values };
           const saveReadiness = computeOwnerFormSaveReadiness(values);
           const activateReadiness = computeOwnerActivateReadiness(values);
           const ruProvisionReadiness = computeOwnerRuProvisionReadiness(values);
