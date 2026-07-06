@@ -1891,7 +1891,7 @@ const UpdateOwnerSidebar = ({
                         compact
                         value={serviceActivations}
                         onChange={setServiceActivations}
-                        disabled={isSubmitting}
+                        disabled={footBusy}
                       />
                     </>
                   )}

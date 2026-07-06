@@ -9,6 +9,7 @@ import {
   findStaffByPhone,
   mapSearchTaskToReservationTask,
 } from '../components/unified-inbox/inboxTaskMappers';
+import { mergeStaffExchanges } from '../services/staffConversationMapper';
 import type { TasksStaffMember } from '../types/tasks.types';
 
 export function useInboxStaffConversation() {
@@ -72,16 +73,21 @@ export function useInboxStaffConversation() {
       });
       const fetched = messagesResponse.data?.exchanges || [];
       if (fetched.length > 0) {
-        setMessages((prev) => (fetched.length >= prev.length ? fetched : prev));
+        setMessages((prev) => mergeStaffExchanges(prev, fetched));
         setActiveConversation((prev) => {
           if (!prev || prev.phone !== targetPhone) return prev;
+          const merged = mergeStaffExchanges(
+            prev.staff_exchanges || prev.recent_exchanges || [],
+            fetched,
+          );
+          const last = merged[merged.length - 1];
           return {
             ...prev,
-            staff_exchanges: fetched,
-            recent_exchanges: fetched.slice(-5),
-            messages_count: fetched.length,
-            exchanges_count: fetched.length,
-            last_message_time: fetched[fetched.length - 1]?.timestamp || prev.last_message_time,
+            staff_exchanges: merged,
+            recent_exchanges: merged.slice(-5),
+            messages_count: merged.length,
+            exchanges_count: merged.length,
+            last_message_time: last?.timestamp || prev.last_message_time,
           };
         });
       }
@@ -112,10 +118,7 @@ export function useInboxStaffConversation() {
 
       const fetched = messagesResponse.data?.exchanges || [];
       if (fetched.length > 0) {
-        setMessages((prev) => {
-          if (fetched.length >= prev.length) return fetched;
-          return prev;
-        });
+        setMessages((prev) => mergeStaffExchanges(prev.length ? prev : seed, fetched));
       } else if (seed.length === 0) {
         setMessages([]);
       }

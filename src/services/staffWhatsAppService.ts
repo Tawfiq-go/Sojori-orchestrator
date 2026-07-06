@@ -16,7 +16,21 @@ const STAFF_WA_BASE = resolveStaffWaBase();
 const THREADS_ENDPOINT = `${STAFF_WA_BASE}/get`;
 const UPDATE_MSG_ENDPOINT = (idOrWamid: string) =>
   `${STAFF_WA_BASE}/update-message/${idOrWamid}`;
-const SEND_MSG_ENDPOINT = `${STAFF_WA_BASE}/send-message`;
+const SEND_MSG_ENDPOINT = `${STAFF_WA_BASE}/send-message/`;
+
+function staffSendErrorMessage(data: unknown): string {
+  if (!data || typeof data !== 'object') return 'Échec envoi staff WhatsApp';
+  const row = data as {
+    message?: string;
+    provider?: { error?: { message?: string; error_user_msg?: string } };
+  };
+  return (
+    row.provider?.error?.error_user_msg ||
+    row.provider?.error?.message ||
+    row.message ||
+    'Échec envoi staff WhatsApp'
+  );
+}
 
 const TASKS_BY_STAFF_ENDPOINT = (staffId: string) =>
   `${MICROSERVICE_BASE_URL.SRV_TASK}/tasks/get-tasks-by-staff?staffIds=${staffId}`;
@@ -73,7 +87,11 @@ export async function updateStaffWaMessage(idOrWamid: string, payload: any) {
 }
 
 export async function sendStaffWaText({ to, text, workerWaName }: SendMessageParams) {
-  return apiClient.put(SEND_MSG_ENDPOINT, { to, text, workerWaName });
+  const { data } = await apiClient.put(SEND_MSG_ENDPOINT, { to, text, workerWaName });
+  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
+    throw new Error(staffSendErrorMessage(data));
+  }
+  return data;
 }
 
 export async function getTasksByStaff(staffId: string) {

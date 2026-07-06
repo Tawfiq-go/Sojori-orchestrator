@@ -1,21 +1,14 @@
 import { Box, Typography } from '@mui/material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  GUEST_HUB_TABS,
+  STAFF_HUB_TABS,
+  type CommsHubTab,
+  type CommsSection,
+} from '../communications/commsHubConfig';
 import { T } from './_tokens';
 
-export type CommsHubTab = 'whatsapp' | 'staff' | 'ota' | 'leads' | 'reviews';
-
-const HUB_TABS: {
-  id: CommsHubTab;
-  label: string;
-  emoji: string;
-  tone: 'wa' | 'ota';
-}[] = [
-  { id: 'whatsapp', label: 'WhatsApp', emoji: '💬', tone: 'wa' },
-  { id: 'staff', label: 'Staff WhatsApp', emoji: '👷', tone: 'wa' },
-  { id: 'ota', label: 'Messages OTA', emoji: '🏨', tone: 'ota' },
-  { id: 'leads', label: 'Demande', emoji: '🎯', tone: 'ota' },
-  { id: 'reviews', label: 'Avis', emoji: '⭐', tone: 'ota' },
-];
+export type { CommsHubTab, CommsSection } from '../communications/commsHubConfig';
 
 export function isWaDesignTab(tab: string): boolean {
   return tab === 'whatsapp' || tab === 'staff';
@@ -26,26 +19,64 @@ export function isOtaDesignTab(tab: string): boolean {
 }
 
 interface InboxHubTabsProps {
+  section: CommsSection;
   counts?: Partial<Record<CommsHubTab, number>>;
   unreadCount?: number;
   metaExtra?: string;
   compact?: boolean;
 }
 
-export default function InboxHubTabs({ counts = {}, unreadCount = 0, metaExtra, compact = false }: InboxHubTabsProps) {
+export default function InboxHubTabs({
+  section,
+  counts = {},
+  unreadCount = 0,
+  metaExtra,
+  compact = false,
+}: InboxHubTabsProps) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const active = (searchParams.get('tab') || 'whatsapp') as CommsHubTab;
+  const active = (searchParams.get('tab') || (section === 'staff' ? 'staff' : 'whatsapp')) as CommsHubTab;
+  const hubTabs = section === 'staff' ? STAFF_HUB_TABS : GUEST_HUB_TABS;
+  const sectionLabel = section === 'staff' ? 'Staff' : 'Guest';
 
-  const total = Object.values(counts).reduce((s, n) => s + (n || 0), 0);
+  const total = hubTabs.reduce((s, tab) => s + (counts[tab.id] || 0), 0);
+
+  const goTab = (tabId: string) => {
+    navigate(`/communications?section=${section}&tab=${tabId}`);
+  };
 
   return (
     <Box sx={{ mb: compact ? 0.75 : 1.75, flexShrink: 0 }}>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: compact ? 1 : 1.75, mb: compact ? 0.75 : 1.75, flexWrap: 'nowrap' }}>
-        <Typography sx={{ fontSize: compact ? 15 : 20, fontWeight: 700, letterSpacing: '-0.025em', color: T.text, flexShrink: 0 }}>
-          Inbox
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: compact ? 1 : 1.75,
+          mb: compact ? 0.75 : 1.75,
+          flexWrap: 'nowrap',
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: compact ? 15 : 20,
+            fontWeight: 700,
+            letterSpacing: '-0.025em',
+            color: T.text,
+            flexShrink: 0,
+          }}
+        >
+          {sectionLabel}
         </Typography>
-        <Typography sx={{ fontSize: compact ? 10.5 : 12, color: T.text3, fontFamily: '"Geist Mono", monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography
+          sx={{
+            fontSize: compact ? 10.5 : 12,
+            color: T.text3,
+            fontFamily: '"Geist Mono", monospace',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
           {total} conv. · {unreadCount} NL{metaExtra ? ` · ${metaExtra}` : ''}
         </Typography>
       </Box>
@@ -66,14 +97,14 @@ export default function InboxHubTabs({ counts = {}, unreadCount = 0, metaExtra, 
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        {HUB_TABS.map((tab) => {
+        {hubTabs.map((tab) => {
           const isActive = active === tab.id;
-          const wa = tab.tone === 'wa';
+          const staffTab = section === 'staff';
           return (
             <Box
               key={tab.id}
               component="button"
-              onClick={() => navigate(`/communications?tab=${tab.id}`)}
+              onClick={() => goTab(tab.id)}
               sx={{
                 px: compact ? 1.125 : 1.5,
                 py: compact ? 0.625 : 0.875,
@@ -83,12 +114,12 @@ export default function InboxHubTabs({ counts = {}, unreadCount = 0, metaExtra, 
                 fontFamily: 'inherit',
                 fontSize: compact ? 11 : 12,
                 fontWeight: 700,
-                color: isActive ? (wa ? '#0e8c4d' : '#c0353a') : T.text3,
+                color: isActive ? (staffTab ? '#b45309' : '#0e8c4d') : T.text3,
                 bgcolor: isActive ? T.bg2 : 'transparent',
                 boxShadow: isActive
-                  ? wa
-                    ? 'inset 0 0 0 1px rgba(37,211,102,0.30)'
-                    : 'inset 0 0 0 1px rgba(255,90,95,0.30)'
+                  ? staffTab
+                    ? 'inset 0 0 0 1px rgba(180,83,9,0.35)'
+                    : 'inset 0 0 0 1px rgba(37,211,102,0.30)'
                   : 'none',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -110,7 +141,7 @@ export default function InboxHubTabs({ counts = {}, unreadCount = 0, metaExtra, 
                     px: 0.625,
                     py: '1px',
                     borderRadius: 999,
-                    bgcolor: isActive ? (wa ? T.green : T.airbnb) : T.bg3,
+                    bgcolor: isActive ? (staffTab ? '#b45309' : T.green) : T.bg3,
                     color: isActive ? '#fff' : T.text4,
                   }}
                 >

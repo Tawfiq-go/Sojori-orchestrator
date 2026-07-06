@@ -8,7 +8,13 @@ import StaffWhatsAppTabV2 from '../components/communications/StaffWhatsAppTabV2'
 import MessagesOTATabV2 from '../components/communications/MessagesOTATabV2';
 import LeadsTabV2 from '../components/communications/LeadsTabV2';
 import ReviewsTabV2 from '../components/communications/ReviewsTabV2';
-import InboxHubTabs, { type CommsHubTab } from '../components/unified-inbox/InboxHubTabs';
+import InboxHubTabs from '../components/unified-inbox/InboxHubTabs';
+import {
+  normalizeCommsTab,
+  resolveCommsSection,
+  type CommsHubTab,
+  type CommsSection,
+} from '../components/communications/commsHubConfig';
 import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import { useSocketIO } from '../hooks/useSocketIO';
 import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
@@ -32,13 +38,17 @@ export default function CommunicationsHubPage() {
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const activeTab = (tabParam === 'templates' ? 'whatsapp' : tabParam || 'whatsapp') as CommsHubTab;
+  const section: CommsSection = resolveCommsSection(searchParams.get('section'), tabParam);
+  const activeTab = normalizeCommsTab(tabParam, section);
 
   useEffect(() => {
-    if (tabParam === 'templates') {
-      navigate('/communications?tab=whatsapp', { replace: true });
+    const needsSection = !searchParams.get('section');
+    const legacyTemplates = tabParam === 'templates';
+    const wrongTab = tabParam != null && tabParam !== activeTab;
+    if (needsSection || legacyTemplates || wrongTab) {
+      navigate(`/communications?section=${section}&tab=${activeTab}`, { replace: true });
     }
-  }, [tabParam, navigate]);
+  }, [searchParams, tabParam, section, activeTab, navigate]);
 
   const [counts, setCounts] = useState<Partial<Record<CommsHubTab, number>>>({});
   const [unreadCount, setUnreadCount] = useState(0);
@@ -165,7 +175,10 @@ export default function CommunicationsHubPage() {
   });
 
   return (
-    <DashboardWrapper hidePageHeader breadcrumb={['Communications', 'Inbox']}>
+    <DashboardWrapper
+      hidePageHeader
+      breadcrumb={['Communications', section === 'staff' ? 'Staff' : 'Guest']}
+    >
       <Box
         sx={{
           ...DASHBOARD_PAGE_FILL_SX,
@@ -176,7 +189,7 @@ export default function CommunicationsHubPage() {
           overflow: 'hidden',
         }}
       >
-        <InboxHubTabs counts={counts} unreadCount={unreadCount} compact />
+        <InboxHubTabs section={section} counts={counts} unreadCount={unreadCount} compact />
 
         <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {activeTab === 'whatsapp' && <WhatsAppTabV2 />}

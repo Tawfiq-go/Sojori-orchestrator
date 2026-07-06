@@ -42,6 +42,25 @@ function messageDisplayBody(m: StaffWaMessage): string {
   return '';
 }
 
+export function mergeStaffExchanges(
+  prev: MessageExchange[],
+  fetched: MessageExchange[],
+): MessageExchange[] {
+  if (!fetched.length) return prev;
+  const seen = new Set<string>();
+  const merged: MessageExchange[] = [];
+  for (const e of [...fetched, ...prev]) {
+    const key = `${e.timestamp ?? ''}|${e.ai_response ?? ''}|${e.user_message ?? ''}|${e.sent_by_admin ? '1' : '0'}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(e);
+  }
+  merged.sort(
+    (a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime(),
+  );
+  return merged;
+}
+
 export function staffOutboundExchange(text: string): MessageExchange {
   return {
     user_message: '',
