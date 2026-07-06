@@ -25,6 +25,50 @@ const FALLBACK_COUNTRIES = [
   },
 ];
 
+const FALLBACK_RU_LANGUAGES = [
+  {
+    ruCode: '1',
+    ruName: 'English',
+    sojoriName: 'English',
+    label: 'English (RU 1)',
+    searchText: 'english anglais en 1',
+  },
+  {
+    ruCode: '2',
+    ruName: 'French',
+    sojoriName: 'French',
+    label: 'French / Francais (RU 2)',
+    searchText: 'french francais français fr 2',
+  },
+  {
+    ruCode: '3',
+    ruName: 'Spanish',
+    sojoriName: 'Spanish',
+    label: 'Spanish / Espanol (RU 3)',
+    searchText: 'spanish espanol espagnol es 3',
+  },
+];
+
+function normalizeRuLanguages(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => {
+      const ruCode = String(row?.ruCode ?? row?.languageId ?? row?.id ?? '').trim();
+      if (!ruCode) return null;
+      const ruName = String(row?.ruName ?? row?.name ?? '').trim();
+      const sojoriName = String(row?.sojoriName ?? row?.label ?? ruName).trim();
+      return {
+        ...row,
+        ruCode,
+        ruName,
+        sojoriName,
+        label: row?.label || `${sojoriName || ruName || ruCode} (RU ${ruCode})`,
+        searchText: String(row?.searchText || `${sojoriName} ${ruName} ${ruCode}`).toLowerCase(),
+      };
+    })
+    .filter(Boolean);
+}
+
 function nationalitiesFromCountries(countries) {
   const seen = new Set();
   const out = [];
@@ -63,15 +107,16 @@ export function useChannelsFillCompanyPickers(open) {
       const body = res.data;
       const d = body?.data;
       if (body?.success && d && Array.isArray(d.countries) && d.countries.length > 0) {
+        const languageOptions = normalizeRuLanguages(d.languagesRu);
         setCountries(d.countries);
-        setLanguagesRu(Array.isArray(d.languagesRu) ? d.languagesRu : []);
+        setLanguagesRu(languageOptions.length > 0 ? languageOptions : FALLBACK_RU_LANGUAGES);
         setNationalities(Array.isArray(d.nationalities) ? d.nationalities : nationalitiesFromCountries(d.countries));
         setInterfaceLanguageCodes(Array.isArray(d.interfaceLanguageCodes) ? d.interfaceLanguageCodes : []);
         setCurrencySortOrder(Array.isArray(d.currencySortOrder) ? d.currencySortOrder : ['MAD', 'EUR', 'USD']);
-        setUsedFallback(false);
+        setUsedFallback(languageOptions.length === 0);
       } else {
         setCountries(FALLBACK_COUNTRIES);
-        setLanguagesRu([]);
+        setLanguagesRu(FALLBACK_RU_LANGUAGES);
         setNationalities(nationalitiesFromCountries(FALLBACK_COUNTRIES));
         setInterfaceLanguageCodes([
           { code: 'fr', label: 'Français (fr)' },
@@ -83,7 +128,7 @@ export function useChannelsFillCompanyPickers(open) {
       }
     } catch (e) {
       setCountries(FALLBACK_COUNTRIES);
-      setLanguagesRu([]);
+      setLanguagesRu(FALLBACK_RU_LANGUAGES);
       setNationalities(nationalitiesFromCountries(FALLBACK_COUNTRIES));
       setInterfaceLanguageCodes([
         { code: 'fr', label: 'Français (fr)' },
