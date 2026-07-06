@@ -64,6 +64,8 @@ export interface WizardDashboardMemberConfig {
 
 export interface WizardStaffRow {
   id: string;
+  /** True once the advanced role defaults have been initialized; user deselections are then preserved. */
+  advancedDefaultsApplied?: boolean;
   firstName: string;
   lastName: string;
   whatsapp: string;
@@ -225,6 +227,8 @@ export type WizardOrchestrationQuickConfig = {
   cleaningFreeTiers: WizardCleaningFreeTier[];
   /** Navette aéroport — prix MAD par ville PM */
   transportAirportByCity: Record<string, number>;
+  /** Navette aeroport - prix MAD par ville et par sens. */
+  transportAirportRoutesByCity?: Record<string, { airportToListing: number; listingToAirport: number }>;
   /** IDs catalogue conciergerie onboarding */
   conciergeServiceIds: string[];
 };

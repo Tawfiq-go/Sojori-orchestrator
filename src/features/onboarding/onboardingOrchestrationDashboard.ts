@@ -126,6 +126,21 @@ export function defaultTransportAirportPrices(cities: string[]): Record<string, 
   return out;
 }
 
+export function defaultTransportAirportRoutes(
+  cities: string[],
+): NonNullable<WizardOrchestrationQuickConfig['transportAirportRoutesByCity']> {
+  const base = defaultTransportAirportPrices(cities);
+  const out: NonNullable<WizardOrchestrationQuickConfig['transportAirportRoutesByCity']> = {};
+  for (const city of cities) {
+    const amount = base[city] ?? 400;
+    out[city] = {
+      airportToListing: amount,
+      listingToAirport: amount,
+    };
+  }
+  return out;
+}
+
 export function defaultOrchestrationQuickConfig(
   cities: string[] = ['Marrakech'],
 ): WizardOrchestrationQuickConfig {
@@ -133,6 +148,7 @@ export function defaultOrchestrationQuickConfig(
     cleaningModes: { free: true, paid: false, sojori: false },
     cleaningFreeTiers: [{ startDay: 1, endDay: 10, numberOfCleaning: 1 }],
     transportAirportByCity: defaultTransportAirportPrices(cities),
+    transportAirportRoutesByCity: defaultTransportAirportRoutes(cities),
     conciergeServiceIds: [],
   };
 }
@@ -145,10 +161,20 @@ export function normalizeOrchestrationQuickConfig(
   const base = defaultOrchestrationQuickConfig(cities);
   if (!raw) return base;
   const transportAirportByCity = { ...base.transportAirportByCity, ...(raw.transportAirportByCity ?? {}) };
+  const transportAirportRoutesByCity = {
+    ...base.transportAirportRoutesByCity,
+    ...(raw.transportAirportRoutesByCity ?? {}),
+  };
   for (const city of cities) {
     if (transportAirportByCity[city] == null) {
       transportAirportByCity[city] = base.transportAirportByCity[city] ?? 400;
     }
+    const legacyAmount = transportAirportByCity[city] ?? base.transportAirportByCity[city] ?? 400;
+    const route = transportAirportRoutesByCity[city];
+    transportAirportRoutesByCity[city] = {
+      airportToListing: Number(route?.airportToListing ?? legacyAmount) || 0,
+      listingToAirport: Number(route?.listingToAirport ?? legacyAmount) || 0,
+    };
   }
   const cleaningModes = {
     free: raw.cleaningModes?.free ?? (caps?.cleaningFree ?? base.cleaningModes.free),
@@ -166,6 +192,7 @@ export function normalizeOrchestrationQuickConfig(
           }))
         : base.cleaningFreeTiers,
     transportAirportByCity,
+    transportAirportRoutesByCity,
     conciergeServiceIds: Array.isArray(raw.conciergeServiceIds) ? [...raw.conciergeServiceIds] : [],
   };
 }

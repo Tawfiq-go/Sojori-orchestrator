@@ -3514,6 +3514,23 @@
   width: 80px;
 }
 
+.ob-x-price--split {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 10px;
+}
+
+.ob-x-price--split label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.ob-x-price--split input {
+  width: 84px;
+}
+
 .ob-x-hour {
   width: auto;
   min-width: 62px;
@@ -3563,6 +3580,26 @@
 .ob-orch-city-price input {
   width: 100%;
   min-width: 72px;
+}
+
+.ob-orch-city-price--split {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  padding: 8px;
+  border: 1px solid var(--ob-bd);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ob-orch-city-price--split label {
+  display: grid;
+  grid-template-columns: 1fr 84px auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.ob-orch-city-name {
+  color: var(--ob-t1);
 }
 
 .ob-orch-city-unit {

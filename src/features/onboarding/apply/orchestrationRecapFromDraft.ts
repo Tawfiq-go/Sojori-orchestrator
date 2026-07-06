@@ -125,7 +125,9 @@ export function buildOrchestrationRecapFromDraft(draft: WizardDraft): Orchestrat
     if (p3.quickConfig?.cleaningFreeTiers?.length) {
       extras.push(`${p3.quickConfig.cleaningFreeTiers.length} palier(s) ménage inclus`);
     }
-    const transportCities = Object.keys(p3.quickConfig?.transportAirportByCity ?? {}).filter(Boolean);
+    const transportCities = Object.keys(
+      p3.quickConfig?.transportAirportRoutesByCity ?? p3.quickConfig?.transportAirportByCity ?? {},
+    ).filter(Boolean);
     if (transportCities.length) {
       extras.push(`Transport aéroport : ${transportCities.join(', ')}`);
     }

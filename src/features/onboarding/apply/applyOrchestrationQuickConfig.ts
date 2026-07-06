@@ -10,6 +10,84 @@ import type { WizardCapabilities, WizardOrchestrationQuickConfig } from '../type
 function buildAirportTransportServices(
   prices: Record<string, number>,
   cities: string[],
+  routesByCity: WizardOrchestrationQuickConfig['transportAirportRoutesByCity'] = {},
+): Array<Record<string, unknown>> {
+  const services: Array<Record<string, unknown>> = [];
+  let order = 0;
+  for (const city of cities) {
+    const fallbackAmount = prices[city] ?? 0;
+    const routePrices = routesByCity?.[city] ?? {
+      airportToListing: fallbackAmount,
+      listingToAirport: fallbackAmount,
+    };
+    const slug = city.toLowerCase().replace(/\s+/g, '_');
+    const directions = [
+      {
+        key: 'airport_to_listing',
+        amount: routePrices.airportToListing,
+        label: `Navette aeroport -> logement · ${city}`,
+        descriptionFr: `Transfert aeroport vers logement (${city})`,
+        descriptionEn: `Airport to property transfer (${city})`,
+        from: `Aeroport ${city}`,
+        to: 'Logement',
+        journeyTag: 'arrival',
+      },
+      {
+        key: 'listing_to_airport',
+        amount: routePrices.listingToAirport,
+        label: `Navette logement -> aeroport · ${city}`,
+        descriptionFr: `Transfert logement vers aeroport (${city})`,
+        descriptionEn: `Property to airport transfer (${city})`,
+        from: 'Logement',
+        to: `Aeroport ${city}`,
+        journeyTag: 'departure',
+      },
+    ] as const;
+
+    for (const direction of directions) {
+      if (!direction.amount || direction.amount <= 0) continue;
+      services.push({
+        id: `onboarding_${direction.key}_${slug}`,
+        enabled: true,
+        name: { fr: direction.label, en: direction.label, ar: direction.label },
+        description: {
+          fr: direction.descriptionFr,
+          en: direction.descriptionEn,
+          ar: direction.label,
+        },
+        route: {
+          from: direction.from,
+          to: direction.to,
+          journeyTag: direction.journeyTag,
+          externalLabel: `Aeroport ${city}`,
+          externalKind: 'airport',
+          propertyName: 'Logement',
+          propertyAddress: '',
+        },
+        pricing: { type: 'total', amount: direction.amount, currency: 'MAD' },
+        capacity: {
+          maxPassengers: 4,
+          errorMessage: {
+            fr: 'Maximum 4 passagers',
+            en: 'Maximum 4 passengers',
+            ar: 'Maximum 4 passengers',
+          },
+        },
+        clientFields: {},
+        availability: { type: 'always' },
+        images: [],
+        order,
+        cityIds: 'all',
+      });
+      order += 1;
+    }
+  }
+  return services;
+}
+
+function buildLegacyAirportTransportServices(
+  prices: Record<string, number>,
+  cities: string[],
 ): Array<Record<string, unknown>> {
   const services: Array<Record<string, unknown>> = [];
   let order = 0;
@@ -134,6 +212,7 @@ export function applyOrchestrationQuickConfig(
     const transportServices = buildAirportTransportServices(
       quick.transportAirportByCity ?? {},
       cities,
+      quick.transportAirportRoutesByCity,
     );
     if (transportServices.length) {
       patchConciergeShellGestion(capabilities, { transportServices });
