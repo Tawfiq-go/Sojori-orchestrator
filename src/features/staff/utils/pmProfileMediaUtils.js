@@ -10,7 +10,11 @@ export const PM_VITRINE_IMAGE_SPECS = {
   gallery: { minWidth: 1024, minHeight: 768 },
 };
 
-export const PM_VITRINE_IMAGE_HINT = `Format ${PM_VITRINE_IMAGE_SPECS.formats} · max ${PM_VITRINE_IMAGE_SPECS.maxFileSizeMb} Mo/fichier · couverture ${PM_VITRINE_IMAGE_SPECS.cover.width}×${PM_VITRINE_IMAGE_SPECS.cover.height} (${PM_VITRINE_IMAGE_SPECS.cover.ratio}) · galerie min ${PM_VITRINE_IMAGE_SPECS.gallery.minWidth}×${PM_VITRINE_IMAGE_SPECS.gallery.minHeight}`;
+export const PM_VITRINE_IMAGE_HINT = `Format ${PM_VITRINE_IMAGE_SPECS.formats} · max ${PM_VITRINE_IMAGE_SPECS.maxFileSizeMb} Mo/fichier`;
+
+export const PM_VITRINE_COVER_HINT = `${PM_VITRINE_IMAGE_HINT} · bannière ${PM_VITRINE_IMAGE_SPECS.cover.width}×${PM_VITRINE_IMAGE_SPECS.cover.height} (${PM_VITRINE_IMAGE_SPECS.cover.ratio})`;
+
+export const PM_VITRINE_GALLERY_HINT = `${PM_VITRINE_IMAGE_HINT} · galerie min ${PM_VITRINE_IMAGE_SPECS.gallery.minWidth}×${PM_VITRINE_IMAGE_SPECS.gallery.minHeight} · max ${PM_VITRINE_MAX_PHOTOS} photos`;
 
 /** Initiales marketplace (2 lettres) depuis le nom public — aligné srv-listing initialsFromName. */
 export function initialsFromPublicName(name = '') {
@@ -76,4 +80,17 @@ export function extractUrlsFromUploadResult(result) {
     return result.urls.map((f) => normalizePmImageUrl(f)).filter(Boolean);
   }
   return [];
+}
+
+/** Sépare coverUrl dédié et galerie (legacy : 1re image = couverture si pas de coverUrl). */
+export function splitPmCoverAndGallery(pmProfile = {}) {
+  const rawImages = normalizePmImageList(pmProfile.images);
+  const storedCover = normalizePmImageUrl(pmProfile.coverUrl);
+  if (storedCover) {
+    return { coverUrl: storedCover, images: rawImages };
+  }
+  if (rawImages.length === 0) {
+    return { coverUrl: '', images: [] };
+  }
+  return { coverUrl: rawImages[0], images: rawImages.slice(1) };
 }

@@ -2,7 +2,7 @@
 // TooltipBreakdown.jsx — cascade Sojori AI + prix actif (dynamique vs manuel)
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
-import { T, priceOf, isArchiveDay, hasInventoryData } from './_shared';
+import { T, priceOf, isArchiveDay, hasInventoryData, resolvePriceMode, PRICE_MODE_LABEL } from './_shared';
 
 function normalizeFactorLabel(label) {
   return String(label || '')
@@ -59,8 +59,9 @@ export default function TooltipBreakdown({ inv, dateStr, currency = 'EUR', place
     inv.calculatedPrice != null && inv.calculatedPrice !== undefined ? inv.calculatedPrice : null;
   const man = inv.manualPrice != null && inv.manualPrice !== undefined ? inv.manualPrice : null;
 
-  const manualActive = Boolean(inv.applyManual && man != null);
-  const dynamicActive = !manualActive && Boolean(inv.useDynamicPrice);
+  const mode = resolvePriceMode(inv);
+  const manualActive = mode === 'manual';
+  const dynamicActive = mode === 'dynamic';
   const total = priceOf(inv);
 
   return (
@@ -95,7 +96,7 @@ export default function TooltipBreakdown({ inv, dateStr, currency = 'EUR', place
 
       {calc != null && (
         <PriceModeRow
-          label="⚡ Dynamique"
+          label="Prix dynamique"
           value={`${calc.toFixed(0)} ${currency}`}
           active={dynamicActive}
           accent={T.ai}
@@ -118,12 +119,18 @@ export default function TooltipBreakdown({ inv, dateStr, currency = 'EUR', place
         />
       )}
 
+      {mode !== 'base' && inv.applyManual && inv.useDynamicPrice && (
+        <div style={{ fontSize: 10.5, color: T.warning, marginTop: 8, lineHeight: 1.45, fontWeight: 600 }}>
+          Flags legacy incohérents — le mode affiché est « {PRICE_MODE_LABEL[mode]} » (priceMode).
+        </div>
+      )}
+
       <div style={{
         paddingTop: 8, marginTop: 8, borderTop: `1px solid ${T.border}`,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
-          Prix final{manualActive ? ' · manuel' : dynamicActive ? ' · dynamique' : ''}
+          Prix final · {PRICE_MODE_LABEL[mode]}
         </span>
         <span style={{
           fontSize: 15, fontWeight: 800,

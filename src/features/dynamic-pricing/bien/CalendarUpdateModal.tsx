@@ -105,13 +105,15 @@ export default function CalendarUpdateModal({
   return (
     <Dialog
       open={open}
-      onClose={phase === 'running' ? undefined : onClose}
+      onClose={(_, reason) => {
+        if (phase === 'running') return;
+        onClose();
+      }}
       maxWidth="sm"
       fullWidth
       slotProps={{
         paper: { sx: { borderRadius: 2, maxHeight: '90vh' } },
       }}
-      disableEscapeKeyDown={phase === 'running'}
     >
       <Stack direction="row" sx={{ alignItems: 'center', p: 2, borderBottom: `1px solid ${T.border}` }}>
         <Typography sx={{ fontWeight: 800, flex: 1 }}>Mise à jour calendrier</Typography>
@@ -182,7 +184,7 @@ export default function CalendarUpdateModal({
             </Typography>
             <Box sx={{ p: 1.5, borderRadius: 1.25, bgcolor: T.goldTint, border: `1px solid ${T.gold}`, mb: 1.5 }}>
               <ReportRow
-                label="Dates envoyées au calendrier (prix G7)"
+                label="Dates envoyées au calendrier (prix dynamique)"
                 value={`${report.daysPayloadPriceDays ?? report.daysPricePushed} j`}
               />
               <ReportRow
@@ -315,13 +317,14 @@ export default function CalendarUpdateModal({
             </Box>
             <Divider sx={{ my: 1.5 }} />
             <Typography sx={{ fontSize: 10.5, fontWeight: 800, color: T.text3, textTransform: 'uppercase', mb: 0.75 }}>
-              Non modifiés (réservé uniquement)
+              Non écrits en inventaire
             </Typography>
             <Box sx={{ p: 1.5, borderRadius: 1.25, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
               <ReportRow label="Jours réservés (protégés)" value={report.daysSkippedReserved} />
-              <ReportRow label="Autres skips moteur" value={report.daysSkippedOther} />
+              <ReportRow label="Sans tarif marché" value={report.daysSkippedOther} />
               <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 1, lineHeight: 1.45 }}>
-                Les jours manuels reçoivent quand même calculatedPrice + breakdown (hover calendrier § Tarif).
+                Le prix dynamique (calculatedPrice) est mis à jour même si le jour est fermé ou en prix manuel affiché.
+                L’affichage ops (manuel vs dynamique) reste inchangé.
               </Typography>
             </Box>
           </>

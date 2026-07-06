@@ -69,6 +69,8 @@ export default function FillCompanyFormFields({
   hideMirroredContactFields = false,
   legalSameAsContact = false,
   onLegalSameAsContactChange,
+  /** Vue Owner : masque badges / légende Rental United */
+  hideRuBadges = false,
 }) {
   const { t } = useTranslation('common');
   const fc = (path) => resolveFc(namePrefix, path);
@@ -150,7 +152,7 @@ export default function FillCompanyFormFields({
           </Typography>
         </Alert>
       )}
-      <RuFieldBadgeLegend />
+      <RuFieldBadgeLegend sx={hideRuBadges ? { display: 'none' } : undefined} />
 
       <Card sx={{ mb: 3, borderRadius: 2, border: '1px solid #e5e8ec' }}>
         <CardHeader
@@ -183,28 +185,38 @@ export default function FillCompanyFormFields({
                   label={t('fillCompany_identity', { defaultValue: 'Identité' })}
                   value={`${mirror.firstName || ''} ${mirror.lastName || ''}`.trim()}
                   ruXmlPath="ContactInfo.FirstName + LastName"
+                  plain={hideRuBadges}
                 />
                 <MirrorFieldRow
-                  label={t('fillCompany_dashboardEmail', { defaultValue: 'Email dashboard (fiche RU)' })}
+                  label={
+                    hideRuBadges
+                      ? t('fillCompany_dashboardEmailPlain', { defaultValue: 'Email dashboard' })
+                      : t('fillCompany_dashboardEmail', { defaultValue: 'Email dashboard (fiche RU)' })
+                  }
                   value={mirror.email}
                   kind="sojoriLogin"
                   ruXmlPath="Sojori + ContactInfo.Email"
+                  plain={hideRuBadges}
                 />
+                {!hideRuBadges ? (
                 <MirrorFieldRow
                   label={t('fillCompany_ruLoginEmail', { defaultValue: 'Connexion extranet R.U.' })}
                   value={mirror.ruEmail}
                   kind="ruCreateUser"
                   ruXmlPath="Push_CreateUser.Email"
                 />
+                ) : null}
                 <MirrorFieldRow
                   label={t('Phone')}
                   value={mirror.phone}
                   ruXmlPath="ContactInfo.Phone + CompanyInfo.PhoneNumber"
+                  plain={hideRuBadges}
                 />
                 <MirrorFieldRow
                   label={t('City')}
                   value={mirror.cityName}
                   ruXmlPath="ContactInfo.City + CompanyInfo.CompanyCity"
+                  plain={hideRuBadges}
                 />
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
@@ -218,7 +230,7 @@ export default function FillCompanyFormFields({
           <Grid container spacing={2}>
             {!showMirrorSummary ? (
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.FirstName" required>
+              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.FirstName" plain={hideRuBadges} required>
                 {t('First Name')}
               </FieldLabelWithRuBadge>
               {showMirrorFields ? (
@@ -239,7 +251,7 @@ export default function FillCompanyFormFields({
             ) : null}
             {!showMirrorSummary ? (
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.LastName" required>
+              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.LastName" plain={hideRuBadges} required>
                 {t('Last Name')}
               </FieldLabelWithRuBadge>
               {showMirrorFields ? (
@@ -260,7 +272,7 @@ export default function FillCompanyFormFields({
             ) : null}
             {!showMirrorSummary ? (
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.Email" required>
+              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.Email" plain={hideRuBadges} required>
                 {t('Email')}
               </FieldLabelWithRuBadge>
               {showMirrorFields ? (
@@ -281,7 +293,7 @@ export default function FillCompanyFormFields({
             ) : null}
             {!showMirrorSummary ? (
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.Phone" required>
+              <FieldLabelWithRuBadge kind={showMirrorFields ? 'ruMirror' : 'ru'} ruXmlPath="ContactInfo.Phone" plain={hideRuBadges} required>
                 {t('Phone')}
               </FieldLabelWithRuBadge>
               {showMirrorFields ? (
@@ -302,7 +314,7 @@ export default function FillCompanyFormFields({
             ) : null}
             {!showMirrorSummary ? (
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.City" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.City" plain={hideRuBadges} required>
                 {t('City')}
               </FieldLabelWithRuBadge>
               <CityFreeSoloAutocomplete
@@ -316,7 +328,7 @@ export default function FillCompanyFormFields({
             </Grid>
             ) : null}
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.CountryId" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.CountryId" plain={hideRuBadges} required>
                 {t('Country')}
               </FieldLabelWithRuBadge>
               <SearchableSelect
@@ -332,7 +344,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.Address" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.Address" plain={hideRuBadges} required>
                 {t('Address')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -347,7 +359,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.ZipCode" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.ZipCode" plain={hideRuBadges} required>
                 {t('Zip Code')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -362,7 +374,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.BirthDate" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.BirthDate" plain={hideRuBadges} required>
                 {t('Birth Date')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -378,7 +390,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.LanguageId" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.LanguageId" plain={hideRuBadges} required>
                 {t('Language')}
               </FieldLabelWithRuBadge>
               <SearchableSelect
@@ -394,7 +406,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.Nationality → NationalityId" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.Nationality → NationalityId" plain={hideRuBadges} required>
                 {t('Nationality')}
               </FieldLabelWithRuBadge>
               <SearchableSelect
@@ -410,7 +422,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.Region → RegionId">
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="ContactInfo.Region → RegionId" plain={hideRuBadges}>
                 {t('Region')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -424,7 +436,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="new" ruXmlPath="ContactInfo.Area → AreaId">
+              <FieldLabelWithRuBadge kind="new" ruXmlPath="ContactInfo.Area → AreaId" plain={hideRuBadges}>
                 {t('Area')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -454,7 +466,7 @@ export default function FillCompanyFormFields({
         <CardContent>
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.CompanyName" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.CompanyName" plain={hideRuBadges} required>
                 {t('Company Name')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -469,7 +481,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.WebsiteAddress">
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.WebsiteAddress" plain={hideRuBadges}>
                 {t('Website Address')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -490,7 +502,7 @@ export default function FillCompanyFormFields({
             </Grid>
             {!showMirrorSummary ? (
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.CompanyCity" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.CompanyCity" plain={hideRuBadges} required>
                 {t('Company City')}
               </FieldLabelWithRuBadge>
               <CityFreeSoloAutocomplete
@@ -504,7 +516,7 @@ export default function FillCompanyFormFields({
             </Grid>
             ) : null}
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.CountryId" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.CountryId" plain={hideRuBadges} required>
                 {t('Company Country')}
               </FieldLabelWithRuBadge>
               <SearchableSelect
@@ -520,7 +532,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.PostCode" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.PostCode" plain={hideRuBadges} required>
                 {t('Post Code')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -535,7 +547,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.Region → RegionId" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.Region → RegionId" plain={hideRuBadges} required>
                 {t('Region')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -551,7 +563,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.Address" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.Address" plain={hideRuBadges} required>
                 {t('Company Address')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -566,7 +578,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.TimeZone" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.TimeZone" plain={hideRuBadges} required>
                 {t('Time Zone')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -581,7 +593,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ruStoredNotPushed" ruXmlPath="CompanyInfo.ConfirmationEmail">
+              <FieldLabelWithRuBadge kind="ruStoredNotPushed" ruXmlPath="CompanyInfo.ConfirmationEmail" plain={hideRuBadges}>
                 {t('Confirmation Email')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -602,7 +614,7 @@ export default function FillCompanyFormFields({
             </Grid>
             {!showMirrorSummary ? (
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.PhoneNumber" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.PhoneNumber" plain={hideRuBadges} required>
                 {t('Company Phone Number')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -618,7 +630,7 @@ export default function FillCompanyFormFields({
             </Grid>
             ) : null}
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.VATNumber" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.VATNumber" plain={hideRuBadges} required>
                 {t('VAT Number')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -633,7 +645,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.ManagerIdentificationNumber" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.ManagerIdentificationNumber" plain={hideRuBadges} required>
                 {t('Manager Identification Number')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -652,7 +664,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.MerchantName" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.MerchantName" plain={hideRuBadges} required>
                 {t('Merchant Name')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -667,7 +679,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.NumberOfProperties" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.NumberOfProperties" plain={hideRuBadges} required>
                 {t('Number Of Properties')}
               </FieldLabelWithRuBadge>
               <FormControl fullWidth size="small">
@@ -693,7 +705,7 @@ export default function FillCompanyFormFields({
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.NumberOfEmployees" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.NumberOfEmployees" plain={hideRuBadges} required>
                 {t('Number Of Employees')}
               </FieldLabelWithRuBadge>
               <FormControl fullWidth size="small">
@@ -714,7 +726,7 @@ export default function FillCompanyFormFields({
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.YearsInBusiness" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.YearsInBusiness" plain={hideRuBadges} required>
                 {t('Years In Business')}
               </FieldLabelWithRuBadge>
               <FormControl fullWidth size="small">
@@ -733,7 +745,7 @@ export default function FillCompanyFormFields({
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.DescribeYourBusiness" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.DescribeYourBusiness" plain={hideRuBadges} required>
                 {t('Describe Your Business')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -754,7 +766,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.Locations">
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="CompanyInfo.Locations" plain={hideRuBadges}>
                 {t('Locations')}
               </FieldLabelWithRuBadge>
               <FormControl fullWidth size="small">
@@ -846,7 +858,7 @@ export default function FillCompanyFormFields({
               ['Email', 'Email', 'LegalRepresentativeInfo.Email'],
             ].map(([key, label, xml]) => (
               <Grid size={{ xs: 12, sm: 6 }} key={key}>
-                <FieldLabelWithRuBadge kind="ru" ruXmlPath={xml} required>
+                <FieldLabelWithRuBadge kind="ru" ruXmlPath={xml} plain={hideRuBadges} required>
                   {t(label)}
                 </FieldLabelWithRuBadge>
                 <TextField
@@ -863,7 +875,7 @@ export default function FillCompanyFormFields({
               </Grid>
             ))}
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.City" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.City" plain={hideRuBadges} required>
                 {t('City')}
               </FieldLabelWithRuBadge>
               <CityFreeSoloAutocomplete
@@ -877,7 +889,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.CountryOfResidenceId" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.CountryOfResidenceId" plain={hideRuBadges} required>
                 {t('Country of Residence')}
               </FieldLabelWithRuBadge>
               <SearchableSelect
@@ -897,7 +909,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.Address" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.Address" plain={hideRuBadges} required>
                 {t('Address')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -913,7 +925,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.PostCode" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.PostCode" plain={hideRuBadges} required>
                 {t('Post Code')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -929,7 +941,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.Birthday" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.Birthday" plain={hideRuBadges} required>
                 {t('Birthday')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -947,7 +959,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.NationalityId" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.NationalityId" plain={hideRuBadges} required>
                 {t('Nationality')}
               </FieldLabelWithRuBadge>
               <SearchableSelect
@@ -965,7 +977,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.Region → RegionId" required>
+              <FieldLabelWithRuBadge kind="ru" ruXmlPath="LegalRepresentativeInfo.Region → RegionId" plain={hideRuBadges} required>
                 {t('Region')}
               </FieldLabelWithRuBadge>
               <TextField
@@ -982,7 +994,7 @@ export default function FillCompanyFormFields({
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FieldLabelWithRuBadge kind="new" ruXmlPath="LegalRepresentativeInfo.Area → AreaId">
+              <FieldLabelWithRuBadge kind="new" ruXmlPath="LegalRepresentativeInfo.Area → AreaId" plain={hideRuBadges}>
                 {t('Area')}
               </FieldLabelWithRuBadge>
               <TextField

@@ -6,6 +6,7 @@ import React, { useState, useMemo } from 'react';
 import {
   T, priceOf, toIso, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   resolveInventoryCellState, formatInventoryRateLabel, hasInventoryData, OUT_OF_WINDOW_CELL_BG,
+  resolvePriceMode,
 } from './_shared';
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import PopoverReservations from './PopoverReservations';
@@ -34,7 +35,7 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
       if (inv.stopSell) stop++;
       else if (inv.reservations?.length > 0) { booked++; revenue += priceOf(inv); }
       else available++;
-      if (inv.useDynamicPrice && inv.calculatedPrice && inv.basePrice) {
+      if (resolvePriceMode(inv) === 'dynamic' && inv.calculatedPrice && inv.basePrice) {
         dynamicWin += Math.max(0, inv.calculatedPrice - inv.basePrice);
       }
     }
@@ -125,7 +126,7 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
       stopSell: hasInventoryData(inv) && !!inv.stopSell,
       booked: (inv?.reservations?.length ?? 0) > 0,
       reservations: inv?.reservations || [],
-      useDynamic: hasInventoryData(inv) && !!inv.useDynamicPrice,
+      useDynamic: hasInventoryData(inv) && resolvePriceMode(inv) === 'dynamic',
       hasManual: inv?.manualPrice != null,
       priceLabel: rate.main,
       showPriceCurrency: rate.showCurrency,

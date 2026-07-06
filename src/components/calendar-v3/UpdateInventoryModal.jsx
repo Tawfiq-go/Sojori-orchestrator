@@ -5,11 +5,26 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo, useEffect } from 'react';
 import { ModalPortal } from '../ModalPortal';
-import { T, toIso, parseIsoLocal, daysBetweenIsoInclusive } from './_shared';
+import { T, toIso, parseIsoLocal, daysBetweenIsoInclusive, resolvePriceMode } from './_shared';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { fr } from 'date-fns/locale';
+
+/** Payload PUT update-inventory — omet undefined/null pour éviter Joi 400. */
+export function sanitizeInventoryUpdatePayload(item) {
+  const keys = [
+    'type', 'roomTypeId', 'date_from', 'date_to', 'price', 'availableRoom', 'stopSell',
+    'min_stay_arrival', 'max_stay', 'closed_to_arrival', 'closed_to_departure',
+    'setUseDynamicPriceManual', 'priceMode', 'days', 'listingName', 'roomTypeName',
+  ];
+  const out = {};
+  for (const k of keys) {
+    if (item[k] === undefined || item[k] === null) continue;
+    out[k] = item[k];
+  }
+  return out;
+}
 
 export default function UpdateInventoryModal({
   open, onClose, selectedCells = [], currency = 'EUR', inventoryData = {}, listings = [], onSave,
@@ -40,12 +55,12 @@ export default function UpdateInventoryModal({
   const cellsAnalysis = useMemo(() => {
     if (selectedCells.length === 0 || !inventoryData) {
       return {
-        prices: [], availabilities: [], stopSells: [], dynamicPrices: [], minStays: [], maxStays: [],
+        prices: [], availabilities: [], stopSells: [], priceModes: [], minStays: [], maxStays: [],
         isSingleListing: false,
       };
     }
 
-    const prices = [], availabilities = [], stopSells = [], dynamicPrices = [], minStays = [], maxStays = [];
+    const prices = [], availabilities = [], stopSells = [], priceModes = [], minStays = [], maxStays = [];
 
     selectedCells.forEach(cell => {
       const inv = inventoryData[cell.listingId]?.[cell.roomTypeId]?.availability?.[cell.dateStr];
@@ -53,7 +68,7 @@ export default function UpdateInventoryModal({
         if (inv.manualPrice != null) prices.push(inv.manualPrice);
         if (inv.availableRoom != null) availabilities.push(inv.availableRoom);
         if (inv.stopSell != null) stopSells.push(inv.stopSell);
-        if (inv.useDynamicPrice != null) dynamicPrices.push(inv.useDynamicPrice);
+        if (inv.useDynamicPrice != null || inv.priceMode != null) priceModes.push(resolvePriceMode(inv));
         if (inv.minStay != null) minStays.push(inv.minStay);
         if (inv.maxStay != null) maxStays.push(inv.maxStay);
       }
@@ -87,13 +102,13 @@ export default function UpdateInventoryModal({
     }
 
     return {
-      prices, availabilities, stopSells, dynamicPrices, minStays, maxStays,
+      prices, availabilities, stopSells, priceModes, minStays, maxStays,
       isSingleListing,
       singleDispoCurrent,
       price: getCommonOrMinMax(prices),
       availability: availabilityStats,
       stopSell: stopSellCommon,
-      dynamicPrice: dynamicPrices.length > 0 && dynamicPrices.every(v => v === dynamicPrices[0]) ? dynamicPrices[0] : null,
+      priceMode: priceModes.length > 0 && priceModes.every(v => v === priceModes[0]) ? priceModes[0] : null,
       minStay: getCommonOrMinMax(minStays),
       maxStay: getCommonOrMinMax(maxStays),
     };
@@ -103,7 +118,7 @@ export default function UpdateInventoryModal({
   const [form, setForm] = useState({
     manualPrice: '', availability: '', stopSell: null,
     minStay: '', maxStay: '', closedArrival: false, closedDeparture: false,
-    useDynamicPrice: null,
+    priceMode: null,
   });
   // Dates toujours éditables (Date objects for MUI DatePicker)
   const [editableStartDate, setEditableStartDate] = useState(null);
@@ -138,7 +153,7 @@ export default function UpdateInventoryModal({
       setForm({
         manualPrice: '', availability: '', stopSell: null,
         minStay: '', maxStay: '', closedArrival: false, closedDeparture: false,
-        useDynamicPrice: null,
+        priceMode: null,
       });
       setEditableStartDate(null);
       setEditableEndDate(null);
@@ -167,7 +182,9 @@ export default function UpdateInventoryModal({
     if (form.maxStay !== '') out.push(`Max Stay: ${form.maxStay} nuit(s)`);
     if (form.closedArrival) out.push('Arrivée fermée ⛔');
     if (form.closedDeparture) out.push('Départ fermé ⛔');
-    if (form.useDynamicPrice !== null) out.push(`Dynamique: ${form.useDynamicPrice ? 'Activer ⚡' : 'Désactiver'}`);
+    if (form.priceMode !== null) {
+      out.push(`Mode prix: ${form.priceMode === 'dynamic' ? 'Dynamique ⚡' : 'Base'}`);
+    }
     return out;
   }, [form, currency, cellsAnalysis.isSingleListing]);
 
@@ -210,15 +227,21 @@ export default function UpdateInventoryModal({
       if (form.maxStay !== '')       payloads.push({ type: 'max_stay',            ...base, max_stay: +form.maxStay });
       if (form.closedArrival)        payloads.push({ type: 'closed_to_arrival',   ...base, closed_to_arrival: true });
       if (form.closedDeparture)      payloads.push({ type: 'closed_to_departure', ...base, closed_to_departure: true });
-      if (form.useDynamicPrice !== null) {
+      if (form.priceMode !== null) {
+        // setUseDynamicPriceManual = API prod actuelle ; setPriceMode = API priceMode unifié
         payloads.push({
           type: 'setUseDynamicPriceManual',
           ...base,
-          setUseDynamicPriceManual: form.useDynamicPrice,
+          setUseDynamicPriceManual: form.priceMode === 'dynamic',
+        });
+        payloads.push({
+          type: 'setPriceMode',
+          ...base,
+          priceMode: form.priceMode,
         });
       }
     });
-    return payloads;
+    return payloads.map(sanitizeInventoryUpdatePayload);
   };
 
   const handleConfirm = async () => {
@@ -231,6 +254,7 @@ export default function UpdateInventoryModal({
       const msg =
         body?.errorMsg ||
         body?.error ||
+        body?.message ||
         e?.message ||
         'Erreur lors de la sauvegarde';
       setError(
@@ -497,17 +521,17 @@ export default function UpdateInventoryModal({
                   cursor: 'pointer', fontSize: 11, fontWeight: 700, color: T.text2,
                   fontFamily: '"Geist Mono", monospace', letterSpacing: '0.06em', textTransform: 'uppercase',
                   padding: '4px 0',
-                }}>▶ Tarification dynamique</summary>
+                }}>▶ Mode prix</summary>
                 <div style={{ marginTop: 8 }}>
-                  <ToggleGroup value={form.useDynamicPrice} onChange={v => upd('useDynamicPrice', v)}
+                  <ToggleGroup value={form.priceMode} onChange={v => upd('priceMode', v)}
                     options={[
-                      { value: true, label: 'Activer ⚡' },
-                      { value: false, label: 'Désactiver' },
+                      { value: 'dynamic', label: 'Dynamique ⚡' },
+                      { value: 'base', label: 'Base' },
                       { value: null, label: 'Aucun changement' },
                     ]} />
                   <p style={{ fontSize: 11, color: T.text3, margin: '8px 0 0', lineHeight: 1.45 }}>
-                    Les tarifs journaliers sont calculés par le service Dynamic Pricing (pilot G7). Ici vous
-                    activez ou désactivez uniquement le mode dynamique sur la période.
+                    Un seul mode par jour : dynamique (prix dynamique Sojori), base, ou manuel (via le champ
+                    prix manuel ci-dessus). Les flags legacy sont synchronisés automatiquement.
                   </p>
                 </div>
               </details>

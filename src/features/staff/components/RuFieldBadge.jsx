@@ -106,14 +106,14 @@ export default function RuFieldBadge({ kind = 'ru', ruXmlPath }) {
   );
 }
 
-export function FieldLabelWithRuBadge({ children, kind, ruXmlPath, required = false }) {
+export function FieldLabelWithRuBadge({ children, kind, ruXmlPath, required = false, plain = false }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5, flexWrap: 'wrap' }}>
       <Typography variant="subtitle2" fontWeight={600}>
         {children}
         {required && <span style={{ color: '#ef4444', marginLeft: '2px' }}>*</span>}
       </Typography>
-      {kind ? <RuFieldBadge kind={kind} ruXmlPath={ruXmlPath} /> : null}
+      {!plain && kind ? <RuFieldBadge kind={kind} ruXmlPath={ruXmlPath} /> : null}
     </Box>
   );
 }
@@ -213,25 +213,25 @@ function AlertLikeBox({ children, sx }) {
   );
 }
 
-export function CompteFieldLabel({ children, kind, ruXmlPath, required = false }) {
+export function CompteFieldLabel({ children, kind, ruXmlPath, required = false, plain = false }) {
   return (
     <div className="owner-compte-field-label">
       <span className="owner-compte-field-label-text">
         {children}
         {required ? <span className="req">*</span> : null}
       </span>
-      {kind ? <RuFieldBadge kind={kind} ruXmlPath={ruXmlPath} /> : null}
+      {!plain && kind ? <RuFieldBadge kind={kind} ruXmlPath={ruXmlPath} /> : null}
     </div>
   );
 }
 
-export function MirrorFieldRow({ label, value, kind = 'ruMirror', ruXmlPath }) {
+export function MirrorFieldRow({ label, value, kind = 'ruMirror', ruXmlPath, plain = false }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', py: 0.25 }}>
       <Typography variant="body2" component="span">
         {label} :
       </Typography>
-      <RuFieldBadge kind={kind} ruXmlPath={ruXmlPath} />
+      {!plain ? <RuFieldBadge kind={kind} ruXmlPath={ruXmlPath} /> : null}
       <Typography variant="body2" component="strong" fontWeight={700}>
         {value || '—'}
       </Typography>

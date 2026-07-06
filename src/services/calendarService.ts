@@ -75,8 +75,11 @@ class CalendarService {
 
       return result.postUpdateDocs ?? [];
     } catch (error) {
-      console.error('Error updating calendar:', error);
-      throw error;
+      const axiosErr = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
+      const body = axiosErr.response?.data;
+      const msg = body?.error ?? body?.message ?? axiosErr.message ?? 'Échec mise à jour inventaire';
+      console.error('Error updating calendar:', msg);
+      throw new Error(msg);
     }
   }
 

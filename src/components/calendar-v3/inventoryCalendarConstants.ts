@@ -68,18 +68,28 @@ export function formatHorizonEndLabel(): string {
   });
 }
 
-/** Calcule la plage API pour couvrir la vue multi + le mois courant (vue simple). */
+/** Calcule la plage API — stable sur un mois (évite refetch à chaque jour). */
 export function computeInventoryFetchRange(pivot: moment.Moment): { from: string; to: string } {
   const { horizonEnd } = getCalendarWindowBounds();
   const maxEnd = moment(horizonEnd);
-  const multiFrom = pivot.clone().startOf('day');
-  let multiTo = pivot.clone().add(MULTI_VISIBLE_DAYS - 1, 'days').endOf('day');
-  if (multiTo.isAfter(maxEnd)) multiTo = maxEnd.clone().endOf('day');
-  const monthFrom = pivot.clone().startOf('month');
-  let monthTo = pivot.clone().endOf('month');
-  if (monthTo.isAfter(maxEnd)) monthTo = maxEnd.clone().endOf('month');
-  const from = moment.min(multiFrom, monthFrom).format('YYYY-MM-DD');
-  const to = moment.max(multiTo, monthTo).format('YYYY-MM-DD');
-  const cappedTo = moment.min(moment(to), maxEnd).format('YYYY-MM-DD');
-  return { from, to: cappedTo };
+
+  // Ancre mois : navigation jour/semaine dans le même mois = même plage API (cache client).
+  const monthStart = pivot.clone().startOf('month').startOf('day');
+  let rangeEnd = pivot.clone().endOf('month').add(MULTI_VISIBLE_DAYS - 1, 'days').endOf('day');
+  if (rangeEnd.isAfter(maxEnd)) rangeEnd = maxEnd.clone().endOf('day');
+
+  return {
+    from: monthStart.format('YYYY-MM-DD'),
+    to: rangeEnd.format('YYYY-MM-DD'),
+  };
+}
+
+/** Plage visible 31 jours (affichage multi) — pour filtrer le cache côté UI si besoin. */
+export function computeMultiViewVisibleRange(pivot: moment.Moment): { from: string; to: string } {
+  const { horizonEnd } = getCalendarWindowBounds();
+  const maxEnd = moment(horizonEnd);
+  const from = pivot.clone().startOf('day');
+  let to = pivot.clone().add(MULTI_VISIBLE_DAYS - 1, 'days').endOf('day');
+  if (to.isAfter(maxEnd)) to = maxEnd.clone().endOf('day');
+  return { from: from.format('YYYY-MM-DD'), to: to.format('YYYY-MM-DD') };
 }

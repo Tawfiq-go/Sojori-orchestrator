@@ -42,6 +42,8 @@ export interface InventoryDay {
   calculatedPrice?: number;
   manualPrice?: number | null;
   applyManual?: boolean;
+  priceMode?: PriceDisplayMode;
+  setUseDynamicPriceManual?: boolean;
   stopSell?: boolean;
   useDynamicPrice?: boolean;
   minStay?: number;
@@ -103,26 +105,49 @@ export interface ColumnDef {
   hasTooltip?: boolean;
 }
 
-/** Logique de prix unifiée (alignée legacy `priceOf(inv)`) */
+export type PriceDisplayMode = 'manual' | 'dynamic' | 'base';
+
+export const PRICE_MODE_LABEL: Record<PriceDisplayMode, string> = {
+  manual: 'Manuel',
+  dynamic: 'Dynamique',
+  base: 'Base',
+};
+
+/** Mode d'affichage — priceMode API ou flags legacy. */
+export function resolvePriceMode(inv?: InventoryDay): PriceDisplayMode {
+  if (!inv) return 'base';
+  const pm = inv.priceMode;
+  if (pm === 'manual' || pm === 'dynamic' || pm === 'base') return pm;
+  if (inv.useDynamicPrice || inv.setUseDynamicPriceManual) return 'dynamic';
+  if (inv.applyManual && inv.manualPrice != null && inv.manualPrice !== undefined) {
+    return 'manual';
+  }
+  return 'base';
+}
+
+/** Logique de prix unifiée (alignée backend `resolveInventoryDayDisplayPrice`). */
 export function priceOf(inv?: InventoryDay): number {
   if (!inv) return 0;
+  const mode = resolvePriceMode(inv);
+  const manual =
+    inv.manualPrice != null && inv.manualPrice !== undefined && Number(inv.manualPrice) > 0
+      ? Math.round(Number(inv.manualPrice))
+      : 0;
+  const calc =
+    inv.calculatedPrice != null && Number(inv.calculatedPrice) > 0
+      ? Math.round(Number(inv.calculatedPrice))
+      : 0;
+  const base =
+    inv.basePrice != null && Number(inv.basePrice) > 0
+      ? Math.round(Number(inv.basePrice))
+      : 0;
 
-  // Si prix manuel appliqué, le retourner en priorité
-  if (inv.applyManual && inv.manualPrice !== null && inv.manualPrice !== undefined) {
-    return inv.manualPrice;
-  }
-
-  // Si prix dynamique activé, retourner le prix calculé
-  if (inv.useDynamicPrice) {
-    return inv.calculatedPrice ?? inv.basePrice ?? 0;
-  }
-
-  // Sinon, retourner le prix manuel s'il existe, sinon le prix de base
-  if (inv.manualPrice !== null && inv.manualPrice !== undefined) {
-    return inv.manualPrice;
-  }
-
-  return inv.basePrice ?? 0;
+  if (mode === 'manual' && manual > 0) return manual;
+  if (mode === 'dynamic' && calc > 0) return calc;
+  if (mode === 'dynamic' && manual > 0) return manual;
+  if (manual > 0) return manual;
+  if (calc > 0) return calc;
+  return base;
 }
 
 /** Fond cellule historique (InventoryArchive) — aligné dashboard legacy */
@@ -142,6 +167,7 @@ export function hasInventoryData(inv?: InventoryDay | null): boolean {
     inv.basePrice != null ||
     inv.availableRoom != null ||
     inv.stopSell != null ||
+    inv.priceMode != null ||
     inv.useDynamicPrice != null ||
     inv.manualPrice != null ||
     inv.calculatedPrice != null ||
@@ -214,7 +240,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
   {
     id: 'minStay',
     label: 'Séjour minimum',
-    short: '+1',
+    short: 'Min stay',
     excelSelectable: true,
   },
   {
@@ -225,14 +251,20 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
   {
     id: 'manualPrice',
-    label: 'Prix manuel',
+    label: 'Prix manuel (valeur stockée)',
     short: 'Manuel',
     excelSelectable: true,
   },
   {
+    id: 'priceMode',
+    label: 'Mode prix (manuel / dynamique / base)',
+    short: 'Mode',
+    excelSelectable: true,
+  },
+  {
     id: 'dynamicPrice',
-    label: 'Prix Dynamique',
-    short: 'Dynamique',
+    label: 'Prix dynamique',
+    short: 'Prix dyn.',
     excelSelectable: true,
   },
   {
@@ -250,25 +282,47 @@ export const ALL_COLUMNS: ColumnDef[] = [
   {
     id: 'maxStay',
     label: 'Séjour maximum',
-    short: 'Max',
+    short: 'Max stay',
     excelSelectable: true,
   },
   {
     id: 'closedArrival',
     label: 'Arrivée fermée',
-    short: 'Arr.',
+    short: 'Arrivée',
     excelSelectable: true,
   },
   {
     id: 'closedDeparture',
     label: 'Départ fermé',
-    short: 'Dép.',
+    short: 'Départ',
     excelSelectable: true,
   },
 ];
 
-/** Colonnes prioritaires — affichées en tête (filtre + lignes collapse) */
-export const CALENDAR_COLUMN_PRIORITY = ['availableRoom', 'rate', 'minStay'] as const;
+/** Colonnes affichées sur la ligne principale (une seule ligne par défaut). */
+export const CALENDAR_PRIMARY_ROW_COLUMNS = ['availableRoom', 'rate'] as const;
+
+/** Colonnes prioritaires — ordre filtre + ligne principale */
+export const CALENDAR_COLUMN_PRIORITY = ['availableRoom', 'rate'] as const;
+
+const PRIMARY_ROW_SET = new Set<string>(CALENDAR_PRIMARY_ROW_COLUMNS);
+
+/** Colonnes effectives (défaut prix + dispo si filtre vide). */
+export function effectiveCalendarColumns(selectedColumns: string[]): string[] {
+  return selectedColumns.length > 0 ? selectedColumns : [...CALENDAR_PRIMARY_ROW_COLUMNS];
+}
+
+export function calendarPrimaryColumns(selectedColumns: string[]): string[] {
+  return sortCalendarColumns(
+    effectiveCalendarColumns(selectedColumns).filter((id) => PRIMARY_ROW_SET.has(id)),
+  );
+}
+
+export function calendarSelectableColumns(selectedColumns: string[]): string[] {
+  return sortCalendarColumns(effectiveCalendarColumns(selectedColumns)).filter(
+    (id) => ALL_COLUMNS.find((c) => c.id === id)?.excelSelectable,
+  );
+}
 
 export function sortCalendarColumns(ids: string[]): string[] {
   const pinned = CALENDAR_COLUMN_PRIORITY.filter((id) => ids.includes(id));
