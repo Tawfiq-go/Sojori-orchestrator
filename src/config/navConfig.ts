@@ -108,14 +108,20 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
-    group: 'Inbox',
+    group: 'Guest',
     roles: PM_ROLES,
     items: [
-      { id: 'comms/guests', label: 'WhatsApp Guest', iconType: 'chat', iconColor: '#6D9EEB' },
-      { id: 'comms/ota', label: 'Messages OTA', iconType: 'chat', iconColor: '#6D9EEB' },
+      { id: 'comms/guests', label: 'WhatsApp', iconType: 'chat', iconColor: '#25D366' },
+      { id: 'comms/ota', label: 'Messages OTA', iconType: 'chat', iconColor: '#FF5A5F' },
       { id: 'comms/leads', label: 'Demande', iconType: 'chat', iconColor: '#6D9EEB' },
-      { id: 'reviews', label: 'Avis', iconType: 'chat', iconColor: '#6D9EEB' },
-      { id: 'comms/staff', label: 'Staff WhatsApp', iconType: 'chat', iconColor: '#6D9EEB', badgeRed: true },
+      { id: 'comms/reviews', label: 'Avis', iconType: 'chat', iconColor: '#E6B022' },
+    ],
+  },
+  {
+    group: 'Staff',
+    roles: PM_ROLES,
+    items: [
+      { id: 'comms/staff', label: 'Staff WhatsApp', iconType: 'chat', iconColor: '#B45309', badgeRed: true },
     ],
   },
   {
@@ -378,6 +384,8 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Orchestration: false,
   Annonces: false,
   Inbox: false,
+  Guest: false,
+  Staff: false,
   Équipe: true,
   Finances: true,
   'Logs API': true,

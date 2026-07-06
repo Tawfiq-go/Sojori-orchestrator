@@ -193,6 +193,8 @@ export default function BienView(props: BienViewProps) {
   } = props;
 
   const [calendarUpdateOpen, setCalendarUpdateOpen] = useState(false);
+  // Onglets de la vue avancée : potentiel+calendrier · réglages · marché
+  const [advTab, setAdvTab] = useState<'apercu' | 'reglages' | 'marche'>('apercu');
   const modeLabel =
     activeModeLabel ??
     pricingModes.find((m) => m.id === activeModeId)?.label ??
@@ -303,94 +305,27 @@ export default function BienView(props: BienViewProps) {
             {listing.amenities.slice(0, 3).map((a, i) => <span key={i}>{a}</span>)}
           </Stack>
         </Box>
-        <Box
-          role="button"
-          tabIndex={0}
-          onClick={() => onToggleAi(!aiEnabled)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onToggleAi(!aiEnabled);
-            }
-          }}
-          sx={{
-          flex: '0 0 auto',
-          display: 'flex', alignItems: 'center', gap: 1.5, p: '8px 14px',
-          cursor: 'pointer',
-          background: aiEnabled
-            ? `linear-gradient(135deg, ${T.goldTint}, ${T.bg1})`
-            : T.bg2,
-          border: `1px solid ${aiEnabled ? T.gold : T.border}`,
-          borderRadius: 1.5,
-          animation: aiEnabled ? 'sj-pulseGold 2.4s infinite' : undefined,
+        {/* Pilotage ON/OFF + one-shot : barre Express en haut de page. Ici : périmètre sync. */}
+        <Box sx={{
+          flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 1, p: '6px 12px',
+          border: `1px solid ${aiEnabled ? T.gold : T.border}`, borderRadius: 1.5,
+          bgcolor: aiEnabled ? T.goldTint : T.bg2,
         }}>
-          <Box sx={{
-            width: 36, height: 20, bgcolor: aiEnabled ? T.gold : T.bg3,
-            borderRadius: '99px', position: 'relative', flexShrink: 0,
-            '&::after': {
-              content: '""', position: 'absolute', top: 2,
-              [aiEnabled ? 'right' : 'left']: 2,
-              width: 16, height: 16, bgcolor: '#fff', borderRadius: '50%',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.20)',
-            },
-          }} />
-          <Box>
-            <Typography sx={{
-              fontSize: 14, fontWeight: 800, lineHeight: 1.1,
-              color: aiEnabled ? T.goldDeep : T.text3,
-            }}>Sojori AI</Typography>
-            <Typography sx={{
-              fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace',
-              textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700,
-            }}>{aiEnabled ? 'Sync auto ON (cron + snapshot)' : 'Sync auto OFF — écran inchangé'}</Typography>
-            {aiEnabled ? (
-              <Stack direction="row" sx={{ gap: 0.75,  mt: 0.5, flexWrap: 'wrap' }}>
-                <SyncScopeChip label="Prix" active={applyPrice} />
-                {onEditSyncScope ? (
-                  <Typography
-                    component="span"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEditSyncScope();
-                    }}
-                    sx={{
-                      cursor: 'pointer',
-                      fontSize: 10,
-                      color: T.goldDeep,
-                      fontWeight: 700,
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    Modifier
-                  </Typography>
-                ) : null}
-              </Stack>
-            ) : null}
-          </Box>
+          <Typography sx={{ fontSize: 11.5, fontWeight: 800, color: aiEnabled ? T.goldDeep : T.text3 }}>
+            {aiEnabled ? 'Pilote actif' : 'Pilote inactif'}
+          </Typography>
+          <SyncScopeChip label="Prix" active={applyPrice} />
+          <SyncScopeChip label="Min stay" active={applyMinStay} />
+          {onEditSyncScope ? (
+            <Typography
+              component="span"
+              onClick={() => onEditSyncScope()}
+              sx={{ cursor: 'pointer', fontSize: 10.5, color: T.goldDeep, fontWeight: 700, textDecoration: 'underline' }}
+            >
+              Modifier
+            </Typography>
+          ) : null}
         </Box>
-        <Button
-          variant="outlined"
-          size="small"
-          disabled={!onRunCalendarUpdate || !provenance.hasRevenueEstimate || pilotApplyLoading}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!onRunCalendarUpdate) return;
-            setCalendarUpdateOpen(true);
-          }}
-          sx={{
-            flex: '0 0 auto',
-            textTransform: 'none',
-            fontWeight: 800,
-            fontSize: 12,
-            borderColor: T.gold,
-            color: T.goldDeep,
-            bgcolor: T.goldTint,
-            '&:hover': { borderColor: T.goldDeep, bgcolor: T.goldTint2 },
-            '&.Mui-disabled': { opacity: 0.55 },
-          }}
-        >
-          {pilotApplyLoading ? 'Mise à jour…' : 'Mettre à jour calendrier'}
-        </Button>
         <Box sx={{
           flex: '0 0 auto',
           fontSize: 10.5, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
@@ -415,7 +350,37 @@ export default function BienView(props: BienViewProps) {
         />
       </Box>
 
+      {/* ── Onglets vue avancée ── */}
+      <Box sx={{ ...DP_LAYOUT_SX, pb: 1.5 }}>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+          {([
+            ['apercu', '📊 Potentiel & calendrier'],
+            ['reglages', '⚙️ Réglages pricing'],
+            ['marche', '🌍 Marché & concurrents'],
+          ] as const).map(([key, label]) => (
+            <Box
+              key={key}
+              role="button"
+              tabIndex={0}
+              onClick={() => setAdvTab(key)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAdvTab(key); } }}
+              sx={{
+                px: 1.75, py: 0.75, borderRadius: '99px', cursor: 'pointer',
+                fontSize: 12.5, fontWeight: 800, userSelect: 'none',
+                border: `1.5px solid ${advTab === key ? T.gold : T.border}`,
+                bgcolor: advTab === key ? T.goldTint : T.bg1,
+                color: advTab === key ? T.goldDeep : T.text2,
+                '&:hover': { borderColor: T.gold },
+              }}
+            >
+              {label}
+            </Box>
+          ))}
+        </Stack>
+      </Box>
+
       {/* ── Section 2 ── */}
+      {advTab === 'apercu' ? (<>
       <Section
         num="02"
         title="Le potentiel de votre bien"
@@ -469,7 +434,10 @@ export default function BienView(props: BienViewProps) {
         ) : null}
       </Section>
 
+      </>) : null}
+
       {/* ── Section 3 — toujours visible (AI OFF = pas de sync auto seulement) ── */}
+      {advTab === 'reglages' ? (<>
       <Section
         num="03"
         title="Configurez votre pricing"
@@ -516,7 +484,10 @@ export default function BienView(props: BienViewProps) {
         />
       </Section>
 
+      </>) : null}
+
       {/* ── Section 4 — toujours visible si snapshot / calendrier (même AI OFF) ── */}
+      {advTab === 'apercu' ? (<>
       {(hasCalendarProd || provenance.hasAirroiSnapshot || calendarDays.length > 0) && (
         <Section
           num="04"
@@ -708,7 +679,10 @@ export default function BienView(props: BienViewProps) {
         </Section>
       )}
 
+      </>) : null}
+
       {/* ── Section 5 ── */}
+      {advTab === 'marche' ? (<>
       <Section
         num="05"
         title={`Étude marché · ${cityLabel}`}
@@ -778,6 +752,7 @@ export default function BienView(props: BienViewProps) {
       >
         <CompsTable rows={compRows} />
       </Section>
+      </>) : null}
 
       {/* ── Modale G7 ── */}
       <EventEditorModal

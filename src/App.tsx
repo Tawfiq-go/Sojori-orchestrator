@@ -352,7 +352,7 @@ function App() {
               <Route path="/communications/whatsapp" element={<LazyRoute><CommsPage /></LazyRoute>} />
               <Route path="/communications/whatsapp-guests" element={<LazyRoute><WhatsAppGuestsPage /></LazyRoute>} />
               <Route path="/communications/whatsapp-staff" element={<LazyRoute><WhatsAppStaffPage /></LazyRoute>} />
-              <Route path="/communications/messages-ota" element={<Navigate to="/communications?tab=ota" replace />} />
+              <Route path="/communications/messages-ota" element={<Navigate to="/communications?section=guest&tab=ota" replace />} />
               <Route path="/communications/staff" element={<LazyRoute><StaffWhatsAppPage /></LazyRoute>} />
               <Route path="/communications/ota" element={<LazyRoute><OTAMessagesPage /></LazyRoute>} />
 
