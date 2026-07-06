@@ -8,12 +8,27 @@ import { CLASSIFICATION_LABEL, CLASSIFICATION_TONE, formatBlockedDayRange } from
 
 export default function AuditBlockedDaysModal({
   open, onClose, listingName, roomTypeName, loading, error, roomTypes = [],
+  onRelease,
 }) {
+  const [releaseState, setReleaseState] = React.useState({}); // clé plage → 'busy' | 'done' | message d'erreur
   if (!open) return null;
 
   const allRanges = roomTypes.flatMap((rt) =>
-    (rt.ranges || []).map((range) => ({ ...range, roomTypeName: rt.roomTypeName }))
+    (rt.ranges || []).map((range) => ({ ...range, roomTypeName: rt.roomTypeName, roomTypeId: rt.roomTypeId }))
   );
+
+  const rangeKey = (r) => `${r.roomTypeId}:${r.from}:${r.to}`;
+  const handleRelease = async (range) => {
+    if (!onRelease) return;
+    const key = rangeKey(range);
+    setReleaseState((s) => ({ ...s, [key]: 'busy' }));
+    try {
+      await onRelease(range);
+      setReleaseState((s) => ({ ...s, [key]: 'done' }));
+    } catch (err) {
+      setReleaseState((s) => ({ ...s, [key]: err?.message || 'Échec de la libération' }));
+    }
+  };
 
   return (
     <ModalPortal>
@@ -85,6 +100,7 @@ export default function AuditBlockedDaysModal({
                     <th style={{ ...thStyle, textAlign: 'right' }}>Jours</th>
                     <th style={thStyle}>Cause probable</th>
                     {roomTypeName == null && <th style={thStyle}>Room type</th>}
+                    {onRelease ? <th style={thStyle}>Action</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -103,6 +119,33 @@ export default function AuditBlockedDaysModal({
                         {roomTypeName == null && (
                           <td style={{ ...tdStyle, color: T.text3 }}>{range.roomTypeName || '—'}</td>
                         )}
+                        {onRelease ? (
+                          <td style={tdStyle}>
+                            {(() => {
+                              const st = releaseState[rangeKey(range)];
+                              if (st === 'done') return <span style={{ color: T.success, fontWeight: 700 }}>Libéré ✓</span>;
+                              if (st === 'busy') return <span style={{ color: T.text3 }}>Libération…</span>;
+                              return (
+                                <>
+                                  <button
+                                    onClick={() => void handleRelease(range)}
+                                    title="Rouvrir ces jours à la vente (calendrier + canaux). Les jours couverts par une réservation active ne sont jamais listés ici."
+                                    style={{
+                                      background: 'none', cursor: 'pointer', fontWeight: 700,
+                                      border: `1px solid ${T.gold}`, color: T.goldDeep,
+                                      borderRadius: 8, padding: '3px 10px', fontSize: 12,
+                                    }}
+                                  >
+                                    Libérer
+                                  </button>
+                                  {st && st !== 'done' && st !== 'busy' ? (
+                                    <div style={{ color: T.error, fontSize: 11, marginTop: 2 }}>{st}</div>
+                                  ) : null}
+                                </>
+                              );
+                            })()}
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })}
