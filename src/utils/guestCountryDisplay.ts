@@ -85,6 +85,44 @@ const NAME_TO_ISO: Record<string, string> = {
   bulgarie: 'BG',
 };
 
+const LANGUAGE_NAME_TO_ISO: Record<string, string> = {
+  french: 'FR',
+  spanish: 'ES',
+  german: 'DE',
+  italian: 'IT',
+  portuguese: 'PT',
+  dutch: 'NL',
+  arabic: 'MA',
+  english: 'GB',
+};
+
+const LANG_CODE_TO_ISO: Record<string, string> = {
+  fr: 'FR',
+  es: 'ES',
+  de: 'DE',
+  it: 'IT',
+  pt: 'PT',
+  nl: 'NL',
+  ar: 'MA',
+  en: 'GB',
+};
+
+const PHONE_PREFIX_TO_ISO: Record<string, string> = {
+  '33': 'FR',
+  '212': 'MA',
+  '213': 'DZ',
+  '216': 'TN',
+  '34': 'ES',
+  '39': 'IT',
+  '49': 'DE',
+  '44': 'GB',
+  '32': 'BE',
+  '41': 'CH',
+  '351': 'PT',
+  '31': 'NL',
+  '1': 'US',
+};
+
 const ISO_TO_LABEL: Record<string, string> = {
   MA: 'Maroc',
   FR: 'France',
@@ -101,6 +139,8 @@ const ISO_TO_LABEL: Record<string, string> = {
   SN: 'Sénégal',
   HU: 'Hongrie',
   BG: 'Bulgarie',
+  PT: 'Portugal',
+  NL: 'Pays-Bas',
 };
 
 function resolveIso(raw: string, codeField: string): string {
@@ -115,6 +155,29 @@ function resolveIso(raw: string, codeField: string): string {
   return '';
 }
 
+function isoFromLanguage(lang: string): string {
+  const raw = String(lang || '').trim();
+  if (!raw) return '';
+  if (raw.includes('-')) {
+    const region = raw.split('-')[1]?.toUpperCase();
+    if (region && region.length === 2) return region;
+  }
+  const lower = raw.toLowerCase();
+  if (lower.length === 2 && LANG_CODE_TO_ISO[lower]) return LANG_CODE_TO_ISO[lower];
+  if (LANGUAGE_NAME_TO_ISO[lower]) return LANGUAGE_NAME_TO_ISO[lower];
+  return '';
+}
+
+function isoFromPhone(phone: string): string {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  for (const len of [3, 2, 1]) {
+    const prefix = digits.slice(0, len);
+    if (PHONE_PREFIX_TO_ISO[prefix]) return PHONE_PREFIX_TO_ISO[prefix];
+  }
+  return '';
+}
+
 function labelForIso(iso: string, fallback: string): string {
   const cleanFallback = stripFlagEmojisFromText(fallback);
   if (iso && ISO_TO_LABEL[iso]) return ISO_TO_LABEL[iso];
@@ -123,13 +186,34 @@ function labelForIso(iso: string, fallback: string): string {
   return cleanFallback || '—';
 }
 
-/** Colonne Pays : un seul drapeau + nom (jamais de globe en plus). */
+export type GuestCountryDisplayOptions = {
+  guestLanguage?: string | null;
+  phone?: string | null;
+  nationality?: string | null;
+};
+
+/** Colonne Pays : drapeau + nom ; infère depuis langue / téléphone si pays absent (Airbnb). */
 export function formatGuestCountryDisplay(
   guestCountry?: string | null,
   guestCountryCode?: string | null,
+  options?: GuestCountryDisplayOptions,
 ): { flag: string; label: string } {
-  const raw = String(guestCountry || '').trim();
-  const codeField = String(guestCountryCode || '').trim();
+  let raw = String(guestCountry || '').trim();
+  let codeField = String(guestCountryCode || '').trim();
+
+  if (!raw && options?.nationality) {
+    raw = String(options.nationality).trim();
+  }
+
+  if (!raw && !codeField) {
+    const langIso = isoFromLanguage(String(options?.guestLanguage || ''));
+    const phoneIso = isoFromPhone(String(options?.phone || ''));
+    const inferred = langIso || phoneIso;
+    if (inferred) {
+      codeField = inferred;
+      raw = ISO_TO_LABEL[inferred] || '';
+    }
+  }
 
   if (!raw && !codeField) {
     return { flag: '', label: '—' };
