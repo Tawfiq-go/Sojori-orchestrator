@@ -327,6 +327,23 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
         loading={auditResult.loading}
         error={auditResult.error}
         roomTypes={auditResult.roomTypes}
+        onRelease={async (range) => {
+          const roomTypeId = range.roomTypeId || listing.roomTypeId || listing.roomTypes?.[0]?._id;
+          if (!roomTypeId) throw new Error('Room type introuvable');
+          const base = {
+            roomTypeId: String(roomTypeId),
+            date_from: range.from,
+            date_to: range.to,
+            listingName: listing.name || '',
+            roomTypeName: range.roomTypeName || '',
+          };
+          // Rouvre à la vente : dispo 1 + stop-sell levé → publié vers les canaux
+          await calendarService.updateCalendar([
+            { ...base, type: 'availability', availableRoom: 1 },
+            { ...base, type: 'stopSell', stopSell: false },
+          ]);
+          setAuditResult((s) => ({ ...s, loading: true }));
+        }}
       />
     </div>
   );
