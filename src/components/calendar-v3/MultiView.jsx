@@ -6,8 +6,8 @@ import React, { useState, useRef, useEffect, useMemo, useCallback, memo } from '
 import {
   T, ALL_COLUMNS, priceOf, cellKey, genDays, isArchiveDay, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   hasInventoryData, resolveInventoryCellState, formatInventoryRateLabel, OUT_OF_WINDOW_CELL_BG,
-  sortCalendarColumns, resolvePriceMode, PRICE_MODE_LABEL,
-  calendarPrimaryColumns, calendarSelectableColumns,
+  resolvePriceMode, PRICE_MODE_LABEL,
+  calendarPrimaryColumns, calendarDetailColumns,
 } from './_shared';
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
@@ -400,8 +400,8 @@ function ListingRow({
   listing, inventories, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onReservationClick,
 }) {
   const primaryCols = calendarPrimaryColumns(selectedColumns);
-  const selectableColumns = calendarSelectableColumns(selectedColumns);
-  const showChevron = selectableColumns.length > 0;
+  const detailColumns = calendarDetailColumns(selectedColumns);
+  const showChevron = detailColumns.length > 0;
   const showDispo = primaryCols.includes('availableRoom');
   const showRate = primaryCols.includes('rate');
   const getInv = (dateStr) => inventories[dateStr];
@@ -476,7 +476,7 @@ function ListingRow({
       </div>
 
       {/* Lignes sélection Excel — collapse (comme avant : pas la ligne résumé) */}
-      {expanded && selectableColumns.map(colId => {
+      {expanded && detailColumns.map(colId => {
         const col = ALL_COLUMNS.find(c => c.id === colId);
         if (!col) return null;
         return (

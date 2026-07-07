@@ -324,6 +324,14 @@ export function calendarSelectableColumns(selectedColumns: string[]): string[] {
   );
 }
 
+/** Colonnes du collapse (hors ligne principale) — inclut réservations. */
+export function calendarDetailColumns(selectedColumns: string[]): string[] {
+  const primary = new Set(calendarPrimaryColumns(selectedColumns));
+  return sortCalendarColumns(effectiveCalendarColumns(selectedColumns)).filter(
+    (id) => !primary.has(id),
+  );
+}
+
 export function sortCalendarColumns(ids: string[]): string[] {
   const pinned = CALENDAR_COLUMN_PRIORITY.filter((id) => ids.includes(id));
   const rest = ids.filter((id) => !(CALENDAR_COLUMN_PRIORITY as readonly string[]).includes(id));
