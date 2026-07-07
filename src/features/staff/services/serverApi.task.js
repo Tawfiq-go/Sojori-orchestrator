@@ -717,6 +717,26 @@ export function getOwnerRuStatusDatesBatch(ownerIds) {
     });
 }
 
+export function getOwnersRuWebhookStatusBatch(ownerIds) {
+  return axios
+    .post(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/owner-ru-webhook-status-batch`, { ownerIds })
+    .then((r) => r.data)
+    .catch((e) => {
+      const msg = e?.response?.data?.message || e?.message || 'Request failed';
+      throw new Error(msg);
+    });
+}
+
+export function provisionOwnerRuWebhooks(ownerId) {
+  return axios
+    .post(`${MICROSERVICE_BASE_URL.SRV_USER}/auth/provision-owner-ru-webhooks/${encodeURIComponent(String(ownerId))}`)
+    .then((r) => r.data)
+    .catch((e) => {
+      const msg = e?.response?.data?.message || e?.message || 'Request failed';
+      throw new Error(msg);
+    });
+}
+
 export function deleteOwner(id) {
   return axios.put(`${MICROSERVICE_BASE_URL.SRV_USER}/user/update-owner-status/${id}`).then(response => {
     if (!response.data) {
