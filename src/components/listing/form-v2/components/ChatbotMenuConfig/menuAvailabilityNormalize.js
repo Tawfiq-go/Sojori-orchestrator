@@ -52,12 +52,22 @@ export function normalizeMenuOptionAvailability(availability) {
     return { type };
   }
 
-  const from = normalizeBoundary(base.from, { unit: 'days', value: 7, moment: 'before', event: 'checkin' });
-  const to = normalizeBoundary(base.to, { unit: 'days', value: 1, moment: 'after', event: 'checkout' });
-  const out = { type, from, to };
+  const out = { type };
+
+  if (Object.prototype.hasOwnProperty.call(availability, 'from') && availability.from) {
+    out.from = normalizeBoundary(base.from, { unit: 'days', value: 7, moment: 'before', event: 'checkin' });
+  }
+
+  if (Object.prototype.hasOwnProperty.call(availability, 'to') && availability.to) {
+    out.to = normalizeBoundary(base.to, { unit: 'days', value: 1, moment: 'after', event: 'checkout' });
+  } else if (type === 'time_window' || type === 'conditional_and_time') {
+    out.to = normalizeBoundary(null, { unit: 'days', value: 1, moment: 'after', event: 'checkout' });
+  }
 
   if (type === 'conditional_and_time') {
-    out.requires = base.requires || 'E_completed,D1_completed';
+    out.requires = Object.prototype.hasOwnProperty.call(availability, 'requires')
+      ? (availability.requires || '')
+      : (base.requires || 'E_completed,D1_completed');
   }
 
   return out;
