@@ -765,7 +765,13 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
       }}>
       {content}
       {showRateTooltip && showTip && hasInventoryData(inv) && (
-        <TooltipBreakdown inv={inv} dateStr={day.iso} currency={currency} placement="right" />
+        <TooltipBreakdown
+          open={showTip}
+          anchorRef={ref}
+          inv={inv}
+          dateStr={day.iso}
+          currency={currency}
+        />
       )}
     </div>
   );
