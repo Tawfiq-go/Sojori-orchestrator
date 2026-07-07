@@ -489,7 +489,7 @@ function ListingRow({
             animation: 'fadeIn 0.25s both',
           }}>
             <div style={{
-              padding: '8px 16px 8px 38px', display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 16px 5px 38px', display: 'flex', alignItems: 'center', gap: 6,
               fontSize: 11, fontWeight: 600, color: T.text2,
               fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em',
               borderRight: `1px solid ${T.border}`,
@@ -576,9 +576,8 @@ function ListingRow({
   );
 }
 
-/* ─── Ligne principale : prix + dispo — lecture seule (scroll / survol sans sélection) ─── */
+/* ─── Ligne principale : résumé tarif + dispo — lecture seule, sans hover ─── */
 function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
-  const [showTip, setShowTip] = useState(false);
   const currency = listing.currencyCode || 'EUR';
   const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
   const rate = formatInventoryRateLabel(state, inv);
@@ -606,60 +605,50 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
 
   return (
     <div
+      title={rate.hint}
       style={{
         borderRight: `1px solid ${T.border}`,
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'stretch', justifyContent: 'center',
-        padding: '4px 2px', minHeight: 54, position: 'relative',
+        display: 'flex', flexDirection: 'row',
+        alignItems: 'center', justifyContent: 'center',
+        gap: showRate && showDispo ? 6 : 0,
+        padding: '3px 4px', minHeight: 36, position: 'relative',
         fontFamily: '"Geist Mono", monospace',
         background,
-        transition: 'all 0.15s',
         cursor: 'default',
         userSelect: 'none',
       }}
-      onMouseLeave={() => setShowTip(false)}
     >
+      {isDynamic && state === 'data' && showRate && (
+        <span style={{ position: 'absolute', top: 2, right: 3, fontSize: 8, color: T.ai, lineHeight: 1 }}>⚡</span>
+      )}
       {showRate && (
-        <div
-          onMouseEnter={() => setShowTip(true)}
+        <span
           style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            padding: '2px 0',
+            fontSize: state === 'data' ? 12 : 11,
+            fontWeight: 700,
+            color: archived ? ARCHIVE_CELL_TEXT : noData ? T.text4 : isDynamic ? T.ai : modeColor,
+            letterSpacing: '-0.01em',
+            whiteSpace: 'nowrap',
           }}
         >
-          {isDynamic && state === 'data' && (
-            <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 9, color: T.ai }}>⚡</span>
-          )}
-          <span
-            title={rate.hint}
-            style={{
-              fontSize: state === 'data' ? 13 : 12,
-              fontWeight: 700,
-              color: archived ? ARCHIVE_CELL_TEXT : noData ? T.text4 : isDynamic ? T.ai : modeColor,
-              letterSpacing: '-0.01em',
-            }}
-          >
-            {rate.main}
-          </span>
+          {rate.main}
           {rate.showCurrency && (
-            <span style={{ fontSize: 9, color: T.text3, fontWeight: 600, letterSpacing: '0.04em' }}>{currency}</span>
+            <span style={{ fontSize: 8, color: T.text3, fontWeight: 600, marginLeft: 2 }}>{currency}</span>
           )}
-        </div>
+        </span>
+      )}
+      {showRate && showDispo && (
+        <span style={{ color: T.text4, fontSize: 9, fontWeight: 600 }}>·</span>
       )}
       {showDispo && (
-        <div
+        <span
           style={{
-            fontSize: 10, fontWeight: 700, textAlign: 'center', color: inv?.stopSell ? T.error : T.text2,
-            borderTop: showRate ? `1px dashed ${T.border}` : 'none',
-            marginTop: showRate ? 2 : 0,
-            padding: '1px 0',
+            fontSize: 10, fontWeight: 700, color: inv?.stopSell ? T.error : T.text2,
+            whiteSpace: 'nowrap',
           }}
         >
-          {showRate ? `${dispoVal} dispo` : dispoVal}
-        </div>
-      )}
-      {showTip && showRate && hasInventoryData(inv) && (
-        <TooltipBreakdown inv={inv} dateStr={day.iso} currency={currency} />
+          {dispoVal}
+        </span>
       )}
     </div>
   );
@@ -712,6 +701,7 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
       ? (
         <span style={{ color: modeColor }} title={`Mode: ${PRICE_MODE_LABEL[mode]}`}>
           {rate.main}
+          <span style={{ fontSize: 9, color: T.text3, marginLeft: 2 }}>{currency}</span>
         </span>
       )
       : <span style={{ color: T.text4 }}>{rate.main}</span>;
@@ -752,25 +742,30 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
     );
   }
 
+  const showRateTooltip = col.id === 'rate';
+
   return (
     <div ref={ref}
       onMouseDown={onMouseDown}
-      onMouseEnter={() => { setShowTip(true); onMouseEnter?.(); }}
+      onMouseEnter={() => {
+        if (showRateTooltip) setShowTip(true);
+        onMouseEnter?.();
+      }}
       onMouseLeave={() => setShowTip(false)}
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '6px 4px', minHeight: 38, position: 'relative',
+        padding: '4px 4px', minHeight: 32, position: 'relative',
         fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 600,
-        cursor: archived ? 'not-allowed' : draggable ? 'cell' : 'default',
+        cursor: archived ? 'not-allowed' : draggable ? 'cell' : (showRateTooltip ? 'help' : 'default'),
         background,
         boxShadow: selected ? `inset 0 0 0 2px ${T.primary}` : 'none',
         color: selected ? T.primaryDeep : T.text,
         transition: 'background 0.1s',
       }}>
       {content}
-      {col.hasTooltip && showTip && hasInventoryData(inv) && (
-        <TooltipBreakdown inv={inv} dateStr={day.iso} currency={currency} />
+      {showRateTooltip && showTip && hasInventoryData(inv) && (
+        <TooltipBreakdown inv={inv} dateStr={day.iso} currency={currency} placement="right" />
       )}
     </div>
   );

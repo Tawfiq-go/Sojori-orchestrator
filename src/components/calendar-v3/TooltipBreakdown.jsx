@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════
-// TooltipBreakdown.jsx — cascade Sojori AI + prix actif (dynamique vs manuel)
+// TooltipBreakdown.jsx — cascade Sojori AI + prix actif (compact)
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { T, priceOf, isArchiveDay, hasInventoryData, resolvePriceMode, PRICE_MODE_LABEL } from './_shared';
@@ -17,33 +17,35 @@ function PilotFactorsBlock({ history, currency }) {
   if (history?.source !== 'pilot-v2' && factors.length === 0) return null;
 
   return (
-    <div style={{ marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${T.border}` }}>
+    <div style={{ marginBottom: 6, paddingBottom: 6, borderBottom: `1px solid ${T.border}` }}>
       <div style={{
-        fontSize: 10, fontWeight: 800, color: T.ai, marginBottom: 6,
+        fontSize: 9, fontWeight: 800, color: T.ai, marginBottom: 4,
         fontFamily: '"Geist Mono", monospace', textTransform: 'uppercase',
       }}>
         Sojori AI · {history.mixEngineVersion ?? 'v2.4'}
       </div>
-      {factors.map((f, i) => {
-        const isBase = f.key === 'base';
-        const label = isBase ? 'Prix marché' : normalizeFactorLabel(f.label);
-        const after = f.after ?? (isBase ? history?.base : null);
-        const valueText = isBase
-          ? `${Math.round(after ?? f.valueMad ?? 0)} ${currency}`
-          : `${(f.valueMad ?? 0) >= 0 ? '+' : ''}${Math.round(f.valueMad ?? 0)} ${currency}`;
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '2px 10px' }}>
+        {factors.map((f, i) => {
+          const isBase = f.key === 'base';
+          const label = isBase ? 'Prix marché' : normalizeFactorLabel(f.label);
+          const after = f.after ?? (isBase ? history?.base : null);
+          const valueText = isBase
+            ? `${Math.round(after ?? f.valueMad ?? 0)} ${currency}`
+            : `${(f.valueMad ?? 0) >= 0 ? '+' : ''}${Math.round(f.valueMad ?? 0)} ${currency}`;
 
-        return (
-          <div key={`${f.key ?? i}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', gap: 8 }}>
-            <span style={{ fontSize: 11, color: T.text2, fontWeight: 600 }}>{label}</span>
-            <span style={{
-              fontSize: 11, fontWeight: 700, fontFamily: '"Geist Mono", monospace',
-              color: isBase ? T.text : (f.valueMad ?? 0) >= 0 ? T.success : T.error,
-            }}>
-              {valueText}
-            </span>
-          </div>
-        );
-      })}
+          return (
+            <React.Fragment key={`${f.key ?? i}`}>
+              <span style={{ fontSize: 10, color: T.text2, fontWeight: 600 }}>{label}</span>
+              <span style={{
+                fontSize: 10, fontWeight: 700, fontFamily: '"Geist Mono", monospace', textAlign: 'right',
+                color: isBase ? T.text : (f.valueMad ?? 0) >= 0 ? T.success : T.error,
+              }}>
+                {valueText}
+              </span>
+            </React.Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -64,116 +66,98 @@ export default function TooltipBreakdown({ inv, dateStr, currency = 'EUR', place
   const dynamicActive = mode === 'dynamic';
   const total = priceOf(inv);
 
+  const priceRows = [];
+  if (calc != null) {
+    priceRows.push({ key: 'dyn', label: 'Dynamique', value: `${calc.toFixed(0)} ${currency}`, active: dynamicActive, accent: T.ai });
+  }
+  if (man != null) {
+    priceRows.push({ key: 'man', label: 'Manuel', value: `${man.toFixed(0)} ${currency}`, active: manualActive, accent: T.warning });
+  }
+  if (!hasPilot && baseInv > 0) {
+    priceRows.push({
+      key: 'base', label: 'Base', value: `${baseInv.toFixed(0)} ${currency}`,
+      active: !dynamicActive && !manualActive, accent: T.text2,
+    });
+  }
+
   return (
     <div role="tooltip" style={{
       position: 'absolute', zIndex: 100,
-      ...(placement === 'left' ? { right: 'calc(100% + 12px)', bottom: 0 } : { left: 'calc(100% + 12px)', bottom: 0 }),
-      minWidth: 240, maxWidth: 300,
-      background: 'rgba(255,255,255,0.95)',
-      backdropFilter: 'blur(20px) saturate(180%)',
-      WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-      border: `1px solid ${T.borderStrong}`, borderRadius: 14,
-      padding: '14px 16px',
-      boxShadow: '0 12px 40px rgba(20,17,10,0.15), 0 0 0 1px rgba(184,133,26,0.10)',
-      animation: 'fadeIn 0.2s both',
+      ...(placement === 'left'
+        ? { right: 'calc(100% + 8px)', top: '50%', transform: 'translateY(-50%)' }
+        : { left: 'calc(100% + 8px)', top: '50%', transform: 'translateY(-50%)' }),
+      minWidth: 220, maxWidth: 280,
+      background: 'rgba(255,255,255,0.97)',
+      backdropFilter: 'blur(16px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+      border: `1px solid ${T.borderStrong}`, borderRadius: 10,
+      padding: '10px 12px',
+      boxShadow: '0 8px 28px rgba(20,17,10,0.14), 0 0 0 1px rgba(184,133,26,0.08)',
+      animation: 'fadeIn 0.15s both',
       pointerEvents: 'none',
     }}>
       <div style={{
-        fontSize: 10.5, fontWeight: 700, color: T.text3,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8,
+        fontSize: 10, fontWeight: 700, color: T.text3,
         fontFamily: '"Geist Mono", monospace',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        paddingBottom: 8, borderBottom: `1px solid ${T.border}`, marginBottom: 8,
+        letterSpacing: '0.04em', textTransform: 'uppercase',
+        paddingBottom: 6, borderBottom: `1px solid ${T.border}`, marginBottom: 6,
       }}>
-        {dateStr}{inv.availableRoom != null ? ` · ${inv.availableRoom} dispo` : ''}
-        {isArchiveDay(inv) ? ' · historique (lecture seule)' : ''}
+        <span>{dateStr}</span>
+        <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}>
+          {inv.availableRoom != null ? `${inv.availableRoom} dispo` : ''}
+          {isArchiveDay(inv) ? ' · hist.' : ''}
+        </span>
       </div>
 
       <PilotFactorsBlock history={history} currency={currency} />
 
-      <div style={{ fontSize: 10, fontWeight: 700, color: T.text3, marginBottom: 4, textTransform: 'uppercase' }}>
-        Prix affiché calendrier
-      </div>
-
-      {calc != null && (
-        <PriceModeRow
-          label="Prix dynamique"
-          value={`${calc.toFixed(0)} ${currency}`}
-          active={dynamicActive}
-          accent={T.ai}
-        />
-      )}
-      {man != null && (
-        <PriceModeRow
-          label="✏ Manuel"
-          value={`${man.toFixed(0)} ${currency}`}
-          active={manualActive}
-          accent={T.warning}
-        />
-      )}
-      {!hasPilot && baseInv > 0 && (
-        <PriceModeRow
-          label="Base inventaire"
-          value={`${baseInv.toFixed(0)} ${currency}`}
-          active={!dynamicActive && !manualActive}
-          accent={T.text2}
-        />
+      {priceRows.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '3px 10px', marginBottom: 6 }}>
+          {priceRows.map((row) => (
+            <React.Fragment key={row.key}>
+              <span style={{
+                fontSize: 11, fontWeight: row.active ? 700 : 500,
+                color: row.active ? row.accent : T.text4,
+              }}>
+                {row.label}
+                {row.active ? (
+                  <span style={{ marginLeft: 4, fontSize: 8, fontWeight: 800, color: row.accent }}>●</span>
+                ) : null}
+              </span>
+              <span style={{
+                fontSize: 11, fontWeight: row.active ? 700 : 500,
+                color: row.active ? row.accent : T.text4,
+                fontFamily: '"Geist Mono", monospace', textAlign: 'right',
+              }}>
+                {row.value}
+              </span>
+            </React.Fragment>
+          ))}
+        </div>
       )}
 
       {mode !== 'base' && inv.applyManual && inv.useDynamicPrice && (
-        <div style={{ fontSize: 10.5, color: T.warning, marginTop: 8, lineHeight: 1.45, fontWeight: 600 }}>
-          Flags legacy incohérents — le mode affiché est « {PRICE_MODE_LABEL[mode]} » (priceMode).
+        <div style={{ fontSize: 9.5, color: T.warning, marginBottom: 4, lineHeight: 1.35, fontWeight: 600 }}>
+          Flags legacy — mode « {PRICE_MODE_LABEL[mode]} »
         </div>
       )}
 
       <div style={{
-        paddingTop: 8, marginTop: 8, borderTop: `1px solid ${T.border}`,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+        paddingTop: 6, borderTop: `1px solid ${T.border}`,
       }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
-          Prix final · {PRICE_MODE_LABEL[mode]}
+        <span style={{ fontSize: 11, fontWeight: 700, color: T.text }}>
+          Final · {PRICE_MODE_LABEL[mode]}
         </span>
         <span style={{
-          fontSize: 15, fontWeight: 800,
+          fontSize: 14, fontWeight: 800,
           color: manualActive ? T.warning : dynamicActive ? T.ai : T.primary,
           fontFamily: '"Geist Mono", monospace',
         }}>
           {total.toFixed(0)} {currency}
         </span>
       </div>
-    </div>
-  );
-}
-
-function PriceModeRow({ label, value, active, accent }) {
-  return (
-    <div style={{
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      padding: '5px 0', gap: 8,
-      opacity: active ? 1 : 0.45,
-    }}>
-      <span style={{
-        fontSize: 12,
-        fontWeight: active ? 700 : 500,
-        color: active ? accent : T.text4,
-      }}>
-        {label}
-        {active ? (
-          <span style={{
-            marginLeft: 6, fontSize: 9, fontWeight: 800, color: accent,
-            fontFamily: '"Geist Mono", monospace',
-          }}>
-            ACTIF
-          </span>
-        ) : null}
-      </span>
-      <span style={{
-        fontSize: 12,
-        fontWeight: active ? 700 : 500,
-        color: active ? accent : T.text4,
-        fontFamily: '"Geist Mono", monospace',
-      }}>
-        {value}
-      </span>
     </div>
   );
 }
