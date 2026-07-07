@@ -41,6 +41,21 @@ function formatRuStatusDate(iso) {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+/** Ligne « Compte RU » : code owner RU + date si dispo. */
+function formatRuAccountStatus(row, ownerCreatedAt) {
+  const id = String(row?.ruOwnerId ?? '').trim();
+  if (!id) return 'Non créé';
+  const date = formatRuStatusDate(ownerCreatedAt);
+  return date ? `Créé · ${id} · ${date}` : `Créé · ${id}`;
+}
+
+/** Ligne « Entreprise RU » : date de dernier push OK si dispo. */
+function formatRuCompanyStatus(companyLastSyncedAt) {
+  if (!companyLastSyncedAt) return 'Non créée';
+  const date = formatRuStatusDate(companyLastSyncedAt);
+  return date ? `Créée · ${date}` : 'Créée';
+}
+
 function ownerName(row) {
   const n = `${row.firstName || ''} ${row.lastName || ''}`.trim();
   return n || row.email || '—';
@@ -241,15 +256,13 @@ export function PropertyManagerHubView({
           const hasRuOwnerId = !!String(row.ruOwnerId || '').trim();
           const ruDates = ruStatusDatesByOwner[String(row._id)] || {};
           const hasCompanySynced = !!ruDates.companyLastSyncedAt;
-          const ownerDate = formatRuStatusDate(ruDates.ownerCreatedAt);
-          const companyDate = formatRuStatusDate(ruDates.companyLastSyncedAt);
           return (
             <Stack spacing={0.25}>
               <Typography sx={{ fontSize: 11, color: hasRuOwnerId ? '#15803d' : '#c2410c' }}>
-                Compte : {hasRuOwnerId ? `Créé${ownerDate ? ` (${ownerDate})` : ''}` : 'Non créé'}
+                Compte : {formatRuAccountStatus(row, ruDates.ownerCreatedAt)}
               </Typography>
               <Typography sx={{ fontSize: 11, color: hasCompanySynced ? '#15803d' : '#c2410c' }}>
-                Entreprise : {hasCompanySynced ? `Créée${companyDate ? ` (${companyDate})` : ''}` : 'Non créée'}
+                Entreprise : {formatRuCompanyStatus(ruDates.companyLastSyncedAt)}
               </Typography>
             </Stack>
           );
@@ -453,15 +466,11 @@ export function PropertyManagerHubView({
                     ? [
                         {
                           label: 'Compte RU',
-                          value: hasRuOwnerId
-                            ? `Créé${formatRuStatusDate(ruDates.ownerCreatedAt) ? ` · ${formatRuStatusDate(ruDates.ownerCreatedAt)}` : ` (ID ${row.ruOwnerId})`}`
-                            : 'Non créé',
+                          value: formatRuAccountStatus(row, ruDates.ownerCreatedAt),
                         },
                         {
                           label: 'Entreprise RU',
-                          value: hasCompanySynced
-                            ? `Créée${formatRuStatusDate(ruDates.companyLastSyncedAt) ? ` · ${formatRuStatusDate(ruDates.companyLastSyncedAt)}` : ''}`
-                            : 'Non créée',
+                          value: formatRuCompanyStatus(ruDates.companyLastSyncedAt),
                         },
                       ]
                     : []),
