@@ -324,12 +324,9 @@ export function calendarSelectableColumns(selectedColumns: string[]): string[] {
   );
 }
 
-/** Colonnes du collapse (hors ligne principale) — inclut réservations. */
+/** Colonnes du collapse (sélection Excel) — inclut tarif + dispo par défaut. */
 export function calendarDetailColumns(selectedColumns: string[]): string[] {
-  const primary = new Set(calendarPrimaryColumns(selectedColumns));
-  return sortCalendarColumns(effectiveCalendarColumns(selectedColumns)).filter(
-    (id) => !primary.has(id),
-  );
+  return sortCalendarColumns(effectiveCalendarColumns(selectedColumns));
 }
 
 export function sortCalendarColumns(ids: string[]): string[] {
