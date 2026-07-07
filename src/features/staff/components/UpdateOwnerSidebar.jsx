@@ -14,6 +14,8 @@ import {
   updateFillCompanyLocal,
   getCities,
   getCurrencies,
+  getOwnersRuWebhookStatusBatch,
+  provisionOwnerRuWebhooks,
 } from '../services/serverApi.task';
 import { uploadImageToAPI, uploadMultipleImagesToAPI } from '../../../redux/slices/UploadSlice';
 import {
@@ -100,6 +102,13 @@ function pmAccountStatusLabel(status) {
   if (status === 'pending') return 'Invitation envoyée';
   if (status === 'active') return 'Actif';
   return status || '—';
+}
+
+function formatWebhookStatusDate(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString();
 }
 
 const buildValidationSchema = (t, owner, isCreate) =>
@@ -250,11 +259,29 @@ const CREATE_INITIAL_VALUES = {
 const OWNER_TABS = [
   { id: 'compte', label: 'Compte' },
   { id: 'entreprise', label: 'Entreprise RU' },
+  { id: 'webhooks-ru', label: 'Webhooks RU' },
   { id: 'sojori-web', label: 'Site sojori-vente' },
   { id: 'orchestration', label: 'Orchestration' },
   { id: 'rapports-pl', label: 'Rapports P&L' },
   { id: 'config-ia', label: 'Config IA' },
 ];
+
+const EMPTY_WEBHOOK_STATUS = {
+  reservation: {
+    subscribed: false,
+    lastSuccessAt: null,
+    lastAttemptAt: null,
+    lastStatus: null,
+    lastMessage: null,
+  },
+  messaging: {
+    subscribed: false,
+    lastSuccessAt: null,
+    lastAttemptAt: null,
+    lastStatus: null,
+    lastMessage: null,
+  },
+};
 
 const TabPanel = ({ active, id, render, children }) => {
   const body = typeof render === 'function' ? render() : children;
@@ -386,6 +413,10 @@ const UpdateOwnerSidebar = ({
   const [activateLoading, setActivateLoading] = useState(false);
   const [ruSyncLoading, setRuSyncLoading] = useState(false);
   const [ruSyncPhase, setRuSyncPhase] = useState(null);
+  const [webhookStatus, setWebhookStatus] = useState(EMPTY_WEBHOOK_STATUS);
+  const [webhookStatusLoading, setWebhookStatusLoading] = useState(false);
+  const [webhookProvisionLoading, setWebhookProvisionLoading] = useState(false);
+  const [webhookError, setWebhookError] = useState('');
   const [localDraftStatus, setLocalDraftStatus] = useState(null);
   const [localRuOwnerId, setLocalRuOwnerId] = useState(null);
   const [selectedCities, setSelectedCities] = useState([]);
@@ -450,6 +481,18 @@ const UpdateOwnerSidebar = ({
       })),
     [sortedCurrencies],
   );
+  const effectiveOwnerId = savedOwnerId || owner?._id;
+  const effectiveDraftStatus = localDraftStatus ?? owner?.status ?? (isCreate ? 'inactive' : null);
+  const effectiveRuOwnerId = localRuOwnerId ?? owner?.ruOwnerId ?? null;
+  const hasRuOwnerId = Boolean(String(effectiveRuOwnerId || '').trim());
+  const canActivateDraft = effectiveDraftStatus === 'inactive';
+  /** Brouillon = status inactive uniquement. */
+  const isDraftFlow = effectiveDraftStatus === 'inactive';
+  /** Email dashboard modifiable tant que le PM n’a pas finalisé son activation (admin uniquement). */
+  const canEditDashboardEmail =
+    !isPmSelfService &&
+    (isCreate || effectiveDraftStatus === 'pending' || effectiveDraftStatus === 'inactive');
+  const webhookOwnerId = String(effectiveOwnerId || '').trim();
 
   const resetTabOnOpenKey = open ? `${isCreate ? 'create' : 'edit'}-${owner?._id ?? 'new'}` : '';
 
@@ -462,6 +505,13 @@ const UpdateOwnerSidebar = ({
       setActiveTab(visibleTabs[0]?.id || 'compte');
     }
   }, [visibleTabs, activeTab]);
+
+  useEffect(() => {
+    if (!open || isCreate || isPmSelfService) return;
+    if (activeTab !== 'webhooks-ru') return;
+    if (!webhookOwnerId) return;
+    void loadRuWebhookStatus(webhookOwnerId);
+  }, [open, activeTab, webhookOwnerId, isCreate, isPmSelfService]);
 
   useEffect(() => {
     if (!open) return;
@@ -602,6 +652,10 @@ const UpdateOwnerSidebar = ({
       setActivateLoading(false);
       setRuSyncLoading(false);
       setRuSyncPhase(null);
+      setWebhookStatus(EMPTY_WEBHOOK_STATUS);
+      setWebhookStatusLoading(false);
+      setWebhookProvisionLoading(false);
+      setWebhookError('');
       setLocalDraftStatus(null);
       setLocalRuOwnerId(null);
     }
@@ -620,17 +674,47 @@ const UpdateOwnerSidebar = ({
     }
   }, [open, owner?._id, owner?.status]);
 
-  const effectiveOwnerId = savedOwnerId || owner?._id;
-  const effectiveDraftStatus = localDraftStatus ?? owner?.status ?? (isCreate ? 'inactive' : null);
-  const effectiveRuOwnerId = localRuOwnerId ?? owner?.ruOwnerId ?? null;
-  const hasRuOwnerId = Boolean(String(effectiveRuOwnerId || '').trim());
-  const canActivateDraft = effectiveDraftStatus === 'inactive';
-  /** Brouillon = status inactive uniquement. */
-  const isDraftFlow = effectiveDraftStatus === 'inactive';
-  /** Email dashboard modifiable tant que le PM n’a pas finalisé son activation (admin uniquement). */
-  const canEditDashboardEmail =
-    !isPmSelfService &&
-    (isCreate || effectiveDraftStatus === 'pending' || effectiveDraftStatus === 'inactive');
+  const loadRuWebhookStatus = async (targetOwnerId) => {
+    if (!targetOwnerId) return;
+    setWebhookStatusLoading(true);
+    setWebhookError('');
+    try {
+      const res = await getOwnersRuWebhookStatusBatch([targetOwnerId]);
+      if (res?.success) {
+        setWebhookStatus(res?.data?.[targetOwnerId] || EMPTY_WEBHOOK_STATUS);
+      } else {
+        setWebhookError(res?.message || 'Impossible de charger le statut des webhooks RU');
+      }
+    } catch (error) {
+      setWebhookError(error?.message || 'Impossible de charger le statut des webhooks RU');
+    } finally {
+      setWebhookStatusLoading(false);
+    }
+  };
+
+  const handleProvisionRuWebhooks = async () => {
+    if (!webhookOwnerId) {
+      toast.warning('Enregistrez d’abord ce PM pour obtenir un identifiant owner.');
+      return;
+    }
+    setWebhookProvisionLoading(true);
+    setWebhookError('');
+    try {
+      const res = await provisionOwnerRuWebhooks(webhookOwnerId);
+      if (res?.success) {
+        toast.success('Webhooks RU activés (réservations + messages)');
+      } else {
+        toast.warning(res?.message || 'Activation webhook partielle');
+      }
+      await loadRuWebhookStatus(webhookOwnerId);
+    } catch (error) {
+      const msg = error?.message || 'Échec provision des webhooks RU';
+      setWebhookError(msg);
+      toast.error(msg);
+    } finally {
+      setWebhookProvisionLoading(false);
+    }
+  };
 
   const normalizePmSlug = (slug) =>
     (slug || '')
@@ -2061,6 +2145,104 @@ const UpdateOwnerSidebar = ({
                         setFieldValue('legalSameAsContact', checked)
                       }
                     />
+                  </>
+                )}
+              />
+
+              <TabPanel
+                active={activeTab}
+                id="webhooks-ru"
+                render={() => (
+                  <>
+                    <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+                      <b>Webhooks RU</b> — état des abonnements <b>Réservation</b> et <b>Messaging</b> pour
+                      ce PM.
+                    </div>
+                    {!values.ruEnabled ? (
+                      <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+                        Activez d’abord le channel manager <b>RU</b> dans l’onglet <b>Compte</b>.
+                      </div>
+                    ) : null}
+                    {!webhookOwnerId ? (
+                      <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+                        Enregistrez ce PM une première fois avant de pouvoir vérifier/abonner les webhooks.
+                      </div>
+                    ) : null}
+                    {webhookError ? (
+                      <div className="form-section full owner-form-alert" style={{ marginBottom: 12 }}>
+                        {webhookError}
+                      </div>
+                    ) : null}
+                    {webhookStatusLoading ? (
+                      <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+                        Chargement du statut des webhooks RU…
+                      </div>
+                    ) : (
+                      <div className="owner-webhooks-grid">
+                        {[
+                          {
+                            key: 'reservation',
+                            title: 'Réservation webhook',
+                            state: webhookStatus?.reservation || EMPTY_WEBHOOK_STATUS.reservation,
+                          },
+                          {
+                            key: 'messaging',
+                            title: 'Messaging webhook',
+                            state: webhookStatus?.messaging || EMPTY_WEBHOOK_STATUS.messaging,
+                          },
+                        ].map((item) => (
+                          <div key={item.key} className="owner-webhook-card">
+                            <div className="owner-webhook-card-h">
+                              <strong>{item.title}</strong>
+                              <span
+                                className={`owner-webhook-badge ${item.state?.subscribed ? 'is-ok' : 'is-off'}`}
+                              >
+                                {item.state?.subscribed ? 'OK' : 'OFF'}
+                              </span>
+                            </div>
+                            <div className="owner-webhook-line">
+                              Dernier succes : {formatWebhookStatusDate(item.state?.lastSuccessAt)}
+                            </div>
+                            <div className="owner-webhook-line">
+                              Dernier essai : {formatWebhookStatusDate(item.state?.lastAttemptAt)}
+                            </div>
+                            {item.state?.lastStatus ? (
+                              <div className="owner-webhook-line">
+                                Statut : {String(item.state.lastStatus)}
+                              </div>
+                            ) : null}
+                            {item.state?.lastMessage ? (
+                              <div className="owner-webhook-line">
+                                Message : {String(item.state.lastMessage)}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-prim"
+                        disabled={
+                          webhookProvisionLoading ||
+                          webhookStatusLoading ||
+                          !values.ruEnabled ||
+                          !webhookOwnerId
+                        }
+                        onClick={() => void handleProvisionRuWebhooks()}
+                      >
+                        {webhookProvisionLoading ? 'RU…' : '(Re)abonner'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        disabled={webhookStatusLoading || !webhookOwnerId}
+                        onClick={() => void loadRuWebhookStatus(webhookOwnerId)}
+                      >
+                        Rafraichir le statut
+                      </button>
+                    </div>
                   </>
                 )}
               />
