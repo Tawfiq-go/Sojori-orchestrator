@@ -16,6 +16,8 @@ export type WhatsappAdminDesign = {
   whatsappPhone: string;
   language: string;
   listingIds: string[];
+  /** Villes autorisées — sentinel « All » = toutes les villes (comme staff). */
+  cityIds: string[];
   banned: boolean;
   permissions: WhatsappAdminPermission[];
   /** Clés srv-fulltask — false = ne pas envoyer (opt-out si absent en base). */
@@ -153,6 +155,11 @@ export function normalizeListingIds(raw: unknown[] | undefined): string[] {
   return ids;
 }
 
+/** Villes autorisées — même sémantique que listingIds (sentinel « All »). */
+export function normalizeCityIds(raw: unknown[] | undefined): string[] {
+  return normalizeListingIds(raw);
+}
+
 const TYPE_TO_CANONICAL: Record<string, string> = {
   Réservation: 'Reservation',
   Reservation: 'Reservation',
@@ -216,6 +223,7 @@ export function emptyWhatsappAdmin(): WhatsappAdminDesign {
     whatsappPhone: '',
     language: 'French',
     listingIds: [],
+    cityIds: [],
     banned: false,
     permissions: WA_ADMIN_TYPES.map((t) => ({ type: t.type, access: 'write' as const })),
     notifications: defaultAdminNotifications(),
@@ -238,6 +246,7 @@ export function apiWhatsappAdminToDesign(row: Record<string, unknown>): Whatsapp
   });
 
   const listingIds = normalizeListingIds(row.listingIds as unknown[] | undefined);
+  const cityIds = normalizeCityIds(row.cityIds as unknown[] | undefined);
 
   return {
     _id: String(row._id),
@@ -245,6 +254,7 @@ export function apiWhatsappAdminToDesign(row: Record<string, unknown>): Whatsapp
     whatsappPhone: String(row.whatsappPhone || ''),
     language: String(row.language || 'French'),
     listingIds,
+    cityIds,
     banned: Boolean(row.banned),
     permissions: WA_ADMIN_TYPES.map((t) => ({
       type: t.type,
@@ -273,6 +283,7 @@ export function designWhatsappAdminToApi(
     whatsappPhone: form.whatsappPhone.trim(),
     language: form.language,
     listingIds: normalizeListingIds(form.listingIds),
+    cityIds: normalizeCityIds(form.cityIds),
     banned: form.banned,
     permissions: form.permissions.map((p) => ({
       type: p.type,
