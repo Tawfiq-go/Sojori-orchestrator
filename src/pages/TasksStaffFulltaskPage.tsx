@@ -322,6 +322,7 @@ function TasksStaffFulltaskPageInner() {
           <WhatsappAdminPageView
             admins={admins}
             listings={listings}
+            cities={cities}
             loading={loadingAdmins}
             onSave={async (form, editingId) => {
               try {

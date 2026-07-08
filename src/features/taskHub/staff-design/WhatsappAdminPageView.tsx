@@ -12,20 +12,49 @@ import {
   type WhatsappAdminDesign,
 } from './whatsappAdminTypes';
 import { initials } from './staffDesignConstants';
+import StaffAccessMultiSelect from './StaffAccessMultiSelect';
 
 type ListingOpt = { id: string; name: string };
+type CityOpt = { id: string; name: string };
 
 type Props = {
   admins: WhatsappAdminDesign[];
   listings: ListingOpt[];
+  cities?: CityOpt[];
   loading?: boolean;
   onSave: (form: WhatsappAdminDesign, editingId: string | null) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
 };
 
+function hasAllAccess(ids: string[] | undefined): boolean {
+  if (!ids?.length) return false;
+  return ids.some((id) => id === 'All' || id === 'ALL');
+}
+
+function adminAccessSummary(a: WhatsappAdminDesign, cities: CityOpt[]): string {
+  if (hasAllAccess(a.listingIds)) return 'Toutes les annonces';
+  if (!a.listingIds?.length && !a.cityIds?.length) return 'Toutes les annonces';
+  const parts: string[] = [];
+  if (hasAllAccess(a.cityIds)) {
+    parts.push('Toutes les villes');
+  } else if (a.cityIds?.length) {
+    const names = a.cityIds
+      .map((id) => cities.find((c) => c.id === id)?.name || '')
+      .filter(Boolean)
+      .slice(0, 2);
+    if (names.length) {
+      parts.push(names.join(', ') + (a.cityIds.length > 2 ? ` +${a.cityIds.length - 2}` : ''));
+    }
+  }
+  const listingCount = (a.listingIds || []).filter((id) => id !== 'All' && id !== 'ALL').length;
+  if (listingCount) parts.push(`${listingCount} annonce(s)`);
+  return parts.length ? parts.join(' · ') : 'Aucun accès';
+}
+
 export default function WhatsappAdminPageView({
   admins,
   listings,
+  cities = [],
   loading,
   onSave,
   onDelete,
@@ -50,6 +79,7 @@ export default function WhatsappAdminPageView({
       ...a,
       permissions: a.permissions.map((p) => ({ ...p })),
       listingIds: [...a.listingIds],
+      cityIds: [...(a.cityIds || [])],
       notifications: { ...defaultAdminNotifications(), ...a.notifications },
     });
     setDrawerOpen(true);
@@ -57,26 +87,41 @@ export default function WhatsappAdminPageView({
 
   const patchForm = (patch: Partial<WhatsappAdminDesign>) => setForm((f) => ({ ...f, ...patch }));
 
-  const toggleListing = (id: string) => {
-    if (!id) return;
-    const sid = String(id);
-    const next = form.listingIds.filter((x) => x !== 'All' && x !== 'ALL');
-    const set = new Set(next.map(String));
-    if (set.has(sid)) set.delete(sid);
-    else set.add(sid);
-    patchForm({ listingIds: [...set] });
-  };
-
-  const hasAllListings = form.listingIds.some((x) => x === 'All' || x === 'ALL');
+  const allListingsMode = hasAllAccess(form.listingIds);
+  const allCitiesMode = hasAllAccess(form.cityIds);
 
   const toggleAllListings = () => {
-    patchForm({ listingIds: hasAllListings ? [] : ['All'] });
+    if (allListingsMode) {
+      patchForm({ listingIds: [], cityIds: [] });
+      return;
+    }
+    patchForm({ listingIds: ['All'], cityIds: ['All'] });
   };
 
-  const isListingSelected = (id: string) => {
-    if (hasAllListings) return false;
-    return form.listingIds.some((x) => String(x) === String(id));
+  const toggleAllCities = () => {
+    if (allListingsMode) return;
+    patchForm({ cityIds: allCitiesMode ? [] : ['All'] });
   };
+
+  const selectedCityIds = useMemo(
+    () => form.cityIds.filter((id) => id !== 'All' && id !== 'ALL'),
+    [form.cityIds],
+  );
+
+  const selectedListingIds = useMemo(
+    () => form.listingIds.filter((id) => id !== 'All' && id !== 'ALL'),
+    [form.listingIds],
+  );
+
+  const cityOptions = useMemo(
+    () => cities.map((c) => ({ id: c.id, label: c.name, emoji: '📍' })),
+    [cities],
+  );
+
+  const listingOptions = useMemo(
+    () => listings.map((l) => ({ id: l.id, label: l.name, emoji: '🏠' })),
+    [listings],
+  );
 
   const handleSave = async () => {
     if (!form.username.trim() || !form.whatsappPhone.trim()) return;
@@ -194,6 +239,12 @@ export default function WhatsappAdminPageView({
                   WhatsApp
                 </span>
                 <span style={{ fontFamily: 'var(--mono)', color: 'var(--t)' }}>{a.whatsappPhone}</span>
+              </div>
+              <div className="meta-line">
+                <span style={{ textTransform: 'uppercase', fontSize: 9.5, fontWeight: 700 }}>
+                  Accès
+                </span>
+                <span style={{ color: 'var(--t)' }}>{adminAccessSummary(a, cities)}</span>
               </div>
             </div>
           ))}
@@ -443,39 +494,87 @@ export default function WhatsappAdminPageView({
             </div>
 
             <div className="form-section full">
-              <div className="form-section-h">Annonces · multi-sélection</div>
-              <div className="pill-group">
-                <button
-                  type="button"
-                  className={`pill-toggle${hasAllListings ? ' on' : ''}`}
-                  onClick={toggleAllListings}
-                >
-                  🌐 Toutes les annonces
-                </button>
-                {listings.length === 0 ? (
-                  <span style={{ fontSize: 12, color: 'var(--t3)', padding: '6px 4px' }}>
-                    Aucune annonce disponible
-                  </span>
-                ) : (
-                  listings.map((l, idx) => (
+              <div className="form-section-h">Accès annonces</div>
+              <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--pd)' }}>
+                Par ville : les nouvelles annonces de la ville sont incluses automatiquement.
+              </p>
+              <button
+                type="button"
+                className={`access-all-chip${allListingsMode ? ' on' : ''}`}
+                onClick={toggleAllListings}
+              >
+                <span>🌍</span>
+                Toutes les annonces
+              </button>
+              {!allListingsMode ? (
+                <>
+                  <div className="form-section-h" style={{ marginTop: 4, marginBottom: 6 }}>
+                    Villes autorisées
+                  </div>
+                  <button
+                    type="button"
+                    className={`access-all-chip${allCitiesMode ? ' on' : ''}`}
+                    style={{ marginBottom: 8 }}
+                    onClick={toggleAllCities}
+                  >
+                    Toutes les villes
+                  </button>
+                  {allCitiesMode ? (
+                    <div className="access-selected-chips" style={{ marginBottom: 12 }}>
+                      <span className="access-chip">
+                        <span className="access-chip-emoji">📍</span>
+                        <span className="access-chip-label">Toutes les villes</span>
+                        <button
+                          type="button"
+                          className="access-chip-x"
+                          aria-label="Retirer toutes les villes"
+                          onClick={toggleAllCities}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    </div>
+                  ) : (
+                    <StaffAccessMultiSelect
+                      options={cityOptions}
+                      selectedIds={selectedCityIds}
+                      onChange={(ids) => patchForm({ cityIds: ids })}
+                      placeholder="Aucune ville — ajoutez Casablanca, Rabat…"
+                      searchPlaceholder="Rechercher une ville…"
+                      addLabel="+ Ajouter des villes"
+                      emptyLabel="Aucune ville trouvée"
+                    />
+                  )}
+                  <div className="form-section-h" style={{ marginTop: 14, marginBottom: 6 }}>
+                    Annonces spécifiques (optionnel)
+                  </div>
+                  <StaffAccessMultiSelect
+                    options={listingOptions}
+                    selectedIds={selectedListingIds}
+                    onChange={(ids) => patchForm({ listingIds: ids })}
+                    disabled={!listings.length}
+                    placeholder="Aucune annonce spécifique"
+                    searchPlaceholder="Rechercher une annonce…"
+                    addLabel="+ Ajouter des annonces"
+                    emptyLabel="Aucune annonce trouvée"
+                  />
+                </>
+              ) : (
+                <div className="access-selected-chips">
+                  <span className="access-chip">
+                    <span className="access-chip-emoji">🌍</span>
+                    <span className="access-chip-label">Toutes les annonces</span>
                     <button
-                      key={l.id || `listing-${idx}`}
                       type="button"
-                      disabled={hasAllListings}
-                      className={`pill-toggle${isListingSelected(l.id) ? ' on' : ''}`}
-                      style={hasAllListings ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
-                      onClick={() => toggleListing(l.id)}
+                      className="access-chip-x"
+                      aria-label="Retirer accès total"
+                      onClick={toggleAllListings}
                     >
-                      🏠 {l.name}
+                      ✕
                     </button>
-                  ))
-                )}
-              </div>
-              {hasAllListings ? (
-                <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 6 }}>
-                  Désactivez « Toutes » pour choisir des annonces précises.
+                  </span>
                 </div>
-              ) : null}
+              )}
             </div>
           </div>
 
