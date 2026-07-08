@@ -111,7 +111,7 @@ export interface PlanEvent {
   dispatchPreview?: import('./planDispatchPreview').MessageDispatchPreview;
   channels?: Channel[];            // multi (ex Bienvenue OTA + Email)
   template?: string;
-  /** Corps catalogue (non affiché sur /tasks/plans — statut envoi seulement). */
+  /** Corps catalogue (non affiché sur /orchestration/plans — statut envoi seulement). */
   messagePreviewFr?: string;
   /** Statut Mongo plan.messages (fait = envoyé, legacy envoye). */
   messageSendStatus?: 'en_attente' | 'fait' | 'envoye' | 'saute' | 'echec';

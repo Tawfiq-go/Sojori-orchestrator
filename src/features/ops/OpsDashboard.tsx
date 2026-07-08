@@ -210,7 +210,7 @@ export function OpsDashboard() {
 
   const handleAction = async (item: OpsFeedItem, kind: string) => {
     if (kind === 'plan') {
-      navigate(`/tasks/plans?reservationId=${encodeURIComponent(item.reservationId)}`);
+      navigate(`/orchestration/plans?reservationId=${encodeURIComponent(item.reservationId)}`);
       return;
     }
     if (kind === 'assign' && item.taskId) {

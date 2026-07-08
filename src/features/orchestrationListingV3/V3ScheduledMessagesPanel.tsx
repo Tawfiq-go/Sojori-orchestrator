@@ -218,7 +218,7 @@ export default function V3ScheduledMessagesPanel({
           (timing, canal, actif/inactif) se configure <strong>ici sur l’annonce</strong>. Le{' '}
           <strong>plan réservation</strong> lit uniquement cette config listing (pas le modèle PM). Textes
           dans{' '}
-          <Link component={RouterLink} to="/tasks/orchestration-config?tab=messages">
+          <Link component={RouterLink} to="/orchestration/config?tab=messages">
             Orchestration · Messages
           </Link>
           . Modèle PM par défaut :{' '}
@@ -237,7 +237,7 @@ export default function V3ScheduledMessagesPanel({
         <Alert severity="info" sx={{ mb: 2, fontSize: 13 }}>
           <strong>QUAND</strong> envoyer chaque message — niveau{' '}
           {isAdminTemplate ? 'Admin (template global)' : 'Property Manager'}. Textes dans{' '}
-          <Link component={RouterLink} to="/tasks/orchestration-config?tab=messages">
+          <Link component={RouterLink} to="/orchestration/config?tab=messages">
             Orchestration · Messages
           </Link>
           . Sync PM → annonces : chaque listing reçoit la liste ; le PM peut désactiver par annonce.
@@ -312,8 +312,8 @@ export default function V3ScheduledMessagesPanel({
       {catalog.length === 0 ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
           Catalogue messages vide — voir{' '}
-          <Link component={RouterLink} to="/tasks/orchestration-config">
-            /tasks/orchestration-config
+          <Link component={RouterLink} to="/orchestration/config">
+            /orchestration/config
           </Link>
           .
         </Alert>

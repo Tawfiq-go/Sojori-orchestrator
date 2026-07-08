@@ -350,7 +350,7 @@ export default function PlansReservationPage() {
             {hasActiveQuery ? ' · filtre serveur actif' : ''}
           </span>
           <Link
-            to="/tasks/orchestration-config"
+            to="/orchestration/config"
             style={{ color: '#0673b3', fontWeight: 700, fontFamily: 'Geist Mono, monospace' }}
           >
             ⚙️ Orchestration config →
@@ -368,7 +368,7 @@ export default function PlansReservationPage() {
           {showAdminConfigSource ? (
             <>
               Aucun plan en base. Configurez l&apos;orchestration sur{' '}
-              <Link to="/tasks/orchestration-config">Orchestration config</Link>, puis créez une réservation
+              <Link to="/orchestration/config">Orchestration config</Link>, puis créez une réservation
               (ou rejouez <code>create.reservation</code>) pour générer un plan.
             </>
           ) : (

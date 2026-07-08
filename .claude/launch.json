@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "orchestrator-dev-3001",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "start:owner"],
+      "port": 3001
+    }
+  ]
+}

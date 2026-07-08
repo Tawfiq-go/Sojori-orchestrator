@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { lazyWithReload } from './utils/lazyWithReload';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -271,6 +271,19 @@ function LazyRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<RouteLoader />}>{children}</Suspense>;
 }
 
+/** Redirection compat /tasks/* → /orchestration/* en préservant la query (ex. ?reservationId=). */
+function OrchestrationLegacyRedirect({
+  to,
+  defaultSearch,
+}: {
+  to: string;
+  defaultSearch?: string;
+}) {
+  const location = useLocation();
+  const search = location.search || (defaultSearch ? `?${defaultSearch}` : '');
+  return <Navigate to={`${to}${search}`} replace />;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -296,21 +309,30 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
-              {/* /orchestrator, /orchestration: ancienne interface V2, appelait srv-orchestrator
-                  (service décommissionné, fusionné dans srv-fulltask — voir CLAUDE.md). Plus
-                  jamais liées depuis le menu (navRoutes.ts redirige déjà vers /tasks/*), gardées
-                  en redirection au cas où un favori/lien externe pointerait encore dessus. */}
-              <Route path="/orchestrator" element={<Navigate to="/tasks/plans" replace />} />
-              <Route path="/orchestration" element={<Navigate to="/tasks/plans" replace />} />
+              {/* Section Orchestration — URLs canoniques /orchestration/* (alignées menu).
+                  Les anciennes /tasks/plans|ops|orchestration-config|whatsapp-messages
+                  redirigent ici (query préservée) pour ne pas casser les deep-links générés. */}
+              <Route path="/orchestrator" element={<Navigate to="/orchestration/plans" replace />} />
+              <Route path="/orchestration" element={<Navigate to="/orchestration/plans" replace />} />
 
-              {/* Routes alternatives */}
-              <Route path="/orchestration/plans" element={<LazyRoute><OrchestrationPlansPageV2 /></LazyRoute>} />
+              <Route path="/orchestration/plans" element={<LazyRoute><PlansReservationPage /></LazyRoute>} />
+              <Route path="/orchestration/ops" element={<LazyRoute><OrchestrationDailyOpsPage /></LazyRoute>} />
+              <Route path="/orchestration/config" element={<LazyRoute><TasksOrchestrationFulltaskPage /></LazyRoute>} />
+              <Route path="/orchestration/whatsapp-messages" element={<LazyRoute><TasksWhatsAppMessagesPage /></LazyRoute>} />
               <Route path="/orchestration/mockup" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
               <Route path="/orchestration/timeline/:id" element={<LazyRoute><OrchestrationTimelinePageV2 /></LazyRoute>} />
               <Route path="/orchestration/events" element={<LazyRoute><OrchestrationEventsPage /></LazyRoute>} />
-              <Route path="/tasks/ops" element={<LazyRoute><OrchestrationDailyOpsPage /></LazyRoute>} />
-              <Route path="/orchestration/daily-ops" element={<Navigate to="/tasks/ops" replace />} />
-              <Route path="/orchestration/config" element={<LazyRoute><OrchestrationConfigPage /></LazyRoute>} />
+              <Route path="/orchestration/daily-ops" element={<Navigate to="/orchestration/ops" replace />} />
+
+              {/* Legacy V2 (interface historique srv-orchestrator, hors menu) — conservées à part */}
+              <Route path="/orchestration/plans-v2-legacy" element={<LazyRoute><OrchestrationPlansPageV2 /></LazyRoute>} />
+              <Route path="/orchestration/config-v2-legacy" element={<LazyRoute><OrchestrationConfigPage /></LazyRoute>} />
+
+              {/* Redirections compat depuis les anciennes URLs /tasks/* d'orchestration */}
+              <Route path="/tasks/plans" element={<OrchestrationLegacyRedirect to="/orchestration/plans" />} />
+              <Route path="/tasks/ops" element={<OrchestrationLegacyRedirect to="/orchestration/ops" />} />
+              <Route path="/tasks/orchestration-config" element={<OrchestrationLegacyRedirect to="/orchestration/config" />} />
+              <Route path="/tasks/whatsapp-messages" element={<OrchestrationLegacyRedirect to="/orchestration/config" defaultSearch="tab=config" />} />
 
               <Route path="/calendar" element={<LazyRoute><CalendarInventoryPageV3 /></LazyRoute>} />
               <Route path="/calendar-v2" element={<LazyRoute><CalendarInventoryPage /></LazyRoute>} />
@@ -327,15 +349,6 @@ function App() {
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
               <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPageV2 /></LazyRoute>} />
               <Route path="/tasks/kanban" element={<LazyRoute><TasksKanbanPage /></LazyRoute>} />
-              <Route
-                path="/tasks/orchestration-config"
-                element={<LazyRoute><TasksOrchestrationFulltaskPage /></LazyRoute>}
-              />
-              <Route
-                path="/tasks/whatsapp-messages"
-                element={<LazyRoute><TasksWhatsAppMessagesPage /></LazyRoute>}
-              />
-              <Route path="/tasks/plans" element={<LazyRoute><PlansReservationPage /></LazyRoute>} />
 
               <Route path="/chatbot/whitelist/:reservationId" element={<LazyRoute><ChatbotWhitelistDetailPage /></LazyRoute>} />
               <Route path="/chatbot/whitelist" element={<LazyRoute><ChatbotWhitelistPage /></LazyRoute>} />

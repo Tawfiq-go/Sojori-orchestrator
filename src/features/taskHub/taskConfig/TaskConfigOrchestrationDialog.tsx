@@ -139,7 +139,7 @@ export function TaskConfigOrchestrationDialog({
           ) : null}
           <Button
             component={RouterLink}
-            to="/tasks/orchestration-config"
+            to="/orchestration/config"
             size="small"
             variant="text"
             sx={{ alignSelf: 'flex-start' }}
