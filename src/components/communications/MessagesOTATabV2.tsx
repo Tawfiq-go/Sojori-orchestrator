@@ -96,6 +96,8 @@ export default function MessagesOTATabV2() {
   const [appliedAdvanced, setAppliedAdvanced] = useState<OtaAdvancedSearch>(EMPTY_ADVANCED);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
+  const [composerDraft, setComposerDraft] = useState('');
+  const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
 
   const inbox = useInboxOTAConversation();
@@ -466,6 +468,8 @@ export default function MessagesOTATabV2() {
     : 'Airbnb';
 
   const handleSelect = async (row: OtaThreadRow) => {
+    setComposerDraft('');
+    setAiSourceDraft('');
     await inbox.selectOtaThread(row);
   };
 
@@ -584,11 +588,16 @@ export default function MessagesOTATabV2() {
               quickTemplates={OTA_QUICK_TEMPLATES}
               quickReplies={OTA_QUICK_REPLIES}
               otaPlatform={otaPlatform}
+              composerValue={composerDraft}
+              onComposerValueChange={setComposerDraft}
               onSendMessage={handleOtaSend}
               onSelectTemplate={async (tpl) => {
                 if (tpl.text) await handleOtaSend(tpl.text);
               }}
-              onAISuggestion={() => setShowAIModal(true)}
+              onAISuggestion={(draft) => {
+                setAiSourceDraft(draft);
+                setShowAIModal(true);
+              }}
             />
             <ConversationDetails
               thread={activeThread}
@@ -629,13 +638,14 @@ export default function MessagesOTATabV2() {
       <AISuggestionModal
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
-        onUseSuggestion={async (text) => {
+        onUseSuggestion={(text) => {
+          setComposerDraft(text);
           setShowAIModal(false);
-          await handleOtaSend(text);
         }}
         context={{
           threadContext: otaThreadContext,
           lastGuestMessage: otaLastGuestMessage,
+          draft: aiSourceDraft,
           guestName: inbox.activeRow?.guestName,
           reservationNumber: inbox.reservation?.reservationNumber,
           channelName: otaPlatform,

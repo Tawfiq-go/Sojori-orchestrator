@@ -19,7 +19,9 @@ interface ConversationThreadProps {
   quickActions?: QuickAction[];
   onSendMessage: (text: string) => void | Promise<void>;
   onSelectTemplate: (template: QuickTemplate) => void;
-  onAISuggestion?: () => void;
+  onAISuggestion?: (draft: string) => void;
+  composerValue?: string;
+  onComposerValueChange?: (value: string) => void;
   otaPlatform?: string;
   whatsappBusinessLine?: string;
   loadingMessages?: boolean;
@@ -37,6 +39,8 @@ export default function ConversationThread({
   onSendMessage,
   onSelectTemplate,
   onAISuggestion,
+  composerValue,
+  onComposerValueChange,
   otaPlatform = 'Airbnb',
   quickReplies = [],
   whatsappBusinessLine = import.meta.env.VITE_WHATSAPP_BUSINESS_DISPLAY || '+33 7 56 84 21 09',
@@ -46,6 +50,7 @@ export default function ConversationThread({
   highlightKeyword = '',
 }: ConversationThreadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [internalComposerValue, setInternalComposerValue] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const hasRenderableMessages =
@@ -65,15 +70,22 @@ export default function ConversationThread({
   const otaTheme = getOtaTheme(thread.channel, otaPlatform);
   const flag = thread.guestFlag || flagFromPhone(thread.phone);
   const platformLabel = otaPlatform || otaTheme.label;
+  const inputValue = composerValue ?? internalComposerValue;
+  const setInputValue = (value: string) => {
+    onComposerValueChange?.(value);
+    if (composerValue === undefined) {
+      setInternalComposerValue(value);
+    }
+  };
 
   const handleSend = async () => {
-    const text = inputRef.current?.value.trim();
+    const text = inputValue.trim();
     if (!text || sending) return;
     setSending(true);
     setSendError(null);
     try {
       await onSendMessage(text);
-      if (inputRef.current) inputRef.current.value = '';
+      setInputValue('');
     } catch (err: unknown) {
       setSendError(extractHttpErrorMessage(err, 'Échec envoi WhatsApp'));
     } finally {
@@ -816,6 +828,8 @@ export default function ConversationThread({
           <Box
             component="input"
             ref={inputRef}
+            value={inputValue}
+            onChange={(event) => setInputValue(event.target.value)}
             placeholder={isOta ? `Reply via ${platformLabel}…` : 'Écrire un message WhatsApp…'}
             onKeyDown={handleKeyDown}
             sx={{
@@ -832,7 +846,7 @@ export default function ConversationThread({
         </Box>
         <Box
           component="button"
-          onClick={onAISuggestion}
+          onClick={() => onAISuggestion?.(inputValue)}
           sx={{
             ...iconBtnSx,
             width: 34,

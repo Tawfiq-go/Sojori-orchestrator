@@ -32,6 +32,8 @@ export default function StaffWhatsAppTabV2() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAIModal, setShowAIModal] = useState(false);
+  const [composerDraft, setComposerDraft] = useState('');
+  const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
 
   const inbox = useInboxStaffConversation();
@@ -73,6 +75,8 @@ export default function StaffWhatsAppTabV2() {
   );
 
   const handleSelect = async (conv: Conversation) => {
+    setComposerDraft('');
+    setAiSourceDraft('');
     await inbox.selectStaffConversation(conv);
   };
 
@@ -237,11 +241,16 @@ export default function StaffWhatsAppTabV2() {
               messages={formattedMessages}
               loadingMessages={inbox.loadingMessages}
               quickTemplates={STAFF_TEMPLATES}
+              composerValue={composerDraft}
+              onComposerValueChange={setComposerDraft}
               onSendMessage={handleStaffSend}
               onSelectTemplate={async (tpl) => {
                 if (tpl.text) await handleStaffSend(tpl.text);
               }}
-              onAISuggestion={() => setShowAIModal(true)}
+              onAISuggestion={(draft) => {
+                setAiSourceDraft(draft);
+                setShowAIModal(true);
+              }}
             />
             <ConversationDetails thread={activeThread} type="staff" />
           </>
@@ -268,9 +277,9 @@ export default function StaffWhatsAppTabV2() {
       <AISuggestionModal
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
-        onUseSuggestion={async (text) => {
+        onUseSuggestion={(text) => {
+          setComposerDraft(text);
           setShowAIModal(false);
-          await handleStaffSend(text);
         }}
         context={{
           threadContext: inbox.messages
@@ -289,6 +298,7 @@ export default function StaffWhatsAppTabV2() {
           lastGuestMessage: [...inbox.messages]
             .reverse()
             .find((ex) => ex.user_message?.trim() && !ex.sent_by_admin)?.user_message,
+          draft: aiSourceDraft,
           guestName: inbox.activeConversation?.name,
           type: 'staff',
         }}
@@ -296,8 +306,6 @@ export default function StaffWhatsAppTabV2() {
     </>
   );
 }
-
-
 
 
 
