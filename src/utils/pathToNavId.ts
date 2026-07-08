@@ -132,9 +132,15 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path.startsWith('/finances/landlords')) return 'finances/landlords';
   if (path.startsWith('/finances/ledger')) return 'finances/ledger';
   if (path.startsWith('/finances/reports')) return 'finances/reports';
-  if (path.startsWith('/tasks/ops') || path.startsWith('/orchestration/daily-ops')) return 'orch/ops';
-  if (path.startsWith('/tasks/orchestration-config')) return 'orch/workflows';
-  if (path.startsWith('/tasks/plans')) return 'orch/plans';
+  if (
+    path.startsWith('/orchestration/ops') ||
+    path.startsWith('/tasks/ops') ||
+    path.startsWith('/orchestration/daily-ops')
+  )
+    return 'orch/ops';
+  if (path.startsWith('/orchestration/config') || path.startsWith('/tasks/orchestration-config'))
+    return 'orch/workflows';
+  if (path.startsWith('/orchestration/plans') || path.startsWith('/tasks/plans')) return 'orch/plans';
 
   if (path.startsWith('/admin/equipe')) {
     const tab = new URLSearchParams(search).get('tab') || 'list';

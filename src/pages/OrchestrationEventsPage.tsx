@@ -13,7 +13,7 @@ export function OrchestrationEventsPage() {
     setTab(newValue);
     if (newValue === 0) navigate('/orchestration?tab=orchestration');
     if (newValue === 1) navigate('/orchestration');
-    if (newValue === 3) navigate('/tasks/ops');
+    if (newValue === 3) navigate('/orchestration/ops');
     if (newValue === 4) navigate('/orchestration/config');
   };
 

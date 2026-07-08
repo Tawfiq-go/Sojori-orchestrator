@@ -205,15 +205,19 @@ export function useDashboardChrome() {
       return 'finances/reports';
     }
 
-    if (path.startsWith('/tasks/ops') || path.startsWith('/orchestration/daily-ops')) {
+    if (
+      path.startsWith('/orchestration/ops') ||
+      path.startsWith('/tasks/ops') ||
+      path.startsWith('/orchestration/daily-ops')
+    ) {
       return 'orch/ops';
     }
 
-    if (path.startsWith('/tasks/orchestration-config')) {
+    if (path.startsWith('/orchestration/config') || path.startsWith('/tasks/orchestration-config')) {
       return 'orch/workflows';
     }
 
-    if (path.startsWith('/tasks/plans')) {
+    if (path.startsWith('/orchestration/plans') || path.startsWith('/tasks/plans')) {
       return 'orch/plans';
     }
 

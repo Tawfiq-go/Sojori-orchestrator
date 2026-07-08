@@ -51,7 +51,7 @@ export default function V3MessageLibrary({ ownerKey }: Props) {
     { title: 'Messages Email', filter: (m: CatalogMessage) => channelOf(m) === 'email' },
   ];
 
-  const expertUrl = `/tasks/orchestration-config?owner=${encodeURIComponent(ownerKey)}&tab=messages`;
+  const expertUrl = `/orchestration/config?owner=${encodeURIComponent(ownerKey)}&tab=messages`;
 
   if (loading) {
     return (

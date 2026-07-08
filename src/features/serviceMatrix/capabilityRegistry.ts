@@ -60,7 +60,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'na', task: 'na', execution: 'na' },
     gestionHint: 'Navigation · menu principal · langue · parcours · sous-menus',
     whatsappHint: 'Options A · B · C · D · J — structure du parcours voyageur',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'cleaning_free',
@@ -75,7 +75,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'Paliers durée · créneaux horaires · message voyageur',
     whatsappHint: 'Option I · fenêtre disponibilité',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'cleaning_paid',
@@ -90,7 +90,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'paidCleaningConfig · types · jours · tarifs',
     whatsappHint: 'Option I (demande ménage) · même entrée menu que inclus',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'cleaning_sojori',
@@ -105,7 +105,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'na', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'cleaningOrchestration · J+ checkout · checklist',
     whatsappHint: 'N/A — automatisation staff post-checkout',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'arrival_choose',
@@ -120,7 +120,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'TS_CHECKIN · créneaux choix arrivée',
     whatsappHint: 'Option D1 · fenêtre',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'departure_choose',
@@ -135,7 +135,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'TS_CHECKOUT · créneaux choix départ',
     whatsappHint: 'Option D2 · fenêtre',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'arrival_declare',
@@ -150,7 +150,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'Heure libre 24h · WhatsApp D3',
     whatsappHint: 'Option D3',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'departure_declare',
@@ -165,7 +165,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'Heure libre 24h · WhatsApp D4',
     whatsappHint: 'Option D4',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'registration',
@@ -180,7 +180,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'Flow enregistrement · champs obligatoires',
     whatsappHint: 'Option E · guest_registration',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'support',
@@ -195,7 +195,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'Catégories · urgence · champs',
     whatsappHint: 'Option K · contact_support',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'service_client',
@@ -210,7 +210,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'SLA · objets · formulaire',
     whatsappHint: 'Option L · contact_service_client',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'transport',
@@ -225,7 +225,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'Routes · prix · villes',
     whatsappHint: 'Option J1 · request_transport',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'groceries',
@@ -240,7 +240,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'Frais · note · devise',
     whatsappHint: 'Option J2 · request_shopping',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'concierge',
@@ -255,7 +255,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     gestionHint: 'customServices · formules · villes',
     whatsappHint: 'Option J3 · request_custom_service',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'access',
@@ -270,7 +270,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'na', task: 'na', execution: 'na' },
     gestionHint: 'Mode réception · instructions par zone',
     whatsappHint: 'Option F · show_access_info',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'property_wifi',
@@ -285,7 +285,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'na', task: 'na', execution: 'na' },
     gestionHint: 'Infos logement · WiFi listing',
     whatsappHint: 'Option G · show_property_info',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'house_rules',
@@ -300,7 +300,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
     gestionHint: 'Rules · InfoUtils · listing_rules_and_info',
     whatsappHint: 'Option H · show_house_rules',
-    orchestrationExpertPath: '/tasks/orchestration-config?tab=messages',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
 ];
 

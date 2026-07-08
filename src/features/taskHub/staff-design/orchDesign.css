@@ -1113,7 +1113,7 @@
 .so-orch-root .wf-block {
   margin-bottom: 18px;
 }
-/* Blocs repliables niveau 2 — même pattern que /tasks/plans (SequencePlanCard) */
+/* Blocs repliables niveau 2 — même pattern que /orchestration/plans (SequencePlanCard) */
 .so-orch-root .orch-l2-block {
   margin-bottom: 12px;
   background: var(--bg2);

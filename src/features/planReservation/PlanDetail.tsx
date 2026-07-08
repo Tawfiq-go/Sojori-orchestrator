@@ -298,7 +298,7 @@ export default function PlanDetail({
           <b>{ownerDisplayName || 'ce propriétaire'}</b> n&apos;a pas encore de config
           orchestration dédiée. Le plan utilise la config <code>ownerId: null</code> (template par
           défaut). Pensez à synchroniser depuis Admin sur{' '}
-          <Link to="/tasks/orchestration-config">orchestration-config</Link>.
+          <Link to="/orchestration/config">orchestration-config</Link>.
         </div>
       ) : null}
 
@@ -309,7 +309,7 @@ export default function PlanDetail({
             <>
               {' '}
               · glisser ⠿ pour réordonner sur{' '}
-              <Link to="/tasks/orchestration-config">orchestration-config</Link> · simulation à droite
+              <Link to="/orchestration/config">orchestration-config</Link> · simulation à droite
             </>
           ) : null}
         </p>
@@ -391,7 +391,7 @@ export default function PlanDetail({
         {showAdminConfigSource ? (
           <>
             {' '}
-            <Link to="/tasks/orchestration-config" style={{ color: 'var(--pd)', fontWeight: 700 }}>
+            <Link to="/orchestration/config" style={{ color: 'var(--pd)', fontWeight: 700 }}>
               Config orchestration
             </Link>
             .

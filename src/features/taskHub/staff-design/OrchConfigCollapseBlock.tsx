@@ -4,14 +4,14 @@ type Props = {
   icon: string;
   title: string;
   countLabel: string;
-  /** Ouvert au premier rendu (défaut : replié, comme /tasks/plans). */
+  /** Ouvert au premier rendu (défaut : replié, comme /orchestration/plans). */
   defaultOpen?: boolean;
   /** Actions dans l'en-tête (checkbox, Désactiver…) — stopPropagation géré côté parent. */
   headerExtra?: ReactNode;
   children: ReactNode;
 };
 
-/** Bloc repliable niveau 2 — même pattern que SequencePlanCard /tasks/plans. */
+/** Bloc repliable niveau 2 — même pattern que SequencePlanCard /orchestration/plans. */
 export default function OrchConfigCollapseBlock({
   icon,
   title,

@@ -17,19 +17,22 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'tasks/team': '/tasks/team',
   calendar: '/calendar',
 
-  // Orchestration (routes réelles fulltask)
-  orchestration: '/tasks/plans',
-  'orch/plans': '/tasks/plans',
-  'orch/ops': '/tasks/ops',
-  'orch/workflows': '/tasks/orchestration-config',
-  'orchestration/plans': '/tasks/plans',
-  'orchestration/config': '/tasks/orchestration-config',
-  'orchestration/whatsapp-messages': '/tasks/orchestration-config?tab=config',
-  orchestrator: '/tasks/plans',
-  'tasks/plans': '/tasks/plans',
-  'tasks/orchestration-config': '/tasks/orchestration-config',
-  'tasks/whatsapp-messages': '/tasks/orchestration-config?tab=config',
-  'tasks/orchestration': '/tasks/plans',
+  // Orchestration — URLs canoniques /orchestration/* (alignées menu)
+  orchestration: '/orchestration/plans',
+  'orch/plans': '/orchestration/plans',
+  'orch/ops': '/orchestration/ops',
+  'orch/workflows': '/orchestration/config',
+  'orchestration/plans': '/orchestration/plans',
+  'orchestration/ops': '/orchestration/ops',
+  'orchestration/config': '/orchestration/config',
+  'orchestration/whatsapp-messages': '/orchestration/config?tab=config',
+  orchestrator: '/orchestration/plans',
+  // Anciens ids tasks/* d'orchestration → nouvelles URLs (compat)
+  'tasks/plans': '/orchestration/plans',
+  'tasks/ops': '/orchestration/ops',
+  'tasks/orchestration-config': '/orchestration/config',
+  'tasks/whatsapp-messages': '/orchestration/config?tab=config',
+  'tasks/orchestration': '/orchestration/plans',
 
   // Catalogue & revenue
   listings: '/listings',
@@ -129,7 +132,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   // Temp — pages legacy / placement à décider
   'temp/pricing-calendar': '/pricing',
   'temp/reservations-planning': '/reservations/planning',
-  'temp/orch-rules': '/tasks/orchestration-config',
+  'temp/orch-rules': '/orchestration/config',
   'temp/sojori-logs': '/admin/sojori-logs',
   'temp/channel-distribution': '/admin/ChannelManager?tab=distribution',
   'temp/settings-template': '/admin/settings?tab=template',

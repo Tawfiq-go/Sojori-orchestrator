@@ -108,7 +108,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
-    group: 'Guest',
+    group: 'Inbox Guest',
     roles: PM_ROLES,
     items: [
       { id: 'comms/guests', label: 'WhatsApp', iconType: 'chat', iconColor: '#25D366' },
@@ -118,7 +118,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
-    group: 'Staff',
+    group: 'Inbox Staff',
     roles: PM_ROLES,
     items: [
       { id: 'comms/staff', label: 'Staff WhatsApp', iconType: 'chat', iconColor: '#B45309', badgeRed: true },
