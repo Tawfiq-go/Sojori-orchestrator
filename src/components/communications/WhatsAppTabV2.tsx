@@ -399,6 +399,7 @@ export default function WhatsAppTabV2() {
         <>
           <ConversationThread
             thread={activeThread}
+            threadMode="whatsapp"
             messages={formattedMessages}
             loadingMessages={inbox.loadingMessages}
             quickTemplates={WA_QUICK_TEMPLATES}
