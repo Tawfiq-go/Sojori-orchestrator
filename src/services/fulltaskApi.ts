@@ -544,6 +544,19 @@ export async function getDayPlan(date?: string): Promise<DayPlanResponse> {
   return data as DayPlanResponse;
 }
 
+export type DayPlanWeekDay = {
+  date: string;
+  fragility: DayPlanResponse['fragility'];
+  stats: DayPlanResponse['stats'];
+};
+
+export async function getDayPlanWeek(start?: string, days = 7): Promise<{ success: boolean; start: string; days: DayPlanWeekDay[] }> {
+  const { data } = await apiClient.get(`${BASE}/plans/day-plan-week`, {
+    params: { ...(start ? { start } : {}), days },
+  });
+  return data as { success: boolean; start: string; days: DayPlanWeekDay[] };
+}
+
 export async function chooseGuestArrival(reservationId: string, time: string) {
   logResaGuest('api:choose-arrival →', { reservationId, time });
   const { data } = await apiClient.patch(
