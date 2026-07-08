@@ -253,6 +253,23 @@ class CalendarService {
   }
 
   /**
+   * GET /api/v1/calendar/inventory/performance-by-listing
+   * KPI mensuels par bien (réalisé + déjà réservé) — onglet Dashboard Performance.
+   */
+  async getPerformanceByListing(params: {
+    from: string; // YYYY-MM
+    to: string;
+    ownerId?: string;
+    listingId?: string;
+  }): Promise<PerformanceByListingResponse> {
+    const response = await apiClient.get<PerformanceByListingResponse>(
+      `${CALENDAR_BASE}/inventory/performance-by-listing`,
+      { params },
+    );
+    return response.data;
+  }
+
+  /**
    * GET /api/v1/calendar/inventory/audit-blocked-days
    * Audit à la demande : jours bloqués (Dispo=0) sans réservation confirmée/pending,
    * groupés en plages avec une classification de cause probable.
@@ -353,3 +370,39 @@ class CalendarService {
 // Export singleton instance
 export const calendarService = new CalendarService();
 export default calendarService;
+
+
+/* ─── Performance par bien (Dashboard) ─────────────────────────── */
+export interface ListingPerformanceMonth {
+  month: string; // YYYY-MM
+  isFuture: boolean;
+  isCurrent: boolean;
+  hasInventory: boolean;
+  openNights: number;
+  blockedNights: number;
+  nightsSold: number;
+  revenue: number;
+  occupancy: number | null;
+  adr: number | null;
+  revpar: number | null;
+  bookings: number;
+  cancellations: number;
+  leadTimeMedianDays: number | null;
+  avgStayNights: number | null;
+  channels: Record<string, number>;
+}
+
+export interface ListingPerformanceRow {
+  listingId: string;
+  name: string;
+  city: string | null;
+  months: ListingPerformanceMonth[];
+}
+
+export interface PerformanceByListingResponse {
+  success: boolean;
+  from: string;
+  to: string;
+  currency: 'MAD';
+  listings: ListingPerformanceRow[];
+}
