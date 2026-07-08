@@ -19,6 +19,8 @@ import {
   setTokens,
 } from '../utils/authUtils';
 import { clearPersistedUser, getPersistedUser, persistUser } from '../data/mockAuth';
+import { clearPmSimulationSnapshot } from '../utils/pmSimulationSession';
+import { clearPersistedAdminScope } from '../utils/adminOwnerFilter.utils';
 import { apiUserToMockUser } from '../utils/apiUserToMockUser';
 import { logAuth, logAuthError, logAuthWarn, maskToken } from '../utils/dashboardDebug';
 import { SESSION_EXPIRED_EVENT } from '../utils/devApiAccess';
@@ -82,6 +84,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = useCallback((): void => {
     logAuth('logout');
     clearPersistedUser();
+    clearPmSimulationSnapshot();
+    clearPersistedAdminScope();
 
     setState({
       user: null,
