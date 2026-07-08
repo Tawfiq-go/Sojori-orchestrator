@@ -7,12 +7,13 @@
 // Style Atelier (tokens dynamic-pricing). Maquette validée v3.
 // ════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Box, Button, Dialog, DialogContent, DialogTitle, IconButton, Stack, Typography } from '@mui/material';
 import { T } from '../dynamic-pricing/_tokens';
 import { calendarService } from '../../services/calendarService';
 import type {
   ListingPerformanceMonth,
   ListingPerformanceRow,
+  PerformanceReservationDetail,
 } from '../../services/calendarService';
 
 const MONO = 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace';
@@ -100,7 +101,7 @@ function occTint(v: number | null): string {
   return 'rgba(199,155,34,0.55)';
 }
 
-function YearCell({ m, prevYear }: { m: ListingPerformanceMonth; prevYear?: ListingPerformanceMonth }) {
+function YearCell({ m, prevYear, onClick }: { m: ListingPerformanceMonth; prevYear?: ListingPerformanceMonth; onClick?: () => void }) {
   const yoy =
     m.isFuture && prevYear?.hasInventory && prevYear.occupancy != null && m.occupancy != null && m.hasInventory
       ? Math.round((m.occupancy - prevYear.occupancy) * 100)
@@ -112,9 +113,11 @@ function YearCell({ m, prevYear }: { m: ListingPerformanceMonth; prevYear?: List
       (m.adr != null ? ` · ADR ${fmtMad(m.adr)}` : '') +
       (m.isFuture ? ' · déjà réservé à date' : '');
   return (
-    <Box title={title} sx={{
+    <Box title={title} onClick={onClick} sx={{
       position: 'relative', borderRadius: '6px', height: 48, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', gap: '1px', minWidth: 0,
+      cursor: onClick ? 'pointer' : 'default',
+      '&:hover': onClick ? { outline: `1.5px solid ${T.gold}`, outlineOffset: '1px' } : undefined,
       ...(m.isFuture
         ? { bgcolor: T.bg1, border: `1.5px dashed ${empty || (m.occupancy ?? 0) === 0 ? T.borderStrong : T.goldDeep}` }
         : { bgcolor: occTint(m.occupancy) }),
@@ -148,6 +151,7 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
   const [rows, setRows] = useState<ListingPerformanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [drill, setDrill] = useState<{ listingId: string; name: string; month: string } | null>(null);
 
   // Fenêtre −24 → +12 : les 12 mois « année » + le N-1 nécessaire aux pastilles.
   const from = useMemo(() => shiftMonth(nowMonth(), -24), []);
@@ -260,22 +264,26 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
           portfolio={portfolio}
           maxPortfolioRevenue={maxPortfolioRevenue}
           futureTotals={futureTotals}
+          onDrill={(listingId, name, month) => setDrill({ listingId, name, month })}
         />
       ) : (
-        <MoisView rows={rows} month={selectedMonth} />
+        <MoisView rows={rows} month={selectedMonth} onDrill={(listingId, name) => setDrill({ listingId, name, month: selectedMonth })} />
       )}
+
+      <ReservationsDrillModal drill={drill} onClose={() => setDrill(null)} />
     </Box>
   );
 }
 
 /* ─── Vue Année ─── */
 
-function AnneeView({ rows, displayKeys, portfolio, maxPortfolioRevenue, futureTotals }: {
+function AnneeView({ rows, displayKeys, portfolio, maxPortfolioRevenue, futureTotals, onDrill }: {
   rows: ListingPerformanceRow[];
   displayKeys: string[];
   portfolio: Map<string, { revenue: number; nightsSold: number; openNights: number }>;
   maxPortfolioRevenue: number;
   futureTotals: { nights: number; revenue: number };
+  onDrill: (listingId: string, name: string, month: string) => void;
 }) {
   const now = nowMonth();
   return (
@@ -344,7 +352,14 @@ function AnneeView({ rows, displayKeys, portfolio, maxPortfolioRevenue, futureTo
                 {displayKeys.map((key) => {
                   const m = byMonth.get(key);
                   if (!m) return <Box key={key} />;
-                  return <YearCell key={key} m={m} prevYear={byMonth.get(shiftMonth(key, -12))} />;
+                  return (
+                    <YearCell
+                      key={key}
+                      m={m}
+                      prevYear={byMonth.get(shiftMonth(key, -12))}
+                      onClick={m.hasInventory ? () => onDrill(row.listingId, row.name, key) : undefined}
+                    />
+                  );
                 })}
               </Box>
             </Box>
@@ -355,7 +370,7 @@ function AnneeView({ rows, displayKeys, portfolio, maxPortfolioRevenue, futureTo
       <Typography sx={{ fontSize: 11.5, color: T.text3, lineHeight: 1.6, mt: 1 }}>
         Les mois à venir montrent le <b>déjà réservé à date</b> (pas une prédiction — ça se remplit encore).
         Pastille ▲▼ = écart d'occupation vs le même mois l'an dernier. « · » = bien pas encore actif ce mois-là.
-        Survolez une cellule pour le détail (ADR compris).
+        Survolez une cellule pour le détail (ADR compris) · cliquez pour voir les réservations du mois.
       </Typography>
     </Box>
   );
@@ -371,7 +386,7 @@ const tdSx = {
   p: '12px', borderBottom: `1px solid ${T.border}`, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' as const, fontSize: 12.5,
 };
 
-function MoisView({ rows, month }: { rows: ListingPerformanceRow[]; month: string }) {
+function MoisView({ rows, month, onDrill }: { rows: ListingPerformanceRow[]; month: string; onDrill: (listingId: string, name: string) => void }) {
   const prevMonth = shiftMonth(month, -1);
   const items = rows
     .map((row) => ({
@@ -426,7 +441,8 @@ function MoisView({ rows, month }: { rows: ListingPerformanceRow[]; month: strin
                 const deltaRev =
                   m && prev && prev.revenue > 0 ? ((m.revenue - prev.revenue) / prev.revenue) * 100 : null;
                 return (
-                  <Box component="tr" key={row.listingId} sx={{ '&:hover td': { bgcolor: T.bg2 } }}>
+                  <Box component="tr" key={row.listingId} onClick={() => onDrill(row.listingId, row.name)}
+                    sx={{ cursor: 'pointer', '&:hover td': { bgcolor: T.bg2 } }}>
                     <Box component="td" sx={{ ...tdSx, minWidth: 170 }}>
                       <Typography sx={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em' }}>{row.name}</Typography>
                       <Typography sx={{ fontFamily: MONO, fontSize: 10.5, color: T.text3 }}>{row.city ?? '—'}</Typography>
@@ -460,8 +476,110 @@ function MoisView({ rows, month }: { rows: ListingPerformanceRow[]; month: strin
         <b>Occupation</b> : nuits occupées ÷ nuits ouvertes (vos jours bloqués sont exclus). ·
         <b> RevPAR</b> : revenus ÷ nuits ouvertes — combine prix et remplissage. ·
         <b> Lead time</b> : délai médian réservation → arrivée (résas arrivant ce mois). ·
-        Revenus attribués par nuit occupée : un séjour à cheval sur deux mois est réparti.
+        Revenus attribués par nuit occupée : un séjour à cheval sur deux mois est réparti. ·
+        Cliquez sur une ligne pour voir les réservations du mois.
       </Typography>
     </Box>
+  );
+}
+
+
+/* ─── Modal réservations du mois (justification des KPI) ─── */
+
+function ReservationsDrillModal({ drill, onClose }: {
+  drill: { listingId: string; name: string; month: string } | null;
+  onClose: () => void;
+}) {
+  const [items, setItems] = useState<PerformanceReservationDetail[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!drill) { setItems(null); setError(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await calendarService.getPerformanceReservations(drill.listingId, drill.month);
+        if (!cancelled) setItems(res.reservations ?? []);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur de chargement');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [drill]);
+
+  const active = (items ?? []).filter((r) => r.countsInKpis);
+  const totalMonth = active.reduce((s, r) => s + r.revenueInMonth, 0);
+  const nightsMonth = active.reduce((s, r) => s + r.nightsInMonth, 0);
+
+  return (
+    <Dialog open={Boolean(drill)} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ pb: 0.5 }}>
+        <Stack direction="row" sx={{ alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
+          <Typography component="span" sx={{ fontSize: 15.5, fontWeight: 800, textTransform: 'capitalize' }}>
+            {drill ? monthLabel(drill.month) : ''}
+          </Typography>
+          <Typography component="span" sx={{ fontSize: 12.5, color: T.text3 }}>{drill?.name}</Typography>
+          <Box sx={{ flex: 1 }} />
+          <IconButton size="small" onClick={onClose} aria-label="Fermer">✕</IconButton>
+        </Stack>
+        <Typography sx={{ fontFamily: MONO, fontSize: 11, color: T.text2, mt: 0.5 }}>
+          {items ? `${active.length} résa(s) comptée(s) · ${nightsMonth} nuit(s) · ${fmtMad(totalMonth)} MAD sur ce mois` : 'Chargement…'}
+        </Typography>
+      </DialogTitle>
+      <DialogContent>
+        {error ? (
+          <Typography sx={{ color: T.error, fontSize: 13, py: 2 }}>{error}</Typography>
+        ) : !items ? (
+          <Typography sx={{ color: T.text3, fontSize: 13, py: 2 }}>Chargement…</Typography>
+        ) : items.length === 0 ? (
+          <Typography sx={{ color: T.text3, fontSize: 13, py: 2 }}>Aucune réservation sur ce mois.</Typography>
+        ) : (
+          <Box sx={{ overflowX: 'auto' }}>
+            <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', minWidth: 720, fontSize: 12.5 }}>
+              <Box component="thead">
+                <Box component="tr">
+                  {['Résa', 'Voyageur', 'Canal', 'Check-in', 'Check-out', 'Nuits (mois)', 'Montant (mois)', 'Total séjour', 'Réservé le', 'Statut'].map((h) => (
+                    <Box key={h} component="th" sx={thSx}>{h}</Box>
+                  ))}
+                </Box>
+              </Box>
+              <Box component="tbody">
+                {items.map((r) => (
+                  <Box component="tr" key={r.reservationNumber} sx={{ opacity: r.countsInKpis ? 1 : 0.5 }}>
+                    <Box component="td" sx={{ ...tdSx, fontFamily: MONO, fontWeight: 700 }}>{r.reservationNumber}</Box>
+                    <Box component="td" sx={tdSx}>{r.guestName ?? '—'}{r.numberOfGuests ? ` · ${r.numberOfGuests}p` : ''}</Box>
+                    <Box component="td" sx={tdSx}>
+                      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                        <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: channelColor(String(r.channelName)) }} />
+                        {r.channelName ?? '—'}
+                      </Box>
+                    </Box>
+                    <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{r.checkIn}</Box>
+                    <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{r.checkOut}</Box>
+                    <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{r.nightsInMonth}/{r.totalNights}</Box>
+                    <Box component="td" sx={{ ...tdSx, fontWeight: 800 }}>{fmtMad(r.revenueInMonth)} MAD</Box>
+                    <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{fmtMad(r.totalPrice)}</Box>
+                    <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{r.bookedAt ?? '—'}</Box>
+                    <Box component="td" sx={tdSx}>
+                      <Box component="span" sx={{
+                        fontFamily: MONO, fontSize: 10.5, fontWeight: 700, borderRadius: '99px', px: 1, py: 0.25,
+                        color: r.countsInKpis ? T.success : T.error,
+                        bgcolor: r.countsInKpis ? T.successTint : T.errorTint,
+                      }}>
+                        {r.countsInKpis ? r.status : `${r.status} (exclue)`}
+                      </Box>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          </Box>
+        )}
+        <Typography sx={{ fontSize: 11, color: T.text3, mt: 1.5 }}>
+          « Nuits (mois) » et « Montant (mois) » = la part de ce mois pour les séjours à cheval.
+          Les réservations annulées sont affichées mais exclues des KPI.
+        </Typography>
+      </DialogContent>
+    </Dialog>
   );
 }
