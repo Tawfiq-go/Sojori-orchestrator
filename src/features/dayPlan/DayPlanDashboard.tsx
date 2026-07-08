@@ -7,8 +7,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import * as fulltaskApi from '../../services/fulltaskApi';
-import type { DayPlanAction, DayPlanStep } from '../../services/fulltaskApi';
+import type { DayPlanAction, DayPlanStep, DayPlanWeekDay } from '../../services/fulltaskApi';
 import PlanManualAssignModal from '../planReservation/PlanManualAssignModal';
+import EscaladeForceSlotModal from '../planReservation/EscaladeForceSlotModal';
 import './dayPlan.css';
 
 const KIND_EMOJI: Record<DayPlanStep['kind'], string> = {
@@ -50,6 +51,10 @@ export function DayPlanDashboard() {
   const [plan, setPlan] = useState<fulltaskApi.DayPlanResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [assignCtx, setAssignCtx] = useState<{ reservationId: string; taskId: string } | null>(null);
+  const [slotCtx, setSlotCtx] = useState<{ reservationId: string; taskId: string; taskType: string } | null>(null);
+  const [week, setWeek] = useState<DayPlanWeekDay[]>([]);
+  const [batchHour, setBatchHour] = useState(16);
+  const [batchLoading, setBatchLoading] = useState(false);
 
   const isToday = date === toIso(new Date());
 
@@ -72,6 +77,19 @@ export function DayPlanDashboard() {
     return () => clearInterval(t);
   }, [load]);
 
+  const loadWeek = useCallback(async () => {
+    try {
+      const res = await fulltaskApi.getDayPlanWeek();
+      setWeek(res.days || []);
+    } catch {
+      setWeek([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadWeek();
+  }, [loadWeek]);
+
   const shiftDate = (days: number) => {
     const [y, m, d] = date.split('-').map(Number);
     setDate(toIso(new Date(y, m - 1, d + days)));
@@ -90,10 +108,49 @@ export function DayPlanDashboard() {
       window.open(`tel:${action.phone}`, '_self');
       return;
     }
-    if (action.type === 'force_slot' || action.type === 'relance_guest') {
-      // v1 : fixer l'heure / relancer se fait depuis le plan détaillé de la réservation
+    if (action.type === 'force_slot' && action.taskId) {
+      setSlotCtx({
+        reservationId: step.reservationId,
+        taskId: action.taskId,
+        taskType: step.kind === 'departure' ? 'departure_choose' : 'arrival_choose',
+      });
+      return;
+    }
+    if (action.type === 'relance_guest') {
       navigate(`/orchestration/plans?reservationId=${encodeURIComponent(step.reservationId)}`);
     }
+  };
+
+  /** Étapes « sans heure » groupables : une action force_slot disponible chacune. */
+  const batchableSlots = useMemo(() => {
+    const steps = plan?.steps ?? [];
+    return steps
+      .filter((s) => s.hourUnknown && s.state === 'attention')
+      .map((s) => ({ step: s, action: s.attention?.actions.find((a) => a.type === 'force_slot') }))
+      .filter((x): x is { step: DayPlanStep; action: DayPlanAction & { taskId: string } } =>
+        Boolean(x.action?.taskId),
+      );
+  }, [plan]);
+
+  const applyBatchSlots = async () => {
+    if (!batchableSlots.length) return;
+    const time = `${String(batchHour).padStart(2, '0')}:00`;
+    setBatchLoading(true);
+    let ok = 0;
+    let ko = 0;
+    for (const { step, action } of batchableSlots) {
+      try {
+        const res = await fulltaskApi.forcePlanGuestSlot(step.reservationId, action.taskId, time);
+        if (res?.success === false) ko++;
+        else ok++;
+      } catch {
+        ko++;
+      }
+    }
+    setBatchLoading(false);
+    if (ok) toast.success(`${time} appliqué à ${ok} réservation${ok > 1 ? 's' : ''}`);
+    if (ko) toast.error(`${ko} échec${ko > 1 ? 's' : ''} — voir les plans concernés`);
+    void load();
   };
 
   const { unknownSteps, timedSteps } = useMemo(() => {
@@ -150,6 +207,35 @@ export function DayPlanDashboard() {
         </div>
       </div>
 
+      {week.length > 0 && (
+        <div className="dp-week">
+          {week.map((d) => {
+            const [, , dayNum] = d.date.split('-');
+            const dayName = new Date(`${d.date}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short' });
+            return (
+              <button
+                key={d.date}
+                type="button"
+                className={`dp-wday frag-${d.fragility.label} ${d.date === date ? 'active' : ''}`}
+                onClick={() => setDate(d.date)}
+                title={`${d.stats.arrivals} arrivées · ${d.stats.departures} départs · ${d.stats.turnovers} turnovers · ${d.stats.attention} décision(s)`}
+              >
+                <span className="dp-wday-name">{dayName} {Number(dayNum)}</span>
+                <span className="dp-wday-counts">
+                  🛬{d.stats.arrivals} 🛫{d.stats.departures}
+                  {d.stats.turnovers > 0 && <> 🔄{d.stats.turnovers}</>}
+                </span>
+                {d.stats.attention > 0 ? (
+                  <span className="dp-wday-attn">✋ {d.stats.attention}</span>
+                ) : (
+                  <span className="dp-wday-ok">✓</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {plan && stats && (
         <div className="dp-chips">
           <span className={`dp-chip frag-${fragility?.label ?? 'calme'}`}>
@@ -176,6 +262,25 @@ export function DayPlanDashboard() {
       {unknownSteps.length > 0 && (
         <div className="dp-section">
           <div className="dp-section-title">⏱ Sans heure choisie ({unknownSteps.length})</div>
+          {batchableSlots.length >= 2 && (
+            <div className="dp-batch">
+              <span className="dp-batch-label">
+                Décision groupée : fixer la même heure pour les {batchableSlots.length} réservations sans réponse
+              </span>
+              <select
+                value={batchHour}
+                onChange={(e) => setBatchHour(Number(e.target.value))}
+                aria-label="Heure par défaut"
+              >
+                {[12, 13, 14, 15, 16, 17, 18, 19].map((h) => (
+                  <option key={h} value={h}>{h}:00</option>
+                ))}
+              </select>
+              <button type="button" className="primary" disabled={batchLoading} onClick={() => void applyBatchSlots()}>
+                {batchLoading ? 'Application…' : `Appliquer à tous (${batchableSlots.length})`}
+              </button>
+            </div>
+          )}
           {unknownSteps.map((s) => (
             <StepRow key={s.id} step={s} onAction={handleAction} />
           ))}
@@ -199,6 +304,20 @@ export function DayPlanDashboard() {
           onClose={() => setAssignCtx(null)}
           onDone={() => {
             setAssignCtx(null);
+            void load();
+          }}
+        />
+      )}
+
+      {slotCtx && (
+        <EscaladeForceSlotModal
+          open
+          reservationId={slotCtx.reservationId}
+          taskId={slotCtx.taskId}
+          taskType={slotCtx.taskType}
+          onClose={() => setSlotCtx(null)}
+          onSubmitted={() => {
+            setSlotCtx(null);
             void load();
           }}
         />
