@@ -26,6 +26,11 @@ function toIso(d: Date): string {
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 }
 
+function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return toIso(new Date(y, m - 1, d + days));
+}
+
 function frDateLabel(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('fr-FR', {
@@ -77,22 +82,31 @@ export function DayPlanDashboard() {
     return () => clearInterval(t);
   }, [load]);
 
+  const [weekStart, setWeekStart] = useState(() => toIso(new Date()));
+
   const loadWeek = useCallback(async () => {
     try {
-      const res = await fulltaskApi.getDayPlanWeek();
+      const res = await fulltaskApi.getDayPlanWeek(weekStart);
       setWeek(res.days || []);
     } catch {
       setWeek([]);
     }
-  }, []);
+  }, [weekStart]);
 
   useEffect(() => {
     void loadWeek();
   }, [loadWeek]);
 
+  /* La bande semaine suit la date sélectionnée : si elle sort de la
+     fenêtre affichée (7 jours), la fenêtre glisse pour la contenir. */
+  useEffect(() => {
+    const weekEnd = addDaysIso(weekStart, 6);
+    if (date < weekStart) setWeekStart(date);
+    else if (date > weekEnd) setWeekStart(addDaysIso(date, -6));
+  }, [date, weekStart]);
+
   const shiftDate = (days: number) => {
-    const [y, m, d] = date.split('-').map(Number);
-    setDate(toIso(new Date(y, m - 1, d + days)));
+    setDate(addDaysIso(date, days));
   };
 
   const handleAction = (step: DayPlanStep, action: DayPlanAction) => {
