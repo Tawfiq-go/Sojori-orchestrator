@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 .env.local
 .vercel
+
+# Vercel env dumps (secrets)
+.env.vercel.prod
+.env.vercel.prod.check
