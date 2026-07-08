@@ -728,7 +728,8 @@
   color: #c81e1e;
 }
 .so-staff-root .access-picker {
-  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 .so-staff-root .access-add-btn {
   padding: 7px 12px;
@@ -747,11 +748,8 @@
   background: var(--pt);
 }
 .so-staff-root .access-dropdown {
-  position: absolute;
-  z-index: 30;
-  left: 0;
-  right: 0;
-  top: calc(100% + 4px);
+  margin-top: 4px;
+  width: 100%;
   background: #fff;
   border: 1px solid var(--bs);
   border-radius: 10px;
@@ -764,8 +762,9 @@
   border-radius: 0;
 }
 .so-staff-root .access-options {
-  max-height: 220px;
+  max-height: min(320px, 42vh);
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .so-staff-root .access-option {
   display: flex;
