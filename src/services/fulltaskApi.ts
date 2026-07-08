@@ -471,6 +471,79 @@ export async function getOpsFeed(days = 2): Promise<OpsFeedResponse> {
   return data as OpsFeedResponse;
 }
 
+export type DayPlanAction = {
+  type: 'assign' | 'relance_guest' | 'force_slot' | 'plan' | 'call';
+  label: string;
+  taskId?: string;
+  messageIndex?: number;
+  phone?: string;
+};
+
+export type DayPlanStep = {
+  id: string;
+  time: string | null;
+  hourUnknown?: boolean;
+  kind: 'departure' | 'arrival' | 'cleaning' | 'task' | 'message' | 'relance';
+  title: string;
+  listingId: string;
+  listingName: string;
+  guestName?: string;
+  reservationId: string;
+  reservationCode?: string;
+  taskId?: string;
+  taskType?: string;
+  staffName?: string | null;
+  state: 'done' | 'pending' | 'attention';
+  auto: boolean;
+  meta?: string;
+  chainId?: string;
+  slackMinutes?: number;
+  attention?: {
+    reason: string;
+    attempted?: string;
+    deadline?: string;
+    actions: DayPlanAction[];
+  };
+};
+
+export type DayPlanChain = {
+  id: string;
+  listingId: string;
+  listingName: string;
+  departingReservationId: string;
+  arrivingReservationId: string;
+  departingGuestName?: string;
+  arrivingGuestName?: string;
+  slackMinutes: number;
+  status: 'ok' | 'tight' | 'broken';
+  cleaningDurationMinutes: number;
+  expectedCleaningEnd: string;
+};
+
+export type DayPlanResponse = {
+  success: boolean;
+  date: string;
+  compiledAt: string;
+  fragility: { tightChains: number; label: 'calme' | 'normale' | 'tendue'; window?: { from: string; to: string } };
+  nextAttentionAt: string | null;
+  stats: {
+    steps: number;
+    done: number;
+    attention: number;
+    arrivals: number;
+    departures: number;
+    turnovers: number;
+    hourUnknown: number;
+  };
+  chains: DayPlanChain[];
+  steps: DayPlanStep[];
+};
+
+export async function getDayPlan(date?: string): Promise<DayPlanResponse> {
+  const { data } = await apiClient.get(`${BASE}/plans/day-plan`, { params: date ? { date } : {} });
+  return data as DayPlanResponse;
+}
+
 export async function chooseGuestArrival(reservationId: string, time: string) {
   logResaGuest('api:choose-arrival →', { reservationId, time });
   const { data } = await apiClient.patch(
