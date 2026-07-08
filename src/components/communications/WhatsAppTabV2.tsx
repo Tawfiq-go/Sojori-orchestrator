@@ -60,6 +60,8 @@ export default function WhatsAppTabV2() {
   const [waStayQuickFilter, setWaStayQuickFilter] = useState<WaStayQuickFilter>('none');
   const [waUnreadOnly, setWaUnreadOnly] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
+  const [composerDraft, setComposerDraft] = useState('');
+  const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
   const [inboxFullscreen, setInboxFullscreen] = useState(false);
 
@@ -237,6 +239,8 @@ export default function WhatsAppTabV2() {
   };
 
   const handleSelect = async (conv: Conversation) => {
+    setComposerDraft('');
+    setAiSourceDraft('');
     await inbox.selectConversation(conv);
   };
 
@@ -398,11 +402,16 @@ export default function WhatsAppTabV2() {
             messages={formattedMessages}
             loadingMessages={inbox.loadingMessages}
             quickTemplates={WA_QUICK_TEMPLATES}
+            composerValue={composerDraft}
+            onComposerValueChange={setComposerDraft}
             onSendMessage={handleGuestSend}
             onSelectTemplate={async (tpl) => {
               if (tpl.text) await handleGuestSend(tpl.text);
             }}
-            onAISuggestion={() => setShowAIModal(true)}
+            onAISuggestion={(draft) => {
+              setAiSourceDraft(draft);
+              setShowAIModal(true);
+            }}
           />
           <ConversationDetails
             thread={activeThread}
@@ -509,13 +518,14 @@ export default function WhatsAppTabV2() {
       <AISuggestionModal
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
-        onUseSuggestion={async (text) => {
+        onUseSuggestion={(text) => {
+          setComposerDraft(text);
           setShowAIModal(false);
-          await handleGuestSend(text);
         }}
         context={{
           threadContext: buildWhatsappThreadContextForAi(inbox.messages),
           lastGuestMessage: getLastGuestMessageFromExchanges(inbox.messages),
+          draft: aiSourceDraft,
           guestName: inbox.activeConversation?.name,
           reservationNumber: inbox.reservation?.reservationNumber,
           type: 'whatsapp',

@@ -54,6 +54,8 @@ export default function LeadsTabV2() {
   const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAIModal, setShowAIModal] = useState(false);
+  const [composerDraft, setComposerDraft] = useState('');
+  const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [filter, setFilter] = useState('all');
   const activeRef = useRef<LeadRow | null>(null);
   activeRef.current = active;
@@ -175,6 +177,8 @@ export default function LeadsTabV2() {
   );
 
   const handleSelect = async (lead: LeadRow) => {
+    setComposerDraft('');
+    setAiSourceDraft('');
     setActive(lead);
     setLoadingMessages(true);
     setMessages([]);
@@ -327,12 +331,17 @@ export default function LeadsTabV2() {
               quickTemplates={OTA_QUICK_TEMPLATES}
               quickReplies={OTA_QUICK_REPLIES}
               otaPlatform={otaPlatform}
+              composerValue={composerDraft}
+              onComposerValueChange={setComposerDraft}
               onSendMessage={async (text) => {
                 await messagesService.sendLeadMessage(active.threadId, text);
                 await handleSelect(active);
               }}
               onSelectTemplate={() => {}}
-              onAISuggestion={() => setShowAIModal(true)}
+              onAISuggestion={(draft) => {
+                setAiSourceDraft(draft);
+                setShowAIModal(true);
+              }}
             />
             <ConversationDetails
               thread={activeThread}
@@ -351,10 +360,14 @@ export default function LeadsTabV2() {
       <AISuggestionModal
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
-        onUseSuggestion={(text) => active && void messagesService.sendLeadMessage(active.threadId, text)}
+        onUseSuggestion={(text) => {
+          setComposerDraft(text);
+          setShowAIModal(false);
+        }}
         context={{
           threadContext: leadsThreadContext,
           lastGuestMessage: leadsLastGuestMessage,
+          draft: aiSourceDraft,
           guestName: active?.guestName,
           reservationNumber: active?.reservationNumber,
           channelName: otaPlatform,
