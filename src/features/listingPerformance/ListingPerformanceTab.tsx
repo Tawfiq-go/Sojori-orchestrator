@@ -107,10 +107,14 @@ function YearCell({ m, prevYear, onClick }: { m: ListingPerformanceMonth; prevYe
       ? Math.round((m.occupancy - prevYear.occupancy) * 100)
       : null;
   const empty = !m.hasInventory;
+  const totalDays = m.openNights + m.blockedNights;
+  const openRatio = totalDays > 0 ? m.openNights / totalDays : 1;
+  const partiallyBlocked = !empty && m.blockedNights > 0;
   const title = empty
     ? `${monthLabel(m.month)} — pas de données (bien pas encore actif)`
     : `${monthLabel(m.month)} · occupation ${fmtPct(m.occupancy)} · ${fmtMad(m.revenue)} MAD · ${m.nightsSold} nuit(s)` +
       (m.adr != null ? ` · ADR ${fmtMad(m.adr)}` : '') +
+      (partiallyBlocked ? ` · ⚠ seulement ${m.openNights} j ouverts / ${totalDays} (${m.blockedNights} bloqués)` : '') +
       (m.isFuture ? ' · déjà réservé à date' : '');
   return (
     <Box title={title} onClick={onClick} sx={{
@@ -139,6 +143,12 @@ function YearCell({ m, prevYear, onClick }: { m: ListingPerformanceMonth; prevYe
       <Typography component="span" sx={{ fontFamily: MONO, fontSize: 8.5, color: T.text3 }} noWrap>
         {empty ? monthLetter(m.month) : `${fmtK(m.revenue)} · ${monthLetter(m.month)}`}
       </Typography>
+      {partiallyBlocked ? (
+        // Jauge d'ouverture : part du mois réellement en vente (le reste est bloqué)
+        <Box sx={{ position: 'absolute', left: 4, right: 4, bottom: 2, height: 3, borderRadius: '99px', bgcolor: T.errorTint, overflow: 'hidden' }}>
+          <Box sx={{ width: `${Math.round(openRatio * 100)}%`, height: '100%', bgcolor: openRatio < 0.5 ? T.error : T.goldDeep, borderRadius: '99px' }} />
+        </Box>
+      ) : null}
     </Box>
   );
 }
@@ -151,7 +161,10 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
   const [rows, setRows] = useState<ListingPerformanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [drill, setDrill] = useState<{ listingId: string; name: string; month: string } | null>(null);
+  const [drill, setDrill] = useState<{
+    listingId: string; name: string; month: string;
+    monthData?: ListingPerformanceMonth | null;
+  } | null>(null);
 
   // Fenêtre −24 → +12 : les 12 mois « année » + le N-1 nécessaire aux pastilles.
   const from = useMemo(() => shiftMonth(nowMonth(), -24), []);
@@ -264,10 +277,16 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
           portfolio={portfolio}
           maxPortfolioRevenue={maxPortfolioRevenue}
           futureTotals={futureTotals}
-          onDrill={(listingId, name, month) => setDrill({ listingId, name, month })}
+          onDrill={(listingId, name, month) => {
+            const row = rows.find((r) => r.listingId === listingId);
+            setDrill({ listingId, name, month, monthData: row?.months.find((x) => x.month === month) ?? null });
+          }}
         />
       ) : (
-        <MoisView rows={rows} month={selectedMonth} onDrill={(listingId, name) => setDrill({ listingId, name, month: selectedMonth })} />
+        <MoisView rows={rows} month={selectedMonth} onDrill={(listingId, name) => {
+          const row = rows.find((r) => r.listingId === listingId);
+          setDrill({ listingId, name, month: selectedMonth, monthData: row?.months.find((x) => x.month === selectedMonth) ?? null });
+        }} />
       )}
 
       <ReservationsDrillModal drill={drill} onClose={() => setDrill(null)} />
@@ -370,6 +389,7 @@ function AnneeView({ rows, displayKeys, portfolio, maxPortfolioRevenue, futureTo
       <Typography sx={{ fontSize: 11.5, color: T.text3, lineHeight: 1.6, mt: 1 }}>
         Les mois à venir montrent le <b>déjà réservé à date</b> (pas une prédiction — ça se remplit encore).
         Pastille ▲▼ = écart d'occupation vs le même mois l'an dernier. « · » = bien pas encore actif ce mois-là.
+        Trait rouge sous une cellule = mois partiellement fermé à la vente (l'occupation ne porte que sur les jours ouverts — cliquez pour le détail).
         Survolez une cellule pour le détail (ADR compris) · cliquez pour voir les réservations du mois.
       </Typography>
     </Box>
@@ -453,7 +473,14 @@ function MoisView({ rows, month, onDrill }: { rows: ListingPerformanceRow[]; mon
                       </Box>
                     ) : (
                       <>
-                        <Box component="td" sx={tdSx}><OccBar value={m.occupancy} /></Box>
+                        <Box component="td" sx={tdSx}>
+                          <OccBar value={m.occupancy} />
+                          {m.blockedNights > 0 ? (
+                            <Typography sx={{ fontFamily: MONO, fontSize: 9.5, color: T.error, mt: 0.25 }}>
+                              ⚠ {m.openNights} j ouverts / {m.openNights + m.blockedNights}
+                            </Typography>
+                          ) : null}
+                        </Box>
                         <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{m.nightsSold}</Box>
                         <Box component="td" sx={{ ...tdSx, fontWeight: 800 }}>{fmtMad(m.revenue)} MAD</Box>
                         <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{m.adr != null ? fmtMad(m.adr) : '—'}</Box>
@@ -487,7 +514,7 @@ function MoisView({ rows, month, onDrill }: { rows: ListingPerformanceRow[]; mon
 /* ─── Modal réservations du mois (justification des KPI) ─── */
 
 function ReservationsDrillModal({ drill, onClose }: {
-  drill: { listingId: string; name: string; month: string } | null;
+  drill: { listingId: string; name: string; month: string; monthData?: ListingPerformanceMonth | null } | null;
   onClose: () => void;
 }) {
   const [items, setItems] = useState<PerformanceReservationDetail[] | null>(null);
@@ -525,6 +552,13 @@ function ReservationsDrillModal({ drill, onClose }: {
         <Typography sx={{ fontFamily: MONO, fontSize: 11, color: T.text2, mt: 0.5 }}>
           {items ? `${active.length} résa(s) comptée(s) · ${nightsMonth} nuit(s) · ${fmtMad(totalMonth)} MAD sur ce mois` : 'Chargement…'}
         </Typography>
+        {drill?.monthData && drill.monthData.blockedNights > 0 ? (
+          <Typography sx={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: T.error, mt: 0.25 }}>
+            ⚠ Mois partiellement fermé : {drill.monthData.openNights} j ouverts sur{' '}
+            {drill.monthData.openNights + drill.monthData.blockedNights} — {drill.monthData.blockedNights} j bloqués
+            (l'occupation de {fmtPct(drill.monthData.occupancy)} est calculée sur les jours ouverts uniquement).
+          </Typography>
+        ) : null}
       </DialogTitle>
       <DialogContent>
         {error ? (
