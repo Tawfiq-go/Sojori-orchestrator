@@ -22,6 +22,7 @@ import { canAccessPmOnboarding } from '../features/onboarding/resolveOwnerId';
 import { useAuth } from '../hooks/useAuth';
 import { hasAdminAccess } from '../utils/rbac.utils';
 import { canAccessProtectedRoutes } from '../utils/devApiAccess';
+import { usePmSimulation } from '../context/PmSimulationContext';
 
 function TeamViewToolbarSlot({ section }: { section: TeamSection }) {
   const { stats } = useTeamViewMode();
@@ -63,7 +64,11 @@ export function TeamRolesHubPage() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
-  const isPlatformAdmin = hasAdminAccess(user?.role);
+  const { isActive: simulationActive } = usePmSimulation();
+  // En simulation PM, l'admin doit voir EXACTEMENT ce que voit un vrai owner :
+  // pas d'onglet « Property managers », pas de barre de scope admin, redirection
+  // vers la vue worker owner. On neutralise donc l'accès admin (même règle que la sidebar).
+  const isPlatformAdmin = hasAdminAccess(user?.role) && !simulationActive;
   const sections = useMemo(
     () =>
       ALL_SECTIONS.filter((s) => {
