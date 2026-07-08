@@ -61,9 +61,21 @@ export function PmSimulationProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const canSimulate = hasAdminAccess(user?.role);
-  const [snapshot, setSnapshot] = useState<PmSimulationSnapshot | null>(() =>
-    canSimulate ? getPmSimulationSnapshot() : null,
-  );
+  const adminUserId = String(user?._id ?? user?.id ?? '').trim();
+  const [snapshot, setSnapshot] = useState<PmSimulationSnapshot | null>(() => {
+    if (!canSimulate) return null;
+    const snap = getPmSimulationSnapshot();
+    if (!snap) return null;
+    if (snap.startedByUserId && adminUserId && snap.startedByUserId !== adminUserId) {
+      clearPmSimulationSnapshot();
+      return null;
+    }
+    if (!snap.startedByUserId && adminUserId) {
+      clearPmSimulationSnapshot();
+      return null;
+    }
+    return snap;
+  });
   const [owners, setOwners] = useState<PmSimulationOwnerOption[]>([]);
   const [ownersLoading, setOwnersLoading] = useState(false);
   const [dashboardDataRevision, setDashboardDataRevision] = useState(0);
@@ -73,8 +85,18 @@ export function PmSimulationProvider({ children }: { children: ReactNode }) {
     if (!canSimulate) {
       clearPmSimulationSnapshot();
       setSnapshot(null);
+      return;
     }
-  }, [canSimulate]);
+    const snap = getPmSimulationSnapshot();
+    if (!snap) {
+      setSnapshot(null);
+      return;
+    }
+    if (!adminUserId || !snap.startedByUserId || snap.startedByUserId !== adminUserId) {
+      clearPmSimulationSnapshot();
+      setSnapshot(null);
+    }
+  }, [canSimulate, adminUserId]);
 
   useEffect(() => {
     if (!canSimulate) return;
@@ -103,7 +125,7 @@ export function PmSimulationProvider({ children }: { children: ReactNode }) {
 
   const startSimulation = useCallback(
     (ownerId: string, details?: { label?: string; email?: string }) => {
-      if (!canSimulate) return;
+      if (!canSimulate || !adminUserId) return;
       const id = String(ownerId).trim();
       if (!id) return;
       const row = owners.find((o) => String(o._id ?? o.id) === id);
@@ -113,6 +135,7 @@ export function PmSimulationProvider({ children }: { children: ReactNode }) {
         ownerEmail: details?.email?.trim() || row?.email,
         startedAt: new Date().toISOString(),
         sessionId: createSimulationSessionId(),
+        startedByUserId: adminUserId,
       };
       persist(next);
       clearDashboardSnapshotCacheForOwner(id);
@@ -129,7 +152,7 @@ export function PmSimulationProvider({ children }: { children: ReactNode }) {
         navigate('/dashboard');
       }
     },
-    [canSimulate, owners, persist, location.pathname, navigate],
+    [canSimulate, adminUserId, owners, persist, location.pathname, navigate],
   );
 
   const stopSimulation = useCallback(() => {

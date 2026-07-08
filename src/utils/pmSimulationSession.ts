@@ -6,6 +6,8 @@ export type PmSimulationSnapshot = {
   ownerEmail?: string;
   startedAt: string;
   sessionId: string;
+  /** Admin connecté au démarrage — évite de réutiliser la simulation après logout / autre compte. */
+  startedByUserId?: string;
 };
 
 function readRaw(): PmSimulationSnapshot | null {
