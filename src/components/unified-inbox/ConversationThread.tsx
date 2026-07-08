@@ -29,6 +29,13 @@ interface ConversationThreadProps {
   messagesTotal?: number;
   /** OTA recherche avancée : surligner + scroll vers la 1ʳᵉ occurrence */
   highlightKeyword?: string;
+  /**
+   * Force le mode de rendu du fil.
+   * - whatsapp: toujours wording/actions WhatsApp (même si channel=ab|bk)
+   * - ota: toujours wording/actions OTA
+   * - auto: déduit depuis thread.channel
+   */
+  threadMode?: 'auto' | 'whatsapp' | 'ota';
 }
 
 export default function ConversationThread({
@@ -48,8 +55,9 @@ export default function ConversationThread({
   messagesLoadError = null,
   messagesTotal = 0,
   highlightKeyword = '',
+  threadMode = 'auto',
 }: ConversationThreadProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [internalComposerValue, setInternalComposerValue] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -65,8 +73,14 @@ export default function ConversationThread({
   );
 
   const kw = highlightKeyword?.trim() ?? '';
+  void quickActions;
 
-  const isOta = isOtaChannelType(thread.channel);
+  const isOta =
+    threadMode === 'ota'
+      ? true
+      : threadMode === 'whatsapp'
+        ? false
+        : isOtaChannelType(thread.channel);
   const otaTheme = getOtaTheme(thread.channel, otaPlatform);
   const flag = thread.guestFlag || flagFromPhone(thread.phone);
   const platformLabel = otaPlatform || otaTheme.label;
@@ -90,13 +104,6 @@ export default function ConversationThread({
       setSendError(extractHttpErrorMessage(err, 'Échec envoi WhatsApp'));
     } finally {
       setSending(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
     }
   };
 
@@ -521,7 +528,7 @@ export default function ConversationThread({
               id={`inbox-msg-${thread.id}-${message.id}`}
               sx={{
                 alignSelf: isOut ? 'flex-end' : 'flex-start',
-                maxWidth: '75%',
+                maxWidth: isOta ? '78%' : '84%',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '2px',
@@ -539,11 +546,11 @@ export default function ConversationThread({
                   background: styles.bg,
                   border: waFailed ? '1px solid rgba(220,38,38,0.45)' : styles.border,
                   borderRadius: styles.radius,
-                  px: isOta ? '15px' : '13px',
-                  py: isOta ? '11px' : '9px',
+                  px: isOta ? '16px' : '15px',
+                  py: isOta ? '12px' : '11px',
                   fontSize: 13,
                   color: styles.color,
-                  lineHeight: 1.5,
+                  lineHeight: 1.7,
                   boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
                 }}
               >
@@ -567,6 +574,7 @@ export default function ConversationThread({
                     color: 'inherit',
                     lineHeight: 'inherit',
                     whiteSpace: 'pre-wrap',
+                    overflowWrap: 'anywhere',
                     wordBreak: 'break-word',
                   }}
                 >
@@ -794,7 +802,7 @@ export default function ConversationThread({
           borderTop: `1px solid ${T.border}`,
           bgcolor: T.bg1,
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-end',
           gap: 1,
           flexShrink: 0,
           opacity: sending ? 0.72 : 1,
@@ -810,7 +818,7 @@ export default function ConversationThread({
           sx={{
             flex: 1,
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'stretch',
             px: '13px',
             py: 1,
             bgcolor: T.bg2,
@@ -826,20 +834,25 @@ export default function ConversationThread({
           }}
         >
           <Box
-            component="input"
+            component="textarea"
             ref={inputRef}
             value={inputValue}
             onChange={(event) => setInputValue(event.target.value)}
             placeholder={isOta ? `Reply via ${platformLabel}…` : 'Écrire un message WhatsApp…'}
-            onKeyDown={handleKeyDown}
             sx={{
               flex: 1,
               border: 0,
               outline: 0,
               font: 'inherit',
               fontSize: 13,
+              lineHeight: 1.5,
               color: T.text,
               bgcolor: 'transparent',
+              resize: 'vertical',
+              minHeight: 68,
+              maxHeight: 220,
+              overflowY: 'auto',
+              py: 0.5,
               '&::placeholder': { color: T.text4 },
             }}
           />
@@ -883,6 +896,22 @@ export default function ConversationThread({
         >
           ➤
         </Box>
+      </Box>
+
+      <Box
+        sx={{
+          px: '18px',
+          pb: 0.75,
+          pt: 0.25,
+          bgcolor: T.bg1,
+          borderTop: `1px solid ${T.border}`,
+          fontSize: 10.5,
+          color: T.text4,
+          fontFamily: '"Geist Mono", monospace',
+          flexShrink: 0,
+        }}
+      >
+        Entrée = nouvelle ligne · Envoi uniquement via le bouton ➤ · glissez le coin pour agrandir
       </Box>
 
       {isOta ? (
