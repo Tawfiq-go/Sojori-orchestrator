@@ -493,6 +493,7 @@ export type DayPlanStep = {
   taskId?: string;
   taskType?: string;
   staffName?: string | null;
+  registrationPending?: boolean;
   state: 'done' | 'pending' | 'attention';
   auto: boolean;
   meta?: string;

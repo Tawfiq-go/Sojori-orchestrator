@@ -10,6 +10,7 @@ import * as fulltaskApi from '../../services/fulltaskApi';
 import type { DayPlanAction, DayPlanStep, DayPlanWeekDay } from '../../services/fulltaskApi';
 import PlanManualAssignModal from '../planReservation/PlanManualAssignModal';
 import EscaladeForceSlotModal from '../planReservation/EscaladeForceSlotModal';
+import TriageView from './TriageView';
 import './dayPlan.css';
 
 const KIND_EMOJI: Record<DayPlanStep['kind'], string> = {
@@ -83,6 +84,31 @@ export function DayPlanDashboard() {
   }, [load]);
 
   const [weekStart, setWeekStart] = useState(() => toIso(new Date()));
+  const [view, setView] = useState<'triage' | 'jour'>('triage');
+  const [triageDays, setTriageDays] = useState<(fulltaskApi.DayPlanResponse | null)[]>([null, null, null]);
+  const [triageLoading, setTriageLoading] = useState(true);
+
+  const triageDates = useMemo(() => {
+    const t = toIso(new Date());
+    return [t, addDaysIso(t, 1), addDaysIso(t, 2)];
+  }, []);
+
+  const loadTriage = useCallback(async () => {
+    setTriageLoading(true);
+    try {
+      const res = await Promise.all(triageDates.map((d) => fulltaskApi.getDayPlan(d).catch(() => null)));
+      setTriageDays(res);
+    } finally {
+      setTriageLoading(false);
+    }
+  }, [triageDates]);
+
+  useEffect(() => {
+    if (view !== 'triage') return;
+    void loadTriage();
+    const t = setInterval(() => void loadTriage(), 60_000);
+    return () => clearInterval(t);
+  }, [view, loadTriage]);
 
   const loadWeek = useCallback(async () => {
     try {
@@ -165,6 +191,7 @@ export function DayPlanDashboard() {
     if (ok) toast.success(`${time} appliqué à ${ok} réservation${ok > 1 ? 's' : ''}`);
     if (ko) toast.error(`${ko} échec${ko > 1 ? 's' : ''} — voir les plans concernés`);
     void load();
+    void loadTriage();
   };
 
   const { unknownSteps, timedSteps } = useMemo(() => {
@@ -189,35 +216,57 @@ export function DayPlanDashboard() {
       <div className="dp-hdr">
         <div>
           <div className="dp-title">
-            Plan de journée · {frDateLabel(date)}
-            {isToday && <span className="dp-live">le plan s'exécute</span>}
+            {view === 'triage' ? 'Triage · aujourd\'hui → J+2' : `Plan de journée · ${frDateLabel(date)}`}
+            {(view === 'triage' || isToday) && <span className="dp-live">le plan s'exécute</span>}
           </div>
           <div className="dp-sub">
-            {plan
-              ? `Compilé ${new Date(plan.compiledAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${stats?.steps ?? 0} étapes · ${stats?.arrivals ?? 0} arrivées · ${stats?.departures ?? 0} départs · ${stats?.turnovers ?? 0} turnovers`
-              : loading
-                ? 'Compilation…'
-                : '—'}
+            {view === 'triage'
+              ? triageDays[0]
+                ? `Compilé ${new Date(triageDays[0]!.compiledAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · agir aujourd'hui, décider pour demain, surveiller après-demain`
+                : 'Compilation…'
+              : plan
+                ? `Compilé ${new Date(plan.compiledAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${stats?.steps ?? 0} étapes · ${stats?.arrivals ?? 0} arrivées · ${stats?.departures ?? 0} départs · ${stats?.turnovers ?? 0} turnovers`
+                : loading
+                  ? 'Compilation…'
+                  : '—'}
           </div>
         </div>
         <div className="dp-datenav">
-          <button type="button" onClick={() => shiftDate(-1)} aria-label="Jour précédent">←</button>
-          <input
-            type="date"
-            className="dp-dateinput"
-            value={date}
-            onChange={(e) => {
-              if (e.target.value) setDate(e.target.value);
-            }}
-            aria-label="Choisir une date"
-          />
-          <button type="button" onClick={() => shiftDate(1)} aria-label="Jour suivant">→</button>
-          {!isToday && (
-            <button type="button" onClick={() => setDate(toIso(new Date()))}>
-              Aujourd'hui
-            </button>
+          <button
+            type="button"
+            className={view === 'triage' ? 'on' : ''}
+            onClick={() => setView('triage')}
+          >
+            Triage J0–J+2
+          </button>
+          <button
+            type="button"
+            className={view === 'jour' ? 'on' : ''}
+            onClick={() => setView('jour')}
+          >
+            Fil du jour
+          </button>
+          {view === 'jour' && (
+            <>
+              <button type="button" onClick={() => shiftDate(-1)} aria-label="Jour précédent">←</button>
+              <input
+                type="date"
+                className="dp-dateinput"
+                value={date}
+                onChange={(e) => {
+                  if (e.target.value) setDate(e.target.value);
+                }}
+                aria-label="Choisir une date"
+              />
+              <button type="button" onClick={() => shiftDate(1)} aria-label="Jour suivant">→</button>
+              {!isToday && (
+                <button type="button" onClick={() => setDate(toIso(new Date()))}>
+                  Aujourd'hui
+                </button>
+              )}
+            </>
           )}
-          <button type="button" onClick={() => void load()} aria-label="Actualiser">⟳</button>
+          <button type="button" onClick={() => void (view === 'triage' ? loadTriage() : load())} aria-label="Actualiser">⟳</button>
         </div>
       </div>
 
@@ -230,8 +279,11 @@ export function DayPlanDashboard() {
               <button
                 key={d.date}
                 type="button"
-                className={`dp-wday frag-${d.fragility.label} ${d.date === date ? 'active' : ''}`}
-                onClick={() => setDate(d.date)}
+                className={`dp-wday frag-${d.fragility.label} ${view === 'jour' && d.date === date ? 'active' : ''}`}
+                onClick={() => {
+                  setDate(d.date);
+                  setView('jour');
+                }}
                 title={`${d.stats.arrivals} arrivées · ${d.stats.departures} départs · ${d.stats.turnovers} turnovers · ${d.stats.attention} décision(s)`}
               >
                 <span className="dp-wday-name">{dayName} {Number(dayNum)}</span>
@@ -250,7 +302,20 @@ export function DayPlanDashboard() {
         </div>
       )}
 
-      {plan && stats && (
+      {view === 'triage' && (
+        <TriageView
+          days={triageDays}
+          dates={triageDates}
+          loading={triageLoading}
+          onAction={handleAction}
+          onOpenFil={(d) => {
+            setDate(d);
+            setView('jour');
+          }}
+        />
+      )}
+
+      {view === 'jour' && plan && stats && (
         <div className="dp-chips">
           <span className={`dp-chip frag-${fragility?.label ?? 'calme'}`}>
             {fragility?.label === 'tendue' && '⚡ '}
@@ -268,12 +333,12 @@ export function DayPlanDashboard() {
         </div>
       )}
 
-      {loading && !plan && <div className="dp-empty">Compilation du plan de journée…</div>}
-      {!loading && plan && plan.steps.length === 0 && (
+      {view === 'jour' && loading && !plan && <div className="dp-empty">Compilation du plan de journée…</div>}
+      {view === 'jour' && !loading && plan && plan.steps.length === 0 && (
         <div className="dp-empty">Aucune activité planifiée ce jour — journée libre.</div>
       )}
 
-      {unknownSteps.length > 0 && (
+      {view === 'jour' && unknownSteps.length > 0 && (
         <div className="dp-section">
           <div className="dp-section-title">⏱ Sans heure choisie ({unknownSteps.length})</div>
           {batchableSlots.length >= 2 && (
@@ -301,7 +366,7 @@ export function DayPlanDashboard() {
         </div>
       )}
 
-      {timedSteps.length > 0 && (
+      {view === 'jour' && timedSteps.length > 0 && (
         <div className="dp-section">
           <div className="dp-section-title">Fil de la journée</div>
           {timedSteps.map((s) => (
@@ -319,6 +384,7 @@ export function DayPlanDashboard() {
           onDone={() => {
             setAssignCtx(null);
             void load();
+            void loadTriage();
           }}
         />
       )}
@@ -333,6 +399,7 @@ export function DayPlanDashboard() {
           onSubmitted={() => {
             setSlotCtx(null);
             void load();
+            void loadTriage();
           }}
         />
       )}
