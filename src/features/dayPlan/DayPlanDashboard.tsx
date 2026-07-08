@@ -131,10 +131,21 @@ export function DayPlanDashboard() {
         </div>
         <div className="dp-datenav">
           <button type="button" onClick={() => shiftDate(-1)} aria-label="Jour précédent">←</button>
-          <button type="button" className={isToday ? 'on' : ''} onClick={() => setDate(toIso(new Date()))}>
-            Aujourd'hui
-          </button>
+          <input
+            type="date"
+            className="dp-dateinput"
+            value={date}
+            onChange={(e) => {
+              if (e.target.value) setDate(e.target.value);
+            }}
+            aria-label="Choisir une date"
+          />
           <button type="button" onClick={() => shiftDate(1)} aria-label="Jour suivant">→</button>
+          {!isToday && (
+            <button type="button" onClick={() => setDate(toIso(new Date()))}>
+              Aujourd'hui
+            </button>
+          )}
           <button type="button" onClick={() => void load()} aria-label="Actualiser">⟳</button>
         </div>
       </div>
