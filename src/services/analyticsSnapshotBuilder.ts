@@ -537,6 +537,14 @@ export async function buildAnalyticsSnapshotClient(
       ? selectedListingIds.filter((id) => activeIds.includes(id))
       : activeIds;
 
+  // Scope owner (réel ou simulé PM) : si aucun listing n'est résolu pour ce propriétaire,
+  // NE PAS interroger les endpoints financiers sans listingIds — ils agrègent alors sur TOUT
+  // le portefeuille (fuite de données plateforme). On renvoie un snapshot vide, comme le dashboard
+  // qui scope côté serveur via ownerId. Sans ownerId (admin « Tous »), on laisse l'agrégation globale.
+  if (query.ownerId && effectiveListingIds.length === 0) {
+    return { ...buildEmptyAnalyticsSnapshot(), periodLabel, properties };
+  }
+
   const base = { listingIds: effectiveListingIds, channelName, staging: query.staging, signal };
   const currentQ = { ...base, ...current };
   const previousQ = { ...base, ...previous };

@@ -35,6 +35,14 @@ export function readPersistedAdminScope(): PersistedAdminScope {
   }
 }
 
+export function clearPersistedAdminScope(): void {
+  try {
+    sessionStorage.removeItem(ADMIN_SCOPE_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function persistAdminScope(mode: PersistedAdminScopeMode, ownerId = ''): void {
   try {
     sessionStorage.setItem(
