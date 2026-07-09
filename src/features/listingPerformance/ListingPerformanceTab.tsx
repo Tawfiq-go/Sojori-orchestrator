@@ -318,6 +318,50 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
 
 /* ─── Vue Année ─── */
 
+function PickupBanner({ rows }: { rows: ListingPerformanceRow[] }) {
+  const now = nowMonth();
+  let p7n = 0, p7r = 0, p30n = 0, p30r = 0;
+  // « Mois qui décroche » : parmi les 6 prochains mois — 0 nuit prise en 30 j ET peu de réservé
+  const futureAgg = new Map<string, { pickup30: number; nightsSold: number; openNights: number }>();
+  for (const row of rows) {
+    for (const m of row.months) {
+      p7n += m.pickup7Nights ?? 0; p7r += m.pickup7Revenue ?? 0;
+      p30n += m.pickup30Nights ?? 0; p30r += m.pickup30Revenue ?? 0;
+      if (m.month > now && m.month <= shiftMonth(now, 6) && m.hasInventory) {
+        const agg = futureAgg.get(m.month) ?? { pickup30: 0, nightsSold: 0, openNights: 0 };
+        agg.pickup30 += m.pickup30Nights ?? 0;
+        agg.nightsSold += m.nightsSold;
+        agg.openNights += m.openNights;
+        futureAgg.set(m.month, agg);
+      }
+    }
+  }
+  let decroche: { month: string; occ: number } | null = null;
+  for (const [month, a] of [...futureAgg.entries()].sort()) {
+    const occ = a.openNights > 0 ? a.nightsSold / a.openNights : 0;
+    if (a.pickup30 === 0 && a.openNights > 0 && occ < 0.2) { decroche = { month, occ }; break; }
+  }
+  const card = (lbl: string, val: string, det: string, hot?: boolean, bad?: boolean) => (
+    <Box key={lbl} sx={{
+      border: `1px solid ${hot ? T.gold : T.border}`, borderRadius: '12px', px: 2, py: 1.5,
+      bgcolor: hot ? T.goldTint : T.bg1, minWidth: 170,
+    }}>
+      <Typography sx={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.07em', textTransform: 'uppercase', color: T.text3 }}>{lbl}</Typography>
+      <Typography sx={{ fontSize: 17, fontWeight: 800, mt: 0.5, color: bad ? T.error : T.text }}>{val}</Typography>
+      <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.25 }}>{det}</Typography>
+    </Box>
+  );
+  return (
+    <Stack direction="row" spacing={1.25} sx={{ flexWrap: 'wrap', rowGap: 1.25, mb: 2 }}>
+      {card('Pickup 7 jours', `+${p7n} nuit${p7n > 1 ? 's' : ''}`, `${fmtMad(p7r)} MAD pris cette semaine`, true)}
+      {card('Pickup 30 jours', `+${p30n} nuit${p30n > 1 ? 's' : ''}`, `${fmtMad(p30r)} MAD pris ce mois`)}
+      {decroche
+        ? card('Mois qui décroche', monthLabel(decroche.month), `0 nuit prise en 30 j · ${fmtPct(decroche.occ)} réservé — agir (prix, min stay)`, false, true)
+        : card('Mois qui décroche', 'aucun signal', 'tous les mois proches prennent des nuits ✓')}
+    </Stack>
+  );
+}
+
 function AnneeView({ rows, displayKeys, portfolio, maxPortfolioRevenue, futureTotals, onDrill }: {
   rows: ListingPerformanceRow[];
   displayKeys: string[];
@@ -329,6 +373,7 @@ function AnneeView({ rows, displayKeys, portfolio, maxPortfolioRevenue, futureTo
   const now = nowMonth();
   return (
     <Box>
+      <PickupBanner rows={rows} />
       {/* Portefeuille 24 mois */}
       <Box sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: '16px', p: 2.25, mb: 2 }}>
         <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>Portefeuille · 24 mois</Typography>
