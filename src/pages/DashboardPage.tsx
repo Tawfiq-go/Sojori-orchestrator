@@ -43,6 +43,9 @@ import { dashboardPeriods } from '../data/mockDashboard';
 const ListingPerformanceTab = lazyWithReload(() =>
   import('../features/listingPerformance/ListingPerformanceTab').then((m) => ({ default: m.default }))
 );
+const OrchestrationOpsCards = lazyWithReload(() =>
+  import('../features/dashboardOps/OrchestrationOpsCards').then((m) => ({ default: m.default }))
+);
 import { ListingCheckboxFilter } from '../components/dashboard/ListingCheckboxFilter';
 import {
   EMPTY_DASHBOARD_SNAPSHOT,
@@ -647,6 +650,10 @@ function DashboardPageContent() {
           trend={snapshot.kpis.revpar.trend}
         />
       </StatsRow>
+
+      <Suspense fallback={null}>
+        <OrchestrationOpsCards ownerId={requestOwnerId || undefined} />
+      </Suspense>
 
       <Box
         sx={{
