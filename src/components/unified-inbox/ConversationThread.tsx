@@ -71,6 +71,7 @@ export default function ConversationThread({
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [inspectedMessage, setInspectedMessage] = useState<Message | null>(null);
+  const [expandedTraceSteps, setExpandedTraceSteps] = useState<Record<string, boolean>>({});
   const hasRenderableMessages =
     !loadingMessages && messages.filter((m) => m.type !== 'day-separator').length > 0;
 
@@ -84,6 +85,18 @@ export default function ConversationThread({
 
   const kw = highlightKeyword?.trim() ?? '';
   void quickActions;
+  const inspectedSteps = inspectedMessage?.processingTrace?.steps ?? [];
+  const routingDetails = inspectedSteps.find((step) => step.key === 'routing')?.details;
+  const planDetails = inspectedSteps.find((step) => step.key === 'response_plan')?.details;
+  const inspectedCategories =
+    (planDetails?.categories as string[] | undefined) ??
+    (routingDetails?.selectedCategories as string[] | undefined) ??
+    [];
+  const openTrace = (message: Message) => {
+    if (!canInspectAi || !message.isAI) return;
+    setExpandedTraceSteps({});
+    setInspectedMessage(message);
+  };
 
   const isOta =
     threadMode === 'ota'
@@ -268,7 +281,7 @@ export default function ConversationThread({
         </Box>
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack direction="row" gap={0.875} sx={{ alignItems: 'center',  mb: '2px' }}>
+          <Stack direction="row" sx={{ gap: 0.875, alignItems: 'center', mb: '2px' }}>
             <Typography sx={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-0.015em' }}>
               {thread.name}
             </Typography>
@@ -353,7 +366,7 @@ export default function ConversationThread({
           </Box>
         </Box>
 
-        <Stack direction="row" gap={0.5} sx={{ flexShrink: 0 }}>
+        <Stack direction="row" sx={{ gap: 0.5, flexShrink: 0 }}>
           {(isOta ? ['🔗', '🌐', '⋮'] : ['📞', '🎥', '🔍', '⋮']).map((icon) => (
             <Box key={icon} component="button" sx={headerActionBtnSx} title={icon}>
               {icon}
@@ -552,7 +565,7 @@ export default function ConversationThread({
               }}
             >
               <Box
-                onClick={() => canInspectAi && message.isAI && setInspectedMessage(message)}
+                onClick={() => openTrace(message)}
                 sx={{
                   background: styles.bg,
                   border: waFailed ? '1px solid rgba(220,38,38,0.45)' : styles.border,
@@ -1011,6 +1024,31 @@ export default function ConversationThread({
                   {inspectedMessage.tokensUsed != null ? ` · ${inspectedMessage.tokensUsed} tokens` : ''}
                 </Typography>
               )}
+              {inspectedMessage.processingTrace && (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1.5 }}>
+                  {[
+                    `Route: ${inspectedMessage.processingTrace.route || 'unknown'}`,
+                    `Categories: ${inspectedCategories.length ? inspectedCategories.join(', ') : 'none'}`,
+                    `Tokens: ${inspectedMessage.tokensUsed ?? 'n/a'}`,
+                  ].map((label) => (
+                    <Box
+                      key={label}
+                      sx={{
+                        px: 1,
+                        py: 0.5,
+                        borderRadius: 999,
+                        bgcolor: T.bg2,
+                        border: `1px solid ${T.border}`,
+                        fontSize: 9.5,
+                        color: T.text3,
+                        fontFamily: '"Geist Mono", monospace',
+                      }}
+                    >
+                      {label}
+                    </Box>
+                  ))}
+                </Box>
+              )}
             </Box>
             <Stack spacing={1.25} sx={{ p: 2.5, overflowY: 'auto' }}>
               {!inspectedMessage.processingTrace && (
@@ -1024,7 +1062,10 @@ export default function ConversationThread({
                 </Box>
               )}
               {inspectedMessage.processingTrace?.steps.map((step, index) => (
-                <Box key={`${step.key}-${index}`} sx={{ display: 'grid', gridTemplateColumns: '24px 1fr', gap: 1.25 }}>
+                <Box
+                  key={`${step.key}-${index}`}
+                  sx={{ display: 'grid', gridTemplateColumns: '24px 1fr', gap: 1.25 }}
+                >
                   <Box
                     sx={{
                       width: 24,
@@ -1041,18 +1082,42 @@ export default function ConversationThread({
                     {step.status === 'completed' ? '✓' : '!'}
                   </Box>
                   <Box sx={{ pb: 1.5, borderBottom: `1px solid ${T.border}` }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
-                      <Typography sx={{ fontSize: 12.5, fontWeight: 750 }}>{step.label}</Typography>
-                      <Typography sx={{ fontSize: 9.5, color: T.text4, fontFamily: '"Geist Mono", monospace' }}>
-                        {step.durationMs ?? 0} ms
+                    <Box
+                      component="button"
+                      type="button"
+                      onClick={() => {
+                        const key = `${step.key}-${index}`;
+                        setExpandedTraceSteps((current) => ({ ...current, [key]: !current[key] }));
+                      }}
+                      aria-expanded={Boolean(expandedTraceSteps[`${step.key}-${index}`])}
+                      sx={{
+                        width: '100%',
+                        p: 0,
+                        border: 0,
+                        bgcolor: 'transparent',
+                        color: 'inherit',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                        <Typography sx={{ fontSize: 12.5, fontWeight: 750 }}>{step.label}</Typography>
+                        <Typography sx={{ fontSize: 9.5, color: T.text4, fontFamily: '"Geist Mono", monospace' }}>
+                          {step.durationMs ?? 0} ms
+                        </Typography>
+                      </Box>
+                      {step.summary && (
+                        <Typography sx={{ mt: 0.5, fontSize: 12, color: T.text3, lineHeight: 1.5 }}>
+                          {step.summary}
+                        </Typography>
+                      )}
+                      <Typography sx={{ mt: 0.75, fontSize: 9.5, color: T.ai, fontWeight: 700 }}>
+                        {expandedTraceSteps[`${step.key}-${index}`] ? '▾ Hide details' : '› Show details'}
                       </Typography>
                     </Box>
-                    {step.summary && (
-                      <Typography sx={{ mt: 0.5, fontSize: 12, color: T.text3, lineHeight: 1.5 }}>
-                        {step.summary}
-                      </Typography>
-                    )}
-                    {step.details && Object.keys(step.details).length > 0 && (
+                    {expandedTraceSteps[`${step.key}-${index}`] &&
+                      step.details &&
+                      Object.keys(step.details).length > 0 && (
                       <Box
                         component="pre"
                         sx={{
