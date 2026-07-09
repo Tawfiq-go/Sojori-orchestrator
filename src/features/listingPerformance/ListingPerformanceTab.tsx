@@ -11,6 +11,8 @@ import { Box, Button, Dialog, DialogContent, DialogTitle, IconButton, Stack, Typ
 import { T } from '../dynamic-pricing/_tokens';
 import { calendarService } from '../../services/calendarService';
 import { fetchEngagementByListing, fetchReviewsByListing } from '../../services/reservationsService';
+import { listLedgerEntries } from '../finances/financesApi';
+import type { LedgerEntry } from '../finances/types';
 import type { ListingEngagementMonth, ListingReviewsRow } from '../../services/reservationsService';
 import type {
   ListingPerformanceMonth,
@@ -309,7 +311,7 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
         }} />
       )}
 
-      <ReservationsDrillModal drill={drill} onClose={() => setDrill(null)} />
+      <ReservationsDrillModal drill={drill} ownerId={ownerId} onClose={() => setDrill(null)} />
     </Box>
   );
 }
@@ -567,15 +569,17 @@ function MoisView({ rows, month, engagement, onDrill }: {
 
 /* ─── Modal réservations du mois (justification des KPI) ─── */
 
-function ReservationsDrillModal({ drill, onClose }: {
+function ReservationsDrillModal({ drill, ownerId, onClose }: {
   drill: { listingId: string; name: string; month: string; monthData?: ListingPerformanceMonth | null } | null;
+  ownerId?: string;
   onClose: () => void;
 }) {
   const [items, setItems] = useState<PerformanceReservationDetail[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [opsCosts, setOpsCosts] = useState<LedgerEntry[] | null>(null);
 
   useEffect(() => {
-    if (!drill) { setItems(null); setError(null); return; }
+    if (!drill) { setItems(null); setError(null); setOpsCosts(null); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -585,8 +589,22 @@ function ReservationsDrillModal({ drill, onClose }: {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur de chargement');
       }
     })();
+    // Coûts d'opération du mois (ledger) — best-effort
+    (async () => {
+      try {
+        const [y, m] = drill.month.split('-').map(Number);
+        const endDate = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+        const entries = await listLedgerEntries(
+          { listingId: drill.listingId, type: 'expense', startDate: `${drill.month}-01`, endDate },
+          { ownerId },
+        );
+        if (!cancelled) setOpsCosts(entries);
+      } catch {
+        if (!cancelled) setOpsCosts([]);
+      }
+    })();
     return () => { cancelled = true; };
-  }, [drill]);
+  }, [drill, ownerId]);
 
   const active = (items ?? []).filter((r) => r.countsInKpis);
   const totalMonth = active.reduce((s, r) => s + r.revenueInMonth, 0);
@@ -663,9 +681,64 @@ function ReservationsDrillModal({ drill, onClose }: {
             </Box>
           </Box>
         )}
+        {drill?.monthData && !drill.monthData.isFuture ? (() => {
+          const md = drill.monthData!;
+          const brut = md.revenue;
+          const commission = md.otaCommission ?? 0;
+          const ops = (opsCosts ?? []).reduce((s2, e) => s2 + (Number(e.amount) || 0), 0);
+          const netNet = brut - commission - ops;
+          const marge = brut > 0 ? netNet / brut : null;
+          const byCat = new Map<string, number>();
+          for (const e of opsCosts ?? []) {
+            const key = e.categoryLabel || e.name || 'Autre';
+            byCat.set(key, (byCat.get(key) ?? 0) + (Number(e.amount) || 0));
+          }
+          const rows: Array<[string, number, string]> = [
+            ['Revenus bruts', brut, T.goldDeep],
+            ['− Commission OTA', -commission, T.error],
+            ['− Coûts d\u2019opération', -ops, T.warning],
+          ];
+          return (
+            <Box sx={{ mt: 2, p: 1.75, border: `1px dashed ${T.borderStrong}`, borderRadius: '12px', bgcolor: T.bg2 }}>
+              <Typography sx={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: T.text3, mb: 1 }}>
+                💰 Rentabilité du mois
+              </Typography>
+              {rows.map(([lbl, val, color]) => (
+                <Stack key={lbl} direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
+                  <Typography sx={{ fontSize: 12.5, color: T.text2 }}>{lbl}</Typography>
+                  <Typography sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 700, color }}>
+                    {val < 0 ? `− ${fmtMad(Math.abs(val))}` : fmtMad(val)} MAD
+                  </Typography>
+                </Stack>
+              ))}
+              {byCat.size > 0 ? (
+                <Box sx={{ pl: 1.5, mb: 0.5 }}>
+                  {[...byCat.entries()].map(([cat, amt]) => (
+                    <Stack key={cat} direction="row" sx={{ justifyContent: 'space-between' }}>
+                      <Typography sx={{ fontSize: 11, color: T.text3 }}>· {cat}</Typography>
+                      <Typography sx={{ fontFamily: MONO, fontSize: 11, color: T.text3 }}>− {fmtMad(amt)}</Typography>
+                    </Stack>
+                  ))}
+                </Box>
+              ) : opsCosts != null && ops === 0 ? (
+                <Typography sx={{ fontSize: 11, color: T.text4, pl: 1.5, mb: 0.5 }}>
+                  · aucune dépense saisie au ledger ce mois
+                </Typography>
+              ) : null}
+              <Stack direction="row" sx={{ justifyContent: 'space-between', pt: 0.75, borderTop: `1px solid ${T.borderStrong}` }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Net-net</Typography>
+                <Typography sx={{ fontFamily: MONO, fontSize: 13, fontWeight: 800, color: netNet >= 0 ? T.success : T.error }}>
+                  {netNet < 0 ? `− ${fmtMad(Math.abs(netNet))}` : fmtMad(netNet)} MAD
+                  {marge != null ? `  (marge ${Math.round(marge * 100)} %)` : ''}
+                </Typography>
+              </Stack>
+            </Box>
+          );
+        })() : null}
         <Typography sx={{ fontSize: 11, color: T.text3, mt: 1.5 }}>
           « Nuits (mois) » et « Montant (mois) » = la part de ce mois pour les séjours à cheval.
           Les réservations annulées sont affichées mais exclues des KPI.
+          Rentabilité : coûts d'opération = dépenses du ledger rattachées au bien sur le mois.
         </Typography>
       </DialogContent>
     </Dialog>
