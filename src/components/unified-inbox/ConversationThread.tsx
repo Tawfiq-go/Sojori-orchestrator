@@ -12,6 +12,15 @@ import { extractHttpErrorMessage } from '../../utils/extractHttpErrorMessage';
 import { useAuth } from '../../hooks/useAuth';
 import { Roles } from '../../constants/roles';
 
+function interactiveContentBadge(contentType?: Message['contentType'] | null): string | null {
+  if (contentType === 'flow') return '🧩 FLOW REPLY';
+  if (contentType === 'buttons') return '🔘 BUTTON REPLY';
+  if (contentType === 'list') return '📋 LIST REPLY';
+  if (contentType === 'interactive') return '↩️ INTERACTIVE REPLY';
+  if (contentType === 'template') return '📨 TEMPLATE';
+  return null;
+}
+
 interface ConversationThreadProps {
   thread: Thread;
   messages: Message[];
@@ -544,6 +553,7 @@ export default function ConversationThread({
           const waFailed = isOut && message.whatsappDelivery === 'failed';
           const styles = bubbleStyles(message.from);
           const isKeywordHit = kw && messageMatchesKeyword(message.text, kw);
+          const contentBadge = interactiveContentBadge(message.contentType);
 
           return (
             <Box
@@ -596,7 +606,7 @@ export default function ConversationThread({
                     ✨ SOJORI AI
                   </Typography>
                 )}
-                {message.contentType === 'flow' && (
+                {contentBadge && (
                   <Box
                     sx={{
                       display: 'inline-flex',
@@ -607,10 +617,14 @@ export default function ConversationThread({
                       borderRadius: 999,
                       bgcolor: 'rgba(124,58,237,0.10)',
                       color: T.ai,
-                      fontSize: 9,
+                      fontSize: 0,
                       fontWeight: 800,
                       fontFamily: '"Geist Mono", monospace',
                       letterSpacing: '0.04em',
+                      '&::after': {
+                        content: `"${contentBadge}"`,
+                        fontSize: 9,
+                      },
                     }}
                   >
                     🧩 INTERACTIVE FLOW

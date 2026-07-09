@@ -48,6 +48,7 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
           text: userText,
           time: formatTime(exchange.timestamp),
           status: exchange.sent_by_admin ? exchange.user_message_status : undefined,
+          contentType: exchange.user_message_content_type,
         });
       }
     }

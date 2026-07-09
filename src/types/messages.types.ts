@@ -10,7 +10,7 @@
 /**
  * Types de contenu des messages
  */
-export type MessageContentType = 'text' | 'flow' | 'buttons' | 'list' | 'template' | 'image';
+export type MessageContentType = 'text' | 'flow' | 'buttons' | 'list' | 'template' | 'interactive' | 'image';
 
 /**
  * Sources des messages
@@ -41,6 +41,7 @@ export type ConversationFilter = 'smart' | 'urgent' | 'unread' | 'today' | 'shor
  */
 export interface MessageExchange {
   user_message: string;
+  user_message_content_type?: MessageContentType | null;
   ai_response: string | null;
   ai_response_content_type: MessageContentType | null;
   ai_response_message_source?: MessageSource;
