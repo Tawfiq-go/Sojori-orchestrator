@@ -29,6 +29,28 @@ function isDirectLocalService(url: string, port: number): boolean {
   }
 }
 
+function rewriteAdminFulltaskPath(path: string): string {
+  const prefix = '/api/v1/admin/fulltask'
+  const rest = path.startsWith(prefix) ? path.slice(prefix.length) : path
+  /** Chemins proxifiés vers /api/v1/fulltask/* côté srv-fulltask (≠ legacy /api/tasks). */
+  const v1Prefixes = [
+    '/notification',
+    '/staff-simplified',
+    '/admin-whatsapp',
+    '/staff-whatsapp',
+    '/expense-categories',
+    '/expenses',
+    '/ledger',
+    '/expense-recurring',
+    '/profit-reports',
+    '/communications-ai',
+  ]
+  if (v1Prefixes.some((p) => rest === p || rest.startsWith(`${p}/`))) {
+    return `/api/v1/fulltask${rest}`
+  }
+  return `/api${rest}`
+}
+
 function adminServiceProxy(
   service: 'fulltask' | 'fullchatbot',
   target: string,
@@ -41,9 +63,9 @@ function adminServiceProxy(
       target,
       changeOrigin: true,
       secure: false,
-      /** srv-fulltask/chatbot en local exposent /api/*, pas /api/v1/admin/… */
+      /** srv-fulltask/chatbot en local : réécriture selon le mount réel (/api/* ou /api/v1/fulltask/*). */
       ...(directLocal
-        ? { rewrite: (path: string) => path.replace(new RegExp(`^${prefix}`), '/api') }
+        ? { rewrite: (path: string) => (service === 'fulltask' ? rewriteAdminFulltaskPath(path) : path.replace(new RegExp(`^${prefix}`), '/api')) }
         : {}),
     },
   }

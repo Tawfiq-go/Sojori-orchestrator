@@ -27,12 +27,14 @@ import { SidebarUserProfileMenu } from './SidebarUserProfileMenu';
 import { LISTING_LAYOUT } from '../../constants/listingLayout';
 import { DASHBOARD_PAGE } from '../../constants/dashboardLayout';
 import { IconColored } from './IconColored';
+import { NotificationBell } from '../../features/notifications';
 import { SojoriBrandLockup } from '../brand/SojoriBrandLogo';
 import {
   Box, Stack, Typography, Button, IconButton, Avatar, Chip, Switch,
   TextField, InputAdornment, Divider, Tooltip, Drawer,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import NotificationsNoneOutlined from '@mui/icons-material/NotificationsNoneOutlined';
 import AdminPanelSettingsOutlined from '@mui/icons-material/AdminPanelSettingsOutlined';
 import AnalyticsOutlined from '@mui/icons-material/AnalyticsOutlined';
 import BusinessOutlined from '@mui/icons-material/BusinessOutlined';
@@ -50,7 +52,6 @@ import HelpOutlineOutlined from '@mui/icons-material/HelpOutlineOutlined';
 import HomeWorkOutlined from '@mui/icons-material/HomeWorkOutlined';
 import HubOutlined from '@mui/icons-material/HubOutlined';
 import MailOutlined from '@mui/icons-material/MailOutlined';
-import NotificationsNoneOutlined from '@mui/icons-material/NotificationsNoneOutlined';
 import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
 import ShoppingBagOutlined from '@mui/icons-material/ShoppingBagOutlined';
 import PublicOutlined from '@mui/icons-material/PublicOutlined';
@@ -237,6 +238,7 @@ const NAV_ICON_BY_ID = {
   'pricing/audit': HistoryOutlined,
   staff: GroupsOutlined,
   'equipe/onboarding': AssignmentOutlined,
+  'equipe/notifications': NotificationsNoneOutlined,
   'equipe/mon-profil': PeopleOutlined,
   'my-tasks': AssignmentTurnedInOutlined,
   'my-sched': TodayOutlined,
@@ -711,16 +713,7 @@ export function TopBar({
 
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto' }}>
         <AdminSessionTopBarButton />
-        <Tooltip title="Notifications">
-          <IconButton sx={iconBtnSx} aria-label="Notifications">
-            <NotificationsNoneOutlined sx={{ fontSize: 20 }} />
-            <Box sx={{
-              position: 'absolute', top: 7, right: 8,
-              width: 7, height: 7, borderRadius: '50%',
-              bgcolor: t.error, border: `2px solid ${t.bg1}`,
-            }} />
-          </IconButton>
-        </Tooltip>
+        <NotificationBell />
         <Tooltip title="Aide">
           <IconButton sx={iconBtnSx} aria-label="Aide">
             <HelpOutlineOutlined sx={{ fontSize: 20 }} />

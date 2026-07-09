@@ -46,7 +46,10 @@ export default function CommunicationsHubPage() {
     const legacyTemplates = tabParam === 'templates';
     const wrongTab = tabParam != null && tabParam !== activeTab;
     if (needsSection || legacyTemplates || wrongTab) {
-      navigate(`/communications?section=${section}&tab=${activeTab}`, { replace: true });
+      const params = new URLSearchParams(searchParams);
+      params.set('section', section);
+      params.set('tab', activeTab);
+      navigate(`/communications?${params.toString()}`, { replace: true });
     }
   }, [searchParams, tabParam, section, activeTab, navigate]);
 

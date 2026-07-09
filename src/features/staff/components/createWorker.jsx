@@ -70,7 +70,7 @@ const EMPTY_WORKER = {
   listingIds: [],
   listingCityIds: [],
   ownerAccess: false,
-  notificationsAll: false,
+  notificationsAll: true,
   notificationConfig: [],
   contractType: '',
   commission: 0
