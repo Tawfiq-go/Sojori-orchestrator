@@ -596,6 +596,26 @@ export default function ConversationThread({
                     ✨ SOJORI AI
                   </Typography>
                 )}
+                {message.contentType === 'flow' && (
+                  <Box
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      mb: 0.75,
+                      px: 0.75,
+                      py: 0.25,
+                      borderRadius: 999,
+                      bgcolor: 'rgba(124,58,237,0.10)',
+                      color: T.ai,
+                      fontSize: 9,
+                      fontWeight: 800,
+                      fontFamily: '"Geist Mono", monospace',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    🧩 INTERACTIVE FLOW
+                  </Box>
+                )}
                 <Typography
                   component="div"
                   sx={{
