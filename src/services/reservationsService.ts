@@ -656,3 +656,29 @@ export async function fetchReviewsByListing(params: {
   );
   return response.data;
 }
+
+
+/* ─── Engagement par bien (vue Mois · leads + 1re réponse) ──────── */
+export interface ListingEngagementMonth {
+  month: string;
+  leadsCount: number;
+  firstResponseMedianMinutes: number | null;
+  conversationsMeasured: number;
+}
+
+export interface EngagementByListingResponse {
+  success: boolean;
+  listings: Array<{ listingId: string; months: ListingEngagementMonth[] }>;
+}
+
+export async function fetchEngagementByListing(params: {
+  ownerId?: string;
+  from?: string;
+  to?: string;
+}): Promise<EngagementByListingResponse> {
+  const response = await apiClient.get<EngagementByListingResponse>(
+    `${RESERVATIONS_API}/engagement/by-listing`,
+    { params },
+  );
+  return response.data;
+}
