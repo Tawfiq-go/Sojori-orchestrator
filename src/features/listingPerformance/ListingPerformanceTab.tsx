@@ -751,8 +751,8 @@ function ReservationsDrillModal({ drill, ownerId, onClose }: {
               {rows.map(([lbl, val, color]) => (
                 <Stack key={lbl} direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
                   <Typography sx={{ fontSize: 12.5, color: T.text2 }}>{lbl}</Typography>
-                  <Typography sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 700, color }}>
-                    {val < 0 ? `− ${fmtMad(Math.abs(val))}` : fmtMad(val)} MAD
+                  <Typography sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 700, color: Math.abs(val) < 0.005 ? T.text4 : color }}>
+                    {Math.abs(val) < 0.005 ? '0' : val < 0 ? `− ${fmtMad(Math.abs(val))}` : fmtMad(val)} MAD
                   </Typography>
                 </Stack>
               ))}
