@@ -10,6 +10,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Button, Dialog, DialogContent, DialogTitle, IconButton, Stack, Typography } from '@mui/material';
 import { T } from '../dynamic-pricing/_tokens';
 import { calendarService } from '../../services/calendarService';
+import { fetchReviewsByListing } from '../../services/reservationsService';
+import type { ListingReviewsRow } from '../../services/reservationsService';
 import type {
   ListingPerformanceMonth,
   ListingPerformanceRow,
@@ -45,7 +47,7 @@ const CHANNEL_COLORS: Record<string, string> = {
 };
 const channelColor = (name: string) => CHANNEL_COLORS[name] ?? T.goldDeep;
 
-type PerfView = 'mois' | 'annee';
+type PerfView = 'mois' | 'annee' | 'avis';
 
 /* ─── Petits composants ─── */
 
@@ -248,6 +250,7 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
         <Box sx={{ display: 'flex', border: `1.5px solid ${T.borderStrong}`, borderRadius: '11px', overflow: 'hidden' }}>
           {segBtn('mois', 'Mois')}
           {segBtn('annee', 'Année')}
+          {segBtn('avis', 'Avis')}
         </Box>
         {view === 'mois' ? (
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: '12px', px: 1.5, py: 0.75 }}>
@@ -255,9 +258,13 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
             <Typography sx={{ fontSize: 13.5, fontWeight: 800, minWidth: 96, textAlign: 'center', textTransform: 'capitalize' }}>{monthLabel(selectedMonth)}</Typography>
             <Box component="button" onClick={() => setSelectedMonth((m) => shiftMonth(m, 1))} sx={{ all: 'unset', cursor: 'pointer', color: T.text3, px: 0.5, fontSize: 15 }}>›</Box>
           </Stack>
-        ) : (
+        ) : view === 'annee' ? (
           <Typography sx={{ fontFamily: MONO, fontSize: 11, color: T.text3 }}>
             12 mois réalisés + 12 mois déjà réservés · ▲▼ vs même mois an dernier
+          </Typography>
+        ) : (
+          <Typography sx={{ fontFamily: MONO, fontSize: 11, color: T.text3 }}>
+            Avis importés d'Airbnb/Booking · sync quotidien
           </Typography>
         )}
         <Box sx={{ flex: 1 }} />
@@ -282,6 +289,8 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
             setDrill({ listingId, name, month, monthData: row?.months.find((x) => x.month === month) ?? null });
           }}
         />
+      ) : view === 'avis' ? (
+        <AvisView ownerId={ownerId} />
       ) : (
         <MoisView rows={rows} month={selectedMonth} onDrill={(listingId, name) => {
           const row = rows.find((r) => r.listingId === listingId);
@@ -615,5 +624,246 @@ function ReservationsDrillModal({ drill, onClose }: {
         </Typography>
       </DialogContent>
     </Dialog>
+  );
+}
+
+
+/* ─── Vue Avis ─── */
+
+const CATEGORY_LABELS: Record<string, string> = {
+  clean: 'Propreté',
+  accuracy: 'Exactitude',
+  checkin: 'Arrivée',
+  communication: 'Communication',
+  location: 'Localisation',
+  value: 'Qualité-prix',
+};
+const CATEGORY_HINTS: Record<string, string> = {
+  checkin: 'Vérifier le flow « Accès & codes » et les instructions d\u2019arrivée de ce bien.',
+  clean: 'Renforcer le ménage : consignes staff, contrôle photo après tâche.',
+  communication: 'Vérifier les messages planifiés et le délai de réponse chatbot/staff.',
+  accuracy: 'Relire l\u2019annonce : photos et description doivent coller à la réalité.',
+  value: 'Revoir le pricing (pilote) ou ajouter de la valeur (équipements).',
+  location: 'Non actionnable — compenser en soignant le reste.',
+};
+const on5 = (v: number | null) => (v == null ? null : Math.round((v / 2) * 10) / 10);
+const fmt5 = (v: number | null) => (v == null ? '—' : on5(v)!.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
+const cleanTag = (t: string) =>
+  t.replace(/^guest_review_host_(positive|negative)_/, '').replace(/_/g, ' ');
+const tagIsNegative = (t: string) => /negative/.test(t);
+
+function Stars({ score10 }: { score10: number | null }) {
+  if (score10 == null) return null;
+  const n = Math.round(score10 / 2);
+  return (
+    <Typography component="span" sx={{ color: T.goldDeep, fontSize: 12, letterSpacing: '1px' }}>
+      {'★'.repeat(n)}{'☆'.repeat(Math.max(0, 5 - n))}
+    </Typography>
+  );
+}
+
+function AvisView({ ownerId }: { ownerId?: string }) {
+  const [data, setData] = useState<ListingReviewsRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchReviewsByListing({ ownerId });
+        if (!cancelled) setData(res.listings ?? []);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur de chargement');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [ownerId]);
+
+  if (error) return <Typography sx={{ color: T.error, fontSize: 13, p: 3 }}>{error}</Typography>;
+  if (!data) return <Box sx={{ p: 4, textAlign: 'center', color: T.text3, fontSize: 13 }}>Chargement des avis…</Box>;
+
+  // Bandeau portefeuille
+  const withReviews = data.filter((l) => l.count > 0);
+  const totalCount = withReviews.reduce((s, l) => s + l.count, 0);
+  const avgPortfolio = totalCount
+    ? withReviews.reduce((s, l) => s + (l.avgOverall ?? 0) * l.count, 0) / totalCount
+    : null;
+  const unreplied = data.reduce((s, l) => s + l.unreplied, 0);
+  const repliedTotal = data.reduce((s, l) => s + l.replied, 0);
+  const responseRate = repliedTotal + unreplied > 0 ? repliedTotal / (repliedTotal + unreplied) : null;
+  // Point faible du parc : catégorie moyenne la plus basse (pondérée par volume)
+  const catAgg = new Map<string, { sum: number; n: number }>();
+  for (const l of withReviews) {
+    for (const [cat, avg] of Object.entries(l.categories)) {
+      const agg = catAgg.get(cat) ?? { sum: 0, n: 0 };
+      agg.sum += avg * l.count;
+      agg.n += l.count;
+      catAgg.set(cat, agg);
+    }
+  }
+  let weakest: { cat: string; avg: number } | null = null;
+  for (const [cat, agg] of catAgg) {
+    const avg = agg.sum / agg.n;
+    if (!weakest || avg < weakest.avg) weakest = { cat, avg };
+  }
+
+  return (
+    <Box>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 1.25, mb: 2 }}>
+        {[
+          { lbl: 'Note portefeuille', val: fmt5(avgPortfolio), suffix: `/ 5 · ${totalCount} avis` },
+          { lbl: 'À répondre', val: String(unreplied), suffix: unreplied > 0 ? '⚠ avis sans réponse' : 'tout est répondu ✓', warn: unreplied > 0 },
+          { lbl: 'Taux de réponse', val: responseRate != null ? `${Math.round(responseRate * 100)} %` : '—', suffix: 'pèse sur le classement Airbnb' },
+          { lbl: 'Point faible du parc', val: weakest ? (CATEGORY_LABELS[weakest.cat] ?? weakest.cat) : '—', suffix: weakest ? `${fmt5(weakest.avg)}/5` : '', small: true },
+        ].map((k) => (
+          <Box key={k.lbl} sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: '14px', p: '13px 16px' }}>
+            <Typography sx={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.text3 }}>{k.lbl}</Typography>
+            <Typography sx={{ fontSize: k.small ? 15 : 21, fontWeight: 800, letterSpacing: '-0.02em', mt: 0.5 }}>{k.val}</Typography>
+            <Typography sx={{ fontSize: 11, color: k.warn ? T.warning : T.text3, mt: 0.25, fontWeight: k.warn ? 700 : 400 }}>{k.suffix}</Typography>
+          </Box>
+        ))}
+      </Box>
+
+      {data.map((l) => (
+        <Box key={l.listingId} sx={{ bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: '16px', p: 2.25, mb: 1.75 }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'baseline', flexWrap: 'wrap', rowGap: 0.75, mb: l.count ? 1.5 : 0 }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 800 }}>{l.name}</Typography>
+            {l.city ? <Typography sx={{ fontFamily: MONO, fontSize: 10.5, color: T.text3 }}>{l.city}</Typography> : null}
+            <Box sx={{ flex: 1 }} />
+            {l.count ? (
+              <>
+                <Typography sx={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>{fmt5(l.avgOverall)}</Typography>
+                <Typography sx={{ fontSize: 11.5, color: T.text3 }}>/ 5 · {l.count} avis</Typography>
+                {l.trendDelta != null ? (
+                  <Typography sx={{
+                    fontFamily: MONO, fontSize: 10.5, fontWeight: 700, borderRadius: '99px', px: 1, py: 0.25,
+                    color: l.trendDelta >= 0 ? T.success : T.error,
+                    bgcolor: l.trendDelta >= 0 ? T.successTint : T.errorTint,
+                  }}>
+                    {l.trendDelta >= 0 ? '▲ +' : '▼ −'}{Math.abs(on5(l.trendDelta) ?? 0).toLocaleString('fr-FR')} sur 90 j
+                  </Typography>
+                ) : null}
+              </>
+            ) : (
+              <Typography sx={{ fontSize: 12.5, color: T.text3 }}>pas encore d'avis</Typography>
+            )}
+          </Stack>
+
+          {l.count === 0 ? (
+            <Typography sx={{ fontSize: 12, color: T.text3 }}>
+              Les avis arriveront après les premiers séjours — le sync quotidien les importe automatiquement.
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '340px 1fr' }, gap: 3 }}>
+              {/* Sous-notes */}
+              <Box>
+                {Object.entries(l.categories).map(([cat, avg]) => {
+                  const low = avg < 9; // < 4,5/5
+                  return (
+                    <Box key={cat} sx={{ display: 'grid', gridTemplateColumns: '116px 1fr 36px', gap: 1.25, alignItems: 'center', mb: 1 }}>
+                      <Typography sx={{ fontSize: 12, color: T.text2, fontWeight: 600 }}>{CATEGORY_LABELS[cat] ?? cat}</Typography>
+                      <Box sx={{ height: 7, borderRadius: '99px', bgcolor: T.bg3, overflow: 'hidden' }}>
+                        <Box sx={{
+                          width: `${Math.min(100, (avg / 10) * 100)}%`, height: '100%', borderRadius: '99px',
+                          background: low ? T.error : `linear-gradient(90deg, ${T.gold}, ${T.goldDeep})`,
+                        }} />
+                      </Box>
+                      <Typography sx={{ fontFamily: MONO, fontSize: 11.5, fontWeight: 700, textAlign: 'right', color: low ? T.error : T.text }}>
+                        {fmt5(avg)}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+                {/* Tags */}
+                <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', rowGap: 0.75, mt: 1.5 }}>
+                  {[...new Set(l.reviews.flatMap((r) => r.tags))].slice(0, 8).map((t) => (
+                    <Typography key={t} component="span" sx={{
+                      fontFamily: MONO, fontSize: 10, fontWeight: 700, borderRadius: '99px', px: 1.125, py: 0.375,
+                      color: tagIsNegative(t) ? T.error : T.success,
+                      bgcolor: tagIsNegative(t) ? T.errorTint : T.successTint,
+                    }}>
+                      {tagIsNegative(t) ? '✗' : '✓'} {cleanTag(t)}
+                    </Typography>
+                  ))}
+                </Stack>
+                {/* Encart actionnable */}
+                {(() => {
+                  const entries = Object.entries(l.categories).filter(([, avg]) => avg < 9);
+                  if (!entries.length || l.count < 3) return null;
+                  const [cat, avg] = entries.sort((a, b) => a[1] - b[1])[0];
+                  return (
+                    <Box sx={{ mt: 1.5, fontSize: 11.5, color: T.text2, bgcolor: T.goldTint, border: `1px dashed ${T.gold}`, borderRadius: '10px', p: '8px 12px' }}>
+                      💡 <b>{CATEGORY_LABELS[cat] ?? cat} {fmt5(avg)}/5</b> — {CATEGORY_HINTS[cat] ?? 'Point à surveiller.'}
+                    </Box>
+                  );
+                })()}
+              </Box>
+
+              {/* Fil des avis */}
+              <Box>
+                {(expanded[l.listingId] ? l.reviews : l.reviews.slice(0, 3)).map((r) => (
+                  <Box key={r.id} sx={{ border: `1px solid ${T.border}`, borderRadius: '12px', p: '11px 14px', mb: 1.25 }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
+                      <Stars score10={r.overallScore} />
+                      <Typography sx={{ fontFamily: MONO, fontSize: 10, color: T.text3 }}>
+                        {r.overallScore != null ? `${fmt5(r.overallScore)}/5 · ` : ''}
+                        <Box component="span" sx={{ color: channelColor(r.ota), fontWeight: 700 }}>{r.ota}</Box>
+                        {r.guestName ? ` · ${r.guestName}` : ''} · {new Date(r.receivedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </Typography>
+                    </Stack>
+                    {r.content ? (
+                      <Typography sx={{ fontSize: 12.5, color: T.text2, lineHeight: 1.55, whiteSpace: 'pre-line' }}>{r.content}</Typography>
+                    ) : (
+                      <Typography sx={{ fontSize: 12, color: T.text4, fontStyle: 'italic' }}>Note sans commentaire</Typography>
+                    )}
+                    {r.reply ? (
+                      <Box sx={{ mt: 1, borderLeft: `3px solid ${T.gold}`, pl: 1.25, py: 0.5, bgcolor: T.goldTint, borderRadius: '0 8px 8px 0' }}>
+                        <Typography sx={{ fontSize: 12, color: T.text2 }}><b>Votre réponse</b> — {r.reply}</Typography>
+                      </Box>
+                    ) : !r.isReplied ? (
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1 }}>
+                        <Typography component="span" sx={{
+                          fontFamily: MONO, fontSize: 10, fontWeight: 800, color: T.warning,
+                          bgcolor: T.warningTint, borderRadius: '99px', px: 1.125, py: 0.25,
+                        }}>
+                          {r.isExpired ? 'FENÊTRE DE RÉPONSE EXPIRÉE' : '⚠ SANS RÉPONSE'}
+                        </Typography>
+                        {!r.isExpired ? (
+                          <Button
+                            size="small"
+                            href="https://www.airbnb.com/hosting/reviews"
+                            target="_blank"
+                            rel="noopener"
+                            sx={{
+                              textTransform: 'none', fontWeight: 800, fontSize: 11.5, py: 0.25,
+                              color: T.goldDeep, border: `1px solid ${T.gold}`, bgcolor: T.goldTint,
+                            }}
+                          >
+                            Répondre sur {r.ota}
+                          </Button>
+                        ) : null}
+                      </Stack>
+                    ) : null}
+                  </Box>
+                ))}
+                {l.reviews.length > 3 ? (
+                  <Button size="small" onClick={() => setExpanded((e) => ({ ...e, [l.listingId]: !e[l.listingId] }))}
+                    sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12, color: T.goldDeep }}>
+                    {expanded[l.listingId] ? 'Réduire ▲' : `Voir les ${l.reviews.length} avis →`}
+                  </Button>
+                ) : null}
+              </Box>
+            </Box>
+          )}
+        </Box>
+      ))}
+
+      <Typography sx={{ fontSize: 11.5, color: T.text3, lineHeight: 1.6, mt: 1 }}>
+        Avis importés d'Airbnb/Booking (sync quotidien). Notes stockées sur 10, affichées sur 5.
+        Répondre vite aux avis pèse sur le classement Airbnb — la réponse directe depuis Sojori arrive
+        (le canal existe déjà côté WhatsApp staff).
+      </Typography>
+    </Box>
   );
 }

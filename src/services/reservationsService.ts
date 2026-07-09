@@ -610,3 +610,49 @@ class ReservationsService {
 // Export singleton instance
 export const reservationsService = new ReservationsService();
 export default reservationsService;
+
+
+/* ─── Avis par bien (onglet Performance · vue Avis) ─────────────── */
+export interface ListingReviewItem {
+  id: string;
+  overallScore: number | null; // sur /10
+  content: string;
+  guestName: string | null;
+  ota: string;
+  receivedAt: string;
+  isReplied: boolean;
+  reply: string | null;
+  tags: string[];
+  isExpired: boolean;
+  otaReservationId: string | null;
+}
+
+export interface ListingReviewsRow {
+  listingId: string;
+  name: string;
+  city: string | null;
+  count: number;
+  avgOverall: number | null; // sur /10
+  replied: number;
+  unreplied: number;
+  trendDelta: number | null; // Δ /10 : 90 derniers jours vs avant
+  categories: Record<string, number>; // moyennes /10 par catégorie
+  reviews: ListingReviewItem[];
+}
+
+export interface ReviewsByListingResponse {
+  success: boolean;
+  scale: 10;
+  listings: ListingReviewsRow[];
+}
+
+export async function fetchReviewsByListing(params: {
+  ownerId?: string;
+  listingId?: string;
+}): Promise<ReviewsByListingResponse> {
+  const response = await apiClient.get<ReviewsByListingResponse>(
+    `${RESERVATIONS_API}/reviews/by-listing`,
+    { params },
+  );
+  return response.data;
+}
