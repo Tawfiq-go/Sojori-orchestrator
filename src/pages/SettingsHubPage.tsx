@@ -30,6 +30,10 @@ export function SettingsHubPage() {
 
   useEffect(() => {
     if (pathname.toLowerCase().includes('currency')) return;
+    if (searchParams.get('tab') === 'notifications') {
+      navigate('/admin/equipe/notifications', { replace: true });
+      return;
+    }
     if (
       (pathname === '/admin/settings' || pathname === '/admin/Settings') &&
       !searchParams.get('tab')
@@ -38,7 +42,7 @@ export function SettingsHubPage() {
       next.set('tab', 'template');
       setSearchParams(next, { replace: true });
     }
-  }, [pathname, searchParams, setSearchParams]);
+  }, [pathname, searchParams, setSearchParams, navigate]);
 
   const setSection = (id: SettingsSection) => {
     if (id === 'currency') {

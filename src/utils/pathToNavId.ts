@@ -142,6 +142,9 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
     return 'orch/workflows';
   if (path.startsWith('/orchestration/plans') || path.startsWith('/tasks/plans')) return 'orch/plans';
 
+  if (path.startsWith('/admin/equipe/mon-profil')) return 'equipe/mon-profil';
+  if (path.startsWith('/admin/equipe/notifications')) return 'equipe/notifications';
+
   if (path.startsWith('/admin/equipe')) {
     const tab = new URLSearchParams(search).get('tab') || 'list';
     if (tab === 'admin-whatsapp') return 'tasks/team';

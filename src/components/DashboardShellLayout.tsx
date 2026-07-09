@@ -9,6 +9,7 @@ import { AdminOwnerFilterProvider, useAdminOwnerFilter } from '../context/AdminO
 import { useAuth } from '../hooks/useAuth';
 import { toLegacyAuthUser } from '../utils/legacyAuthUser';
 import { canSelectOwnerInAdminFilter } from '../utils/taskScope.utils';
+import { NotificationProvider } from '../features/notifications';
 
 /** Layout persistant : sidebar + topbar ne se remontent pas à chaque changement de route. */
 export const DashboardShellContext = createContext(false);
@@ -75,8 +76,9 @@ function DashboardShellInner({
   }, [location.pathname, location.search]);
 
   return (
-    <PageChromeContext.Provider value={pageChromeValue}>
-      <DashboardLayout
+    <NotificationProvider>
+      <PageChromeContext.Provider value={pageChromeValue}>
+        <DashboardLayout
         activePath={chrome.activePath}
         onNavigate={chrome.onNavigate}
         onLogout={chrome.onLogout}
@@ -90,6 +92,7 @@ function DashboardShellInner({
         {children}
       </DashboardLayout>
     </PageChromeContext.Provider>
+    </NotificationProvider>
   );
 }
 

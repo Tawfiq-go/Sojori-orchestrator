@@ -7,7 +7,7 @@ import Autocomplete from '@mui/material/Autocomplete';
 import { getListings } from '../../listing/services/serverApi.listing';
 import { useTranslation } from 'react-i18next';
 import { Formik, Form } from 'formik';
-import { getAccounById, getNotificationEvent, updateWorker, getGroups, getCities, resendWorkerCredentials, deleteWorker } from '../services/serverApi.task';
+import { getAccounById, updateWorker, getGroups, getCities, resendWorkerCredentials, deleteWorker } from '../services/serverApi.task';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import {
@@ -20,15 +20,13 @@ import {
   WorkerFormActions,
   WorkerListingPicker,
   WorkerDashboardAccessPanel,
-  WorkerNotificationsPanel,
-  buildAllNotificationsConfig,
-  isNotificationsAllMode,
   isWildcardGrants,
   workerTextFieldSx,
   WF,
 } from './workerFormDesign';
 import WorkerPasswordDialog from './WorkerPasswordDialog';
 import DeleteUserDialog from './DeleteUserDialog';
+import { NotificationPreferencesSection } from '../../notifications/NotificationPreferencesSection';
 
 const CONTRACT_TYPES = ['GROSS REVENUE', 'NET REVENUE', 'NET-NET', 'FIXED FEE'];
 const fieldSx = workerTextFieldSx();
@@ -42,10 +40,6 @@ const ADMIN_OPT = {
   _id: '__ADMIN__',
   name: 'Admin-level access',
 };
-const NOTIF_CHANNELS = [{
-  key: 'dashboard',
-  label: 'Dashboard'
-}];
 const EMPTY_WORKER = {
   avatar: null,
   firstName: '',
@@ -67,7 +61,7 @@ const EMPTY_WORKER = {
   listingIds: [],
   listingCityIds: [],
   ownerAccess: false,
-  notificationsAll: false,
+  notificationsAll: true,
   notificationConfig: [],
   workerTypeOwner: false,
   contractType: '',
@@ -125,7 +119,6 @@ export default function WorkerAccessForm() {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [listings, setListings] = useState([]);
-  const [NOTIFICATION_EVENTS, setNOTIFICATION_EVENTS] = useState([]);
   const [listingsTotal, setListingsTotal] = useState(0);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsPage, setListingsPage] = useState(0);
@@ -156,24 +149,12 @@ export default function WorkerAccessForm() {
       .finally(() => setCitiesLoading(false));
   }, []);
   useEffect(() => {
-    getNotificationEvent().then(({
-      data
-    }) => setNOTIFICATION_EVENTS(data?.NOTIFICATION_EVENTS || [])).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-  useEffect(() => {
     const ownerId = accountFromApi?.ownerId;
     if (!ownerId) return;
     getGroups(ownerId).then(({
       data
     }) => setGroups(Array.isArray(data?.groups) ? data.groups : [])).catch(() => {});
   }, [accountFromApi?.ownerId]);
-  useEffect(() => {
-    if (!accountFromApi || !NOTIFICATION_EVENTS.length || !formikRef.current) return;
-    const all =
-      !!accountFromApi.notificationsAll ||
-      isNotificationsAllMode(accountFromApi.notificationConfig, NOTIFICATION_EVENTS, 'dashboard');
-    formikRef.current.setFieldValue('worker.notificationsAll', all);
-  }, [accountFromApi, NOTIFICATION_EVENTS]);
   useEffect(() => {
     const t = setTimeout(() => {
       (async () => {
@@ -281,9 +262,8 @@ export default function WorkerAccessForm() {
     payload.featureGrants = Array.isArray(payload.featureGrants) ? payload.featureGrants : [];
     payload.phone = payload.phone?.trim() ? normalizePhone(payload.phone) : null;
     payload.whatsapp = payload.whatsapp?.trim() ? normalizePhone(payload.whatsapp) : null;
-    if (payload.notificationsAll) {
-      payload.notificationConfig = buildAllNotificationsConfig(NOTIFICATION_EVENTS, 'dashboard');
-    }
+    delete payload.notificationConfig;
+    delete payload.notificationsAll;
     delete payload.address;
     delete payload.postalCode;
     delete payload.city;
@@ -399,42 +379,6 @@ export default function WorkerAccessForm() {
       next,
       overlay: newOverlay
     };
-  };
-  const notifFind = (config, key) => (Array.isArray(config) ? config : []).find(e => e.key === key) || null;
-  const notifIsOn = (config, key, channelKey, defaults = {}) => {
-    const found = notifFind(config, key);
-    if (found) return !!found.channels?.[channelKey];
-    return !!defaults[channelKey];
-  };
-  const notifSet = (config, key, channelKey, value, defaults = {}, allChannelKeys = NOTIF_CHANNELS.map(c => c.key)) => {
-    const next = Array.isArray(config) ? [...config] : [];
-    const idx = next.findIndex(e => e.key === key);
-    if (idx === -1) {
-      const channels = {
-        ...defaults,
-        [channelKey]: !!value
-      };
-      const allOff = allChannelKeys.every(k => !channels[k]);
-      if (!allOff) next.push({
-        key,
-        channels
-      });
-      return next;
-    }
-    const updated = {
-      key,
-      channels: {
-        ...(next[idx].channels || {}),
-        [channelKey]: !!value
-      }
-    };
-    const allOff = allChannelKeys.every(k => !updated.channels[k]);
-    if (allOff) {
-      next.splice(idx, 1);
-    } else {
-      next[idx] = updated;
-    }
-    return next;
   };
   const headerSubtitle = accountFromApi
     ? [accountFromApi.firstName, accountFromApi.lastName].filter(Boolean).join(' ') +
@@ -795,36 +739,13 @@ export default function WorkerAccessForm() {
                     />
                   </WorkerFormSection>
 
-                  <WorkerFormSection id="notifications" icon="🔔" title="Notifications" hint="Toutes les alertes ou sélection directe par événement">
-                    <WorkerNotificationsPanel
-                      events={NOTIFICATION_EVENTS}
-                      config={w.notificationConfig}
-                      notificationsAll={!!w.notificationsAll}
-                      onNotificationsAllChange={(on) => {
-                        if (on) {
-                          if (!w.notificationsAll) {
-                            setFieldValue('worker._previousNotificationConfig', w.notificationConfig || []);
-                          }
-                          setFieldValue('worker.notificationsAll', true);
-                          setFieldValue(
-                            'worker.notificationConfig',
-                            buildAllNotificationsConfig(NOTIFICATION_EVENTS, 'dashboard'),
-                          );
-                          return;
-                        }
-                        setFieldValue('worker.notificationsAll', false);
-                        setFieldValue('worker.notificationConfig', w._previousNotificationConfig || []);
-                        setFieldValue('worker._previousNotificationConfig', []);
-                      }}
-                      isOn={(key, ch, defaults) => notifIsOn(w.notificationConfig, key, ch, defaults)}
-                      onToggle={(key, ch, v, defaults) =>
-                        setFieldValue(
-                          'worker.notificationConfig',
-                          notifSet(w.notificationConfig, key, ch, v, defaults),
-                        )
-                      }
-                      t={t}
-                    />
+                  <WorkerFormSection
+                    id="notifications"
+                    icon="🔔"
+                    title="Notifications dashboard"
+                    hint="Cloche du dashboard pour ce worker — enregistrement immédiat. Tout est activé par défaut à la création."
+                  >
+                    <NotificationPreferencesSection targetUserId={userId} compact />
                   </WorkerFormSection>
 
                   <WorkerFormActions

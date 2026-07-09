@@ -145,6 +145,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         roles: PM_ROLES,
         description: 'Configuration initiale PM — équipe, import Airbnb, orchestration',
       },
+      {
+        id: 'equipe/notifications',
+        label: 'Notifications',
+        icon: '🔔',
+        roles: PM_ROLES,
+        description: 'Alertes cloche dashboard — résa, orchestration, messages…',
+      },
       { id: 'my-tasks', label: 'Mes tâches', iconType: 'check', iconColor: '#93C47D', roles: WORKER_ONLY },
       { id: 'my-sched', label: 'Mon planning', iconType: 'calendar', iconColor: '#E06666', roles: WORKER_ONLY },
     ],

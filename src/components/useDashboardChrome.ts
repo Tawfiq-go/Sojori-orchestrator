@@ -225,6 +225,10 @@ export function useDashboardChrome() {
       return 'equipe/mon-profil';
     }
 
+    if (path.startsWith('/admin/equipe/notifications')) {
+      return 'equipe/notifications';
+    }
+
     if (path.startsWith('/admin/equipe')) {
       const tab = new URLSearchParams(location.search).get('tab') || 'list';
       if (tab === 'admin-whatsapp') return 'tasks/team';
