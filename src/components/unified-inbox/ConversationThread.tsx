@@ -21,6 +21,10 @@ function interactiveContentBadge(contentType?: Message['contentType'] | null): s
   return null;
 }
 
+function hasFailedTraceStep(message: Message): boolean {
+  return Boolean(message.processingTrace?.steps?.some((step) => step.status === 'failed'));
+}
+
 interface ConversationThreadProps {
   thread: Thread;
   messages: Message[];
@@ -551,6 +555,7 @@ export default function ConversationThread({
           const isOut = message.from === 'you' || message.from === 'sojori';
           const isGuest = message.from === 'guest';
           const waFailed = isOut && message.whatsappDelivery === 'failed';
+          const traceFailed = message.isAI && hasFailedTraceStep(message);
           const styles = bubbleStyles(message.from);
           const isKeywordHit = kw && messageMatchesKeyword(message.text, kw);
           const contentBadge = interactiveContentBadge(message.contentType);
@@ -577,8 +582,10 @@ export default function ConversationThread({
               <Box
                 onClick={() => openTrace(message)}
                 sx={{
-                  background: styles.bg,
-                  border: waFailed ? '1px solid rgba(220,38,38,0.45)' : styles.border,
+                  background: traceFailed
+                    ? 'linear-gradient(0deg, rgba(254,226,226,0.72), rgba(254,242,242,0.72)), #fff'
+                    : styles.bg,
+                  border: waFailed || traceFailed ? '1px solid rgba(220,38,38,0.45)' : styles.border,
                   borderRadius: styles.radius,
                   px: isOta ? '16px' : '15px',
                   py: isOta ? '12px' : '11px',
@@ -616,7 +623,7 @@ export default function ConversationThread({
                       py: 0.25,
                       borderRadius: 999,
                       bgcolor: 'rgba(124,58,237,0.10)',
-                      color: T.ai,
+                      color: traceFailed ? '#dc2626' : T.ai,
                       fontSize: 0,
                       fontWeight: 800,
                       fontFamily: '"Geist Mono", monospace',
@@ -703,7 +710,7 @@ export default function ConversationThread({
                   <DoneAll sx={{ fontSize: 14, color: T.text4 }} />
                 )}
               </Stack>
-              {waFailed && (
+              {(waFailed || traceFailed) && (
                 <Typography
                   sx={{
                     alignSelf: 'flex-end',
@@ -714,7 +721,9 @@ export default function ConversationThread({
                     px: 0.5,
                   }}
                 >
-                  {formatWhatsAppDeliveryError(message.whatsappDeliveryError).split('\n')[0]}
+                  {waFailed
+                    ? formatWhatsAppDeliveryError(message.whatsappDeliveryError).split('\n')[0]
+                    : 'Action automatique échouée · cliquez pour voir le trace'}
                 </Typography>
               )}
               {isOta && isGuest && (
