@@ -6,6 +6,7 @@
 import type { ReservationTask } from './reservationTask.types';
 import type { ReservationSourceKind } from '../components/reservations/ReservationSourceIcon';
 import type { ProcessingTrace } from './messages.types';
+import type { MessageContentType } from './messages.types';
 
 export type ChannelType = 'all' | 'wa' | 'ab' | 'bk' | 'em' | 'vrbo';
 
@@ -72,6 +73,7 @@ export interface Message {
   processingTrace?: ProcessingTrace;
   aiModel?: string;
   tokensUsed?: number;
+  contentType?: MessageContentType | null;
 }
 
 export interface QuickTemplate {
