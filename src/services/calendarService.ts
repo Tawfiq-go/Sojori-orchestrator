@@ -396,6 +396,10 @@ export interface ListingPerformanceMonth {
   revenue: number;
   otaCommission: number;
   netRevenue: number;
+  pickup7Nights: number;
+  pickup30Nights: number;
+  pickup7Revenue: number;
+  pickup30Revenue: number;
   occupancy: number | null;
   adr: number | null;
   revpar: number | null;
