@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
@@ -243,6 +244,23 @@ export default function WhatsAppTabV2() {
     setAiSourceDraft('');
     await inbox.selectConversation(conv);
   };
+
+  const [searchParams] = useSearchParams();
+  const deepLinkPhone = searchParams.get('phone');
+  const waDeepLinkedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!deepLinkPhone || loading) return;
+    if (waDeepLinkedRef.current === deepLinkPhone) return;
+    const needle = deepLinkPhone.replace(/\s/g, '');
+    const conv = displayConversations.find((c) => {
+      const p = (c.phone || '').replace(/\s/g, '');
+      return p === needle || c.phone === deepLinkPhone;
+    });
+    if (!conv) return;
+    waDeepLinkedRef.current = deepLinkPhone;
+    void handleSelect(conv);
+  }, [deepLinkPhone, displayConversations, loading]);
 
   const bumpConversationPreview = useCallback((phone: string, text: string) => {
     const exchange = outboundInboxExchange(text);

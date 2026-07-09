@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
@@ -472,6 +473,19 @@ export default function MessagesOTATabV2() {
     setAiSourceDraft('');
     await inbox.selectOtaThread(row);
   };
+
+  const [searchParams] = useSearchParams();
+  const deepLinkThread = searchParams.get('thread');
+  const otaDeepLinkedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!deepLinkThread || loading || !displayRows.length) return;
+    if (otaDeepLinkedRef.current === deepLinkThread) return;
+    const row = displayRows.find((r) => String(r.threadId) === deepLinkThread);
+    if (!row) return;
+    otaDeepLinkedRef.current = deepLinkThread;
+    void handleSelect(row);
+  }, [deepLinkThread, displayRows, loading]);
 
   const otaThreadContext = useMemo(
     () => buildOtaThreadContextForAi(inbox.messages),
