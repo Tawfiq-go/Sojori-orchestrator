@@ -9,6 +9,8 @@ import { getOtaTheme, isOtaChannelType } from './otaPlatformTheme';
 import type { Thread, Message, QuickTemplate, QuickAction } from '../../types/unifiedInbox.types';
 import { formatWhatsAppDeliveryError } from './formatWhatsAppDeliveryError';
 import { extractHttpErrorMessage } from '../../utils/extractHttpErrorMessage';
+import { useAuth } from '../../hooks/useAuth';
+import { Roles } from '../../constants/roles';
 
 interface ConversationThreadProps {
   thread: Thread;
@@ -57,6 +59,13 @@ export default function ConversationThread({
   highlightKeyword = '',
   threadMode = 'auto',
 }: ConversationThreadProps) {
+  const { user } = useAuth();
+  const normalizedRole = String(user?.role || '').toLowerCase();
+  const canInspectAi =
+    user?.role === Roles.Admin ||
+    user?.role === Roles.SuperAdmin ||
+    normalizedRole === 'admin' ||
+    normalizedRole === 'superadmin';
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [internalComposerValue, setInternalComposerValue] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
@@ -266,7 +275,6 @@ export default function ConversationThread({
             {flag && <Typography sx={{ fontSize: 14, lineHeight: 1 }}>{flag}</Typography>}
             {thread.isVip && (
               <Box
-                onClick={() => message.processingTrace && setInspectedMessage(message)}
                 sx={{
                   background: `linear-gradient(135deg, ${T.primarySoft}, ${T.primaryDeep})`,
                   color: '#1a1408',
@@ -544,6 +552,7 @@ export default function ConversationThread({
               }}
             >
               <Box
+                onClick={() => canInspectAi && message.isAI && setInspectedMessage(message)}
                 sx={{
                   background: styles.bg,
                   border: waFailed ? '1px solid rgba(220,38,38,0.45)' : styles.border,
@@ -554,9 +563,9 @@ export default function ConversationThread({
                   color: styles.color,
                   lineHeight: 1.7,
                   boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
-                  cursor: message.processingTrace ? 'pointer' : 'default',
+                  cursor: canInspectAi && message.isAI ? 'pointer' : 'default',
                   transition: 'box-shadow 120ms ease',
-                  '&:hover': message.processingTrace
+                  '&:hover': canInspectAi && message.isAI
                     ? { boxShadow: '0 0 0 2px rgba(124,58,237,0.22)' }
                     : undefined,
                 }}
@@ -954,7 +963,7 @@ export default function ConversationThread({
         </Box>
       )}
 
-      {inspectedMessage?.processingTrace && (
+      {canInspectAi && inspectedMessage && (
         <>
           <Box
             onClick={() => setInspectedMessage(null)}
@@ -983,17 +992,19 @@ export default function ConversationThread({
             }}
           >
             <Box sx={{ p: 2.5, borderBottom: `1px solid ${T.border}` }}>
-              <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography sx={{ fontSize: 16, fontWeight: 800 }}>How this answer was made</Typography>
                   <Typography sx={{ mt: 0.5, fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
-                    {inspectedMessage.processingTrace.route || 'response'} · {inspectedMessage.processingTrace.durationMs} ms
+                    {inspectedMessage.processingTrace
+                      ? `${inspectedMessage.processingTrace.route || 'response'} · ${inspectedMessage.processingTrace.durationMs} ms`
+                      : 'Trace unavailable for this response'}
                   </Typography>
                 </Box>
                 <Box component="button" onClick={() => setInspectedMessage(null)} sx={iconBtnSx} aria-label="Close">
                   ✕
                 </Box>
-              </Stack>
+              </Box>
               {(inspectedMessage.aiModel || inspectedMessage.tokensUsed != null) && (
                 <Typography sx={{ mt: 1.5, fontSize: 11, color: T.text3 }}>
                   {inspectedMessage.aiModel || 'No AI model'}
@@ -1002,7 +1013,17 @@ export default function ConversationThread({
               )}
             </Box>
             <Stack spacing={1.25} sx={{ p: 2.5, overflowY: 'auto' }}>
-              {inspectedMessage.processingTrace.steps.map((step, index) => (
+              {!inspectedMessage.processingTrace && (
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#fff7ed', border: '1px solid #fed7aa' }}>
+                  <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: '#9a3412' }}>
+                    No processing trace was returned by srv-fullchatbot.
+                  </Typography>
+                  <Typography sx={{ mt: 0.75, fontSize: 12, lineHeight: 1.55, color: '#7c2d12' }}>
+                    This is usually an older response, or the backend pod handling this message is still running a build without trace persistence.
+                  </Typography>
+                </Box>
+              )}
+              {inspectedMessage.processingTrace?.steps.map((step, index) => (
                 <Box key={`${step.key}-${index}`} sx={{ display: 'grid', gridTemplateColumns: '24px 1fr', gap: 1.25 }}>
                   <Box
                     sx={{
@@ -1020,12 +1041,12 @@ export default function ConversationThread({
                     {step.status === 'completed' ? '✓' : '!'}
                   </Box>
                   <Box sx={{ pb: 1.5, borderBottom: `1px solid ${T.border}` }}>
-                    <Stack direction="row" justifyContent="space-between" gap={1}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
                       <Typography sx={{ fontSize: 12.5, fontWeight: 750 }}>{step.label}</Typography>
                       <Typography sx={{ fontSize: 9.5, color: T.text4, fontFamily: '"Geist Mono", monospace' }}>
                         {step.durationMs ?? 0} ms
                       </Typography>
-                    </Stack>
+                    </Box>
                     {step.summary && (
                       <Typography sx={{ mt: 0.5, fontSize: 12, color: T.text3, lineHeight: 1.5 }}>
                         {step.summary}
