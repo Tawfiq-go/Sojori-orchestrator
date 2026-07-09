@@ -78,6 +78,9 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
           status: waFailed ? undefined : waStatus === 'sent' ? 'sent' : undefined,
           whatsappDelivery: waStatus,
           whatsappDeliveryError: exchange.ai_response_send_error ?? null,
+          processingTrace: exchange.processing_trace,
+          aiModel: exchange.ai_model,
+          tokensUsed: exchange.tokens_used,
         });
       }
     }

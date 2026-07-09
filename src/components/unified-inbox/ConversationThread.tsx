@@ -61,6 +61,7 @@ export default function ConversationThread({
   const [internalComposerValue, setInternalComposerValue] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [inspectedMessage, setInspectedMessage] = useState<Message | null>(null);
   const hasRenderableMessages =
     !loadingMessages && messages.filter((m) => m.type !== 'day-separator').length > 0;
 
@@ -265,6 +266,7 @@ export default function ConversationThread({
             {flag && <Typography sx={{ fontSize: 14, lineHeight: 1 }}>{flag}</Typography>}
             {thread.isVip && (
               <Box
+                onClick={() => message.processingTrace && setInspectedMessage(message)}
                 sx={{
                   background: `linear-gradient(135deg, ${T.primarySoft}, ${T.primaryDeep})`,
                   color: '#1a1408',
@@ -552,6 +554,11 @@ export default function ConversationThread({
                   color: styles.color,
                   lineHeight: 1.7,
                   boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
+                  cursor: message.processingTrace ? 'pointer' : 'default',
+                  transition: 'box-shadow 120ms ease',
+                  '&:hover': message.processingTrace
+                    ? { boxShadow: '0 0 0 2px rgba(124,58,237,0.22)' }
+                    : undefined,
                 }}
               >
                 {message.isAI && (
@@ -945,6 +952,110 @@ export default function ConversationThread({
         >
           ⚠ Fenêtre 24h ouverte — réponses libres autorisées
         </Box>
+      )}
+
+      {inspectedMessage?.processingTrace && (
+        <>
+          <Box
+            onClick={() => setInspectedMessage(null)}
+            sx={{
+              position: 'fixed',
+              inset: 0,
+              bgcolor: 'rgba(15,23,42,0.22)',
+              zIndex: 1299,
+            }}
+          />
+          <Box
+            role="dialog"
+            aria-label="AI response trace"
+            sx={{
+              position: 'fixed',
+              zIndex: 1300,
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: { xs: '100%', sm: 420 },
+              bgcolor: '#fff',
+              borderLeft: `1px solid ${T.border}`,
+              boxShadow: '-12px 0 36px rgba(15,23,42,0.16)',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <Box sx={{ p: 2.5, borderBottom: `1px solid ${T.border}` }}>
+              <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
+                <Box>
+                  <Typography sx={{ fontSize: 16, fontWeight: 800 }}>How this answer was made</Typography>
+                  <Typography sx={{ mt: 0.5, fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
+                    {inspectedMessage.processingTrace.route || 'response'} · {inspectedMessage.processingTrace.durationMs} ms
+                  </Typography>
+                </Box>
+                <Box component="button" onClick={() => setInspectedMessage(null)} sx={iconBtnSx} aria-label="Close">
+                  ✕
+                </Box>
+              </Stack>
+              {(inspectedMessage.aiModel || inspectedMessage.tokensUsed != null) && (
+                <Typography sx={{ mt: 1.5, fontSize: 11, color: T.text3 }}>
+                  {inspectedMessage.aiModel || 'No AI model'}
+                  {inspectedMessage.tokensUsed != null ? ` · ${inspectedMessage.tokensUsed} tokens` : ''}
+                </Typography>
+              )}
+            </Box>
+            <Stack spacing={1.25} sx={{ p: 2.5, overflowY: 'auto' }}>
+              {inspectedMessage.processingTrace.steps.map((step, index) => (
+                <Box key={`${step.key}-${index}`} sx={{ display: 'grid', gridTemplateColumns: '24px 1fr', gap: 1.25 }}>
+                  <Box
+                    sx={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: '50%',
+                      bgcolor: step.status === 'completed' ? '#ecfdf5' : '#fef2f2',
+                      color: step.status === 'completed' ? '#059669' : '#dc2626',
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontSize: 11,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {step.status === 'completed' ? '✓' : '!'}
+                  </Box>
+                  <Box sx={{ pb: 1.5, borderBottom: `1px solid ${T.border}` }}>
+                    <Stack direction="row" justifyContent="space-between" gap={1}>
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 750 }}>{step.label}</Typography>
+                      <Typography sx={{ fontSize: 9.5, color: T.text4, fontFamily: '"Geist Mono", monospace' }}>
+                        {step.durationMs ?? 0} ms
+                      </Typography>
+                    </Stack>
+                    {step.summary && (
+                      <Typography sx={{ mt: 0.5, fontSize: 12, color: T.text3, lineHeight: 1.5 }}>
+                        {step.summary}
+                      </Typography>
+                    )}
+                    {step.details && Object.keys(step.details).length > 0 && (
+                      <Box
+                        component="pre"
+                        sx={{
+                          mt: 1,
+                          mb: 0,
+                          p: 1.25,
+                          borderRadius: 1.5,
+                          bgcolor: T.bg2,
+                          color: T.text3,
+                          fontSize: 10,
+                          lineHeight: 1.55,
+                          whiteSpace: 'pre-wrap',
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {JSON.stringify(step.details, null, 2)}
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+        </>
       )}
     </Box>
   );
