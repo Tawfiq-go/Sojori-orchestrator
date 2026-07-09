@@ -394,6 +394,8 @@ export interface ListingPerformanceMonth {
   blockedNights: number;
   nightsSold: number;
   revenue: number;
+  otaCommission: number;
+  netRevenue: number;
   occupancy: number | null;
   adr: number | null;
   revpar: number | null;

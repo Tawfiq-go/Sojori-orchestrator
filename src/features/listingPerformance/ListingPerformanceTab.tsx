@@ -10,8 +10,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Button, Dialog, DialogContent, DialogTitle, IconButton, Stack, Typography } from '@mui/material';
 import { T } from '../dynamic-pricing/_tokens';
 import { calendarService } from '../../services/calendarService';
-import { fetchReviewsByListing } from '../../services/reservationsService';
-import type { ListingReviewsRow } from '../../services/reservationsService';
+import { fetchEngagementByListing, fetchReviewsByListing } from '../../services/reservationsService';
+import type { ListingEngagementMonth, ListingReviewsRow } from '../../services/reservationsService';
 import type {
   ListingPerformanceMonth,
   ListingPerformanceRow,
@@ -167,6 +167,7 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
     listingId: string; name: string; month: string;
     monthData?: ListingPerformanceMonth | null;
   } | null>(null);
+  const [engagement, setEngagement] = useState<Map<string, Map<string, ListingEngagementMonth>>>(new Map());
 
   // Fenêtre −24 → +12 : les 12 mois « année » + le N-1 nécessaire aux pastilles.
   const from = useMemo(() => shiftMonth(nowMonth(), -24), []);
@@ -178,6 +179,16 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
     try {
       const res = await calendarService.getPerformanceByListing({ from, to, ownerId });
       setRows(res.listings ?? []);
+      // Engagement (leads · 1re réponse) — best-effort, sans bloquer les KPI
+      void fetchEngagementByListing({ ownerId, from, to })
+        .then((eng) => {
+          const map = new Map<string, Map<string, ListingEngagementMonth>>();
+          for (const l of eng.listings ?? []) {
+            map.set(l.listingId, new Map(l.months.map((m) => [m.month, m])));
+          }
+          setEngagement(map);
+        })
+        .catch(() => setEngagement(new Map()));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur de chargement');
     } finally {
@@ -292,7 +303,7 @@ export default function ListingPerformanceTab({ ownerId }: { ownerId?: string })
       ) : view === 'avis' ? (
         <AvisView ownerId={ownerId} />
       ) : (
-        <MoisView rows={rows} month={selectedMonth} onDrill={(listingId, name) => {
+        <MoisView rows={rows} month={selectedMonth} engagement={engagement} onDrill={(listingId, name) => {
           const row = rows.find((r) => r.listingId === listingId);
           setDrill({ listingId, name, month: selectedMonth, monthData: row?.months.find((x) => x.month === selectedMonth) ?? null });
         }} />
@@ -415,7 +426,12 @@ const tdSx = {
   p: '12px', borderBottom: `1px solid ${T.border}`, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' as const, fontSize: 12.5,
 };
 
-function MoisView({ rows, month, onDrill }: { rows: ListingPerformanceRow[]; month: string; onDrill: (listingId: string, name: string) => void }) {
+function MoisView({ rows, month, engagement, onDrill }: {
+  rows: ListingPerformanceRow[];
+  month: string;
+  engagement: Map<string, Map<string, ListingEngagementMonth>>;
+  onDrill: (listingId: string, name: string) => void;
+}) {
   const prevMonth = shiftMonth(month, -1);
   const items = rows
     .map((row) => ({
@@ -429,10 +445,13 @@ function MoisView({ rows, month, onDrill }: { rows: ListingPerformanceRow[]; mon
     (acc, { m }) => {
       if (!m) return acc;
       acc.revenue += m.revenue; acc.nights += m.nightsSold; acc.open += m.openNights;
+      acc.commission += m.otaCommission ?? 0;
       return acc;
     },
-    { revenue: 0, nights: 0, open: 0 },
+    { revenue: 0, nights: 0, open: 0, commission: 0 },
   );
+  const totLeads = items.reduce((s2, { row }) => s2 + (engagement.get(row.listingId)?.get(month)?.leadsCount ?? 0), 0);
+  const totBookings = items.reduce((s2, { m }) => s2 + (m?.bookings ?? 0), 0);
 
   return (
     <Box>
@@ -440,6 +459,7 @@ function MoisView({ rows, month, onDrill }: { rows: ListingPerformanceRow[]; mon
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1.25, mb: 2 }}>
         {[
           { lbl: 'Revenus', val: `${fmtMad(tot.revenue)}`, unit: 'MAD' },
+          { lbl: 'Revenu net', val: `${fmtMad(tot.revenue - tot.commission)}`, unit: `MAD · com. ${fmtMad(tot.commission)}` },
           { lbl: 'Occupation', val: fmtPct(tot.open > 0 ? tot.nights / tot.open : null), unit: '' },
           { lbl: 'ADR', val: tot.nights > 0 ? fmtMad(tot.revenue / tot.nights) : '—', unit: 'MAD/nuit' },
           { lbl: 'RevPAR', val: tot.open > 0 ? fmtMad(tot.revenue / tot.open) : '—', unit: 'MAD' },
@@ -460,8 +480,8 @@ function MoisView({ rows, month, onDrill }: { rows: ListingPerformanceRow[]; mon
           <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
             <Box component="thead">
               <Box component="tr">
-                {['Bien', 'Occupation', 'Nuits', 'Revenus', 'ADR', 'RevPAR', 'Lead time', 'Séjour moy.', 'Canaux', 'Δ revenus'].map((h) => (
-                  <Box key={h} component="th" sx={thSx}>{h}</Box>
+                {['Bien', 'Occupation', 'Nuits', 'Revenus', '− Commission', 'Net', 'ADR', 'Lead time', '1ʳᵉ réponse', 'Séjour moy.', 'Canaux', 'Δ revenus'].map((h) => (
+                  <Box key={h} component="th" sx={['− Commission', 'Net', '1ʳᵉ réponse'].includes(h) ? { ...thSx, color: T.goldDeep } : thSx}>{h}</Box>
                 ))}
               </Box>
             </Box>
@@ -477,7 +497,7 @@ function MoisView({ rows, month, onDrill }: { rows: ListingPerformanceRow[]; mon
                       <Typography sx={{ fontFamily: MONO, fontSize: 10.5, color: T.text3 }}>{row.city ?? '—'}</Typography>
                     </Box>
                     {!m || !m.hasInventory ? (
-                      <Box component="td" colSpan={9} sx={{ ...tdSx, color: T.text4 }}>
+                      <Box component="td" colSpan={11} sx={{ ...tdSx, color: T.text4 }}>
                         Pas de données pour ce mois (bien pas encore actif).
                       </Box>
                     ) : (
@@ -492,9 +512,26 @@ function MoisView({ rows, month, onDrill }: { rows: ListingPerformanceRow[]; mon
                         </Box>
                         <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{m.nightsSold}</Box>
                         <Box component="td" sx={{ ...tdSx, fontWeight: 800 }}>{fmtMad(m.revenue)} MAD</Box>
+                        <Box component="td" sx={{ ...tdSx, fontFamily: MONO, bgcolor: T.goldTint, color: T.error }}>
+                          {(m.otaCommission ?? 0) > 0 ? `− ${fmtMad(m.otaCommission)}` : '—'}
+                        </Box>
+                        <Box component="td" sx={{ ...tdSx, fontWeight: 800, bgcolor: T.goldTint, color: T.success }}>
+                          {fmtMad(m.netRevenue ?? m.revenue)} MAD
+                        </Box>
                         <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{m.adr != null ? fmtMad(m.adr) : '—'}</Box>
-                        <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{m.revpar != null ? fmtMad(m.revpar) : '—'}</Box>
                         <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{m.leadTimeMedianDays != null ? `${Math.round(m.leadTimeMedianDays)} j` : '—'}</Box>
+                        {(() => {
+                          const eng = engagement.get(row.listingId)?.get(month);
+                          const mins = eng?.firstResponseMedianMinutes ?? null;
+                          const label = mins == null ? '—' : mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, '0')}`;
+                          const slow = mins != null && mins > 60;
+                          return (
+                            <Box component="td" sx={{ ...tdSx, fontFamily: MONO, bgcolor: T.goldTint, color: slow ? T.warning : T.text, fontWeight: slow ? 800 : 400 }}
+                              title={eng ? `${eng.conversationsMeasured} conversation(s) mesurée(s)` : 'Pas de conversation mesurée ce mois'}>
+                              {label}{slow ? ' ⚠' : ''}
+                            </Box>
+                          );
+                        })()}
                         <Box component="td" sx={{ ...tdSx, fontFamily: MONO }}>{m.avgStayNights != null ? `${m.avgStayNights.toLocaleString('fr-FR')} n` : '—'}</Box>
                         <Box component="td" sx={tdSx}><ChannelMix channels={m.channels} /></Box>
                         <Box component="td" sx={tdSx}><DeltaChip delta={deltaRev} unit=" %" /></Box>
@@ -508,8 +545,16 @@ function MoisView({ rows, month, onDrill }: { rows: ListingPerformanceRow[]; mon
         </Box>
       </Box>
 
+      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, mt: 1.5 }}>
+        <Typography component="span" sx={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, borderRadius: '99px', px: 1.5, py: 0.5, bgcolor: T.bg2, color: T.text2 }}>
+          Demandes du mois : <b>{totLeads}</b> · résas : <b>{totBookings}</b>
+          {totLeads + totBookings > 0 ? ` · conversion ${Math.round((totBookings / (totBookings + totLeads)) * 100)} %` : ''}
+        </Typography>
+      </Stack>
       <Typography sx={{ fontSize: 11.5, color: T.text3, lineHeight: 1.6, mt: 1.5 }}>
-        <b>Occupation</b> : nuits occupées ÷ nuits ouvertes (vos jours bloqués sont exclus). ·
+        <b>Net</b> : revenus − commission OTA (répartis par nuit). ·
+        <b> 1ʳᵉ réponse</b> : médiane du délai 1ᵉʳ message voyageur → votre 1ʳᵉ réponse (fils créés ce mois) — objectif &lt; 1 h pour le classement Airbnb. ·
+        <b> Occupation</b> : nuits occupées ÷ nuits ouvertes (vos jours bloqués sont exclus). ·
         <b> RevPAR</b> : revenus ÷ nuits ouvertes — combine prix et remplissage. ·
         <b> Lead time</b> : délai médian réservation → arrivée (résas arrivant ce mois). ·
         Revenus attribués par nuit occupée : un séjour à cheval sur deux mois est réparti. ·
