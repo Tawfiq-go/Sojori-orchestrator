@@ -201,6 +201,11 @@ const TeamLegacyRedirect = lazyWithReload(() =>
 );
 const OwnerSelfProfilePage = lazyWithReload(() =>
   import('./pages/OwnerSelfProfilePage').then((module) => ({ default: module.OwnerSelfProfilePage }))
+)
+const NotificationPreferencesPage = lazyWithReload(() =>
+  import('./pages/NotificationPreferencesPage').then((module) => ({
+    default: module.NotificationPreferencesPage,
+  }))
 );
 const WorkerCreatePage = lazyWithReload(() =>
   import('./pages/WorkerAdminPages').then((module) => ({ default: module.WorkerCreatePage }))
@@ -433,6 +438,7 @@ function App() {
               <Route path="/admin/equipe" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
               <Route path="/admin/equipe/owners" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
               <Route path="/admin/equipe/mon-profil" element={<LazyRoute><OwnerSelfProfilePage /></LazyRoute>} />
+              <Route path="/admin/equipe/notifications" element={<LazyRoute><NotificationPreferencesPage /></LazyRoute>} />
               <Route element={<AdminRoute />}>
                 <Route path="/admin/pm-lifecycle" element={<LazyRoute><PmLifecycleHubPage /></LazyRoute>} />
                 <Route path="/admin/pm-lifecycle/:ownerId" element={<LazyRoute><PmLifecycleDetailPage /></LazyRoute>} />
