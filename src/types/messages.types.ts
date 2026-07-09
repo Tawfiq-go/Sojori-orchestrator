@@ -53,12 +53,31 @@ export interface MessageExchange {
   cache_hit?: boolean;
   response_time_ms?: number;
   trace_id?: string;
-  processing_trace?: any;
+  processing_trace?: ProcessingTrace;
   ai_intent?: any;
   user_context?: any;
   /** Outbound WhatsApp delivery (srv-fullchatbot assistant row). */
   ai_response_send_status?: 'pending' | 'sent' | 'failed';
   ai_response_send_error?: string | null;
+}
+
+export interface ProcessingTraceStep {
+  key: string;
+  label: string;
+  status: 'completed' | 'failed' | 'skipped';
+  startedAt: string;
+  durationMs?: number;
+  summary?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ProcessingTrace {
+  version: 1;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  route?: string;
+  steps: ProcessingTraceStep[];
 }
 
 /**

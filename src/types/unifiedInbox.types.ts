@@ -5,6 +5,7 @@
 
 import type { ReservationTask } from './reservationTask.types';
 import type { ReservationSourceKind } from '../components/reservations/ReservationSourceIcon';
+import type { ProcessingTrace } from './messages.types';
 
 export type ChannelType = 'all' | 'wa' | 'ab' | 'bk' | 'em' | 'vrbo';
 
@@ -68,6 +69,9 @@ export interface Message {
   /** WhatsApp Cloud API delivery — distinct from thread read receipts. */
   whatsappDelivery?: 'pending' | 'sent' | 'failed';
   whatsappDeliveryError?: string | null;
+  processingTrace?: ProcessingTrace;
+  aiModel?: string;
+  tokensUsed?: number;
 }
 
 export interface QuickTemplate {
