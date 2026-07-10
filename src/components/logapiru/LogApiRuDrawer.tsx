@@ -165,7 +165,7 @@ export function LogApiRuDrawer({
     return [...new Set(out)];
   }, [audit]);
 
-  const status = detail ? uiStatus(detail.status, detail.statusCode) : 'success';
+  const status = detail ? uiStatus(detail.status, detail.statusCode, detail.responseTime) : 'success';
   const code = detail ? RU_CODES[detail.statusCode] : undefined;
   const correlationId = auditStr('correlationId');
   const trigger = auditStr('trigger');
@@ -260,7 +260,7 @@ export function LogApiRuDrawer({
                   <div className="dwr-meta">
                     <div className="cell">
                       <div className="l">Statut</div>
-                      <StatusBadge status={status} />
+                      <StatusBadge status={status} statusCode={detail.statusCode} />
                     </div>
                     <div className="cell">
                       <div className="l">Code RU</div>

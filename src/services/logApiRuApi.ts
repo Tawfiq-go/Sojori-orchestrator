@@ -76,6 +76,7 @@ export interface LogApiRuActionStat {
   lastUsed: string;
   lastStatus: string;
   lastStatusCode: string;
+  lastResponseTime?: number | null;
 }
 
 export interface LogApiRuOwnerStat {
