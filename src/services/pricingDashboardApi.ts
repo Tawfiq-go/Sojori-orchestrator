@@ -27,3 +27,32 @@ export function fetchRuListingsByOwner() {
     timeout: 30000,
   });
 }
+
+export interface AirroiCostByOwnerItem {
+  ownerId: string;
+  totalCalls: number;
+  successCount: number;
+  totalCostUsd: number;
+  lastCallAt: string | null;
+}
+
+export interface AirroiCostByOwnerResponse {
+  success: boolean;
+  data: {
+    items: AirroiCostByOwnerItem[];
+    byMonth: { ownerId: string; month: string; calls: number; costUsd: number }[];
+    byDay: { ownerId: string; day: string; calls: number; costUsd: number }[];
+    totalCostUsd: number;
+  };
+}
+
+/** period='all' | hours=N (défaut 72h côté backend) — même convention que channels-dashboard. */
+export function fetchAirroiCostByOwner(query: { period?: 'all'; hours?: number } = {}) {
+  const params = new URLSearchParams();
+  if (query.period === 'all') params.set('period', 'all');
+  else params.set('hours', String(query.hours ?? 720)); // 30 jours par défaut pour une vue coût mensuel
+  return apiClient.get<AirroiCostByOwnerResponse>(`${PRICING_DASHBOARD}/airroi-cost-by-owner?${params.toString()}`, {
+    ...channelsDashboardAxiosConfig(),
+    timeout: 30000,
+  });
+}
