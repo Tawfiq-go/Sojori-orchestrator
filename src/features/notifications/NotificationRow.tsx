@@ -6,7 +6,7 @@ import OpenInNewOutlined from '@mui/icons-material/OpenInNewOutlined';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { tokens as t } from '../../components/dashboard/dashboardTokens';
-import { NOTIF_FACETS, NOTIF_PRIORITY, isUnread } from './constants';
+import { NOTIF_FACETS, NOTIF_PRIORITY, isUnread, messageChannelMeta } from './constants';
 import type { NotificationItem } from './types';
 import { useMarkRead, useSetStatus } from './useNotifications';
 import { resolveNotificationNavigatePath } from './notificationNavigation';
@@ -27,6 +27,7 @@ export function NotificationRow({ notification }: NotificationRowProps) {
 
   const facet = NOTIF_FACETS[notification.facet];
   const prio = NOTIF_PRIORITY[notification.priority];
+  const channel = messageChannelMeta(notification.eventKey);
   const unread = isUnread(notification);
   const bodyText = plainBody(notification.body || '');
 
@@ -134,9 +135,29 @@ export function NotificationRow({ notification }: NotificationRowProps) {
 
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
-            <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: t.text, lineHeight: 1.3 }}>
-              {notification.title}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, flexWrap: 'wrap' }}>
+              {channel ? (
+                <Box
+                  component="span"
+                  sx={{
+                    fontSize: 9,
+                    fontWeight: 800,
+                    px: 0.5,
+                    py: 0.1,
+                    borderRadius: '4px',
+                    bgcolor: `${channel.color}22`,
+                    color: channel.color,
+                    flexShrink: 0,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {channel.label}
+                </Box>
+              ) : null}
+              <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: t.text, lineHeight: 1.3 }}>
+                {notification.title}
+              </Typography>
+            </Box>
             <Typography sx={{ fontSize: 10.5, color: t.text4, flexShrink: 0, whiteSpace: 'nowrap' }}>
               {relTime}
             </Typography>

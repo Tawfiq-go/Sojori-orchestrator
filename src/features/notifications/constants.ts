@@ -31,6 +31,22 @@ export const FACET_ORDER: NotificationFacet[] = [
   'lead',
 ];
 
+/** Filtres inbox guest dans la cloche (remplace la facette « message » unique). */
+export const NOTIF_MESSAGE_CHANNELS = [
+  {
+    eventKey: 'message:ota_received',
+    label: 'OTA',
+    color: '#FF5A5F',
+  },
+  {
+    eventKey: 'message:whatsapp_received',
+    label: 'WhatsApp',
+    color: '#25D366',
+  },
+] as const;
+
+export type MessageChannelEventKey = (typeof NOTIF_MESSAGE_CHANNELS)[number]['eventKey'];
+
 export interface PriorityMeta {
   label: string;
   color: string;
@@ -66,4 +82,8 @@ export function isActiveInPanel(n: Pick<NotificationItem, 'status'>): boolean {
     n.status !== 'done' &&
     n.status !== 'handled'
   );
+}
+
+export function messageChannelMeta(eventKey: string) {
+  return NOTIF_MESSAGE_CHANNELS.find((c) => c.eventKey === eventKey);
 }

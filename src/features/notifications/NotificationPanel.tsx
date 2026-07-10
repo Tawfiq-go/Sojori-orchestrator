@@ -22,15 +22,21 @@ interface NotificationPanelProps {
 function PanelBody({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const [facet, setFacet] = useState('');
+  const [eventKey, setEventKey] = useState('');
   const { data: unread } = useUnreadCount();
-  const { data: listData, isLoading, isFetching } = useNotificationList(facet, 'all');
+  const { data: listData, isLoading, isFetching } = useNotificationList(facet, eventKey, 'all');
   const markAllRead = useMarkAllRead();
 
   const items = listData?.items ?? [];
-  const uc = unread ?? { total: 0, actionRequired: 0, byFacet: {} };
+  const uc = unread ?? { total: 0, actionRequired: 0, byFacet: {}, byEventKey: {} };
 
   const handleMarkAll = () => {
-    void markAllRead.mutateAsync(facet || undefined).catch(() => {});
+    void markAllRead
+      .mutateAsync({
+        facet: facet || undefined,
+        eventKey: eventKey || undefined,
+      })
+      .catch(() => {});
   };
 
   const handlePrefs = () => {
@@ -134,8 +140,11 @@ function PanelBody({ onClose }: { onClose: () => void }) {
 
         <NotificationFacetChips
           selectedFacet={facet}
+          selectedEventKey={eventKey}
           onSelectFacet={setFacet}
+          onSelectEventKey={setEventKey}
           byFacet={uc.byFacet}
+          byEventKey={uc.byEventKey}
         />
       </Box>
 

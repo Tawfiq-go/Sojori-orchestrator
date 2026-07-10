@@ -8,6 +8,7 @@ import { NotificationHistoryRow } from '../features/notifications/NotificationHi
 import { NotificationsSectionTabs } from '../features/notifications/NotificationsSectionTabs';
 import {
   useNotificationHistory,
+  useUnreadCount,
   type NotificationHistoryTab,
 } from '../features/notifications/useNotifications';
 
@@ -45,8 +46,11 @@ function HistoryTabButton({
 export function NotificationsHistoryPage() {
   const [tab, setTab] = useState<NotificationHistoryTab>('treated');
   const [facet, setFacet] = useState('');
-  const { data, isLoading } = useNotificationHistory(tab, facet);
+  const [eventKey, setEventKey] = useState('');
+  const { data: unread } = useUnreadCount();
+  const { data, isLoading } = useNotificationHistory(tab, facet, eventKey);
   const items = data?.items ?? [];
+  const uc = unread ?? { byFacet: {}, byEventKey: {} };
 
   return (
     <DashboardWrapper breadcrumb={['Équipe', 'Notifications', 'Historique']}>
@@ -86,7 +90,11 @@ export function NotificationsHistoryPage() {
         >
           <NotificationFacetChips
             selectedFacet={facet}
+            selectedEventKey={eventKey}
             onSelectFacet={setFacet}
+            onSelectEventKey={setEventKey}
+            byFacet={uc.byFacet}
+            byEventKey={uc.byEventKey}
           />
         </Box>
 

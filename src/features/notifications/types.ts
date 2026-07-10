@@ -52,6 +52,7 @@ export interface UnreadCountData {
   total: number;
   actionRequired: number;
   byFacet: Partial<Record<NotificationFacet, number>>;
+  byEventKey?: Partial<Record<string, number>>;
 }
 
 export interface NotificationListResponse {
