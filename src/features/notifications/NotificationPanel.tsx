@@ -28,7 +28,7 @@ function PanelBody({ onClose }: { onClose: () => void }) {
   const markAllRead = useMarkAllRead();
 
   const items = listData?.items ?? [];
-  const uc = unread ?? { total: 0, actionRequired: 0, byFacet: {}, byEventKey: {} };
+  const uc = unread ?? { total: 0, activeCount: 0, actionRequired: 0, byFacet: {}, byEventKey: {} };
 
   const handleMarkAll = () => {
     void markAllRead
@@ -129,11 +129,21 @@ function PanelBody({ onClose }: { onClose: () => void }) {
         <Typography sx={{ px: 1.25, pb: 0.75, fontSize: 10, color: t.text3, lineHeight: 1.4 }}>
           Uniquement les alertes <b>actives</b>. Terminer ou Ignorer les retire d’ici — retrouvez-les
           dans <b>Historique</b>.
-          {uc.actionRequired > 0 ? (
+          {uc.activeCount > 0 || items.length > 0 ? (
             <>
               {' '}
-              Le badge rouge de la cloche ({uc.actionRequired}) signale les{' '}
-              <b>urgentes / critiques</b> parmi celles-ci.
+              Le badge de la cloche affiche le total <b>en cours</b>
+              {uc.actionRequired > 0 ? (
+                <>
+                  {' '}
+                  (<b style={{ color: t.error }}>rouge</b> = {uc.actionRequired} urgente
+                  {uc.actionRequired > 1 ? 's' : ''} / critique
+                  {uc.actionRequired > 1 ? 's' : ''})
+                </>
+              ) : (
+                <> (doré = priorité normale)</>
+              )}
+              .
             </>
           ) : null}
         </Typography>

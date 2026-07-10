@@ -50,6 +50,8 @@ export interface NotificationItem {
 
 export interface UnreadCountData {
   total: number;
+  /** Aligné panneau cloche « En cours » (hors traitées / ignorées / expirées). */
+  activeCount?: number;
   actionRequired: number;
   byFacet: Partial<Record<NotificationFacet, number>>;
   byEventKey?: Partial<Record<string, number>>;

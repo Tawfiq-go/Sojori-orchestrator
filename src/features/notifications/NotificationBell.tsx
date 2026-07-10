@@ -25,7 +25,9 @@ export function NotificationBell() {
   const [ringing, setRinging] = useState(false);
 
   const actionRequired = unread?.actionRequired ?? 0;
-  const badgeLabel = actionRequired > 99 ? '99+' : String(actionRequired);
+  const activeCount = unread?.activeCount ?? unread?.total ?? 0;
+  const badgeCount = activeCount > 99 ? '99+' : String(activeCount);
+  const isUrgent = actionRequired > 0;
 
   useEffect(() => {
     if (!livePulse) return;
@@ -39,15 +41,17 @@ export function NotificationBell() {
     setPanelOpen(!panelOpen);
   };
 
+  const tooltipTitle = !enabled
+    ? 'Sélectionnez un propriétaire pour voir les notifications'
+    : activeCount > 0
+      ? isUrgent
+        ? `${activeCount} en cours (${actionRequired} urgente${actionRequired > 1 ? 's' : ''})`
+        : `${activeCount} notification${activeCount > 1 ? 's' : ''} en cours`
+      : 'Notifications';
+
   return (
     <>
-      <Tooltip
-        title={
-          enabled
-            ? 'Notifications'
-            : 'Sélectionnez un propriétaire pour voir les notifications'
-        }
-      >
+      <Tooltip title={tooltipTitle}>
         <span>
           <IconButton
             ref={bellRef}
@@ -71,7 +75,7 @@ export function NotificationBell() {
             disabled={!enabled}
           >
             <NotificationsNoneOutlined sx={{ fontSize: 20 }} />
-            {actionRequired > 0 ? (
+            {activeCount > 0 ? (
               <Box
                 component="span"
                 sx={{
@@ -82,8 +86,8 @@ export function NotificationBell() {
                   height: 16,
                   px: 0.375,
                   borderRadius: '999px',
-                  bgcolor: t.error,
-                  color: '#fff',
+                  bgcolor: isUrgent ? t.error : t.primary,
+                  color: isUrgent ? '#fff' : t.primaryOnGold,
                   fontSize: 9.5,
                   fontWeight: 800,
                   lineHeight: '16px',
@@ -91,7 +95,7 @@ export function NotificationBell() {
                   border: `2px solid ${t.bg1}`,
                 }}
               >
-                {badgeLabel}
+                {badgeCount}
               </Box>
             ) : null}
           </IconButton>
