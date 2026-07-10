@@ -25,11 +25,12 @@ export function getSocket(): Socket {
   socket = io(resolveSocketOrigin(), {
     path: SOCKET_PATH,
     auth: (cb) => cb({ token: getToken() }),
-    transports: ['websocket', 'polling'],
+    // Polling d'abord en local : évite la rafale ws 503 quand le proxy Vite / ingress socket est indispo
+    transports: import.meta.env.DEV ? ['polling', 'websocket'] : ['websocket', 'polling'],
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 10000,
-    reconnectionAttempts: Infinity,
+    reconnectionAttempts: import.meta.env.DEV ? 8 : Infinity,
   });
 
   socket.on('connect_error', (err) => {

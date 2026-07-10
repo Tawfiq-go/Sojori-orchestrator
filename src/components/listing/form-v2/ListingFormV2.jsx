@@ -11,6 +11,8 @@ import listingsService from '../../../services/listingsService';
 import { getListingImportOnboarding } from '../../../services/importOnboardingService';
 import { isPersistedListingId } from '../../../utils/listingId';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../../hooks/useAuth';
+import { hasAdminAccess } from '../../../utils/rbac.utils';
 
 import { GeneralTab, LocationTab }                          from './tabs/GeneralLocationTabs';
 import { PhotosTabReal }                                    from './tabs/PhotosTabReal';
@@ -34,6 +36,8 @@ export default function ListingFormV2({
   listingStructure = null,
   roomTypeConfigs = [],
 }) {
+  const { user } = useAuth();
+  const isAdmin = hasAdminAccess(user?.role);
   const [values, setValues] = useState(initialValues);
   const [publishLoading, setPublishLoading] = useState(false);
   const [importOnboardingActive, setImportOnboardingActive] = useState(
@@ -164,7 +168,7 @@ export default function ListingFormV2({
                                                             airbnbHeroOrder={values.airbnbHeroOrder}
                                                             onAirbnbOrderChange={v => setValues(s => ({ ...s, airbnbHeroOrder: v }))} />;
       if (tabKey === 'amenities')    return <AmenitiesTab   {...common} listingId={listingId} />;
-      if (tabKey === 'ru-import')    return <RuImportDataTab {...common} />;
+      if (tabKey === 'ru-import')    return isAdmin ? <RuImportDataTab {...common} /> : null;
       if (tabKey === 'pricing')      return <PricingTab     {...common} />;
       if (tabKey === 'availability') return <AvailabilityTab {...common} />;
       if (tabKey === 'fees')         return <FeesTab        {...common} />;
@@ -209,6 +213,9 @@ export default function ListingFormV2({
       lockLevel={lockLevel}
       embedded={embedded}
       importOnboardingActive={importOnboardingActive}
+      hideRuImportTab={!isAdmin}
+      lastSavedAt={values.updatedAt}
+      lastPublishedAt={values.otaChannelsSnapshot?.updatedAt}
       onSave={() => onSave?.(values)}
       onPublish={handlePublish}
       publishLoading={publishLoading}

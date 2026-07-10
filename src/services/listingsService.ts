@@ -1969,16 +1969,15 @@ export const listingsService = {
   },
 
   /**
-   * GET /api/v1/listing/listings?staging=false&compact=false
-   * Récupère la liste des listings avec leurs roomTypes (pour le modal de création de réservation)
-   *
-   * Basé sur le Legacy dashboard: serverApi.reservation.jsx getListings()
-   * ⚠️ IMPORTANT: compact=false pour avoir les roomTypes complets
+   * Listings actifs + roomTypes pour le modal « Nouvelle réservation ».
+   * Source de vérité = même requête que /listings?tab=active (forListingsOverview),
+   * enrichie des roomTypes via forReservation (sans exclure les annonces sans room type).
    */
   async getListingsWithRoomTypes(options?: {
     staging?: boolean;
     compact?: boolean;
     active?: boolean;
+    filterOwnerId?: string | string[];
   }): Promise<{
     success: boolean;
     data: Array<{
@@ -1994,97 +1993,92 @@ export const listingsService = {
       }>;
     }>;
   }> {
+    const mapRoomTypes = (roomTypes: unknown) =>
+      Array.isArray(roomTypes)
+        ? roomTypes.map((rt: unknown) => {
+            const roomType = asRecord(rt);
+            return {
+              _id: asString(roomType._id || roomType.id),
+              roomTypeName: asString(roomType.roomTypeName || roomType.name),
+              personCapacityMax: asNumber(roomType.personCapacityMax) ?? 0,
+            };
+          })
+        : [];
+
     try {
       const staging = options?.staging ?? false;
-      const compact = options?.compact ?? false; // false pour avoir roomTypes
-      const active = options?.active ?? undefined;
+      const activeFilter = options?.active !== false;
 
-      let url = `${LISTING_API_BASE_URL}/listings?staging=${staging}&compact=${compact}&forReservation=true`;
+      // 1. Même liste que ListingsOverviewPage (/listings?tab=active)
+      const overview = await this.getListings({
+        page: 0,
+        limit: 5000,
+        staging,
+        useActiveFilter: options?.active !== undefined,
+        active: activeFilter,
+        filterOwnerId: options?.filterOwnerId,
+        forListingsOverview: true,
+      });
 
-      // ✅ Si active est défini, ajouter useActiveFilter=true + active=true/false
-      if (active !== undefined) {
-        url += `&useActiveFilter=true&active=${active}`;
+      if (!overview.data.items.length) {
+        return { success: true, data: [] };
       }
 
-      // Toutes les annonces actives (pas seulement la 1ère page)
-      url += '&limit=5000&page=0';
-
-      const response = await apiClient.get(url);
-
-      const payload = asRecord(response.data);
-
-      if (payload.success === false) {
-        return { success: false, data: [] };
+      // 2. Room types (forReservation) — même scope owner / actif
+      let roomTypesUrl = `${LISTING_API_BASE_URL}/listings?staging=${staging}&compact=false&forReservation=true&limit=5000&page=0`;
+      if (options?.active !== undefined) {
+        roomTypesUrl += `&useActiveFilter=true&active=${activeFilter}`;
+      }
+      const ownerFilter = options?.filterOwnerId
+        ? Array.isArray(options.filterOwnerId)
+          ? options.filterOwnerId
+          : [options.filterOwnerId]
+        : [];
+      if (ownerFilter.length > 0) {
+        const query = new URLSearchParams();
+        appendFilterOwnerIdsToSearchParams(query, ownerFilter);
+        const ownerQs = query.toString();
+        if (ownerQs) roomTypesUrl += `&${ownerQs}`;
       }
 
-      const listings = Array.isArray(payload.data) ? payload.data : [];
+      const roomTypesByListingId = new Map<
+        string,
+        Array<{ _id: string; roomTypeName: string; personCapacityMax?: number }>
+      >();
 
-      const mappedListings = listings.map((listing: any) => {
-        const record = asRecord(listing);
+      try {
+        const rtResponse = await apiClient.get(roomTypesUrl);
+        const rtPayload = asRecord(rtResponse.data);
+        if (rtPayload.success !== false) {
+          const rtListings = Array.isArray(rtPayload.data) ? rtPayload.data : [];
+          for (const listing of rtListings) {
+            const record = asRecord(listing);
+            const id = asString(record._id || record.id);
+            if (id) roomTypesByListingId.set(id, mapRoomTypes(record.roomTypes));
+          }
+        }
+      } catch (rtError) {
+        console.warn('[getListingsWithRoomTypes] room types fetch failed, listings shown without RT', rtError);
+      }
+
+      const merged = overview.data.items.map((item) => {
+        const raw = asRecord(item.raw);
         return {
-          id: asString(record._id || record.id),
-          name: asString(record.name),
-          checkInTime: asString(record.checkInTimeStart || record.checkInTime),
-          checkOutTime: asString(record.checkOutTime),
-          propertyUnit: asString(record.propertyUnit),
-          roomTypes: Array.isArray(record.roomTypes)
-            ? record.roomTypes.map((rt: any) => {
-                const roomType = asRecord(rt);
-                return {
-                  _id: asString(roomType._id || roomType.id),
-                  roomTypeName: asString(roomType.roomTypeName || roomType.name),
-                  personCapacityMax: asNumber(roomType.personCapacityMax) ?? 0,
-                };
-              })
-            : [],
+          id: item.id,
+          name: item.name,
+          checkInTime: pickFirstString(raw, ['checkInTimeStart', 'checkInTime']) || undefined,
+          checkOutTime: pickFirstString(raw, ['checkOutTime']) || undefined,
+          propertyUnit: item.propertyUnit,
+          roomTypes: roomTypesByListingId.get(item.id) ?? [],
         };
       });
 
       return {
         success: true,
-        data: mappedListings,
+        data: merged.sort((a, b) => a.name.localeCompare(b.name, 'fr')),
       };
     } catch (error) {
       console.error('Error fetching listings with room types:', error);
-
-      // Backend retourne 404 quand 0 listings → retourner [] au lieu de throw
-      if (isRecord(error)) {
-        const responsePayload = asRecord(error.response);
-        if (responsePayload.status === 404) {
-          const data = asRecord(responsePayload.data);
-          const listings = Array.isArray(data.data) ? data.data : [];
-
-          if (listings.length > 0) {
-            // Même mapping si des données sont présentes dans la 404
-            const mappedListings = listings.map((listing: any) => {
-              const record = asRecord(listing);
-              return {
-                id: asString(record._id || record.id),
-                name: asString(record.name),
-                checkInTime: asString(record.checkInTimeStart || record.checkInTime),
-                checkOutTime: asString(record.checkOutTime),
-                propertyUnit: asString(record.propertyUnit),
-                roomTypes: Array.isArray(record.roomTypes)
-                  ? record.roomTypes.map((rt: any) => {
-                      const roomType = asRecord(rt);
-                      return {
-                        _id: asString(roomType._id || roomType.id),
-                        roomTypeName: asString(roomType.roomTypeName || roomType.name),
-                        personCapacityMax: asNumber(roomType.personCapacityMax) ?? 0,
-                      };
-                    })
-                  : [],
-              };
-            });
-
-            return {
-              success: true,
-              data: mappedListings,
-            };
-          }
-        }
-      }
-
       return { success: false, data: [] };
     }
   },

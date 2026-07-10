@@ -100,6 +100,49 @@ export function normalizeListingFormLevel(level, { forceConfig = false } = {}) {
 }
 
 /* ─── Helpers UI ───────────────────────────────────────────── */
+function formatShellDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(d);
+}
+
+function ShellMetaDates({ lastSavedAt, lastPublishedAt }) {
+  const saved = formatShellDate(lastSavedAt);
+  const published = formatShellDate(lastPublishedAt);
+  if (!saved && !published) return null;
+  return (
+    <Stack
+      direction="row"
+      sx={{
+        gap: 1.5,
+        flexWrap: 'wrap',
+        mt: 0.5,
+        fontSize: 10.5,
+        color: T.text4,
+        fontFamily: '"Geist Mono", monospace',
+      }}
+    >
+      {saved ? (
+        <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.375 }}>
+          💾 Enregistré · {saved}
+        </Box>
+      ) : null}
+      {published ? (
+        <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.375 }}>
+          📤 Publié OTA · {published}
+        </Box>
+      ) : null}
+    </Stack>
+  );
+}
+
 function StatusChip({ tone, label, dot = true }) {
   const map = {
     success: { bg: T.successTint, color: T.success, dotBg: T.success },
@@ -173,6 +216,9 @@ export default function ListingFormShell({
   onAiAssist,
   renderTab,                  // (tabKey, level) => ReactNode — branche tes vrais composants ici
   importOnboardingActive = false,
+  hideRuImportTab = false,    // owner : masque l'onglet « Trace import RU » (réservé admin)
+  lastSavedAt,                // date dernière sauvegarde (updatedAt listing)
+  lastPublishedAt,            // date dernière publication vers OTA (otaChannelsSnapshot.updatedAt)
 }) {
   const resolvedLockLevel = lockLevel
     ? normalizeListingFormLevel(lockLevel, { forceConfig: lockLevel === 'config' || lockLevel === 'config-new' })
@@ -218,8 +264,19 @@ export default function ListingFormShell({
     }
   }, [resolvedLockLevel, hiddenConfigTabIds, configTabsFiltered, activeTab]);
 
+  useEffect(() => {
+    if (hideRuImportTab && level === 'detail' && activeTab === 'ru-import') {
+      setActiveTab(DETAIL_TABS[0].items[0].id);
+    }
+  }, [hideRuImportTab, level, activeTab]);
+
   const isOrchV3 = level === 'orchestration-v3';
-  const detailTabsBase = level === 'detail' ? DETAIL_TABS : [];
+  const detailTabsSource = hideRuImportTab
+    ? DETAIL_TABS.map(g => ({ ...g, items: g.items.filter(t => t.id !== 'ru-import') })).filter(
+        g => g.items.length > 0,
+      )
+    : DETAIL_TABS;
+  const detailTabsBase = level === 'detail' ? detailTabsSource : [];
   const detailTabsWithImport = importOnboardingActive && level === 'detail'
     ? [{ group: 'Post-import', items: [POST_IMPORT_TAB] }, ...detailTabsBase]
     : detailTabsBase;
@@ -390,6 +447,7 @@ export default function ListingFormShell({
                     {locationLine}
                   </Typography>
                 ) : null}
+                <ShellMetaDates lastSavedAt={lastSavedAt} lastPublishedAt={lastPublishedAt} />
               </>
             ) : null}
           </Box>

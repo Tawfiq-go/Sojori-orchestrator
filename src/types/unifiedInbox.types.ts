@@ -64,6 +64,8 @@ export interface Message {
   text: string;
   time: string;
   isAI?: boolean;
+  /** Envoi manuel inbox admin (menu / flow / texte) */
+  isAdmin?: boolean;
   type?: 'message' | 'day-separator' | 'system-note';
   // Message status (sent/delivered/read) - displayed for outgoing messages only
   status?: 'sent' | 'delivered' | 'read';
@@ -81,6 +83,13 @@ export interface QuickTemplate {
   label: string;
   icon: string;
   text: string;
+}
+
+export interface GuestMenuDispatchOption {
+  code: string;
+  label: string;
+  icon: string;
+  kind: 'flow' | 'interactive' | 'text';
 }
 
 export interface QuickAction {

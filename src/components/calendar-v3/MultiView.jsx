@@ -194,6 +194,7 @@ export default function MultiView({
         <div style={{ display: 'flex', gap: 12, fontSize: 10.5, color: T.text2, fontWeight: 600 }}>
           <Legend dot="rgba(6,115,179,0.7)" label="Réservé" />
           <Legend dot="rgba(200,30,30,0.7)" label="Stop sell" />
+          <Legend dot={T.warning} label="Bloqué canal (sans résa Sojori)" />
           <Legend dot={T.ai} label="Prix dynamique" />
           <Legend dot={T.bg2} label="Weekend" />
           <Legend dot={ARCHIVE_CELL_BG} label="Historique (lecture seule)" />
@@ -576,6 +577,31 @@ function ListingRow({
   );
 }
 
+/* ─── Jour indisponible SANS réservation Sojori : classification de la cause ───
+ * Contexte : les dates fermées côté canal (Airbnb/Rentals United) sont importées
+ * dans l'inventaire avec availableRoom=0 (et stopSell=false), sans objet
+ * réservation Sojori. On les distingue du stop-sell manuel pour l'affichage. */
+function blockedNoResaInfo(inv) {
+  if (!inv || !hasInventoryData(inv)) return null;
+  if ((inv.reservations?.length ?? 0) > 0) return null; // occupé par une résa → normal
+  const ar = inv.availableRoom;
+  const isStop = inv.stopSell === true;
+  const isZero = ar != null && ar <= 0;
+  if (!isStop && !isZero) return null;
+  if (isStop) {
+    return {
+      kind: 'stop',
+      color: T.error,
+      label: 'Stop-sell OTA — bloqué manuellement sur les canaux, aucune réservation Sojori.',
+    };
+  }
+  return {
+    kind: 'channel',
+    color: T.warning,
+    label: 'Bloqué côté canal (Airbnb / Rentals United) — date fermée à l’import, sans réservation Sojori. Ne pas rouvrir sans vérifier le canal (risque de sur-réservation).',
+  };
+}
+
 /* ─── Ligne principale : résumé tarif + dispo — lecture seule, sans hover ─── */
 function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
   const currency = listing.currencyCode || 'EUR';
@@ -602,10 +628,12 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
 
   const dash = '—';
   const dispoVal = inv?.stopSell ? '🚫' : (inv?.availableRoom != null ? inv.availableRoom : dash);
+  const blockInfo = state === 'data' ? blockedNoResaInfo(inv) : null;
+  const dispoColor = inv?.stopSell ? T.error : (blockInfo?.kind === 'channel' ? T.warning : T.text2);
 
   return (
     <div
-      title={rate.hint}
+      title={blockInfo ? blockInfo.label : rate.hint}
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex', flexDirection: 'row',
@@ -614,10 +642,19 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
         padding: '3px 4px', minHeight: 36, position: 'relative',
         fontFamily: '"Geist Mono", monospace',
         background,
-        cursor: 'default',
+        cursor: blockInfo ? 'help' : 'default',
         userSelect: 'none',
       }}
     >
+      {blockInfo && (
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute', top: 3, left: 3, width: 5, height: 5,
+            borderRadius: '50%', background: blockInfo.color, lineHeight: 1,
+          }}
+        />
+      )}
       {isDynamic && state === 'data' && showRate && (
         <span style={{ position: 'absolute', top: 2, right: 3, fontSize: 8, color: T.ai, lineHeight: 1 }}>⚡</span>
       )}
@@ -643,7 +680,7 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
       {showDispo && (
         <span
           style={{
-            fontSize: 10, fontWeight: 700, color: inv?.stopSell ? T.error : T.text2,
+            fontSize: 10, fontWeight: 700, color: dispoColor,
             whiteSpace: 'nowrap',
           }}
         >
@@ -729,7 +766,18 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
       background: T.primaryTint, padding: '1px 6px', borderRadius: 99,
       cursor: 'pointer', fontFamily: '"Geist Mono", monospace',
     };
-    content = n === 0 ? '—' : (
+    if (n === 0) {
+      const blockInfo = state === 'data' ? blockedNoResaInfo(inv) : null;
+      content = blockInfo ? (
+        <span
+          title={blockInfo.label}
+          style={{ color: blockInfo.color, fontSize: 12, fontWeight: 800, cursor: 'help', lineHeight: 1 }}
+        >
+          {blockInfo.kind === 'stop' ? '🚫' : '⧗'}
+        </span>
+      ) : '—';
+    } else {
+      content = (
       <span
         onClick={(e) => {
           e.stopPropagation();
@@ -739,7 +787,8 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
       >
         {n === 1 ? '1 résa' : `${n} résa`}
       </span>
-    );
+      );
+    }
   }
 
   const showRateTooltip = col.id === 'rate';

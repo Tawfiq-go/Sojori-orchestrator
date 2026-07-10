@@ -15,7 +15,7 @@ import {
   markAllNotificationsRead,
 } from './notificationApi';
 import type { NotificationPanelTab, NotificationItem } from './types';
-import { isActionRequired } from './constants';
+import { isActionRequired, isActiveInPanel } from './constants';
 
 import { isNotificationApiNotDeployed } from './notificationApiErrors';
 
@@ -46,12 +46,65 @@ export function useNotificationList(facet: string, tab: NotificationPanelTab) {
         limit: 50,
         page: 1,
       });
-      let items = res.items ?? [];
+      let items = (res.items ?? []).filter(isActiveInPanel);
       if (tab === 'action') {
         items = items.filter(isActionRequired);
       }
-      items = items.filter((n) => n.status !== 'dismissed' && n.status !== 'expired');
       return { ...res, items };
+    },
+    enabled,
+    placeholderData: keepPreviousData,
+    retry: notifQueryRetry,
+  });
+}
+
+export type NotificationHistoryTab = 'active' | 'treated' | 'dismissed';
+
+export function useNotificationHistory(tab: NotificationHistoryTab, facet: string) {
+  const { ownerId, enabled } = useNotificationScope();
+  return useQuery({
+    queryKey: [...ROOT_KEY, 'history', ownerId, tab, facet],
+    queryFn: async () => {
+      const facetParam = facet || undefined;
+      if (tab === 'active') {
+        const res = await fetchNotifications({
+          ownerId,
+          facet: facetParam,
+          limit: 100,
+          page: 1,
+        });
+        return { items: (res.items ?? []).filter(isActiveInPanel) };
+      }
+      if (tab === 'dismissed') {
+        const res = await fetchNotifications({
+          ownerId,
+          facet: facetParam,
+          status: 'dismissed',
+          limit: 100,
+          page: 1,
+        });
+        return { items: res.items ?? [] };
+      }
+      const [doneRes, handledRes] = await Promise.all([
+        fetchNotifications({
+          ownerId,
+          facet: facetParam,
+          status: 'done',
+          limit: 50,
+          page: 1,
+        }),
+        fetchNotifications({
+          ownerId,
+          facet: facetParam,
+          status: 'handled',
+          limit: 50,
+          page: 1,
+        }),
+      ]);
+      const items = [...(doneRes.items ?? []), ...(handledRes.items ?? [])].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+      return { items };
     },
     enabled,
     placeholderData: keepPreviousData,
@@ -110,11 +163,7 @@ export function useMarkRead() {
       });
       queryClient.setQueriesData<{ items: NotificationItem[] }>(
         { queryKey: [...ROOT_KEY, 'list'] },
-        (old) =>
-          patchList(old, id, {
-            readAt: new Date().toISOString(),
-            status: 'handled',
-          }),
+        (old) => patchList(old, id, 'remove'),
       );
       return { prev };
     },
@@ -132,9 +181,13 @@ export function useSetStatus() {
       setNotificationStatus(id, status, ownerId),
     onMutate: async ({ id, status }) => {
       await queryClient.cancelQueries({ queryKey: ROOT_KEY });
-      if (status === 'dismissed') {
+      if (status === 'dismissed' || status === 'done') {
         queryClient.setQueriesData<{ items: NotificationItem[] }>(
           { queryKey: [...ROOT_KEY, 'list'] },
+          (old) => patchList(old, id, 'remove'),
+        );
+        queryClient.setQueriesData<{ items: NotificationItem[] }>(
+          { queryKey: [...ROOT_KEY, 'history'] },
           (old) => patchList(old, id, 'remove'),
         );
       } else {

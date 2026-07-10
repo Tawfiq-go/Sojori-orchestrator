@@ -288,7 +288,47 @@ class MessagesService {
   }
 
   /**
-   * Rechercher conversations par numéro de réservation
+   * Envoyer un menu / flow WhatsApp (comme si le guest tapait C, D, E…)
+   * POST /api/v1/ai/debug/send-menu-code
+   */
+  async sendMenuCode(data: {
+    phone: string;
+    menuCode: string;
+  }): Promise<{ success: boolean; menuCode?: string; delivery?: string; error?: string }> {
+    try {
+      const response = await apiClient.post(
+        `${resolveGuestWhatsappDebugBase()}/send-menu-code`,
+        {
+          phone: data.phone,
+          menuCode: data.menuCode,
+        },
+        { timeout: 60_000 },
+      );
+
+      const body = response.data as {
+        status?: string;
+        success?: boolean;
+        ok?: boolean;
+        error?: string;
+        detail?: string;
+        menuCode?: string;
+        delivery?: string;
+      };
+      if (body.status === 'error' || body.success === false || body.ok === false) {
+        throw new Error(body.error || body.detail || 'Échec envoi menu / flow WhatsApp');
+      }
+      return {
+        success: true,
+        menuCode: body.menuCode ?? data.menuCode,
+        delivery: body.delivery,
+      };
+    } catch (error: unknown) {
+      console.error('❌ Erreur envoi menu / flow WhatsApp:', error);
+      throw new Error(extractHttpErrorMessage(error, 'Erreur lors de l\'envoi du flow WhatsApp'));
+    }
+  }
+
+  /**
    * Comme sojori-dashboard: whatsappApi.getByReservation()
    */
   async getByReservation(reservationNumber: string): Promise<ConversationsResponse> {
