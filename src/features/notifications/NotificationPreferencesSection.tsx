@@ -6,6 +6,7 @@ import Typography from '@mui/material/Typography';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import { tokens as t } from '../../components/dashboard/dashboardTokens';
 import { FACET_ORDER, NOTIF_FACETS } from './constants';
+import { NotificationWhatsAppPrefs, WHATSAPP_MESSAGE_EVENT, GUEST_JOURNEY_NOTIFY_EVENTS } from './NotificationWhatsAppPrefs';
 import type { NotificationFacet, PreferenceCatalogEntry } from './types';
 import { useNotificationPreferences, useUpdatePreferences } from './useNotifications';
 import { useNotificationScope } from './NotificationProvider';
@@ -29,13 +30,16 @@ export function NotificationPreferencesSection({
 
   const groups = useMemo(() => {
     const catalog = data?.catalog ?? [];
+    const journeyKeys = new Set<string>(GUEST_JOURNEY_NOTIFY_EVENTS);
     const byFacet = new Map<NotificationFacet, PreferenceCatalogEntry[]>();
     for (const entry of catalog) {
+      if (entry.eventKey === WHATSAPP_MESSAGE_EVENT) continue;
+      if (journeyKeys.has(entry.eventKey)) continue;
       const list = byFacet.get(entry.facet) ?? [];
       list.push(entry);
       byFacet.set(entry.facet, list);
     }
-    return FACET_ORDER.filter((f) => byFacet.has(f)).map((facet) => ({
+    return FACET_ORDER.filter((f) => f !== 'guest_journey' && byFacet.has(f)).map((facet) => ({
       facet,
       events: byFacet.get(facet) ?? [],
     }));
@@ -99,6 +103,10 @@ export function NotificationPreferencesSection({
           alertes critiques restent toujours actives (sécurité opérationnelle). À la création, tout
           est activé par défaut.
         </Typography>
+      ) : null}
+
+      {data?.catalog?.length ? (
+        <NotificationWhatsAppPrefs catalog={data.catalog} />
       ) : null}
 
       {groups.map(({ facet, events }) => {
