@@ -5,9 +5,26 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Button, MenuItem, Select, Stack, Switch, TextField, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  MenuItem,
+  Select,
+  Stack,
+  Switch,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useAuth } from '../../hooks/useAuth';
 import { Roles } from '../../constants/roles';
+import { normalizeDashboardRole } from '../../config/routeAccessPolicy';
 import { monitoringGet } from '../../utils/monitoringApi';
 import apiClient from '../../services/apiClient';
 import {
@@ -134,7 +151,14 @@ const SERVICE_LABEL: Record<string, string> = {
   'srv-dynamic-pricing': 'srv-dynamic-pricing',
   'srv-fulltask': 'srv-fulltask',
   'srv-logs-proxy': 'srv-logs-proxy',
+  'srv-reservations': 'srv-reservations',
+  'srv-crm': 'srv-crm',
 };
+
+function isCronManagerRole(role: string | null | undefined): boolean {
+  const normalized = normalizeDashboardRole(role);
+  return normalized === Roles.Admin || normalized === Roles.SuperAdmin;
+}
 
 type FreqMode = 'daily' | 'weekly' | 'interval' | 'custom';
 
@@ -225,16 +249,7 @@ function ScheduleEditor({
   const isValid = freq.mode === 'custom' ? freq.custom.trim().split(/\s+/).length >= 5 : true;
 
   return (
-    <Box
-      sx={{
-        mt: 1,
-        p: 1.5,
-        borderRadius: '10px',
-        border: `1px solid ${t.border}`,
-        bgcolor: t.bg1,
-        minWidth: 320,
-      }}
-    >
+    <Box sx={{ minWidth: 320 }}>
       <Stack direction="row" spacing={0.75} sx={{ mb: 1.25, flexWrap: 'wrap', rowGap: 0.5 }}>
         {(
           [
@@ -360,7 +375,7 @@ function ScheduleEditor({
 
 export default function CronMonitoringPage() {
   const { user } = useAuth();
-  const canManage = user?.role === Roles.Admin || user?.role === Roles.SuperAdmin;
+  const canManage = isCronManagerRole(user?.role);
 
   const [isLive, setIsLive] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -369,7 +384,7 @@ export default function CronMonitoringPage() {
   const [serviceErrors, setServiceErrors] = useState<Record<string, string>>({});
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [serviceFilter, setServiceFilter] = useState<string>('all');
-  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [scheduleModalJob, setScheduleModalJob] = useState<AggregatedCronJob | null>(null);
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -393,10 +408,10 @@ export default function CronMonitoringPage() {
   }, [fetchJobs]);
 
   useEffect(() => {
-    if (!isLive || editingKey) return;
+    if (!isLive || scheduleModalJob) return;
     const interval = setInterval(fetchJobs, 30000);
     return () => clearInterval(interval);
-  }, [isLive, fetchJobs, editingKey]);
+  }, [isLive, fetchJobs, scheduleModalJob]);
 
   const services = useMemo(() => {
     const set = new Set(jobs.map((j) => j.service));
@@ -452,7 +467,7 @@ export default function CronMonitoringPage() {
       setPendingAction(key);
       try {
         await apiClient.post(`/api/monitoring/cron/${job.service}/${job.cronId}/schedule`, { expressions });
-        setEditingKey(null);
+        setScheduleModalJob(null);
         await fetchJobs();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Erreur réseau';
@@ -548,8 +563,8 @@ export default function CronMonitoringPage() {
                   const key = `${job.service}:${job.cronId}`;
                   const toggling = pendingAction === key;
                   const running = pendingAction === `${key}:run`;
-                  const savingSchedule = pendingAction === `${key}:schedule`;
-                  const isEditing = editingKey === key;
+                  const canEditSchedule = Boolean(job.scheduleUrl && canManage && !job.readOnly);
+                  const canToggleJob = Boolean(job.toggleUrl && canManage && !job.readOnly);
 
                   return (
                     <Box
@@ -581,37 +596,51 @@ export default function CronMonitoringPage() {
                       </Box>
 
                       <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top', minWidth: 220 }}>
-                        {isEditing ? (
-                          <ScheduleEditor
-                            job={job}
-                            saving={savingSchedule}
-                            onCancel={() => setEditingKey(null)}
-                            onSave={(expressions) => void handleSaveSchedule(job, expressions)}
-                          />
-                        ) : (
-                          <Stack spacing={0.25}>
+                        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+                          <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
                             <Typography sx={{ fontSize: 12, color: t.text, fontWeight: 600 }}>
                               {job.schedules.map(describeSchedule).join(' · ')}
                             </Typography>
                             <Typography sx={{ fontSize: 10, color: t.text3, fontFamily: 'monospace' }}>
                               {job.schedules.join(' · ')}
                             </Typography>
-                            {job.scheduleUrl && canManage && (
-                              <Button
-                                sx={{ ...btnGhostSx, minHeight: 24, px: 1, py: 0.25, fontSize: 11, alignSelf: 'flex-start', mt: 0.25 }}
-                                onClick={() => setEditingKey(key)}
-                              >
-                                Modifier la fréquence
-                              </Button>
+                            {job.readOnly && (
+                              <Typography sx={{ fontSize: 10, color: t.text3, mt: 0.25 }}>
+                                Fréquence non modifiable
+                              </Typography>
                             )}
                           </Stack>
-                        )}
+                          {canEditSchedule && (
+                            <Tooltip title="Modifier la fréquence">
+                              <IconButton
+                                size="small"
+                                aria-label="Modifier la fréquence"
+                                onClick={() => setScheduleModalJob(job)}
+                                sx={{ color: t.text2, mt: -0.25 }}
+                              >
+                                <EditOutlinedIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Stack>
                       </Box>
 
                       <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top' }}>
-                        <Badge variant={job.enabled ? 'success' : 'neutral'} dot>
-                          {job.enabled ? 'actif' : 'désactivé'}
-                        </Badge>
+                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                          <Badge variant={job.enabled ? 'success' : 'neutral'} dot>
+                            {job.enabled ? 'actif' : 'désactivé'}
+                          </Badge>
+                          {canToggleJob && (
+                            <Tooltip title={job.enabled ? 'Désactiver le cron' : 'Activer le cron'}>
+                              <Switch
+                                checked={job.enabled}
+                                disabled={toggling}
+                                onChange={() => void handleToggle(job)}
+                                size="small"
+                              />
+                            </Tooltip>
+                          )}
+                        </Stack>
                       </Box>
 
                       <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top', whiteSpace: 'nowrap' }}>
@@ -623,13 +652,10 @@ export default function CronMonitoringPage() {
 
                       <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top' }}>
                         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                          {job.runNowUrl && canManage && (
+                          {job.runNowUrl && canManage && !job.readOnly && (
                             <Button sx={{ ...btnGhostSx, minHeight: 28, px: 1.25, fontSize: 11.5 }} disabled={running} onClick={() => void handleRunNow(job)}>
                               {running ? '…' : 'Relancer'}
                             </Button>
-                          )}
-                          {job.toggleUrl && canManage && (
-                            <Switch checked={job.enabled} disabled={toggling} onChange={() => void handleToggle(job)} size="small" />
                           )}
                         </Stack>
                       </Box>
@@ -641,6 +667,37 @@ export default function CronMonitoringPage() {
           </Box>
         )}
       </MonitorSection>
+
+      <Dialog
+        open={scheduleModalJob != null}
+        onClose={() => {
+          if (!scheduleModalJob) return;
+          const saving = pendingAction === `${scheduleModalJob.service}:${scheduleModalJob.cronId}:schedule`;
+          if (!saving) setScheduleModalJob(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        {scheduleModalJob && (
+          <>
+            <DialogTitle sx={{ fontSize: 16, fontWeight: 700 }}>
+              Modifier la fréquence — {scheduleModalJob.label}
+            </DialogTitle>
+            <DialogContent dividers>
+              <Typography sx={{ fontSize: 12, color: t.text2, mb: 1.5 }}>
+                {SERVICE_LABEL[scheduleModalJob.service] || scheduleModalJob.service} · {scheduleModalJob.cronId}
+              </Typography>
+              <ScheduleEditor
+                job={scheduleModalJob}
+                saving={pendingAction === `${scheduleModalJob.service}:${scheduleModalJob.cronId}:schedule`}
+                onCancel={() => setScheduleModalJob(null)}
+                onSave={(expressions) => void handleSaveSchedule(scheduleModalJob, expressions)}
+              />
+            </DialogContent>
+            <DialogActions />
+          </>
+        )}
+      </Dialog>
     </MonitorPageFrame>
   );
 }
