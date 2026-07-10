@@ -13,6 +13,7 @@ import InfrastructureMonitoringPage from './InfrastructureMonitoringPage';
 import PodsMonitoringPage from './PodsMonitoringPage';
 import ReservationSyncMonitorTab from './ReservationSyncMonitorTab';
 import SocketMonitoringPage from './SocketMonitoringPage';
+import CronMonitoringPage from './CronMonitoringPage';
 
 const TAB_OPTIONS = [
   { value: 'Summary', label: '📊 Summary' },
@@ -25,6 +26,7 @@ const TAB_OPTIONS = [
   { value: 'Infrastructure', label: '🏗️ Infra' },
   { value: 'Pods', label: '🧩 Pods' },
   { value: 'ReservationSync', label: '🔄 Sync résa' },
+  { value: 'Cron', label: '⏱️ Cron' },
 ] as const;
 
 type MonitorTab = (typeof TAB_OPTIONS)[number]['value'];
@@ -43,6 +45,7 @@ const TAB_BY_LOWER: Record<string, MonitorTab> = {
   infrastructure: 'Infrastructure',
   pods: 'Pods',
   'reservation-sync': 'ReservationSync',
+  cron: 'Cron',
 };
 
 function canonicalTab(tabParam: string | null): MonitorTab {
@@ -109,6 +112,7 @@ export default function MonitoringHubPage() {
           {tab === 'Infrastructure' && <InfrastructureMonitoringPage />}
           {tab === 'Pods' && <PodsMonitoringPage />}
           {tab === 'ReservationSync' && <ReservationSyncMonitorTab />}
+          {tab === 'Cron' && <CronMonitoringPage />}
         </Box>
       </Box>
     </DashboardWrapper>
