@@ -694,6 +694,11 @@ export default function MessagesOTATabV2() {
           setComposerDraft(text);
           setShowAIModal(false);
         }}
+        onSendSuggestion={async (text) => {
+          await handleOtaSend(text);
+          setComposerDraft('');
+          setShowAIModal(false);
+        }}
         context={{
           threadContext: otaThreadContext,
           lastGuestMessage: otaLastGuestMessage,

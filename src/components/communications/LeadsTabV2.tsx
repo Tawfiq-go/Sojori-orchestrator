@@ -255,6 +255,17 @@ export default function LeadsTabV2() {
     return active?.lastMessage?.trim() || '';
   }, [messages, active?.lastMessage]);
 
+  const handleLeadSend = useCallback(
+    async (text: string) => {
+      if (!active) return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      await messagesService.sendLeadMessage(active.threadId, trimmed);
+      await handleSelect(active);
+    },
+    [active, handleSelect],
+  );
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -333,10 +344,7 @@ export default function LeadsTabV2() {
               otaPlatform={otaPlatform}
               composerValue={composerDraft}
               onComposerValueChange={setComposerDraft}
-              onSendMessage={async (text) => {
-                await messagesService.sendLeadMessage(active.threadId, text);
-                await handleSelect(active);
-              }}
+              onSendMessage={handleLeadSend}
               onSelectTemplate={() => {}}
               onAISuggestion={(draft) => {
                 setAiSourceDraft(draft);
@@ -362,6 +370,11 @@ export default function LeadsTabV2() {
         onClose={() => setShowAIModal(false)}
         onUseSuggestion={(text) => {
           setComposerDraft(text);
+          setShowAIModal(false);
+        }}
+        onSendSuggestion={async (text) => {
+          await handleLeadSend(text);
+          setComposerDraft('');
           setShowAIModal(false);
         }}
         context={{
