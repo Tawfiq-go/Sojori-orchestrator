@@ -14,7 +14,8 @@ import { ViewToggle, monitorTokens as t, MonitorEmpty, MonitorPageFrame } from '
 import { PricingSummaryTab } from '../components/pricing/PricingSummaryTab';
 import { RuCostTab } from '../components/pricing/RuCostTab';
 import { AirroiCostTab } from '../components/pricing/AirroiCostTab';
-import { PricingComingSoonTab } from '../components/pricing/PricingComingSoonTab';
+import { AiCostTab } from '../components/pricing/AiCostTab';
+import { WhatsappCostTab } from '../components/pricing/WhatsappCostTab';
 
 const TAB_OPTIONS = [
   { value: 'Summary', label: '📋 Summary' },
@@ -79,18 +80,8 @@ export default function PricingHubPage() {
           {tab === 'Summary' && <PricingSummaryTab />}
           {tab === 'RU' && <RuCostTab />}
           {tab === 'AirROI' && <AirroiCostTab />}
-          {tab === 'WhatsApp' && (
-            <PricingComingSoonTab
-              label="Coût WhatsApp"
-              hint="Volume de messages guest (ConversationMessage) et staff (StaffMessages) par owner — jointure ownerId à construire, pas encore agrégé."
-            />
-          )}
-          {tab === 'AI' && (
-            <PricingComingSoonTab
-              label="Coût IA"
-              hint="5 points d'appel OpenAI identifiés (srv-fullchatbot, srv-reservations), aucun ne logue encore les appels réussis avec ownerId — instrumentation à faire sur le modèle AirroiApiCall."
-            />
-          )}
+          {tab === 'WhatsApp' && <WhatsappCostTab />}
+          {tab === 'AI' && <AiCostTab />}
         </Box>
       </Box>
     </DashboardWrapper>

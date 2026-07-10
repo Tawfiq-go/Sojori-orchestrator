@@ -56,3 +56,63 @@ export function fetchAirroiCostByOwner(query: { period?: 'all'; hours?: number }
     timeout: 30000,
   });
 }
+
+export interface AiUsageByOwnerDayItem {
+  ownerId: string;
+  day: string;
+  calls: number;
+  successCount: number;
+  promptTokens: number;
+  completionTokens: number;
+  costUsd: number;
+}
+
+export interface AiUsageByOwnerDayResponse {
+  success: boolean;
+  data: {
+    byOwnerDay: AiUsageByOwnerDayItem[];
+    totalCostUsd: number;
+    totalCalls: number;
+    serviceErrors?: Record<string, string>;
+  };
+}
+
+/** Fusion srv-fullchatbot (chatbot, OCR passeport) + srv-reservations (traduction, météo). */
+export function fetchAiUsageByOwnerDay(query: { period?: 'all'; hours?: number } = {}) {
+  const params = new URLSearchParams();
+  if (query.period === 'all') params.set('period', 'all');
+  else params.set('hours', String(query.hours ?? 720));
+  return apiClient.get<AiUsageByOwnerDayResponse>(`${PRICING_DASHBOARD}/ai-usage-by-owner-day?${params.toString()}`, {
+    ...channelsDashboardAxiosConfig(),
+    timeout: 30000,
+  });
+}
+
+export interface WhatsappUsageByOwnerDayItem {
+  ownerId: string;
+  day: string;
+  received: number;
+  sent: number;
+  total: number;
+}
+
+export interface WhatsappUsageByOwnerDayResponse {
+  success: boolean;
+  data: {
+    byOwnerDay: WhatsappUsageByOwnerDayItem[];
+    totalReceived: number;
+    totalSent: number;
+    serviceErrors?: Record<string, string>;
+  };
+}
+
+/** Fusion volet guest (srv-fullchatbot) + staff (srv-fulltask). Volumes uniquement, pas de coût pour l'instant. */
+export function fetchWhatsappUsageByOwnerDay(query: { period?: 'all'; hours?: number } = {}) {
+  const params = new URLSearchParams();
+  if (query.period === 'all') params.set('period', 'all');
+  else params.set('hours', String(query.hours ?? 720));
+  return apiClient.get<WhatsappUsageByOwnerDayResponse>(
+    `${PRICING_DASHBOARD}/whatsapp-usage-by-owner-day?${params.toString()}`,
+    { ...channelsDashboardAxiosConfig(), timeout: 30000 },
+  );
+}
