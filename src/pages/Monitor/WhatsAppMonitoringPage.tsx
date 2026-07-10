@@ -65,9 +65,15 @@ const SUB_TABS: { value: SubTab; label: string }[] = [
 ];
 
 function serviceLabel(s?: string) {
-  if (s === 'srv-chatbot') return 'Chatbot';
-  if (s === 'srv-task') return 'StaffBot';
+  if (s === 'srv-fullchatbot' || s === 'srv-chatbot') return 'Chatbot (guest)';
+  if (s === 'srv-fulltask' || s === 'srv-task') return 'StaffBot';
   return s || '—';
+}
+
+function serviceBadgeVariant(s?: string): 'info' | 'ai' {
+  if (s === 'srv-fullchatbot' || s === 'srv-chatbot') return 'info';
+  if (s === 'srv-fulltask' || s === 'srv-task') return 'ai';
+  return 'info';
 }
 
 function messageStatusLabel(msg: WaMessage) {
@@ -207,14 +213,20 @@ export default function WhatsAppMonitoringPage() {
                   icon="💬"
                   iconBg={t.infoTint}
                   iconColor={t.info}
-                  value={String(summaryData.byService?.['srv-chatbot'] ?? 0)}
-                  label="Chatbot (client)"
+                  value={String(
+                    (summaryData.byService?.['srv-fullchatbot'] ?? 0) +
+                      (summaryData.byService?.['srv-chatbot'] ?? 0),
+                  )}
+                  label="Chatbot (guest)"
                 />
                 <StatCard
                   icon="📱"
                   iconBg={t.aiTint}
                   iconColor={t.ai}
-                  value={String(summaryData.byService?.['srv-task'] ?? 0)}
+                  value={String(
+                    (summaryData.byService?.['srv-fulltask'] ?? 0) +
+                      (summaryData.byService?.['srv-task'] ?? 0),
+                  )}
                   label="StaffBot"
                 />
               </StatsRow>
@@ -284,8 +296,10 @@ export default function WhatsAppMonitoringPage() {
               onChange={setSource}
               options={[
                 { value: 'all', label: 'Tous services' },
-                { value: 'srv-chatbot', label: 'Chatbot' },
-                { value: 'srv-task', label: 'StaffBot' },
+                { value: 'srv-fullchatbot', label: 'Chatbot (guest)' },
+                { value: 'srv-fulltask', label: 'StaffBot' },
+                { value: 'srv-chatbot', label: 'Chatbot (legacy)' },
+                { value: 'srv-task', label: 'StaffBot (legacy)' },
               ]}
             />
           </MonitorToolbar>
@@ -312,7 +326,7 @@ export default function WhatsAppMonitoringPage() {
                   key: 'service',
                   label: 'Service',
                   render: (row: WaMessage & { id: string }) => (
-                    <Badge variant={row.service === 'srv-chatbot' ? 'info' : 'ai'}>
+                    <Badge variant={serviceBadgeVariant(row.service)}>
                       {serviceLabel(row.service)}
                     </Badge>
                   ),
