@@ -361,6 +361,7 @@ export function AppSidebar({
   const navScrollRef = React.useRef(null);
   const { data: unreadCount } = useUnreadCount();
   const byFacet = unreadCount?.byFacet;
+  const byEventKey = unreadCount?.byEventKey;
 
   React.useEffect(() => {
     const role = String(user?.role || '').toLowerCase();
@@ -524,7 +525,7 @@ export function AppSidebar({
         {navGroups.map((group) => {
           const isCollapsed = collapsed[group.group] ?? true;
           const isCore = Boolean(group.core);
-          const groupUnread = getSidebarGroupUnread(group.group, byFacet);
+          const groupUnread = getSidebarGroupUnread(group.group, byFacet, byEventKey);
           return (
             <React.Fragment key={group.group}>
               <Box
@@ -590,7 +591,7 @@ export function AppSidebar({
                     item={item}
                     active={navItemMatchesPath(item, activePath)}
                     disabled={Boolean(item.navDisabled && item.sub?.length)}
-                    notificationCount={getSidebarItemUnread(item.id, byFacet)}
+                    notificationCount={getSidebarItemUnread(item.id, byFacet, byEventKey)}
                     onClick={() => {
                       if (item.navDisabled && item.sub?.length) return;
                       onNavigate?.(item.id);
@@ -602,7 +603,7 @@ export function AppSidebar({
                       item={s}
                       sub
                       active={activePath === s.id}
-                      notificationCount={getSidebarItemUnread(s.id, byFacet)}
+                      notificationCount={getSidebarItemUnread(s.id, byFacet, byEventKey)}
                       onClick={() => onNavigate?.(s.id)}
                     />
                   ))}

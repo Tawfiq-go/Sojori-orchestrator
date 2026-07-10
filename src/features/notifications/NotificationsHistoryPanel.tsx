@@ -7,6 +7,7 @@ import { NotificationHistoryRow } from './NotificationHistoryRow';
 import { NotificationRow } from './NotificationRow';
 import {
   useNotificationHistory,
+  useUnreadCount,
   type NotificationHistoryTab,
 } from './useNotifications';
 
@@ -71,10 +72,13 @@ const EMPTY_MESSAGES: Record<NotificationHistoryTab, string> = {
 export function NotificationsHistoryPanel() {
   const [tab, setTab] = useState<NotificationHistoryTab>('active');
   const [facet, setFacet] = useState('');
-  const { data: activeData } = useNotificationHistory('active', facet);
-  const { data: dismissedData } = useNotificationHistory('dismissed', facet);
-  const { data, isLoading } = useNotificationHistory(tab, facet);
+  const [eventKey, setEventKey] = useState('');
+  const { data: unread } = useUnreadCount();
+  const { data: activeData } = useNotificationHistory('active', facet, eventKey);
+  const { data: dismissedData } = useNotificationHistory('dismissed', facet, eventKey);
+  const { data, isLoading } = useNotificationHistory(tab, facet, eventKey);
   const items = data?.items ?? [];
+  const uc = unread ?? { byFacet: {}, byEventKey: {} };
 
   return (
     <Box>
@@ -112,7 +116,14 @@ export function NotificationsHistoryPanel() {
           overflow: 'hidden',
         }}
       >
-        <NotificationFacetChips selectedFacet={facet} onSelectFacet={setFacet} />
+        <NotificationFacetChips
+          selectedFacet={facet}
+          selectedEventKey={eventKey}
+          onSelectFacet={setFacet}
+          onSelectEventKey={setEventKey}
+          byFacet={uc.byFacet}
+          byEventKey={uc.byEventKey}
+        />
       </Box>
 
       <Box

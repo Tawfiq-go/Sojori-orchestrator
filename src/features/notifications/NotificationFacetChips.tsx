@@ -1,19 +1,32 @@
 import Box from '@mui/material/Box';
 import { tokens as t } from '../../components/dashboard/dashboardTokens';
-import { FACET_ORDER, NOTIF_FACETS } from './constants';
+import { FACET_ORDER, NOTIF_FACETS, NOTIF_MESSAGE_CHANNELS } from './constants';
 import type { NotificationFacet } from './types';
 
 interface NotificationFacetChipsProps {
   selectedFacet: string;
+  selectedEventKey: string;
   onSelectFacet: (facet: string) => void;
+  onSelectEventKey: (eventKey: string) => void;
   byFacet?: Partial<Record<NotificationFacet, number>>;
+  byEventKey?: Partial<Record<string, number>>;
 }
+
+const CHIP_FACETS = FACET_ORDER.filter((facet) => facet !== 'message');
 
 export function NotificationFacetChips({
   selectedFacet,
+  selectedEventKey,
   onSelectFacet,
+  onSelectEventKey,
   byFacet = {},
+  byEventKey = {},
 }: NotificationFacetChipsProps) {
+  const selectAll = () => {
+    onSelectFacet('');
+    onSelectEventKey('');
+  };
+
   return (
     <Box
       sx={{
@@ -24,7 +37,7 @@ export function NotificationFacetChips({
         px: 1.25,
         py: 0.75,
         borderTop: `1px solid ${t.border}`,
-        maxHeight: 56,
+        maxHeight: 72,
         overflowY: 'auto',
         overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch',
@@ -33,12 +46,9 @@ export function NotificationFacetChips({
         '&::-webkit-scrollbar-thumb': { bgcolor: t.border, borderRadius: 999 },
       }}
     >
-      <FacetChip
-        label="Toutes"
-        active={!selectedFacet}
-        onClick={() => onSelectFacet('')}
-      />
-      {FACET_ORDER.map((facet) => {
+      <FacetChip label="Toutes" active={!selectedFacet && !selectedEventKey} onClick={selectAll} />
+
+      {CHIP_FACETS.map((facet) => {
         const meta = NOTIF_FACETS[facet];
         const count = byFacet[facet] ?? 0;
         return (
@@ -47,8 +57,28 @@ export function NotificationFacetChips({
             label={meta.label}
             color={meta.color}
             count={count}
-            active={selectedFacet === facet}
-            onClick={() => onSelectFacet(facet)}
+            active={selectedFacet === facet && !selectedEventKey}
+            onClick={() => {
+              onSelectEventKey('');
+              onSelectFacet(facet);
+            }}
+          />
+        );
+      })}
+
+      {NOTIF_MESSAGE_CHANNELS.map((channel) => {
+        const count = byEventKey[channel.eventKey] ?? 0;
+        return (
+          <FacetChip
+            key={channel.eventKey}
+            label={channel.label}
+            color={channel.color}
+            count={count}
+            active={selectedEventKey === channel.eventKey}
+            onClick={() => {
+              onSelectFacet('');
+              onSelectEventKey(channel.eventKey);
+            }}
           />
         );
       })}

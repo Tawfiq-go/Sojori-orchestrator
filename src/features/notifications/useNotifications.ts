@@ -35,14 +35,19 @@ export function useUnreadCount() {
   });
 }
 
-export function useNotificationList(facet: string, tab: NotificationPanelTab) {
+export function useNotificationList(
+  facet: string,
+  eventKey: string,
+  tab: NotificationPanelTab,
+) {
   const { ownerId, enabled } = useNotificationScope();
   return useQuery({
-    queryKey: [...ROOT_KEY, 'list', ownerId, facet, tab],
+    queryKey: [...ROOT_KEY, 'list', ownerId, facet, eventKey, tab],
     queryFn: async () => {
       const res = await fetchNotifications({
         ownerId,
         facet: facet || undefined,
+        eventKey: eventKey || undefined,
         limit: 50,
         page: 1,
       });
@@ -60,16 +65,22 @@ export function useNotificationList(facet: string, tab: NotificationPanelTab) {
 
 export type NotificationHistoryTab = 'active' | 'treated' | 'dismissed';
 
-export function useNotificationHistory(tab: NotificationHistoryTab, facet: string) {
+export function useNotificationHistory(
+  tab: NotificationHistoryTab,
+  facet: string,
+  eventKey: string,
+) {
   const { ownerId, enabled } = useNotificationScope();
   return useQuery({
-    queryKey: [...ROOT_KEY, 'history', ownerId, tab, facet],
+    queryKey: [...ROOT_KEY, 'history', ownerId, tab, facet, eventKey],
     queryFn: async () => {
       const facetParam = facet || undefined;
+      const eventKeyParam = eventKey || undefined;
       if (tab === 'active') {
         const res = await fetchNotifications({
           ownerId,
           facet: facetParam,
+          eventKey: eventKeyParam,
           limit: 100,
           page: 1,
         });
@@ -79,6 +90,7 @@ export function useNotificationHistory(tab: NotificationHistoryTab, facet: strin
         const res = await fetchNotifications({
           ownerId,
           facet: facetParam,
+          eventKey: eventKeyParam,
           status: 'dismissed',
           limit: 100,
           page: 1,
@@ -89,6 +101,7 @@ export function useNotificationHistory(tab: NotificationHistoryTab, facet: strin
         fetchNotifications({
           ownerId,
           facet: facetParam,
+          eventKey: eventKeyParam,
           status: 'done',
           limit: 50,
           page: 1,
@@ -96,6 +109,7 @@ export function useNotificationHistory(tab: NotificationHistoryTab, facet: strin
         fetchNotifications({
           ownerId,
           facet: facetParam,
+          eventKey: eventKeyParam,
           status: 'handled',
           limit: 50,
           page: 1,
@@ -211,7 +225,8 @@ export function useMarkAllRead() {
   const { ownerId } = useNotificationScope();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (facet?: string) => markAllNotificationsRead(facet, ownerId),
+    mutationFn: (opts?: { facet?: string; eventKey?: string }) =>
+      markAllNotificationsRead(opts, ownerId),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ROOT_KEY });
     },
