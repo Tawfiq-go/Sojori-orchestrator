@@ -30,10 +30,21 @@ export function apiProblemLabel(type?: string): string {
 
 export function apiLogTitle(entry: ApiLogEntry): string {
   const method = entry.httpMethod || 'GET'
-  const path = entry.httpPath || entry.httpUrl || entry.message || '—'
+  const path = resolveApiDisplayPath(entry)
   const ms = entry.durationMs != null ? `${entry.durationMs}ms` : ''
   const status = entry.statusCode != null ? `HTTP ${entry.statusCode}` : ''
   return [method, path, ms, status].filter(Boolean).join(' · ')
+}
+
+/** Préfère httpPath ; repli httpUrl ou message si legacy catch-all `*`. */
+export function resolveApiDisplayPath(entry: ApiLogEntry): string {
+  const path = entry.httpPath?.trim()
+  if (path && path !== '*') return path
+  const url = entry.httpUrl?.split('?')[0]?.trim()
+  if (url) return url
+  const fromMsg = entry.message?.match(/\[api\]\s+\w+\s+(\S+)/)?.[1]
+  if (fromMsg && fromMsg !== '*') return fromMsg
+  return path || entry.message || '—'
 }
 
 export function apiLogContextLine(entry: ApiLogEntry): string {
