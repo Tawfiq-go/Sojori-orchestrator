@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Button, Stack, Switch, TextField, Typography } from '@mui/material';
+import { Box, Button, MenuItem, Select, Stack, Switch, TextField, Typography } from '@mui/material';
 import { useAuth } from '../../hooks/useAuth';
 import { Roles } from '../../constants/roles';
 import { monitoringGet } from '../../utils/monitoringApi';
@@ -121,6 +121,78 @@ const SERVICE_LABEL: Record<string, string> = {
   'srv-logs-proxy': 'srv-logs-proxy',
 };
 
+type FreqMode = 'daily' | 'weekly' | 'interval' | 'custom';
+
+interface FreqState {
+  mode: FreqMode;
+  hour: number;
+  minute: number;
+  daysOfWeek: number[]; // 0=dimanche … 6=samedi (JS convention)
+  intervalMinutes: number;
+  custom: string;
+}
+
+const WEEKDAYS = [
+  { value: 1, label: 'Lun' },
+  { value: 2, label: 'Mar' },
+  { value: 3, label: 'Mer' },
+  { value: 4, label: 'Jeu' },
+  { value: 5, label: 'Ven' },
+  { value: 6, label: 'Sam' },
+  { value: 0, label: 'Dim' },
+];
+
+/** Analyse une expression cron (5 ou 6 champs) en état d'éditeur visuel. Retombe sur "custom" si non reconnu. */
+function parseScheduleToFreq(expr: string): FreqState {
+  const fallback: FreqState = { mode: 'custom', hour: 5, minute: 0, daysOfWeek: [], intervalMinutes: 15, custom: expr };
+  const parts = expr.trim().split(/\s+/);
+  const isSixField = parts.length === 6;
+  const min = isSixField ? parts[1] : parts[0];
+  const hour = isSixField ? parts[2] : parts[1];
+  const dom = isSixField ? parts[3] : parts[2];
+  const month = isSixField ? parts[4] : parts[3];
+  const dow = isSixField ? parts[5] : parts[4];
+  if (parts.length !== 5 && parts.length !== 6) return fallback;
+
+  // Toutes les X minutes : */X * * * *
+  const everyMinMatch = min.match(/^\*\/(\d+)$/);
+  if (everyMinMatch && hour === '*' && dom === '*' && month === '*' && dow === '*') {
+    return { ...fallback, mode: 'interval', intervalMinutes: Number(everyMinMatch[1]) };
+  }
+
+  if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && month === '*') {
+    if (dow === '*') {
+      return { ...fallback, mode: 'daily', hour: Number(hour), minute: Number(min) };
+    }
+    const days = dow.split(',').map(Number).filter((d) => !Number.isNaN(d));
+    if (days.length > 0) {
+      return { ...fallback, mode: 'weekly', hour: Number(hour), minute: Number(min), daysOfWeek: days };
+    }
+  }
+
+  return fallback;
+}
+
+/** Construit une expression cron 5 champs (min hour dom month dow) à partir de l'état visuel. */
+function buildScheduleFromFreq(f: FreqState): string {
+  if (f.mode === 'custom') return f.custom.trim();
+  if (f.mode === 'interval') return `*/${f.intervalMinutes} * * * *`;
+  if (f.mode === 'weekly') return `${f.minute} ${f.hour} * * ${f.daysOfWeek.length ? f.daysOfWeek.join(',') : '*'}`;
+  return `${f.minute} ${f.hour} * * *`;
+}
+
+function describeFreq(f: FreqState): string {
+  const hh = String(f.hour).padStart(2, '0');
+  const mm = String(f.minute).padStart(2, '0');
+  if (f.mode === 'interval') return `toutes les ${f.intervalMinutes} min`;
+  if (f.mode === 'daily') return `tous les jours à ${hh}:${mm}`;
+  if (f.mode === 'weekly') {
+    const names = WEEKDAYS.filter((w) => f.daysOfWeek.includes(w.value)).map((w) => w.label);
+    return `${names.length ? names.join(', ') : 'chaque semaine'} à ${hh}:${mm}`;
+  }
+  return f.custom;
+}
+
 function ScheduleEditor({
   job,
   saving,
@@ -132,28 +204,142 @@ function ScheduleEditor({
   onCancel: () => void;
   onSave: (expressions: string[]) => void;
 }) {
-  const [value, setValue] = useState(job.schedules.join(', '));
+  const [freq, setFreq] = useState<FreqState>(() => parseScheduleToFreq(job.schedules[0] || '0 5 * * *'));
+
+  const previewExpr = buildScheduleFromFreq(freq);
+  const isValid = freq.mode === 'custom' ? freq.custom.trim().split(/\s+/).length >= 5 : true;
 
   return (
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1, flexWrap: 'wrap' }}>
-      <TextField
-        size="small"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="0 5 * * * (5h chaque jour) — plusieurs horaires séparés par une virgule"
-        sx={{ minWidth: 320, '& input': { fontFamily: 'monospace', fontSize: 12 } }}
-      />
-      <Button
-        sx={btnPrimarySx}
-        disabled={saving || !value.trim()}
-        onClick={() => onSave(value.split(',').map((s) => s.trim()).filter(Boolean))}
-      >
-        {saving ? '…' : 'Enregistrer'}
-      </Button>
-      <Button sx={btnGhostSx} disabled={saving} onClick={onCancel}>
-        Annuler
-      </Button>
-    </Stack>
+    <Box
+      sx={{
+        mt: 1,
+        p: 1.5,
+        borderRadius: '10px',
+        border: `1px solid ${t.border}`,
+        bgcolor: t.bg1,
+        minWidth: 320,
+      }}
+    >
+      <Stack direction="row" spacing={0.75} sx={{ mb: 1.25, flexWrap: 'wrap', rowGap: 0.5 }}>
+        {(
+          [
+            ['daily', 'Quotidien'],
+            ['weekly', 'Hebdomadaire'],
+            ['interval', 'Toutes les X min'],
+            ['custom', 'Expression cron'],
+          ] as [FreqMode, string][]
+        ).map(([mode, label]) => (
+          <Button
+            key={mode}
+            sx={{ ...btnGhostSx, minHeight: 26, px: 1, py: 0.25, fontSize: 11 }}
+            variant={freq.mode === mode ? 'contained' : 'outlined'}
+            onClick={() => setFreq((f) => ({ ...f, mode }))}
+          >
+            {label}
+          </Button>
+        ))}
+      </Stack>
+
+      {(freq.mode === 'daily' || freq.mode === 'weekly') && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: freq.mode === 'weekly' ? 1 : 0 }}>
+          <Typography sx={{ fontSize: 11.5, color: t.text3 }}>Heure</Typography>
+          <Select
+            size="small"
+            value={freq.hour}
+            onChange={(e) => setFreq((f) => ({ ...f, hour: Number(e.target.value) }))}
+            sx={{ fontSize: 12, minWidth: 70 }}
+          >
+            {Array.from({ length: 24 }, (_, h) => (
+              <MenuItem key={h} value={h} sx={{ fontSize: 12 }}>
+                {String(h).padStart(2, '0')}h
+              </MenuItem>
+            ))}
+          </Select>
+          <Select
+            size="small"
+            value={freq.minute}
+            onChange={(e) => setFreq((f) => ({ ...f, minute: Number(e.target.value) }))}
+            sx={{ fontSize: 12, minWidth: 70 }}
+          >
+            {[0, 15, 30, 45].map((m) => (
+              <MenuItem key={m} value={m} sx={{ fontSize: 12 }}>
+                :{String(m).padStart(2, '0')}
+              </MenuItem>
+            ))}
+          </Select>
+        </Stack>
+      )}
+
+      {freq.mode === 'weekly' && (
+        <Stack direction="row" spacing={0.5} sx={{ mb: 0, flexWrap: 'wrap', rowGap: 0.5 }}>
+          {WEEKDAYS.map((d) => {
+            const active = freq.daysOfWeek.includes(d.value);
+            return (
+              <Button
+                key={d.value}
+                sx={{ ...btnGhostSx, minHeight: 24, minWidth: 40, px: 0.5, py: 0.25, fontSize: 10.5 }}
+                variant={active ? 'contained' : 'outlined'}
+                onClick={() =>
+                  setFreq((f) => ({
+                    ...f,
+                    daysOfWeek: active ? f.daysOfWeek.filter((x) => x !== d.value) : [...f.daysOfWeek, d.value],
+                  }))
+                }
+              >
+                {d.label}
+              </Button>
+            );
+          })}
+        </Stack>
+      )}
+
+      {freq.mode === 'interval' && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Typography sx={{ fontSize: 11.5, color: t.text3 }}>Toutes les</Typography>
+          <Select
+            size="small"
+            value={freq.intervalMinutes}
+            onChange={(e) => setFreq((f) => ({ ...f, intervalMinutes: Number(e.target.value) }))}
+            sx={{ fontSize: 12, minWidth: 90 }}
+          >
+            {[5, 10, 15, 30, 45, 60].map((m) => (
+              <MenuItem key={m} value={m} sx={{ fontSize: 12 }}>
+                {m} min
+              </MenuItem>
+            ))}
+          </Select>
+        </Stack>
+      )}
+
+      {freq.mode === 'custom' && (
+        <TextField
+          size="small"
+          value={freq.custom}
+          onChange={(e) => setFreq((f) => ({ ...f, custom: e.target.value }))}
+          placeholder="0 5 * * * (5h chaque jour)"
+          sx={{ minWidth: 260, '& input': { fontFamily: 'monospace', fontSize: 12 } }}
+        />
+      )}
+
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1.25, flexWrap: 'wrap' }}>
+        <Typography sx={{ fontSize: 10.5, color: t.text3, fontFamily: 'monospace' }}>
+          → {describeFreq(freq)} ({previewExpr})
+        </Typography>
+      </Stack>
+
+      <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+        <Button
+          sx={btnPrimarySx}
+          disabled={saving || !isValid || (freq.mode === 'weekly' && freq.daysOfWeek.length === 0)}
+          onClick={() => onSave([previewExpr])}
+        >
+          {saving ? 'Relance en cours…' : 'Enregistrer et relancer le cron'}
+        </Button>
+        <Button sx={btnGhostSx} disabled={saving} onClick={onCancel}>
+          Annuler
+        </Button>
+      </Stack>
+    </Box>
   );
 }
 
@@ -400,7 +586,7 @@ export default function CronMonitoringPage() {
                                 sx={{ ...btnGhostSx, minHeight: 24, px: 1, py: 0.25, fontSize: 11, alignSelf: 'flex-start', mt: 0.25 }}
                                 onClick={() => setEditingKey(key)}
                               >
-                                Modifier l'heure
+                                Modifier la fréquence
                               </Button>
                             )}
                           </Stack>
