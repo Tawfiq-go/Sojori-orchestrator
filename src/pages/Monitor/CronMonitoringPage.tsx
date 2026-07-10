@@ -22,9 +22,11 @@ import {
   Typography,
 } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import PlayArrowOutlinedIcon from '@mui/icons-material/PlayArrowOutlined';
 import { useAuth } from '../../hooks/useAuth';
-import { Roles } from '../../constants/roles';
-import { normalizeDashboardRole } from '../../config/routeAccessPolicy';
+import { getPersistedUser } from '../../data/mockAuth';
+import { hasAdminAccess } from '../../utils/rbac.utils';
+import { resolveCronCapabilities } from '../../features/monitoring/cron/cronJobCapabilities';
 import { monitoringGet } from '../../utils/monitoringApi';
 import apiClient from '../../services/apiClient';
 import {
@@ -54,6 +56,9 @@ interface AggregatedCronJob {
   toggleUrl?: string;
   runNowUrl?: string;
   scheduleUrl?: string;
+  canSchedule?: boolean;
+  canToggle?: boolean;
+  canRunNow?: boolean;
 }
 
 function CompactStat({ icon, iconColor, value, label }: { icon: string; iconColor: string; value: string; label: string }) {
@@ -155,9 +160,10 @@ const SERVICE_LABEL: Record<string, string> = {
   'srv-crm': 'srv-crm',
 };
 
-function isCronManagerRole(role: string | null | undefined): boolean {
-  const normalized = normalizeDashboardRole(role);
-  return normalized === Roles.Admin || normalized === Roles.SuperAdmin;
+function resolveCanManageCron(userRole: string | undefined): boolean {
+  if (hasAdminAccess(userRole)) return true;
+  const persisted = getPersistedUser();
+  return hasAdminAccess(persisted?.role);
 }
 
 type FreqMode = 'daily' | 'weekly' | 'interval' | 'custom';
@@ -375,7 +381,7 @@ function ScheduleEditor({
 
 export default function CronMonitoringPage() {
   const { user } = useAuth();
-  const canManage = isCronManagerRole(user?.role);
+  const canManage = resolveCanManageCron(user?.role);
 
   const [isLive, setIsLive] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -445,11 +451,12 @@ export default function CronMonitoringPage() {
 
   const handleRunNow = useCallback(
     async (job: AggregatedCronJob) => {
-      if (!job.runNowUrl) return;
       const key = `${job.service}:${job.cronId}:run`;
       setPendingAction(key);
       try {
-        await apiClient.post(`/api/monitoring/cron/${job.service}/${job.cronId}/run-now`, { runNowUrl: job.runNowUrl });
+        await apiClient.post(`/api/monitoring/cron/${job.service}/${job.cronId}/run-now`, {
+          ...(job.runNowUrl ? { runNowUrl: job.runNowUrl } : {}),
+        });
         await fetchJobs();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Erreur réseau';
@@ -563,8 +570,10 @@ export default function CronMonitoringPage() {
                   const key = `${job.service}:${job.cronId}`;
                   const toggling = pendingAction === key;
                   const running = pendingAction === `${key}:run`;
-                  const canEditSchedule = Boolean(job.scheduleUrl && canManage && !job.readOnly);
-                  const canToggleJob = Boolean(job.toggleUrl && canManage && !job.readOnly);
+                  const caps = resolveCronCapabilities(job);
+                  const canEditSchedule = canManage && caps.canSchedule;
+                  const canToggleJob = canManage && caps.canToggle;
+                  const canRunNowJob = canManage && caps.canRunNow;
 
                   return (
                     <Box
@@ -652,8 +661,27 @@ export default function CronMonitoringPage() {
 
                       <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top' }}>
                         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                          {job.runNowUrl && canManage && !job.readOnly && (
-                            <Button sx={{ ...btnGhostSx, minHeight: 28, px: 1.25, fontSize: 11.5 }} disabled={running} onClick={() => void handleRunNow(job)}>
+                          {canRunNowJob && (
+                            <Tooltip title="Relancer maintenant">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  aria-label="Relancer"
+                                  disabled={running}
+                                  onClick={() => void handleRunNow(job)}
+                                  sx={{ color: t.text2 }}
+                                >
+                                  <PlayArrowOutlinedIcon sx={{ fontSize: 20 }} />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                          {canRunNowJob && (
+                            <Button
+                              sx={{ ...btnGhostSx, minHeight: 28, px: 1.25, fontSize: 11.5 }}
+                              disabled={running}
+                              onClick={() => void handleRunNow(job)}
+                            >
                               {running ? '…' : 'Relancer'}
                             </Button>
                           )}
