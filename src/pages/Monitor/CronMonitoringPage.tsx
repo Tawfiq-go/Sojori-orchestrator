@@ -169,9 +169,11 @@ function resolveCanManageCron(userRole: string | undefined): boolean {
   if (hasAdminAccess(userRole)) return true;
   const persisted = getPersistedUser();
   if (hasAdminAccess(persisted?.role)) return true;
-  /** Dev local : VITE_DISABLE_AUTH ouvre le monitor sans login — boutons visibles (POST exige JWT ou dev token). */
-  if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_AUTH === 'true') return true;
-  if (import.meta.env.VITE_DISABLE_AUTH === 'true' && hasActiveSession()) return true;
+  /** Session JWT non-admin (ex. Owner) → pas de boutons (sinon 403 sur schedule/toggle/run-now). */
+  const role = userRole || persisted?.role;
+  if (role && !hasAdminAccess(role)) return false;
+  /** Dev local sans rôle connu + VITE_DISABLE_AUTH : UI ouverte (POST exige quand même un JWT Admin en prod). */
+  if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_AUTH === 'true' && !hasActiveSession()) return true;
   return false;
 }
 
