@@ -262,7 +262,7 @@ export default function AIMonitoringPage() {
       <MonitorPageHeader
         accent="ai"
         title="Intelligence artificielle"
-        subtitle="Appels problématiques uniquement (échec, timeout, fallback, latence &gt; 5 s) — Mongo unified_monitoring"
+        subtitle="Appels problématiques — srv-fullchatbot, srv-fulltask, srv-reservations (échec, timeout, fallback, latence &gt; 5 s)"
         count={timeRange}
         live={live}
         onToggleLive={() => setLive((v) => !v)}
@@ -276,9 +276,9 @@ export default function AIMonitoringPage() {
 
       <Panel sx={{ mb: 2, py: 1.5, px: 2, bgcolor: t.aiTint, border: `1px solid ${t.border}` }}>
         <Typography sx={{ fontSize: 12, color: t.text2, lineHeight: 1.5 }}>
-          Les services (srv-task, srv-chatbot, orchestrator) n&apos;écrivent dans{' '}
-          <strong>unified_monitoring</strong> que les appels à problème — pas tous les appels OpenAI réussis.
-          Pour voir des lignes : élargir la période (7 j) ou onglet Appels / Erreurs.
+          Les services n&apos;écrivent dans <strong>unified_monitoring</strong> que les appels à problème
+          (guest chatbot, staff Flow IA, traductions/OCR, mail templates reservations).
+          Période par défaut : 7 j.
         </Typography>
       </Panel>
 
@@ -386,7 +386,7 @@ export default function AIMonitoringPage() {
               )}
             </>
           ) : summaryData && !fetchError ? (
-            <MonitorEmpty message={`Aucun événement IA « problème » sur ${timeRange}. Essayez 7 j ou vérifiez que srv-task/chatbot ont LOGS_PROXY_MONGODB_URI.`} />
+            <MonitorEmpty message={`Aucun événement IA « problème » sur ${timeRange}. Essayez 7 j ou vérifiez LOGS_PROXY_MONGODB_URI sur fullchatbot/fulltask.`} />
           ) : !fetchError ? (
             <MonitorEmpty message="Aucune donnée IA sur cette période." />
           ) : null}
@@ -402,10 +402,12 @@ export default function AIMonitoringPage() {
               onChange={setService}
               options={[
                 { value: 'all', label: 'Tous' },
-                { value: 'srv-chatbot', label: 'srv-chatbot' },
-                { value: 'srv-task', label: 'srv-task' },
-                { value: 'srv-orchestrator', label: 'srv-orchestrator' },
+                { value: 'srv-fullchatbot', label: 'fullchatbot (guest)' },
+                { value: 'srv-fulltask', label: 'fulltask (staff IA)' },
                 { value: 'srv-reservations', label: 'srv-reservations' },
+                { value: 'srv-chatbot', label: 'srv-chatbot (legacy)' },
+                { value: 'srv-task', label: 'srv-task (legacy)' },
+                { value: 'srv-orchestrator', label: 'srv-orchestrator (legacy)' },
               ]}
             />
             <MonitorSelectFilter
