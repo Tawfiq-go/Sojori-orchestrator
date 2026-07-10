@@ -1,15 +1,23 @@
 /** LogApiRU — petits composants partagés (badges, pastilles, états). */
-import { RU_CATEGORIES, type UiDir, type UiStatus } from './logApiRuMeta';
+import { RU_CATEGORIES, RU_SLOW_MS, type UiDir, type UiStatus, uiStatusLabel } from './logApiRuMeta'
 import type { LogApiRuCategory } from '../../services/logApiRuApi';
 
-export function StatusBadge({ status, label }: { status: UiStatus; label?: string }) {
-  const text = label ?? (status === 'success' ? 'Succès' : status === 'warning' ? 'Retry' : 'Échec');
+export function StatusBadge({
+  status,
+  label,
+  statusCode,
+}: {
+  status: UiStatus
+  label?: string
+  statusCode?: string
+}) {
+  const text = label ?? uiStatusLabel(status, statusCode)
   return (
     <span className={`badge ${status}`}>
       <span className="dot" />
       {text}
     </span>
-  );
+  )
 }
 
 export function DirBadge({ dir }: { dir: UiDir }) {
@@ -57,8 +65,8 @@ export function ErrorState({ onRetry }: { onRetry: () => void }) {
 }
 
 export function msClass(ms: number | null | undefined): string {
-  if (ms == null) return '';
-  if (ms > 5000) return 'slow';
-  if (ms > 2000) return 'warn';
-  return '';
+  if (ms == null) return ''
+  if (ms > RU_SLOW_MS) return 'slow'
+  if (ms > 2000) return 'warn'
+  return ''
 }

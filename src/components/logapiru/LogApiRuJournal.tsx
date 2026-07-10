@@ -54,7 +54,7 @@ function JournalRow({
   now: Date;
   onOpen: (id: string) => void;
 }) {
-  const status = uiStatus(item.status, item.statusCode);
+  const status = uiStatus(item.status, item.statusCode, item.responseTime);
   const code = RU_CODES[item.statusCode];
   const cat = categoryOfAction(item.action);
   const source = auditStr(item, 'modificationSource') || auditStr(item, 'trigger');
@@ -98,7 +98,7 @@ function JournalRow({
         </div>
       </div>
       <div className="jstatus">
-        <StatusBadge status={status} />
+        <StatusBadge status={status} statusCode={item.statusCode} />
         {item.statusCode && item.statusCode !== '0' && (
           <span className="code">
             {item.statusCode}
@@ -216,7 +216,7 @@ export function LogApiRuJournal({
         >
           <option value="">Tout statut</option>
           <option value="success">Succès</option>
-          <option value="warning">Retry / warning</option>
+          <option value="warning">Lent / retry</option>
           <option value="error">Échec</option>
         </select>
       </div>
@@ -325,9 +325,9 @@ export function LogApiRuJournal({
               );
             }
             const lead = g.items[0];
-            const worst = g.items.some((x) => uiStatus(x.status, x.statusCode) === 'error')
+            const worst = g.items.some((x) => uiStatus(x.status, x.statusCode, x.responseTime) === 'error')
               ? 'error'
-              : g.items.some((x) => uiStatus(x.status, x.statusCode) === 'warning')
+              : g.items.some((x) => uiStatus(x.status, x.statusCode, x.responseTime) === 'warning')
                 ? 'warning'
                 : 'success';
             const isCollapsed = collapsed[g.cid];

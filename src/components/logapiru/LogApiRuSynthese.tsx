@@ -30,7 +30,7 @@ function gaugeColor(pct: number): string {
 }
 
 function isDegraded(a: LogApiRuActionStat): boolean {
-  return uiStatus(a.lastStatus, a.lastStatusCode) !== 'success';
+  return uiStatus(a.lastStatus, a.lastStatusCode, a.lastResponseTime) !== 'success';
 }
 
 function SkeletonSynthese() {
@@ -217,7 +217,11 @@ export function LogApiRuSynthese({
                       </td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <StatusBadge status={uiStatus(r.lastStatus, r.lastStatusCode)} label="" />
+                          <StatusBadge
+                            status={uiStatus(r.lastStatus, r.lastStatusCode, r.lastResponseTime)}
+                            statusCode={r.lastStatusCode}
+                            label=""
+                          />
                           <span className="lastcall" title={absTime(r.lastUsed)}>
                             {relTime(r.lastUsed, now)}
                           </span>

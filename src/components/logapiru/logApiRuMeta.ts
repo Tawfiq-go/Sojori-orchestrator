@@ -111,10 +111,31 @@ export function actionLabel(action: string): string {
 
 export type UiStatus = 'success' | 'warning' | 'error';
 
-/** success | warning (retry -5/-6) | error — même sémantique que le backend ru-log-stats. */
-export function uiStatus(status: string, statusCode: string): UiStatus {
+/** Seuil « lent » RU : succès métier mais durée > 10s → warning (pas erreur). */
+export const RU_SLOW_MS = 10_000;
+
+/**
+ * success | warning (retry -5/-6 OU succès lent >10s) | error (échec / pas de réponse métier).
+ * Aligné avec srv-channels ru-log-stats.
+ */
+export function uiStatus(
+  status: string,
+  statusCode: string,
+  responseTime?: number | null,
+): UiStatus {
   if (statusCode === '-5' || statusCode === '-6') return 'warning';
-  return status === 'success' ? 'success' : 'error';
+  if (status === 'success') {
+    if (typeof responseTime === 'number' && responseTime > RU_SLOW_MS) return 'warning';
+    return 'success';
+  }
+  return 'error';
+}
+
+export function uiStatusLabel(status: UiStatus, statusCode?: string): string {
+  if (status === 'success') return 'Succès';
+  if (status === 'error') return 'Échec';
+  if (statusCode === '-5' || statusCode === '-6') return 'Retry';
+  return 'Lent';
 }
 
 export type UiDir = 'push' | 'pull';
