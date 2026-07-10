@@ -117,6 +117,12 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'admin/monitor/reservation-sync': '/monitor?tab=ReservationSync',
   'admin/sojori-logs': '/admin/sojori-logs',
 
+  // Cost & Pricing
+  pricing: '/monitor?tab=Pricing',
+  'pricing/ru': '/monitor?tab=Pricing',
+  'pricing/whatsapp': '/monitor?tab=Pricing',
+  'pricing/ai': '/monitor?tab=Pricing',
+
   // Administration
   'admin/pms': '/admin/equipe/owners?tab=list',
   'admin/pm-lifecycle': '/admin/pm-lifecycle',

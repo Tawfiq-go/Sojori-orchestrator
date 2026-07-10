@@ -235,6 +235,25 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
+    group: 'Cost & Pricing',
+    roles: ADMIN_ROLES,
+    items: [
+      {
+        id: 'pricing',
+        label: 'Pricing',
+        iconType: 'chart',
+        iconColor: '#0D9488',
+        badge: 'Live',
+        description: 'Consommation par owner des services facturés à Sojori (RU, WhatsApp, IA)',
+        sub: [
+          { id: 'pricing/ru', label: 'Listings RU' },
+          { id: 'pricing/whatsapp', label: 'WhatsApp' },
+          { id: 'pricing/ai', label: 'IA' },
+        ],
+      },
+    ],
+  },
+  {
     group: 'Administration',
     roles: ADMIN_ROLES,
     items: [
@@ -405,6 +424,7 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Finances: true,
   'Logs API': true,
   'Monitor & infra': true,
+  'Cost & Pricing': true,
   Administration: true,
   Temp: true,
 };
