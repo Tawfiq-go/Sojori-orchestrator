@@ -26,6 +26,7 @@ import PlayArrowOutlinedIcon from '@mui/icons-material/PlayArrowOutlined';
 import { useAuth } from '../../hooks/useAuth';
 import { getPersistedUser } from '../../data/mockAuth';
 import { hasAdminAccess } from '../../utils/rbac.utils';
+import { hasActiveSession } from '../../utils/devApiAccess';
 import { resolveCronCapabilities } from '../../features/monitoring/cron/cronJobCapabilities';
 import { monitoringGet } from '../../utils/monitoringApi';
 import apiClient from '../../services/apiClient';
@@ -163,7 +164,10 @@ const SERVICE_LABEL: Record<string, string> = {
 function resolveCanManageCron(userRole: string | undefined): boolean {
   if (hasAdminAccess(userRole)) return true;
   const persisted = getPersistedUser();
-  return hasAdminAccess(persisted?.role);
+  if (hasAdminAccess(persisted?.role)) return true;
+  /** VITE_DISABLE_AUTH bypass RouteAccessGuard mais pas ce composant — session JWT = admin monitor. */
+  if (import.meta.env.VITE_DISABLE_AUTH === 'true' && hasActiveSession()) return true;
+  return false;
 }
 
 type FreqMode = 'daily' | 'weekly' | 'interval' | 'custom';
@@ -620,16 +624,13 @@ export default function CronMonitoringPage() {
                             )}
                           </Stack>
                           {canEditSchedule && (
-                            <Tooltip title="Modifier la fréquence">
-                              <IconButton
-                                size="small"
-                                aria-label="Modifier la fréquence"
-                                onClick={() => setScheduleModalJob(job)}
-                                sx={{ color: t.text2, mt: -0.25 }}
-                              >
-                                <EditOutlinedIcon sx={{ fontSize: 18 }} />
-                              </IconButton>
-                            </Tooltip>
+                            <Button
+                              sx={{ ...btnGhostSx, minHeight: 26, px: 1, py: 0.25, fontSize: 11, flexShrink: 0 }}
+                              startIcon={<EditOutlinedIcon sx={{ fontSize: 16 }} />}
+                              onClick={() => setScheduleModalJob(job)}
+                            >
+                              Modifier
+                            </Button>
                           )}
                         </Stack>
                       </Box>
