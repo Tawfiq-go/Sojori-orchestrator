@@ -143,6 +143,10 @@ function describeSchedule(expr: string): string {
     const days = dow.split(',').map((d) => WEEKDAY_NAMES[d] ?? d).join(', ');
     return `${days} à ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
   }
+  // Mensuel, jour du mois fixe ("0 4 1 * *")
+  if (/^\d+$/.test(min) && /^\d+$/.test(hour) && /^\d+$/.test(dom) && month === '*' && (dow === '*' || dow === '?')) {
+    return `le ${dom} de chaque mois à ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
+  }
   // Tous les jours, heure fixe ("0 5 * * *")
   if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && month === '*' && dow === '*') {
     return `tous les jours à ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
@@ -171,13 +175,14 @@ function resolveCanManageCron(userRole: string | undefined): boolean {
   return false;
 }
 
-type FreqMode = 'daily' | 'weekly' | 'interval' | 'custom';
+type FreqMode = 'daily' | 'weekly' | 'monthly' | 'interval' | 'custom';
 
 interface FreqState {
   mode: FreqMode;
   hour: number;
   minute: number;
   daysOfWeek: number[]; // 0=dimanche … 6=samedi (JS convention)
+  dayOfMonth: number; // 1–28 (évite les mois courts)
   intervalMinutes: number;
   custom: string;
 }
@@ -194,7 +199,15 @@ const WEEKDAYS = [
 
 /** Analyse une expression cron (5 ou 6 champs) en état d'éditeur visuel. Retombe sur "custom" si non reconnu. */
 function parseScheduleToFreq(expr: string): FreqState {
-  const fallback: FreqState = { mode: 'custom', hour: 5, minute: 0, daysOfWeek: [], intervalMinutes: 15, custom: expr };
+  const fallback: FreqState = {
+    mode: 'custom',
+    hour: 5,
+    minute: 0,
+    daysOfWeek: [],
+    dayOfMonth: 1,
+    intervalMinutes: 15,
+    custom: expr,
+  };
   const parts = expr.trim().split(/\s+/);
   const isSixField = parts.length === 6;
   const min = isSixField ? parts[1] : parts[0];
@@ -208,6 +221,17 @@ function parseScheduleToFreq(expr: string): FreqState {
   const everyMinMatch = min.match(/^\*\/(\d+)$/);
   if (everyMinMatch && hour === '*' && dom === '*' && month === '*' && dow === '*') {
     return { ...fallback, mode: 'interval', intervalMinutes: Number(everyMinMatch[1]) };
+  }
+
+  // Mensuel : M H D * *  (ex. 0 4 1 * *)
+  if (/^\d+$/.test(min) && /^\d+$/.test(hour) && /^\d+$/.test(dom) && month === '*' && (dow === '*' || dow === '?')) {
+    return {
+      ...fallback,
+      mode: 'monthly',
+      hour: Number(hour),
+      minute: Number(min),
+      dayOfMonth: Math.min(28, Math.max(1, Number(dom))),
+    };
   }
 
   if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && month === '*') {
@@ -228,6 +252,7 @@ function buildScheduleFromFreq(f: FreqState): string {
   if (f.mode === 'custom') return f.custom.trim();
   if (f.mode === 'interval') return `*/${f.intervalMinutes} * * * *`;
   if (f.mode === 'weekly') return `${f.minute} ${f.hour} * * ${f.daysOfWeek.length ? f.daysOfWeek.join(',') : '*'}`;
+  if (f.mode === 'monthly') return `${f.minute} ${f.hour} ${f.dayOfMonth} * *`;
   return `${f.minute} ${f.hour} * * *`;
 }
 
@@ -236,6 +261,7 @@ function describeFreq(f: FreqState): string {
   const mm = String(f.minute).padStart(2, '0');
   if (f.mode === 'interval') return `toutes les ${f.intervalMinutes} min`;
   if (f.mode === 'daily') return `tous les jours à ${hh}:${mm}`;
+  if (f.mode === 'monthly') return `le ${f.dayOfMonth} de chaque mois à ${hh}:${mm}`;
   if (f.mode === 'weekly') {
     const names = WEEKDAYS.filter((w) => f.daysOfWeek.includes(w.value)).map((w) => w.label);
     return `${names.length ? names.join(', ') : 'chaque semaine'} à ${hh}:${mm}`;
@@ -266,6 +292,7 @@ function ScheduleEditor({
           [
             ['daily', 'Quotidien'],
             ['weekly', 'Hebdomadaire'],
+            ['monthly', 'Mensuel'],
             ['interval', 'Toutes les X min'],
             ['custom', 'Expression cron'],
           ] as [FreqMode, string][]
@@ -281,8 +308,8 @@ function ScheduleEditor({
         ))}
       </Stack>
 
-      {(freq.mode === 'daily' || freq.mode === 'weekly') && (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: freq.mode === 'weekly' ? 1 : 0 }}>
+      {(freq.mode === 'daily' || freq.mode === 'weekly' || freq.mode === 'monthly') && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: freq.mode === 'weekly' || freq.mode === 'monthly' ? 1 : 0 }}>
           <Typography sx={{ fontSize: 11.5, color: t.text3 }}>Heure</Typography>
           <Select
             size="small"
@@ -305,6 +332,24 @@ function ScheduleEditor({
             {[0, 15, 30, 45].map((m) => (
               <MenuItem key={m} value={m} sx={{ fontSize: 12 }}>
                 :{String(m).padStart(2, '0')}
+              </MenuItem>
+            ))}
+          </Select>
+        </Stack>
+      )}
+
+      {freq.mode === 'monthly' && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0 }}>
+          <Typography sx={{ fontSize: 11.5, color: t.text3 }}>Jour du mois</Typography>
+          <Select
+            size="small"
+            value={freq.dayOfMonth}
+            onChange={(e) => setFreq((f) => ({ ...f, dayOfMonth: Number(e.target.value) }))}
+            sx={{ fontSize: 12, minWidth: 80 }}
+          >
+            {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+              <MenuItem key={d} value={d} sx={{ fontSize: 12 }}>
+                {d}
               </MenuItem>
             ))}
           </Select>
