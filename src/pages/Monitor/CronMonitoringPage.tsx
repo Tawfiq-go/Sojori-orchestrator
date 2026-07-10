@@ -95,19 +95,34 @@ function describeSchedule(expr: string): string {
   const month = isSixField ? parts[4] : parts[3];
   const dow = isSixField ? parts[5] : parts[4];
 
-  if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && month === '*' && dow === '*') {
-    return `tous les jours à ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
-  }
-  if (/^\*\/\d+$/.test(isSixField ? parts[0] : min) && isSixField) {
+  const WEEKDAY_NAMES: Record<string, string> = { '0': 'dim', '1': 'lun', '2': 'mar', '3': 'mer', '4': 'jeu', '5': 'ven', '6': 'sam' };
+
+  // Toutes les X secondes (6 champs uniquement, ex: "*/30 * * * * *")
+  if (isSixField && /^\*\/\d+$/.test(parts[0]) && min === '*' && hour === '*' && dom === '*' && month === '*' && dow === '*') {
     return `toutes les ${parts[0].replace('*/', '')}s`;
   }
+  // Toutes les X minutes ("*/15 * * * *")
   const everyMinMatch = min.match(/^\*\/(\d+)$/);
   if (everyMinMatch && hour === '*' && dom === '*' && month === '*' && dow === '*') {
     return `toutes les ${everyMinMatch[1]} min`;
   }
+  // Toutes les X heures, à la minute M fixe ("0 */2 * * *")
   const everyHourMatch = hour.match(/^\*\/(\d+)$/);
   if (/^\d+$/.test(min) && everyHourMatch && dom === '*' && month === '*' && dow === '*') {
     return `toutes les ${everyHourMatch[1]}h à :${min.padStart(2, '0')}`;
+  }
+  // Toutes les heures, à la minute M fixe ("0 * * * *")
+  if (/^\d+$/.test(min) && hour === '*' && dom === '*' && month === '*' && dow === '*') {
+    return `toutes les heures à :${min.padStart(2, '0')}`;
+  }
+  // Jour(s) de semaine fixe(s), heure fixe ("0 9 * * 1,3,5")
+  if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && month === '*' && dow !== '*') {
+    const days = dow.split(',').map((d) => WEEKDAY_NAMES[d] ?? d).join(', ');
+    return `${days} à ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
+  }
+  // Tous les jours, heure fixe ("0 5 * * *")
+  if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && month === '*' && dow === '*') {
+    return `tous les jours à ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
   }
   return expr;
 }
