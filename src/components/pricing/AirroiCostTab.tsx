@@ -39,7 +39,7 @@ export function AirroiCostTab() {
         if (ownerIds.length > 0) {
           try {
             const namesRes = await resolveChannelsOwnerNames(ownerIds);
-            const map = (namesRes as { data?: { data?: Record<string, string> } })?.data?.data || {};
+            const map = (namesRes as { data?: { data?: { owners?: Record<string, string> } } })?.data?.data?.owners || {};
             setOwnerNames(map);
           } catch {
             // Résolution best-effort.
