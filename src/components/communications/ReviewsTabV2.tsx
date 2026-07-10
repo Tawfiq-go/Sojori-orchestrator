@@ -236,13 +236,15 @@ export default function ReviewsTabV2() {
       }
     : undefined;
 
-  const handlePublish = async () => {
-    if (!active || !replyText.trim() || airbnbReplyWindowClosed) return;
+  const handlePublish = async (overrideText?: string) => {
+    const text = (overrideText ?? replyText).trim();
+    if (!active || !text || airbnbReplyWindowClosed) return;
     setSending(true);
     try {
-      await messagesService.replyToReview(active.threadId, replyText.trim());
-      const updated = { ...active, replied: true, response: replyText.trim() };
+      await messagesService.replyToReview(active.threadId, text);
+      const updated = { ...active, replied: true, response: text };
       setActive(updated);
+      setReplyText(text);
       setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
     } finally {
       setSending(false);
@@ -319,7 +321,7 @@ export default function ReviewsTabV2() {
               reviewText={active.reviewText}
               replyText={replyText}
               onReplyChange={setReplyText}
-              onPublish={handlePublish}
+              onPublish={() => handlePublish()}
               onAISuggestion={() => setShowAIModal(true)}
               sending={sending}
               otaPlatform={normalizeBookingSource(active.channel)}
@@ -344,9 +346,11 @@ export default function ReviewsTabV2() {
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
         onUseSuggestion={setReplyText}
+        onSendSuggestion={(text) => handlePublish(text)}
         context={{
           guestName: active?.guestName,
           reviewContent: active?.reviewText,
+          draft: replyText,
           rating: active?.rating,
           type: 'reviews',
         }}
