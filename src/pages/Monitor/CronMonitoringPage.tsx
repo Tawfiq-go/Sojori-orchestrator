@@ -165,7 +165,8 @@ function resolveCanManageCron(userRole: string | undefined): boolean {
   if (hasAdminAccess(userRole)) return true;
   const persisted = getPersistedUser();
   if (hasAdminAccess(persisted?.role)) return true;
-  /** VITE_DISABLE_AUTH bypass RouteAccessGuard mais pas ce composant — session JWT = admin monitor. */
+  /** Dev local : VITE_DISABLE_AUTH ouvre le monitor sans login — boutons visibles (POST exige JWT ou dev token). */
+  if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_AUTH === 'true') return true;
   if (import.meta.env.VITE_DISABLE_AUTH === 'true' && hasActiveSession()) return true;
   return false;
 }
@@ -594,7 +595,7 @@ export default function CronMonitoringPage() {
 
                       <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top', minWidth: 160 }}>
                         <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: t.text }}>{job.label}</Typography>
-                        {job.readOnly && (
+                        {job.readOnly && !caps.canSchedule && (
                           <Badge variant="neutral">lecture seule</Badge>
                         )}
                       </Box>
@@ -617,7 +618,7 @@ export default function CronMonitoringPage() {
                             <Typography sx={{ fontSize: 10, color: t.text3, fontFamily: 'monospace' }}>
                               {job.schedules.join(' · ')}
                             </Typography>
-                            {job.readOnly && (
+                            {job.readOnly && !caps.canSchedule && (
                               <Typography sx={{ fontSize: 10, color: t.text3, mt: 0.25 }}>
                                 Fréquence non modifiable
                               </Typography>

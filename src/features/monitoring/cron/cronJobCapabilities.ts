@@ -48,15 +48,15 @@ const TOGGLEABLE_CRON_IDS = new Set([
 
 /** Préfère les flags API ; repli client si absents (vieux proxy). */
 export function resolveCronCapabilities(job: CronJobLike) {
-  if (job.readOnly) {
-    return { canSchedule: false, canToggle: false, canRunNow: false };
-  }
   if (job.canSchedule != null || job.canToggle != null || job.canRunNow != null) {
     return {
       canSchedule: Boolean(job.canSchedule),
       canToggle: Boolean(job.canToggle),
       canRunNow: Boolean(job.canRunNow),
     };
+  }
+  if (job.readOnly) {
+    return { canSchedule: false, canToggle: false, canRunNow: false };
   }
   const id = job.cronId;
   return {
