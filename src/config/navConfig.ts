@@ -239,11 +239,18 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
     roles: ADMIN_ROLES,
     items: [
       {
-        id: 'pricing/ru',
-        label: 'Listings RU',
+        id: 'pricing/summary',
+        label: 'Summary',
         iconType: 'chart',
         iconColor: '#0D9488',
         badge: 'Live',
+        description: 'Récap consommation par owner et par mois — RU, WhatsApp, IA, AirROI',
+      },
+      {
+        id: 'pricing/ru',
+        label: 'Listings RU',
+        iconType: 'building',
+        iconColor: '#0D9488',
         description: 'Listings synchronisés RU par owner vs coût $700/200',
       },
       {
@@ -259,6 +266,13 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
         iconType: 'robot',
         iconColor: '#0D9488',
         description: 'Appels IA par owner',
+      },
+      {
+        id: 'pricing/airroi',
+        label: 'AirROI',
+        iconType: 'trending',
+        iconColor: '#0D9488',
+        description: 'Coût réel AirROI par owner (dynamic pricing)',
       },
     ],
   },

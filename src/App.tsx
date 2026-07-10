@@ -231,6 +231,9 @@ const OnboardingSuitePage = lazyWithReload(() =>
 const MonitoringHubPage = lazyWithReload(() =>
   import('./pages/Monitor/MonitoringHubPage').then((module) => ({ default: module.default }))
 );
+const PricingHubPage = lazyWithReload(() =>
+  import('./pages/PricingHubPage').then((module) => ({ default: module.default }))
+);
 const PmLifecycleHubPage = lazyWithReload(() =>
   import('./pages/PmLifecycleHubPage').then((module) => ({ default: module.PmLifecycleHubPage }))
 );
@@ -431,6 +434,7 @@ function App() {
               <Route path="/crm" element={<LazyRoute><CRMPage /></LazyRoute>} />
               <Route path="/monitor" element={<LazyRoute><MonitoringHubPage /></LazyRoute>} />
               <Route path="/admin/monitor" element={<LazyRoute><MonitoringHubPage /></LazyRoute>} />
+              <Route path="/admin/pricing" element={<LazyRoute><PricingHubPage /></LazyRoute>} />
               <Route path="/admin/sojori-logs" element={<LazyRoute><SojoriLogsAdminPage /></LazyRoute>} />
               <Route path="/admin/channels" element={<LazyRoute><ChannelsAdminPage /></LazyRoute>} />
               <Route path="/admin/Channels" element={<LazyRoute><ChannelsLegacyRedirect /></LazyRoute>} />

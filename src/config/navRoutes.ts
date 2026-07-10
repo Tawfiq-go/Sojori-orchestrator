@@ -118,9 +118,11 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'admin/sojori-logs': '/admin/sojori-logs',
 
   // Cost
-  'pricing/ru': '/monitor?tab=Pricing',
-  'pricing/whatsapp': '/monitor?tab=Pricing',
-  'pricing/ai': '/monitor?tab=Pricing',
+  'pricing/summary': '/admin/pricing?tab=Summary',
+  'pricing/ru': '/admin/pricing?tab=RU',
+  'pricing/whatsapp': '/admin/pricing?tab=WhatsApp',
+  'pricing/ai': '/admin/pricing?tab=AI',
+  'pricing/airroi': '/admin/pricing?tab=AirROI',
 
   // Administration
   'admin/pms': '/admin/equipe/owners?tab=list',
