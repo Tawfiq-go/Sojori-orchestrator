@@ -57,3 +57,13 @@ export function isActionRequired(n: {
     (n.status === 'created' || n.status === 'pending')
   );
 }
+
+/** Visible dans le panneau cloche (exclut archivées / traitées). */
+export function isActiveInPanel(n: Pick<NotificationItem, 'status'>): boolean {
+  return (
+    n.status !== 'dismissed' &&
+    n.status !== 'expired' &&
+    n.status !== 'done' &&
+    n.status !== 'handled'
+  );
+}

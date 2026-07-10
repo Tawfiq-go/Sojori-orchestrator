@@ -17,7 +17,7 @@ import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
 import { mapConversationToThread } from '../unified-inbox/inboxMappers';
 import { enrichThreadFromReservation } from '../unified-inbox/inboxReservationEnrichment';
 import { buildWhatsappThreadContextForAi, getLastGuestMessageFromExchanges } from '../../services/communicationsAi.helpers';
-import { buildInboxMessages, outboundInboxExchange, WA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
+import { buildInboxMessages, outboundInboxExchange, WA_GUEST_MENU_DISPATCH, WA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
 import { formatThreadWhen } from '../unified-inbox/inboxFormat';
 import {
   applyWaInboxFilters,
@@ -62,6 +62,7 @@ export default function WhatsAppTabV2() {
   const [waUnreadOnly, setWaUnreadOnly] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [composerDraft, setComposerDraft] = useState('');
+  const [sendingGuestMenuCode, setSendingGuestMenuCode] = useState<string | null>(null);
   const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
   const [inboxFullscreen, setInboxFullscreen] = useState(false);
@@ -323,6 +324,22 @@ export default function WhatsAppTabV2() {
     [inbox, bumpConversationPreview, revertConversationPreview],
   );
 
+  const handleGuestSendMenu = useCallback(
+    async (menuCode: string) => {
+      if (!inbox.activeConversation) return;
+      const phone = inbox.activeConversation.phone;
+      const conv = inbox.activeConversation;
+      setSendingGuestMenuCode(menuCode);
+      try {
+        await messagesService.sendMenuCode({ phone, menuCode });
+        void inbox.refreshMessages(conv);
+      } finally {
+        setSendingGuestMenuCode(null);
+      }
+    },
+    [inbox],
+  );
+
   useEffect(() => {
     if (inbox.activeConversation) {
       setTaskCounts((prev) => ({
@@ -421,6 +438,9 @@ export default function WhatsAppTabV2() {
             messages={formattedMessages}
             loadingMessages={inbox.loadingMessages}
             quickTemplates={WA_QUICK_TEMPLATES}
+            guestMenuDispatch={WA_GUEST_MENU_DISPATCH}
+            sendingGuestMenuCode={sendingGuestMenuCode}
+            onSendGuestMenu={handleGuestSendMenu}
             composerValue={composerDraft}
             onComposerValueChange={setComposerDraft}
             onSendMessage={handleGuestSend}

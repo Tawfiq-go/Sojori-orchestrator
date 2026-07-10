@@ -39,7 +39,7 @@ const TITLE_OVERRIDES: Record<string, string> = {
   'orch/workflows': 'Workflows · config',
   staff: 'Staff',
   'equipe/onboarding': 'On-boarding',
-  'equipe/notifications': 'Notifications dashboard',
+  'equipe/notifications': 'Notifications',
   payments: 'Paiements',
   reservations: 'Réservations',
 };

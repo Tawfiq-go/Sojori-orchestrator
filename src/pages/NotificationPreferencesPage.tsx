@@ -1,6 +1,7 @@
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { tokens as T } from '../components/dashboard/dashboardTokens';
 import { NotificationPreferencesSection } from '../features/notifications/NotificationPreferencesSection';
+import { NotificationsSectionTabs } from '../features/notifications/NotificationsSectionTabs';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
@@ -11,11 +12,13 @@ import InfoOutlined from '@mui/icons-material/InfoOutlined';
  */
 export function NotificationPreferencesPage() {
   return (
-    <DashboardWrapper breadcrumb={['Équipe', 'Notifications dashboard']}>
+    <DashboardWrapper breadcrumb={['Équipe', 'Notifications', 'Configuration']}>
       <Box sx={{ py: 2.5, maxWidth: 920 }}>
         <Typography sx={{ fontSize: 26, fontWeight: 800, color: T.text, mb: 0.75 }}>
           Notifications dashboard
         </Typography>
+
+        <NotificationsSectionTabs />
         <Typography sx={{ fontSize: 13, color: T.text3, mb: 2, maxWidth: 720 }}>
           Choisissez quels événements déclenchent une alerte dans la cloche du dashboard pour le
           propriétaire (réservation créée, annulée, message OTA, escalade orchestration, etc.).

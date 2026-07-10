@@ -19,14 +19,18 @@ export function NotificationFacetChips({
       sx={{
         display: 'flex',
         flexWrap: 'wrap',
+        alignContent: 'flex-start',
         gap: 0.5,
         px: 1.25,
         py: 0.75,
         borderTop: `1px solid ${t.border}`,
         maxHeight: 56,
         overflowY: 'auto',
-        alignContent: 'flex-start',
+        overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'thin',
         '&::-webkit-scrollbar': { width: 4, height: 4 },
+        '&::-webkit-scrollbar-thumb': { bgcolor: t.border, borderRadius: 999 },
       }}
     >
       <FacetChip
@@ -74,6 +78,7 @@ function FacetChip({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 0.35,
+        flexShrink: 0,
         border: `1px solid ${active ? t.primary : t.border}`,
         bgcolor: active ? t.primaryTint : t.bg2,
         color: active ? t.primaryDeep : t.text2,

@@ -342,7 +342,6 @@ export default function UpdateInventoryModal({
                       <DatePicker
                         value={editableStartDate}
                         referenceDate={editableStartDate ?? undefined}
-                        maxDate={editableEndDate ?? undefined}
                         onChange={(newValue) => {
                           setEditableStartDate(newValue);
                           if (newValue && editableEndDate && newValue > editableEndDate) {

@@ -1,22 +1,25 @@
 import { useRef, useState } from 'react';
 import { useInboxMessageScroll } from './useInboxMessageScroll';
 import { highlightInboxKeyword, messageMatchesKeyword } from './highlightInboxKeyword';
-import { Box, Stack, Typography, CircularProgress, Tooltip } from '@mui/material';
-import { DoneAll } from '@mui/icons-material';
+import { Box, Stack, Typography, CircularProgress, Tooltip, Dialog, DialogTitle, DialogContent, IconButton } from '@mui/material';
+import { DoneAll, Close } from '@mui/icons-material';
 import { T } from './_tokens';
 import { flagFromPhone } from './inboxFormat';
 import { getOtaTheme, isOtaChannelType } from './otaPlatformTheme';
-import type { Thread, Message, QuickTemplate, QuickAction } from '../../types/unifiedInbox.types';
+import type { Thread, Message, QuickTemplate, QuickAction, GuestMenuDispatchOption } from '../../types/unifiedInbox.types';
 import { formatWhatsAppDeliveryError } from './formatWhatsAppDeliveryError';
 import { extractHttpErrorMessage } from '../../utils/extractHttpErrorMessage';
 import { useAuth } from '../../hooks/useAuth';
 import { Roles } from '../../constants/roles';
 
-function interactiveContentBadge(contentType?: Message['contentType'] | null): string | null {
-  if (contentType === 'flow') return '🧩 FLOW REPLY';
-  if (contentType === 'buttons') return '🔘 BUTTON REPLY';
-  if (contentType === 'list') return '📋 LIST REPLY';
-  if (contentType === 'interactive') return '↩️ INTERACTIVE REPLY';
+function interactiveContentBadge(
+  contentType?: Message['contentType'] | null,
+  isOutbound?: boolean,
+): string | null {
+  if (contentType === 'flow') return isOutbound ? '🧩 FLOW ENVOYÉ' : '🧩 FLOW REPLY';
+  if (contentType === 'buttons') return isOutbound ? '🔘 BOUTONS ENVOYÉS' : '🔘 BUTTON REPLY';
+  if (contentType === 'list') return isOutbound ? '📋 LISTE ENVOYÉE' : '📋 LIST REPLY';
+  if (contentType === 'interactive') return isOutbound ? '📲 INTERACTIF ENVOYÉ' : '↩️ INTERACTIVE REPLY';
   if (contentType === 'template') return '📨 TEMPLATE';
   return null;
 }
@@ -32,6 +35,10 @@ interface ConversationThreadProps {
   /** Réponses rapides OTA (pilules, entre messages et templates) */
   quickReplies?: QuickTemplate[];
   quickActions?: QuickAction[];
+  /** Menu codes C/D/E… — envoi flow ou réponse backend (admin inbox guest WA) */
+  guestMenuDispatch?: GuestMenuDispatchOption[];
+  onSendGuestMenu?: (menuCode: string) => Promise<void>;
+  sendingGuestMenuCode?: string | null;
   onSendMessage: (text: string) => void | Promise<void>;
   onSelectTemplate: (template: QuickTemplate) => void;
   onAISuggestion?: (draft: string) => void;
@@ -58,6 +65,9 @@ export default function ConversationThread({
   messages,
   quickTemplates,
   quickActions = [],
+  guestMenuDispatch = [],
+  onSendGuestMenu,
+  sendingGuestMenuCode = null,
   onSendMessage,
   onSelectTemplate,
   onAISuggestion,
@@ -85,6 +95,7 @@ export default function ConversationThread({
   const [sending, setSending] = useState(false);
   const [inspectedMessage, setInspectedMessage] = useState<Message | null>(null);
   const [expandedTraceSteps, setExpandedTraceSteps] = useState<Record<string, boolean>>({});
+  const [flowMenuOpen, setFlowMenuOpen] = useState(false);
   const hasRenderableMessages =
     !loadingMessages && messages.filter((m) => m.type !== 'day-separator').length > 0;
 
@@ -98,6 +109,45 @@ export default function ConversationThread({
 
   const kw = highlightKeyword?.trim() ?? '';
   void quickActions;
+
+  const guestMenuKindStyle = (kind: GuestMenuDispatchOption['kind']) => {
+    if (kind === 'flow') {
+      return {
+        bg: 'rgba(124,58,237,0.08)',
+        border: 'rgba(124,58,237,0.35)',
+        hoverBg: 'rgba(124,58,237,0.14)',
+        hoverBorder: '#7c3aed',
+        color: '#5b21b6',
+      };
+    }
+    if (kind === 'interactive') {
+      return {
+        bg: 'rgba(37,99,235,0.08)',
+        border: 'rgba(37,99,235,0.35)',
+        hoverBg: 'rgba(37,99,235,0.14)',
+        hoverBorder: '#2563eb',
+        color: '#1d4ed8',
+      };
+    }
+    return {
+      bg: T.bg1,
+      border: T.border,
+      hoverBg: T.primaryTint,
+      hoverBorder: T.primary,
+      color: T.text2,
+    };
+  };
+
+  const handleGuestMenuSend = async (code: string) => {
+    if (!onSendGuestMenu || sendingGuestMenuCode) return;
+    setSendError(null);
+    try {
+      await onSendGuestMenu(code);
+      setFlowMenuOpen(false);
+    } catch (err: unknown) {
+      setSendError(extractHttpErrorMessage(err, 'Échec envoi flow / menu WhatsApp'));
+    }
+  };
   const inspectedSteps = inspectedMessage?.processingTrace?.steps ?? [];
   const routingDetails = inspectedSteps.find((step) => step.key === 'routing')?.details;
   const planDetails = inspectedSteps.find((step) => step.key === 'response_plan')?.details;
@@ -106,7 +156,7 @@ export default function ConversationThread({
     (routingDetails?.selectedCategories as string[] | undefined) ??
     [];
   const openTrace = (message: Message) => {
-    if (!canInspectAi || !message.isAI) return;
+    if (!canInspectAi || !message.isAI || message.isAdmin) return;
     setExpandedTraceSteps({});
     setInspectedMessage(message);
   };
@@ -558,7 +608,7 @@ export default function ConversationThread({
           const traceFailed = message.isAI && hasFailedTraceStep(message);
           const styles = bubbleStyles(message.from);
           const isKeywordHit = kw && messageMatchesKeyword(message.text, kw);
-          const contentBadge = interactiveContentBadge(message.contentType);
+          const contentBadge = interactiveContentBadge(message.contentType, isOut);
 
           return (
             <Box
@@ -593,13 +643,26 @@ export default function ConversationThread({
                   color: styles.color,
                   lineHeight: 1.7,
                   boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
-                  cursor: canInspectAi && message.isAI ? 'pointer' : 'default',
+                  cursor: canInspectAi && message.isAI && !message.isAdmin ? 'pointer' : 'default',
                   transition: 'box-shadow 120ms ease',
-                  '&:hover': canInspectAi && message.isAI
+                  '&:hover': canInspectAi && message.isAI && !message.isAdmin
                     ? { boxShadow: '0 0 0 2px rgba(124,58,237,0.22)' }
                     : undefined,
                 }}
               >
+                {message.isAdmin && (
+                  <Typography
+                    sx={{
+                      fontSize: 9.5,
+                      color: '#1d4ed8',
+                      fontWeight: 700,
+                      fontFamily: '"Geist Mono", monospace',
+                      mb: 0.5,
+                    }}
+                  >
+                    👤 Admin · envoi manuel
+                  </Typography>
+                )}
                 {message.isAI && (
                   <Typography
                     sx={{
@@ -614,7 +677,7 @@ export default function ConversationThread({
                   </Typography>
                 )}
                 {contentBadge && (
-                  <Box
+                  <Typography
                     sx={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -624,18 +687,14 @@ export default function ConversationThread({
                       borderRadius: 999,
                       bgcolor: 'rgba(124,58,237,0.10)',
                       color: traceFailed ? '#dc2626' : T.ai,
-                      fontSize: 0,
+                      fontSize: 9,
                       fontWeight: 800,
                       fontFamily: '"Geist Mono", monospace',
                       letterSpacing: '0.04em',
-                      '&::after': {
-                        content: `"${contentBadge}"`,
-                        fontSize: 9,
-                      },
                     }}
                   >
-                    🧩 INTERACTIVE FLOW
-                  </Box>
+                    {contentBadge}
+                  </Typography>
                 )}
                 <Typography
                   component="div"
@@ -799,7 +858,7 @@ export default function ConversationThread({
         )}
       </Box>
 
-      {quickTemplates.length > 0 && (
+      {(quickTemplates.length > 0 || (!isOta && guestMenuDispatch.length > 0)) && (
         <Box
           sx={{
             px: '18px',
@@ -807,6 +866,7 @@ export default function ConversationThread({
             display: 'flex',
             gap: 0.75,
             flexWrap: 'wrap',
+            alignItems: 'center',
             bgcolor: T.bg2,
             borderTop: `1px solid ${T.border}`,
             flexShrink: 0,
@@ -842,8 +902,144 @@ export default function ConversationThread({
               {item.icon} {item.label}
             </Box>
           ))}
+          {!isOta && guestMenuDispatch.length > 0 && (
+            <Box
+              component="button"
+              type="button"
+              onClick={() => setFlowMenuOpen(true)}
+              disabled={Boolean(sendingGuestMenuCode)}
+              sx={{
+                px: '11px',
+                py: '6px',
+                bgcolor: 'rgba(124,58,237,0.08)',
+                border: '1px solid rgba(124,58,237,0.35)',
+                borderRadius: '8px',
+                fontSize: 11.5,
+                fontWeight: 700,
+                color: '#5b21b6',
+                cursor: sendingGuestMenuCode ? 'wait' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.625,
+                transition: 'all 0.12s',
+                '&:hover': sendingGuestMenuCode
+                  ? {}
+                  : {
+                      bgcolor: 'rgba(124,58,237,0.14)',
+                      borderColor: '#7c3aed',
+                      transform: 'translateY(-1px)',
+                    },
+              }}
+              title="Envoyer un menu ou flow WhatsApp (E, D, C…)"
+            >
+              {sendingGuestMenuCode ? (
+                <CircularProgress size={14} sx={{ color: '#5b21b6' }} />
+              ) : (
+                <>🧩 Menu / Flow</>
+              )}
+            </Box>
+          )}
         </Box>
       )}
+
+      <Dialog
+        open={flowMenuOpen}
+        onClose={() => !sendingGuestMenuCode && setFlowMenuOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2, maxHeight: '80vh' } }}
+      >
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            py: 1.5,
+            px: 2,
+            fontSize: 15,
+            fontWeight: 700,
+          }}
+        >
+          Envoyer menu / flow
+          <IconButton
+            size="small"
+            onClick={() => setFlowMenuOpen(false)}
+            disabled={Boolean(sendingGuestMenuCode)}
+            aria-label="Fermer"
+          >
+            <Close fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ px: 2, py: 1.5 }}>
+          <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 1.5, lineHeight: 1.45 }}>
+            Comme si le guest tapait la lettre sur WhatsApp — intro + formulaire quand applicable.
+          </Typography>
+          {(['flow', 'interactive', 'text'] as const).map((kind) => {
+            const items = guestMenuDispatch.filter((item) => item.kind === kind);
+            if (!items.length) return null;
+            const sectionLabel =
+              kind === 'flow' ? 'Flows WhatsApp' : kind === 'interactive' ? 'Messages interactifs' : 'Réponses texte';
+            return (
+              <Box key={kind} sx={{ mb: 1.5 }}>
+                <Typography
+                  sx={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    color: T.text3,
+                    letterSpacing: 0.4,
+                    textTransform: 'uppercase',
+                    mb: 0.75,
+                  }}
+                >
+                  {sectionLabel}
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {items.map((item) => {
+                    const style = guestMenuKindStyle(item.kind);
+                    const busy = sendingGuestMenuCode === item.code;
+                    return (
+                      <Box
+                        key={item.code}
+                        component="button"
+                        type="button"
+                        disabled={Boolean(sendingGuestMenuCode)}
+                        onClick={() => void handleGuestMenuSend(item.code)}
+                        sx={{
+                          px: '10px',
+                          py: '6px',
+                          bgcolor: style.bg,
+                          border: `1px solid ${style.border}`,
+                          borderRadius: '8px',
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          color: style.color,
+                          cursor: sendingGuestMenuCode ? 'wait' : 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                          opacity: sendingGuestMenuCode && !busy ? 0.5 : 1,
+                          '&:hover': sendingGuestMenuCode
+                            ? {}
+                            : { bgcolor: style.hoverBg, borderColor: style.hoverBorder },
+                        }}
+                      >
+                        {busy ? (
+                          <CircularProgress size={12} sx={{ color: style.color }} />
+                        ) : (
+                          <Box component="span" sx={{ fontSize: 10, fontWeight: 800 }}>
+                            {item.code}
+                          </Box>
+                        )}
+                        {item.icon} {item.label}
+                      </Box>
+                    );
+                  })}
+                </Box>
+              </Box>
+            );
+          })}
+        </DialogContent>
+      </Dialog>
 
       {sendError && !isOta && (
         <Box

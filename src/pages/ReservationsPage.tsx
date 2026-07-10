@@ -7,7 +7,7 @@
 // Tous les champs / handlers / appels API du fichier original sont conservés.
 // ════════════════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useMemo, useState, startTransition, memo } from 'react';
+import { useCallback, useEffect, useMemo, useState, startTransition, memo, useRef } from 'react';
 import {
   Box, Stack, Typography, Paper, Chip, IconButton, Tooltip, Button,
   TextField, InputAdornment, FormControl, Select, MenuItem, Checkbox,
@@ -258,6 +258,10 @@ export function ReservationsPage() {
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const isModalOpenRef = useRef(false);
+  useEffect(() => {
+    isModalOpenRef.current = isModalOpen;
+  }, [isModalOpen]);
 
   // ─── Helper for cancellation acknowledgement ──────────────────────
   const isCancellationUnacknowledged = (reservation: Reservation) => {
@@ -386,7 +390,10 @@ export function ReservationsPage() {
   useSocketIO({
     rooms: socketRooms,
     enabled: scopeFetchReady,
-    onReconnect: () => { fetchReservations(); },
+    onReconnect: () => {
+      if (isModalOpenRef.current) return;
+      fetchReservations();
+    },
     handlers: {
       [SOCKET_EVENTS.NEW_RESERVATION]: (reservation: Reservation) => {
         setReservations(prev => {
@@ -789,6 +796,7 @@ export function ReservationsPage() {
       {/* Modal d'ajout de réservation */}
       <CreateReservationModal
         open={isModalOpen}
+        filterOwnerId={requestOwnerId || undefined}
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {
           setIsModalOpen(false);

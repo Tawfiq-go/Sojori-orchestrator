@@ -1,5 +1,5 @@
 import type { MessageExchange } from '../../types/messages.types';
-import type { Message, QuickTemplate } from '../../types/unifiedInbox.types';
+import type { Message, QuickTemplate, GuestMenuDispatchOption } from '../../types/unifiedInbox.types';
 import { formatInboxDaySeparator } from './inboxFormat';
 import { formatInboxMessageText } from './formatInboxMessageText';
 
@@ -70,12 +70,14 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
       } else {
         const waStatus = exchange.ai_response_send_status;
         const waFailed = waStatus === 'failed';
+        const isAdminOutbound = Boolean(exchange.sent_by_admin) && Boolean(aiText);
         msgs.push({
           id: `ai-${index}`,
           from: exchange.sent_by_admin ? 'you' : 'sojori',
           text: aiText,
           time: formatTime(exchange.timestamp),
-          isAI: !exchange.sent_by_admin,
+          isAI: isAdminOutbound ? false : !exchange.sent_by_admin,
+          isAdmin: isAdminOutbound,
           status: waFailed ? undefined : waStatus === 'sent' ? 'sent' : undefined,
           whatsappDelivery: waStatus,
           whatsappDeliveryError: exchange.ai_response_send_error ?? null,
@@ -89,6 +91,27 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
     return msgs;
   });
 }
+
+export const WA_GUEST_MENU_DISPATCH: GuestMenuDispatchOption[] = [
+  { code: 'E', label: 'Enregistrement', icon: '👥', kind: 'flow' },
+  { code: 'D1', label: 'Heure arrivée', icon: '🛬', kind: 'flow' },
+  { code: 'D2', label: 'Heure départ', icon: '🛫', kind: 'flow' },
+  { code: 'D3', label: 'Déclarer arrivée', icon: '📍', kind: 'flow' },
+  { code: 'D4', label: 'Déclarer départ', icon: '📍', kind: 'flow' },
+  { code: 'I', label: 'Ménage', icon: '🧹', kind: 'flow' },
+  { code: 'K', label: 'Support', icon: '🆘', kind: 'flow' },
+  { code: 'L', label: 'Service client', icon: '💌', kind: 'flow' },
+  { code: 'J1', label: 'Transport', icon: '🚗', kind: 'flow' },
+  { code: 'J2', label: 'Courses', icon: '🛒', kind: 'flow' },
+  { code: 'J3', label: 'Conciergerie', icon: '✨', kind: 'flow' },
+  { code: 'D', label: 'Arrivée & départ', icon: '⏰', kind: 'interactive' },
+  { code: 'J', label: 'Hub conciergerie', icon: '🛎️', kind: 'interactive' },
+  { code: 'G', label: 'Propriété & WiFi', icon: '🏠', kind: 'interactive' },
+  { code: 'C', label: 'Parcours arrivée', icon: '🚶', kind: 'text' },
+  { code: 'F', label: 'Accès & codes', icon: '🔐', kind: 'text' },
+  { code: 'B', label: 'Langue', icon: '🌍', kind: 'text' },
+  { code: 'A', label: 'Menu principal', icon: '📋', kind: 'text' },
+];
 
 export const WA_QUICK_TEMPLATES: QuickTemplate[] = [
   { id: 'wa-1', label: '👋 Bienvenue', icon: '👋', text: 'Bienvenue !' },

@@ -10,12 +10,7 @@ import { useTheme } from '@mui/material/styles';
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
 import { tokens as t } from '../../components/dashboard/dashboardTokens';
 import { useNotificationScope } from './NotificationProvider';
-import {
-  useNotificationList,
-  useUnreadCount,
-  useMarkAllRead,
-} from './useNotifications';
-import type { NotificationPanelTab } from './types';
+import { useNotificationList, useUnreadCount, useMarkAllRead } from './useNotifications';
 import { NotificationFacetChips } from './NotificationFacetChips';
 import { NotificationRow } from './NotificationRow';
 
@@ -26,10 +21,9 @@ interface NotificationPanelProps {
 
 function PanelBody({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<NotificationPanelTab>('action');
   const [facet, setFacet] = useState('');
   const { data: unread } = useUnreadCount();
-  const { data: listData, isLoading, isFetching } = useNotificationList(facet, tab);
+  const { data: listData, isLoading, isFetching } = useNotificationList(facet, 'all');
   const markAllRead = useMarkAllRead();
 
   const items = listData?.items ?? [];
@@ -41,7 +35,7 @@ function PanelBody({ onClose }: { onClose: () => void }) {
 
   const handlePrefs = () => {
     onClose();
-    navigate('/admin/equipe/notifications');
+    navigate('/admin/equipe/notifications?tab=config');
   };
 
   return (
@@ -49,18 +43,20 @@ function PanelBody({ onClose }: { onClose: () => void }) {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        flex: 1,
+        height: '100%',
         minHeight: 0,
         maxHeight: 'inherit',
         overflow: 'hidden',
       }}
     >
-      {/* En-tête + filtres — toujours visibles, ne scrollent pas */}
       <Box
         sx={{
           flexShrink: 0,
           borderBottom: `1px solid ${t.border}`,
           bgcolor: t.bg1,
+          position: 'sticky',
+          top: 0,
+          zIndex: 2,
         }}
       >
         <Box
@@ -74,7 +70,25 @@ function PanelBody({ onClose }: { onClose: () => void }) {
           }}
         >
           <Typography sx={{ fontSize: 14, fontWeight: 800, color: t.text, flex: 1 }}>
-            Notifications
+            En cours
+            {items.length > 0 ? (
+              <Box
+                component="span"
+                sx={{
+                  ml: 0.75,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  borderRadius: '999px',
+                  px: 0.75,
+                  py: 0.125,
+                  bgcolor: t.bg3,
+                  color: t.text3,
+                  verticalAlign: 'middle',
+                }}
+              >
+                {items.length}
+              </Box>
+            ) : null}
           </Typography>
           <Box
             component="button"
@@ -106,21 +120,17 @@ function PanelBody({ onClose }: { onClose: () => void }) {
           </IconButton>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 0.5, px: 1.25, pb: 0.75 }}>
-          <TabButton
-            active={tab === 'action'}
-            onClick={() => setTab('action')}
-            label="Action requise"
-            count={uc.actionRequired}
-            highlight
-          />
-          <TabButton
-            active={tab === 'all'}
-            onClick={() => setTab('all')}
-            label="Tout"
-            count={uc.total}
-          />
-        </Box>
+        <Typography sx={{ px: 1.25, pb: 0.75, fontSize: 10, color: t.text3, lineHeight: 1.4 }}>
+          Uniquement les alertes <b>actives</b>. Terminer ou Ignorer les retire d’ici — retrouvez-les
+          dans <b>Historique</b>.
+          {uc.actionRequired > 0 ? (
+            <>
+              {' '}
+              Le badge rouge de la cloche ({uc.actionRequired}) signale les{' '}
+              <b>urgentes / critiques</b> parmi celles-ci.
+            </>
+          ) : null}
+        </Typography>
 
         <NotificationFacetChips
           selectedFacet={facet}
@@ -141,7 +151,7 @@ function PanelBody({ onClose }: { onClose: () => void }) {
         {isLoading || isFetching ? (
           <SkeletonList />
         ) : items.length === 0 ? (
-          <EmptyState tab={tab} />
+          <EmptyState />
         ) : (
           items.map((n) => <NotificationRow key={n._id} notification={n} />)
         )}
@@ -153,10 +163,32 @@ function PanelBody({ onClose }: { onClose: () => void }) {
           px: 1.25,
           py: 0.75,
           borderTop: `1px solid ${t.border}`,
-          textAlign: 'center',
           bgcolor: t.bg1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 0.5,
+          alignItems: 'center',
         }}
       >
+        <Box
+          component="button"
+          type="button"
+          onClick={() => {
+            onClose();
+            navigate('/admin/equipe/notifications?tab=historique');
+          }}
+          sx={{
+            border: 'none',
+            cursor: 'pointer',
+            bgcolor: 'transparent',
+            color: t.primaryDeep,
+            fontWeight: 700,
+            fontSize: 12,
+            '&:hover': { textDecoration: 'underline' },
+          }}
+        >
+          Voir l'historique complet →
+        </Box>
         <Box
           component="button"
           type="button"
@@ -167,69 +199,13 @@ function PanelBody({ onClose }: { onClose: () => void }) {
             bgcolor: 'transparent',
             color: t.text3,
             fontWeight: 600,
-            fontSize: 12,
+            fontSize: 11,
             '&:hover': { color: t.primaryDeep },
           }}
         >
-          Gérer les préférences →
+          Gérer les préférences
         </Box>
       </Box>
-    </Box>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  label,
-  count,
-  highlight,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  count: number;
-  highlight?: boolean;
-}) {
-  return (
-    <Box
-      component="button"
-      type="button"
-      onClick={onClick}
-      sx={{
-        flex: 1,
-        border: 'none',
-        cursor: 'pointer',
-        bgcolor: active ? t.bg1 : t.bg2,
-        color: active ? t.text : t.text2,
-        fontWeight: active ? 700 : 600,
-        fontSize: 11,
-        py: 0.5,
-        borderRadius: '7px',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 0.5,
-        boxShadow: active ? `inset 0 -2px 0 ${t.primary}` : 'none',
-      }}
-    >
-      {label}
-      {count > 0 ? (
-        <Box
-          component="span"
-          sx={{
-            fontSize: 10,
-            fontWeight: 700,
-            borderRadius: '999px',
-            px: 0.75,
-            py: 0.125,
-            bgcolor: highlight && active ? t.warning : t.bg3,
-            color: highlight && active ? '#fff' : t.text3,
-          }}
-        >
-          {count}
-        </Box>
-      ) : null}
     </Box>
   );
 }
@@ -251,17 +227,15 @@ function SkeletonList() {
   );
 }
 
-function EmptyState({ tab }: { tab: NotificationPanelTab }) {
+function EmptyState() {
   return (
     <Box sx={{ py: 5, px: 2, textAlign: 'center' }}>
-      <Typography sx={{ fontSize: 32, mb: 1 }}>{tab === 'action' ? '✅' : '🔔'}</Typography>
+      <Typography sx={{ fontSize: 32, mb: 1 }}>✅</Typography>
       <Typography sx={{ fontSize: 14, fontWeight: 700, color: t.text }}>
-        {tab === 'action' ? 'Rien à traiter' : 'Rien à signaler'}
+        Aucune notification en cours
       </Typography>
       <Typography sx={{ fontSize: 12, color: t.text3, mt: 0.5 }}>
-        {tab === 'action'
-          ? 'Aucune action requise pour le moment.'
-          : 'Vous êtes à jour.'}
+        Terminées ou ignorées → page Historique.
       </Typography>
     </Box>
   );

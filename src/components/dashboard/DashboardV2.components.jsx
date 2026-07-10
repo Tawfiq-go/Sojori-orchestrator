@@ -27,7 +27,8 @@ import { SidebarUserProfileMenu } from './SidebarUserProfileMenu';
 import { LISTING_LAYOUT } from '../../constants/listingLayout';
 import { DASHBOARD_PAGE } from '../../constants/dashboardLayout';
 import { IconColored } from './IconColored';
-import { NotificationBell } from '../../features/notifications';
+import { NotificationBell, SidebarNotificationBadge, getSidebarGroupUnread, getSidebarItemUnread } from '../../features/notifications';
+import { useUnreadCount } from '../../features/notifications/useNotifications';
 import { SojoriBrandLockup } from '../brand/SojoriBrandLogo';
 import {
   Box, Stack, Typography, Button, IconButton, Avatar, Chip, Switch,
@@ -358,6 +359,8 @@ export function AppSidebar({
 }) {
   const navGroups = useSidebarNav(user);
   const navScrollRef = React.useRef(null);
+  const { data: unreadCount } = useUnreadCount();
+  const byFacet = unreadCount?.byFacet;
 
   React.useEffect(() => {
     const role = String(user?.role || '').toLowerCase();
@@ -521,6 +524,7 @@ export function AppSidebar({
         {navGroups.map((group) => {
           const isCollapsed = collapsed[group.group] ?? true;
           const isCore = Boolean(group.core);
+          const groupUnread = getSidebarGroupUnread(group.group, byFacet);
           return (
             <React.Fragment key={group.group}>
               <Box
@@ -556,21 +560,29 @@ export function AppSidebar({
                   },
                 }}
               >
-                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
                   <span>{group.group}</span>
                   {isCore ? (
                     <Chip label="CORE" size="small" sx={{ height: 16, fontSize: 9, fontWeight: 800, bgcolor: t.aiTint, color: t.ai }} />
                   ) : null}
+                  {isCollapsed && groupUnread > 0 ? (
+                    <SidebarNotificationBadge count={groupUnread} />
+                  ) : null}
                 </Stack>
-                <ExpandMore
-                  sx={{
-                    fontSize: 19,
-                    color: 'currentColor',
-                    opacity: 0.6,
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                  }}
-                />
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
+                  {!isCollapsed && groupUnread > 0 ? (
+                    <SidebarNotificationBadge count={groupUnread} />
+                  ) : null}
+                  <ExpandMore
+                    sx={{
+                      fontSize: 19,
+                      color: 'currentColor',
+                      opacity: 0.6,
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                    }}
+                  />
+                </Stack>
               </Box>
               {!isCollapsed && group.items.map((item) => (
                 <React.Fragment key={item.id}>
@@ -578,6 +590,7 @@ export function AppSidebar({
                     item={item}
                     active={navItemMatchesPath(item, activePath)}
                     disabled={Boolean(item.navDisabled && item.sub?.length)}
+                    notificationCount={getSidebarItemUnread(item.id, byFacet)}
                     onClick={() => {
                       if (item.navDisabled && item.sub?.length) return;
                       onNavigate?.(item.id);
@@ -589,6 +602,7 @@ export function AppSidebar({
                       item={s}
                       sub
                       active={activePath === s.id}
+                      notificationCount={getSidebarItemUnread(s.id, byFacet)}
                       onClick={() => onNavigate?.(s.id)}
                     />
                   ))}
@@ -604,7 +618,7 @@ export function AppSidebar({
   );
 }
 
-function SideLink({ item, active, sub, disabled, onClick }) {
+function SideLink({ item, active, sub, disabled, notificationCount = 0, onClick }) {
   const handleClick = (e) => {
     if (disabled) return;
     onClick?.(e);
@@ -649,6 +663,7 @@ function SideLink({ item, active, sub, disabled, onClick }) {
         <NavItemIcon item={item} active={active} sub={sub} />
       </Box>
       <Box sx={{ flex: 1, minWidth: 0, letterSpacing: '-0.1px' }}>{item.label}</Box>
+      {notificationCount > 0 ? <SidebarNotificationBadge count={notificationCount} /> : null}
       {item.badge && (
         <Box sx={{
           fontFamily: 'Geist Mono, monospace', fontSize: 9.5, fontWeight: 700,

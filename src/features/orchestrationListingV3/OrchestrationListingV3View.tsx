@@ -19,6 +19,7 @@ import OrchestrationModelSubTabs, {
   type OrchestrationModelSection,
 } from './OrchestrationModelSubTabs';
 import V3ScheduledMessagesPanel from './V3ScheduledMessagesPanel';
+import OrchestrationOverviewPanel from './OrchestrationOverviewPanel';
 import { V3 } from './theme';
 import {
   loadListingOrchestrationMatrix,
@@ -512,6 +513,10 @@ export default function OrchestrationListingV3View({
             listingId={effectiveListingId}
             listingName={listings.find(l => l.id === effectiveListingId)?.name}
           />
+        </Box>
+      ) : showListingOrchestrationTabs && listingSection === 'apercu' ? (
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: embedded ? 1 : 2, pb: 2 }}>
+          <OrchestrationOverviewPanel ownerKey={ownerKey} />
         </Box>
       ) : showListingOrchestrationTabs && listingSection !== 'services' ? null : (
       <Box

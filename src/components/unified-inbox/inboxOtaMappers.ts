@@ -216,6 +216,30 @@ export function filterOtaThreadsForInbox(rows: OtaThreadRow[]): OtaThreadRow[] {
   return filterOtaInboxDefault(rows);
 }
 
+/** Correspondance `?thread=` (RU threadId ou _id Mongo) pour deep links notifications. */
+export function findOtaThreadByLinkKey(
+  rows: OtaThreadRow[],
+  key: string,
+): OtaThreadRow | undefined {
+  const norm = key.trim();
+  if (!norm) return undefined;
+  const digits = norm.replace(/\D/g, '');
+  return rows.find((r) => {
+    if (String(r.threadId) === norm) return true;
+    if (String(r.id) === norm) return true;
+    if (digits && String(r.threadId).replace(/\D/g, '') === digits) return true;
+    return false;
+  });
+}
+
+/** Construit une ligne inbox depuis GET get-messages-by-thread-id (thread + reservation). */
+export function mapOtaThreadDetailToRow(payload: unknown): OtaThreadRow | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const p = payload as Record<string, unknown>;
+  if (!p.thread || typeof p.thread !== 'object') return null;
+  return mapApiItemToOtaThread(p);
+}
+
 export function mapApiItemToOtaThread(item: any): OtaThreadRow {
   const threadData = item.thread || item;
   const reservation = item.reservation || {};

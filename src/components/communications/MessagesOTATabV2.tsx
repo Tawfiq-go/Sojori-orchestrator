@@ -15,8 +15,10 @@ import {
   bumpOtaThreadAfterSend,
   filterOtaActiveReservationsOnly,
   filterOtaInboxDefault,
+  findOtaThreadByLinkKey,
   mapApiItemToOtaThread,
   mapOtaRowToThread,
+  mapOtaThreadDetailToRow,
   mergeOtaThreadPages,
   type OtaThreadRow,
 } from '../unified-inbox/inboxOtaMappers';
@@ -477,15 +479,51 @@ export default function MessagesOTATabV2() {
   const [searchParams] = useSearchParams();
   const deepLinkThread = searchParams.get('thread');
   const otaDeepLinkedRef = useRef<string | null>(null);
+  const otaDeepLinkFetchRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!deepLinkThread || loading || !displayRows.length) return;
+    if (!deepLinkThread || !scopeFetchReady) return;
     if (otaDeepLinkedRef.current === deepLinkThread) return;
-    const row = displayRows.find((r) => String(r.threadId) === deepLinkThread);
-    if (!row) return;
-    otaDeepLinkedRef.current = deepLinkThread;
-    void handleSelect(row);
-  }, [deepLinkThread, displayRows, loading]);
+
+    const key = deepLinkThread.trim();
+    const fromList =
+      findOtaThreadByLinkKey(otaBaseRows, key) ?? findOtaThreadByLinkKey(inboxRows, key);
+
+    if (fromList) {
+      otaDeepLinkedRef.current = key;
+      setComposerDraft('');
+      setAiSourceDraft('');
+      void inbox.selectOtaThread(fromList);
+      return;
+    }
+
+    if (loading) return;
+    if (otaDeepLinkFetchRef.current === key) return;
+    otaDeepLinkFetchRef.current = key;
+
+    void (async () => {
+      try {
+        const res = await messagesService.getOTAMessages(key);
+        const row = mapOtaThreadDetailToRow(res);
+        if (!row) return;
+
+        otaDeepLinkedRef.current = key;
+        setInboxRows((prev) => {
+          const exists = prev.some((r) => String(r.threadId) === String(row.threadId));
+          if (exists) return prev;
+          const merged = [row, ...prev];
+          setCachedOtaInbox(merged);
+          return merged;
+        });
+        setComposerDraft('');
+        setAiSourceDraft('');
+        await inbox.selectOtaThread(row);
+      } catch (err) {
+        console.warn('[OTA] deep link: thread introuvable', key, err);
+        otaDeepLinkFetchRef.current = null;
+      }
+    })();
+  }, [deepLinkThread, otaBaseRows, inboxRows, loading, scopeFetchReady, inbox]);
 
   const otaThreadContext = useMemo(
     () => buildOtaThreadContextForAi(inbox.messages),

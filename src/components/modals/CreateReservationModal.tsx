@@ -2,7 +2,7 @@
 // CreateReservationModal.tsx — Version Hybride
 // Design Claude V2 (Grid, scrollbar 8px) + Logique métier Sojori
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Dialog,
   Box,
@@ -26,6 +26,107 @@ import { listingsService } from '../../services/listingsService';
 import { ReservationAvailabilityCalendar } from './ReservationAvailabilityCalendar';
 import { ModalScrollColumn } from '../common/ModalScrollColumn';
 import { blurActiveElement } from '../../utils/domFocus';
+
+const RESERVATION_CREATE_DRAFT_KEY = 'sojori_create_reservation_draft_v1';
+
+type ReservationCreateDraft = {
+  guestFirstName: string;
+  guestLastName: string;
+  guestEmail: string;
+  phone: string;
+  guestCountry: string;
+  guestLanguage: string;
+  listingId: string;
+  roomTypeId: string;
+  checkInDate: string;
+  checkOutDate: string;
+  adults: number;
+  children: number;
+  infants: number;
+  currency: string;
+  pricingMode: 'calendar' | 'perDay' | 'total';
+  uniformPrice: string;
+  dailyPrices: Record<string, number>;
+  totalPrice: number;
+  status: 'Pending' | 'Confirmed';
+  paymentStatus: 'Paid' | 'UnPaid';
+  paymentType: 'cash' | 'bank_card';
+};
+
+function readReservationDraft(): ReservationCreateDraft | null {
+  try {
+    const raw = sessionStorage.getItem(RESERVATION_CREATE_DRAFT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ReservationCreateDraft;
+  } catch {
+    return null;
+  }
+}
+
+function writeReservationDraft(draft: ReservationCreateDraft) {
+  try {
+    sessionStorage.setItem(RESERVATION_CREATE_DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function clearReservationDraft() {
+  try {
+    sessionStorage.removeItem(RESERVATION_CREATE_DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function applyReservationDraft(
+  draft: ReservationCreateDraft,
+  apply: {
+    setGuestFirstName: (v: string) => void;
+    setGuestLastName: (v: string) => void;
+    setGuestEmail: (v: string) => void;
+    setPhone: (v: string) => void;
+    setGuestCountry: (v: string) => void;
+    setGuestLanguage: (v: string) => void;
+    setListingId: (v: string) => void;
+    setRoomTypeId: (v: string) => void;
+    setCheckInDate: (v: string) => void;
+    setCheckOutDate: (v: string) => void;
+    setAdults: (v: number) => void;
+    setChildren: (v: number) => void;
+    setInfants: (v: number) => void;
+    setCurrency: (v: string) => void;
+    setPricingMode: (v: 'calendar' | 'perDay' | 'total') => void;
+    setUniformPrice: (v: string) => void;
+    setDailyPrices: (v: Record<string, number>) => void;
+    setTotalPrice: (v: number) => void;
+    setStatus: (v: 'Pending' | 'Confirmed') => void;
+    setPaymentStatus: (v: 'Paid' | 'UnPaid') => void;
+    setPaymentType: (v: 'cash' | 'bank_card') => void;
+  },
+) {
+  apply.setGuestFirstName(draft.guestFirstName || '');
+  apply.setGuestLastName(draft.guestLastName || '');
+  apply.setGuestEmail(draft.guestEmail || '');
+  apply.setPhone(draft.phone || '');
+  apply.setGuestCountry(draft.guestCountry || '');
+  apply.setGuestLanguage(draft.guestLanguage || 'fr');
+  apply.setListingId(draft.listingId || '');
+  apply.setRoomTypeId(draft.roomTypeId || '');
+  apply.setCheckInDate(draft.checkInDate || '');
+  apply.setCheckOutDate(draft.checkOutDate || '');
+  apply.setAdults(draft.adults ?? 1);
+  apply.setChildren(draft.children ?? 0);
+  apply.setInfants(draft.infants ?? 0);
+  apply.setCurrency(draft.currency || DEFAULT_RESERVATION_CURRENCY);
+  apply.setPricingMode(draft.pricingMode || 'calendar');
+  apply.setUniformPrice(draft.uniformPrice || '');
+  apply.setDailyPrices(draft.dailyPrices || {});
+  apply.setTotalPrice(draft.totalPrice ?? 0);
+  apply.setStatus(draft.status || 'Confirmed');
+  apply.setPaymentStatus(draft.paymentStatus || 'UnPaid');
+  apply.setPaymentType(draft.paymentType || 'cash');
+}
 
 const RESERVATION_CURRENCIES = ['MAD', 'EUR', 'USD'] as const;
 const DEFAULT_RESERVATION_CURRENCY = 'MAD';
@@ -55,6 +156,8 @@ interface CreateReservationModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  /** Même scope PM que /listings et /reservations (admin filtre owner). */
+  filterOwnerId?: string;
 }
 
 interface Listing {
@@ -68,7 +171,7 @@ interface Listing {
   }>;
 }
 
-export function CreateReservationModal({ open, onClose, onSuccess }: CreateReservationModalProps) {
+export function CreateReservationModal({ open, onClose, onSuccess, filterOwnerId }: CreateReservationModalProps) {
   // ─── State ───────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -139,11 +242,94 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
   };
 
   // ─── Effects ─────────────────────────────────────────
+  const draftRestoredRef = useRef(false);
+
   useEffect(() => {
-    if (open) {
-      fetchListings();
+    if (!open) {
+      draftRestoredRef.current = false;
+      return;
     }
-  }, [open]);
+    if (!draftRestoredRef.current) {
+      const draft = readReservationDraft();
+      if (draft) {
+        applyReservationDraft(draft, {
+          setGuestFirstName,
+          setGuestLastName,
+          setGuestEmail,
+          setPhone,
+          setGuestCountry,
+          setGuestLanguage,
+          setListingId,
+          setRoomTypeId,
+          setCheckInDate,
+          setCheckOutDate,
+          setAdults,
+          setChildren,
+          setInfants,
+          setCurrency,
+          setPricingMode,
+          setUniformPrice,
+          setDailyPrices,
+          setTotalPrice,
+          setStatus,
+          setPaymentStatus,
+          setPaymentType,
+        });
+      }
+      draftRestoredRef.current = true;
+    }
+    fetchListings();
+  }, [open, filterOwnerId]);
+
+  useEffect(() => {
+    if (!open) return;
+    writeReservationDraft({
+      guestFirstName,
+      guestLastName,
+      guestEmail,
+      phone,
+      guestCountry,
+      guestLanguage,
+      listingId,
+      roomTypeId,
+      checkInDate,
+      checkOutDate,
+      adults,
+      children,
+      infants,
+      currency,
+      pricingMode,
+      uniformPrice,
+      dailyPrices,
+      totalPrice,
+      status,
+      paymentStatus,
+      paymentType,
+    });
+  }, [
+    open,
+    guestFirstName,
+    guestLastName,
+    guestEmail,
+    phone,
+    guestCountry,
+    guestLanguage,
+    listingId,
+    roomTypeId,
+    checkInDate,
+    checkOutDate,
+    adults,
+    children,
+    infants,
+    currency,
+    pricingMode,
+    uniformPrice,
+    dailyPrices,
+    totalPrice,
+    status,
+    paymentStatus,
+    paymentType,
+  ]);
 
   useEffect(() => {
     if (listingId) {
@@ -163,6 +349,14 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
     }
   }, [listingId, listings]);
 
+  useEffect(() => {
+    if (!listingId || listings.length === 0) return;
+    if (!listings.some((l) => l.id === listingId)) {
+      setListingId('');
+      setRoomTypeId('');
+    }
+  }, [listings, listingId]);
+
   // ─── Handlers ────────────────────────────────────────
   const fetchListings = async () => {
     setIsLoading(true);
@@ -171,7 +365,8 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
       const result = await listingsService.getListingsWithRoomTypes({
         staging: false,
         compact: false,
-        active: true, // ✅ Filtrer uniquement les listings actifs
+        active: true,
+        filterOwnerId: filterOwnerId || undefined,
       });
 
       if (result.success) {
@@ -226,6 +421,14 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
     }
     if (!listingId) {
       toast.error('Propriété requise');
+      return;
+    }
+    if (!roomTypeId && !isSingleProperty) {
+      toast.error('Type de chambre requis');
+      return;
+    }
+    if (!roomTypeId && isSingleProperty) {
+      toast.error('Room type introuvable pour cette annonce Single — contactez le support.');
       return;
     }
     if (!checkInDate || !checkOutDate) {
@@ -345,6 +548,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
   };
 
   const resetForm = () => {
+    clearReservationDraft();
     setGuestFirstName('');
     setGuestLastName('');
     setGuestEmail('');
@@ -372,6 +576,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
 
   const handleClose = () => {
     blurActiveElement();
+    resetForm();
     onClose();
   };
 
@@ -576,6 +781,7 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
             <Field label="Propriété" required>
               <Select
                 size="small"
+                displayEmpty
                 value={listingId}
                 onChange={e => {
                   setListingId(e.target.value);
@@ -583,13 +789,18 @@ export function CreateReservationModal({ open, onClose, onSuccess }: CreateReser
                 }}
                 disabled={isLoading}
               >
-                {isLoading && <MenuItem value="">Chargement...</MenuItem>}
+                <MenuItem value="" disabled>
+                  {isLoading ? 'Chargement…' : 'Choisir une annonce active'}
+                </MenuItem>
                 {listings.map(listing => (
                   <MenuItem key={listing.id} value={listing.id}>
                     {listing.name}
                   </MenuItem>
                 ))}
               </Select>
+              <Typography sx={{ fontSize: 10.5, color: t.text3, mt: 0.75, lineHeight: 1.4 }}>
+                Annonces actives — même liste que Catalogue → Annonces.
+              </Typography>
             </Field>
             {showRoomType && (
               <Box sx={{ mt: 1.5 }}>

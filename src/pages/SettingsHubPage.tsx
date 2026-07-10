@@ -31,7 +31,7 @@ export function SettingsHubPage() {
   useEffect(() => {
     if (pathname.toLowerCase().includes('currency')) return;
     if (searchParams.get('tab') === 'notifications') {
-      navigate('/admin/equipe/notifications', { replace: true });
+      navigate('/admin/equipe/notifications?tab=config', { replace: true });
       return;
     }
     if (

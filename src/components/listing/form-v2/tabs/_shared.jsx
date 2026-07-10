@@ -46,7 +46,7 @@ export function RuFormLegend() {
     return (
       <Typography sx={{ fontSize: 11, color: T.text3, mb: 1.5, lineHeight: 1.45 }}>
         <Box component="span" sx={{ color: '#4a90e2', fontWeight: 700 }}>R</Box>
-        {' '}= envoyé ou mappé vers Rentals United ·{' '}
+        {' '}= publié vers les plateformes de réservation (OTA) ·{' '}
         <Box component="span" sx={{ color: '#b91c1c', fontWeight: 700 }}>*</Box>
         {' '}= obligatoire pour une annonce valide
       </Typography>
