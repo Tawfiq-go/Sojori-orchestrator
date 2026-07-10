@@ -13,6 +13,7 @@ import InfrastructureMonitoringPage from './InfrastructureMonitoringPage';
 import PodsMonitoringPage from './PodsMonitoringPage';
 import ReservationSyncMonitorTab from './ReservationSyncMonitorTab';
 import SocketMonitoringPage from './SocketMonitoringPage';
+import APIMonitoringPage from './APIMonitoringPage';
 import CronMonitoringPage from './CronMonitoringPage';
 
 const TAB_OPTIONS = [
@@ -22,6 +23,7 @@ const TAB_OPTIONS = [
   { value: 'RabbitMQ', label: '🐰 RabbitMQ' },
   { value: 'WhatsApp', label: '💬 WhatsApp' },
   { value: 'Sockets', label: '🔌 Sockets' },
+  { value: 'API', label: '🌐 API' },
   { value: 'AI', label: '🤖 IA' },
   { value: 'Infrastructure', label: '🏗️ Infra' },
   { value: 'Pods', label: '🧩 Pods' },
@@ -41,6 +43,7 @@ const TAB_BY_LOWER: Record<string, MonitorTab> = {
   rabbitmq: 'RabbitMQ',
   whatsapp: 'WhatsApp',
   sockets: 'Sockets',
+  api: 'API',
   ai: 'AI',
   infrastructure: 'Infrastructure',
   pods: 'Pods',
@@ -108,6 +111,7 @@ export default function MonitoringHubPage() {
           {tab === 'RabbitMQ' && <RabbitMQPage />}
           {tab === 'WhatsApp' && <WhatsAppMonitoringPage />}
           {tab === 'Sockets' && <SocketMonitoringPage />}
+          {tab === 'API' && <APIMonitoringPage />}
           {tab === 'AI' && <AIMonitoringPage />}
           {tab === 'Infrastructure' && <InfrastructureMonitoringPage />}
           {tab === 'Pods' && <PodsMonitoringPage />}
