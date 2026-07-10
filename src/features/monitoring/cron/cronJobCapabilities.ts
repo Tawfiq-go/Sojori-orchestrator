@@ -14,7 +14,6 @@ export type CronJobLike = {
 
 const SCHEDULABLE_CRON_IDS = new Set([
   'inventory_rolling_archive',
-  'dynamic_price_trigger',
   'auto_complete_reservations',
   'agent_availability_sync',
   'orchestrator_tick',
@@ -31,7 +30,6 @@ const SCHEDULABLE_CRON_IDS = new Set([
 
 const TOGGLEABLE_CRON_IDS = new Set([
   'inventory_rolling_archive',
-  'dynamic_price_trigger',
   'auto_complete_reservations',
   'agent_availability_sync',
   'orchestrator_tick',
