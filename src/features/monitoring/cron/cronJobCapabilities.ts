@@ -23,6 +23,10 @@ const SCHEDULABLE_CRON_IDS = new Set([
   'market_refresh_marrakech',
   'recompute_all_listings',
   'auto_snapshot_listings',
+  'pod_watcher',
+  'unified_sync',
+  'ru_unified_owner_pull',
+  'ru_daily_backfill_7d',
 ]);
 
 const TOGGLEABLE_CRON_IDS = new Set([
@@ -30,11 +34,21 @@ const TOGGLEABLE_CRON_IDS = new Set([
   'dynamic_price_trigger',
   'auto_complete_reservations',
   'agent_availability_sync',
+  'orchestrator_tick',
+  'recurring_ledger',
+  'archive_tasks',
+  'market_refresh_marrakech',
+  'recompute_all_listings',
+  'auto_snapshot_listings',
+  'pod_watcher',
+  'unified_sync',
+  'ru_unified_owner_pull',
+  'ru_daily_backfill_7d',
 ]);
 
 /** Préfère les flags API ; repli client si absents (vieux proxy). */
 export function resolveCronCapabilities(job: CronJobLike) {
-  if (job.readOnly || job.service === 'srv-logs-proxy') {
+  if (job.readOnly) {
     return { canSchedule: false, canToggle: false, canRunNow: false };
   }
   if (job.canSchedule != null || job.canToggle != null || job.canRunNow != null) {
@@ -44,13 +58,10 @@ export function resolveCronCapabilities(job: CronJobLike) {
       canRunNow: Boolean(job.canRunNow),
     };
   }
-  if (job.service === 'srv-channels') {
-    return { canSchedule: true, canToggle: true, canRunNow: false };
-  }
   const id = job.cronId;
   return {
     canSchedule: SCHEDULABLE_CRON_IDS.has(id) || Boolean(job.scheduleUrl),
     canToggle: TOGGLEABLE_CRON_IDS.has(id) || Boolean(job.toggleUrl),
-    canRunNow: Boolean(job.runNowUrl) || (job.service !== 'srv-channels' && SCHEDULABLE_CRON_IDS.has(id)),
+    canRunNow: Boolean(job.runNowUrl) || SCHEDULABLE_CRON_IDS.has(id),
   };
 }
