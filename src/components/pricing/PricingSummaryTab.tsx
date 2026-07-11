@@ -1,9 +1,9 @@
 /**
  * Récap Pricing — une ligne par owner par mois : listings RU (snapshot courant, RU n'a pas
- * d'historique mensuel), coût RU implicite, coût AirROI réel, coût IA réel, volume WhatsApp
- * (pas de coût — grille Meta Cloud API pas encore construite). Les métriques agrégées par
- * jour côté backend (IA, WhatsApp) sont regroupées par mois ici pour rester à la même
- * granularité que la vue Summary.
+ * d'historique mensuel), coût RU implicite, coût AirROI réel, coût IA réel, coût WhatsApp
+ * ESTIMÉ (voir WhatsappCostTab — Meta facture par conversation, pas par message, grille
+ * approximative). Les métriques agrégées par jour côté backend (IA, WhatsApp) sont
+ * regroupées par mois ici pour rester à la même granularité que la vue Summary.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Stack, Typography } from '@mui/material';
@@ -40,6 +40,7 @@ interface SummaryRow {
   aiCostUsd: number;
   aiCalls: number;
   whatsappTotal: number;
+  whatsappCostUsd: number;
   totalCostUsd: number;
 }
 
@@ -62,7 +63,9 @@ export function PricingSummaryTab() {
   const [aiByMonth, setAiByMonth] = useState<{ ownerId: string; month: string; calls: number; costUsd: number }[]>(
     [],
   );
-  const [whatsappByMonth, setWhatsappByMonth] = useState<{ ownerId: string; month: string; total: number }[]>([]);
+  const [whatsappByMonth, setWhatsappByMonth] = useState<
+    { ownerId: string; month: string; total: number; costUsd: number }[]
+  >([]);
   const [ownerNames, setOwnerNames] = useState<Record<string, string>>({});
 
   const fetchData = useCallback(async () => {
@@ -99,13 +102,17 @@ export function PricingSummaryTab() {
       setAiByMonth(Array.from(aiMonthMap.values()));
 
       const waRows = waRes.data.success ? waRes.data.data.byOwnerDay || [] : [];
-      const waMonthMap = new Map<string, { ownerId: string; month: string; total: number }>();
+      const waMonthMap = new Map<string, { ownerId: string; month: string; total: number; costUsd: number }>();
       for (const r of waRows) {
         const month = dayToMonth(r.day);
         const key = `${r.ownerId}|${month}`;
         const existing = waMonthMap.get(key);
-        if (existing) existing.total += r.total;
-        else waMonthMap.set(key, { ownerId: r.ownerId, month, total: r.total });
+        if (existing) {
+          existing.total += r.total;
+          existing.costUsd += r.costUsd;
+        } else {
+          waMonthMap.set(key, { ownerId: r.ownerId, month, total: r.total, costUsd: r.costUsd });
+        }
       }
       setWhatsappByMonth(Array.from(waMonthMap.values()));
 
@@ -160,6 +167,7 @@ export function PricingSummaryTab() {
         const ruCostUsd = ruListingCount * RU_COST_PER_LISTING;
         const airroiCostUsd = airroi?.costUsd || 0;
         const aiCostUsd = ai?.costUsd || 0;
+        const whatsappCostUsd = wa?.costUsd || 0;
         return {
           ownerId,
           month,
@@ -170,7 +178,8 @@ export function PricingSummaryTab() {
           aiCostUsd,
           aiCalls: ai?.calls || 0,
           whatsappTotal: wa?.total || 0,
-          totalCostUsd: ruCostUsd + airroiCostUsd + aiCostUsd,
+          whatsappCostUsd,
+          totalCostUsd: ruCostUsd + airroiCostUsd + aiCostUsd + whatsappCostUsd,
         };
       })
       .sort((a, b) => (a.month === b.month ? b.totalCostUsd - a.totalCostUsd : b.month.localeCompare(a.month)));
@@ -185,6 +194,9 @@ export function PricingSummaryTab() {
   const totalAirroiCostUsd = airroiByMonth.filter((r) => r.month === thisMonth).reduce((sum, r) => sum + r.costUsd, 0);
   const totalAiCostUsd = aiByMonth.filter((r) => r.month === thisMonth).reduce((sum, r) => sum + r.costUsd, 0);
   const totalWhatsapp = whatsappByMonth.filter((r) => r.month === thisMonth).reduce((sum, r) => sum + r.total, 0);
+  const totalWhatsappCostUsd = whatsappByMonth
+    .filter((r) => r.month === thisMonth)
+    .reduce((sum, r) => sum + r.costUsd, 0);
   const ownersCount = new Set(rows.map((r) => r.ownerId)).size;
 
   const columns = [
@@ -223,11 +235,22 @@ export function PricingSummaryTab() {
       ),
     },
     {
-      key: 'whatsappTotal',
-      label: 'WhatsApp (volume)',
+      key: 'whatsappCostUsd',
+      label: 'Coût WhatsApp (estimé)',
       align: 'right' as const,
       render: (row: SummaryRow) => (
-        <Typography sx={{ fontSize: 12, color: t.text3 }}>{row.whatsappTotal || '—'}</Typography>
+        <Typography sx={{ fontSize: 12, color: t.text3, fontFamily: 'monospace' }}>
+          {row.whatsappCostUsd > 0 ? (
+            <>
+              ${row.whatsappCostUsd.toFixed(4)}{' '}
+              <Typography component="span" sx={{ fontSize: 10, color: t.text3 }}>
+                ({row.whatsappTotal} msg)
+              </Typography>
+            </>
+          ) : (
+            '—'
+          )}
+        </Typography>
       ),
     },
     {
@@ -310,15 +333,15 @@ export function PricingSummaryTab() {
           icon="💬"
           iconBg="rgba(16,185,129,0.12)"
           iconColor={t.success}
-          value={String(totalWhatsapp)}
-          label="Messages WhatsApp (ce mois, volume)"
+          value={`$${totalWhatsappCostUsd.toFixed(2)}`}
+          label={`Coût WhatsApp estimé (ce mois, ${totalWhatsapp} msg)`}
         />
         <StatCard
           icon="💰"
           iconBg="rgba(6,182,212,0.12)"
           iconColor="#0e7490"
-          value={`$${(totalRuCostUsd + totalAirroiCostUsd + totalAiCostUsd).toFixed(2)}`}
-          label="Total connu ce mois (hors coût WhatsApp)"
+          value={`$${(totalRuCostUsd + totalAirroiCostUsd + totalAiCostUsd + totalWhatsappCostUsd).toFixed(2)}`}
+          label="Total connu ce mois"
         />
       </StatsRow>
 
@@ -333,8 +356,8 @@ export function PricingSummaryTab() {
       <Typography sx={{ fontSize: 11, color: t.text3 }}>
         RU n'a pas d'historique mensuel (snapshot du nombre de listings actuel) — seul le mois en
         cours affiche un coût RU. AirROI et IA ont un vrai historique par mois avec coût réel.
-        WhatsApp affiche un volume de messages, pas de coût — la tarification Meta Cloud API se
-        fait par conversation (catégorie + pays), grille pas encore construite.
+        WhatsApp affiche un coût ESTIMÉ (Meta facture par conversation/catégorie/pays, pas par
+        message — voir l'onglet WhatsApp pour le détail de l'approximation utilisée).
       </Typography>
     </Stack>
   );
