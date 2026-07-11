@@ -122,7 +122,7 @@ export function WhatsappCostTab() {
       align: 'right' as const,
       render: (row: WhatsappUsageByOwnerDayItem) => (
         <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: t.success }}>
-          ${row.costUsd.toFixed(4)}
+          ${(row.costUsd || 0).toFixed(4)}
         </Typography>
       ),
     },
