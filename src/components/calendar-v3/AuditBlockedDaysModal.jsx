@@ -87,7 +87,7 @@ export default function AuditBlockedDaysModal({
 
             {!loading && !error && allRanges.length === 0 && (
               <div style={{ padding: '24px 0', fontSize: 13, color: T.text3, textAlign: 'center' }}>
-                Aucune anomalie détectée — tous les jours bloqués sont couverts par une réservation.
+                Aucune anomalie — jours bloqués couverts par une résa, et aucune résa active sur un jour encore disponible.
               </div>
             )}
 
@@ -99,6 +99,7 @@ export default function AuditBlockedDaysModal({
                     <th style={thStyle}>Au</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>Jours</th>
                     <th style={thStyle}>Cause probable</th>
+                    <th style={thStyle}>Résa</th>
                     {roomTypeName == null && <th style={thStyle}>Room type</th>}
                     {onRelease ? <th style={thStyle}>Action</th> : null}
                   </tr>
@@ -107,6 +108,7 @@ export default function AuditBlockedDaysModal({
                   {allRanges.map((range, i) => {
                     const tone = CLASSIFICATION_TONE[range.classification];
                     const color = T[tone] || T.text3;
+                    const canRelease = range.classification !== 'missing_reservation_block';
                     return (
                       <tr key={`${range.from}-${range.to}-${i}`}
                         style={{ borderBottom: `1px solid ${T.border}` }}>
@@ -116,12 +118,22 @@ export default function AuditBlockedDaysModal({
                         <td style={{ ...tdStyle, color, fontWeight: 600 }}>
                           {CLASSIFICATION_LABEL[range.classification]}
                         </td>
+                        <td style={{ ...tdStyle, color: T.text3, fontFamily: '"Geist Mono", monospace', fontSize: 11 }}>
+                          {(range.reservationNumbers || []).join(', ') || '—'}
+                        </td>
                         {roomTypeName == null && (
                           <td style={{ ...tdStyle, color: T.text3 }}>{range.roomTypeName || '—'}</td>
                         )}
                         {onRelease ? (
                           <td style={tdStyle}>
                             {(() => {
+                              if (!canRelease) {
+                                return (
+                                  <span style={{ color: T.text3, fontSize: 11 }} title="Utiliser ReservationSync → Corriger (CALENDAR_BLOCK_MISSING)">
+                                    À rebloquer
+                                  </span>
+                                );
+                              }
                               const st = releaseState[rangeKey(range)];
                               if (st === 'done') return <span style={{ color: T.success, fontWeight: 700 }}>Libéré ✓</span>;
                               if (st === 'busy') return <span style={{ color: T.text3 }}>Libération…</span>;

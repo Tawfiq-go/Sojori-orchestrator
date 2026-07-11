@@ -4,17 +4,12 @@ import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import { tokens as t } from '../../components/dashboard/dashboardTokens';
 import type { PreferenceCatalogEntry } from './types';
+import { GUEST_JOURNEY_NOTIFY_EVENTS } from './constants';
 import { useUpdatePreferences } from './useNotifications';
 
 export const WHATSAPP_MESSAGE_EVENT = 'message:whatsapp_received';
 
-export const GUEST_JOURNEY_NOTIFY_EVENTS = [
-  'guest:registration_started',
-  'guest:registration_member',
-  'guest:registration_completed',
-  'guest:arrival_time_chosen',
-  'guest:departure_time_chosen',
-] as const;
+export { GUEST_JOURNEY_NOTIFY_EVENTS };
 
 export type WhatsappNotifyMode = 'all_messages' | 'milestones_only';
 

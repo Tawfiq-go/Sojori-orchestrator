@@ -1,21 +1,21 @@
 /**
- * Infrastructure Monitoring — design Sojori V2 (MonitorDesign)
+ * Infrastructure Monitoring — layout dense (même pattern que API / AI).
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Box, LinearProgress, Stack, Typography } from '@mui/material';
+import { useState, useEffect, useCallback } from 'react';
+import { Box, Button, LinearProgress, Stack, Typography } from '@mui/material';
 import apiClient from '../../services/apiClient';
 import {
   Badge,
   DataTable,
   MonitorEmpty,
   MonitorError,
+  MonitorKpiStrip,
   MonitorLoading,
   MonitorPageFrame,
-  MonitorPageHeader,
   MonitorSection,
-  StatCard,
-  StatsRow,
+  MonitorToolbarRow,
+  btnGhostSx,
   monitorTokens as t,
   severityBadgeVariant,
 } from '../../features/monitoring/shared/MonitorDesign';
@@ -114,18 +114,18 @@ export default function InfrastructureMonitoringPage() {
           ? t.warning
           : t.success;
     return (
-      <Box sx={{ minWidth: 100 }}>
-        <Stack direction="row" sx={{ justifyContent: 'space-between',  mb: 0.5 }}>
-          <Typography sx={{ fontSize: 11, fontWeight: 700 }}>{percent.toFixed(1)}%</Typography>
+      <Box sx={{ minWidth: 80 }}>
+        <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.25 }}>
+          <Typography sx={{ fontSize: 10.5, fontWeight: 700 }}>{percent.toFixed(1)}%</Typography>
         </Stack>
         <LinearProgress
           variant="determinate"
           value={Math.min(100, percent)}
           sx={{
-            height: 6,
-            borderRadius: 3,
+            height: 4,
+            borderRadius: 2,
             bgcolor: t.bg2,
-            '& .MuiLinearProgress-bar': { bgcolor: color, borderRadius: 3 },
+            '& .MuiLinearProgress-bar': { bgcolor: color, borderRadius: 2 },
           }}
         />
       </Box>
@@ -142,24 +142,24 @@ export default function InfrastructureMonitoringPage() {
     metricKey: 'cpu_percent_of_limit' | 'memory_percent_of_limit';
   }) {
     return (
-      <MonitorSection title={title}>
+      <MonitorSection dense title={title}>
         {items.length === 0 ? (
           <MonitorEmpty message="Aucune donnée." />
         ) : (
-          <Stack spacing={1}>
+          <Stack spacing={0.5}>
             {items.slice(0, 8).map((c, idx) => (
               <Box
                 key={`${c.pod}-${idx}`}
                 sx={{
-                  p: 1.25,
-                  borderRadius: '8px',
+                  p: 0.75,
+                  borderRadius: '6px',
                   border: `1px solid ${t.border}`,
                   bgcolor: t.bg2,
                 }}
               >
-                <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between',  mb: 0.75 }}>
+                <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                   <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text }} noWrap>
+                    <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: t.text }} noWrap>
                       {c.container}
                     </Typography>
                     <Typography sx={{ fontSize: 10, color: t.text3 }} noWrap>
@@ -181,52 +181,91 @@ export default function InfrastructureMonitoringPage() {
 
   return (
     <MonitorPageFrame>
-      <MonitorPageHeader
-        accent="infra"
-        title="Infrastructure"
-        subtitle="Volumes persistants, consommation CPU/RAM et santé des pods"
-        live={isLive}
-        onToggleLive={() => setIsLive((v) => !v)}
-        onRefresh={() => void fetchInfrastructureData()}
-        loading={loading}
+      <MonitorToolbarRow
+        left={
+          <Typography sx={{ fontSize: 12, color: t.text3 }}>
+            Volumes, CPU/RAM, santé pods
+          </Typography>
+        }
+        right={
+          <>
+            <Button sx={btnGhostSx} onClick={() => setIsLive((v) => !v)}>
+              <Badge variant={isLive ? 'success' : 'neutral'} dot>
+                {isLive ? 'Live' : 'Pause'}
+              </Badge>
+            </Button>
+            <Button sx={btnGhostSx} onClick={() => void fetchInfrastructureData()} disabled={loading}>
+              {loading ? '…' : 'Actualiser'}
+            </Button>
+          </>
+        }
       />
 
       {error ? <MonitorError message={error} onRetry={() => void fetchInfrastructureData()} /> : null}
 
       {storageData && (
         <>
-          <StatsRow>
-            <StatCard
-              icon="💾"
-              iconBg={t.infoTint}
-              iconColor={t.info}
-              value={String(storageData.summary.total)}
-              label="Volumes"
-            />
-            <StatCard
-              icon="✅"
-              iconBg={t.successTint}
-              iconColor={t.success}
-              value={String(storageData.summary.ok)}
-              label="OK"
-            />
-            <StatCard
-              icon="⚠️"
-              iconBg={t.warningTint}
-              iconColor={t.warning}
-              value={String(storageData.summary.warning)}
-              label="Alerte"
-            />
-            <StatCard
-              icon="🔴"
-              iconBg={t.errorTint}
-              iconColor={t.error}
-              value={String(storageData.summary.critical)}
-              label="Critique"
-            />
-          </StatsRow>
+          <MonitorKpiStrip
+            items={[
+              { label: 'Volumes', value: storageData.summary.total, tone: 'neutral' },
+              {
+                label: 'OK',
+                value: storageData.summary.ok,
+                tone: 'success',
+              },
+              {
+                label: 'Alerte',
+                value: storageData.summary.warning,
+                tone: storageData.summary.warning > 0 ? 'warning' : 'neutral',
+              },
+              {
+                label: 'Critique',
+                value: storageData.summary.critical,
+                tone: storageData.summary.critical > 0 ? 'error' : 'neutral',
+              },
+              {
+                label: 'Pods issues',
+                value: podsWithIssues.length,
+                tone: podsWithIssues.length > 0 ? 'error' : 'success',
+              },
+              ...(containersData?.summary
+                ? [
+                    {
+                      label: 'Conteneurs',
+                      value: containersData.summary.total_containers ?? 0,
+                      tone: 'neutral' as const,
+                    },
+                    {
+                      label: 'CPU critique',
+                      value: containersData.summary.cpu_critical ?? 0,
+                      tone: (containersData.summary.cpu_critical ?? 0) > 0 ? ('error' as const) : ('neutral' as const),
+                    },
+                    {
+                      label: 'RAM critique',
+                      value: containersData.summary.memory_critical ?? 0,
+                      tone: (containersData.summary.memory_critical ?? 0) > 0 ? ('error' as const) : ('neutral' as const),
+                    },
+                  ]
+                : []),
+              ...(podsData
+                ? [
+                    { label: 'Pods', value: podsData.summary.total ?? 0, tone: 'neutral' as const },
+                    {
+                      label: 'Running',
+                      value: podsData.summary.running ?? 0,
+                      tone: 'success' as const,
+                    },
+                    {
+                      label: 'Unhealthy',
+                      value: podsData.summary.unhealthy ?? 0,
+                      tone: (podsData.summary.unhealthy ?? 0) > 0 ? ('error' as const) : ('neutral' as const),
+                    },
+                  ]
+                : []),
+            ]}
+          />
 
-          <MonitorSection title="Stockage (PV)" desc={`${storageData.volumes.length} volume(s)`}>
+          <MonitorSection dense title="Stockage (PV)" desc={`${storageData.volumes.length} volume(s)`}>
             {storageData.volumes.length === 0 ? (
               <MonitorEmpty message="Aucun volume collecté." />
             ) : (
@@ -246,7 +285,7 @@ export default function InfrastructureMonitoringPage() {
                     label: 'Capacité',
                     align: 'right',
                     render: (r: Volume & { id: string }) => (
-                      <Typography sx={{ fontSize: 12 }}>
+                      <Typography sx={{ fontSize: 11.5 }}>
                         {r.formatted_used && r.formatted_capacity
                           ? `${r.formatted_used} / ${r.formatted_capacity}`
                           : r.formatted_capacity || '—'}
@@ -282,8 +321,8 @@ export default function InfrastructureMonitoringPage() {
           sx={{
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
-            gap: 2,
-            mb: 2.5,
+            gap: 1.25,
+            mb: 1.25,
           }}
         >
           <ConsumerList
@@ -299,143 +338,62 @@ export default function InfrastructureMonitoringPage() {
         </Box>
       )}
 
-      {containersData?.summary && (
-        <StatsRow>
-          <StatCard
-            icon="📦"
-            iconBg={t.bg2}
-            iconColor={t.text2}
-            value={String(containersData.summary.total_containers ?? 0)}
-            label="Conteneurs"
-          />
-          <StatCard
-            icon="🔥"
-            iconBg={t.errorTint}
-            iconColor={t.error}
-            value={String(containersData.summary.cpu_critical ?? 0)}
-            label="CPU critique"
-          />
-          <StatCard
-            icon="⚠️"
-            iconBg={t.warningTint}
-            iconColor={t.warning}
-            value={String(containersData.summary.cpu_warning ?? 0)}
-            label="CPU alerte"
-          />
-          <StatCard
-            icon="🧠"
-            iconBg={t.errorTint}
-            iconColor={t.error}
-            value={String(containersData.summary.memory_critical ?? 0)}
-            label="RAM critique"
-          />
-        </StatsRow>
-      )}
-
       {podsData && (
-        <>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(6, 1fr)' },
-              gap: 1.75,
-              mb: 2.5,
-            }}
-          >
-            {[
-              { label: 'Pods', value: podsData.summary.total, icon: '📦' },
-              { label: 'Running', value: podsData.summary.running, icon: '▶️', variant: 'success' as const },
-              { label: 'Pending', value: podsData.summary.pending, icon: '⏳', variant: 'warning' as const },
-              { label: 'Failed', value: podsData.summary.failed, icon: '❌', variant: 'error' as const },
-              { label: 'Healthy', value: podsData.summary.healthy, icon: '💚', variant: 'success' as const },
-              { label: 'Unhealthy', value: podsData.summary.unhealthy, icon: '💔', variant: 'error' as const },
-            ].map((k) => (
-              <StatCard
-                key={k.label}
-                icon={k.icon}
-                iconBg={
-                  k.variant === 'success'
-                    ? t.successTint
-                    : k.variant === 'warning'
-                      ? t.warningTint
-                      : k.variant === 'error'
-                        ? t.errorTint
-                        : t.bg2
-                }
-                iconColor={
-                  k.variant === 'success'
-                    ? t.success
-                    : k.variant === 'warning'
-                      ? t.warning
-                      : k.variant === 'error'
-                        ? t.error
-                        : t.text2
-                }
-                value={String(k.value ?? 0)}
-                label={k.label}
-              />
-            ))}
-          </Box>
-
-          {podsWithIssues.length > 0 ? (
-            <MonitorSection
-              title="Pods avec anomalies"
-              desc={`${podsWithIssues.length} pod(s)`}
-            >
-              <DataTable
-                hideRowActions
-                columns={[
-                  { key: 'name', label: 'Pod', render: (r: PodRow & { id: string }) => r.name },
-                  { key: 'status', label: 'Statut K8s', render: (r: PodRow & { id: string }) => r.status },
-                  {
-                    key: 'restarts',
-                    label: 'Restarts',
-                    align: 'center',
-                    render: (r: PodRow & { id: string }) => (
-                      <Typography
-                        sx={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: r.restarts > 0 ? t.warning : t.text3,
-                        }}
-                      >
-                        {r.restarts}
-                      </Typography>
-                    ),
-                  },
-                  {
-                    key: 'issues',
-                    label: 'Problèmes',
-                    render: (r: PodRow & { id: string }) => (
-                      <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap' }}>
-                        {r.issues.map((issue, i) => (
-                          <Badge key={i} variant="warning">
-                            {issue.replace(/_/g, ' ')}
-                          </Badge>
-                        ))}
-                      </Stack>
-                    ),
-                  },
-                  {
-                    key: 'health',
-                    label: 'Santé',
-                    align: 'center',
-                    render: (r: PodRow & { id: string }) => (
-                      <Badge variant={severityBadgeVariant(r.health_status)} dot>
-                        {r.health_status}
-                      </Badge>
-                    ),
-                  },
-                ]}
-                rows={podsWithIssues.slice(0, 20).map((p, i) => ({ id: p.name || `pod-${i}`, ...p }))}
-              />
-            </MonitorSection>
-          ) : (
-            <MonitorSection title="Santé des pods">
-              <MonitorEmpty message="Aucun pod en anomalie détecté." />
-            </MonitorSection>
-          )}
-        </>
+        podsWithIssues.length > 0 ? (
+          <MonitorSection dense title="Pods avec anomalies" desc={`${podsWithIssues.length} pod(s)`}>
+            <DataTable
+              hideRowActions
+              columns={[
+                { key: 'name', label: 'Pod', render: (r: PodRow & { id: string }) => r.name },
+                { key: 'status', label: 'Statut K8s', render: (r: PodRow & { id: string }) => r.status },
+                {
+                  key: 'restarts',
+                  label: 'Restarts',
+                  align: 'center',
+                  render: (r: PodRow & { id: string }) => (
+                    <Typography
+                      sx={{
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        color: r.restarts > 0 ? t.warning : t.text3,
+                      }}
+                    >
+                      {r.restarts}
+                    </Typography>
+                  ),
+                },
+                {
+                  key: 'issues',
+                  label: 'Problèmes',
+                  render: (r: PodRow & { id: string }) => (
+                    <Stack direction="row" gap={0.5} sx={{ flexWrap: 'wrap' }}>
+                      {r.issues.map((issue, i) => (
+                        <Badge key={i} variant="warning">
+                          {issue.replace(/_/g, ' ')}
+                        </Badge>
+                      ))}
+                    </Stack>
+                  ),
+                },
+                {
+                  key: 'health',
+                  label: 'Santé',
+                  align: 'center',
+                  render: (r: PodRow & { id: string }) => (
+                    <Badge variant={severityBadgeVariant(r.health_status)} dot>
+                      {r.health_status}
+                    </Badge>
+                  ),
+                },
+              ]}
+              rows={podsWithIssues.slice(0, 20).map((p, i) => ({ id: p.name || `pod-${i}`, ...p }))}
+            />
+          </MonitorSection>
+        ) : (
+          <MonitorSection dense title="Santé des pods">
+            <MonitorEmpty message="Aucun pod en anomalie détecté." />
+          </MonitorSection>
+        )
       )}
     </MonitorPageFrame>
   );

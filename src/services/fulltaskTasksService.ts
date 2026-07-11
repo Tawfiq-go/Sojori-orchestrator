@@ -92,9 +92,17 @@ class FulltaskTasksService {
     console.log('🔍 [getTasks] START - Fetching tasks, staff, and listings in parallel');
     const startTime = performance.now();
 
+    const isArchivedParam =
+      params.isArchived === 'all'
+        ? 'all'
+        : params.isArchived === true
+          ? true
+          : false;
+
     const tasksPromise = fulltaskApi.listTasks({
       listingId: params.listingIds?.length === 1 ? params.listingIds[0] : undefined,
       type: params.subTypes?.length === 1 ? params.subTypes[0] : undefined,
+      isArchived: isArchivedParam,
     }).then(res => {
       console.log(`✅ [getTasks] listTasks completed in ${(performance.now() - startTime).toFixed(0)}ms`);
       return res;
@@ -190,6 +198,12 @@ class FulltaskTasksService {
           typeLabel.includes(q)
         );
       });
+    }
+
+    if (isArchivedParam === true) {
+      rows = rows.filter((t) => t.isArchived === true);
+    } else if (isArchivedParam !== 'all') {
+      rows = rows.filter((t) => t.isArchived !== true);
     }
 
     const sortField = params.sortField || 'createdAt';

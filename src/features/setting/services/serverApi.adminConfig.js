@@ -209,25 +209,6 @@ export const deleteChannel = async id => {
   }
 };
 
-// ----------------------Cron----------------
-
-export const getCrons = async () => {
-  try {
-    const response = await axios.get(`${MICROSERVICE_BASE_URL.SRV_CRON}/setting`);
-    return response.data;
-  } catch (error) {
-    throw new Error('Error fetching crons');
-  }
-};
-export const createCron = async data => {
-  try {
-    const response = await axios.post(`${MICROSERVICE_BASE_URL.SRV_CRON}/setting`, data);
-    return response.data;
-  } catch (error) {
-    throw new Error(error.response.data.message);
-  }
-};
-
 // ----------------------WebSiteBlock----------------
 
 export const getWebSiteBlocks = async () => {
@@ -320,9 +301,6 @@ export function getSyncPropertyTypes() {
 }
 export function getSyncBedTypes() {
   return axios.get(`${MICROSERVICE_BASE_URL.SRV_LISTING}/BedTypes/sync-bed-types`);
-}
-export function getSyncAccessToken() {
-  return axios.get(`${MICROSERVICE_BASE_URL.SRV_CRON}/access-token`);
 }
 export function getSyncCalendar() {
   return axios.get(`${MICROSERVICE_BASE_URL.SRV_CALENDAR}/calendar/sync-calendar`);

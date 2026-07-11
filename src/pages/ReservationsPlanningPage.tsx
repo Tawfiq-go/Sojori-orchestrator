@@ -37,33 +37,14 @@ import {
   PLANNING_LOOKBACK_DAYS,
 } from '../utils/planningViewDates';
 
-function normalizeMongoId(value: unknown): string | undefined {
-  if (value == null || value === '') return undefined;
-  if (typeof value === 'string') return value;
-  if (typeof value === 'object') {
-    const o = value as { _id?: unknown; toString?: () => string };
-    if (o._id != null) return String(o._id);
-    if (typeof o.toString === 'function') {
-      const s = o.toString();
-      if (/^[a-f0-9]{24}$/i.test(s)) return s;
-    }
-  }
-  const s = String(value);
-  return s && s !== '[object Object]' ? s : undefined;
-}
-
-function resolveListingId(res: Reservation): string | undefined {
-  const anyRes = res as Reservation & {
-    listing?: { _id?: unknown };
-    listingId?: unknown;
-  };
-  return (
-    normalizeMongoId(anyRes.sojoriId) ||
-    normalizeMongoId(anyRes.listingMapId) ||
-    normalizeMongoId(anyRes.listingId) ||
-    normalizeMongoId(anyRes.listing?._id)
-  );
-}
+import {
+  findListingForReservation,
+  buildListingIdIndex,
+  collectOrphanListingSeedsForOwner,
+  mergeActiveAndOrphanListings,
+  reservationOwnerId,
+  resolveReservationListingId,
+} from '../utils/planningListingMatch';
 
 function mapReservationStatus(status?: string): 'confirmed' | 'pending' {
   const s = (status || '').toLowerCase();
@@ -133,6 +114,7 @@ export function ReservationsPlanningPage() {
       listingsHydratedRef.current = true;
       return;
     }
+    let items: ListingSummary[] = [];
     const res = await listingsService.getListings({
       useActiveFilter: true,
       active: true,
@@ -141,17 +123,35 @@ export function ReservationsPlanningPage() {
       limit: 500,
       filterOwnerId: scope.filterOwnerId,
     });
+    items = res.data.items;
+    // Après migration owner/host : listings parfois non « active » → grille vide.
+    if (items.length === 0 && scope.filterOwnerId) {
+      const fallback = await listingsService.getListings({
+        useActiveFilter: false,
+        compact: true,
+        forListingsOverview: false,
+        limit: 500,
+        filterOwnerId: scope.filterOwnerId,
+      });
+      items = fallback.data.items;
+      if (items.length > 0) {
+        console.warn('[ReservationsPlanning] fallback listings sans filtre active', {
+          count: items.length,
+          filterOwnerId: scope.filterOwnerId,
+        });
+      }
+    }
     console.log('[ReservationsPlanning] fetchActiveListings', {
-      count: res.data.items.length,
-      sample: res.data.items.slice(0, 3).map((l) => ({
+      count: items.length,
+      sample: items.slice(0, 3).map((l) => ({
         id: l.id,
         name: l.name,
         occupancyStatus: l.occupancyStatus,
         cleanlinessStatus_v2: l.cleanlinessStatus_v2,
       })),
     });
-    setActiveListings(res.data.items);
-    setCachedPlanningListings(listingsCacheKey, res.data.items);
+    setActiveListings(items);
+    setCachedPlanningListings(listingsCacheKey, items);
     listingsHydratedRef.current = true;
   }, [listingsCacheKey, scope.filterOwnerId]);
 
@@ -269,15 +269,33 @@ export function ReservationsPlanningPage() {
   }, []);
 
   const listingRows: ListingRow[] = useMemo(() => {
-    if (activeListings.length === 0) return [];
+    const ownerKey = scope.filterOwnerId ? String(scope.filterOwnerId) : '';
+    // Orphelines seulement en scope PM unique (ex. listing inactif « Sojori CFC fibre »).
+    const orphans = collectOrphanListingSeedsForOwner(reservations, activeListings, ownerKey || undefined);
+    const rowsSource = mergeActiveAndOrphanListings(activeListings, orphans);
+    if (rowsSource.length === 0) return [];
 
+    const byId = buildListingIdIndex(activeListings);
     const windowStart = startDate;
     const windowEnd = addDays(startDate, daysCount);
+    let unmatchedForeign = 0;
 
     const reservationsByListing = new Map<string, Reservation[]>();
     for (const res of reservations) {
-      const listingId = resolveListingId(res);
+      if (ownerKey) {
+        const resOwner = reservationOwnerId(res);
+        if (resOwner && resOwner !== ownerKey) {
+          unmatchedForeign += 1;
+          continue;
+        }
+      }
+
+      const matched = findListingForReservation(res, byId);
+      const listingId = matched?.id || (ownerKey ? resolveReservationListingId(res) : undefined);
       if (!listingId) continue;
+      // Sans matched : seulement si orpheline autorisée (owner scopé).
+      if (!matched && !ownerKey) continue;
+      if (!matched && !orphans.some((o) => o.listingId === listingId)) continue;
 
       const arrival = toIsoDate(res.arrivalDate);
       const departure = toIsoDate(res.departureDate);
@@ -292,8 +310,17 @@ export function ReservationsPlanningPage() {
       else reservationsByListing.set(listingId, [res]);
     }
 
-    return activeListings.map((listing) => {
-      const listingId = listing.id;
+    if (orphans.length > 0 || unmatchedForeign > 0) {
+      console.warn('[ReservationsPlanning] match listings', {
+        orphans: orphans.map((o) => o.listingName),
+        unmatchedForeign,
+        activeListings: activeListings.length,
+        filterOwnerId: ownerKey || null,
+      });
+    }
+
+    return rowsSource.map((listing) => {
+      const listingId = String(listing.id);
       const resas = reservationsByListing.get(listingId) || [];
       const op = mergeListingOperationalRow(listingId, {
         occupancyStatus: listing.occupancyStatus,
@@ -321,7 +348,7 @@ export function ReservationsPlanningPage() {
         })),
       };
     });
-  }, [activeListings, reservations, startDate, daysCount, operationalByListing, opSyncTick]);
+  }, [activeListings, reservations, startDate, daysCount, operationalByListing, opSyncTick, scope.filterOwnerId]);
 
   const handleCleanlinessChange = useCallback(
     async (listingId: string, status: DisplayCleanliness) => {

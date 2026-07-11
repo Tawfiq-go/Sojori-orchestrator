@@ -283,8 +283,9 @@ class CalendarService {
 
   /**
    * GET /api/v1/calendar/inventory/audit-blocked-days
-   * Audit à la demande : jours bloqués (Dispo=0) sans réservation confirmée/pending,
-   * groupés en plages avec une classification de cause probable.
+   * Audit à la demande :
+   * - jours bloqués (Dispo=0) sans réservation confirmée/pending
+   * - jours encore disponibles alors qu'une réservation Confirmé/Pending les couvre
    */
   async auditBlockedDays(
     listingId: string,
@@ -301,8 +302,9 @@ class CalendarService {
       ranges: Array<{
         from: string;
         to: string;
-        classification: 'cancelled_reservation' | 'ota_stop_sell' | 'unknown';
+        classification: 'cancelled_reservation' | 'ota_stop_sell' | 'unknown' | 'missing_reservation_block';
         dayCount: number;
+        reservationNumbers?: string[];
       }>;
     }>;
   }> {

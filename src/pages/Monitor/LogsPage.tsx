@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Box, Stack } from '@mui/material';
+import { Box, Button } from '@mui/material';
 import { FiltersPanel } from '../../features/monitoring/logs/components/FiltersPanel';
 import { LogsTable } from '../../features/monitoring/logs/components/LogsTable';
 import { LogDetailModal } from '../../features/monitoring/logs/components/LogDetailModal';
@@ -7,12 +7,11 @@ import { useFilters } from '../../features/monitoring/logs/hooks/useFilters';
 import { useLogs, type LogEntry } from '../../features/monitoring/logs/hooks/useLogs';
 import {
   Badge,
+  MonitorKpiStrip,
   MonitorPageFrame,
-  MonitorPageHeader,
-  Panel,
-  StatCard,
-  StatsRow,
-  monitorTokens as t,
+  MonitorSection,
+  MonitorToolbarRow,
+  btnGhostSx,
 } from '../../features/monitoring/shared/MonitorDesign';
 
 export default function LogsPage() {
@@ -41,76 +40,63 @@ export default function LogsPage() {
 
   return (
     <MonitorPageFrame>
-      <MonitorPageHeader
-        accent="logs"
-        title="Logs applicatifs"
-        subtitle="Filtrage par service, niveau et recherche full-text"
-        count={`${logs.length} ligne(s)`}
-        live={live}
-        onToggleLive={() => setLive((v) => !v)}
-        onRefresh={() => void refetch()}
-        loading={loading}
+      <MonitorToolbarRow
+        left={
+          <Badge variant="neutral">{logs.length} ligne(s)</Badge>
+        }
+        right={
+          <>
+            <Button sx={btnGhostSx} onClick={() => setLive((v) => !v)}>
+              <Badge variant={live ? 'success' : 'neutral'} dot>
+                {live ? 'Live' : 'Pause'}
+              </Badge>
+            </Button>
+            <Button sx={btnGhostSx} onClick={() => void refetch()} disabled={loading}>
+              {loading ? '…' : 'Actualiser'}
+            </Button>
+          </>
+        }
       />
 
-      <StatsRow>
-        <StatCard
-          icon="🔴"
-          iconBg={t.errorTint}
-          iconColor={t.error}
-          value={String(severityCounts.critical)}
-          label="Critical"
-        />
-        <StatCard
-          icon="❌"
-          iconBg={t.errorTint}
-          iconColor={t.error}
-          value={String(severityCounts.error)}
-          label="Error"
-        />
-        <StatCard
-          icon="⚠️"
-          iconBg={t.warningTint}
-          iconColor={t.warning}
-          value={String(severityCounts.warning)}
-          label="Warning"
-        />
-        <StatCard
-          icon="ℹ️"
-          iconBg={t.infoTint}
-          iconColor={t.info}
-          value={String(severityCounts.info)}
-          label="Info"
-        />
-      </StatsRow>
+      <MonitorKpiStrip
+        items={[
+          {
+            label: 'Critical',
+            value: severityCounts.critical,
+            tone: severityCounts.critical > 0 ? 'error' : 'neutral',
+          },
+          {
+            label: 'Error',
+            value: severityCounts.error,
+            tone: severityCounts.error > 0 ? 'error' : 'neutral',
+          },
+          {
+            label: 'Warning',
+            value: severityCounts.warning,
+            tone: severityCounts.warning > 0 ? 'warning' : 'neutral',
+          },
+          {
+            label: 'Info',
+            value: severityCounts.info,
+            tone: 'info',
+          },
+        ]}
+      />
 
-      <Panel sx={{ mb: 2 }}>
-        <Stack
-          direction={{ xs: 'column', lg: 'row' }}
-          spacing={2}
-          sx={{ alignItems: { lg: 'flex-start' } }}
-        >
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <FiltersPanel
-              filters={filters}
-              onFilterChange={updateFilter}
-              onClear={clearFilters}
-              stats={stats}
-            />
-          </Box>
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap',  flexShrink: 0 }}>
-            <Badge variant="error" dot>
-              Critical {severityCounts.critical}
-            </Badge>
-            <Badge variant="error">Error {severityCounts.error}</Badge>
-            <Badge variant="warning">Warning {severityCounts.warning}</Badge>
-            <Badge variant="info">Info {severityCounts.info}</Badge>
-          </Stack>
-        </Stack>
-      </Panel>
+      <MonitorSection dense title="Filtres" desc="Service, niveau, recherche">
+        <FiltersPanel
+          filters={filters}
+          onFilterChange={updateFilter}
+          onClear={clearFilters}
+          stats={stats}
+        />
+      </MonitorSection>
 
-      <Panel sx={{ p: 0, overflow: 'hidden' }}>
-        <LogsTable logs={logs} loading={loading} onLogClick={setSelectedLog} />
-      </Panel>
+      <MonitorSection dense title="Journal" headRight={<Badge variant="neutral">{logs.length}</Badge>}>
+        <Box sx={{ mx: -1.5, mb: -1.5 }}>
+          <LogsTable logs={logs} loading={loading} onLogClick={setSelectedLog} />
+        </Box>
+      </MonitorSection>
 
       <LogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />
     </MonitorPageFrame>

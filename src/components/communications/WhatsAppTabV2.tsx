@@ -248,20 +248,39 @@ export default function WhatsAppTabV2() {
 
   const [searchParams] = useSearchParams();
   const deepLinkPhone = searchParams.get('phone');
+  const deepLinkReservation =
+    searchParams.get('reservation') || searchParams.get('res') || null;
   const waDeepLinkedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!deepLinkPhone || loading) return;
-    if (waDeepLinkedRef.current === deepLinkPhone) return;
-    const needle = deepLinkPhone.replace(/\s/g, '');
-    const conv = displayConversations.find((c) => {
-      const p = (c.phone || '').replace(/\s/g, '');
-      return p === needle || c.phone === deepLinkPhone;
-    });
+    if (loading) return;
+    const linkKey = deepLinkPhone
+      ? `phone:${deepLinkPhone}`
+      : deepLinkReservation
+        ? `res:${deepLinkReservation}`
+        : null;
+    if (!linkKey) return;
+    if (waDeepLinkedRef.current === linkKey) return;
+
+    let conv: Conversation | undefined;
+    if (deepLinkPhone) {
+      const needle = deepLinkPhone.replace(/\s/g, '');
+      conv = displayConversations.find((c) => {
+        const p = (c.phone || '').replace(/\s/g, '');
+        return p === needle || c.phone === deepLinkPhone;
+      });
+    } else if (deepLinkReservation) {
+      const resNeedle = deepLinkReservation.trim().toUpperCase();
+      conv = displayConversations.find((c) => {
+        const num = String(c.reservation_number || c.reservation_id || '').trim().toUpperCase();
+        return num === resNeedle;
+      });
+    }
+
     if (!conv) return;
-    waDeepLinkedRef.current = deepLinkPhone;
+    waDeepLinkedRef.current = linkKey;
     void handleSelect(conv);
-  }, [deepLinkPhone, displayConversations, loading]);
+  }, [deepLinkPhone, deepLinkReservation, displayConversations, loading]);
 
   const bumpConversationPreview = useCallback((phone: string, text: string) => {
     const exchange = outboundInboxExchange(text);

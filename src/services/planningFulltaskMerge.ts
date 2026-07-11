@@ -6,6 +6,7 @@ import {
   inferTaskPlannedDay,
   inferTaskPlannedIso,
 } from '../utils/inferTaskPlannedDate';
+import { resolveReservationListingId } from '../utils/planningListingMatch';
 import type { TaskType } from '../components/calendar-views/_shared';
 
 export interface PlanningTimelineItem {
@@ -72,13 +73,7 @@ function normalizeMongoId(value: unknown): string | undefined {
 }
 
 function resolveListingId(res: Reservation): string | undefined {
-  const anyRes = res as Reservation & { listingId?: string; listing?: { _id?: string } };
-  return (
-    normalizeMongoId(anyRes.sojoriId) ||
-    normalizeMongoId(anyRes.listingMapId) ||
-    normalizeMongoId(anyRes.listingId) ||
-    normalizeMongoId(anyRes.listing?._id)
-  );
+  return resolveReservationListingId(res);
 }
 
 function resolveReservationId(res: Reservation): string {
@@ -165,11 +160,12 @@ export async function fetchTaskNewPlanning(params: {
   const startTime = performance.now();
 
   const reservationsPromise = reservationsService.getList({
-    limit: 200, // ⚡ Augmenté de 100 → 200 pour réduire les appels individuels getById()
-    status: 'Confirmed,Pending',
+    limit: 100, // backend cap 100
+    status: 'Confirmed,Pending,Inside',
     dateType: 'arrival_or_departure',
     startDate: params.startDate,
     endDate: params.endDate,
+    filterOwnerId: params.ownerId,
   }).then(res => {
     console.log(`✅ [fetchTaskNewPlanning] getList (reservations) completed in ${(performance.now() - startTime).toFixed(0)}ms - ${res?.data?.length || 0} items`);
     return res;
@@ -248,6 +244,13 @@ export async function fetchTaskNewPlanning(params: {
   }
 
   let reservations = reservationsRes?.data || [];
+  if (params.ownerId) {
+    const ownerKey = String(params.ownerId);
+    reservations = reservations.filter((r) => {
+      const resOwner = String((r as Reservation & { ownerId?: unknown }).ownerId || '');
+      return !resOwner || resOwner === ownerKey;
+    });
+  }
   reservations = reservations.filter((r) =>
     reservationOverlapsWindow(r, params.startDate, params.endDate),
   );

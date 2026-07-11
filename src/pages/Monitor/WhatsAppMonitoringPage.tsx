@@ -1,9 +1,9 @@
 /**
- * WhatsApp Monitoring — design Sojori V2 (MonitorDesign)
+ * WhatsApp Monitoring — layout dense (même pattern que l’onglet API).
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { useState, useEffect, useCallback } from 'react';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import apiClient from '../../services/apiClient';
 import { formatCasablancaDate } from '../../utils/dateFormatting.js';
 import {
@@ -11,17 +11,16 @@ import {
   DataTable,
   MonitorEmpty,
   MonitorErrorList,
+  MonitorKpiStrip,
   MonitorLoading,
   MonitorPageFrame,
-  MonitorPageHeader,
   MonitorSection,
   MonitorSelectFilter,
   MonitorSubTabs,
   MonitorTimeRange,
-  MonitorToolbar,
-  StatCard,
-  StatsRow,
+  MonitorToolbarRow,
   TablePagination,
+  btnGhostSx,
   monitorTokens as t,
   severityBadgeVariant,
 } from '../../features/monitoring/shared/MonitorDesign';
@@ -171,104 +170,122 @@ export default function WhatsAppMonitoringPage() {
     ...msg,
   }));
 
+  const problemCount = summaryData?.total ?? 0;
+  const failedCount = summaryData?.failed ?? 0;
+  const chatbotCount =
+    (summaryData?.byService?.['srv-fullchatbot'] ?? 0) +
+    (summaryData?.byService?.['srv-chatbot'] ?? 0);
+  const staffbotCount =
+    (summaryData?.byService?.['srv-fulltask'] ?? 0) +
+    (summaryData?.byService?.['srv-task'] ?? 0);
+
   return (
     <MonitorPageFrame>
-      <MonitorPageHeader
-        accent="whatsapp"
-        title="WhatsApp"
-        subtitle="Échecs, templates et erreurs WABA — Chatbot & StaffBot"
-        count={timeRange}
-        live={live}
-        onToggleLive={() => setLive((v) => !v)}
-        onRefresh={refresh}
-        loading={loading}
+      <MonitorToolbarRow
+        left={
+          <>
+            <MonitorSubTabs dense options={SUB_TABS} value={activeTab} onChange={setActiveTab} />
+            <MonitorTimeRange dense ranges={TIME_RANGES} value={timeRange} onChange={setTimeRange} />
+          </>
+        }
+        right={
+          <>
+            <Button sx={btnGhostSx} onClick={() => setLive((v) => !v)}>
+              <Badge variant={live ? 'success' : 'neutral'} dot>
+                {live ? 'Live' : 'Pause'}
+              </Badge>
+            </Button>
+            <Button sx={btnGhostSx} onClick={refresh} disabled={loading}>
+              {loading ? '…' : 'Actualiser'}
+            </Button>
+          </>
+        }
       />
 
-      <MonitorSubTabs options={SUB_TABS} value={activeTab} onChange={setActiveTab} />
+      {(summaryData || !loading) && activeTab === 'summary' ? (
+        <MonitorKpiStrip
+          items={[
+            {
+              label: 'Problèmes',
+              value: problemCount,
+              tone: problemCount > 0 ? 'error' : 'success',
+            },
+            {
+              label: 'Échecs',
+              value: failedCount,
+              tone: 'error',
+            },
+            {
+              label: 'Chatbot',
+              value: chatbotCount,
+              tone: 'info',
+            },
+            {
+              label: 'StaffBot',
+              value: staffbotCount,
+              tone: 'info',
+            },
+          ]}
+        />
+      ) : null}
 
       {activeTab === 'summary' && (
         <>
-          <MonitorTimeRange ranges={TIME_RANGES} value={timeRange} onChange={setTimeRange} />
           {loading && !summaryData ? (
             <MonitorLoading />
           ) : summaryData ? (
             <>
-              <StatsRow>
-                <StatCard
-                  icon="⚠️"
-                  iconBg={t.errorTint}
-                  iconColor={t.error}
-                  value={String(summaryData.total ?? 0)}
-                  label="Problèmes"
-                  trend={timeRange}
-                />
-                <StatCard
-                  icon="❌"
-                  iconBg={t.errorTint}
-                  iconColor={t.error}
-                  value={String(summaryData.failed ?? 0)}
-                  label="Messages en échec"
-                />
-                <StatCard
-                  icon="💬"
-                  iconBg={t.infoTint}
-                  iconColor={t.info}
-                  value={String(
-                    (summaryData.byService?.['srv-fullchatbot'] ?? 0) +
-                      (summaryData.byService?.['srv-chatbot'] ?? 0),
-                  )}
-                  label="Chatbot (guest)"
-                />
-                <StatCard
-                  icon="📱"
-                  iconBg={t.aiTint}
-                  iconColor={t.ai}
-                  value={String(
-                    (summaryData.byService?.['srv-fulltask'] ?? 0) +
-                      (summaryData.byService?.['srv-task'] ?? 0),
-                  )}
-                  label="StaffBot"
-                />
-              </StatsRow>
-
-              {(summaryData.topTemplates?.length ?? 0) > 0 && (
-                <MonitorSection title="Templates en échec" desc="Top par volume">
-                  <Stack spacing={1}>
-                    {summaryData.topTemplates!.map((tpl, idx) => (
-                      <Stack
-                        key={idx}
-                        direction="row"
-                        sx={{
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          p: 1.25,
-                          borderRadius: '8px',
-                          bgcolor: t.bg2,
-                          border: `1px solid ${t.border}`,
-                        }}
-                      >
-                        <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.text }}>
-                          {tpl._id || 'Inconnu'}
-                        </Typography>
-                        <Badge variant="error">{tpl.count ?? 0} échecs</Badge>
+              {problemCount === 0 && failedCount === 0 ? (
+                <MonitorEmpty message="Aucune donnée WhatsApp sur cette période." />
+              ) : (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) minmax(0, 1.4fr)' },
+                    gap: 1.25,
+                    mb: 1.25,
+                    alignItems: 'start',
+                  }}
+                >
+                  {(summaryData.topTemplates?.length ?? 0) > 0 && (
+                    <MonitorSection dense title="Templates en échec" desc="Top par volume">
+                      <Stack spacing={0.75}>
+                        {summaryData.topTemplates!.map((tpl, idx) => (
+                          <Stack
+                            key={idx}
+                            direction="row"
+                            sx={{
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              py: 0.5,
+                              borderBottom: `1px solid ${t.border}`,
+                            }}
+                          >
+                            <Typography sx={{ fontSize: 12, fontWeight: 600, color: t.text }}>
+                              {tpl._id || 'Inconnu'}
+                            </Typography>
+                            <Badge variant="error">{tpl.count ?? 0}</Badge>
+                          </Stack>
+                        ))}
                       </Stack>
-                    ))}
-                  </Stack>
-                </MonitorSection>
-              )}
+                    </MonitorSection>
+                  )}
 
-              {(summaryData.recentErrors?.length ?? 0) > 0 && (
-                <MonitorSection title="Erreurs récentes" desc="5 dernières">
-                  <MonitorErrorList
-                    items={summaryData.recentErrors!.slice(0, 5)}
-                    renderTitle={(e) =>
-                      String(e.data?.error_message || 'Erreur inconnue')
-                    }
-                    renderMeta={(e) =>
-                      `${serviceLabel(e.service)} · ${formatCasablancaDate(e.timestamp)}`
-                    }
-                  />
-                </MonitorSection>
+                  {(summaryData.recentErrors?.length ?? 0) > 0 && (
+                    <MonitorSection dense title="Erreurs récentes" desc="5">
+                      <MonitorErrorList
+                        dense
+                        items={summaryData.recentErrors!.slice(0, 5)}
+                        renderTitle={(e) =>
+                          String(e.data?.error_message || 'Erreur inconnue')
+                        }
+                        renderMeta={(e) =>
+                          `${serviceLabel(e.service)} · ${formatCasablancaDate(e.timestamp)}`
+                        }
+                      />
+                    </MonitorSection>
+                  )}
+                </Box>
               )}
             </>
           ) : (
@@ -279,7 +296,11 @@ export default function WhatsAppMonitoringPage() {
 
       {activeTab === 'messages' && (
         <>
-          <MonitorToolbar>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.75, mb: 1 }}
+          >
             <MonitorSelectFilter
               label="Direction"
               value={direction}
@@ -302,7 +323,7 @@ export default function WhatsAppMonitoringPage() {
                 { value: 'srv-task', label: 'StaffBot (legacy)' },
               ]}
             />
-          </MonitorToolbar>
+          </Stack>
 
           {loading && messageRows.length === 0 ? (
             <MonitorLoading label="Chargement des messages…" />
@@ -389,8 +410,9 @@ export default function WhatsAppMonitoringPage() {
           {loading && errorsData.length === 0 ? (
             <MonitorLoading />
           ) : (
-            <MonitorSection title="Journal d'erreurs" desc={`${errorsData.length} entrée(s)`}>
+            <MonitorSection dense title="Journal d'erreurs" desc={`${errorsData.length}`}>
               <MonitorErrorList
+                dense
                 items={errorsData}
                 renderTitle={(e) => String(e.data?.error_message || 'Erreur inconnue')}
                 renderMeta={(e) => (

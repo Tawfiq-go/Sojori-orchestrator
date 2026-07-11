@@ -50,7 +50,15 @@ export async function fetchUnreadCount(ownerId?: string | null): Promise<UnreadC
     });
     if (!data?.success) throw new Error(data?.error || 'unread-count failed');
     return data.data as UnreadCountData;
-  }, { total: 0, activeCount: 0, actionRequired: 0, byFacet: {}, byEventKey: {} });
+  }, {
+    total: 0,
+    activeCount: 0,
+    actionRequired: 0,
+    byFacet: {},
+    byEventKey: {},
+    byFacetActive: {},
+    byEventKeyActive: {},
+  });
 }
 
 export interface ListNotificationsParams {

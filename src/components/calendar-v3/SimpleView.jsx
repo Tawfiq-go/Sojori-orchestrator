@@ -160,7 +160,7 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
             {listing.name} · {MONTHS[month]} {year}
             <button
               type="button"
-              title="Audit disponibilité — jours bloqués sans réservation (365 j.)"
+              title="Audit disponibilité — bloqué sans résa OU résa confirmée encore disponible (365 j.)"
               onClick={handleAuditClick}
               style={{
                 background: 'none', border: 0, padding: '0 2px',

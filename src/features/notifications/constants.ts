@@ -31,6 +31,23 @@ export const FACET_ORDER: NotificationFacet[] = [
   'lead',
 ];
 
+/** Jalons parcours déclenchés via WhatsApp (flows E, D1/D2…). */
+export const GUEST_JOURNEY_NOTIFY_EVENTS = [
+  'guest:registration_started',
+  'guest:registration_member',
+  'guest:registration_completed',
+  'guest:arrival_time_chosen',
+  'guest:departure_time_chosen',
+] as const;
+
+export type GuestJourneyNotifyEventKey = (typeof GUEST_JOURNEY_NOTIFY_EVENTS)[number];
+
+/** Badge sidebar Inbox Guest → WhatsApp : messages libres + jalons parcours WA. */
+export const WHATSAPP_GUEST_SIDEBAR_EVENT_KEYS = [
+  'message:whatsapp_received',
+  ...GUEST_JOURNEY_NOTIFY_EVENTS,
+] as const;
+
 /** Filtres inbox guest dans la cloche (remplace la facette « message » unique). */
 export const NOTIF_MESSAGE_CHANNELS = [
   {

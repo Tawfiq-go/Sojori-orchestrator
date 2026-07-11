@@ -16,6 +16,7 @@ import {
 } from './notificationApi';
 import type { NotificationPanelTab, NotificationItem } from './types';
 import { isActionRequired, isActiveInPanel } from './constants';
+import { aggregateActiveNotificationCounts } from './sidebarNotificationBadges';
 
 import { isNotificationApiNotDeployed } from './notificationApiErrors';
 
@@ -23,6 +24,21 @@ const ROOT_KEY = ['notifications'] as const;
 
 const notifQueryRetry = (failureCount: number, error: unknown) =>
   !isNotificationApiNotDeployed(error) && failureCount < 1;
+
+export function useSidebarNotificationCounts() {
+  const { ownerId, enabled } = useNotificationScope();
+  return useQuery({
+    queryKey: [...ROOT_KEY, 'active-items', ownerId],
+    queryFn: async () => {
+      const res = await fetchNotifications({ ownerId, limit: 100, page: 1 });
+      const items = (res.items ?? []).filter(isActiveInPanel);
+      return aggregateActiveNotificationCounts(items);
+    },
+    enabled,
+    refetchInterval: enabled ? 60_000 : false,
+    retry: notifQueryRetry,
+  });
+}
 
 export function useUnreadCount() {
   const { ownerId, enabled } = useNotificationScope();

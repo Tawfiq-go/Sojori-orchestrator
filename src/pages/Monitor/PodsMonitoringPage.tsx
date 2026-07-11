@@ -1,52 +1,23 @@
 /**
  * Pods Monitoring — détail par pod (démarrage, probes, crash, ressources, RabbitMQ)
+ * Layout dense (même pattern que API / AI).
  */
 
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
-import { Box, Collapse, LinearProgress, Stack, Typography } from '@mui/material';
+import { useState, useEffect, useCallback } from 'react';
+import { Box, Button, Collapse, LinearProgress, Stack, Typography } from '@mui/material';
 import apiClient from '../../services/apiClient';
 import {
   Badge,
   MonitorEmpty,
   MonitorError,
+  MonitorKpiStrip,
   MonitorLoading,
   MonitorPageFrame,
-  MonitorPageHeader,
   MonitorSection,
+  MonitorToolbarRow,
+  btnGhostSx,
   monitorTokens as t,
 } from '../../features/monitoring/shared/MonitorDesign';
-
-function CompactStat({ icon, iconColor, value, label }: { icon: string; iconColor: string; value: string; label: string }) {
-  return (
-    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center',  py: 0.25 }}>
-      <Box sx={{ fontSize: 14, color: iconColor, lineHeight: 1 }}>{icon}</Box>
-      <Typography sx={{ fontSize: 15, fontWeight: 800, color: t.text, lineHeight: 1 }}>{value}</Typography>
-      <Typography sx={{ fontSize: 11.5, color: t.text3, lineHeight: 1 }}>{label}</Typography>
-    </Stack>
-  );
-}
-
-function CompactStatsRow({ children }: { children: ReactNode }) {
-  return (
-    <Stack
-      direction="row"
-      divider={<Box sx={{ width: '1px', alignSelf: 'stretch', bgcolor: t.border }} />}
-      spacing={2}
-      sx={{
-        px: 1.75,
-        py: 1,
-        mb: 2,
-        borderRadius: '10px',
-        border: `1px solid ${t.border}`,
-        bgcolor: t.bg1,
-        flexWrap: 'wrap',
-        rowGap: 0.5,
-      }}
-    >
-      {children}
-    </Stack>
-  );
-}
 
 interface PodEvent {
   type?: string;
@@ -73,11 +44,34 @@ interface PodRabbitmqConnection {
 }
 
 interface PodRabbitmq {
-  status: 'connected' | 'disconnected' | 'unknown';
+  status: 'connected' | 'disconnected' | 'unknown' | 'unused';
   lastLine?: string;
   connectedAt?: string;
   connectionsForService?: number;
   connections?: PodRabbitmqConnection[];
+  source?: string;
+}
+
+interface PodMongodb {
+  status: 'connected' | 'disconnected' | 'unknown' | 'unused';
+  lastLine?: string;
+  connectedAt?: string;
+  source?: string;
+}
+
+interface PodHealth {
+  runtime: {
+    status: 'running' | 'stopped' | 'pending' | 'failed' | 'unknown';
+    label: string;
+    ready: boolean;
+  };
+  mongodb: PodMongodb;
+  rabbitmq: PodRabbitmq;
+  probe?: {
+    ok: boolean | null;
+    httpStatus?: number;
+    path?: string;
+  };
 }
 
 interface ReadinessCondition {
@@ -143,25 +137,43 @@ interface PodDetail {
   restartCount: number;
   image?: string;
   startedAt?: string | null;
+  podIP?: string | null;
   startup: PodStartup;
   probes: PodProbes | null;
   resources: PodResources;
   crash: PodCrash | null;
   events: PodEvent[];
+  health?: PodHealth;
   rabbitmq: PodRabbitmq;
+  mongodb?: PodMongodb;
   restartHistory: RestartCycle[];
+}
+
+function runtimeBadgeVariant(status?: string): 'success' | 'warning' | 'error' | 'neutral' {
+  if (status === 'running') return 'success';
+  if (status === 'pending') return 'warning';
+  if (status === 'failed' || status === 'stopped') return 'error';
+  return 'neutral';
+}
+
+function depBadgeVariant(status?: string): 'success' | 'error' | 'neutral' | 'warning' {
+  if (status === 'connected') return 'success';
+  if (status === 'disconnected') return 'error';
+  if (status === 'unused') return 'neutral';
+  return 'warning';
+}
+
+function depLabel(kind: 'Mongo' | 'Rabbit', status?: string): string {
+  if (status === 'connected') return `${kind} connecté`;
+  if (status === 'disconnected') return `${kind} déconnecté`;
+  if (status === 'unused') return `${kind} N/A`;
+  return `${kind} ?`;
 }
 
 function phaseBadgeVariant(phase?: string): 'success' | 'warning' | 'error' | 'neutral' {
   if (phase === 'Running') return 'success';
   if (phase === 'Pending') return 'warning';
   if (phase === 'Failed' || phase === 'Unknown') return 'error';
-  return 'neutral';
-}
-
-function rabbitmqBadgeVariant(status: PodRabbitmq['status']): 'success' | 'error' | 'neutral' {
-  if (status === 'connected') return 'success';
-  if (status === 'disconnected') return 'error';
   return 'neutral';
 }
 
@@ -300,12 +312,12 @@ function RestartHistoryTabs({ history }: { history: RestartCycle[] }) {
             key={i}
             sx={{
               border: `1px solid ${hasError ? t.error : t.border}`,
-              borderRadius: '8px',
-              p: 1.25,
+              borderRadius: '6px',
+              p: 0.75,
               bgcolor: t.bg1,
             }}
           >
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center',  mb: 0.75 }}>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mb: 0.5 }}>
               <Box
                 sx={{
                   px: 0.75,
@@ -416,50 +428,83 @@ export default function PodsMonitoringPage() {
   }
 
   const crashing = pods.filter((p) => p.crash);
-  const rabbitDisconnected = pods.filter((p) => p.rabbitmq?.status === 'disconnected');
+  const mongoDisconnected = pods.filter(
+    (p) => (p.health?.mongodb?.status || p.mongodb?.status) === 'disconnected',
+  );
+  const rabbitDisconnected = pods.filter(
+    (p) => (p.health?.rabbitmq?.status || p.rabbitmq?.status) === 'disconnected',
+  );
   const highResourceUsage = pods.filter(
     (p) => (p.resources?.cpu?.percentOfLimit ?? 0) > 90 || (p.resources?.memory?.percentOfLimit ?? 0) > 90,
   );
 
   return (
     <MonitorPageFrame>
-      <MonitorPageHeader
-        accent="infra"
-        title="Pods"
-        subtitle="Démarrage, probes, crash, ressources et connexion RabbitMQ par pod"
-        live={isLive}
-        onToggleLive={() => setIsLive((v) => !v)}
-        onRefresh={() => void fetchPods()}
-        loading={loading}
+      <MonitorToolbarRow
+        left={
+          <Typography sx={{ fontSize: 12, color: t.text3 }}>
+            Running / Stopped · Mongo · RabbitMQ (probe live + Management API)
+          </Typography>
+        }
+        right={
+          <>
+            <Button sx={btnGhostSx} onClick={() => setIsLive((v) => !v)}>
+              <Badge variant={isLive ? 'success' : 'neutral'} dot>
+                {isLive ? 'Live' : 'Pause'}
+              </Badge>
+            </Button>
+            <Button sx={btnGhostSx} onClick={() => void fetchPods()} disabled={loading}>
+              {loading ? '…' : 'Actualiser'}
+            </Button>
+          </>
+        }
       />
 
       {error ? <MonitorError message={error} onRetry={() => void fetchPods()} /> : null}
 
-      <CompactStatsRow>
-        <CompactStat icon="📦" iconColor={t.text2} value={String(pods.length)} label="Pods" />
-        <CompactStat icon="🔴" iconColor={t.error} value={String(crashing.length)} label="En crash" />
-        <CompactStat icon="🧠" iconColor={t.warning} value={String(highResourceUsage.length)} label="CPU/RAM > 90%" />
-        <CompactStat
-          icon="🐰"
-          iconColor={t.success}
-          value={String(pods.filter((p) => p.rabbitmq?.status === 'connected').length)}
-          label="RabbitMQ OK"
-        />
-        <CompactStat icon="⚠️" iconColor={t.warning} value={String(rabbitDisconnected.length)} label="RabbitMQ déconnecté" />
-      </CompactStatsRow>
+      <MonitorKpiStrip
+        items={[
+          { label: 'Pods', value: pods.length, tone: 'neutral' },
+          {
+            label: 'En crash',
+            value: crashing.length,
+            tone: crashing.length > 0 ? 'error' : 'neutral',
+          },
+          {
+            label: 'CPU/RAM > 90%',
+            value: highResourceUsage.length,
+            tone: highResourceUsage.length > 0 ? 'warning' : 'neutral',
+          },
+          {
+            label: 'Mongo déconnecté',
+            value: mongoDisconnected.length,
+            tone: mongoDisconnected.length > 0 ? 'warning' : 'neutral',
+          },
+          {
+            label: 'RabbitMQ OK',
+            value: pods.filter((p) => (p.health?.rabbitmq?.status || p.rabbitmq?.status) === 'connected').length,
+            tone: 'success',
+          },
+          {
+            label: 'RabbitMQ déconnecté',
+            value: rabbitDisconnected.length,
+            tone: rabbitDisconnected.length > 0 ? 'warning' : 'neutral',
+          },
+        ]}
+      />
 
-      <MonitorSection title="Détail des pods" desc={`${pods.length} pod(s)`}>
+      <MonitorSection dense title="Détail des pods" desc={`${pods.length} pod(s)`}>
         {pods.length === 0 ? (
           <MonitorEmpty message="Aucun pod trouvé." />
         ) : (
-          <Stack spacing={1}>
+          <Stack spacing={0.5}>
             {pods.map((p) => {
               const isOpen = expanded === p.name;
               return (
                 <Box
                   key={p.name}
                   sx={{
-                    borderRadius: '10px',
+                    borderRadius: '8px',
                     border: `1px solid ${p.crash ? t.error : t.border}`,
                     bgcolor: t.bg2,
                     overflow: 'hidden',
@@ -468,7 +513,7 @@ export default function PodsMonitoringPage() {
                   <Box
                     onClick={() => setExpanded(isOpen ? null : p.name)}
                     sx={{
-                      p: 1.5,
+                      p: 1,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -487,9 +532,24 @@ export default function PodsMonitoringPage() {
                     </Box>
 
                     <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                      <Badge variant={phaseBadgeVariant(p.phase)} dot>
-                        {p.phase || 'Unknown'}
-                      </Badge>
+                      {(() => {
+                        const runtime = p.health?.runtime;
+                        const mongo = p.health?.mongodb || p.mongodb;
+                        const rabbit = p.health?.rabbitmq || p.rabbitmq;
+                        return (
+                          <>
+                            <Badge variant={runtime ? runtimeBadgeVariant(runtime.status) : phaseBadgeVariant(p.phase)} dot>
+                              {runtime?.label || p.phase || 'Unknown'}
+                            </Badge>
+                            <Badge variant={depBadgeVariant(mongo?.status)}>
+                              {depLabel('Mongo', mongo?.status)}
+                            </Badge>
+                            <Badge variant={depBadgeVariant(rabbit?.status)}>
+                              {depLabel('Rabbit', rabbit?.status)}
+                            </Badge>
+                          </>
+                        );
+                      })()}
                       <Badge variant={p.restartCount > 3 ? 'error' : p.restartCount > 0 ? 'warning' : 'neutral'}>
                         {p.restartCount} restart{p.restartCount > 1 ? 's' : ''}
                       </Badge>
@@ -500,19 +560,12 @@ export default function PodsMonitoringPage() {
                         <Badge variant="error">RAM {p.resources.memory.percentOfLimit}%</Badge>
                       )}
                       {p.crash && <Badge variant="error">{p.crash.reason}</Badge>}
-                      <Badge variant={rabbitmqBadgeVariant(p.rabbitmq?.status)}>
-                        🐰 {p.rabbitmq?.status === 'connected'
-                          ? 'connecté'
-                          : p.rabbitmq?.status === 'disconnected'
-                            ? 'déconnecté'
-                            : 'inconnu'}
-                      </Badge>
                     </Stack>
                   </Box>
 
                   <Collapse in={isOpen}>
-                    <Box sx={{ p: 1.5, pt: 0, borderTop: `1px solid ${t.border}` }}>
-                      <Stack spacing={1.5} sx={{ mt: 1.25 }}>
+                    <Box sx={{ p: 1, pt: 0, borderTop: `1px solid ${t.border}` }}>
+                      <Stack spacing={1} sx={{ mt: 1 }}>
                         {/* Timeline de démarrage */}
                         <Box>
                           <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text2, mb: 0.5 }}>
@@ -625,16 +678,44 @@ export default function PodsMonitoringPage() {
                           </Box>
                         )}
 
-                        {/* RabbitMQ */}
+                        {/* Santé live : Running + Mongo + Rabbit */}
+                        <Box>
+                          <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text2, mb: 0.5 }}>
+                            Santé (extérieur)
+                          </Typography>
+                          <Typography sx={{ fontSize: 12, color: t.text3 }}>
+                            {p.health?.runtime?.label || p.phase || '?'}
+                            {p.health?.probe?.path
+                              ? ` · probe ${p.health.probe.path} → ${p.health.probe.httpStatus ?? '?'}`
+                              : ''}
+                            {p.podIP ? ` · IP ${p.podIP}` : ''}
+                          </Typography>
+                          <Typography sx={{ fontSize: 12, color: t.text3, mt: 0.25 }}>
+                            Mongo: {(p.health?.mongodb || p.mongodb)?.status || '?'}
+                            {(p.health?.mongodb || p.mongodb)?.source
+                              ? ` (${(p.health?.mongodb || p.mongodb)?.source})`
+                              : ''}
+                            {' · '}
+                            Rabbit: {(p.health?.rabbitmq || p.rabbitmq)?.status || '?'}
+                            {(p.health?.rabbitmq || p.rabbitmq)?.source
+                              ? ` (${(p.health?.rabbitmq || p.rabbitmq)?.source})`
+                              : ''}
+                            {(p.health?.rabbitmq || p.rabbitmq)?.connectionsForService != null
+                              ? ` · ${(p.health?.rabbitmq || p.rabbitmq)?.connectionsForService} conn. AMQP`
+                              : ''}
+                          </Typography>
+                        </Box>
+
+                        {/* RabbitMQ détail */}
                         <Box>
                           <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text2, mb: 0.5 }}>
                             RabbitMQ
                           </Typography>
                           <Typography sx={{ fontSize: 12, color: t.text3 }}>
                             {p.rabbitmq?.connectionsForService !== undefined
-                              ? `${p.rabbitmq.connectionsForService} connexion(s) actives pour ${p.app}`
+                              ? `${p.rabbitmq.connectionsForService} connexion(s) depuis l'IP du pod`
                               : 'Aucune connexion active détectée'}
-                            {p.rabbitmq?.connectedAt ? ` · connecté depuis ${new Date(p.rabbitmq.connectedAt).toLocaleString('fr-FR')}` : ''}
+                            {p.rabbitmq?.connectedAt ? ` · depuis ${new Date(p.rabbitmq.connectedAt).toLocaleString('fr-FR')}` : ''}
                           </Typography>
                           {p.rabbitmq?.lastLine && (
                             <Typography sx={{ fontSize: 11, color: t.text3, fontFamily: 'monospace', mt: 0.5 }}>

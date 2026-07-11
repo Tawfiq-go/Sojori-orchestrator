@@ -3,25 +3,32 @@
 // ════════════════════════════════════════════════════════════════════
 import { parseIsoLocal } from './_shared';
 
-export type BlockedDayClassification = 'cancelled_reservation' | 'ota_stop_sell' | 'unknown';
+export type BlockedDayClassification =
+  | 'cancelled_reservation'
+  | 'ota_stop_sell'
+  | 'unknown'
+  | 'missing_reservation_block';
 
 export interface BlockedDayRange {
   from: string;
   to: string;
   classification: BlockedDayClassification;
   dayCount: number;
+  reservationNumbers?: string[];
 }
 
 export const CLASSIFICATION_LABEL: Record<BlockedDayClassification, string> = {
   cancelled_reservation: 'Réservation annulée a laissé le calendrier bloqué',
   ota_stop_sell: 'Stop-sell manuel OTA',
   unknown: 'Inconnu — vérification manuelle requise',
+  missing_reservation_block: 'Réservation confirmée mais calendrier encore disponible',
 };
 
 export const CLASSIFICATION_TONE: Record<BlockedDayClassification, 'error' | 'warning' | 'text3'> = {
   cancelled_reservation: 'error',
   ota_stop_sell: 'warning',
   unknown: 'text3',
+  missing_reservation_block: 'error',
 };
 
 const MONTH_SHORT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];

@@ -8,7 +8,6 @@ import {
   Box,
   Stack,
   Typography,
-  Paper,
   Chip,
   Button,
   TextField,
@@ -35,24 +34,33 @@ import apiClient from '../../services/apiClient';
 import { getOwners } from '../../services/teamDashboardApi';
 import reservationsService from '../../services/reservationsService';
 import { listingsService } from '../../services/listingsService';
+import {
+  Badge,
+  MonitorKpiStrip,
+  MonitorPageFrame,
+  MonitorSection,
+  MonitorToolbarRow,
+  btnPrimarySx,
+  monitorTokens as t,
+} from '../../features/monitoring/shared/MonitorDesign';
 
 moment.locale('fr');
 
 const T = {
-  primary: '#b8851a',
-  primaryDeep: '#876119',
-  bg1: '#ffffff',
-  bg2: '#fafaf7',
-  bg3: '#f0eee8',
-  text: '#14110a',
-  text2: '#55504a',
-  text3: '#7a756c',
-  text4: '#a8a299',
-  border: 'rgba(20,17,10,0.07)',
-  success: '#0a8f5e',
-  warning: '#c46506',
-  error: '#c81e1e',
-  info: '#0673b3',
+  primary: t.primary,
+  primaryDeep: t.primaryDeep,
+  bg1: t.bg1,
+  bg2: t.bg2,
+  bg3: t.bg3,
+  text: t.text,
+  text2: t.text2,
+  text3: t.text3,
+  text4: t.text4,
+  border: t.border,
+  success: t.success,
+  warning: t.warning,
+  error: t.error,
+  info: t.info,
 };
 
 const ISSUE_LABELS: Record<string, string> = {
@@ -95,12 +103,16 @@ type SyncIssue = {
   code: string;
   severity: string;
   message: string;
+  rootCause?: string;
   reservationStatus?: string;
   planStatus?: string;
   whitelistStatus?: string;
   calendarBlocked?: boolean | null;
   activeTaskCount?: number;
   guestName?: string;
+  ownerId?: string;
+  ownerName?: string;
+  ownerEmail?: string;
   listingId?: string;
   listingName?: string;
   channelName?: string;
@@ -127,7 +139,8 @@ type AuditResult = {
 };
 
 const FIX_ERROR_HINTS: Record<string, string> = {
-  reservation_unreachable: 'Réservation introuvable sur srv-reservations',
+  reservation_unreachable: 'Réservation introuvable — plan déjà annulé ou absent',
+  plan_still_required: 'Plan encore requis (réservation Confirmé/Pending active)',
   orchestration_skipped: 'Orchestration désactivée sur le listing',
   reservation_cancelled: 'Réservation annulée — plan non créé',
   reconcile_error: 'Erreur interne lors de la réconciliation',
@@ -180,7 +193,10 @@ function formatTime(timeInput: unknown): string | null {
 }
 
 function issueNeedsEnrich(row: SyncIssue): boolean {
-  return !row.guestName || !row.arrivalDate || !row.listingName;
+  // Plan/whitelist orphelin : la résa n'existe plus — pas de refetch (404 attendu)
+  if (row.code === 'RESERVATION_UNREACHABLE') return false;
+  if (row.guestName && row.arrivalDate && (row.listingName || row.listingId)) return false;
+  return !row.guestName || !row.arrivalDate || !(row.listingName || row.listingId);
 }
 
 function mergeReservationIntoIssue(row: SyncIssue, r: Record<string, unknown>): SyncIssue {
@@ -210,18 +226,19 @@ async function enrichAuditIssues(issues: SyncIssue[]): Promise<SyncIssue[]> {
   if (idsToFetch.length === 0) return issues;
 
   const reservationCache = new Map<string, Record<string, unknown>>();
-  const BATCH = 6;
+  const BATCH = 80;
   for (let i = 0; i < idsToFetch.length; i += BATCH) {
-    await Promise.all(
-      idsToFetch.slice(i, i + BATCH).map(async (id) => {
-        try {
-          const r = await reservationsService.getById(id);
-          reservationCache.set(id, r as unknown as Record<string, unknown>);
-        } catch {
-          /* réservation inaccessible */
-        }
-      }),
-    );
+    try {
+      const batch = await reservationsService.getBatch(idsToFetch.slice(i, i + BATCH), {
+        silent: true,
+      });
+      for (const r of batch.data ?? []) {
+        const id = String((r as { _id?: string })._id ?? '').trim();
+        if (id) reservationCache.set(id, r as unknown as Record<string, unknown>);
+      }
+    } catch {
+      /* enrichissement best-effort */
+    }
   }
 
   let merged = issues.map((row) => {
@@ -279,32 +296,6 @@ function fmtDateTime(d?: string): { date: string; time: string } {
   return { date: m.format('DD MMM YY'), time: m.format('HH:mm') };
 }
 
-function KpiCard({
-  label,
-  value,
-  sub,
-  accent = T.text,
-}: {
-  label: string;
-  value?: number;
-  sub?: string;
-  accent?: string;
-}) {
-  return (
-    <Paper sx={{ p: 1.75, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
-      <Typography sx={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.text3 }}>
-        {label}
-      </Typography>
-      <Typography sx={{ mt: 0.5, fontSize: 22, fontWeight: 700, color: accent, lineHeight: 1 }}>
-        {value ?? '—'}
-      </Typography>
-      {sub ? (
-        <Typography sx={{ mt: 0.5, fontSize: 11, color: T.text4 }}>{sub}</Typography>
-      ) : null}
-    </Paper>
-  );
-}
-
 function Pill({
   label,
   count,
@@ -324,11 +315,11 @@ function Pill({
       onClick={onClick}
       sx={{
         textTransform: 'none',
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 600,
-        px: 1.25,
-        py: 0.5,
-        minHeight: 28,
+        px: 1,
+        py: 0.35,
+        minHeight: 26,
         borderRadius: 999,
         border: '1px solid',
         borderColor: active ? color : T.border,
@@ -342,13 +333,13 @@ function Pill({
         component="span"
         sx={{
           ml: 0.75,
-          fontSize: 10.5,
+          fontSize: 10,
           fontWeight: 700,
           bgcolor: active ? `${color}28` : T.bg3,
           color: active ? color : T.text3,
           borderRadius: 999,
           px: 0.75,
-          py: 0.25,
+          py: 0.15,
         }}
       >
         {count}
@@ -610,8 +601,11 @@ export default function ReservationSyncMonitorTab() {
         (r) =>
           r.reservationCode?.toLowerCase().includes(s) ||
           r.guestName?.toLowerCase().includes(s) ||
+          r.ownerName?.toLowerCase().includes(s) ||
+          r.ownerEmail?.toLowerCase().includes(s) ||
           r.listingName?.toLowerCase().includes(s) ||
-          r.message?.toLowerCase().includes(s),
+          r.message?.toLowerCase().includes(s) ||
+          r.rootCause?.toLowerCase().includes(s),
       );
     }
     if (codeFilter !== 'all') f = f.filter((r) => r.code === codeFilter);
@@ -658,7 +652,6 @@ export default function ReservationSyncMonitorTab() {
   const summary = result?.summary;
   const issueCount = summary?.issues ?? 0;
   const remainingCount = Math.max(0, issueCount - fixedKeys.size);
-  const kpiAccent = remainingCount === 0 ? T.success : remainingCount > 5 ? T.error : T.warning;
   const fixableCount = issues.filter((i) => i.code !== 'RESERVATION_UNREACHABLE').length;
   const fixAllLabel =
     codeFilter === 'all'
@@ -666,129 +659,136 @@ export default function ReservationSyncMonitorTab() {
       : `Corriger tout — ${ISSUE_LABELS[codeFilter] || codeFilter} (${fixableCount})`;
 
   return (
-    <Box sx={{ width: '100%' }}>
-      <Typography sx={{ fontSize: 20, fontWeight: 700, color: T.text, letterSpacing: '-0.02em' }}>
-        Sync réservations
-      </Typography>
-      <Typography sx={{ mt: 0.5, fontSize: 13, color: T.text2 }}>
-        Vérifie toutes les réservations (Confirmé, Pending, Completed, annulées…) et détecte les
-        artefacts orphelins dans fulltask (plan), fullchatbot (whitelist) et calendar.
-      </Typography>
-
-      {/* Audit controls */}
-      <Paper sx={{ mt: 2, p: 2, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ flexWrap: 'wrap' }}>
-          <TextField
-            size="small"
-            placeholder="Filtrer owners…"
-            value={ownerSearch}
-            onChange={(e) => setOwnerSearch(e.target.value)}
-            sx={{ minWidth: 160, flex: 1 }}
-          />
-          <FormControl size="small" sx={{ minWidth: 260, flex: 2 }}>
-            <Select
-              displayEmpty
-              value={selectedOwnerId}
-              onChange={(e) => setSelectedOwnerId(e.target.value)}
-              disabled={ownersLoading}
-            >
-              <MenuItem value="">— Choisir un propriétaire —</MenuItem>
-              {owners.map((o) => {
-                const id = resolveOwnerId(o);
-                if (!id) return null;
-                return (
-                  <MenuItem key={id} value={id}>
-                    {ownerLabel(o)}
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          </FormControl>
-          <TextField
-            size="small"
-            type="number"
-            label="Créées (j)"
-            value={createdSinceDays}
-            onChange={(e) => setCreatedSinceDays(Number(e.target.value) || 14)}
-            sx={{ width: 110 }}
-          />
-          <TextField
-            size="small"
-            type="number"
-            label="Arrivée (j)"
-            value={arrivalWithinDays}
-            onChange={(e) => setArrivalWithinDays(Number(e.target.value) || 60)}
-            sx={{ width: 110 }}
-          />
-          <TextField
-            size="small"
-            type="number"
-            label="Limite"
-            value={limit}
-            onChange={(e) => setLimit(Number(e.target.value) || 200)}
-            sx={{ width: 90 }}
-          />
+    <MonitorPageFrame>
+      <MonitorToolbarRow
+        left={
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
+            <TextField
+              size="small"
+              placeholder="Filtrer owners…"
+              value={ownerSearch}
+              onChange={(e) => setOwnerSearch(e.target.value)}
+              sx={{ minWidth: 140, width: 160 }}
+            />
+            <FormControl size="small" sx={{ minWidth: 220, maxWidth: 320 }}>
+              <Select
+                displayEmpty
+                value={selectedOwnerId}
+                onChange={(e) => setSelectedOwnerId(e.target.value)}
+                disabled={ownersLoading}
+              >
+                <MenuItem value="">— Choisir un propriétaire —</MenuItem>
+                {owners.map((o) => {
+                  const id = resolveOwnerId(o);
+                  if (!id) return null;
+                  return (
+                    <MenuItem key={id} value={id}>
+                      {ownerLabel(o)}
+                    </MenuItem>
+                  );
+                })}
+              </Select>
+            </FormControl>
+            <TextField
+              size="small"
+              type="number"
+              label="Créées (j)"
+              value={createdSinceDays}
+              onChange={(e) => setCreatedSinceDays(Number(e.target.value) || 14)}
+              sx={{ width: 100 }}
+            />
+            <TextField
+              size="small"
+              type="number"
+              label="Arrivée (j)"
+              value={arrivalWithinDays}
+              onChange={(e) => setArrivalWithinDays(Number(e.target.value) || 60)}
+              sx={{ width: 100 }}
+            />
+            <TextField
+              size="small"
+              type="number"
+              label="Limite"
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value) || 200)}
+              sx={{ width: 80 }}
+            />
+          </Stack>
+        }
+        right={
           <Button
-            variant="contained"
             size="small"
-            startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <PlayIcon />}
+            startIcon={loading ? <CircularProgress size={14} color="inherit" /> : <PlayIcon />}
             disabled={loading || !selectedOwnerId}
             onClick={() => void runAudit()}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              bgcolor: T.primary,
-              '&:hover': { bgcolor: T.primaryDeep },
-              alignSelf: 'center',
-            }}
+            sx={btnPrimarySx}
           >
-            Lancer l&apos;audit
+            Audit
           </Button>
-        </Stack>
-        {error ? (
-          <Alert severity="error" sx={{ mt: 1.5 }}>
-            {error}
-          </Alert>
-        ) : null}
-      </Paper>
+        }
+      />
+
+      {error ? (
+        <Alert severity="error" sx={{ mb: 1.25 }}>
+          {error}
+        </Alert>
+      ) : null}
 
       {summary ? (
         <>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
-            <KpiCard
-              label="Résas fenêtre"
-              value={summary.reservationsInWindow ?? summary.scanned}
-              sub={Object.entries(summary.reservationsByStatus ?? {})
-                .slice(0, 4)
-                .map(([st, n]) => `${st}: ${n}`)
-                .join(' · ')}
-            />
-            <KpiCard label="Plans actifs" value={summary.plansActive} />
-            <KpiCard label="Whitelist" value={summary.whitelistRows} />
-            <KpiCard
-              label="Anomalies"
-              value={remainingCount}
-              accent={kpiAccent}
-              sub={
-                fixedKeys.size > 0
-                  ? `${fixedKeys.size} corrigée(s) · ${result?.durationMs ? `${Math.round(result.durationMs / 1000)}s` : ''}`
-                  : result?.durationMs
-                    ? `${Math.round(result.durationMs / 1000)}s`
-                    : undefined
-              }
-            />
-          </Stack>
+          <MonitorKpiStrip
+            items={[
+              {
+                label: 'Résas fenêtre',
+                value: summary.reservationsInWindow ?? summary.scanned ?? 0,
+                tone: 'neutral',
+              },
+              {
+                label: 'Plans actifs',
+                value: summary.plansActive ?? 0,
+                tone: 'info',
+              },
+              {
+                label: 'Whitelist',
+                value: summary.whitelistRows ?? 0,
+                tone: 'neutral',
+              },
+              {
+                label: 'Anomalies',
+                value: remainingCount,
+                tone:
+                  remainingCount === 0 ? 'success' : remainingCount > 5 ? 'error' : 'warning',
+              },
+              ...(fixedKeys.size > 0
+                ? [{ label: 'Corrigées', value: fixedKeys.size, tone: 'success' as const }]
+                : []),
+              ...(result?.durationMs
+                ? [
+                    {
+                      label: 'Durée',
+                      value: `${Math.round(result.durationMs / 1000)}s`,
+                      tone: 'neutral' as const,
+                    },
+                  ]
+                : []),
+            ]}
+          />
 
           {remainingCount === 0 ? (
-            <Alert severity="success" sx={{ mt: 2 }}>
+            <Alert severity="success" sx={{ mb: 1.25 }}>
               {issueCount === 0
                 ? 'Aucune anomalie détectée sur la fenêtre sélectionnée.'
                 : 'Toutes les anomalies affichées ont été corrigées.'}
             </Alert>
           ) : (
             <>
-              {/* Toolbar — même logique que /reservations */}
-              <Paper sx={{ mt: 2, p: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
+              <MonitorSection
+                dense
+                title="Filtres"
+                headRight={
+                  <Badge variant="neutral">{issues.length} ligne(s)</Badge>
+                }
+              >
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
                   <TextField
                     size="small"
@@ -804,9 +804,9 @@ export default function ReservationSyncMonitorTab() {
                         ),
                       },
                     }}
-                    sx={{ flex: 1, minWidth: 200, maxWidth: 340 }}
+                    sx={{ flex: 1, minWidth: 180, maxWidth: 300 }}
                   />
-                  <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <FormControl size="small" sx={{ minWidth: 160 }}>
                     <Select
                       multiple
                       displayEmpty
@@ -822,7 +822,7 @@ export default function ReservationSyncMonitorTab() {
                       ))}
                     </Select>
                   </FormControl>
-                  <FormControl size="small" sx={{ minWidth: 160 }}>
+                  <FormControl size="small" sx={{ minWidth: 140 }}>
                     <Select
                       displayEmpty
                       value={statusFilter}
@@ -836,7 +836,7 @@ export default function ReservationSyncMonitorTab() {
                       ))}
                     </Select>
                   </FormControl>
-                  <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <FormControl size="small" sx={{ minWidth: 180 }}>
                     <Select
                       displayEmpty
                       value={codeFilter}
@@ -868,21 +868,18 @@ export default function ReservationSyncMonitorTab() {
                     </Button>
                   ) : null}
                 </Stack>
-                <Stack direction="row" spacing={0.75} sx={{ mt: 1.25, flexWrap: 'wrap', gap: 0.75 }}>
+                <Stack direction="row" spacing={0.75} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
                   <Pill label="Arr. auj." count={filterCounts.arrToday} active={quickFilters.arrToday} onClick={() => toggleQuick('arrToday')} color={T.info} />
                   <Pill label="Dép. auj." count={filterCounts.depToday} active={quickFilters.depToday} onClick={() => toggleQuick('depToday')} color={T.warning} />
-                  <Pill label="Arr. 7 jours" count={filterCounts.arr7days} active={quickFilters.arr7days} onClick={() => toggleQuick('arr7days')} color={T.primary} />
-                  <Pill label="Dép. 7 jours" count={filterCounts.dep7days} active={quickFilters.dep7days} onClick={() => toggleQuick('dep7days')} color={T.error} />
-                  <Typography sx={{ fontSize: 12, color: T.text3, alignSelf: 'center', ml: 1 }}>
-                    {issues.length} ligne(s) affichée(s)
-                  </Typography>
+                  <Pill label="Arr. 7 j" count={filterCounts.arr7days} active={quickFilters.arr7days} onClick={() => toggleQuick('arr7days')} color={T.primary} />
+                  <Pill label="Dép. 7 j" count={filterCounts.dep7days} active={quickFilters.dep7days} onClick={() => toggleQuick('dep7days')} color={T.error} />
                 </Stack>
-              </Paper>
+              </MonitorSection>
 
               {batchSummary ? (
                 <Alert
                   severity={batchSummary.failed === 0 ? 'success' : 'warning'}
-                  sx={{ mt: 1.5 }}
+                  sx={{ mb: 1.25 }}
                 >
                   Batch : {batchSummary.fixed}/{batchSummary.total} corrigée(s)
                   {batchSummary.failed > 0 ? ` · ${batchSummary.failed} échec(s)` : ''}
@@ -890,23 +887,25 @@ export default function ReservationSyncMonitorTab() {
                 </Alert>
               ) : null}
 
-              <Paper sx={{ mt: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
-                <Box sx={{ overflowX: 'auto' }}>
+              <MonitorSection dense title="Anomalies">
+                <Box sx={{ mx: -1.5, mb: -1.5, overflowX: 'auto' }}>
                   <Box
                     component="table"
-                    sx={{ width: '100%', minWidth: 1400, borderCollapse: 'collapse', fontSize: 12.5 }}
+                    sx={{ width: '100%', minWidth: 1400, borderCollapse: 'collapse', fontSize: 12 }}
                   >
                     <Box component="thead">
                       <Box component="tr" sx={{ bgcolor: T.bg2 }}>
                         {[
                           'Réservation',
                           'Anomalie',
+                          'Propriétaire',
                           'Propriété',
                           'Voyageur',
                           'Créé',
                           'Check-in',
                           'Check-out',
                           'Statut',
+                          'Pourquoi',
                           'Message',
                           'Action',
                         ].map((h) => (
@@ -915,11 +914,11 @@ export default function ReservationSyncMonitorTab() {
                             key={h}
                             sx={{
                               textAlign: 'left',
-                              px: 1.5,
-                              py: 1.25,
-                              fontSize: 10.75,
+                              px: 1.25,
+                              py: 0.75,
+                              fontSize: 10,
                               fontWeight: 700,
-                              letterSpacing: '0.08em',
+                              letterSpacing: '0.06em',
                               textTransform: 'uppercase',
                               color: T.text3,
                               borderBottom: `1px solid ${T.border}`,
@@ -949,8 +948,8 @@ export default function ReservationSyncMonitorTab() {
                               '&:hover': { bgcolor: T.bg2 },
                               '& > td': {
                                 borderBottom: `1px solid ${T.border}`,
-                                px: 1.5,
-                                py: 1.25,
+                                px: 1.25,
+                                py: 0.85,
                                 verticalAlign: 'middle',
                               },
                             }}
@@ -995,12 +994,26 @@ export default function ReservationSyncMonitorTab() {
                               </Stack>
                             </Box>
                             <Box component="td">
-                              <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text, maxWidth: 180 }}>
+                              <Typography sx={{ fontSize: 12, fontWeight: 600, color: T.text, maxWidth: 160 }}>
+                                {row.ownerName || row.ownerEmail || '—'}
+                              </Typography>
+                              {row.ownerEmail && row.ownerName ? (
+                                <Typography sx={{ fontSize: 10.5, color: T.text4, maxWidth: 160 }}>
+                                  {row.ownerEmail}
+                                </Typography>
+                              ) : row.ownerId ? (
+                                <Typography sx={{ fontSize: 10, color: T.text4, fontFamily: 'monospace' }}>
+                                  {row.ownerId.slice(-8)}
+                                </Typography>
+                              ) : null}
+                            </Box>
+                            <Box component="td">
+                              <Typography sx={{ fontSize: 12, fontWeight: 600, color: T.text, maxWidth: 180 }}>
                                 {row.listingName || '—'}
                               </Typography>
                             </Box>
                             <Box component="td">
-                              <Typography sx={{ fontSize: 12.5, fontWeight: 500, color: T.text }}>
+                              <Typography sx={{ fontSize: 12, fontWeight: 500, color: T.text }}>
                                 {row.guestName || '—'}
                               </Typography>
                             </Box>
@@ -1032,6 +1045,11 @@ export default function ReservationSyncMonitorTab() {
                                 size="small"
                                 sx={{ bgcolor: st.bg, color: st.color, fontWeight: 600, fontSize: 11, height: 22 }}
                               />
+                            </Box>
+                            <Box component="td">
+                              <Typography sx={{ fontSize: 11.5, color: T.text, maxWidth: 280, lineHeight: 1.45 }}>
+                                {row.rootCause || '—'}
+                              </Typography>
                             </Box>
                             <Box component="td">
                               <Typography sx={{ fontSize: 12, color: T.text2, maxWidth: 220 }}>
@@ -1093,40 +1111,40 @@ export default function ReservationSyncMonitorTab() {
                       })}
                     </Box>
                   </Box>
+                  {issues.length === 0 ? (
+                    <Box sx={{ p: 3, textAlign: 'center' }}>
+                      <WarningIcon sx={{ fontSize: 28, color: T.text4, mb: 0.5 }} />
+                      <Typography sx={{ fontSize: 13, color: T.text3 }}>
+                        Aucune anomalie ne correspond aux filtres actifs.
+                      </Typography>
+                    </Box>
+                  ) : null}
                 </Box>
-                {issues.length === 0 ? (
-                  <Box sx={{ p: 4, textAlign: 'center' }}>
-                    <WarningIcon sx={{ fontSize: 32, color: T.text4, mb: 1 }} />
-                    <Typography sx={{ fontSize: 13, color: T.text3 }}>
-                      Aucune anomalie ne correspond aux filtres actifs.
-                    </Typography>
-                  </Box>
-                ) : null}
-              </Paper>
+              </MonitorSection>
             </>
           )}
         </>
       ) : !loading ? (
-        <Paper
+        <Box
           sx={{
-            mt: 3,
-            p: 4,
+            mt: 2,
+            p: 3,
             textAlign: 'center',
             border: `1px dashed ${T.border}`,
             borderRadius: 1.5,
             bgcolor: T.bg1,
           }}
         >
-          <RefreshIcon sx={{ fontSize: 36, color: T.text4, mb: 1 }} />
+          <RefreshIcon sx={{ fontSize: 28, color: T.text4, mb: 0.5 }} />
           <Typography sx={{ fontSize: 13, color: T.text3 }}>
             Choisissez un propriétaire, puis lancez l&apos;audit.
           </Typography>
-        </Paper>
+        </Box>
       ) : (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress sx={{ color: T.primary }} />
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress sx={{ color: T.primary }} size={32} />
         </Box>
       )}
-    </Box>
+    </MonitorPageFrame>
   );
 }

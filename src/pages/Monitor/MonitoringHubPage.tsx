@@ -88,8 +88,8 @@ export default function MonitoringHubPage() {
       <Box className="sojori-main-enter" sx={{ minWidth: 0 }}>
         <Box
           sx={{
-            mb: 2.5,
-            pb: 2,
+            mb: 1.25,
+            pb: 1,
             borderBottom: `1px solid ${t.border}`,
           }}
         >
