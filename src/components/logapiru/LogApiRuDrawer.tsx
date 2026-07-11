@@ -257,6 +257,33 @@ export function LogApiRuDrawer({
                         )}
                     </div>
                   </div>
+                  {status === 'error' && (
+                    <div className="dwr-errbanner">
+                      <div className="ttl">
+                        Échec API RU
+                        {detail.statusCode ? ` · code ${detail.statusCode}` : ''}
+                        {code?.label ? ` · ${code.label}` : ''}
+                      </div>
+                      <div className="msg">
+                        {detail.responseMsg?.trim() || code?.hint || 'Voir le XML / JSON de réponse ci-dessous.'}
+                      </div>
+                    </div>
+                  )}
+                  {status === 'warning' && (
+                    <div className="dwr-warnbanner">
+                      <div className="ttl">
+                        {detail.statusCode === '-5' || detail.statusCode === '-6'
+                          ? `Retry RU · ${code?.label || detail.statusCode}`
+                          : 'Appel lent (>10s) — réponse OK, pas un échec métier'}
+                      </div>
+                      <div className="msg">
+                        {code?.hint ||
+                          (detail.responseTime != null
+                            ? `Durée ${fmtN(detail.responseTime)} ms`
+                            : detail.responseMsg || '')}
+                      </div>
+                    </div>
+                  )}
                   <div className="dwr-meta">
                     <div className="cell">
                       <div className="l">Statut</div>

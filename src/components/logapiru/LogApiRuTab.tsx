@@ -190,6 +190,16 @@ export function LogApiRuTab() {
     });
   };
 
+  const filterStatus = (status: '' | 'error' | 'warning' | 'success') => {
+    setParams({
+      ruView: 'journal',
+      ruStatus: status || undefined,
+      ruCid: undefined,
+      ruPage: undefined,
+      callId: undefined,
+    });
+  };
+
   return (
     <div className="logapiru-root">
       <div className="lru-topbar">
@@ -264,6 +274,7 @@ export function LogApiRuTab() {
           onRetry={() => setStatsNonce((n) => n + 1)}
           onSelectAction={selectAction}
           onSelectOwner={selectOwner}
+          onFilterStatus={filterStatus}
         />
       ) : (
         <LogApiRuJournal

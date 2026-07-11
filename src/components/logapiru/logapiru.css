@@ -259,6 +259,22 @@
 .logapiru-root .kpi.warn .v { color: var(--lru-warning); }
 .logapiru-root .kpi.err .v { color: var(--lru-error); }
 .logapiru-root .kpi.ok .v { color: var(--lru-success); }
+.logapiru-root button.kpi-btn {
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.logapiru-root button.kpi-btn:hover {
+  border-color: var(--lru-text3);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+.logapiru-root button.kpi-btn:focus-visible {
+  outline: 2px solid var(--lru-accent, #0673b3);
+  outline-offset: 2px;
+}
 
 .logapiru-root .period {
   display: inline-flex;
@@ -406,6 +422,74 @@
   background: var(--lru-bg1);
   border: 1px solid var(--lru-border);
   border-radius: var(--lru-r);
+}
+.logapiru-root .status-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-right: 4px;
+}
+.logapiru-root .schip {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--lru-border);
+  background: var(--lru-bg2);
+  color: var(--lru-text2);
+  cursor: pointer;
+}
+.logapiru-root .schip:hover { border-color: var(--lru-text3); }
+.logapiru-root .schip.on {
+  background: var(--lru-bg1);
+  border-color: var(--lru-primary, #0673b3);
+  color: var(--lru-text);
+  box-shadow: 0 0 0 2px var(--lru-primaryTint, rgba(6, 115, 179, 0.15));
+}
+.logapiru-root .schip.err.on {
+  border-color: var(--lru-error);
+  color: var(--lru-error);
+  box-shadow: 0 0 0 2px rgba(200, 60, 60, 0.12);
+}
+.logapiru-root .schip.warn.on {
+  border-color: var(--lru-warning);
+  color: var(--lru-warning);
+  box-shadow: 0 0 0 2px rgba(184, 136, 26, 0.15);
+}
+.logapiru-root .dwr-errbanner {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(200, 60, 60, 0.35);
+  background: rgba(200, 60, 60, 0.08);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.logapiru-root .dwr-errbanner .ttl {
+  font-weight: 800;
+  color: var(--lru-error);
+  margin-bottom: 4px;
+}
+.logapiru-root .dwr-errbanner .msg {
+  font-family: var(--lru-mono);
+  color: var(--lru-text);
+  word-break: break-word;
+}
+.logapiru-root .dwr-warnbanner {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(184, 136, 26, 0.4);
+  background: rgba(184, 136, 26, 0.1);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.logapiru-root .dwr-warnbanner .ttl {
+  font-weight: 800;
+  color: var(--lru-warning);
+  margin-bottom: 4px;
 }
 .logapiru-root .fsel { position: relative; }
 .logapiru-root .fsel select,
