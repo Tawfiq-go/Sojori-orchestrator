@@ -94,6 +94,7 @@ export interface WhatsappUsageByOwnerDayItem {
   received: number;
   sent: number;
   total: number;
+  costUsd: number;
 }
 
 export interface WhatsappUsageByOwnerDayResponse {
@@ -102,11 +103,14 @@ export interface WhatsappUsageByOwnerDayResponse {
     byOwnerDay: WhatsappUsageByOwnerDayItem[];
     totalReceived: number;
     totalSent: number;
+    totalCostUsd: number;
+    /** true : coût estimé (1 conversation "service"/jour actif), pas la facturation Meta exacte. */
+    costEstimated: boolean;
     serviceErrors?: Record<string, string>;
   };
 }
 
-/** Fusion volet guest (srv-fullchatbot) + staff (srv-fulltask). Volumes uniquement, pas de coût pour l'instant. */
+/** Fusion volet guest (srv-fullchatbot) + staff (srv-fulltask). Coût estimé (voir costEstimated). */
 export function fetchWhatsappUsageByOwnerDay(query: { period?: 'all'; hours?: number } = {}) {
   const params = new URLSearchParams();
   if (query.period === 'all') params.set('period', 'all');
