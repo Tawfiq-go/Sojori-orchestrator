@@ -157,7 +157,7 @@ export default function TasksPlanningPageV2() {
       const result = await fetchTaskNewPlanning({
         startDate: startDateStr,
         endDate: endDateStr,
-        ownerId: scope.ownerId,
+        ownerId: scope.filterOwnerId || scope.ownerId,
       });
 
       if (requestId !== windowRequestIdRef.current) return;
@@ -175,7 +175,7 @@ export default function TasksPlanningPageV2() {
         setIsRefreshing(false);
       }
     }
-  }, [windowRange, scope.ownerId, scope.canAccessAllOwners, scope.scopeFetchReady]);
+  }, [windowRange, scope.ownerId, scope.filterOwnerId, scope.canAccessAllOwners, scope.scopeFetchReady]);
 
   useEffect(() => {
     const onOperationalStatusChanged = () => setOpSyncTick((n) => n + 1);
@@ -260,7 +260,7 @@ export default function TasksPlanningPageV2() {
   });
 
   const listings: ListingRow[] = useMemo(() => {
-    const ownerKey = scope.ownerId ? String(scope.ownerId) : '';
+    const ownerKey = scope.filterOwnerId || scope.ownerId ? String(scope.filterOwnerId || scope.ownerId) : '';
     const activeById = buildListingIdIndex(activeListings);
     const reservationsByListing = new Map<string, Array<Record<string, unknown>>>();
     const operationalByListing = new Map<string, Record<string, unknown>>();
@@ -285,7 +285,9 @@ export default function TasksPlanningPageV2() {
         if (ownerKey && hasResas) {
           orphanSeeds.push({
             listingId,
-            listingName: String(l.listingName || l.name || 'Listing (inactif / hors grille)'),
+            listingName: String(
+              l.listingName || l.name || 'Listing (inactif / hors grille)',
+            ),
             city: String(l.city || '—'),
           });
           reservationsByListing.set(listingId, l.reservations as Array<Record<string, unknown>>);
@@ -343,7 +345,7 @@ export default function TasksPlanningPageV2() {
         })),
       };
     });
-  }, [activeListings, rawData, opSyncTick, scope.ownerId]);
+  }, [activeListings, rawData, opSyncTick, scope.ownerId, scope.filterOwnerId]);
 
   const handleTaskClick = (_item: TimelineItem) => {
     // TODO: Ouvrir drawer détail tâche

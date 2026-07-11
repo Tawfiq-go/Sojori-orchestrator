@@ -6,7 +6,7 @@ import {
   inferTaskPlannedDay,
   inferTaskPlannedIso,
 } from '../utils/inferTaskPlannedDate';
-import { resolveReservationListingId } from '../utils/planningListingMatch';
+import { resolveReservationListingId, reservationListingLabel } from '../utils/planningListingMatch';
 import type { TaskType } from '../components/calendar-views/_shared';
 
 export interface PlanningTimelineItem {
@@ -35,6 +35,8 @@ export interface PlanningReservationRow {
 
 export interface PlanningListingRow {
   listingId: string;
+  listingName?: string;
+  city?: string;
   reservations: PlanningReservationRow[];
 }
 
@@ -256,11 +258,17 @@ export async function fetchTaskNewPlanning(params: {
   );
 
   const reservationsByListing = new Map<string, PlanningReservationRow[]>();
+  const listingMeta = new Map<string, { listingName: string; city: string }>();
   const reservationKeysSeen = new Set<string>();
 
   for (const res of reservations) {
     const listingId = resolveListingId(res);
     if (!listingId) continue;
+
+    if (!listingMeta.has(listingId)) {
+      const label = reservationListingLabel(res);
+      listingMeta.set(listingId, { listingName: label.name, city: label.city });
+    }
 
     const reservationId = resolveReservationId(res);
     const key = `${listingId}::${reservationId}`;
@@ -339,6 +347,10 @@ export async function fetchTaskNewPlanning(params: {
       departureDate = toIsoDate(res.departureDate) || departureDate;
       guestName = res.guestName || guestName;
       reservationNumber = res.reservationNumber || reservationNumber;
+      if (!listingMeta.has(listingId)) {
+        const label = reservationListingLabel(res);
+        listingMeta.set(listingId, { listingName: label.name, city: label.city });
+      }
     }
 
     const row: PlanningReservationRow = {
@@ -368,10 +380,13 @@ export async function fetchTaskNewPlanning(params: {
 
   const listings: PlanningListingRow[] = [...listingIdsFromTasks].map((listingId) => {
     const reservations = reservationsByListing.get(listingId) || [];
+    const meta = listingMeta.get(listingId);
     const orphanTasks = tasksByListingOnly.get(listingId) || [];
     if (orphanTasks.length > 0 && reservations.length === 0) {
       return {
         listingId,
+        listingName: meta?.listingName,
+        city: meta?.city,
         reservations: [
           {
             reservationId: `orphan-${listingId}`,
@@ -384,7 +399,12 @@ export async function fetchTaskNewPlanning(params: {
         ],
       };
     }
-    return { listingId, reservations };
+    return {
+      listingId,
+      listingName: meta?.listingName,
+      city: meta?.city,
+      reservations,
+    };
   });
 
   return {
