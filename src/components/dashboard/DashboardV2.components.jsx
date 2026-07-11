@@ -27,7 +27,7 @@ import { SidebarUserProfileMenu } from './SidebarUserProfileMenu';
 import { LISTING_LAYOUT } from '../../constants/listingLayout';
 import { DASHBOARD_PAGE } from '../../constants/dashboardLayout';
 import { IconColored } from './IconColored';
-import { NotificationBell, SidebarNotificationBadge, getSidebarGroupUnread, getSidebarItemUnread } from '../../features/notifications';
+import { NotificationBell, SidebarNotificationBadge, getSidebarGroupUnread, getSidebarItemUnread, useSidebarNotificationCounts } from '../../features/notifications';
 import { useUnreadCount } from '../../features/notifications/useNotifications';
 import { SojoriBrandLockup } from '../brand/SojoriBrandLogo';
 import {
@@ -360,8 +360,9 @@ export function AppSidebar({
   const navGroups = useSidebarNav(user);
   const navScrollRef = React.useRef(null);
   const { data: unreadCount } = useUnreadCount();
-  const byFacet = unreadCount?.byFacet;
-  const byEventKey = unreadCount?.byEventKey;
+  const { data: sidebarCounts } = useSidebarNotificationCounts();
+  const byFacet = sidebarCounts?.byFacet ?? unreadCount?.byFacetActive ?? unreadCount?.byFacet;
+  const byEventKey = sidebarCounts?.byEventKey ?? unreadCount?.byEventKeyActive ?? unreadCount?.byEventKey;
 
   React.useEffect(() => {
     const role = String(user?.role || '').toLowerCase();

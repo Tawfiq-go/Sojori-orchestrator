@@ -5,8 +5,6 @@ import {
   CheckCircle,
   AlertTriangle,
   Activity,
-  Users,
-  Database,
   Trash2,
   RotateCcw,
   Eye,
@@ -16,9 +14,11 @@ import apiClient from '../../services/apiClient';
 import { getAdminRabbitmqDlqApiBase, RABBITMQ_HEALTH_PATH } from '../../utils/monitoringApi';
 import DLQManagerModal from './DLQManagerModal';
 import {
+  Badge,
   btnGhostSx,
+  MonitorKpiStrip,
   MonitorPageFrame,
-  MonitorPageHeader,
+  MonitorToolbarRow,
   monitorTokens as mt,
 } from '../../features/monitoring/shared/MonitorDesign';
 import { Button } from '@mui/material';
@@ -161,6 +161,7 @@ export default function RabbitMQPage() {
   const [filterConsumers, setFilterConsumers] = useState<string[]>(['zero', 'active']);
   const [filterMessages, setFilterMessages] = useState<string[]>(['empty', 'backlog']);
   const [filterPublisher, setFilterPublisher] = useState<string[]>(['active', 'inactive']);
+  const [live, setLive] = useState(true);
 
   const fetchHealth = async (opts?: { silent?: boolean }) => {
     try {
@@ -182,9 +183,13 @@ export default function RabbitMQPage() {
 
   useEffect(() => {
     fetchHealth();
+  }, []);
+
+  useEffect(() => {
+    if (!live) return;
     const interval = setInterval(() => fetchHealth({ silent: true }), 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [live]);
 
   const { attentionQueues, quietQueues, filteredQueues, allServices } = useMemo(() => {
     const list = health?.queues || [];
@@ -301,74 +306,80 @@ export default function RabbitMQPage() {
 
   const svcCount = health?.connections?.byService ? Object.keys(health.connections.byService).length : 0;
   const displayQueues = filteredQueues;
+  const clusterStatus = health?.cluster?.status || 'healthy';
+  const clusterTone =
+    clusterStatus === 'error' ? 'error' : clusterStatus === 'warning' ? 'warning' : 'success';
 
   return (
     <MonitorPageFrame>
-      <MonitorPageHeader
-        accent="rabbitmq"
-        title="RabbitMQ"
-        subtitle={
-          health
-            ? `${health.cluster?.runningNodes ?? 0} nœud(s) · ${health.cluster?.totalPods ?? 0} pod(s)${
-                lastUpdate ? ` · ${lastUpdate.toLocaleTimeString('fr-FR')}` : ''
-              }`
-            : 'Surveillance cluster'
+      <MonitorToolbarRow
+        left={
+          <>
+            <Badge variant={clusterTone === 'success' ? 'success' : clusterTone === 'warning' ? 'warning' : 'error'} dot>
+              {health?.cluster?.statusMessage || 'RabbitMQ'}
+            </Badge>
+            {lastUpdate ? (
+              <Badge variant="neutral">{lastUpdate.toLocaleTimeString('fr-FR')}</Badge>
+            ) : null}
+          </>
         }
-        live
-        onRefresh={() => void fetchHealth()}
-        loading={loading}
-        extraActions={
-          <Button
-            size="small"
-            sx={{
-              ...btnGhostSx,
-              color: mt.error,
-              borderColor: mt.error,
-            }}
-            onClick={() => setShowDLQModal(true)}
-            startIcon={<Trash2 className="h-3.5 w-3.5" />}
-          >
-            DLQ
-          </Button>
+        right={
+          <>
+            <Button
+              size="small"
+              sx={{
+                ...btnGhostSx,
+                color: mt.error,
+                borderColor: mt.error,
+              }}
+              onClick={() => setShowDLQModal(true)}
+              startIcon={<Trash2 className="h-3.5 w-3.5" />}
+            >
+              DLQ
+            </Button>
+            <Button sx={btnGhostSx} onClick={() => setLive((v) => !v)}>
+              <Badge variant={live ? 'success' : 'neutral'} dot>
+                {live ? 'Live' : 'Pause'}
+              </Badge>
+            </Button>
+            <Button sx={btnGhostSx} onClick={() => void fetchHealth()} disabled={loading}>
+              {loading ? '…' : 'Actualiser'}
+            </Button>
+          </>
         }
       />
 
-      <div className="p-2 space-y-2 w-full">
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
-          <div className="rounded-lg border border-slate-200/90 bg-white p-2 shadow-sm">
-            <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-              <Database className="h-3 w-3 text-violet-600" />
-              Cluster
-            </div>
-            <div
-              className={`mt-0.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] border ${getStatusColor(
-                health?.cluster?.status || 'healthy'
-              )}`}
-            >
-              {getStatusIcon(health?.cluster?.status || 'healthy')}
-              <span className="font-medium truncate">{health?.cluster?.statusMessage || '—'}</span>
-            </div>
-          </div>
-          <div className="rounded-lg border border-slate-200/90 bg-white p-2 shadow-sm">
-            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Mémoire</div>
-            <div className="mt-0.5 text-sm font-bold text-slate-900 leading-tight">{health?.memory || 'N/A'}</div>
-          </div>
-          <div className="rounded-lg border border-slate-200/90 bg-white p-2 shadow-sm">
-            <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-              <Users className="h-3 w-3 text-violet-600" />
-              Connexions
-            </div>
-            <div className="mt-0.5 text-lg font-black text-slate-900 leading-none">
-              {health?.connections?.total ?? 0}
-            </div>
-          </div>
-          <div className="rounded-lg border border-slate-200/90 bg-white p-2 shadow-sm">
-            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Services</div>
-            <div className="mt-0.5 text-lg font-black text-slate-900 leading-none">{svcCount}</div>
-          </div>
-        </div>
+      <MonitorKpiStrip
+        items={[
+          {
+            label: 'Cluster',
+            value: `${health?.cluster?.runningNodes ?? 0}/${health?.cluster?.totalPods ?? 0}`,
+            tone: clusterTone,
+          },
+          {
+            label: 'Mémoire',
+            value: health?.memory || 'N/A',
+            tone: 'neutral',
+          },
+          {
+            label: 'Connexions',
+            value: health?.connections?.total ?? 0,
+            tone: 'info',
+          },
+          {
+            label: 'Services',
+            value: svcCount,
+            tone: 'neutral',
+          },
+          {
+            label: 'Queues',
+            value: displayQueues.length,
+            tone: attentionQueues.length > 0 ? 'warning' : 'success',
+          },
+        ]}
+      />
 
+      <div className="p-2 space-y-2 w-full">
         {health?.cluster?.status === 'warning' && (
           <div className="px-2 py-1 text-[11px] bg-amber-50 border border-amber-200 rounded-md text-amber-900">
             <strong>Split-brain</strong> — nœuds séparés, risque pour les messages.

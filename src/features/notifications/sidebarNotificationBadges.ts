@@ -1,11 +1,32 @@
 import type { NotificationFacet } from './types';
+import {
+  WHATSAPP_GUEST_SIDEBAR_EVENT_KEYS,
+} from './constants';
+import type { NotificationItem } from './types';
 
-/** Facettes agrégées par groupe sidebar (aligné design Claude / prototype). */
+/** Agrège les notifs « en cours » — 1 ligne panneau = 1 badge (pas le ×N agrégé). */
+export function aggregateActiveNotificationCounts(
+  items: Pick<NotificationItem, 'eventKey' | 'facet' | 'aggregatedCount'>[],
+): {
+  byFacet: Partial<Record<NotificationFacet, number>>;
+  byEventKey: Partial<Record<string, number>>;
+} {
+  const byFacet: Partial<Record<NotificationFacet, number>> = {};
+  const byEventKey: Partial<Record<string, number>> = {};
+  for (const n of items) {
+    const facet = n.facet as NotificationFacet;
+    byFacet[facet] = (byFacet[facet] ?? 0) + 1;
+    byEventKey[n.eventKey] = (byEventKey[n.eventKey] ?? 0) + 1;
+  }
+  return { byFacet, byEventKey };
+}
+
+/** Facettes agrégées par groupe sidebar. */
 export const SIDEBAR_GROUP_FACETS: Record<string, NotificationFacet[]> = {
   Réservations: ['reservation'],
   Task: ['task', 'concierge'],
-  Orchestration: ['orchestration', 'guest_journey'],
-  'Inbox Guest': ['message', 'review', 'lead'],
+  Orchestration: ['orchestration'],
+  'Inbox Guest': ['message', 'guest_journey', 'review', 'lead'],
   Finances: ['finance'],
 };
 
@@ -29,7 +50,7 @@ export const SIDEBAR_ITEM_FACETS: Record<string, NotificationFacet[]> = {
 
 /** Compteurs par eventKey (WhatsApp vs OTA dans Inbox Guest). */
 export const SIDEBAR_ITEM_EVENT_KEYS: Record<string, string[]> = {
-  'comms/guests': ['message:whatsapp_received'],
+  'comms/guests': [...WHATSAPP_GUEST_SIDEBAR_EVENT_KEYS],
   'comms/ota': ['message:ota_received'],
 };
 
@@ -58,14 +79,11 @@ export function getSidebarGroupUnread(
   if (!facets) return 0;
 
   if (group === 'Inbox Guest') {
+    const waInbox = sumEventKeyCounts(byEventKey, [...WHATSAPP_GUEST_SIDEBAR_EVENT_KEYS]);
     const ota = sumEventKeyCounts(byEventKey, ['message:ota_received']);
-    const wa = sumEventKeyCounts(byEventKey, ['message:whatsapp_received']);
-    const other = sumFacetCounts(byFacet, ['review', 'lead']);
-    const fromEvents = ota + wa;
-    if (fromEvents > 0 || (byEventKey && Object.keys(byEventKey).length > 0)) {
-      return fromEvents + other;
-    }
-    return sumFacetCounts(byFacet, ['message', 'review', 'lead']);
+    const reviewLead = sumFacetCounts(byFacet, ['review', 'lead']);
+    if (waInbox + ota > 0) return waInbox + ota + reviewLead;
+    return sumFacetCounts(byFacet, ['message', 'guest_journey', 'review', 'lead']);
   }
 
   return sumFacetCounts(byFacet, facets);
@@ -79,8 +97,12 @@ export function getSidebarItemUnread(
   const eventKeys = SIDEBAR_ITEM_EVENT_KEYS[itemId];
   if (eventKeys?.length) {
     const fromEvents = sumEventKeyCounts(byEventKey, eventKeys);
-    if (fromEvents > 0 || (byEventKey && Object.keys(byEventKey).length > 0)) {
-      return fromEvents;
+    if (fromEvents > 0) return fromEvents;
+    if (itemId === 'comms/guests') {
+      return sumFacetCounts(byFacet, ['message', 'guest_journey']);
+    }
+    if (itemId === 'comms/ota') {
+      return sumFacetCounts(byFacet, ['message']);
     }
     return 0;
   }

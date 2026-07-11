@@ -25,6 +25,10 @@ import {
   setCachedPlanningListings,
   invalidatePlanningListingsCache,
 } from '../utils/planningListingsCache';
+import {
+  buildListingIdIndex,
+  mergeActiveAndOrphanListings,
+} from '../utils/planningListingMatch';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import type { ListingSummary } from '../types/listings.types';
@@ -100,6 +104,7 @@ export default function TasksPlanningPageV2() {
       listingsHydratedRef.current = true;
       return;
     }
+    let items: ListingSummary[] = [];
     const listingsResponse = await listingsService.getListings({
       useActiveFilter: true,
       active: true,
@@ -108,8 +113,25 @@ export default function TasksPlanningPageV2() {
       limit: 500,
       filterOwnerId: scope.filterOwnerId,
     });
-    setActiveListings(listingsResponse.data.items);
-    setCachedPlanningListings(listingsCacheKey, listingsResponse.data.items);
+    items = listingsResponse.data.items;
+    if (items.length === 0 && scope.filterOwnerId) {
+      const fallback = await listingsService.getListings({
+        useActiveFilter: false,
+        compact: true,
+        forListingsOverview: false,
+        limit: 500,
+        filterOwnerId: scope.filterOwnerId,
+      });
+      items = fallback.data.items;
+      if (items.length > 0) {
+        console.warn('[TasksPlanning] fallback listings sans filtre active', {
+          count: items.length,
+          filterOwnerId: scope.filterOwnerId,
+        });
+      }
+    }
+    setActiveListings(items);
+    setCachedPlanningListings(listingsCacheKey, items);
     listingsHydratedRef.current = true;
   }, [listingsCacheKey, scope.filterOwnerId]);
 
@@ -238,20 +260,51 @@ export default function TasksPlanningPageV2() {
   });
 
   const listings: ListingRow[] = useMemo(() => {
-    if (activeListings.length === 0) return [];
-
+    const ownerKey = scope.ownerId ? String(scope.ownerId) : '';
+    const activeById = buildListingIdIndex(activeListings);
     const reservationsByListing = new Map<string, Array<Record<string, unknown>>>();
     const operationalByListing = new Map<string, Record<string, unknown>>();
+    const orphanSeeds: Array<{ listingId: string; listingName: string; city: string }> = [];
+
     if (rawData?.listings) {
       rawData.listings.forEach((l) => {
         const listingId = String(l.listingId || l._id || '');
         if (!listingId) return;
-        if (Array.isArray(l.reservations)) reservationsByListing.set(listingId, l.reservations);
-        operationalByListing.set(listingId, l);
+        const matched = activeById.get(listingId);
+        const hasResas = Array.isArray(l.reservations) && l.reservations.length > 0;
+
+        if (matched) {
+          if (hasResas) {
+            reservationsByListing.set(matched.id, l.reservations as Array<Record<string, unknown>>);
+          }
+          operationalByListing.set(matched.id, l);
+          return;
+        }
+
+        // Orpheline : seulement si un PM est sélectionné (résas déjà filtrées par owner).
+        if (ownerKey && hasResas) {
+          orphanSeeds.push({
+            listingId,
+            listingName: String(l.listingName || l.name || 'Listing (inactif / hors grille)'),
+            city: String(l.city || '—'),
+          });
+          reservationsByListing.set(listingId, l.reservations as Array<Record<string, unknown>>);
+          operationalByListing.set(listingId, l);
+        }
       });
     }
 
-    return activeListings.map((listing) => {
+    const rowsSource = mergeActiveAndOrphanListings(activeListings, orphanSeeds);
+    if (rowsSource.length === 0) return [];
+
+    if (orphanSeeds.length > 0) {
+      console.warn('[TasksPlanning] listings inactifs du PM (orphelines scopées)', {
+        orphans: orphanSeeds.map((o) => o.listingName),
+        ownerId: ownerKey,
+      });
+    }
+
+    return rowsSource.map((listing) => {
       const listingId = String(listing.id || '');
       const resas = reservationsByListing.get(listingId) || [];
       const op = mergeListingOperationalRow(listingId, {
@@ -290,7 +343,7 @@ export default function TasksPlanningPageV2() {
         })),
       };
     });
-  }, [activeListings, rawData, opSyncTick]);
+  }, [activeListings, rawData, opSyncTick, scope.ownerId]);
 
   const handleTaskClick = (_item: TimelineItem) => {
     // TODO: Ouvrir drawer détail tâche

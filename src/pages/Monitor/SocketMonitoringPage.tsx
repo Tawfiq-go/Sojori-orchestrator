@@ -1,9 +1,10 @@
 /**
- * Socket Health Monitoring — santé srv-sockets (auth, émission, RabbitMQ)
+ * Socket Health Monitoring — layout dense (même pattern que l’onglet API).
  * Logs intelligents : type de problème, PM (ownerId), résa, tel, thread.
  */
 
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode, type CSSProperties } from 'react';
+import { Box, Button, Stack } from '@mui/material';
 import apiClient from '../../services/apiClient';
 import { getOwnersAllPages } from '../../services/teamDashboardApi';
 import { formatCasablancaDate } from '../../utils/dateFormatting.js';
@@ -17,14 +18,14 @@ import {
   Badge,
   MonitorEmpty,
   MonitorErrorList,
+  MonitorKpiStrip,
   MonitorLoading,
   MonitorPageFrame,
-  MonitorPageHeader,
   MonitorSection,
   MonitorSubTabs,
   MonitorTimeRange,
-  StatCard,
-  StatsRow,
+  MonitorToolbarRow,
+  btnGhostSx,
   monitorTokens as t,
 } from '../../features/monitoring/shared/MonitorDesign';
 
@@ -75,6 +76,22 @@ const TIME_RANGES = [
   { value: '24h', label: '24 h' },
   { value: '7d', label: '7 j' },
 ];
+
+const th: CSSProperties = {
+  textAlign: 'left',
+  padding: '4px 6px',
+  fontSize: 11,
+  color: t.text3,
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+};
+
+const td: CSSProperties = {
+  padding: '5px 6px',
+  fontSize: 12,
+  color: t.text,
+  verticalAlign: 'top',
+};
 
 function renderLogMeta(
   e: SocketLogEntry,
@@ -144,101 +161,117 @@ export default function SocketMonitoringPage() {
   const byOwner = summaryData?.byOwner ?? [];
   const byProblemType = summaryData?.byProblemType ?? [];
   const problemCount = summaryData?.total ?? 0;
+  const problemTypesFiltered = byProblemType.filter((r) => r.problemType !== 'emit_ok');
 
   return (
     <MonitorPageFrame>
-      <MonitorPageHeader
-        accent="whatsapp"
-        title="Sockets"
-        subtitle="Problèmes temps réel srv-sockets — par PM, résa, thread, téléphone"
-        count={timeRange}
-        live={live}
-        onToggleLive={() => setLive((v) => !v)}
-        onRefresh={() => void fetchSummary()}
-        loading={loading}
+      <MonitorToolbarRow
+        left={
+          <>
+            <MonitorSubTabs dense options={SUB_TABS} value={activeTab} onChange={setActiveTab} />
+            <MonitorTimeRange dense ranges={TIME_RANGES} value={timeRange} onChange={setTimeRange} />
+          </>
+        }
+        right={
+          <>
+            <Button sx={btnGhostSx} onClick={() => setLive((v) => !v)}>
+              <Badge variant={live ? 'success' : 'neutral'} dot>
+                {live ? 'Live' : 'Pause'}
+              </Badge>
+            </Button>
+            <Button sx={btnGhostSx} onClick={() => void fetchSummary()} disabled={loading}>
+              {loading ? '…' : 'Actualiser'}
+            </Button>
+          </>
+        }
       />
 
-      <MonitorSubTabs options={SUB_TABS} value={activeTab} onChange={setActiveTab} />
+      {summaryData || !loading ? (
+        <MonitorKpiStrip
+          items={[
+            {
+              label: 'Problèmes',
+              value: problemCount,
+              tone: problemCount > 0 ? 'error' : 'success',
+            },
+            {
+              label: 'Auth refusée',
+              value: summaryData?.authRejected ?? 0,
+              tone: 'error',
+            },
+            {
+              label: 'Non diffusé',
+              value: summaryData?.emitCritical ?? 0,
+              tone: 'error',
+            },
+            {
+              label: 'Échec room',
+              value: summaryData?.emitRoomFailed ?? 0,
+              tone: 'warning',
+            },
+            {
+              label: 'RabbitMQ',
+              value: summaryData?.rabbitmqDisconnects ?? 0,
+              tone: 'info',
+            },
+            {
+              label: 'Émissions OK',
+              value: summaryData?.emitOk ?? 0,
+              tone: 'success',
+            },
+          ]}
+        />
+      ) : null}
 
       {activeTab === 'summary' && (
         <>
-          <MonitorTimeRange ranges={TIME_RANGES} value={timeRange} onChange={setTimeRange} />
           {loading && !summaryData ? (
             <MonitorLoading />
           ) : summaryData ? (
             <>
-              <StatsRow>
-                <StatCard
-                  icon="🚨"
-                  iconBg={t.errorTint}
-                  iconColor={t.error}
-                  value={String(problemCount)}
-                  label="Problèmes"
-                  trend={timeRange}
-                />
-                <StatCard
-                  icon="🚫"
-                  iconBg={t.errorTint}
-                  iconColor={t.error}
-                  value={String(summaryData.authRejected ?? 0)}
-                  label="Auth refusée"
-                />
-                <StatCard
-                  icon="⚠️"
-                  iconBg={t.errorTint}
-                  iconColor={t.error}
-                  value={String(summaryData.emitCritical ?? 0)}
-                  label="Non diffusé"
-                />
-                <StatCard
-                  icon="📡"
-                  iconBg={t.warningTint}
-                  iconColor={t.warning}
-                  value={String(summaryData.emitRoomFailed ?? 0)}
-                  label="Échec room"
-                />
-                <StatCard
-                  icon="🐰"
-                  iconBg={t.aiTint}
-                  iconColor={t.ai}
-                  value={String(summaryData.rabbitmqDisconnects ?? 0)}
-                  label="RabbitMQ"
-                />
-                <StatCard
-                  icon="✅"
-                  iconBg={t.successTint}
-                  iconColor={t.success}
-                  value={String(summaryData.emitOk ?? 0)}
-                  label="Émissions OK"
-                />
-              </StatsRow>
-
-              {byProblemType.length > 0 && (
-                <MonitorSection title="Par type de problème" desc="Répartition sur la période">
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {byProblemType
-                      .filter((r) => r.problemType !== 'emit_ok')
-                      .map((row) => (
-                        <Badge key={row.problemType} variant="error">
-                          {socketProblemLabel(row.problemType)} · {row.count}
-                        </Badge>
-                      ))}
-                  </div>
-                </MonitorSection>
-              )}
-
-              {recentErrors.length > 0 && (
-                <MonitorSection title="Derniers problèmes" desc="30 plus récents">
-                  <MonitorErrorList
-                    items={recentErrors.slice(0, 10)}
-                    renderTitle={(e) => socketLogTitle(e as SocketLogEntry)}
-                    renderMeta={(item) => renderLogMeta(item as SocketLogEntry, ownerLabel)}
-                  />
-                </MonitorSection>
-              )}
-
-              {problemCount === 0 && (
+              {problemCount === 0 ? (
                 <MonitorEmpty message="Aucun problème socket sur cette période. Les émissions OK ne sont pas comptées comme incidents." />
+              ) : (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) minmax(0, 1.4fr)' },
+                    gap: 1.25,
+                    mb: 1.25,
+                    alignItems: 'start',
+                  }}
+                >
+                  <Stack spacing={1.25}>
+                    {problemTypesFiltered.length > 0 && (
+                      <MonitorSection dense title="Par type">
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                          {problemTypesFiltered.map((row) => (
+                            <Badge key={row.problemType} variant="error">
+                              {socketProblemLabel(row.problemType)} · {row.count}
+                            </Badge>
+                          ))}
+                        </Box>
+                      </MonitorSection>
+                    )}
+                  </Stack>
+
+                  <MonitorSection
+                    dense
+                    title="Derniers problèmes"
+                    desc={`${Math.min(recentErrors.length, 12)}`}
+                  >
+                    {recentErrors.length === 0 ? (
+                      <MonitorEmpty message="Aucun incident récent." />
+                    ) : (
+                      <MonitorErrorList
+                        dense
+                        items={recentErrors.slice(0, 12)}
+                        renderTitle={(e) => socketLogTitle(e as SocketLogEntry)}
+                        renderMeta={(item) => renderLogMeta(item as SocketLogEntry, ownerLabel)}
+                      />
+                    )}
+                  </MonitorSection>
+                </Box>
               )}
             </>
           ) : (
@@ -249,56 +282,42 @@ export default function SocketMonitoringPage() {
 
       {activeTab === 'byOwner' && (
         <>
-          <MonitorTimeRange ranges={TIME_RANGES} value={timeRange} onChange={setTimeRange} />
           {loading && byOwner.length === 0 ? (
             <MonitorLoading />
           ) : byOwner.length === 0 ? (
             <MonitorEmpty message="Aucun PM impacté par un problème socket sur cette période." />
           ) : (
-            <MonitorSection
-              title="PM impactés"
-              desc="Property managers avec au moins un incident socket"
-            >
+            <MonitorSection dense title="PM impactés" desc={`${byOwner.length}`}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${t.border}` }}>
-                    <th style={{ textAlign: 'left', padding: '8px 4px', fontSize: 12, color: t.text3 }}>
-                      Property manager
-                    </th>
-                    <th style={{ textAlign: 'right', padding: '8px 4px', fontSize: 12, color: t.text3 }}>
-                      Incidents
-                    </th>
-                    <th style={{ textAlign: 'left', padding: '8px 4px', fontSize: 12, color: t.text3 }}>
-                      Types
-                    </th>
-                    <th style={{ textAlign: 'left', padding: '8px 4px', fontSize: 12, color: t.text3 }}>
-                      Dernière
-                    </th>
-                    <th style={{ textAlign: 'left', padding: '8px 4px', fontSize: 12, color: t.text3 }}>
-                      Réservations
-                    </th>
+                    <th style={th}>Property manager</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Incidents</th>
+                    <th style={th}>Types</th>
+                    <th style={th}>Dernière</th>
+                    <th style={th}>Réservations</th>
                   </tr>
                 </thead>
                 <tbody>
                   {byOwner.map((row) => (
                     <tr key={row.ownerId} style={{ borderBottom: `1px solid ${t.border}` }}>
-                      <td style={{ padding: '8px 4px', fontSize: 13, fontWeight: 600, color: t.text }}>
+                      <td style={{ ...td, fontWeight: 600 }}>
                         {ownerLabel(row.ownerId)}
-                        <div style={{ fontSize: 11, color: t.text3, fontWeight: 400 }}>{row.ownerId}</div>
+                        <div style={{ fontSize: 10, color: t.text3, fontWeight: 400 }}>{row.ownerId}</div>
                       </td>
-                      <td style={{ padding: '8px 4px', textAlign: 'right' }}>
+                      <td style={{ ...td, textAlign: 'right' }}>
                         <Badge variant="error">{row.count}</Badge>
                       </td>
-                      <td style={{ padding: '8px 4px', fontSize: 11, color: t.text2 }}>
+                      <td style={{ ...td, fontSize: 11, color: t.text2 }}>
                         {(row.problemTypes || [])
                           .filter(Boolean)
                           .map((pt) => socketProblemLabel(String(pt)))
                           .join(', ') || '—'}
                       </td>
-                      <td style={{ padding: '8px 4px', fontSize: 12, color: t.text2 }}>
+                      <td style={{ ...td, fontSize: 11, color: t.text2, whiteSpace: 'nowrap' }}>
                         {row.lastSeen ? formatCasablancaDate(row.lastSeen) : '—'}
                       </td>
-                      <td style={{ padding: '8px 4px', fontSize: 12, color: t.text2 }}>
+                      <td style={{ ...td, fontSize: 11, color: t.text2 }}>
                         {(row.reservationNumbers || []).slice(0, 3).join(', ') || '—'}
                       </td>
                     </tr>
@@ -312,14 +331,14 @@ export default function SocketMonitoringPage() {
 
       {activeTab === 'errors' && (
         <>
-          <MonitorTimeRange ranges={TIME_RANGES} value={timeRange} onChange={setTimeRange} />
           {loading && recentErrors.length === 0 ? (
             <MonitorLoading />
           ) : recentErrors.length === 0 ? (
             <MonitorEmpty message="Aucun problème socket sur cette période." />
           ) : (
-            <MonitorSection title="Journal des incidents" desc={`${recentErrors.length} entrée(s)`}>
+            <MonitorSection dense title="Journal" desc={`${recentErrors.length}`}>
               <MonitorErrorList
+                dense
                 items={recentErrors}
                 renderTitle={(e) => socketLogTitle(e as SocketLogEntry)}
                 renderMeta={(item) => renderLogMeta(item as SocketLogEntry, ownerLabel)}

@@ -55,6 +55,9 @@ export interface UnreadCountData {
   actionRequired: number;
   byFacet: Partial<Record<NotificationFacet, number>>;
   byEventKey?: Partial<Record<string, number>>;
+  /** Compteurs « en cours » pour badges sidebar (même logique que activeCount). */
+  byFacetActive?: Partial<Record<NotificationFacet, number>>;
+  byEventKeyActive?: Partial<Record<string, number>>;
 }
 
 export interface NotificationListResponse {

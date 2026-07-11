@@ -8,7 +8,6 @@ import ReferralPage from './pages/referral/referral.page';
 import ChatInbox from './components/ChatInbox';
 import OpenAi from './pages/openai.page';
 import ChannelManager from './pages/channelManager.page';
-import CronConfig from './pages/cronConfig.page';
 import UsefulNUmber from './pages/useFulNumber/UsefulNumber.page';
 import WatchField from './pages/WatchField/WatchField.page';
 
@@ -21,7 +20,6 @@ const tabComponents = {
   chatbox: ChatInbox,
   'ai-config': OpenAi,
   'channel-manager': ChannelManager,
-  'cron-config': CronConfig,
   'use-full-number': UsefulNUmber,
   sockets: WatchField,
 };

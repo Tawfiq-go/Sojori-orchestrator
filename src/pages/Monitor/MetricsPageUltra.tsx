@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Button } from '@mui/material';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   useNodes,
@@ -12,9 +13,12 @@ import {
 } from '../../features/monitoring/metrics/hooks/usePrometheusData';
 import { monitoringDelete } from '../../utils/monitoringApi';
 import {
+  Badge,
+  MonitorKpiStrip,
   MonitorPageFrame,
-  MonitorPageHeader,
   MonitorTimeRange,
+  MonitorToolbarRow,
+  btnGhostSx,
 } from '../../features/monitoring/shared/MonitorDesign';
 
 // Type definitions
@@ -452,44 +456,76 @@ const MetricsPageUltra: React.FC = () => {
     refetchPodsTs();
   };
 
+  const cpuTone =
+    parseFloat(avgCPU) >= 80 ? 'error' : parseFloat(avgCPU) >= 60 ? 'warning' : 'success';
+  const memTone =
+    parseFloat(avgMemory) >= 80 ? 'error' : parseFloat(avgMemory) >= 60 ? 'warning' : 'success';
+
   return (
     <MonitorPageFrame>
-      <MonitorPageHeader
-        accent="metrics"
-        title="Métriques Prometheus"
-        subtitle={`${processedNodes.length} nœuds · ${processedPods.length} pods · CPU moy. ${avgCPU}% · RAM moy. ${avgMemory}%`}
-        count={timeRange}
-        live={autoRefresh}
-        onToggleLive={() => setAutoRefresh((v) => !v)}
-        onRefresh={refreshAll}
-        loading={nodesLoading || podsLoading}
+      <MonitorToolbarRow
+        left={
+          <MonitorTimeRange
+            dense
+            ranges={[
+              { value: '1h', label: '1 h' },
+              { value: '6h', label: '6 h' },
+              { value: '24h', label: '24 h' },
+              { value: '7d', label: '7 j' },
+            ]}
+            value={timeRange}
+            onChange={setTimeRange}
+          />
+        }
+        right={
+          <>
+            <Button sx={btnGhostSx} onClick={() => setAutoRefresh((v) => !v)}>
+              <Badge variant={autoRefresh ? 'success' : 'neutral'} dot>
+                {autoRefresh ? 'Live' : 'Pause'}
+              </Badge>
+            </Button>
+            <Button
+              sx={btnGhostSx}
+              onClick={refreshAll}
+              disabled={nodesLoading || podsLoading}
+            >
+              {nodesLoading || podsLoading ? '…' : 'Actualiser'}
+            </Button>
+          </>
+        }
       />
 
-      <MonitorTimeRange
-        ranges={[
-          { value: '1h', label: '1 h' },
-          { value: '6h', label: '6 h' },
-          { value: '24h', label: '24 h' },
-          { value: '7d', label: '7 j' },
+      <MonitorKpiStrip
+        items={[
+          {
+            label: 'CPU moy.',
+            value: `${avgCPU}%`,
+            tone: cpuTone as 'error' | 'warning' | 'success',
+          },
+          {
+            label: 'RAM moy.',
+            value: `${avgMemory}%`,
+            tone: memTone as 'error' | 'warning' | 'success',
+          },
+          { label: 'Nœuds', value: processedNodes.length, tone: 'info' },
+          { label: 'Pods', value: processedPods.length, tone: 'neutral' },
         ]}
-        value={timeRange}
-        onChange={setTimeRange}
       />
 
       {(nodesLoading || podsLoading) && (
-        <div className="mx-4 mt-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
+        <div className="mt-1 mb-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
           Chargement Prometheus (nodes / pods)…
         </div>
       )}
       {metricsLoadError && (
-        <div className="mx-4 mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
+        <div className="mt-1 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
           Erreur métriques : {metricsLoadError} — vérifie le proxy Vite et l’auth (JWT / X-Dev-Token).
         </div>
       )}
 
       {/* Ultra-Compact Grid Layout - NO SCROLL */}
       <div className="p-2 grid grid-cols-12 gap-2 animate-fade-in">
-        {/* Row 1: Compact KPIs with Sparklines */}
+        {/* Row 1: Compact sparklines (KPIs moved to MonitorKpiStrip) */}
         <div className="col-span-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-2 text-white shadow-lg hover:shadow-xl transition-all duration-300">
           <div className="flex items-center justify-between mb-1">
             <div>

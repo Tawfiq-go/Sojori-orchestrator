@@ -1,9 +1,9 @@
 /**
- * AI / LLM Monitoring — design Sojori V2 (MonitorDesign)
+ * AI / LLM Monitoring — layout dense (même pattern que l’onglet API).
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import apiClient from '../../services/apiClient';
 import { formatCasablancaDate } from '../../utils/dateFormatting.js';
 import {
@@ -13,23 +13,22 @@ import {
   MonitorEmpty,
   MonitorError,
   MonitorErrorList,
+  MonitorKpiStrip,
   MonitorLoading,
   MonitorPageFrame,
-  MonitorPageHeader,
   MonitorSection,
   MonitorSelectFilter,
   MonitorSubTabs,
   MonitorTimeRange,
-  MonitorToolbar,
-  Panel,
-  StatCard,
-  StatsRow,
+  MonitorToolbarRow,
   TablePagination,
+  btnGhostSx,
   monitorTokens as t,
   severityBadgeVariant,
 } from '../../features/monitoring/shared/MonitorDesign';
 
 type SubTab = 'summary' | 'calls' | 'errors';
+type StatusFilter = 'all' | 'failed' | 'timeout' | 'fallback' | 'success';
 
 interface AiCall {
   _id?: string;
@@ -89,6 +88,14 @@ const SUB_TABS: { value: SubTab; label: string }[] = [
   { value: 'errors', label: 'Erreurs' },
 ];
 
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: 'all', label: 'Tous' },
+  { value: 'failed', label: 'Échec' },
+  { value: 'timeout', label: 'Timeout' },
+  { value: 'fallback', label: 'Fallback' },
+  { value: 'success', label: 'Lent OK' },
+];
+
 function formatModelDisplay(provider?: string, model?: string) {
   if (!model) return provider?.toUpperCase() || 'Inconnu';
   const names: Record<string, string> = {
@@ -139,7 +146,7 @@ export default function AIMonitoringPage() {
   });
   const [errorsData, setErrorsData] = useState<AiCall[]>([]);
   const [provider, setProvider] = useState('all');
-  const [status, setStatus] = useState('all');
+  const [status, setStatus] = useState<StatusFilter>('all');
   const [service, setService] = useState('all');
   const [page, setPage] = useState(1);
   const limit = 50;
@@ -252,141 +259,161 @@ export default function AIMonitoringPage() {
     summaryData?.byProvider?.reduce((s, p) => s + (p.totalCost || 0), 0) ?? 0;
   const hasSummaryEvents = totalProblems > 0;
 
-  const callRows = (callsData.calls || []).map((c, idx) => ({
-    id: c._id || `call-${idx}`,
-    ...c,
-  }));
+  const callRows = useMemo(
+    () => (callsData.calls || []).map((c, idx) => ({ id: c._id || `call-${idx}`, ...c })),
+    [callsData.calls],
+  );
+
+  const setStatusFromKpi = (next: StatusFilter) => {
+    setStatus((prev) => (prev === next ? 'all' : next));
+    if (next !== 'all') setActiveTab('calls');
+  };
 
   return (
     <MonitorPageFrame>
-      <MonitorPageHeader
-        accent="ai"
-        title="Intelligence artificielle"
-        subtitle="Appels problématiques — srv-fullchatbot, srv-fulltask, srv-reservations (échec, timeout, fallback, latence &gt; 5 s)"
-        count={timeRange}
-        live={live}
-        onToggleLive={() => setLive((v) => !v)}
-        onRefresh={refresh}
-        loading={loading}
+      <MonitorToolbarRow
+        left={
+          <>
+            <MonitorSubTabs dense options={SUB_TABS} value={activeTab} onChange={setActiveTab} />
+            <MonitorTimeRange dense ranges={TIME_RANGES} value={timeRange} onChange={setTimeRange} />
+          </>
+        }
+        right={
+          <>
+            <Button sx={btnGhostSx} onClick={() => setLive((v) => !v)}>
+              <Badge variant={live ? 'success' : 'neutral'} dot>
+                {live ? 'Live' : 'Pause'}
+              </Badge>
+            </Button>
+            <Button sx={btnGhostSx} onClick={refresh} disabled={loading}>
+              {loading ? '…' : 'Actualiser'}
+            </Button>
+          </>
+        }
       />
 
-      <MonitorSubTabs options={SUB_TABS} value={activeTab} onChange={setActiveTab} />
+      {(summaryData || !loading) && activeTab === 'summary' ? (
+        <MonitorKpiStrip
+          items={[
+            {
+              label: 'Problèmes',
+              value: totalProblems,
+              tone: totalProblems > 0 ? 'error' : 'success',
+              active: status === 'all',
+              onClick: () => setStatus('all'),
+            },
+            {
+              label: 'Échecs',
+              value: totalFailed,
+              tone: 'error',
+              active: status === 'failed',
+              onClick: () => setStatusFromKpi('failed'),
+            },
+            {
+              label: 'Fallbacks',
+              value: totalFallbacks,
+              tone: 'warning',
+              active: status === 'fallback',
+              onClick: () => setStatusFromKpi('fallback'),
+            },
+            {
+              label: 'Latence moy.',
+              value: avgLatency ? `${avgLatency}ms` : '—',
+              tone: 'info',
+            },
+            {
+              label: 'Tokens',
+              value: totalTokens.toLocaleString('fr-FR'),
+              tone: 'neutral',
+            },
+            {
+              label: 'Coût',
+              value: totalCost > 0 ? `$${totalCost.toFixed(3)}` : '—',
+              tone: 'success',
+            },
+          ]}
+        />
+      ) : null}
 
       {fetchError ? <MonitorError message={fetchError} onRetry={refresh} /> : null}
 
-      <Panel sx={{ mb: 2, py: 1.5, px: 2, bgcolor: t.aiTint, border: `1px solid ${t.border}` }}>
-        <Typography sx={{ fontSize: 12, color: t.text2, lineHeight: 1.5 }}>
-          Les services n&apos;écrivent dans <strong>unified_monitoring</strong> que les appels à problème
-          (guest chatbot, staff Flow IA, traductions/OCR, mail templates reservations).
-          Période par défaut : 7 j.
-        </Typography>
-      </Panel>
-
       {activeTab === 'summary' && (
         <>
-          <MonitorTimeRange ranges={TIME_RANGES} value={timeRange} onChange={setTimeRange} />
           {loading && !summaryData ? (
             <MonitorLoading />
           ) : summaryData && hasSummaryEvents ? (
-            <>
-              <StatsRow>
-                <StatCard
-                  icon="🤖"
-                  iconBg={t.aiTint}
-                  iconColor={t.ai}
-                  value={String(totalProblems)}
-                  label="Problèmes"
-                  trend={timeRange}
-                />
-                <StatCard
-                  icon="❌"
-                  iconBg={t.errorTint}
-                  iconColor={t.error}
-                  value={String(totalFailed)}
-                  label="Appels en échec"
-                />
-                <StatCard
-                  icon="↩️"
-                  iconBg={t.warningTint}
-                  iconColor={t.warning}
-                  value={String(totalFallbacks)}
-                  label="Fallbacks"
-                />
-                <StatCard
-                  icon="🪙"
-                  iconBg={t.primaryTint}
-                  iconColor={t.primaryDeep}
-                  value={totalTokens.toLocaleString('fr-FR')}
-                  label="Tokens (période)"
-                />
-              </StatsRow>
-              <StatsRow>
-                <StatCard
-                  icon="⏱"
-                  iconBg={t.infoTint}
-                  iconColor={t.info}
-                  value={avgLatency ? `${avgLatency} ms` : '—'}
-                  label="Latence moyenne"
-                />
-                <StatCard
-                  icon="💵"
-                  iconBg={t.successTint}
-                  iconColor={t.success}
-                  value={totalCost > 0 ? `$${totalCost.toFixed(3)}` : '—'}
-                  label="Coût estimé"
-                />
-              </StatsRow>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) minmax(0, 1.4fr)' },
+                gap: 1.25,
+                alignItems: 'start',
+              }}
+            >
+              <Stack spacing={1.25}>
+                {(summaryData.byProvider?.length ?? 0) > 0 && (
+                  <MonitorSection dense title="Par fournisseur" desc="clic → Appels">
+                    <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap' }}>
+                      {summaryData.byProvider!.map((ps) => (
+                        <FilterChip
+                          key={ps._id}
+                          label={`${ps._id || '?'} · ${ps.total ?? 0}`}
+                          active={provider === ps._id}
+                          onClick={() => {
+                            setProvider(ps._id || 'all');
+                            setActiveTab('calls');
+                          }}
+                        />
+                      ))}
+                    </Stack>
+                  </MonitorSection>
+                )}
+              </Stack>
 
-              {(summaryData.byProvider?.length ?? 0) > 0 && (
-                <MonitorSection title="Par fournisseur" desc="Cliquer pour filtrer les appels">
-                  <Stack direction="row" gap={1} sx={{ flexWrap: 'wrap' }}>
-                    {summaryData.byProvider!.map((ps) => (
-                      <FilterChip
-                        key={ps._id}
-                        label={`${ps._id || '?'} · ${ps.total ?? 0}`}
-                        active={provider === ps._id}
-                        onClick={() => {
-                          setProvider(ps._id || 'all');
-                          setActiveTab('calls');
-                        }}
-                      />
-                    ))}
-                  </Stack>
+              {(summaryData.recentErrors?.length ?? 0) > 0 ? (
+                <MonitorSection
+                  dense
+                  title="Erreurs récentes"
+                  desc={`${Math.min(summaryData.recentErrors!.length, 10)}`}
+                >
+                  <MonitorErrorList
+                    dense
+                    items={summaryData.recentErrors!.slice(0, 10).map((e) => ({
+                      _id: e._id,
+                      severity: 'error',
+                      timestamp: e.timestamp,
+                      service: e.service,
+                      data: {
+                        user_friendly_message: e.error || `${e.status} — ${e.provider}`,
+                        llm_provider: e.provider,
+                        model: e.model,
+                        latency_ms: e.latency,
+                      },
+                    }))}
+                    renderTitle={(e) =>
+                      String(e.data?.user_friendly_message || e.service || 'Erreur IA')
+                    }
+                    renderMeta={(e) => (
+                      <>
+                        {formatModelDisplay(
+                          e.data?.llm_provider as string | undefined,
+                          e.data?.model as string | undefined,
+                        )}
+                        {e.data?.latency_ms != null ? ` · ${e.data.latency_ms} ms` : ''}
+                        {' · '}
+                        {e.service || '—'}
+                        {' · '}
+                        {formatCasablancaDate(e.timestamp)}
+                      </>
+                    )}
+                  />
                 </MonitorSection>
+              ) : (
+                <MonitorEmpty message="Aucune erreur récente sur la période." />
               )}
-
-              {(summaryData.recentErrors?.length ?? 0) > 0 && (
-                <MonitorSection title="Erreurs récentes">
-                  <Stack spacing={1.25}>
-                    {summaryData.recentErrors!.slice(0, 8).map((e, idx) => (
-                      <Box
-                        key={e._id || idx}
-                        sx={{
-                          p: 1.75,
-                          borderRadius: '10px',
-                          border: `1px solid ${t.border}`,
-                          bgcolor: t.errorTint,
-                        }}
-                      >
-                        <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.text }}>
-                          {e.error || `${e.status} — ${e.provider}`}
-                        </Typography>
-                        <Typography sx={{ fontSize: 11, color: t.text3, mt: 0.5 }}>
-                          {formatModelDisplay(e.provider, e.model)}
-                          {e.latency != null ? ` · ${e.latency} ms` : ''}
-                          {' · '}
-                          {e.service || '—'}
-                          {' · '}
-                          {formatCasablancaDate(e.timestamp)}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Stack>
-                </MonitorSection>
-              )}
-            </>
+            </Box>
           ) : summaryData && !fetchError ? (
-            <MonitorEmpty message={`Aucun événement IA « problème » sur ${timeRange}. Essayez 7 j ou vérifiez LOGS_PROXY_MONGODB_URI sur fullchatbot/fulltask.`} />
+            <MonitorEmpty message={`Aucun événement IA « problème » sur ${timeRange}. Essayez 7 j.`} />
           ) : !fetchError ? (
             <MonitorEmpty message="Aucune donnée IA sur cette période." />
           ) : null}
@@ -395,19 +422,22 @@ export default function AIMonitoringPage() {
 
       {activeTab === 'calls' && (
         <>
-          <MonitorToolbar>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.75, mb: 1 }}
+          >
             <MonitorSelectFilter
               label="Service"
               value={service}
               onChange={setService}
               options={[
                 { value: 'all', label: 'Tous' },
-                { value: 'srv-fullchatbot', label: 'fullchatbot (guest)' },
-                { value: 'srv-fulltask', label: 'fulltask (staff IA)' },
-                { value: 'srv-reservations', label: 'srv-reservations' },
-                { value: 'srv-chatbot', label: 'srv-chatbot (legacy)' },
-                { value: 'srv-task', label: 'srv-task (legacy)' },
-                { value: 'srv-orchestrator', label: 'srv-orchestrator (legacy)' },
+                { value: 'srv-fullchatbot', label: 'fullchatbot' },
+                { value: 'srv-fulltask', label: 'fulltask' },
+                { value: 'srv-reservations', label: 'reservations' },
+                { value: 'srv-chatbot', label: 'chatbot (legacy)' },
+                { value: 'srv-task', label: 'task (legacy)' },
               ]}
             />
             <MonitorSelectFilter
@@ -422,19 +452,19 @@ export default function AIMonitoringPage() {
                 { value: 'rules', label: 'Rules' },
               ]}
             />
-            <MonitorSelectFilter
-              label="Statut"
-              value={status}
-              onChange={setStatus}
-              options={[
-                { value: 'all', label: 'Tous' },
-                { value: 'failed', label: 'Échec' },
-                { value: 'timeout', label: 'Timeout' },
-                { value: 'fallback', label: 'Fallback' },
-                { value: 'success', label: 'Lent (OK)' },
-              ]}
-            />
-          </MonitorToolbar>
+            <Box sx={{ width: 1, height: 16, bgcolor: t.border }} />
+            <Box sx={{ fontSize: 10, fontWeight: 700, color: t.text3, textTransform: 'uppercase' }}>
+              Statut
+            </Box>
+            {STATUS_FILTERS.map((f) => (
+              <FilterChip
+                key={f.value}
+                label={f.label}
+                active={status === f.value}
+                onClick={() => setStatus(f.value)}
+              />
+            ))}
+          </Stack>
 
           {loading && callRows.length === 0 ? (
             <MonitorLoading label="Chargement des appels…" />
@@ -443,13 +473,14 @@ export default function AIMonitoringPage() {
           ) : (
             <DataTable
               hideRowActions
+              compact
               columns={[
                 {
                   key: 'timestamp',
                   label: 'Date',
-                  width: '130px',
+                  width: '120px',
                   render: (row: AiCall & { id: string }) => (
-                    <Typography sx={{ fontSize: 12, color: t.text2 }}>
+                    <Typography sx={{ fontSize: 11, color: t.text2, whiteSpace: 'nowrap' }}>
                       {formatCasablancaDate(row.timestamp)}
                     </Typography>
                   ),
@@ -472,10 +503,10 @@ export default function AIMonitoringPage() {
                 },
                 {
                   key: 'tokens',
-                  label: 'Tokens',
+                  label: 'Tok',
                   align: 'right',
                   render: (row: AiCall & { id: string }) => (
-                    <Typography sx={{ fontSize: 12, fontWeight: 600 }}>
+                    <Typography sx={{ fontSize: 11, fontWeight: 600, fontFamily: 'Geist Mono, monospace' }}>
                       {row.data?.tokens_used?.toLocaleString('fr-FR') ?? '—'}
                     </Typography>
                   ),
@@ -485,26 +516,27 @@ export default function AIMonitoringPage() {
                   label: 'Coût',
                   align: 'right',
                   render: (row: AiCall & { id: string }) => (
-                    <Typography sx={{ fontSize: 12, fontWeight: 600, color: t.success }}>
+                    <Typography sx={{ fontSize: 11, fontWeight: 600, color: t.success, fontFamily: 'Geist Mono, monospace' }}>
                       {row.data?.cost_usd != null ? `$${row.data.cost_usd.toFixed(4)}` : '—'}
                     </Typography>
                   ),
                 },
                 {
                   key: 'latency',
-                  label: 'Latence',
+                  label: 'ms',
                   align: 'right',
                   render: (row: AiCall & { id: string }) => {
                     const ms = row.data?.latency_ms ?? 0;
                     return (
                       <Typography
                         sx={{
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: 700,
+                          fontFamily: 'Geist Mono, monospace',
                           color: ms > 5000 ? t.error : t.text2,
                         }}
                       >
-                        {ms ? `${ms} ms` : '—'}
+                        {ms || '—'}
                       </Typography>
                     );
                   },
@@ -513,16 +545,22 @@ export default function AIMonitoringPage() {
                   key: 'message',
                   label: 'Message',
                   render: (row: AiCall & { id: string }) => (
-                    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'flex-start' }}>
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
                       <Badge variant={severityBadgeVariant(row.severity)} dot>
                         {(row.severity || 'info').toUpperCase()}
                       </Badge>
-                      <Typography sx={{ fontSize: 12, color: t.text, flex: 1 }}>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          color: t.text,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {row.data?.user_friendly_message ||
                           row.data?.error_message ||
-                          (row.data?.fallback_to
-                            ? `Fallback → ${row.data.fallback_to}`
-                            : '—')}
+                          (row.data?.fallback_to ? `Fallback → ${row.data.fallback_to}` : '—')}
                       </Typography>
                     </Stack>
                   ),
@@ -531,7 +569,7 @@ export default function AIMonitoringPage() {
               rows={callRows}
               footer={
                 <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                  <Typography sx={{ fontSize: 12, color: t.text3 }}>
+                  <Typography sx={{ fontSize: 11, color: t.text3 }}>
                     {callsData.total} appel(s)
                   </Typography>
                   <TablePagination
@@ -551,8 +589,9 @@ export default function AIMonitoringPage() {
           {loading && errorsData.length === 0 ? (
             <MonitorLoading />
           ) : (
-            <MonitorSection title="Journal d'erreurs IA">
+            <MonitorSection dense title="Journal erreurs" desc={`${errorsData.length}`}>
               <MonitorErrorList
+                dense
                 items={errorsData}
                 renderTitle={(e) =>
                   String(

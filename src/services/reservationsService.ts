@@ -356,7 +356,7 @@ class ReservationsService {
 
   async getById(
     reservationId: string,
-    opts?: { includeThreads?: boolean; skipCache?: boolean },
+    opts?: { includeThreads?: boolean; skipCache?: boolean; silent?: boolean },
   ): Promise<Reservation> {
     const startTime = performance.now();
     const cacheKey = reservationId.trim();
@@ -380,7 +380,7 @@ class ReservationsService {
       const response = await apiClient.get(url);
 
       const duration = performance.now() - startTime;
-      if (import.meta.env.DEV) {
+      if (import.meta.env.DEV && !opts?.silent) {
         console.log(`[ReservationsService] getById ${reservationId} in ${duration.toFixed(0)}ms`);
       }
 
@@ -388,8 +388,13 @@ class ReservationsService {
       setCachedReservationDetail(cacheKey, reservation);
       return reservation;
     } catch (error) {
-      const duration = performance.now() - startTime;
-      console.error(`[ReservationsService] ❌ Error fetching reservation ${reservationId} (${duration.toFixed(0)}ms):`, error);
+      if (!opts?.silent) {
+        const duration = performance.now() - startTime;
+        console.error(
+          `[ReservationsService] ❌ Error fetching reservation ${reservationId} (${duration.toFixed(0)}ms):`,
+          error,
+        );
+      }
       throw error;
     }
   }
@@ -400,13 +405,18 @@ class ReservationsService {
    * @param ids Array of reservation IDs to fetch
    * @returns { success: boolean, data: Reservation[], notFound?: string[] }
    */
-  async getBatch(ids: string[]): Promise<{ success: boolean; data: Reservation[]; notFound?: string[] }> {
+  async getBatch(
+    ids: string[],
+    opts?: { silent?: boolean },
+  ): Promise<{ success: boolean; data: Reservation[]; notFound?: string[] }> {
     if (ids.length === 0) {
       return { success: true, data: [] };
     }
 
     const startTime = performance.now();
-    console.log(`[ReservationsService] 🚀 Batch fetching ${ids.length} reservations...`);
+    if (!opts?.silent) {
+      console.log(`[ReservationsService] 🚀 Batch fetching ${ids.length} reservations...`);
+    }
 
     try {
       const url = `${RESERVATIONS_API}/batch?ids=${ids.join(',')}`;
@@ -414,7 +424,11 @@ class ReservationsService {
 
       const duration = performance.now() - startTime;
       const found = response.data.data?.length || 0;
-      console.log(`[ReservationsService] ✅ Batch fetched ${found}/${ids.length} reservations in ${duration.toFixed(0)}ms`);
+      if (!opts?.silent) {
+        console.log(
+          `[ReservationsService] ✅ Batch fetched ${found}/${ids.length} reservations in ${duration.toFixed(0)}ms`,
+        );
+      }
 
       return {
         success: response.data.success ?? true,
@@ -422,8 +436,10 @@ class ReservationsService {
         notFound: response.data.notFound,
       };
     } catch (error) {
-      const duration = performance.now() - startTime;
-      console.error(`[ReservationsService] ❌ Error after ${duration.toFixed(0)}ms:`, error);
+      if (!opts?.silent) {
+        const duration = performance.now() - startTime;
+        console.error(`[ReservationsService] ❌ Error after ${duration.toFixed(0)}ms:`, error);
+      }
       throw error;
     }
   }

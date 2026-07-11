@@ -209,13 +209,15 @@ export function MonitorSubTabs<T extends string>({
   options,
   value,
   onChange,
+  dense,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
+  dense?: boolean;
 }) {
   return (
-    <Box sx={{ mb: 2 }}>
+    <Box sx={{ mb: dense ? 0 : 2 }}>
       <ViewToggle
         options={options.map((o) => ({ value: o.value, label: o.label }))}
         value={value}
@@ -229,11 +231,27 @@ export function MonitorTimeRange({
   ranges,
   value,
   onChange,
+  dense,
 }: {
   ranges: { value: string; label: string }[];
   value: string;
   onChange: (v: string) => void;
+  dense?: boolean;
 }) {
+  if (dense) {
+    return (
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+        {ranges.map((r) => (
+          <FilterChip
+            key={r.value}
+            label={r.label}
+            active={value === r.value}
+            onClick={() => onChange(r.value)}
+          />
+        ))}
+      </Stack>
+    );
+  }
   return (
     <FilterBar>
       {ranges.map((r) => (
@@ -245,6 +263,119 @@ export function MonitorTimeRange({
         />
       ))}
     </FilterBar>
+  );
+}
+
+/** Barre d’outils compacte : sous-onglets + période + actions sur une ligne. */
+export function MonitorToolbarRow({
+  left,
+  right,
+}: {
+  left: React.ReactNode;
+  right?: React.ReactNode;
+}) {
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 1,
+        mb: 1.25,
+        pb: 1,
+        borderBottom: `1px solid ${t.border}`,
+      }}
+    >
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.75, minWidth: 0 }}>
+        {left}
+      </Stack>
+      {right ? (
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexShrink: 0 }}>
+          {right}
+        </Stack>
+      ) : null}
+    </Stack>
+  );
+}
+
+/** KPIs horizontaux compacts (peu de hauteur). Cliquables si onClick fourni. */
+export function MonitorKpiStrip({
+  items,
+}: {
+  items: Array<{
+    label: string;
+    value: string | number;
+    tone?: 'neutral' | 'error' | 'warning' | 'success' | 'info';
+    active?: boolean;
+    onClick?: () => void;
+  }>;
+}) {
+  const toneMap = {
+    neutral: { bg: t.bg2, color: t.text },
+    error: { bg: t.errorTint, color: t.error },
+    warning: { bg: t.warningTint, color: t.warning },
+    success: { bg: t.successTint, color: t.success },
+    info: { bg: t.infoTint, color: t.info },
+  } as const;
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 0.75,
+        mb: 1.25,
+      }}
+    >
+      {items.map((item) => {
+        const c = toneMap[item.tone || 'neutral'];
+        const clickable = Boolean(item.onClick);
+        return (
+          <Box
+            key={item.label}
+            component={clickable ? 'button' : 'div'}
+            type={clickable ? 'button' : undefined}
+            onClick={item.onClick}
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'baseline',
+              gap: 0.75,
+              px: 1.25,
+              py: 0.5,
+              borderRadius: '8px',
+              border: `1px solid ${item.active ? t.primary : t.border}`,
+              bgcolor: item.active ? t.primaryTint : c.bg,
+              minWidth: 0,
+              cursor: clickable ? 'pointer' : 'default',
+              font: 'inherit',
+              m: 0,
+              boxShadow: item.active ? `0 0 0 1px ${t.primary}` : 'none',
+              '&:hover': clickable
+                ? { borderColor: t.borderStrong, bgcolor: item.active ? t.primaryTint : t.bg2 }
+                : undefined,
+            }}
+          >
+            <Typography
+              sx={{
+                fontFamily: 'Geist Mono, monospace',
+                fontSize: 15,
+                fontWeight: 800,
+                letterSpacing: '-0.03em',
+                color: c.color,
+                lineHeight: 1.1,
+              }}
+            >
+              {item.value}
+            </Typography>
+            <Typography sx={{ fontSize: 11, fontWeight: 600, color: t.text3, whiteSpace: 'nowrap' }}>
+              {item.label}
+            </Typography>
+          </Box>
+        );
+      })}
+    </Box>
   );
 }
 
@@ -363,14 +494,27 @@ export function MonitorSection({
   desc,
   children,
   headRight,
+  dense,
 }: {
   title: string;
   desc?: string;
   children: React.ReactNode;
   headRight?: React.ReactNode;
+  dense?: boolean;
 }) {
   return (
-    <Panel title={title} desc={desc} headRight={headRight} sx={{ mb: 2.5 }}>
+    <Panel
+      title={title}
+      desc={desc}
+      headRight={headRight}
+      sx={{
+        mb: dense ? 1.25 : 2.5,
+        p: dense ? 1.5 : undefined,
+        '& > .MuiStack-root:first-of-type': dense
+          ? { mb: 1, pb: 0.75 }
+          : undefined,
+      }}
+    >
       {children}
     </Panel>
   );
@@ -380,34 +524,56 @@ export function MonitorErrorList({
   items,
   renderTitle,
   renderMeta,
+  dense,
 }: {
   items: Array<{ _id?: string; severity?: string; timestamp?: string; service?: string; data?: Record<string, unknown> }>;
   renderTitle: (item: (typeof items)[0]) => string;
   renderMeta?: (item: (typeof items)[0]) => React.ReactNode;
+  dense?: boolean;
 }) {
   if (!items.length) return <MonitorEmpty message="Aucune erreur sur la période." />;
   return (
-    <Stack spacing={1.25}>
+    <Stack spacing={dense ? 0.5 : 1.25}>
       {items.map((item, idx) => (
         <Box
           key={item._id || idx}
           sx={{
-            p: 1.75,
-            borderRadius: '10px',
+            p: dense ? 1 : 1.75,
+            borderRadius: dense ? '8px' : '10px',
             border: `1px solid ${t.border}`,
             bgcolor: severityBadgeVariant(item.severity) === 'error' ? t.errorTint : t.warningTint,
           }}
         >
           <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-            <Badge variant={severityBadgeVariant(item.severity)} dot>
-              {(item.severity || 'info').toUpperCase()}
-            </Badge>
+            {!dense ? (
+              <Badge variant={severityBadgeVariant(item.severity)} dot>
+                {(item.severity || 'info').toUpperCase()}
+              </Badge>
+            ) : null}
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.text }}>
+              <Typography
+                sx={{
+                  fontSize: dense ? 12 : 13,
+                  fontWeight: 600,
+                  color: t.text,
+                  lineHeight: 1.3,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
                 {renderTitle(item)}
               </Typography>
               {renderMeta ? (
-                <Typography component="div" sx={{ fontSize: 11, color: t.text3, mt: 0.5 }}>
+                <Typography
+                  component="div"
+                  sx={{
+                    fontSize: 11,
+                    color: t.text3,
+                    mt: dense ? 0.25 : 0.5,
+                    lineHeight: 1.35,
+                  }}
+                >
                   {renderMeta(item)}
                 </Typography>
               ) : null}

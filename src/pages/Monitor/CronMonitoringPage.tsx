@@ -34,10 +34,11 @@ import {
   Badge,
   MonitorEmpty,
   MonitorError,
+  MonitorKpiStrip,
   MonitorLoading,
   MonitorPageFrame,
-  MonitorPageHeader,
   MonitorSection,
+  MonitorToolbarRow,
   btnGhostSx,
   btnPrimarySx,
   monitorTokens as t,
@@ -60,38 +61,6 @@ interface AggregatedCronJob {
   canSchedule?: boolean;
   canToggle?: boolean;
   canRunNow?: boolean;
-}
-
-function CompactStat({ icon, iconColor, value, label }: { icon: string; iconColor: string; value: string; label: string }) {
-  return (
-    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', py: 0.25 }}>
-      <Box sx={{ fontSize: 14, color: iconColor, lineHeight: 1 }}>{icon}</Box>
-      <Typography sx={{ fontSize: 15, fontWeight: 800, color: t.text, lineHeight: 1 }}>{value}</Typography>
-      <Typography sx={{ fontSize: 11.5, color: t.text3, lineHeight: 1 }}>{label}</Typography>
-    </Stack>
-  );
-}
-
-function CompactStatsRow({ children }: { children: React.ReactNode }) {
-  return (
-    <Stack
-      direction="row"
-      divider={<Box sx={{ width: '1px', alignSelf: 'stretch', bgcolor: t.border }} />}
-      spacing={2}
-      sx={{
-        px: 1.75,
-        py: 1,
-        mb: 2,
-        borderRadius: '10px',
-        border: `1px solid ${t.border}`,
-        bgcolor: t.bg1,
-        flexWrap: 'wrap',
-        rowGap: 0.5,
-      }}
-    >
-      {children}
-    </Stack>
-  );
 }
 
 function formatClock(iso?: string | null): string {
@@ -548,14 +517,24 @@ export default function CronMonitoringPage() {
 
   return (
     <MonitorPageFrame>
-      <MonitorPageHeader
-        accent="infra"
-        title="Cron"
-        subtitle="Cron jobs de tous les services backend — à quoi ils servent, quand ils tournent, activer/désactiver/relancer/reprogrammer"
-        live={isLive}
-        onToggleLive={() => setIsLive((v) => !v)}
-        onRefresh={() => void fetchJobs()}
-        loading={loading}
+      <MonitorToolbarRow
+        left={
+          <Typography sx={{ fontSize: 12, color: t.text3 }}>
+            Jobs de tous les services — activer / relancer / reprogrammer
+          </Typography>
+        }
+        right={
+          <>
+            <Button sx={btnGhostSx} onClick={() => setIsLive((v) => !v)}>
+              <Badge variant={isLive ? 'success' : 'neutral'} dot>
+                {isLive ? 'Live' : 'Pause'}
+              </Badge>
+            </Button>
+            <Button sx={btnGhostSx} onClick={() => void fetchJobs()} disabled={loading}>
+              {loading ? '…' : 'Actualiser'}
+            </Button>
+          </>
+        }
       />
 
       {error ? <MonitorError message={error} onRetry={() => void fetchJobs()} /> : null}
@@ -569,14 +548,24 @@ export default function CronMonitoringPage() {
         />
       )}
 
-      <CompactStatsRow>
-        <CompactStat icon="⏱️" iconColor={t.text2} value={String(jobs.length)} label="Cron jobs" />
-        <CompactStat icon="🧩" iconColor={t.text2} value={String(services.length)} label="Services" />
-        <CompactStat icon="⛔" iconColor={t.warning} value={String(disabled.length)} label="Désactivés" />
-        <CompactStat icon="🔴" iconColor={t.error} value={String(failing.length)} label="Dernière exécution en erreur" />
-      </CompactStatsRow>
+      <MonitorKpiStrip
+        items={[
+          { label: 'Cron jobs', value: jobs.length, tone: 'neutral' },
+          { label: 'Services', value: services.length, tone: 'neutral' },
+          {
+            label: 'Désactivés',
+            value: disabled.length,
+            tone: disabled.length > 0 ? 'warning' : 'neutral',
+          },
+          {
+            label: 'En erreur',
+            value: failing.length,
+            tone: failing.length > 0 ? 'error' : 'success',
+          },
+        ]}
+      />
 
-      <Stack direction="row" spacing={0.75} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 0.75 }}>
+      <Stack direction="row" spacing={0.5} sx={{ mb: 1.25, flexWrap: 'wrap', rowGap: 0.5 }}>
         <Button sx={btnGhostSx} variant={serviceFilter === 'all' ? 'contained' : 'outlined'} onClick={() => setServiceFilter('all')}>
           Tous
         </Button>
@@ -587,7 +576,7 @@ export default function CronMonitoringPage() {
         ))}
       </Stack>
 
-      <MonitorSection title="Cron jobs" desc={`${visibleJobs.length} job(s)`}>
+      <MonitorSection dense title="Cron jobs" desc={`${visibleJobs.length} job(s)`}>
         {visibleJobs.length === 0 ? (
           <MonitorEmpty message="Aucun cron job trouvé." />
         ) : (
@@ -601,13 +590,13 @@ export default function CronMonitoringPage() {
                       key={h}
                       sx={{
                         textAlign: 'left',
-                        fontSize: 10.5,
+                        fontSize: 10,
                         fontWeight: 700,
                         color: t.text3,
                         textTransform: 'uppercase',
                         letterSpacing: '0.03em',
-                        py: 1,
-                        px: 1,
+                        py: 0.5,
+                        px: 0.75,
                         borderBottom: `1px solid ${t.border}`,
                         whiteSpace: 'nowrap',
                       }}
@@ -636,45 +625,45 @@ export default function CronMonitoringPage() {
                         borderBottom: `1px solid ${t.border}`,
                       }}
                     >
-                      <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top' }}>
+                      <Box component="td" sx={{ py: 0.75, px: 0.75, verticalAlign: 'top' }}>
                         <Badge variant="neutral">{SERVICE_LABEL[job.service] || job.service}</Badge>
                       </Box>
 
-                      <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top', minWidth: 160 }}>
-                        <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: t.text }}>{job.label}</Typography>
+                      <Box component="td" sx={{ py: 0.75, px: 0.75, verticalAlign: 'top', minWidth: 140 }}>
+                        <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text }}>{job.label}</Typography>
                         {job.readOnly && !caps.canSchedule && (
                           <Badge variant="neutral">lecture seule</Badge>
                         )}
                       </Box>
 
-                      <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top', minWidth: 280, maxWidth: 420 }}>
-                        <Typography sx={{ fontSize: 11.5, color: t.text2, lineHeight: 1.4 }}>{job.description}</Typography>
+                      <Box component="td" sx={{ py: 0.75, px: 0.75, verticalAlign: 'top', minWidth: 240, maxWidth: 400 }}>
+                        <Typography sx={{ fontSize: 11, color: t.text2, lineHeight: 1.35 }}>{job.description}</Typography>
                         {job.lastError && (
-                          <Typography sx={{ fontSize: 10.5, color: t.error, fontFamily: 'monospace', mt: 0.5 }}>
+                          <Typography sx={{ fontSize: 10, color: t.error, fontFamily: 'monospace', mt: 0.25 }}>
                             {job.lastError}
                           </Typography>
                         )}
                       </Box>
 
-                      <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top', minWidth: 220 }}>
+                      <Box component="td" sx={{ py: 0.75, px: 0.75, verticalAlign: 'top', minWidth: 200 }}>
                         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-                          <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography sx={{ fontSize: 12, color: t.text, fontWeight: 600 }}>
+                          <Stack spacing={0.15} sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography sx={{ fontSize: 11.5, color: t.text, fontWeight: 600 }}>
                               {job.schedules.map(describeSchedule).join(' · ')}
                             </Typography>
-                            <Typography sx={{ fontSize: 10, color: t.text3, fontFamily: 'monospace' }}>
+                            <Typography sx={{ fontSize: 9.5, color: t.text3, fontFamily: 'monospace' }}>
                               {job.schedules.join(' · ')}
                             </Typography>
                             {job.readOnly && !caps.canSchedule && (
-                              <Typography sx={{ fontSize: 10, color: t.text3, mt: 0.25 }}>
+                              <Typography sx={{ fontSize: 9.5, color: t.text3, mt: 0.15 }}>
                                 Fréquence non modifiable
                               </Typography>
                             )}
                           </Stack>
                           {canEditSchedule && (
                             <Button
-                              sx={{ ...btnGhostSx, minHeight: 26, px: 1, py: 0.25, fontSize: 11, flexShrink: 0 }}
-                              startIcon={<EditOutlinedIcon sx={{ fontSize: 16 }} />}
+                              sx={{ ...btnGhostSx, minHeight: 24, px: 0.75, py: 0.15, fontSize: 10.5, flexShrink: 0 }}
+                              startIcon={<EditOutlinedIcon sx={{ fontSize: 14 }} />}
                               onClick={() => setScheduleModalJob(job)}
                             >
                               Modifier
@@ -683,8 +672,8 @@ export default function CronMonitoringPage() {
                         </Stack>
                       </Box>
 
-                      <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top' }}>
-                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                      <Box component="td" sx={{ py: 0.75, px: 0.75, verticalAlign: 'top' }}>
+                        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                           <Badge variant={job.enabled ? 'success' : 'neutral'} dot>
                             {job.enabled ? 'actif' : 'désactivé'}
                           </Badge>
@@ -701,15 +690,15 @@ export default function CronMonitoringPage() {
                         </Stack>
                       </Box>
 
-                      <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top', whiteSpace: 'nowrap' }}>
-                        <Typography sx={{ fontSize: 11.5, color: t.text2 }}>{formatClock(job.lastRun)}</Typography>
+                      <Box component="td" sx={{ py: 0.75, px: 0.75, verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                        <Typography sx={{ fontSize: 11, color: t.text2 }}>{formatClock(job.lastRun)}</Typography>
                         {job.lastDurationMs != null && (
-                          <Typography sx={{ fontSize: 10.5, color: t.text3 }}>{formatDurationMs(job.lastDurationMs)}</Typography>
+                          <Typography sx={{ fontSize: 10, color: t.text3 }}>{formatDurationMs(job.lastDurationMs)}</Typography>
                         )}
                       </Box>
 
-                      <Box component="td" sx={{ py: 1.25, px: 1, verticalAlign: 'top' }}>
-                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Box component="td" sx={{ py: 0.75, px: 0.75, verticalAlign: 'top' }}>
+                        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                           {canRunNowJob && (
                             <Tooltip title="Relancer maintenant">
                               <span>
@@ -720,14 +709,14 @@ export default function CronMonitoringPage() {
                                   onClick={() => void handleRunNow(job)}
                                   sx={{ color: t.text2 }}
                                 >
-                                  <PlayArrowOutlinedIcon sx={{ fontSize: 20 }} />
+                                  <PlayArrowOutlinedIcon sx={{ fontSize: 18 }} />
                                 </IconButton>
                               </span>
                             </Tooltip>
                           )}
                           {canRunNowJob && (
                             <Button
-                              sx={{ ...btnGhostSx, minHeight: 28, px: 1.25, fontSize: 11.5 }}
+                              sx={{ ...btnGhostSx, minHeight: 24, px: 1, fontSize: 11 }}
                               disabled={running}
                               onClick={() => void handleRunNow(job)}
                             >

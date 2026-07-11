@@ -8,7 +8,7 @@ import { fr } from 'date-fns/locale';
 import { tokens as t } from '../../components/dashboard/dashboardTokens';
 import { NOTIF_FACETS, NOTIF_PRIORITY, isUnread, messageChannelMeta } from './constants';
 import type { NotificationItem } from './types';
-import { useMarkRead, useSetStatus } from './useNotifications';
+import { useSetStatus } from './useNotifications';
 import { resolveNotificationNavigatePath } from './notificationNavigation';
 
 interface NotificationRowProps {
@@ -21,7 +21,6 @@ function plainBody(text: string): string {
 
 export function NotificationRow({ notification }: NotificationRowProps) {
   const navigate = useNavigate();
-  const markRead = useMarkRead();
   const setStatus = useSetStatus();
   const [removing, setRemoving] = useState(false);
 
@@ -42,10 +41,6 @@ export function NotificationRow({ notification }: NotificationRowProps) {
     : '';
 
   const handleOpen = () => {
-    setRemoving(true);
-    window.setTimeout(() => {
-      void markRead.mutateAsync(notification._id).catch(() => setRemoving(false));
-    }, 120);
     const path = resolveNotificationNavigatePath(notification.linkPath, notification);
     if (path) navigate(path);
   };

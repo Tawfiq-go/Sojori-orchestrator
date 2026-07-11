@@ -10,16 +10,20 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Activity, AlertTriangle, CheckCircle2, Clock, Filter, MessageSquare, Rabbit, RefreshCw, Search, TrendingUp, XCircle, ChevronDown, ChevronUp, BarChart3, Zap } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, MessageSquare, Rabbit, RefreshCw, TrendingUp, XCircle, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { monitoringGet } from '../../utils/monitoringApi';
 import {
+  Badge,
   FilterChip,
   FilterBar,
+  MonitorKpiStrip,
   MonitorPageFrame,
-  MonitorPageHeader,
+  MonitorToolbarRow,
   Panel,
+  btnGhostSx,
 } from '../../features/monitoring/shared/MonitorDesign';
+import { Button } from '@mui/material';
 
 // Type definitions
 interface TypeConfigItem {
@@ -328,43 +332,31 @@ function EventItem({ event, expanded, onToggle }: EventItemProps) {
   );
 }
 
-// Stats Summary Component (Ultra-Compact - Single Line)
-interface StatsSummaryProps {
-  stats: Stats;
-}
-
-function StatsSummary({ stats }: StatsSummaryProps) {
-  if (!stats) return null;
-
-  const statItems = [
-    { label: 'Total', value: stats.total, icon: BarChart3, color: 'text-slate-600', bg: 'bg-slate-50' },
-    { label: 'Logs', value: stats.byType.log, icon: MessageSquare, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Metrics', value: stats.byType.metric, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { label: 'RabbitMQ', value: stats.byType.rabbitmq, icon: Rabbit, color: 'text-orange-600', bg: 'bg-orange-50' },
-    { label: 'Alerts', value: stats.byType.alert, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50' },
-    { label: 'Critical', value: stats.bySeverity.critical, icon: XCircle, color: 'text-red-700', bg: 'bg-red-100' },
-    { label: 'Error', value: stats.bySeverity.error ?? 0, icon: AlertTriangle, color: 'text-amber-800', bg: 'bg-amber-100' },
-    { label: 'Warning', value: stats.bySeverity.warning, icon: AlertTriangle, color: 'text-orange-700', bg: 'bg-orange-100' },
-    { label: 'Info', value: stats.bySeverity.info, icon: MessageSquare, color: 'text-blue-700', bg: 'bg-blue-100' }
+// Stats Summary — replaced by MonitorKpiStrip in render
+function buildStatsKpiItems(stats: Stats) {
+  return [
+    { label: 'Total', value: stats.total || 0, tone: 'neutral' as const },
+    { label: 'Logs', value: stats.byType.log || 0, tone: 'info' as const },
+    { label: 'Metrics', value: stats.byType.metric || 0, tone: 'neutral' as const },
+    { label: 'RabbitMQ', value: stats.byType.rabbitmq || 0, tone: 'warning' as const },
+    { label: 'Alerts', value: stats.byType.alert || 0, tone: 'error' as const },
+    {
+      label: 'Critical',
+      value: stats.bySeverity.critical || 0,
+      tone: (stats.bySeverity.critical || 0) > 0 ? ('error' as const) : ('neutral' as const),
+    },
+    {
+      label: 'Error',
+      value: stats.bySeverity.error ?? 0,
+      tone: (stats.bySeverity.error ?? 0) > 0 ? ('error' as const) : ('neutral' as const),
+    },
+    {
+      label: 'Warning',
+      value: stats.bySeverity.warning || 0,
+      tone: (stats.bySeverity.warning || 0) > 0 ? ('warning' as const) : ('neutral' as const),
+    },
+    { label: 'Info', value: stats.bySeverity.info || 0, tone: 'info' as const },
   ];
-
-  return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1">
-      {statItems.map(({ label, value, icon: Icon, color, bg }) => (
-        <div key={label} className={`${bg} rounded-lg px-2 py-1 border border-slate-200 hover:shadow-sm transition-shadow flex-shrink-0`}>
-          <div className="flex items-center gap-1.5">
-            <Icon size={14} className={color} />
-            <div className="flex items-baseline gap-1">
-              <span className="text-[10px] font-medium text-slate-600 uppercase">{label}</span>
-              <span className={`text-base font-bold ${color} tabular-nums`}>
-                {value || 0}
-              </span>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 // Main Component
@@ -485,20 +477,29 @@ export default function UnifiedMonitoringPage() {
 
   return (
     <MonitorPageFrame>
-      <MonitorPageHeader
-        accent="default"
-        title="Vue unifiée"
-        subtitle={`Dernière MAJ ${formatCasablancaDate(lastRefresh, 'HH:mm:ss')} — logs, métriques, RabbitMQ, alertes`}
-        live={autoRefresh}
-        onToggleLive={() => setAutoRefresh(!autoRefresh)}
-        onRefresh={() => void fetchData()}
-        loading={loading}
+      <MonitorToolbarRow
+        left={
+          <Badge variant="neutral">
+            MAJ {formatCasablancaDate(lastRefresh, 'HH:mm:ss')}
+          </Badge>
+        }
+        right={
+          <>
+            <Button sx={btnGhostSx} onClick={() => setAutoRefresh(!autoRefresh)}>
+              <Badge variant={autoRefresh ? 'success' : 'neutral'} dot>
+                {autoRefresh ? 'Live' : 'Pause'}
+              </Badge>
+            </Button>
+            <Button sx={btnGhostSx} onClick={() => void fetchData()} disabled={loading}>
+              {loading ? '…' : 'Actualiser'}
+            </Button>
+          </>
+        }
       />
 
-      <div className="space-y-2">
+      {data?.stats ? <MonitorKpiStrip items={buildStatsKpiItems(data.stats)} /> : null}
 
-        {/* Stats Summary */}
-        {data?.stats && <StatsSummary stats={data.stats} />}
+      <div className="space-y-2">
 
         <Panel sx={{ p: 2 }}>
           <FilterBar>

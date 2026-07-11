@@ -182,7 +182,9 @@ export function fullTaskToListItem(
   listingById: Record<string, string> = {},
   reservationMeta?: ReservationMetaLike,
 ) {
-  const legacyStatus = mapFulltaskStatusToLegacy(task.status, task.assignedTo);
+  const legacyStatus = task.isArchived === true
+    ? 'ARCHIVED'
+    : mapFulltaskStatusToLegacy(task.status, task.assignedTo);
   const assignedTo = task.assignedTo ? String(task.assignedTo) : '';
   const staff = assignedTo ? staffById[assignedTo] : null;
   const listingId = task.listingId ? String(task.listingId) : '';
@@ -320,7 +322,7 @@ export function fullTaskToListItem(
     supportCategoryIcon:
       taskType === 'support' ? String(payload.categoryIcon ?? '').trim() || undefined : undefined,
     comment: task.executionNote ? String(task.executionNote) : '',
-    isArchived: false,
+    isArchived: task.isArchived === true,
     isClientRequest: task.status === 'waiting_guest',
     isClientConfirmed: task.status !== 'waiting_guest',
   };
