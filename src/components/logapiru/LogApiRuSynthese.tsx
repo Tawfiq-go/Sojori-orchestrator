@@ -62,6 +62,8 @@ export interface LogApiRuSyntheseProps {
   onRetry: () => void;
   onSelectAction: (action: string) => void;
   onSelectOwner: (ownerId: string) => void;
+  /** Filtre journal : error | warning (lents/retry) | success | '' */
+  onFilterStatus: (status: '' | 'error' | 'warning' | 'success') => void;
 }
 
 export function LogApiRuSynthese({
@@ -71,6 +73,7 @@ export function LogApiRuSynthese({
   onRetry,
   onSelectAction,
   onSelectOwner,
+  onFilterStatus,
 }: LogApiRuSyntheseProps) {
   const now = useMemo(() => new Date(), [stats]);
 
@@ -100,28 +103,37 @@ export function LogApiRuSynthese({
   return (
     <div>
       <div className="kpis">
-        <div className="kpi">
+        <button type="button" className="kpi kpi-btn" onClick={() => onFilterStatus('')}>
           <div className="k">Appels API</div>
           <div className="v">{fmtN(kpis.total)}</div>
-          <div className="trend">{byAction.length} APIs actives sur la fenêtre</div>
-        </div>
-        <div className={`kpi ${errRate > 2 ? 'warn' : 'ok'}`}>
-          <div className="k">Taux d’erreur</div>
-          <div className="v">
-            {errRate.toFixed(1)}
-            <small>%</small>
-          </div>
+          <div className="trend">{byAction.length} APIs actives · ouvrir le journal</div>
+        </button>
+        <button
+          type="button"
+          className={`kpi kpi-btn ${kpis.errors > 0 || errRate > 2 ? 'warn' : 'ok'}`}
+          onClick={() => onFilterStatus('error')}
+          title="Voir uniquement les échecs API RU (pas les appels lents)"
+        >
+          <div className="k">Échecs API</div>
+          <div className="v">{fmtN(kpis.errors)}</div>
           <div className="trend">
-            {fmtN(kpis.errors)} échec{kpis.errors > 1 ? 's' : ''} · {fmtN(kpis.warnings)} retry
+            {errRate.toFixed(1)}% · cliquer pour filtrer · hors lents
           </div>
-        </div>
-        <div className={`kpi ${kpis.slow > 0 ? 'err' : 'ok'}`}>
+        </button>
+        <button
+          type="button"
+          className={`kpi kpi-btn ${kpis.slow > 0 ? 'err' : 'ok'}`}
+          onClick={() => onFilterStatus('warning')}
+          title="Succès lents (>10s) ou retry RU (-5/-6) — pas des échecs métier"
+        >
           <div className="k">
-            Appels lents <span className="badge neutral" style={{ fontSize: 9 }}>&gt;5s</span>
+            Lents / retry <span className="badge neutral" style={{ fontSize: 9 }}>&gt;10s</span>
           </div>
-          <div className="v">{fmtN(kpis.slow)}</div>
-          <div className="trend">sur la fenêtre sélectionnée</div>
-        </div>
+          <div className="v">{fmtN(kpis.slow + kpis.warnings)}</div>
+          <div className="trend">
+            {fmtN(kpis.slow)} lents · {fmtN(kpis.warnings)} retry · cliquer
+          </div>
+        </button>
         <div className="kpi">
           <div className="k">Temps de réponse moy.</div>
           <div className="v">

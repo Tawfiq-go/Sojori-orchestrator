@@ -207,12 +207,33 @@ export function LogApiRuJournal({
     return out;
   }, [items]);
 
+  const statusChips: Array<{ id: '' | 'error' | 'warning' | 'success'; label: string; hint: string }> = [
+    { id: '', label: 'Tous', hint: 'Tous les appels' },
+    { id: 'error', label: 'Échecs', hint: 'Vrais échecs API RU (code ≠ 0, hors retry)' },
+    { id: 'warning', label: 'Lents / retry', hint: 'Succès >10s ou codes -5/-6 — pas une erreur métier' },
+    { id: 'success', label: 'Succès', hint: 'OK et <10s' },
+  ];
+
   const filterBar = (
     <div className="filterbar">
+      <div className="status-chips" role="group" aria-label="Filtrer par statut">
+        {statusChips.map((c) => (
+          <button
+            key={c.id || 'all'}
+            type="button"
+            className={`schip ${filters.status === c.id ? 'on' : ''} ${c.id === 'error' ? 'err' : ''} ${c.id === 'warning' ? 'warn' : ''}`}
+            title={c.hint}
+            onClick={() => onFiltersChange({ status: c.id })}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
       <div className="fsel">
         <select
           value={filters.status}
           onChange={(e) => onFiltersChange({ status: e.target.value as LogApiRuFilters['status'] })}
+          aria-label="Statut (liste)"
         >
           <option value="">Tout statut</option>
           <option value="success">Succès</option>
@@ -269,6 +290,7 @@ export function LogApiRuJournal({
           <option value="1000">≥ 1 s</option>
           <option value="2000">≥ 2 s</option>
           <option value="5000">≥ 5 s</option>
+          <option value="10000">≥ 10 s (lent)</option>
         </select>
       </div>
       <div className="fsearch">
