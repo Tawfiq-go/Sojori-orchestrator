@@ -30,6 +30,7 @@ import ServiceClientConfigTab from '../listing/components/ConfigOrchestration/Se
 import SupportConfigTabContainer from '../listing/components/ConfigOrchestration/SupportConfigTabContainer';
 import TransportConfigTab from '../listing/components/ConfigOrchestration/TransportConfigTab';
 import { V3BlockSaveBar } from '../orchestrationListingV3/V3BlockSaveBar';
+import PreArrivalRequiredToggle from './PreArrivalRequiredToggle';
 import type { MatrixScopeMode } from './types';
 import { SOJORI_TOKENS as T } from '../listing/components/ConfigOrchestration/types';
 
@@ -114,15 +115,35 @@ export function CapabilityGestionPanel({
     return (
       <Box sx={embeddedSx}>
         <ArrivalDepartureConfigTab {...commonListing} capabilityKey={key} />
+        {key === 'arrival_choose' && lid && (
+          <PreArrivalRequiredToggle
+            listingId={lid}
+            capabilityKey="arrival_choose"
+            title="Choix de l'heure d'arrivée"
+            helpRequired="Le voyageur doit choisir son heure d'arrivée (menu D1) avant le jour J — relances puis escalade selon la config. L'assistant WhatsApp le présente comme requis."
+            helpOptional="Une heure d'arrivée par défaut s'applique si le voyageur ne choisit pas. L'assistant WhatsApp le présente comme optionnel."
+          />
+        )}
       </Box>
     );
   }
   if (key === 'registration') {
     return (
-      <Alert severity="info" sx={{ fontSize: 12.5 }}>
-        Enregistrement voyageurs (flow E) — règles dans le menu WhatsApp ci-dessous. Contenu formulaire :
-        orchestration / fulltask.
-      </Alert>
+      <Box sx={embeddedSx}>
+        <Alert severity="info" sx={{ fontSize: 12.5 }}>
+          Enregistrement voyageurs (flow E) — règles dans le menu WhatsApp ci-dessous. Contenu formulaire :
+          orchestration / fulltask.
+        </Alert>
+        {lid && (
+          <PreArrivalRequiredToggle
+            listingId={lid}
+            capabilityKey="registration"
+            title="Enregistrement voyageurs"
+            helpRequired="Les codes d'accès (menu F) restent verrouillés tant que l'enregistrement n'est pas complété, et l'assistant WhatsApp l'explique au voyageur : l'enregistrement sur place ne suffit pas."
+            helpOptional="Le voyageur peut aussi s'enregistrer sur place à l'arrivée — le menu F (Accès & codes) n'exige plus l'enregistrement, et l'assistant le confirme si on lui demande."
+          />
+        )}
+      </Box>
     );
   }
   if (key === 'support') {
