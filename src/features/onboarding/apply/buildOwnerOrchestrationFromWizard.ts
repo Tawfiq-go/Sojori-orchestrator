@@ -185,5 +185,24 @@ export function buildOwnerOrchestrationCapabilitiesFromWizard(draft: WizardDraft
     ? applyConditionsToCapabilities(capabilities, conditions)
     : false;
 
+  // Politique pré-arrivée (gestion.requiredBeforeArrival) : consommée par le
+  // chatbot (verrou menu F + discours de l'assistant). Dérivée des conditions
+  // du wizard, propagée ensuite aux listings via apply-listings (copie gestion).
+  if (conditions) {
+    const setRequiredBeforeArrival = (key: string, value: boolean) => {
+      const cap = capabilities[key];
+      if (!cap) return;
+      capabilities[key] = {
+        ...cap,
+        gestion: {
+          ...((cap.gestion as Record<string, unknown>) ?? {}),
+          requiredBeforeArrival: value,
+        },
+      };
+    };
+    setRequiredBeforeArrival('registration', conditions.registrationBeforeArrival);
+    setRequiredBeforeArrival('arrival_choose', conditions.arrivalBeforeCodes);
+  }
+
   return { capabilities, activations, jxPatched, conditionsApplied };
 }
