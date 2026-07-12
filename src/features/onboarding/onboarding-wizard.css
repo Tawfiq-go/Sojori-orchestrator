@@ -3390,6 +3390,27 @@
   font-weight: 600;
 }
 
+.ob-x-req {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.ob-x-req-txt {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ob-t3);
+}
+
+.ob-x-req-txt.on {
+  color: var(--ob-ok, #1a7f4e);
+}
+
 .ob-x-seg {
   display: inline-flex;
   border: 1px solid var(--ob-b);
