@@ -150,6 +150,10 @@ export interface WizardJxSettings {
   wifi: string;
   rules: string;
   codesAfterRegistration: boolean;
+  /** Enregistrement obligatoire avant l'arrivée (gestion.requiredBeforeArrival) — défaut true */
+  registrationRequired?: boolean;
+  /** Choix de l'heure d'arrivée obligatoire avant l'arrivée — défaut true */
+  arrivalChooseRequired?: boolean;
 }
 
 export interface WizardConditions {

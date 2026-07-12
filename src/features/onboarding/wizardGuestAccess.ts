@@ -324,8 +324,10 @@ export function deriveConditionsFromJx(
   const hasCodes = caps.accessCodes;
 
   return {
-    registrationBeforeArrival: hasRegistration && hasArrivalChoose,
-    arrivalBeforeCodes: hasCodes && jx.codesAfterRegistration,
+    registrationBeforeArrival:
+      hasRegistration && hasArrivalChoose && jx.registrationRequired !== false,
+    arrivalBeforeCodes:
+      hasCodes && jx.codesAfterRegistration && jx.arrivalChooseRequired !== false,
     registrationBeforeStaff: hasRegistration,
     arrivalBeforeStaff: hasArrivalChoose,
     preset: 'secure',
