@@ -141,7 +141,10 @@ type AuditResult = {
 const FIX_ERROR_HINTS: Record<string, string> = {
   reservation_unreachable: 'Réservation introuvable — plan déjà annulé ou absent',
   plan_still_required: 'Plan encore requis (réservation Confirmé/Pending active)',
-  orchestration_skipped: 'Orchestration désactivée sur le listing',
+  orchestration_skipped:
+    'Plan non créé — orchestration listing off, 0 workflows, ou import silencieux non lancé',
+  orchestration_launch_pending:
+    'Import silencieux (Booking/RU) : lancer l’orchestration depuis la fiche réservation / import',
   reservation_cancelled: 'Réservation annulée — plan non créé',
   reconcile_error: 'Erreur interne lors de la réconciliation',
   whitelist_upsert_failed: 'Échec création whitelist',
