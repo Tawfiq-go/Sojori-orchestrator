@@ -186,23 +186,29 @@ export function buildOwnerOrchestrationCapabilitiesFromWizard(draft: WizardDraft
     : false;
 
   // Politique pré-arrivée (gestion.requiredBeforeArrival) : consommée par le
-  // chatbot (verrou menu F + discours de l'assistant). Dérivée des conditions
-  // du wizard, propagée ensuite aux listings via apply-listings (copie gestion).
-  if (conditions) {
-    const setRequiredBeforeArrival = (key: string, value: boolean) => {
-      const cap = capabilities[key];
-      if (!cap) return;
-      capabilities[key] = {
-        ...cap,
-        gestion: {
-          ...((cap.gestion as Record<string, unknown>) ?? {}),
-          requiredBeforeArrival: value,
-        },
-      };
+  // chatbot (verrou menu F + discours de l'assistant). Toggle explicite du wizard
+  // (jx.registrationRequired / jx.arrivalChooseRequired) prioritaire, sinon
+  // conditions dérivées ; propagée aux listings via apply-listings (copie gestion).
+  const setRequiredBeforeArrival = (key: string, value: boolean | undefined) => {
+    if (typeof value !== 'boolean') return;
+    const cap = capabilities[key];
+    if (!cap) return;
+    capabilities[key] = {
+      ...cap,
+      gestion: {
+        ...((cap.gestion as Record<string, unknown>) ?? {}),
+        requiredBeforeArrival: value,
+      },
     };
-    setRequiredBeforeArrival('registration', conditions.registrationBeforeArrival);
-    setRequiredBeforeArrival('arrival_choose', conditions.arrivalBeforeCodes);
-  }
+  };
+  setRequiredBeforeArrival(
+    'registration',
+    jx?.registrationRequired ?? conditions?.registrationBeforeArrival,
+  );
+  setRequiredBeforeArrival(
+    'arrival_choose',
+    jx?.arrivalChooseRequired ?? conditions?.arrivalBeforeCodes,
+  );
 
   return { capabilities, activations, jxPatched, conditionsApplied };
 }

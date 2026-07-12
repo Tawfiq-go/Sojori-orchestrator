@@ -471,11 +471,37 @@ export default function OnboardingStepOrchestrationExpress({
               const curLabel = String(jx[svc.jxKey] ?? '');
               const st = parseJxState(svc, curLabel);
               const kind = endKindOf(svc);
+              const reqKey =
+                svc.jxKey === 'registration'
+                  ? ('registrationRequired' as const)
+                  : svc.jxKey === 'arrivalChoose'
+                    ? ('arrivalChooseRequired' as const)
+                    : null;
               return (
                 <div key={svc.jxKey} className={`ob-x-row${isOn ? '' : ' ob-x-row--off'}`}>
                   <span className="ob-x-row-label">
                     {svc.emoji} {svc.label}
                     <span className="ob-x-tag">Flow</span>
+                    {reqKey && isOn && (
+                      <label
+                        className="ob-x-req"
+                        title={
+                          svc.jxKey === 'registration'
+                            ? "Obligatoire : les codes d'accès restent verrouillés tant que l'enregistrement n'est pas complété. Optionnel : possible sur place à l'arrivée."
+                            : "Obligatoire : le voyageur doit choisir son heure d'arrivée avant le jour J (relances/escalade). Optionnel : une heure par défaut s'applique."
+                        }
+                      >
+                        <Toggle
+                          on={jx[reqKey] !== false}
+                          onChange={(v) =>
+                            onChangePanel3({ jx: { ...jx, [reqKey]: v } as WizardJxSettings })
+                          }
+                        />
+                        <span className={`ob-x-req-txt${jx[reqKey] !== false ? ' on' : ''}`}>
+                          Obligatoire
+                        </span>
+                      </label>
+                    )}
                   </span>
                   <span className="ob-x-inline-choices">
                     <span className="ob-x-seg">
