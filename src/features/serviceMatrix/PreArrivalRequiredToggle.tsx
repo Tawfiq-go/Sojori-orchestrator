@@ -11,37 +11,49 @@ import {
   saveListingGestion,
   type ListingOrchestrationDoc,
 } from '../orchestrationListingV3/listingOrchestrationApi';
+import {
+  saveOwnerGestion,
+  type OwnerOrchestrationDoc,
+} from '../orchestrationListingV3/ownerOrchestrationApi';
 
 type Props = {
-  listingId: string;
+  /** Mode listing : id du listing. Mode owner (template) : laisser vide et fournir ownerKey. */
+  listingId?: string;
+  ownerKey?: string;
   capabilityKey: 'registration' | 'arrival_choose';
   title: string;
   helpRequired: string;
   helpOptional: string;
 };
 
+type AnyOrchestrationDoc = ListingOrchestrationDoc | OwnerOrchestrationDoc;
+
 export function PreArrivalRequiredToggle({
   listingId,
+  ownerKey,
   capabilityKey,
   title,
   helpRequired,
   helpOptional,
 }: Props) {
-  const [doc, setDoc] = useState<ListingOrchestrationDoc | null>(null);
+  const [doc, setDoc] = useState<AnyOrchestrationDoc | null>(null);
   const [value, setValue] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const ownerMode = !listingId && Boolean(ownerKey);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const raw = (await listingsService.getListingOrchestrationCompiled(listingId)) as
+      const raw = (ownerMode
+        ? await listingsService.getOwnerOrchestrationCompiled(ownerKey as string)
+        : await listingsService.getListingOrchestrationCompiled(listingId as string)) as
         | { data?: unknown }
-        | ListingOrchestrationDoc
+        | AnyOrchestrationDoc
         | null;
       const d = (raw && typeof raw === 'object' && 'data' in raw && raw.data
         ? raw.data
-        : raw) as ListingOrchestrationDoc | null;
+        : raw) as AnyOrchestrationDoc | null;
       setDoc(d ?? null);
       const gestion = (d?.capabilities?.[capabilityKey]?.gestion ?? {}) as Record<string, unknown>;
       setValue(gestion.requiredBeforeArrival !== false);
@@ -50,7 +62,7 @@ export function PreArrivalRequiredToggle({
     } finally {
       setLoading(false);
     }
-  }, [listingId, capabilityKey]);
+  }, [listingId, ownerKey, ownerMode, capabilityKey]);
 
   useEffect(() => {
     void load();
@@ -63,13 +75,23 @@ export function PreArrivalRequiredToggle({
       string,
       unknown
     >;
+    const gestion = { ...existingGestion, requiredBeforeArrival: next };
     try {
-      await saveListingGestion({
-        listingId,
-        capabilityKey,
-        gestion: { ...existingGestion, requiredBeforeArrival: next },
-        doc,
-      });
+      if (ownerMode) {
+        await saveOwnerGestion({
+          ownerKey: ownerKey as string,
+          capabilityKey,
+          gestion,
+          doc: doc as OwnerOrchestrationDoc,
+        });
+      } else {
+        await saveListingGestion({
+          listingId: listingId as string,
+          capabilityKey,
+          gestion,
+          doc: doc as ListingOrchestrationDoc,
+        });
+      }
       setValue(next);
       toast.success(
         next ? `${title} : obligatoire avant l'arrivée` : `${title} : possible sur place / optionnel`,
