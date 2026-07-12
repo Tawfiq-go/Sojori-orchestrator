@@ -115,9 +115,10 @@ export function CapabilityGestionPanel({
     return (
       <Box sx={embeddedSx}>
         <ArrivalDepartureConfigTab {...commonListing} capabilityKey={key} />
-        {key === 'arrival_choose' && lid && (
+        {key === 'arrival_choose' && (lid || templateMode) && (
           <PreArrivalRequiredToggle
-            listingId={lid}
+            listingId={lid || undefined}
+            ownerKey={templateMode ? templateOwnerKey : undefined}
             capabilityKey="arrival_choose"
             title="Choix de l'heure d'arrivée"
             helpRequired="Le voyageur doit choisir son heure d'arrivée (menu D1) avant le jour J — relances puis escalade selon la config. L'assistant WhatsApp le présente comme requis."
@@ -134,9 +135,10 @@ export function CapabilityGestionPanel({
           Enregistrement voyageurs (flow E) — règles dans le menu WhatsApp ci-dessous. Contenu formulaire :
           orchestration / fulltask.
         </Alert>
-        {lid && (
+        {(lid || templateMode) && (
           <PreArrivalRequiredToggle
-            listingId={lid}
+            listingId={lid || undefined}
+            ownerKey={templateMode ? templateOwnerKey : undefined}
             capabilityKey="registration"
             title="Enregistrement voyageurs"
             helpRequired="Les codes d'accès (menu F) restent verrouillés tant que l'enregistrement n'est pas complété, et l'assistant WhatsApp l'explique au voyageur : l'enregistrement sur place ne suffit pas."
