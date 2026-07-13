@@ -106,7 +106,7 @@ export function NotificationPreferencesSection({
       ) : null}
 
       {data?.catalog?.length ? (
-        <NotificationWhatsAppPrefs catalog={data.catalog} />
+        <NotificationWhatsAppPrefs catalog={data.catalog} targetUserId={targetUserId} />
       ) : null}
 
       {groups.map(({ facet, events }) => {
