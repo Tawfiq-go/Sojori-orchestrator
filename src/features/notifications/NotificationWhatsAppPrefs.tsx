@@ -30,10 +30,11 @@ function deriveMode(catalog: PreferenceCatalogEntry[]): WhatsappNotifyMode {
 
 interface NotificationWhatsAppPrefsProps {
   catalog: PreferenceCatalogEntry[];
+  targetUserId?: string | null;
 }
 
-export function NotificationWhatsAppPrefs({ catalog }: NotificationWhatsAppPrefsProps) {
-  const updatePrefs = useUpdatePreferences();
+export function NotificationWhatsAppPrefs({ catalog, targetUserId = null }: NotificationWhatsAppPrefsProps) {
+  const updatePrefs = useUpdatePreferences(targetUserId);
   const [regDetailOpen, setRegDetailOpen] = useState(true);
 
   const byKey = useMemo(() => catalogMap(catalog), [catalog]);

@@ -29,6 +29,8 @@ function PanelBody({ onClose }: { onClose: () => void }) {
 
   const items = listData?.items ?? [];
   const uc = unread ?? { total: 0, activeCount: 0, actionRequired: 0, byFacet: {}, byEventKey: {} };
+  const activeCount = uc.activeCount ?? uc.total ?? 0;
+  const actionRequired = uc.actionRequired ?? 0;
 
   const handleMarkAll = () => {
     void markAllRead
@@ -129,16 +131,16 @@ function PanelBody({ onClose }: { onClose: () => void }) {
         <Typography sx={{ px: 1.25, pb: 0.75, fontSize: 10, color: t.text3, lineHeight: 1.4 }}>
           Uniquement les alertes <b>actives</b>. Terminer ou Ignorer les retire d’ici — retrouvez-les
           dans <b>Historique</b>.
-          {uc.activeCount > 0 || items.length > 0 ? (
+          {activeCount > 0 || items.length > 0 ? (
             <>
               {' '}
               Le badge de la cloche affiche le total <b>en cours</b>
-              {uc.actionRequired > 0 ? (
+              {actionRequired > 0 ? (
                 <>
                   {' '}
-                  (<b style={{ color: t.error }}>rouge</b> = {uc.actionRequired} urgente
-                  {uc.actionRequired > 1 ? 's' : ''} / critique
-                  {uc.actionRequired > 1 ? 's' : ''})
+                  (<b style={{ color: t.error }}>rouge</b> = {actionRequired} urgente
+                  {actionRequired > 1 ? 's' : ''} / critique
+                  {actionRequired > 1 ? 's' : ''})
                 </>
               ) : (
                 <> (doré = priorité normale)</>
@@ -277,13 +279,15 @@ export function NotificationPanel({ anchorEl, onClose }: NotificationPanelProps)
         anchor="right"
         open={open}
         onClose={handleClose}
-        PaperProps={{
-          sx: {
-            width: 'min(100vw, 400px)',
-            bgcolor: t.bg1,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
+        slotProps={{
+          paper: {
+            sx: {
+              width: 'min(100vw, 400px)',
+              bgcolor: t.bg1,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            },
           },
         }}
       >
