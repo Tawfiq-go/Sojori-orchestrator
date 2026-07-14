@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Box, Button } from '@mui/material';
+import { Alert, Box, Button } from '@mui/material';
 import { FiltersPanel } from '../../features/monitoring/logs/components/FiltersPanel';
 import { LogsTable } from '../../features/monitoring/logs/components/LogsTable';
 import { LogDetailModal } from '../../features/monitoring/logs/components/LogDetailModal';
@@ -16,7 +16,7 @@ import {
 
 export default function LogsPage() {
   const { filters, updateFilter, clearFilters } = useFilters();
-  const { logs, stats, loading, refetch } = useLogs(filters);
+  const { logs, stats, loading, error, refetch } = useLogs(filters);
   const [live, setLive] = useState(false);
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
 
@@ -26,7 +26,7 @@ export default function LogsPage() {
     return () => clearInterval(interval);
   }, [live, refetch]);
 
-  const severityCounts = useMemo(() => {
+  const visibleSeverityCounts = useMemo(() => {
     const counts = { critical: 0, error: 0, warning: 0, info: 0 };
     logs.forEach((log) => {
       const severity = (log.severity || log.level || '').toLowerCase();
@@ -37,6 +37,12 @@ export default function LogsPage() {
     });
     return counts;
   }, [logs]);
+  const severityCounts = {
+    critical: stats.critical ?? visibleSeverityCounts.critical,
+    error: stats.error ?? visibleSeverityCounts.error,
+    warning: stats.warning ?? visibleSeverityCounts.warning,
+    info: stats.info ?? visibleSeverityCounts.info,
+  };
 
   return (
     <MonitorPageFrame>
@@ -91,6 +97,8 @@ export default function LogsPage() {
           stats={stats}
         />
       </MonitorSection>
+
+      {error ? <Alert severity="error">{error}</Alert> : null}
 
       <MonitorSection dense title="Journal" headRight={<Badge variant="neutral">{logs.length}</Badge>}>
         <Box sx={{ mx: -1.5, mb: -1.5 }}>
