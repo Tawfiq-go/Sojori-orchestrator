@@ -67,6 +67,7 @@ export function SojoriLogsHubContent({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const setEndpointTab = (ep: string) => {
     const next = new URLSearchParams(searchParams);
@@ -123,11 +124,19 @@ export function SojoriLogsHubContent({
     }
     setExpandedId(id);
     setDetailLoading(true);
+    setDetailError(null);
     try {
       const { data: body } = await fetchSojoriAirroiCallDetail(id);
-      setDetail(body?.success ? body.data : null);
-    } catch {
+      if (!body?.success) {
+        setDetail(null);
+        setDetailError(body?.error || 'Détail indisponible');
+      } else {
+        setDetail(body.data);
+      }
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
       setDetail(null);
+      setDetailError(err.response?.data?.error || err.message || 'Erreur réseau');
     } finally {
       setDetailLoading(false);
     }
@@ -316,7 +325,9 @@ export function SojoriLogsHubContent({
                                   )}
                                 </pre>
                               ) : (
-                                <span className="text-xs text-slate-500">Détail indisponible</span>
+                                <span className="text-xs text-red-600">
+                                  {detailError || 'Détail indisponible'}
+                                </span>
                               )}
                             </td>
                           </tr>

@@ -1,6 +1,6 @@
 /**
  * Récap Pricing — une ligne par owner par mois : listings RU (snapshot courant, RU n'a pas
- * d'historique mensuel), coût RU implicite, coût AirROI réel, coût IA réel, coût WhatsApp
+ * d'historique mensuel), coût RU implicite, coût AirROI estimé, coût IA réel, coût WhatsApp
  * ESTIMÉ (voir WhatsappCostTab — Meta facture par conversation, pas par message, grille
  * approximative). Les métriques agrégées par jour côté backend (IA, WhatsApp) sont
  * regroupées par mois ici pour rester à la même granularité que la vue Summary.
@@ -327,7 +327,7 @@ export function PricingSummaryTab() {
           iconBg="rgba(13,148,136,0.12)"
           iconColor="#0D9488"
           value={`$${totalAirroiCostUsd.toFixed(2)}`}
-          label="Coût AirROI réel total (ce mois)"
+          label="Coût AirROI estimé total (ce mois)"
         />
         <StatCard
           icon="💬"
@@ -355,7 +355,8 @@ export function PricingSummaryTab() {
 
       <Typography sx={{ fontSize: 11, color: t.text3 }}>
         RU n'a pas d'historique mensuel (snapshot du nombre de listings actuel) — seul le mois en
-        cours affiche un coût RU. AirROI et IA ont un vrai historique par mois avec coût réel.
+        cours affiche un coût RU. AirROI a un historique calculé par appel (estimation à rapprocher
+        de la facture) et IA conserve son historique de consommation par mois.
         WhatsApp affiche un coût ESTIMÉ (Meta facture par conversation/catégorie/pays, pas par
         message — voir l'onglet WhatsApp pour le détail de l'approximation utilisée).
       </Typography>

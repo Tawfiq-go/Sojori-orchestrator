@@ -1,5 +1,5 @@
 /**
- * Onglet Pricing — coût AirROI réel par owner (dynamic pricing), 30 derniers jours.
+ * Onglet Pricing — coût AirROI estimé par owner (dynamic pricing), 30 derniers jours.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Stack, Typography } from '@mui/material';
@@ -89,7 +89,7 @@ export function AirroiCostTab() {
     },
     {
       key: 'totalCostUsd',
-      label: 'Coût réel (30j)',
+      label: 'Coût estimé (30j)',
       align: 'right' as const,
       render: (row: AirroiCostByOwnerItem) => (
         <Typography sx={{ fontSize: 12, color: t.text3, fontFamily: 'monospace' }}>
@@ -121,7 +121,7 @@ export function AirroiCostTab() {
           iconBg="rgba(13,148,136,0.12)"
           iconColor="#0D9488"
           value={`$${totalCostUsd.toFixed(2)}`}
-          label="Coût AirROI réel — 30 derniers jours"
+          label="Coût AirROI estimé — 30 derniers jours"
         />
         <StatCard
           icon="📈"
@@ -148,9 +148,9 @@ export function AirroiCostTab() {
       </MonitorSection>
 
       <Typography sx={{ fontSize: 11, color: t.text3 }}>
-        Contrairement à RU, le coût AirROI ci-dessus est le montant réel facturé par appel
-        (AirroiApiCall.costUsd), pas une estimation — chaque appel au connecteur AirROI (marché,
-        comparables) est tarifé et tracké individuellement par owner.
+        Le coût AirROI ci-dessus est calculé par appel avec la grille tarifaire configurée
+        (AirroiApiCall.costUsd). Il s&apos;agit d&apos;une estimation interne : la facture AirROI reste
+        la source de vérité à rapprocher en fin de période.
       </Typography>
     </Stack>
   );
