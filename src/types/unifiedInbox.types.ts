@@ -76,6 +76,12 @@ export interface Message {
   aiModel?: string;
   tokensUsed?: number;
   contentType?: MessageContentType | null;
+  /** Inbox Resa — tags (audio, demande, confirmation…) */
+  tags?: string[];
+  /** Inbox Resa — URL blob locale pour lecture audio */
+  audioUrl?: string | null;
+  /** Transcript / résumé affiché sous le player */
+  audioCaption?: string | null;
 }
 
 export interface QuickTemplate {
