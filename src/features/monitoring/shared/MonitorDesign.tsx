@@ -57,7 +57,7 @@ const ACCENT: Record<
   default: { emoji: '📊', iconBg: t.primaryTint, iconColor: t.primaryDeep },
   logs: { emoji: '📝', iconBg: t.infoTint, iconColor: t.info },
   metrics: { emoji: '📈', iconBg: 'rgba(6,182,212,0.12)', iconColor: '#0e7490' },
-  rabbitmq: { emoji: '🐰', iconBg: t.aiTint, iconColor: t.ai },
+  rabbitmq: { emoji: '◇', iconBg: t.primaryTint, iconColor: t.primaryDeep },
   whatsapp: { emoji: '💬', iconBg: 'rgba(16,185,129,0.12)', iconColor: t.success },
   ai: { emoji: '🤖', iconBg: t.aiTint, iconColor: t.ai },
   infra: { emoji: '🏗️', iconBg: t.infoTint, iconColor: t.info },

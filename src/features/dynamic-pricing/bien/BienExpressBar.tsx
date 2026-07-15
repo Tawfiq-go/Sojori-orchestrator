@@ -9,6 +9,7 @@ import {
   Typography,
 } from '@mui/material';
 import { T } from '../_tokens';
+import { DP } from '../clientLabels';
 import CalendarUpdateModal from './CalendarUpdateModal';
 import type { BienViewProps } from '../BienView';
 import {
@@ -127,7 +128,6 @@ export default function BienExpressBar({
 
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [fetchCost, setFetchCost] = useState<number | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   // Interrupteurs d'automatisation (config pilote)
@@ -180,8 +180,7 @@ export default function BienExpressBar({
     setFetching(true);
     setFetchError(null);
     try {
-      const r = await onFetchMarket();
-      if (r && typeof r.costUsd === 'number') setFetchCost(r.costUsd);
+      await onFetchMarket();
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : 'Échec de la récupération');
     } finally {
@@ -211,13 +210,13 @@ export default function BienExpressBar({
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
         <AutoRow
           emoji="🔄"
-          title="Snapshot automatique — chaque lundi"
-          subtitle="Récupère les prix estimés AirROI du bien (~0,40 $/semaine, plafonné)"
+          title={DP.autoSnapshotTitle}
+          subtitle={DP.autoSnapshotSubtitle}
           statusLine={
             lastAutoSnapshotAt
-              ? `Dernier auto : ${fmtDate(lastAutoSnapshotAt)}`
+              ? `Dernière actualisation auto : ${fmtDate(lastAutoSnapshotAt)}`
               : snapshotAt
-                ? `Dernier snapshot (manuel) : ${fmtDate(snapshotAt)}`
+                ? `Dernière actualisation (manuelle) : ${fmtDate(snapshotAt)}`
                 : 'Jamais exécuté'
           }
           checked={autoSnapshot}
@@ -227,7 +226,7 @@ export default function BienExpressBar({
         <AutoRow
           emoji="🌙"
           title="Propagation automatique — chaque nuit à 4h30"
-          subtitle="Applique le snapshot au calendrier + push Airbnb (gratuit, 0 appel AirROI)"
+          subtitle={DP.autoPropagationSubtitle}
           statusLine={
             lastAudit
               ? `Dernière : ${fmtDate(lastAudit.appliedAt)} · ${lastAudit.triggerSource === 'recompute-listing' ? 'auto (nuit)' : 'manuelle'}`
@@ -260,8 +259,7 @@ export default function BienExpressBar({
             '&:hover': { borderColor: T.goldDeep, bgcolor: T.goldTint2 },
           }}
         >
-          {fetching ? 'Récupération…' : '① Récupérer le snapshot maintenant'}
-          {fetchCost != null && !fetching ? ` · $${fetchCost.toFixed(2)}` : ''}
+          {fetching ? 'Actualisation…' : DP.fetchSnapshotNow}
         </Button>
         <Button
           variant="contained"
@@ -276,7 +274,9 @@ export default function BienExpressBar({
         </Button>
         <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
           Mode {modeLabel} · {view.floor}–{view.ceiling} MAD
-          {snapshotAt ? ` · snapshot du ${fmtDate(snapshotAt)}` : ' · aucun snapshot'}
+          {snapshotAt
+            ? ` · ${DP.estimationPrixMarche} du ${fmtDate(snapshotAt)}`
+            : ` · aucune ${DP.estimationPrixMarche.toLowerCase()}`}
         </Typography>
       </Stack>
       {fetchError ? (

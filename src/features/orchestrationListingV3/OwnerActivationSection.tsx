@@ -88,7 +88,6 @@ export default function OwnerActivationSection({
         }
         return {
           ...prev,
-          orchestrationEnabled: Object.values(activations).some(Boolean),
           capabilities,
         };
       });

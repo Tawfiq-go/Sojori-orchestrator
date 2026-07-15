@@ -46,6 +46,8 @@ interface ConversationThreadProps {
   /** Inbox Resa — enregistrer une note vocale */
   onRecordVoice?: () => void;
   recordingVoice?: boolean;
+  /** Envoi audio en cours */
+  sendingVoice?: boolean;
   composerValue?: string;
   onComposerValueChange?: (value: string) => void;
   otaPlatform?: string;
@@ -77,6 +79,7 @@ export default function ConversationThread({
   onAISuggestion,
   onRecordVoice,
   recordingVoice = false,
+  sendingVoice = false,
   composerValue,
   onComposerValueChange,
   otaPlatform = 'Airbnb',
@@ -730,6 +733,7 @@ export default function ConversationThread({
                     <Box
                       component="audio"
                       controls
+                      preload="metadata"
                       src={message.audioUrl}
                       sx={{ width: '100%', maxWidth: 280, height: 32 }}
                     />
@@ -739,6 +743,18 @@ export default function ConversationThread({
                       </Typography>
                     ) : null}
                   </Box>
+                )}
+                {!message.audioUrl && message.contentType === 'audio' && (
+                  <Typography
+                    sx={{
+                      fontSize: 11,
+                      mb: 0.75,
+                      opacity: 0.75,
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    🎧 Audio indisponible (expiré) — transcript ci-dessous
+                  </Typography>
                 )}
                 <Typography
                   component="div"
@@ -1107,6 +1123,30 @@ export default function ConversationThread({
         </Box>
       )}
 
+      {(recordingVoice || sendingVoice) && (
+        <Box
+          sx={{
+            mx: '18px',
+            mb: 0.5,
+            px: 1.25,
+            py: 1,
+            borderRadius: 1,
+            bgcolor: recordingVoice ? 'rgba(220,38,38,0.08)' : 'rgba(13,148,136,0.1)',
+            border: recordingVoice
+              ? '1px solid rgba(220,38,38,0.35)'
+              : '1px solid rgba(13,148,136,0.35)',
+            flexShrink: 0,
+            fontSize: 12,
+            fontWeight: 600,
+            color: recordingVoice ? '#b91c1c' : '#0f766e',
+          }}
+        >
+          {recordingVoice
+            ? '🎙️ Enregistrement… cliquez ⏹ pour envoyer la note vocale'
+            : '⏳ Envoi de la note vocale…'}
+        </Box>
+      )}
+
       <Box
         sx={{
           px: '18px',
@@ -1117,26 +1157,34 @@ export default function ConversationThread({
           alignItems: 'flex-end',
           gap: 1,
           flexShrink: 0,
-          opacity: sending ? 0.72 : 1,
+          opacity: sending || sendingVoice ? 0.72 : 1,
         }}
       >
-        <Box
-          component="button"
-          onClick={() => onRecordVoice?.()}
-          sx={{
-            ...iconBtnSx,
-            ...(recordingVoice
-              ? { bgcolor: 'rgba(220,38,38,0.15)', color: '#b91c1c', border: '1px solid rgba(220,38,38,0.4)' }
-              : {}),
-          }}
-          title={recordingVoice ? 'Arrêter l’enregistrement' : 'Enregistrer une note vocale'}
-        >
-          {recordingVoice ? '⏹' : '🎙️'}
-        </Box>
-        <Box component="button" sx={iconBtnSx} title="Joindre">
+        {onRecordVoice ? (
+          <Box
+            component="button"
+            type="button"
+            disabled={sendingVoice}
+            onClick={() => onRecordVoice()}
+            sx={{
+              ...iconBtnSx,
+              ...(recordingVoice
+                ? {
+                    bgcolor: 'rgba(220,38,38,0.15)',
+                    color: '#b91c1c',
+                    border: '1px solid rgba(220,38,38,0.4)',
+                  }
+                : {}),
+            }}
+            title={recordingVoice ? 'Arrêter et envoyer' : 'Enregistrer une note vocale'}
+          >
+            {recordingVoice ? '⏹' : '🎙️'}
+          </Box>
+        ) : null}
+        <Box component="button" type="button" sx={iconBtnSx} title="Joindre">
           📎
         </Box>
-        <Box component="button" sx={iconBtnSx} title={isOta ? 'Traduction' : 'Emoji'}>
+        <Box component="button" type="button" sx={iconBtnSx} title={isOta ? 'Traduction' : 'Emoji'}>
           {isOta ? '🌐' : '😊'}
         </Box>
         <Box

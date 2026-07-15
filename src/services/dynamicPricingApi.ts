@@ -380,13 +380,26 @@ export interface PilotPricingConfigDto {
   floorAggressive?: number;
   lastMinuteEnabled?: boolean;
   lastMinuteWindowDays?: number;
+  /** % sur prix dynamique si dispo (ex. −15). */
+  lastMinuteDiscountPct?: number;
+  occupancyBandsEnabled?: boolean;
+  occupancyBands?: Array<{
+    min: number;
+    max: number;
+    adjustment: number;
+    active?: boolean;
+  }>;
+  /** estimate = AirROI · listing_base = prix inventaire · manual_base = montant fixe MAD */
+  pricingBaseSource?: 'estimate' | 'listing_base' | 'manual_base';
+  /** Base fixe MAD si pricingBaseSource === 'manual_base' (ex. 1000). */
+  manualBasePriceMad?: number;
   minStayDelta: number;
   minStayPlancher?: number;
   gapBlockEnabled?: boolean;
   gapBlockMinNights?: number;
   events: PilotPricingEventDto[];
   fxUsdMad?: number;
-  /** Refresh hebdo automatique du snapshot AirROI (payant ~0,40 $/sem). */
+  /** Refresh hebdo automatique de l’estimation prix de marché. */
   autoSnapshotEnabled?: boolean;
   lastAutoSnapshotAt?: string;
   lastAppliedAt?: string;

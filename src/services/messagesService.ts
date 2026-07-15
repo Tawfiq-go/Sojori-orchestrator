@@ -55,6 +55,8 @@ class MessagesService {
     hasReservation?: boolean;
     owner_id?: string;
     sortBy?: string;
+    /** Staff vs Admin WhatsApp tab (srv-fulltask). */
+    inboxParty?: 'staff' | 'admin';
     /** Prefetch / badge counts: skip console.error on expected 401 */
     silent?: boolean;
   }): Promise<ConversationsResponse> {
@@ -85,6 +87,7 @@ class MessagesService {
           page: pageNum,
           limit,
           messagesLimit: 50,
+          inboxParty: params?.inboxParty === 'staff' ? 'staff' : 'admin',
           ...(params?.search ? { search_text: params.search } : {}),
           ...(params?.owner_id ? { ownerId: params.owner_id } : {}),
         });
@@ -130,6 +133,7 @@ class MessagesService {
       before?: string;
       before_message_id?: string;
       inbox?: WhatsappInboxKind;
+      inboxParty?: 'staff' | 'admin';
     }
   ): Promise<any> {
     try {
@@ -140,6 +144,7 @@ class MessagesService {
         const { rows } = await getStaffWaThreads({
           workerWaNumber: digits || phone,
           messagesLimit: options?.limit ?? 50,
+          inboxParty: options?.inboxParty === 'staff' ? 'staff' : 'admin',
         });
         const row =
           rows[0] ||
@@ -197,6 +202,8 @@ class MessagesService {
       before_message_id?: string;
       /** staff = srv-fulltask /staff-whatsapp, guest = srv-fullchatbot */
       inbox?: WhatsappInboxKind;
+      /** Staff vs Admin WhatsApp tab filter. */
+      inboxParty?: 'staff' | 'admin';
       /** Mongo reservationId — only used when scope=reservation */
       reservationId?: string;
       /** guest inbox: phone = full WhatsApp history (default); reservation = current stay only */
@@ -211,6 +218,7 @@ class MessagesService {
         const { rows } = await getStaffWaThreads({
           workerWaNumber: digits || phone,
           messagesLimit: options?.limit ?? 50,
+          inboxParty: options?.inboxParty === 'staff' ? 'staff' : 'admin',
         });
         const row =
           rows[0] ||
@@ -256,10 +264,15 @@ class MessagesService {
   async sendMessage(
     data: SendMessageRequest,
     inbox: WhatsappInboxKind = 'guest',
+    opts?: { inboxParty?: 'staff' | 'admin' },
   ): Promise<SendMessageResponse> {
     try {
       if (inbox === 'staff') {
-        await sendStaffWaText({ to: data.phone, text: data.message });
+        await sendStaffWaText({
+          to: data.phone,
+          text: data.message,
+          inboxParty: opts?.inboxParty === 'staff' ? 'staff' : 'admin',
+        });
         return { success: true };
       }
 

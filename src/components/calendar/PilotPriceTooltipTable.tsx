@@ -17,6 +17,7 @@ type History = {
   mixEngineVersion?: string;
   calculated?: number;
   base?: number;
+  pricingBaseSource?: 'estimate' | 'listing_base' | 'manual_base';
   pilotFactors?: PilotFactorRow[];
 };
 
@@ -30,12 +31,30 @@ type InvSlice = {
   setUseDynamicPriceManual?: boolean;
 };
 
-function normalizeFactorLabel(label: string) {
-  return label.replace(/\(estimate\)/gi, '').replace(/\s+/g, ' ').trim();
-}
+const FACTOR_ORDER = [
+  'base',
+  'mode',
+  'occupancy',
+  'floorNormal',
+  'floorAggressive',
+  'ceiling',
+  'event',
+  'lastMinute',
+  'rounding',
+];
 
-function priceOfInv(inv: InvSlice): number {
-  return priceOf(inv);
+function factorTitle(f: PilotFactorRow) {
+  if (f.key === 'base') {
+    const sub = String(f.sub || '').toLowerCase();
+    if (sub.includes('listing')) return 'Prix base listing';
+    return 'Estimation prix de marché';
+  }
+  if (f.key === 'mode') return f.label || 'Mode';
+  if (f.key === 'occupancy') return 'Taux occupation';
+  if (f.key === 'lastMinute') return 'Dernière minute';
+  if (f.key === 'event') return f.label || 'Événement';
+  if (f.key === 'rounding') return 'Arrondi';
+  return f.label || f.key || '';
 }
 
 export default function PilotPriceTooltipTable({
@@ -48,7 +67,11 @@ export default function PilotPriceTooltipTable({
   currency?: string;
 }) {
   if (!history) return null;
-  const factors = history.pilotFactors ?? [];
+  const factors = [...(history.pilotFactors ?? [])].sort((a, b) => {
+    const ia = FACTOR_ORDER.indexOf(a.key || '');
+    const ib = FACTOR_ORDER.indexOf(b.key || '');
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
   const isPilot = history.source === 'pilot-v2' || factors.length > 0;
   if (!isPilot) return null;
 
@@ -57,32 +80,47 @@ export default function PilotPriceTooltipTable({
   const mode = inv ? resolvePriceMode(inv) : 'base';
   const manualActive = mode === 'manual';
   const dynamicActive = mode === 'dynamic';
-  const total = inv ? priceOfInv(inv) : (history.calculated ?? 0);
+  const total = inv ? priceOf(inv) : (history.calculated ?? 0);
+  const baseSource =
+    history.pricingBaseSource === 'manual_base'
+      ? 'base manuel'
+      : history.pricingBaseSource === 'listing_base'
+        ? 'base listing'
+        : 'base estimé';
 
   return (
     <Box sx={{ p: 1.5, minWidth: 280, maxWidth: 360, bgcolor: '#fff' }}>
       <Typography sx={{ fontSize: 10, fontWeight: 800, color: T.ai, mb: 1, textTransform: 'uppercase' }}>
-        Sojori AI · {history.mixEngineVersion ?? 'v2.4'}
+        Sojori AI · {history.mixEngineVersion ?? 'v2.1'} · {baseSource}
       </Typography>
       {factors.map((f, i) => {
         const isBase = f.key === 'base';
-        const label = isBase ? 'Prix marché' : normalizeFactorLabel(f.label);
-        const valueText = isBase
-          ? `${Math.round(f.after ?? history.base ?? f.valueMad ?? 0)} ${currency}`
-          : `${(f.valueMad ?? 0) >= 0 ? '+' : ''}${Math.round(f.valueMad ?? 0)} ${currency}`;
+        const after = Math.round(f.after ?? (isBase ? history.base : 0) ?? 0);
+        const delta = Math.round(f.valueMad ?? 0);
         return (
-          <Stack key={`${f.key ?? i}`} direction="row" sx={{ justifyContent: 'space-between', py: 0.35 }}>
-            <Typography sx={{ fontSize: 11, fontWeight: 600, color: T.text2 }}>{label}</Typography>
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 700,
-                fontFamily: '"Geist Mono", monospace',
-                color: isBase ? T.text : (f.valueMad ?? 0) >= 0 ? T.success : T.error,
-              }}
-            >
-              {valueText}
-            </Typography>
+          <Stack key={`${f.key ?? i}`} sx={{ py: 0.4 }}>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
+              <Typography sx={{ fontSize: 11, fontWeight: isBase ? 800 : 650, color: T.text2 }}>
+                {factorTitle(f)}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  fontFamily: '"Geist Mono", monospace',
+                  color: isBase ? T.text : delta >= 0 ? T.success : T.error,
+                }}
+              >
+                {isBase
+                  ? `${after} ${currency}`
+                  : `${delta >= 0 ? '+' : ''}${delta} ${currency}`}
+              </Typography>
+            </Stack>
+            {f.sub ? (
+              <Typography sx={{ fontSize: 9.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
+                {f.sub}
+              </Typography>
+            ) : null}
           </Stack>
         );
       })}
@@ -90,13 +128,13 @@ export default function PilotPriceTooltipTable({
       {inv ? (
         <>
           <Typography sx={{ fontSize: 10, fontWeight: 800, color: T.text3, mt: 1, mb: 0.5, textTransform: 'uppercase' }}>
-            Prix affiché calendrier
+            Affiché calendrier
           </Typography>
           {calc != null ? (
-            <ModeRow label="Prix dynamique" value={`${calc} ${currency}`} active={dynamicActive} color={T.ai} />
+            <ModeRow label="Prix dynamique" value={`${Math.round(calc)} ${currency}`} active={dynamicActive} color={T.ai} />
           ) : null}
           {man != null ? (
-            <ModeRow label="✏ Manuel" value={`${man} ${currency}`} active={manualActive} color={T.warning} />
+            <ModeRow label="Prix manuel" value={`${Math.round(man)} ${currency}`} active={manualActive} color={T.warning} />
           ) : null}
         </>
       ) : null}
@@ -125,16 +163,19 @@ function ModeRow({
   color: string;
 }) {
   return (
-    <Stack direction="row" sx={{ justifyContent: 'space-between', opacity: active ? 1 : 0.45 }}>
-      <Typography sx={{ fontSize: 11, fontWeight: active ? 700 : 500, color: active ? color : T.text4 }}>
+    <Stack direction="row" sx={{ justifyContent: 'space-between', py: 0.25 }}>
+      <Typography sx={{ fontSize: 11.5, fontWeight: active ? 800 : 500, color: active ? color : T.text4 }}>
         {label}
-        {active ? (
-          <Box component="span" sx={{ ml: 0.75, fontSize: 9, fontWeight: 800 }}>
-            ACTIF
-          </Box>
-        ) : null}
+        {active ? ' ●' : ''}
       </Typography>
-      <Typography sx={{ fontSize: 11, fontWeight: active ? 700 : 500, color: active ? color : T.text4, fontFamily: '"Geist Mono", monospace' }}>
+      <Typography
+        sx={{
+          fontSize: 12,
+          fontWeight: active ? 800 : 500,
+          color: active ? color : T.text4,
+          fontFamily: '"Geist Mono", monospace',
+        }}
+      >
         {value}
       </Typography>
     </Stack>

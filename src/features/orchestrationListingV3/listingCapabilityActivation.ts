@@ -23,6 +23,8 @@ export type ListingServiceActivationResponse = {
   ownerId: string;
   listingId: string;
   services: ServiceActivationStatusEntry[];
+  /** Coupe-circuit listing_orchestrations.orchestrationEnabled */
+  orchestrationEnabled?: boolean;
 };
 
 function unwrapApiPayload<T>(res: unknown): T {
@@ -203,6 +205,7 @@ async function loadFromOrchestrationEffective(
     ownerId: String(doc.ownerId ?? ''),
     listingId,
     services,
+    orchestrationEnabled: doc.orchestrationEnabled !== false,
   };
 }
 
@@ -224,6 +227,7 @@ function parseServiceActivationResponse(res: unknown): ListingServiceActivationR
         ownerId: String(effective.ownerId ?? ''),
         listingId: effective.listingId,
         services,
+        orchestrationEnabled: effective.orchestrationEnabled !== false,
       };
     }
   }

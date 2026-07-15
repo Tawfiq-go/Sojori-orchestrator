@@ -25,10 +25,12 @@ export function defaultActivationsAllOff(): Record<string, boolean> {
 
 export function buildOrchestrationFlagsFromActivations(
   activations: Record<string, boolean>,
+  /** Master switch indépendant — si omis, dérivé des services (compat onboarding legacy). */
+  orchestrationEnabled?: boolean,
 ): Record<string, boolean> {
   const anyActive = CAPABILITY_REGISTRY.some(def => activations[def.key] === true);
   const flags: Record<string, boolean> = {
-    orchestrationEnabled: anyActive,
+    orchestrationEnabled: orchestrationEnabled ?? anyActive,
   };
   for (const def of CAPABILITY_REGISTRY) {
     if (def.orchestrationFlag) {
@@ -112,9 +114,12 @@ export async function saveOwnerCapabilityActivations(
   ownerKey: string,
   activations: Record<string, boolean>,
   existingDoc?: OwnerOrchestrationDoc | null,
+  options?: { orchestrationEnabled?: boolean },
 ): Promise<void> {
   const allCapabilities = buildCapabilitiesPatchFromActivations(activations, existingDoc);
-  const orchestrationEnabled = CAPABILITY_REGISTRY.some(def => activations[def.key] === true);
+  // Ne plus dériver le master des services : préserver le flag doc / explicite.
+  const orchestrationEnabled =
+    options?.orchestrationEnabled ?? existingDoc?.orchestrationEnabled !== false;
 
   const capabilities: Record<string, ListingCapabilityDoc> = {};
   for (const [key, cap] of Object.entries(allCapabilities)) {
@@ -129,6 +134,14 @@ export async function saveOwnerCapabilityActivations(
     orchestrationEnabled,
     capabilities: Object.keys(capabilities).length > 0 ? capabilities : allCapabilities,
   });
+}
+
+/** Persiste uniquement le coupe-circuit global owner. */
+export async function saveOwnerOrchestrationEnabled(
+  ownerKey: string,
+  orchestrationEnabled: boolean,
+): Promise<void> {
+  await listingsService.putOwnerOrchestration(ownerKey, { orchestrationEnabled });
 }
 
 /** Nouveau owner : tout désactivé sauf sélection explicite à la création. */

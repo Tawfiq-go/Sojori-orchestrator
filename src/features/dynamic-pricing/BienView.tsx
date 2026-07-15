@@ -75,6 +75,16 @@ export interface BienViewProps {
   gapBlockEnabled: boolean;
   gapBlockMinNights: number;
   modeEnabled: boolean;
+  lastMinuteEnabled: boolean;
+  lastMinuteWindowDays: number;
+  lastMinuteDiscountPct: number;
+  occupancyBandsEnabled: boolean;
+  occupancyLowMax: number;
+  occupancyLowAdj: number;
+  occupancyHighMin: number;
+  occupancyHighAdj: number;
+  pricingBaseSource: 'estimate' | 'listing_base' | 'manual_base';
+  manualBasePriceMad: number;
   applyPrice: boolean;
   applyMinStay: boolean;
   scopeModalOpen?: boolean;
@@ -128,6 +138,16 @@ export interface BienViewProps {
   onGapBlockEnabledChange: (on: boolean) => void;
   onGapBlockMinNightsChange: (v: number) => void;
   onModeEnabledChange: (enabled: boolean) => void;
+  onLastMinuteEnabledChange: (on: boolean) => void;
+  onLastMinuteWindowDaysChange: (v: number) => void;
+  onLastMinuteDiscountPctChange: (v: number) => void;
+  onOccupancyBandsEnabledChange: (on: boolean) => void;
+  onOccupancyLowMaxChange: (v: number) => void;
+  onOccupancyLowAdjChange: (v: number) => void;
+  onOccupancyHighMinChange: (v: number) => void;
+  onOccupancyHighAdjChange: (v: number) => void;
+  onPricingBaseSourceChange: (v: 'estimate' | 'listing_base' | 'manual_base') => void;
+  onManualBasePriceMadChange: (v: number) => void;
   onAddEvent: () => void;
   onEventModalClose?: () => void;
   onEventSave?: (event: PricingEvent) => void | Promise<void>;
@@ -172,6 +192,9 @@ export default function BienView(props: BienViewProps) {
     potentialHint, hasCompsProd,
     performance, market, aiEnabled,
     floor, ceiling, mode, activeModeId, pricingModes, gapBlockEnabled, gapBlockMinNights, modeEnabled,
+    lastMinuteEnabled, lastMinuteWindowDays, lastMinuteDiscountPct,
+    occupancyBandsEnabled, occupancyLowMax, occupancyLowAdj, occupancyHighMin, occupancyHighAdj,
+    pricingBaseSource, manualBasePriceMad,
     applyPrice, applyMinStay, scopeModalOpen, scopeModalEdit, scopeSaving, scopeSaveError,
     configSaveStatus, events, suggestions,
     eventModalOpen, editingEventId,
@@ -186,6 +209,10 @@ export default function BienView(props: BienViewProps) {
     previewDiffOnlyChanged = true, onPreviewDiffOnlyChanged, onPreviewDiffReload,
     onActiveModeChange, onModeToggle, onAddCustomMode, onUpdateCustomMode, onDeleteCustomMode,
     onGapBlockEnabledChange, onGapBlockMinNightsChange, onModeEnabledChange,
+    onLastMinuteEnabledChange, onLastMinuteWindowDaysChange, onLastMinuteDiscountPctChange,
+    onOccupancyBandsEnabledChange, onOccupancyLowMaxChange, onOccupancyLowAdjChange,
+    onOccupancyHighMinChange, onOccupancyHighAdjChange,
+    onPricingBaseSourceChange, onManualBasePriceMadChange,
     onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
     onEventModalClose, onEventSave,
     onYearChange, onApplyToOps, onRunCalendarUpdate, activeModeLabel, onExpandDay,
@@ -445,13 +472,15 @@ export default function BienView(props: BienViewProps) {
           configSaveStatus === 'saving'
             ? 'Enregistrement automatique…'
             : configSaveStatus === 'saved'
-              ? 'Modifications enregistrées (auto-save ~1s)'
+              ? 'Recette enregistrée (auto-save ~1s)'
               : configSaveStatus === 'error'
                 ? 'Erreur enregistrement — réessayez ou activez Sojori AI'
-                : 'Bornes, modes, events — sauvegarde auto après chaque réglage'
+                : '6 étapes : base → bornes → mode → occupation → last-min → events'
         }
         sources={[
           { kind: floor > 0 ? 'prod' : 'empty', label: 'Bornes' },
+          { kind: occupancyBandsEnabled ? 'prod' : 'empty', label: 'Occupation' },
+          { kind: lastMinuteEnabled ? 'prod' : 'empty', label: 'Last-min' },
           { kind: events.length > 0 ? 'prod' : 'empty', label: events.length ? `${events.length} event(s)` : 'Événements' },
         ]}
       >
@@ -464,6 +493,16 @@ export default function BienView(props: BienViewProps) {
           modeEnabled={modeEnabled}
           gapBlockEnabled={gapBlockEnabled}
           gapBlockMinNights={gapBlockMinNights}
+          lastMinuteEnabled={lastMinuteEnabled}
+          lastMinuteWindowDays={lastMinuteWindowDays}
+          lastMinuteDiscountPct={lastMinuteDiscountPct}
+          occupancyBandsEnabled={occupancyBandsEnabled}
+          occupancyLowMax={occupancyLowMax}
+          occupancyLowAdj={occupancyLowAdj}
+          occupancyHighMin={occupancyHighMin}
+          occupancyHighAdj={occupancyHighAdj}
+          pricingBaseSource={pricingBaseSource}
+          manualBasePriceMad={manualBasePriceMad}
           events={events} suggestions={suggestions}
           hasBoundsProd={floor > 0 && ceiling > 0}
           estimatedRevenue={estimatedRevenueMad}
@@ -472,6 +511,16 @@ export default function BienView(props: BienViewProps) {
           onGapBlockEnabledChange={onGapBlockEnabledChange}
           onGapBlockMinNightsChange={onGapBlockMinNightsChange}
           onModeEnabledChange={onModeEnabledChange}
+          onLastMinuteEnabledChange={onLastMinuteEnabledChange}
+          onLastMinuteWindowDaysChange={onLastMinuteWindowDaysChange}
+          onLastMinuteDiscountPctChange={onLastMinuteDiscountPctChange}
+          onOccupancyBandsEnabledChange={onOccupancyBandsEnabledChange}
+          onOccupancyLowMaxChange={onOccupancyLowMaxChange}
+          onOccupancyLowAdjChange={onOccupancyLowAdjChange}
+          onOccupancyHighMinChange={onOccupancyHighMinChange}
+          onOccupancyHighAdjChange={onOccupancyHighAdjChange}
+          onPricingBaseSourceChange={onPricingBaseSourceChange}
+          onManualBasePriceMadChange={onManualBasePriceMadChange}
           onApplyRecoBounds={onApplyRecoBounds}
           onActiveModeChange={onActiveModeChange}
           onModeToggle={onModeToggle}
@@ -636,7 +685,7 @@ export default function BienView(props: BienViewProps) {
                 return lines.filter(Boolean).join(' ');
               }
               if (calendarHasEventOverlay) {
-                return `Snapshot marché${snap ? ` (${snap})` : ''} + events en orange (aperçu local, pas encore appliqué).`;
+                return `Estimation prix de marché${snap ? ` (${snap})` : ''} + events en orange (aperçu local, pas encore appliqué).`;
               }
               if (calendarFromAirroi) {
                 return [

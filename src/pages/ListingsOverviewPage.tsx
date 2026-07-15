@@ -508,8 +508,28 @@ export function ListingsOverviewPage() {
                         {ruLabel}
                       </Typography>
                     )}
-                    <Typography sx={{ mt: 0.5, fontSize: 12.5, color: t.text2 }}>
+                    <Typography sx={{ mt: 0.5, fontSize: 12.5, color: t.text2, display: 'flex', alignItems: 'center', gap: 1 }}>
                       Type : {listing.propertyUnit}
+                      {String(listing.propertyUnit || '').toLowerCase() === 'multi' && (
+                        <Box
+                          component="span"
+                          sx={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: '#B8881A',
+                            background: 'rgba(230,176,34,0.12)',
+                            border: '1px solid rgba(230,176,34,0.28)',
+                            borderRadius: '999px',
+                            px: 1,
+                            py: 0.25,
+                          }}
+                        >
+                          Multi
+                          {Array.isArray(listing.roomTypes) && listing.roomTypes.length > 0
+                            ? ` · ${listing.roomTypes.length} type${listing.roomTypes.length > 1 ? 's' : ''}`
+                            : ''}
+                        </Box>
+                      )}
                     </Typography>
                     <Typography sx={{ mt: 0.5, fontSize: 12.5, color: t.text2 }}>
                       Channel manager: {listing.channelManager || 'Non défini'}

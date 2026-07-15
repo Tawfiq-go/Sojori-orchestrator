@@ -161,51 +161,44 @@ export const MONITORING_TABS_INFO = {
   RabbitMQ: {
     title: 'Monitoring RabbitMQ',
     description:
-      'Surveillance des queues RabbitMQ et détection d\'incidents: queues bloquées, consommateurs manquants, Dead Letter Queues (DLQ). Permet de rejouer ou purger les messages en DLQ.',
+      'Vue files Ready / Unacked, incidents (sans consumer, backlog stagnant, connexions blocked), et actions DLQ. Refresh live toutes les 30s.',
     graphs: [
       {
-        name: 'Queue Health Status',
-        description: 'Cards affichant le statut de chaque queue (✅ Healthy / ⚠️ Warning / 🔴 Critical)',
+        name: 'KPIs',
+        description: 'Cluster, mémoire, connexions, Ready, Unacked, sans consumer, stagnants',
       },
       {
-        name: 'Messages Timeline',
-        description: 'Line chart montrant Messages ready, Messages unacked, et Total messages',
+        name: 'Incidents',
+        description: 'Liste priorisée des anomalies (API + détection stagnant côté UI)',
       },
       {
-        name: 'DLQ Incidents',
-        description: 'Table listant les Dead Letter Queues avec nombre de messages et actions (Replay, Purge)',
+        name: 'Table files',
+        description: 'Colonnes Ready / Unacked / Consumers / Producteur / État + actions DLQ',
       },
     ],
     dataSources: [
       {
-        name: 'Queue Stats',
-        endpoint: 'GET /api/rabbitmq/queues',
-        collection: 'rabbitmq_snapshots + RabbitMQ Management API',
+        name: 'Health',
+        endpoint: 'GET /api/rabbitmq/health',
+        collection: 'RabbitMQ Management API + K8s pods',
         service: 'srv-logs-proxy',
-        type: 'Hybrid',
+        type: 'API',
       },
       {
-        name: 'DLQ List',
-        endpoint: 'GET /api/admin/rabbitmq/dlq/list',
-        collection: 'RabbitMQ API direct',
+        name: 'DLQ',
+        endpoint: 'GET /api/v1/admin/rabbitmq/dlq/*',
+        collection: 'RabbitMQ AMQP',
         service: 'srv-admin',
         type: 'RabbitMQ API',
       },
-      {
-        name: 'Timeline',
-        endpoint: 'GET /api/rabbitmq/timeline',
-        collection: 'rabbitmq_snapshots',
-        service: 'srv-logs-proxy',
-        type: 'MongoDB',
-      },
     ],
-    filters: ['Time Range (1h, 6h, 24h)', 'Queue Name (search)', 'Incident Type (no_consumer, backlog, dlq, slow_processing)'],
+    filters: ['Vue À surveiller / Toutes / DLQ', 'Service'],
     actions: [
       'Rejouer DLQ - Republier les messages vers la queue originale',
-      'Purger DLQ - Vider complètement une DLQ (⚠️ irréversible)',
-      'Export incidents CSV',
+      'Purger DLQ - Vider complètement une DLQ (irréversible)',
+      'Inspection message DLQ',
     ],
-    refreshInterval: 'Toutes les 30 secondes',
+    refreshInterval: 'Toutes les 30 secondes (Live)',
   },
 
   WhatsApp: {

@@ -12,12 +12,16 @@ import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { findConversationByThreadId } from '../../utils/conversationThreadId';
 import type { Conversation } from '../../types/messages.types';
 import type { Thread } from '../../types/unifiedInbox.types';
-import { useInboxStaffConversation } from '../../hooks/useInboxStaffConversation';
+import {
+  useInboxStaffConversation,
+  type StaffWaInboxParty,
+} from '../../hooks/useInboxStaffConversation';
 import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
 import { mapConversationToThread } from '../unified-inbox/inboxMappers';
 import { buildInboxMessages } from '../unified-inbox/inboxMessages';
 import { formatThreadWhen } from '../unified-inbox/inboxFormat';
 import type { QuickTemplate } from '../../types/unifiedInbox.types';
+import type { InboxRealtimeChannel } from '../../utils/inboxRealtime';
 
 const STAFF_TEMPLATES: QuickTemplate[] = [
   { id: 's1', label: '✅ Tâche assignée', icon: '✅', text: 'Nouvelle tâche assignée : ' },
@@ -26,7 +30,29 @@ const STAFF_TEMPLATES: QuickTemplate[] = [
   { id: 's4', label: '📍 Lieu', icon: '📍', text: 'Adresse du logement : ' },
 ];
 
-export default function StaffWhatsAppTabV2() {
+const ADMIN_TEMPLATES: QuickTemplate[] = [
+  { id: 'a1', label: '✅ Bien reçu', icon: '✅', text: 'Bien reçu, on s’en occupe.' },
+  { id: 'a2', label: '🕐 Sous peu', icon: '🕐', text: 'On revient vers vous sous peu.' },
+  { id: 'a3', label: '📋 Merci', icon: '📋', text: 'Merci pour le message.' },
+];
+
+type Props = {
+  inboxParty?: StaffWaInboxParty;
+};
+
+export default function StaffWhatsAppTabV2({ inboxParty = 'staff' }: Props) {
+  const isAdminTab = inboxParty === 'admin';
+  const listTitle = isAdminTab ? 'Admin WhatsApp' : 'Staff WhatsApp';
+  const channelLabel = isAdminTab ? 'Admin' : 'Staff';
+  const channelEmoji = isAdminTab ? '🛡️' : '👷';
+  const emptyLabel = isAdminTab
+    ? 'Aucune conversation admin'
+    : 'Aucune conversation staff';
+  const selectLabel = isAdminTab
+    ? 'Sélectionnez un contact admin'
+    : 'Sélectionnez un contact staff';
+  const realtimeChannel: InboxRealtimeChannel = isAdminTab ? 'admin' : 'staff';
+
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +62,7 @@ export default function StaffWhatsAppTabV2() {
   const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
 
-  const inbox = useInboxStaffConversation();
+  const inbox = useInboxStaffConversation(inboxParty);
 
   const loadStaffConversations = useCallback(async () => {
     if (!scopeFetchReady) {
@@ -51,6 +77,7 @@ export default function StaffWhatsAppTabV2() {
         hasReservation: false,
         limit: 50,
         owner_id: requestOwnerId || undefined,
+        inboxParty,
       });
       if (response.status === 'success') {
         setConversations(response.data.conversations);
@@ -60,14 +87,14 @@ export default function StaffWhatsAppTabV2() {
     } finally {
       setLoading(false);
     }
-  }, [scopeFetchReady, requestOwnerId]);
+  }, [scopeFetchReady, requestOwnerId, inboxParty]);
 
   useEffect(() => {
     void loadStaffConversations();
   }, [loadStaffConversations]);
 
   useInboxRealtimeRefresh(
-    'staff',
+    realtimeChannel,
     () => loadStaffConversations(),
     () => {
       if (inbox.activeConversation) void inbox.refreshStaffMessages();
@@ -108,7 +135,9 @@ export default function StaffWhatsAppTabV2() {
       inbox.appendOutboundMessage(trimmed);
       bumpConversationPreview(phone, trimmed);
       try {
-        await messagesService.sendMessage({ phone, message: trimmed }, 'staff');
+        await messagesService.sendMessage({ phone, message: trimmed }, 'staff', {
+          inboxParty,
+        });
         void inbox.refreshStaffMessages(phone);
       } catch (err) {
         inbox.removeLastOutboundMessage();
@@ -131,7 +160,7 @@ export default function StaffWhatsAppTabV2() {
         throw err;
       }
     },
-    [inbox, bumpConversationPreview],
+    [inbox, bumpConversationPreview, inboxParty],
   );
 
   useEffect(() => {
@@ -186,6 +215,7 @@ export default function StaffWhatsAppTabV2() {
   ]);
 
   const formattedMessages = buildInboxMessages(inbox.messages, false);
+  const templates = isAdminTab ? ADMIN_TEMPLATES : STAFF_TEMPLATES;
 
   if (loading) {
     return (
@@ -209,8 +239,8 @@ export default function StaffWhatsAppTabV2() {
             gridColumn: '1 / -1',
           }}
         >
-          <Typography sx={{ fontSize: 48 }}>👷</Typography>
-          <Typography sx={{ fontSize: 15, fontWeight: 600 }}>Aucune conversation staff</Typography>
+          <Typography sx={{ fontSize: 48 }}>{channelEmoji}</Typography>
+          <Typography sx={{ fontSize: 15, fontWeight: 600 }}>{emptyLabel}</Typography>
         </Box>
       </InboxLayout>
     );
@@ -222,9 +252,15 @@ export default function StaffWhatsAppTabV2() {
         <ThreadsList
           threads={formattedThreads}
           channels={[
-            { id: 'wa', label: 'Staff', icon: '👷', color: '#25D366', count: conversations.length },
+            {
+              id: 'wa',
+              label: channelLabel,
+              icon: channelEmoji,
+              color: '#25D366',
+              count: conversations.length,
+            },
           ]}
-          listTitle="Staff WhatsApp"
+          listTitle={listTitle}
           mode="whatsapp"
           activeThreadId={activeThread?.id ?? null}
           searchTerm={searchTerm}
@@ -240,7 +276,7 @@ export default function StaffWhatsAppTabV2() {
               thread={activeThread}
               messages={formattedMessages}
               loadingMessages={inbox.loadingMessages}
-              quickTemplates={STAFF_TEMPLATES}
+              quickTemplates={templates}
               composerValue={composerDraft}
               onComposerValueChange={setComposerDraft}
               onSendMessage={handleStaffSend}
@@ -266,9 +302,9 @@ export default function StaffWhatsAppTabV2() {
               gridColumn: { xs: '1', lg: '2' },
             }}
           >
-            <Typography sx={{ fontSize: 48 }}>👷</Typography>
+            <Typography sx={{ fontSize: 48 }}>{channelEmoji}</Typography>
             <Typography sx={{ fontSize: 15, fontWeight: 600, color: t.text2 }}>
-              Sélectionnez un contact staff
+              {selectLabel}
             </Typography>
           </Box>
         )}
@@ -286,10 +322,12 @@ export default function StaffWhatsAppTabV2() {
             .map((ex) => {
               const parts: string[] = [];
               if (ex.user_message?.trim()) {
-                parts.push(`${ex.sent_by_admin ? 'Staff' : 'Client'}: ${ex.user_message.trim()}`);
+                parts.push(
+                  `${ex.sent_by_admin ? channelLabel : 'Contact'}: ${ex.user_message.trim()}`,
+                );
               }
               if (ex.ai_response?.trim()) {
-                parts.push(`Staff: ${ex.ai_response.trim()}`);
+                parts.push(`${channelLabel}: ${ex.ai_response.trim()}`);
               }
               return parts.join('\n');
             })
@@ -306,11 +344,3 @@ export default function StaffWhatsAppTabV2() {
     </>
   );
 }
-
-
-
-
-
-
-
-

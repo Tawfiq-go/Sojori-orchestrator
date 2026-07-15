@@ -31,8 +31,14 @@ export function useNodes() {
     setLoading(true);
     setError(null);
     try {
-      const response = await prometheusGet<{ data?: unknown }>('/nodes');
-      setData(response.data.data);
+      const [metricsResponse, metadataResponse] = await Promise.all([
+        prometheusGet<{ data?: Record<string, unknown> }>('/nodes'),
+        prometheusGet<{ data?: unknown }>('/nodes/metadata').catch(() => null),
+      ]);
+      setData({
+        ...metricsResponse.data.data,
+        metadata: (metadataResponse?.data?.data as Record<string, unknown>) ?? {},
+      });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Request failed');
     } finally {
