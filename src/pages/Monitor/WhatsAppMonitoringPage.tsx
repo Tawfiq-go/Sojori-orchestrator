@@ -10,6 +10,7 @@ import {
   Badge,
   DataTable,
   MonitorEmpty,
+  MonitorError,
   MonitorErrorList,
   MonitorKpiStrip,
   MonitorLoading,
@@ -39,12 +40,28 @@ interface WaMessage {
     error_code?: string;
     raw_error_message?: string;
     whatsapp_status?: string;
+    from?: string;
+    to?: string;
+    message_id?: string;
   };
 }
 
 interface SummaryData {
   total?: number;
+  accepted?: number;
+  sent?: number;
+  delivered?: number;
+  read?: number;
   failed?: number;
+  deliveryRate?: number | null;
+  readRate?: number | null;
+  failureRate?: number | null;
+  isPartial?: boolean;
+  coverage?: {
+    coverageStartAt?: string | null;
+    notes?: string[];
+    isPartial?: boolean;
+  };
   byService?: Record<string, number>;
   topTemplates?: Array<{ _id?: string; count?: number }>;
   recentErrors?: WaMessage[];
@@ -78,10 +95,30 @@ function serviceBadgeVariant(s?: string): 'info' | 'ai' {
 function messageStatusLabel(msg: WaMessage) {
   const d = msg.data;
   if (d?.error_message) return d.error_message;
+  if (d?.whatsapp_status === 'accepted') return 'Message accepte';
   if (d?.whatsapp_status === 'sent') return 'Message envoyé';
   if (d?.whatsapp_status === 'delivered') return 'Message délivré';
   if (d?.whatsapp_status === 'read') return 'Message lu';
   return 'Sans erreur';
+}
+
+function statusBadgeVariant(status?: string, severity?: string): 'success' | 'warning' | 'error' | 'info' | 'neutral' {
+  if (status === 'failed') return 'error';
+  if (status === 'read' || status === 'delivered') return 'success';
+  if (status === 'sent' || status === 'accepted') return 'info';
+  return severityBadgeVariant(severity);
+}
+
+function formatRate(value?: number | null) {
+  if (value == null) return 'n/a';
+  return `${Math.round(value * 1000) / 10}%`;
+}
+
+function maskPhone(value?: string) {
+  if (!value) return 'masked';
+  const digits = value.replace(/\D/g, '');
+  if (digits.length <= 4) return '****';
+  return `****${digits.slice(-4)}`;
 }
 
 export default function WhatsAppMonitoringPage() {
@@ -99,86 +136,86 @@ export default function WhatsAppMonitoringPage() {
   const [errorsData, setErrorsData] = useState<WaMessage[]>([]);
   const [direction, setDirection] = useState('all');
   const [source, setSource] = useState('all');
+  const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
+  const [apiError, setApiError] = useState<string | null>(null);
   const limit = 50;
 
   const fetchSummary = useCallback(async () => {
     try {
       setLoading(true);
+      setApiError(null);
       const response = await apiClient.get('/api/monitoring/whatsapp/stats', {
-        params: { timeRange },
+        params: { timeRange, source },
       });
       setSummaryData(response.data.data);
-    } catch {
+    } catch (error: any) {
+      setApiError(error?.response?.data?.error || error?.message || 'Impossible de charger la synthese WhatsApp.');
       setSummaryData(null);
     } finally {
       setLoading(false);
     }
-  }, [timeRange]);
+  }, [timeRange, source]);
 
   const fetchMessages = useCallback(async () => {
     try {
       setLoading(true);
+      setApiError(null);
       const response = await apiClient.get('/api/monitoring/whatsapp/messages', {
-        params: { page, limit, direction, source, status: 'all' },
+        params: { page, limit, direction, source, status, timeRange },
       });
       setMessagesData(response.data.data);
-    } catch {
+    } catch (error: any) {
+      setApiError(error?.response?.data?.error || error?.message || 'Impossible de charger les messages WhatsApp.');
       setMessagesData({ messages: [], total: 0, page: 1, totalPages: 1 });
     } finally {
       setLoading(false);
     }
-  }, [page, direction, source]);
+  }, [page, direction, source, status, timeRange]);
 
   const fetchErrors = useCallback(async () => {
     try {
       setLoading(true);
+      setApiError(null);
       const response = await apiClient.get('/api/monitoring/whatsapp/errors', {
-        params: { limit: 100 },
+        params: { limit: 100, source, timeRange },
       });
       setErrorsData(response.data.data.errors || []);
-    } catch {
+    } catch (error: any) {
+      setApiError(error?.response?.data?.error || error?.message || 'Impossible de charger les erreurs WhatsApp.');
       setErrorsData([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [source, timeRange]);
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     if (activeTab === 'summary') void fetchSummary();
     else if (activeTab === 'messages') void fetchMessages();
     else void fetchErrors();
-  };
+  }, [activeTab, fetchSummary, fetchMessages, fetchErrors]);
 
   useEffect(() => {
-    if (activeTab === 'summary') {
-      void fetchSummary();
-      if (!live) return;
-      const interval = setInterval(fetchSummary, 30000);
-      return () => clearInterval(interval);
-    }
-    if (activeTab === 'messages') void fetchMessages();
-    else void fetchErrors();
-  }, [activeTab, fetchSummary, fetchMessages, fetchErrors, live]);
+    refresh();
+    if (!live) return;
+    const interval = setInterval(refresh, 30000);
+    return () => clearInterval(interval);
+  }, [refresh, live]);
 
   useEffect(() => {
     setPage(1);
-  }, [direction, source]);
+  }, [direction, source, status, timeRange]);
 
   const messageRows = (messagesData.messages || []).map((msg, idx) => ({
     id: msg._id || `msg-${idx}`,
     ...msg,
   }));
 
-  const problemCount = summaryData?.total ?? 0;
+  const totalMessages = summaryData?.total ?? 0;
+  const acceptedCount = summaryData?.accepted ?? 0;
+  const deliveredCount = summaryData?.delivered ?? 0;
+  const readCount = summaryData?.read ?? 0;
   const failedCount = summaryData?.failed ?? 0;
-  const chatbotCount =
-    (summaryData?.byService?.['srv-fullchatbot'] ?? 0) +
-    (summaryData?.byService?.['srv-chatbot'] ?? 0);
-  const staffbotCount =
-    (summaryData?.byService?.['srv-fulltask'] ?? 0) +
-    (summaryData?.byService?.['srv-task'] ?? 0);
-
   return (
     <MonitorPageFrame>
       <MonitorToolbarRow
@@ -202,13 +239,39 @@ export default function WhatsAppMonitoringPage() {
         }
       />
 
+      {apiError ? <MonitorError message={apiError} onRetry={refresh} /> : null}
+
+      {summaryData?.isPartial || summaryData?.coverage?.isPartial ? (
+        <Box sx={{ mb: 1.25 }}>
+          <Badge variant="warning">Couverture historique incomplete</Badge>
+          <Typography sx={{ mt: 0.5, fontSize: 12, color: t.text3 }}>
+            {(summaryData.coverage?.notes || ['Certaines periodes peuvent ne contenir que les echecs.']).join(' ')}
+          </Typography>
+        </Box>
+      ) : null}
+
       {(summaryData || !loading) && activeTab === 'summary' ? (
         <MonitorKpiStrip
           items={[
             {
-              label: 'Problèmes',
-              value: problemCount,
-              tone: problemCount > 0 ? 'error' : 'success',
+              label: 'Messages',
+              value: totalMessages,
+              tone: 'info',
+            },
+            {
+              label: 'Acceptes',
+              value: acceptedCount,
+              tone: 'info',
+            },
+            {
+              label: 'Delivres',
+              value: deliveredCount,
+              tone: 'success',
+            },
+            {
+              label: 'Lus',
+              value: readCount,
+              tone: 'success',
             },
             {
               label: 'Échecs',
@@ -216,13 +279,13 @@ export default function WhatsAppMonitoringPage() {
               tone: 'error',
             },
             {
-              label: 'Chatbot',
-              value: chatbotCount,
-              tone: 'info',
+              label: 'Livraison',
+              value: formatRate(summaryData?.deliveryRate),
+              tone: 'success',
             },
             {
-              label: 'StaffBot',
-              value: staffbotCount,
+              label: 'Lecture',
+              value: formatRate(summaryData?.readRate),
               tone: 'info',
             },
           ]}
@@ -235,7 +298,7 @@ export default function WhatsAppMonitoringPage() {
             <MonitorLoading />
           ) : summaryData ? (
             <>
-              {problemCount === 0 && failedCount === 0 ? (
+              {totalMessages === 0 && failedCount === 0 ? (
                 <MonitorEmpty message="Aucune donnée WhatsApp sur cette période." />
               ) : (
                 <Box
@@ -323,6 +386,19 @@ export default function WhatsAppMonitoringPage() {
                 { value: 'srv-task', label: 'StaffBot (legacy)' },
               ]}
             />
+            <MonitorSelectFilter
+              label="Statut"
+              value={status}
+              onChange={setStatus}
+              options={[
+                { value: 'all', label: 'Tous' },
+                { value: 'accepted', label: 'Accepte' },
+                { value: 'sent', label: 'Envoye' },
+                { value: 'delivered', label: 'Delivre' },
+                { value: 'read', label: 'Lu' },
+                { value: 'failed', label: 'Echec' },
+              ]}
+            />
           </Stack>
 
           {loading && messageRows.length === 0 ? (
@@ -371,11 +447,20 @@ export default function WhatsAppMonitoringPage() {
                   ),
                 },
                 {
+                  key: 'phone',
+                  label: 'Telephone',
+                  render: (row: WaMessage & { id: string }) => (
+                    <Typography sx={{ fontSize: 12, color: t.text2 }}>
+                      {maskPhone(row.data?.from || row.data?.to)}
+                    </Typography>
+                  ),
+                },
+                {
                   key: 'status',
                   label: 'Statut',
                   render: (row: WaMessage & { id: string }) => (
                     <Stack spacing={0.5}>
-                      <Badge variant={severityBadgeVariant(row.severity)} dot>
+                      <Badge variant={statusBadgeVariant(row.data?.whatsapp_status, row.severity)} dot>
                         {messageStatusLabel(row)}
                       </Badge>
                       {row.data?.error_code ? (
