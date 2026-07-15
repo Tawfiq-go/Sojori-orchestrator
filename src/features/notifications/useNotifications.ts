@@ -14,6 +14,7 @@ import {
   setNotificationStatus,
   markAllNotificationsRead,
 } from './notificationApi';
+import { getTaskOperationalSummary } from '../../services/fulltaskApi';
 import type { NotificationPanelTab, NotificationItem } from './types';
 import { isActionRequired, isActiveInPanel } from './constants';
 
@@ -34,6 +35,20 @@ export function useSidebarNotificationCounts() {
         byFacet: counts.byFacetActive ?? counts.byFacet ?? {},
         byEventKey: counts.byEventKeyActive ?? counts.byEventKey ?? {},
       };
+    },
+    enabled,
+    refetchInterval: enabled ? 60_000 : false,
+    retry: notifQueryRetry,
+  });
+}
+
+export function useTaskOperationalIndicators() {
+  const { ownerId, enabled } = useNotificationScope();
+  return useQuery({
+    queryKey: [...ROOT_KEY, 'task-operational-indicators', ownerId],
+    queryFn: async () => {
+      const res = await getTaskOperationalSummary({ ownerId });
+      return res.data;
     },
     enabled,
     refetchInterval: enabled ? 60_000 : false,

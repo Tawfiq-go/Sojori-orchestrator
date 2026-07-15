@@ -3,15 +3,18 @@ import { tokens as t } from '../../components/dashboard/dashboardTokens';
 
 interface SidebarNotificationBadgeProps {
   count: number;
+  title?: string;
 }
 
-export function SidebarNotificationBadge({ count }: SidebarNotificationBadgeProps) {
+export function SidebarNotificationBadge({ count, title }: SidebarNotificationBadgeProps) {
   if (!count || count <= 0) return null;
   const label = count > 99 ? '99+' : String(count);
 
   return (
     <Box
       component="span"
+      title={title}
+      aria-label={title}
       sx={{
         fontFamily: 'Geist Mono, monospace',
         fontSize: 9.5,
