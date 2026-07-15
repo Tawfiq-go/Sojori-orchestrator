@@ -4,6 +4,7 @@ import { Box } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { DASHBOARD_PAGE_FILL_SX } from '../constants/dashboardLayout';
 import WhatsAppTabV2 from '../components/communications/WhatsAppTabV2';
+import BookingWhatsAppTabV2 from '../components/communications/BookingWhatsAppTabV2';
 import StaffWhatsAppTabV2 from '../components/communications/StaffWhatsAppTabV2';
 import MessagesOTATabV2 from '../components/communications/MessagesOTATabV2';
 import LeadsTabV2 from '../components/communications/LeadsTabV2';
@@ -21,7 +22,10 @@ import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 import { scheduleInboxRealtimeDispatch } from '../utils/inboxRealtime';
 import { hasJwtSession } from '../utils/devApiAccess';
 import messagesService from '../services/messagesService';
+import { getBookingInboxThreads } from '../services/bookingInboxService';
 import { getCachedOtaInbox } from '../utils/otaInboxCache';
+import { useAuth } from '../hooks/useAuth';
+import { Roles } from '../constants/roles';
 
 function isOtaChannel(ch?: string): boolean {
   const c = (ch || '').toLowerCase();
@@ -35,36 +39,60 @@ function isWaGuestChannel(ch?: string): boolean {
 
 export default function CommunicationsHubPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const section: CommsSection = resolveCommsSection(searchParams.get('section'), tabParam);
   const activeTab = normalizeCommsTab(tabParam, section);
+  const isPlatformAdmin =
+    user?.role === Roles.Admin ||
+    user?.role === Roles.SuperAdmin ||
+    String(user?.role || '').toLowerCase() === 'admin' ||
+    String(user?.role || '').toLowerCase() === 'superadmin';
 
   useEffect(() => {
     const needsSection = !searchParams.get('section');
     const legacyTemplates = tabParam === 'templates';
     const wrongTab = tabParam != null && tabParam !== activeTab;
-    if (needsSection || legacyTemplates || wrongTab) {
+    const bookingForbidden = activeTab === 'booking' && !isPlatformAdmin;
+    if (needsSection || legacyTemplates || wrongTab || bookingForbidden) {
       const params = new URLSearchParams(searchParams);
-      params.set('section', section);
-      params.set('tab', activeTab);
+      params.set('section', bookingForbidden ? 'staff' : section);
+      params.set('tab', bookingForbidden ? 'admin' : activeTab);
       navigate(`/communications?${params.toString()}`, { replace: true });
     }
-  }, [searchParams, tabParam, section, activeTab, navigate]);
+  }, [searchParams, tabParam, section, activeTab, navigate, isPlatformAdmin]);
 
   const [counts, setCounts] = useState<Partial<Record<CommsHubTab, number>>>({});
   const [unreadCount, setUnreadCount] = useState(0);
 
   const refetchCounts = useCallback(async () => {
-    if (!scopeFetchReady) {
-      setCounts({});
-      setUnreadCount(0);
-      return;
-    }
     const cachedOta = getCachedOtaInbox();
     if (cachedOta) {
       setCounts((prev) => ({ ...prev, ota: cachedOta.length }));
+    }
+
+    // Inbox Resa = plateforme sans owner — compteurs indépendants du filtre propriétaire
+    if (isPlatformAdmin) {
+      void getBookingInboxThreads({ limit: 50 })
+        .then((res) => {
+          setCounts((prev) => ({
+            ...prev,
+            booking: res.data.conversations?.length || 0,
+          }));
+        })
+        .catch(() => {
+          /* ignore */
+        });
+    }
+
+    if (!scopeFetchReady) {
+      if (!isPlatformAdmin) {
+        setCounts({});
+        setUnreadCount(0);
+      }
+      return;
     }
 
     try {
@@ -82,17 +110,29 @@ export default function CommunicationsHubPage() {
         .catch(() => null);
 
       let staffRes: Awaited<ReturnType<typeof messagesService.getConversations>> | null = null;
+      let adminWaRes: Awaited<ReturnType<typeof messagesService.getConversations>> | null = null;
       let leadsRes: { threads?: unknown[] } = { threads: [] };
       let reviewsRes: { threads?: unknown[]; data?: unknown[] } = { threads: [] };
 
       if (jwtReady) {
-        [staffRes, leadsRes, reviewsRes] = await Promise.all([
+        [staffRes, adminWaRes, leadsRes, reviewsRes] = await Promise.all([
           messagesService
             .getConversations({
               filter: 'smart',
               hasReservation: false,
               limit: 50,
               owner_id: ownerScope,
+              inboxParty: 'staff',
+              silent: true,
+            })
+            .catch(() => null),
+          messagesService
+            .getConversations({
+              filter: 'smart',
+              hasReservation: false,
+              limit: 50,
+              owner_id: ownerScope,
+              inboxParty: 'admin',
               silent: true,
             })
             .catch(() => null),
@@ -120,21 +160,25 @@ export default function CommunicationsHubPage() {
 
       const staffCount =
         staffRes?.status === 'success' ? staffRes.data.conversations.length : 0;
+      const adminWaCount =
+        adminWaRes?.status === 'success' ? adminWaRes.data.conversations.length : 0;
       const leadsCount = leadsRes.threads?.length ?? 0;
       const reviewsCount = (reviewsRes.threads || reviewsRes.data || []).length;
 
-      setCounts({
+      setCounts((prev) => ({
+        ...prev,
         whatsapp: waGuest,
         staff: staffCount,
+        admin: adminWaCount,
         ota,
         leads: leadsCount,
         reviews: reviewsCount,
-      });
+      }));
       setUnreadCount(unread);
     } catch {
       /* counts optionnels — échecs déjà loggés par apiClient */
     }
-  }, [scopeFetchReady, requestOwnerId]);
+  }, [scopeFetchReady, requestOwnerId, isPlatformAdmin]);
 
   useEffect(() => {
     void refetchCounts();
@@ -196,7 +240,9 @@ export default function CommunicationsHubPage() {
 
         <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {activeTab === 'whatsapp' && <WhatsAppTabV2 />}
-          {activeTab === 'staff' && <StaffWhatsAppTabV2 />}
+          {activeTab === 'booking' && isPlatformAdmin && <BookingWhatsAppTabV2 />}
+          {activeTab === 'staff' && <StaffWhatsAppTabV2 inboxParty="staff" />}
+          {activeTab === 'admin' && <StaffWhatsAppTabV2 inboxParty="admin" />}
           {activeTab === 'ota' && <MessagesOTATabV2 />}
           {activeTab === 'leads' && <LeadsTabV2 />}
           {activeTab === 'reviews' && <ReviewsTabV2 />}

@@ -1,7 +1,8 @@
 export type CommsSection = 'guest' | 'staff';
 
 export type CommsGuestTab = 'whatsapp' | 'ota' | 'leads' | 'reviews';
-export type CommsStaffTab = 'staff';
+/** Inbox Resa = ligne booking sans owner → onglet côté staff/admin plateforme. */
+export type CommsStaffTab = 'staff' | 'admin' | 'booking';
 export type CommsHubTab = CommsGuestTab | CommsStaffTab;
 
 export const GUEST_HUB_TABS: {
@@ -19,7 +20,11 @@ export const STAFF_HUB_TABS: {
   id: CommsStaffTab;
   label: string;
   emoji: string;
-}[] = [{ id: 'staff', label: 'Staff WhatsApp', emoji: '👷' }];
+}[] = [
+  { id: 'staff', label: 'Staff WhatsApp', emoji: '👷' },
+  { id: 'admin', label: 'Admin WhatsApp', emoji: '🛡️' },
+  { id: 'booking', label: 'Inbox Resa', emoji: '🧾' },
+];
 
 const GUEST_TAB_SET = new Set<string>(GUEST_HUB_TABS.map((t) => t.id));
 const STAFF_TAB_SET = new Set<string>(STAFF_HUB_TABS.map((t) => t.id));
@@ -29,7 +34,7 @@ export function resolveCommsSection(
   tabParam: string | null,
 ): CommsSection {
   if (sectionParam === 'staff' || sectionParam === 'guest') return sectionParam;
-  if (tabParam === 'staff') return 'staff';
+  if (tabParam === 'staff' || tabParam === 'admin' || tabParam === 'booking') return 'staff';
   return 'guest';
 }
 

@@ -123,6 +123,16 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: PM_ROLES,
     items: [
       { id: 'comms/staff', label: 'Staff WhatsApp', iconType: 'chat', iconColor: '#B45309', badgeRed: true },
+      { id: 'comms/admin', label: 'Admin WhatsApp', iconType: 'chat', iconColor: '#7C3AED' },
+      // Numéro booking sans owner → Inbox plateforme Admin uniquement
+      {
+        id: 'comms/booking',
+        label: 'Inbox Resa',
+        iconType: 'chat',
+        iconColor: '#0D9488',
+        roles: ADMIN_ROLES,
+        description: 'Ligne résa Sojori — conversations sans owner',
+      },
     ],
   },
   {
@@ -440,6 +450,8 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Task: false,
   Orchestration: false,
   Annonces: false,
+  'Inbox Guest': false,
+  'Inbox Staff': false,
   Inbox: false,
   Guest: false,
   Staff: false,

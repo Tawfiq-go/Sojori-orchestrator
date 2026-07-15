@@ -21,6 +21,7 @@ function interactiveContentBadge(
   if (contentType === 'list') return isOutbound ? '📋 LISTE ENVOYÉE' : '📋 LIST REPLY';
   if (contentType === 'interactive') return isOutbound ? '📲 INTERACTIF ENVOYÉ' : '↩️ INTERACTIVE REPLY';
   if (contentType === 'template') return '📨 TEMPLATE';
+  if (contentType === 'audio') return '🎤 AUDIO';
   return null;
 }
 
@@ -42,6 +43,9 @@ interface ConversationThreadProps {
   onSendMessage: (text: string) => void | Promise<void>;
   onSelectTemplate: (template: QuickTemplate) => void;
   onAISuggestion?: (draft: string) => void;
+  /** Inbox Resa — enregistrer une note vocale */
+  onRecordVoice?: () => void;
+  recordingVoice?: boolean;
   composerValue?: string;
   onComposerValueChange?: (value: string) => void;
   otaPlatform?: string;
@@ -71,6 +75,8 @@ export default function ConversationThread({
   onSendMessage,
   onSelectTemplate,
   onAISuggestion,
+  onRecordVoice,
+  recordingVoice = false,
   composerValue,
   onComposerValueChange,
   otaPlatform = 'Airbnb',
@@ -696,6 +702,44 @@ export default function ConversationThread({
                     {contentBadge}
                   </Typography>
                 )}
+                {!!message.tags?.length && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.75 }}>
+                    {message.tags.map((tag) => (
+                      <Typography
+                        key={tag}
+                        component="span"
+                        sx={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          px: 0.75,
+                          py: 0.2,
+                          borderRadius: 999,
+                          bgcolor: 'rgba(13,148,136,0.12)',
+                          color: '#0f766e',
+                          fontFamily: '"Geist Mono", monospace',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {tag}
+                      </Typography>
+                    ))}
+                  </Box>
+                )}
+                {message.audioUrl && (
+                  <Box sx={{ mb: 0.75 }}>
+                    <Box
+                      component="audio"
+                      controls
+                      src={message.audioUrl}
+                      sx={{ width: '100%', maxWidth: 280, height: 32 }}
+                    />
+                    {message.audioCaption ? (
+                      <Typography sx={{ fontSize: 11, mt: 0.5, opacity: 0.85, whiteSpace: 'pre-wrap' }}>
+                        {message.audioCaption}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                )}
                 <Typography
                   component="div"
                   sx={{
@@ -1076,6 +1120,19 @@ export default function ConversationThread({
           opacity: sending ? 0.72 : 1,
         }}
       >
+        <Box
+          component="button"
+          onClick={() => onRecordVoice?.()}
+          sx={{
+            ...iconBtnSx,
+            ...(recordingVoice
+              ? { bgcolor: 'rgba(220,38,38,0.15)', color: '#b91c1c', border: '1px solid rgba(220,38,38,0.4)' }
+              : {}),
+          }}
+          title={recordingVoice ? 'Arrêter l’enregistrement' : 'Enregistrer une note vocale'}
+        >
+          {recordingVoice ? '⏹' : '🎙️'}
+        </Box>
         <Box component="button" sx={iconBtnSx} title="Joindre">
           📎
         </Box>

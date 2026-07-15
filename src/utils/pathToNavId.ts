@@ -31,7 +31,11 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path.startsWith('/communications')) {
     const tab = new URLSearchParams(search).get('tab') || 'whatsapp';
     const section = new URLSearchParams(search).get('section');
-    if (section === 'staff' || tab === 'staff') return 'comms/staff';
+    if (section === 'staff' || tab === 'staff' || tab === 'admin' || tab === 'booking') {
+      if (tab === 'admin') return 'comms/admin';
+      if (tab === 'booking') return 'comms/booking';
+      return 'comms/staff';
+    }
     const commTabToNav: Record<string, string> = {
       whatsapp: 'comms/guests',
       guests: 'comms/guests',
