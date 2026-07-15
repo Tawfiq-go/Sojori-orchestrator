@@ -1,97 +1,160 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  RefreshCw,
   AlertCircle,
-  CheckCircle,
   AlertTriangle,
-  Activity,
-  Trash2,
-  RotateCcw,
+  CheckCircle,
   Eye,
-  X
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+  X,
 } from 'lucide-react';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import apiClient from '../../services/apiClient';
 import { getAdminRabbitmqDlqApiBase, RABBITMQ_HEALTH_PATH } from '../../utils/monitoringApi';
 import DLQManagerModal from './DLQManagerModal';
 import {
   Badge,
   btnGhostSx,
+  btnPrimarySx,
+  FilterChip,
   MonitorKpiStrip,
   MonitorPageFrame,
   MonitorToolbarRow,
-  monitorTokens as mt,
+  monitorTokens as t,
 } from '../../features/monitoring/shared/MonitorDesign';
-import { Button } from '@mui/material';
 
-// Type definitions
+type QueueStatus = 'healthy' | 'warning' | 'error';
+
 interface QueueData {
   name: string;
   messages: number;
+  messages_ready?: number;
+  messages_unacknowledged?: number;
   consumers: number;
-  status: 'healthy' | 'warning' | 'error';
+  status: QueueStatus;
   statusReason?: string;
   publishActive: boolean;
   idle_since?: string;
-  firstMessageTimestamp?: string;
+  firstMessageTimestamp?: string | number | null;
   service?: string;
 }
 
-interface ClusterInfo {
-  status: 'healthy' | 'warning' | 'error';
-  statusMessage: string;
-  runningNodes: number;
-  totalPods: number;
-}
-
-interface ConnectionsInfo {
-  total: number;
-  byService: Record<string, number>;
+interface Incident {
+  severity: 'critical' | 'warning';
+  type: string;
+  message: string;
+  queueName?: string;
+  service?: string;
+  hints?: string[];
+  counts?: {
+    messages_total: number;
+    messages_ready: number;
+    messages_unacknowledged: number;
+    consumers?: number;
+  };
 }
 
 interface HealthData {
   queues: QueueData[];
-  cluster: ClusterInfo;
+  cluster: {
+    status: QueueStatus;
+    statusMessage: string;
+    runningNodes: number;
+    totalPods: number;
+  };
   memory?: string;
-  connections: ConnectionsInfo;
+  connections: {
+    total: number;
+    blocked?: number;
+    blocking?: number;
+    byService: Record<string, number>;
+  };
+  incidents?: Incident[];
   alarms?: string[];
 }
 
 interface InspectedMessage {
   queueName: string;
-  content: any;
-  headers: Record<string, any>;
-  properties: Record<string, any>;
+  content: unknown;
+  headers: Record<string, unknown>;
+  properties: Record<string, unknown>;
 }
 
-function timeAgo(dateString: string | undefined): string | null {
-  if (!dateString) return null;
-  const now = new Date();
-  const past = new Date(dateString);
-  const diffMs = now.getTime() - past.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+type ViewMode = 'attention' | 'active' | 'all' | 'dlq';
+type StuckMap = Record<string, { ready: number; stagnantPolls: number }>;
 
+function timeAgo(dateString: string | undefined | null): string | null {
+  if (!dateString) return null;
+  const past = new Date(dateString);
+  if (Number.isNaN(past.getTime())) return null;
+  const diffMin = Math.floor((Date.now() - past.getTime()) / 60000);
   if (diffMin < 1) return "à l'instant";
   if (diffMin < 60) return `il y a ${diffMin} min`;
+  const diffHours = Math.floor(diffMin / 60);
   if (diffHours < 24) return `il y a ${diffHours}h`;
-  return `il y a ${diffDays}j`;
+  return `il y a ${Math.floor(diffHours / 24)}j`;
 }
 
-function queueNeedsAttention(q: QueueData): boolean {
-  const msgs = q.messages ?? 0;
-  const cons = q.consumers ?? 0;
-  if (q.status === 'error' || q.status === 'warning') return true;
-  if (msgs > 0 && cons === 0) return true;
+function readyOf(q: QueueData): number {
+  if (typeof q.messages_ready === 'number') return q.messages_ready;
+  return q.messages ?? 0;
+}
+
+function unackedOf(q: QueueData): number {
+  if (typeof q.messages_unacknowledged === 'number') return q.messages_unacknowledged;
+  return Math.max(0, (q.messages ?? 0) - readyOf(q));
+}
+
+function isDeadConsumer(q: QueueData): boolean {
+  return (q.consumers ?? 0) === 0 && (q.messages ?? 0) > 0;
+}
+
+function isInFlightStuck(q: QueueData): boolean {
+  return unackedOf(q) > 0 && (q.consumers ?? 0) > 0 && readyOf(q) === 0 && unackedOf(q) >= 5;
+}
+
+function isIdleNoise(q: QueueData): boolean {
+  return (q.messages ?? 0) === 0 && (q.consumers ?? 0) === 0;
+}
+
+function isBenignIdleReason(reason?: string): boolean {
+  if (!reason) return false;
+  return /^Idle\b/i.test(reason) || /0 message.*pas de consumer/i.test(reason);
+}
+
+function needsAttention(q: QueueData, stuck: boolean): boolean {
+  // Idle legacy (0/0) must never look like an incident
+  if (isIdleNoise(q) && q.status !== 'error') return false;
+  if (q.status === 'error') return true;
+  if (q.status === 'warning' && !isBenignIdleReason(q.statusReason)) return true;
+  if (isDeadConsumer(q) || isInFlightStuck(q) || stuck) return true;
+  if (unackedOf(q) > 0 && readyOf(q) === 0) return true; // in-flight visible in "À surveiller"
   return false;
 }
 
-function rowDisplayStatus(q: QueueData): 'healthy' | 'warning' | 'error' {
-  const msgs = q.messages ?? 0;
-  const cons = q.consumers ?? 0;
-  if (q.status === 'error' && msgs > 0 && cons === 0) return 'error';
-  if (q.status === 'error') return 'warning';
-  return q.status || 'healthy';
+function rowTone(q: QueueData, stuck: boolean): 'error' | 'warning' | 'success' | 'neutral' | 'info' {
+  if (isDeadConsumer(q) || q.status === 'error') return 'error';
+  if (stuck || isInFlightStuck(q)) return 'warning';
+  if (q.status === 'warning' && !isBenignIdleReason(q.statusReason)) return 'warning';
+  if (unackedOf(q) > 0 && (q.consumers ?? 0) > 0) return 'info';
+  if (isIdleNoise(q) || (q.messages ?? 0) === 0) return 'neutral';
+  return 'success';
+}
+
+function toneColors(tone: 'error' | 'warning' | 'success' | 'neutral' | 'info') {
+  switch (tone) {
+    case 'error':
+      return { bg: t.errorTint, fg: t.error, border: 'rgba(200,30,30,0.22)' };
+    case 'warning':
+      return { bg: t.warningTint, fg: t.warning, border: 'rgba(196,101,6,0.22)' };
+    case 'success':
+      return { bg: t.successTint, fg: t.success, border: 'rgba(10,143,94,0.22)' };
+    case 'info':
+      return { bg: t.infoTint, fg: t.info, border: 'rgba(6,115,179,0.22)' };
+    default:
+      return { bg: t.bg2, fg: t.text2, border: t.border };
+  }
 }
 
 export default function RabbitMQPage() {
@@ -103,32 +166,39 @@ export default function RabbitMQPage() {
   const [dlqRetrying, setDlqRetrying] = useState<string | null>(null);
   const [inspectedMessage, setInspectedMessage] = useState<InspectedMessage | null>(null);
   const [inspectingQueue, setInspectingQueue] = useState<string | null>(null);
+  const [live, setLive] = useState(true);
+  const [view, setView] = useState<ViewMode>('attention');
+  const [filterService, setFilterService] = useState<string>('all');
+  const [stuckMap, setStuckMap] = useState<StuckMap>({});
+  const prevReadyRef = useRef<Record<string, number>>({});
 
   const inspectDLQMessage = async (queueName: string) => {
     if (!queueName?.endsWith?.('.dlq')) return;
     try {
       setInspectingQueue(queueName);
       const base = getAdminRabbitmqDlqApiBase();
-      const { data } = await apiClient.get(`${base}/${encodeURIComponent(queueName)}/messages?limit=1`);
-      if (data.success && data.data.messages && data.data.messages.length > 0) {
+      const { data } = await apiClient.get(
+        `${base}/${encodeURIComponent(queueName)}/messages?limit=1`,
+      );
+      if (data.success && data.data.messages?.length > 0) {
         const msg = data.data.messages[0];
-        let content: any = {};
+        let content: unknown = {};
         try {
           content = JSON.parse(msg.content);
-        } catch (e) {
+        } catch {
           content = { raw: msg.content };
         }
         setInspectedMessage({
           queueName,
           content,
           headers: msg.properties?.headers || {},
-          properties: msg.properties || {}
+          properties: msg.properties || {},
         });
       } else {
         window.alert('Aucun message trouvé dans cette DLQ');
       }
     } catch (err: any) {
-      window.alert(err.response?.data?.message || err.message || 'Erreur lors de la récupération du message');
+      window.alert(err.response?.data?.message || err.message || 'Erreur inspection DLQ');
     } finally {
       setInspectingQueue(null);
     }
@@ -136,15 +206,17 @@ export default function RabbitMQPage() {
 
   const retryDlqFromRow = async (queueName: string) => {
     if (!queueName?.endsWith?.('.dlq')) return;
-    if (!window.confirm(`Rejouer tous les messages de la DLQ « ${queueName} » vers la queue d'origine ?`)) {
+    if (!window.confirm(`Rejouer tous les messages de « ${queueName} » vers la queue d'origine ?`)) {
       return;
     }
     try {
       setDlqRetrying(queueName);
       const base = getAdminRabbitmqDlqApiBase();
-      const { data } = await apiClient.post(`${base}/${encodeURIComponent(queueName)}/retry`, { all: true });
+      const { data } = await apiClient.post(`${base}/${encodeURIComponent(queueName)}/retry`, {
+        all: true,
+      });
       if (data.success) {
-        window.alert(`Rejeu OK : ${data.data.retriedCount} message(s) → ${data.data.originalQueue}`);
+        window.alert(`Rejeu OK : ${data.data.retriedCount} → ${data.data.originalQueue}`);
         await fetchHealth();
       } else {
         window.alert(data.error || 'Échec du rejeu');
@@ -156,12 +228,29 @@ export default function RabbitMQPage() {
     }
   };
 
-  // Filters - checkbox-based multi-select
-  const [filterService, setFilterService] = useState<string>('all');
-  const [filterConsumers, setFilterConsumers] = useState<string[]>(['zero', 'active']);
-  const [filterMessages, setFilterMessages] = useState<string[]>(['empty', 'backlog']);
-  const [filterPublisher, setFilterPublisher] = useState<string[]>(['active', 'inactive']);
-  const [live, setLive] = useState(true);
+  const updateStuckFromQueues = useCallback((queues: QueueData[]) => {
+    const prev = prevReadyRef.current;
+    const nextPrev: Record<string, number> = {};
+
+    setStuckMap((prevStuck) => {
+      const nextStuck: StuckMap = {};
+      for (const q of queues) {
+        const ready = readyOf(q);
+        nextPrev[q.name] = ready;
+        const previous = prev[q.name];
+        if (ready <= 0) continue;
+        if (previous !== undefined && ready >= previous) {
+          const stagnant = (prevStuck[q.name]?.stagnantPolls ?? 0) + 1;
+          nextStuck[q.name] = { ready, stagnantPolls: stagnant };
+        } else if (isDeadConsumer(q)) {
+          nextStuck[q.name] = { ready, stagnantPolls: prevStuck[q.name]?.stagnantPolls ?? 1 };
+        }
+      }
+      return nextStuck;
+    });
+
+    prevReadyRef.current = nextPrev;
+  }, []);
 
   const fetchHealth = async (opts?: { silent?: boolean }) => {
     try {
@@ -169,157 +258,157 @@ export default function RabbitMQPage() {
       setError(null);
       const response = await apiClient.get(RABBITMQ_HEALTH_PATH);
       if (response.data.success) {
-        setHealth(response.data.data);
+        const data = response.data.data as HealthData;
+        setHealth(data);
         setLastUpdate(new Date());
+        updateStuckFromQueues(data.queues || []);
       } else {
-        setError(response.data.error || 'Failed to fetch health data');
+        setError(response.data.error || 'Échec santé RabbitMQ');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || 'Network error');
+      setError(err.response?.data?.error || err.message || 'Erreur réseau');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchHealth();
+    void fetchHealth();
   }, []);
 
   useEffect(() => {
     if (!live) return;
-    const interval = setInterval(() => fetchHealth({ silent: true }), 30000);
+    const interval = setInterval(() => void fetchHealth({ silent: true }), 30000);
     return () => clearInterval(interval);
   }, [live]);
 
-  const { attentionQueues, quietQueues, filteredQueues, allServices } = useMemo(() => {
-    const list = health?.queues || [];
-    const attention: QueueData[] = [];
-    const quiet: QueueData[] = [];
-    const servicesSet = new Set<string>();
-
-    for (const q of list) {
-      if (q.service) servicesSet.add(q.service);
-      if (queueNeedsAttention(q)) attention.push(q);
-      else quiet.push(q);
+  const allServices = useMemo(() => {
+    const set = new Set<string>();
+    for (const q of health?.queues || []) {
+      if (q.service) set.add(q.service);
     }
+    return Array.from(set).sort();
+  }, [health?.queues]);
 
-    attention.sort((a, b) => (b.messages || 0) - (a.messages || 0));
-    quiet.sort((a, b) => a.name.localeCompare(b.name));
+  const totals = useMemo(() => {
+    const queues = health?.queues || [];
+    let ready = 0;
+    let unacked = 0;
+    let dead = 0;
+    let stuck = 0;
+    let active = 0;
+    let attention = 0;
+    for (const q of queues) {
+      ready += readyOf(q);
+      unacked += unackedOf(q);
+      const isStuck = (stuckMap[q.name]?.stagnantPolls ?? 0) >= 2;
+      if (isDeadConsumer(q)) dead += 1;
+      if (isStuck) stuck += 1;
+      if (!isIdleNoise(q)) active += 1;
+      if (needsAttention(q, isStuck)) attention += 1;
+    }
+    return { ready, unacked, dead, stuck, total: queues.length, active, attention };
+  }, [health?.queues, stuckMap]);
 
-    // Apply filters
-    let filtered = [...attention, ...quiet];
-
+  const displayQueues = useMemo(() => {
+    let list = [...(health?.queues || [])];
     if (filterService !== 'all') {
-      filtered = filtered.filter((q) => q.service === filterService);
+      list = list.filter((q) => q.service === filterService);
     }
+    if (view === 'dlq') {
+      list = list.filter((q) => q.name.endsWith('.dlq'));
+    } else if (view === 'attention') {
+      list = list.filter((q) =>
+        needsAttention(q, (stuckMap[q.name]?.stagnantPolls ?? 0) >= 2),
+      );
+    } else if (view === 'active') {
+      list = list.filter((q) => !isIdleNoise(q));
+    }
+    list.sort((a, b) => {
+      const sa = needsAttention(a, (stuckMap[a.name]?.stagnantPolls ?? 0) >= 2) ? 0 : 1;
+      const sb = needsAttention(b, (stuckMap[b.name]?.stagnantPolls ?? 0) >= 2) ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      return (b.messages || 0) - (a.messages || 0) || a.name.localeCompare(b.name);
+    });
+    return list;
+  }, [health?.queues, filterService, view, stuckMap]);
 
-    // Consumers filter
-    if (filterConsumers.length < 2) {
-      filtered = filtered.filter((q) => {
-        if (filterConsumers.includes('zero')) return q.consumers === 0;
-        if (filterConsumers.includes('active')) return q.consumers > 0;
-        return false;
+  const incidents = useMemo(() => {
+    const fromApi = [...(health?.incidents || [])];
+    // Client-side stuck incidents (backlog not draining across polls)
+    for (const [name, info] of Object.entries(stuckMap)) {
+      if (info.stagnantPolls < 2) continue;
+      if (fromApi.some((i) => i.queueName === name && i.type === 'stuck_backlog')) continue;
+      fromApi.push({
+        severity: 'warning',
+        type: 'stuck_backlog',
+        message: `Backlog ready stagnant sur « ${name} » (${info.ready} ready, ${info.stagnantPolls} polls)`,
+        queueName: name,
       });
     }
-
-    // Messages filter
-    if (filterMessages.length < 2) {
-      filtered = filtered.filter((q) => {
-        if (filterMessages.includes('empty')) return q.messages === 0;
-        if (filterMessages.includes('backlog')) return q.messages > 0;
-        return false;
-      });
-    }
-
-    // Publisher filter
-    if (filterPublisher.length < 2) {
-      filtered = filtered.filter((q) => {
-        if (filterPublisher.includes('active')) return q.publishActive === true;
-        if (filterPublisher.includes('inactive')) return q.publishActive === false;
-        return false;
-      });
-    }
-
-    return {
-      attentionQueues: attention,
-      quietQueues: quiet,
-      filteredQueues: filtered,
-      allServices: Array.from(servicesSet).sort()
-    };
-  }, [health?.queues, filterService, filterConsumers, filterMessages, filterPublisher]);
-
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case 'healthy':
-        return 'text-green-700 bg-green-50/90 border-green-200/80';
-      case 'warning':
-        return 'text-amber-800 bg-amber-50/90 border-amber-200/80';
-      case 'error':
-        return 'text-red-700 bg-red-50/90 border-red-200/80';
-      default:
-        return 'text-slate-600 bg-slate-50 border-slate-200';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    const cls = 'h-3.5 w-3.5 shrink-0';
-    switch (status) {
-      case 'healthy':
-        return <CheckCircle className={cls} />;
-      case 'warning':
-        return <AlertTriangle className={cls} />;
-      case 'error':
-        return <AlertCircle className={cls} />;
-      default:
-        return <Activity className={cls} />;
-    }
-  };
+    return fromApi.sort((a, b) => {
+      if (a.severity === b.severity) return 0;
+      return a.severity === 'critical' ? -1 : 1;
+    });
+  }, [health?.incidents, stuckMap]);
 
   if (loading && !health) {
     return (
-      <div className="flex items-center justify-center min-h-[180px] py-6">
-        <div className="flex items-center gap-2 text-slate-600">
-          <RefreshCw className="h-5 w-5 animate-spin text-violet-600" />
-          <span className="text-xs">Chargement RabbitMQ…</span>
-        </div>
-      </div>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6, gap: 1.5 }}>
+        <RefreshCw size={18} style={{ color: t.primaryDeep, animation: 'spin 1s linear infinite' }} />
+        <Typography sx={{ fontSize: 13, color: t.text2 }}>Chargement RabbitMQ…</Typography>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </Box>
     );
   }
 
   if (error && !health) {
     return (
-      <div className="flex items-center justify-center min-h-[180px] px-3 py-6">
-        <div className="flex flex-col items-center gap-2 max-w-md p-3 bg-red-50 border border-red-200 rounded-lg text-center">
-          <AlertCircle className="h-6 w-6 text-red-600" />
-          <p className="text-xs text-red-700">{error}</p>
-          <button
-            type="button"
-            onClick={() => fetchHealth()}
-            className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-          >
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6, px: 2 }}>
+        <Box
+          sx={{
+            maxWidth: 420,
+            p: 2.5,
+            borderRadius: '12px',
+            border: `1px solid ${t.error}`,
+            bgcolor: t.errorTint,
+            textAlign: 'center',
+          }}
+        >
+          <AlertCircle size={22} style={{ color: t.error, marginBottom: 8 }} />
+          <Typography sx={{ fontSize: 13, color: t.error, mb: 1.5 }}>{error}</Typography>
+          <Button sx={btnPrimarySx} onClick={() => void fetchHealth()}>
             Réessayer
-          </button>
-        </div>
-      </div>
+          </Button>
+        </Box>
+      </Box>
     );
   }
 
-  const svcCount = health?.connections?.byService ? Object.keys(health.connections.byService).length : 0;
-  const displayQueues = filteredQueues;
   const clusterStatus = health?.cluster?.status || 'healthy';
   const clusterTone =
     clusterStatus === 'error' ? 'error' : clusterStatus === 'warning' ? 'warning' : 'success';
+  const blocked = health?.connections?.blocked ?? 0;
+  const blocking = health?.connections?.blocking ?? 0;
 
   return (
     <MonitorPageFrame>
       <MonitorToolbarRow
         left={
           <>
-            <Badge variant={clusterTone === 'success' ? 'success' : clusterTone === 'warning' ? 'warning' : 'error'} dot>
+            <Badge
+              variant={clusterTone === 'success' ? 'success' : clusterTone === 'warning' ? 'warning' : 'error'}
+              dot
+            >
               {health?.cluster?.statusMessage || 'RabbitMQ'}
             </Badge>
             {lastUpdate ? (
               <Badge variant="neutral">{lastUpdate.toLocaleTimeString('fr-FR')}</Badge>
+            ) : null}
+            {blocked > 0 || blocking > 0 ? (
+              <Badge variant="error" dot>
+                {blocked} blocked · {blocking} blocking
+              </Badge>
             ) : null}
           </>
         }
@@ -327,19 +416,15 @@ export default function RabbitMQPage() {
           <>
             <Button
               size="small"
-              sx={{
-                ...btnGhostSx,
-                color: mt.error,
-                borderColor: mt.error,
-              }}
+              sx={{ ...btnGhostSx, color: t.error, borderColor: 'rgba(200,30,30,0.35)' }}
               onClick={() => setShowDLQModal(true)}
-              startIcon={<Trash2 className="h-3.5 w-3.5" />}
+              startIcon={<Trash2 size={14} />}
             >
               DLQ
             </Button>
             <Button sx={btnGhostSx} onClick={() => setLive((v) => !v)}>
               <Badge variant={live ? 'success' : 'neutral'} dot>
-                {live ? 'Live' : 'Pause'}
+                {live ? 'Live 30s' : 'Pause'}
               </Badge>
             </Button>
             <Button sx={btnGhostSx} onClick={() => void fetchHealth()} disabled={loading}>
@@ -356,414 +441,669 @@ export default function RabbitMQPage() {
             value: `${health?.cluster?.runningNodes ?? 0}/${health?.cluster?.totalPods ?? 0}`,
             tone: clusterTone,
           },
-          {
-            label: 'Mémoire',
-            value: health?.memory || 'N/A',
-            tone: 'neutral',
-          },
+          { label: 'Mémoire', value: health?.memory || '—', tone: 'neutral' },
           {
             label: 'Connexions',
             value: health?.connections?.total ?? 0,
-            tone: 'info',
+            tone: blocked > 0 ? 'error' : 'info',
           },
           {
-            label: 'Services',
-            value: svcCount,
-            tone: 'neutral',
+            label: 'Ready',
+            value: totals.ready,
+            tone: totals.ready > 0 ? 'warning' : 'success',
+            active: view === 'attention' && totals.ready > 0,
+            onClick: () => setView('attention'),
           },
           {
-            label: 'Queues',
-            value: displayQueues.length,
-            tone: attentionQueues.length > 0 ? 'warning' : 'success',
+            label: 'Unacked',
+            value: totals.unacked,
+            tone: totals.unacked > 0 ? 'warning' : 'neutral',
+          },
+          {
+            label: 'Sans consumer',
+            value: totals.dead,
+            tone: totals.dead > 0 ? 'error' : 'success',
+            active: view === 'attention',
+            onClick: () => setView('attention'),
+          },
+          {
+            label: 'Stagnants',
+            value: totals.stuck,
+            tone: totals.stuck > 0 ? 'warning' : 'neutral',
           },
         ]}
       />
 
-      <div className="p-2 space-y-2 w-full">
-        {health?.cluster?.status === 'warning' && (
-          <div className="px-2 py-1 text-[11px] bg-amber-50 border border-amber-200 rounded-md text-amber-900">
-            <strong>Split-brain</strong> — nœuds séparés, risque pour les messages.
-          </div>
+      <Stack spacing={1.25}>
+        {health?.alarms && health.alarms.length > 0 && (
+          <Box
+            sx={{
+              px: 1.5,
+              py: 1,
+              borderRadius: '10px',
+              border: `1px solid rgba(200,30,30,0.25)`,
+              bgcolor: t.errorTint,
+            }}
+          >
+            <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.error, mb: 0.5 }}>
+              Alarmes cluster
+            </Typography>
+            {health.alarms.map((a) => (
+              <Typography key={a} sx={{ fontSize: 12, color: t.error }}>
+                {a}
+              </Typography>
+            ))}
+          </Box>
         )}
 
-        {health?.alarms && health.alarms.length > 0 && (
-          <div className="px-2 py-1.5 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-[10px] font-bold text-red-800 mb-0.5">Alarmes</p>
-            <ul className="list-disc list-inside text-[11px] text-red-700 space-y-0">
-              {health.alarms.map((alarm, idx) => (
-                <li key={idx}>{alarm}</li>
-              ))}
-            </ul>
-          </div>
+        {incidents.length > 0 && (
+          <Box
+            sx={{
+              borderRadius: '12px',
+              border: `1px solid ${t.borderStrong}`,
+              bgcolor: t.bg1,
+              overflow: 'hidden',
+            }}
+          >
+            <Box
+              sx={{
+                px: 1.5,
+                py: 1,
+                borderBottom: `1px solid ${t.border}`,
+                bgcolor: t.bg2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text }}>
+                Incidents ({incidents.length})
+              </Typography>
+              <Typography sx={{ fontSize: 11, color: t.text3 }}>
+                dead consumer · backlog · unacked · connexions
+              </Typography>
+            </Box>
+            <Stack sx={{ maxHeight: 180, overflow: 'auto' }}>
+              {incidents.slice(0, 12).map((inc, idx) => {
+                const c = toneColors(inc.severity === 'critical' ? 'error' : 'warning');
+                return (
+                  <Box
+                    key={`${inc.type}-${inc.queueName || idx}`}
+                    sx={{
+                      px: 1.5,
+                      py: 1,
+                      borderBottom: `1px solid ${t.border}`,
+                      display: 'flex',
+                      gap: 1.25,
+                      alignItems: 'flex-start',
+                      bgcolor: idx % 2 ? t.bg0 : t.bg1,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        mt: 0.25,
+                        px: 0.75,
+                        py: 0.15,
+                        borderRadius: '6px',
+                        bgcolor: c.bg,
+                        color: c.fg,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.04,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {inc.severity === 'critical' ? 'Critique' : 'Attention'}
+                    </Box>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography sx={{ fontSize: 12, color: t.text, lineHeight: 1.35 }}>
+                        {inc.message}
+                      </Typography>
+                      {inc.counts && (
+                        <Typography sx={{ fontSize: 11, color: t.text3, mt: 0.25 }}>
+                          ready {inc.counts.messages_ready} · unacked{' '}
+                          {inc.counts.messages_unacknowledged}
+                          {typeof inc.counts.consumers === 'number'
+                            ? ` · cons. ${inc.counts.consumers}`
+                            : ''}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Stack>
+          </Box>
         )}
 
         {health?.connections?.byService && Object.keys(health.connections.byService).length > 0 && (
-          <div className="rounded-lg border border-slate-200/90 bg-white px-2 py-1.5 shadow-sm">
-            <span className="text-[10px] font-semibold text-slate-500 uppercase mr-2">Par service</span>
-            <span className="inline-flex flex-wrap gap-1">
-              {Object.entries(health.connections.byService).map(([service, count]) => (
-                <span
+          <Box
+            sx={{
+              px: 1.5,
+              py: 1.1,
+              borderRadius: '12px',
+              border: `1px solid ${t.border}`,
+              bgcolor: t.bg1,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 0.75,
+              alignItems: 'center',
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: t.text3,
+                textTransform: 'uppercase',
+                letterSpacing: 0.06,
+                mr: 0.5,
+              }}
+            >
+              Connexions
+            </Typography>
+            {Object.entries(health.connections.byService)
+              .sort((a, b) => b[1] - a[1])
+              .map(([service, count]) => (
+                <Box
                   key={service}
-                  className="inline-flex items-baseline gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 border border-violet-100 text-[10px]"
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'baseline',
+                    gap: 0.5,
+                    px: 1,
+                    py: 0.35,
+                    borderRadius: '8px',
+                    bgcolor: t.bg2,
+                    border: `1px solid ${t.border}`,
+                  }}
                 >
-                  <span className="font-medium text-violet-800 max-w-[120px] truncate">{service}</span>
-                  <span className="font-bold text-violet-950">{count}</span>
-                </span>
+                  <Typography
+                    sx={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: t.text2,
+                      maxWidth: 140,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {service}
+                  </Typography>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text }}>{count}</Typography>
+                </Box>
               ))}
-            </span>
-          </div>
+          </Box>
         )}
 
-        <div className="rounded-lg border border-slate-200/90 bg-white shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-2 py-1 border-b border-slate-100 bg-slate-50/80">
-            <div className="flex items-center gap-1 text-[11px] font-bold text-slate-800">
-              <Activity className="h-3.5 w-3.5 text-violet-600" />
-              Files d&apos;attente
-              <span className="font-normal text-slate-500">
-                ({filteredQueues.length}/{health?.queues?.length || 0})
-              </span>
-            </div>
-            {quietQueues.length > 0 && attentionQueues.length > 0 && (
-              <span className="text-[10px] text-slate-500">{attentionQueues.length} à surveiller</span>
-            )}
-          </div>
-
-          <div className="px-2 py-1.5 border-b border-slate-100 bg-white flex flex-wrap gap-3 items-start">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[9px] font-bold text-slate-500 uppercase">Consumers</span>
-              <div className="flex flex-wrap gap-1.5">
-                {(
-                  [
-                    { value: 'zero', label: '0 cons.', icon: '🔴' },
-                    { value: 'active', label: 'Actifs', icon: '✅' },
-                  ] as const
-                ).map(({ value, label, icon }) => (
-                  <label key={value} className="flex items-center gap-1 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={filterConsumers.includes(value)}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...filterConsumers, value]
-                          : filterConsumers.filter((c) => c !== value);
-                        setFilterConsumers(next);
-                      }}
-                      className="w-3 h-3 rounded border-slate-300 text-[#E6B022]"
-                    />
-                    <span className="text-[10px] font-medium text-slate-700">
-                      {icon} {label}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="w-px h-4 bg-slate-300" />
-
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[9px] font-bold text-slate-500 uppercase">Messages</span>
-              <div className="flex flex-wrap gap-1.5">
-                {(
-                  [
-                    { value: 'empty', label: 'Vides', icon: '⚪' },
-                    { value: 'backlog', label: 'Backlog', icon: '⚠️' },
-                  ] as const
-                ).map(({ value, label, icon }) => (
-                  <label key={value} className="flex items-center gap-1 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={filterMessages.includes(value)}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...filterMessages, value]
-                          : filterMessages.filter((m) => m !== value);
-                        setFilterMessages(next);
-                      }}
-                      className="w-3 h-3 rounded border-slate-300 text-[#E6B022]"
-                    />
-                    <span className="text-[10px] font-medium text-slate-700">
-                      {icon} {label}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="w-px h-4 bg-slate-300" />
-
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[9px] font-bold text-slate-500 uppercase">Publisher</span>
-              <div className="flex flex-wrap gap-1.5">
-                {(
-                  [
-                    { value: 'active', label: 'Actifs', icon: '✓' },
-                    { value: 'inactive', label: 'Inactifs', icon: '—' },
-                  ] as const
-                ).map(({ value, label, icon }) => (
-                  <label key={value} className="flex items-center gap-1 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={filterPublisher.includes(value)}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...filterPublisher, value]
-                          : filterPublisher.filter((p) => p !== value);
-                        setFilterPublisher(next);
-                      }}
-                      className="w-3 h-3 rounded border-slate-300 text-[#E6B022]"
-                    />
-                    <span className="text-[10px] font-medium text-slate-700">
-                      {icon} {label}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
+        <Box
+          sx={{
+            borderRadius: '12px',
+            border: `1px solid ${t.borderStrong}`,
+            bgcolor: t.bg1,
+            overflow: 'hidden',
+          }}
+        >
+          <Box
+            sx={{
+              px: 1.5,
+              py: 1,
+              borderBottom: `1px solid ${t.border}`,
+              bgcolor: t.bg2,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: t.text, mr: 0.5 }}>
+                Files
+              </Typography>
+              {(
+                [
+                  { id: 'attention' as const, label: `À surveiller (${totals.attention})` },
+                  { id: 'active' as const, label: `Actives (${totals.active})` },
+                  { id: 'all' as const, label: `Toutes (${totals.total})` },
+                  { id: 'dlq' as const, label: 'DLQ' },
+                ]
+              ).map((opt) => (
+                <FilterChip
+                  key={opt.id}
+                  label={opt.label}
+                  active={view === opt.id}
+                  onClick={() => setView(opt.id)}
+                />
+              ))}
+            </Stack>
             {allServices.length > 0 && (
-              <>
-                <div className="w-px h-4 bg-slate-300" />
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9px] font-bold text-slate-500 uppercase">Service</span>
-                  <select
-                    value={filterService}
-                    onChange={(e) => setFilterService(e.target.value)}
-                    className={`text-[10px] font-semibold rounded-md px-2 py-1 border ${
-                      filterService !== 'all'
-                        ? 'bg-gradient-to-r from-[#E6B022] to-[#B8881A] text-white border-[#E6B022]'
-                        : 'bg-slate-100 text-slate-600 border-slate-200'
-                    }`}
-                  >
-                    <option value="all">Tous services</option>
-                    {allServices.map((svc) => (
-                      <option key={svc} value={svc}>
-                        {svc}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </>
+              <Box
+                component="select"
+                value={filterService}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                  setFilterService(e.target.value)
+                }
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  px: 1.25,
+                  py: 0.5,
+                  borderRadius: '8px',
+                  border: `1px solid ${filterService !== 'all' ? t.primary : t.border}`,
+                  bgcolor: filterService !== 'all' ? t.primaryTint : t.bg1,
+                  color: t.text,
+                  outline: 'none',
+                }}
+              >
+                <option value="all">Tous services</option>
+                {allServices.map((svc) => (
+                  <option key={svc} value={svc}>
+                    {svc}
+                  </option>
+                ))}
+              </Box>
             )}
+          </Box>
 
-            {(filterService !== 'all' ||
-              filterConsumers.length < 2 ||
-              filterMessages.length < 2 ||
-              filterPublisher.length < 2) && (
-              <>
-                <div className="w-px h-4 bg-slate-300" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterService('all');
-                    setFilterConsumers(['zero', 'active']);
-                    setFilterMessages(['empty', 'backlog']);
-                    setFilterPublisher(['active', 'inactive']);
-                  }}
-                  className="text-[10px] font-semibold px-2 py-1 rounded-md bg-red-100 text-red-700 hover:bg-red-200 self-end"
-                >
-                  ✕ Reset
-                </button>
-              </>
-            )}
-          </div>
+          {/* Table header */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(180px, 1.6fr) 64px 64px 56px 56px 72px 120px',
+              gap: 1,
+              px: 1.5,
+              py: 0.75,
+              borderBottom: `1px solid ${t.border}`,
+              bgcolor: t.bg0,
+            }}
+          >
+            {['Queue', 'Ready', 'Unacked', 'Cons.', 'Prod.', 'État', ''].map((h) => (
+              <Typography
+                key={h || 'actions'}
+                sx={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: t.text3,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.05,
+                }}
+              >
+                {h}
+              </Typography>
+            ))}
+          </Box>
 
-          <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: 'calc(100vh - 250px)' }}>
-            {health?.queues && health.queues.length > 0 ? (
-              <div className="divide-y divide-slate-100">
-                {displayQueues.map((queue) => {
-                  const rowStatus = rowDisplayStatus(queue);
-                  const hasDeadConsumer = queue.consumers === 0 && queue.messages > 0;
-                  const rowBgClass = hasDeadConsumer
-                    ? 'bg-red-100/90 border-red-200'
-                    : getStatusColor(rowStatus);
-
-                  return (
-                    <div
-                      key={queue.name}
-                      className={`flex items-center gap-2 px-2 py-1 min-h-0 ${rowBgClass} border-b border-slate-100/50 last:border-b-0`}
-                    >
-                      <div className="shrink-0 text-slate-600">{getStatusIcon(rowStatus)}</div>
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className="font-mono text-[11px] font-medium text-slate-900 truncate leading-tight"
-                          title={queue.name}
-                        >
-                          {queue.name}
-                        </p>
-                        {queue.statusReason && (
-                          <p className="text-[10px] text-slate-600 leading-tight truncate" title={queue.statusReason}>
-                            {queue.statusReason}
-                          </p>
-                        )}
-                        {queue.consumers === 0 && queue.idle_since && (
-                          <p
-                            className="text-[10px] text-red-600 leading-tight truncate"
-                            title={`Inactif depuis ${new Date(queue.idle_since).toLocaleString('fr-FR')}`}
-                          >
-                            ⏱ Inactif {timeAgo(queue.idle_since)}
-                          </p>
-                        )}
-                        {queue.messages > 0 && queue.consumers === 0 && queue.firstMessageTimestamp && (
-                          <p
-                            className="text-[10px] text-amber-700 leading-tight truncate"
-                            title={`Message créé le ${new Date(queue.firstMessageTimestamp).toLocaleString('fr-FR')}`}
-                          >
-                            📅 Message {timeAgo(new Date(queue.firstMessageTimestamp).toISOString())}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <div className="flex shrink-0 gap-3 text-center text-[10px] tabular-nums">
-                          <div className="flex flex-col items-center min-w-[40px]">
-                            <span className="text-slate-500 block leading-none">Msg</span>
-                            <span className="font-bold text-slate-900">{queue.messages}</span>
-                          </div>
-                          <div className="flex flex-col items-center min-w-[40px]">
-                            <span className="text-slate-500 block leading-none">Cons.</span>
-                            <span className="font-bold text-slate-900">{queue.consumers}</span>
-                          </div>
-                          <div className="flex flex-col items-center min-w-[40px]">
-                            <span className="text-slate-500 block leading-none">Prod.</span>
-                            <span
-                              className={`font-bold ${queue.publishActive ? 'text-green-700' : 'text-slate-400'}`}
-                            >
-                              {queue.publishActive ? '✓' : '—'}
-                            </span>
-                          </div>
-                        </div>
-                        {queue.name.endsWith('.dlq') && queue.messages > 0 && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => inspectDLQMessage(queue.name)}
-                              disabled={inspectingQueue === queue.name}
-                              title="Voir le contenu du premier message"
-                              className="shrink-0 flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[10px] font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                            >
-                              <Eye className={`h-3 w-3 ${inspectingQueue === queue.name ? 'animate-spin' : ''}`} />
-                              Info
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => retryDlqFromRow(queue.name)}
-                              disabled={dlqRetrying === queue.name}
-                              title="Rejouer tous les messages vers la queue d'origine"
-                              className="shrink-0 flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[10px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                            >
-                              <RotateCcw
-                                className={`h-3 w-3 ${dlqRetrying === queue.name ? 'animate-spin' : ''}`}
-                              />
-                              Rejouer
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          <Box sx={{ maxHeight: 'calc(100vh - 320px)', overflow: 'auto' }}>
+            {displayQueues.length === 0 ? (
+              <Typography sx={{ fontSize: 13, color: t.text3, px: 2, py: 3, textAlign: 'center' }}>
+                {view === 'attention'
+                  ? 'Aucune file à surveiller — backlog drainé et consumers présents.'
+                  : 'Aucune file.'}
+              </Typography>
             ) : (
-              <p className="text-xs text-slate-500 px-2 py-2">Aucune file.</p>
-            )}
-          </div>
-        </div>
+              displayQueues.map((queue) => {
+                const stagnant = stuckMap[queue.name]?.stagnantPolls ?? 0;
+                const stuck = stagnant >= 2;
+                const tone = rowTone(queue, stuck);
+                const colors = toneColors(tone);
+                const ready = readyOf(queue);
+                const unacked = unackedOf(queue);
+                const dead = isDeadConsumer(queue);
+                const inFlight = isInFlightStuck(queue);
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-2 py-1 rounded-md border border-slate-200/80 bg-white/90 text-[10px] text-slate-600">
-          <span className="font-semibold text-slate-700">Légende</span>
-          <span className="inline-flex items-center gap-0.5">
-            <CheckCircle className="h-3 w-3 text-green-600" /> OK
-          </span>
-          <span className="inline-flex items-center gap-0.5">
-            <AlertTriangle className="h-3 w-3 text-amber-600" /> Attention
-          </span>
-          <span className="inline-flex items-center gap-0.5">
-            <AlertCircle className="h-3 w-3 text-red-600" /> Critique = messages &gt; 0 et 0 consumer
-          </span>
-        </div>
-      </div>
+                let etatLabel = 'OK';
+                let etatTone: 'error' | 'warning' | 'success' | 'neutral' | 'info' = 'success';
+                if (dead) {
+                  etatLabel = 'Sans consumer';
+                  etatTone = 'error';
+                } else if (stuck) {
+                  etatLabel = 'Stagnant';
+                  etatTone = 'warning';
+                } else if (inFlight) {
+                  etatLabel = 'Unacked';
+                  etatTone = 'warning';
+                } else if (unacked > 0 && queue.consumers > 0) {
+                  etatLabel = 'En cours';
+                  etatTone = 'info';
+                } else if (queue.status === 'warning' && !isBenignIdleReason(queue.statusReason)) {
+                  etatLabel = 'Attention';
+                  etatTone = 'warning';
+                } else if (ready > 0) {
+                  etatLabel = 'Backlog';
+                  etatTone = 'warning';
+                } else if (isIdleNoise(queue)) {
+                  etatLabel = 'Idle';
+                  etatTone = 'neutral';
+                }
+                const etatC = toneColors(etatTone);
+                const showReason =
+                  queue.statusReason &&
+                  !isBenignIdleReason(queue.statusReason) &&
+                  (dead || stuck || inFlight || queue.status === 'warning' || ready > 0);
+
+                return (
+                  <Box
+                    key={queue.name}
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(180px, 1.6fr) 64px 64px 56px 56px 72px 120px',
+                      gap: 1,
+                      px: 1.5,
+                      py: 1,
+                      alignItems: 'center',
+                      borderBottom: `1px solid ${t.border}`,
+                      borderLeft: `3px solid ${colors.fg}`,
+                      bgcolor: tone === 'error' || tone === 'warning' ? colors.bg : t.bg1,
+                      '&:hover': { bgcolor: t.bg2 },
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          fontFamily: 'Geist Mono, ui-monospace, monospace',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: t.text,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={queue.name}
+                      >
+                        {queue.name}
+                      </Typography>
+                      {showReason && (
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                            color: t.text3,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={queue.statusReason}
+                        >
+                          {queue.statusReason}
+                        </Typography>
+                      )}
+                    </Box>
+
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        fontVariantNumeric: 'tabular-nums',
+                        color: ready > 0 ? t.warning : t.text3,
+                      }}
+                    >
+                      {ready}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        fontVariantNumeric: 'tabular-nums',
+                        color: unacked > 0 ? t.info : t.text3,
+                      }}
+                    >
+                      {unacked}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        fontVariantNumeric: 'tabular-nums',
+                        color: queue.consumers === 0 ? t.error : t.text,
+                      }}
+                    >
+                      {queue.consumers}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: queue.publishActive ? t.success : t.text4,
+                      }}
+                    >
+                      {queue.publishActive ? 'oui' : '—'}
+                    </Typography>
+                    <Box
+                      sx={{
+                        justifySelf: 'start',
+                        px: 0.75,
+                        py: 0.25,
+                        borderRadius: '6px',
+                        bgcolor: etatC.bg,
+                        color: etatC.fg,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {etatLabel}
+                    </Box>
+                    <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+                      {queue.name.endsWith('.dlq') && queue.messages > 0 && (
+                        <>
+                          <Button
+                            size="small"
+                            sx={{
+                              ...btnGhostSx,
+                              minWidth: 0,
+                              px: 0.75,
+                              py: 0.25,
+                              fontSize: 10,
+                            }}
+                            onClick={() => void inspectDLQMessage(queue.name)}
+                            disabled={inspectingQueue === queue.name}
+                            startIcon={<Eye size={12} />}
+                          >
+                            Info
+                          </Button>
+                          <Button
+                            size="small"
+                            sx={{
+                              ...btnPrimarySx,
+                              minWidth: 0,
+                              px: 0.75,
+                              py: 0.25,
+                              fontSize: 10,
+                            }}
+                            onClick={() => void retryDlqFromRow(queue.name)}
+                            disabled={dlqRetrying === queue.name}
+                            startIcon={<RotateCcw size={12} />}
+                          >
+                            Rejouer
+                          </Button>
+                        </>
+                      )}
+                    </Stack>
+                  </Box>
+                );
+              })
+            )}
+          </Box>
+        </Box>
+
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            flexWrap: 'wrap',
+            gap: 1,
+            px: 1.5,
+            py: 1,
+            borderRadius: '10px',
+            border: `1px solid ${t.border}`,
+            bgcolor: t.bg1,
+            alignItems: 'center',
+          }}
+        >
+          <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text2 }}>Légende</Typography>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <CheckCircle size={12} style={{ color: t.success }} />
+            <Typography sx={{ fontSize: 11, color: t.text3 }}>OK</Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <AlertTriangle size={12} style={{ color: t.warning }} />
+            <Typography sx={{ fontSize: 11, color: t.text3 }}>
+              Backlog / unacked / stagnant
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <AlertCircle size={12} style={{ color: t.error }} />
+            <Typography sx={{ fontSize: 11, color: t.text3 }}>
+              Messages présents + 0 consumer
+            </Typography>
+          </Stack>
+          <Typography sx={{ fontSize: 11, color: t.text4, ml: 'auto' }}>
+            Ready = en attente · Unacked = livrés non acquittés
+          </Typography>
+        </Stack>
+      </Stack>
 
       {inspectedMessage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
-              <div className="flex items-center gap-2">
-                <Eye className="h-4 w-4 text-blue-600" />
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Inspection Message DLQ</h3>
-                  <p className="text-xs text-slate-500 truncate max-w-md" title={inspectedMessage.queueName}>
-                    {inspectedMessage.queueName}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setInspectedMessage(null)}
-                className="p-1.5 text-slate-600 hover:bg-slate-200 rounded-lg"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <Box
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'rgba(20,17,10,0.45)',
+            p: 2,
+          }}
+        >
+          <Box
+            sx={{
+              bgcolor: t.bg1,
+              borderRadius: '14px',
+              border: `1px solid ${t.borderStrong}`,
+              width: '100%',
+              maxWidth: 720,
+              maxHeight: '80vh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                px: 2,
+                py: 1.5,
+                borderBottom: `1px solid ${t.border}`,
+                bgcolor: t.bg2,
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontSize: 14, fontWeight: 700, color: t.text }}>
+                  Message DLQ
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    color: t.text3,
+                    fontFamily: 'Geist Mono, monospace',
+                    maxWidth: 480,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {inspectedMessage.queueName}
+                </Typography>
+              </Box>
+              <Button sx={btnGhostSx} onClick={() => setInspectedMessage(null)}>
+                <X size={16} />
+              </Button>
+            </Box>
+            <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
               {inspectedMessage.headers && Object.keys(inspectedMessage.headers).length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <div className="text-xs font-semibold text-amber-900 mb-2">Informations</div>
-                  <div className="space-y-1 text-xs">
-                    {inspectedMessage.headers['x-failed-at'] && (
-                      <div className="flex gap-2">
-                        <span className="text-amber-700 font-medium">Échec:</span>
-                        <span className="text-amber-900">
-                          {new Date(String(inspectedMessage.headers['x-failed-at'])).toLocaleString('fr-FR')}
-                        </span>
-                      </div>
-                    )}
-                    {inspectedMessage.headers['x-original-queue'] && (
-                      <div className="flex gap-2">
-                        <span className="text-amber-700 font-medium">Queue origine:</span>
-                        <span className="text-amber-900 font-mono">
-                          {String(inspectedMessage.headers['x-original-queue'])}
-                        </span>
-                      </div>
-                    )}
-                    {inspectedMessage.headers['x-failure-reason'] && (
-                      <div className="flex gap-2">
-                        <span className="text-amber-700 font-medium">Raison:</span>
-                        <span className="text-amber-900">{String(inspectedMessage.headers['x-failure-reason'])}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <Box
+                  sx={{
+                    mb: 2,
+                    p: 1.5,
+                    borderRadius: '10px',
+                    bgcolor: t.primaryTint,
+                    border: `1px solid rgba(230,176,34,0.28)`,
+                  }}
+                >
+                  <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.primaryDeep, mb: 0.75 }}>
+                    Métadonnées
+                  </Typography>
+                  {Object.entries(inspectedMessage.headers).map(([k, v]) => (
+                    <Typography key={k} sx={{ fontSize: 12, color: t.text2 }}>
+                      <Box component="span" sx={{ fontWeight: 600, color: t.text3, mr: 1 }}>
+                        {k}
+                      </Box>
+                      {String(v)}
+                    </Typography>
+                  ))}
+                </Box>
               )}
-              <div>
-                <div className="text-xs font-semibold text-slate-600 uppercase mb-2">Payload (JSON)</div>
-                <pre className="text-xs bg-slate-900 text-green-400 p-3 rounded-lg overflow-x-auto font-mono">
-                  {JSON.stringify(inspectedMessage.content, null, 2)}
-                </pre>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-slate-200 bg-slate-50">
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(JSON.stringify(inspectedMessage.content, null, 2));
-                  window.alert('Payload copié');
+              <Typography
+                sx={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: t.text3,
+                  textTransform: 'uppercase',
+                  mb: 0.75,
                 }}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg"
+              >
+                Payload
+              </Typography>
+              <Box
+                component="pre"
+                sx={{
+                  m: 0,
+                  p: 1.5,
+                  borderRadius: '10px',
+                  bgcolor: '#14110a',
+                  color: t.primarySoft,
+                  fontSize: 12,
+                  fontFamily: 'Geist Mono, monospace',
+                  overflow: 'auto',
+                }}
+              >
+                {JSON.stringify(inspectedMessage.content, null, 2)}
+              </Box>
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 1,
+                px: 2,
+                py: 1.5,
+                borderTop: `1px solid ${t.border}`,
+                bgcolor: t.bg2,
+              }}
+            >
+              <Button
+                sx={btnGhostSx}
+                onClick={() => {
+                  void navigator.clipboard.writeText(
+                    JSON.stringify(inspectedMessage.content, null, 2),
+                  );
+                }}
               >
                 Copier
-              </button>
-              <button
-                type="button"
-                onClick={() => setInspectedMessage(null)}
-                className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-              >
+              </Button>
+              <Button sx={btnPrimarySx} onClick={() => setInspectedMessage(null)}>
                 Fermer
-              </button>
-            </div>
-          </div>
-        </div>
+              </Button>
+            </Box>
+          </Box>
+        </Box>
       )}
 
-      {/* DLQ Manager Modal */}
       <DLQManagerModal isOpen={showDLQModal} onClose={() => setShowDLQModal(false)} />
     </MonitorPageFrame>
   );

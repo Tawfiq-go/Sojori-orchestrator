@@ -33,6 +33,7 @@ export const WA_ADMIN_TYPES = [
   { type: 'Reservation', label: 'Réservations', menuLetter: 'R', abbr: 'RS' },
   { type: 'ArrivalDeparture', label: 'Arr. / dép.', menuLetter: 'D', abbr: 'DC' },
   { type: 'Finances', label: 'Dépense / Extra', menuLetter: 'E', abbr: 'EX' },
+  { type: 'Enregistrement', label: 'Enregistrement (passeports)', menuLetter: 'P', abbr: 'PG' },
   { type: 'Task', label: 'Supervision tâches', menuLetter: 'T', abbr: 'TS' },
 ] as const;
 
@@ -179,6 +180,10 @@ const TYPE_TO_CANONICAL: Record<string, string> = {
   Extra: 'Finances',
   Expense: 'Finances',
   Ledger: 'Finances',
+  Enregistrement: 'Enregistrement',
+  Registration: 'Enregistrement',
+  Passeport: 'Enregistrement',
+  Passport: 'Enregistrement',
 };
 
 function notificationsFromApi(raw: unknown): Record<string, boolean> {

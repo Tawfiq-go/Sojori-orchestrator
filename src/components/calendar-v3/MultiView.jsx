@@ -565,9 +565,13 @@ function ListingRow({
             listingName: listing.name || '',
             roomTypeName: range.roomTypeName || '',
           };
-          // Rouvre à la vente : dispo 1 + stop-sell levé → publié vers les canaux
+          // Single : stock 1. Multi : revenir au roomNumber du type (pas hardcode 1).
+          const isMulti = listing.propertyUnit === 'Multi';
+          const capacity = isMulti
+            ? Math.max(1, Number(range.roomNumber ?? listing.roomNumber ?? 1))
+            : 1;
           await calendarService.updateCalendar([
-            { ...base, type: 'availability', availableRoom: 1 },
+            { ...base, type: 'availability', availableRoom: capacity },
             { ...base, type: 'stopSell', stopSell: false },
           ]);
           setAuditResult((s) => ({ ...s, loading: true }));

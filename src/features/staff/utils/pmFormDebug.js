@@ -159,13 +159,41 @@ export function logPmSaveAccountStart(ctx) {
 }
 
 export function logPmSaveAccountPayload(label, payload) {
+  const pm = payload?.pmProfile || {};
   console.info(`[PM-save] ${label}`, {
     email: payload?.email ?? '(non envoyé)',
     keys: Object.keys(payload || {}),
+    pmProfile: {
+      published: pm.published,
+      verified: pm.verified,
+      slug: pm.slug || '(vide)',
+      publicName: pm.publicName || '(vide)',
+      imagesCount: Array.isArray(pm.images) ? pm.images.length : 0,
+      hasCover: Boolean(pm.coverUrl),
+    },
   });
 }
 
-export function logPmSaveAccountResult({ wantedEmail, returnedEmail, draftEmail }) {
+/** Trace vitrine « Profil publié » (toggle + load + save). Filtrer console : [PM-vitrine] */
+export function logPmVitrinePublished(event, detail = {}) {
+  const published =
+    detail.published === true || detail.published === false
+      ? detail.published
+      : detail.pmProfile?.published;
+  console.info(`[PM-vitrine] ${event}`, {
+    ...detail,
+    published,
+    tip: 'Cherchez aussi [PM-save] / [PM-api] update-account et côté serveur [updateAccount] pmProfile.published',
+  });
+}
+
+export function logPmSaveAccountResult({
+  wantedEmail,
+  returnedEmail,
+  draftEmail,
+  wantedPublished,
+  returnedPublished,
+}) {
   const wanted = String(wantedEmail || '').trim().toLowerCase();
   const returned = String(returnedEmail || '').trim().toLowerCase();
   const draft = String(draftEmail || '').trim().toLowerCase();
@@ -181,5 +209,21 @@ export function logPmSaveAccountResult({ wantedEmail, returnedEmail, draftEmail 
     );
   }
   console.groupEnd();
+
+  if (wantedPublished === true || wantedPublished === false) {
+    const pubOk = returnedPublished === wantedPublished;
+    console.group(
+      `[PM-vitrine] ${pubOk ? '✓' : '✗'} Profil publié après Enregistrer`,
+    );
+    console.info('envoyé (formulaire):', wantedPublished);
+    console.info('reçu (API account.pmProfile.published):', returnedPublished);
+    console.info('persisté selon réponse API:', pubOk ? 'OUI' : 'NON — bug save ou réponse incomplète');
+    if (!pubOk) {
+      console.warn(
+        'Si envoyé=true et reçu≠true : srv-user n’a pas persisté (markModified) ou la réponse omet pmProfile.published.',
+      );
+    }
+    console.groupEnd();
+  }
   return ok;
 }

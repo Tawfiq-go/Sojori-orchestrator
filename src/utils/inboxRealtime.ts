@@ -10,11 +10,12 @@
  * | Avis (reviews)  | RU_CHAT            | event.threadId (RU rentals)             |
  */
 
-export type InboxRealtimeChannel = 'whatsapp' | 'staff' | 'ota' | 'leads' | 'reviews';
+export type InboxRealtimeChannel = 'whatsapp' | 'staff' | 'admin' | 'ota' | 'leads' | 'reviews';
 
 export const INBOX_REALTIME_CHANNELS: InboxRealtimeChannel[] = [
   'whatsapp',
   'staff',
+  'admin',
   'ota',
   'leads',
   'reviews',
@@ -44,7 +45,15 @@ export function classifyInboxSocketPayload(payload: unknown): InboxRealtimeChann
   const msg = p.msg;
   if (msg && typeof msg === 'object' && ('origin' in (msg as object))) {
     const kind = String(p.inboxKind ?? p.inbox ?? '').toLowerCase();
-    if (kind === 'staff') return ['staff'];
+    if (kind === 'staff') {
+      const party = String(
+        p.inboxParty ?? (msg as { inboxParty?: string }).inboxParty ?? '',
+      ).toLowerCase();
+      if (party === 'admin') return ['admin'];
+      if (party === 'staff') return ['staff'];
+      // Legacy payloads without party: refresh both staff WA tabs
+      return ['staff', 'admin'];
+    }
     return ['whatsapp'];
   }
 

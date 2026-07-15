@@ -241,6 +241,16 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const [gapBlockEnabled, setGapBlockEnabled] = useState(true);
   const [gapBlockMinNights, setGapBlockMinNights] = useState(2);
   const [modeEnabled, setModeEnabled] = useState(true);
+  const [lastMinuteEnabled, setLastMinuteEnabled] = useState(true);
+  const [lastMinuteWindowDays, setLastMinuteWindowDays] = useState(10);
+  const [lastMinuteDiscountPct, setLastMinuteDiscountPct] = useState(-15);
+  const [occupancyBandsEnabled, setOccupancyBandsEnabled] = useState(true);
+  const [occupancyLowMax, setOccupancyLowMax] = useState(30);
+  const [occupancyLowAdj, setOccupancyLowAdj] = useState(-10);
+  const [occupancyHighMin, setOccupancyHighMin] = useState(70);
+  const [occupancyHighAdj, setOccupancyHighAdj] = useState(15);
+  const [pricingBaseSource, setPricingBaseSource] = useState<'estimate' | 'listing_base' | 'manual_base'>('estimate');
+  const [manualBasePriceMad, setManualBasePriceMad] = useState(1000);
   const [applyPrice, setApplyPrice] = useState(true);
   const [applyMinStay, setApplyMinStay] = useState(true);
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
@@ -289,6 +299,16 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     modeEnabled,
     applyPrice,
     applyMinStay,
+    lastMinuteEnabled,
+    lastMinuteWindowDays,
+    lastMinuteDiscountPct,
+    occupancyBandsEnabled,
+    occupancyLowMax,
+    occupancyLowAdj,
+    occupancyHighMin,
+    occupancyHighAdj,
+    pricingBaseSource,
+    manualBasePriceMad,
     calendarYear,
   });
   const previewDiff = useApplyPreviewDiff({
@@ -430,6 +450,37 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
           setGapBlockEnabled(c.gapBlockEnabled !== false);
           setGapBlockMinNights(Math.max(2, Math.min(14, c.gapBlockMinNights ?? 2)));
           setModeEnabled(c.modeEnabled !== false);
+          setLastMinuteEnabled(c.lastMinuteEnabled !== false);
+          setLastMinuteWindowDays(Math.max(3, Math.min(21, c.lastMinuteWindowDays ?? 10)));
+          setLastMinuteDiscountPct(
+            typeof c.lastMinuteDiscountPct === 'number' ? c.lastMinuteDiscountPct : -15,
+          );
+          setOccupancyBandsEnabled(c.occupancyBandsEnabled !== false);
+          const bands = Array.isArray(c.occupancyBands) ? c.occupancyBands : [];
+          const low = bands.find((b) => Number(b.max) <= 50) ?? bands[0];
+          const high = bands.find((b) => Number(b.min) >= 50) ?? bands[1];
+          if (low) {
+            setOccupancyLowMax(Math.max(10, Math.min(50, Number(low.max) || 30)));
+            setOccupancyLowAdj(
+              typeof low.adjustment === 'number' ? low.adjustment : -10,
+            );
+          }
+          if (high) {
+            setOccupancyHighMin(Math.max(50, Math.min(90, Number(high.min) || 70)));
+            setOccupancyHighAdj(
+              typeof high.adjustment === 'number' ? high.adjustment : 15,
+            );
+          }
+          setPricingBaseSource(
+            c.pricingBaseSource === 'listing_base'
+              ? 'listing_base'
+              : c.pricingBaseSource === 'manual_base'
+                ? 'manual_base'
+                : 'estimate',
+          );
+          if (typeof c.manualBasePriceMad === 'number' && c.manualBasePriceMad > 0) {
+            setManualBasePriceMad(Math.max(200, Math.min(20000, Math.round(c.manualBasePriceMad))));
+          }
           setApplyPrice(c.applyPrice !== false);
           setApplyMinStay(c.applyMinStay !== false && c.applyPrice !== false);
           setEvents(mapPilotEventsToUi(c.events ?? []));
@@ -729,8 +780,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         })
       : null;
     potentialHint = snap
-      ? `Estimation Sojori · snapshot ${snap}`
-      : 'Estimation Sojori';
+      ? `Estimation prix de marché · ${snap}`
+      : 'Estimation prix de marché';
   } else if (p50Comps > 0) {
     hasPotentialProd = true;
     performance = {
@@ -762,7 +813,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
             ? `Votre annonce (12 mois) : ≈ ${selfCompAdr.toLocaleString('fr-FR')} MAD`
             : null,
           est?.adrP50Mad
-            ? `Estimation Sojori : ADR P50 ≈ ${est.adrP50Mad.toLocaleString('fr-FR')} MAD — peut être plus bas que les comparables haut de gamme`
+            ? `Estimation prix de marché : ADR P50 ≈ ${est.adrP50Mad.toLocaleString('fr-FR')} MAD — peut être plus bas que les comparables haut de gamme`
             : null,
           'Les curseurs §03 (500 min) = bornes du slider UI, pas un prix imposé par l’estimation.',
         ]
@@ -888,6 +939,16 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       gapBlockEnabled,
       gapBlockMinNights,
       modeEnabled,
+      lastMinuteEnabled,
+      lastMinuteWindowDays,
+      lastMinuteDiscountPct,
+      occupancyBandsEnabled,
+      occupancyLowMax,
+      occupancyLowAdj,
+      occupancyHighMin,
+      occupancyHighAdj,
+      pricingBaseSource,
+      manualBasePriceMad,
       applyPrice: aiEnabled && applyPrice,
       applyMinStay: aiEnabled && applyMinStay,
       scopeModalOpen,
@@ -1062,6 +1123,46 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       },
       onModeEnabledChange: (v) => {
         setModeEnabled(v);
+        scheduleConfigSave();
+      },
+      onLastMinuteEnabledChange: (on) => {
+        setLastMinuteEnabled(on);
+        scheduleConfigSave();
+      },
+      onLastMinuteWindowDaysChange: (v) => {
+        setLastMinuteWindowDays(Math.max(3, Math.min(21, Math.round(v))));
+        scheduleConfigSave();
+      },
+      onLastMinuteDiscountPctChange: (v) => {
+        setLastMinuteDiscountPct(Math.max(-40, Math.min(0, Math.round(v))));
+        scheduleConfigSave();
+      },
+      onOccupancyBandsEnabledChange: (on) => {
+        setOccupancyBandsEnabled(on);
+        scheduleConfigSave();
+      },
+      onOccupancyLowMaxChange: (v) => {
+        setOccupancyLowMax(Math.max(10, Math.min(50, Math.round(v))));
+        scheduleConfigSave();
+      },
+      onOccupancyLowAdjChange: (v) => {
+        setOccupancyLowAdj(Math.max(-30, Math.min(0, Math.round(v))));
+        scheduleConfigSave();
+      },
+      onOccupancyHighMinChange: (v) => {
+        setOccupancyHighMin(Math.max(50, Math.min(90, Math.round(v))));
+        scheduleConfigSave();
+      },
+      onOccupancyHighAdjChange: (v) => {
+        setOccupancyHighAdj(Math.max(0, Math.min(40, Math.round(v))));
+        scheduleConfigSave();
+      },
+      onPricingBaseSourceChange: (v: 'estimate' | 'listing_base' | 'manual_base') => {
+        setPricingBaseSource(v);
+        scheduleConfigSave();
+      },
+      onManualBasePriceMadChange: (v: number) => {
+        setManualBasePriceMad(Math.max(200, Math.min(20000, Math.round(v))));
         scheduleConfigSave();
       },
       onAddEvent: () => {

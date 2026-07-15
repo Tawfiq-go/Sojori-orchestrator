@@ -32,9 +32,22 @@ interface PrometheusResponse {
   result?: PrometheusResult[];
 }
 
+interface NodeMeta {
+  name?: string;
+  internalIp?: string | null;
+  machineType?: string;
+  provisioning?: 'spot' | 'fixed';
+  preemptible?: boolean;
+  cpuCores?: number;
+  memoryGi?: number;
+  age?: string | null;
+  createdAt?: string;
+}
+
 interface NodeData {
   instance: string;
   name: string;
+  displayName: string;
   cpu: string;
   memory: string;
   networkRx: string;
@@ -42,6 +55,12 @@ interface NodeData {
   disk: string;
   cpuCount: number;
   podsCount: number;
+  machineType: string;
+  provisioning: 'spot' | 'fixed' | 'unknown';
+  capacityCpu: number;
+  capacityMemGi: number;
+  age: string;
+  podRestarts: number;
 }
 
 interface PodData {
@@ -66,6 +85,11 @@ interface NodesData {
   network_rx?: PrometheusResponse;
   network_tx?: PrometheusResponse;
   node_info?: PrometheusResponse;
+  node_created?: PrometheusResponse;
+  cpu_capacity?: PrometheusResponse;
+  memory_capacity?: PrometheusResponse;
+  pod_restarts_by_node?: PrometheusResponse;
+  metadata?: Record<string, NodeMeta>;
 }
 
 interface PodsData {
@@ -306,38 +330,56 @@ const MetricsPageUltra: React.FC = () => {
     return [...sortPodsList(problems, sortPodsBy), ...sortPodsList(healthy, sortPodsBy)];
   }, [processedPods, showOnlyProblems, sortPodsBy]);
 
-  // Process nodes with ALL metrics + real names
+  // Process nodes with ALL metrics + Spot/type metadata
   const processedNodes = React.useMemo<NodeData[]>(() => {
     const nodesRaw = nodesData as NodesData | null | undefined;
     if (!nodesRaw?.cpu || !nodesRaw?.memory) return [];
     const nodes = new Map<string, NodeData>();
+    const meta = nodesRaw.metadata || {};
 
-    // Build instance → node name mapping from kube_node_info
+    const resolveMeta = (nodeName: string, instanceIp: string): NodeMeta | undefined =>
+      meta[nodeName] || meta[instanceIp] || meta[instanceIp.split(':')[0]];
+
+    const shortNodeName = (full: string) => {
+      const m = full.match(/-([a-z0-9]{4})$/i);
+      if (m) return m[1];
+      return full.length > 18 ? full.slice(-12) : full;
+    };
+
     const instanceToNode = new Map<string, string>();
+    const nodeToInternalIp = new Map<string, string>();
     nodesRaw.node_info?.result?.forEach((item) => {
       const instance = item.metric.instance;
       const nodeName = item.metric.node || instance.split(':')[0];
       instanceToNode.set(instance, nodeName);
+      if (item.metric.internal_ip) nodeToInternalIp.set(nodeName, String(item.metric.internal_ip));
     });
 
-    // CPU
     nodesRaw.cpu?.result?.forEach((item) => {
       const instance = item.metric.instance;
       const nodeName = instanceToNode.get(instance) || instance.split(':')[0];
+      const instanceIp = instance.split(':')[0];
+      const nm = resolveMeta(nodeName, instanceIp);
       nodes.set(instance, {
         instance,
         name: nodeName,
+        displayName: nm?.internalIp || nodeToInternalIp.get(nodeName) || shortNodeName(nodeName),
         cpu: (parseFloat(item.value[1]) * 100).toFixed(1),
         memory: '0',
         networkRx: '0',
         networkTx: '0',
         disk: '0',
         cpuCount: 0,
-        podsCount: 0
+        podsCount: 0,
+        machineType: nm?.machineType || '—',
+        provisioning: nm?.provisioning || 'unknown',
+        capacityCpu: nm?.cpuCores || 0,
+        capacityMemGi: nm?.memoryGi || 0,
+        age: nm?.age || '—',
+        podRestarts: 0,
       });
     });
 
-    // Memory
     nodesRaw.memory?.result?.forEach((item) => {
       const instance = item.metric.instance;
       if (nodes.has(instance)) {
@@ -345,7 +387,6 @@ const MetricsPageUltra: React.FC = () => {
       }
     });
 
-    // Disk usage
     nodesRaw.disk?.result?.forEach((item) => {
       const instance = item.metric.instance;
       if (nodes.has(instance)) {
@@ -353,43 +394,78 @@ const MetricsPageUltra: React.FC = () => {
       }
     });
 
-    // CPU count
     nodesRaw.cpu_count?.result?.forEach((item) => {
       const instance = item.metric.instance;
       if (nodes.has(instance)) {
-        nodes.get(instance)!.cpuCount = parseInt(item.value[1]) || 0;
+        nodes.get(instance)!.cpuCount = parseInt(item.value[1], 10) || 0;
       }
     });
 
-    // Pods per node
-    nodesRaw.pods_per_node?.result?.forEach((item) => {
+    nodesRaw.cpu_capacity?.result?.forEach((item) => {
       const nodeName = item.metric.node;
-      nodes.forEach((nodeData) => {
-        if (nodeData.name === nodeName) {
-          nodeData.podsCount = parseInt(item.value[1]) || 0;
+      nodes.forEach((n) => {
+        if (n.name === nodeName) {
+          n.capacityCpu = parseFloat(item.value[1]) || n.capacityCpu;
+          if (!n.cpuCount) n.cpuCount = Math.round(n.capacityCpu);
+        }
+      });
+    });
+    nodesRaw.memory_capacity?.result?.forEach((item) => {
+      const nodeName = item.metric.node;
+      nodes.forEach((n) => {
+        if (n.name === nodeName) {
+          n.capacityMemGi = Math.round((parseFloat(item.value[1]) / 1024 / 1024 / 1024) * 10) / 10;
         }
       });
     });
 
-    // Network RX (bytes/sec)
+    nodesRaw.node_created?.result?.forEach((item) => {
+      const nodeName = item.metric.node;
+      const createdSec = parseFloat(item.value[1]);
+      if (!createdSec) return;
+      const ageMs = Date.now() - createdSec * 1000;
+      const hours = Math.floor(ageMs / (1000 * 60 * 60));
+      const minutes = Math.floor((ageMs % (1000 * 60 * 60)) / (1000 * 60));
+      const days = Math.floor(hours / 24);
+      const age =
+        days > 0 ? `${days}d ${hours % 24}h` : hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+      nodes.forEach((n) => {
+        if (n.name === nodeName && (n.age === '—' || !n.age)) n.age = age;
+      });
+    });
+
+    nodesRaw.pods_per_node?.result?.forEach((item) => {
+      const nodeName = item.metric.node;
+      nodes.forEach((nodeData) => {
+        if (nodeData.name === nodeName) {
+          nodeData.podsCount = parseInt(item.value[1], 10) || 0;
+        }
+      });
+    });
+
+    nodesRaw.pod_restarts_by_node?.result?.forEach((item) => {
+      const nodeName = item.metric.node;
+      nodes.forEach((nodeData) => {
+        if (nodeData.name === nodeName) {
+          nodeData.podRestarts = parseInt(item.value[1], 10) || 0;
+        }
+      });
+    });
+
     nodesRaw.network_rx?.result?.forEach((item) => {
       const instance = item.metric.instance;
       if (nodes.has(instance)) {
-        const bytesPerSec = parseFloat(item.value[1]);
-        nodes.get(instance)!.networkRx = (bytesPerSec / 1024).toFixed(0);
+        nodes.get(instance)!.networkRx = (parseFloat(item.value[1]) / 1024).toFixed(0);
       }
     });
 
-    // Network TX (bytes/sec)
     nodesRaw.network_tx?.result?.forEach((item) => {
       const instance = item.metric.instance;
       if (nodes.has(instance)) {
-        const bytesPerSec = parseFloat(item.value[1]);
-        nodes.get(instance)!.networkTx = (bytesPerSec / 1024).toFixed(0);
+        nodes.get(instance)!.networkTx = (parseFloat(item.value[1]) / 1024).toFixed(0);
       }
     });
 
-    // Sort nodes based on sortNodesBy
     const nodesArray = Array.from(nodes.values());
     if (sortNodesBy === 'cpu') {
       nodesArray.sort((a, b) => parseFloat(b.cpu) - parseFloat(a.cpu));
@@ -635,6 +711,10 @@ const MetricsPageUltra: React.FC = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-2 py-1 text-left font-bold text-gray-700">NODE</th>
+                  <th className="px-2 py-1 text-left font-bold text-gray-700">TYPE</th>
+                  <th className="px-2 py-1 text-left font-bold text-gray-700">MODE</th>
+                  <th className="px-2 py-1 text-left font-bold text-gray-700">ÂGE</th>
+                  <th className="px-2 py-1 text-right font-bold text-gray-700">↺</th>
                   <th className="px-2 py-1 text-left font-bold text-gray-700">CPU</th>
                   <th className="px-2 py-1 text-left font-bold text-gray-700">RAM</th>
                   <th className="px-2 py-1 text-left font-bold text-gray-700">💾</th>
@@ -643,14 +723,64 @@ const MetricsPageUltra: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {processedNodes.map((node, i) => (
+                {processedNodes.map((node, i) => {
+                  const cores = node.capacityCpu || node.cpuCount || 0;
+                  const mem = node.capacityMemGi;
+                  const typeLabel =
+                    node.machineType !== '—'
+                      ? `${node.machineType} · ${cores || '?'}CPU · ${mem ? `${mem}Go` : '?'}`
+                      : cores
+                        ? `${cores} CPU`
+                        : '—';
+                  const modeLabel =
+                    node.provisioning === 'spot'
+                      ? 'Spot'
+                      : node.provisioning === 'fixed'
+                        ? 'Fixe'
+                        : '?';
+                  const modeClass =
+                    node.provisioning === 'spot'
+                      ? 'bg-amber-100 text-amber-800'
+                      : node.provisioning === 'fixed'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-slate-100 text-slate-600';
+                  return (
                   <tr key={i} className="hover:bg-blue-50 transition-colors">
-                    <td className="px-2 py-1 font-semibold text-gray-900 text-[10px]" title={`${node.name} (${node.cpuCount} cores)`}>
-                      {node.name.substring(0, 18)}
+                    <td
+                      className="px-2 py-1 font-semibold text-gray-900 text-[10px]"
+                      title={node.name}
+                    >
+                      {node.displayName}
+                    </td>
+                    <td className="px-2 py-1 text-[9px] text-gray-700 font-medium whitespace-nowrap" title={typeLabel}>
+                      {typeLabel}
+                    </td>
+                    <td className="px-2 py-1">
+                      <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${modeClass}`}>
+                        {modeLabel}
+                      </span>
+                    </td>
+                    <td
+                      className="px-2 py-1 text-[9px] text-gray-700 font-medium"
+                      title="Âge du nœud (repart à 0 après préemption GCP)"
+                    >
+                      {node.age}
+                    </td>
+                    <td
+                      className="px-2 py-1 text-right"
+                      title="Restarts cumulés des pods sur ce nœud"
+                    >
+                      <span
+                        className={`font-bold text-[9px] ${
+                          node.podRestarts > 0 ? 'text-amber-600' : 'text-gray-500'
+                        }`}
+                      >
+                        {node.podRestarts}
+                      </span>
                     </td>
                     <td className="px-2 py-1">
                       <div className="flex items-center gap-1">
-                        <div className="flex-1 h-1 bg-gray-200 rounded-full">
+                        <div className="flex-1 h-1 bg-gray-200 rounded-full min-w-[28px]">
                           <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600" style={{ width: `${node.cpu}%` }} />
                         </div>
                         <span className="font-bold text-gray-900 text-[9px] w-7">{node.cpu}%</span>
@@ -658,7 +788,7 @@ const MetricsPageUltra: React.FC = () => {
                     </td>
                     <td className="px-2 py-1">
                       <div className="flex items-center gap-1">
-                        <div className="flex-1 h-1 bg-gray-200 rounded-full">
+                        <div className="flex-1 h-1 bg-gray-200 rounded-full min-w-[28px]">
                           <div className="h-full bg-gradient-to-r from-purple-400 to-purple-600" style={{ width: `${node.memory}%` }} />
                         </div>
                         <span className="font-bold text-gray-900 text-[9px] w-7">{node.memory}%</span>
@@ -678,16 +808,29 @@ const MetricsPageUltra: React.FC = () => {
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
           <div className="px-3 py-1 border-t border-gray-200 bg-gray-50">
             <div className="grid grid-cols-6 gap-2 text-center">
               <div>
+                <div className="text-[9px] text-gray-600">Spot / Fixe</div>
+                <div className="text-[10px] font-bold">
+                  <span className="text-amber-700">
+                    {processedNodes.filter((n) => n.provisioning === 'spot').length}S
+                  </span>
+                  {' / '}
+                  <span className="text-emerald-700">
+                    {processedNodes.filter((n) => n.provisioning === 'fixed').length}F
+                  </span>
+                </div>
+              </div>
+              <div>
                 <div className="text-[9px] text-gray-600">Total CPU</div>
                 <div className="text-[10px] font-bold text-blue-600">
-                  {processedNodes.reduce((sum, n) => sum + (n.cpuCount || 0), 0)} cores
+                  {processedNodes.reduce((sum, n) => sum + (n.capacityCpu || n.cpuCount || 0), 0)} cores
                 </div>
               </div>
               <div>
@@ -697,10 +840,6 @@ const MetricsPageUltra: React.FC = () => {
               <div>
                 <div className="text-[9px] text-gray-600">Avg RAM</div>
                 <div className="text-[10px] font-bold">{avgMemory}%</div>
-              </div>
-              <div>
-                <div className="text-[9px] text-gray-600">Avg Disk</div>
-                <div className="text-[10px] font-bold">{processedNodes.length > 0 ? (processedNodes.reduce((sum, n) => sum + parseFloat(n.disk || '0'), 0) / processedNodes.length).toFixed(1) : 0}%</div>
               </div>
               <div>
                 <div className="text-[9px] text-gray-600">Total Pods</div>

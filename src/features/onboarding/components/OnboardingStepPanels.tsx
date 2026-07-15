@@ -188,6 +188,44 @@ export function OnboardingStepPanels({ wizard, ownerId }: StepPanelsProps) {
           Répondez en langage métier — quand proposer chaque service, quand assigner le staff,
           quand relancer. Le mode <strong>Avancé</strong> ouvre le détail ligne par ligne.
         </p>
+        <div
+          className="ob-cfg-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginBottom: 14,
+            background:
+              p3.orchestrationEnabled === false
+                ? 'rgba(200,30,30,0.08)'
+                : 'rgba(10,143,94,0.08)',
+            borderColor:
+              p3.orchestrationEnabled === false
+                ? 'rgba(200,30,30,0.25)'
+                : 'rgba(10,143,94,0.25)',
+            color: p3.orchestrationEnabled === false ? '#7a1a1a' : '#0a5c3c',
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>Orchestration globale</div>
+            <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>
+              Coupe-circuit : si désactivé, aucun plan / tâche / message auto — même si des
+              services sont configurés ci-dessous.
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`ob-toggle${p3.orchestrationEnabled !== false ? ' on' : ''}`}
+            aria-pressed={p3.orchestrationEnabled !== false}
+            aria-label="Orchestration globale"
+            onClick={() =>
+              handlePanel3Change({
+                orchestrationEnabled: p3.orchestrationEnabled === false,
+              })
+            }
+          />
+        </div>
         <div className="ob-x-tabs">
           <button
             type="button"

@@ -162,6 +162,7 @@ export function createDefaultWizardDraft(path: 'A' | 'B' = 'A'): WizardDraft {
         quickConfig: defaultOrchestrationQuickConfig(['Marrakech']),
         pack: 'standard',
         orchestrationApplyMode: 'replace',
+        orchestrationEnabled: true,
       },
       '4': { jx: defaultJx() },
       '5': { conditions: defaultConditions() },
@@ -204,6 +205,8 @@ export function mergeWizardDraftFromServer(
       capabilities?: WizardCapabilities;
       jx?: Partial<WizardJxSettings>;
       quickConfig?: Partial<WizardOrchestrationQuickConfig>;
+      pack?: 'essential' | 'standard' | 'complete' | 'premium';
+      orchestrationEnabled?: boolean;
     };
     const p4 = panels['4'] as { jx?: Partial<WizardJxSettings> } | undefined;
     panels['3'] = {
@@ -216,6 +219,7 @@ export function mergeWizardDraftFromServer(
       }),
       pack: p3.pack ?? 'standard',
       orchestrationApplyMode: 'replace',
+      orchestrationEnabled: p3.orchestrationEnabled !== false,
     } as never;
   }
   if (panels['4']) {

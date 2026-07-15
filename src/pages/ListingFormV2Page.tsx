@@ -1,4 +1,4 @@
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Box, CircularProgress, Alert } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import ListingFormV2 from '../components/listing/form-v2/ListingFormV2';
@@ -15,9 +15,13 @@ import {
 import { toast } from 'react-toastify';
 import { useMemo } from 'react';
 
+/**
+ * Edit listing — une seule surface : ListingFormV2 + sidebar.
+ * Multi : Infos (types/stock) · Photos · Pricing — sans onglet Types redondant.
+ * Single : inchangé.
+ */
 export function ListingFormV2Page() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const levelParam = searchParams.get('level');
   const tabParamRaw = searchParams.get('tab');
@@ -46,7 +50,6 @@ export function ListingFormV2Page() {
       : tabParam || undefined;
   const queryClient = useQueryClient();
 
-  // Fetch listing data
   const { data: listingDoc, isLoading, error } = useQuery({
     queryKey: ['listing', id],
     queryFn: () => listingsService.getListingDocument(id!),
@@ -82,7 +85,6 @@ export function ListingFormV2Page() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Update listing mutation
   const { mutate: saveListing, isPending: isSaving } = useMutation({
     mutationFn: async (values: Record<string, unknown>) => {
       await listingsService.updateListingProperty(
@@ -98,19 +100,21 @@ export function ListingFormV2Page() {
       queryClient.invalidateQueries({ queryKey: ['listing-pricing-discounts', id] });
     },
     onError: (error: any) => {
-      toast.error(error?.message || 'Erreur lors de l\'enregistrement');
+      toast.error(error?.message || "Erreur lors de l'enregistrement");
     },
   });
 
   if (isLoading) {
     return (
       <DashboardWrapper>
-        <Box sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '80vh',
-        }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '80vh',
+          }}
+        >
           <CircularProgress size={48} sx={{ color: '#b8851a' }} />
         </Box>
       </DashboardWrapper>
@@ -133,9 +137,7 @@ export function ListingFormV2Page() {
     return (
       <DashboardWrapper>
         <Box sx={{ p: 4 }}>
-          <Alert severity="warning">
-            Listing introuvable
-          </Alert>
+          <Alert severity="warning">Listing introuvable</Alert>
         </Box>
       </DashboardWrapper>
     );

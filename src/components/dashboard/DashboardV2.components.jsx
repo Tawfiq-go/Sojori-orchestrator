@@ -229,6 +229,7 @@ const NAV_ICON_BY_ID = {
   inbox: InboxOutlined,
   'comms': ForumOutlined,
   'comms/guests': ForumOutlined,
+  'comms/booking': ShoppingBagOutlined,
   'orch/plans': AutoAwesomeOutlined,
   'orch/ops': TodayOutlined,
   'orch/workflows': SettingsOutlined,

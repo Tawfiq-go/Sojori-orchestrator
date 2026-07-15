@@ -37,6 +37,10 @@ function enrichBookingMessages(
   exchanges: BookingInboxExchange[],
   audioUrls: Record<string, string>,
 ): Message[] {
+  const sorted = [...exchanges].sort(
+    (a, b) =>
+      new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime(),
+  );
   // map day-separators + user/ai by index from buildInboxMessages order
   let exchangeIdx = -1;
   return base.map((msg) => {
@@ -45,16 +49,20 @@ function enrichBookingMessages(
       const n = Number(String(msg.id).replace(/^(user|ai)-/, ''));
       if (!Number.isNaN(n)) exchangeIdx = n;
     }
-    const ex = exchanges[exchangeIdx];
+    const ex = sorted[exchangeIdx];
     if (!ex) return msg;
-    const mediaId = ex.media_id;
+    const audioKey = (ex.media_id || ex.id || '').trim();
     const tags = ex.tags || [];
-    const isAudio = ex.type === 'audio' || tags.includes('audio') || Boolean(mediaId);
+    const isAudio =
+      ex.type === 'audio' ||
+      tags.includes('audio') ||
+      Boolean(ex.media_id) ||
+      Boolean(ex.has_audio);
     return {
       ...msg,
       tags: tags.length ? tags : isAudio ? ['audio'] : undefined,
       contentType: isAudio ? 'audio' : msg.contentType,
-      audioUrl: mediaId ? audioUrls[mediaId] || null : null,
+      audioUrl: audioKey ? audioUrls[audioKey] || null : null,
       audioCaption: ex.transcript || ex.summary || null,
     };
   });
@@ -72,6 +80,8 @@ export default function BookingWhatsAppTabV2() {
   const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [audioUrls, setAudioUrls] = useState<Record<string, string>>({});
   const [recording, setRecording] = useState(false);
+  const [sendingVoice, setSendingVoice] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const objectUrlsRef = useRef<string[]>([]);
@@ -103,19 +113,29 @@ export default function BookingWhatsAppTabV2() {
   }, []);
 
   const hydrateAudio = useCallback(async (exchanges: BookingInboxExchange[]) => {
-    const ids = [
+    // Seulement IDs rejouables : Meta mediaId ou message avec buffer stocké (pas les ObjectId orphelins).
+    const keys = [
       ...new Set(
-        exchanges.map((e) => e.media_id).filter((id): id is string => Boolean(id?.trim())),
+        exchanges
+          .filter((e) => Boolean(e.media_id?.trim()) || Boolean(e.audio_stored))
+          .map((e) => {
+            if (e.audio_stored && e.id?.trim()) return e.id.trim();
+            return (e.media_id || '').trim();
+          })
+          .filter(Boolean),
       ),
     ];
     const next: Record<string, string> = {};
     await Promise.all(
-      ids.map(async (id) => {
+      keys.map(async (id) => {
         try {
           const blob = await fetchBookingInboxMediaBlob(id);
           const url = URL.createObjectURL(blob);
           objectUrlsRef.current.push(url);
           next[id] = url;
+          const twin = exchanges.find((e) => e.media_id === id || e.id === id);
+          if (twin?.media_id && twin.media_id !== id) next[twin.media_id] = url;
+          if (twin?.id && twin.id !== id) next[twin.id] = url;
         } catch {
           // media expired or unavailable — keep transcript only
         }
@@ -167,6 +187,7 @@ export default function BookingWhatsAppTabV2() {
 
   const handleRecordVoice = useCallback(async () => {
     if (!active) return;
+    setVoiceError(null);
     if (recording && mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       setRecording(false);
@@ -187,9 +208,10 @@ export default function BookingWhatsAppTabV2() {
         const blob = new Blob(chunksRef.current, { type: mime });
         chunksRef.current = [];
         if (!blob.size || !active) return;
-        const ab = await blob.arrayBuffer();
-        const b64 = bufferToBase64(ab);
+        setSendingVoice(true);
         try {
+          const ab = await blob.arrayBuffer();
+          const b64 = bufferToBase64(ab);
           await sendBookingInboxAudio({
             to: active.phone,
             audioBase64: b64,
@@ -203,6 +225,11 @@ export default function BookingWhatsAppTabV2() {
           void loadThreads();
         } catch (err) {
           console.error('[Inbox Resa] send audio failed', err);
+          setVoiceError(
+            err instanceof Error ? err.message : 'Échec envoi note vocale WhatsApp',
+          );
+        } finally {
+          setSendingVoice(false);
         }
       };
       mediaRecorderRef.current = recorder;
@@ -211,6 +238,7 @@ export default function BookingWhatsAppTabV2() {
     } catch (err) {
       console.error('[Inbox Resa] mic denied', err);
       setRecording(false);
+      setVoiceError('Micro refusé — autorisez le micro dans le navigateur.');
     }
   }, [active, hydrateAudio, loadThreads, recording]);
 
@@ -340,10 +368,29 @@ export default function BookingWhatsAppTabV2() {
               }}
               onRecordVoice={() => void handleRecordVoice()}
               recordingVoice={recording}
+              sendingVoice={sendingVoice}
             />
+            {voiceError && (
+              <Typography
+                sx={{
+                  px: 2,
+                  py: 1,
+                  fontSize: 12,
+                  color: '#b91c1c',
+                  bgcolor: 'rgba(220,38,38,0.06)',
+                }}
+              >
+                {voiceError}
+              </Typography>
+            )}
             <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               {conversationTags.length > 0 && (
-                <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ px: 1.5, pt: 1.5 }}>
+                <Stack
+                  direction="row"
+                  spacing={0.5}
+                  useFlexGap
+                  sx={{ px: 1.5, pt: 1.5, flexWrap: 'wrap' }}
+                >
                   {conversationTags.map((tag) => (
                     <Chip
                       key={tag}

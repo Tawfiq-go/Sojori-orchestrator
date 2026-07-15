@@ -50,6 +50,38 @@ export const DETAIL_TABS = [
   ]},
 ];
 
+/**
+ * Sidebar Multi (anti-redondance) :
+ * - Infos bâtiment → types, stock, capacité
+ * - Photos → listingImages + roomTypeImages
+ * - Pricing → basePrice par type
+ * Pas d’onglet « Types de chambres » qui re-édite images/stock/prix.
+ */
+export const DETAIL_TABS_MULTI = [
+  { group: 'Bâtiment', items: [
+    { id: 'general',      icon: '🏛', label: 'Infos bâtiment' },
+    { id: 'location',     icon: '📍', label: 'Adresse' },
+    { id: 'photos',       icon: '📸', label: 'Photos' },
+    { id: 'amenities',    icon: '✨', label: 'Équipements communs' },
+  ]},
+  { group: 'Commercial', items: [
+    { id: 'pricing',      icon: '💰', label: 'Pricing (par type)' },
+    { id: 'availability', icon: '📅', label: 'Disponibilité & séjour' },
+    { id: 'fees',         icon: '💳', label: 'Fees & Deposits' },
+  ]},
+  { group: 'Distribution', items: [
+    { id: 'distribution', icon: '📡', label: 'Distribution' },
+  ]},
+  { group: 'Admin', items: [
+    { id: 'license',      icon: '📄', label: 'License' },
+    { id: 'ru-import',    icon: '🗄️', label: 'Trace import RU' },
+  ]},
+];
+
+export function getDetailTabs(propertyUnit) {
+  return propertyUnit === 'Multi' ? DETAIL_TABS_MULTI : DETAIL_TABS;
+}
+
 /** Onglets Config orchestration (ex-« Config Orch. NEW »). */
 export const CONFIG_NEW_TABS = [
   { group: 'Services', items: [
@@ -219,6 +251,7 @@ export default function ListingFormShell({
   hideRuImportTab = false,    // owner : masque l'onglet « Trace import RU » (réservé admin)
   lastSavedAt,                // date dernière sauvegarde (updatedAt listing)
   lastPublishedAt,            // date dernière publication vers OTA (otaChannelsSnapshot.updatedAt)
+  propertyUnit = 'Single',    // Single | Multi — sidebar Multi anti-redondance (Infos / Photos / Pricing)
 }) {
   const resolvedLockLevel = lockLevel
     ? normalizeListingFormLevel(lockLevel, { forceConfig: lockLevel === 'config' || lockLevel === 'config-new' })
@@ -266,21 +299,34 @@ export default function ListingFormShell({
 
   useEffect(() => {
     if (hideRuImportTab && level === 'detail' && activeTab === 'ru-import') {
-      setActiveTab(DETAIL_TABS[0].items[0].id);
+      setActiveTab(getDetailTabs(propertyUnit)[0].items[0].id);
     }
-  }, [hideRuImportTab, level, activeTab]);
+  }, [hideRuImportTab, level, activeTab, propertyUnit]);
+
+  // Multi : bascule si onglet Single-only (ex. ancien pricing root seul)
+  useEffect(() => {
+    if (propertyUnit !== 'Multi' || level !== 'detail') return;
+    const ids = new Set(
+      getDetailTabs('Multi').flatMap((g) => g.items.map((t) => t.id)),
+    );
+    if (!ids.has(activeTab) && activeTab !== 'post-import') {
+      setActiveTab('general');
+    }
+  }, [propertyUnit, level, activeTab]);
 
   const isOrchV3 = level === 'orchestration-v3';
+  const detailTabsRaw = getDetailTabs(propertyUnit);
   const detailTabsSource = hideRuImportTab
-    ? DETAIL_TABS.map(g => ({ ...g, items: g.items.filter(t => t.id !== 'ru-import') })).filter(
+    ? detailTabsRaw.map(g => ({ ...g, items: g.items.filter(t => t.id !== 'ru-import') })).filter(
         g => g.items.length > 0,
       )
-    : DETAIL_TABS;
+    : detailTabsRaw;
   const detailTabsBase = level === 'detail' ? detailTabsSource : [];
   const detailTabsWithImport = importOnboardingActive && level === 'detail'
     ? [{ group: 'Post-import', items: [POST_IMPORT_TAB] }, ...detailTabsBase]
     : detailTabsBase;
   const tabsConfig = level === 'detail' ? detailTabsWithImport : isOrchV3 ? [] : configTabsFiltered;
+  const detailTabCount = detailTabsWithImport.reduce((n, g) => n + g.items.length, 0);
   const activeTabMeta = isOrchV3
     ? { id: 'orchestration-v3', icon: '🎯', label: 'Orchestration' }
     : tabsConfig.flatMap(g => g.items).find(t => t.id === activeTab) || tabsConfig[0]?.items?.[0] || { id: activeTab, icon: '·', label: activeTab };
@@ -336,7 +382,15 @@ export default function ListingFormShell({
             }}
           >
             {[
-              { id: 'detail', icon: '🏠', label: 'Détail listing', pillLabel: '10 onglets', accent: T.primary, tint: T.primaryTint, tintColor: T.primaryDeep },
+              {
+                id: 'detail',
+                icon: propertyUnit === 'Multi' ? '🏛' : '🏠',
+                label: propertyUnit === 'Multi' ? 'Détail Multi' : 'Détail listing',
+                pillLabel: `${detailTabCount || 10} onglets`,
+                accent: T.primary,
+                tint: T.primaryTint,
+                tintColor: T.primaryDeep,
+              },
               { id: 'orchestration-v3', icon: '🎯', label: 'Orchestration', pillLabel: 'Par service', accent: '#7c3aed', tint: 'rgba(124,58,237,0.10)', tintColor: '#7c3aed' },
             ].map(opt => {
               const active = level === opt.id;
@@ -350,7 +404,7 @@ export default function ListingFormShell({
                       setActiveTab('orchestration-v3');
                       return;
                     }
-                    setActiveTab(DETAIL_TABS[0].items[0].id);
+                    setActiveTab(getDetailTabs(propertyUnit)[0].items[0].id);
                   }}
                   sx={{
                     all: 'unset',
@@ -568,7 +622,7 @@ export default function ListingFormShell({
               <Box sx={{ flex: 1 }} />
               <Button onClick={onSave} sx={btnGhost} disabled={publishLoading}>Sauvegarder</Button>
               <Button onClick={onPublish} sx={btnPrim} disabled={publishLoading || publishDisabled}>
-                {publishLoading ? 'Synchronisation RU...' : 'Publier →'}
+                {publishLoading ? 'Synchronisation OTAs...' : 'Publier →'}
               </Button>
             </Stack>
             )}

@@ -74,6 +74,7 @@ import {
   logPmSaveAccountStart,
   logPmSaveAccountPayload,
   logPmSaveAccountResult,
+  logPmVitrinePublished,
 } from '../utils/pmFormDebug';
 import { buildDefaultRuEmail, resolveRuEmailDisplay } from '../utils/ruEmailUtils';
 import OwnerPasswordDialog from './OwnerPasswordDialog';
@@ -134,7 +135,12 @@ const buildValidationSchema = (t, owner, isCreate) =>
     lastName: Yup.string().required(t('Last name is required')),
     phone: Yup.string().required(t('Phone is required')),
     whatsapp: Yup.string(),
-    channelManager: Yup.string().required(t('Channel Manager is required')),
+    // Vide OK si RU/Channex off (PM démo / sojori-only) — sinon Enregistrer est bloqué sans toast.
+    channelManager: Yup.string().when('ruEnabled', {
+      is: true,
+      then: (s) => s.required(t('Channel Manager is required')),
+      otherwise: (s) => s.optional().nullable().allow(''),
+    }),
     cityId: Yup.string().required(t('City is required')),
     settings: Yup.object().shape({
       language: Yup.string().required(t('Language is required')),
@@ -448,6 +454,78 @@ const UpdateOwnerSidebar = ({
     }
   };
 
+  const [vitrinePublishSaving, setVitrinePublishSaving] = useState(false);
+
+  /** Toggle Publié → save immédiat (sans Enregistrer / sans validation formulaire entière). */
+  const savePublishedNow = async (nextPublished, formikBag) => {
+    const { setFieldValue, values } = formikBag || {};
+    const ownerId = owner?._id;
+    if (!ownerId) {
+      console.error('[PM-vitrine] savePublishedNow: pas d’ownerId');
+      toast.error('Impossible de publier : owner introuvable');
+      return;
+    }
+    const prev = Boolean(values?.pmProfile?.published);
+    setFieldValue?.('pmProfile.published', nextPublished);
+    logPmVitrinePublished('auto-save start', {
+      ownerId,
+      email: owner?.email || values?.email,
+      from: prev,
+      to: nextPublished,
+      slug: values?.pmProfile?.slug,
+    });
+    setVitrinePublishSaving(true);
+    try {
+      const pmProfile = {
+        ...(values?.pmProfile || {}),
+        published: nextPublished,
+        slug: normalizePmSlug(values?.pmProfile?.slug),
+        coverUrl: normalizePmImageUrl(values?.pmProfile?.coverUrl),
+        images: normalizePmImageList(values?.pmProfile?.images),
+      };
+      console.info('[PM-vitrine] PUT update-account (published only)', {
+        ownerId,
+        published: nextPublished,
+        slug: pmProfile.slug,
+      });
+      const response = await updateOwner(ownerId, { pmProfile });
+      const saved = response?.data?.account?.pmProfile?.published;
+      logPmVitrinePublished('auto-save response', {
+        ownerId,
+        wantedPublished: nextPublished,
+        returnedPublished: saved,
+        ok: saved === nextPublished,
+      });
+      if (saved !== nextPublished) {
+        toast.error(
+          `Publié non persisté (envoyé=${nextPublished}, reçu=${String(saved)}). Voir console [PM-vitrine].`,
+        );
+        setFieldValue?.('pmProfile.published', Boolean(saved));
+        return;
+      }
+      onOwnerUpdated?.({
+        ...(response?.data?.account || owner),
+        pmProfile: {
+          ...(owner?.pmProfile || {}),
+          ...(response?.data?.account?.pmProfile || pmProfile),
+          published: nextPublished,
+        },
+      });
+      toast.success(nextPublished ? 'Profil publié' : 'Profil dépublié');
+    } catch (error) {
+      console.error('[PM-vitrine] auto-save FAIL', error?.response?.data || error);
+      setFieldValue?.('pmProfile.published', prev);
+      toast.error(
+        error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          'Échec publication vitrine',
+      );
+    } finally {
+      setVitrinePublishSaving(false);
+    }
+  };
+
   const applyFillCompanyServerError = (error, formikBag) => {
     const mapped = resolveFillCompanyServerError(error);
     if (!mapped) return false;
@@ -471,6 +549,16 @@ const UpdateOwnerSidebar = ({
       setSelectedCities([]);
     }
   }, [open, isCreate, owner?._id]);
+
+  useEffect(() => {
+    if (!open || isCreate || !owner?._id) return;
+    logPmVitrinePublished('drawer-open', {
+      ownerId: owner._id,
+      email: owner.email,
+      publishedFromOwnerProp: owner?.pmProfile?.published,
+      slug: owner?.pmProfile?.slug,
+    });
+  }, [open, isCreate, owner?._id, owner?.pmProfile?.published]);
 
   const currencyOptions = useMemo(
     () =>
@@ -1174,9 +1262,14 @@ const UpdateOwnerSidebar = ({
     const { setErrors, validateForm, setTouched, setFieldValue } = formikBag;
     const validationErrors = await validateForm();
     if (Object.keys(validationErrors).length > 0) {
+      logPmFormValidationBlocked('Enregistrer', validationErrors);
+      console.error('[PM-save] Enregistrer BLOQUÉ par validation', validationErrors);
       focusValidationTab(validationErrors);
       setTouched(validationErrors, true);
       setErrors(validationErrors);
+      toast.error(
+        `Enregistrer bloqué — champs invalides : ${Object.keys(validationErrors).join(', ')}`,
+      );
       return;
     }
     if (!owner?._id) return;
@@ -1196,6 +1289,12 @@ const UpdateOwnerSidebar = ({
       formEmail: normalizedFormEmail,
       ownerEmail: normalizedOwnerEmail,
       emailChanging,
+    });
+    logPmVitrinePublished('before-save (handleSaveEdit)', {
+      ownerId: owner._id,
+      email: owner.email,
+      published: values?.pmProfile?.published,
+      slug: values?.pmProfile?.slug,
     });
 
     try {
@@ -1239,6 +1338,14 @@ const UpdateOwnerSidebar = ({
         wantedEmail: emailChanging ? normalizedFormEmail : normalizedOwnerEmail,
         returnedEmail: updatedAccount?.email,
         draftEmail,
+        wantedPublished: values?.pmProfile?.published,
+        returnedPublished: updatedAccount?.pmProfile?.published,
+      });
+      logPmVitrinePublished('after-save API account', {
+        ownerId: owner._id,
+        wantedPublished: values?.pmProfile?.published,
+        returnedPublished: updatedAccount?.pmProfile?.published,
+        slug: updatedAccount?.pmProfile?.slug,
       });
       if (emailChanging && !emailOk) {
         setErrors({
@@ -1463,7 +1570,7 @@ const UpdateOwnerSidebar = ({
           const ruProvisionReadiness = computeOwnerRuProvisionReadiness(values);
           const ruFillCompanyReadiness = computeOwnerRuFillCompanyReadiness(values);
           const isRuChannel = Boolean(values.ruEnabled);
-          const footBusy = saveLoading || activateLoading || ruSyncLoading;
+          const footBusy = saveLoading || activateLoading || ruSyncLoading || vitrinePublishSaving;
           const headerInitials = isCreate
             ? (() => {
                 const n = ownerInitials({
@@ -2470,14 +2577,36 @@ const UpdateOwnerSidebar = ({
                   <span style={{ fontSize: 18 }}>🌐</span>
                   <div style={{ flex: 1 }}>
                     <div className="nm">Profil publié</div>
-                    <div className="ds">Visible sur sojori.com / marketplace</div>
+                    <div className="ds">
+                      {vitrinePublishSaving
+                        ? 'Enregistrement…'
+                        : 'Sauve au clic (pas besoin d’Enregistrer)'}
+                    </div>
                   </div>
                   <div
-                    className={`toggle${values.pmProfile.published ? ' on' : ''}`}
-                    onClick={() => setFieldValue('pmProfile.published', !values.pmProfile.published)}
+                    className={`toggle${values.pmProfile.published ? ' on' : ''}${
+                      vitrinePublishSaving ? ' disabled' : ''
+                    }`}
+                    onClick={() => {
+                      if (vitrinePublishSaving || isCreate || !owner?._id) {
+                        console.warn('[PM-vitrine] toggle ignoré', {
+                          vitrinePublishSaving,
+                          isCreate,
+                          ownerId: owner?._id,
+                        });
+                        if (isCreate || !owner?._id) {
+                          toast.info('Enregistrez d’abord le compte, puis publiez la vitrine');
+                        }
+                        return;
+                      }
+                      const next = !values.pmProfile.published;
+                      void savePublishedNow(next, formikBag);
+                    }}
                     onKeyDown={() => {}}
                     role="switch"
                     aria-checked={values.pmProfile.published}
+                    aria-busy={vitrinePublishSaving}
+                    style={vitrinePublishSaving ? { opacity: 0.5, pointerEvents: 'none' } : undefined}
                   />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

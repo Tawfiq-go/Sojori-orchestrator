@@ -82,7 +82,7 @@ export default function ListingFormV2({
   };
 
   /**
-   * Publier = Synchroniser vers Rentals United (sans sauvegarder d'abord)
+   * Publier = pousser le listing vers les OTAs (via channel manager RU)
    * Appelle POST /api/v1/listing/listings/:listingId/sync-with-rental-united
    */
   const handlePublish = async () => {
@@ -90,16 +90,15 @@ export default function ListingFormV2({
 
     if (!isPersistedListingId(listingId)) {
       console.error('[ListingFormV2] Listing not persisted yet:', listingId);
-      toast.error('Sauvegardez le listing d\'abord (bouton Sauvegarder), puis publiez vers Rentals United.');
+      toast.error('Sauvegardez le listing d\'abord (bouton Sauvegarder), puis publiez vers les OTAs.');
       return;
     }
 
     setPublishLoading(true);
     try {
-      console.log('[ListingFormV2] Starting RU sync for listingId:', listingId);
-      toast.info('Synchronisation vers Rentals United en cours...');
+      console.log('[ListingFormV2] Starting OTA sync for listingId:', listingId);
+      toast.info('Synchronisation vers les OTAs en cours...');
 
-      // Synchroniser avec Rentals United
       const syncResult = await listingsService.syncListingToRentalUnited(listingId);
 
       console.log('[ListingFormV2] Sync result:', syncResult);
@@ -109,13 +108,13 @@ export default function ListingFormV2({
         const propertyIds = syncResult.data?.propertyIds || [];
         console.log('[ListingFormV2] Sync SUCCESS - apiCallCount:', apiCallCount, 'propertyIds:', propertyIds);
         toast.success(
-          `✓ Listing synchronisé avec RU (${apiCallCount} appels API, ${propertyIds.length} propriétés)`,
+          `✓ Listing synchronisé vers les OTAs (${apiCallCount} appels API, ${propertyIds.length} propriétés)`,
           { autoClose: 5000 }
         );
       } else {
         console.error('[ListingFormV2] Sync FAILED - error:', syncResult.error);
         toast.error(
-          `Échec de la synchronisation RU: ${syncResult.error || 'Erreur inconnue'}`,
+          `Échec de la synchronisation vers les OTAs: ${syncResult.error || 'Erreur inconnue'}`,
           { autoClose: 8000 }
         );
       }
@@ -166,7 +165,10 @@ export default function ListingFormV2({
                                                             onChange={imgs => setValues(v => ({ ...v, listingImages: imgs }))}
                                                             onImagesPersisted={onImagesPersisted}
                                                             airbnbHeroOrder={values.airbnbHeroOrder}
-                                                            onAirbnbOrderChange={v => setValues(s => ({ ...s, airbnbHeroOrder: v }))} />;
+                                                            onAirbnbOrderChange={v => setValues(s => ({ ...s, airbnbHeroOrder: v }))}
+                                                            propertyUnit={values.propertyUnit}
+                                                            roomTypes={values.roomTypes || []}
+                                                            onRoomTypesChange={(rts) => setValues((v) => ({ ...v, roomTypes: rts }))} />;
       if (tabKey === 'amenities')    return <AmenitiesTab   {...common} listingId={listingId} />;
       if (tabKey === 'ru-import')    return isAdmin ? <RuImportDataTab {...common} /> : null;
       if (tabKey === 'pricing')      return <PricingTab     {...common} />;
@@ -175,7 +177,20 @@ export default function ListingFormV2({
       if (tabKey === 'distribution' || tabKey === 'direct') {
         return <DistributionTab {...common} listingId={listingId} />;
       }
-      if (tabKey === 'rooms')        return <RoomsTab       {...common} listingId={listingId} />;
+      if (tabKey === 'rooms') {
+        // Multi : types/stock dans Infos bâtiment, photos dans Photos, prix dans Pricing
+        if (values.propertyUnit === 'Multi') {
+          return (
+            <Box sx={{ p: 2 }}>
+              <Typography sx={{ fontSize: 13, color: '#55504a', lineHeight: 1.5 }}>
+                Les types Multi sont gérés dans <b>Infos bâtiment</b> (stock / capacité),{' '}
+                <b>Photos</b> et <b>Pricing (par type)</b> — pour éviter les doublons.
+              </Typography>
+            </Box>
+          );
+        }
+        return <RoomsTab {...common} listingId={listingId} />;
+      }
       if (tabKey === 'license')      return <LicenseTab     {...common} />;
     }
     return null;
@@ -197,7 +212,10 @@ export default function ListingFormV2({
       tabsStatus={{
         general:      { tone: 'success', label: '✓' },
         location:     { tone: 'success', label: '✓' },
-        photos:       { tone: 'warning', label: `${(values.photos || []).length}/15` },
+        photos:       {
+          tone: (values.listingImages || []).length ? 'success' : 'warning',
+          label: `${(values.listingImages || []).filter((i) => i?.url).length}`,
+        },
         amenities:    { tone: 'success', label: '✓' },
         license:      { tone: 'warning', label: '⚠' },
       }}
@@ -214,6 +232,7 @@ export default function ListingFormV2({
       embedded={embedded}
       importOnboardingActive={importOnboardingActive}
       hideRuImportTab={!isAdmin}
+      propertyUnit={values.propertyUnit === 'Multi' ? 'Multi' : 'Single'}
       lastSavedAt={values.updatedAt}
       lastPublishedAt={values.otaChannelsSnapshot?.updatedAt}
       onSave={() => onSave?.(values)}

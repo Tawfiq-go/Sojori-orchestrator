@@ -299,12 +299,14 @@ class CalendarService {
     roomTypes: Array<{
       roomTypeId: string;
       roomTypeName: string;
+      roomNumber?: number;
       ranges: Array<{
         from: string;
         to: string;
         classification: 'cancelled_reservation' | 'ota_stop_sell' | 'unknown' | 'missing_reservation_block';
         dayCount: number;
         reservationNumbers?: string[];
+        roomNumber?: number;
       }>;
     }>;
   }> {

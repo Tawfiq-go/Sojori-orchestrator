@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import { toast } from 'react-toastify';
+import listingsService from '../../services/listingsService';
 import OwnerCapabilitiesActivationPanel from './OwnerCapabilitiesActivationPanel';
 import {
   displayActivationsFromServices,
@@ -32,6 +33,7 @@ export default function ListingActivationSection({
   const [local, setLocal] = useState<Record<string, boolean>>(() =>
     displayActivationsFromServices(initialServices),
   );
+  const [orchestrationEnabled, setOrchestrationEnabled] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<ListingServiceActivationPatch | null>(null);
   const servicesRef = useRef(services);
@@ -55,6 +57,9 @@ export default function ListingActivationSection({
     try {
       const data = await loadListingServiceActivation(listingId);
       applyServices(data.services ?? []);
+      if (data.orchestrationEnabled !== undefined) {
+        setOrchestrationEnabled(data.orchestrationEnabled !== false);
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Chargement activation impossible';
       toast.error(msg);
@@ -67,10 +72,17 @@ export default function ListingActivationSection({
     if (initialServices?.length) {
       applyServices(initialServices);
       setLoading(false);
+      void loadListingServiceActivation(listingId)
+        .then(data => {
+          if (data.orchestrationEnabled !== undefined) {
+            setOrchestrationEnabled(data.orchestrationEnabled !== false);
+          }
+        })
+        .catch(() => undefined);
       return;
     }
     void load();
-  }, [applyServices, initialServices, load]);
+  }, [applyServices, initialServices, load, listingId]);
 
   const flushSave = useCallback(
     async (patch: ListingServiceActivationPatch) => {
@@ -130,11 +142,34 @@ export default function ListingActivationSection({
 
   const handleResetOverride = useCallback(
     (key: string) => {
-      const nextDisplay = { ...local, [key]: servicesRef.current.find(s => s.serviceId === key)?.ownerEnabled === true };
+      const nextDisplay = {
+        ...local,
+        [key]: servicesRef.current.find(s => s.serviceId === key)?.ownerEnabled === true,
+      };
       setLocal(nextDisplay);
       void flushSave({ unset: [key] });
     },
     [flushSave, local],
+  );
+
+  const handleGlobalChange = useCallback(
+    async (next: boolean) => {
+      const prev = orchestrationEnabled;
+      setOrchestrationEnabled(next);
+      setSaving(true);
+      try {
+        await listingsService.putListingOrchestration(listingIdRef.current, {
+          orchestrationEnabled: next,
+        });
+        toast.success(next ? 'Orchestration globale activée' : 'Orchestration globale coupée');
+      } catch (e: unknown) {
+        setOrchestrationEnabled(prev);
+        toast.error(e instanceof Error ? e.message : 'Erreur enregistrement');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [orchestrationEnabled],
   );
 
   if (loading && !services.length) {
@@ -154,6 +189,8 @@ export default function ListingActivationSection({
       mode="listing"
       value={local}
       serviceActivationStatus={services}
+      orchestrationEnabled={orchestrationEnabled}
+      onOrchestrationEnabledChange={v => void handleGlobalChange(v)}
       onChange={handleChange}
       onListingSave={async display => {
         await flushSave(overridesPatchFromDisplayState(servicesRef.current, display));

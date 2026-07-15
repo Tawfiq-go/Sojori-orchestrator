@@ -9,10 +9,14 @@ import type { Conversation, MessageExchange } from '../types/messages.types';
 const BASE = '/api/v1/admin/channels-dashboard/booking-inbox';
 
 export type BookingInboxExchange = MessageExchange & {
+  id?: string;
   transcript?: string;
   summary?: string;
   type?: string;
   media_id?: string;
+  has_audio?: boolean;
+  /** Bytes audio persistés côté serveur — rejouable même si Meta a expiré */
+  audio_stored?: boolean;
   tags?: string[];
 };
 
@@ -138,18 +142,29 @@ export async function suggestBookingInboxAi(params: {
   return data.data;
 }
 
-/** Fetch audio blob with auth for HTMLAudioElement. */
+/** Fetch audio blob with auth for HTMLAudioElement. key = mediaId ou mongo id. */
 export async function fetchBookingInboxMediaBlob(mediaId: string): Promise<Blob> {
-  const { data, headers } = await apiClient.get(
+  const { data, headers, status } = await apiClient.get(
     `${BASE}/media/${encodeURIComponent(mediaId)}`,
     {
       ...channelsDashboardAxiosConfig(),
       responseType: 'blob',
       timeout: 60000,
+      validateStatus: (s) => s < 500,
     },
   );
-  const type = String(headers?.['content-type'] || 'audio/ogg');
-  return data instanceof Blob ? data : new Blob([data], { type });
+  const type = String(headers?.['content-type'] || '');
+  if (status >= 400 || type.includes('application/json')) {
+    throw new Error('media_unavailable');
+  }
+  const blob =
+    data instanceof Blob ? data : new Blob([data], { type: type || 'audio/ogg' });
+  if (!blob.size) throw new Error('media_empty');
+  // Still JSON error wrapped as blob (some proxies)
+  if (type.includes('application/json') || blob.type.includes('json')) {
+    throw new Error('media_unavailable');
+  }
+  return blob.type ? blob : new Blob([blob], { type: 'audio/ogg' });
 }
 
 export function bufferToBase64(buf: ArrayBuffer): string {

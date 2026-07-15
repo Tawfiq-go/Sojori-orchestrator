@@ -143,6 +143,8 @@ const FIX_ERROR_HINTS: Record<string, string> = {
   plan_still_required: 'Plan encore requis (réservation Confirmé/Pending active)',
   orchestration_skipped:
     'Plan non créé — orchestration listing off, 0 workflows, ou import silencieux non lancé',
+  plan_terminal_blocking:
+    'Ancien plan annulé/archivé bloquait la recréation — relancer la correction',
   orchestration_launch_pending:
     'Import silencieux (Booking/RU) : lancer l’orchestration depuis la fiche réservation / import',
   reservation_cancelled: 'Réservation annulée — plan non créé',

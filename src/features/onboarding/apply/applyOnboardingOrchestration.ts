@@ -151,7 +151,9 @@ export async function applyOnboardingOrchestration(
 
   emitPhase(options, 'capabilities');
   await applyWithTimeout('PUT owner orchestration', 120_000, () =>
-    replaceOwnerOrchestrationCapabilities(ownerId, built.capabilities, built.activations),
+    replaceOwnerOrchestrationCapabilities(ownerId, built.capabilities, built.activations, {
+      orchestrationEnabled: draft.panels['3']?.orchestrationEnabled !== false,
+    }),
   );
 
   let finalAuditLines: string[] = [];

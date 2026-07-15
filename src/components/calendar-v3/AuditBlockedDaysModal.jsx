@@ -14,7 +14,12 @@ export default function AuditBlockedDaysModal({
   if (!open) return null;
 
   const allRanges = roomTypes.flatMap((rt) =>
-    (rt.ranges || []).map((range) => ({ ...range, roomTypeName: rt.roomTypeName, roomTypeId: rt.roomTypeId }))
+    (rt.ranges || []).map((range) => ({
+      ...range,
+      roomTypeName: rt.roomTypeName,
+      roomTypeId: rt.roomTypeId,
+      roomNumber: rt.roomNumber,
+    }))
   );
 
   const rangeKey = (r) => `${r.roomTypeId}:${r.from}:${r.to}`;

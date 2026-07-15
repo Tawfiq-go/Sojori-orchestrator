@@ -260,6 +260,12 @@ export interface WizardPanel3 {
   pack: 'essential' | 'standard' | 'complete' | 'premium';
   /** À l'apply : remplace entièrement le template orchestration owner */
   orchestrationApplyMode: 'replace';
+  /**
+   * Coupe-circuit global owner (orchestrationEnabled).
+   * Indépendant des services : false = pas de plan/tâches/messages auto.
+   * Défaut true.
+   */
+  orchestrationEnabled?: boolean;
 }
 
 export interface WizardPanel4 {

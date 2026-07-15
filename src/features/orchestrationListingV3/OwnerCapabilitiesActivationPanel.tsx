@@ -21,6 +21,7 @@ import {
   activationsFromRows,
   defaultActivationsAllOff,
   saveOwnerCapabilityActivations,
+  saveOwnerOrchestrationEnabled,
 } from './ownerCapabilityActivation';
 import {
   countEffectiveActiveServices,
@@ -29,10 +30,12 @@ import {
   type ServiceActivationStatusEntry,
 } from './listingCapabilityActivation';
 import type { OwnerOrchestrationDoc } from './ownerOrchestrationApi';
+import OrchestrationGlobalSwitch from './OrchestrationGlobalSwitch';
 import {
   shouldAutoSyncListingsAfterOwnerSave,
   syncAllListingsFromOwnerOrchestration,
 } from './ownerOrchestrationListingSync';
+import listingsService from '../../services/listingsService';
 
 const GROUP_EMOJI: Record<CapabilityGroupId, string> = {
   cleaning: '🧹',
@@ -66,6 +69,9 @@ type Props = {
   /** Après save owner : propager le modèle PM vers toutes les annonces. */
   autoSyncListings?: boolean;
   isAdminTemplate?: boolean;
+  /** Coupe-circuit orchestrationEnabled (indépendant des services). */
+  orchestrationEnabled?: boolean;
+  onOrchestrationEnabledChange?: (next: boolean) => void;
 };
 
 export default function OwnerCapabilitiesActivationPanel({
@@ -86,6 +92,8 @@ export default function OwnerCapabilitiesActivationPanel({
   listingSaving = false,
   autoSyncListings = false,
   isAdminTemplate = false,
+  orchestrationEnabled: orchestrationEnabledProp,
+  onOrchestrationEnabledChange,
 }: Props) {
   const statusByKey = useMemo(
     () => Object.fromEntries((serviceActivationStatus ?? []).map(s => [s.serviceId, s])),
@@ -103,6 +111,22 @@ export default function OwnerCapabilitiesActivationPanel({
   );
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [globalOn, setGlobalOn] = useState(() =>
+    orchestrationEnabledProp !== undefined
+      ? orchestrationEnabledProp
+      : orchestrationDoc?.orchestrationEnabled !== false,
+  );
+  const [savingGlobal, setSavingGlobal] = useState(false);
+
+  useEffect(() => {
+    if (orchestrationEnabledProp !== undefined) {
+      setGlobalOn(orchestrationEnabledProp);
+      return;
+    }
+    if (orchestrationDoc) {
+      setGlobalOn(orchestrationDoc.orchestrationEnabled !== false);
+    }
+  }, [orchestrationEnabledProp, orchestrationDoc]);
 
   useEffect(() => {
     if (controlled && isListingMode && autoSaveListing) {
@@ -122,7 +146,9 @@ export default function OwnerCapabilitiesActivationPanel({
     setDirty(false);
   }, [controlled, rows, value, isListingMode, serviceActivationStatus, autoSaveListing]);
 
-  const savingNow = saving || listingSaving;
+  const savingNow = saving || listingSaving || savingGlobal;
+  const globalOff = globalOn === false;
+  const switchesDisabled = disabled || savingNow || globalOff;
 
   const setActivation = useCallback(
     (key: string, active: boolean) => {
@@ -199,7 +225,9 @@ export default function OwnerCapabilitiesActivationPanel({
     if (!ownerKey || ownerKey === 'global') return;
     setSaving(true);
     try {
-      await saveOwnerCapabilityActivations(ownerKey, local, orchestrationDoc);
+      await saveOwnerCapabilityActivations(ownerKey, local, orchestrationDoc, {
+        orchestrationEnabled: globalOn,
+      });
       let syncCount = 0;
       if (
         autoSyncListings &&
@@ -233,6 +261,50 @@ export default function OwnerCapabilitiesActivationPanel({
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const persistGlobal = async (next: boolean) => {
+    const prev = globalOn;
+    setGlobalOn(next);
+    if (onOrchestrationEnabledChange) {
+      onOrchestrationEnabledChange(next);
+      return;
+    }
+    if (isListingMode) {
+      if (!ownerKey) return;
+      setSavingGlobal(true);
+      try {
+        await listingsService.putListingOrchestration(ownerKey, { orchestrationEnabled: next });
+        toast.success(next ? 'Orchestration globale activée' : 'Orchestration globale coupée');
+      } catch (e: unknown) {
+        setGlobalOn(prev);
+        toast.error(e instanceof Error ? e.message : 'Erreur enregistrement');
+      } finally {
+        setSavingGlobal(false);
+      }
+      return;
+    }
+    if (!ownerKey || ownerKey === 'global') return;
+    setSavingGlobal(true);
+    try {
+      await saveOwnerOrchestrationEnabled(ownerKey, next);
+      if (
+        autoSyncListings &&
+        shouldAutoSyncListingsAfterOwnerSave(ownerKey, isAdminTemplate)
+      ) {
+        try {
+          await syncAllListingsFromOwnerOrchestration(ownerKey);
+        } catch {
+          /* sync best-effort */
+        }
+      }
+      toast.success(next ? 'Orchestration globale activée' : 'Orchestration globale coupée');
+    } catch (e: unknown) {
+      setGlobalOn(prev);
+      toast.error(e instanceof Error ? e.message : 'Erreur enregistrement');
+    } finally {
+      setSavingGlobal(false);
     }
   };
 
@@ -302,6 +374,13 @@ export default function OwnerCapabilitiesActivationPanel({
         </Stack>
       </Stack>
 
+      <OrchestrationGlobalSwitch
+        checked={globalOn}
+        disabled={disabled || savingNow}
+        scope={isListingMode ? 'listing' : 'owner'}
+        onChange={v => void persistGlobal(v)}
+      />
+
       {menuNav ? (
         <Box
           sx={{
@@ -335,7 +414,7 @@ export default function OwnerCapabilitiesActivationPanel({
               <Button
                 size="small"
                 sx={{ minWidth: 0, fontSize: 9, py: 0.1, px: 0.75 }}
-                disabled={disabled || savingNow}
+                disabled={switchesDisabled}
                 onClick={() => onResetListingOverride?.('menu_navigation')}
               >
                 Hériter
@@ -345,7 +424,7 @@ export default function OwnerCapabilitiesActivationPanel({
             <Switch
               size="small"
               checked={local.menu_navigation === true}
-              disabled={disabled || savingNow}
+              disabled={switchesDisabled}
               onChange={(_, checked) => setActivation('menu_navigation', checked)}
             />
           </Stack>
@@ -382,16 +461,16 @@ export default function OwnerCapabilitiesActivationPanel({
                 <Button
                   size="small"
                   sx={{ minWidth: 0, fontSize: 10, py: 0.25 }}
-              disabled={disabled || savingNow}
-              onClick={() => setGroup(grp.id, true)}
+                  disabled={switchesDisabled}
+                  onClick={() => setGroup(grp.id, true)}
                 >
                   Tout Oui
                 </Button>
                 <Button
                   size="small"
                   sx={{ minWidth: 0, fontSize: 10, py: 0.25 }}
-              disabled={disabled || savingNow}
-              onClick={() => setGroup(grp.id, false)}
+                  disabled={switchesDisabled}
+                  onClick={() => setGroup(grp.id, false)}
                 >
                   Tout Non
                 </Button>
@@ -422,7 +501,7 @@ export default function OwnerCapabilitiesActivationPanel({
                       <Button
                         size="small"
                         sx={{ minWidth: 0, fontSize: 9, py: 0.1, px: 0.75 }}
-                        disabled={disabled || savingNow}
+                        disabled={switchesDisabled}
                         onClick={() => onResetListingOverride?.(def.key)}
                       >
                         Hériter
@@ -431,7 +510,7 @@ export default function OwnerCapabilitiesActivationPanel({
                     <Switch
                       size="small"
                       checked={local[def.key] === true}
-                      disabled={disabled || savingNow}
+                      disabled={switchesDisabled}
                       onChange={(_, checked) => setActivation(def.key, checked)}
                     />
                   </Stack>

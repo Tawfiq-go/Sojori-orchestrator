@@ -255,7 +255,7 @@ export function DynamicPricingPage() {
                     fontFamily: '"Geist Mono", monospace',
                   }}
                 >
-                  Snapshot marché ·{' '}
+                  Estimation prix de marché ·{' '}
                   {new Date(bienDetail.row.airroiSnapshotAt).toLocaleString('fr-FR', {
                     dateStyle: 'short',
                     timeStyle: 'short',
@@ -271,7 +271,7 @@ export function DynamicPricingPage() {
                     fontWeight: 600,
                   }}
                 >
-                  Pas de snapshot marché — utiliser ⟳ sur cette fiche
+                  Pas d’estimation prix de marché — actualiser sur cette fiche
                 </Typography>
               )}
               <BienExpressBar

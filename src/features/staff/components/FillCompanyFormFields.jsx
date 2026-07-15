@@ -954,7 +954,6 @@ export default function FillCompanyFormFields({
                 helperText={tLegal?.Birthday && eLegal?.Birthday ? t(eLegal.Birthday) : ''}
                 fullWidth
                 size="small"
-                InputLabelProps={{ shrink: true }}
                 disabled={legalFieldsDisabled}
               />
             </Grid>

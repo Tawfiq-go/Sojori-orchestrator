@@ -79,8 +79,12 @@ export async function replaceOwnerOrchestrationCapabilities(
   ownerKey: string,
   capabilities: Record<string, ListingCapabilityDoc>,
   activations: Record<string, boolean>,
+  options?: { orchestrationEnabled?: boolean },
 ): Promise<void> {
-  const flags = buildOrchestrationFlagsFromActivations(activations);
+  const flags = buildOrchestrationFlagsFromActivations(
+    activations,
+    options?.orchestrationEnabled,
+  );
   await listingsService.putOwnerOrchestration(ownerKey, {
     orchestrationEnabled: flags.orchestrationEnabled,
     capabilities,

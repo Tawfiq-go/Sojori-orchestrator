@@ -44,12 +44,15 @@ interface GetThreadsParams {
   search_text?: string;
   workerWaNumber?: string;
   ownerId?: string;
+  /** Staff WhatsApp (tasks) vs Admin WhatsApp (OTA notifs). */
+  inboxParty?: 'staff' | 'admin';
 }
 
 interface SendMessageParams {
   to: string;
   text: string;
   workerWaName?: string;
+  inboxParty?: 'staff' | 'admin';
 }
 
 function normalizeStaffWaPhone(phone?: string): string {
@@ -86,8 +89,13 @@ export async function updateStaffWaMessage(idOrWamid: string, payload: any) {
   return data?.data || data;
 }
 
-export async function sendStaffWaText({ to, text, workerWaName }: SendMessageParams) {
-  const { data } = await apiClient.put(SEND_MSG_ENDPOINT, { to, text, workerWaName });
+export async function sendStaffWaText({ to, text, workerWaName, inboxParty }: SendMessageParams) {
+  const { data } = await apiClient.put(SEND_MSG_ENDPOINT, {
+    to,
+    text,
+    workerWaName,
+    inboxParty: inboxParty === 'staff' || inboxParty === 'admin' ? inboxParty : 'admin',
+  });
   if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
     throw new Error(staffSendErrorMessage(data));
   }

@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════
-// TooltipBreakdown.jsx — cascade Sojori AI + prix actif (portal, z-index élevé)
+// TooltipBreakdown.jsx — cascade Sojori AI claire (base → réglages → final)
 // ════════════════════════════════════════════════════════════════════
 import React, { useLayoutEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -7,16 +7,9 @@ import { T, priceOf, isArchiveDay, hasInventoryData, resolvePriceMode, PRICE_MOD
 
 const TOOLTIP_Z = 10150;
 const VIEWPORT_PAD = 10;
-/** Sous la barre nav + toolbar calendrier + légende sticky */
 const SAFE_TOP = 132;
 
-function normalizeFactorLabel(label) {
-  return String(label || '')
-    .replace(/\(estimate\)/gi, '')
-    .replace(/estimate/gi, 'marché')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+const FACTOR_ORDER = ['base', 'mode', 'occupancy', 'floorNormal', 'floorAggressive', 'ceiling', 'event', 'lastMinute', 'rounding'];
 
 function computeTooltipPosition(anchor, tip) {
   const vw = window.innerWidth;
@@ -50,37 +43,109 @@ function computeTooltipPosition(anchor, tip) {
   return { top, left };
 }
 
-function PilotFactorsBlock({ history, currency }) {
-  const factors = history?.pilotFactors ?? [];
+function factorTitle(f) {
+  if (f.key === 'base') {
+    const sub = String(f.sub || '').toLowerCase();
+    if (sub.includes('listing') || sub.includes('base listing')) return 'Prix base listing';
+    return 'Estimation prix de marché';
+  }
+  if (f.key === 'mode') return f.label || 'Mode';
+  if (f.key === 'occupancy') return 'Taux occupation';
+  if (f.key === 'lastMinute') return 'Dernière minute';
+  if (f.key === 'event') return f.label || 'Événement';
+  if (f.key === 'floorNormal' || f.key === 'floorAggressive') return 'Plancher';
+  if (f.key === 'ceiling') return 'Plafond';
+  if (f.key === 'rounding') return 'Arrondi';
+  return f.label || f.key;
+}
+
+function sortFactors(factors) {
+  return [...factors].sort((a, b) => {
+    const ia = FACTOR_ORDER.indexOf(a.key);
+    const ib = FACTOR_ORDER.indexOf(b.key);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+}
+
+/** Affiche la cascade du dernier apply (pas le prix manuel). */
+function PilotCascadeBlock({ history, currency }) {
+  const factors = sortFactors(history?.pilotFactors ?? []);
   if (history?.source !== 'pilot-v2' && factors.length === 0) return null;
 
+  const baseSource =
+    history?.pricingBaseSource === 'manual_base'
+      ? 'manuel'
+      : history?.pricingBaseSource === 'listing_base'
+        ? 'listing'
+        : 'estimate';
+
   return (
-    <div style={{ marginBottom: 6, paddingBottom: 6, borderBottom: `1px solid ${T.border}` }}>
+    <div style={{ marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${T.border}` }}>
       <div style={{
-        fontSize: 9, fontWeight: 800, color: T.ai, marginBottom: 4,
-        fontFamily: '"Geist Mono", monospace', textTransform: 'uppercase',
+        fontSize: 9, fontWeight: 800, color: T.ai, marginBottom: 6,
+        fontFamily: '"Geist Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.04em',
       }}>
-        Sojori AI · {history.mixEngineVersion ?? 'v2.4'}
+        Sojori AI · {history.mixEngineVersion ?? 'v2.1'}
+        {' · '}
+        {baseSource === 'manuel'
+          ? 'base manuel'
+          : baseSource === 'listing'
+            ? 'base listing'
+            : 'base estimé'}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '2px 10px' }}>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {factors.map((f, i) => {
           const isBase = f.key === 'base';
-          const label = isBase ? 'Prix marché' : normalizeFactorLabel(f.label);
-          const after = f.after ?? (isBase ? history?.base : null);
-          const valueText = isBase
-            ? `${Math.round(after ?? f.valueMad ?? 0)} ${currency}`
-            : `${(f.valueMad ?? 0) >= 0 ? '+' : ''}${Math.round(f.valueMad ?? 0)} ${currency}`;
+          const after = Math.round(f.after ?? (isBase ? history?.base : 0) ?? 0);
+          const delta = Math.round(f.valueMad ?? 0);
+          const skipNeutral =
+            !isBase &&
+            Math.abs(delta) < 1 &&
+            (f.key === 'floorNormal' || f.key === 'rounding') &&
+            String(f.sub || '').includes('non atteints');
+
+          if (skipNeutral) return null;
 
           return (
-            <React.Fragment key={`${f.key ?? i}`}>
-              <span style={{ fontSize: 10, color: T.text2, fontWeight: 600 }}>{label}</span>
-              <span style={{
-                fontSize: 10, fontWeight: 700, fontFamily: '"Geist Mono", monospace', textAlign: 'right',
-                color: isBase ? T.text : (f.valueMad ?? 0) >= 0 ? T.success : T.error,
-              }}>
-                {valueText}
-              </span>
-            </React.Fragment>
+            <div key={`${f.key ?? i}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{
+                  fontSize: 11, fontWeight: isBase ? 800 : 650,
+                  color: isBase ? T.text : T.text2,
+                  lineHeight: 1.25,
+                }}>
+                  {factorTitle(f)}
+                </div>
+                {f.sub ? (
+                  <div style={{
+                    fontSize: 9.5, color: T.text3, lineHeight: 1.3, marginTop: 1,
+                    fontFamily: '"Geist Mono", monospace',
+                  }}>
+                    {f.sub}
+                  </div>
+                ) : null}
+              </div>
+              <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                {isBase ? (
+                  <span style={{ fontSize: 11, fontWeight: 800, fontFamily: '"Geist Mono", monospace', color: T.text }}>
+                    {after} {currency}
+                  </span>
+                ) : (
+                  <>
+                    <div style={{
+                      fontSize: 10.5, fontWeight: 700, fontFamily: '"Geist Mono", monospace',
+                      color: delta > 0 ? T.success : delta < 0 ? T.error : T.text3,
+                    }}>
+                      {delta > 0 ? '+' : ''}{delta} {currency}
+                    </div>
+                    <div style={{ fontSize: 9, color: T.text4, fontFamily: '"Geist Mono", monospace' }}>
+                      → {after}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           );
         })}
       </div>
@@ -93,29 +158,15 @@ function TooltipBody({ inv, dateStr, currency }) {
   const hasPilot =
     history?.source === 'pilot-v2' || (Array.isArray(history?.pilotFactors) && history.pilotFactors.length > 0);
 
-  const baseInv = inv.basePrice ?? 0;
   const calc =
     inv.calculatedPrice != null && inv.calculatedPrice !== undefined ? inv.calculatedPrice : null;
   const man = inv.manualPrice != null && inv.manualPrice !== undefined ? inv.manualPrice : null;
+  const baseInv = inv.basePrice ?? 0;
 
   const mode = resolvePriceMode(inv);
   const manualActive = mode === 'manual';
   const dynamicActive = mode === 'dynamic';
   const total = priceOf(inv);
-
-  const priceRows = [];
-  if (calc != null) {
-    priceRows.push({ key: 'dyn', label: 'Dynamique', value: `${calc.toFixed(0)} ${currency}`, active: dynamicActive, accent: T.ai });
-  }
-  if (man != null) {
-    priceRows.push({ key: 'man', label: 'Manuel', value: `${man.toFixed(0)} ${currency}`, active: manualActive, accent: T.warning });
-  }
-  if (!hasPilot && baseInv > 0) {
-    priceRows.push({
-      key: 'base', label: 'Base', value: `${baseInv.toFixed(0)} ${currency}`,
-      active: !dynamicActive && !manualActive, accent: T.text2,
-    });
-  }
 
   return (
     <>
@@ -124,7 +175,7 @@ function TooltipBody({ inv, dateStr, currency }) {
         fontSize: 10, fontWeight: 700, color: T.text3,
         fontFamily: '"Geist Mono", monospace',
         letterSpacing: '0.04em', textTransform: 'uppercase',
-        paddingBottom: 6, borderBottom: `1px solid ${T.border}`, marginBottom: 6,
+        paddingBottom: 6, borderBottom: `1px solid ${T.border}`, marginBottom: 8,
       }}>
         <span>{dateStr}</span>
         <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}>
@@ -133,38 +184,51 @@ function TooltipBody({ inv, dateStr, currency }) {
         </span>
       </div>
 
-      <PilotFactorsBlock history={history} currency={currency} />
+      {hasPilot ? (
+        <PilotCascadeBlock history={history} currency={currency} />
+      ) : null}
 
-      {priceRows.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '3px 10px', marginBottom: 6 }}>
-          {priceRows.map((row) => (
-            <React.Fragment key={row.key}>
-              <span style={{
-                fontSize: 11, fontWeight: row.active ? 700 : 500,
-                color: row.active ? row.accent : T.text4,
-              }}>
-                {row.label}
-                {row.active ? (
-                  <span style={{ marginLeft: 4, fontSize: 8, fontWeight: 800, color: row.accent }}>●</span>
-                ) : null}
-              </span>
-              <span style={{
-                fontSize: 11, fontWeight: row.active ? 700 : 500,
-                color: row.active ? row.accent : T.text4,
-                fontFamily: '"Geist Mono", monospace', textAlign: 'right',
-              }}>
-                {row.value}
-              </span>
-            </React.Fragment>
-          ))}
-        </div>
-      )}
-
-      {mode !== 'base' && inv.applyManual && inv.useDynamicPrice && (
-        <div style={{ fontSize: 9.5, color: T.warning, marginBottom: 4, lineHeight: 1.35, fontWeight: 600 }}>
-          Flags legacy — mode « {PRICE_MODE_LABEL[mode]} »
-        </div>
-      )}
+      {/* Résumé affiché — dynamique vs manuel */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 10px', marginBottom: 6 }}>
+        {calc != null ? (
+          <>
+            <span style={{ fontSize: 11.5, fontWeight: dynamicActive ? 800 : 500, color: dynamicActive ? T.ai : T.text4 }}>
+              Prix dynamique
+              {dynamicActive ? <span style={{ marginLeft: 4, fontSize: 8 }}>●</span> : null}
+            </span>
+            <span style={{
+              fontSize: 12, fontWeight: dynamicActive ? 800 : 500,
+              color: dynamicActive ? T.ai : T.text4,
+              fontFamily: '"Geist Mono", monospace', textAlign: 'right',
+            }}>
+              {Math.round(calc)} {currency}
+            </span>
+          </>
+        ) : null}
+        {man != null ? (
+          <>
+            <span style={{ fontSize: 11.5, fontWeight: manualActive ? 800 : 500, color: manualActive ? T.warning : T.text4 }}>
+              Prix manuel
+              {manualActive ? <span style={{ marginLeft: 4, fontSize: 8 }}>●</span> : null}
+            </span>
+            <span style={{
+              fontSize: 12, fontWeight: manualActive ? 800 : 500,
+              color: manualActive ? T.warning : T.text4,
+              fontFamily: '"Geist Mono", monospace', textAlign: 'right',
+            }}>
+              {Math.round(man)} {currency}
+            </span>
+          </>
+        ) : null}
+        {!hasPilot && baseInv > 0 ? (
+          <>
+            <span style={{ fontSize: 11, color: T.text3 }}>Prix base</span>
+            <span style={{ fontSize: 11, fontFamily: '"Geist Mono", monospace', textAlign: 'right', color: T.text3 }}>
+              {Math.round(baseInv)} {currency}
+            </span>
+          </>
+        ) : null}
+      </div>
 
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
@@ -174,11 +238,11 @@ function TooltipBody({ inv, dateStr, currency }) {
           Final · {PRICE_MODE_LABEL[mode]}
         </span>
         <span style={{
-          fontSize: 14, fontWeight: 800,
+          fontSize: 15, fontWeight: 800,
           color: manualActive ? T.warning : dynamicActive ? T.ai : T.primary,
           fontFamily: '"Geist Mono", monospace',
         }}>
-          {total.toFixed(0)} {currency}
+          {Math.round(total)} {currency}
         </span>
       </div>
     </>
@@ -222,8 +286,8 @@ export default function TooltipBreakdown({ inv, dateStr, currency = 'EUR', ancho
         top: coords?.top ?? -9999,
         left: coords?.left ?? -9999,
         zIndex: TOOLTIP_Z,
-        minWidth: 220,
-        maxWidth: 280,
+        minWidth: 240,
+        maxWidth: 300,
         background: 'rgba(255,255,255,0.98)',
         backdropFilter: 'blur(16px) saturate(180%)',
         WebkitBackdropFilter: 'blur(16px) saturate(180%)',

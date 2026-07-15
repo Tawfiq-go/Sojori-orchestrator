@@ -227,6 +227,106 @@ function LastMinuteDiscountsEditor({ rows = [], onChange }) {
 export function PricingTab({ values = {}, onChange }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
   const currency = values.currencyCode || 'MAD';
+  const isMulti = values.propertyUnit === 'Multi';
+  const roomTypes = Array.isArray(values.roomTypes) ? values.roomTypes : [];
+
+  const patchRoomTypePrice = (index, price) => {
+    const next = roomTypes.map((rt, i) =>
+      i === index ? { ...rt, basePrice: price } : { ...rt },
+    );
+    onChange?.({ ...values, roomTypes: next });
+  };
+
+  if (isMulti) {
+    return (
+      <Box>
+        <RuFormLegend />
+        <Card title="💰 Prix par type de chambre" meta={`${roomTypes.length} types`}>
+          <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1.75, lineHeight: 1.45 }}>
+            Chaque <b>RoomType</b> a son tarif (poussé vers la Property RU correspondante).
+            Pas de prix unique listing — Standard / Suite / Palace peuvent différer.
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+            {roomTypes.map((rt, i) => (
+              <Box
+                key={String(rt._id || rt.roomTypeName || i)}
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: '1.4fr 1fr auto' },
+                  gap: 1.25,
+                  alignItems: 'center',
+                  p: 1.25,
+                  borderRadius: '10px',
+                  border: `1px solid ${T.border}`,
+                  bgcolor: T.bg2,
+                }}
+              >
+                <Box>
+                  <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>
+                    {rt.roomTypeName || `Type ${i + 1}`}
+                  </Typography>
+                  <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
+                    ×{Math.max(1, Number(rt.roomNumber) || 1)} unités
+                  </Typography>
+                </Box>
+                <Field label="Prix / nuit" required ruField="basePrice">
+                  <MoneyInput
+                    value={rt.basePrice}
+                    onChange={(v) => patchRoomTypePrice(i, v)}
+                    currency={currency}
+                  />
+                </Field>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.primaryDeep, textAlign: 'right' }}>
+                  {Number(rt.basePrice) || 0} {currency}
+                </Typography>
+              </Box>
+            ))}
+            {roomTypes.length === 0 && (
+              <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
+                Aucun type — ajoutez-en dans Infos bâtiment.
+              </Typography>
+            )}
+          </Box>
+        </Card>
+
+        <Card title="Devise & pricing dynamique">
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+            <Field label="Devise" required ruField="currencyCode">
+              <SelectField value={values.currencyCode || ''} onChange={v => upd('currencyCode', v)}
+                options={[{ value: 'EUR', label: '€ EUR' }, { value: 'MAD', label: 'DH MAD' }, { value: 'USD', label: '$ USD' }, { value: 'GBP', label: '£ GBP' }]} />
+            </Field>
+          </Box>
+          <Box sx={{ mt: 1.5 }}>
+            <ToggleRow
+              title="Activer le pricing dynamique"
+              desc="Règles calendrier — une ligne par RoomType si le moteur le permet."
+              checked={!!values.dynamicPricing}
+              onChange={v => upd('dynamicPricing', v)}
+            />
+          </Box>
+        </Card>
+
+        <Card>
+          <Field label="Remises long séjour" ruField="longStayDiscounts" fullWidth>
+            <LongStayDiscountsEditor
+              rows={values.longStayDiscounts || []}
+              onChange={(rows) => upd('longStayDiscounts', rows)}
+            />
+          </Field>
+        </Card>
+
+        <Card>
+          <Field label="Remises last minute" ruField="lastMinuteDiscount" fullWidth>
+            <LastMinuteDiscountsEditor
+              rows={values.lastMinuteDiscount || []}
+              onChange={(rows) => upd('lastMinuteDiscount', rows)}
+            />
+          </Field>
+        </Card>
+      </Box>
+    );
+  }
+
   return (
     <Box>
       <RuFormLegend />

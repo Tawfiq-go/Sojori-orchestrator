@@ -61,14 +61,9 @@ export default function BienAirroiView({ row }: { row: PortfolioRow }) {
         <Typography sx={{ fontSize: 20, fontWeight: 900, mb: 0.5 }}>{row.listing.name}</Typography>
         <Stack direction="row" sx={{ gap: 2,  flexWrap: 'wrap', fontSize: 12, color: T.text2 }}>
           <span>
-            Snapshot marché :{' '}
+            Estimation prix de marché :{' '}
             <b style={{ color: row.hasAirroiSnapshot ? T.success : T.text4 }}>{snapLabel}</b>
           </span>
-          {row.airroiSnapshotCostUsd != null && (
-            <span>
-              Coût refresh : <b>${row.airroiSnapshotCostUsd.toFixed(3)} USD</b>
-            </span>
-          )}
           {row.perfMeta?.ttmPeriodLabel && (
             <span title={row.perfMeta.metricsPeriodLabel ?? ''}>TTM : {row.perfMeta.ttmPeriodLabel}</span>
           )}
@@ -89,11 +84,10 @@ export default function BienAirroiView({ row }: { row: PortfolioRow }) {
           }}
         >
           <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.text }}>
-            Aucun snapshot marché pour ce bien.
+            Aucune estimation prix de marché pour ce bien.
           </Typography>
           <Typography sx={{ fontSize: 12, color: T.text2, mt: 0.5 }}>
-            Utilisez « Données marché » en haut à droite → « Récupérer les performances de ce bien » (appels
-            payants via srv-channels).
+            Utilisez « Données marché » en haut à droite → « Actualiser les performances de ce bien ».
           </Typography>
         </Box>
       ) : (

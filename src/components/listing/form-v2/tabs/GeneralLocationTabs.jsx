@@ -23,6 +23,7 @@ import {
   rulesListToText,
   textToRulesList,
 } from '../utils/ruImportFieldHelpers';
+import { createEmptyRoomType } from '../../multi/multiTypes';
 import {
   Box, Stack, Typography, TextField, Select, MenuItem, FormControl,
   Switch, IconButton, Chip, Button,
@@ -149,10 +150,10 @@ function Card({ title, meta, children }) {
 
 function Counter({ value, onChange, min = 0, max = 99 }) {
   return (
-    <Stack direction="row" sx={{ alignItems: 'center', border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1, width: 'fit-content' }}>
-      <IconButton size="small" onClick={() => onChange(Math.max(min, value - 1))} sx={{ width: 32, height: 32, color: T.text2 }}>−</IconButton>
-      <Box sx={{ px: 1.75, fontFamily: '"Geist Mono", monospace', fontWeight: 700, fontSize: 13, minWidth: 50, textAlign: 'center' }}>{value}</Box>
-      <IconButton size="small" onClick={() => onChange(Math.min(max, value + 1))} sx={{ width: 32, height: 32, color: T.text2 }}>+</IconButton>
+    <Stack direction="row" sx={{ alignItems: 'center', border: `1.5px solid ${T.borderStrong}`, borderRadius: 1.2, bgcolor: T.bg1, width: 'fit-content' }}>
+      <IconButton size="small" onClick={() => onChange(Math.max(min, value - 1))} sx={{ width: 36, height: 36, color: T.text, fontSize: 18, fontWeight: 700 }}>−</IconButton>
+      <Box sx={{ px: 1.75, fontFamily: '"Geist Mono", monospace', fontWeight: 800, fontSize: 15, minWidth: 56, textAlign: 'center', color: T.text }}>{value}</Box>
+      <IconButton size="small" onClick={() => onChange(Math.min(max, value + 1))} sx={{ width: 36, height: 36, color: T.text, fontSize: 18, fontWeight: 700 }}>+</IconButton>
     </Stack>
   );
 }
@@ -220,6 +221,49 @@ export function GeneralTab({
 }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
   const isAI = (k) => aiFilled.has(k);
+  const isMulti = values?.propertyUnit === 'Multi';
+  const roomTypesList = Array.isArray(values?.roomTypes) ? values.roomTypes : [];
+  const multiUnits = roomTypesList.reduce(
+    (s, rt) => s + Math.max(0, Number(rt?.roomNumber) || 0),
+    0,
+  );
+
+  const patchRoomTypeField = (index, patch) => {
+    const next = roomTypesList.map((rt, i) => {
+      if (i !== index) return { ...rt };
+      const merged = { ...rt, ...patch };
+      if (patch.roomNumber != null) {
+        const roomNumber = Math.max(1, Number(patch.roomNumber) || 1);
+        merged.roomNumber = roomNumber;
+        const existingRooms = Array.isArray(rt.rooms) ? rt.rooms : [];
+        if (existingRooms.length !== roomNumber) {
+          const name = String(rt.roomTypeName || `Type ${i + 1}`);
+          merged.rooms = Array.from({ length: roomNumber }, (_, ri) => {
+            const old = existingRooms[ri] || {};
+            return {
+              ...old,
+              roomNumber: ri + 1,
+              roomName: old.roomName || `${name} ${ri + 1}`,
+              roomCode: old.roomCode || `RT${i + 1}-${ri + 1}`,
+              enabled: old.enabled !== false,
+            };
+          });
+        }
+      }
+      if (patch.personCapacity != null) {
+        const cap = Math.max(1, Number(patch.personCapacity) || 1);
+        merged.personCapacity = cap;
+        if (
+          merged.personCapacityMax == null ||
+          Number(merged.personCapacityMax) < cap
+        ) {
+          merged.personCapacityMax = cap;
+        }
+      }
+      return merged;
+    });
+    onChange?.({ ...values, roomTypes: next });
+  };
 
   const patchRoomTypeConfig = (configId) => {
     const selected = roomTypeConfigs.find((t) => t._id === configId);
@@ -230,6 +274,71 @@ export function GeneralTab({
       roomTypeName: selected?.type ?? roomTypes[0]?.roomTypeName,
     };
     onChange?.({ ...values, roomTypeConfigId: configId, roomTypes });
+  };
+
+  /** Form roomType row from Multi draft (sans images — gérées dans Photos). */
+  const draftToFormRoomType = (draft, ranking) => {
+    const roomNumber = Math.max(1, Number(draft.roomNumber) || 1);
+    const name = String(draft.roomTypeName || `Type ${ranking + 1}`);
+    return {
+      roomTypeName: name,
+      roomNumber,
+      personCapacity: Math.max(1, Number(draft.personCapacity) || 2),
+      personCapacityMax: Math.max(
+        Number(draft.personCapacity) || 2,
+        Number(draft.personCapacityMax) || Number(draft.personCapacity) || 2,
+      ),
+      bedroomsNumber: Math.max(0, Number(draft.bedroomsNumber) || 1),
+      bedsNumber: Math.max(0, Number(draft.bedsNumber) || 1),
+      bathroomsNumber: Math.max(0, Number(draft.bathroomsNumber) || 1),
+      surface: Number(draft.surface) || 0,
+      basePrice: Number(draft.basePrice) || 0,
+      roomTypeImages: [],
+      rooms: Array.from({ length: roomNumber }, (_, ri) => ({
+        roomNumber: ri + 1,
+        roomName: `${name} ${ri + 1}`,
+        roomCode: `RT${ranking + 1}-${ri + 1}`,
+        enabled: true,
+      })),
+    };
+  };
+
+  const addRoomType = () => {
+    const draft = createEmptyRoomType({
+      roomTypeName: `Type ${roomTypesList.length + 1}`,
+      roomNumber: 1,
+    });
+    onChange?.({
+      ...values,
+      roomTypes: [...roomTypesList, draftToFormRoomType(draft, roomTypesList.length)],
+    });
+  };
+
+  const duplicateRoomType = (index) => {
+    const src = roomTypesList[index];
+    if (!src) return;
+    const draft = createEmptyRoomType({
+      roomTypeName: `${src.roomTypeName || 'Type'} (copie)`,
+      roomNumber: Math.max(1, Number(src.roomNumber) || 1),
+      personCapacity: src.personCapacity,
+      personCapacityMax: src.personCapacityMax,
+      bedroomsNumber: src.bedroomsNumber,
+      bedsNumber: src.bedsNumber,
+      bathroomsNumber: src.bathroomsNumber,
+      surface: src.surface,
+      basePrice: src.basePrice,
+    });
+    const next = [...roomTypesList];
+    next.splice(index + 1, 0, draftToFormRoomType(draft, index + 1));
+    onChange?.({ ...values, roomTypes: next });
+  };
+
+  const removeRoomType = (index) => {
+    if (roomTypesList.length <= 1) return;
+    onChange?.({
+      ...values,
+      roomTypes: roomTypesList.filter((_, i) => i !== index),
+    });
   };
 
   const descLang = values._descLang || '🇫🇷 FR';
@@ -344,7 +453,7 @@ export function GeneralTab({
             </FormControl>
           </Field>
 
-          {roomTypeConfigs.length > 0 && (
+          {roomTypeConfigs.length > 0 && !isMulti && (
             <Field
               fullWidth
               label="Room Type"
@@ -401,63 +510,69 @@ export function GeneralTab({
             />
           </Field>
 
-          <Field
-            fullWidth
-            label="Person Capacity"
-            required
-            ruField="personCapacity"
-          >
-            <TextField
-              size="small"
-              type="number"
+          {!isMulti && (
+            <Field
               fullWidth
-              value={values.personCapacity ?? ''}
-              onChange={(e) => {
-                const n = e.target.value === '' ? undefined : +e.target.value;
-                upd('personCapacity', n);
-              }}
-              sx={sxInput}
-              slotProps={{ htmlInput: { min: 0 } }}
-            />
-          </Field>
+              label="Person Capacity"
+              required
+              ruField="personCapacity"
+            >
+              <TextField
+                size="small"
+                type="number"
+                fullWidth
+                value={values.personCapacity ?? ''}
+                onChange={(e) => {
+                  const n = e.target.value === '' ? undefined : +e.target.value;
+                  upd('personCapacity', n);
+                }}
+                sx={sxInput}
+                slotProps={{ htmlInput: { min: 0 } }}
+              />
+            </Field>
+          )}
 
-          <Field
-            fullWidth
-            label="Max Person Capacity"
-            ruField="personCapacityMax"
-          >
-            <TextField
-              size="small"
-              type="number"
+          {!isMulti && (
+            <Field
               fullWidth
-              value={values.personCapacityMax ?? values.guests ?? ''}
-              onChange={(e) => {
-                const n = e.target.value === '' ? undefined : +e.target.value;
-                onChange?.({ ...values, personCapacityMax: n, guests: n });
-              }}
-              sx={sxInput}
-              slotProps={{ htmlInput: { min: 0 } }}
-            />
-          </Field>
+              label="Max Person Capacity"
+              ruField="personCapacityMax"
+            >
+              <TextField
+                size="small"
+                type="number"
+                fullWidth
+                value={values.personCapacityMax ?? values.guests ?? ''}
+                onChange={(e) => {
+                  const n = e.target.value === '' ? undefined : +e.target.value;
+                  onChange?.({ ...values, personCapacityMax: n, guests: n });
+                }}
+                sx={sxInput}
+                slotProps={{ htmlInput: { min: 0 } }}
+              />
+            </Field>
+          )}
 
-          <Field
-            fullWidth
-            label="StandardGuests (RU)"
-            ruField="standardGuests"
-            hint="RU StandardGuests · capacité « standard » OTA"
-          >
-            <TextField
-              size="small"
-              type="number"
+          {!isMulti && (
+            <Field
               fullWidth
-              value={values.standardGuests ?? ''}
-              onChange={(e) =>
-                upd('standardGuests', e.target.value === '' ? undefined : +e.target.value)
-              }
-              sx={sxInput}
-              slotProps={{ htmlInput: { min: 1 } }}
-            />
-          </Field>
+              label="StandardGuests (RU)"
+              ruField="standardGuests"
+              hint="RU StandardGuests · capacité « standard » OTA"
+            >
+              <TextField
+                size="small"
+                type="number"
+                fullWidth
+                value={values.standardGuests ?? ''}
+                onChange={(e) =>
+                  upd('standardGuests', e.target.value === '' ? undefined : +e.target.value)
+                }
+                sx={sxInput}
+                slotProps={{ htmlInput: { min: 1 } }}
+              />
+            </Field>
+          )}
 
           <Field
             fullWidth
@@ -475,22 +590,24 @@ export function GeneralTab({
             />
           </Field>
 
-          <Field
-            fullWidth
-            label="Surface (m²)"
-            ruField="surface"
-            ai={isAI('sqm')}
-          >
-            <TextField
-              size="small"
-              type="number"
+          {!isMulti && (
+            <Field
               fullWidth
-              value={values.sqm ?? ''}
-              onChange={(e) => upd('sqm', e.target.value === '' ? undefined : +e.target.value)}
-              sx={isAI('sqm') ? sxInputAI : sxInput}
-              slotProps={{ htmlInput: { min: 0 } }}
-            />
-          </Field>
+              label="Surface (m²)"
+              ruField="surface"
+              ai={isAI('sqm')}
+            >
+              <TextField
+                size="small"
+                type="number"
+                fullWidth
+                value={values.sqm ?? ''}
+                onChange={(e) => upd('sqm', e.target.value === '' ? undefined : +e.target.value)}
+                sx={isAI('sqm') ? sxInputAI : sxInput}
+                slotProps={{ htmlInput: { min: 0 } }}
+              />
+            </Field>
+          )}
         </Box>
 
         <Box sx={{ mt: 2, pt: 2, borderTop: `1px dashed ${T.border}` }}>
@@ -507,13 +624,186 @@ export function GeneralTab({
         </Box>
       </Card>
 
-      <Card title="🛏 Chambres & lits">
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
-          <Field label="Chambres" required ruField="bedroomsNumber"><Counter value={values.bedrooms ?? 0} onChange={(v) => upd('bedrooms', v)} /></Field>
-          <Field label="Salles de bain" required ruField="bathroomsNumber"><Counter value={values.bathrooms ?? 0} onChange={(v) => upd('bathrooms', v)} /></Field>
-          <Field label="Lits" ruField="bedsNumber"><Counter value={values.beds ?? 0} onChange={(v) => upd('beds', v)} /></Field>
-        </Box>
-      </Card>
+      {isMulti ? (
+        <Card
+          title="🛏 Types de chambres"
+          meta={`${roomTypesList.length} types · ${multiUnits} unités`}
+        >
+          <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1.75, lineHeight: 1.45 }}>
+            Ici : <b>nom</b>, <b>stock</b> et <b>capacité</b>. Photos → onglet <b>Photos</b> ·
+            Prix → <b>Pricing (par type)</b>. Sur RU : 1 Property par type · U = unités.
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {roomTypesList.map((rt, i) => (
+              <Box
+                key={String(rt._id || rt.roomTypeName || i)}
+                sx={{
+                  p: 1.75,
+                  borderRadius: '12px',
+                  border: `1px solid ${T.borderStrong}`,
+                  bgcolor: T.bg1,
+                  boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+                }}
+              >
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 1.5 }}
+                >
+                  <TextField
+                    size="small"
+                    label="Nom du type"
+                    value={rt.roomTypeName || ''}
+                    onChange={(e) => patchRoomTypeField(i, { roomTypeName: e.target.value })}
+                    sx={{ ...sxInput, flex: 1, minWidth: 180 }}
+                  />
+                  <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexShrink: 0 }}>
+                    <Chip
+                      label={`×${Math.max(1, Number(rt.roomNumber) || 1)}`}
+                      size="small"
+                      sx={{
+                        fontWeight: 800,
+                        bgcolor: T.primaryTint,
+                        color: T.primaryDeep,
+                        border: '1px solid rgba(184,133,26,0.3)',
+                      }}
+                    />
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => duplicateRoomType(i)}
+                      sx={{ textTransform: 'none', fontWeight: 700, minWidth: 0, px: 1 }}
+                    >
+                      Dupliquer
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="text"
+                      color="error"
+                      disabled={roomTypesList.length <= 1}
+                      onClick={() => removeRoomType(i)}
+                      sx={{ textTransform: 'none', fontWeight: 700, minWidth: 0, px: 1 }}
+                    >
+                      Supprimer
+                    </Button>
+                  </Stack>
+                </Stack>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr 1fr',
+                      md: 'repeat(3, 1fr)',
+                      lg: 'repeat(6, 1fr)',
+                    },
+                    gap: 1.5,
+                  }}
+                >
+                  <Field label="Unités (stock)" required ruField="roomNumber">
+                    <Counter
+                      value={Math.max(1, Number(rt.roomNumber) || 1)}
+                      min={1}
+                      max={99}
+                      onChange={(v) => patchRoomTypeField(i, { roomNumber: v })}
+                    />
+                  </Field>
+                  <Field label="Pers. capacity" required ruField="personCapacity">
+                    <Counter
+                      value={Math.max(1, Number(rt.personCapacity) || 1)}
+                      min={1}
+                      max={30}
+                      onChange={(v) => patchRoomTypeField(i, { personCapacity: v })}
+                    />
+                  </Field>
+                  <Field label="Pers. max" ruField="personCapacityMax">
+                    <Counter
+                      value={Math.max(
+                        Number(rt.personCapacity) || 1,
+                        Number(rt.personCapacityMax) || Number(rt.personCapacity) || 1,
+                      )}
+                      min={1}
+                      max={40}
+                      onChange={(v) =>
+                        patchRoomTypeField(i, {
+                          personCapacityMax: Math.max(v, Number(rt.personCapacity) || 1),
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Chambres" ruField="bedroomsNumber">
+                    <Counter
+                      value={Math.max(0, Number(rt.bedroomsNumber) || 0)}
+                      min={0}
+                      max={20}
+                      onChange={(v) => patchRoomTypeField(i, { bedroomsNumber: v })}
+                    />
+                  </Field>
+                  <Field label="Lits" ruField="bedsNumber">
+                    <Counter
+                      value={Math.max(0, Number(rt.bedsNumber) || 0)}
+                      min={0}
+                      max={30}
+                      onChange={(v) => patchRoomTypeField(i, { bedsNumber: v })}
+                    />
+                  </Field>
+                  <Field label="SDB" ruField="bathroomsNumber">
+                    <Counter
+                      value={Math.max(0, Number(rt.bathroomsNumber) || 0)}
+                      min={0}
+                      max={20}
+                      onChange={(v) => patchRoomTypeField(i, { bathroomsNumber: v })}
+                    />
+                  </Field>
+                </Box>
+                <Box sx={{ mt: 1.5, maxWidth: 180 }}>
+                  <Field label="Surface (m²)" ruField="surface">
+                    <TextField
+                      size="small"
+                      type="number"
+                      fullWidth
+                      value={rt.surface ?? ''}
+                      onChange={(e) =>
+                        patchRoomTypeField(i, {
+                          surface: e.target.value === '' ? 0 : +e.target.value,
+                        })
+                      }
+                      sx={sxInput}
+                      slotProps={{ htmlInput: { min: 0 } }}
+                    />
+                  </Field>
+                </Box>
+              </Box>
+            ))}
+            {roomTypesList.length === 0 && (
+              <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
+                Aucun type — cliquez sur « Ajouter un type ».
+              </Typography>
+            )}
+            <Button
+              variant="outlined"
+              onClick={addRoomType}
+              sx={{
+                alignSelf: 'flex-start',
+                textTransform: 'none',
+                fontWeight: 800,
+                borderRadius: '10px',
+                borderColor: T.borderStrong,
+                color: T.primaryDeep,
+              }}
+            >
+              + Ajouter un type
+            </Button>
+          </Box>
+        </Card>
+      ) : (
+        <Card title="🛏 Chambres & lits">
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
+            <Field label="Chambres" required ruField="bedroomsNumber"><Counter value={values.bedrooms ?? 0} onChange={(v) => upd('bedrooms', v)} /></Field>
+            <Field label="Salles de bain" required ruField="bathroomsNumber"><Counter value={values.bathrooms ?? 0} onChange={(v) => upd('bathrooms', v)} /></Field>
+            <Field label="Lits" ruField="bedsNumber"><Counter value={values.beds ?? 0} onChange={(v) => upd('beds', v)} /></Field>
+          </Box>
+        </Card>
+      )}
 
       <Card title="📝 Descriptions" meta={`Multilingue · ${descriptions.length} langue(s)`}>
         <LangSwitcher
