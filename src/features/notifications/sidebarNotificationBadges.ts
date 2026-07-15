@@ -24,7 +24,7 @@ export function aggregateActiveNotificationCounts(
 /** Facettes agrégées par groupe sidebar. */
 export const SIDEBAR_GROUP_FACETS: Record<string, NotificationFacet[]> = {
   Réservations: ['reservation'],
-  Task: ['task', 'concierge'],
+  Task: ['task'],
   Orchestration: ['orchestration'],
   'Inbox Guest': ['message', 'guest_journey', 'review', 'lead'],
   Finances: ['finance'],
@@ -35,10 +35,6 @@ export const SIDEBAR_ITEM_FACETS: Record<string, NotificationFacet[]> = {
   reservations: ['reservation'],
   'reservations/planning': ['reservation'],
   payments: ['finance'],
-
-  'tasks/list': ['task'],
-  'tasks/planning': ['task'],
-  'tasks/kanban': ['task'],
 
   'comms/leads': ['lead'],
   'comms/reviews': ['review'],

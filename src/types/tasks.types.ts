@@ -126,6 +126,7 @@ export interface TasksPagination {
 
 export interface TasksSearchParams {
   ownerId?: string;
+  audience?: 'STAFF' | 'GUEST' | 'SYSTEM';
   page?: number;
   limit?: number;
   listingIds?: string[];

@@ -27,7 +27,7 @@ import { SidebarUserProfileMenu } from './SidebarUserProfileMenu';
 import { LISTING_LAYOUT } from '../../constants/listingLayout';
 import { DASHBOARD_PAGE } from '../../constants/dashboardLayout';
 import { IconColored } from './IconColored';
-import { NotificationBell, SidebarNotificationBadge, getSidebarGroupUnread, getSidebarItemUnread, useSidebarNotificationCounts } from '../../features/notifications';
+import { NotificationBell, SidebarNotificationBadge, getSidebarGroupUnread, getSidebarItemUnread, useSidebarNotificationCounts, useTaskOperationalIndicators } from '../../features/notifications';
 import { useUnreadCount } from '../../features/notifications/useNotifications';
 import { SojoriBrandLockup } from '../brand/SojoriBrandLogo';
 import {
@@ -361,6 +361,7 @@ export function AppSidebar({
   const navScrollRef = React.useRef(null);
   const { data: unreadCount } = useUnreadCount();
   const { data: sidebarCounts } = useSidebarNotificationCounts();
+  const { data: taskIndicators } = useTaskOperationalIndicators();
   const byFacet = sidebarCounts?.byFacet ?? unreadCount?.byFacetActive ?? unreadCount?.byFacet;
   const byEventKey = sidebarCounts?.byEventKey ?? unreadCount?.byEventKeyActive ?? unreadCount?.byEventKey;
 
@@ -526,7 +527,15 @@ export function AppSidebar({
         {navGroups.map((group) => {
           const isCollapsed = collapsed[group.group] ?? true;
           const isCore = Boolean(group.core);
-          const groupUnread = getSidebarGroupUnread(group.group, byFacet, byEventKey);
+          const isTaskGroup = group.group === 'Task';
+          const groupUnread =
+            isTaskGroup && taskIndicators
+              ? taskIndicators.actionRequired
+              : getSidebarGroupUnread(group.group, byFacet, byEventKey);
+          const groupBadgeTitle =
+            isTaskGroup && taskIndicators
+              ? `${taskIndicators.unassigned} tÃ¢che(s) non assignÃ©e(s), ${taskIndicators.overdue} en retard`
+              : undefined;
           return (
             <React.Fragment key={group.group}>
               <Box
@@ -568,12 +577,12 @@ export function AppSidebar({
                     <Chip label="CORE" size="small" sx={{ height: 16, fontSize: 9, fontWeight: 800, bgcolor: t.aiTint, color: t.ai }} />
                   ) : null}
                   {isCollapsed && groupUnread > 0 ? (
-                    <SidebarNotificationBadge count={groupUnread} />
+                    <SidebarNotificationBadge count={groupUnread} title={groupBadgeTitle} />
                   ) : null}
                 </Stack>
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
                   {!isCollapsed && groupUnread > 0 ? (
-                    <SidebarNotificationBadge count={groupUnread} />
+                    <SidebarNotificationBadge count={groupUnread} title={groupBadgeTitle} />
                   ) : null}
                   <ExpandMore
                     sx={{

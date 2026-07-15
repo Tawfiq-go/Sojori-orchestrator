@@ -100,6 +100,8 @@ class FulltaskTasksService {
           : false;
 
     const tasksPromise = fulltaskApi.listTasks({
+      ownerId: params.ownerId,
+      audience: params.audience ?? 'STAFF',
       listingId: params.listingIds?.length === 1 ? params.listingIds[0] : undefined,
       type: params.subTypes?.length === 1 ? params.subTypes[0] : undefined,
       isArchived: isArchivedParam,

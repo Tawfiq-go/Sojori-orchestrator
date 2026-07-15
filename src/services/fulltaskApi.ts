@@ -17,6 +17,25 @@ export async function listTasks(params: Record<string, unknown> = {}) {
   return data;
 }
 
+export type TaskOperationalSummary = {
+  open: number;
+  unassigned: number;
+  overdue: number;
+  dueToday: number;
+  dueNext7Days: number;
+  withoutDate: number;
+  actionRequired: number;
+  audience: 'STAFF';
+  generatedAt: string;
+};
+
+export async function getTaskOperationalSummary(
+  params: Record<string, unknown> = {},
+): Promise<{ success: boolean; data: TaskOperationalSummary }> {
+  const { data } = await apiClient.get(`${BASE}/tasks/summary`, { params });
+  return data;
+}
+
 export async function createTask(body: Record<string, unknown>) {
   const { data } = await apiClient.post(`${BASE}/tasks`, body);
   return data;

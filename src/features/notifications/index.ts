@@ -7,7 +7,7 @@ export {
   getSidebarItemUnread,
   aggregateActiveNotificationCounts,
 } from './sidebarNotificationBadges';
-export { useSidebarNotificationCounts } from './useNotifications';
+export { useSidebarNotificationCounts, useTaskOperationalIndicators } from './useNotifications';
 export type {
   NotificationItem,
   NotificationFacet,

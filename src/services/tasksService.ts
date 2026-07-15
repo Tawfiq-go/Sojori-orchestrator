@@ -88,6 +88,7 @@ class TasksService {
       const response = await apiClient.get(`${TASKS_BASE_URL}/tasks/search`, {
         params: compactParams({
           ownerId: params.ownerId,
+          audience: params.audience ?? 'STAFF',
           page: params.page ?? 0,
           limit: params.limit ?? 100,
           listingIds: toCommaSeparated(params.listingIds),
