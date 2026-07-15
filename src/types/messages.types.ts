@@ -10,7 +10,7 @@
 /**
  * Types de contenu des messages
  */
-export type MessageContentType = 'text' | 'flow' | 'buttons' | 'list' | 'template' | 'interactive' | 'image';
+export type MessageContentType = 'text' | 'flow' | 'buttons' | 'list' | 'template' | 'interactive' | 'image' | 'audio';
 
 /**
  * Sources des messages
