@@ -6,12 +6,14 @@ import {
   type CommsHubTab,
   type CommsSection,
 } from '../communications/commsHubConfig';
+import { useAuth } from '../../hooks/useAuth';
+import { Roles } from '../../constants/roles';
 import { T } from './_tokens';
 
 export type { CommsHubTab, CommsSection } from '../communications/commsHubConfig';
 
 export function isWaDesignTab(tab: string): boolean {
-  return tab === 'whatsapp' || tab === 'staff';
+  return tab === 'whatsapp' || tab === 'booking' || tab === 'staff' || tab === 'admin';
 }
 
 export function isOtaDesignTab(tab: string): boolean {
@@ -26,6 +28,11 @@ interface InboxHubTabsProps {
   compact?: boolean;
 }
 
+function isPlatformAdminRole(role: unknown): boolean {
+  const r = String(role || '').trim();
+  return r === Roles.Admin || r === Roles.SuperAdmin || r.toLowerCase() === 'admin' || r.toLowerCase() === 'superadmin';
+}
+
 export default function InboxHubTabs({
   section,
   counts = {},
@@ -33,10 +40,14 @@ export default function InboxHubTabs({
   metaExtra,
   compact = false,
 }: InboxHubTabsProps) {
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const active = (searchParams.get('tab') || (section === 'staff' ? 'staff' : 'whatsapp')) as CommsHubTab;
-  const hubTabs = section === 'staff' ? STAFF_HUB_TABS : GUEST_HUB_TABS;
+  const hubTabs =
+    section === 'staff'
+      ? STAFF_HUB_TABS.filter((tab) => (tab.id === 'booking' ? isPlatformAdminRole(user?.role) : true))
+      : GUEST_HUB_TABS;
   const sectionLabel = section === 'staff' ? 'Staff' : 'Guest';
 
   const total = hubTabs.reduce((s, tab) => s + (counts[tab.id] || 0), 0);
