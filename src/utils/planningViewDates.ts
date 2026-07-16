@@ -3,8 +3,8 @@ import { addDays, startOfDay } from 'date-fns';
 /** Visible day columns in StayView grid. */
 export const PLANNING_VISIBLE_DAYS = 14;
 
-/** Days before today on initial load (J-2). */
-export const PLANNING_INITIAL_BACK_DAYS = 2;
+/** Days before today on initial load (J-1 : seulement la veille). */
+export const PLANNING_INITIAL_BACK_DAYS = 1;
 
 /** History window for minimap / scroll buffer. */
 export const PLANNING_LOOKBACK_DAYS = 7;
