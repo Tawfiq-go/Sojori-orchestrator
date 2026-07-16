@@ -26,6 +26,10 @@ export interface PlanningReservationRow {
   guestName: string;
   arrivalDate: string;
   departureDate: string;
+  /** Heure d'arrivée / départ voyageur (HH:mm) — les tâches fulltask étant
+   *  planifiées à la journée, c'est la source d'heure des vues staff. */
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
   status: string;
   channelName?: string;
   numberOfGuests?: number;
@@ -280,6 +284,8 @@ export async function fetchTaskNewPlanning(params: {
       guestName: res.guestName || 'Guest',
       arrivalDate: toIsoDate(res.arrivalDate),
       departureDate: toIsoDate(res.departureDate),
+      checkInTime: res.checkInTime ?? null,
+      checkOutTime: res.checkOutTime ?? null,
       status: mapReservationStatus(res.status),
       channelName: res.channelName || res.otaCode || 'direct',
       numberOfGuests: res.numberOfGuests ?? res.adults ?? 0,
@@ -337,6 +343,8 @@ export async function fetchTaskNewPlanning(params: {
     let arrivalDate = params.startDate;
     let departureDate = params.endDate;
     let reservationNumber = reservationId;
+    let checkInTime: string | null = null;
+    let checkOutTime: string | null = null;
     const firstTask = timeline[0]?.data as Record<string, unknown> | undefined;
     if (firstTask?.guestName) guestName = String(firstTask.guestName);
 
@@ -347,6 +355,8 @@ export async function fetchTaskNewPlanning(params: {
       departureDate = toIsoDate(res.departureDate) || departureDate;
       guestName = res.guestName || guestName;
       reservationNumber = res.reservationNumber || reservationNumber;
+      checkInTime = res.checkInTime ?? null;
+      checkOutTime = res.checkOutTime ?? null;
       if (!listingMeta.has(listingId)) {
         const label = reservationListingLabel(res);
         listingMeta.set(listingId, { listingName: label.name, city: label.city });
@@ -358,6 +368,8 @@ export async function fetchTaskNewPlanning(params: {
       guestName,
       arrivalDate,
       departureDate,
+      checkInTime,
+      checkOutTime,
       status: 'confirmed',
       reservationNumber,
       timeline,
