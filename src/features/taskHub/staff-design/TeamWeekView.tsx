@@ -19,9 +19,9 @@ import { normalizeOwnerId } from '../../../utils/fulltaskMappers';
 import type { Staff } from './types';
 import './teamWeekView.css';
 
-const WINDOW_DAYS = 15;
+const WINDOW_DAYS = 7;
 const CANCELLED_STATUSES = new Set(['CANCELLED_ADMIN', 'CANCELLED_CUSTOMER', 'ARCHIVED']);
-const MAX_CHIPS_COLLAPSED = 2;
+const MAX_CHIPS_COLLAPSED = 3;
 
 type TeamTask = {
   taskId: string | null;
@@ -88,7 +88,8 @@ function pivotTasks(listings: PlanningListingRow[], dayMin: string, dayMax: stri
         const day = format(dt, 'yyyy-MM-dd');
         if (day < dayMin || day > dayMax) continue;
         const data = (it.data || {}) as Record<string, unknown>;
-        // Minuit UTC = tâche planifiée à la journée : pas d'heure à afficher.
+        // scheduledFor porte l'heure métier (inferTaskPlannedIso) ; minuit UTC
+        // subsiste seulement quand aucune heure n'est connue → pas d'affichage.
         const dayLevel = dt.getUTCHours() === 0 && dt.getUTCMinutes() === 0;
         out.push({
           taskId: data.taskId ? String(data.taskId) : null,
