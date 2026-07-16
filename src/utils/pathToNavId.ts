@@ -20,6 +20,11 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path.startsWith('/tasks/planning')) return 'tasks/planning';
   if (path.startsWith('/tasks/kanban')) return 'tasks/kanban';
   if (path.startsWith('/tasks/team')) return 'tasks/team';
+  if (path.startsWith('/calendar') || path.startsWith('/calendar-v2')) {
+    const view = new URLSearchParams(search).get('view');
+    if (view === 'simple') return 'calendar/simple';
+    return 'calendar/multi';
+  }
   if (path.startsWith('/listings/mapping')) return 'listings/mapping';
   if (path.startsWith('/listings/orchestration-model')) return 'listings/orchestration-model';
   if (path.startsWith('/listings') || path.startsWith('/catalogue/listings')) return 'listings/list';

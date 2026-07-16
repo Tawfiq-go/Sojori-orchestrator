@@ -53,10 +53,26 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
-    group: 'Pricing',
+    group: 'Calendrier',
     roles: PM_ROLES,
     items: [
-      { id: 'calendar', label: 'Calendrier', iconType: 'calendar', iconColor: '#E06666' },
+      {
+        id: 'calendar',
+        label: 'Calendrier',
+        iconType: 'calendar',
+        iconColor: '#E06666',
+        navDisabled: true,
+        sub: [
+          { id: 'calendar/multi', label: 'Vue Multi', iconType: 'calendar', iconColor: '#E06666' },
+          { id: 'calendar/simple', label: 'Vue Simple', iconType: 'calendar', iconColor: '#E06666' },
+        ],
+      },
+    ],
+  },
+  {
+    group: 'Prix dynamique',
+    roles: PM_ROLES,
+    items: [
       { id: 'pricing/portfolio', label: 'Prix dynamique', iconType: 'trending', iconColor: '#93C47D' },
       { id: 'pricing/audit', label: 'Audit prix', iconType: 'trending', iconColor: '#93C47D' },
     ],
@@ -445,6 +461,8 @@ export function navGroupsForRole(
 /** État collapsed par défaut — groupes secondaires repliés au premier login. */
 export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Dashboard: false,
+  Calendrier: false,
+  'Prix dynamique': false,
   Pricing: false,
   Réservations: false,
   Task: false,

@@ -2,6 +2,7 @@
 // CalendarInventoryPage.jsx — wrapper toolbar + Multi/Simple toggle
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { T } from './_shared';
 import MultiView from './MultiView';
 import SimpleView from './SimpleView';
@@ -43,8 +44,30 @@ export default function CalendarInventoryPage({
   listingNameById = {},
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsProp || [];
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewFromUrl = searchParams.get('view') === 'simple' ? 'simple' : 'multi';
 
-  const [view, setView] = useState(defaultView);
+  const [view, setViewState] = useState(viewFromUrl || defaultView);
+  const setView = useCallback(
+    (next) => {
+      const v = next === 'simple' ? 'simple' : 'multi';
+      setViewState(v);
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev);
+          p.set('view', v);
+          return p;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  useEffect(() => {
+    setViewState(viewFromUrl);
+  }, [viewFromUrl]);
+
   const [selectedListingId, setSelectedListingId] = useState(listings[0]?._id);
   const [selectedColumns, setSelectedColumns] = useState(['availableRoom', 'rate']);
   const [pivotDate, setPivotDate] = useState(() => startOfDay(startDate));

@@ -15,7 +15,9 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'tasks/planning': '/tasks/planning',
   'tasks/kanban': '/tasks/kanban',
   'tasks/team': '/tasks/team',
-  calendar: '/calendar',
+  calendar: '/calendar?view=multi',
+  'calendar/multi': '/calendar?view=multi',
+  'calendar/simple': '/calendar?view=simple',
 
   // Orchestration — URLs canoniques /orchestration/* (alignées menu)
   orchestration: '/orchestration/plans',

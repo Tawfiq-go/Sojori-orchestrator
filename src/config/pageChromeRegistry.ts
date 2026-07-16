@@ -21,6 +21,8 @@ for (const group of OWNER_NAV_GROUPS) {
 const TITLE_OVERRIDES: Record<string, string> = {
   dashboard: 'Dashboard principal',
   calendar: 'Calendrier',
+  'calendar/multi': 'Vue Multi',
+  'calendar/simple': 'Vue Simple',
   'listings/list': 'Listings',
   'listings/orchestration-model': 'Modèle orchestration',
   'reservations/planning': 'Planning réservations',
