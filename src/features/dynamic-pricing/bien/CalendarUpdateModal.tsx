@@ -37,6 +37,8 @@ export type CalendarUpdateModalProps = {
   occupancyHighMin?: number;
   occupancyHighAdj?: number;
   lastMinuteEnabled?: boolean;
+  lastMinuteFromDays?: number;
+  lastMinuteToDays?: number;
   lastMinuteWindowDays?: number;
   lastMinuteDiscountPct?: number;
   onClose: () => void;
@@ -200,11 +202,14 @@ function NarrativeRecap({
         : `${narrative.occupancyMonths.length} mois · clique pour le détail`;
 
   const lm = narrative.lastMinute;
+  const lmFrom = lm.fromDays ?? 1;
+  const lmTo = lm.toDays ?? lm.windowDays;
+  const lmFenetre = lmFrom === lmTo ? `J+${lmFrom}` : `J+${lmFrom} → J+${lmTo}`;
   const lmSummary = !lm.enabled
     ? 'Désactivée'
     : lm.daysHit === 0
-      ? `Fenêtre ${lm.windowDays} j · ${fmtPct(lm.discountPct)} — aucune nuit hit`
-      : `Fenêtre ${lm.windowDays} j · ${fmtPct(lm.discountPct)} sur ${lm.daysHit} nuit(s)${
+      ? `Fenêtre ${lmFenetre} · ${fmtPct(lm.discountPct)} — aucune nuit hit`
+      : `Fenêtre ${lmFenetre} · ${fmtPct(lm.discountPct)} sur ${lm.daysHit} nuit(s)${
           lm.ranges.length > 1 ? ` · ${lm.ranges.length} plages` : ''
         }`;
 
@@ -245,7 +250,7 @@ function NarrativeRecap({
           summary={`${narrative.mode.label} (×${narrative.mode.multiplier})`}
         />
 
-        <RecapCollapse n={3} title="Occupation (par mois)" summary={occSummary} defaultOpen>
+        <RecapCollapse n={3} title="Occupation restante (par mois)" summary={occSummary} defaultOpen>
           <Stack sx={{ pt: 1, gap: 0.25 }}>
             {narrative.occupancyMonths.length === 0 ? (
               <Typography sx={{ fontSize: 11.5, color: T.text3 }}>Aucun mois dans la grille.</Typography>
@@ -274,7 +279,7 @@ function NarrativeRecap({
 
         <RecapCollapse n={5} title="Dernière minute" summary={lmSummary} defaultOpen={lm.daysHit > 0}>
           <Stack sx={{ pt: 1, gap: 0.5 }}>
-            <ReportRow label="Fenêtre" value={`${lm.windowDays} j`} />
+            <ReportRow label="Fenêtre" value={lmFenetre} />
             <ReportRow label="Ajustement" value={fmtPct(lm.discountPct)} highlight />
             <ReportRow label="Nuits touchées" value={`${lm.daysHit} j`} highlight={lm.daysHit > 0} />
             {lm.ranges.length > 0 ? (
@@ -354,7 +359,9 @@ export default function CalendarUpdateModal({
   occupancyHighMin = 70,
   occupancyHighAdj = 15,
   lastMinuteEnabled = true,
-  lastMinuteWindowDays = 10,
+  lastMinuteFromDays = 1,
+  lastMinuteToDays = 7,
+  lastMinuteWindowDays = 7,
   lastMinuteDiscountPct = -15,
   onClose,
   onRun,
@@ -365,10 +372,12 @@ export default function CalendarUpdateModal({
 
   const modeSummary = modeEnabled ? activeModeLabel : `${activeModeLabel} (OFF · ×1)`;
   const occupancySummary = occupancyBandsEnabled
-    ? `≤ ${occupancyLowMax}% → ${fmtPct(occupancyLowAdj)} · ≥ ${occupancyHighMin}% → ${fmtPct(occupancyHighAdj)} (taux = réservés ÷ jours du mois)`
+    ? `≤ ${occupancyLowMax}% → ${fmtPct(occupancyLowAdj)} · ≥ ${occupancyHighMin}% → ${fmtPct(occupancyHighAdj)} (taux = réservés ÷ jours restants du mois)`
     : 'OFF';
+  const lmFrom = lastMinuteFromDays ?? 1;
+  const lmTo = lastMinuteToDays ?? lastMinuteWindowDays ?? 7;
   const lastMinuteSummary = lastMinuteEnabled
-    ? `${lastMinuteWindowDays} j · ${fmtPct(lastMinuteDiscountPct)}`
+    ? `J+${lmFrom}→J+${lmTo} · ${fmtPct(lastMinuteDiscountPct)}`
     : 'OFF';
 
   useEffect(() => {

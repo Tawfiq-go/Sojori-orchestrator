@@ -606,8 +606,10 @@ function blockedNoResaInfo(inv) {
   };
 }
 
-/* ─── Ligne principale : résumé tarif + dispo — lecture seule, sans hover ─── */
+/* ─── Ligne principale : résumé tarif + dispo — hover = découpage prix (même si bloqué) ─── */
 function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
+  const [showTip, setShowTip] = useState(false);
+  const ref = useRef(null);
   const currency = listing.currencyCode || 'EUR';
   const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
   const rate = formatInventoryRateLabel(state, inv);
@@ -634,10 +636,13 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
   const dispoVal = inv?.stopSell ? '🚫' : (inv?.availableRoom != null ? inv.availableRoom : dash);
   const blockInfo = state === 'data' ? blockedNoResaInfo(inv) : null;
   const dispoColor = inv?.stopSell ? T.error : (blockInfo?.kind === 'channel' ? T.warning : T.text2);
+  const canHoverPrice = showRate && hasInventoryData(inv) && !noData;
 
   return (
     <div
-      title={blockInfo ? blockInfo.label : rate.hint}
+      ref={ref}
+      onMouseEnter={() => { if (canHoverPrice) setShowTip(true); }}
+      onMouseLeave={() => setShowTip(false)}
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex', flexDirection: 'row',
@@ -646,13 +651,14 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
         padding: '3px 4px', minHeight: 36, position: 'relative',
         fontFamily: '"Geist Mono", monospace',
         background,
-        cursor: blockInfo ? 'help' : 'default',
+        cursor: canHoverPrice ? 'help' : (blockInfo ? 'help' : 'default'),
         userSelect: 'none',
       }}
     >
       {blockInfo && (
         <span
           aria-hidden
+          title={blockInfo.label}
           style={{
             position: 'absolute', top: 3, left: 3, width: 5, height: 5,
             borderRadius: '50%', background: blockInfo.color, lineHeight: 1,
@@ -690,6 +696,15 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
         >
           {dispoVal}
         </span>
+      )}
+      {canHoverPrice && showTip && (
+        <TooltipBreakdown
+          open={showTip}
+          anchorRef={ref}
+          inv={inv}
+          dateStr={day.iso}
+          currency={currency}
+        />
       )}
     </div>
   );

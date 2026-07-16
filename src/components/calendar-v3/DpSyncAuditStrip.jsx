@@ -90,10 +90,15 @@ export default function DpSyncAuditStrip({
     ? summary.byListing?.find((r) => r.listingId === selectedListingId)
     : null;
 
-  const auditQs =
-    summary.byListing?.length > 0
-      ? `?listingIds=${summary.byListing.map((r) => r.listingId).join(',')}`
-      : '';
+  const auditQs = (() => {
+    const params = new URLSearchParams();
+    if (summary.byListing?.length > 0) {
+      params.set('listingIds', summary.byListing.map((r) => r.listingId).join(','));
+    }
+    if (fleet.auditId) params.set('auditId', fleet.auditId);
+    const s = params.toString();
+    return s ? `?${s}` : '';
+  })();
 
   const statsLine = `${listingCount} bien(s) · ${daysCal} j. cal. maj.${
     daysPrice > 0 ? ` · ${daysPrice} prix` : ''

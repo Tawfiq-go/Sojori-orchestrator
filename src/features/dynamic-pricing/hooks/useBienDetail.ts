@@ -242,7 +242,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const [gapBlockMinNights, setGapBlockMinNights] = useState(2);
   const [modeEnabled, setModeEnabled] = useState(true);
   const [lastMinuteEnabled, setLastMinuteEnabled] = useState(true);
-  const [lastMinuteWindowDays, setLastMinuteWindowDays] = useState(10);
+  const [lastMinuteFromDays, setLastMinuteFromDays] = useState(1);
+  const [lastMinuteToDays, setLastMinuteToDays] = useState(7);
   const [lastMinuteDiscountPct, setLastMinuteDiscountPct] = useState(-15);
   const [occupancyBandsEnabled, setOccupancyBandsEnabled] = useState(true);
   const [occupancyLowMax, setOccupancyLowMax] = useState(30);
@@ -251,6 +252,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const [occupancyHighAdj, setOccupancyHighAdj] = useState(15);
   const [pricingBaseSource, setPricingBaseSource] = useState<'estimate' | 'listing_base' | 'manual_base'>('estimate');
   const [manualBasePriceMad, setManualBasePriceMad] = useState(1000);
+  const [eventsEnabled, setEventsEnabled] = useState(true);
   const [applyPrice, setApplyPrice] = useState(true);
   const [applyMinStay, setApplyMinStay] = useState(true);
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
@@ -260,6 +262,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const [configSaveStatus, setConfigSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const configSaveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configHydratedRef = useRef(false);
+  /** Évite qu’un refetch écrase les bornes pendant l’édition / avant auto-save. */
+  const boundsDirtyRef = useRef(false);
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [calendarYear, setCalendarYear] = useState(new Date().getUTCFullYear());
@@ -300,7 +304,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     applyPrice,
     applyMinStay,
     lastMinuteEnabled,
-    lastMinuteWindowDays,
+    lastMinuteFromDays,
+    lastMinuteToDays,
     lastMinuteDiscountPct,
     occupancyBandsEnabled,
     occupancyLowMax,
@@ -309,6 +314,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     occupancyHighAdj,
     pricingBaseSource,
     manualBasePriceMad,
+    eventsEnabled,
     calendarYear,
   });
   const previewDiff = useApplyPreviewDiff({
@@ -338,6 +344,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
             ? { events: mapUiEventsToDto(eventsOverride) }
             : {}),
         });
+        boundsDirtyRef.current = false;
         setConfigSaveStatus('saved');
       } catch (e) {
         setConfigSaveStatus('error');
@@ -430,8 +437,11 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
           : row.estimateSummary?.adrP50Mad != null && row.estimateSummary.adrP50Mad > 0
             ? row.estimateSummary.adrP50Mad
             : null;
-      setFloor(row.bounds?.floor ?? (adrMad != null ? Math.round(adrMad * 0.65) : null));
-      setCeiling(row.bounds?.ceiling ?? (adrMad != null ? Math.round(adrMad * 1.35) : null));
+      // Ne pas écraser les bornes utilisateur : ADR n’est qu’un fallback si pas encore de config.
+      if (!configHydratedRef.current) {
+        setFloor(row.bounds?.floor ?? (adrMad != null ? Math.round(adrMad * 0.65) : null));
+        setCeiling(row.bounds?.ceiling ?? (adrMad != null ? Math.round(adrMad * 1.35) : null));
+      }
 
       try {
         const cfgRes = await fetchPilotConfig(listingId);
@@ -444,16 +454,32 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
               ? c.modes.map((m) => ({ ...m, kind: m.kind ?? 'preset' }))
               : DEFAULT_PRICING_MODES,
           );
-          setFloor(c.floorNormal);
-          setCeiling(c.ceiling);
+          // Bornes : config pilote, sauf si l’utilisateur édite encore (dirty).
+          if (!boundsDirtyRef.current) {
+            if (typeof c.floorNormal === 'number' && c.floorNormal > 0) setFloor(c.floorNormal);
+            if (typeof c.ceiling === 'number' && c.ceiling > 0) setCeiling(c.ceiling);
+          }
           setAiEnabled(c.enabled);
           setGapBlockEnabled(c.gapBlockEnabled !== false);
-          setGapBlockMinNights(Math.max(2, Math.min(14, c.gapBlockMinNights ?? 2)));
+          setGapBlockMinNights(Math.max(1, Math.min(14, c.gapBlockMinNights ?? 2)));
           setModeEnabled(c.modeEnabled !== false);
           setLastMinuteEnabled(c.lastMinuteEnabled !== false);
-          setLastMinuteWindowDays(Math.max(3, Math.min(21, c.lastMinuteWindowDays ?? 10)));
+          {
+            const to = Math.max(
+              1,
+              Math.min(30, c.lastMinuteToDays ?? c.lastMinuteWindowDays ?? 7),
+            );
+            const from = Math.max(
+              1,
+              Math.min(to, c.lastMinuteFromDays ?? 1),
+            );
+            setLastMinuteFromDays(from);
+            setLastMinuteToDays(to);
+          }
           setLastMinuteDiscountPct(
-            typeof c.lastMinuteDiscountPct === 'number' ? c.lastMinuteDiscountPct : -15,
+            typeof c.lastMinuteDiscountPct === 'number'
+              ? Math.max(-50, Math.min(0, c.lastMinuteDiscountPct))
+              : -15,
           );
           setOccupancyBandsEnabled(c.occupancyBandsEnabled !== false);
           const bands = Array.isArray(c.occupancyBands) ? c.occupancyBands : [];
@@ -481,6 +507,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
           if (typeof c.manualBasePriceMad === 'number' && c.manualBasePriceMad > 0) {
             setManualBasePriceMad(Math.max(200, Math.min(20000, Math.round(c.manualBasePriceMad))));
           }
+          setEventsEnabled(c.eventsEnabled !== false);
           setApplyPrice(c.applyPrice !== false);
           setApplyMinStay(c.applyMinStay !== false && c.applyPrice !== false);
           setEvents(mapPilotEventsToUi(c.events ?? []));
@@ -550,15 +577,80 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     return data.applyReport;
   }, [listingId, pilot, load]);
 
+  const softReloadMarketRow = useCallback(async () => {
+    if (!listingId) return;
+    // Pas de setLoading — on garde la fiche montée, on patch seulement le snapshot / marché.
+    const portfolioRes = await fetchDynamicPricingPortfolio({ year: calendarYear });
+    if (!portfolioRes.data?.success) {
+      throw new Error('Portfolio indisponible après actualisation');
+    }
+    let marketPayload = portfolioRes.data;
+    const mappedAll = mapPortfolioApiToView(marketPayload);
+    const row = mappedAll.rows.find((r) => r.listing._id === listingId) ?? null;
+    if (!row) {
+      throw new Error('Bien introuvable après actualisation');
+    }
+
+    const listingCityKey = normalizeCityKey(row.listing.city);
+    if (listingCityKey && listingCityKey !== '—') {
+      const cacheCity = marketPayload.marketCache?.city
+        ? normalizeCityKey(marketPayload.marketCache.city)
+        : null;
+      if (cacheCity !== listingCityKey) {
+        const scopedRes = await fetchDynamicPricingPortfolio({
+          year: calendarYear,
+          city: listingCityKey,
+        });
+        if (scopedRes.data?.success) {
+          marketPayload = scopedRes.data;
+        }
+      }
+    }
+
+    const mappedMarket = mapPortfolioApiToView(marketPayload);
+    const cacheCity = marketPayload.marketCache?.city
+      ? normalizeCityKey(marketPayload.marketCache.city)
+      : null;
+    const marketOk =
+      Boolean(marketPayload.marketCache?.hasCity) &&
+      listingCityKey !== '—' &&
+      cacheCity === listingCityKey;
+
+    setPortfolioRow(row);
+    setHasMarketProd(marketOk);
+    setMarketFetchedAt(marketPayload.marketCache?.fetchedAt ?? null);
+    setCityKpisProd(marketOk ? mappedMarket.cityKpis : null);
+    setMarketCharts(chartsFromApi(marketPayload.marketCharts));
+
+    const futureErr =
+      row.airroiRaw?.refreshErrors?.find((e) => e.includes('getListingFutureRates')) ?? null;
+    setCalendarAirroiError(futureErr);
+
+    let days: CalendarDay[] = [];
+    let fromAirroi = false;
+    if (row.hasAirroiSnapshot && !row.hasRevenueEstimate) {
+      const allAirroi = mapAirroiCalendarDays(row);
+      if (allAirroi.length > 0) {
+        days = allAirroi;
+        fromAirroi = true;
+      }
+    }
+    setCalendarDays(days);
+    setCalendarFromCache(false);
+    setCalendarFromAirroi(fromAirroi);
+
+    await pilot.runPreview().catch(() => undefined);
+  }, [listingId, calendarYear, pilot]);
+
   const refreshAirroi = useCallback(async () => {
     if (!listingId) return;
     const res = await refreshOneListingPerformanceAirroi(listingId);
     if (!res.data?.ok) {
       throw new Error(res.data?.error ?? 'Refresh marché échoué');
     }
-    await load();
+    await softReloadMarketRow();
     return { costUsd: res.data.costUsd };
-  }, [listingId, load]);
+  }, [listingId, softReloadMarketRow]);
 
   const refreshAirroiPart = useCallback(
     async (part: AirroiListingRefreshPart) => {
@@ -567,13 +659,10 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       if (!res.data?.ok) {
         throw new Error(res.data?.error ?? `Appel ${part} échoué`);
       }
-      await load();
-      if (part === 'estimate') {
-        await pilot.runPreview().catch(() => undefined);
-      }
+      await softReloadMarketRow();
       return { costUsd: res.data.costUsd };
     },
-    [listingId, load, pilot],
+    [listingId, softReloadMarketRow],
   );
 
   const listingEstimateInputs = useMemo(() => {
@@ -803,6 +892,18 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const compsAdrValues = compRows.map((r) => r.adrTtm).filter((n) => n > 0);
   const compsMedianAdr = medianPositive(compsAdrValues);
   const selfCompAdr = compRows.find((r) => r.isSelf)?.adrTtm ?? 0;
+  const estimateAdrMad = est?.adrP50Mad && est.adrP50Mad > 0 ? est.adrP50Mad : 0;
+  const recoRefAdr =
+    compsMedianAdr > 0
+      ? compsMedianAdr
+      : selfCompAdr > 0
+        ? selfCompAdr
+        : estimateAdrMad > 0
+          ? estimateAdrMad
+          : 0;
+  /** Recommandation indépendante des curseurs utilisateur (P25≈×0,65 · P75≈×1,35). */
+  const recoFloorMad = recoRefAdr > 0 ? Math.round(recoRefAdr * 0.65) : 0;
+  const recoCeilingMad = recoRefAdr > 0 ? Math.round(recoRefAdr * 1.35) : 0;
   const boundsContextHint =
     compsMedianAdr > 0 || est?.adrP50Mad
       ? [
@@ -815,7 +916,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
           est?.adrP50Mad
             ? `Estimation prix de marché : ADR P50 ≈ ${est.adrP50Mad.toLocaleString('fr-FR')} MAD — peut être plus bas que les comparables haut de gamme`
             : null,
-          'Les curseurs §03 (500 min) = bornes du slider UI, pas un prix imposé par l’estimation.',
+          'Deux curseurs libres 0–20 000 MAD, indépendants du repère marché.',
         ]
           .filter(Boolean)
           .join(' · ')
@@ -871,7 +972,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     seasonality: [],
     leadTimeDays: 0,
     avgStayNights: portfolioRow.airroiRaw?.ttm_avg_length_of_stay ?? 0,
-    recoBounds: { floor: floor ?? 0, ceiling: ceiling ?? 0 },
+    recoBounds: { floor: recoFloorMad, ceiling: recoCeilingMad },
     kpis: marketKpis,
   };
 
@@ -940,7 +1041,9 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       gapBlockMinNights,
       modeEnabled,
       lastMinuteEnabled,
-      lastMinuteWindowDays,
+      lastMinuteFromDays,
+      lastMinuteToDays,
+      lastMinuteWindowDays: lastMinuteToDays,
       lastMinuteDiscountPct,
       occupancyBandsEnabled,
       occupancyLowMax,
@@ -949,6 +1052,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       occupancyHighAdj,
       pricingBaseSource,
       manualBasePriceMad,
+      eventsEnabled,
       applyPrice: aiEnabled && applyPrice,
       applyMinStay: aiEnabled && applyMinStay,
       scopeModalOpen,
@@ -1036,31 +1140,20 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         setScopeModalOpen(true);
       },
       onFloorChange: (v) => {
-        setFloor(v);
+        boundsDirtyRef.current = true;
+        setFloor(Math.max(0, Math.min(20_000, Math.round(v))));
         scheduleConfigSave();
       },
       onCeilingChange: (v) => {
-        setCeiling(v);
+        boundsDirtyRef.current = true;
+        setCeiling(Math.max(0, Math.min(20_000, Math.round(v))));
         scheduleConfigSave();
       },
       onApplyRecoBounds: () => {
-        const adrs = compRows.map((r) => r.adrTtm).filter((n) => n > 0);
-        const compsMed = medianPositive(adrs);
-        const selfAdr = compRows.find((r) => r.isSelf)?.adrTtm ?? 0;
-        const estimateAdr = portfolioRow.estimateSummary?.adrP50Mad ?? 0;
-        const ref =
-          compsMed > 0
-            ? compsMed
-            : selfAdr > 0
-              ? selfAdr
-              : estimateAdr > 0
-                ? estimateAdr
-                : portfolioRow.airroiRaw?.ttm_avg_rate != null
-                  ? Math.round(portfolioRow.airroiRaw.ttm_avg_rate * USD_TO_MAD)
-                  : 0;
-        if (ref <= 0) return;
-        setFloor(Math.round(ref * 0.65));
-        setCeiling(Math.round(ref * 1.35));
+        if (recoFloorMad <= 0 || recoCeilingMad <= 0) return;
+        boundsDirtyRef.current = true;
+        setFloor(recoFloorMad);
+        setCeiling(recoCeilingMad);
         scheduleConfigSave();
       },
       onActiveModeChange: (id: string) => {
@@ -1118,7 +1211,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         scheduleConfigSave();
       },
       onGapBlockMinNightsChange: (v) => {
-        setGapBlockMinNights(Math.max(2, Math.min(14, Math.round(v))));
+        setGapBlockMinNights(Math.max(1, Math.min(14, Math.round(v))));
         scheduleConfigSave();
       },
       onModeEnabledChange: (v) => {
@@ -1129,12 +1222,20 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         setLastMinuteEnabled(on);
         scheduleConfigSave();
       },
-      onLastMinuteWindowDaysChange: (v) => {
-        setLastMinuteWindowDays(Math.max(3, Math.min(21, Math.round(v))));
+      onLastMinuteFromDaysChange: (v) => {
+        const from = Math.max(1, Math.min(30, Math.round(v)));
+        setLastMinuteFromDays(from);
+        setLastMinuteToDays((to) => Math.max(from, to));
+        scheduleConfigSave();
+      },
+      onLastMinuteToDaysChange: (v) => {
+        const to = Math.max(1, Math.min(30, Math.round(v)));
+        setLastMinuteToDays(to);
+        setLastMinuteFromDays((from) => Math.min(from, to));
         scheduleConfigSave();
       },
       onLastMinuteDiscountPctChange: (v) => {
-        setLastMinuteDiscountPct(Math.max(-40, Math.min(0, Math.round(v))));
+        setLastMinuteDiscountPct(Math.max(-50, Math.min(0, Math.round(v))));
         scheduleConfigSave();
       },
       onOccupancyBandsEnabledChange: (on) => {
@@ -1163,6 +1264,10 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       },
       onManualBasePriceMadChange: (v: number) => {
         setManualBasePriceMad(Math.max(200, Math.min(20000, Math.round(v))));
+        scheduleConfigSave();
+      },
+      onEventsEnabledChange: (on: boolean) => {
+        setEventsEnabled(on);
         scheduleConfigSave();
       },
       onAddEvent: () => {

@@ -227,7 +227,7 @@ export function DynamicPricingPage() {
                 Portefeuille
               </Button>
             </Box>
-          ) : listingId && bienDetail?.loading ? (
+          ) : listingId && bienDetail?.loading && !bienDetail?.view ? (
             <Box sx={{ p: 4, textAlign: 'center' }}>
               <Typography sx={{ color: T.text2 }}>Chargement du bien…</Typography>
             </Box>
@@ -280,7 +280,7 @@ export function DynamicPricingPage() {
                   bienDetail.row?.hasRevenueEstimate || bienDetail.row?.hasAirroiSnapshot,
                 )}
                 snapshotAt={bienDetail.row?.airroiSnapshotAt ?? null}
-                onFetchMarket={() => bienDetail.refreshAirroi()}
+                onFetchMarket={() => bienDetail.refreshAirroiPart('estimate')}
                 advancedOpen={bienAdvancedOpen}
                 onToggleAdvanced={toggleBienAdvanced}
               />
