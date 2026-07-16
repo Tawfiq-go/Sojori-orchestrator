@@ -38,6 +38,12 @@ export function useDashboardChrome() {
       return 'tasks/team';
     }
 
+    if (path.startsWith('/calendar') || path.startsWith('/calendar-v2')) {
+      const view = new URLSearchParams(location.search).get('view');
+      if (view === 'simple') return 'calendar/simple';
+      return 'calendar/multi';
+    }
+
     if (path.startsWith('/listings/mapping')) {
       return 'listings/mapping';
     }
