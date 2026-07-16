@@ -380,6 +380,10 @@ export interface PilotPricingConfigDto {
   floorAggressive?: number;
   lastMinuteEnabled?: boolean;
   lastMinuteWindowDays?: number;
+  /** Début fenêtre (A) — jours avant arrivée, inclus. */
+  lastMinuteFromDays?: number;
+  /** Fin fenêtre (B) — jours avant arrivée, inclus. */
+  lastMinuteToDays?: number;
   /** % sur prix dynamique si dispo (ex. −15). */
   lastMinuteDiscountPct?: number;
   occupancyBandsEnabled?: boolean;
@@ -397,6 +401,8 @@ export interface PilotPricingConfigDto {
   minStayPlancher?: number;
   gapBlockEnabled?: boolean;
   gapBlockMinNights?: number;
+  /** Si false, les events restent stockés mais ne s’appliquent pas. */
+  eventsEnabled?: boolean;
   events: PilotPricingEventDto[];
   fxUsdMad?: number;
   /** Refresh hebdo automatique de l’estimation prix de marché. */
@@ -467,6 +473,8 @@ export type ApplyNarrativeDto = {
   lastMinute: {
     enabled: boolean;
     windowDays: number;
+    fromDays?: number;
+    toDays?: number;
     discountPct: number;
     daysHit: number;
     ranges: Array<{
@@ -695,14 +703,29 @@ export async function fetchApplyPreviewDiff(
   );
 }
 
+export async function fetchListingEstimateDiff(listingId: string, year?: number) {
+  const qs = year ? `?year=${year}` : '';
+  return apiClient.get<{
+    success: boolean;
+    listingId: string;
+    diff: ListingEstimateDiffDto | null;
+  }>(`${BASE}/listings/${encodeURIComponent(listingId)}/estimate-diff${qs}`);
+}
+
 export type PricingAuditRowDto = {
   _id: string;
+  listingId?: string;
   appliedAt: string;
   appliedBy: string;
   triggerSource: string;
   daysChanged: number;
+  daysSkipped?: number;
   ruPublishStatus: string;
+  ruPublishedAt?: string | null;
+  airroiSnapshotId?: string;
   applyReportSummary?: ApplyReportSummaryDto;
+  daysCalendarUpdated?: number;
+  daysPayloadPrice?: number;
 };
 
 export async function fetchListingPricingAudits(listingId: string, limit = 15) {
@@ -711,6 +734,118 @@ export async function fetchListingPricingAudits(listingId: string, limit = 15) {
     listingId: string;
     audits: PricingAuditRowDto[];
   }>(`${BASE}/listings/${encodeURIComponent(listingId)}/audits?limit=${limit}`);
+}
+
+export type PortfolioAuditsDto = {
+  success: boolean;
+  audits: PricingAuditRowDto[];
+  total: number;
+  limit: number;
+  skip: number;
+};
+
+export async function fetchPortfolioAudits(opts: {
+  listingIds?: string[];
+  limit?: number;
+  skip?: number;
+  appliedBy?: 'cron' | 'manual' | '';
+}) {
+  const params = new URLSearchParams();
+  if (opts.listingIds?.length) {
+    params.set('listingIds', opts.listingIds.join(','));
+  }
+  if (opts.limit != null) params.set('limit', String(opts.limit));
+  if (opts.skip != null) params.set('skip', String(opts.skip));
+  if (opts.appliedBy === 'cron' || opts.appliedBy === 'manual') {
+    params.set('appliedBy', opts.appliedBy);
+  }
+  const qs = params.toString() ? `?${params}` : '';
+  return apiClient.get<PortfolioAuditsDto>(`${BASE}/portfolio/audits${qs}`);
+}
+
+export type PricingAuditDayDiffDto = {
+  date: string;
+  beforeCalculatedPrice: number | null;
+  afterCalculatedPrice: number;
+  deltaMad: number | null;
+  beforeMinStay: number | null;
+  afterMinStay: number;
+  beforeBasePrice: number | null;
+  afterBasePrice: number;
+  useDynamicPrice: boolean;
+  changed: boolean;
+};
+
+export type PricingAuditDetailDto = {
+  _id: string;
+  listingId: string;
+  appliedAt: string;
+  appliedBy: string;
+  triggerSource: string;
+  pilotPricingConfigId: string;
+  recommendedPriceCacheId: string;
+  airroiSnapshotId: string;
+  daysChanged: number;
+  daysSkipped: number;
+  legacyEngineDisabled: boolean;
+  ruPublishStatus: string;
+  ruPublishedAt: string | null;
+  ruErrors: Array<{ date: string; message: string }>;
+  applyReportSummary: ApplyReportSummaryDto | null;
+  dayDiffs: PricingAuditDayDiffDto[];
+  changedDayDiffs: PricingAuditDayDiffDto[];
+  stats: {
+    daysInPayload: number;
+    daysPriceDelta: number;
+    avgAbsDeltaMad: number;
+    maxAbsDeltaMad: number;
+  };
+};
+
+export async function fetchPricingAuditDetail(auditId: string) {
+  return apiClient.get<{ success: boolean; audit: PricingAuditDetailDto }>(
+    `${BASE}/audits/${encodeURIComponent(auditId)}`,
+  );
+}
+
+export type PricingAuditCompareDto = {
+  success: boolean;
+  sameListing: boolean;
+  older: {
+    _id: string;
+    listingId: string;
+    appliedAt: string;
+    appliedBy: string;
+    triggerSource: string;
+    daysChanged: number;
+  };
+  newer: {
+    _id: string;
+    listingId: string;
+    appliedAt: string;
+    appliedBy: string;
+    triggerSource: string;
+    daysChanged: number;
+  };
+  changedDays: Array<{
+    date: string;
+    priceA: number | null;
+    priceB: number | null;
+    deltaMad: number | null;
+    minStayA: number | null;
+    minStayB: number | null;
+  }>;
+  summary: {
+    totalDaysCompared: number;
+    daysWithDelta: number;
+    avgAbsDeltaMad: number;
+  };
+};
+
+export async function fetchPricingAuditsCompare(auditIdA: string, auditIdB: string) {
+  return apiClient.get<PricingAuditCompareDto>(
+    `${BASE}/audits/compare?a=${encodeURIComponent(auditIdA)}&b=${encodeURIComponent(auditIdB)}`,
+  );
 }
 
 export async function fetchDayBreakdown(

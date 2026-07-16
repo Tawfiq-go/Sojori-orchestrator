@@ -68,6 +68,21 @@ function sortFactors(factors) {
 }
 
 /** Affiche la cascade du dernier apply (pas le prix manuel). */
+function fmtComputedAt(iso) {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return String(iso).slice(0, 16);
+  }
+}
+
 function PilotCascadeBlock({ history, currency }) {
   const factors = sortFactors(history?.pilotFactors ?? []);
   if (history?.source !== 'pilot-v2' && factors.length === 0) return null;
@@ -79,20 +94,63 @@ function PilotCascadeBlock({ history, currency }) {
         ? 'listing'
         : 'estimate';
 
+  const computedLabel = fmtComputedAt(history?.computedAt || history?.at);
+  const occPct = history?.occupancyPctAtApply;
+  const hasOcc = occPct != null && Number.isFinite(Number(occPct));
+
   return (
     <div style={{ marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${T.border}` }}>
       <div style={{
         fontSize: 9, fontWeight: 800, color: T.ai, marginBottom: 6,
         fontFamily: '"Geist Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.04em',
       }}>
-        Sojori AI · {history.mixEngineVersion ?? 'v2.1'}
+        Sojori AI · {history.mixEngineVersion ?? 'v2'}
         {' · '}
-        {baseSource === 'manuel'
-          ? 'base manuel'
-          : baseSource === 'listing'
-            ? 'base listing'
-            : 'base estimé'}
+        {factors.length === 0
+          ? 'détail manquant — relancer MAJ calendrier'
+          : baseSource === 'manuel'
+            ? 'base manuel'
+            : baseSource === 'listing'
+              ? 'base listing'
+              : 'base estimé'}
       </div>
+
+      {(computedLabel || hasOcc) ? (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr auto',
+          gap: '3px 10px',
+          marginBottom: 8,
+          padding: '6px 8px',
+          borderRadius: 6,
+          background: 'rgba(124,58,237,0.06)',
+        }}>
+          {computedLabel ? (
+            <>
+              <span style={{ fontSize: 10.5, color: T.text2, fontWeight: 650 }}>Calculé le</span>
+              <span style={{
+                fontSize: 10.5, fontWeight: 800, color: T.text,
+                fontFamily: '"Geist Mono", monospace', textAlign: 'right',
+              }}>
+                {computedLabel}
+              </span>
+            </>
+          ) : null}
+          {hasOcc ? (
+            <>
+              <span style={{ fontSize: 10.5, color: T.text2, fontWeight: 650 }}>
+                Occupation à ce moment
+              </span>
+              <span style={{
+                fontSize: 10.5, fontWeight: 800, color: T.ai,
+                fontFamily: '"Geist Mono", monospace', textAlign: 'right',
+              }}>
+                {Number(occPct)} %{history?.occupancyMonth ? ` · ${history.occupancyMonth}` : ''}
+              </span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {factors.map((f, i) => {
@@ -153,6 +211,23 @@ function PilotCascadeBlock({ history, currency }) {
   );
 }
 
+/** Dispo / stop-sell : info seule — n’empêche jamais l’affichage du découpage prix. */
+function availabilityStatus(inv) {
+  if (inv?.stopSell === true) {
+    return { label: 'Stop-sell · prix inchangé', color: T.error };
+  }
+  const ar = inv?.availableRoom;
+  if (ar != null && ar <= 0) {
+    const hasResa = (inv?.reservations?.length ?? 0) > 0;
+    return {
+      label: hasResa ? '0 dispo · réservé' : '0 dispo · bloqué (prix inchangé)',
+      color: T.warning,
+    };
+  }
+  if (ar != null) return { label: `${ar} dispo`, color: T.text3 };
+  return null;
+}
+
 function TooltipBody({ inv, dateStr, currency }) {
   const history = inv.calculatedPriceHistory;
   const hasPilot =
@@ -167,6 +242,7 @@ function TooltipBody({ inv, dateStr, currency }) {
   const manualActive = mode === 'manual';
   const dynamicActive = mode === 'dynamic';
   const total = priceOf(inv);
+  const avail = availabilityStatus(inv);
 
   return (
     <>
@@ -178,11 +254,34 @@ function TooltipBody({ inv, dateStr, currency }) {
         paddingBottom: 6, borderBottom: `1px solid ${T.border}`, marginBottom: 8,
       }}>
         <span>{dateStr}</span>
-        <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}>
-          {inv.availableRoom != null ? `${inv.availableRoom} dispo` : ''}
+        <span style={{
+          textTransform: 'none', letterSpacing: 0, fontWeight: 600,
+          color: avail?.color || T.text3,
+        }}>
+          {avail?.label || ''}
           {isArchiveDay(inv) ? ' · hist.' : ''}
         </span>
       </div>
+
+      {history?.applyAuditId ? (
+        <a
+          href={`/dynamic-pricing/audit?auditId=${encodeURIComponent(String(history.applyAuditId))}`}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            display: 'inline-block',
+            fontSize: 10,
+            fontWeight: 700,
+            color: T.ai,
+            textDecoration: 'none',
+            marginBottom: 8,
+            fontFamily: '"Geist Mono", monospace',
+            pointerEvents: 'auto',
+            cursor: 'pointer',
+          }}
+        >
+          Voir apply dans Audit →
+        </a>
+      ) : null}
 
       {hasPilot ? (
         <PilotCascadeBlock history={history} currency={currency} />

@@ -18,12 +18,10 @@ export const DP = {
   prixDeBase: 'Prix de base',
   profilEstimation: 'Profil estimation marché',
   snapshotMarche: 'Estimation prix de marché',
-  autoSnapshotTitle: 'Actualisation marché — chaque lundi',
-  autoSnapshotSubtitle:
-    'Met à jour l’estimation prix de marché du bien pour la semaine',
-  autoPropagationSubtitle:
-    'Applique l’estimation au calendrier + publication canaux (sans nouvel appel marché)',
-  fetchSnapshotNow: '① Actualiser l’estimation prix de marché',
+  autoSnapshotTitle: 'Marché — chaque lundi',
+  autoSnapshotSubtitle: 'Estimation prix de marché (hebdo)',
+  autoPropagationSubtitle: 'Calendrier + canaux (nuit 4h30)',
+  fetchSnapshotNow: 'Actualiser l’estimation',
   fetchEstimationHint:
     '⟳ Récupérer l’estimation prix de marché puis prévisualiser ici (12 mois)',
   fetchEstimationRequired:

@@ -2,7 +2,7 @@
 // SimpleView.jsx — vue 1 listing, grille mensuelle 7×N
 // Inspiration Airbnb Host · stat cards en haut · cellules riches
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   T, priceOf, toIso, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   resolveInventoryCellState, formatInventoryRateLabel, hasInventoryData, OUT_OF_WINDOW_CELL_BG,
@@ -11,6 +11,7 @@ import {
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import PopoverReservations from './PopoverReservations';
 import AuditBlockedDaysModal from './AuditBlockedDaysModal';
+import TooltipBreakdown from './TooltipBreakdown';
 import { normalizeCalendarReservations } from './reservationCalendarUtils';
 import calendarService from '../../services/calendarService';
 
@@ -134,6 +135,7 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
       basePrice: inv?.basePrice,
       available: inv?.availableRoom ?? 1,
       currency: listing.currencyCode || 'EUR',
+      inv,
     });
   }
 
@@ -199,87 +201,14 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
             if (!c.inMonth) {
               return <div key={c.key} style={{ borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, background: T.bg2, opacity: 0.5 }} />;
             }
-            const isSel = selected.includes(c.iso);
             return (
-              <div key={c.key} onClick={(e) => toggleDay(c.iso, e)} style={{
-                borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
-                padding: 8, display: 'flex', flexDirection: 'column', gap: 5,
-                cursor: c.noInventory || c.isArchived ? 'not-allowed' : 'cell', transition: 'all 0.15s', position: 'relative',
-                background:
-                  c.cellState === 'out_of_window' ? OUT_OF_WINDOW_CELL_BG :
-                  c.isArchived ? ARCHIVE_CELL_BG :
-                  c.noInventory ? T.bg2 :
-                  isSel ? T.primaryTint3 :
-                  c.isToday ? T.primaryTint :
-                  c.stopSell ? 'rgba(200,30,30,0.05)' :
-                  c.booked ? 'rgba(6,115,179,0.06)' :
-                  c.isWeekend ? T.bg2 : 'transparent',
-                boxShadow: isSel ? `inset 0 0 0 2px ${T.primary}` : 'none',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{
-                    fontFamily: '"Geist Mono", monospace',
-                    fontSize: 13, fontWeight: c.isToday ? 800 : 700,
-                    color: c.isArchived ? ARCHIVE_CELL_TEXT : c.isToday ? T.primaryDeep : T.text,
-                  }}>{c.num}</span>
-                  {c.isArchived && (
-                    <span style={{ fontSize: 8, fontWeight: 700, color: ARCHIVE_CELL_TEXT }}>hist.</span>
-                  )}
-                  <span style={{ display: 'flex', gap: 3 }}>
-                    {c.useDynamic && <i style={{ width: 6, height: 6, borderRadius: '50%', background: T.ai }} />}
-                    {c.hasManual && <i style={{ width: 6, height: 6, borderRadius: '50%', background: T.warning }} />}
-                  </span>
-                </div>
-                {c.noInventory || c.cellState === 'out_of_window' ? (
-                  <div
-                    title={c.priceHint}
-                    style={{
-                      fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
-                      color: T.text4, marginTop: 2,
-                    }}
-                  >
-                    {c.priceLabel}
-                    <small style={{ fontSize: 9, color: T.text4, marginLeft: 3, display: 'block', fontWeight: 600 }}>
-                      {c.cellState === 'out_of_window' ? 'hors fenêtre' : 'n/d'}
-                    </small>
-                  </div>
-                ) : c.stopSell ? (
-                  <div style={{
-                    fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
-                    color: T.error, textDecoration: 'line-through', marginTop: 2,
-                  }}>{c.basePrice ?? '—'}<small style={{ fontSize: 9.5, color: T.text3, marginLeft: 3, fontWeight: 600 }}>{c.currency}</small></div>
-                ) : (
-                  <div style={{
-                    fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
-                    color: c.useDynamic ? T.ai : T.text, letterSpacing: '-0.01em', marginTop: 2,
-                  }}>{c.priceLabel}{c.showPriceCurrency ? <small style={{ fontSize: 9.5, color: T.text3, marginLeft: 3, fontWeight: 600 }}>{c.currency}</small> : null}</div>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 'auto' }}>
-                  {c.stopSell && (
-                    <span style={{ fontSize: 9, background: T.errorTint, color: T.error, padding: '1px 5px', borderRadius: 99, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}>🚫 Stop</span>
-                  )}
-                  {!c.stopSell && c.booked && (
-                    <span style={{ fontSize: 9.5, color: T.error, fontFamily: '"Geist Mono", monospace', fontWeight: 700 }}>0 / {c.available}</span>
-                  )}
-                  {!c.noInventory && !c.stopSell && !c.booked && (
-                    <span style={{ fontSize: 9.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>{c.available} / {c.available}</span>
-                  )}
-                  {c.reservations.length >= 1 && (
-                    <span onClick={(e) => {
-                      e.stopPropagation();
-                      handleReservationClick(
-                        e.currentTarget.getBoundingClientRect(),
-                        c.iso,
-                        c.reservations,
-                      );
-                    }} style={{
-                      fontSize: 9, background: T.infoTint, color: T.info,
-                      padding: '1px 5px', borderRadius: 99, fontWeight: 700,
-                      fontFamily: '"Geist Mono", monospace', cursor: 'pointer',
-                    }}>{c.reservations.length === 1 ? '1 résa' : `${c.reservations.length} résa`}</span>
-                  )}
-                </div>
-              </div>
+              <SimpleDayCell
+                key={c.key}
+                c={c}
+                selected={selected.includes(c.iso)}
+                onToggle={(e) => toggleDay(c.iso, e)}
+                onReservationClick={handleReservationClick}
+              />
             );
           })}
         </div>
@@ -346,6 +275,113 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
           setAuditResult((s) => ({ ...s, loading: true }));
         }}
       />
+    </div>
+  );
+}
+
+function SimpleDayCell({ c, selected, onToggle, onReservationClick }) {
+  const [showTip, setShowTip] = useState(false);
+  const ref = useRef(null);
+  const canHoverPrice = !c.noInventory && hasInventoryData(c.inv);
+
+  return (
+    <div
+      ref={ref}
+      onClick={onToggle}
+      onMouseEnter={() => { if (canHoverPrice) setShowTip(true); }}
+      onMouseLeave={() => setShowTip(false)}
+      style={{
+        borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
+        padding: 8, display: 'flex', flexDirection: 'column', gap: 5,
+        cursor: c.noInventory || c.isArchived ? 'not-allowed' : (canHoverPrice ? 'help' : 'cell'),
+        transition: 'all 0.15s', position: 'relative',
+        background:
+          c.cellState === 'out_of_window' ? OUT_OF_WINDOW_CELL_BG :
+          c.isArchived ? ARCHIVE_CELL_BG :
+          c.noInventory ? T.bg2 :
+          selected ? T.primaryTint3 :
+          c.isToday ? T.primaryTint :
+          c.stopSell ? 'rgba(200,30,30,0.05)' :
+          c.booked ? 'rgba(6,115,179,0.06)' :
+          c.isWeekend ? T.bg2 : 'transparent',
+        boxShadow: selected ? `inset 0 0 0 2px ${T.primary}` : 'none',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{
+          fontFamily: '"Geist Mono", monospace',
+          fontSize: 13, fontWeight: c.isToday ? 800 : 700,
+          color: c.isArchived ? ARCHIVE_CELL_TEXT : c.isToday ? T.primaryDeep : T.text,
+        }}>{c.num}</span>
+        {c.isArchived && (
+          <span style={{ fontSize: 8, fontWeight: 700, color: ARCHIVE_CELL_TEXT }}>hist.</span>
+        )}
+        <span style={{ display: 'flex', gap: 3 }}>
+          {c.useDynamic && <i style={{ width: 6, height: 6, borderRadius: '50%', background: T.ai }} />}
+          {c.hasManual && <i style={{ width: 6, height: 6, borderRadius: '50%', background: T.warning }} />}
+        </span>
+      </div>
+      {c.noInventory || c.cellState === 'out_of_window' ? (
+        <div
+          title={c.priceHint}
+          style={{
+            fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
+            color: T.text4, marginTop: 2,
+          }}
+        >
+          {c.priceLabel}
+          <small style={{ fontSize: 9, color: T.text4, marginLeft: 3, display: 'block', fontWeight: 600 }}>
+            {c.cellState === 'out_of_window' ? 'hors fenêtre' : 'n/d'}
+          </small>
+        </div>
+      ) : (
+        <div style={{
+          fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
+          color: c.useDynamic ? T.ai : T.text, letterSpacing: '-0.01em', marginTop: 2,
+        }}>
+          {c.priceLabel}
+          {c.showPriceCurrency ? (
+            <small style={{ fontSize: 9.5, color: T.text3, marginLeft: 3, fontWeight: 600 }}>{c.currency}</small>
+          ) : null}
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 'auto' }}>
+        {c.stopSell && (
+          <span style={{ fontSize: 9, background: T.errorTint, color: T.error, padding: '1px 5px', borderRadius: 99, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}>🚫 Stop</span>
+        )}
+        {!c.stopSell && c.booked && (
+          <span style={{ fontSize: 9.5, color: T.error, fontFamily: '"Geist Mono", monospace', fontWeight: 700 }}>0 / {c.available}</span>
+        )}
+        {!c.noInventory && !c.stopSell && !c.booked && (
+          <span style={{ fontSize: 9.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>{c.available} / {c.available}</span>
+        )}
+        {!c.stopSell && !c.booked && c.available != null && c.available <= 0 && (
+          <span style={{ fontSize: 9, background: 'rgba(217,119,6,0.12)', color: T.warning, padding: '1px 5px', borderRadius: 99, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}>0 dispo</span>
+        )}
+        {c.reservations.length >= 1 && (
+          <span onClick={(e) => {
+            e.stopPropagation();
+            onReservationClick?.(
+              e.currentTarget.getBoundingClientRect(),
+              c.iso,
+              c.reservations,
+            );
+          }} style={{
+            fontSize: 9, background: T.infoTint, color: T.info,
+            padding: '1px 5px', borderRadius: 99, fontWeight: 700,
+            fontFamily: '"Geist Mono", monospace', cursor: 'pointer',
+          }}>{c.reservations.length === 1 ? '1 résa' : `${c.reservations.length} résa`}</span>
+        )}
+      </div>
+      {canHoverPrice && showTip && (
+        <TooltipBreakdown
+          open={showTip}
+          anchorRef={ref}
+          inv={c.inv}
+          dateStr={c.iso}
+          currency={c.currency}
+        />
+      )}
     </div>
   );
 }

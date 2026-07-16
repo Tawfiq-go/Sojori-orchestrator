@@ -199,18 +199,17 @@ export function resolveInventoryCellState(
   return 'missing';
 }
 
-/** Libellé tarif Rate TOP / vue simple — jamais « 0 » si pas de donnée inventaire. */
+/** Libellé tarif Rate TOP / vue simple — jamais « 0 » si pas de donnée inventaire.
+ *  Prix indépendant de la dispo / stop-sell (déblocage ou annulation possible). */
 export function formatInventoryRateLabel(
   state: InventoryCellState,
   inv?: InventoryDay | null,
 ): { main: string; hint?: string; showCurrency: boolean } {
   if (state === 'data') {
-    if (inv?.stopSell) return { main: '—', showCurrency: false };
     const p = priceOf(inv ?? undefined);
     return { main: String(p), showCurrency: true };
   }
   if (state === 'archive') {
-    if (inv?.stopSell) return { main: '—', hint: 'historique', showCurrency: false };
     const p = priceOf(inv ?? undefined);
     return { main: String(p), showCurrency: true, hint: 'historique' };
   }

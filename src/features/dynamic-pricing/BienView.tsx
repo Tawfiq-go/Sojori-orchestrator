@@ -76,6 +76,8 @@ export interface BienViewProps {
   gapBlockMinNights: number;
   modeEnabled: boolean;
   lastMinuteEnabled: boolean;
+  lastMinuteFromDays: number;
+  lastMinuteToDays: number;
   lastMinuteWindowDays: number;
   lastMinuteDiscountPct: number;
   occupancyBandsEnabled: boolean;
@@ -85,6 +87,7 @@ export interface BienViewProps {
   occupancyHighAdj: number;
   pricingBaseSource: 'estimate' | 'listing_base' | 'manual_base';
   manualBasePriceMad: number;
+  eventsEnabled: boolean;
   applyPrice: boolean;
   applyMinStay: boolean;
   scopeModalOpen?: boolean;
@@ -139,7 +142,8 @@ export interface BienViewProps {
   onGapBlockMinNightsChange: (v: number) => void;
   onModeEnabledChange: (enabled: boolean) => void;
   onLastMinuteEnabledChange: (on: boolean) => void;
-  onLastMinuteWindowDaysChange: (v: number) => void;
+  onLastMinuteFromDaysChange: (v: number) => void;
+  onLastMinuteToDaysChange: (v: number) => void;
   onLastMinuteDiscountPctChange: (v: number) => void;
   onOccupancyBandsEnabledChange: (on: boolean) => void;
   onOccupancyLowMaxChange: (v: number) => void;
@@ -148,6 +152,7 @@ export interface BienViewProps {
   onOccupancyHighAdjChange: (v: number) => void;
   onPricingBaseSourceChange: (v: 'estimate' | 'listing_base' | 'manual_base') => void;
   onManualBasePriceMadChange: (v: number) => void;
+  onEventsEnabledChange: (on: boolean) => void;
   onAddEvent: () => void;
   onEventModalClose?: () => void;
   onEventSave?: (event: PricingEvent) => void | Promise<void>;
@@ -192,9 +197,9 @@ export default function BienView(props: BienViewProps) {
     potentialHint, hasCompsProd,
     performance, market, aiEnabled,
     floor, ceiling, mode, activeModeId, pricingModes, gapBlockEnabled, gapBlockMinNights, modeEnabled,
-    lastMinuteEnabled, lastMinuteWindowDays, lastMinuteDiscountPct,
+    lastMinuteEnabled, lastMinuteFromDays, lastMinuteToDays, lastMinuteDiscountPct,
     occupancyBandsEnabled, occupancyLowMax, occupancyLowAdj, occupancyHighMin, occupancyHighAdj,
-    pricingBaseSource, manualBasePriceMad,
+    pricingBaseSource, manualBasePriceMad, eventsEnabled,
     applyPrice, applyMinStay, scopeModalOpen, scopeModalEdit, scopeSaving, scopeSaveError,
     configSaveStatus, events, suggestions,
     eventModalOpen, editingEventId,
@@ -209,10 +214,10 @@ export default function BienView(props: BienViewProps) {
     previewDiffOnlyChanged = true, onPreviewDiffOnlyChanged, onPreviewDiffReload,
     onActiveModeChange, onModeToggle, onAddCustomMode, onUpdateCustomMode, onDeleteCustomMode,
     onGapBlockEnabledChange, onGapBlockMinNightsChange, onModeEnabledChange,
-    onLastMinuteEnabledChange, onLastMinuteWindowDaysChange, onLastMinuteDiscountPctChange,
+    onLastMinuteEnabledChange, onLastMinuteFromDaysChange, onLastMinuteToDaysChange, onLastMinuteDiscountPctChange,
     onOccupancyBandsEnabledChange, onOccupancyLowMaxChange, onOccupancyLowAdjChange,
     onOccupancyHighMinChange, onOccupancyHighAdjChange,
-    onPricingBaseSourceChange, onManualBasePriceMadChange,
+    onPricingBaseSourceChange, onManualBasePriceMadChange, onEventsEnabledChange,
     onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
     onEventModalClose, onEventSave,
     onYearChange, onApplyToOps, onRunCalendarUpdate, activeModeLabel, onExpandDay,
@@ -473,18 +478,18 @@ export default function BienView(props: BienViewProps) {
               ? 'Recette enregistrée (auto-save ~1s)'
               : configSaveStatus === 'error'
                 ? 'Erreur enregistrement — réessayez ou activez Sojori AI'
-                : '6 étapes : base → bornes → mode → occupation → last-min → events'
+                : '7 blocs : base · bornes · mode · occupation · last-min · trous · events'
         }
         sources={[
           { kind: floor > 0 ? 'prod' : 'empty', label: 'Bornes' },
           { kind: occupancyBandsEnabled ? 'prod' : 'empty', label: 'Occupation' },
           { kind: lastMinuteEnabled ? 'prod' : 'empty', label: 'Last-min' },
-          { kind: events.length > 0 ? 'prod' : 'empty', label: events.length ? `${events.length} event(s)` : 'Événements' },
+          { kind: eventsEnabled && events.length > 0 ? 'prod' : 'empty', label: events.length ? `${events.length} event(s)` : 'Événements' },
         ]}
       >
         <PricingControls
           floor={floor} ceiling={ceiling}
-          floorRange={[500, 3000]} ceilingRange={[1500, 8000]}
+          floorRange={[0, 20_000]} ceilingRange={[0, 20_000]}
           recoFloor={market.recoBounds?.floor ?? 0} recoCeiling={market.recoBounds?.ceiling ?? 0}
           pricingModes={pricingModes}
           activeModeId={activeModeId}
@@ -492,7 +497,9 @@ export default function BienView(props: BienViewProps) {
           gapBlockEnabled={gapBlockEnabled}
           gapBlockMinNights={gapBlockMinNights}
           lastMinuteEnabled={lastMinuteEnabled}
-          lastMinuteWindowDays={lastMinuteWindowDays}
+          lastMinuteFromDays={lastMinuteFromDays}
+          lastMinuteToDays={lastMinuteToDays}
+          lastMinuteWindowDays={lastMinuteToDays}
           lastMinuteDiscountPct={lastMinuteDiscountPct}
           occupancyBandsEnabled={occupancyBandsEnabled}
           occupancyLowMax={occupancyLowMax}
@@ -501,6 +508,7 @@ export default function BienView(props: BienViewProps) {
           occupancyHighAdj={occupancyHighAdj}
           pricingBaseSource={pricingBaseSource}
           manualBasePriceMad={manualBasePriceMad}
+          eventsEnabled={eventsEnabled}
           events={events} suggestions={suggestions}
           hasBoundsProd={floor > 0 && ceiling > 0}
           estimatedRevenue={estimatedRevenueMad}
@@ -510,7 +518,8 @@ export default function BienView(props: BienViewProps) {
           onGapBlockMinNightsChange={onGapBlockMinNightsChange}
           onModeEnabledChange={onModeEnabledChange}
           onLastMinuteEnabledChange={onLastMinuteEnabledChange}
-          onLastMinuteWindowDaysChange={onLastMinuteWindowDaysChange}
+          onLastMinuteFromDaysChange={onLastMinuteFromDaysChange}
+          onLastMinuteToDaysChange={onLastMinuteToDaysChange}
           onLastMinuteDiscountPctChange={onLastMinuteDiscountPctChange}
           onOccupancyBandsEnabledChange={onOccupancyBandsEnabledChange}
           onOccupancyLowMaxChange={onOccupancyLowMaxChange}
@@ -519,6 +528,7 @@ export default function BienView(props: BienViewProps) {
           onOccupancyHighAdjChange={onOccupancyHighAdjChange}
           onPricingBaseSourceChange={onPricingBaseSourceChange}
           onManualBasePriceMadChange={onManualBasePriceMadChange}
+          onEventsEnabledChange={onEventsEnabledChange}
           onApplyRecoBounds={onApplyRecoBounds}
           onActiveModeChange={onActiveModeChange}
           onModeToggle={onModeToggle}
@@ -836,7 +846,9 @@ export default function BienView(props: BienViewProps) {
         occupancyHighMin={occupancyHighMin}
         occupancyHighAdj={occupancyHighAdj}
         lastMinuteEnabled={lastMinuteEnabled}
-        lastMinuteWindowDays={lastMinuteWindowDays}
+        lastMinuteFromDays={lastMinuteFromDays}
+        lastMinuteToDays={lastMinuteToDays}
+        lastMinuteWindowDays={lastMinuteToDays}
         lastMinuteDiscountPct={lastMinuteDiscountPct}
         onClose={() => setCalendarUpdateOpen(false)}
         onRun={onRunCalendarUpdate ?? (async () => {

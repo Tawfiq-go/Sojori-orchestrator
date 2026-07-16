@@ -1,8 +1,8 @@
 // ════════════════════════════════════════════════════════════════════
-// PricingControls.tsx — Réglages pédagogiques (PriceLabs-like cascade)
+// PricingControls.tsx — Réglages pédagogiques (cascade PriceLabs-like)
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
-import { Box, Stack, Typography, Slider, Button, IconButton, Switch, FormControlLabel, TextField } from '@mui/material';
+import { Box, Stack, Typography, Slider, Button, IconButton, TextField } from '@mui/material';
 import { T, DP_LAYOUT_SX } from '../_tokens';
 
 export type PricingMode = 'prudent' | 'equilibre' | 'agressif';
@@ -58,6 +58,11 @@ export interface PricingControlsProps {
   gapBlockMinNights: number;
   modeEnabled: boolean;
   lastMinuteEnabled: boolean;
+  /** Début fenêtre A (jours avant arrivée). */
+  lastMinuteFromDays: number;
+  /** Fin fenêtre B (jours avant arrivée). */
+  lastMinuteToDays: number;
+  /** @deprecated alias de lastMinuteToDays */
   lastMinuteWindowDays: number;
   lastMinuteDiscountPct: number;
   occupancyBandsEnabled: boolean;
@@ -68,13 +73,16 @@ export interface PricingControlsProps {
   pricingBaseSource: 'estimate' | 'listing_base' | 'manual_base';
   /** Base fixe MAD si source C (manuel). */
   manualBasePriceMad: number;
+  /** Si false, les events restent en mémoire mais ne sont pas appliqués. */
+  eventsEnabled?: boolean;
   onFloorChange: (v: number) => void;
   onCeilingChange: (v: number) => void;
   onGapBlockEnabledChange: (on: boolean) => void;
   onGapBlockMinNightsChange: (v: number) => void;
   onModeEnabledChange: (enabled: boolean) => void;
   onLastMinuteEnabledChange: (on: boolean) => void;
-  onLastMinuteWindowDaysChange: (v: number) => void;
+  onLastMinuteFromDaysChange: (v: number) => void;
+  onLastMinuteToDaysChange: (v: number) => void;
   onLastMinuteDiscountPctChange: (v: number) => void;
   onOccupancyBandsEnabledChange: (on: boolean) => void;
   onOccupancyLowMaxChange: (v: number) => void;
@@ -83,9 +91,11 @@ export interface PricingControlsProps {
   onOccupancyHighAdjChange: (v: number) => void;
   onPricingBaseSourceChange: (v: 'estimate' | 'listing_base' | 'manual_base') => void;
   onManualBasePriceMadChange: (v: number) => void;
+  onEventsEnabledChange?: (on: boolean) => void;
   onApplyRecoBounds: () => void;
   onActiveModeChange: (modeId: string) => void;
-  onModeToggle: (modeId: string, enabled: boolean) => void;
+  /** Conservé pour compat — les modes se choisissent au clic carte. */
+  onModeToggle?: (modeId: string, enabled: boolean) => void;
   onAddCustomMode: () => void;
   onUpdateCustomMode: (modeId: string, patch: Partial<Pick<PricingModeDef, 'label' | 'multiplier'>>) => void;
   onDeleteCustomMode: (modeId: string) => void;
@@ -119,30 +129,220 @@ const PRESET_META: Record<
   },
 };
 
+const lblSx = {
+  fontSize: 11,
+  fontFamily: '"Geist Mono", monospace',
+  fontWeight: 700,
+  color: T.text3,
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+} as const;
+const valSx = {
+  fontFamily: '"Geist Mono", monospace',
+  fontSize: 14,
+  fontWeight: 800,
+  letterSpacing: '-0.01em',
+} as const;
+
+/** Interrupteur uniforme Actif · Oui / Non */
+function ActiveToggle({
+  active,
+  onChange,
+  alwaysOn,
+}: {
+  active: boolean;
+  onChange?: (v: boolean) => void;
+  alwaysOn?: boolean;
+}) {
+  if (alwaysOn) {
+    return (
+      <Box
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.75,
+          px: 1,
+          py: 0.4,
+          borderRadius: 999,
+          bgcolor: T.goldTint,
+          border: `1px solid ${T.gold}`,
+        }}
+      >
+        <Typography sx={{ fontSize: 10, fontWeight: 800, color: T.goldDeep, letterSpacing: '0.04em' }}>
+          TOUJOURS ACTIF
+        </Typography>
+      </Box>
+    );
+  }
+  return (
+    <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
+      <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3 }}>Actif</Typography>
+      <Box
+        sx={{
+          display: 'inline-flex',
+          p: 0.25,
+          borderRadius: 999,
+          bgcolor: T.bg3,
+          border: `1px solid ${T.border}`,
+        }}
+      >
+        {([true, false] as const).map((v) => {
+          const on = active === v;
+          return (
+            <Box
+              key={v ? 'oui' : 'non'}
+              component="button"
+              type="button"
+              onClick={() => onChange?.(v)}
+              sx={{
+                all: 'unset',
+                cursor: 'pointer',
+                px: 1.1,
+                py: 0.35,
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 800,
+                fontFamily: '"Geist Mono", monospace',
+                bgcolor: on ? (v ? T.successTint : T.bg1) : 'transparent',
+                color: on ? (v ? T.success : T.text3) : T.text4,
+                boxShadow: on ? `inset 0 0 0 1px ${v ? T.success : T.border}` : 'none',
+              }}
+            >
+              {v ? 'Oui' : 'Non'}
+            </Box>
+          );
+        })}
+      </Box>
+    </Stack>
+  );
+}
+
+function CtrlBlock({
+  title,
+  stepHint,
+  active,
+  onActiveChange,
+  alwaysOn,
+  children,
+}: {
+  title: string;
+  stepHint?: string;
+  active?: boolean;
+  onActiveChange?: (v: boolean) => void;
+  alwaysOn?: boolean;
+  children: React.ReactNode;
+}) {
+  const isOff = !alwaysOn && active === false;
+  return (
+    <Box
+      sx={{
+        bgcolor: T.bg1,
+        border: `1px solid ${isOff ? T.border : T.border}`,
+        borderRadius: 2,
+        p: { xs: 2, md: 2.5 },
+        boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+        opacity: isOff ? 0.92 : 1,
+      }}
+    >
+      <Stack
+        direction="row"
+        sx={{
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 1.5,
+          mb: stepHint ? 0.5 : 1.5,
+        }}
+      >
+        <Typography sx={{ fontSize: 14, fontWeight: 800, letterSpacing: '-0.015em', flex: 1 }}>
+          {title}
+        </Typography>
+        {(alwaysOn || onActiveChange != null) && (
+          <ActiveToggle
+            alwaysOn={alwaysOn}
+            active={alwaysOn ? true : Boolean(active)}
+            onChange={onActiveChange}
+          />
+        )}
+      </Stack>
+      {stepHint ? (
+        <Typography sx={{ fontSize: 11.5, color: T.text3, lineHeight: 1.45, mb: 1.5 }}>
+          {stepHint}
+        </Typography>
+      ) : null}
+      {isOff ? (
+        <Typography sx={{ fontSize: 11.5, color: T.text3, fontStyle: 'italic', mb: 1.25 }}>
+          Désactivé — les valeurs ci-dessous sont conservées mais ignorées au calcul. Pas besoin de
+          mettre des zéros.
+        </Typography>
+      ) : null}
+      <Box
+        sx={{
+          opacity: isOff ? 0.45 : 1,
+          pointerEvents: isOff ? 'none' : 'auto',
+          transition: 'opacity 0.15s',
+        }}
+      >
+        {children}
+      </Box>
+    </Box>
+  );
+}
+
+function FieldSlider({
+  label,
+  display,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  display: React.ReactNode;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <Box sx={{ mb: 1.75 }}>
+      <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 0.5 }}>
+        <Typography sx={lblSx}>{label}</Typography>
+        <Typography sx={{ ...valSx, fontSize: 13 }}>{display}</Typography>
+      </Stack>
+      <GoldSlider value={value} min={min} max={max} step={step} onChange={onChange} />
+    </Box>
+  );
+}
+
 export default function PricingControls(props: PricingControlsProps) {
   const {
     floor, ceiling, floorRange, ceilingRange, recoFloor, recoCeiling,
     pricingModes, activeModeId, events, suggestions, gapBlockEnabled, gapBlockMinNights, modeEnabled,
-    lastMinuteEnabled, lastMinuteWindowDays, lastMinuteDiscountPct,
+    lastMinuteEnabled, lastMinuteFromDays, lastMinuteToDays, lastMinuteDiscountPct,
     occupancyBandsEnabled, occupancyLowMax, occupancyLowAdj, occupancyHighMin, occupancyHighAdj,
     pricingBaseSource, manualBasePriceMad,
+    eventsEnabled = true,
     onGapBlockEnabledChange, onGapBlockMinNightsChange,
     onFloorChange, onCeilingChange, onModeEnabledChange,
-    onLastMinuteEnabledChange, onLastMinuteWindowDaysChange, onLastMinuteDiscountPctChange,
+    onLastMinuteEnabledChange, onLastMinuteFromDaysChange, onLastMinuteToDaysChange, onLastMinuteDiscountPctChange,
     onOccupancyBandsEnabledChange, onOccupancyLowMaxChange, onOccupancyLowAdjChange,
     onOccupancyHighMinChange, onOccupancyHighAdjChange,
     onPricingBaseSourceChange, onManualBasePriceMadChange,
+    onEventsEnabledChange,
     onApplyRecoBounds,
-    onActiveModeChange, onModeToggle, onAddCustomMode, onUpdateCustomMode, onDeleteCustomMode,
+    onActiveModeChange, onAddCustomMode, onUpdateCustomMode, onDeleteCustomMode,
     onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
-    estimatedRevenue, estimatedRevenueLiftPct, hasBoundsProd = false, boundsContextHint,
+    estimatedRevenue, estimatedRevenueLiftPct, boundsContextHint,
   } = props;
 
-  const dash = '—';
-  const sortedModes = [...pricingModes].sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === 'preset' ? -1 : 1;
-    return a.label.localeCompare(b.label, 'fr');
-  });
+  const sortedModes = [...pricingModes]
+    .filter((m) => m.enabled || m.kind === 'custom')
+    .sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'preset' ? -1 : 1;
+      return a.label.localeCompare(b.label, 'fr');
+    });
 
   const cascadeChips: { n: number; label: string; on: boolean }[] = [
     {
@@ -155,45 +355,42 @@ export default function PricingControls(props: PricingControlsProps) {
             : 'Base · estimé',
       on: true,
     },
-    { n: 2, label: 'Mode', on: modeEnabled },
-    { n: 3, label: 'Occupation', on: occupancyBandsEnabled },
-    { n: 4, label: 'Bornes', on: true },
-    { n: 5, label: 'Events', on: events.length > 0 },
-    { n: 6, label: 'Last-min', on: lastMinuteEnabled },
+    { n: 2, label: 'Bornes', on: true },
+    { n: 3, label: 'Mode', on: modeEnabled },
+    { n: 4, label: 'Occupation', on: occupancyBandsEnabled },
+    { n: 5, label: 'Last-min', on: lastMinuteEnabled },
+    { n: 6, label: 'Trous', on: gapBlockEnabled },
+    { n: 7, label: 'Events', on: eventsEnabled && events.length > 0 },
   ];
 
   return (
-    <Box sx={{
-      display: 'grid',
-      gridTemplateColumns: { xs: '1fr', md: '1.15fr 1fr' },
-      gap: 2,
-      ...DP_LAYOUT_SX,
-    }}>
-      {/* ── Bannière pédagogique + cascade live ───────────────── */}
-      <Box sx={{
-        gridColumn: { md: '1 / -1' },
-        p: { xs: 2, md: 2.5 },
-        borderRadius: 2,
-        border: `1px solid ${T.goldTint2}`,
-        background: `linear-gradient(135deg, ${T.goldTint}, ${T.bg1} 55%)`,
-        boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
-      }}>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+        gap: 2,
+        ...DP_LAYOUT_SX,
+      }}
+    >
+      {/* Bannière */}
+      <Box
+        sx={{
+          gridColumn: { md: '1 / -1' },
+          p: { xs: 2, md: 2.5 },
+          borderRadius: 2,
+          border: `1px solid ${T.goldTint2}`,
+          background: `linear-gradient(135deg, ${T.goldTint}, ${T.bg1} 55%)`,
+          boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+        }}
+      >
         <Typography sx={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em', mb: 0.625 }}>
           Comment Sojori calcule votre prix
         </Typography>
         <Typography sx={{ fontSize: 12, color: T.text2, lineHeight: 1.5, maxWidth: 720, mb: 1.75 }}>
-          Comme PriceLabs : on part d&apos;une <b>base</b>, on applique le <b>mode</b> et
-          l&apos;<b>occupation</b>, on serre dans les <b>bornes</b>, puis on surcharge les{' '}
-          <b>événements</b> et la <b>dernière minute</b>. Chaque nuit, le cron refait cette cascade.
+          Base → bornes → mode → occupation → last-min. Un <b>événement</b> actif prend le lead
+          et remplace tout sur ses dates.
         </Typography>
-        <Stack
-          direction="row"
-          sx={{
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: 0.75,
-          }}
-        >
+        <Stack direction="row" sx={{ flexWrap: 'wrap', alignItems: 'center', gap: 0.75 }}>
           {cascadeChips.map((chip, i) => (
             <React.Fragment key={chip.n}>
               {i > 0 && (
@@ -220,7 +417,6 @@ export default function PricingControls(props: PricingControlsProps) {
                   border: `1px solid ${chip.on ? T.goldTint2 : T.border}`,
                   bgcolor: chip.on ? T.bg1 : T.bg3,
                   opacity: chip.on ? 1 : 0.42,
-                  transition: 'opacity 0.15s',
                 }}
               >
                 <Box
@@ -241,15 +437,26 @@ export default function PricingControls(props: PricingControlsProps) {
                 >
                   {chip.n}
                 </Box>
-                <Typography sx={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: chip.on ? T.text : T.text3,
-                  whiteSpace: 'nowrap',
-                }}>
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: chip.on ? T.text : T.text3,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {chip.label}
                   {!chip.on && (
-                    <Box component="span" sx={{ ml: 0.5, fontSize: 9.5, fontWeight: 800, color: T.text4, fontFamily: '"Geist Mono", monospace' }}>
+                    <Box
+                      component="span"
+                      sx={{
+                        ml: 0.5,
+                        fontSize: 9.5,
+                        fontWeight: 800,
+                        color: T.text4,
+                        fontFamily: '"Geist Mono", monospace',
+                      }}
+                    >
                       OFF
                     </Box>
                   )}
@@ -260,33 +467,36 @@ export default function PricingControls(props: PricingControlsProps) {
         </Stack>
       </Box>
 
-      {/* ① Base du calcul */}
+      {/* ① Base */}
       <Box sx={{ gridColumn: { md: '1 / -1' } }}>
         <CtrlBlock
           title="① Base du calcul"
-          stepHint="Choisissez d’où part le prix avant les réglages ci-dessous."
+          stepHint="D’où part le prix avant les réglages. Toujours utilisé."
+          alwaysOn
         >
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-            {[
-              {
-                id: 'estimate' as const,
-                title: 'A · Estimation prix de marché',
-                desc: 'Recommandé — estimation marché, puis vos réglages',
-                recommended: true,
-              },
-              {
-                id: 'listing_base' as const,
-                title: 'B · Prix listing',
-                desc: 'Base = prix déjà en place · + réglages',
-                recommended: false,
-              },
-              {
-                id: 'manual_base' as const,
-                title: 'C · Prix manuel',
-                desc: 'Base fixe (ex. 1000 MAD) · + mode / occ / last-min',
-                recommended: false,
-              },
-            ].map((opt) => {
+            {(
+              [
+                {
+                  id: 'estimate' as const,
+                  title: 'A · Estimation prix de marché',
+                  desc: 'Recommandé — estimation marché, puis vos réglages',
+                  recommended: true,
+                },
+                {
+                  id: 'listing_base' as const,
+                  title: 'B · Prix listing',
+                  desc: 'Base = prix déjà en place · + réglages',
+                  recommended: false,
+                },
+                {
+                  id: 'manual_base' as const,
+                  title: 'C · Prix manuel',
+                  desc: 'Base fixe (ex. 1000 MAD) · + mode / occ / last-min',
+                  recommended: false,
+                },
+              ] as const
+            ).map((opt) => {
               const on = pricingBaseSource === opt.id;
               return (
                 <Box
@@ -304,11 +514,23 @@ export default function PricingControls(props: PricingControlsProps) {
                   }}
                 >
                   {opt.recommended ? (
-                    <Box sx={{
-                      position: 'absolute', top: 8, right: 8,
-                      fontSize: 9, fontWeight: 800, fontFamily: '"Geist Mono", monospace',
-                      bgcolor: T.gold, color: T.text, px: 0.6, py: 0.1, borderRadius: 999,
-                    }}>★ RECO</Box>
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        fontSize: 9,
+                        fontWeight: 800,
+                        fontFamily: '"Geist Mono", monospace',
+                        bgcolor: T.gold,
+                        color: T.text,
+                        px: 0.6,
+                        py: 0.1,
+                        borderRadius: 999,
+                      }}
+                    >
+                      ★ RECO
+                    </Box>
                   ) : null}
                   <Typography sx={{ fontSize: 12.5, fontWeight: 800, pr: opt.recommended ? 5 : 0 }}>
                     {opt.title}
@@ -321,221 +543,190 @@ export default function PricingControls(props: PricingControlsProps) {
             })}
           </Stack>
           {pricingBaseSource === 'manual_base' ? (
-            <Box sx={{ mt: 1.75, p: 1.5, borderRadius: 1.25, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.75 }}>
-                <Typography sx={{ fontSize: 12, fontWeight: 800 }}>Montant de base (MAD)</Typography>
-                <Typography sx={{ fontFamily: '"Geist Mono", monospace', fontWeight: 800, fontSize: 14 }}>
-                  {manualBasePriceMad.toLocaleString('fr-FR')} MAD
-                </Typography>
-              </Stack>
-              <GoldSlider
+            <Box
+              sx={{
+                mt: 1.75,
+                p: 1.5,
+                borderRadius: 1.25,
+                bgcolor: T.bg2,
+                border: `1px solid ${T.border}`,
+              }}
+            >
+              <FieldSlider
+                label="Montant de base (MAD)"
+                display={`${manualBasePriceMad.toLocaleString('fr-FR')} MAD`}
                 value={manualBasePriceMad}
                 min={200}
                 max={5000}
                 step={50}
                 onChange={onManualBasePriceMadChange}
               />
-              <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 0.75 }}>
-                Tous les jours partent de ce montant, puis mode / occupation / last-min / events.
+              <Typography sx={{ fontSize: 10.5, color: T.text3, mt: -0.5 }}>
+                Tous les jours partent de ce montant, puis les blocs actifs ci-dessous.
               </Typography>
             </Box>
           ) : null}
         </CtrlBlock>
       </Box>
 
-      {/* ② Bornes */}
-      <CtrlBlock
-        title="② Bornes de prix"
-        stepHint="Plancher et plafond : le prix final ne sort jamais de cette fourchette."
-      >
-        {boundsContextHint ? (
-          <Typography sx={{ fontSize: 10.5, color: T.text2, lineHeight: 1.45, mb: 1.5 }}>
-            {boundsContextHint}
-          </Typography>
-        ) : null}
-        {hasBoundsProd ? <DistributionMini /> : null}
-        <Box sx={{ mb: 2.25 }}>
-          <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 0.75 }}>
-            <Typography sx={lblSx}>Prix min (plancher)</Typography>
-            <Typography sx={valSx}>{hasBoundsProd ? floor.toLocaleString('fr-FR') : dash}<Box component="span" sx={{ fontSize: 10, color: T.text3, ml: 0.375 }}>MAD</Box></Typography>
-          </Stack>
-          <GoldSlider value={floor} min={floorRange[0]} max={floorRange[1]} step={50} onChange={onFloorChange} />
-        </Box>
-        <Box
-          sx={{
-            mb: 2.25,
-            p: 1.5,
-            borderRadius: 1.25,
-            bgcolor: gapBlockEnabled ? T.bg2 : 'rgba(211,47,47,0.04)',
-            border: `1px solid ${gapBlockEnabled ? T.border : '#d32f2f'}`,
-          }}
+      {/* ② Bornes — toujours actives, min + max seulement */}
+      <Box sx={{ gridColumn: { md: '1 / -1' } }}>
+        <CtrlBlock
+          title="② Bornes de prix"
+          stepHint="Plancher et plafond : le prix final ne sort jamais de cette fourchette. Toujours actifs avec le dynamic pricing."
+          alwaysOn
         >
-          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text }}>
-              Combler trous (min stay)
+          {boundsContextHint ? (
+            <Typography sx={{ fontSize: 10.5, color: T.text2, lineHeight: 1.45, mb: 1.25 }}>
+              {boundsContextHint}
             </Typography>
-            <Box
-              component="button"
-              type="button"
-              onClick={() => onGapBlockEnabledChange(!gapBlockEnabled)}
-              sx={{
-                all: 'unset',
-                cursor: 'pointer',
-                fontSize: 10,
-                fontWeight: 800,
-                fontFamily: '"Geist Mono", monospace',
-                px: 1,
-                py: 0.35,
-                borderRadius: 999,
-                bgcolor: gapBlockEnabled ? T.successTint : T.bg3,
-                color: gapBlockEnabled ? T.success : T.text3,
-              }}
-            >
-              {gapBlockEnabled ? 'ON' : 'OFF'}
-            </Box>
-          </Stack>
-          <Typography sx={{ fontSize: 11, color: T.text2, lineHeight: 1.45, mb: 1.25 }}>
-            Trou de <b>2 nuits</b> avec min stay client <b>3</b> → on écrit <b>min stay 2</b> sur
-            ces jours (valeur d&apos;origine sauvegardée). Trou 1 nuit : signalé seulement.
-            Annulation résa : autre flux calendrier.
+          ) : null}
+
+          <Typography sx={{ fontSize: 11, color: T.text3, mb: 1.25, lineHeight: 1.4 }}>
+            Deux curseurs <b>indépendants</b> — 0 à 20 000 MAD. Aucune corrélation avec P25/P75 ni
+            entre min et max.
           </Typography>
-          {gapBlockEnabled ? (
-            <Box>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography sx={lblSx}>Min stay client (référence)</Typography>
-                <Typography sx={{ ...valSx, fontSize: 12 }}>{gapBlockMinNights} nuit(s)</Typography>
-              </Stack>
-              <GoldSlider
-                value={gapBlockMinNights}
-                min={2}
-                max={14}
-                step={1}
-                onChange={onGapBlockMinNightsChange}
-              />
-            </Box>
-          ) : (
-            <Typography sx={{ fontSize: 11, color: T.text3, fontStyle: 'italic' }}>
-              Désactivé — aucun ajustement min stay sur les trous.
+
+          <Box sx={{ mb: 2 }}>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 0.5 }}>
+              <Typography sx={lblSx}>Prix min (plancher)</Typography>
+              <Typography sx={valSx}>
+                {floor.toLocaleString('fr-FR')}
+                <Box component="span" sx={{ fontSize: 10, color: T.text3, ml: 0.375 }}>MAD</Box>
+              </Typography>
+            </Stack>
+            <GoldSlider
+              value={Math.min(floorRange[1], Math.max(floorRange[0], floor))}
+              min={floorRange[0]}
+              max={floorRange[1]}
+              step={50}
+              onChange={onFloorChange}
+            />
+          </Box>
+
+          <Box sx={{ mb: 1.5 }}>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 0.5 }}>
+              <Typography sx={lblSx}>Prix max (plafond)</Typography>
+              <Typography sx={valSx}>
+                {ceiling.toLocaleString('fr-FR')}
+                <Box component="span" sx={{ fontSize: 10, color: T.text3, ml: 0.375 }}>MAD</Box>
+              </Typography>
+            </Stack>
+            <GoldSlider
+              value={Math.min(ceilingRange[1], Math.max(ceilingRange[0], ceiling))}
+              min={ceilingRange[0]}
+              max={ceilingRange[1]}
+              step={50}
+              onChange={onCeilingChange}
+            />
+          </Box>
+
+          {(recoFloor > 0 || recoCeiling > 0) && (
+            <Typography sx={{ fontSize: 10.5, color: T.text4, lineHeight: 1.4 }}>
+              Repère marché (non appliqué) : {recoFloor.toLocaleString('fr-FR')} –{' '}
+              {recoCeiling.toLocaleString('fr-FR')} MAD
+              {recoFloor > 0 && recoCeiling > 0 ? (
+                <>
+                  {' · '}
+                  <Box
+                    component="button"
+                    type="button"
+                    onClick={onApplyRecoBounds}
+                    sx={{
+                      all: 'unset',
+                      cursor: 'pointer',
+                      color: T.goldDeep,
+                      fontWeight: 700,
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    utiliser ce repère
+                  </Box>
+                </>
+              ) : null}
             </Typography>
           )}
-        </Box>
-        <Box sx={{ mb: 2.25 }}>
-          <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 0.75 }}>
-            <Typography sx={lblSx}>Prix max (plafond)</Typography>
-            <Typography sx={valSx}>{hasBoundsProd ? ceiling.toLocaleString('fr-FR') : dash}<Box component="span" sx={{ fontSize: 10, color: T.text3, ml: 0.375 }}>MAD</Box></Typography>
-          </Stack>
-          <GoldSlider value={ceiling} min={ceilingRange[0]} max={ceilingRange[1]} step={100} onChange={onCeilingChange} />
-        </Box>
-        <Box sx={{
-          mt: 2.25, p: 1.75, borderRadius: 1.375,
-          background: `linear-gradient(135deg, ${T.goldTint}, transparent 80%)`,
-          border: `1px solid ${T.goldTint2}`,
-        }}>
-          <Typography sx={{
-            fontSize: 11, color: T.goldDeep, fontFamily: '"Geist Mono", monospace',
-            fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.625,
-          }}>💡 Recommandation Sojori</Typography>
-          <Typography sx={{ fontSize: 12, color: T.text2, mb: 1.125 }}>
-            Plancher <b style={{ color: T.text, fontFamily: '"Geist Mono", monospace' }}>{recoFloor} MAD</b> · Plafond{' '}
-            <b style={{ color: T.text, fontFamily: '"Geist Mono", monospace' }}>{recoCeiling} MAD</b> · aligné P25→P75 Guéliz.
-          </Typography>
-          <Button onClick={onApplyRecoBounds} sx={{
-            px: 1.5, py: 0.75, bgcolor: T.bg1, border: `1px solid ${T.goldDeep}`,
-            color: T.goldDeep, fontSize: 11.5, fontWeight: 700, borderRadius: 1, textTransform: 'none',
-            '&:hover': { bgcolor: T.gold, color: T.text },
-          }}>Appliquer les défauts</Button>
-        </Box>
-      </CtrlBlock>
+        </CtrlBlock>
+      </Box>
 
       {/* ③ Mode */}
       <CtrlBlock
         title="③ Coefficient modes"
         stepHint="Positionnement vs marché (×0,95 / ×1 / ×1,1). Pas le taux d’occupation."
+        active={modeEnabled}
+        onActiveChange={onModeEnabledChange}
       >
-        <FormControlLabel
-          sx={{ mb: 1.25, ml: 0 }}
-          control={
-            <Switch
-              checked={modeEnabled}
-              onChange={(_, v) => onModeEnabledChange(v)}
-              sx={{ '& .Mui-checked': { color: T.goldDeep }, '& .Mui-checked + .MuiSwitch-track': { bgcolor: T.gold } }}
-            />
-          }
-          label={
-            <Typography sx={{ fontSize: 12, fontWeight: 700 }}>
-              {modeEnabled ? 'Modes actifs' : 'Modes OFF (×1 — sans effet)'}
-            </Typography>
-          }
-        />
-        <Box sx={{ opacity: modeEnabled ? 1 : 0.55 }}>
+        <Stack spacing={1}>
           {sortedModes.map((m) => {
             const meta = m.kind === 'preset' ? PRESET_META[m.id] : null;
-            const isActive = activeModeId === m.id && m.enabled;
+            const isActive = activeModeId === m.id;
             return (
-              <Box key={m.id} sx={{ mb: 1.25, position: 'relative' }}>
+              <Box key={m.id}>
                 <ModeCard
                   on={isActive}
-                  disabled={!m.enabled}
                   recommended={meta?.recommended}
                   name={m.label}
-                  sub={`×${m.multiplier}${m.kind === 'custom' ? ' · personnalisé' : ''}`}
+                  sub={`×${m.multiplier}${m.kind === 'custom' ? ' · perso' : ''}`}
                   desc={meta?.desc ?? (
-                    <>Coefficient <b>×{m.multiplier}</b></>
+                    <>
+                      Coefficient <b>×{m.multiplier}</b>
+                    </>
                   )}
                   quote={meta?.quote ?? 'Mode personnalisé'}
                   extra={
                     m.id === 'equilibre' && isActive && estimatedRevenue !== undefined ? (
-                      <Stack direction="row" sx={{ alignItems: 'center', gap: 1,
-                        mt: 1, p: '7px 10px',
-                        background: `linear-gradient(90deg, ${T.goldTint}, transparent)`,
-                        borderRadius: '7px', fontSize: 11, color: T.text2, fontFamily: '"Geist Mono", monospace',
-                      }}>
+                      <Stack
+                        direction="row"
+                        sx={{
+                          alignItems: 'center',
+                          gap: 1,
+                          mt: 1,
+                          p: '7px 10px',
+                          background: `linear-gradient(90deg, ${T.goldTint}, transparent)`,
+                          borderRadius: '7px',
+                          fontSize: 11,
+                          color: T.text2,
+                          fontFamily: '"Geist Mono", monospace',
+                        }}
+                      >
                         <span>Revenu annuel estimé</span>
-                        <Box component="b" sx={{ color: T.goldDeep, fontSize: 13, fontWeight: 800 }}>
+                        <Box
+                          component="b"
+                          sx={{ color: T.goldDeep, fontSize: 13, fontWeight: 800 }}
+                        >
                           {estimatedRevenue.toLocaleString('fr-FR')} MAD
                         </Box>
-                        {estimatedRevenueLiftPct !== undefined && <span>· +{estimatedRevenueLiftPct}%</span>}
+                        {estimatedRevenueLiftPct !== undefined && (
+                          <span>· +{estimatedRevenueLiftPct}%</span>
+                        )}
                       </Stack>
                     ) : null
                   }
-                  onClick={() => m.enabled && onActiveModeChange(m.id)}
+                  onClick={() => onActiveModeChange(m.id)}
                 />
-                <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mt: -0.5, mb: 0.5, pl: 0.5 }}>
-                  <Switch
-                    size="small"
-                    checked={m.enabled}
-                    onChange={(_, v) => onModeToggle(m.id, v)}
-                    sx={{ '& .Mui-checked': { color: T.goldDeep } }}
-                  />
-                  <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-                    {m.enabled ? 'Activé' : 'Désactivé'}
-                  </Typography>
-                  {m.kind === 'custom' && (
-                    <>
-                      <TextField
-                        size="small"
-                        value={m.label}
-                        onChange={(e) => onUpdateCustomMode(m.id, { label: e.target.value })}
-                        sx={{ ml: 'auto', maxWidth: 140, '& input': { fontSize: 11, py: 0.5 } }}
-                      />
-                      <IconButton size="small" onClick={() => onDeleteCustomMode(m.id)} sx={{ fontSize: 12 }}>🗑</IconButton>
-                    </>
-                  )}
-                </Stack>
-                {m.kind === 'custom' && m.enabled && (
-                  <Box sx={{ px: 1, pb: 1 }}>
-                    <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography sx={lblSx}>Coefficient</Typography>
-                      <Typography sx={{ ...valSx, fontSize: 12 }}>×{m.multiplier}</Typography>
-                    </Stack>
-                    <GoldSlider
-                      value={m.multiplier}
-                      min={0.75}
-                      max={1.35}
-                      step={0.01}
-                      onChange={(v) => onUpdateCustomMode(m.id, { multiplier: v })}
+                {m.kind === 'custom' && (
+                  <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mt: 0.75, pl: 0.5 }}>
+                    <TextField
+                      size="small"
+                      value={m.label}
+                      onChange={(e) => onUpdateCustomMode(m.id, { label: e.target.value })}
+                      sx={{ maxWidth: 140, '& input': { fontSize: 11, py: 0.5 } }}
                     />
-                  </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <FieldSlider
+                        label="Coefficient"
+                        display={`×${m.multiplier}`}
+                        value={m.multiplier}
+                        min={0.75}
+                        max={1.35}
+                        step={0.01}
+                        onChange={(v) => onUpdateCustomMode(m.id, { multiplier: v })}
+                      />
+                    </Box>
+                    <IconButton size="small" onClick={() => onDeleteCustomMode(m.id)} sx={{ fontSize: 12 }}>
+                      🗑
+                    </IconButton>
+                  </Stack>
                 )}
               </Box>
             );
@@ -544,176 +735,272 @@ export default function PricingControls(props: PricingControlsProps) {
             fullWidth
             onClick={onAddCustomMode}
             sx={{
-              py: 1, mt: 0.5, bgcolor: T.bg2, border: `1.5px dashed ${T.borderStrong}`,
-              borderRadius: 1.25, color: T.text2, fontSize: 12, fontWeight: 700, textTransform: 'none',
+              py: 1,
+              bgcolor: T.bg2,
+              border: `1.5px dashed ${T.borderStrong}`,
+              borderRadius: 1.25,
+              color: T.text2,
+              fontSize: 12,
+              fontWeight: 700,
+              textTransform: 'none',
               '&:hover': { borderColor: T.gold, bgcolor: T.goldTint, color: T.goldDeep },
             }}
           >
             + Mode personnalisé
           </Button>
-        </Box>
+        </Stack>
       </CtrlBlock>
 
-      {/* ④ Occupation · ⑤ Last-minute */}
-      <Box sx={{ gridColumn: { md: '1 / -1' }, display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+      {/* ④ Occupation */}
+      <CtrlBlock
+        title="④ Taux d’occupation"
+        stepHint="Mois restant sous ou sur-occupé (à partir d’aujourd’hui) → baisse ou hausse %. Le passé du mois n’entre plus dans le %."
+        active={occupancyBandsEnabled}
+        onActiveChange={onOccupancyBandsEnabledChange}
+      >
+        <FieldSlider
+          label="Seuil bas (sous → baisse)"
+          display={`< ${occupancyLowMax} %`}
+          value={occupancyLowMax}
+          min={10}
+          max={50}
+          step={5}
+          onChange={onOccupancyLowMaxChange}
+        />
+        <FieldSlider
+          label="Ajustement bas"
+          display={`${occupancyLowAdj} %`}
+          value={occupancyLowAdj}
+          min={-30}
+          max={0}
+          step={1}
+          onChange={onOccupancyLowAdjChange}
+        />
+        <FieldSlider
+          label="Seuil haut (dessus → hausse)"
+          display={`> ${occupancyHighMin} %`}
+          value={occupancyHighMin}
+          min={50}
+          max={90}
+          step={5}
+          onChange={onOccupancyHighMinChange}
+        />
+        <FieldSlider
+          label="Ajustement haut"
+          display={`+${occupancyHighAdj} %`}
+          value={occupancyHighAdj}
+          min={0}
+          max={40}
+          step={1}
+          onChange={onOccupancyHighAdjChange}
+        />
+      </CtrlBlock>
+
+      {/* ⑤ Last-min */}
+      <CtrlBlock
+        title="⑤ Dernière minute"
+        stepHint="Fenêtre A→B depuis la config BD de ce listing (jours avant arrivée). Ex. A=1 B=15 = demain→J+15 ; A=10 B=30 = J+10→J+30. Y = %."
+        active={lastMinuteEnabled}
+        onActiveChange={onLastMinuteEnabledChange}
+      >
+        <FieldSlider
+          label="De A (jours avant)"
+          display={`J+${lastMinuteFromDays}`}
+          value={lastMinuteFromDays}
+          min={1}
+          max={30}
+          step={1}
+          onChange={onLastMinuteFromDaysChange}
+        />
+        <FieldSlider
+          label="À B (jours avant)"
+          display={`J+${lastMinuteToDays}`}
+          value={lastMinuteToDays}
+          min={1}
+          max={30}
+          step={1}
+          onChange={onLastMinuteToDaysChange}
+        />
+        <FieldSlider
+          label="Ajustement Y (%)"
+          display={`${lastMinuteDiscountPct} %`}
+          value={lastMinuteDiscountPct}
+          min={-50}
+          max={0}
+          step={1}
+          onChange={onLastMinuteDiscountPctChange}
+        />
+      </CtrlBlock>
+
+      {/* ⑥ Trous — séparé des bornes */}
         <CtrlBlock
-          title="④ Taux d’occupation"
-          stepHint="Mois sous ou sur-occupé → baisse ou hausse % (cron nuit)."
+          title="⑥ Combler trous (min stay)"
+          stepHint="Référence min stay client (défaut 2, min 1). Trou de 2 nuits avec min stay 3 → on écrit min stay 2 (origine sauvegardée). Trou 1 nuit : signalé seulement."
+          active={gapBlockEnabled}
+          onActiveChange={onGapBlockEnabledChange}
         >
-          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.25 }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 800 }}>Bandes actives</Typography>
-            <Box
-              component="button"
-              type="button"
-              onClick={() => onOccupancyBandsEnabledChange(!occupancyBandsEnabled)}
-              sx={{
-                all: 'unset', cursor: 'pointer', fontSize: 10, fontWeight: 800,
-                fontFamily: '"Geist Mono", monospace', px: 1, py: 0.35, borderRadius: 999,
-                bgcolor: occupancyBandsEnabled ? T.successTint : T.bg3,
-                color: occupancyBandsEnabled ? T.success : T.text3,
-              }}
-            >
-              {occupancyBandsEnabled ? 'ON' : 'OFF'}
-            </Box>
-          </Stack>
-          <Box sx={{ opacity: occupancyBandsEnabled ? 1 : 0.5 }}>
-            <Box sx={{ mb: 1.75 }}>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography sx={lblSx}>Seuil bas (sous → baisse)</Typography>
-                <Typography sx={{ ...valSx, fontSize: 12 }}>&lt; {occupancyLowMax} %</Typography>
-              </Stack>
-              <GoldSlider value={occupancyLowMax} min={10} max={50} step={5} onChange={onOccupancyLowMaxChange} />
-            </Box>
-            <Box sx={{ mb: 1.75 }}>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography sx={lblSx}>Ajustement bas</Typography>
-                <Typography sx={{ ...valSx, fontSize: 12 }}>{occupancyLowAdj} %</Typography>
-              </Stack>
-              <GoldSlider value={occupancyLowAdj} min={-30} max={0} step={1} onChange={onOccupancyLowAdjChange} />
-            </Box>
-            <Box sx={{ mb: 1.75 }}>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography sx={lblSx}>Seuil haut (dessus → hausse)</Typography>
-                <Typography sx={{ ...valSx, fontSize: 12 }}>&gt; {occupancyHighMin} %</Typography>
-              </Stack>
-              <GoldSlider value={occupancyHighMin} min={50} max={90} step={5} onChange={onOccupancyHighMinChange} />
-            </Box>
-            <Box>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography sx={lblSx}>Ajustement haut</Typography>
-                <Typography sx={{ ...valSx, fontSize: 12 }}>+{occupancyHighAdj} %</Typography>
-              </Stack>
-              <GoldSlider value={occupancyHighAdj} min={0} max={40} step={1} onChange={onOccupancyHighAdjChange} />
-            </Box>
-          </Box>
+          <FieldSlider
+            label="Min stay client (référence)"
+            display={`${gapBlockMinNights} nuit(s)`}
+            value={gapBlockMinNights}
+            min={1}
+            max={14}
+            step={1}
+            onChange={onGapBlockMinNightsChange}
+          />
         </CtrlBlock>
 
-        <CtrlBlock
-          title="⑤ Dernière minute"
-          stepHint="Sur les N jours dispo à venir : % sur le prix déjà calculé."
-        >
-          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.25 }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 800 }}>Réduction active</Typography>
-            <Box
-              component="button"
-              type="button"
-              onClick={() => onLastMinuteEnabledChange(!lastMinuteEnabled)}
-              sx={{
-                all: 'unset', cursor: 'pointer', fontSize: 10, fontWeight: 800,
-                fontFamily: '"Geist Mono", monospace', px: 1, py: 0.35, borderRadius: 999,
-                bgcolor: lastMinuteEnabled ? T.successTint : T.bg3,
-                color: lastMinuteEnabled ? T.success : T.text3,
-              }}
-            >
-              {lastMinuteEnabled ? 'ON' : 'OFF'}
-            </Box>
-          </Stack>
-          <Box sx={{ opacity: lastMinuteEnabled ? 1 : 0.5 }}>
-            <Box sx={{ mb: 1.75 }}>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography sx={lblSx}>Fenêtre (jours)</Typography>
-                <Typography sx={{ ...valSx, fontSize: 12 }}>{lastMinuteWindowDays} j</Typography>
-              </Stack>
-              <GoldSlider value={lastMinuteWindowDays} min={3} max={21} step={1} onChange={onLastMinuteWindowDaysChange} />
-            </Box>
-            <Box>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography sx={lblSx}>Ajustement prix dynamique</Typography>
-                <Typography sx={{ ...valSx, fontSize: 12 }}>{lastMinuteDiscountPct} %</Typography>
-              </Stack>
-              <GoldSlider value={lastMinuteDiscountPct} min={-40} max={0} step={1} onChange={onLastMinuteDiscountPctChange} />
-            </Box>
-          </Box>
-        </CtrlBlock>
-      </Box>
-
-      {/* ⑥ Events */}
+      {/* ⑦ Events */}
       <Box sx={{ gridColumn: { md: '1 / -1' } }}>
         <CtrlBlock
-          title="⑥ Événements"
-          stepHint="Périodes datées : prix fixe MAD ou % marché. Hors last-min / occupation."
+          title="⑦ Événements"
+          stepHint="Lead absolu : sur leurs dates, le prix event remplace mode, occupation, bornes et last-min. Prix fixe MAD ou % marché."
+          active={eventsEnabled}
+          onActiveChange={onEventsEnabledChange}
         >
-          <Button fullWidth onClick={onAddEvent} sx={{
-            py: 1.125, mb: 1.5, bgcolor: T.bg2, border: `1.5px dashed ${T.borderStrong}`,
-            borderRadius: 1.25, color: T.text2, fontSize: 12, fontWeight: 700, textTransform: 'none',
-            '&:hover': { borderColor: T.gold, bgcolor: T.goldTint, color: T.goldDeep },
-          }}>+ Ajouter une période</Button>
+          <Button
+            fullWidth
+            onClick={onAddEvent}
+            sx={{
+              py: 1.125,
+              mb: 1.5,
+              bgcolor: T.bg2,
+              border: `1.5px dashed ${T.borderStrong}`,
+              borderRadius: 1.25,
+              color: T.text2,
+              fontSize: 12,
+              fontWeight: 700,
+              textTransform: 'none',
+              '&:hover': { borderColor: T.gold, bgcolor: T.goldTint, color: T.goldDeep },
+            }}
+          >
+            + Ajouter une période
+          </Button>
 
-          {events.map(ev => (
-            <Stack key={ev.id} direction="row" sx={{ alignItems: 'center', gap: 1.25,
-              p: '11px 13px', mb: 1, bgcolor: T.bg1,
-              border: `1px solid ${T.border}`, borderRadius: 1.25,
-            }}>
+          {events.map((ev) => (
+            <Stack
+              key={ev.id}
+              direction="row"
+              sx={{
+                alignItems: 'center',
+                gap: 1.25,
+                p: '11px 13px',
+                mb: 1,
+                bgcolor: T.bg1,
+                border: `1px solid ${T.border}`,
+                borderRadius: 1.25,
+              }}
+            >
               <Box sx={{ fontSize: 18 }}>{ev.emoji}</Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontSize: 12.5, fontWeight: 700, letterSpacing: '-0.005em' }}>{ev.name}</Typography>
-                <Typography sx={{
-                  fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', mt: 0.25,
-                }}>
+                <Typography sx={{ fontSize: 12.5, fontWeight: 700, letterSpacing: '-0.005em' }}>
+                  {ev.name}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: 10.5,
+                    color: T.text3,
+                    fontFamily: '"Geist Mono", monospace',
+                    mt: 0.25,
+                  }}
+                >
                   {ev.dateRange} ·{' '}
                   <b style={{ color: T.goldDeep }}>
                     {ev.kind === 'market_percent'
                       ? `${ev.marketPercent} % marché×occupation`
                       : `${ev.fixedPrice.toLocaleString('fr-FR')} MAD/nuit fixe`}
-                  </b>
-                  {' '}· min {ev.minNights} nuits
+                  </b>{' '}
+                  · min {ev.minNights} nuits
                 </Typography>
               </Box>
               <Stack direction="row" sx={{ gap: 0.375 }}>
-                <IconButton size="small" onClick={() => onEditEvent(ev.id)} sx={{ fontSize: 12, color: T.text3 }}>✏</IconButton>
-                <IconButton size="small" onClick={() => onDeleteEvent(ev.id)} sx={{ fontSize: 12, color: T.text3 }}>🗑</IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => onEditEvent(ev.id)}
+                  sx={{ fontSize: 12, color: T.text3 }}
+                >
+                  ✏
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => onDeleteEvent(ev.id)}
+                  sx={{ fontSize: 12, color: T.text3 }}
+                >
+                  🗑
+                </IconButton>
               </Stack>
             </Stack>
           ))}
 
           {suggestions.length > 0 && (
-            <Box sx={{
-              mt: 1.75, p: 1.5, borderRadius: 1.375,
-              background: `linear-gradient(135deg, ${T.aiTint}, transparent)`,
-              border: '1px solid rgba(124,58,237,0.30)',
-            }}>
-              <Typography sx={{
-                fontSize: 10.5, color: T.ai, fontFamily: '"Geist Mono", monospace',
-                fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.875,
-              }}>✨ Sojori suggère · détection IA</Typography>
-              {suggestions.map(s => (
-                <Stack key={s.id} direction="row"
-                  onClick={() => onAcceptSuggestion(s.id)} sx={{ alignItems: 'center', gap: 1.125,
-                    p: '9px 11px', bgcolor: T.bg1, border: '1px solid rgba(124,58,237,0.20)',
-                    borderRadius: 1, cursor: 'pointer', mb: 0.625,
+            <Box
+              sx={{
+                mt: 1.75,
+                p: 1.5,
+                borderRadius: 1.375,
+                background: `linear-gradient(135deg, ${T.aiTint}, transparent)`,
+                border: '1px solid rgba(124,58,237,0.30)',
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 10.5,
+                  color: T.ai,
+                  fontFamily: '"Geist Mono", monospace',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  mb: 0.875,
+                }}
+              >
+                ✨ Sojori suggère · détection IA
+              </Typography>
+              {suggestions.map((s) => (
+                <Stack
+                  key={s.id}
+                  direction="row"
+                  onClick={() => onAcceptSuggestion(s.id)}
+                  sx={{
+                    alignItems: 'center',
+                    gap: 1.125,
+                    p: '9px 11px',
+                    bgcolor: T.bg1,
+                    border: '1px solid rgba(124,58,237,0.20)',
+                    borderRadius: 1,
+                    cursor: 'pointer',
+                    mb: 0.625,
                     '&:hover': { borderColor: T.ai, bgcolor: 'rgba(124,58,237,0.04)' },
-                  }}>
+                  }}
+                >
                   <Box sx={{ fontSize: 14 }}>📌</Box>
                   <Box sx={{ flex: 1 }}>
                     <Typography sx={{ fontSize: 11.5, fontWeight: 700 }}>{s.dateRange}</Typography>
-                    <Typography sx={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', mt: 0.125 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 10.5,
+                        color: T.text3,
+                        fontFamily: '"Geist Mono", monospace',
+                        mt: 0.125,
+                      }}
+                    >
                       {s.reason}
                     </Typography>
                   </Box>
-                  <Box sx={{
-                    ml: 'auto', fontFamily: '"Geist Mono", monospace', fontSize: 11, fontWeight: 800,
-                    color: T.ai, bgcolor: T.aiTint, px: 0.875, py: 0.25, borderRadius: '99px',
-                  }}>+{s.deltaPct}%</Box>
+                  <Box
+                    sx={{
+                      ml: 'auto',
+                      fontFamily: '"Geist Mono", monospace',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: T.ai,
+                      bgcolor: T.aiTint,
+                      px: 0.875,
+                      py: 0.25,
+                      borderRadius: '99px',
+                    }}
+                  >
+                    +{s.deltaPct}%
+                  </Box>
                 </Stack>
               ))}
             </Box>
@@ -724,44 +1011,40 @@ export default function PricingControls(props: PricingControlsProps) {
   );
 }
 
-const lblSx = { fontSize: 11, fontFamily: '"Geist Mono", monospace', fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.04em' } as const;
-const valSx = { fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em' } as const;
-
-function CtrlBlock({ title, stepHint, children }: {
-  title: string;
-  stepHint?: string;
-  children: React.ReactNode;
+function GoldSlider({
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
 }) {
   return (
-    <Box sx={{
-      bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 2, p: 2.75,
-      boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
-    }}>
-      <Typography sx={{ fontSize: 14, fontWeight: 800, mb: stepHint ? 0.5 : 1.75, letterSpacing: '-0.015em' }}>
-        {title}
-      </Typography>
-      {stepHint ? (
-        <Typography sx={{ fontSize: 11.5, color: T.text3, lineHeight: 1.45, mb: 1.5 }}>
-          {stepHint}
-        </Typography>
-      ) : null}
-      {children}
-    </Box>
-  );
-}
-
-function GoldSlider({ value, min, max, step, onChange }: {
-  value: number; min: number; max: number; step: number; onChange: (v: number) => void;
-}) {
-  return (
-    <Slider value={value} min={min} max={max} step={step}
+    <Slider
+      value={value}
+      min={min}
+      max={max}
+      step={step}
       onChange={(_, v) => onChange(v as number)}
       sx={{
-        color: T.goldDeep, height: 6,
+        color: T.goldDeep,
+        height: 6,
         '& .MuiSlider-rail': { bgcolor: T.borderStrong, opacity: 0.3 },
-        '& .MuiSlider-track': { background: `linear-gradient(90deg, ${T.gold}, ${T.goldDeep})`, border: 0, boxShadow: `0 0 8px ${T.goldTint2}` },
+        '& .MuiSlider-track': {
+          background: `linear-gradient(90deg, ${T.gold}, ${T.goldDeep})`,
+          border: 0,
+          boxShadow: `0 0 8px ${T.goldTint2}`,
+        },
         '& .MuiSlider-thumb': {
-          width: 24, height: 24, bgcolor: '#fff', border: `3px solid ${T.goldDeep}`,
+          width: 22,
+          height: 22,
+          bgcolor: '#fff',
+          border: `3px solid ${T.goldDeep}`,
           boxShadow: '0 3px 10px rgba(199,155,34,0.30)',
           '&:hover, &.Mui-focusVisible': { boxShadow: `0 0 0 6px ${T.goldTint}` },
         },
@@ -770,72 +1053,100 @@ function GoldSlider({ value, min, max, step, onChange }: {
   );
 }
 
-function ModeCard({ on, disabled, recommended, name, sub, desc, quote, extra, onClick }: {
-  on: boolean; disabled?: boolean; recommended?: boolean; name: string; sub?: string;
-  desc: React.ReactNode; quote: string; extra?: React.ReactNode; onClick: () => void;
+function ModeCard({
+  on,
+  recommended,
+  name,
+  sub,
+  desc,
+  quote,
+  extra,
+  onClick,
+}: {
+  on: boolean;
+  recommended?: boolean;
+  name: string;
+  sub?: string;
+  desc: React.ReactNode;
+  quote: string;
+  extra?: React.ReactNode;
+  onClick: () => void;
 }) {
   return (
-    <Box onClick={disabled ? undefined : onClick} sx={{
-      p: 1.75, borderRadius: 1.5, cursor: disabled ? 'default' : 'pointer', position: 'relative',
-      bgcolor: T.bg1,
-      border: `1.5px solid ${on ? T.gold : T.border}`,
-      background: on ? `linear-gradient(135deg, ${T.goldTint}, ${T.bg1} 70%)` : T.bg1,
-      boxShadow: on ? `0 0 0 3px ${T.goldTint}` : 'none',
-      opacity: disabled ? 0.45 : 1,
-      transition: 'all 0.15s',
-    }}>
-      <Box sx={{
-        position: 'absolute', top: 14, right: 14, width: 18, height: 18, borderRadius: '50%',
-        border: `2px solid ${on ? T.goldDeep : T.borderStrong}`,
-        background: on ? `radial-gradient(circle at center, ${T.goldDeep} 0 5px, transparent 5px)` : 'transparent',
-      }} />
-      <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 0.625, pr: 4 }}>
-        <Typography sx={{ fontSize: 13.5, fontWeight: 700, letterSpacing: '-0.005em' }}>{name}</Typography>
+    <Box
+      onClick={onClick}
+      sx={{
+        p: 1.5,
+        borderRadius: 1.5,
+        cursor: 'pointer',
+        position: 'relative',
+        bgcolor: T.bg1,
+        border: `1.5px solid ${on ? T.gold : T.border}`,
+        background: on ? `linear-gradient(135deg, ${T.goldTint}, ${T.bg1} 70%)` : T.bg1,
+        boxShadow: on ? `0 0 0 3px ${T.goldTint}` : 'none',
+        transition: 'all 0.15s',
+      }}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 14,
+          right: 14,
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          border: `2px solid ${on ? T.goldDeep : T.borderStrong}`,
+          background: on
+            ? `radial-gradient(circle at center, ${T.goldDeep} 0 5px, transparent 5px)`
+            : 'transparent',
+        }}
+      />
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 0.5, pr: 4 }}>
+        <Typography sx={{ fontSize: 13.5, fontWeight: 700, letterSpacing: '-0.005em' }}>
+          {name}
+        </Typography>
         {sub && (
-          <Typography sx={{ fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>{sub}</Typography>
+          <Typography sx={{ fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
+            {sub}
+          </Typography>
         )}
         {recommended && (
-          <Box sx={{
-            fontSize: 9.5, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
-            bgcolor: T.gold, color: T.text, px: 0.75, py: 0.125,
-            borderRadius: '99px', letterSpacing: '0.04em',
-          }}>★ RECOMMANDÉ</Box>
+          <Box
+            sx={{
+              fontSize: 9.5,
+              fontFamily: '"Geist Mono", monospace',
+              fontWeight: 800,
+              bgcolor: T.gold,
+              color: T.text,
+              px: 0.75,
+              py: 0.125,
+              borderRadius: '99px',
+              letterSpacing: '0.04em',
+            }}
+          >
+            ★ RECO
+          </Box>
         )}
       </Stack>
-      <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 0.75, '& b': { color: T.text, fontWeight: 700 } }}>
+      <Typography
+        sx={{ fontSize: 11.5, color: T.text3, mb: 0.75, '& b': { color: T.text, fontWeight: 700 } }}
+      >
         {desc}
       </Typography>
-      <Box sx={{
-        fontSize: 11, color: T.text2, fontStyle: 'italic',
-        p: '6px 9px', bgcolor: T.bg2, borderRadius: 0.75,
-        borderLeft: `2px solid ${on ? T.gold : T.borderStrong}`,
-      }}>"{quote}"</Box>
+      <Box
+        sx={{
+          fontSize: 11,
+          color: T.text2,
+          fontStyle: 'italic',
+          p: '6px 9px',
+          bgcolor: T.bg2,
+          borderRadius: 0.75,
+          borderLeft: `2px solid ${on ? T.gold : T.borderStrong}`,
+        }}
+      >
+        &quot;{quote}&quot;
+      </Box>
       {on && extra}
-    </Box>
-  );
-}
-
-function DistributionMini() {
-  return (
-    <Box sx={{ height: 48, my: 1, mb: -0.5 }}>
-      <svg viewBox="0 0 280 48" width="100%" height="100%" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="distrGrad" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor={T.gold} stopOpacity="0.4" />
-            <stop offset="1" stopColor={T.gold} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d="M 0,42 Q 30,42 50,38 T 100,15 T 140,8 T 180,15 T 230,32 T 280,42 L 280,48 L 0,48 Z" fill="url(#distrGrad)" />
-        <path d="M 0,42 Q 30,42 50,38 T 100,15 T 140,8 T 180,15 T 230,32 T 280,42" stroke={T.goldDeep} strokeWidth="1.5" fill="none" />
-        <line x1="70" y1="0" x2="70" y2="48" stroke={T.text4} strokeDasharray="2 2" opacity="0.5" />
-        <line x1="140" y1="0" x2="140" y2="48" stroke={T.text4} strokeDasharray="2 2" opacity="0.5" />
-        <line x1="210" y1="0" x2="210" y2="48" stroke={T.text4} strokeDasharray="2 2" opacity="0.5" />
-        <text x="70" y="9" textAnchor="middle" fontSize="7" fontFamily="Geist Mono" fill={T.text3} fontWeight="700">P25</text>
-        <text x="140" y="9" textAnchor="middle" fontSize="7" fontFamily="Geist Mono" fill={T.text3} fontWeight="700">P50</text>
-        <text x="210" y="9" textAnchor="middle" fontSize="7" fontFamily="Geist Mono" fill={T.text3} fontWeight="700">P75</text>
-        <line x1="50" y1="0" x2="50" y2="48" stroke={T.goldDeep} strokeWidth="2" />
-        <line x1="220" y1="0" x2="220" y2="48" stroke={T.goldDeep} strokeWidth="2" />
-      </svg>
     </Box>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   Box,
   Button,
@@ -13,18 +13,19 @@ import { DP } from '../clientLabels';
 import CalendarUpdateModal from './CalendarUpdateModal';
 import type { BienViewProps } from '../BienView';
 import {
+  fetchListingEstimateDiff,
   fetchListingPricingAudits,
   fetchPilotConfig,
   savePilotConfig,
+  type ApplyReportSummaryDto,
+  type ListingEstimateDiffDto,
   type PricingAuditRowDto,
 } from '../../../services/dynamicPricingApi';
 
 /**
- * Parcours Express du pricing par bien :
- * 1. deux interrupteurs d'automatisation (snapshot hebdo · propagation nuit)
- * 2. deux actions manuelles one-shot (snapshot · propagation)
- * 3. visuel « dernière mise à jour » (jours écrits / protégés / indispo / push)
- * L'étude de marché complète reste repliée derrière le toggle avancé.
+ * Parcours Express :
+ * — colonne AUTO (cron) vs colonne MANUEL (one-shot)
+ * — chaque action a sa dernière exécution + impact résumé
  */
 export interface BienExpressBarProps {
   view: BienViewProps;
@@ -40,79 +41,123 @@ const fmtDate = (v?: string | null) =>
     ? new Date(v).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
     : null;
 
-function AutoRow({
-  emoji,
+function isAutoAudit(a: PricingAuditRowDto): boolean {
+  if (a.appliedBy === 'cron') return true;
+  const t = (a.triggerSource || '').toLowerCase();
+  return t.includes('recompute') || t.includes('nightly') || t.includes('cron');
+}
+
+function ImpactChip({
+  label,
+  value,
+  tone = 'muted',
+}: {
+  label: string;
+  value: number | string;
+  tone?: 'ok' | 'warn' | 'muted' | 'impact';
+}) {
+  const color =
+    tone === 'ok'
+      ? T.success
+      : tone === 'warn'
+        ? T.goldDeep
+        : tone === 'impact'
+          ? T.goldDeep
+          : T.text2;
+  const bg =
+    tone === 'ok'
+      ? T.successTint
+      : tone === 'warn' || tone === 'impact'
+        ? T.goldTint
+        : T.bg2;
+  return (
+    <Chip
+      size="small"
+      label={
+        <Box component="span" sx={{ display: 'inline-flex', gap: 0.5, alignItems: 'baseline' }}>
+          <Box component="span" sx={{ fontWeight: 800, fontFamily: '"Geist Mono", monospace' }}>
+            {value}
+          </Box>
+          <Box component="span" sx={{ fontWeight: 600 }}>{label}</Box>
+        </Box>
+      }
+      sx={{
+        height: 22,
+        fontSize: 10.5,
+        color,
+        bgcolor: bg,
+        border: `1px solid ${tone === 'impact' ? T.gold : T.border}`,
+        '& .MuiChip-label': { px: 0.75 },
+      }}
+    />
+  );
+}
+
+function auditImpact(a: PricingAuditRowDto | null): {
+  cal: number;
+  computed: number;
+  protectedN: number;
+  aligned: boolean;
+  push: boolean | null;
+} | null {
+  if (!a) return null;
+  const s: ApplyReportSummaryDto | undefined = a.applyReportSummary;
+  const cal = s?.daysCalendarDatesUpdated ?? s?.daysChanged ?? a.daysChanged ?? 0;
+  const computed = s?.daysPayloadPriceDays ?? 0;
+  const protectedN = (s?.daysSkippedManual ?? 0) + (s?.daysSkippedReserved ?? 0);
+  const aligned = cal === 0 && computed > 0;
+  const push = s ? Boolean(s.ruPublishQueued) : a.ruPublishStatus === 'success' ? true : null;
+  return { cal, computed, protectedN, aligned, push };
+}
+
+function CompactToggle({
   title,
-  subtitle,
-  statusLine,
+  schedule,
   checked,
   saving,
   onChange,
 }: {
-  emoji: string;
   title: string;
-  subtitle: string;
-  statusLine?: string | null;
+  schedule: string;
   checked: boolean;
   saving: boolean;
   onChange: (v: boolean) => void;
 }) {
   return (
-    <Stack
-      direction="row"
-      spacing={1.5}
-      sx={{
-        alignItems: 'center',
-        p: 1.5,
-        borderRadius: 2,
-        border: `1px solid ${checked ? T.gold : T.border}`,
-        bgcolor: checked ? T.goldTint : T.bg1,
-        flex: 1,
-        minWidth: 0,
-      }}
-    >
-      <Typography sx={{ fontSize: 22, flexShrink: 0 }}>{emoji}</Typography>
-      <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>{title}</Typography>
-        <Typography sx={{ fontSize: 11.5, color: T.text3 }}>{subtitle}</Typography>
-        {statusLine ? (
-          <Typography sx={{ fontSize: 11, color: T.text2, fontWeight: 600 }}>
-            {statusLine}
-          </Typography>
-        ) : null}
+    <Stack direction="row" sx={{ alignItems: 'center', gap: 1, minWidth: 0 }}>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography sx={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25 }}>{title}</Typography>
+        <Typography sx={{ fontSize: 10.5, color: T.text3, lineHeight: 1.3 }}>{schedule}</Typography>
       </Box>
-      <Stack sx={{ alignItems: 'center', flexShrink: 0 }}>
-        <Switch
-          checked={checked}
-          disabled={saving}
-          onChange={(e) => onChange(e.target.checked)}
-          sx={{
-            '& .MuiSwitch-switchBase.Mui-checked': { color: T.goldDeep },
-            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: T.gold },
-          }}
-        />
-        <Typography sx={{ fontSize: 10.5, fontWeight: 800, color: checked ? T.goldDeep : T.text3 }}>
-          {saving ? '…' : checked ? 'ACTIVÉ' : 'DÉSACTIVÉ'}
-        </Typography>
-      </Stack>
+      <Switch
+        size="small"
+        checked={checked}
+        disabled={saving}
+        onChange={(e) => onChange(e.target.checked)}
+        sx={{
+          flexShrink: 0,
+          '& .MuiSwitch-switchBase.Mui-checked': { color: T.goldDeep },
+          '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: T.gold },
+        }}
+      />
     </Stack>
   );
 }
 
-function StatChip({ label, value, tone }: { label: string; value: number | string; tone?: 'ok' | 'warn' | 'muted' }) {
-  const color = tone === 'ok' ? T.success : tone === 'warn' ? T.goldDeep : T.text2;
+function LastRunLine({
+  when,
+  chips,
+}: {
+  when: string | null;
+  chips: ReactNode;
+}) {
   return (
-    <Chip
-      size="small"
-      label={`${value} ${label}`}
-      sx={{
-        fontWeight: 700,
-        fontSize: 11.5,
-        color,
-        bgcolor: tone === 'ok' ? T.successTint : tone === 'warn' ? T.goldTint : T.bg2,
-        border: `1px solid ${T.border}`,
-      }}
-    />
+    <Box sx={{ mt: 0.75 }}>
+      <Typography sx={{ fontSize: 10.5, color: T.text3, mb: 0.4 }}>
+        Dernière : <Box component="span" sx={{ fontWeight: 700, color: T.text2 }}>{when ?? 'jamais'}</Box>
+      </Typography>
+      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>{chips}</Stack>
+    </Box>
   );
 }
 
@@ -130,15 +175,15 @@ export default function BienExpressBar({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
-  // Interrupteurs d'automatisation (config pilote)
   const [autoSnapshot, setAutoSnapshot] = useState(false);
   const [autoPropagation, setAutoPropagation] = useState(false);
   const [lastAutoSnapshotAt, setLastAutoSnapshotAt] = useState<string | null>(null);
   const [savingToggle, setSavingToggle] = useState<'snap' | 'prop' | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
 
-  // Visuel dernière mise à jour (audit d'application)
-  const [lastAudit, setLastAudit] = useState<PricingAuditRowDto | null>(null);
+  const [lastAutoAudit, setLastAutoAudit] = useState<PricingAuditRowDto | null>(null);
+  const [lastManualAudit, setLastManualAudit] = useState<PricingAuditRowDto | null>(null);
+  const [estimateDiff, setEstimateDiff] = useState<ListingEstimateDiffDto | null>(null);
 
   const loadState = useCallback(async () => {
     try {
@@ -146,11 +191,19 @@ export default function BienExpressBar({
       setAutoSnapshot(Boolean(cfg.data?.config?.autoSnapshotEnabled));
       setAutoPropagation(Boolean(cfg.data?.config?.enabled));
       setLastAutoSnapshotAt(cfg.data?.config?.lastAutoSnapshotAt ?? null);
-    } catch { /* config absente = tout OFF */ }
+    } catch { /* config absente */ }
     try {
-      const audits = await fetchListingPricingAudits(listingId, 1);
-      setLastAudit(audits.data?.audits?.[0] ?? null);
-    } catch { /* pas d'audit encore */ }
+      const audits = await fetchListingPricingAudits(listingId, 20);
+      const rows = audits.data?.audits ?? [];
+      setLastAutoAudit(rows.find(isAutoAudit) ?? null);
+      setLastManualAudit(rows.find((a) => !isAutoAudit(a)) ?? null);
+    } catch { /* pas d'audit */ }
+    try {
+      const diffRes = await fetchListingEstimateDiff(listingId);
+      setEstimateDiff(diffRes.data?.diff ?? null);
+    } catch {
+      setEstimateDiff(null);
+    }
   }, [listingId]);
 
   useEffect(() => { void loadState(); }, [loadState]);
@@ -181,6 +234,7 @@ export default function BienExpressBar({
     setFetchError(null);
     try {
       await onFetchMarket();
+      await loadState();
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : 'Échec de la récupération');
     } finally {
@@ -189,179 +243,219 @@ export default function BienExpressBar({
   };
 
   const modeLabel = view.activeModeLabel ?? view.mode;
-  const summary = lastAudit?.applyReportSummary ?? null;
-  const protectedDays = (summary?.daysSkippedManual ?? 0) + (summary?.daysSkippedReserved ?? 0);
+  const autoImpact = auditImpact(lastAutoAudit);
+  const manualImpact = auditImpact(lastManualAudit);
+
+  const estimateChips = (
+    <>
+      {estimateDiff?.hasPrevious ? (
+        <ImpactChip
+          value={estimateDiff.totalChanged}
+          label={estimateDiff.totalChanged === 0 ? 'j = snapshot préc.' : 'j ≠ snapshot préc.'}
+          tone={estimateDiff.totalChanged > 0 ? 'impact' : 'ok'}
+        />
+      ) : estimateDiff == null && snapshotAt ? (
+        <ImpactChip value="—" label="diff indisponible" tone="muted" />
+      ) : snapshotAt ? (
+        <ImpactChip value="—" label="1er snapshot" tone="muted" />
+      ) : (
+        <ImpactChip value="—" label="pas d’estimation" tone="muted" />
+      )}
+    </>
+  );
+
+  const calendarChips = (imp: ReturnType<typeof auditImpact>) => {
+    if (!imp) return <ImpactChip value="—" label="jamais propagé" tone="muted" />;
+    return (
+      <>
+        <ImpactChip
+          value={imp.cal}
+          label={imp.aligned ? 'j déjà alignés' : 'j calendrier ≠'}
+          tone={imp.cal > 0 ? 'impact' : 'ok'}
+        />
+        {imp.computed > 0 ? (
+          <ImpactChip value={imp.computed} label="j calculés" tone="muted" />
+        ) : null}
+        {imp.protectedN > 0 ? (
+          <ImpactChip value={imp.protectedN} label="protégés" tone="warn" />
+        ) : null}
+        {imp.push != null ? (
+          <ImpactChip
+            value={imp.push ? '✓' : '—'}
+            label="push canaux"
+            tone={imp.push ? 'ok' : 'muted'}
+          />
+        ) : null}
+      </>
+    );
+  };
+
+  const panelSx = {
+    flex: 1,
+    minWidth: 0,
+    p: 1.25,
+    borderRadius: 1.5,
+    border: `1px solid ${T.border}`,
+    bgcolor: T.bg1,
+  } as const;
 
   return (
     <Box
       sx={{
         mx: { xs: 2, md: 3 },
         mb: 2,
-        p: { xs: 2, md: 2.5 },
-        borderRadius: 2.5,
-        border: `1.5px solid ${T.gold}`,
+        p: { xs: 1.5, md: 1.75 },
+        borderRadius: 2,
+        border: `1px solid ${T.gold}`,
         bgcolor: T.bg1,
       }}
     >
-      {/* ── 1 · Automatisation ── */}
-      <Typography sx={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '0.08em', color: T.text3, mb: 1 }}>
-        ⚡ AUTOMATISATION
-      </Typography>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-        <AutoRow
-          emoji="🔄"
-          title={DP.autoSnapshotTitle}
-          subtitle={DP.autoSnapshotSubtitle}
-          statusLine={
-            lastAutoSnapshotAt
-              ? `Dernière actualisation auto : ${fmtDate(lastAutoSnapshotAt)}`
-              : snapshotAt
-                ? `Dernière actualisation (manuelle) : ${fmtDate(snapshotAt)}`
-                : 'Jamais exécuté'
-          }
-          checked={autoSnapshot}
-          saving={savingToggle === 'snap'}
-          onChange={(v) => void saveToggle('snap', v)}
-        />
-        <AutoRow
-          emoji="🌙"
-          title="Propagation automatique — chaque nuit à 4h30"
-          subtitle={DP.autoPropagationSubtitle}
-          statusLine={
-            lastAudit
-              ? `Dernière : ${fmtDate(lastAudit.appliedAt)} · ${lastAudit.triggerSource === 'recompute-listing' ? 'auto (nuit)' : 'manuelle'}`
-              : 'Jamais exécutée'
-          }
-          checked={autoPropagation}
-          saving={savingToggle === 'prop'}
-          onChange={(v) => void saveToggle('prop', v)}
-        />
-      </Stack>
-      {toggleError ? (
-        <Typography sx={{ fontSize: 11.5, color: T.error, fontWeight: 600, mt: 0.5 }}>
-          {toggleError}
-        </Typography>
-      ) : null}
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25}>
+        {/* ── AUTO ── */}
+        <Box sx={{ ...panelSx, borderColor: autoSnapshot || autoPropagation ? T.gold : T.border }}>
+          <Typography
+            sx={{
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              color: T.goldDeep,
+              mb: 1,
+            }}
+          >
+            AUTO
+          </Typography>
 
-      {/* ── 2 · Actions manuelles ── */}
-      <Typography sx={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '0.08em', color: T.text3, mt: 2, mb: 1 }}>
-        🕹 ACTIONS MANUELLES (ONE-SHOT)
-      </Typography>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
-        <Button
-          variant="outlined"
-          disabled={fetching}
-          onClick={() => void handleFetch()}
-          startIcon={fetching ? <CircularProgress size={14} color="inherit" /> : undefined}
-          sx={{
-            textTransform: 'none', fontWeight: 800, fontSize: 12.5,
-            borderColor: T.gold, color: T.goldDeep, bgcolor: T.goldTint,
-            '&:hover': { borderColor: T.goldDeep, bgcolor: T.goldTint2 },
-          }}
-        >
-          {fetching ? 'Actualisation…' : DP.fetchSnapshotNow}
-        </Button>
-        <Button
-          variant="contained"
-          disabled={!hasMarketData || !view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
-          onClick={() => setCalendarOpen(true)}
-          sx={{
-            textTransform: 'none', fontWeight: 800, fontSize: 12.5,
-            bgcolor: T.goldDeep, '&:hover': { bgcolor: T.gold },
-          }}
-        >
-          {view.pilotApplyLoading ? 'Propagation…' : '② Propager vers le calendrier maintenant'}
-        </Button>
-        <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
-          Mode {modeLabel} · {view.floor}–{view.ceiling} MAD
-          {snapshotAt
-            ? ` · ${DP.estimationPrixMarche} du ${fmtDate(snapshotAt)}`
-            : ` · aucune ${DP.estimationPrixMarche.toLowerCase()}`}
-        </Typography>
-      </Stack>
-      {fetchError ? (
-        <Typography sx={{ fontSize: 11.5, color: T.error, fontWeight: 600, mt: 0.5 }}>
-          {fetchError}
-        </Typography>
-      ) : null}
-      {view.pilotApplyError ? (
-        <Typography sx={{ fontSize: 11.5, color: T.error, fontWeight: 600, mt: 0.5 }}>
-          {view.pilotApplyError}
-        </Typography>
-      ) : null}
+          <CompactToggle
+            title={DP.autoSnapshotTitle}
+            schedule={DP.autoSnapshotSubtitle}
+            checked={autoSnapshot}
+            saving={savingToggle === 'snap'}
+            onChange={(v) => void saveToggle('snap', v)}
+          />
+          <LastRunLine
+            when={fmtDate(lastAutoSnapshotAt)}
+            chips={estimateChips}
+          />
 
-      {/* ── 3 · Dernière mise à jour du calendrier ── */}
-      <Typography sx={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '0.08em', color: T.text3, mt: 2, mb: 1 }}>
-        📊 DERNIÈRE MISE À JOUR DU CALENDRIER
-      </Typography>
-      {lastAudit ? (
-        <Box>
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2 }}>
-              {fmtDate(lastAudit.appliedAt)}
-            </Typography>
-            <StatChip
-              label="jours mis à jour"
-              value={summary?.daysCalendarDatesUpdated ?? summary?.daysChanged ?? lastAudit.daysChanged}
-              tone="ok"
-            />
-            {protectedDays > 0 ? (
-              <StatChip label="protégés (prix manuel / résa)" value={protectedDays} tone="warn" />
-            ) : null}
-            {(summary?.daysSkippedUnavailable ?? 0) > 0 ? (
-              <StatChip label="indispo" value={summary?.daysSkippedUnavailable ?? 0} tone="muted" />
-            ) : null}
-            {summary ? (
-              <StatChip
-                label={summary.ruPublishQueued ? 'push Airbnb envoyé' : 'push Airbnb non déclenché'}
-                value={summary.ruPublishQueued ? '✓' : '✗'}
-                tone={summary.ruPublishQueued ? 'ok' : 'muted'}
-              />
-            ) : null}
-          </Stack>
-          {summary?.narrative?.steps?.length ? (
-            <Box
-              sx={{
-                mt: 1.25,
-                p: 1.25,
-                borderRadius: 1.25,
-                bgcolor: T.bg2,
-                border: `1px solid ${T.border}`,
-              }}
-            >
-              <Typography sx={{ fontSize: 10.5, fontWeight: 800, color: T.text3, textTransform: 'uppercase', mb: 0.75 }}>
-                Récap cascade (audit)
-              </Typography>
-              <Stack sx={{ gap: 0.75 }}>
-                {summary.narrative.steps.map((step) => (
-                  <Typography key={step.n} sx={{ fontSize: 11.5, color: T.text2, lineHeight: 1.45 }}>
-                    <Box component="span" sx={{ fontWeight: 800, color: T.goldDeep }}>
-                      {step.n}. {step.title}
-                    </Box>
-                    {' — '}
-                    {step.detail}
-                  </Typography>
-                ))}
-              </Stack>
-            </Box>
-          ) : null}
+          <Box sx={{ borderTop: `1px dashed ${T.border}`, my: 1.1 }} />
+
+          <CompactToggle
+            title="Propagation nuit"
+            schedule={DP.autoPropagationSubtitle}
+            checked={autoPropagation}
+            saving={savingToggle === 'prop'}
+            onChange={(v) => void saveToggle('prop', v)}
+          />
+          <LastRunLine
+            when={fmtDate(lastAutoAudit?.appliedAt)}
+            chips={calendarChips(autoImpact)}
+          />
         </Box>
-      ) : (
-        <Typography sx={{ fontSize: 12, color: T.text3 }}>
-          Aucune propagation encore — utilisez le bouton ② ou activez la propagation automatique.
+
+        {/* ── MANUEL ── */}
+        <Box sx={panelSx}>
+          <Typography
+            sx={{
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              color: T.text3,
+              mb: 1,
+            }}
+          >
+            MANUEL · ONE-SHOT
+          </Typography>
+
+          <Button
+            fullWidth
+            size="small"
+            variant="outlined"
+            disabled={fetching}
+            onClick={() => void handleFetch()}
+            startIcon={fetching ? <CircularProgress size={12} color="inherit" /> : undefined}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 800,
+              fontSize: 12,
+              py: 0.6,
+              borderColor: T.gold,
+              color: T.goldDeep,
+              bgcolor: T.goldTint,
+              '&:hover': { borderColor: T.goldDeep, bgcolor: T.goldTint2 },
+            }}
+          >
+            {fetching ? 'Actualisation…' : DP.fetchSnapshotNow}
+          </Button>
+          <LastRunLine
+            when={
+              // dernière estimation manuelle ≈ snapshot courant si ≠ auto
+              snapshotAt && snapshotAt !== lastAutoSnapshotAt
+                ? fmtDate(snapshotAt)
+                : snapshotAt && !lastAutoSnapshotAt
+                  ? fmtDate(snapshotAt)
+                  : snapshotAt
+                    ? fmtDate(snapshotAt)
+                    : null
+            }
+            chips={estimateChips}
+          />
+
+          <Box sx={{ borderTop: `1px dashed ${T.border}`, my: 1.1 }} />
+
+          <Button
+            fullWidth
+            size="small"
+            variant="contained"
+            disabled={!hasMarketData || !view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
+            onClick={() => setCalendarOpen(true)}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 800,
+              fontSize: 12,
+              py: 0.6,
+              bgcolor: T.goldDeep,
+              '&:hover': { bgcolor: T.gold },
+            }}
+          >
+            {view.pilotApplyLoading ? 'Propagation…' : 'Propager au calendrier'}
+          </Button>
+          <LastRunLine
+            when={fmtDate(lastManualAudit?.appliedAt)}
+            chips={calendarChips(manualImpact)}
+          />
+        </Box>
+      </Stack>
+
+      {(toggleError || fetchError || view.pilotApplyError) && (
+        <Typography sx={{ fontSize: 11, color: T.error, fontWeight: 600, mt: 0.75 }}>
+          {toggleError || fetchError || view.pilotApplyError}
         </Typography>
       )}
 
-      {/* ── Toggle étude de marché ── */}
-      <Box sx={{ mt: 2, pt: 1.5, borderTop: `1px dashed ${T.border}` }}>
+      <Stack
+        direction="row"
+        sx={{
+          mt: 1,
+          pt: 1,
+          borderTop: `1px dashed ${T.border}`,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 0.75,
+        }}
+      >
+        <Typography sx={{ fontSize: 11, color: T.text3 }}>
+          {modeLabel} · {view.floor}–{view.ceiling} MAD
+          {snapshotAt ? ` · estim. ${fmtDate(snapshotAt)}` : ''}
+        </Typography>
         <Button
           size="small"
           onClick={onToggleAdvanced}
-          sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12, color: T.text2 }}
+          sx={{ textTransform: 'none', fontWeight: 700, fontSize: 11.5, color: T.text2, minWidth: 0 }}
         >
-          {advancedOpen ? 'Masquer l’étude de marché ▲' : '🔬 Étude de marché & réglages avancés ▼'}
+          {advancedOpen ? 'Masquer avancé ▲' : 'Réglages & étude ▼'}
         </Button>
-      </Box>
+      </Stack>
 
       <CalendarUpdateModal
         open={calendarOpen && Boolean(view.onRunCalendarUpdate)}
@@ -383,7 +477,9 @@ export default function BienExpressBar({
         occupancyHighMin={view.occupancyHighMin}
         occupancyHighAdj={view.occupancyHighAdj}
         lastMinuteEnabled={view.lastMinuteEnabled}
-        lastMinuteWindowDays={view.lastMinuteWindowDays}
+        lastMinuteFromDays={view.lastMinuteFromDays}
+        lastMinuteToDays={view.lastMinuteToDays}
+        lastMinuteWindowDays={view.lastMinuteToDays ?? view.lastMinuteWindowDays}
         lastMinuteDiscountPct={view.lastMinuteDiscountPct}
         onClose={() => {
           setCalendarOpen(false);

@@ -42,7 +42,8 @@ function buildConfigPayload(
   applyPrice: boolean,
   applyMinStay: boolean,
   lastMinuteEnabled: boolean,
-  lastMinuteWindowDays: number,
+  lastMinuteFromDays: number,
+  lastMinuteToDays: number,
   lastMinuteDiscountPct: number,
   occupancyBandsEnabled: boolean,
   occupancyLowMax: number,
@@ -51,6 +52,7 @@ function buildConfigPayload(
   occupancyHighAdj: number,
   pricingBaseSource: 'estimate' | 'listing_base' | 'manual_base',
   manualBasePriceMad: number,
+  eventsEnabled: boolean,
 ): Partial<PilotPricingConfigDto> {
   return {
     enabled,
@@ -64,7 +66,9 @@ function buildConfigPayload(
     ceiling,
     floorAggressive: Math.round(floor * 0.7),
     lastMinuteEnabled,
-    lastMinuteWindowDays,
+    lastMinuteFromDays,
+    lastMinuteToDays,
+    lastMinuteWindowDays: lastMinuteToDays,
     lastMinuteDiscountPct,
     occupancyBandsEnabled,
     occupancyBands: [
@@ -87,6 +91,8 @@ function buildConfigPayload(
     minStayPlancher: 1,
     gapBlockEnabled,
     gapBlockMinNights,
+    eventsEnabled,
+    // Toujours persistés — eventsEnabled=false = ignorés au calcul, pas effacés.
     events: events.map((e) => {
       const parts = e.dateRange.split('→').map((s) => s.trim());
       const startDate = (parts[0] ?? e.dateRange).slice(0, 10);
@@ -130,7 +136,8 @@ export function usePilotPricing(options: {
   applyPrice: boolean;
   applyMinStay: boolean;
   lastMinuteEnabled: boolean;
-  lastMinuteWindowDays: number;
+  lastMinuteFromDays: number;
+  lastMinuteToDays: number;
   lastMinuteDiscountPct: number;
   occupancyBandsEnabled: boolean;
   occupancyLowMax: number;
@@ -140,6 +147,7 @@ export function usePilotPricing(options: {
   pricingBaseSource: 'estimate' | 'listing_base' | 'manual_base';
   manualBasePriceMad: number;
   calendarYear: number;
+  eventsEnabled?: boolean;
 }) {
   const {
     listingId,
@@ -157,7 +165,8 @@ export function usePilotPricing(options: {
     applyPrice,
     applyMinStay,
     lastMinuteEnabled,
-    lastMinuteWindowDays,
+    lastMinuteFromDays,
+    lastMinuteToDays,
     lastMinuteDiscountPct,
     occupancyBandsEnabled,
     occupancyLowMax,
@@ -167,6 +176,7 @@ export function usePilotPricing(options: {
     pricingBaseSource,
     manualBasePriceMad,
     calendarYear,
+    eventsEnabled = true,
   } = options;
 
   const [pilotReady, setPilotReady] = useState(false);
@@ -195,7 +205,8 @@ export function usePilotPricing(options: {
       applyPrice,
       applyMinStay,
       lastMinuteEnabled,
-      lastMinuteWindowDays,
+      lastMinuteFromDays,
+      lastMinuteToDays,
       lastMinuteDiscountPct,
       occupancyBandsEnabled,
       occupancyLowMax,
@@ -204,6 +215,7 @@ export function usePilotPricing(options: {
       occupancyHighAdj,
       pricingBaseSource,
       manualBasePriceMad,
+      eventsEnabled,
     );
   }, [
     activeModeId,
@@ -219,7 +231,8 @@ export function usePilotPricing(options: {
     applyPrice,
     applyMinStay,
     lastMinuteEnabled,
-    lastMinuteWindowDays,
+    lastMinuteFromDays,
+    lastMinuteToDays,
     lastMinuteDiscountPct,
     occupancyBandsEnabled,
     occupancyLowMax,
@@ -228,6 +241,7 @@ export function usePilotPricing(options: {
     occupancyHighAdj,
     pricingBaseSource,
     manualBasePriceMad,
+    eventsEnabled,
   ]);
 
   const loadConfig = useCallback(async () => {
