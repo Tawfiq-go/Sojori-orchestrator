@@ -221,7 +221,7 @@ export default function BienView(props: BienViewProps) {
 
   const [calendarUpdateOpen, setCalendarUpdateOpen] = useState(false);
   // Onglets de la vue avancée : potentiel+calendrier · réglages · marché
-  const [advTab, setAdvTab] = useState<'apercu' | 'reglages' | 'marche'>('apercu');
+  const [advTab, setAdvTab] = useState<'reglages' | 'bien'>('reglages');
   const modeLabel =
     activeModeLabel ??
     pricingModes.find((m) => m.id === activeModeId)?.label ??
@@ -381,9 +381,8 @@ export default function BienView(props: BienViewProps) {
       <Box sx={{ ...DP_LAYOUT_SX, pb: 1.5 }}>
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
           {([
-            ['apercu', '📊 Potentiel & calendrier'],
             ['reglages', '⚙️ Réglages pricing'],
-            ['marche', '🌍 Marché & concurrents'],
+            ['bien', '🏡 Bien & comps'],
           ] as const).map(([key, label]) => (
             <Box
               key={key}
@@ -406,8 +405,8 @@ export default function BienView(props: BienViewProps) {
         </Stack>
       </Box>
 
-      {/* ── Section 2 ── */}
-      {advTab === 'apercu' ? (<>
+      {/* ── Bien & comps : potentiel · calendrier · carte · concurrents ── */}
+      {advTab === 'bien' ? (<>
       <Section
         num="02"
         title="Le potentiel de votre bien"
@@ -455,15 +454,14 @@ export default function BienView(props: BienViewProps) {
           >
             <b>Estimation Sojori seule</b> — pas encore de performances annonce / comparables sur ce listing (
             <code style={{ fontSize: 11 }}>{listing._id}</code>). Modal ⟳ →{' '}
-            <b>Performances annonce</b> + comparables pour remplir §02, §06–§07 et enrichir le tableau
-            §04. Un autre listing du même nom peut déjà avoir ces données (vérifiez l’URL / l’ID).
+            <b>Performances annonce</b> + comparables pour enrichir cette vue.
           </Box>
         ) : null}
       </Section>
 
       </>) : null}
 
-      {/* ── Section 3 — toujours visible (AI OFF = pas de sync auto seulement) ── */}
+      {/* ── Réglages pricing ── */}
       {advTab === 'reglages' ? (<>
       <Section
         num="03"
@@ -535,8 +533,8 @@ export default function BienView(props: BienViewProps) {
 
       </>) : null}
 
-      {/* ── Section 4 — toujours visible si snapshot / calendrier (même AI OFF) ── */}
-      {advTab === 'apercu' ? (<>
+      {/* ── Calendrier (onglet Bien & comps) ── */}
+      {advTab === 'bien' ? (<>
       {(hasCalendarProd || provenance.hasAirroiSnapshot || calendarDays.length > 0) && (
         <Section
           num="04"
@@ -730,46 +728,41 @@ export default function BienView(props: BienViewProps) {
 
       </>) : null}
 
-      {/* ── Section 5 ── */}
-      {advTab === 'marche' ? (<>
+      {/* ── Comps listing (pas les tendances ville — celles-ci sont sur le portefeuille) ── */}
+      {advTab === 'bien' ? (<>
+      {(hasCompsMarket || (selfVsComps && (selfVsComps.adrDeltaPct != null || selfVsComps.occDeltaPts != null))) ? (
       <Section
         num="05"
-        title={`Étude marché · ${cityLabel}`}
-        sub={`Deux cadres : concurrents directs + marché ${cityLabel} (graphiques)`}
+        title="Votre bien vs concurrents"
+        sub="Médianes TTM des comparables de cette annonce"
         sources={[
-          hasMarketProd ? { kind: 'prod', label: 'KPIs ville' } : { kind: 'empty', label: 'VIDE' },
-          seasonality.length > 0 || pacing.length > 0
-            ? { kind: 'prod', label: 'Graphiques PROD' }
-            : {
-                kind: 'empty',
-                label: 'Graphiques VIDE',
-                tooltip: `Modal ⟳ · Actualiser le marché · ${cityLabel}`,
-              },
+          hasCompsMarket
+            ? { kind: 'prod', label: 'Comps listing' }
+            : { kind: 'empty', label: 'VIDE' },
         ]}
       >
         <MarketCharts
+          variant="listing"
           cityName={cityLabel}
-          kpis={market.kpis}
           compsStats={compsMarketStats}
           selfVsComps={selfVsComps}
-          seasonality={seasonality}
-          pacing={pacing}
-          supplyGrowth={supplyGrowth}
-          hasData={hasMarketProd && Boolean(market.kpis)}
-          hasCharts={seasonality.length > 0 || pacing.length > 0}
+          seasonality={[]}
+          pacing={[]}
+          supplyGrowth={[]}
           hasCompsStats={hasCompsMarket}
         />
       </Section>
+      ) : null}
 
-      {/* ── Section 6 ── */}
+      {/* ── Carte ── */}
       <Section
         num="06"
-        title={`Carte ${listing.city} · positionnement`}
-        sub={`GPS = fiche listing Sojori (priorité) · ${compMapPins.length} concurrents autour de ce point`}
+        title={`Carte · positionnement`}
+        sub={`GPS fiche listing · ${compMapPins.length} concurrents autour`}
         sources={[
           bienMapPosition
-            ? { kind: 'prod', label: 'Carte OSM', tooltip: 'Leaflet · OpenStreetMap — pas de token' }
-            : { kind: 'empty', label: 'VIDE', tooltip: 'GPS bien manquant (fiche listing)' },
+            ? { kind: 'prod', label: 'Carte OSM', tooltip: 'Leaflet · OpenStreetMap' }
+            : { kind: 'empty', label: 'VIDE', tooltip: 'GPS bien manquant' },
         ]}
       >
         {bienMapPosition ? (
@@ -781,21 +774,21 @@ export default function BienView(props: BienViewProps) {
           <DataEmptyPlaceholder
             hint={
               compRows.length > 1
-                ? 'Comps en base mais GPS du bien manquant — vérifiez lat/lng sur la fiche listing (legacy).'
-                : 'Carte — lancer ⟳ Envoyer · récupérer (comparables + lat/lng bien)'
+                ? 'Comps en base mais GPS du bien manquant — vérifiez lat/lng sur la fiche listing.'
+                : 'Carte — actualiser les performances de l’annonce (comparables + GPS)'
             }
           />
         )}
       </Section>
 
-      {/* ── Section 7 ── */}
+      {/* ── Tableau concurrents ── */}
       <Section
         num="07"
-        title={`Vos ${compRows.length - 1} concurrents directs`}
-        sub="Comparables snapshot · tri colonnes · lien annonce si disponible · carte §06"
+        title={`Vos ${Math.max(0, compRows.length - 1)} concurrents directs`}
+        sub="Comparables de l’annonce · tri colonnes"
         sources={[
           hasCompsProd || compRows.length > 0
-            ? { kind: 'prod', label: 'Ligne bien (snapshot)' }
+            ? { kind: 'prod', label: 'Comps snapshot' }
             : { kind: 'empty', label: 'VIDE' },
         ]}
       >
@@ -836,6 +829,15 @@ export default function BienView(props: BienViewProps) {
         gapBlockMinNights={gapBlockMinNights}
         eventsCount={eventsCount ?? events.length}
         activeModeLabel={modeLabel}
+        modeEnabled={modeEnabled}
+        occupancyBandsEnabled={occupancyBandsEnabled}
+        occupancyLowMax={occupancyLowMax}
+        occupancyLowAdj={occupancyLowAdj}
+        occupancyHighMin={occupancyHighMin}
+        occupancyHighAdj={occupancyHighAdj}
+        lastMinuteEnabled={lastMinuteEnabled}
+        lastMinuteWindowDays={lastMinuteWindowDays}
+        lastMinuteDiscountPct={lastMinuteDiscountPct}
         onClose={() => setCalendarUpdateOpen(false)}
         onRun={onRunCalendarUpdate ?? (async () => {
           throw new Error('Mise à jour calendrier indisponible');

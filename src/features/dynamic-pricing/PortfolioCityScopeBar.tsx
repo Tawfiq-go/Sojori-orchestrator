@@ -4,7 +4,6 @@ import { Box, Stack, Typography, Tooltip } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { T } from './_tokens';
 import type { CityScopeOption, CityScopeStats } from './cityScope';
-import { MARKET_CACHE_CITIES, marketBandAppliesToCityScope } from './cityScope';
 
 interface Props {
   options: CityScopeOption[];
@@ -13,42 +12,44 @@ interface Props {
   stats: CityScopeStats;
   globalTotal: number;
   loading?: boolean;
+  /** Biens à traiter (annonce / estimation manquante) */
+  todoCount?: number;
 }
 
 export default function PortfolioCityScopeBar({
-  options, activeScope, onScopeChange, stats, globalTotal, loading,
+  options, activeScope, onScopeChange, stats, loading, todoCount = 0,
 }: Props) {
-  const activeOpt = options.find(o =>
-    o.id === '__all__' ? !activeScope : o.id === activeScope,
-  );
-  const showGapHint = stats.withoutSnapshot > 0;
-
   return (
-    <Box sx={{ mb: 2 }}>
-      <Stack direction="row" sx={{ gap: 1,  alignItems: 'center', mb: 1 }}>
+    <Box sx={{ mb: 1.75 }}>
+      <Stack direction="row" sx={{ gap: 1, alignItems: 'center', mb: 0.875, flexWrap: 'wrap' }}>
         <Typography sx={{
           fontSize: 10, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
           color: T.text3, textTransform: 'uppercase', letterSpacing: '0.10em',
         }}>
-          Ville · portefeuille
+          Ville
         </Typography>
         <Tooltip
-          title="Choisir une ville pour filtrer biens, macros et tableau. Les données marché (—) apparaissent seulement après ⟳ refresh par bien avec annonce connectée."
+          title="Filtre le tableau. Connectez l’annonce puis actualisez l’estimation prix de marché sur la fiche."
           arrow
         >
           <InfoOutlinedIcon sx={{ fontSize: 14, color: T.text3, cursor: 'help' }} />
         </Tooltip>
-        {activeScope && activeOpt && activeOpt.rawLabels.length > 1 ? (
-          <Typography sx={{
-            fontSize: 10, color: T.warning, fontFamily: '"Geist Mono", monospace', ml: 'auto',
-          }}>
-            Libellés Sojori : {activeOpt.rawLabels.join(' · ')} — regroupés sous {activeScope}
-          </Typography>
-        ) : null}
+        <Typography sx={{
+          ml: 'auto', fontSize: 11.5, color: T.text2, fontFamily: '"Geist Mono", monospace',
+        }}>
+          {stats.withAirbnb}/{stats.total} connecté{stats.total !== 1 ? 's' : ''}
+          {' · '}
+          {stats.withSnapshot}/{stats.total} estimation
+          {todoCount > 0 ? (
+            <Box component="span" sx={{ color: T.warning, fontWeight: 700 }}>
+              {' · '}{todoCount} à traiter
+            </Box>
+          ) : null}
+        </Typography>
       </Stack>
 
-      <Stack direction="row" sx={{ gap: 0.75,  flexWrap: 'wrap', mb: 1.25 }}>
-        {options.map(opt => {
+      <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
+        {options.map((opt) => {
           const active = opt.id === '__all__' ? !activeScope : opt.id === activeScope;
           return (
             <Box
@@ -63,8 +64,8 @@ export default function PortfolioCityScopeBar({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 1,
-                px: 1.75,
-                py: 1.125,
+                px: 1.5,
+                py: 0.875,
                 borderRadius: 1.25,
                 border: `1px solid ${active ? T.goldDeep : T.border}`,
                 bgcolor: active ? T.goldTint : T.bg1,
@@ -92,46 +93,6 @@ export default function PortfolioCityScopeBar({
           );
         })}
       </Stack>
-
-      {showGapHint ? (
-        <Box sx={{
-          p: 1.5, borderRadius: 1.5,
-          border: `1px solid ${T.border}`,
-          bgcolor: T.bg1,
-        }}>
-          <Typography sx={{ fontSize: 12.5, color: T.text2, lineHeight: 1.55 }}>
-            <Box component="span" sx={{ fontWeight: 800, color: T.text }}>
-              {activeScope ? `Vue ${activeScope}` : 'Toutes villes'}
-            </Box>
-            {' · '}
-            {stats.withSnapshot}/{stats.total} bien{stats.total !== 1 ? 's' : ''} avec snapshot marché
-            {stats.withAirbnb < stats.total ? (
-              <> · {stats.withAirbnb} annonce{stats.withAirbnb !== 1 ? 's' : ''} connectée{stats.withAirbnb !== 1 ? 's' : ''} (refresh ⟳ possible)</>
-            ) : null}
-            {stats.withoutSnapshot > 0 ? (
-              <>
-                {' · '}
-                <Box component="span" sx={{ color: T.warning, fontWeight: 700 }}>
-                  {stats.withoutSnapshot} ligne{stats.withoutSnapshot !== 1 ? 's' : ''} en —
-                </Box>
-                {' '}
-                = pas encore de refresh marché (pas un bug portefeuille). Connecter l’annonce sur le listing
-                puis ⟳ « Actualiser performances ».
-              </>
-            ) : null}
-          </Typography>
-          {!activeScope && globalTotal > 12 ? (
-            <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 0.75 }}>
-              Conseil : filtrer par ville pour éviter de mélanger Casablanca et Marrakech dans le même tableau.
-            </Typography>
-          ) : null}
-          {activeScope && !marketBandAppliesToCityScope(activeScope) ? (
-            <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 0.75 }}>
-              Le cache marché ⟳ (modal) est disponible pour {MARKET_CACHE_CITIES.join(' et ')} — choisissez l’une de ces villes pour la bande marché.
-            </Typography>
-          ) : null}
-        </Box>
-      ) : null}
     </Box>
   );
 }

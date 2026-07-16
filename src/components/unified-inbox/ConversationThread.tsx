@@ -48,6 +48,9 @@ interface ConversationThreadProps {
   recordingVoice?: boolean;
   /** Envoi audio en cours */
   sendingVoice?: boolean;
+  /** Inbox Resa — cliquer un message ouvre le détail (filtres / transcript) */
+  onSelectMessage?: (message: Message) => void;
+  selectedMessageId?: string | null;
   composerValue?: string;
   onComposerValueChange?: (value: string) => void;
   otaPlatform?: string;
@@ -80,6 +83,8 @@ export default function ConversationThread({
   onRecordVoice,
   recordingVoice = false,
   sendingVoice = false,
+  onSelectMessage,
+  selectedMessageId = null,
   composerValue,
   onComposerValueChange,
   otaPlatform = 'Airbnb',
@@ -165,6 +170,10 @@ export default function ConversationThread({
     (routingDetails?.selectedCategories as string[] | undefined) ??
     [];
   const openTrace = (message: Message) => {
+    if (onSelectMessage) {
+      onSelectMessage(message);
+      return;
+    }
     if (!canInspectAi || !message.isAI || message.isAdmin) return;
     setExpandedTraceSteps({});
     setInspectedMessage(message);
@@ -652,11 +661,20 @@ export default function ConversationThread({
                   color: styles.color,
                   lineHeight: 1.7,
                   boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
-                  cursor: canInspectAi && message.isAI && !message.isAdmin ? 'pointer' : 'default',
+                  cursor:
+                    onSelectMessage || (canInspectAi && message.isAI && !message.isAdmin)
+                      ? 'pointer'
+                      : 'default',
                   transition: 'box-shadow 120ms ease',
-                  '&:hover': canInspectAi && message.isAI && !message.isAdmin
-                    ? { boxShadow: '0 0 0 2px rgba(124,58,237,0.22)' }
-                    : undefined,
+                  outline:
+                    selectedMessageId && selectedMessageId === message.id
+                      ? '2px solid rgba(13,148,136,0.55)'
+                      : undefined,
+                  outlineOffset: 2,
+                  '&:hover':
+                    onSelectMessage || (canInspectAi && message.isAI && !message.isAdmin)
+                      ? { boxShadow: '0 0 0 2px rgba(13,148,136,0.22)' }
+                      : undefined,
                 }}
               >
                 {message.isAdmin && (

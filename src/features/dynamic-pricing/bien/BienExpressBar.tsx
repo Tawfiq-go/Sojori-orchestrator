@@ -295,29 +295,57 @@ export default function BienExpressBar({
         📊 DERNIÈRE MISE À JOUR DU CALENDRIER
       </Typography>
       {lastAudit ? (
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}>
-          <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2 }}>
-            {fmtDate(lastAudit.appliedAt)}
-          </Typography>
-          <StatChip
-            label="jours mis à jour"
-            value={summary?.daysCalendarDatesUpdated ?? summary?.daysChanged ?? lastAudit.daysChanged}
-            tone="ok"
-          />
-          {protectedDays > 0 ? (
-            <StatChip label="protégés (prix manuel / résa)" value={protectedDays} tone="warn" />
-          ) : null}
-          {(summary?.daysSkippedUnavailable ?? 0) > 0 ? (
-            <StatChip label="indispo" value={summary?.daysSkippedUnavailable ?? 0} tone="muted" />
-          ) : null}
-          {summary ? (
+        <Box>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2 }}>
+              {fmtDate(lastAudit.appliedAt)}
+            </Typography>
             <StatChip
-              label={summary.ruPublishQueued ? 'push Airbnb envoyé' : 'push Airbnb non déclenché'}
-              value={summary.ruPublishQueued ? '✓' : '✗'}
-              tone={summary.ruPublishQueued ? 'ok' : 'muted'}
+              label="jours mis à jour"
+              value={summary?.daysCalendarDatesUpdated ?? summary?.daysChanged ?? lastAudit.daysChanged}
+              tone="ok"
             />
+            {protectedDays > 0 ? (
+              <StatChip label="protégés (prix manuel / résa)" value={protectedDays} tone="warn" />
+            ) : null}
+            {(summary?.daysSkippedUnavailable ?? 0) > 0 ? (
+              <StatChip label="indispo" value={summary?.daysSkippedUnavailable ?? 0} tone="muted" />
+            ) : null}
+            {summary ? (
+              <StatChip
+                label={summary.ruPublishQueued ? 'push Airbnb envoyé' : 'push Airbnb non déclenché'}
+                value={summary.ruPublishQueued ? '✓' : '✗'}
+                tone={summary.ruPublishQueued ? 'ok' : 'muted'}
+              />
+            ) : null}
+          </Stack>
+          {summary?.narrative?.steps?.length ? (
+            <Box
+              sx={{
+                mt: 1.25,
+                p: 1.25,
+                borderRadius: 1.25,
+                bgcolor: T.bg2,
+                border: `1px solid ${T.border}`,
+              }}
+            >
+              <Typography sx={{ fontSize: 10.5, fontWeight: 800, color: T.text3, textTransform: 'uppercase', mb: 0.75 }}>
+                Récap cascade (audit)
+              </Typography>
+              <Stack sx={{ gap: 0.75 }}>
+                {summary.narrative.steps.map((step) => (
+                  <Typography key={step.n} sx={{ fontSize: 11.5, color: T.text2, lineHeight: 1.45 }}>
+                    <Box component="span" sx={{ fontWeight: 800, color: T.goldDeep }}>
+                      {step.n}. {step.title}
+                    </Box>
+                    {' — '}
+                    {step.detail}
+                  </Typography>
+                ))}
+              </Stack>
+            </Box>
           ) : null}
-        </Stack>
+        </Box>
       ) : (
         <Typography sx={{ fontSize: 12, color: T.text3 }}>
           Aucune propagation encore — utilisez le bouton ② ou activez la propagation automatique.
@@ -348,6 +376,15 @@ export default function BienExpressBar({
         gapBlockMinNights={view.gapBlockMinNights}
         eventsCount={view.eventsCount ?? view.events.length}
         activeModeLabel={modeLabel}
+        modeEnabled={view.modeEnabled}
+        occupancyBandsEnabled={view.occupancyBandsEnabled}
+        occupancyLowMax={view.occupancyLowMax}
+        occupancyLowAdj={view.occupancyLowAdj}
+        occupancyHighMin={view.occupancyHighMin}
+        occupancyHighAdj={view.occupancyHighAdj}
+        lastMinuteEnabled={view.lastMinuteEnabled}
+        lastMinuteWindowDays={view.lastMinuteWindowDays}
+        lastMinuteDiscountPct={view.lastMinuteDiscountPct}
         onClose={() => {
           setCalendarOpen(false);
           void loadState();

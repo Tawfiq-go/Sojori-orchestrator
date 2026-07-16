@@ -80,8 +80,10 @@ export interface Message {
   tags?: string[];
   /** Inbox Resa — URL blob locale pour lecture audio */
   audioUrl?: string | null;
-  /** Transcript / résumé affiché sous le player */
+  /** Inbox Resa — Transcript / résumé affiché sous le player */
   audioCaption?: string | null;
+  /** Index exchange Inbox Resa (pour panneau détail) */
+  bookingExchangeIndex?: number;
 }
 
 export interface QuickTemplate {

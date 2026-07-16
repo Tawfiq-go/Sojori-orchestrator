@@ -62,6 +62,12 @@ export interface MarketChartsProps {
   hasData?: boolean;
   hasCharts?: boolean;
   hasCompsStats?: boolean;
+  /**
+   * city = tendances + KPIs ville (portefeuille filtré)
+   * listing = médianes comps vs votre bien (fiche)
+   * full = les deux (legacy)
+   */
+  variant?: 'city' | 'listing' | 'full';
 }
 
 const dash = '—';
@@ -84,12 +90,16 @@ export default function MarketCharts(props: MarketChartsProps) {
     hasData = false,
     hasCharts = false,
     hasCompsStats = false,
+    variant = 'full',
   } = props;
+
+  const showCity = variant === 'city' || variant === 'full';
+  const showListingComps = variant === 'listing' || variant === 'full';
 
   if (!hasData && !hasCharts && !hasCompsStats) {
     return (
       <DataEmptyPlaceholder
-        hint={`⟳ Refresh perf bien (comps) ou refresh marché ${cityName} (modal · choisir la ville)`}
+        hint={`⟳ Actualiser le marché ${cityName} (modal données marché)`}
       />
     );
   }
@@ -107,10 +117,8 @@ export default function MarketCharts(props: MarketChartsProps) {
 
   return (
     <Box sx={{ ...DP_LAYOUT_SX }}>
-      <Typography sx={{ fontSize: 11, color: T.text3, mb: 2, lineHeight: 1.45 }}>
-        Tendances ville en haut · <b>comps vs marché</b> en bas (avant le tableau §07).
-      </Typography>
-
+      {showCity ? (
+        <>
       {/* Graphiques ville — pleine largeur */}
       <MarketFrame
         title={`Tendances marché · ${cityName}`}
@@ -286,12 +294,62 @@ export default function MarketCharts(props: MarketChartsProps) {
         )}
       </MarketFrame>
 
-      {/* Deux cadres en bas — comps + ville (avant tableau §07) */}
+      {variant === 'city' ? (
+        <MarketFrame
+          title={`Marché · ${cityName}`}
+          subtitle="Indicateurs agrégés de la ville"
+          badge="Ville"
+        >
+          {hasData ? (
+            <Box sx={kpiGridSx}>
+              <Kpi
+                v={k.occupancyAvg > 0 ? Math.round(k.occupancyAvg * 100) : dash}
+                u="%"
+                l="Occupation 24m"
+              />
+              <Kpi
+                v={k.adrMedianCity > 0 ? k.adrMedianCity.toLocaleString('fr-FR') : dash}
+                u="MAD"
+                l={`ADR ${cityName}`}
+              />
+              <Kpi
+                v={k.leadTimeDays > 0 ? Math.round(k.leadTimeDays) : dash}
+                u="j"
+                l="Lead time"
+              />
+              <Kpi v={k.avgStayNights > 0 ? k.avgStayNights : dash} u="n" l="Durée séjour" />
+              <Kpi
+                v={k.supplyGrowthPct !== 0 ? `${k.supplyGrowthPct >= 0 ? '+' : ''}${k.supplyGrowthPct}` : dash}
+                u="%"
+                l="Croiss. offre"
+              />
+              <Kpi
+                v={k.activeListings && k.activeListings > 0 ? k.activeListings.toLocaleString('fr-FR') : dash}
+                u=""
+                l="Annonces actives"
+              />
+            </Box>
+          ) : (
+            <DataEmptyPlaceholder
+              compact
+              hint={`Actualiser le marché · ${cityName}`}
+            />
+          )}
+        </MarketFrame>
+      ) : null}
+        </>
+      ) : null}
+
+      {showListingComps ? (
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
+          gridTemplateColumns: {
+            xs: '1fr',
+            lg: variant === 'listing' ? '1fr' : '1fr 1fr',
+          },
           gap: 1.75,
+          mt: showCity ? 1.75 : 0,
         }}
       >
         <MarketFrame
@@ -348,9 +406,10 @@ export default function MarketCharts(props: MarketChartsProps) {
           )}
         </MarketFrame>
 
+        {variant === 'full' ? (
         <MarketFrame
           title={`Marché · ${cityName}`}
-          subtitle="KPIs agrégés · POST /markets/summary"
+          subtitle="Indicateurs agrégés de la ville"
           badge="Ville"
         >
           {hasData ? (
@@ -385,11 +444,13 @@ export default function MarketCharts(props: MarketChartsProps) {
           ) : (
             <DataEmptyPlaceholder
               compact
-              hint={`⟳ Modal · Actualiser le marché · ${cityName}`}
+              hint={`Actualiser le marché · ${cityName}`}
             />
           )}
         </MarketFrame>
+        ) : null}
       </Box>
+      ) : null}
     </Box>
   );
 }

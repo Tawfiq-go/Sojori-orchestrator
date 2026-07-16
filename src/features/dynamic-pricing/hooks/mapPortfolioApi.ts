@@ -3,6 +3,8 @@ import type { MarketCityKpis, PortfolioZoneStats } from '../PortfolioView';
 import type { PortfolioMacro, PortfolioRow, Listing } from '../_tokens';
 import type { PortfolioApiResponse, PortfolioListingDto } from '../../../services/dynamicPricingApi';
 import { isExploitableListing } from '../listingFilters';
+import { chartsFromApi } from '../utils/extractMarketChartsFromApi';
+import type { SeasonalityPoint, PacingPoint, SupplyGrowthPoint } from '../bien/MarketCharts';
 
 const USD_TO_MAD = 10;
 
@@ -67,6 +69,13 @@ export function mapPortfolioApiToView(data: PortfolioApiResponse): {
   zoneStats: Record<string, PortfolioZoneStats>;
   mapPins: PortfolioMapPin[];
   rows: PortfolioRow[];
+  marketCache?: PortfolioApiResponse['marketCache'];
+  marketCharts: {
+    seasonality: SeasonalityPoint[];
+    pacing: PacingPoint[];
+    supplyGrowth: SupplyGrowthPoint[];
+    hasCharts: boolean;
+  };
 } {
   const rows = data.listings
     .filter((l) => l.active !== false && isExploitableListing(l.name))
@@ -110,5 +119,6 @@ export function mapPortfolioApiToView(data: PortfolioApiResponse): {
     mapPins,
     rows,
     marketCache: data.marketCache,
+    marketCharts: chartsFromApi(data.marketCharts),
   };
 }

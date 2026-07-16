@@ -36,7 +36,7 @@ export default function MarketCityBand({ city, hasData = false, fetchedAt }: Mar
           fontSize: 10.5, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
           color: T.gold, textTransform: 'uppercase', letterSpacing: '0.10em',
         }}>MARCHÉ · {city.cityName.toUpperCase()}</Typography>
-        <Tooltip title="Données marché markets/summary + metrics/all + future/pacing" arrow>
+        <Tooltip title="Indicateurs agrégés du marché ville (cache actualisé via données marché)" arrow>
           <Box sx={{
             width: 16, height: 16, borderRadius: '50%',
             bgcolor: 'rgba(244,207,94,0.15)', color: T.gold,

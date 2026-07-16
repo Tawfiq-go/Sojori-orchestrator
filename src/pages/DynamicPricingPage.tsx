@@ -340,6 +340,7 @@ export function DynamicPricingPage() {
                 loading={portfolio.loading}
                 marketFromCache={Boolean(portfolio.marketCache?.hasCity)}
                 marketFetchedAt={portfolio.marketCache?.fetchedAt ?? null}
+                marketCharts={portfolio.marketCharts}
                 onDrillDown={(id) => navigate(bienHref(id, cityScope))}
                 onPatchPilotConfig={patchPilotConfig}
                 onBulkAction={async (action, ids) => {

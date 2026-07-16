@@ -36,6 +36,12 @@ const EMPTY_PORTFOLIO: PortfolioMockData = {
   zoneStats: {},
   mapPins: [],
   rows: [],
+  marketCharts: {
+    seasonality: [],
+    pacing: [],
+    supplyGrowth: [],
+    hasCharts: false,
+  },
 };
 
 export function usePortfolio(

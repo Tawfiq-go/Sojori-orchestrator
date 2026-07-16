@@ -4,7 +4,7 @@ import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
 import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
-import ConversationDetails from '../unified-inbox/ConversationDetails';
+import BookingDemandDetail from './BookingDemandDetail';
 import AISuggestionModal from './AISuggestionModal';
 import {
   type BookingInboxExchange,
@@ -64,6 +64,7 @@ function enrichBookingMessages(
       contentType: isAudio ? 'audio' : msg.contentType,
       audioUrl: audioKey ? audioUrls[audioKey] || null : null,
       audioCaption: ex.transcript || ex.summary || null,
+      bookingExchangeIndex: exchangeIdx,
     };
   });
 }
@@ -82,6 +83,8 @@ export default function BookingWhatsAppTabV2() {
   const [recording, setRecording] = useState(false);
   const [sendingVoice, setSendingVoice] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [selectedExchangeIdx, setSelectedExchangeIdx] = useState<number | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const objectUrlsRef = useRef<string[]>([]);
@@ -147,6 +150,8 @@ export default function BookingWhatsAppTabV2() {
   const selectConversation = async (conv: Conversation) => {
     setActive(conv);
     setComposerDraft('');
+    setSelectedExchangeIdx(null);
+    setSelectedMessageId(null);
     setLoadingMessages(true);
     setAudioUrls({});
     try {
@@ -154,6 +159,17 @@ export default function BookingWhatsAppTabV2() {
       const exchanges = res.data.exchanges || [];
       setMessages(exchanges);
       void hydrateAudio(exchanges);
+      // Auto-focus first client demande with audit or audio
+      const sorted = [...exchanges].sort(
+        (a, b) =>
+          new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime(),
+      );
+      const firstDemand = sorted.findIndex(
+        (e) =>
+          Boolean(e.user_message?.trim()) &&
+          (Boolean(e.search_audit) || e.type === 'audio' || Boolean(e.transcript)),
+      );
+      if (firstDemand >= 0) setSelectedExchangeIdx(firstDemand);
     } catch {
       setMessages([]);
     } finally {
@@ -286,6 +302,15 @@ export default function BookingWhatsAppTabV2() {
     [messages, audioUrls],
   );
 
+  const selectedExchange = useMemo(() => {
+    if (selectedExchangeIdx == null) return null;
+    const sorted = [...messages].sort(
+      (a, b) =>
+        new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime(),
+    );
+    return sorted[selectedExchangeIdx] || null;
+  }, [messages, selectedExchangeIdx]);
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -369,6 +394,13 @@ export default function BookingWhatsAppTabV2() {
               onRecordVoice={() => void handleRecordVoice()}
               recordingVoice={recording}
               sendingVoice={sendingVoice}
+              selectedMessageId={selectedMessageId}
+              onSelectMessage={(msg) => {
+                setSelectedMessageId(String(msg.id));
+                if (typeof msg.bookingExchangeIndex === 'number') {
+                  setSelectedExchangeIdx(msg.bookingExchangeIndex);
+                }
+              }}
             />
             {voiceError && (
               <Typography
@@ -383,7 +415,7 @@ export default function BookingWhatsAppTabV2() {
                 {voiceError}
               </Typography>
             )}
-            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
               {conversationTags.length > 0 && (
                 <Stack
                   direction="row"
@@ -407,7 +439,11 @@ export default function BookingWhatsAppTabV2() {
                   ))}
                 </Stack>
               )}
-              <ConversationDetails thread={activeThread} type="guest" />
+              <BookingDemandDetail
+                exchange={selectedExchange}
+                phone={active?.phone}
+                language={active?.language}
+              />
             </Box>
           </>
         ) : (
