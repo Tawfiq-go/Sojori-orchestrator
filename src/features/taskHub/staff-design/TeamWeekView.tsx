@@ -88,11 +88,13 @@ function pivotTasks(listings: PlanningListingRow[], dayMin: string, dayMax: stri
         const day = format(dt, 'yyyy-MM-dd');
         if (day < dayMin || day > dayMax) continue;
         const data = (it.data || {}) as Record<string, unknown>;
+        // Minuit UTC = tâche planifiée à la journée : pas d'heure à afficher.
+        const dayLevel = dt.getUTCHours() === 0 && dt.getUTCMinutes() === 0;
         out.push({
           taskId: data.taskId ? String(data.taskId) : null,
           reservationId: resa.reservationId,
           day,
-          time: format(dt, 'HH:mm'),
+          time: dayLevel ? '' : format(dt, 'HH:mm'),
           label: taskLabel(String(it.category || it.type || '')),
           kind: taskKind(String(it.type || '')),
           listingName: listing.listingName || 'Sans nom',
@@ -289,7 +291,8 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
       title={`${t.label} · ${t.listingName}${t.guestName ? ` · ${t.guestName}` : ''}${t.done ? ' · terminée' : ''}${!t.staffId ? ' — cliquer pour assigner' : ''}`}
       onClick={(e) => onChipClick(t, e)}
     >
-      <span className="twv-chip-time">{t.time}</span> {t.label}
+      {t.time && <span className="twv-chip-time">{t.time} </span>}
+      {t.label}
       <span className="twv-chip-listing">{t.listingName}</span>
     </button>
   );
