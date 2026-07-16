@@ -23,9 +23,16 @@ import { ownerDisplayNameFromId } from '../utils/ownerDisplay.utils';
 import { filterStaffSelectableCities } from '../features/taskHub/staff-design/staffActiveCities';
 import { ONBOARDING_LEGACY_TAB } from '../utils/teamUrlUtils';
 import { PM_ONBOARDING_WIZARD_PATH } from '../features/onboarding/wizardNavigation';
+import TeamWeekView from '../features/taskHub/staff-design/TeamWeekView';
 import './tasksTeamPage.css';
 
-type HubTab = 'equipe' | 'admin';
+type HubTab = 'planning' | 'equipe' | 'admin';
+
+function hubTabFromParam(tab: string | null): HubTab {
+  if (tab === 'admin') return 'admin';
+  if (tab === 'annuaire') return 'equipe';
+  return 'planning';
+}
 
 type ListingWithOwner = { id: string; name: string; ownerId?: string; ownerName?: string; cityId?: string };
 type CityOption = { id: string; name: string };
@@ -76,9 +83,7 @@ function TasksStaffFulltaskPageInner() {
     [scope.canAccessAllOwners, scope.ownerId, requestOwnerId],
   );
 
-  const [hubTab, setHubTab] = useState<HubTab>(() =>
-    searchParams.get('tab') === 'admin' ? 'admin' : 'equipe',
-  );
+  const [hubTab, setHubTab] = useState<HubTab>(() => hubTabFromParam(searchParams.get('tab')));
   const [staff, setStaff] = useState<Staff[]>([]);
   const [admins, setAdmins] = useState<WhatsappAdminDesign[]>([]);
   const [listings, setListings] = useState<ListingWithOwner[]>([]);
@@ -225,6 +230,7 @@ function TasksStaffFulltaskPageInner() {
     setHubTab(tab);
     const next = new URLSearchParams(searchParams);
     if (tab === 'admin') next.set('tab', 'admin');
+    else if (tab === 'equipe') next.set('tab', 'annuaire');
     else next.delete('tab');
     const qs = next.toString();
     navigate(qs ? `/tasks/team?${qs}` : '/tasks/team', { replace: true });
@@ -232,8 +238,7 @@ function TasksStaffFulltaskPageInner() {
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'admin') setHubTab('admin');
-    else if (tab !== ONBOARDING_LEGACY_TAB && tab !== 'setup') setHubTab('equipe');
+    if (tab !== ONBOARDING_LEGACY_TAB && tab !== 'setup') setHubTab(hubTabFromParam(tab));
   }, [searchParams]);
 
   return (
@@ -243,10 +248,17 @@ function TasksStaffFulltaskPageInner() {
         <div className="tasks-team-tabs">
           <button
             type="button"
+            className={`tasks-team-tab${hubTab === 'planning' ? ' on' : ''}`}
+            onClick={() => selectTab('planning')}
+          >
+            Planning équipe
+          </button>
+          <button
+            type="button"
             className={`tasks-team-tab${hubTab === 'equipe' ? ' on' : ''}`}
             onClick={() => selectTab('equipe')}
           >
-            Équipe terrain
+            Annuaire
           </button>
           <button
             type="button"
@@ -257,7 +269,16 @@ function TasksStaffFulltaskPageInner() {
           </button>
         </div>
 
-        {hubTab === 'equipe' ? (
+        {hubTab === 'planning' && (
+          <TeamWeekView
+            staff={staff}
+            filterOwnerId={filterOwnerId}
+            ownerOptions={ownerOptions}
+            onOpenStaff={() => selectTab('equipe')}
+          />
+        )}
+
+        {hubTab === 'equipe' && (
           <StaffPageView
             staff={staff}
             listings={listings}
@@ -318,7 +339,9 @@ function TasksStaffFulltaskPageInner() {
               }
             }}
           />
-        ) : (
+        )}
+
+        {hubTab === 'admin' && (
           <WhatsappAdminPageView
             admins={admins}
             listings={listings}
