@@ -48,10 +48,13 @@ export default function CalendarInventoryPage({
   const viewFromUrl = searchParams.get('view') === 'simple' ? 'simple' : 'multi';
 
   const [view, setViewState] = useState(viewFromUrl || defaultView);
+  /** Vue simple : aucun listing auto — l'utilisateur doit choisir. */
+  const [selectedListingId, setSelectedListingId] = useState(null);
   const setView = useCallback(
     (next) => {
       const v = next === 'simple' ? 'simple' : 'multi';
       setViewState(v);
+      if (v === 'simple') setSelectedListingId(null);
       setSearchParams(
         (prev) => {
           const p = new URLSearchParams(prev);
@@ -66,9 +69,9 @@ export default function CalendarInventoryPage({
 
   useEffect(() => {
     setViewState(viewFromUrl);
+    if (viewFromUrl === 'simple') setSelectedListingId(null);
   }, [viewFromUrl]);
 
-  const [selectedListingId, setSelectedListingId] = useState(listings[0]?._id);
   const [selectedColumns, setSelectedColumns] = useState(['availableRoom', 'rate']);
   const [pivotDate, setPivotDate] = useState(() => startOfDay(startDate));
   const [modalCells, setModalCells] = useState(null);
@@ -95,8 +98,14 @@ export default function CalendarInventoryPage({
   }, [limitHint]);
 
   useEffect(() => {
-    if (listings.length > 0 && !selectedListingId) {
-      setSelectedListingId(listings[0]._id);
+    // Vue simple : pas de listing auto — l'utilisateur doit choisir.
+    // Si le listing sélectionné disparaît du catalogue, on reset.
+    if (
+      selectedListingId &&
+      listings.length > 0 &&
+      !listings.some((l) => String(l._id) === String(selectedListingId))
+    ) {
+      setSelectedListingId(null);
     }
   }, [listings, selectedListingId]);
 
@@ -359,23 +368,24 @@ export default function CalendarInventoryPage({
           </span>
         )}
 
-        {view === 'simple' && selectedListing && (
+        {view === 'simple' && (
           <select
-            value={selectedListingId}
-            onChange={(e) => setSelectedListingId(e.target.value)}
+            value={selectedListingId || ''}
+            onChange={(e) => setSelectedListingId(e.target.value || null)}
             style={{
               padding: '7px 12px',
               background: T.bg1,
-              border: `1px solid ${T.border}`,
+              border: `1px solid ${selectedListingId ? T.border : T.gold}`,
               borderRadius: 9,
               font: 'inherit',
               fontSize: 12.5,
-              color: T.text,
+              color: selectedListingId ? T.text : T.text3,
               fontWeight: 600,
               cursor: 'pointer',
-              minWidth: 200,
+              minWidth: 220,
             }}
           >
+            <option value="">Choisir un listing…</option>
             {listings.map((l) => (
               <option key={l._id} value={l._id}>
                 {l.name}
@@ -452,12 +462,12 @@ export default function CalendarInventoryPage({
         >
           <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 8 }}>
-            Aucun listing sélectionné
+            Choisissez un listing
           </div>
           <div style={{ fontSize: 13, color: T.text3 }}>
             {listings.length === 0
               ? 'Aucun listing disponible. Veuillez ajouter des propriétés.'
-              : 'Veuillez sélectionner un listing dans le menu déroulant ci-dessus.'}
+              : 'Sélectionnez un listing dans le menu déroulant ci-dessus pour afficher le calendrier.'}
           </div>
         </div>
       )}
