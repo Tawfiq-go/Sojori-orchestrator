@@ -8,6 +8,30 @@ import type { Conversation, MessageExchange } from '../types/messages.types';
 
 const BASE = '/api/v1/admin/channels-dashboard/booking-inbox';
 
+export type BookingSearchAudit = {
+  transcript?: string;
+  criteria: {
+    city?: string;
+    checkIn?: string;
+    checkOut?: string;
+    adults?: number;
+    children?: number;
+    guests?: number;
+    budget?: string;
+    amenities?: string[];
+    language?: string;
+  };
+  resultCount: number;
+  results: Array<{
+    id: string;
+    title: string;
+    nightly?: number;
+    city?: string;
+    neighborhood?: string;
+  }>;
+  at?: string;
+};
+
 export type BookingInboxExchange = MessageExchange & {
   id?: string;
   transcript?: string;
@@ -18,6 +42,7 @@ export type BookingInboxExchange = MessageExchange & {
   /** Bytes audio persistés côté serveur — rejouable même si Meta a expiré */
   audio_stored?: boolean;
   tags?: string[];
+  search_audit?: BookingSearchAudit;
 };
 
 type ThreadRow = {

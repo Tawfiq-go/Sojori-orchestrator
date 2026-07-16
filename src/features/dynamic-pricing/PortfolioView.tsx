@@ -1,18 +1,18 @@
 // ════════════════════════════════════════════════════════════════════
-// PortfolioView.tsx — vue portefeuille (38 biens · drill-down)
-//
-// Compose : MacroKpis · MarketCityBand · PortfolioMap · BulkActionsPanel · PortfolioTable
+// PortfolioView.tsx — portefeuille compact : villes → tableau (carte si ville)
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Box, Stack, Typography, Skeleton, Tooltip } from '@mui/material';
+import { Box, Stack, Typography, Tooltip } from '@mui/material';
 import type { PilotPricingConfigDto } from '../../services/dynamicPricingApi';
 import DynamicPriceScopeModal from './bien/DynamicPriceScopeModal';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { T, KEYFRAMES, fmtMADCompact } from './_tokens';
 import type { Listing, PortfolioRow, PortfolioMacro } from './_tokens';
 import MarketCityBand from './MarketCityBand';
+import MarketCharts from './bien/MarketCharts';
 import PortfolioMap from './PortfolioMap';
 import type { PortfolioMapPin } from './PortfolioMap';
+import type { SeasonalityPoint, PacingPoint, SupplyGrowthPoint, MarketKpis } from './bien/MarketCharts';
 import {
   AIRROI_RAW_COLUMNS,
   AIRROI_RAW_TABLE_INTRO,
@@ -20,18 +20,14 @@ import {
   getOperationalSnapshotColumns,
   type AirroiColumnDef,
 } from './airroiRawColumns';
-import { DataSourceLegend, SectionSourceBar } from './DataSourceBadges';
 import PortfolioCityScopeBar from './PortfolioCityScopeBar';
-import PortfolioDataMaturityCard from './PortfolioDataMaturityCard';
 import {
   buildCityScopeOptions,
   computeCityScopeStats,
   listingMatchesCityScope,
   marketBandAppliesToCityScope,
-  MARKET_CACHE_CITY,
 } from './cityScope';
 import {
-  computeDataMaturity,
   DATA_GAP_LABELS,
   getDataGapReason,
   isExploitableListing,
@@ -70,7 +66,7 @@ export interface PortfolioZoneStats {
 /* ─── Props ─── */
 export type BulkAction =
   | 'activate-ai' | 'deactivate-ai'
-  | { type: 'set-mode'; mode: PricingMode }
+  | { type: 'set-mode'; mode: 'prudent' | 'equilibre' | 'agressif' }
   | { type: 'set-bounds-default' }
   | 'apply-to-calendar' | 'export-csv';
 
@@ -81,6 +77,13 @@ interface Props {
   /** Dernier refresh marché Marrakech (si cache Mongo) */
   marketFromCache?: boolean;
   marketFetchedAt?: string | null;
+  /** Graphiques ville (saisonnalité / pacing / offre) — affichés si filtre ville */
+  marketCharts?: {
+    seasonality: SeasonalityPoint[];
+    pacing: PacingPoint[];
+    supplyGrowth: SupplyGrowthPoint[];
+    hasCharts?: boolean;
+  };
   /** NOUVEAU : KPIs par zone pour le tooltip carte au hover */
   zoneStats: Record<string, PortfolioZoneStats>;
   /** Pins biens pré-mappés (taille = potentiel, couleur = perf vs potentiel) */
@@ -103,6 +106,7 @@ export default function PortfolioView({
   onCityScopeChange,
   marketFromCache = false,
   marketFetchedAt = null,
+  marketCharts,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exploitableOnly, setExploitableOnly] = useState(true);
@@ -161,11 +165,6 @@ export default function PortfolioView({
   }, [scopedRows, exploitableOnly]);
   const displayStats = useMemo(() => computeCityScopeStats(displayRows), [displayRows]);
 
-  const dataMaturity = useMemo(
-    () => computeDataMaturity(scopedRows, marketFromCache, cityScope),
-    [scopedRows, marketFromCache, cityScope],
-  );
-
   const todoRowsCount = useMemo(
     () => displayRows.filter((r) => rowMatchesTableTab(r, 'todo')).length,
     [displayRows],
@@ -186,27 +185,9 @@ export default function PortfolioView({
     return true;
   }), [displayRows, tableTab, airbnbOnly, search]);
 
-  const latestSnapshotAt = useMemo(() => {
-    let max = 0;
-    for (const r of rows) {
-      if (!r.airroiSnapshotAt) continue;
-      const t = new Date(r.airroiSnapshotAt).getTime();
-      if (!Number.isNaN(t) && t > max) max = t;
-    }
-    return max > 0 ? new Date(max).toISOString() : null;
-  }, [rows]);
-
-  const scopedMacro = useMemo((): PortfolioMacro => ({
-    ...macro,
-    totalListings: displayRows.length,
-    realizedTtmMad: displayStats.ttmRevenueUsd,
-  }), [macro, displayRows.length, displayStats.ttmRevenueUsd]);
-
   return (
     <Box>
       <style>{KEYFRAMES}</style>
-
-      <DataSourceLegend />
 
       <PortfolioCityScopeBar
         options={cityScopeOptions}
@@ -215,81 +196,63 @@ export default function PortfolioView({
         stats={displayStats}
         globalTotal={rows.length}
         loading={loading}
+        todoCount={todoRowsCount}
       />
 
-      <PortfolioDataMaturityCard
-        maturity={dataMaturity}
-        cityLabel={cityScope}
-        loading={loading}
-      />
-
-      {/* ─── Rangée 1 · 4 macros KPIs (MES biens) ─── */}
-      <SectionSourceBar
-        compact
-        items={[
-          { kind: 'prod', label: 'PROD', tooltip: 'srv-listing — tous les biens actifs' },
-        ]}
-        note="Rechargé à chaque ouverture — pas d’appel marché automatique"
-      />
-      <MacroKpisTest macro={scopedMacro} rows={displayRows} loading={loading} cityLabel={cityScope} />
-
-      {/* ─── Bande marché ville (Marrakech uniquement quand filtre ville = Marrakech) ─── */}
       {showMarketBand ? (
-        <>
-          <SectionSourceBar
-            compact
-            items={[
-              marketFromCache
-                ? { kind: 'prod', label: 'PROD', tooltip: 'MarketDataSnapshot Mongo après refresh marché' }
-                : { kind: 'empty', label: 'VIDE', tooltip: `Lancer « Actualiser marché ${MARKET_CACHE_CITY} » dans ⟳` },
-            ]}
-            snapshotAt={marketFetchedAt}
-            snapshotLabel="Cache marché"
-            note={`Cache marché · ${cityScope}`}
-          />
+        <Box sx={{ mb: 2 }}>
           <MarketCityBand city={cityKpis} hasData={marketFromCache} fetchedAt={marketFetchedAt} />
-        </>
+          {(marketCharts?.hasCharts || marketFromCache) ? (
+            <Box sx={{ mt: 1.75 }}>
+              <MarketCharts
+                variant="city"
+                cityName={cityScope ?? cityKpis.cityName}
+                kpis={{
+                  occupancyAvg: cityKpis.occupancyAvg24m,
+                  adrMedianDistrict: cityKpis.adrMedianCity,
+                  adrMedianCity: cityKpis.adrMedianCity,
+                  supplyGrowthPct: cityKpis.supplyGrowthPct,
+                  leadTimeDays: cityKpis.bookingLeadTimeDays ?? 0,
+                  avgStayNights: cityKpis.avgStayNightsCity ?? 0,
+                  activeListings: cityKpis.activeListingsCount,
+                } satisfies MarketKpis}
+                seasonality={marketCharts?.seasonality ?? []}
+                pacing={marketCharts?.pacing ?? []}
+                supplyGrowth={marketCharts?.supplyGrowth ?? []}
+                hasData={marketFromCache}
+                hasCharts={Boolean(marketCharts?.hasCharts)}
+              />
+            </Box>
+          ) : null}
+        </Box>
       ) : null}
 
-      {cityScope ? (
-        <>
-          <SectionSourceBar
-            compact
-            items={[
-              { kind: 'prod', label: 'PROD', tooltip: 'Pins si lat/lng marché ou Sojori' },
-              { kind: 'empty', label: 'VIDE', tooltip: 'Pas de pin sans coordonnées' },
-            ]}
-            snapshotAt={latestSnapshotAt}
-            snapshotLabel="Dernier snapshot (max. biens)"
+      {cityScope && scopedPins.length > 0 ? (
+        <Box sx={{ mb: 2 }}>
+          <PortfolioMap
+            pins={scopedPins}
+            zoneStats={zoneStats}
+            cityLabel={cityScope}
+            onPinClick={onDrillDown}
           />
-          <Box sx={{
-            display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 480px' },
-            gap: 2, mb: 2.25,
-          }}>
-            <PortfolioMap
-              pins={scopedPins}
-              zoneStats={zoneStats}
-              cityLabel={cityScope}
-              onPinClick={onDrillDown}
-            />
-            <BulkActionsPanel
-              selectedCount={selectedIds.length}
-              aiOpportunityMad={macro.aiOpportunityMad}
-              aiOffCount={macro.totalListings - macro.aiEnabledCount}
-              showAiHint={macro.aiOpportunityMad > 0}
-              onAction={(a) => onBulkAction(a, selectedIds)}
-            />
-          </Box>
-        </>
+          {selectedIds.length > 0 ? (
+            <Box sx={{ mt: 1.25 }}>
+              <BulkActionsPanel
+                selectedCount={selectedIds.length}
+                aiOpportunityMad={macro.aiOpportunityMad}
+                aiOffCount={macro.totalListings - macro.aiEnabledCount}
+                showAiHint={false}
+                onAction={(a) => onBulkAction(a, selectedIds)}
+              />
+            </Box>
+          ) : null}
+        </Box>
       ) : null}
 
-      {/* ─── Table ─── */}
       {!loading && displayRows.length > 0 && filtered.length === 0 ? (
-        <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1.5, bgcolor: T.warningTint, border: `1px solid ${T.border}` }}>
-          <Typography sx={{ fontSize: 12.5, color: T.text2 }}>
-            Aucun bien ne correspond aux filtres ({displayRows.length} dans {cityScope ?? 'toutes villes'}
-            {exploitableOnly ? ', exploitables uniquement' : ''}).
-            Désactivez les filtres actifs ou élargissez la recherche.
+        <Box sx={{ mb: 1.5, p: 1.25, borderRadius: 1.25, bgcolor: T.warningTint, border: `1px solid ${T.border}` }}>
+          <Typography sx={{ fontSize: 12, color: T.text2 }}>
+            Aucun bien pour ces filtres — élargissez la recherche ou l’onglet.
           </Typography>
         </Box>
       ) : null}
@@ -345,94 +308,6 @@ export default function PortfolioView({
           }
         }}
       />
-    </Box>
-  );
-}
-
-/* ════════════════════════ MacroKpis (mode test brut marché) ════════════════════════ */
-function MacroKpisTest({
-  macro, rows, loading, cityLabel,
-}: { macro: PortfolioMacro; rows: PortfolioRow[]; loading?: boolean; cityLabel?: string | null }) {
-  if (loading) {
-    return (
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, mb: 2.25 }}>
-        {[1, 2, 3, 4].map(i => <Skeleton key={i} variant="rounded" height={100} sx={{ borderRadius: 1.75 }} />)}
-      </Box>
-    );
-  }
-  const withSnap = rows.filter(r => r.hasAirroiSnapshot).length;
-  const withAirbnb = rows.filter(r => r.listing.airbnbConnected).length;
-  return (
-    <Box sx={{
-      display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
-      gap: 2, mb: 2.25, animation: 'sj-fadeIn 0.4s',
-    }}>
-      <MacroCard label="BIENS SOJORI" emoji="🏠" value={String(macro.totalListings)}
-        ctx={<>{cityLabel ? `Vue ${cityLabel}` : 'Toutes villes'} · hors staging</>} />
-      <MacroCard label="CANAL" emoji="🔗" value={String(withAirbnb)}
-        ctx={<>Prêts pour refresh marché</>} />
-      <MacroCard label="SNAPSHOTS" emoji="💾" value={String(withSnap)}
-        ctx={<>Données brutes en base (channels)</>} />
-      <MacroCard label="Σ ttm_revenue (USD)" emoji="📊"
-        value={macro.realizedTtmMad > 0 ? macro.realizedTtmMad.toLocaleString('fr-FR') : '—'}
-        ctx={<>Somme brute des biens avec snapshot</>} />
-    </Box>
-  );
-}
-
-function MacroCard({ label, emoji, value, ctx, trend, progress }: {
-  label: string; emoji: string; value: string;
-  ctx: React.ReactNode; trend?: { pts: number; label: string }; progress?: number;
-}) {
-  return (
-    <Box sx={{
-      background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
-      p: 2.25, position: 'relative', overflow: 'hidden',
-      boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
-      '&::before': {
-        content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-        background: `linear-gradient(90deg, ${T.gold}, ${T.goldSoft})`,
-      },
-    }}>
-      <Stack direction="row" sx={{ alignItems: 'center', gap: 0.875, 
-        fontSize: 10, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
-        color: T.text3, textTransform: 'uppercase', letterSpacing: '0.08em', mb: 1.25,
-      }}>
-        <Box component="span" sx={{ fontSize: 12, letterSpacing: 0 }}>{emoji}</Box>
-        {label}
-      </Stack>
-      <Typography sx={{
-        fontFamily: '"Geist Mono", monospace', fontSize: 28, fontWeight: 800,
-        letterSpacing: '-0.03em', lineHeight: 1,
-      }}>{value}</Typography>
-      <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.75 }}>{ctx}</Typography>
-      {trend && (
-        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5, 
-          mt: 1, display: 'inline-flex', fontSize: 10.5, fontFamily: '"Geist Mono", monospace',
-          fontWeight: 700, px: 1, py: 0.25, borderRadius: 999,
-          color: trend.pts >= 0 ? T.success : T.error,
-          background: trend.pts >= 0 ? T.successTint : T.errorTint,
-        }}>{trend.pts >= 0 ? '↗' : '↘'} {trend.pts > 0 ? '+' : ''}{trend.pts} pts {trend.label}</Stack>
-      )}
-      {progress != null && (
-        <Box sx={{ mt: 1.25 }}>
-          <Box sx={{ height: 6, background: T.bg3, borderRadius: 999, overflow: 'hidden' }}>
-            <Box sx={{
-              height: '100%', width: `${progress}%`,
-              background: `linear-gradient(90deg, ${T.gold}, ${T.goldDeep})`,
-              backgroundSize: '200% 100%', animation: 'sj-shimmer 2s infinite linear',
-            }} />
-          </Box>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', 
-            fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace',
-            mt: 0.625, fontWeight: 700, letterSpacing: '0.02em',
-          }}>
-            <span>0</span>
-            <span style={{ color: T.goldDeep }}>{progress}%</span>
-            <span>100%</span>
-          </Stack>
-        </Box>
-      )}
     </Box>
   );
 }
@@ -494,8 +369,8 @@ function BulkActionsPanel({ selectedCount, aiOpportunityMad, aiOffCount, showAiH
 
         <BulkSection label="🎯 APPLIQUER UN MODE">
           <BulkBtn emoji="🛡" onClick={() => onAction({ type: 'set-mode', mode: 'prudent' })}>Prudent</BulkBtn>
-          <BulkBtn emoji="⚖" onClick={() => onAction({ type: 'set-mode', mode: 'balanced' })}>Équilibré</BulkBtn>
-          <BulkBtn emoji="🚀" onClick={() => onAction({ type: 'set-mode', mode: 'aggressive' })}>Agressif</BulkBtn>
+          <BulkBtn emoji="⚖" onClick={() => onAction({ type: 'set-mode', mode: 'equilibre' })}>Équilibré</BulkBtn>
+          <BulkBtn emoji="🚀" onClick={() => onAction({ type: 'set-mode', mode: 'agressif' })}>Agressif</BulkBtn>
         </BulkSection>
 
         <BulkSection label="💰 BORNES PAR DÉFAUT">
@@ -584,10 +459,10 @@ function PortfolioTable({
   );
   const tabNote =
     tableTab === 'audit'
-      ? 'Toutes les colonnes brutes snapshot (USD)'
+      ? 'Colonnes brutes estimation marché'
       : tableTab === 'todo'
-        ? 'Biens sans annonce connectée ou sans snapshot ⟳'
-        : 'Vue synthèse · statut données par bien';
+        ? 'Annonce ou estimation manquante'
+        : 'Statut par bien';
 
   return (
     <Box sx={{
@@ -673,13 +548,7 @@ function PortfolioTable({
               onClick={() => setShowAllSnapshotKpis((v) => !v)}
               activeVariant="gold"
             >
-              Tous les KPI snapshot
-              <Box component="span" sx={{
-                fontFamily: '"Geist Mono", monospace', fontSize: 10, fontWeight: 800,
-                color: showAllSnapshotKpis ? T.goldDeep : T.text3,
-              }}>
-                {showAllSnapshotKpis ? 'ON' : `${snapshotCols.length} cols`}
-              </Box>
+              Plus de colonnes
             </FilterChip>
           ) : null}
           <FilterChip
@@ -704,21 +573,8 @@ function PortfolioTable({
         </Stack>
       </Stack>
 
-      <Box sx={{ px: '18px', py: 1, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
-        <SectionSourceBar
-          compact
-          items={[
-            { kind: 'prod', label: 'Sojori · canal', tooltip: 'Colonnes Bien + Canal (srv-listing)' },
-            tableTab === 'audit'
-              ? {
-                  kind: 'prod',
-                  label: 'Colonnes snapshot',
-                  tooltip: 'ListingPerformanceSnapshot — voir colonne Snapshot pour la date par bien',
-                }
-              : { kind: 'prod', label: 'Synthèse', tooltip: tabNote },
-          ]}
-          note={tabNote}
-        />
+      <Box sx={{ px: '18px', py: 0.75, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
+        <Typography sx={{ fontSize: 11.5, color: T.text3 }}>{tabNote}</Typography>
       </Box>
 
       <Box sx={{ overflowX: 'auto' }}>
@@ -768,14 +624,14 @@ function PortfolioTable({
                 <Box component="th" sx={tableHeadSx(T.text3)}>Statut</Box>
                 <Box component="th" sx={tableHeadSx(T.text3)}>Canal</Box>
                 <SnapshotHeaderCell
-                  label="Snapshot"
-                  hintTitle="Prix estimés · création"
-                  hintBody="Date de création du snapshot de prix estimés du marché pour ce bien."
+                  label="Estimation"
+                  hintTitle="Estimation prix de marché"
+                  hintBody="Date de la dernière estimation prix de marché pour ce bien."
                 />
                 <SnapshotHeaderCell
                   label="Calendrier"
                   hintTitle="Calendrier · mise à jour"
-                  hintBody="Dernière application des prix au calendrier Sojori (propagation manuelle ou nocturne)."
+                  hintBody="Dernière application des prix au calendrier Sojori (manuelle ou nocturne)."
                 />
                 <SnapshotHeaderCell
                   label="Publié OTA"

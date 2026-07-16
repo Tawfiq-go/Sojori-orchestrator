@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { MarketCityKpis, PortfolioZoneStats } from '../PortfolioView';
 import type { PortfolioMapPin } from '../PortfolioMap';
 import type { PortfolioMacro, PortfolioRow } from '../_tokens';
+import type { SeasonalityPoint, PacingPoint, SupplyGrowthPoint } from '../bien/MarketCharts';
 import {
   buildCityKpis,
   buildMapPins,
@@ -16,6 +17,12 @@ export interface PortfolioMockData {
   zoneStats: Record<string, PortfolioZoneStats>;
   mapPins: PortfolioMapPin[];
   rows: PortfolioRow[];
+  marketCharts?: {
+    seasonality: SeasonalityPoint[];
+    pacing: PacingPoint[];
+    supplyGrowth: SupplyGrowthPoint[];
+    hasCharts: boolean;
+  };
 }
 
 export function usePortfolioMock(): PortfolioMockData {

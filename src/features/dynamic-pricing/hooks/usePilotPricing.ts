@@ -99,7 +99,7 @@ function buildConfigPayload(
         startDate,
         endDate,
         eventKind: e.kind,
-        eventFloorMad: isPercent ? 0 : e.fixedPrice,
+        eventFloorMad: isPercent ? 0 : Math.max(0, Number(e.fixedPrice) || 0),
         eventMarketPercent: isPercent ? e.marketPercent : undefined,
         minNightsOverride: e.minNights > 0 ? e.minNights : undefined,
       };

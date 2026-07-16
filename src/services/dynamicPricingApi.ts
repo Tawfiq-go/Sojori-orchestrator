@@ -448,9 +448,41 @@ export async function previewPilotPricing(
   }>(`${BASE}/listings/${encodeURIComponent(listingId)}/preview`, config ? { config } : {});
 }
 
+export type ApplyNarrativeDto = {
+  steps: Array<{ n: number; title: string; detail: string }>;
+  base: {
+    source: 'estimate' | 'listing_base' | 'manual_base';
+    label: string;
+    snapshotAt: string | null;
+    manualBasePriceMad?: number;
+  };
+  mode: { label: string; multiplier: number };
+  occupancyMonths: Array<{
+    monthKey: string;
+    monthLabel: string;
+    occupancyPct: number;
+    adjustmentPct: number | null;
+    days: number;
+  }>;
+  lastMinute: {
+    enabled: boolean;
+    windowDays: number;
+    discountPct: number;
+    daysHit: number;
+    ranges: Array<{
+      startDate: string;
+      endDate: string;
+      days: number;
+      discountPct: number;
+    }>;
+  };
+  bounds: { floor: number; ceiling: number };
+  eventsCount: number;
+};
+
 export type PilotApplyReportDto = {
   mixEngineVersion: string;
-  pricingSource: 'calculator_estimate';
+  pricingSource: 'calculator_estimate' | 'listing_base' | 'manual_base';
   hasEstimate: boolean;
   estimateSnapshotAt: string | null;
   activeModeLabel: string;
@@ -505,6 +537,8 @@ export type PilotApplyReportDto = {
   roomTypesTouched?: number;
   ruPublishQueued: boolean;
   legacyEngineDisabled: boolean;
+  /** Récit cascade réelle de cet apply (persisté aussi en audit). */
+  narrative?: ApplyNarrativeDto;
 };
 
 export async function applyPilotPricing(
@@ -538,6 +572,7 @@ export type ApplyReportSummaryDto = {
   daysSkippedUnavailable?: number;
   daysPayloadMissingInventory: number;
   ruPublishQueued: boolean;
+  narrative?: ApplyNarrativeDto;
 };
 
 export type ListingApplySyncDto = {
