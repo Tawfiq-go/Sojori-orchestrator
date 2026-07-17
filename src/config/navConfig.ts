@@ -168,7 +168,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         id: 'equipe/direct-booking',
         label: 'Direct booking',
         icon: '🌐',
-        roles: [Roles.Owner],
+        roles: PM_ROLES,
         badge: 'NEW',
         description: 'Votre site de réservation sur votre propre domaine',
       },

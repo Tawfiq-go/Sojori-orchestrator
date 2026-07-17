@@ -21,6 +21,10 @@ import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { getAccounById, updateOwner } from '../features/staff/services/serverApi.task';
 import { useAuth } from '../hooks/useAuth';
+import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
+import TeamOwnerScopeBar from '../features/taskHub/staff-design/TeamOwnerScopeBar';
+import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import { hasAdminAccess } from '../utils/rbac.utils';
 
 type DirectBookingConfig = {
   enabled: boolean;
@@ -128,11 +132,15 @@ const STATUS_LABELS: Record<string, { label: string; color: 'default' | 'warning
 
 const DOMAIN_RE = /^(?!https?:\/\/)[a-z0-9.-]+\.[a-z]{2,}$/i;
 
-export default function DirectBookingConfigPage() {
+function DirectBookingConfigInner() {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const userIds = user as { _id?: string; id?: string } | null | undefined;
   const userId = String(userIds?._id || userIds?.id || '');
   const isOwner = String(user?.role || '').toLowerCase() === 'owner';
+  const isAdmin = hasAdminAccess(user?.role);
+  const { requestOwnerId } = useAdminOwnerFilter();
+  /** Owner : son compte · Admin : le PM choisi dans le filtre en haut. */
+  const targetOwnerId = isOwner ? userId : isAdmin ? String(requestOwnerId || '') : '';
 
   const [pmProfile, setPmProfile] = useState<PmProfileLite | null>(null);
   const [config, setConfig] = useState<DirectBookingConfig>({
@@ -152,14 +160,16 @@ export default function DirectBookingConfigPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!userId || !isOwner) {
+    if (!targetOwnerId) {
       setLoading(false);
+      setPmProfile(null);
       return;
     }
+    setLoading(true);
     let active = true;
     void (async () => {
       try {
-        const res = await getAccounById(userId);
+        const res = await getAccounById(targetOwnerId);
         const account = res.data?.account as { pmProfile?: PmProfileLite; email?: string } | undefined;
         if (!active) return;
         const profile = account?.pmProfile ?? {};
@@ -185,7 +195,7 @@ export default function DirectBookingConfigPage() {
     return () => {
       active = false;
     };
-  }, [userId, isOwner]);
+  }, [targetOwnerId]);
 
   const domainInvalid = config.domain.trim() !== '' && !DOMAIN_RE.test(config.domain.trim());
   const statusMeta = STATUS_LABELS[config.status] ?? STATUS_LABELS.brouillon;
@@ -198,11 +208,11 @@ export default function DirectBookingConfigPage() {
   );
 
   const handleSave = async () => {
-    if (!canSave || !userId) return;
+    if (!canSave || !targetOwnerId) return;
     setSaving(true);
     try {
       await updateOwner(
-        userId,
+        targetOwnerId,
         {
           pmProfile: {
             directBooking: {
@@ -232,6 +242,7 @@ export default function DirectBookingConfigPage() {
 
   return (
     <DashboardWrapper breadcrumb={['Équipe', 'Direct booking']}>
+      <TeamOwnerScopeBar />
       <Box sx={{ maxWidth: 780, mx: 'auto', p: { xs: 1.5, md: 3 } }}>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, mb: 0.5 }}>
           <Typography sx={{ fontSize: 22, fontWeight: 800, color: '#1a1611' }}>
@@ -251,10 +262,11 @@ export default function DirectBookingConfigPage() {
             <CircularProgress size={20} />
             <Typography sx={{ fontSize: 13, color: '#7a756c' }}>Chargement…</Typography>
           </Box>
-        ) : !isOwner ? (
+        ) : !targetOwnerId ? (
           <Alert severity="info">
-            Cette page est réservée aux comptes propriétaire (PM). La configuration d'un
-            client se gère depuis sa fiche owner.
+            {isAdmin
+              ? 'Sélectionnez un propriétaire (PM) dans le filtre en haut de page pour configurer et prévisualiser son site.'
+              : "Cette page est réservée aux comptes propriétaire (PM) et aux admins."}
           </Alert>
         ) : (
           <Stack sx={{ gap: 2 }}>
@@ -567,5 +579,14 @@ export default function DirectBookingConfigPage() {
         )}
       </Box>
     </DashboardWrapper>
+  );
+}
+
+/** Provider requis pour le filtre propriétaire (admins cross-tenant). */
+export default function DirectBookingConfigPage() {
+  return (
+    <AdminOwnerScopeLayout showTopBar={false}>
+      <DirectBookingConfigInner />
+    </AdminOwnerScopeLayout>
   );
 }
