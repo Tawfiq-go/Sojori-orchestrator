@@ -4,7 +4,7 @@
  * (srv-user), consommé par le moteur multi-tenant sojori-vente.
  * Le branding (logo, couleurs, slug) vient du profil PM existant.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
@@ -20,6 +20,8 @@ import {
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { getAccounById, updateOwner } from '../features/staff/services/serverApi.task';
+import { MICROSERVICE_BASE_URL } from '../config/authConfig';
+import { postFormDataAsMultipart } from '../utils/upload/postFormData';
 import { useAuth } from '../hooks/useAuth';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
 import TeamOwnerScopeBar from '../features/taskHub/staff-design/TeamOwnerScopeBar';
@@ -157,6 +159,33 @@ function DirectBookingConfigInner() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+
+  /** Upload du logo directement ici (pas besoin de passer par Mon profil PM) —
+   *  sauvegarde immédiate dans pmProfile.vitrineLogoUrl (utilisé par le site). */
+  const handleLogoFile = async (file: File | null) => {
+    if (!file || !targetOwnerId || uploadingLogo) return;
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append('media', file);
+      formData.append('type', 'other');
+      formData.append('name', `db-logo-${Math.random().toString(36).slice(2, 12)}`);
+      const res = await postFormDataAsMultipart(MICROSERVICE_BASE_URL.UPLOAD_IMAGE, formData, {});
+      const url = String((res as { data?: { url?: string } })?.data?.url || '');
+      if (!url) throw new Error('URL du logo manquante dans la réponse');
+      await updateOwner(targetOwnerId, { pmProfile: { vitrineLogoUrl: url } }, undefined);
+      setPmProfile((prev) => ({ ...(prev ?? {}), vitrineLogoUrl: url }));
+      toast.success('Logo mis à jour — visible sur votre site.');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      toast.error(err.response?.data?.error || err.message || 'Upload du logo impossible');
+    } finally {
+      setUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     if (!targetOwnerId) {
@@ -370,9 +399,26 @@ function DirectBookingConfigInner() {
                     Logo, couleurs et description proviennent de votre profil PM.
                   </Typography>
                 </Box>
-                <Button component={RouterLink} to="/admin/equipe/mon-profil" size="small" variant="outlined">
-                  Modifier
-                </Button>
+                <Stack direction="row" sx={{ gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disabled={uploadingLogo}
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    {uploadingLogo ? 'Envoi…' : '⬆️ Uploader un logo'}
+                  </Button>
+                  <Button component={RouterLink} to="/admin/equipe/mon-profil" size="small" variant="text">
+                    Couleurs & détails
+                  </Button>
+                </Stack>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  style={{ display: 'none' }}
+                  onChange={(e) => void handleLogoFile(e.target.files?.[0] ?? null)}
+                />
               </Stack>
             </Box>
 
