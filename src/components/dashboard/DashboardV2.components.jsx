@@ -716,7 +716,7 @@ function OwnerQuickActions({ user }) {
     <Stack direction="row" spacing={0.25} sx={{
       alignItems: 'center', flexShrink: 0,
       display: { xs: 'none', md: 'flex' },
-      borderRight: `1px solid ${t.border}`, mr: 1, pr: 1,
+      borderRight: `1px solid ${t.borderStrong || t.border}`, mr: 2.5, pr: 2,
     }}>
       {OWNER_QUICK_ACTIONS.map((a) => (
         <Tooltip key={a.to} title={a.label}>
