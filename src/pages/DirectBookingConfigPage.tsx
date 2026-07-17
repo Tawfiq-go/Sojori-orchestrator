@@ -29,7 +29,46 @@ type DirectBookingConfig = {
   contactEmail: string;
   contactPhone: string;
   status: string;
+  theme: string;
 };
+
+/** Presets visuels — miroir de lib/themes/presets.ts (sojori-vente). */
+const THEME_CHOICES: Array<{
+  id: string;
+  label: string;
+  description: string;
+  swatches: string[];
+  preview: string;
+}> = [
+  {
+    id: 'sojori',
+    label: 'Sojori',
+    description: 'Or et papier — le style sojori.com',
+    swatches: ['#c89b3c', '#faf7f0', '#0f1011'],
+    preview: 'https://sojori.com/?theme=sojori',
+  },
+  {
+    id: 'medina',
+    label: 'Médina',
+    description: 'Terracotta, safran et chaux — esprit riad',
+    swatches: ['#9a3412', '#d97706', '#faf3ec'],
+    preview: 'https://sojori.com/?theme=medina',
+  },
+  {
+    id: 'riviera',
+    label: 'Riviera',
+    description: 'Bleu profond et or discret — élégance européenne',
+    swatches: ['#1e3a5f', '#b3a125', '#fbfbf8'],
+    preview: 'https://sojori.com/?theme=riviera',
+  },
+  {
+    id: 'desert',
+    label: 'Désert',
+    description: 'Sable, ocre et basalte — minimal contemporain',
+    swatches: ['#8c6f4e', '#c2a878', '#f6f1e7'],
+    preview: 'https://sojori.com/?theme=desert',
+  },
+];
 
 type PmProfileLite = {
   publicName?: string;
@@ -62,6 +101,7 @@ export default function DirectBookingConfigPage() {
     contactEmail: '',
     contactPhone: '',
     status: 'brouillon',
+    theme: 'sojori',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -87,6 +127,7 @@ export default function DirectBookingConfigPage() {
           contactEmail: db.contactEmail || account?.email || '',
           contactPhone: db.contactPhone || '',
           status: db.status || 'brouillon',
+          theme: db.theme || 'sojori',
         });
       } catch {
         if (active) toast.error('Chargement du profil impossible');
@@ -123,6 +164,7 @@ export default function DirectBookingConfigPage() {
               siteName: config.siteName.trim(),
               contactEmail: config.contactEmail.trim(),
               contactPhone: config.contactPhone.trim(),
+              theme: config.theme,
             },
           },
         },
@@ -259,6 +301,63 @@ export default function DirectBookingConfigPage() {
                   Modifier
                 </Button>
               </Stack>
+            </Box>
+
+
+            <Box sx={{ border: '1px solid rgba(26,22,17,0.1)', borderRadius: 2.5, p: 2.25, bgcolor: '#fff' }}>
+              <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 0.5 }}>Style de votre site</Typography>
+              <Typography sx={{ fontSize: 12, color: '#7a756c', mb: 1.5 }}>
+                Même moteur de réservation, quatre ambiances — cliquez « Aperçu » pour voir le
+                style en réel, votre couleur d'accent s'y applique automatiquement.
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+                {THEME_CHOICES.map((t) => (
+                  <Box
+                    key={t.id}
+                    onClick={() => setConfig((c) => ({ ...c, theme: t.id }))}
+                    sx={{
+                      border:
+                        config.theme === t.id
+                          ? '2px solid #b8851a'
+                          : '1px solid rgba(26,22,17,0.12)',
+                      borderRadius: 2,
+                      p: 1.5,
+                      cursor: 'pointer',
+                      bgcolor: config.theme === t.id ? 'rgba(184,133,26,0.06)' : '#fff',
+                    }}
+                  >
+                    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                      <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>{t.label}</Typography>
+                      <Stack direction="row" sx={{ gap: 0.5 }}>
+                        {t.swatches.map((color) => (
+                          <Box
+                            key={color}
+                            sx={{
+                              width: 16,
+                              height: 16,
+                              borderRadius: '4px',
+                              bgcolor: color,
+                              border: '0.5px solid rgba(26,22,17,0.15)',
+                            }}
+                          />
+                        ))}
+                      </Stack>
+                    </Stack>
+                    <Typography sx={{ fontSize: 11.5, color: '#7a756c', mb: 0.75 }}>{t.description}</Typography>
+                    <Button
+                      size="small"
+                      variant="text"
+                      sx={{ fontSize: 11.5, p: 0, minWidth: 0 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(t.preview, '_blank', 'noopener');
+                      }}
+                    >
+                      Aperçu ↗
+                    </Button>
+                  </Box>
+                ))}
+              </Box>
             </Box>
 
             {config.domain.trim() && !domainInvalid && (
