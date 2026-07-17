@@ -70,8 +70,8 @@ export interface PricingControlsProps {
   occupancyLowAdj: number;
   occupancyHighMin: number;
   occupancyHighAdj: number;
-  pricingBaseSource: 'estimate' | 'listing_base' | 'manual_base';
-  /** Base fixe MAD si source C (manuel). */
+  pricingBaseSource: 'estimate' | 'manual_base';
+  /** Base fixe MAD si source B (manuel). */
   manualBasePriceMad: number;
   /** Si false, les events restent en mémoire mais ne sont pas appliqués. */
   eventsEnabled?: boolean;
@@ -89,7 +89,7 @@ export interface PricingControlsProps {
   onOccupancyLowAdjChange: (v: number) => void;
   onOccupancyHighMinChange: (v: number) => void;
   onOccupancyHighAdjChange: (v: number) => void;
-  onPricingBaseSourceChange: (v: 'estimate' | 'listing_base' | 'manual_base') => void;
+  onPricingBaseSourceChange: (v: 'estimate' | 'manual_base') => void;
   onManualBasePriceMadChange: (v: number) => void;
   onEventsEnabledChange?: (on: boolean) => void;
   onApplyRecoBounds: () => void;
@@ -350,9 +350,7 @@ export default function PricingControls(props: PricingControlsProps) {
       label:
         pricingBaseSource === 'manual_base'
           ? `Base · ${manualBasePriceMad} MAD`
-          : pricingBaseSource === 'listing_base'
-            ? 'Base · listing'
-            : 'Base · estimé',
+          : 'Base · estimé',
       on: true,
     },
     { n: 2, label: 'Bornes', on: true },
@@ -484,14 +482,8 @@ export default function PricingControls(props: PricingControlsProps) {
                   recommended: true,
                 },
                 {
-                  id: 'listing_base' as const,
-                  title: 'B · Prix listing',
-                  desc: 'Base = prix déjà en place · + réglages',
-                  recommended: false,
-                },
-                {
                   id: 'manual_base' as const,
-                  title: 'C · Prix manuel',
+                  title: 'B · Prix manuel',
                   desc: 'Base fixe (ex. 1000 MAD) · + mode / occ / last-min',
                   recommended: false,
                 },

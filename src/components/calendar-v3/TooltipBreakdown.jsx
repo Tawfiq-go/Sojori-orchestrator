@@ -88,11 +88,7 @@ function PilotCascadeBlock({ history, currency }) {
   if (history?.source !== 'pilot-v2' && factors.length === 0) return null;
 
   const baseSource =
-    history?.pricingBaseSource === 'manual_base'
-      ? 'manuel'
-      : history?.pricingBaseSource === 'listing_base'
-        ? 'listing'
-        : 'estimate';
+    history?.pricingBaseSource === 'manual_base' ? 'manuel' : 'estimate';
 
   const computedLabel = fmtComputedAt(history?.computedAt || history?.at);
   const occPct = history?.occupancyPctAtApply;

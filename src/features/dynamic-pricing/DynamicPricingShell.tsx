@@ -16,15 +16,15 @@ interface Props {
 
 export default function DynamicPricingShell({ dataActions, hideTitle = false, children }: Props) {
   return (
-    <Box sx={{ ...DASHBOARD_PAGE_FILL_SX, pt: hideTitle ? 1.25 : 2.5, pb: 1.75 }}>
+    <Box sx={{ ...DASHBOARD_PAGE_FILL_SX, pt: hideTitle ? 0.5 : 2.5, pb: 1 }}>
       {(hideTitle ? dataActions : true) ? (
         <Stack
           direction="row"
           sx={{
             alignItems: hideTitle ? 'center' : 'baseline',
-            gap: 2,
+            gap: 1.5,
             flexWrap: 'wrap',
-            mb: hideTitle && dataActions ? 0.5 : 0,
+            mb: hideTitle && dataActions ? 0.75 : 0,
           }}
         >
           {!hideTitle ? (

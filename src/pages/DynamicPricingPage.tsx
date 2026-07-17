@@ -204,7 +204,7 @@ export function DynamicPricingPage() {
   ) : null;
 
   return (
-    <DashboardWrapper breadcrumb={isBienPage ? [] : ['Dynamic Pricing']}>
+    <DashboardWrapper breadcrumb={[]} hidePageHeader>
       <Box
         sx={{
           bgcolor: T.bg0,
@@ -214,7 +214,7 @@ export function DynamicPricingPage() {
         }}
       >
         <DynamicPricingShell
-          hideTitle={isBienPage}
+          hideTitle
           dataActions={isBienPage ? bienAirroiModal : portfolioAirroiModal}
         >
           {listingId && bienDetail?.error && !bienDetail.loading ? (

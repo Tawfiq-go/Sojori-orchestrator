@@ -200,10 +200,10 @@ export default function PortfolioView({
       />
 
       {showMarketBand ? (
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ mb: 1.25 }}>
           <MarketCityBand city={cityKpis} hasData={marketFromCache} fetchedAt={marketFetchedAt} />
           {(marketCharts?.hasCharts || marketFromCache) ? (
-            <Box sx={{ mt: 1.75 }}>
+            <Box sx={{ mt: 1 }}>
               <MarketCharts
                 variant="city"
                 cityName={cityScope ?? cityKpis.cityName}
@@ -228,7 +228,7 @@ export default function PortfolioView({
       ) : null}
 
       {cityScope && scopedPins.length > 0 ? (
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ mb: 1.25 }}>
           <PortfolioMap
             pins={scopedPins}
             zoneStats={zoneStats}

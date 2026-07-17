@@ -85,7 +85,7 @@ export interface BienViewProps {
   occupancyLowAdj: number;
   occupancyHighMin: number;
   occupancyHighAdj: number;
-  pricingBaseSource: 'estimate' | 'listing_base' | 'manual_base';
+  pricingBaseSource: 'estimate' | 'manual_base';
   manualBasePriceMad: number;
   eventsEnabled: boolean;
   applyPrice: boolean;
@@ -150,7 +150,7 @@ export interface BienViewProps {
   onOccupancyLowAdjChange: (v: number) => void;
   onOccupancyHighMinChange: (v: number) => void;
   onOccupancyHighAdjChange: (v: number) => void;
-  onPricingBaseSourceChange: (v: 'estimate' | 'listing_base' | 'manual_base') => void;
+  onPricingBaseSourceChange: (v: 'estimate' | 'manual_base') => void;
   onManualBasePriceMadChange: (v: number) => void;
   onEventsEnabledChange: (on: boolean) => void;
   onAddEvent: () => void;
