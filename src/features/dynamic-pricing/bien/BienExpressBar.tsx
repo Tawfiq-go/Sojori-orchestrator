@@ -126,8 +126,8 @@ function CompactToggle({
   return (
     <Stack direction="row" sx={{ alignItems: 'center', gap: 1, minWidth: 0 }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25 }}>{title}</Typography>
-        <Typography sx={{ fontSize: 10.5, color: T.text3, lineHeight: 1.3 }}>{schedule}</Typography>
+        <Typography sx={{ fontSize: 13.5, fontWeight: 800, lineHeight: 1.25 }}>{title}</Typography>
+        <Typography sx={{ fontSize: 11.5, color: T.text3, lineHeight: 1.35 }}>{schedule}</Typography>
       </Box>
       <Switch
         size="small"
@@ -153,7 +153,7 @@ function LastRunLine({
 }) {
   return (
     <Box sx={{ mt: 0.75 }}>
-      <Typography sx={{ fontSize: 10.5, color: T.text3, mb: 0.4 }}>
+      <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 0.5 }}>
         Dernière : <Box component="span" sx={{ fontWeight: 700, color: T.text2 }}>{when ?? 'jamais'}</Box>
       </Typography>
       <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>{chips}</Stack>
@@ -293,8 +293,8 @@ export default function BienExpressBar({
   const panelSx = {
     flex: 1,
     minWidth: 0,
-    p: 1.25,
-    borderRadius: 1.5,
+    p: { xs: 1.5, md: 2 },
+    borderRadius: 2,
     border: `1px solid ${T.border}`,
     bgcolor: T.bg1,
   } as const;
@@ -303,23 +303,64 @@ export default function BienExpressBar({
     <Box
       sx={{
         mx: { xs: 2, md: 3 },
-        mb: 2,
-        p: { xs: 1.5, md: 1.75 },
-        borderRadius: 2,
-        border: `1px solid ${T.gold}`,
+        mb: 2.5,
+        p: { xs: 2, md: 2.5 },
+        borderRadius: 2.5,
+        border: `1.5px solid ${T.gold}`,
         bgcolor: T.bg1,
+        boxShadow: `0 8px 24px ${T.goldTint}`,
       }}
     >
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        sx={{
+          alignItems: { xs: 'flex-start', sm: 'baseline' },
+          justifyContent: 'space-between',
+          gap: 1,
+          mb: 2,
+          pb: 1.5,
+          borderBottom: `1px solid ${T.border}`,
+        }}
+      >
+        <Box>
+          <Typography
+            sx={{
+              m: 0,
+              fontSize: { xs: 18, md: 22 },
+              fontWeight: 800,
+              letterSpacing: '-0.02em',
+              color: T.text,
+              lineHeight: 1.2,
+            }}
+          >
+            {DP.estimationPrixMarche}
+          </Typography>
+          <Typography
+            sx={{
+              mt: 0.5,
+              fontSize: 13,
+              fontWeight: 600,
+              color: snapshotAt ? T.text2 : T.warning,
+              fontFamily: snapshotAt ? '"Geist Mono", monospace' : 'inherit',
+            }}
+          >
+            {snapshotAt
+              ? `Dernière estimation · ${fmtDate(snapshotAt)}`
+              : 'Pas d’estimation — actualisez sur cette fiche'}
+          </Typography>
+        </Box>
+      </Stack>
+
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
         {/* ── AUTO ── */}
         <Box sx={{ ...panelSx, borderColor: autoSnapshot || autoPropagation ? T.gold : T.border }}>
           <Typography
             sx={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 800,
               letterSpacing: '0.08em',
               color: T.goldDeep,
-              mb: 1,
+              mb: 1.25,
             }}
           >
             AUTO
@@ -337,7 +378,7 @@ export default function BienExpressBar({
             chips={estimateChips}
           />
 
-          <Box sx={{ borderTop: `1px dashed ${T.border}`, my: 1.1 }} />
+          <Box sx={{ borderTop: `1px dashed ${T.border}`, my: 1.25 }} />
 
           <CompactToggle
             title="Propagation nuit"
@@ -356,11 +397,11 @@ export default function BienExpressBar({
         <Box sx={panelSx}>
           <Typography
             sx={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 800,
               letterSpacing: '0.08em',
               color: T.text3,
-              mb: 1,
+              mb: 1.25,
             }}
           >
             MANUEL · ONE-SHOT
@@ -368,16 +409,16 @@ export default function BienExpressBar({
 
           <Button
             fullWidth
-            size="small"
+            size="medium"
             variant="outlined"
             disabled={fetching}
             onClick={() => void handleFetch()}
-            startIcon={fetching ? <CircularProgress size={12} color="inherit" /> : undefined}
+            startIcon={fetching ? <CircularProgress size={14} color="inherit" /> : undefined}
             sx={{
               textTransform: 'none',
               fontWeight: 800,
-              fontSize: 12,
-              py: 0.6,
+              fontSize: 13,
+              py: 1,
               borderColor: T.gold,
               color: T.goldDeep,
               bgcolor: T.goldTint,
@@ -400,19 +441,19 @@ export default function BienExpressBar({
             chips={estimateChips}
           />
 
-          <Box sx={{ borderTop: `1px dashed ${T.border}`, my: 1.1 }} />
+          <Box sx={{ borderTop: `1px dashed ${T.border}`, my: 1.25 }} />
 
           <Button
             fullWidth
-            size="small"
+            size="medium"
             variant="contained"
             disabled={!hasMarketData || !view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
             onClick={() => setCalendarOpen(true)}
             sx={{
               textTransform: 'none',
               fontWeight: 800,
-              fontSize: 12,
-              py: 0.6,
+              fontSize: 13,
+              py: 1,
               bgcolor: T.goldDeep,
               '&:hover': { bgcolor: T.gold },
             }}
@@ -427,7 +468,7 @@ export default function BienExpressBar({
       </Stack>
 
       {(toggleError || fetchError || view.pilotApplyError) && (
-        <Typography sx={{ fontSize: 11, color: T.error, fontWeight: 600, mt: 0.75 }}>
+        <Typography sx={{ fontSize: 12, color: T.error, fontWeight: 600, mt: 1 }}>
           {toggleError || fetchError || view.pilotApplyError}
         </Typography>
       )}
@@ -435,8 +476,8 @@ export default function BienExpressBar({
       <Stack
         direction="row"
         sx={{
-          mt: 1,
-          pt: 1,
+          mt: 1.5,
+          pt: 1.25,
           borderTop: `1px dashed ${T.border}`,
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -444,14 +485,14 @@ export default function BienExpressBar({
           gap: 0.75,
         }}
       >
-        <Typography sx={{ fontSize: 11, color: T.text3 }}>
+        <Typography sx={{ fontSize: 12.5, color: T.text2, fontWeight: 600 }}>
           {modeLabel} · {view.floor}–{view.ceiling} MAD
           {snapshotAt ? ` · estim. ${fmtDate(snapshotAt)}` : ''}
         </Typography>
         <Button
           size="small"
           onClick={onToggleAdvanced}
-          sx={{ textTransform: 'none', fontWeight: 700, fontSize: 11.5, color: T.text2, minWidth: 0 }}
+          sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12.5, color: T.text2, minWidth: 0 }}
         >
           {advancedOpen ? 'Masquer avancé ▲' : 'Réglages & étude ▼'}
         </Button>

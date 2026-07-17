@@ -201,7 +201,7 @@ export function buildAdditionalFeesSavePayload(values: Record<string, unknown>):
   return out;
 }
 
-/** Ligne récap RU pour un frais éditable (ménage / taxe). */
+/** Ligne récap client pour un frais éditable (ménage / taxe) — sans jargon technique. */
 export function buildRuFeeSummaryLine(
   feeTaxType: 'cleaning' | 'city_tax',
   enabled: boolean,
@@ -210,11 +210,11 @@ export function buildRuFeeSummaryLine(
   currency: string,
 ): string {
   if (!enabled) {
-    return 'Désactivé — non inclus dans le XML envoyé à Rentals United.';
+    return 'Désactivé — non synchronisé vers les plateformes de réservation.';
   }
   const meta = RU_FEE_META[feeTaxType];
   const amount = Number(value ?? 0);
-  return `RU → ${meta.nameRu} · ${ruFeeCalcLabel(discriminatorId)} · ${amount} ${currency} · Lors de la réservation`;
+  return `${meta.nameFr} · ${ruFeeCalcLabel(discriminatorId)} · ${amount} ${currency} · Lors de la réservation`;
 }
 
 export function formatDepositRuLabel(amount: number | undefined, currency = 'MAD'): string {

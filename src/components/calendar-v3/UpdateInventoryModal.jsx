@@ -5,7 +5,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo, useEffect } from 'react';
 import { ModalPortal } from '../ModalPortal';
-import { T, toIso, parseIsoLocal, daysBetweenIsoInclusive, resolvePriceMode } from './_shared';
+import { T, toIso, parseIsoLocal, daysBetweenIsoInclusive, resolvePriceMode, resolveSelectionCurrency } from './_shared';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -27,11 +27,16 @@ export function sanitizeInventoryUpdatePayload(item) {
 }
 
 export default function UpdateInventoryModal({
-  open, onClose, selectedCells = [], currency = 'EUR', inventoryData = {}, listings = [], onSave,
+  open, onClose, selectedCells = [], currency = 'MAD', inventoryData = {}, listings = [], onSave,
 }) {
   const [step, setStep] = useState('form'); // 'form' | 'confirm'
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const displayCurrency = useMemo(
+    () => resolveSelectionCurrency(selectedCells, listings, currency || 'MAD'),
+    [selectedCells, listings, currency],
+  );
 
   /* ─── Date range from selectedCells ─── */
   const selectionMeta = useMemo(() => {
@@ -167,7 +172,7 @@ export default function UpdateInventoryModal({
 
   const changesSummary = useMemo(() => {
     const out = [];
-    if (form.manualPrice !== '') out.push(`Prix manuel: ${form.manualPrice} ${currency}`);
+    if (form.manualPrice !== '') out.push(`Prix manuel: ${form.manualPrice} ${displayCurrency}`);
     if (form.availability !== '') {
       if (cellsAnalysis.isSingleListing) {
         out.push(`Disponibilité: ${form.availability === '1' ? 'Dispo ✅' : 'Pas dispo 🚫'}`);
@@ -186,7 +191,7 @@ export default function UpdateInventoryModal({
       out.push(`Mode prix: ${form.priceMode === 'dynamic' ? 'Dynamique ⚡' : 'Base'}`);
     }
     return out;
-  }, [form, currency, cellsAnalysis.isSingleListing]);
+  }, [form, displayCurrency, cellsAnalysis.isSingleListing]);
 
   const handleSubmit = () => {
     if (changesSummary.length === 0) { setError('Veuillez modifier au moins un champ'); return; }
@@ -415,20 +420,20 @@ export default function UpdateInventoryModal({
               <Section label="Prix manuel">
                 {cellsAnalysis.price.common !== null && (
                   <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
-                    Actuel: <b>{cellsAnalysis.price.common} {currency}</b>
+                    Actuel: <b>{cellsAnalysis.price.common} {displayCurrency}</b>
                   </div>
                 )}
                 {cellsAnalysis.price.common === null && cellsAnalysis.price.min !== null && (
                   <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
-                    Min: <b>{cellsAnalysis.price.min}</b> • Max: <b>{cellsAnalysis.price.max} {currency}</b>
+                    Min: <b>{cellsAnalysis.price.min}</b> • Max: <b>{cellsAnalysis.price.max} {displayCurrency}</b>
                   </div>
                 )}
                 <FieldBox>
                   <input type="number"
-                    placeholder={cellsAnalysis.price.common !== null ? `Actuel: ${cellsAnalysis.price.common} ${currency}` : "Laisser vide pour ne pas modifier"}
+                    placeholder={cellsAnalysis.price.common !== null ? `Actuel: ${cellsAnalysis.price.common} ${displayCurrency}` : "Laisser vide pour ne pas modifier"}
                     value={form.manualPrice}
                     onChange={e => upd('manualPrice', e.target.value)} />
-                  <span style={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>{currency}</span>
+                  <span style={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>{displayCurrency}</span>
                 </FieldBox>
               </Section>
 

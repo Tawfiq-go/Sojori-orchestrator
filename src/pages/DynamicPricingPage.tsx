@@ -20,7 +20,6 @@ import DynamicPricingBreadcrumb, {
 import { buildListingDataCoverage } from '../features/dynamic-pricing/bienDataCoverage';
 import { listingMatchesCityScope, normalizeCityKey } from '../features/dynamic-pricing/cityScope';
 import { applyPilotPricing, type PilotPricingConfigDto } from '../services/dynamicPricingApi';
-import { DP_LAYOUT_SX } from '../features/dynamic-pricing/_tokens';
 
 /**
  * Dynamic Pricing — portefeuille (tableau brut) + fiche bien (dashboard design Claude).
@@ -205,7 +204,7 @@ export function DynamicPricingPage() {
   ) : null;
 
   return (
-    <DashboardWrapper breadcrumb={['Dynamic Pricing']}>
+    <DashboardWrapper breadcrumb={isBienPage ? [] : ['Dynamic Pricing']}>
       <Box
         sx={{
           bgcolor: T.bg0,
@@ -214,7 +213,10 @@ export function DynamicPricingPage() {
           minWidth: 0,
         }}
       >
-        <DynamicPricingShell dataActions={isBienPage ? bienAirroiModal : portfolioAirroiModal}>
+        <DynamicPricingShell
+          hideTitle={isBienPage}
+          dataActions={isBienPage ? bienAirroiModal : portfolioAirroiModal}
+        >
           {listingId && bienDetail?.error && !bienDetail.loading ? (
             <Box sx={{ p: 3, maxWidth: 720, mx: 'auto' }}>
               <Typography sx={{ color: T.error, fontWeight: 700, mb: 1 }}>
@@ -245,35 +247,6 @@ export function DynamicPricingPage() {
                   { label: bienDetail.view.listing.name },
                 ]}
               />
-              {bienDetail.row?.airroiSnapshotAt ? (
-                <Typography
-                  sx={{
-                    ...DP_LAYOUT_SX,
-                    pb: 0.5,
-                    fontSize: 11,
-                    color: T.text3,
-                    fontFamily: '"Geist Mono", monospace',
-                  }}
-                >
-                  Estimation prix de marché ·{' '}
-                  {new Date(bienDetail.row.airroiSnapshotAt).toLocaleString('fr-FR', {
-                    dateStyle: 'short',
-                    timeStyle: 'short',
-                  })}
-                </Typography>
-              ) : (
-                <Typography
-                  sx={{
-                    ...DP_LAYOUT_SX,
-                    pb: 0.5,
-                    fontSize: 11.5,
-                    color: T.warning,
-                    fontWeight: 600,
-                  }}
-                >
-                  Pas d’estimation prix de marché — actualiser sur cette fiche
-                </Typography>
-              )}
               <BienExpressBar
                 view={bienDetail.view}
                 hasMarketData={Boolean(
