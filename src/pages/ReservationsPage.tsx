@@ -24,7 +24,7 @@ import {
   ArrowUpward as ArrowUpIcon,
   ArrowDownward as ArrowDownIcon,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import moment from 'moment';
 import 'moment/locale/fr';
@@ -511,16 +511,17 @@ export function ReservationsPage() {
     startTransition(() => setIsModalOpen(true));
   }, []);
 
-  // ?action=new (raccourci header) → ouvre directement la création
+  // ?action=new (raccourci header) → ouvre la création — réactif au changement
+  // d'URL (fonctionne aussi quand on est déjà sur /reservations)
+  const location = useLocation();
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     if (params.get('action') === 'new') {
       openCreateModal();
       params.delete('action');
       window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}`);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.search, openCreateModal]);
 
   const handleViewDetails = (r: Reservation) => navigate(`/reservations/${r._id}`);
 
