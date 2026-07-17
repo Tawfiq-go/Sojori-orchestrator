@@ -16,7 +16,7 @@
 // ════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { NAV_DEFAULT_COLLAPSED } from '../../config/navConfig';
 import { useSidebarNav } from '../../hooks/useSidebarNav';
 import { usePmSimulation } from '../../context/PmSimulationContext';
@@ -168,6 +168,7 @@ export function DashboardLayout({
         simulationActive={simulationActive}
         adminScopeInTopBar={adminScopeInTopBar}
         onMenuClick={() => setMobileNavOpen(true)}
+        user={user}
       />
       <Box
         ref={mainRef}
@@ -694,12 +695,48 @@ function SideLink({ item, active, sub, disabled, notificationCount = 0, onClick 
 // 3. TopBar
 // ════════════════════════════════════════════════════════════════════
 
+/** Raccourcis header owner — l'essentiel du quotidien (la sidebar garde le reste). */
+const OWNER_QUICK_ACTIONS = [
+  { emoji: '➕', label: 'Nouvelle résa', to: '/reservations?action=new' },
+  { emoji: '📋', label: 'Réservations', to: '/reservations' },
+  { emoji: '📅', label: 'Calendrier', to: '/calendar?view=multi' },
+  { emoji: '✅', label: 'Tâches', to: '/tasks' },
+  { emoji: '💬', label: 'WhatsApp', to: '/communications?section=guest&tab=whatsapp' },
+  { emoji: '☀️', label: 'Plan de journée', to: '/orchestration/day-plan' },
+];
+
+function OwnerQuickActions({ user }) {
+  const navigate = useNavigate();
+  const role = String(user?.role || '').toLowerCase();
+  if (role !== 'owner') return null;
+  return (
+    <Stack direction="row" spacing={0.25} sx={{
+      alignItems: 'center', flexShrink: 0,
+      display: { xs: 'none', md: 'flex' },
+      borderLeft: `1px solid ${t.border}`, ml: 1, pl: 1,
+    }}>
+      {OWNER_QUICK_ACTIONS.map((a) => (
+        <Tooltip key={a.to} title={a.label}>
+          <IconButton
+            onClick={() => navigate(a.to)}
+            aria-label={a.label}
+            sx={{ ...iconBtnSx, width: 32, height: 32, fontSize: 16 }}
+          >
+            <span aria-hidden="true">{a.emoji}</span>
+          </IconButton>
+        </Tooltip>
+      ))}
+    </Stack>
+  );
+}
+
 export function TopBar({
   breadcrumb = [],
   compact = false,
   simulationActive = false,
   adminScopeInTopBar = false,
   onMenuClick,
+  user,
 }) {
   return (
     <Box
@@ -735,6 +772,8 @@ export function TopBar({
           </React.Fragment>
         ))}
       </Stack>
+
+      <OwnerQuickActions user={user} />
 
       {adminScopeInTopBar ? <AdminBusinessScopeTopFilter /> : null}
 
