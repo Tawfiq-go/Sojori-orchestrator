@@ -30,7 +30,48 @@ type DirectBookingConfig = {
   contactPhone: string;
   status: string;
   theme: string;
+  shape: string;
+  social: {
+    instagram: string;
+    facebook: string;
+    linkedin: string;
+    tiktok: string;
+    youtube: string;
+    website: string;
+  };
 };
+
+const EMPTY_SOCIAL = {
+  instagram: '',
+  facebook: '',
+  linkedin: '',
+  tiktok: '',
+  youtube: '',
+  website: '',
+};
+
+const SHAPE_CHOICES: Array<{ id: string; label: string; hint: string }> = [
+  { id: 'auto', label: 'Auto', hint: 'La forme du thème choisi' },
+  { id: 'arche', label: 'Arche', hint: 'Porte marocaine' },
+  { id: 'carre', label: 'Carré', hint: 'Angles francs' },
+  { id: 'arrondi', label: 'Arrondi', hint: 'Coins doux' },
+  { id: 'galbe', label: 'Galbé', hint: 'Très arrondi' },
+];
+
+const SOCIAL_FIELDS: Array<{ key: keyof typeof EMPTY_SOCIAL; label: string; placeholder: string }> = [
+  { key: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/votrecompte' },
+  { key: 'facebook', label: 'Facebook', placeholder: 'https://facebook.com/votrepage' },
+  { key: 'linkedin', label: 'LinkedIn', placeholder: 'https://linkedin.com/company/…' },
+  { key: 'tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@votrecompte' },
+  { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/@votrechaine' },
+  { key: 'website', label: 'Site actuel', placeholder: 'https://votre-site-actuel.com' },
+];
+
+const PREVIEW_PAGES: Array<{ id: string; label: string; path: (slug: string) => string }> = [
+  { id: 'home', label: 'Accueil', path: () => '/' },
+  { id: 'search', label: 'Recherche', path: () => '/search' },
+  { id: 'vitrine', label: 'Vitrine', path: (slug) => (slug ? `/pm/${slug}` : '/') },
+];
 
 /** Presets visuels — miroir de lib/themes/presets.ts (sojori-vente). */
 const THEME_CHOICES: Array<{
@@ -102,7 +143,11 @@ export default function DirectBookingConfigPage() {
     contactPhone: '',
     status: 'brouillon',
     theme: 'sojori',
+    shape: 'auto',
+    social: { ...EMPTY_SOCIAL },
   });
+  const [previewPage, setPreviewPage] = useState('home');
+  const [previewMobile, setPreviewMobile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -128,6 +173,8 @@ export default function DirectBookingConfigPage() {
           contactPhone: db.contactPhone || '',
           status: db.status || 'brouillon',
           theme: db.theme || 'sojori',
+          shape: db.shape || 'auto',
+          social: { ...EMPTY_SOCIAL, ...(db.social ?? {}) },
         });
       } catch {
         if (active) toast.error('Chargement du profil impossible');
@@ -165,6 +212,8 @@ export default function DirectBookingConfigPage() {
               contactEmail: config.contactEmail.trim(),
               contactPhone: config.contactPhone.trim(),
               theme: config.theme,
+              shape: config.shape,
+              social: config.social,
             },
           },
         },
@@ -360,6 +409,139 @@ export default function DirectBookingConfigPage() {
               </Box>
             </Box>
 
+
+            <Box sx={{ border: '1px solid rgba(26,22,17,0.1)', borderRadius: 2.5, p: 2.25, bgcolor: '#fff' }}>
+              <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 0.5 }}>Forme des visuels</Typography>
+              <Typography sx={{ fontSize: 12, color: '#7a756c', mb: 1.25 }}>
+                L'empreinte des photos et cartes — « Arche » donne la porte marocaine.
+              </Typography>
+              <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+                {SHAPE_CHOICES.map((sh) => (
+                  <Box
+                    key={sh.id}
+                    onClick={() => setConfig((c) => ({ ...c, shape: sh.id }))}
+                    sx={{
+                      border: config.shape === sh.id ? '2px solid #b8851a' : '1px solid rgba(26,22,17,0.12)',
+                      borderRadius: 2,
+                      px: 1.5,
+                      py: 1,
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      minWidth: 86,
+                      bgcolor: config.shape === sh.id ? 'rgba(184,133,26,0.06)' : '#fff',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 40,
+                        height: 30,
+                        mx: 'auto',
+                        mb: 0.5,
+                        bgcolor: '#c89b3c',
+                        borderRadius:
+                          sh.id === 'arche'
+                            ? '50% 50% 4px 4px'
+                            : sh.id === 'carre'
+                              ? '0px'
+                              : sh.id === 'galbe'
+                                ? '12px'
+                                : sh.id === 'arrondi'
+                                  ? '7px'
+                                  : '4px',
+                        opacity: sh.id === 'auto' ? 0.45 : 1,
+                      }}
+                    />
+                    <Typography sx={{ fontSize: 12, fontWeight: 700 }}>{sh.label}</Typography>
+                    <Typography sx={{ fontSize: 10.5, color: '#9a948a' }}>{sh.hint}</Typography>
+                  </Box>
+                ))}
+              </Stack>
+            </Box>
+
+            <Box sx={{ border: '1px solid rgba(26,22,17,0.1)', borderRadius: 2.5, p: 2.25, bgcolor: '#fff' }}>
+              <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 0.5 }}>Réseaux sociaux</Typography>
+              <Typography sx={{ fontSize: 12, color: '#7a756c', mb: 1.5 }}>
+                Affichés dans le pied de page de votre site.
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+                {SOCIAL_FIELDS.map((f) => (
+                  <TextField
+                    key={f.key}
+                    label={f.label}
+                    placeholder={f.placeholder}
+                    value={config.social[f.key]}
+                    onChange={(e) =>
+                      setConfig((c) => ({ ...c, social: { ...c.social, [f.key]: e.target.value } }))
+                    }
+                    size="small"
+                    fullWidth
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            <Box sx={{ border: '1px solid rgba(26,22,17,0.1)', borderRadius: 2.5, p: 2.25, bgcolor: '#fff' }}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1, mb: 1.5 }}
+              >
+                <Box>
+                  <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Aperçu en direct</Typography>
+                  <Typography sx={{ fontSize: 12, color: '#7a756c' }}>
+                    Votre thème et votre forme appliqués au vrai site, page par page.
+                  </Typography>
+                </Box>
+                <Stack direction="row" sx={{ gap: 0.75 }}>
+                  {PREVIEW_PAGES.map((pg) => (
+                    <Button
+                      key={pg.id}
+                      size="small"
+                      variant={previewPage === pg.id ? 'contained' : 'outlined'}
+                      onClick={() => setPreviewPage(pg.id)}
+                      sx={{ fontSize: 11.5, px: 1.25, minWidth: 0 }}
+                    >
+                      {pg.label}
+                    </Button>
+                  ))}
+                  <Button
+                    size="small"
+                    variant={previewMobile ? 'contained' : 'outlined'}
+                    onClick={() => setPreviewMobile((m) => !m)}
+                    sx={{ fontSize: 11.5, px: 1.25, minWidth: 0 }}
+                  >
+                    📱
+                  </Button>
+                </Stack>
+              </Stack>
+              <Box
+                sx={{
+                  border: '1px solid rgba(26,22,17,0.12)',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  bgcolor: '#f6f5f1',
+                  display: 'flex',
+                  justifyContent: 'center',
+                }}
+              >
+                <Box
+                  component="iframe"
+                  key={`${previewPage}-${config.theme}-${config.shape}-${previewMobile}`}
+                  src={`https://sojori.com${(PREVIEW_PAGES.find((pg) => pg.id === previewPage) ?? PREVIEW_PAGES[0]).path(pmProfile?.slug || '')}?theme=${config.theme}&shape=${config.shape}`}
+                  title="Aperçu du site"
+                  sx={{
+                    width: previewMobile ? 390 : '100%',
+                    maxWidth: '100%',
+                    height: 560,
+                    border: 'none',
+                    bgcolor: '#fff',
+                  }}
+                />
+              </Box>
+              <Typography sx={{ fontSize: 11, color: '#9a948a', mt: 0.75 }}>
+                Aperçu sur sojori.com avec vos réglages — votre site aura votre nom, votre logo et
+                uniquement vos annonces.
+              </Typography>
+            </Box>
             {config.domain.trim() && !domainInvalid && (
               <Alert severity="info" sx={{ borderRadius: 2.5 }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 0.5 }}>
