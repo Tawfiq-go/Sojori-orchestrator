@@ -108,6 +108,25 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
+    group: 'Direct booking',
+    roles: PM_ROLES,
+    items: [
+      {
+        id: 'direct-booking/config',
+        label: 'Config',
+        icon: '🌐',
+        badge: 'NEW',
+        description: 'Domaine, thème, forme, réseaux sociaux du site client',
+      },
+      {
+        id: 'direct-booking/preview',
+        label: 'Preview',
+        icon: '👁️',
+        description: 'Aperçu du site page par page, mobile et desktop',
+      },
+    ],
+  },
+  {
     group: 'Annonces',
     roles: PM_ROLES,
     items: [
@@ -163,14 +182,6 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         icon: '👤',
         roles: [Roles.Owner],
         description: 'Coordonnées, entreprise et vitrine sojori.com',
-      },
-      {
-        id: 'equipe/direct-booking',
-        label: 'Direct booking',
-        icon: '🌐',
-        roles: PM_ROLES,
-        badge: 'NEW',
-        description: 'Votre site de réservation sur votre propre domaine',
       },
       {
         id: 'equipe/onboarding',
