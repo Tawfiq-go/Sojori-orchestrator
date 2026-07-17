@@ -165,6 +165,14 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         description: 'Coordonnées, entreprise et vitrine sojori.com',
       },
       {
+        id: 'equipe/direct-booking',
+        label: 'Direct booking',
+        icon: '🌐',
+        roles: [Roles.Owner],
+        badge: 'NEW',
+        description: 'Votre site de réservation sur votre propre domaine',
+      },
+      {
         id: 'equipe/onboarding',
         label: 'On-boarding',
         icon: '🚀',
