@@ -402,7 +402,7 @@ function DirectBookingConfigInner() {
                       component="img"
                       src={pmProfile.vitrineLogoUrl}
                       alt="logo"
-                      sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      sx={{ width: '100%', height: '100%', objectFit: 'contain', bgcolor: '#fff' }}
                     />
                   ) : (
                     <Typography sx={{ color: '#fff', fontWeight: 800, fontSize: 13 }}>
