@@ -96,7 +96,7 @@ function DirectBookingPreviewInner() {
   if (!authLoading && !isAuthenticated) return <Navigate to="/login" replace />;
 
   const currentPage = PAGES.find((p) => p.id === page) ?? PAGES[0];
-  const src = `https://sojori.com${currentPage.path(slug)}?theme=${theme}&shape=${shape}${slug ? `&pm=${encodeURIComponent(slug)}` : ''}`;
+  const src = `https://sojori.com${currentPage.path(slug)}?theme=${theme}&shape=${shape}&fresh=1${slug ? `&pm=${encodeURIComponent(slug)}` : ''}`;
   const unsaved = theme !== savedTheme;
 
   return (
