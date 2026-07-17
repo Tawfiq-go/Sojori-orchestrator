@@ -780,7 +780,7 @@ export function FeesTab({ values = {}, onChange }) {
             </IconButton>
           </Box>
           <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: 'text.secondary' }}>
-            RU → {row.nameRu} · {row.calcLabel} · {row.value} {currency}
+            {row.nameFr} · {row.calcLabel} · {row.value} {currency} · Lors de la réservation
           </Typography>
         </Card>
       ))}
@@ -873,7 +873,7 @@ export function FeesTab({ values = {}, onChange }) {
         </Typography>
         {values.cancellationPolicyIsCustom ? (
           <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mb: 1 }}>
-            Politique personnalisée importée depuis Rentals United / Airbnb — aucun préréglage Sojori ne correspond exactement.
+            Politique personnalisée importée depuis Airbnb / Booking — aucun préréglage Sojori ne correspond exactement.
             {values.cancellationPolicySuggested ? (
               <>
                 {' '}

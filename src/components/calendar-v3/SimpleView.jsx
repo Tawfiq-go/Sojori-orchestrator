@@ -134,7 +134,7 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
       priceHint: rate.hint,
       basePrice: inv?.basePrice,
       available: inv?.availableRoom ?? 1,
-      currency: listing.currencyCode || 'EUR',
+      currency: listing.currencyCode || listing.currency || 'MAD',
       inv,
     });
   }

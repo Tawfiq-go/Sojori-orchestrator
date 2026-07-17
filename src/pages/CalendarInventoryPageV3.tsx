@@ -225,7 +225,7 @@ export function CalendarInventoryPageV3() {
         _id: listing._id,
         name: listing.name,
         propertyUnit: listing.propertyUnit || 'Multi',
-        currencyCode: listing.currencyCode || 'MAD',
+        currencyCode: listing.currencyCode || listing.currency || 'MAD',
         photoColor: listing.photoColor || '#fde68a',
         photoColorDeep: listing.photoColorDeep || '#d97706',
         roomTypeId: roomTypeByListing[listing._id] || 'default',
