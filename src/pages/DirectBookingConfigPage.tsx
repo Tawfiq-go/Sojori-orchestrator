@@ -35,6 +35,9 @@ type DirectBookingConfig = {
   status: string;
   theme: string;
   shape: string;
+  heroEyebrow: string;
+  heroTitle: string;
+  heroSubtitle: string;
   social: {
     instagram: string;
     facebook: string;
@@ -147,6 +150,9 @@ function DirectBookingConfigInner() {
     status: 'brouillon',
     theme: 'sojori',
     shape: 'auto',
+    heroEyebrow: '',
+    heroTitle: '',
+    heroSubtitle: '',
     social: { ...EMPTY_SOCIAL },
   });
   const [loading, setLoading] = useState(true);
@@ -177,6 +183,9 @@ function DirectBookingConfigInner() {
           status: db.status || 'brouillon',
           theme: db.theme || 'sojori',
           shape: db.shape || 'auto',
+          heroEyebrow: db.heroEyebrow || '',
+          heroTitle: db.heroTitle || '',
+          heroSubtitle: db.heroSubtitle || '',
           social: { ...EMPTY_SOCIAL, ...(db.social ?? {}) },
         });
       } catch {
@@ -216,6 +225,9 @@ function DirectBookingConfigInner() {
               contactPhone: config.contactPhone.trim(),
               theme: config.theme,
               shape: config.shape,
+              heroEyebrow: config.heroEyebrow.trim(),
+              heroTitle: config.heroTitle.trim(),
+              heroSubtitle: config.heroSubtitle.trim(),
               social: config.social,
             },
           },
@@ -415,6 +427,43 @@ function DirectBookingConfigInner() {
               </Box>
             </Box>
 
+
+
+            <Box sx={{ border: '1px solid rgba(26,22,17,0.1)', borderRadius: 2.5, p: 2.25, bgcolor: '#fff' }}>
+              <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 0.5 }}>Textes d'accueil</Typography>
+              <Typography sx={{ fontSize: 12, color: '#7a756c', mb: 1.5 }}>
+                Le bandeau d'accueil de votre site — laissez vide pour garder les textes par
+                défaut.
+              </Typography>
+              <Stack sx={{ gap: 2 }}>
+                <TextField
+                  label="Sur-titre"
+                  placeholder="MARRAKECH · RIADS DE CHARME"
+                  value={config.heroEyebrow}
+                  onChange={(e) => setConfig((c) => ({ ...c, heroEyebrow: e.target.value }))}
+                  size="small"
+                  fullWidth
+                />
+                <TextField
+                  label="Titre principal"
+                  placeholder="Vivez la médina autrement"
+                  value={config.heroTitle}
+                  onChange={(e) => setConfig((c) => ({ ...c, heroTitle: e.target.value }))}
+                  size="small"
+                  fullWidth
+                />
+                <TextField
+                  label="Sous-titre"
+                  placeholder="Riads et suites au cœur de Marrakech, sélectionnés et gérés par nos soins."
+                  value={config.heroSubtitle}
+                  onChange={(e) => setConfig((c) => ({ ...c, heroSubtitle: e.target.value }))}
+                  size="small"
+                  fullWidth
+                  multiline
+                  minRows={2}
+                />
+              </Stack>
+            </Box>
 
             <Box sx={{ border: '1px solid rgba(26,22,17,0.1)', borderRadius: 2.5, p: 2.25, bgcolor: '#fff' }}>
               <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 0.5 }}>Forme des visuels</Typography>
