@@ -26,7 +26,8 @@ const CurrencySidebar = ({
     currencySymbol: Yup.string().required(t('Required')),
     languageId: Yup.array().min(1, t('At_least_one_language_required')),
     min: Yup.number().min(0, t('Must_be_positive')).required(t('Required')),
-    max: Yup.number().min(Yup.ref('min'), t('Max_must_be_greater_than_min')).required(t('Required'))
+    max: Yup.number().min(Yup.ref('min'), t('Max_must_be_greater_than_min')).required(t('Required')),
+    madRate: Yup.number().positive().nullable().optional(),
   });
   const getInitialValues = () => {
     const baseValues = {
@@ -37,7 +38,8 @@ const CurrencySidebar = ({
       useInTranslate: false,
       defaultCurrency: false,
       min: 0,
-      max: 1000
+      max: 1000,
+      madRate: '',
     };
     if (!existingCurrency) {
       return baseValues;
@@ -45,7 +47,8 @@ const CurrencySidebar = ({
     return {
       ...baseValues,
       ...existingCurrency,
-      languageId: existingCurrency.languageId || []
+      languageId: existingCurrency.languageId || [],
+      madRate: existingCurrency.madRate ?? '',
     };
   };
   const initialValues = getInitialValues();
@@ -76,7 +79,11 @@ const CurrencySidebar = ({
         useInTranslate: values.useInTranslate,
         defaultCurrency: values.defaultCurrency,
         min: Number(values.min),
-        max: Number(values.max)
+        max: Number(values.max),
+        madRate:
+          values.madRate === '' || values.madRate == null
+            ? null
+            : Number(values.madRate),
       };
       let savedCurrency;
       if (existingCurrency) {
@@ -88,7 +95,8 @@ const CurrencySidebar = ({
       } else {
         savedCurrency = await createCurrency(currencyData);
       }
-      onSave(savedCurrency);
+      const currencyDoc = savedCurrency?.currency || savedCurrency;
+      onSave(currencyDoc);
       onClose();
       toast.success(t(existingCurrency ? 'Currency_updated_successfully' : 'Currency_created_successfully'));
     } catch (error) {
@@ -283,6 +291,32 @@ const CurrencySidebar = ({
                       </label>
                       <Field as={TextField} fullWidth name="max" type="number" size="small" error={Boolean(errors.max && touched.max)} helperText={errors.max && touched.max ? t(errors.max) : ''} />
                     </div>
+                  </div>
+
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{
+                      display: 'block',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      marginBottom: '8px',
+                    }}>
+                      Taux → MAD (1 {values.currencyCode || 'devise'} = X MAD)
+                    </label>
+                    <Field
+                      as={TextField}
+                      fullWidth
+                      name="madRate"
+                      type="number"
+                      size="small"
+                      placeholder="ex. 10.67 pour EUR"
+                      inputProps={{ step: '0.0001', min: '0' }}
+                      error={Boolean(errors.madRate && touched.madRate)}
+                      helperText={
+                        errors.madRate && touched.madRate
+                          ? t(errors.madRate)
+                          : 'Utilisé pour le push prix RU/Airbnb. MAD = 1. EUR ≈ 10.67 aujourd’hui. Laisser vide si non applicable.'
+                      }
+                    />
                   </div>
 
                   <div style={{

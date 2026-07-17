@@ -42,7 +42,7 @@ export default function DynamicPricingBreadcrumb({ crumbs, embedded }: Props) {
               sx={{
                 all: 'unset',
                 cursor: 'pointer',
-                fontSize: 12.5,
+                fontSize: 13.5,
                 fontWeight: i === crumbs.length - 1 ? 800 : 700,
                 color: i === crumbs.length - 1 ? T.text : T.text2,
                 borderRadius: 1,

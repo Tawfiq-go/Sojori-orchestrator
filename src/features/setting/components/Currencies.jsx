@@ -127,6 +127,11 @@ function Currencies() {
     header: t('Max'),
     body: rowData => <span>{rowData.max}</span>
   }, {
+    header: 'Taux → MAD',
+    body: rowData => <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>
+      {rowData.madRate != null && rowData.madRate !== '' ? rowData.madRate : '—'}
+    </span>
+  }, {
     header: t('Languages'),
     body: rowData => <span>
           {Array.isArray(rowData.languageId) && rowData.languageId.length > 0 ? rowData.languageId.map(id => {
@@ -158,7 +163,11 @@ function Currencies() {
       {/* <Typography variant="h4" component="h1" className="mb-4" gutterBottom>
         {t('Currency_Management')}
        </Typography> */}
-      <div className="flex justify-end my-2">
+      <div className="flex justify-between items-center my-2 gap-2 flex-wrap">
+        <Typography sx={{ fontSize: 12, color: '#616161', maxWidth: 640 }}>
+          Colonne <b>Taux → MAD</b> : 1 unité de devise = X MAD. Pour <b>EUR</b>, ce taux alimente le push prix RU/Airbnb.
+          Aujourd’hui marché ≈ <b>10,67</b>. À ajuster manuellement (automation quotidienne plus tard).
+        </Typography>
         <StyledButton onClick={() => handleOpenSidebar()}>
           {t('Create_New_Currency')}
         </StyledButton>

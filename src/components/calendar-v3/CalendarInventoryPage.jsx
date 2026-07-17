@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { T } from './_shared';
+import { T, resolveSelectionCurrency } from './_shared';
 import MultiView from './MultiView';
 import SimpleView from './SimpleView';
 import ColumnFilters from './ColumnFilters';
@@ -475,7 +475,7 @@ export default function CalendarInventoryPage({
       <UpdateInventoryModal
         open={!!modalCells}
         selectedCells={modalCells || []}
-        currency={selectedListing?.currencyCode || 'EUR'}
+        currency={resolveSelectionCurrency(modalCells, listings, 'MAD')}
         inventoryData={inventoryData}
         listings={listings}
         onClose={() => setModalCells(null)}
