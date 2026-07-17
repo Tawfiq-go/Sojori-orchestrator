@@ -703,7 +703,9 @@ const OWNER_QUICK_ACTIONS = [
   { emoji: '✅', label: 'Tâches', to: '/tasks' },
   { emoji: '💬', label: 'WhatsApp', to: '/communications?section=guest&tab=whatsapp' },
   { emoji: '🏨', label: 'Messages OTA', to: '/communications?section=guest&tab=ota' },
+  { emoji: '🎛', label: 'Plans d’orchestration', to: '/orchestration/plans' },
   { emoji: '☀️', label: 'Plan de journée', to: '/orchestration/day-plan' },
+  { emoji: '⭐', label: 'Avis voyageurs', to: '/communications?section=guest&tab=reviews' },
 ];
 
 function OwnerQuickActions({ user }) {
@@ -714,7 +716,7 @@ function OwnerQuickActions({ user }) {
     <Stack direction="row" spacing={0.25} sx={{
       alignItems: 'center', flexShrink: 0,
       display: { xs: 'none', md: 'flex' },
-      borderLeft: `1px solid ${t.border}`, ml: 1, pl: 1,
+      borderRight: `1px solid ${t.borderStrong || t.border}`, mr: 2.5, pr: 2,
     }}>
       {OWNER_QUICK_ACTIONS.map((a) => (
         <Tooltip key={a.to} title={a.label}>
@@ -774,11 +776,10 @@ export function TopBar({
         ))}
       </Stack>
 
-      <OwnerQuickActions user={user} />
-
       {adminScopeInTopBar ? <AdminBusinessScopeTopFilter /> : null}
 
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto' }}>
+        <OwnerQuickActions user={user} />
         <AdminSessionTopBarButton />
         <NotificationBell />
         <Tooltip title="Aide">

@@ -205,6 +205,9 @@ const OwnerSelfProfilePage = lazyWithReload(() =>
 const DirectBookingConfigPage = lazyWithReload(() =>
   import('./pages/DirectBookingConfigPage').then((module) => ({ default: module.default }))
 )
+const DirectBookingPreviewPage = lazyWithReload(() =>
+  import('./pages/DirectBookingPreviewPage').then((module) => ({ default: module.default }))
+)
 const NotificationsHubPage = lazyWithReload(() =>
   import('./pages/NotificationsHubPage').then((module) => ({
     default: module.NotificationsHubPage,
@@ -446,6 +449,8 @@ function App() {
               <Route path="/admin/equipe/owners" element={<LazyRoute><TeamRolesHubPage /></LazyRoute>} />
               <Route path="/admin/equipe/mon-profil" element={<LazyRoute><OwnerSelfProfilePage /></LazyRoute>} />
               <Route path="/admin/equipe/direct-booking" element={<LazyRoute><DirectBookingConfigPage /></LazyRoute>} />
+              <Route path="/direct-booking/config" element={<LazyRoute><DirectBookingConfigPage /></LazyRoute>} />
+              <Route path="/direct-booking/preview" element={<LazyRoute><DirectBookingPreviewPage /></LazyRoute>} />
               <Route path="/admin/equipe/notifications" element={<LazyRoute><NotificationsHubPage /></LazyRoute>} />
               <Route
                 path="/admin/equipe/notifications/historique"
