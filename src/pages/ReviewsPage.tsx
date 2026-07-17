@@ -31,6 +31,7 @@ import {
 } from '@mui/material';
 import messagesService from '../services/messagesService';
 import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
+import { parseReview } from '../components/communications/reviewMappers';
 
 type ReviewRow = {
   id: string;
@@ -73,40 +74,6 @@ function resolveListingName(reservation: Record<string, unknown>, threadData: Re
   return '—';
 }
 
-function parseReview(messages: unknown[]) {
-  let rating = 5;
-  let message = '';
-  let response = '';
-  for (const msg of messages || []) {
-    const parsed = (msg as { parsedReview?: Record<string, unknown> })?.parsedReview;
-    if (parsed) {
-      if (parsed.Rating != null && parsed.Rating !== '') rating = Number(parsed.Rating) || rating;
-      if (parsed.Message) message = message || String(parsed.Message);
-      if (parsed.Response) response = String(parsed.Response);
-      continue;
-    }
-    const body = (msg as { body?: unknown })?.body;
-    if (!body) continue;
-    if (typeof body === 'string' && body.trim().startsWith('<')) {
-      const plain = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      if (plain.length > 12) message = message || plain;
-      continue;
-    }
-    try {
-      const data = typeof body === 'string' ? JSON.parse(body) : (body as Record<string, unknown>);
-      if (data.Rating != null && data.Rating !== '') rating = Number(data.Rating) || rating;
-      if (data.Message) message = message || String(data.Message);
-      if (data.Response) response = String(data.Response);
-    } catch {
-      const plain = String(body)
-        .replace(/<[^>]+>/g, ' ')
-        .trim();
-      if (plain.length > 12) message = message || plain;
-    }
-  }
-  return { rating, message, response };
-}
-
 function normalizeOta(raw: string): string {
   const lower = raw.toLowerCase();
   if (lower.includes('booking')) return 'Booking.com';
@@ -129,7 +96,7 @@ function mapApiToRows(items: unknown[], flaggedIds: Set<string>): ReviewRow[] {
     const threadData = item.thread || item;
     const reservation = item.reservation || {};
     const messages = item.messages || [];
-    const review = parseReview(messages);
+    const review = parseReview(messages, item.reviewSummary);
     const listingName = resolveListingName(reservation, threadData);
     const reviewStatus = String(threadData.reviewStatus || '');
     const replied =

@@ -12,6 +12,18 @@ export interface ReviewRow {
   replied: boolean;
   checkInDate?: string;
   checkOutDate?: string;
+  reservationStatus?: string;
+  reservationCreatedAt?: string;
+  nightsCount?: number;
+  guestsCount?: number;
+  totalPrice?: number;
+  currency?: string;
+}
+
+interface ReviewSummary {
+  rating?: number;
+  customerComment?: string;
+  publicResponse?: string;
 }
 
 function stripHtml(value: string): string {
@@ -26,7 +38,7 @@ function bookingScore(value: string): number | undefined {
   return Math.min(5, score > 5 ? score / 2 : score);
 }
 
-export function parseReview(messages: any[]) {
+export function parseReview(messages: any[], summary?: ReviewSummary) {
   let rating: number | undefined;
   let message = '';
   let response = '';
@@ -36,24 +48,49 @@ export function parseReview(messages: any[]) {
     if (!body) continue;
 
     const raw = typeof body === 'string' ? body : JSON.stringify(body);
-    const parsedBookingScore = bookingScore(raw);
-    if (parsedBookingScore != null) rating = parsedBookingScore;
+    if (msg?.isIncoming !== false) {
+      const parsedBookingScore = bookingScore(raw);
+      if (parsedBookingScore != null) rating = parsedBookingScore;
+    }
 
     try {
-      const data = typeof body === 'string' ? JSON.parse(body) : body;
-      if (data.Rating != null && data.Rating !== '') {
+      const data = msg?.parsedReview || (typeof body === 'string' ? JSON.parse(body) : body);
+      if (msg?.isIncoming !== false && data.Rating != null && data.Rating !== '') {
         const parsedRating = Number(data.Rating);
-        if (Number.isFinite(parsedRating) && parsedRating >= 0) rating = parsedRating;
+        if (Number.isFinite(parsedRating) && parsedRating >= 0) {
+          rating = Math.min(5, parsedRating > 5 ? parsedRating / 2 : parsedRating);
+        }
       }
-      if (data.Message) message = message || String(data.Message);
+      const candidate = data.Message ? String(data.Message) : '';
+      if (msg?.isIncoming === false) response = response || candidate;
+      else if (candidate) message = message || candidate;
       if (data.Response) response = String(data.Response);
     } catch {
       const plain = stripHtml(raw);
-      if (plain.length > 12) message = message || plain;
+      if (plain.length > 12) {
+        if (msg?.isIncoming === false) response = response || plain;
+        else message = message || plain;
+      }
     }
   }
 
-  return { rating: rating ?? 5, message, response };
+  return {
+    rating: summary?.rating ?? rating ?? 5,
+    message: summary?.customerComment || message,
+    response: summary?.publicResponse || response,
+  };
+}
+
+function resolveListingName(reservation: any, threadData: any): string {
+  const listing = reservation?.sojoriId;
+  if (listing && typeof listing === 'object' && listing.name) return String(listing.name);
+  return String(
+    reservation?.listingName ||
+      reservation?.listingTitle ||
+      reservation?.propertyName ||
+      threadData?.listingName ||
+      'Listing',
+  );
 }
 
 export function normalizeReviewChannel(rawChannel: unknown, messages: any[]): string {
@@ -74,7 +111,7 @@ export function mapReviewApiRows(threadsData: any[]): ReviewRow[] {
     const threadData = item.thread || item;
     const reservation = item.reservation || {};
     const messages = item.messages || [];
-    const review = parseReview(messages);
+    const review = parseReview(messages, item.reviewSummary);
     const channel = normalizeReviewChannel(
       threadData.communicationChannel || reservation.channelName,
       messages,
@@ -84,7 +121,7 @@ export function mapReviewApiRows(threadsData: any[]): ReviewRow[] {
       id: String(threadData._id),
       threadId: String(threadData.threadId),
       guestName: reservation.guestName || threadData.recipientName || 'Guest',
-      listingName: reservation.listingName || 'Listing',
+      listingName: resolveListingName(reservation, threadData),
       channel,
       reservationNumber: reservation.reservationNumber || '-',
       lastMessageTime: threadData.lastMessageAt,
@@ -94,6 +131,12 @@ export function mapReviewApiRows(threadsData: any[]): ReviewRow[] {
       replied: Boolean(review.response || threadData.reviewStatus === 'responded'),
       checkInDate: reservation.arrivalDate,
       checkOutDate: reservation.departureDate,
+      reservationStatus: reservation.status,
+      reservationCreatedAt: reservation.createdAt,
+      nightsCount: reservation.nights,
+      guestsCount: reservation.numberOfGuests,
+      totalPrice: reservation.totalPrice,
+      currency: reservation.currency,
     };
   });
 }

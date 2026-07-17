@@ -12,7 +12,15 @@ import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
 import type { Thread } from '../../types/unifiedInbox.types';
 import type { InboxReservationData } from '../../types/inboxReservation.types';
 import { otaChannelColor, otaChannelFromName } from '../unified-inbox/inboxMappers';
-import { formatThreadWhen, normalizeBookingSource, isAirbnbReviewReplyWindowExpired, airbnbReviewReplyWindowLabel } from '../unified-inbox/inboxFormat';
+import {
+  formatReservationCreatedDisplay,
+  formatStayDateShort,
+  formatThreadWhen,
+  nightsBetween,
+  normalizeBookingSource,
+  isAirbnbReviewReplyWindowExpired,
+  airbnbReviewReplyWindowLabel,
+} from '../unified-inbox/inboxFormat';
 import { mapReviewApiRows, type ReviewRow } from './reviewMappers';
 
 const GLOBAL_SEARCH_MIN_LEN = 2;
@@ -172,8 +180,19 @@ export default function ReviewsTabV2() {
         reviewRating: active.rating,
         reviewReplied: active.replied,
         reviewResponse: active.response,
+        reservationStatus: /confirm/i.test(active.reservationStatus || '')
+          ? 'Confirmée'
+          : active.reservationStatus || 'Confirmée',
+        reservationCreatedAt: active.reservationCreatedAt,
+        reservationCreatedDisplay: formatReservationCreatedDisplay(active.reservationCreatedAt),
         checkInDate: active.checkInDate,
         checkOutDate: active.checkOutDate,
+        checkInDisplay: active.checkInDate ? formatStayDateShort(active.checkInDate) : undefined,
+        checkOutDisplay: active.checkOutDate ? formatStayDateShort(active.checkOutDate) : undefined,
+        nightsCount: active.nightsCount ?? nightsBetween(active.checkInDate, active.checkOutDate),
+        guestsLabel: active.guestsCount ? `${active.guestsCount} voyageur${active.guestsCount > 1 ? 's' : ''}` : undefined,
+        totalPrice: active.totalPrice,
+        currency: active.currency,
       }
     : undefined;
 
