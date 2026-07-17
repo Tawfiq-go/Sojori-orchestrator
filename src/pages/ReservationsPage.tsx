@@ -511,6 +511,17 @@ export function ReservationsPage() {
     startTransition(() => setIsModalOpen(true));
   }, []);
 
+  // ?action=new (raccourci header) → ouvre directement la création
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'new') {
+      openCreateModal();
+      params.delete('action');
+      window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleViewDetails = (r: Reservation) => navigate(`/reservations/${r._id}`);
 
   const visibleRows = filteredReservations;
