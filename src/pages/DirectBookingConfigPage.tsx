@@ -248,7 +248,7 @@ function DirectBookingConfigInner() {
   return (
     <DashboardWrapper breadcrumb={['Équipe', 'Direct booking']}>
       <TeamOwnerScopeBar />
-      <Box sx={{ maxWidth: 780, mx: 'auto', p: { xs: 1.5, md: 3 } }}>
+      <Box sx={{ maxWidth: 1360, mx: 'auto', p: { xs: 1.5, md: 2.5 } }}>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, mb: 0.5 }}>
           <Typography sx={{ fontSize: 22, fontWeight: 800, color: '#1a1611' }}>
             🌐 Votre site Direct booking
@@ -274,7 +274,14 @@ function DirectBookingConfigInner() {
               : "Cette page est réservée aux comptes propriétaire (PM) et aux admins."}
           </Alert>
         ) : (
-          <Stack sx={{ gap: 2 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
+              gap: 2,
+              alignItems: 'start',
+            }}
+          >
             <Box sx={{ border: '1px solid rgba(26,22,17,0.1)', borderRadius: 2.5, p: 2.25, bgcolor: '#fff' }}>
               <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                 <Typography sx={{ fontSize: 15, fontWeight: 700 }}>
@@ -574,12 +581,15 @@ function DirectBookingConfigInner() {
               </Alert>
             )}
 
-            <Stack direction="row" sx={{ justifyContent: 'flex-end', gap: 1.5 }}>
+            <Stack
+              direction="row"
+              sx={{ justifyContent: 'flex-end', gap: 1.5, gridColumn: '1 / -1' }}
+            >
               <Button variant="contained" disabled={!canSave} onClick={() => void handleSave()}>
                 {saving ? 'Enregistrement…' : 'Enregistrer ma configuration'}
               </Button>
             </Stack>
-          </Stack>
+          </Box>
         )}
       </Box>
     </DashboardWrapper>
