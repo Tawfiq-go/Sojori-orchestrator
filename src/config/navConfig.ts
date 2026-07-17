@@ -49,24 +49,14 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       { id: 'dashboard', label: 'Tableau de bord', iconType: 'dashboard', iconColor: '#D4A574', badge: 'Live' },
       { id: 'analytics', label: 'Analytics', iconType: 'chart', iconColor: '#5B9BD5' },
-      { id: 'reports', label: 'Rapports', iconType: 'document', iconColor: '#A6A6A6' },
     ],
   },
   {
     group: 'Calendrier',
     roles: PM_ROLES,
     items: [
-      {
-        id: 'calendar',
-        label: 'Calendrier',
-        iconType: 'calendar',
-        iconColor: '#E06666',
-        navDisabled: true,
-        sub: [
-          { id: 'calendar/multi', label: 'Vue Multi', iconType: 'calendar', iconColor: '#E06666' },
-          { id: 'calendar/simple', label: 'Vue Simple', iconType: 'calendar', iconColor: '#E06666' },
-        ],
-      },
+      { id: 'calendar/multi', label: 'Vue Multi', iconType: 'calendar', iconColor: '#E06666' },
+      { id: 'calendar/simple', label: 'Vue Simple', iconType: 'calendar', iconColor: '#E06666' },
     ],
   },
   {
@@ -102,7 +92,6 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     core: true,
     items: [
       { id: 'orch/plans', label: 'Plans par séjour', iconType: 'settings', iconColor: '#666666', badge: 'CORE' },
-      { id: 'orch/ops', label: 'Ops · J0/J+1', iconType: 'settings', iconColor: '#666666' },
       { id: 'orch/day-plan', label: 'Plan de journée', iconType: 'settings', iconColor: '#666666', badge: 'NEW' },
       { id: 'orch/workflows', label: 'Workflows · config', iconType: 'settings', iconColor: '#666666' },
     ],

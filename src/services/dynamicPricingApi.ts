@@ -393,8 +393,8 @@ export interface PilotPricingConfigDto {
     adjustment: number;
     active?: boolean;
   }>;
-  /** estimate = AirROI · listing_base = prix inventaire · manual_base = montant fixe MAD */
-  pricingBaseSource?: 'estimate' | 'listing_base' | 'manual_base';
+  /** estimate = marché AirROI · manual_base = montant fixe MAD */
+  pricingBaseSource?: 'estimate' | 'manual_base';
   /** Base fixe MAD si pricingBaseSource === 'manual_base' (ex. 1000). */
   manualBasePriceMad?: number;
   minStayDelta: number;
@@ -457,7 +457,7 @@ export async function previewPilotPricing(
 export type ApplyNarrativeDto = {
   steps: Array<{ n: number; title: string; detail: string }>;
   base: {
-    source: 'estimate' | 'listing_base' | 'manual_base';
+    source: 'estimate' | 'manual_base';
     label: string;
     snapshotAt: string | null;
     manualBasePriceMad?: number;
@@ -490,7 +490,7 @@ export type ApplyNarrativeDto = {
 
 export type PilotApplyReportDto = {
   mixEngineVersion: string;
-  pricingSource: 'calculator_estimate' | 'listing_base' | 'manual_base';
+  pricingSource: 'calculator_estimate' | 'manual_base';
   hasEstimate: boolean;
   estimateSnapshotAt: string | null;
   activeModeLabel: string;

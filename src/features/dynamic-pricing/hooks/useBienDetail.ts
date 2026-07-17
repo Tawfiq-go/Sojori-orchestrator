@@ -250,7 +250,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const [occupancyLowAdj, setOccupancyLowAdj] = useState(-10);
   const [occupancyHighMin, setOccupancyHighMin] = useState(70);
   const [occupancyHighAdj, setOccupancyHighAdj] = useState(15);
-  const [pricingBaseSource, setPricingBaseSource] = useState<'estimate' | 'listing_base' | 'manual_base'>('estimate');
+  const [pricingBaseSource, setPricingBaseSource] = useState<'estimate' | 'manual_base'>('estimate');
   const [manualBasePriceMad, setManualBasePriceMad] = useState(1000);
   const [eventsEnabled, setEventsEnabled] = useState(true);
   const [applyPrice, setApplyPrice] = useState(true);
@@ -498,11 +498,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
             );
           }
           setPricingBaseSource(
-            c.pricingBaseSource === 'listing_base'
-              ? 'listing_base'
-              : c.pricingBaseSource === 'manual_base'
-                ? 'manual_base'
-                : 'estimate',
+            c.pricingBaseSource === 'manual_base' ? 'manual_base' : 'estimate',
           );
           if (typeof c.manualBasePriceMad === 'number' && c.manualBasePriceMad > 0) {
             setManualBasePriceMad(Math.max(200, Math.min(20000, Math.round(c.manualBasePriceMad))));
@@ -1258,7 +1254,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         setOccupancyHighAdj(Math.max(0, Math.min(40, Math.round(v))));
         scheduleConfigSave();
       },
-      onPricingBaseSourceChange: (v: 'estimate' | 'listing_base' | 'manual_base') => {
+      onPricingBaseSourceChange: (v: 'estimate' | 'manual_base') => {
         setPricingBaseSource(v);
         scheduleConfigSave();
       },

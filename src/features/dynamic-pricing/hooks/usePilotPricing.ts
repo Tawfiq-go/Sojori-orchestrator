@@ -50,7 +50,7 @@ function buildConfigPayload(
   occupancyLowAdj: number,
   occupancyHighMin: number,
   occupancyHighAdj: number,
-  pricingBaseSource: 'estimate' | 'listing_base' | 'manual_base',
+  pricingBaseSource: 'estimate' | 'manual_base',
   manualBasePriceMad: number,
   eventsEnabled: boolean,
 ): Partial<PilotPricingConfigDto> {
@@ -144,7 +144,7 @@ export function usePilotPricing(options: {
   occupancyLowAdj: number;
   occupancyHighMin: number;
   occupancyHighAdj: number;
-  pricingBaseSource: 'estimate' | 'listing_base' | 'manual_base';
+  pricingBaseSource: 'estimate' | 'manual_base';
   manualBasePriceMad: number;
   calendarYear: number;
   eventsEnabled?: boolean;
@@ -341,11 +341,11 @@ export function usePilotPricing(options: {
     }
     setApplyLoading(true);
     try {
+      // Même séquence que le cron 04:30 : 1) config en DB 2) apply lit UNIQUEMENT la DB.
       await savePilotConfig(listingId, { ...payload, enabled: true });
       let res;
       try {
         res = await applyPilotPricing(listingId, {
-          config: { ...payload, enabled: true },
           triggerSource: 'orchestrator-ui',
         });
       } catch (e) {

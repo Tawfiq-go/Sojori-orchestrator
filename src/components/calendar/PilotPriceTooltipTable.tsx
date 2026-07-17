@@ -17,7 +17,7 @@ type History = {
   mixEngineVersion?: string;
   calculated?: number;
   base?: number;
-  pricingBaseSource?: 'estimate' | 'listing_base' | 'manual_base';
+  pricingBaseSource?: 'estimate' | 'manual_base';
   pilotFactors?: PilotFactorRow[];
 };
 
@@ -82,11 +82,7 @@ export default function PilotPriceTooltipTable({
   const dynamicActive = mode === 'dynamic';
   const total = inv ? priceOf(inv) : (history.calculated ?? 0);
   const baseSource =
-    history.pricingBaseSource === 'manual_base'
-      ? 'base manuel'
-      : history.pricingBaseSource === 'listing_base'
-        ? 'base listing'
-        : 'base estimé';
+    history.pricingBaseSource === 'manual_base' ? 'base manuel' : 'base estimé';
 
   return (
     <Box sx={{ p: 1.5, minWidth: 280, maxWidth: 360, bgcolor: '#fff' }}>

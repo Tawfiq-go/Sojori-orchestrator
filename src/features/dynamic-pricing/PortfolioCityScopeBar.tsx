@@ -20,8 +20,8 @@ export default function PortfolioCityScopeBar({
   options, activeScope, onScopeChange, stats, loading, todoCount = 0,
 }: Props) {
   return (
-    <Box sx={{ mb: 1.75 }}>
-      <Stack direction="row" sx={{ gap: 1, alignItems: 'center', mb: 0.875, flexWrap: 'wrap' }}>
+    <Box sx={{ mb: 1.25 }}>
+      <Stack direction="row" sx={{ gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
         <Typography sx={{
           fontSize: 10, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
           color: T.text3, textTransform: 'uppercase', letterSpacing: '0.10em',
