@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Typography, CircularProgress } from '@mui/material';
+import { Alert, Box, Button, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
 import ThreadsList from '../unified-inbox/ThreadsList';
@@ -13,72 +13,10 @@ import type { Thread } from '../../types/unifiedInbox.types';
 import type { InboxReservationData } from '../../types/inboxReservation.types';
 import { otaChannelColor, otaChannelFromName } from '../unified-inbox/inboxMappers';
 import { formatThreadWhen, normalizeBookingSource, isAirbnbReviewReplyWindowExpired, airbnbReviewReplyWindowLabel } from '../unified-inbox/inboxFormat';
-
-interface ReviewRow {
-  id: string;
-  threadId: string;
-  guestName: string;
-  listingName: string;
-  channel: string;
-  reservationNumber: string;
-  lastMessageTime?: string;
-  rating: number;
-  reviewText: string;
-  response?: string;
-  replied: boolean;
-  checkInDate?: string;
-  checkOutDate?: string;
-}
-
-function parseReview(messages: any[]) {
-  let rating = 5;
-  let message = '';
-  let response = '';
-  for (const msg of messages || []) {
-    const body = msg?.body;
-    if (!body) continue;
-    try {
-      const data = typeof body === 'string' ? JSON.parse(body) : body;
-      if (data.Rating != null) rating = Number(data.Rating) || rating;
-      if (data.Message) message = message || String(data.Message);
-      if (data.Response) response = String(data.Response);
-    } catch {
-      const plain = String(body).replace(/<[^>]+>/g, ' ').trim();
-      if (plain.length > 12) message = message || plain;
-    }
-  }
-  return { rating, message, response };
-}
+import { mapReviewApiRows, type ReviewRow } from './reviewMappers';
 
 const GLOBAL_SEARCH_MIN_LEN = 2;
 const GLOBAL_SEARCH_DEBOUNCE_MS = 500;
-
-function mapReviewApiRows(threadsData: any[]): ReviewRow[] {
-  return threadsData.map((item: any) => {
-    const threadData = item.thread || item;
-    const reservation = item.reservation || {};
-    const messages = item.messages || [];
-    const review = parseReview(messages);
-    let channel = threadData.communicationChannel || reservation.channelName || 'Airbnb';
-    if (channel.toLowerCase().includes('booking')) channel = 'Booking.com';
-    else if (channel.toLowerCase().includes('airbnb')) channel = 'Airbnb';
-    return {
-      id: threadData._id,
-      threadId: threadData.threadId,
-      guestName: reservation.guestName || threadData.recipientName || 'Guest',
-      listingName: reservation.listingName || 'Listing',
-      channel,
-      reservationNumber: reservation.reservationNumber || '—',
-      lastMessageTime: threadData.lastMessageAt,
-      rating: review.rating,
-      reviewText: review.message || threadData.preview || '',
-      response: review.response,
-      replied: !!review.response,
-      checkInDate: reservation.arrivalDate,
-      checkOutDate: reservation.departureDate,
-    };
-  });
-}
 
 export default function ReviewsTabV2() {
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
@@ -86,6 +24,7 @@ export default function ReviewsTabV2() {
   const [active, setActive] = useState<ReviewRow | null>(null);
   const [replyText, setReplyText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchPending, setSearchPending] = useState(false);
   const [sending, setSending] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -104,6 +43,7 @@ export default function ReviewsTabV2() {
     }
     const requestId = ++searchRequestIdRef.current;
     try {
+      setLoadError(null);
       if (opts?.forSearch) setSearchPending(true);
       else setLoading(true);
 
@@ -128,6 +68,7 @@ export default function ReviewsTabV2() {
     } catch (err) {
       if (requestId === searchRequestIdRef.current) {
         console.error('❌ reviews:', err);
+        setLoadError(err instanceof Error ? err.message : 'Impossible de charger les avis.');
       }
     } finally {
       if (requestId === searchRequestIdRef.current) {
@@ -261,6 +202,19 @@ export default function ReviewsTabV2() {
 
   return (
     <>
+      {loadError && (
+        <Alert
+          severity="error"
+          sx={{ mb: 1.5 }}
+          action={(
+            <Button color="inherit" size="small" onClick={() => void loadReviews()}>
+              Réessayer
+            </Button>
+          )}
+        >
+          Impossible de charger les avis Booking/Airbnb : {loadError}
+        </Alert>
+      )}
       <Box sx={{ display: 'flex', gap: 0.75, mb: 1.5, flexWrap: 'wrap' }}>
         {[
           { id: 'all', label: 'Tous' },
