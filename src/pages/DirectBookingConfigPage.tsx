@@ -404,7 +404,8 @@ function DirectBookingConfigInner() {
                       sx={{ fontSize: 11.5, p: 0, minWidth: 0 }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(t.preview, '_blank', 'noopener');
+                        const pm = pmProfile?.slug ? `&pm=${encodeURIComponent(pmProfile.slug)}` : '';
+                        window.open(`${t.preview}${pm}`, '_blank', 'noopener');
                       }}
                     >
                       Aperçu ↗
