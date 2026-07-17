@@ -702,6 +702,7 @@ const OWNER_QUICK_ACTIONS = [
   { emoji: '📅', label: 'Calendrier', to: '/calendar?view=multi' },
   { emoji: '✅', label: 'Tâches', to: '/tasks' },
   { emoji: '💬', label: 'WhatsApp', to: '/communications?section=guest&tab=whatsapp' },
+  { emoji: '🏨', label: 'Messages OTA', to: '/communications?section=guest&tab=ota' },
   { emoji: '☀️', label: 'Plan de journée', to: '/orchestration/day-plan' },
 ];
 
