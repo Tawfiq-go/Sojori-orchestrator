@@ -96,7 +96,10 @@ function DirectBookingPreviewInner() {
   if (!authLoading && !isAuthenticated) return <Navigate to="/login" replace />;
 
   const currentPage = PAGES.find((p) => p.id === page) ?? PAGES[0];
-  const src = `https://sojori.com${currentPage.path(slug)}?theme=${theme}&shape=${shape}&fresh=1${slug ? `&pm=${encodeURIComponent(slug)}` : ''}`;
+  // Scope tenant : slug si défini, sinon ownerId (accepté par le backend) —
+  // un client tout neuf sans slug voit SON site (vide) et jamais la marketplace.
+  const pmScope = slug || targetOwnerId;
+  const src = `https://sojori.com${currentPage.path(slug)}?theme=${theme}&shape=${shape}&fresh=1${pmScope ? `&pm=${encodeURIComponent(pmScope)}` : ''}`;
   const unsaved = theme !== savedTheme;
 
   return (
