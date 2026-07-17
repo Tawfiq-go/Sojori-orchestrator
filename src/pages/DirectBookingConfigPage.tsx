@@ -71,11 +71,6 @@ const SOCIAL_FIELDS: Array<{ key: keyof typeof EMPTY_SOCIAL; label: string; plac
   { key: 'website', label: 'Site actuel', placeholder: 'https://votre-site-actuel.com' },
 ];
 
-const PREVIEW_PAGES: Array<{ id: string; label: string; path: (slug: string) => string }> = [
-  { id: 'home', label: 'Accueil', path: () => '/' },
-  { id: 'search', label: 'Recherche', path: () => '/search' },
-  { id: 'vitrine', label: 'Vitrine', path: (slug) => (slug ? `/pm/${slug}` : '/') },
-];
 
 /** Presets visuels — miroir de lib/themes/presets.ts (sojori-vente). */
 const THEME_CHOICES: Array<{
@@ -154,8 +149,6 @@ function DirectBookingConfigInner() {
     shape: 'auto',
     social: { ...EMPTY_SOCIAL },
   });
-  const [previewPage, setPreviewPage] = useState('home');
-  const [previewMobile, setPreviewMobile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -492,67 +485,28 @@ function DirectBookingConfigInner() {
               </Box>
             </Box>
 
-            <Box sx={{ border: '1px solid rgba(26,22,17,0.1)', borderRadius: 2.5, p: 2.25, bgcolor: '#fff' }}>
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1, mb: 1.5 }}
-              >
-                <Box>
-                  <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Aperçu en direct</Typography>
-                  <Typography sx={{ fontSize: 12, color: '#7a756c' }}>
-                    Votre thème et votre forme appliqués au vrai site, page par page.
-                  </Typography>
-                </Box>
-                <Stack direction="row" sx={{ gap: 0.75 }}>
-                  {PREVIEW_PAGES.map((pg) => (
-                    <Button
-                      key={pg.id}
-                      size="small"
-                      variant={previewPage === pg.id ? 'contained' : 'outlined'}
-                      onClick={() => setPreviewPage(pg.id)}
-                      sx={{ fontSize: 11.5, px: 1.25, minWidth: 0 }}
-                    >
-                      {pg.label}
-                    </Button>
-                  ))}
-                  <Button
-                    size="small"
-                    variant={previewMobile ? 'contained' : 'outlined'}
-                    onClick={() => setPreviewMobile((m) => !m)}
-                    sx={{ fontSize: 11.5, px: 1.25, minWidth: 0 }}
-                  >
-                    📱
-                  </Button>
-                </Stack>
-              </Stack>
-              <Box
-                sx={{
-                  border: '1px solid rgba(26,22,17,0.12)',
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                  bgcolor: '#f6f5f1',
-                  display: 'flex',
-                  justifyContent: 'center',
-                }}
-              >
-                <Box
-                  component="iframe"
-                  key={`${previewPage}-${config.theme}-${config.shape}-${previewMobile}`}
-                  src={`https://sojori.com${(PREVIEW_PAGES.find((pg) => pg.id === previewPage) ?? PREVIEW_PAGES[0]).path(pmProfile?.slug || '')}?theme=${config.theme}&shape=${config.shape}`}
-                  title="Aperçu du site"
-                  sx={{
-                    width: previewMobile ? 390 : '100%',
-                    maxWidth: '100%',
-                    height: 560,
-                    border: 'none',
-                    bgcolor: '#fff',
-                  }}
-                />
+            <Box
+              sx={{
+                border: '1px solid rgba(26,22,17,0.1)',
+                borderRadius: 2.5,
+                p: 2.25,
+                bgcolor: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1.5,
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Aperçu du site</Typography>
+                <Typography sx={{ fontSize: 12, color: '#7a756c' }}>
+                  Votre thème et votre forme appliqués au vrai site — page par page, mobile et
+                  desktop.
+                </Typography>
               </Box>
-              <Typography sx={{ fontSize: 11, color: '#9a948a', mt: 0.75 }}>
-                Aperçu sur sojori.com avec vos réglages — votre site aura votre nom, votre logo et
-                uniquement vos annonces.
-              </Typography>
+              <Button component={RouterLink} to="/direct-booking/preview" variant="contained" size="small">
+                👁️ Ouvrir la preview
+              </Button>
             </Box>
             {config.domain.trim() && !domainInvalid && (
               <Alert severity="info" sx={{ borderRadius: 2.5 }}>
