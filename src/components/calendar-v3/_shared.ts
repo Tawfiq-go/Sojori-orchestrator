@@ -432,6 +432,37 @@ export function genDays(startDate: Date, count = 31): DayInfo[] {
 export const cellKey = (c: CellSelection): string =>
   `${c.listingId}|${c.roomTypeId}|${c.dateStr}|${c.column}`;
 
+/** Devise listing calendrier — défaut Sojori = MAD (jamais EUR silencieux). */
+export function resolveListingCurrency(
+  listing?: { currencyCode?: string; currency?: string } | null,
+  fallback = 'MAD',
+): string {
+  const code = String(listing?.currencyCode || listing?.currency || '').trim().toUpperCase();
+  return code || fallback;
+}
+
+/** Devise homogène des cellules sélectionnées, sinon fallback. */
+export function resolveSelectionCurrency(
+  cells: Array<{ listingId?: string }> | null | undefined,
+  listings: Array<{ _id?: string; id?: string; currencyCode?: string; currency?: string }> = [],
+  fallback = 'MAD',
+): string {
+  if (!cells?.length) return fallback;
+  const byId = new Map(
+    listings.map((l) => [String(l._id || l.id), resolveListingCurrency(l, '')]),
+  );
+  const codes = [
+    ...new Set(
+      cells
+        .map((c) => byId.get(String(c.listingId)) || '')
+        .filter(Boolean),
+    ),
+  ];
+  if (codes.length === 1) return codes[0];
+  if (codes.length > 1) return codes[0]; // multi-devises : affiche la 1re, évite EUR fantôme
+  return fallback;
+}
+
 /** Get currency symbol from currency code */
 export function getCurrencySymbol(code: string): string {
   const symbols: Record<string, string> = {

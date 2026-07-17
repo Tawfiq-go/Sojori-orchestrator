@@ -388,7 +388,7 @@ const ListingLabel = memo(function ListingLabel({ listing, expanded, showChevron
               display: 'block',
             }}
           >
-            Moy: {avgPrice} {listing.currencyCode || 'EUR'}
+            Moy: {avgPrice} {listing.currencyCode || listing.currency || 'MAD'}
           </span>
         )}
       </div>
@@ -610,7 +610,7 @@ function blockedNoResaInfo(inv) {
 function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
   const [showTip, setShowTip] = useState(false);
   const ref = useRef(null);
-  const currency = listing.currencyCode || 'EUR';
+  const currency = listing.currencyCode || listing.currency || 'MAD';
   const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
   const rate = formatInventoryRateLabel(state, inv);
   const archived = state === 'archive';
@@ -714,7 +714,7 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
 function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown, onMouseEnter, onReservationClick }) {
   const [showTip, setShowTip] = useState(false);
   const ref = useRef(null);
-  const currency = listing.currencyCode || 'EUR';
+  const currency = listing.currencyCode || listing.currency || 'MAD';
 
   // Détecter les états de la cellule
   const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });

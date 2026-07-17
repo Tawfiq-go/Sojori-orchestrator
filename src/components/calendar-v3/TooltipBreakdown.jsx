@@ -348,7 +348,7 @@ function TooltipBody({ inv, dateStr, currency }) {
   );
 }
 
-export default function TooltipBreakdown({ inv, dateStr, currency = 'EUR', anchorRef, open = false }) {
+export default function TooltipBreakdown({ inv, dateStr, currency = 'MAD', anchorRef, open = false }) {
   const tipRef = useRef(null);
   const [coords, setCoords] = useState(null);
 
