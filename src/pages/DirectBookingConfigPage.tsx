@@ -165,7 +165,15 @@ function DirectBookingConfigInner() {
   /** Upload du logo directement ici (pas besoin de passer par Mon profil PM) —
    *  sauvegarde immédiate dans pmProfile.vitrineLogoUrl (utilisé par le site). */
   const handleLogoFile = async (file: File | null) => {
-    if (!file || !targetOwnerId || uploadingLogo) return;
+    if (!file || uploadingLogo) return;
+    if (!targetOwnerId) {
+      toast.error('Sélectionnez d’abord un propriétaire (PM) dans le filtre en haut.');
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error('Logo trop lourd (max 4 Mo) — réduisez l’image et réessayez.');
+      return;
+    }
     setUploadingLogo(true);
     try {
       const formData = new FormData();
