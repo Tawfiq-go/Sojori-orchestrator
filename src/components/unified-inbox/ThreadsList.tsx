@@ -7,6 +7,8 @@ import type { Thread, Channel } from '../../types/unifiedInbox.types';
 import type { OtaAdvancedSearch, OtaChannelFilter, OtaFilterCounts, OtaStayQuickFilter, OtaStayQuickFilterCounts } from './otaThreadFilters';
 import OtaInboxFilters from './OtaInboxFilters';
 import WaInboxFilters, { countWaActiveFilters } from './WaInboxFilters';
+import airbnbLogo from '../../assets/images/airbnb.png';
+import bookingLogo from '../../assets/images/booking.png';
 import type {
   WaChannelFilter,
   WaFilterCounts,
@@ -225,6 +227,12 @@ export default function ThreadsList({
     if (ch === 'ab') return 'A';
     if (ch === 'bk') return 'B';
     return 'V';
+  };
+
+  const otaChannelLogo = (ch: string) => {
+    if (ch === 'ab') return { src: airbnbLogo, alt: 'Airbnb' };
+    if (ch === 'bk') return { src: bookingLogo, alt: 'Booking.com' };
+    return null;
   };
 
   return (
@@ -658,6 +666,7 @@ export default function ThreadsList({
             mode === 'ota' ? thread.channel === 'ab' : thread.bookingPlatform === 'ab';
           const isBooking =
             mode === 'ota' ? thread.channel === 'bk' : thread.bookingPlatform === 'bk';
+          const channelLogo = mode === 'ota' ? otaChannelLogo(thread.channel) : null;
 
           return (
             <Box
@@ -698,20 +707,42 @@ export default function ThreadsList({
                     width: ultraCompact ? 32 : 38,
                     height: ultraCompact ? 32 : 38,
                     borderRadius: '50%',
-                    background: thread.isStaff
-                      ? 'linear-gradient(135deg,#fcd34d,#b45309)'
-                      : avatarGradient(thread.channel),
+                    background: channelLogo
+                      ? '#fff'
+                      : thread.isStaff
+                        ? 'linear-gradient(135deg,#fcd34d,#b45309)'
+                        : avatarGradient(thread.channel),
                     fontSize: ultraCompact ? 11 : 13,
                     fontWeight: 700,
-                    color: '#fff',
+                    color: channelLogo ? T.text : '#fff',
                     fontFamily: '"Geist Mono", monospace',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: '0 1px 3px rgba(20,17,10,0.10)',
+                    boxShadow: channelLogo
+                      ? '0 1px 4px rgba(20,17,10,0.14), inset 0 0 0 1px rgba(20,17,10,0.08)'
+                      : '0 1px 3px rgba(20,17,10,0.10)',
                   }}
                 >
-                  {getInitials(thread.name)}
+                  {channelLogo ? (
+                    <Box
+                      title={channelLogo.alt}
+                      sx={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: '50%',
+                        overflow: 'hidden',
+                        backgroundImage: `url(${channelLogo.src})`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'center',
+                        backgroundSize: thread.channel === 'bk' ? '108%' : '70%',
+                      }}
+                      role="img"
+                      aria-label={channelLogo.alt}
+                    />
+                  ) : (
+                    getInitials(thread.name)
+                  )}
                 </Box>
                 {mode === 'whatsapp' && !thread.isStaff && (
                   <Box
@@ -728,26 +759,28 @@ export default function ThreadsList({
                     }}
                   />
                 )}
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    bottom: -2,
-                    right: -2,
-                    width: 16,
-                    height: 16,
-                    borderRadius: '50%',
-                    bgcolor: thread.channelColor,
-                    fontSize: 8,
-                    fontWeight: 800,
-                    color: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    border: `2px solid ${T.bg1}`,
-                  }}
-                >
-                  {channelMini(thread.channel)}
-                </Box>
+                {!channelLogo && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      bottom: -2,
+                      right: -2,
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      bgcolor: thread.channelColor,
+                      fontSize: 8,
+                      fontWeight: 800,
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: `2px solid ${T.bg1}`,
+                    }}
+                  >
+                    {channelMini(thread.channel)}
+                  </Box>
+                )}
               </Box>
 
               <Box sx={{ flex: 1, minWidth: 0 }}>
