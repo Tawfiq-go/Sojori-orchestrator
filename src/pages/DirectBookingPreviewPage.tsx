@@ -102,7 +102,7 @@ function DirectBookingPreviewInner() {
   return (
     <DashboardWrapper breadcrumb={['Direct booking', 'Preview']}>
       <TeamOwnerScopeBar />
-      <Box sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 1, md: 2 } }}>
+      <Box sx={{ width: '100%', px: { xs: 1, md: 1.5 }, py: 1 }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between', gap: 1, mb: 1.5 }}
@@ -205,8 +205,8 @@ function DirectBookingPreviewInner() {
                 sx={{
                   width: mobile ? 390 : '100%',
                   maxWidth: '100%',
-                  height: 'calc(100vh - 260px)',
-                  minHeight: 480,
+                  height: 'calc(100vh - 230px)',
+                  minHeight: 520,
                   border: 'none',
                   bgcolor: '#fff',
                 }}
