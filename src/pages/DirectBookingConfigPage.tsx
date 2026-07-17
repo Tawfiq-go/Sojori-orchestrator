@@ -242,7 +242,7 @@ function DirectBookingConfigInner() {
     if (!canSave || !targetOwnerId) return;
     setSaving(true);
     try {
-      await updateOwner(
+      const res = await updateOwner(
         targetOwnerId,
         {
           pmProfile: {
@@ -263,7 +263,18 @@ function DirectBookingConfigInner() {
         },
         undefined,
       );
-      toast.success('Configuration Direct booking enregistrée — notre équipe prend le relais.');
+      // Le backend rattache le domaine à l'hébergement au save (API Vercel)
+      // et renvoie le statut réel + un message de branchement.
+      const body = (res as { data?: { account?: { pmProfile?: PmProfileLite }; domainSync?: string } })
+        ?.data;
+      const newStatus = body?.account?.pmProfile?.directBooking?.status;
+      if (newStatus) setConfig((prev) => ({ ...prev, status: newStatus }));
+      if (body?.domainSync) {
+        if (newStatus === 'en_ligne') toast.success(`🌐 ${body.domainSync}`);
+        else toast.info(`⏳ ${body.domainSync}`);
+      } else {
+        toast.success('Configuration Direct booking enregistrée — notre équipe prend le relais.');
+      }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } }; message?: string };
       toast.error(err.response?.data?.error || err.message || 'Enregistrement impossible');
