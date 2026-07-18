@@ -2,21 +2,66 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
+  Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   MenuItem,
   Popover,
   Select,
   Switch,
+  Tab,
+  Tabs,
   Typography,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { toast } from 'react-toastify';
-import { CAPABILITY_REGISTRY, getCapabilityDefinition } from '../serviceMatrix/capabilityRegistry';
+import {
+  CAPABILITY_GROUPS,
+  CAPABILITY_REGISTRY,
+  getCapabilityDefinition,
+  type CapabilityGroupId,
+} from '../serviceMatrix/capabilityRegistry';
+import {
+  CapabilityGestionPanel,
+  CapabilityWhatsAppPanel,
+} from '../serviceMatrix/CapabilityMatrixConfigPanels';
 import listingsService from '../../services/listingsService';
 import * as fulltaskApi from '../../services/fulltaskApi';
 import { unwrapFulltaskData } from '../../utils/unwrapFulltaskResponse';
-import { loadOwnerOrchestrationMatrix, type OwnerOrchestrationEffective } from './ownerOrchestrationApi';
+import {
+  loadOwnerOrchestrationMatrix,
+  saveOwnerGestion,
+  type OwnerOrchestrationDoc,
+  type OwnerOrchestrationEffective,
+} from './ownerOrchestrationApi';
+import {
+  loadListingOrchestrationMatrix,
+  saveListingGestion,
+  type ListingOrchestrationDoc,
+  type ListingOrchestrationEffective,
+} from './listingOrchestrationApi';
+import {
+  activationStatusFromEffectiveDoc,
+  loadListingServiceActivation,
+  overridePatchForToggle,
+  saveListingServiceActivation,
+  type ServiceActivationStatusEntry,
+} from './listingCapabilityActivation';
+import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import { V3 } from './theme';
+
+const GROUP_ORDER: CapabilityGroupId[] = [
+  'cleaning',
+  'journey',
+  'communication',
+  'concierge',
+  'info',
+];
 
 /* ───────────────────── formatteurs langage métier ───────────────────── */
 
@@ -103,6 +148,86 @@ function hourOf(time?: string): string {
   return `${Number(String(time).slice(0, 2))}h`;
 }
 
+type CapDoc = {
+  key?: string;
+  taskType?: string;
+  decisions?: Record<string, unknown>;
+  taskBehavior?: Record<string, unknown>;
+  gestion?: Record<string, unknown>;
+  whatsapp?: { menuCodes?: string[]; menuOptions?: Array<Record<string, unknown>>; overrides?: unknown[] };
+  execution?: {
+    enabled?: boolean;
+    reminders?: Array<Record<string, unknown>>;
+    staffReminders?: Array<Record<string, unknown>>;
+    staffAssignment?: Record<string, unknown> | null;
+    escalationEnabled?: boolean;
+    deadline?: Record<string, unknown> | null;
+  } | null;
+};
+
+/** Résumé lisible de ce qui est déjà configuré (gestion + WA). */
+function configHints(cap: CapDoc, key: string): string[] {
+  const g = (cap.gestion ?? {}) as Record<string, unknown>;
+  const hints: string[] = [];
+
+  if (key === 'cleaning_free' || key === 'cleaning_paid' || key === 'cleaning_sojori') {
+    const freq = Array.isArray(g.frequency) ? g.frequency : [];
+    const slots = Array.isArray(g.timeSlots)
+      ? g.timeSlots
+      : Array.isArray(g.TS_CLEAN)
+        ? g.TS_CLEAN
+        : [];
+    const extras = Array.isArray(g.extras)
+      ? (g.extras as Array<{ enabled?: boolean }>).filter((e) => e.enabled !== false)
+      : [];
+    if (freq.length) hints.push(`${freq.length} palier${freq.length > 1 ? 's' : ''}`);
+    if (slots.length) hints.push(`${slots.length} créneau${slots.length > 1 ? 'x' : ''}`);
+    if (extras.length) hints.push(`${extras.length} option${extras.length > 1 ? 's' : ''}`);
+  }
+
+  if (key === 'concierge') {
+    const services = (
+      Array.isArray(g.services) ? g.services : Array.isArray(g.customServices) ? g.customServices : []
+    ) as Array<{ enabled?: boolean }>;
+    const on = services.filter((s) => s.enabled !== false);
+    if (on.length) hints.push(`${on.length} service${on.length > 1 ? 's' : ''}`);
+    else if (services.length) hints.push(`${services.length} au catalogue`);
+  }
+
+  if (key === 'transport') {
+    const zones = Array.isArray(g.transportServices)
+      ? g.transportServices
+      : Array.isArray(g.zones)
+        ? g.zones
+        : Array.isArray(g.routes)
+          ? g.routes
+          : [];
+    if (zones.length) hints.push(`${zones.length} trajet${zones.length > 1 ? 's' : ''} / prix`);
+  }
+
+  if (key === 'groceries') {
+    const items = Array.isArray(g.groceryServices)
+      ? g.groceryServices
+      : Array.isArray(g.items)
+        ? g.items
+        : Array.isArray(g.products)
+          ? g.products
+          : [];
+    if (items.length) hints.push(`${items.length} article${items.length > 1 ? 's' : ''}`);
+  }
+
+  if (key === 'cleaning_paid') {
+    const paid = g.paidCleaningConfig as { services?: unknown[] } | null | undefined;
+    const services = Array.isArray(paid?.services) ? paid.services : Array.isArray(g.services) ? g.services : [];
+    if (services.length) hints.push(`${services.length} offre${services.length > 1 ? 's' : ''} payante${services.length > 1 ? 's' : ''}`);
+  }
+
+  const codes = cap.whatsapp?.menuCodes;
+  if (Array.isArray(codes) && codes.length) hints.push(`menu ${codes.join('·')}`);
+
+  return hints;
+}
+
 const HOURS = ['08:00', '09:00', '10:00', '11:00', '14:00', '16:00', '18:00'] as const;
 
 const CLIENT_MSG_ID: Record<string, string> = {
@@ -133,6 +258,33 @@ function defaultRefForTask(taskType: string): string {
   if (taskType === 'departure_choose' || taskType === 'departure_declare' || taskType === 'checkout_cleaning') return 'checkout';
   if (taskType === 'support' || taskType === 'service_client') return 'task_created';
   return 'scheduledDate';
+}
+
+function isPostCreationEscalation(taskType: string): boolean {
+  return taskType === 'support' || taskType === 'service_client';
+}
+
+type DeadlineDoc = { ref?: string; day?: number; time?: string; hours?: number } | null | undefined;
+
+/** Escalade lisible — Support/Service client = après création (J0 / J+1 / +Xh). */
+function escalationHuman(escOn: boolean, dl: DeadlineDoc): string {
+  if (!escOn) return '—';
+  if (!dl) return 'ON';
+  const hours = dl.hours != null ? Number(dl.hours) : null;
+  if (hours != null && hours > 0) {
+    return `+${hours}h après création`;
+  }
+  if (dl.day != null) {
+    const d = Number(dl.day);
+    const dayLabel = d === 0 ? 'J0' : d > 0 ? `J+${d}` : `J${d}`;
+    const timePart = dl.time ? ` à ${hourOf(dl.time)}` : '';
+    if (dl.ref === 'task_created' || d >= 0) {
+      if (d === 0) return `J0 après création${timePart}`;
+      if (d > 0) return `${dayLabel} après création${timePart}`;
+    }
+    return `${dayLabel}${timePart}`;
+  }
+  return 'ON';
 }
 
 /* ───────────────────── petits contrôles réutilisables ───────────────────── */
@@ -171,41 +323,91 @@ function HourSelect({ value, onChange }: { value: string; onChange: (v: string) 
 
 /* ───────────────────────────── composant ───────────────────────────── */
 
-type CapDoc = {
-  key?: string;
-  taskType?: string;
-  decisions?: Record<string, unknown>;
-  taskBehavior?: Record<string, unknown>;
-  gestion?: Record<string, unknown>;
-  whatsapp?: { menuCodes?: string[]; menuOptions?: Array<Record<string, unknown>>; overrides?: unknown[] };
-  execution?: {
-    enabled?: boolean;
-    reminders?: Array<Record<string, unknown>>;
-    staffReminders?: Array<Record<string, unknown>>;
-    staffAssignment?: Record<string, unknown> | null;
-    escalationEnabled?: boolean;
-    deadline?: Record<string, unknown> | null;
-  } | null;
-};
-
 type EditorKind = 'availability' | 'reminders' | 'assign' | 'staffRem' | 'escalation';
 
-export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: string }) {
-  const [doc, setDoc] = useState<OwnerOrchestrationEffective | null>(null);
+type OverviewDoc = OwnerOrchestrationEffective | ListingOrchestrationEffective;
+
+export default function OrchestrationOverviewPanel({
+  ownerKey,
+  listingId,
+  listingName,
+}: {
+  ownerKey: string;
+  /** Si fourni (fiche annonce) : grille + Configurer au scope listing (codes Accès éditables). */
+  listingId?: string;
+  listingName?: string;
+}) {
+  const isListingScope = Boolean(listingId);
+  const [doc, setDoc] = useState<OverviewDoc | null>(null);
   const [messages, setMessages] = useState<Array<Record<string, unknown>>>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editor, setEditor] = useState<{ kind: EditorKind; capKey: string; anchor: HTMLElement } | null>(null);
+  const [configModal, setConfigModal] = useState<{ capKey: string; tab: 'gestion' | 'wa' } | null>(null);
+  const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
+  const [activationStatus, setActivationStatus] = useState<ServiceActivationStatusEntry[]>([]);
 
   const reload = useCallback(() => {
     setLoading(true);
     setError(null);
-    loadOwnerOrchestrationMatrix(ownerKey)
-      .then(async ({ doc: d }) => {
+
+    const loadValues = async () => {
+      if (listingId) {
+        try {
+          const listingDoc = await listingsService.getListingDocument(listingId);
+          let vals = { ...((listingDoc ?? {}) as Record<string, unknown>) };
+          try {
+            const accessRes = await listingsService.getListingAccessConfig(listingId);
+            const accessData = (accessRes as { data?: Record<string, unknown> })?.data;
+            if (accessData && typeof accessData === 'object') {
+              vals = { ...vals, ...accessData };
+            }
+          } catch {
+            /* access doc optional */
+          }
+          setListingValues(vals);
+        } catch {
+          setListingValues({});
+        }
+        return;
+      }
+      try {
+        const res = await listingsService.getListingOwnerConfigTemplate(ownerKey);
+        const payload = (res as { data?: { listing?: Record<string, unknown> } })?.data ?? res;
+        setListingValues(
+          ((payload as { listing?: Record<string, unknown> })?.listing ?? {}) as Record<string, unknown>,
+        );
+      } catch {
+        setListingValues({});
+      }
+    };
+
+    const loadMatrix = listingId
+      ? loadListingOrchestrationMatrix(listingId).then(({ doc: d }) => d)
+      : loadOwnerOrchestrationMatrix(ownerKey).then(({ doc: d }) => d);
+
+    loadMatrix
+      .then(async (d) => {
         setDoc(d);
+        await loadValues();
+        if (listingId) {
+          const fromDoc = activationStatusFromEffectiveDoc(d as ListingOrchestrationEffective, listingId);
+          if (fromDoc?.length) {
+            setActivationStatus(fromDoc);
+          } else {
+            try {
+              const act = await loadListingServiceActivation(listingId);
+              setActivationStatus(act.services ?? []);
+            } catch {
+              setActivationStatus([]);
+            }
+          }
+        } else {
+          setActivationStatus([]);
+        }
         let msgs = (d.scheduledMessages ?? []) as Array<Record<string, unknown>>;
-        if (!msgs.length) {
+        if (!msgs.length && !listingId) {
           try {
             const raw = await fulltaskApi.getOrchestrationConfig(ownerKey, { strictOwner: true });
             const ft = unwrapFulltaskData<{ scheduledMessages?: Array<Record<string, unknown>> }>(raw);
@@ -218,7 +420,7 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Chargement impossible'))
       .finally(() => setLoading(false));
-  }, [ownerKey]);
+  }, [ownerKey, listingId]);
 
   useEffect(() => {
     reload();
@@ -226,46 +428,178 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
 
   const caps = (doc?.capabilities ?? {}) as Record<string, CapDoc>;
 
+  const resolveCap = useCallback(
+    (capKey: string): CapDoc | null => {
+      const existing = caps[capKey];
+      if (existing) return existing;
+      const def = getCapabilityDefinition(capKey);
+      if (!def) return null;
+      return {
+        key: capKey,
+        taskType: def.taskType ?? undefined,
+        decisions: {
+          managed: false,
+          clientEnabled: false,
+          orchestrated: false,
+          taskEnabled: false,
+        },
+      };
+    },
+    [caps],
+  );
+
   const saveCapPatch = useCallback(
     async (capKey: string, patch: Partial<CapDoc>) => {
-      const cap = caps[capKey];
+      const cap = resolveCap(capKey);
       const def = getCapabilityDefinition(capKey);
       if (!cap || !def) return;
+
+      if (listingId) {
+        const act = activationStatus.find((s) => s.serviceId === capKey);
+        if (act && act.effectiveEnabled !== true) {
+          toast.warning(
+            `« ${def.label} » est désactivé pour cette annonce — activez-le (ON) avant de modifier.`,
+          );
+          return;
+        }
+      }
+
       setSaving(true);
       try {
-        await listingsService.putOwnerOrchestration(ownerKey, {
-          capabilities: {
-            [capKey]: {
-              key: capKey,
-              taskType: def.taskType,
-              decisions: cap.decisions,
-              taskBehavior: cap.taskBehavior,
-              gestion: cap.gestion,
-              whatsapp: patch.whatsapp ?? cap.whatsapp,
-              execution: patch.execution !== undefined ? patch.execution : cap.execution,
-            },
-          },
-        });
-        // maj locale optimiste
+        const payload = {
+          key: capKey,
+          taskType: def.taskType,
+          decisions: patch.decisions ?? cap.decisions,
+          taskBehavior: patch.taskBehavior ?? cap.taskBehavior,
+          gestion: patch.gestion ?? cap.gestion,
+          whatsapp: patch.whatsapp ?? cap.whatsapp,
+          execution: patch.execution !== undefined ? patch.execution : cap.execution,
+        };
+        if (listingId) {
+          await listingsService.putListingOrchestration(listingId, {
+            capabilities: { [capKey]: payload },
+          });
+        } else {
+          await listingsService.putOwnerOrchestration(ownerKey, {
+            capabilities: { [capKey]: payload },
+          });
+        }
         setDoc((prev) =>
           prev
             ? {
                 ...prev,
                 capabilities: {
                   ...prev.capabilities,
-                  [capKey]: { ...(prev.capabilities[capKey] as CapDoc), ...patch } as never,
+                  [capKey]: { ...cap, ...patch } as never,
                 },
               }
             : prev,
         );
-        toast.success('Modèle mis à jour');
+        toast.success(listingId ? 'Annonce mise à jour' : 'Modèle mis à jour');
+      } catch (e: unknown) {
+        const ax = e as { response?: { data?: { error?: string; message?: string } } };
+        const detail = ax.response?.data?.error || ax.response?.data?.message;
+        toast.error(detail || (e instanceof Error ? e.message : 'Enregistrement impossible'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [resolveCap, ownerKey, listingId, activationStatus],
+  );
+
+  const patchDecision = (capKey: string, field: 'managed' | 'clientEnabled', value: boolean) => {
+    const cap = resolveCap(capKey);
+    if (!cap) return;
+
+    // Listing : ON = activation (service-activation), pas decisions.managed
+    if (listingId && field === 'managed') {
+      void (async () => {
+        setSaving(true);
+        try {
+          const patch = overridePatchForToggle(activationStatus, capKey, value);
+          if (!patch.overrides && !patch.unset?.length) {
+            toast.info('Déjà aligné sur l’activation propriétaire');
+            return;
+          }
+          const next = await saveListingServiceActivation(listingId, patch);
+          setActivationStatus(next.services ?? []);
+          toast.success(value ? 'Service activé pour cette annonce' : 'Service désactivé pour cette annonce');
+          reload();
+        } catch (e: unknown) {
+          toast.error(e instanceof Error ? e.message : 'Activation impossible');
+        } finally {
+          setSaving(false);
+        }
+      })();
+      return;
+    }
+
+    if (listingId && field === 'clientEnabled') {
+      const act = activationStatus.find((s) => s.serviceId === capKey);
+      if (act && act.effectiveEnabled !== true) {
+        toast.warning('Activez d’abord le service (colonne ON) avant WhatsApp voyageur');
+        return;
+      }
+    }
+
+    const next: Record<string, unknown> = {
+      managed: true,
+      clientEnabled: true,
+      orchestrated: true,
+      taskEnabled: true,
+      ...(cap.decisions ?? {}),
+      [field]: value,
+    };
+    if (field === 'managed' && !value) {
+      next.clientEnabled = false;
+    }
+    void saveCapPatch(capKey, { decisions: next });
+  };
+
+  const onGestionPatch = useCallback(
+    async (capKey: string, patch: Record<string, unknown>) => {
+      if (!doc) return;
+      const existing = (caps[capKey]?.gestion ?? {}) as Record<string, unknown>;
+      const nextGestion = { ...existing, ...patch };
+      setSaving(true);
+      try {
+        if (listingId) {
+          await saveListingGestion({
+            listingId,
+            capabilityKey: capKey,
+            gestion: nextGestion,
+            doc: doc as ListingOrchestrationDoc,
+          });
+        } else {
+          await saveOwnerGestion({
+            ownerKey,
+            capabilityKey: capKey,
+            gestion: nextGestion,
+            doc: doc as OwnerOrchestrationDoc,
+          });
+        }
+        setDoc((prev) =>
+          prev
+            ? {
+                ...prev,
+                capabilities: {
+                  ...prev.capabilities,
+                  [capKey]: {
+                    ...(prev.capabilities[capKey] as CapDoc),
+                    gestion: nextGestion,
+                  } as never,
+                },
+              }
+            : prev,
+        );
+        toast.success('Configuration enregistrée');
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
       } finally {
         setSaving(false);
       }
     },
-    [caps, ownerKey],
+    [caps, doc, ownerKey, listingId],
   );
 
   /* ── éditeurs ── */
@@ -506,32 +840,105 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
 
     if (editor.kind === 'escalation') {
       const escOn = exec.escalationEnabled === true;
-      const dl = (exec.deadline ?? null) as { ref?: string; day?: number; time?: string } | null;
+      const dl = (exec.deadline ?? null) as DeadlineDoc;
+      const postCreate = isPostCreationEscalation(taskType);
       const ref = String(dl?.ref ?? defaultRefForTask(taskType));
-      const day = Number(dl?.day ?? -1);
-      const time = String(dl?.time ?? '11:00');
-      const write = (on: boolean, nextDay: number, nextTime: string) => {
+      const hours = dl?.hours != null ? Number(dl.hours) : null;
+      const day =
+        hours != null
+          ? null
+          : dl?.day != null
+            ? Number(dl.day)
+            : postCreate
+              ? 1
+              : -1;
+      const time = String(dl?.time ?? (postCreate ? '09:00' : '11:00'));
+
+      const writeDay = (on: boolean, nextDay: number, nextTime: string) => {
         patchExecution(editor.capKey, {
           escalationEnabled: on,
-          deadline: on ? { ref, day: nextDay, time: nextTime } : dl,
+          deadline: on
+            ? { ref: postCreate ? 'task_created' : ref, day: nextDay, time: nextTime }
+            : dl,
         });
       };
+      const writeHours = (on: boolean, nextHours: number) => {
+        patchExecution(editor.capKey, {
+          escalationEnabled: on,
+          deadline: on ? { ref: 'task_created', hours: nextHours } : dl,
+        });
+      };
+
       body = (
         <Box sx={{ display: 'grid', gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Switch size="small" checked={escOn} onChange={(e) => write(e.target.checked, day, time)} />
+            <Switch
+              size="small"
+              checked={escOn}
+              onChange={(e) => {
+                if (!e.target.checked) {
+                  writeDay(false, day ?? 1, time);
+                  return;
+                }
+                if (postCreate) {
+                  if (hours != null) writeHours(true, hours);
+                  else writeDay(true, day ?? 1, time);
+                } else {
+                  writeDay(true, day ?? -1, time);
+                }
+              }}
+            />
             <Typography sx={{ fontSize: 12, color: V3.t2 }}>Alerter l&apos;admin (escalade)</Typography>
           </Box>
-          {escOn && (
+          {escOn && postCreate && (
+            <>
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>
+                APRÈS CRÉATION DE LA TÂCHE
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                {[2, 4, 8].map((h) => (
+                  <SegChip
+                    key={`h${h}`}
+                    on={hours === h}
+                    label={`+${h}h`}
+                    onClick={() => writeHours(true, h)}
+                  />
+                ))}
+                {[0, 1].map((d) => (
+                  <SegChip
+                    key={`d${d}`}
+                    on={hours == null && day === d}
+                    label={d === 0 ? 'J0' : 'J+1'}
+                    onClick={() => writeDay(true, d, time)}
+                  />
+                ))}
+              </Box>
+              {hours == null && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography sx={{ fontSize: 12, color: V3.t3 }}>Heure</Typography>
+                  <HourSelect value={time} onChange={(t) => writeDay(true, day ?? 1, t)} />
+                </Box>
+              )}
+              <Typography sx={{ fontSize: 11, color: V3.t4 }}>
+                Ex. +4h = escalade 4 h après la demande · J+1 à 9h = lendemain à 09:00.
+              </Typography>
+            </>
+          )}
+          {escOn && !postCreate && (
             <>
               <Box sx={{ display: 'flex', gap: 0.5 }}>
-                {[-2, -1, 0].map((d) => (
-                  <SegChip key={d} on={day === d} label={d === 0 ? 'J0' : `J${d}`} onClick={() => write(true, d, time)} />
+                {[-2, -1, 0, 1].map((d) => (
+                  <SegChip
+                    key={d}
+                    on={day === d}
+                    label={d === 0 ? 'J0' : d > 0 ? `J+${d}` : `J${d}`}
+                    onClick={() => writeDay(true, d, time)}
+                  />
                 ))}
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Typography sx={{ fontSize: 12, color: V3.t3 }}>Heure</Typography>
-                <HourSelect value={time} onChange={(t) => write(true, day, t)} />
+                <HourSelect value={time} onChange={(t) => writeDay(true, day ?? 0, t)} />
               </Box>
             </>
           )}
@@ -560,22 +967,48 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
 
   const rows = useMemo(
     () =>
-      CAPABILITY_REGISTRY.filter((def) => caps[def.key]).map((def) => {
-        const cap = caps[def.key];
-        const on = cap.decisions?.managed === true;
+      CAPABILITY_REGISTRY.filter((def) => def.key !== 'menu_navigation').map((def) => {
+        const cap: CapDoc = caps[def.key] ?? {
+          key: def.key,
+          taskType: def.taskType ?? undefined,
+          decisions: {
+            managed: false,
+            clientEnabled: false,
+            orchestrated: false,
+            taskEnabled: false,
+          },
+        };
+        const act = activationStatus.find((s) => s.serviceId === def.key);
+        const on = isListingScope
+          ? act
+            ? act.effectiveEnabled === true
+            : cap.decisions?.managed === true
+          : cap.decisions?.managed === true;
+        const waOn = on && cap.decisions?.clientEnabled === true;
         const exec = cap.execution;
         const reminders = exec?.reminders ?? [];
         const staffRem = exec?.staffReminders ?? [];
         const sa = exec?.staffAssignment ?? null;
         const escOn = exec?.escalationEnabled === true;
-        const dl = exec?.deadline as { day?: number; time?: string } | null | undefined;
+        const dl = exec?.deadline as DeadlineDoc;
+        const hints = configHints(cap, def.key);
+        const hasClient = def.columns.client !== 'na';
         return {
           key: def.key,
+          group: def.group,
+          groupLabel: CAPABILITY_GROUPS[def.group] ?? def.groupLabel,
           emoji: def.emoji,
           label: def.label,
           on,
+          waOn,
+          hasClient,
           hasTask: Boolean(def.taskType),
-          availability: on ? availabilityHuman(cap.whatsapp?.menuOptions?.[0]?.availability as Availability) : 'Off',
+          hints,
+          availability: on
+            ? hasClient
+              ? availabilityHuman(cap.whatsapp?.menuOptions?.[0]?.availability as Availability)
+              : '—'
+            : 'Off',
           reminders: reminders.length
             ? `${daysHuman(reminders.map((r) => Number(r.day ?? 0)))} à ${hourOf(String(reminders[0]?.time ?? ''))}`
             : '—',
@@ -584,15 +1017,36 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
           staffReminder: staffRem.length
             ? `${daysHuman(staffRem.map((r) => Number(r.day ?? 0)))} à ${hourOf(String(staffRem[0]?.time ?? ''))}`
             : '—',
-          escalation: escOn
-            ? dl?.day != null
-              ? `${dl.day === 0 ? 'J0' : dl.day > 0 ? `J+${dl.day}` : `J${dl.day}`} à ${hourOf(dl.time)}`
-              : 'ON'
-            : '—',
+          escalation: escalationHuman(escOn, dl),
         };
       }),
-    [caps],
+    [caps, activationStatus, isListingScope],
   );
+
+  const groupedRows = useMemo(() => {
+    const byGroup = new Map<CapabilityGroupId, typeof rows>();
+    for (const r of rows) {
+      const list = byGroup.get(r.group) ?? [];
+      list.push(r);
+      byGroup.set(r.group, list);
+    }
+    return GROUP_ORDER.filter((g) => byGroup.has(g)).map((g) => ({
+      id: g,
+      label: CAPABILITY_GROUPS[g],
+      rows: byGroup.get(g)!,
+    }));
+  }, [rows]);
+
+  const configGestionValues = useMemo(() => {
+    if (!configModal) return {};
+    const capGestion = (caps[configModal.capKey]?.gestion ?? {}) as Record<string, unknown>;
+    const merged: Record<string, unknown> = { ...listingValues };
+    for (const [k, v] of Object.entries(capGestion)) {
+      if (v !== null && v !== undefined) merged[k] = v;
+      else if (!(k in merged)) merged[k] = v;
+    }
+    return merged;
+  }, [configModal, caps, listingValues]);
 
   if (loading) {
     return (
@@ -613,63 +1067,225 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
     px: 0.5,
     '&:hover': { bgcolor: V3.alt, outline: `1px solid ${V3.b}` },
   } as const;
-  const head = { fontSize: 11, fontWeight: 800, color: V3.t3, textTransform: 'uppercase' as const, letterSpacing: '0.04em' };
+  const head = {
+    fontSize: 10.5,
+    fontWeight: 800,
+    color: V3.t3,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+  };
 
   const open = (kind: EditorKind, capKey: string) => (e: React.MouseEvent<HTMLElement>) =>
     setEditor({ kind, capKey, anchor: e.currentTarget });
 
+  const configDef = configModal ? getCapabilityDefinition(configModal.capKey) : null;
+  const configHelp = (() => {
+    if (!configDef) return '';
+    switch (configDef.key) {
+      case 'access':
+        return isListingScope
+          ? 'Éditez mode d’accueil, parking, immeuble et appartement (codes + descriptions) — puis Enregistrer.'
+          : 'Template owner : mode d’accueil seulement. Codes parking / immeuble / appartement → chaque fiche annonce.';
+      case 'cleaning_free':
+      case 'cleaning_paid':
+      case 'cleaning_sojori':
+        return 'Éditez les paliers de durée, créneaux horaires et options — puis Enregistrer.';
+      case 'transport':
+        return 'Ajoutez des trajets et fixez le prix de chaque course — puis Enregistrer.';
+      case 'concierge':
+        return 'Choisissez les services conciergerie du catalogue, tarifs et détails — puis Enregistrer.';
+      case 'groceries':
+        return 'Configurez les articles / paniers courses et leurs prix — puis Enregistrer.';
+      default:
+        return configDef.gestionHint || 'Modifiez la configuration puis Enregistrer.';
+    }
+  })();
+
   return (
     <Box sx={{ display: 'grid', gap: 2, opacity: saving ? 0.6 : 1 }}>
       <Alert severity="info" sx={{ fontSize: 12.5 }}>
-        Cliquez une cellule pour la modifier — chaque changement est enregistré immédiatement dans le
-        modèle owner. Détail complet dans « Services &amp; workflows ».
+        {isListingScope ? (
+          <>
+            Vue <strong>annonce</strong> : <strong>ON</strong> = activation du service pour cette fiche
+            (onglet Activation). Puis Configurer / WA / ops. Un service Off ne peut pas être modifié via
+            orchestration.
+          </>
+        ) : (
+          <>
+            Cliquez <strong>Configurer</strong> pour éditer paliers / créneaux / prix / catalogue. Mode
+            Accès template = mode d&apos;accueil seulement (codes par annonce).
+          </>
+        )}
       </Alert>
 
       <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card, overflowX: 'auto' }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 800, color: V3.t, mb: 1 }}>
-          📱 Services — quand ils sont proposés et comment l&apos;équipe exécute
+        <Typography sx={{ fontSize: 14, fontWeight: 800, color: V3.t, mb: 1.25 }}>
+          Services — activation, config &amp; exécution
         </Typography>
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: '1.4fr 1.3fr 1fr 1.5fr 0.9fr 0.8fr',
+            gridTemplateColumns: 'minmax(150px,1.3fr) 44px 44px minmax(130px,1.15fr) 1.1fr 0.9fr 1.2fr 0.85fr 0.75fr 96px',
             gap: 0.75,
             alignItems: 'center',
-            minWidth: 860,
+            minWidth: 1080,
           }}
         >
           <Typography sx={head}>Service</Typography>
-          <Typography sx={head}>Proposé au voyageur</Typography>
-          <Typography sx={head}>Relances client</Typography>
-          <Typography sx={head}>Assignation staff</Typography>
+          <Typography sx={head}>ON</Typography>
+          <Typography sx={head}>WA</Typography>
+          <Typography sx={head}>Configurer</Typography>
+          <Typography sx={head}>Proposé</Typography>
+          <Typography sx={head}>Relances</Typography>
+          <Typography sx={head}>Assignation</Typography>
           <Typography sx={head}>Rappel staff</Typography>
           <Typography sx={head}>Escalade</Typography>
-          {rows.map((r) => (
-            <Box key={r.key} sx={{ display: 'contents' }}>
-              <Typography component="div" sx={{ ...cell, fontWeight: 700, color: r.on ? V3.t : V3.t4 }}>
-                {r.emoji} {r.label}
-                {!r.on && <Chip label="Off" size="small" sx={{ ml: 0.75, height: 16, fontSize: 10 }} />}
+          <Typography sx={head}>Fiche</Typography>
+
+          {groupedRows.map((group) => (
+            <Box key={group.id} sx={{ display: 'contents' }}>
+              <Typography
+                sx={{
+                  ...head,
+                  gridColumn: '1 / -1',
+                  mt: group.id === groupedRows[0]?.id ? 0.5 : 1.25,
+                  mb: 0.25,
+                  color: V3.t,
+                  fontSize: 11.5,
+                  bgcolor: V3.alt,
+                  px: 1,
+                  py: 0.5,
+                  borderRadius: 1,
+                }}
+              >
+                {group.label}
               </Typography>
-              <Typography component="div" sx={r.on ? editCell : { ...cell, opacity: 0.5 }} onClick={r.on ? open('availability', r.key) : undefined}>
-                {r.availability}
-              </Typography>
-              <Typography component="div" sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('reminders', r.key) : undefined}>
-                {r.reminders}
-              </Typography>
-              <Typography component="div" sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('assign', r.key) : undefined}>
-                {r.assign}
-                {r.autoAssign != null && r.assign !== '—' && (
-                  <Box component="span" sx={{ ml: 0.5, fontSize: 11, color: r.autoAssign ? V3.task : V3.t4 }}>
-                    · Auto-accepté {r.autoAssign ? '✓' : '✗'}
+              {group.rows.map((r) => (
+                <Box key={r.key} sx={{ display: 'contents' }}>
+                  <Typography component="div" sx={{ ...cell, fontWeight: 700, color: r.on ? V3.t : V3.t4 }}>
+                    {r.emoji} {r.label}
+                    {!r.on && (
+                      <Chip label="Off" size="small" sx={{ ml: 0.75, height: 16, fontSize: 10 }} />
+                    )}
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <Switch
+                      size="small"
+                      checked={r.on}
+                      onChange={(e) => patchDecision(r.key, 'managed', e.target.checked)}
+                      inputProps={{ 'aria-label': `${r.label} actif` }}
+                    />
                   </Box>
-                )}
-              </Typography>
-              <Typography component="div" sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('staffRem', r.key) : undefined}>
-                {r.staffReminder}
-              </Typography>
-              <Typography component="div" sx={r.hasTask ? editCell : cell} onClick={r.hasTask ? open('escalation', r.key) : undefined}>
-                {r.escalation}
-              </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                    {r.hasClient ? (
+                      <Switch
+                        size="small"
+                        checked={r.waOn}
+                        disabled={!r.on}
+                        onChange={(e) => patchDecision(r.key, 'clientEnabled', e.target.checked)}
+                        inputProps={{ 'aria-label': `${r.label} WhatsApp` }}
+                      />
+                    ) : (
+                      <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
+                    )}
+                  </Box>
+                  <Box
+                    sx={{
+                      ...editCell,
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 0.35,
+                      minHeight: 28,
+                      alignItems: 'center',
+                      py: 0.25,
+                    }}
+                    onClick={() => setConfigModal({ capKey: r.key, tab: 'gestion' })}
+                    title="Cliquer pour configurer (prix, créneaux, services…)"
+                  >
+                    {r.hints.length === 0 ? (
+                      <Typography sx={{ ...cell, color: V3.p, fontSize: 11.5, fontWeight: 700 }}>
+                        + Configurer
+                      </Typography>
+                    ) : (
+                      r.hints.map((h) => (
+                        <Chip
+                          key={h}
+                          label={h}
+                          size="small"
+                          sx={{
+                            height: 18,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            bgcolor: V3.pt,
+                            color: V3.pd,
+                            cursor: 'pointer',
+                          }}
+                        />
+                      ))
+                    )}
+                  </Box>
+                  <Typography
+                    component="div"
+                    sx={r.on && r.hasClient ? editCell : { ...cell, opacity: 0.5 }}
+                    onClick={r.on && r.hasClient ? open('availability', r.key) : undefined}
+                  >
+                    {r.availability}
+                  </Typography>
+                  <Typography
+                    component="div"
+                    sx={r.on && r.hasTask ? editCell : cell}
+                    onClick={r.on && r.hasTask ? open('reminders', r.key) : undefined}
+                  >
+                    {r.reminders}
+                  </Typography>
+                  <Typography
+                    component="div"
+                    sx={r.on && r.hasTask ? editCell : cell}
+                    onClick={r.on && r.hasTask ? open('assign', r.key) : undefined}
+                  >
+                    {r.assign}
+                    {r.autoAssign != null && r.assign !== '—' && (
+                      <Box component="span" sx={{ ml: 0.5, fontSize: 11, color: r.autoAssign ? V3.task : V3.t4 }}>
+                        · Auto {r.autoAssign ? '✓' : '✗'}
+                      </Box>
+                    )}
+                  </Typography>
+                  <Typography
+                    component="div"
+                    sx={r.on && r.hasTask ? editCell : cell}
+                    onClick={r.on && r.hasTask ? open('staffRem', r.key) : undefined}
+                  >
+                    {r.staffReminder}
+                  </Typography>
+                  <Typography
+                    component="div"
+                    sx={r.on && r.hasTask ? editCell : cell}
+                    onClick={r.on && r.hasTask ? open('escalation', r.key) : undefined}
+                  >
+                    {r.escalation}
+                  </Typography>
+                  <Box>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      startIcon={<SettingsOutlinedIcon sx={{ fontSize: 14 }} />}
+                      onClick={() => setConfigModal({ capKey: r.key, tab: 'gestion' })}
+                      sx={{
+                        fontSize: 11,
+                        py: 0.35,
+                        px: 1,
+                        minWidth: 0,
+                        textTransform: 'none',
+                        bgcolor: V3.p,
+                        boxShadow: 'none',
+                        '&:hover': { bgcolor: V3.pd, boxShadow: 'none' },
+                      }}
+                    >
+                      Éditer
+                    </Button>
+                  </Box>
+                </Box>
+              ))}
             </Box>
           ))}
         </Box>
@@ -677,7 +1293,7 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
 
       <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card }}>
         <Typography sx={{ fontSize: 14, fontWeight: 800, color: V3.t, mb: 1 }}>
-          💬 Messages automatiques du séjour
+          Messages automatiques du séjour
         </Typography>
         {messages.length === 0 ? (
           <Typography sx={cell}>Aucun message planifié.</Typography>
@@ -711,6 +1327,105 @@ export default function OrchestrationOverviewPanel({ ownerKey }: { ownerKey: str
       </Box>
 
       {renderEditor()}
+
+      <Dialog
+        open={Boolean(configModal && configDef)}
+        onClose={() => {
+          setConfigModal(null);
+          reload();
+        }}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2, maxHeight: '92vh' } }}
+      >
+        {configDef && configModal && (
+          <>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, pr: 6, fontWeight: 800 }}>
+              <Box>
+                <Typography component="div" sx={{ fontSize: 18, fontWeight: 800 }}>
+                  Configurer · {configDef.emoji} {configDef.label}
+                  {listingName ? (
+                    <Typography component="span" sx={{ fontSize: 13, fontWeight: 600, color: V3.t3, ml: 1 }}>
+                      · {listingName}
+                    </Typography>
+                  ) : null}
+                </Typography>
+                <Typography sx={{ fontSize: 12.5, color: V3.t3, fontWeight: 500, mt: 0.5 }}>
+                  {configHelp}
+                </Typography>
+              </Box>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  setConfigModal(null);
+                  reload();
+                }}
+                sx={{ position: 'absolute', right: 12, top: 12 }}
+                aria-label="Fermer"
+              >
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers sx={{ pt: 1.5 }}>
+              <Tabs
+                value={configModal.tab}
+                onChange={(_, v) => setConfigModal({ ...configModal, tab: v })}
+                sx={{ mb: 2, minHeight: 36 }}
+              >
+                <Tab value="gestion" label="Éditer la config" sx={{ textTransform: 'none', minHeight: 36, fontWeight: 700 }} />
+                {configDef.menuCodes.length > 0 && (
+                  <Tab value="wa" label="WhatsApp voyageur" sx={{ textTransform: 'none', minHeight: 36 }} />
+                )}
+              </Tabs>
+
+              {configModal.tab === 'gestion' && (
+                <Box key={`gestion-${configDef.key}-${listingId ?? ownerKey}`}>
+                  {configDef.key === 'cleaning_free' ? (
+                    <V3CleaningIncludedPanel
+                      gestion={configGestionValues}
+                      listingValues={listingValues}
+                      onSave={async (nextGestion) => {
+                        await onGestionPatch(configDef.key, nextGestion);
+                      }}
+                    />
+                  ) : (
+                    <CapabilityGestionPanel
+                      def={configDef}
+                      scope={isListingScope ? 'listing' : 'owner'}
+                      ownerKey={ownerKey}
+                      listingId={listingId}
+                      listingValues={configGestionValues}
+                      onListingPatch={async (patch) => {
+                        await onGestionPatch(configDef.key, patch);
+                      }}
+                      manualSaveMode
+                    />
+                  )}
+                </Box>
+              )}
+
+              {configModal.tab === 'wa' && (
+                <Box key={`wa-${configDef.key}-${listingId ?? ownerKey}`}>
+                  <CapabilityWhatsAppPanel
+                    def={configDef}
+                    scope={isListingScope ? 'listing' : 'owner'}
+                    ownerKey={ownerKey}
+                    listingId={listingId}
+                    orchestrationDoc={isListingScope ? (doc as ListingOrchestrationDoc) : undefined}
+                    ownerOrchestrationDoc={
+                      isListingScope ? undefined : (doc as OwnerOrchestrationDoc)
+                    }
+                    onOrchestrationSaved={reload}
+                    onWhatsappPatch={() => {
+                      void reload();
+                    }}
+                  />
+                </Box>
+              )}
+            </DialogContent>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 }
