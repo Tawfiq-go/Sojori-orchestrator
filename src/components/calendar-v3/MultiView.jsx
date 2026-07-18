@@ -179,13 +179,13 @@ export default function MultiView({
       overflow: 'hidden', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
       userSelect: isDragging ? 'none' : 'auto',
       maxWidth: '100%',
-      maxHeight: 'calc(100vh - 220px)',
+      maxHeight: 'calc(100vh - 150px)',
       display: 'flex',
       flexDirection: 'column',
     }}>
       {/* Légende des couleurs - au-dessus du header */}
       <div style={{
-        padding: '10px 16px', background: T.bg0, borderBottom: `1px solid ${T.border}`,
+        padding: '4px 12px', background: T.bg0, borderBottom: `1px solid ${T.border}`,
         display: 'flex', alignItems: 'center', gap: 16,
       }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: T.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
@@ -214,7 +214,7 @@ export default function MultiView({
           minWidth: 'max-content',
         }}>
           <div style={{
-            padding: '14px 16px', display: 'flex', alignItems: 'center',
+            padding: '7px 12px', display: 'flex', alignItems: 'center',
             fontSize: 11, fontWeight: 700, color: T.text3,
             letterSpacing: '0.08em', textTransform: 'uppercase',
             borderRight: `1px solid ${T.border}`,
@@ -290,7 +290,7 @@ export default function MultiView({
 const DayHeader = memo(function DayHeader({ day, loading }) {
   return (
     <div style={{
-      padding: '10px 0', textAlign: 'center',
+      padding: '5px 0 4px', textAlign: 'center',
       borderRight: `1px solid ${T.border}`,
       background: day.isToday ? T.primaryTint : 'transparent',
       position: 'relative',
@@ -326,7 +326,7 @@ const ListingLabel = memo(function ListingLabel({ listing, expanded, showChevron
     <div
       onClick={onToggle}
       style={{
-        padding: '12px 16px',
+        padding: '6px 12px',
         display: 'flex',
         alignItems: 'center',
         gap: 9,
@@ -648,7 +648,7 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
         display: 'flex', flexDirection: 'row',
         alignItems: 'center', justifyContent: 'center',
         gap: showRate && showDispo ? 6 : 0,
-        padding: '3px 4px', minHeight: 36, position: 'relative',
+        padding: '2px 4px', minHeight: 30, position: 'relative',
         fontFamily: '"Geist Mono", monospace',
         background,
         cursor: canHoverPrice ? 'help' : (blockInfo ? 'help' : 'default'),
@@ -823,7 +823,7 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '4px 4px', minHeight: 32, position: 'relative',
+        padding: '3px 4px', minHeight: 27, position: 'relative',
         fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 600,
         cursor: archived ? 'not-allowed' : draggable ? 'cell' : (showRateTooltip ? 'help' : 'default'),
         background,
