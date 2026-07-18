@@ -10,6 +10,7 @@ export interface ListingSummary {
   name: string;
   city: string;
   country: string;
+  cityId?: string;
   ownerId: string | null;
   ownerName: string;
   status: ListingStatus;
