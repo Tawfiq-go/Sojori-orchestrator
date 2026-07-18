@@ -99,6 +99,195 @@ const REQUIRE_EVENTS: Array<{ id: string; label: string; short: string }> = [
   { id: 'D4_completed', label: 'Départ déclaré (D4)', short: 'D4' },
 ];
 
+/** Ancre WhatsApp : avant arrivée vs pendant séjour / avant départ. */
+type TimingAnchor = 'checkin' | 'checkout';
+
+/** Fins supportées (interprétées par menuAvailabilityEngine). */
+type TimingFin = 'J-3' | 'J-2' | 'J-1' | 'J0' | 'fin' | 'J+1';
+
+const START_DAYS_PRE = [7, 6, 5, 4, 3, 2, 1] as const;
+const FIN_CHIPS: TimingFin[] = ['J-3', 'J-2', 'J-1', 'J0', 'fin', 'J+1'];
+
+/** Suggestions métier par service — alignées moteur WA (from/to + requires). */
+const TIMING_PRESETS: Record<
+  string,
+  { label: string; start: 'toujours' | 'resa' | number; fin: TimingFin; anchor: TimingAnchor; hint: string }
+> = {
+  cleaning_free: {
+    label: 'Séjour entier',
+    start: 'resa',
+    fin: 'fin',
+    anchor: 'checkout',
+    hint: 'Menu I dès la résa jusqu’au départ',
+  },
+  cleaning_paid: {
+    label: 'Séjour entier',
+    start: 'resa',
+    fin: 'fin',
+    anchor: 'checkout',
+    hint: 'Demande ménage possible tout le séjour',
+  },
+  arrival_choose: {
+    label: 'Pré-arrivée',
+    start: 'resa',
+    fin: 'J0',
+    anchor: 'checkin',
+    hint: 'Choisir créneau dès la résa jusqu’au jour d’arrivée',
+  },
+  departure_choose: {
+    label: 'Avant départ',
+    start: 3,
+    fin: 'J0',
+    anchor: 'checkout',
+    hint: 'Choisir départ J-3 → jour du départ',
+  },
+  arrival_declare: {
+    label: 'Jour J arrivée',
+    start: 1,
+    fin: 'J0',
+    anchor: 'checkin',
+    hint: 'Déclarer arrivée J-1 → J0',
+  },
+  departure_declare: {
+    label: 'Jour J départ',
+    start: 1,
+    fin: 'J0',
+    anchor: 'checkout',
+    hint: 'Déclarer départ J-1 → J0',
+  },
+  registration: {
+    label: 'Pré-arrivée',
+    start: 'resa',
+    fin: 'J0',
+    anchor: 'checkin',
+    hint: 'Enregistrement dès la résa jusqu’à l’arrivée',
+  },
+  access: {
+    label: 'Après E+D1',
+    start: 'resa',
+    fin: 'fin',
+    anchor: 'checkout',
+    hint: 'Codes : plutôt via conditions E + D1',
+  },
+  transport: {
+    label: 'Séjour',
+    start: 'resa',
+    fin: 'fin',
+    anchor: 'checkout',
+    hint: 'À la demande pendant le séjour',
+  },
+  groceries: {
+    label: 'Séjour',
+    start: 'resa',
+    fin: 'fin',
+    anchor: 'checkout',
+    hint: 'À la demande pendant le séjour',
+  },
+  concierge: {
+    label: 'Séjour',
+    start: 'resa',
+    fin: 'fin',
+    anchor: 'checkout',
+    hint: 'À la demande pendant le séjour',
+  },
+  support: {
+    label: 'Toujours',
+    start: 'toujours',
+    fin: 'fin',
+    anchor: 'checkout',
+    hint: 'Toujours visible',
+  },
+  service_client: {
+    label: 'Toujours',
+    start: 'toujours',
+    fin: 'fin',
+    anchor: 'checkout',
+    hint: 'Toujours visible',
+  },
+};
+
+function mkBoundaryFrom(
+  start: 'resa' | number,
+  anchor: TimingAnchor,
+): Boundary | undefined {
+  if (start === 'resa') return undefined;
+  if (start === 0) {
+    return {
+      unit: 'days',
+      value: 0,
+      reference: anchor === 'checkout' ? 'on_checkout_day' : 'on_checkin_day',
+    };
+  }
+  return {
+    unit: 'days',
+    value: start,
+    reference: anchor === 'checkout' ? 'before_checkout' : 'before_checkin',
+  };
+}
+
+function mkBoundaryTo(fin: TimingFin, anchor: TimingAnchor): Boundary {
+  if (fin === 'fin') {
+    return { unit: 'days', value: 0, reference: 'after_checkout' };
+  }
+  if (fin === 'J+1') {
+    return { unit: 'days', value: 1, reference: 'after_checkout' };
+  }
+  if (fin === 'J0') {
+    return {
+      unit: 'days',
+      value: 0,
+      reference: anchor === 'checkout' ? 'on_checkout_day' : 'on_checkin_day',
+    };
+  }
+  const n = Number(fin.replace('J-', ''));
+  return {
+    unit: 'days',
+    value: n,
+    reference: anchor === 'checkout' ? 'before_checkout' : 'before_checkin',
+  };
+}
+
+function parseTimingState(av: Availability, fallbackAnchor: TimingAnchor): {
+  start: 'toujours' | 'resa' | number;
+  fin: TimingFin;
+  anchor: TimingAnchor;
+} {
+  if (av?.type === 'always') {
+    return { start: 'toujours', fin: 'fin', anchor: fallbackAnchor };
+  }
+  const fromRef = String(av?.from?.reference ?? '');
+  const toRef = String(av?.to?.reference ?? '');
+  let anchor: TimingAnchor = fallbackAnchor;
+  if (fromRef.includes('checkout') || toRef.includes('checkout')) anchor = 'checkout';
+  else if (fromRef.includes('checkin') || toRef.includes('checkin')) anchor = 'checkin';
+
+  let start: 'toujours' | 'resa' | number = 'resa';
+  if (av?.type === 'after_booking_confirmed' || (!av?.from && (av?.type === 'time_window' || av?.type === 'conditional_and_time'))) {
+    start = 'resa';
+  } else if (fromRef.startsWith('on_')) {
+    start = 0;
+  } else if (av?.from?.value != null) {
+    start = Number(av.from.value);
+  }
+
+  let fin: TimingFin = 'fin';
+  if (toRef === 'after_checkout') {
+    fin = Number(av?.to?.value ?? 0) >= 1 ? 'J+1' : 'fin';
+  } else if (toRef.startsWith('on_')) {
+    fin = 'J0';
+  } else if (toRef.startsWith('before_') && av?.to?.value != null) {
+    const v = Number(av.to.value);
+    if (v === 1) fin = 'J-1';
+    else if (v === 2) fin = 'J-2';
+    else if (v === 3) fin = 'J-3';
+    else fin = 'J-1';
+  } else if (!av?.to) {
+    fin = 'fin';
+  }
+
+  return { start, fin, anchor };
+}
+
 function requiresList(av: Availability): string[] {
   return String(av?.requires ?? '')
     .split(',')
@@ -955,33 +1144,30 @@ export default function OrchestrationOverviewPanel({
 
     if (editor.kind === 'availability') {
       const av = (cap.whatsapp?.menuOptions?.[0]?.availability ?? { type: 'always' }) as Availability;
-      const refBase = isDeparture ? 'before_checkout' : 'before_checkin';
-      const dayRef = (av?.from?.reference ?? '') as string;
-      const curStart: 'toujours' | 'resa' | number =
-        av?.type === 'always' ? 'toujours'
-        : av?.type === 'after_booking_confirmed' || (!av?.from && (av?.type === 'time_window' || av?.type === 'conditional_and_time'))
-          ? 'resa'
-          : Number(av?.from?.value ?? 3);
-      const curEnd = av?.to;
-      const mkTo = (fin: 'J-1' | 'J0' | 'depart') =>
-        fin === 'depart'
-          ? { unit: 'days', value: 0, reference: 'after_checkout' }
-          : fin === 'J0'
-            ? { unit: 'days', value: 0, reference: isDeparture ? 'on_checkout_day' : 'on_checkin_day' }
-            : { unit: 'days', value: 1, reference: refBase };
-      const curFin: 'J-1' | 'J0' | 'depart' =
-        (curEnd?.reference ?? '').startsWith('on_') ? 'J0'
-        : curEnd?.reference === 'after_checkout' || !curEnd ? 'depart'
-        : 'J-1';
+      const fallbackAnchor: TimingAnchor =
+        taskType === 'departure_choose' || taskType === 'departure_declare' ? 'checkout' : 'checkin';
+      const { start: curStart, fin: curFin, anchor: curAnchor } = parseTimingState(av, fallbackAnchor);
       const curReqs = requiresList(av);
-      /** Construit l'availability : base début/fin, puis conditions (ET) si présentes. */
-      const writeAv = (start: 'toujours' | 'resa' | number, fin: 'J-1' | 'J0' | 'depart', reqs: string[]) => {
+      const preset = TIMING_PRESETS[editor.capKey];
+      const anchorLabel = curAnchor === 'checkout' ? 'départ' : 'arrivée';
+
+      const writeAv = (
+        start: 'toujours' | 'resa' | number,
+        fin: TimingFin,
+        reqs: string[],
+        anchor: TimingAnchor,
+      ) => {
         let base: Record<string, unknown>;
-        if (start === 'toujours') base = { type: 'always' };
-        else if (start === 'resa') {
-          base = fin === 'depart' ? { type: 'after_booking_confirmed' } : { type: 'time_window', to: mkTo(fin) };
+        if (start === 'toujours') {
+          base = { type: 'always' };
+        } else if (start === 'resa') {
+          base =
+            fin === 'fin'
+              ? { type: 'after_booking_confirmed' }
+              : { type: 'time_window', to: mkBoundaryTo(fin, anchor) };
         } else {
-          base = { type: 'time_window', from: { unit: 'days', value: start, reference: refBase }, to: mkTo(fin) };
+          const from = mkBoundaryFrom(start, anchor);
+          base = { type: 'time_window', from, to: mkBoundaryTo(fin, anchor) };
         }
         if (reqs.length) {
           base = {
@@ -993,35 +1179,85 @@ export default function OrchestrationOverviewPanel({
         }
         patchAvailability(editor.capKey, base);
       };
-      const setStart = (start: 'toujours' | 'resa' | number) => writeAv(start, curFin, curReqs);
-      const setFin = (fin: 'J-1' | 'J0' | 'depart') => {
+
+      const setStart = (start: 'toujours' | 'resa' | number) => writeAv(start, curFin, curReqs, curAnchor);
+      const setFin = (fin: TimingFin) => {
         if (curStart === 'toujours') return;
-        writeAv(curStart, fin, curReqs);
+        writeAv(curStart, fin, curReqs, curAnchor);
+      };
+      const setAnchor = (anchor: TimingAnchor) => {
+        if (curStart === 'toujours') return;
+        writeAv(curStart, curFin, curReqs, anchor);
       };
       const toggleReq = (id: string) => {
         const next = curReqs.includes(id) ? curReqs.filter((r) => r !== id) : [...curReqs, id];
-        writeAv(curStart, curFin, next);
+        writeAv(curStart, curFin, next, curAnchor);
       };
+      const applyPreset = () => {
+        if (!preset) return;
+        writeAv(preset.start, preset.fin, curReqs, preset.anchor);
+      };
+
+      const finLabel = (fin: TimingFin) => {
+        if (fin === 'fin') return 'Fin (départ)';
+        if (fin === 'J+1') return 'J+1 après départ';
+        if (fin === 'J0') return curAnchor === 'checkout' ? 'J0 départ' : 'J0 arrivée';
+        return `${fin} av. ${anchorLabel}`;
+      };
+
       body = (
-        <Box sx={{ display: 'grid', gap: 1 }}>
+        <Box sx={{ display: 'grid', gap: 1.25 }}>
+          {preset && (
+            <Box>
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3, mb: 0.5 }}>
+                SUGGESTION · {def.label}
+              </Typography>
+              <SegChip on={false} label={`${preset.label} — ${preset.hint}`} onClick={applyPreset} />
+            </Box>
+          )}
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>
+            RÉFÉRENCE DES JOURS (WhatsApp)
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            <SegChip
+              on={curAnchor === 'checkin'}
+              label="Par rapport à l’arrivée"
+              onClick={() => setAnchor('checkin')}
+            />
+            <SegChip
+              on={curAnchor === 'checkout'}
+              label="Par rapport au départ (séjour)"
+              onClick={() => setAnchor('checkout')}
+            />
+          </Box>
           <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>DÉBUT</Typography>
           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
             <SegChip on={curStart === 'toujours'} label="Toujours" onClick={() => setStart('toujours')} />
             <SegChip on={curStart === 'resa'} label="À la réservation" onClick={() => setStart('resa')} />
-            {[7, 3, 2, 1].map((d) => (
+            {START_DAYS_PRE.map((d) => (
               <SegChip key={d} on={curStart === d} label={`J-${d}`} onClick={() => setStart(d)} />
             ))}
+            <SegChip on={curStart === 0} label="J0" onClick={() => setStart(0)} />
           </Box>
           {curStart !== 'toujours' && (
             <>
               <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>FIN</Typography>
-              <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <SegChip on={curFin === 'J-1'} label={isDeparture ? 'J-1 (veille)' : 'J-1'} onClick={() => setFin('J-1')} />
-                <SegChip on={curFin === 'J0'} label={isDeparture ? 'Jour du départ' : 'J0'} onClick={() => setFin('J0')} />
-                <SegChip on={curFin === 'depart'} label="Départ" onClick={() => setFin('depart')} />
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                {FIN_CHIPS.map((fin) => (
+                  <SegChip
+                    key={fin}
+                    on={curFin === fin}
+                    label={finLabel(fin)}
+                    onClick={() => setFin(fin)}
+                  />
+                ))}
               </Box>
             </>
           )}
+          <Typography sx={{ fontSize: 11, color: V3.t4 }}>
+            J-n = n jours avant {anchorLabel}. J0 = le jour. Fin = jusqu’au départ. J+1 = lendemain du
+            départ. WhatsApp utilise ces bornes pour afficher / masquer l’option menu.
+          </Typography>
           <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>
             CONDITIONS REQUISES (toutes — ET)
           </Typography>
@@ -1031,8 +1267,7 @@ export default function OrchestrationOverviewPanel({
             ))}
           </Box>
           <Typography sx={{ fontSize: 11, color: V3.t4 }}>
-            Le voyageur doit avoir complété chaque condition cochée avant de voir l&apos;option
-            (ex. codes d&apos;accès : E + D1). Aucune coche = pas de condition.
+            Ex. accès : cocher E + D1. Aucune coche = pas de condition.
           </Typography>
         </Box>
       );
