@@ -177,7 +177,7 @@ export async function fetchTaskNewPlanning(params: {
     return res;
   });
 
-  const tasksPromise = fulltaskApi.listTasks({}).then(res => {
+  const tasksPromise = fulltaskApi.listTasks({ audience: 'STAFF' }).then(res => {
     console.log(`✅ [fetchTaskNewPlanning] listTasks completed in ${(performance.now() - startTime).toFixed(0)}ms - ${res?.data?.length || 0} items`);
     return res;
   });

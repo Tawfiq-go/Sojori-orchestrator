@@ -17,6 +17,7 @@ import {
   isEffectivelyActivated,
   type ServiceActivationStatusEntry,
 } from './listingCapabilityActivation';
+import { SCHEDULED_MESSAGES_RAIL_KEY } from './OrchestrationModelSubTabs';
 
 const GROUP_EMOJI: Record<string, string> = {
   cleaning: '🧹',
@@ -38,6 +39,8 @@ type Props = {
   serviceActivationStatus?: ServiceActivationStatusEntry[];
   syncHints?: Record<string, CapabilitySyncHint>;
   onSelectService: (key: string) => void;
+  /** Affiche l’entrée Messages planifiés dans le rail Services & workflows. */
+  showMessagesEntry?: boolean;
 };
 
 function statusColor(status: CapabilityRowState['status']) {
@@ -61,6 +64,7 @@ export default function V3Rail({
   serviceActivationStatus,
   syncHints = {},
   onSelectService,
+  showMessagesEntry = true,
 }: Props) {
   const rowByKey = Object.fromEntries(rows.map(r => [r.key, r]));
 
@@ -91,6 +95,7 @@ export default function V3Rail({
     (!filterInactiveCapabilities || isCapabilityActivated(menuNavRow)) &&
     (!filterByEffectiveActivation ||
       isEffectivelyActivated('menu_navigation', serviceActivationStatus));
+  const messagesActive = selectedKey === SCHEDULED_MESSAGES_RAIL_KEY;
 
   return (
     <Box
@@ -109,6 +114,38 @@ export default function V3Rail({
         WebkitOverflowScrolling: 'touch',
       }}
     >
+      {showMessagesEntry && (
+        <Box
+          component="button"
+          type="button"
+          onClick={() => onSelectService(SCHEDULED_MESSAGES_RAIL_KEY)}
+          sx={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.125,
+            p: '11px',
+            mb: 1,
+            borderRadius: '9px',
+            border: `1px solid ${messagesActive ? V3.client : V3.b}`,
+            bgcolor: messagesActive
+              ? V3.clientT
+              : 'linear-gradient(135deg,rgba(6,115,179,0.08),transparent)',
+            cursor: 'pointer',
+            textAlign: 'left',
+            '&:hover': { bgcolor: V3.clientT },
+          }}
+        >
+          <span style={{ fontSize: 15 }}>📨</span>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 800 }}>Messages planifiés</Typography>
+            <Typography sx={{ fontSize: 9.5, color: V3.t3 }}>
+              Timing · canaux · catalogue
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
       {menuNavDef && showMenuNav && (
         <Box
           component="button"
