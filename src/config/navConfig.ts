@@ -60,76 +60,12 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
-    group: 'Prix dynamique',
-    roles: PM_ROLES,
-    items: [
-      { id: 'pricing/portfolio', label: 'Prix dynamique', iconType: 'trending', iconColor: '#93C47D' },
-      { id: 'pricing/audit', label: 'Audit prix', iconType: 'trending', iconColor: '#93C47D' },
-    ],
-  },
-  {
     group: 'Réservations',
     roles: OPS_ROLES,
     items: [
       { id: 'reservations', label: 'Liste', iconType: 'calendar', iconColor: '#E06666' },
       { id: 'reservations/planning', label: 'Planning', iconType: 'calendar', iconColor: '#E06666', roles: PM_ROLES },
       { id: 'payments', label: 'Paiements', iconType: 'chart', iconColor: '#5B9BD5', roles: PM_ROLES },
-    ],
-  },
-  {
-    group: 'Task',
-    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
-    items: [
-      { id: 'tasks/list', label: 'Liste', iconType: 'check', iconColor: '#93C47D' },
-      { id: 'tasks/planning', label: 'Planning', iconType: 'check', iconColor: '#93C47D' },
-      { id: 'tasks/kanban', label: 'Kanban', iconType: 'check', iconColor: '#93C47D' },
-      { id: 'tasks/team', label: 'Équipe', iconType: 'check', iconColor: '#93C47D', description: 'Staff terrain & admin WhatsApp' },
-    ],
-  },
-  {
-    group: 'Orchestration',
-    roles: PM_ROLES,
-    core: true,
-    items: [
-      { id: 'orch/plans', label: 'Plans par séjour', iconType: 'settings', iconColor: '#666666', badge: 'CORE' },
-      { id: 'orch/day-plan', label: 'Plan de journée', iconType: 'settings', iconColor: '#666666', badge: 'NEW' },
-      { id: 'orch/workflows', label: 'Workflows · config', iconType: 'settings', iconColor: '#666666' },
-    ],
-  },
-  {
-    group: 'Direct booking',
-    roles: PM_ROLES,
-    items: [
-      {
-        id: 'direct-booking/config',
-        label: 'Config',
-        icon: '🌐',
-        badge: 'NEW',
-        description: 'Domaine, thème, forme, réseaux sociaux du site client',
-      },
-      {
-        id: 'direct-booking/preview',
-        label: 'Preview',
-        icon: '👁️',
-        description: 'Aperçu du site page par page, mobile et desktop',
-      },
-    ],
-  },
-  {
-    group: 'Annonces',
-    roles: PM_ROLES,
-    items: [
-      { id: 'listings/list', label: 'Listings', iconType: 'home', iconColor: '#D4A574' },
-      { id: 'listings/mapping', label: 'Mapping RU', iconType: 'link', iconColor: '#6D9EEB', roles: ADMIN_ROLES },
-      { id: 'listings/orchestration-model', label: 'Modèle orchestration', iconType: 'home', iconColor: '#D4A574' },
-      { id: 'chatbot/listing', label: 'Listing chatbot', iconType: 'home', iconColor: '#D4A574' },
-      {
-        id: 'admin/ChannelManager/channel-manager',
-        label: 'Channel Manager',
-        iconType: 'link',
-        iconColor: '#6D9EEB',
-        description: 'RU · connexion Airbnb & OTA',
-      },
     ],
   },
   {
@@ -156,6 +92,70 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         iconColor: '#0D9488',
         roles: ADMIN_ROLES,
         description: 'Ligne résa Sojori — conversations sans owner',
+      },
+    ],
+  },
+  {
+    group: 'Task',
+    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
+    items: [
+      { id: 'tasks/list', label: 'Liste', iconType: 'check', iconColor: '#93C47D' },
+      { id: 'tasks/planning', label: 'Planning', iconType: 'check', iconColor: '#93C47D' },
+      { id: 'tasks/kanban', label: 'Kanban', iconType: 'check', iconColor: '#93C47D' },
+      { id: 'tasks/team', label: 'Équipe', iconType: 'check', iconColor: '#93C47D', description: 'Staff terrain & admin WhatsApp' },
+    ],
+  },
+  {
+    group: 'Orchestration',
+    roles: PM_ROLES,
+    core: true,
+    items: [
+      { id: 'orch/plans', label: 'Plans par séjour', iconType: 'settings', iconColor: '#666666', badge: 'CORE' },
+      { id: 'orch/day-plan', label: 'Plan de journée', iconType: 'settings', iconColor: '#666666', badge: 'NEW' },
+      { id: 'orch/workflows', label: 'Workflows · config', iconType: 'settings', iconColor: '#666666' },
+    ],
+  },
+  {
+    group: 'Annonces',
+    roles: PM_ROLES,
+    items: [
+      { id: 'listings/list', label: 'Listings', iconType: 'home', iconColor: '#D4A574' },
+      { id: 'listings/mapping', label: 'Mapping RU', iconType: 'link', iconColor: '#6D9EEB', roles: ADMIN_ROLES },
+      { id: 'listings/orchestration-model', label: 'Modèle orchestration', iconType: 'home', iconColor: '#D4A574' },
+      { id: 'chatbot/listing', label: 'Listing chatbot', iconType: 'home', iconColor: '#D4A574' },
+      {
+        id: 'admin/ChannelManager/channel-manager',
+        label: 'Channel Manager',
+        iconType: 'link',
+        iconColor: '#6D9EEB',
+        description: 'RU · connexion Airbnb & OTA',
+      },
+    ],
+  },
+  {
+    group: 'Prix dynamique',
+    roles: PM_ROLES,
+    items: [
+      { id: 'pricing/portfolio', label: 'Prix dynamique', iconType: 'trending', iconColor: '#93C47D' },
+      { id: 'pricing/audit', label: 'Audit prix', iconType: 'trending', iconColor: '#93C47D' },
+    ],
+  },
+  {
+    group: 'Direct booking',
+    roles: PM_ROLES,
+    items: [
+      {
+        id: 'direct-booking/config',
+        label: 'Config',
+        icon: '🌐',
+        badge: 'NEW',
+        description: 'Domaine, thème, forme, réseaux sociaux du site client',
+      },
+      {
+        id: 'direct-booking/preview',
+        label: 'Preview',
+        icon: '👁️',
+        description: 'Aperçu du site page par page, mobile et desktop',
       },
     ],
   },
