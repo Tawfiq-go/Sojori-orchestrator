@@ -269,7 +269,7 @@ function defaultRefForTask(taskType: string): string {
   return 'scheduledDate';
 }
 
-/** Flags décisions du popup apercu (master ops = taskEnabled). */
+/** Flags décisions du popup apercu (ops/staff = taskEnabled). */
 type DecisionFlags = {
   orchestrated: boolean;
   clientEnabled: boolean;
@@ -1518,7 +1518,8 @@ export default function OrchestrationOverviewPanel({
     <Box sx={{ display: 'grid', gap: 2, opacity: saving ? 0.6 : 1 }}>
       <Alert severity="info" sx={{ fontSize: 12.5 }}>
         <strong>ON</strong> active le service (et le plan auto). <strong>Décisions</strong> : WhatsApp /
-        Créer tâche / Relances / Rappel staff / Escalade. Créer tâche OFF ⇒ pas de staff.
+        Ops·Staff / Relances / Rappel staff / Escalade. Ops OFF ⇒ pas de staff, invisible owner —
+        relances &amp; escalade OK.
       </Alert>
 
       <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card, overflowX: 'auto' }}>
@@ -1610,12 +1611,12 @@ export default function OrchestrationOverviewPanel({
                       py: 0.25,
                     }}
                     onClick={() => (r.on ? setDecisionsModal(r.key) : toast.warning('Activez d’abord ON'))}
-                    title="WhatsApp · Créer tâche · Relances · Staff · Escalade"
+                    title="WhatsApp · Ops/Staff · Relances · Staff · Escalade"
                   >
                     {(
                       [
                         r.hasClient && { on: r.flags.clientEnabled, label: 'WA' },
-                        r.hasTaskCol && { on: r.flags.taskEnabled, label: 'Tâche' },
+                        r.hasTaskCol && { on: r.flags.taskEnabled, label: 'Ops' },
                         r.hasOrch && { on: r.flags.clientReminders, label: 'Rel' },
                         r.hasTaskCol && { on: r.flags.staffReminders, label: 'Staff' },
                         r.hasTaskCol && { on: r.flags.pmEscalation, label: 'Esc' },
@@ -1889,8 +1890,8 @@ export default function OrchestrationOverviewPanel({
                 </Alert>
               )}
               <Typography sx={{ fontSize: 12, color: V3.t3, mb: 1.5 }}>
-                La colonne ON active le service et le plan auto. Créer tâche OFF ⇒ pas d&apos;assign
-                staff ni rappel staff.
+                ON = service + plan. Ops/Staff OFF ⇒ pas d&apos;assign staff, invisible owner — les
+                relances client et l&apos;escalade admin restent possibles.
               </Typography>
               {hasClient && (
                 <DecisionSwitch
@@ -1903,8 +1904,8 @@ export default function OrchestrationOverviewPanel({
               )}
               {hasTaskCol && (
                 <DecisionSwitch
-                  label="📋 Créer tâche (ops)"
-                  hint="Visible owner · staff possible · master ops"
+                  label="👷 Ops / Staff"
+                  hint="Visible owner · assign staff (sinon relances + escalade seuls)"
                   checked={flags.taskEnabled}
                   disabled={locked}
                   onChange={(v) => toggle('taskEnabled', v)}
@@ -1922,7 +1923,7 @@ export default function OrchestrationOverviewPanel({
               {hasTaskCol && (
                 <DecisionSwitch
                   label="👷 Rappel staff"
-                  hint="Notif équipe (nécessite Créer tâche)"
+                  hint="Notif équipe (nécessite Ops / Staff)"
                   checked={flags.staffReminders}
                   disabled={locked || !flags.taskEnabled}
                   onChange={(v) => toggle('staffReminders', v)}
