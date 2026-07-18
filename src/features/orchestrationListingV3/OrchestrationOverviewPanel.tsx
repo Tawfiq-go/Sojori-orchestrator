@@ -1708,7 +1708,7 @@ export default function OrchestrationOverviewPanel({
                     }
                     title={
                       r.onDemand
-                        ? 'À la demande — pas de relances client'
+                        ? 'Pas de relances client (à la demande / ménage Sojori)'
                         : 'Relances voyageur'
                     }
                   >
@@ -1951,7 +1951,7 @@ export default function OrchestrationOverviewPanel({
                     💌 Relances client
                   </Typography>
                   <Typography sx={{ fontSize: 11.5, color: V3.t3 }}>
-                    N/A — service à la demande, pas de relance voyageur
+                    N/A — pas de relance voyageur (à la demande / ménage Sojori)
                   </Typography>
                 </Box>
               )}
