@@ -337,22 +337,34 @@ export function defaultListingRailCapabilityKey(): string {
   return row?.key ?? 'cleaning_free';
 }
 
-/** Tâches créées à la demande client — pas de relances voyageur (hardcodé N/A). */
-export const ON_DEMAND_TASK_TYPES = [
+/** Tâches sans relances voyageur (à la demande + ménage Sojori checkout). */
+export const NO_CLIENT_REMINDER_TASK_TYPES = [
   'cleaning_paid',
   'transport',
   'groceries',
   'concierge',
   'support',
   'service_client',
+  'checkout_cleaning',
 ] as const
+
+/** @deprecated alias — préférer NO_CLIENT_REMINDER_TASK_TYPES */
+export const ON_DEMAND_TASK_TYPES = NO_CLIENT_REMINDER_TASK_TYPES
 
 export function isOnDemandCapability(
   def: Pick<CapabilityDefinition, 'taskType' | 'key'> | null | undefined,
 ): boolean {
   if (!def) return false
+  if (def.key === 'cleaning_sojori') return true
   const t = def.taskType ?? def.key
-  return (ON_DEMAND_TASK_TYPES as readonly string[]).includes(String(t))
+  return (NO_CLIENT_REMINDER_TASK_TYPES as readonly string[]).includes(String(t))
+}
+
+/** true = pas de toggle Relances client (N/A). */
+export function hasNoClientReminders(
+  def: Pick<CapabilityDefinition, 'taskType' | 'key'> | null | undefined,
+): boolean {
+  return isOnDemandCapability(def)
 }
 
 export function defaultExecutionState(): import('./types').CapabilityExecutionState {
