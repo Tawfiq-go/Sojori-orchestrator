@@ -1,20 +1,88 @@
 import type { ReservationTask } from '../../types/reservationTask.types';
 import type { TasksStaffMember } from '../../types/tasks.types';
 
+const TASK_TITLES: Record<string, string> = {
+  arrival_choose: "Choix de l'heure d'arrivée",
+  arrival: "Choix de l'heure d'arrivée",
+  arrival_declare: "Heure d'arrivée déclarée",
+  departure_choose: "Choix de l'heure de départ",
+  departure: "Choix de l'heure de départ",
+  departure_declare: "Heure de départ déclarée",
+  cleaning_free: 'Ménage inclus',
+  cleaning_paid: 'Ménage supplémentaire',
+  checkout_cleaning: 'Ménage après le départ',
+  cleaning: 'Ménage',
+  registration: 'Enregistrement des voyageurs',
+  transport: 'Transport',
+  groceries: 'Courses et livraison',
+  concierge: 'Service de conciergerie',
+  service_client: 'Demande voyageur',
+  support: 'Assistance voyageur',
+  maintenance: 'Maintenance',
+};
+
+function nonEmpty(value: unknown): string | undefined {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text || undefined;
+}
+
+function humanizeTaskType(type: string): string {
+  return type
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
+}
+
+export function taskTitle(type: string, payload: Record<string, unknown> = {}): string {
+  return (
+    nonEmpty(payload.categoryTitle) ||
+    nonEmpty(payload.categoryLabel) ||
+    nonEmpty(payload.serviceName) ||
+    TASK_TITLES[type.toLowerCase()] ||
+    humanizeTaskType(type) ||
+    'Tâche'
+  );
+}
+
+function taskDescription(t: Record<string, unknown>, title: string): string | undefined {
+  const payload = (t.payload && typeof t.payload === 'object' ? t.payload : {}) as Record<string, unknown>;
+  const candidates = [payload.routeLabel, payload.serviceName, payload.categoryLabel, t.requestNote];
+  return candidates.map(nonEmpty).find((value) => value && value !== title);
+}
+
+function normalizeTaskStatus(value: unknown): string {
+  const status = String(value || 'new').toLowerCase();
+  if (status === 'done' || status === 'completed') return 'COMPLETED';
+  if (status === 'cancelled' || status === 'rejected') return 'CANCELLED';
+  if (status === 'doing' || status === 'in_progress') return 'IN_PROGRESS';
+  if (status === 'confirmed' || status === 'pending_partner' || status === 'assigned') return 'ASSIGNED';
+  return 'CREATED';
+}
+
 export function mapSearchTaskToReservationTask(t: Record<string, unknown>): ReservationTask {
-  const assigned = t.assignedStaff as { name?: string; phone?: string } | undefined;
+  const assigned = (t.assignedStaff || t.assignedTo) as
+    | { name?: string; username?: string; phone?: string; whatsappPhone?: string }
+    | undefined;
+  const payload = (t.payload && typeof t.payload === 'object' ? t.payload : {}) as Record<string, unknown>;
+  const type = String(t.type || t.subType || t.itemType || 'other');
+  const title = taskTitle(type, payload);
   return {
     taskId: String(t._id || t.taskId || ''),
     taskCode: String(t.taskCode || t.code || ''),
-    type: String(t.subType || t.itemType || t.type || 'other'),
-    status: String(t.status || 'CREATED'),
-    scheduledFor: (t.startDate || t.scheduledFor) as string | undefined,
-    deadline: (t.deadline || t.endDate) as string | undefined,
+    type,
+    title,
+    description: taskDescription(t, title),
+    status: normalizeTaskStatus(t.status || t.taskStatus),
+    priority: nonEmpty(t.priority || t.emergency),
+    source: nonEmpty(t.triggeredBy || payload.source),
+    scheduledFor: (t.scheduledDate || t.scheduledAt || t.startDate || t.scheduledFor) as string | undefined,
+    deadline: (t.dueAt || t.deadline || t.endDate) as string | undefined,
     assignedStaff:
-      assigned?.name || t.staffName
+      assigned?.name || assigned?.username || t.staffName
         ? {
-            name: String(assigned?.name || t.staffName),
-            phone: String(assigned?.phone || t.staffWhatsappPhone || t.staffPhone || ''),
+            name: String(assigned?.name || assigned?.username || t.staffName),
+            phone: String(
+              assigned?.phone || assigned?.whatsappPhone || t.staffWhatsappPhone || t.staffPhone || '',
+            ),
           }
         : null,
   };

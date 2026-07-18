@@ -4,8 +4,8 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo } from 'react';
 import { Box, Stack, Typography, Tooltip } from '@mui/material';
-import { T, TASK_META, STATUS_META, formatDeadline, initials } from './_tokens';
-import type { TaskType, TaskStatus } from './_tokens';
+import { T, STATUS_META, formatDeadline, initials, taskMetaForType } from './_tokens';
+import type { TaskStatus } from './_tokens';
 import type { ReservationTask } from '../../types/reservationTask.types';
 
 export interface TaskCardProps {
@@ -17,12 +17,14 @@ export interface TaskCardProps {
 
 export default function TaskCard({ task, onContactStaff, onViewDetails, onAssign }: TaskCardProps) {
   const [hover, setHover] = useState(false);
-  const meta = TASK_META[(task.type as TaskType) || 'other'] || TASK_META.other;
+  const meta = taskMetaForType(task.type);
   const status = STATUS_META[(task.status as TaskStatus) || 'CREATED'] || STATUS_META.CREATED;
   const deadline = useMemo(() => formatDeadline(task.deadline || task.scheduledFor), [task.deadline, task.scheduledFor]);
   const isUrgent = deadline.urgency === 'urgent' || deadline.urgency === 'late';
   const isDone = status.step === 4;
   const isUnassigned = !task.assignedStaff && !isDone;
+  const title = task.title?.trim() || meta.label;
+  const showType = meta.label !== 'Tâche' && meta.label !== title;
 
   return (
     <Box
@@ -56,12 +58,29 @@ export default function TaskCard({ task, onContactStaff, onViewDetails, onAssign
         <Typography sx={{
           fontSize: 11.5, fontWeight: 700, color: T.text,
           textDecoration: isDone ? 'line-through' : 'none',
-        }}>{meta.label}</Typography>
+        }}>{title}</Typography>
         <Typography sx={{
           ml: 'auto', fontFamily: '"Geist Mono", monospace', fontSize: 9,
           color: T.text4, fontWeight: 700, letterSpacing: '0.04em',
         }}>{task.taskCode}</Typography>
       </Stack>
+
+      {(task.description || showType) && (
+        <Typography
+          title={task.description || meta.label}
+          sx={{
+            mb: 0.75,
+            color: T.text3,
+            fontSize: 10,
+            lineHeight: 1.3,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {task.description || meta.label}
+        </Typography>
+      )}
 
       {/* Progress 4 steps */}
       <Stack direction="row" gap={0.625} sx={{ alignItems: 'center',  mb: 0.875 }}>
