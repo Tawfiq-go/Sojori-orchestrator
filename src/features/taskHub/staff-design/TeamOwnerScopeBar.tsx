@@ -38,19 +38,6 @@ export default function TeamOwnerScopeBar() {
     );
   }
 
-  const label =
-    getOwnerListLabel(legacyUser) ||
-    (user as { company?: string })?.company ||
-    user?.email ||
-    'Mon compte';
-
-  return (
-    <div className="tasks-team-owner-bar tasks-team-owner-bar--locked">
-      <span className="tasks-team-owner-kicker">Propriétaire</span>
-      <span className="tasks-team-owner-value">{label}</span>
-      <span className="tasks-team-owner-hint">
-        Les annonces et le staff sont limités à votre compte.
-      </span>
-    </div>
-  );
+  // Owner : pas de bandeau « limité à votre compte » — le scope est implicite.
+  return null;
 }
