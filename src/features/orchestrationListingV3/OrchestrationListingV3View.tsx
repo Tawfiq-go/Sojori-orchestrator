@@ -160,9 +160,15 @@ export default function OrchestrationListingV3View({
     }
   }, [effectiveListingId, isOwnerTemplate, ownerKey]);
 
+  const hasLoadedOnceRef = useRef(false);
+
+  useEffect(() => {
+    hasLoadedOnceRef.current = false;
+  }, [ownerKey, effectiveListingId, isOwnerTemplate]);
+
   const load = useCallback(async (options?: { silent?: boolean; discardLocalKey?: string }) => {
-    const silent = options?.silent === true;
     const discardLocalKey = options?.discardLocalKey;
+    const silent = options?.silent === true || hasLoadedOnceRef.current;
     if (!isOwnerTemplate && scope === 'listing' && !effectiveListingId) {
       setRows([]);
       if (!silent) setLoading(false);
@@ -176,6 +182,7 @@ export default function OrchestrationListingV3View({
         menuOptionsRef.current = loaded.menuOptions;
         workflowsRef.current = loaded.workflows;
         setOrchestrationDoc(loaded.doc);
+        hasLoadedOnceRef.current = true;
         logV3Orch('load.owner', { discardLocalKey, rowCount: loaded.rows.length });
       } else if (scope === 'listing' && effectiveListingId) {
         const loaded = await loadListingOrchestrationMatrix(effectiveListingId);
@@ -184,6 +191,7 @@ export default function OrchestrationListingV3View({
         workflowsRef.current = loaded.workflows;
         setOrchestrationDoc(loaded.doc);
         applyActivationFromDoc(loaded.doc, effectiveListingId);
+        hasLoadedOnceRef.current = true;
         logV3Orch('load.listing', { listingId: effectiveListingId, discardLocalKey });
       } else {
         setRows([]);
@@ -199,7 +207,7 @@ export default function OrchestrationListingV3View({
         toast.error(msg);
       }
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
     }
   }, [scope, ownerKey, effectiveListingId, isOwnerTemplate, applyActivationFromDoc]);
 
@@ -440,7 +448,7 @@ export default function OrchestrationListingV3View({
   const showListingOrchestrationTabs =
     Boolean(effectiveListingId) && (embedded || (scope === 'listing' && !ownerTemplateMode));
 
-  if (loading) {
+  if (loading && !orchestrationDoc) {
     return (
       <Box sx={{ py: 8, display: 'flex', justifyContent: 'center' }}>
         <CircularProgress sx={{ color: V3.p }} />

@@ -798,9 +798,8 @@ export default function OrchestrationOverviewPanel({
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
   const [activationStatus, setActivationStatus] = useState<ServiceActivationStatusEntry[]>([]);
 
-  const reload = useCallback((opts?: { silent?: boolean }) => {
-    const silent = opts?.silent === true;
-    if (!silent) setLoading(true);
+  const reload = useCallback((_opts?: { silent?: boolean }) => {
+    // Pas de setLoading(true) ici : évite de démonter la grille / les modals (effet « reload page »).
     setError(null);
 
     const loadValues = async () => {
@@ -838,7 +837,7 @@ export default function OrchestrationOverviewPanel({
       ? loadListingOrchestrationMatrix(listingId).then(({ doc: d }) => d)
       : loadOwnerOrchestrationMatrix(ownerKey).then(({ doc: d }) => d);
 
-    loadMatrix
+    return loadMatrix
       .then(async (d) => {
         setDoc(d);
         await loadValues();
@@ -869,13 +868,12 @@ export default function OrchestrationOverviewPanel({
         }
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Chargement impossible'))
-      .finally(() => {
-        if (!silent) setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }, [ownerKey, listingId]);
 
   useEffect(() => {
-    reload();
+    setLoading(true);
+    void reload();
   }, [reload]);
 
   const caps = (doc?.capabilities ?? {}) as Record<string, CapDoc>;
@@ -1801,15 +1799,18 @@ export default function OrchestrationOverviewPanel({
     return merged;
   }, [configModal, caps, listingValues]);
 
-  if (loading) {
+  if (loading && !doc) {
     return (
       <Box sx={{ py: 5, display: 'flex', justifyContent: 'center' }}>
         <CircularProgress size={28} />
       </Box>
     );
   }
-  if (error || !doc) {
+  if (error && !doc) {
     return <Alert severity="warning">{error ?? 'Modèle orchestration introuvable.'}</Alert>;
+  }
+  if (!doc) {
+    return <Alert severity="warning">Modèle orchestration introuvable.</Alert>;
   }
 
   const cell = { fontSize: 12.5, color: V3.t2 } as const;
@@ -2222,6 +2223,8 @@ export default function OrchestrationOverviewPanel({
             onClose={() => setDecisionsModal(null)}
             maxWidth="sm"
             fullWidth
+            disableScrollLock
+            disableRestoreFocus
             PaperProps={{ sx: { borderRadius: 2 } }}
           >
             <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
@@ -2322,11 +2325,11 @@ export default function OrchestrationOverviewPanel({
 
       <Dialog
         open={Boolean(configModal && configDef)}
-        onClose={() => {
-          setConfigModal(null);
-        }}
+        onClose={() => setConfigModal(null)}
         maxWidth="lg"
         fullWidth
+        disableScrollLock
+        disableRestoreFocus
         PaperProps={{ sx: { borderRadius: 2, maxHeight: '92vh' } }}
       >
         {configDef && configModal && (
@@ -2405,9 +2408,11 @@ export default function OrchestrationOverviewPanel({
                     ownerOrchestrationDoc={
                       isListingScope ? undefined : (doc as OwnerOrchestrationDoc)
                     }
-                    onOrchestrationSaved={() => reload({ silent: true })}
+                    onOrchestrationSaved={() => {
+                      void reload();
+                    }}
                     onWhatsappPatch={() => {
-                      reload({ silent: true });
+                      void reload();
                     }}
                   />
                 </Box>
