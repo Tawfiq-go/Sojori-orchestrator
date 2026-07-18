@@ -405,7 +405,7 @@ export interface PilotPricingConfigDto {
   eventsEnabled?: boolean;
   events: PilotPricingEventDto[];
   fxUsdMad?: number;
-  /** Refresh hebdo automatique de l’estimation prix de marché. */
+  /** Refresh bi-hebdo automatique de l’estimation prix de marché (lun + jeu). */
   autoSnapshotEnabled?: boolean;
   lastAutoSnapshotAt?: string;
   lastAppliedAt?: string;
