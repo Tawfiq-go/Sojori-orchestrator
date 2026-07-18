@@ -224,7 +224,8 @@ function availabilityStatus(inv) {
   return null;
 }
 
-function TooltipBody({ inv, dateStr, currency }) {
+/** Exporté : réutilisé par le panneau latéral de la vue simple (onglet Prix dynamique). */
+export function TooltipBody({ inv, dateStr, currency }) {
   const history = inv.calculatedPriceHistory;
   const hasPilot =
     history?.source === 'pilot-v2' || (Array.isArray(history?.pilotFactors) && history.pilotFactors.length > 0);

@@ -8,11 +8,11 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   T, toIso, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   resolveInventoryCellState, formatInventoryRateLabel, hasInventoryData, OUT_OF_WINDOW_CELL_BG,
-  resolvePriceMode, priceOf,
+  resolvePriceMode, priceOf, PRICE_MODE_LABEL,
 } from './_shared';
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import AuditBlockedDaysModal from './AuditBlockedDaysModal';
-import TooltipBreakdown from './TooltipBreakdown';
+import { TooltipBody } from './TooltipBreakdown';
 import { normalizeCalendarReservations } from './reservationCalendarUtils';
 import calendarService from '../../services/calendarService';
 
@@ -67,9 +67,20 @@ export default function SimpleView({
     return out;
   }, [months]);
 
-  /* ─── Sélection multi-jours (édition prix/dispo) ─── */
+  /* ─── Sélection multi-jours (édition prix/dispo) — clic → panneau latéral ─── */
   const [selected, setSelected] = useState([]);
-  useEffect(() => setSelected([]), [selectedListingId]);
+  /** Dernier jour cliqué : ses détails s'affichent dans le panneau. */
+  const [focusIso, setFocusIso] = useState(null);
+  useEffect(() => { setSelected([]); setFocusIso(null); }, [selectedListingId]);
+
+  const clearSelection = () => { setSelected([]); setFocusIso(null); };
+
+  useEffect(() => {
+    if (selected.length === 0) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') clearSelection(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected.length]);
 
   const toggleDay = (iso, e) => {
     const inv = inventories[iso];
@@ -81,17 +92,26 @@ export default function SimpleView({
       if (a >= 0 && b >= 0) {
         const [from, to] = a < b ? [a, b] : [b, a];
         setSelected(allIsos.slice(from, to + 1));
+        setFocusIso(iso);
         return;
       }
     }
-    setSelected(prev => prev.includes(iso) ? prev.filter(x => x !== iso) : [...prev, iso]);
+    setSelected(prev => {
+      if (prev.includes(iso)) {
+        const next = prev.filter(x => x !== iso);
+        setFocusIso(next.length > 0 ? next[next.length - 1] : null);
+        return next;
+      }
+      setFocusIso(iso);
+      return [...prev, iso];
+    });
   };
   const commitSelection = () => {
     if (selected.length === 0) return;
     onCellsSelected?.(selected.map(iso => ({
       listingId: listing._id, roomTypeId: listing.roomTypes?.[0]?._id, dateStr: iso, column: 'rate',
     })));
-    setSelected([]);
+    clearSelection();
   };
 
   /* ─── Audit jours bloqués sans réservation ─── */
@@ -219,27 +239,16 @@ export default function SimpleView({
         </div>
       </div>
 
-      {/* Sélection toolbar flottante */}
+      {/* Panneau latéral façon Airbnb : détails du/des jour(s) au clic (plus de hover) */}
       {selected.length > 0 && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: T.text, color: '#fff', padding: '10px 18px', borderRadius: 14,
-          display: 'flex', alignItems: 'center', gap: 12,
-          boxShadow: '0 12px 40px rgba(20,17,10,0.30)', zIndex: 40,
-          animation: 'fadeIn 0.25s both',
-        }}>
-          <span style={{ fontSize: 12.5, fontWeight: 600 }}>
-            📋 <b style={{ fontFamily: '"Geist Mono", monospace', color: T.primarySoft }}>{selected.length} jour(s)</b> sélectionné(s)
-          </span>
-          <button onClick={commitSelection} style={{
-            padding: '6px 12px', borderRadius: 7, background: '#fff', color: T.text,
-            fontSize: 11.5, fontWeight: 700, border: 0, cursor: 'pointer',
-          }}>✏ Modifier</button>
-          <button onClick={() => setSelected([])} style={{
-            padding: '6px 12px', borderRadius: 7, background: 'transparent', color: '#fff',
-            fontSize: 11.5, fontWeight: 700, border: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer',
-          }}>Annuler</button>
-        </div>
+        <DaySidePanel
+          selected={selected}
+          focusIso={focusIso || selected[selected.length - 1]}
+          inventories={inventories}
+          currency={currency}
+          onModify={commitSelection}
+          onClose={clearSelection}
+        />
       )}
 
       <AuditBlockedDaysModal
@@ -531,17 +540,11 @@ function WeekRow({ week, monthReservations, selected, currency, onToggleDay, onO
 /* ════════════════ Cellule jour ════════════════ */
 
 function DayCell({ c, currency, selected, onToggle }) {
-  const [showTip, setShowTip] = useState(false);
-  const ref = useRef(null);
-  const canHoverPrice = !c.noInventory && hasInventoryData(c.inv);
   const muted = c.isPast || c.isArchived;
 
   return (
     <div
-      ref={ref}
       onClick={onToggle}
-      onMouseEnter={() => { if (canHoverPrice) setShowTip(true); }}
-      onMouseLeave={() => setShowTip(false)}
       style={{
         borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
         padding: '5px 8px', display: 'flex', flexDirection: 'column', gap: 2,
@@ -594,16 +597,6 @@ function DayCell({ c, currency, selected, onToggle }) {
         {c.showPriceCurrency ? <small style={{ fontSize: 9, fontWeight: 600, marginRight: 2 }}>{currency}</small> : null}
         {c.priceLabel}
       </div>
-
-      {canHoverPrice && showTip && (
-        <TooltipBreakdown
-          open={showTip}
-          anchorRef={ref}
-          inv={c.inv}
-          dateStr={c.iso}
-          currency={currency}
-        />
-      )}
     </div>
   );
 }
@@ -614,5 +607,170 @@ function Legend({ dot, label }) {
       <i style={{ width: 8, height: 8, borderRadius: '50%', background: dot, display: 'inline-block' }} />
       {label}
     </span>
+  );
+}
+
+/* ════════════════ Panneau latéral jour(s) sélectionné(s) — façon Airbnb ════════════════ */
+
+const PANEL_TABS = [
+  { id: 'infos', label: 'Tarif & dispo' },
+  { id: 'ai', label: '⚡ Prix dynamique' },
+];
+
+function fmtDayLabel(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(`${iso}T00:00:00`).toLocaleDateString('fr-FR', {
+      weekday: 'short', day: 'numeric', month: 'short',
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function PanelRow({ label, value, color, strong }) {
+  if (value == null || value === '') return null;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, padding: '4px 0' }}>
+      <span style={{ fontSize: 11.5, color: strong ? T.text : T.text2, fontWeight: strong ? 800 : 600 }}>{label}</span>
+      <span style={{
+        fontSize: strong ? 13 : 11.5, fontWeight: strong ? 800 : 700, textAlign: 'right',
+        fontFamily: '"Geist Mono", monospace', color: color || T.text,
+      }}>{value}</span>
+    </div>
+  );
+}
+
+function DaySidePanel({ selected, focusIso, inventories, currency, onModify, onClose }) {
+  const [tab, setTab] = useState('infos');
+  const sorted = useMemo(() => [...selected].sort(), [selected]);
+  const inv = inventories[focusIso];
+  const hasData = hasInventoryData(inv);
+  const nb = selected.length;
+  const mode = hasData ? resolvePriceMode(inv) : null;
+
+  const rangeLabel = nb === 1
+    ? fmtDayLabel(sorted[0])
+    : `${fmtDayLabel(sorted[0])} → ${fmtDayLabel(sorted[nb - 1])}`;
+
+  return (
+    <div style={{
+      position: 'fixed', right: 18, top: 120, width: 322, zIndex: 46,
+      maxHeight: 'calc(100vh - 150px)', display: 'flex', flexDirection: 'column',
+      background: T.bg1, border: `1px solid ${T.borderStrong || T.border}`, borderRadius: 16,
+      boxShadow: '0 18px 60px rgba(20,17,10,0.22)', animation: 'fadeIn 0.15s both', overflow: 'hidden',
+    }}>
+      {/* En-tête */}
+      <div style={{
+        padding: '12px 16px 10px', borderBottom: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8,
+      }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, textTransform: 'capitalize' }}>{rangeLabel}</div>
+          <div style={{ fontSize: 10.5, color: T.text3, fontWeight: 600, marginTop: 2 }}>
+            {nb} jour(s) sélectionné(s)
+            {nb > 1 ? ` · détails : ${fmtDayLabel(focusIso)}` : ''}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fermer"
+          title="Fermer (Esc)"
+          style={{
+            border: 0, background: T.bg2, width: 26, height: 26, borderRadius: '50%',
+            cursor: 'pointer', fontSize: 12, fontWeight: 700, color: T.text2, flexShrink: 0,
+          }}
+        >✕</button>
+      </div>
+
+      {/* Onglets */}
+      <div style={{ display: 'flex', gap: 4, padding: '8px 12px 0' }}>
+        {PANEL_TABS.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              style={{
+                flex: 1, padding: '7px 8px', borderRadius: 9, border: 0, cursor: 'pointer',
+                fontSize: 11.5, fontWeight: 800, fontFamily: 'inherit',
+                background: active ? (t.id === 'ai' ? 'rgba(124,58,237,0.10)' : T.bg3) : 'transparent',
+                color: active ? (t.id === 'ai' ? T.ai : T.text) : T.text3,
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Corps scrollable */}
+      <div style={{ padding: '10px 16px 12px', overflowY: 'auto', flex: 1 }}>
+        {!hasData ? (
+          <div style={{ fontSize: 11.5, color: T.text3, fontWeight: 600, padding: '12px 0' }}>
+            Pas de données inventaire pour ce jour.
+          </div>
+        ) : tab === 'ai' ? (
+          <TooltipBody inv={inv} dateStr={focusIso} currency={currency} />
+        ) : (
+          <>
+            <PanelRow
+              strong
+              label={`Prix final · ${PRICE_MODE_LABEL[mode] || mode || ''}`}
+              value={`${Math.round(priceOf(inv))} ${currency}`}
+              color={mode === 'manual' ? T.warning : mode === 'dynamic' ? T.ai : T.primary}
+            />
+            {inv.calculatedPrice != null && (
+              <PanelRow label="Prix dynamique" value={`${Math.round(inv.calculatedPrice)} ${currency}`} color={mode === 'dynamic' ? T.ai : T.text3} />
+            )}
+            {inv.manualPrice != null && (
+              <PanelRow label="Prix manuel" value={`${Math.round(inv.manualPrice)} ${currency}`} color={mode === 'manual' ? T.warning : T.text3} />
+            )}
+            {inv.basePrice != null && (
+              <PanelRow label="Prix base" value={`${Math.round(inv.basePrice)} ${currency}`} color={T.text3} />
+            )}
+            <div style={{ borderTop: `1px solid ${T.border}`, margin: '6px 0' }} />
+            <PanelRow
+              label="Disponibilité"
+              value={inv.stopSell ? '🚫 Stop sell' : `${inv.availableRoom ?? '—'} dispo`}
+              color={inv.stopSell ? T.error : (inv.availableRoom ?? 1) <= 0 ? T.warning : T.success}
+            />
+            {(inv.reservations?.length ?? 0) > 0 && (
+              <PanelRow label="Réservations" value={String(inv.reservations.length)} color={T.info} />
+            )}
+            <PanelRow label="Min stay arrivée" value={inv.minStay != null ? `${inv.minStay} nuit(s)` : null} />
+            <PanelRow label="Max stay" value={inv.maxStay != null && Number(inv.maxStay) > 0 ? `${inv.maxStay} nuit(s)` : null} />
+            <PanelRow label="Arrivée fermée" value={inv.closedArrival ? 'Oui' : null} color={T.warning} />
+            <PanelRow label="Départ fermé" value={inv.closedDeparture ? 'Oui' : null} color={T.warning} />
+          </>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div style={{ padding: '10px 16px', borderTop: `1px solid ${T.border}`, display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          onClick={onModify}
+          style={{
+            flex: 1, padding: '9px 12px', borderRadius: 9, border: 0, cursor: 'pointer',
+            background: T.text, color: '#fff', fontSize: 12, fontWeight: 800, fontFamily: 'inherit',
+          }}
+        >
+          ✏ Modifier {nb > 1 ? `${nb} jours` : 'ce jour'}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            padding: '9px 12px', borderRadius: 9, border: `1px solid ${T.border}`, cursor: 'pointer',
+            background: 'transparent', color: T.text2, fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+          }}
+        >
+          Annuler
+        </button>
+      </div>
+    </div>
   );
 }
