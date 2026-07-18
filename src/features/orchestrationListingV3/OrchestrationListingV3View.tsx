@@ -516,7 +516,11 @@ export default function OrchestrationListingV3View({
         </Box>
       ) : showListingOrchestrationTabs && listingSection === 'apercu' ? (
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: embedded ? 1 : 2, pb: 2 }}>
-          <OrchestrationOverviewPanel ownerKey={ownerKey} />
+          <OrchestrationOverviewPanel
+            ownerKey={ownerKey}
+            listingId={effectiveListingId ?? undefined}
+            listingName={listings.find(l => l.id === effectiveListingId)?.name}
+          />
         </Box>
       ) : showListingOrchestrationTabs && listingSection !== 'services' ? null : (
       <Box
