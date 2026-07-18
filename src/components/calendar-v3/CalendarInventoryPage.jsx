@@ -190,7 +190,7 @@ export default function CalendarInventoryPage({
   return (
     <div
       style={{
-        padding: view === 'simple' ? '8px 24px 40px' : '22px 40px 50px 40px',
+        padding: view === 'simple' ? '8px 24px 40px' : '10px 28px 36px',
         maxWidth: '100%',
         margin: '0 auto',
         width: '100%',
@@ -206,8 +206,8 @@ export default function CalendarInventoryPage({
           background: T.bg1,
           border: `1px solid ${T.border}`,
           borderRadius: 14,
-          padding: view === 'simple' ? '5px 10px' : '10px 14px',
-          marginBottom: view === 'simple' ? 8 : 14,
+          padding: view === 'simple' ? '5px 10px' : '6px 12px',
+          marginBottom: 8,
           boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
           flexWrap: 'wrap',
           overflow: 'visible',
