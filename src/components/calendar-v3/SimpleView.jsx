@@ -134,7 +134,7 @@ export default function SimpleView({
   const currency = listing.currencyCode || listing.currency || 'MAD';
 
   return (
-    <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start', justifyContent: 'center' }}>
       {/* ─── Rail vignettes listings (façon Airbnb) ─── */}
       <ListingRail
         listings={listings}
@@ -142,8 +142,8 @@ export default function SimpleView({
         onSelect={onSelectListing}
       />
 
-      {/* ─── Calendrier vertical — largeur plafonnée (cellules plus étroites, façon Airbnb) ─── */}
-      <div style={{ flex: 1, minWidth: 0, maxWidth: 1000 }}>
+      {/* ─── Calendrier vertical — plafonné et centré (façon Airbnb) ─── */}
+      <div style={{ flex: 1, minWidth: 0, maxWidth: 1150 }}>
         <div style={{
           background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 16, overflow: 'hidden',
           boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
