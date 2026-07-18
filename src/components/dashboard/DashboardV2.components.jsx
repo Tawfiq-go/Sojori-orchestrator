@@ -701,6 +701,7 @@ const OWNER_QUICK_ACTIONS = [
   { emoji: '📋', label: 'Réservations', to: '/reservations' },
   { emoji: '📅', label: 'Calendrier', to: '/calendar?view=multi' },
   { emoji: '✅', label: 'Tâches', to: '/tasks' },
+  { emoji: '👷', label: 'Staff', to: '/tasks/team' },
   { emoji: '💬', label: 'WhatsApp', to: '/communications?section=guest&tab=whatsapp' },
   { emoji: '🏨', label: 'Messages OTA', to: '/communications?section=guest&tab=ota' },
   { emoji: '🎛', label: 'Plans d’orchestration', to: '/orchestration/plans' },
