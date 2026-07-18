@@ -925,22 +925,30 @@ export default function OrchestrationOverviewPanel({
           whatsapp: patch.whatsapp ?? cap.whatsapp,
           execution: patch.execution !== undefined ? patch.execution : cap.execution,
         };
-        if (listingId) {
-          await listingsService.putListingOrchestration(listingId, {
-            capabilities: { [capKey]: payload },
-          });
-        } else {
-          await listingsService.putOwnerOrchestration(ownerKey, {
-            capabilities: { [capKey]: payload },
-          });
-        }
+        const putRes = listingId
+          ? await listingsService.putListingOrchestration(listingId, {
+              capabilities: { [capKey]: payload },
+            })
+          : await listingsService.putOwnerOrchestration(ownerKey, {
+              capabilities: { [capKey]: payload },
+            });
+        const effectiveCap = (
+          putRes as {
+            effective?: { capabilities?: Record<string, CapDoc> };
+            data?: { effective?: { capabilities?: Record<string, CapDoc> } };
+          }
+        )?.effective?.capabilities?.[capKey]
+          ?? (putRes as { data?: { effective?: { capabilities?: Record<string, CapDoc> } } })
+              ?.data?.effective?.capabilities?.[capKey];
         setDoc((prev) =>
           prev
             ? {
                 ...prev,
                 capabilities: {
                   ...prev.capabilities,
-                  [capKey]: { ...cap, ...patch } as never,
+                  [capKey]: (effectiveCap
+                    ? { ...cap, ...patch, ...effectiveCap }
+                    : { ...cap, ...patch }) as never,
                 },
               }
             : prev,
@@ -1164,9 +1172,36 @@ export default function OrchestrationOverviewPanel({
   /* ── éditeurs ── */
 
   const patchAvailability = (capKey: string, av: Record<string, unknown>) => {
-    const cap = caps[capKey];
-    const menuOptions = (cap.whatsapp?.menuOptions ?? []).map((o) => ({ ...o, availability: av }));
-    void saveCapPatch(capKey, { whatsapp: { ...cap.whatsapp, menuOptions } });
+    const cap = resolveCap(capKey);
+    const def = getCapabilityDefinition(capKey);
+    if (!cap || !def) return;
+    const codes = def.menuCodes.length
+      ? def.menuCodes
+      : (cap.whatsapp?.menuCodes ?? []).filter(Boolean);
+    let menuOptions = [...(cap.whatsapp?.menuOptions ?? [])];
+    if (menuOptions.length === 0 && codes.length > 0) {
+      menuOptions = codes.map((code) => ({
+        code,
+        enabled: true,
+        availability: av,
+      }));
+    } else {
+      menuOptions = menuOptions.map((o) => ({ ...o, availability: av }));
+      // Garantit au moins une option pour chaque code menu du service.
+      for (const code of codes) {
+        if (!menuOptions.some((o) => String((o as { code?: string }).code ?? '') === code)) {
+          menuOptions.push({ code, enabled: true, availability: av });
+        }
+      }
+    }
+    void saveCapPatch(capKey, {
+      whatsapp: {
+        ...(cap.whatsapp ?? {}),
+        menuCodes: codes.length ? codes : cap.whatsapp?.menuCodes,
+        menuOptions,
+        overrides: cap.whatsapp?.overrides ?? codes.map((code) => ({ code, enabled: true })),
+      },
+    });
   };
 
   const patchExecution = (capKey: string, exePatch: Record<string, unknown>) => {
@@ -1379,8 +1414,8 @@ export default function OrchestrationOverviewPanel({
       };
       body = (
         <Box sx={{ display: 'grid', gap: 1 }}>
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
-            {[-3, -2, -1, 0].map((d) => (
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            {[-7, -6, -5, -4, -3, -2, -1, 0].map((d) => (
               <SegChip
                 key={d}
                 on={days.includes(d)}
@@ -1400,55 +1435,116 @@ export default function OrchestrationOverviewPanel({
     if (editor.kind === 'assign') {
       const sa = (exec.staffAssignment ?? null) as Record<string, unknown> | null;
       const start = sa?.startAt as { ref?: string; day?: number; time?: string } | undefined;
-      const end = sa?.endAt as Record<string, unknown> | undefined;
+      const end = sa?.endAt as { ref?: string; day?: number; time?: string } | undefined;
       const ref = String(start?.ref && start.ref !== 'task_created' ? start.ref : defaultRefForTask(taskType));
       const auto = (sa as { autoAssign?: boolean } | null)?.autoAssign === true;
-      const time = String(start?.time ?? '09:00');
+      const startTime = String(start?.time ?? '09:00');
+      const endTime = String(end?.time ?? '18:00');
+      const startDay = start?.ref === 'task_created' ? -3 : Number(start?.day ?? -3);
+      const endDay = end?.day != null ? Number(end.day) : startDay === 0 ? 0 : 0;
+      const mode: 'immediate' | 'none' | 'window' = !sa
+        ? 'none'
+        : start?.ref === 'task_created'
+          ? 'immediate'
+          : 'window';
+      const ASSIGN_DAYS = [-7, -6, -5, -4, -3, -2, -1, 0] as const;
+      const ASSIGN_END_DAYS = [-7, -6, -5, -4, -3, -2, -1, 0, 1] as const;
+      const dayLabel = (d: number) => (d === 0 ? 'J0' : d > 0 ? `J+${d}` : `J${d}`);
       const base = {
         releaseWindows: (sa as { releaseWindows?: string[] } | null)?.releaseWindows ?? ['11:00', '16:00'],
         releaseMode: (sa as { releaseMode?: string } | null)?.releaseMode ?? 'tolerance',
         acceptToleranceHours: (sa as { acceptToleranceHours?: number } | null)?.acceptToleranceHours ?? 3,
         assignmentHoursMode: (sa as { assignmentHoursMode?: string } | null)?.assignmentHoursMode ?? 'planning',
       };
-      const curState: 'immediate' | 'none' | number =
-        !sa ? 'none' : start?.ref === 'task_created' ? 'immediate' : Number(start?.day ?? -3) === 0 ? 0 : Number(start?.day ?? -3);
-      const write = (state: 'immediate' | 'none' | number, opts?: { time?: string; auto?: boolean }) => {
-        const nextAuto = opts?.auto ?? auto;
-        const nextTime = opts?.time ?? time;
-        if (state === 'none') return patchExecution(editor.capKey, { staffAssignment: null });
-        if (state === 'immediate') {
+      const write = (opts: {
+        mode?: 'immediate' | 'none' | 'window';
+        startDay?: number;
+        startTime?: string;
+        endDay?: number;
+        endTime?: string;
+        auto?: boolean;
+      }) => {
+        const nextMode = opts.mode ?? mode;
+        const nextAuto = opts.auto ?? auto;
+        if (nextMode === 'none') return patchExecution(editor.capKey, { staffAssignment: null });
+        if (nextMode === 'immediate') {
           return patchExecution(editor.capKey, {
-            staffAssignment: { ...base, autoAssign: nextAuto, findAnotherStaff: !nextAuto, startAt: { ref: 'task_created' } },
+            staffAssignment: {
+              ...base,
+              autoAssign: nextAuto,
+              findAnotherStaff: !nextAuto,
+              startAt: { ref: 'task_created' },
+            },
           });
         }
-        const day = Number(state);
-        const startAt = { ref, day, time: nextTime };
-        const endAt = day === 0
-          ? { ref, day: 0, time: '18:00' }
-          : (end ?? { ref, day: -1, time: '11:00' });
+        const sd = opts.startDay ?? startDay;
+        const st = opts.startTime ?? startTime;
+        let ed = opts.endDay ?? (end?.day != null ? endDay : Math.max(sd, 0));
+        if (ed < sd) ed = sd;
+        const et = opts.endTime ?? endTime;
         patchExecution(editor.capKey, {
-          staffAssignment: { ...base, autoAssign: nextAuto, findAnotherStaff: !nextAuto, startAt, endAt },
+          staffAssignment: {
+            ...base,
+            autoAssign: nextAuto,
+            findAnotherStaff: !nextAuto,
+            startAt: { ref, day: sd, time: st },
+            endAt: { ref, day: ed, time: et },
+          },
         });
       };
       body = (
         <Box sx={{ display: 'grid', gap: 1 }}>
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>MODE</Typography>
           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-            <SegChip on={curState === 'immediate'} label="Immédiat" onClick={() => write('immediate')} />
-            {[-7, -3, -1].map((d) => (
-              <SegChip key={d} on={curState === d} label={`Dès J${d}`} onClick={() => write(d)} />
-            ))}
-            <SegChip on={curState === 0} label="J0" onClick={() => write(0)} />
-            <SegChip on={curState === 'none'} label="—" onClick={() => write('none')} />
+            <SegChip on={mode === 'immediate'} label="Immédiat" onClick={() => write({ mode: 'immediate' })} />
+            <SegChip
+              on={mode === 'window'}
+              label="Fenêtre"
+              onClick={() => write({ mode: 'window', startDay, endDay: Math.max(endDay, startDay) })}
+            />
+            <SegChip on={mode === 'none'} label="—" onClick={() => write({ mode: 'none' })} />
           </Box>
-          {typeof curState === 'number' && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography sx={{ fontSize: 12, color: V3.t3 }}>1ʳᵉ tentative</Typography>
-              <HourSelect value={time} onChange={(t) => write(curState, { time: t })} />
-            </Box>
+          {mode === 'window' && (
+            <>
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>DÉBUT (1ʳᵉ tentative)</Typography>
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                {ASSIGN_DAYS.map((d) => (
+                  <SegChip
+                    key={`s${d}`}
+                    on={startDay === d}
+                    label={dayLabel(d)}
+                    onClick={() => write({ mode: 'window', startDay: d })}
+                  />
+                ))}
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography sx={{ fontSize: 12, color: V3.t3 }}>Heure début</Typography>
+                <HourSelect value={startTime} onChange={(t) => write({ mode: 'window', startTime: t })} />
+              </Box>
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>FIN (arrêt assignation)</Typography>
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                {ASSIGN_END_DAYS.filter((d) => d >= startDay).map((d) => (
+                  <SegChip
+                    key={`e${d}`}
+                    on={endDay === d}
+                    label={dayLabel(d)}
+                    onClick={() => write({ mode: 'window', endDay: d })}
+                  />
+                ))}
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography sx={{ fontSize: 12, color: V3.t3 }}>Heure fin</Typography>
+                <HourSelect value={endTime} onChange={(t) => write({ mode: 'window', endTime: t })} />
+              </Box>
+            </>
           )}
-          {curState !== 'none' && (
+          {mode !== 'none' && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Switch size="small" checked={auto} onChange={(e) => write(curState, { auto: e.target.checked })} />
+              <Switch
+                size="small"
+                checked={auto}
+                onChange={(e) => write({ mode, auto: e.target.checked })}
+              />
               <Typography sx={{ fontSize: 12, color: V3.t2 }}>
                 Auto-accepté (assigné sans acceptation staff)
               </Typography>
@@ -1547,7 +1643,7 @@ export default function OrchestrationOverviewPanel({
                 APRÈS CRÉATION DE LA TÂCHE
               </Typography>
               <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                {[2, 4, 8].map((h) => (
+                {[2, 4, 8, 24].map((h) => (
                   <SegChip
                     key={`h${h}`}
                     on={hours === h}
@@ -1571,7 +1667,7 @@ export default function OrchestrationOverviewPanel({
                 </Box>
               )}
               <Typography sx={{ fontSize: 11, color: V3.t4 }}>
-                Ex. +4h = escalade 4 h après la demande · J+1 à 9h = lendemain à 09:00.
+                Ex. +4h = 4 h après la demande · +24h = 24 h après · J+1 à 9h = lendemain à 09:00.
               </Typography>
             </>
           )}
@@ -1604,7 +1700,7 @@ export default function OrchestrationOverviewPanel({
         onClose={close}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
-        <Box sx={{ p: 1.5, maxWidth: 380 }}>
+        <Box sx={{ p: 1.5, maxWidth: editor.kind === 'assign' ? 440 : 380 }}>
           <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t, mb: 1 }}>
             {def.emoji} {def.label}
           </Typography>
@@ -1669,6 +1765,8 @@ export default function OrchestrationOverviewPanel({
               { v: -1, u: 'days' as const, label: 'J−1' },
               { v: 0, u: 'days' as const, label: 'J0' },
               { v: 1, u: 'days' as const, label: 'J+1' },
+              { v: 2, u: 'days' as const, label: 'J+2' },
+              { v: 3, u: 'days' as const, label: 'J+3' },
             ].map((opt) => (
               <SegChip
                 key={`${opt.u}${opt.v}${opt.label}`}
@@ -1858,9 +1956,9 @@ export default function OrchestrationOverviewPanel({
   return (
     <Box sx={{ display: 'grid', gap: 2 }}>
       <Alert severity="info" sx={{ fontSize: 12.5 }}>
-        <strong>ON</strong> active le service (et le plan auto). <strong>Décisions</strong> : WhatsApp /
-        Créer tâche / Relances / Rappel staff / Escalade. Créer tâche OFF ⇒ pas de staff —
-        relances &amp; escalade OK.
+        <strong>ON</strong> active le service (et le plan). <strong>Décisions</strong> : WhatsApp /
+        Créer tâche / Relances / Rappel staff / Escalade. <strong>Visibilité WA</strong> = quand le
+        menu apparaît au voyageur. Créer tâche OFF ⇒ pas d&apos;équipe — relances &amp; escalade OK.
       </Alert>
 
       <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card, overflowX: 'auto' }}>
@@ -1878,15 +1976,33 @@ export default function OrchestrationOverviewPanel({
           }}
         >
           <Typography sx={head}> </Typography>
-          <Typography sx={head}>Nom</Typography>
-          <Typography sx={head}>ON</Typography>
-          <Typography sx={head}>Décisions</Typography>
-          <Typography sx={head}>Configurer</Typography>
-          <Typography sx={head}>Timing</Typography>
-          <Typography sx={head}>Relances</Typography>
-          <Typography sx={head}>Staff</Typography>
-          <Typography sx={head}>Escalade</Typography>
-          <Typography sx={head}>Fiche</Typography>
+          <Typography sx={head} title="Nom du service / flow">
+            Service
+          </Typography>
+          <Typography sx={head} title="Activer ou couper le service">
+            ON
+          </Typography>
+          <Typography sx={head} title="WhatsApp · Créer tâche · Relances · Staff · Escalade">
+            Décisions
+          </Typography>
+          <Typography sx={head} title="Prix, créneaux, catalogue, textes…">
+            Contenu
+          </Typography>
+          <Typography sx={head} title="Fenêtre où le menu WhatsApp est proposé au voyageur">
+            Visibilité WA
+          </Typography>
+          <Typography sx={head} title="Rappels WhatsApp au voyageur si pas encore fait">
+            Relances client
+          </Typography>
+          <Typography sx={head} title="Fenêtre d’assignation équipe + auto-accept">
+            Assignation
+          </Typography>
+          <Typography sx={head} title="Alerte admin si non traité à temps">
+            Escalade
+          </Typography>
+          <Typography sx={head} title="Ouvrir la fiche de configuration">
+            Éditer
+          </Typography>
 
           {groupedRows.map((group, gi) => (
             <Box key={group.id} sx={{ display: 'contents' }}>
@@ -1994,11 +2110,11 @@ export default function OrchestrationOverviewPanel({
                       py: 0.25,
                     }}
                     onClick={() => setConfigModal({ capKey: r.key, tab: 'gestion' })}
-                    title="Configurer (prix, créneaux, catalogue…)"
+                    title="Contenu (prix, créneaux, catalogue…)"
                   >
                     {r.hints.length === 0 ? (
                       <Typography sx={{ ...cell, color: V3.p, fontSize: 11.5, fontWeight: 700 }}>
-                        + Configurer
+                        + Contenu
                       </Typography>
                     ) : (
                       r.hints.map((h) => (
@@ -2022,7 +2138,7 @@ export default function OrchestrationOverviewPanel({
                     component="div"
                     sx={r.on && r.hasClient ? editCell : { ...cell, opacity: 0.5 }}
                     onClick={r.on && r.hasClient ? open('availability', r.key) : undefined}
-                    title="Fenêtre proposée au voyageur"
+                    title="Visibilité WhatsApp — fenêtre proposée au voyageur"
                   >
                     {r.availability}
                   </Typography>
@@ -2037,7 +2153,7 @@ export default function OrchestrationOverviewPanel({
                     title={
                       r.onDemand
                         ? 'Pas de relances client (à la demande / ménage Sojori)'
-                        : 'Relances voyageur'
+                        : 'Relances client (voyageur)'
                     }
                   >
                     {r.onDemand ? 'N/A' : r.reminders}
@@ -2046,6 +2162,7 @@ export default function OrchestrationOverviewPanel({
                     component="div"
                     sx={r.on && r.hasTask ? editCell : cell}
                     onClick={r.on && r.hasTask ? open('assign', r.key) : undefined}
+                    title="Assignation staff — début / fin / auto-accept"
                   >
                     {r.assign}
                     {r.autoAssign != null && r.assign !== '—' && (
@@ -2058,6 +2175,7 @@ export default function OrchestrationOverviewPanel({
                     component="div"
                     sx={r.on && r.hasTask ? editCell : cell}
                     onClick={r.on && r.hasTask ? open('escalation', r.key) : undefined}
+                    title="Escalade admin si non traité"
                   >
                     {r.escalation}
                   </Typography>
@@ -2102,13 +2220,29 @@ export default function OrchestrationOverviewPanel({
           >
             Messages planifiés
             <Box component="span" sx={{ ml: 1, fontWeight: 600, color: V3.t3, fontSize: 10.5 }}>
-              · msg
+              · envois automatiques (hors menu)
             </Box>
           </Typography>
 
+          {/* En-têtes adaptés messages (même grille que les flows) */}
+          <Typography sx={head}> </Typography>
+          <Typography sx={head}>Message</Typography>
+          <Typography sx={head}>ON</Typography>
+          <Typography sx={{ ...head, color: V3.t4 }}>—</Typography>
+          <Typography sx={head} title="Modèle catalogue + canal d’envoi">
+            Canal
+          </Typography>
+          <Typography sx={head} title="Référence + délai + heure d’envoi">
+            Quand envoyer
+          </Typography>
+          <Typography sx={{ ...head, color: V3.t4 }}>—</Typography>
+          <Typography sx={{ ...head, color: V3.t4 }}>—</Typography>
+          <Typography sx={{ ...head, color: V3.t4 }}>—</Typography>
+          <Typography sx={head}>Modifier</Typography>
+
           {messages.length === 0 ? (
             <Typography sx={{ ...cell, gridColumn: '1 / -1', color: V3.t4, py: 1 }}>
-              Aucun message planifié — onglet Messages pour en ajouter.
+              Aucun message planifié — ajoutez-en dans Services &amp; workflows → Messages planifiés.
             </Typography>
           ) : (
             messages.map((m) => {
@@ -2179,7 +2313,7 @@ export default function OrchestrationOverviewPanel({
                       onClick={(e) => setMsgEditor({ id: m._id, anchor: e.currentTarget })}
                       sx={{ fontSize: 11, py: 0.35, px: 1, minWidth: 0, textTransform: 'none' }}
                     >
-                      Timing
+                      Quand
                     </Button>
                   </Box>
                 </Box>

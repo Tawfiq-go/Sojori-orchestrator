@@ -16,6 +16,7 @@ import V3Header, { type V3ScopeMode } from './V3Header';
 import V3Rail from './V3Rail';
 import V3ServicePanel from './V3ServicePanel';
 import OrchestrationModelSubTabs, {
+  SCHEDULED_MESSAGES_RAIL_KEY,
   type OrchestrationModelSection,
 } from './OrchestrationModelSubTabs';
 import V3ScheduledMessagesPanel from './V3ScheduledMessagesPanel';
@@ -43,7 +44,6 @@ import {
   firstActivatedCapabilityKey,
   isCapabilityActivated,
 } from './ownerCapabilityActivation';
-import ListingActivationSection from './ListingActivationSection';
 import {
   activationStatusFromEffectiveDoc,
   hasAnyEffectiveActiveService,
@@ -89,9 +89,7 @@ export default function OrchestrationListingV3View({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(CAPABILITY_REGISTRY[0]?.key ?? null);
-  const [listingSection, setListingSection] = useState<OrchestrationModelSection>(
-    embedded ? 'activation' : 'services',
-  );
+  const [listingSection, setListingSection] = useState<OrchestrationModelSection>('apercu');
   const [serviceActivationStatus, setServiceActivationStatus] = useState<
     ServiceActivationStatusEntry[] | undefined
   >(undefined);
@@ -211,15 +209,6 @@ export default function OrchestrationListingV3View({
     }
   }, [scope, ownerKey, effectiveListingId, isOwnerTemplate, applyActivationFromDoc]);
 
-  const handleActivationSaved = useCallback(
-    (status: ServiceActivationStatusEntry[]) => {
-      setServiceActivationStatus(status);
-      setActivationLoaded(true);
-      void load({ silent: true });
-    },
-    [load],
-  );
-
   useEffect(() => {
     void load();
   }, [load]);
@@ -275,6 +264,7 @@ export default function OrchestrationListingV3View({
 
   useEffect(() => {
     if (!isOwnerTemplate || isAdminTemplate || ownerKey === 'global' || !selectedKey) return;
+    if (selectedKey === SCHEDULED_MESSAGES_RAIL_KEY) return;
     const row = rows.find(r => r.key === selectedKey);
     if (row && isCapabilityActivated(row)) return;
     const fallback = firstActivatedCapabilityKey(rows);
@@ -283,7 +273,7 @@ export default function OrchestrationListingV3View({
 
   useEffect(() => {
     if (isOwnerTemplate || !effectiveListingId || !selectedKey || !activationLoaded) return;
-    if (listingSection === 'activation') return;
+    if (selectedKey === SCHEDULED_MESSAGES_RAIL_KEY) return;
     if (selectedKey === 'menu_navigation') return;
     if (!isCapabilityVisibleOnListingRail(selectedKey)) {
       setSelectedKey(defaultListingRailCapabilityKey());
@@ -433,7 +423,10 @@ export default function OrchestrationListingV3View({
       ? hasAnyEffectiveActiveService(serviceActivationStatus)
       : true;
 
+  const showMessagesPanel = selectedKey === SCHEDULED_MESSAGES_RAIL_KEY;
+
   const showServicePanelEffective =
+    !showMessagesPanel &&
     selectedDef &&
     selectedKey &&
     selectedRow &&
@@ -495,34 +488,11 @@ export default function OrchestrationListingV3View({
 
       {showListingOrchestrationTabs ? (
         <Box sx={{ px: embedded ? 1 : 2, pt: 1, flexShrink: 0 }}>
-          <OrchestrationModelSubTabs
-            value={listingSection}
-            onChange={setListingSection}
-            showActivation
-          />
+          <OrchestrationModelSubTabs value={listingSection} onChange={setListingSection} />
         </Box>
       ) : null}
 
-      {showListingOrchestrationTabs && listingSection === 'activation' && effectiveListingId ? (
-        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: embedded ? 1 : 2, pb: 2 }}>
-          <ListingActivationSection
-            listingId={effectiveListingId}
-            initialServices={serviceActivationStatus}
-            onSaved={handleActivationSaved}
-          />
-        </Box>
-      ) : null}
-
-      {showListingOrchestrationTabs && listingSection === 'messages' && effectiveListingId ? (
-        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          <V3ScheduledMessagesPanel
-            scope="listing"
-            ownerKey={ownerKey}
-            listingId={effectiveListingId}
-            listingName={listings.find(l => l.id === effectiveListingId)?.name}
-          />
-        </Box>
-      ) : showListingOrchestrationTabs && listingSection === 'apercu' ? (
+      {showListingOrchestrationTabs && listingSection === 'apercu' ? (
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: embedded ? 1 : 2, pb: 2 }}>
           <OrchestrationOverviewPanel
             ownerKey={ownerKey}
@@ -554,6 +524,11 @@ export default function OrchestrationListingV3View({
             onSelectService={key => {
               setSelectedKey(key);
             }}
+            showMessagesEntry={
+              isOwnerTemplate
+                ? isAdminTemplate || ownerKey === 'global' || anyOwnerServiceActive
+                : true
+            }
           />
         )}
 
@@ -568,6 +543,15 @@ export default function OrchestrationListingV3View({
             WebkitOverflowScrolling: 'touch',
           }}
         >
+          {showMessagesPanel && (
+            <V3ScheduledMessagesPanel
+              scope={isOwnerTemplate ? 'owner' : 'listing'}
+              ownerKey={ownerKey}
+              listingId={effectiveListingId ?? undefined}
+              listingName={listings.find(l => l.id === effectiveListingId)?.name}
+              isAdminTemplate={isOwnerTemplate ? isAdminTemplate : undefined}
+            />
+          )}
           {showServicePanelEffective && (
             <V3ServicePanel
               def={selectedDef!}
@@ -601,16 +585,16 @@ export default function OrchestrationListingV3View({
           effectiveListingId &&
           activationLoaded &&
           !listingHasEffectiveServices &&
-          listingSection === 'services' ? (
+          (!showListingOrchestrationTabs || listingSection === 'services') ? (
             <Alert severity="info" sx={{ m: 2 }}>
-              Aucun service actif pour cette annonce. Activez des services dans l&apos;onglet{' '}
-              <strong>Activation des services</strong>.
+              Aucun service actif pour cette annonce. Activez des services dans la{' '}
+              <strong>Vue d&apos;ensemble</strong> (colonne ON).
             </Alert>
           ) : null}
           {isOwnerTemplate && !isAdminTemplate && ownerKey !== 'global' && !anyOwnerServiceActive ? (
             <Alert severity="info" sx={{ m: 2 }}>
-              Aucun service activé. Utilisez l&apos;onglet{' '}
-              <strong>Activation des services</strong> pour activer les services à configurer.
+              Aucun service activé. Activez des services dans la{' '}
+              <strong>Vue d&apos;ensemble</strong> (colonne ON).
             </Alert>
           ) : null}
         </Box>

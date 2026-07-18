@@ -7,12 +7,11 @@ import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwne
 import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
 import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
 import OrchestrationListingV3View from '../features/orchestrationListingV3/OrchestrationListingV3View';
-import OwnerActivationSection from '../features/orchestrationListingV3/OwnerActivationSection';
 import OrchestrationOverviewPanel from '../features/orchestrationListingV3/OrchestrationOverviewPanel';
 import OrchestrationModelSubTabs, {
+  normalizeOrchestrationSection,
   type OrchestrationModelSection,
 } from '../features/orchestrationListingV3/OrchestrationModelSubTabs';
-import V3ScheduledMessagesPanel from '../features/orchestrationListingV3/V3ScheduledMessagesPanel';
 import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
 import { useAuth } from '../hooks/useAuth';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
@@ -39,11 +38,11 @@ function apiErrorMessage(e: unknown): string {
 type ListingPick = { id: string; name: string };
 
 function parseExplicitSection(raw: string | null): OrchestrationModelSection | null {
-  if (raw === 'messages') return 'messages';
-  if (raw === 'activation') return 'activation';
+  if (raw == null || raw === '') return null;
+  // activation / messages → apercu ; services reste services
   if (raw === 'services') return 'services';
-  if (raw === 'apercu') return 'apercu';
-  return null;
+  if (raw === 'apercu' || raw === 'activation' || raw === 'messages') return 'apercu';
+  return normalizeOrchestrationSection(raw);
 }
 
 function OwnerModelPageInner() {
@@ -58,11 +57,6 @@ function OwnerModelPageInner() {
   const [ownerListings, setOwnerListings] = useState<ListingPick[]>([]);
   const [selectedListingIds, setSelectedListingIds] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
-  const [ownerServicesActive, setOwnerServicesActive] = useState(false);
-
-  useEffect(() => {
-    setOwnerServicesActive(false);
-  }, [ownerKey]);
 
   const syncMode = isAdminTemplate ? 'owners' : isAdmin ? 'admin-pm' : 'listings';
   const adminViewingPm = isAdmin && !isAdminTemplate;
@@ -112,36 +106,20 @@ function OwnerModelPageInner() {
     void loadOwnerListings();
   }, [loadOwnerListings]);
 
-  const showActivationTab = !isAdminTemplate && ownerKey !== 'global';
-
   const section = useMemo(() => {
     const parsed = parseExplicitSection(searchParams.get('section'));
-    if (parsed) return parsed;
-    return showActivationTab ? 'activation' : 'services';
-  }, [searchParams, showActivationTab]);
+    return parsed ?? 'apercu';
+  }, [searchParams]);
 
   const setSection = useCallback(
     (next: OrchestrationModelSection) => {
       const params = new URLSearchParams(searchParams);
-      const defaultSection: OrchestrationModelSection = showActivationTab ? 'activation' : 'services';
-      if (next === defaultSection) params.delete('section');
+      if (next === 'apercu') params.delete('section');
       else params.set('section', next);
       setSearchParams(params, { replace: true });
     },
-    [searchParams, setSearchParams, showActivationTab],
+    [searchParams, setSearchParams],
   );
-
-  useEffect(() => {
-    if (!showActivationTab && section === 'activation') {
-      setSection('services');
-    }
-  }, [showActivationTab, section, setSection]);
-
-  useEffect(() => {
-    if (!ownerServicesActive && section === 'messages') {
-      setSection(showActivationTab ? 'activation' : 'services');
-    }
-  }, [ownerServicesActive, section, setSection, showActivationTab]);
 
   const handleSyncToOwner = async (targetOwnerId: string, targetOwnerName: string) => {
     const result = await syncAdminTemplateToOwnerSimple(targetOwnerId);
@@ -235,25 +213,9 @@ function OwnerModelPageInner() {
   return (
     <Box sx={{ px: { xs: 2, sm: 3 }, py: 1, width: '100%' }}>
       <CatalogueAnnoncesTabs />
-      <OrchestrationModelSubTabs
-        value={section}
-        onChange={setSection}
-        showActivation={showActivationTab}
-        hideMessages={!ownerServicesActive}
-      />
+      <OrchestrationModelSubTabs value={section} onChange={setSection} />
 
-      {section === 'activation' && showActivationTab && (
-        <OwnerActivationSection
-          key={ownerKey}
-          ownerKey={ownerKey}
-          isAdminTemplate={isAdminTemplate}
-          onMetaChange={({ anyActive }) => setOwnerServicesActive(anyActive)}
-        />
-      )}
-
-      {section === 'apercu' && (
-        <OrchestrationOverviewPanel ownerKey={ownerKey} />
-      )}
+      {section === 'apercu' && <OrchestrationOverviewPanel ownerKey={ownerKey} />}
 
       {section === 'services' && isAdmin && isAdminTemplate && (
         <Alert severity="info" sx={{ mb: 1.5, fontSize: 13 }}>
@@ -272,11 +234,11 @@ function OwnerModelPageInner() {
 
       {section === 'services' && (
         <>
-      <OwnerConfigScopeBarWithSync
-        {...ownerScope}
-        compact
-        hideListingPicker={syncMode === 'listings'}
-        syncMode={syncMode}
+          <OwnerConfigScopeBarWithSync
+            {...ownerScope}
+            compact
+            hideListingPicker={syncMode === 'listings'}
+            syncMode={syncMode}
             onSyncToOwner={isAdmin ? handleSyncToOwner : undefined}
             onSyncToAllOwners={isAdmin && isAdminTemplate ? handleSyncToAllOwners : undefined}
             onSyncAllListings={!isAdminTemplate ? handleSyncAllListings : undefined}
@@ -302,18 +264,9 @@ function OwnerModelPageInner() {
               onListingChange={() => {}}
               listingCount={ownerListings.length}
               ownerTemplateMode
-              onOwnerActivationMeta={({ anyActive }) => setOwnerServicesActive(anyActive)}
             />
           )}
         </>
-      )}
-
-      {section === 'messages' && ownerServicesActive && (
-        <V3ScheduledMessagesPanel
-          scope="owner"
-          ownerKey={ownerKey}
-          isAdminTemplate={isAdminTemplate}
-        />
       )}
     </Box>
   );
