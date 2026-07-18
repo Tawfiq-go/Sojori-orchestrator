@@ -31,8 +31,6 @@ import {
   CapabilityWhatsAppPanel,
 } from '../serviceMatrix/CapabilityMatrixConfigPanels';
 import listingsService from '../../services/listingsService';
-import * as fulltaskApi from '../../services/fulltaskApi';
-import { unwrapFulltaskData } from '../../utils/unwrapFulltaskResponse';
 import {
   loadOwnerOrchestrationMatrix,
   saveOwnerGestion,
@@ -52,6 +50,15 @@ import {
   saveListingServiceActivation,
   type ServiceActivationStatusEntry,
 } from './listingCapabilityActivation';
+import {
+  loadListingScheduledMessagesContext,
+  saveListingScheduledMessages,
+} from './listingScheduledMessagesApi';
+import {
+  loadOwnerScheduledMessagesContext,
+  saveOwnerScheduledMessages,
+} from './ownerScheduledMessagesApi';
+import type { CatalogMessage, ScheduledOrchestrationMessage } from '../taskHub/staff-design/types';
 import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import { V3 } from './theme';
 
@@ -321,6 +328,68 @@ function HourSelect({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
+/** Flag discret Flow / Msg devant chaque ligne. */
+function KindFlag({ kind }: { kind: 'flow' | 'msg' }) {
+  const flow = kind === 'flow';
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: 'inline-block',
+        fontSize: 9,
+        fontWeight: 800,
+        letterSpacing: '0.05em',
+        textTransform: 'uppercase',
+        color: flow ? V3.orch : V3.client,
+        bgcolor: flow ? V3.orchT : V3.clientT,
+        border: `1px solid ${flow ? 'rgba(124,58,237,0.22)' : 'rgba(6,115,179,0.22)'}`,
+        px: 0.55,
+        py: 0.15,
+        borderRadius: 0.5,
+        lineHeight: 1.35,
+        flexShrink: 0,
+      }}
+    >
+      {flow ? 'Flow' : 'Msg'}
+    </Box>
+  );
+}
+
+function messageWhenHuman(rule: ScheduledOrchestrationMessage): string {
+  const ref = rule.trigger?.reference;
+  const delay = rule.trigger?.delay;
+  if (!ref || !delay) return '—';
+  const abs = Math.abs(Number(delay.value ?? 0));
+  const sign = Number(delay.value ?? 0) >= 0 ? '+' : '−';
+  const base =
+    ref === 'reservation_date'
+      ? 'résa'
+      : ref === 'check_in'
+        ? 'arrivée'
+        : ref === 'check_out'
+          ? 'départ'
+          : ref === 'task_created'
+            ? 'tâche'
+            : 'réf.';
+  if (delay.unit === 'hours') {
+    return abs === 0 ? `Immédiat (${base})` : `${sign}${abs}h après ${base}`;
+  }
+  const dayLabel =
+    Number(delay.value ?? 0) === 0
+      ? `jour ${base}`
+      : Number(delay.value ?? 0) > 0
+        ? `J+${abs} après ${base}`
+        : `J−${abs} avant ${base}`;
+  return `${dayLabel}${rule.trigger.time ? ` à ${hourOf(rule.trigger.time)}` : ''}`;
+}
+
+function messageChannelHuman(rule: ScheduledOrchestrationMessage): string {
+  const ch = rule.deliveryChannel;
+  if (ch === 'whatsapp') return 'WA';
+  if (ch === 'email') return 'Email';
+  return 'OTA';
+}
+
 /* ───────────────────────────── composant ───────────────────────────── */
 
 type EditorKind = 'availability' | 'reminders' | 'assign' | 'staffRem' | 'escalation';
@@ -339,11 +408,13 @@ export default function OrchestrationOverviewPanel({
 }) {
   const isListingScope = Boolean(listingId);
   const [doc, setDoc] = useState<OverviewDoc | null>(null);
-  const [messages, setMessages] = useState<Array<Record<string, unknown>>>([]);
+  const [messages, setMessages] = useState<ScheduledOrchestrationMessage[]>([]);
+  const [msgCatalog, setMsgCatalog] = useState<CatalogMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editor, setEditor] = useState<{ kind: EditorKind; capKey: string; anchor: HTMLElement } | null>(null);
+  const [msgEditor, setMsgEditor] = useState<{ id: string; anchor: HTMLElement } | null>(null);
   const [configModal, setConfigModal] = useState<{ capKey: string; tab: 'gestion' | 'wa' } | null>(null);
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
   const [activationStatus, setActivationStatus] = useState<ServiceActivationStatusEntry[]>([]);
@@ -406,17 +477,16 @@ export default function OrchestrationOverviewPanel({
         } else {
           setActivationStatus([]);
         }
-        let msgs = (d.scheduledMessages ?? []) as Array<Record<string, unknown>>;
-        if (!msgs.length && !listingId) {
-          try {
-            const raw = await fulltaskApi.getOrchestrationConfig(ownerKey, { strictOwner: true });
-            const ft = unwrapFulltaskData<{ scheduledMessages?: Array<Record<string, unknown>> }>(raw);
-            msgs = ft?.scheduledMessages ?? [];
-          } catch {
-            msgs = [];
-          }
+        try {
+          const msgCtx = listingId
+            ? await loadListingScheduledMessagesContext(listingId, ownerKey)
+            : await loadOwnerScheduledMessagesContext(ownerKey);
+          setMessages(msgCtx.rules ?? []);
+          setMsgCatalog(msgCtx.catalog ?? []);
+        } catch {
+          setMessages([]);
+          setMsgCatalog([]);
         }
-        setMessages(msgs);
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Chargement impossible'))
       .finally(() => setLoading(false));
@@ -601,6 +671,39 @@ export default function OrchestrationOverviewPanel({
     },
     [caps, doc, ownerKey, listingId],
   );
+
+  const persistMessages = useCallback(
+    async (next: ScheduledOrchestrationMessage[]) => {
+      setSaving(true);
+      try {
+        if (listingId) {
+          await saveListingScheduledMessages(listingId, next, msgCatalog);
+        } else {
+          await saveOwnerScheduledMessages(ownerKey, next, msgCatalog);
+        }
+        setMessages(next);
+        toast.success('Message mis à jour');
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : 'Enregistrement message impossible');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [listingId, ownerKey, msgCatalog],
+  );
+
+  const patchMessageEnabled = (id: string, enabled: boolean) => {
+    const next = messages.map((m) => (m._id === id ? { ...m, enabled } : m));
+    void persistMessages(next);
+  };
+
+  const patchMessageTrigger = (
+    id: string,
+    trigger: ScheduledOrchestrationMessage['trigger'],
+  ) => {
+    const next = messages.map((m) => (m._id === id ? { ...m, trigger } : m));
+    void persistMessages(next);
+  };
 
   /* ── éditeurs ── */
 
@@ -963,6 +1066,96 @@ export default function OrchestrationOverviewPanel({
     );
   };
 
+  const renderMsgEditor = () => {
+    if (!msgEditor) return null;
+    const rule = messages.find((m) => m._id === msgEditor.id);
+    if (!rule) return null;
+    const ref = rule.trigger?.reference ?? 'check_in';
+    const delayVal = Number(rule.trigger?.delay?.value ?? -1);
+    const unit = rule.trigger?.delay?.unit === 'hours' ? 'hours' : 'days';
+    const time = String(rule.trigger?.time ?? '10:00');
+    const write = (next: ScheduledOrchestrationMessage['trigger']) => {
+      patchMessageTrigger(rule._id, next);
+    };
+    return (
+      <Popover
+        open
+        anchorEl={msgEditor.anchor}
+        onClose={() => setMsgEditor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Box sx={{ p: 1.5, maxWidth: 360, display: 'grid', gap: 1 }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t }}>
+            💬 {rule.label} · timing
+          </Typography>
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>RÉFÉRENCE</Typography>
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            {(
+              [
+                ['reservation_date', 'Résa'],
+                ['check_in', 'Arrivée'],
+                ['check_out', 'Départ'],
+              ] as const
+            ).map(([id, label]) => (
+              <SegChip
+                key={id}
+                on={ref === id}
+                label={label}
+                onClick={() =>
+                  write({
+                    reference: id,
+                    delay: { value: delayVal, unit },
+                    time: unit === 'days' ? time : undefined,
+                  })
+                }
+              />
+            ))}
+          </Box>
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>DÉLAI</Typography>
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            {[
+              { v: 0, u: 'hours' as const, label: 'Immédiat' },
+              { v: 2, u: 'hours' as const, label: '+2h' },
+              { v: 4, u: 'hours' as const, label: '+4h' },
+              { v: -2, u: 'days' as const, label: 'J−2' },
+              { v: -1, u: 'days' as const, label: 'J−1' },
+              { v: 0, u: 'days' as const, label: 'J0' },
+              { v: 1, u: 'days' as const, label: 'J+1' },
+            ].map((opt) => (
+              <SegChip
+                key={`${opt.u}${opt.v}${opt.label}`}
+                on={unit === opt.u && delayVal === opt.v}
+                label={opt.label}
+                onClick={() =>
+                  write({
+                    reference: ref,
+                    delay: { value: opt.v, unit: opt.u },
+                    time: opt.u === 'days' ? time : undefined,
+                  })
+                }
+              />
+            ))}
+          </Box>
+          {unit === 'days' && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography sx={{ fontSize: 12, color: V3.t3 }}>Heure</Typography>
+              <HourSelect
+                value={time}
+                onChange={(t) =>
+                  write({
+                    reference: ref,
+                    delay: { value: delayVal, unit: 'days' },
+                    time: t,
+                  })
+                }
+              />
+            </Box>
+          )}
+        </Box>
+      </Popover>
+    );
+  };
+
   /* ── rendu tableau ── */
 
   const rows = useMemo(
@@ -1104,51 +1297,42 @@ export default function OrchestrationOverviewPanel({
   return (
     <Box sx={{ display: 'grid', gap: 2, opacity: saving ? 0.6 : 1 }}>
       <Alert severity="info" sx={{ fontSize: 12.5 }}>
-        {isListingScope ? (
-          <>
-            Vue <strong>annonce</strong> : <strong>ON</strong> = activation du service pour cette fiche
-            (onglet Activation). Puis Configurer / WA / ops. Un service Off ne peut pas être modifié via
-            orchestration.
-          </>
-        ) : (
-          <>
-            Cliquez <strong>Configurer</strong> pour éditer paliers / créneaux / prix / catalogue. Mode
-            Accès template = mode d&apos;accueil seulement (codes par annonce).
-          </>
-        )}
+        Liste unifiée <strong>Flow</strong> (services) et <strong>Msg</strong> (messages planifiés). Colonnes
+        prioritaires : ON → Configurer → Timing. Puis ops (relances / staff / escalade).
       </Alert>
 
       <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card, overflowX: 'auto' }}>
         <Typography sx={{ fontSize: 14, fontWeight: 800, color: V3.t, mb: 1.25 }}>
-          Services — activation, config &amp; exécution
+          Flows &amp; messages — config d&apos;ensemble
         </Typography>
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(150px,1.3fr) 44px 44px minmax(130px,1.15fr) 1.1fr 0.9fr 1.2fr 0.85fr 0.75fr 96px',
+            gridTemplateColumns:
+              '36px minmax(150px,1.35fr) 44px minmax(120px,1.15fr) minmax(110px,1.05fr) 40px 0.85fr 1.05fr 0.75fr 88px',
             gap: 0.75,
             alignItems: 'center',
-            minWidth: 1080,
+            minWidth: 1100,
           }}
         >
-          <Typography sx={head}>Service</Typography>
+          <Typography sx={head}> </Typography>
+          <Typography sx={head}>Nom</Typography>
           <Typography sx={head}>ON</Typography>
-          <Typography sx={head}>WA</Typography>
           <Typography sx={head}>Configurer</Typography>
-          <Typography sx={head}>Proposé</Typography>
+          <Typography sx={head}>Timing</Typography>
+          <Typography sx={head}>WA</Typography>
           <Typography sx={head}>Relances</Typography>
-          <Typography sx={head}>Assignation</Typography>
-          <Typography sx={head}>Rappel staff</Typography>
+          <Typography sx={head}>Staff</Typography>
           <Typography sx={head}>Escalade</Typography>
           <Typography sx={head}>Fiche</Typography>
 
-          {groupedRows.map((group) => (
+          {groupedRows.map((group, gi) => (
             <Box key={group.id} sx={{ display: 'contents' }}>
               <Typography
                 sx={{
                   ...head,
                   gridColumn: '1 / -1',
-                  mt: group.id === groupedRows[0]?.id ? 0.5 : 1.25,
+                  mt: gi === 0 ? 0.5 : 1.25,
                   mb: 0.25,
                   color: V3.t,
                   fontSize: 11.5,
@@ -1159,13 +1343,32 @@ export default function OrchestrationOverviewPanel({
                 }}
               >
                 {group.label}
+                <Box component="span" sx={{ ml: 1, fontWeight: 600, color: V3.t3, fontSize: 10.5 }}>
+                  · flows
+                </Box>
               </Typography>
               {group.rows.map((r) => (
                 <Box key={r.key} sx={{ display: 'contents' }}>
-                  <Typography component="div" sx={{ ...cell, fontWeight: 700, color: r.on ? V3.t : V3.t4 }}>
-                    {r.emoji} {r.label}
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <KindFlag kind="flow" />
+                  </Box>
+                  <Typography
+                    component="div"
+                    sx={{
+                      ...cell,
+                      fontWeight: 700,
+                      color: r.on ? V3.t : V3.t4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span>
+                      {r.emoji} {r.label}
+                    </span>
                     {!r.on && (
-                      <Chip label="Off" size="small" sx={{ ml: 0.75, height: 16, fontSize: 10 }} />
+                      <Chip label="Off" size="small" sx={{ height: 16, fontSize: 10 }} />
                     )}
                   </Typography>
                   <Box sx={{ display: 'flex', justifyContent: 'center' }}>
@@ -1175,19 +1378,6 @@ export default function OrchestrationOverviewPanel({
                       onChange={(e) => patchDecision(r.key, 'managed', e.target.checked)}
                       inputProps={{ 'aria-label': `${r.label} actif` }}
                     />
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                    {r.hasClient ? (
-                      <Switch
-                        size="small"
-                        checked={r.waOn}
-                        disabled={!r.on}
-                        onChange={(e) => patchDecision(r.key, 'clientEnabled', e.target.checked)}
-                        inputProps={{ 'aria-label': `${r.label} WhatsApp` }}
-                      />
-                    ) : (
-                      <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
-                    )}
                   </Box>
                   <Box
                     sx={{
@@ -1200,7 +1390,7 @@ export default function OrchestrationOverviewPanel({
                       py: 0.25,
                     }}
                     onClick={() => setConfigModal({ capKey: r.key, tab: 'gestion' })}
-                    title="Cliquer pour configurer (prix, créneaux, services…)"
+                    title="Configurer (prix, créneaux, catalogue…)"
                   >
                     {r.hints.length === 0 ? (
                       <Typography sx={{ ...cell, color: V3.p, fontSize: 11.5, fontWeight: 700 }}>
@@ -1228,9 +1418,23 @@ export default function OrchestrationOverviewPanel({
                     component="div"
                     sx={r.on && r.hasClient ? editCell : { ...cell, opacity: 0.5 }}
                     onClick={r.on && r.hasClient ? open('availability', r.key) : undefined}
+                    title="Fenêtre proposée au voyageur"
                   >
                     {r.availability}
                   </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                    {r.hasClient ? (
+                      <Switch
+                        size="small"
+                        checked={r.waOn}
+                        disabled={!r.on}
+                        onChange={(e) => patchDecision(r.key, 'clientEnabled', e.target.checked)}
+                        inputProps={{ 'aria-label': `${r.label} WhatsApp` }}
+                      />
+                    ) : (
+                      <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
+                    )}
+                  </Box>
                   <Typography
                     component="div"
                     sx={r.on && r.hasTask ? editCell : cell}
@@ -1249,13 +1453,6 @@ export default function OrchestrationOverviewPanel({
                         · Auto {r.autoAssign ? '✓' : '✗'}
                       </Box>
                     )}
-                  </Typography>
-                  <Typography
-                    component="div"
-                    sx={r.on && r.hasTask ? editCell : cell}
-                    onClick={r.on && r.hasTask ? open('staffRem', r.key) : undefined}
-                  >
-                    {r.staffReminder}
                   </Typography>
                   <Typography
                     component="div"
@@ -1288,45 +1485,112 @@ export default function OrchestrationOverviewPanel({
               ))}
             </Box>
           ))}
+
+          <Typography
+            sx={{
+              ...head,
+              gridColumn: '1 / -1',
+              mt: 1.5,
+              mb: 0.25,
+              color: V3.t,
+              fontSize: 11.5,
+              bgcolor: V3.clientT,
+              px: 1,
+              py: 0.5,
+              borderRadius: 1,
+            }}
+          >
+            Messages planifiés
+            <Box component="span" sx={{ ml: 1, fontWeight: 600, color: V3.t3, fontSize: 10.5 }}>
+              · msg
+            </Box>
+          </Typography>
+
+          {messages.length === 0 ? (
+            <Typography sx={{ ...cell, gridColumn: '1 / -1', color: V3.t4, py: 1 }}>
+              Aucun message planifié — onglet Messages pour en ajouter.
+            </Typography>
+          ) : (
+            messages.map((m) => {
+              const catalogLabel =
+                msgCatalog.find((c) => c.id === m.catalogMessageId)?.label ?? m.label;
+              return (
+                <Box key={m._id} sx={{ display: 'contents' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <KindFlag kind="msg" />
+                  </Box>
+                  <Typography
+                    component="div"
+                    sx={{
+                      ...cell,
+                      fontWeight: 700,
+                      color: m.enabled ? V3.t : V3.t4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span>💬 {m.label || catalogLabel}</span>
+                    {!m.enabled && (
+                      <Chip label="Off" size="small" sx={{ height: 16, fontSize: 10 }} />
+                    )}
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <Switch
+                      size="small"
+                      checked={m.enabled !== false}
+                      onChange={(e) => patchMessageEnabled(m._id, e.target.checked)}
+                      inputProps={{ 'aria-label': `${m.label} actif` }}
+                    />
+                  </Box>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.35, alignItems: 'center' }}>
+                    <Chip
+                      label={catalogLabel}
+                      size="small"
+                      sx={{ height: 18, fontSize: 10, fontWeight: 600, bgcolor: V3.clientT, color: V3.client }}
+                    />
+                    <Chip
+                      label={messageChannelHuman(m)}
+                      size="small"
+                      sx={{ height: 18, fontSize: 10, fontWeight: 600 }}
+                    />
+                  </Box>
+                  <Typography
+                    component="div"
+                    sx={m.enabled !== false ? editCell : { ...cell, opacity: 0.5 }}
+                    onClick={
+                      m.enabled !== false
+                        ? (e) => setMsgEditor({ id: m._id, anchor: e.currentTarget })
+                        : undefined
+                    }
+                    title="Quand envoyer"
+                  >
+                    {messageWhenHuman(m)}
+                  </Typography>
+                  <Typography sx={{ ...cell, textAlign: 'center', color: V3.t4 }}>—</Typography>
+                  <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
+                  <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
+                  <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
+                  <Box>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={(e) => setMsgEditor({ id: m._id, anchor: e.currentTarget })}
+                      sx={{ fontSize: 11, py: 0.35, px: 1, minWidth: 0, textTransform: 'none' }}
+                    >
+                      Timing
+                    </Button>
+                  </Box>
+                </Box>
+              );
+            })
+          )}
         </Box>
       </Box>
 
-      <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 800, color: V3.t, mb: 1 }}>
-          Messages automatiques du séjour
-        </Typography>
-        {messages.length === 0 ? (
-          <Typography sx={cell}>Aucun message planifié.</Typography>
-        ) : (
-          <Box sx={{ display: 'grid', gap: 0.5 }}>
-            {messages.map((m, i) => {
-              const trigger = m.trigger as { ref?: string; day?: number; hours?: number; time?: string } | undefined;
-              const channel = m.channel as { primary?: string } | undefined;
-              let when = '—';
-              if (trigger?.ref === 'booking_created') {
-                const h = Number(trigger.hours ?? 0);
-                when = h === 0 ? 'Immédiat à la réservation' : `+${h}h après la réservation`;
-              } else if (trigger) {
-                const base = trigger.ref === 'checkin' ? 'arrivée' : 'départ';
-                const d = Number(trigger.day ?? 0);
-                when = `${d === 0 ? `jour ${base}` : d > 0 ? `J+${d} après ${base}` : `J${d} avant ${base}`}${trigger.time ? ` à ${hourOf(trigger.time)}` : ''}`;
-              }
-              return (
-                <Typography key={String(m.messageId ?? i)} sx={{ ...cell, opacity: m.enabled === false ? 0.5 : 1 }}>
-                  <strong>{String(m.label ?? m.messageId ?? '')}</strong> — {when} ·{' '}
-                  {(channel?.primary ?? '').toUpperCase() || '—'}
-                  {m.enabled === false ? ' · désactivé' : ''}
-                </Typography>
-              );
-            })}
-          </Box>
-        )}
-        <Typography sx={{ fontSize: 11.5, color: V3.t3, mt: 1 }}>
-          Textes et réglages fins : onglet « Messages planifiés ».
-        </Typography>
-      </Box>
-
       {renderEditor()}
+      {renderMsgEditor()}
 
       <Dialog
         open={Boolean(configModal && configDef)}
