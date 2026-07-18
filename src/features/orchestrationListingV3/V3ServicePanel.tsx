@@ -44,7 +44,7 @@ const PANEL_META: Record<
 > = {
   gestion: { field: 'managed', kind: 'manage', icon: '⚙', label: 'Gérer', hint: "J'exploite ce service" },
   wa: { field: 'clientEnabled', kind: 'client', icon: '👤', label: 'Client choisit', hint: 'Menu WhatsApp' },
-  task: { field: 'taskEnabled', kind: 'task', icon: '👷', label: 'Ops / Staff', hint: 'Visible owner · assign staff' },
+  task: { field: 'taskEnabled', kind: 'task', icon: '📋', label: 'Créer tâche', hint: 'Assigner l’équipe' },
   exec: { field: 'orchestrated', kind: 'orch', icon: '⚡', label: 'Orchestrer', hint: 'Relances auto' },
 };
 

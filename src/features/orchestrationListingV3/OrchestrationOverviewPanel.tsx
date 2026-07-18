@@ -1518,7 +1518,7 @@ export default function OrchestrationOverviewPanel({
     <Box sx={{ display: 'grid', gap: 2, opacity: saving ? 0.6 : 1 }}>
       <Alert severity="info" sx={{ fontSize: 12.5 }}>
         <strong>ON</strong> active le service (et le plan auto). <strong>Décisions</strong> : WhatsApp /
-        Ops·Staff / Relances / Rappel staff / Escalade. Ops OFF ⇒ pas de staff, invisible owner —
+        Créer tâche / Relances / Rappel staff / Escalade. Créer tâche OFF ⇒ pas de staff —
         relances &amp; escalade OK.
       </Alert>
 
@@ -1611,12 +1611,12 @@ export default function OrchestrationOverviewPanel({
                       py: 0.25,
                     }}
                     onClick={() => (r.on ? setDecisionsModal(r.key) : toast.warning('Activez d’abord ON'))}
-                    title="WhatsApp · Ops/Staff · Relances · Staff · Escalade"
+                    title="WhatsApp · Créer tâche · Relances · Staff · Escalade"
                   >
                     {(
                       [
                         r.hasClient && { on: r.flags.clientEnabled, label: 'WA' },
-                        r.hasTaskCol && { on: r.flags.taskEnabled, label: 'Ops' },
+                        r.hasTaskCol && { on: r.flags.taskEnabled, label: 'Tâche' },
                         r.hasOrch && { on: r.flags.clientReminders, label: 'Rel' },
                         r.hasTaskCol && { on: r.flags.staffReminders, label: 'Staff' },
                         r.hasTaskCol && { on: r.flags.pmEscalation, label: 'Esc' },
@@ -1890,8 +1890,8 @@ export default function OrchestrationOverviewPanel({
                 </Alert>
               )}
               <Typography sx={{ fontSize: 12, color: V3.t3, mb: 1.5 }}>
-                ON = service + plan. Ops/Staff OFF ⇒ pas d&apos;assign staff, invisible owner — les
-                relances client et l&apos;escalade admin restent possibles.
+                ON = service + plan. Créer tâche OFF ⇒ pas d&apos;équipe assignée — les relances
+                client et l&apos;escalade admin restent possibles.
               </Typography>
               {hasClient && (
                 <DecisionSwitch
@@ -1904,8 +1904,8 @@ export default function OrchestrationOverviewPanel({
               )}
               {hasTaskCol && (
                 <DecisionSwitch
-                  label="👷 Ops / Staff"
-                  hint="Visible owner · assign staff (sinon relances + escalade seuls)"
+                  label="📋 Créer tâche"
+                  hint="Assigner l’équipe et suivre dans les tâches"
                   checked={flags.taskEnabled}
                   disabled={locked}
                   onChange={(v) => toggle('taskEnabled', v)}
@@ -1923,7 +1923,7 @@ export default function OrchestrationOverviewPanel({
               {hasTaskCol && (
                 <DecisionSwitch
                   label="👷 Rappel staff"
-                  hint="Notif équipe (nécessite Ops / Staff)"
+                  hint="Notif équipe (nécessite Créer tâche)"
                   checked={flags.staffReminders}
                   disabled={locked || !flags.taskEnabled}
                   onChange={(v) => toggle('staffReminders', v)}
