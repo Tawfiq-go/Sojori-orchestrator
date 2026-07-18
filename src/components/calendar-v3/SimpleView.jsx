@@ -275,26 +275,30 @@ export default function SimpleView({
 /* ════════════════ Rail vignettes ════════════════ */
 
 function ListingRail({ listings, selectedId, onSelect }) {
-  const [hoveredId, setHoveredId] = useState(null);
+  /** Tooltip en position fixed : le rail est scrollable (overflow-y auto),
+      un tooltip absolu serait clippé horizontalement. */
+  const [hovered, setHovered] = useState(null); // { id, top, left }
   if (!listings || listings.length <= 0) return null;
   return (
     <div style={{
       position: 'sticky', top: 12, flexShrink: 0,
       display: 'flex', flexDirection: 'column', gap: 8,
-      maxHeight: 'calc(100vh - 40px)', overflowY: 'auto', overflowX: 'visible',
+      maxHeight: 'calc(100vh - 40px)', overflowY: 'auto',
       padding: '4px 2px', scrollbarWidth: 'thin',
     }}>
       {listings.map((l) => {
         const id = String(l._id);
         const active = String(selectedId) === id;
-        const hovered = hoveredId === id;
         return (
           <div key={id} style={{ position: 'relative' }}>
             <button
               type="button"
               onClick={() => onSelect?.(id)}
-              onMouseEnter={() => setHoveredId(id)}
-              onMouseLeave={() => setHoveredId((h) => (h === id ? null : h))}
+              onMouseEnter={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setHovered({ id, top: r.top + r.height / 2, left: r.right + 10 });
+              }}
+              onMouseLeave={() => setHovered((h) => (h?.id === id ? null : h))}
               aria-label={l.name}
               style={{
                 width: 48, height: 48, padding: 0, borderRadius: 12, overflow: 'hidden',
@@ -323,21 +327,25 @@ function ListingRail({ listings, selectedId, onSelect }) {
                 </span>
               )}
             </button>
-            {/* Tooltip nom au survol */}
-            {hovered && (
-              <div style={{
-                position: 'absolute', left: 56, top: '50%', transform: 'translateY(-50%)',
-                background: T.text, color: '#fff', padding: '6px 11px', borderRadius: 9,
-                fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', zIndex: 60,
-                boxShadow: '0 6px 20px rgba(20,17,10,0.25)', pointerEvents: 'none',
-              }}>
-                {l.name}
-                {l.city ? <span style={{ fontWeight: 500, opacity: 0.7 }}> · {l.city}</span> : null}
-              </div>
-            )}
           </div>
         );
       })}
+      {/* Tooltip nom au survol — fixed pour échapper au clipping du rail scrollable */}
+      {hovered && (() => {
+        const l = listings.find((x) => String(x._id) === hovered.id);
+        if (!l) return null;
+        return (
+          <div style={{
+            position: 'fixed', left: hovered.left, top: hovered.top, transform: 'translateY(-50%)',
+            background: T.text, color: '#fff', padding: '6px 11px', borderRadius: 9,
+            fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', zIndex: 80,
+            boxShadow: '0 6px 20px rgba(20,17,10,0.25)', pointerEvents: 'none',
+          }}>
+            {l.name}
+            {l.city ? <span style={{ fontWeight: 500, opacity: 0.7 }}> · {l.city}</span> : null}
+          </div>
+        );
+      })()}
     </div>
   );
 }
