@@ -194,7 +194,8 @@ export default function CalendarInventoryPage({
         maxWidth: '100%',
         margin: '0 auto',
         width: '100%',
-        overflow: 'hidden',
+        // overflow hidden casse position:sticky (rail vignettes) — nécessaire seulement en vue multi
+        overflow: view === 'simple' ? 'visible' : 'hidden',
       }}
     >
       {showLandscapeHint && <CalendarLandscapeHint />}

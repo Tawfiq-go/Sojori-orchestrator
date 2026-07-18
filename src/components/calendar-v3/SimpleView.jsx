@@ -282,6 +282,8 @@ function ListingRail({ listings, selectedId, onSelect }) {
   return (
     <div style={{
       position: 'sticky', top: 12, flexShrink: 0,
+      // au-dessus des en-têtes sticky du calendrier (zIndex 5) pour que le tooltip ne soit jamais caché
+      zIndex: 30,
       display: 'flex', flexDirection: 'column', gap: 8,
       maxHeight: 'calc(100vh - 40px)', overflowY: 'auto',
       padding: '4px 2px', scrollbarWidth: 'thin',
