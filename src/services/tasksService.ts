@@ -14,6 +14,7 @@ import type {
   TaskUpdateFieldsPayload,
 } from '../types/tasks.types';
 import type { ReservationPlanningResponse } from '../types/tasksPlanning.types';
+import { mapSearchTaskToReservationTask } from '../components/unified-inbox/inboxTaskMappers';
 
 const TASKS_BASE_URL = MICROSERVICE_BASE_URL.SRV_TASK;
 
@@ -341,24 +342,7 @@ class TasksService {
           const status = String((task as { status?: string }).status || '').toLowerCase();
           return status !== 'done' && status !== 'cancelled';
         })
-        .map((task) => {
-          const t = task as Record<string, unknown>;
-          const assigned = t.assignedTo as { username?: string; whatsappPhone?: string } | undefined;
-          return {
-            taskId: String(t._id || t.taskId || ''),
-            taskCode: String(t.taskCode || t.code || ''),
-            type: String(t.type || t.subType || 'other'),
-            status: String(t.status || 'new'),
-            scheduledFor: (t.scheduledDate || t.scheduledAt || t.startDate) as string | undefined,
-            deadline: (t.dueAt || t.deadline || t.endDate) as string | undefined,
-            assignedStaff: assigned?.username
-              ? {
-                  name: String(assigned.username),
-                  phone: String(assigned.whatsappPhone || ''),
-                }
-              : null,
-          };
-        });
+        .map((task) => mapSearchTaskToReservationTask(task as Record<string, unknown>));
 
       return {
         success: true,

@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useState, Suspense, memo, type ReactNode } from 'react';
 import { lazyWithReload } from '../utils/lazyWithReload';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -1026,6 +1027,8 @@ function categorySubline(task: TaskListItem): ReactNode {
 }
 
 export function TasksListPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTaskId = searchParams.get('taskId');
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, loading: authLoading } = useAuth();
@@ -1293,6 +1296,22 @@ export function TasksListPage() {
     },
     [applyTaskRowUpdate, taskMapCaches],
   );
+
+  useEffect(() => {
+    if (!requestedTaskId || authLoading || !scope.scopeFetchReady || selectedTaskDetail) return;
+    let cancelled = false;
+    void tasksService
+      .fetchTaskListItem(requestedTaskId, taskMapCaches)
+      .then((task) => {
+        if (!cancelled) setSelectedTaskDetail(task);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error('Impossible d’ouvrir cette tâche.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedTaskId, authLoading, scope.scopeFetchReady, selectedTaskDetail, taskMapCaches]);
 
   const displayTasks = useMemo(() => {
     let list = tasks;
@@ -2701,7 +2720,14 @@ export function TasksListPage() {
         <Suspense fallback={<CircularProgress />}>
           <TaskDetailDrawer
             task={selectedTaskDetail}
-            onClose={() => setSelectedTaskDetail(null)}
+            onClose={() => {
+              setSelectedTaskDetail(null);
+              if (requestedTaskId) {
+                const next = new URLSearchParams(searchParams);
+                next.delete('taskId');
+                setSearchParams(next, { replace: true });
+              }
+            }}
             onSuccess={() => {
               if (selectedTaskDetail) {
                 void refreshTaskRow(String(selectedTaskDetail._id));

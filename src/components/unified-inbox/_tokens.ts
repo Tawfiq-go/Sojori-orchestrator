@@ -32,10 +32,23 @@ export const TASK_META: Record<TaskType, { emoji: string; label: string; accent:
   concierge:    { emoji: '🛎', label: 'Conciergerie',           accent: T.ai },
   support:      { emoji: '🆘', label: 'Support',                accent: '#86198f' },
   transport:    { emoji: '🚗', label: 'Transport',              accent: T.info },
-  registration: { emoji: '📋', label: 'Enregistrement police',  accent: T.info },
+  registration: { emoji: '📋', label: 'Enregistrement voyageurs', accent: T.info },
   maintenance:  { emoji: '🔧', label: 'Maintenance',            accent: T.error },
   other:        { emoji: '📋', label: 'Tâche',                  accent: T.text3 },
 };
+
+export function taskMetaForType(rawType?: string) {
+  const type = String(rawType || '').toLowerCase();
+  if (type.startsWith('arrival')) return TASK_META.arrival;
+  if (type.startsWith('departure')) return TASK_META.departure;
+  if (type.includes('cleaning')) return TASK_META.cleaning;
+  if (type === 'registration') return TASK_META.registration;
+  if (type === 'transport') return TASK_META.transport;
+  if (type === 'concierge' || type === 'groceries' || type === 'service_client') return TASK_META.concierge;
+  if (type === 'support') return TASK_META.support;
+  if (type === 'maintenance') return TASK_META.maintenance;
+  return TASK_META.other;
+}
 
 export type TaskStatus = 'CREATED' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 

@@ -6,7 +6,13 @@ export interface ReservationTask {
   taskId: string;
   taskCode: string;
   type: string;
+  /** Human-readable title derived from the production task type/payload. */
+  title?: string;
+  /** Useful operational context (service, route, category or request note). */
+  description?: string;
   status: string;
+  priority?: string;
+  source?: string;
   scheduledFor?: string;
   deadline?: string;
   assignedStaff?: {

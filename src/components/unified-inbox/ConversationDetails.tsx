@@ -63,6 +63,14 @@ export default function ConversationDetails({
     }
   };
 
+  const handleViewTask = (task: ReservationTask) => {
+    window.open(
+      `/tasks?taskId=${encodeURIComponent(task.taskId)}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
+
   const allTasks = thread.tasks ?? [];
   const supportTasks = allTasks.filter((t) => (t.type || '').toLowerCase().includes('support'));
   const linkedTasks = allTasks.filter((t) => !supportTasks.includes(t));
@@ -84,7 +92,7 @@ export default function ConversationDetails({
           title={title}
           layout={layout}
           onContactStaff={handleContactStaff}
-          onViewDetails={(t) => onAction?.(`task:${t.taskId}`)}
+          onViewDetails={handleViewTask}
           onAssign={(t) => onAction?.(`assign:${t.taskId}`)}
         />
       </Box>
