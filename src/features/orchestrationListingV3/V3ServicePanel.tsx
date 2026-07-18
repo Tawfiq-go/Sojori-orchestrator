@@ -6,7 +6,7 @@ import {
 } from '../serviceMatrix/CapabilityMatrixConfigPanels';
 import CapabilityExecutionPanel from '../serviceMatrix/CapabilityExecutionPanel';
 import type { CapabilityDefinition } from '../serviceMatrix/capabilityRegistry';
-import { capabilityShortHint } from '../serviceMatrix/capabilityRegistry';
+import { capabilityShortHint, isOnDemandCapability } from '../serviceMatrix/capabilityRegistry';
 import type { CapabilityExecutionState, CapabilityRowState } from '../serviceMatrix/types';
 import type { ListingOrchestrationDoc } from './listingOrchestrationApi';
 import type { OwnerOrchestrationDoc } from './ownerOrchestrationApi';
@@ -124,8 +124,14 @@ export default function V3ServicePanel({
   };
 
   const visibleExecPills = useMemo(
-    () => (def.columns.client === 'na' ? EXEC_PILLS.filter(p => p.id !== 'relances') : EXEC_PILLS),
-    [def.columns.client],
+    () =>
+      EXEC_PILLS.filter((p) => {
+        if (p.id === 'relances' && (def.columns.client === 'na' || isOnDemandCapability(def))) {
+          return false;
+        }
+        return true;
+      }),
+    [def],
   );
 
   const selectPanel = (id: PanelId) => {

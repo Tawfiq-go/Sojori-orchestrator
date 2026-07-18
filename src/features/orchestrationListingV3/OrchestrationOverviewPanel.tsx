@@ -26,6 +26,7 @@ import {
   CAPABILITY_GROUPS,
   CAPABILITY_REGISTRY,
   getCapabilityDefinition,
+  isOnDemandCapability,
   type CapabilityGroupId,
 } from '../serviceMatrix/capabilityRegistry';
 import {
@@ -314,6 +315,7 @@ function buildExecutionFromFlags(
   cap: CapDoc,
   flags: DecisionFlags,
   taskType: string,
+  opts?: { onDemand?: boolean },
 ): NonNullable<CapDoc['execution']> {
   const prev = cap.execution ?? { enabled: true };
   const ref = defaultRefForTask(taskType);
@@ -323,7 +325,8 @@ function buildExecutionFromFlags(
   let deadline = prev.deadline ?? null;
   let escalationEnabled = flags.pmEscalation;
 
-  if (!flags.clientReminders) {
+  // À la demande (ménage payant, conciergerie…) : jamais de relances client.
+  if (opts?.onDemand || !flags.clientReminders) {
     reminders = [];
   } else if (reminders.length === 0) {
     reminders = [
@@ -836,7 +839,13 @@ export default function OrchestrationOverviewPanel({
       orchestrated: true,
       taskEnabled: def.columns.task === 'na' ? false : flags.taskEnabled,
     };
-    const execution = buildExecutionFromFlags(cap, flags, taskType);
+    const onDemand = isOnDemandCapability(def);
+    const execution = buildExecutionFromFlags(
+      cap,
+      onDemand ? { ...flags, clientReminders: false } : flags,
+      taskType,
+      { onDemand },
+    );
     void saveCapPatch(capKey, { decisions, execution });
   };
 
@@ -1402,6 +1411,8 @@ export default function OrchestrationOverviewPanel({
         const hasClient = def.columns.client !== 'na';
         const hasTaskCol = def.columns.task !== 'na' && Boolean(def.taskType);
         const hasOrch = def.columns.orchestrated !== 'na';
+        const onDemand = isOnDemandCapability(def);
+        const hasClientReminders = hasOrch && !onDemand;
         const flags = readDecisionFlags(cap);
         return {
           key: def.key,
@@ -1415,7 +1426,9 @@ export default function OrchestrationOverviewPanel({
           hasTask: Boolean(def.taskType),
           hasTaskCol,
           hasOrch,
-          flags,
+          hasClientReminders,
+          onDemand,
+          flags: onDemand ? { ...flags, clientReminders: false } : flags,
           hints,
           availability: on
             ? hasClient
@@ -1617,7 +1630,7 @@ export default function OrchestrationOverviewPanel({
                       [
                         r.hasClient && { on: r.flags.clientEnabled, label: 'WA' },
                         r.hasTaskCol && { on: r.flags.taskEnabled, label: 'Tâche' },
-                        r.hasOrch && { on: r.flags.clientReminders, label: 'Rel' },
+                        r.hasClientReminders && { on: r.flags.clientReminders, label: 'Rel' },
                         r.hasTaskCol && { on: r.flags.staffReminders, label: 'Staff' },
                         r.hasTaskCol && { on: r.flags.pmEscalation, label: 'Esc' },
                       ] as Array<{ on: boolean; label: string } | false>
@@ -1687,10 +1700,19 @@ export default function OrchestrationOverviewPanel({
                   </Typography>
                   <Typography
                     component="div"
-                    sx={r.on && r.hasTask ? editCell : cell}
-                    onClick={r.on && r.hasTask ? open('reminders', r.key) : undefined}
+                    sx={r.on && r.hasClientReminders && r.hasTask ? editCell : cell}
+                    onClick={
+                      r.on && r.hasClientReminders && r.hasTask
+                        ? open('reminders', r.key)
+                        : undefined
+                    }
+                    title={
+                      r.onDemand
+                        ? 'À la demande — pas de relances client'
+                        : 'Relances voyageur'
+                    }
                   >
-                    {r.reminders}
+                    {r.onDemand ? 'N/A' : r.reminders}
                   </Typography>
                   <Typography
                     component="div"
@@ -1857,10 +1879,13 @@ export default function OrchestrationOverviewPanel({
         const hasClient = dDef.columns.client !== 'na';
         const hasTaskCol = dDef.columns.task !== 'na' && Boolean(dDef.taskType);
         const hasOrch = dDef.columns.orchestrated !== 'na';
+        const onDemand = isOnDemandCapability(dDef);
+        const hasClientReminders = hasOrch && !onDemand;
         const locked = !serviceOn;
 
         const toggle = (field: keyof DecisionFlags, value: boolean) => {
           const next = applyDecisionFlagRules({ ...flags, [field]: value }, field);
+          if (onDemand) next.clientReminders = false;
           saveDecisionFlags(dKey, next);
         };
 
@@ -1911,7 +1936,7 @@ export default function OrchestrationOverviewPanel({
                   onChange={(v) => toggle('taskEnabled', v)}
                 />
               )}
-              {hasOrch && (
+              {hasClientReminders && (
                 <DecisionSwitch
                   label="💌 Relances client"
                   hint="Rappels voyageur automatiques"
@@ -1919,6 +1944,16 @@ export default function OrchestrationOverviewPanel({
                   disabled={locked}
                   onChange={(v) => toggle('clientReminders', v)}
                 />
+              )}
+              {onDemand && hasOrch && (
+                <Box sx={{ py: 1, borderBottom: `1px solid ${V3.b}` }}>
+                  <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: V3.t4 }}>
+                    💌 Relances client
+                  </Typography>
+                  <Typography sx={{ fontSize: 11.5, color: V3.t3 }}>
+                    N/A — service à la demande, pas de relance voyageur
+                  </Typography>
+                </Box>
               )}
               {hasTaskCol && (
                 <DecisionSwitch
