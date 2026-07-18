@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════
 // SimpleView.jsx — vue 1 listing façon Airbnb Host
-// · Rail vignettes à gauche (hover = nom, clic = changer de bien)
+// · Rail vignettes à gauche — grille 5×N (hover = nom, clic = changer de bien)
 // · Mois empilés en scroll vertical (lazy-load via sentinel)
 // · Réservations en barres qui s'étalent sur les jours (« Prénom + N »)
 // ════════════════════════════════════════════════════════════════════
@@ -283,62 +283,71 @@ export default function SimpleView({
 
 /* ════════════════ Rail vignettes ════════════════ */
 
+const RAIL_THUMB = 48;
+const RAIL_GAP = 8;
+/** Blocs de 5 vignettes en horizontal, puis ligne suivante (même zone gauche). */
+const RAIL_COLS = 5;
+
 function ListingRail({ listings, selectedId, onSelect }) {
   /** Tooltip en position fixed : le rail est scrollable (overflow-y auto),
       un tooltip absolu serait clippé horizontalement. */
   const [hovered, setHovered] = useState(null); // { id, top, left }
   if (!listings || listings.length <= 0) return null;
+  const railWidth = RAIL_COLS * RAIL_THUMB + (RAIL_COLS - 1) * RAIL_GAP;
   return (
     <div style={{
       position: 'sticky', top: 12, flexShrink: 0,
       // au-dessus des en-têtes sticky du calendrier (zIndex 5) pour que le tooltip ne soit jamais caché
       zIndex: 30,
-      display: 'flex', flexDirection: 'column', gap: 8,
-      maxHeight: 'calc(100vh - 40px)', overflowY: 'auto',
+      width: railWidth,
+      display: 'grid',
+      gridTemplateColumns: `repeat(${RAIL_COLS}, ${RAIL_THUMB}px)`,
+      gap: RAIL_GAP,
+      maxHeight: 'calc(100vh - 40px)', overflowY: 'auto', overflowX: 'hidden',
       padding: '4px 2px', scrollbarWidth: 'thin',
+      alignContent: 'start',
     }}>
       {listings.map((l) => {
         const id = String(l._id);
         const active = String(selectedId) === id;
         return (
-          <div key={id} style={{ position: 'relative' }}>
-            <button
-              type="button"
-              onClick={() => onSelect?.(id)}
-              onMouseEnter={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                setHovered({ id, top: r.top + r.height / 2, left: r.right + 10 });
-              }}
-              onMouseLeave={() => setHovered((h) => (h?.id === id ? null : h))}
-              aria-label={l.name}
-              style={{
-                width: 48, height: 48, padding: 0, borderRadius: 12, overflow: 'hidden',
-                cursor: 'pointer', display: 'block',
-                border: active ? `2px solid ${T.text}` : `1px solid ${T.border}`,
-                boxShadow: active ? '0 0 0 2px rgba(20,17,10,0.10)' : 'none',
-                opacity: active ? 1 : 0.75,
-                transform: active ? 'scale(1.04)' : 'scale(1)',
-                transition: 'all 0.15s',
-                background: l.photoColor || T.bg3,
-              }}
-            >
-              {l.coverImageUrl ? (
-                <img
-                  src={l.coverImageUrl}
-                  alt={l.name}
-                  loading="lazy"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                />
-              ) : (
-                <span style={{
-                  width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 16, fontWeight: 800, color: l.photoColorDeep || T.text2,
-                }}>
-                  {(l.name || '?').charAt(0).toUpperCase()}
-                </span>
-              )}
-            </button>
-          </div>
+          <button
+            key={id}
+            type="button"
+            onClick={() => onSelect?.(id)}
+            onMouseEnter={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setHovered({ id, top: r.top + r.height / 2, left: r.right + 10 });
+            }}
+            onMouseLeave={() => setHovered((h) => (h?.id === id ? null : h))}
+            aria-label={l.name}
+            style={{
+              width: RAIL_THUMB, height: RAIL_THUMB, padding: 0, borderRadius: 12, overflow: 'hidden',
+              cursor: 'pointer', display: 'block',
+              border: active ? `2px solid ${T.text}` : `1px solid ${T.border}`,
+              boxShadow: active ? '0 0 0 2px rgba(20,17,10,0.10)' : 'none',
+              opacity: active ? 1 : 0.75,
+              transform: active ? 'scale(1.04)' : 'scale(1)',
+              transition: 'all 0.15s',
+              background: l.photoColor || T.bg3,
+            }}
+          >
+            {l.coverImageUrl ? (
+              <img
+                src={l.coverImageUrl}
+                alt={l.name}
+                loading="lazy"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            ) : (
+              <span style={{
+                width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 16, fontWeight: 800, color: l.photoColorDeep || T.text2,
+              }}>
+                {(l.name || '?').charAt(0).toUpperCase()}
+              </span>
+            )}
+          </button>
         );
       })}
       {/* Tooltip nom au survol — fixed pour échapper au clipping du rail scrollable */}
