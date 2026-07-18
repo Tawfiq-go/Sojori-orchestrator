@@ -84,6 +84,26 @@ export function computeInventoryFetchRange(pivot: moment.Moment): { from: string
   };
 }
 
+/** Vue simple façon Airbnb : plage de N mois complets à partir du mois pivot (scroll vertical). */
+export function computeSimpleMonthsFetchRange(
+  pivot: moment.Moment,
+  monthsCount: number,
+): { from: string; to: string } {
+  const { horizonEnd } = getCalendarWindowBounds();
+  const maxEnd = moment(horizonEnd);
+  const monthStart = pivot.clone().startOf('month').startOf('day');
+  let rangeEnd = pivot
+    .clone()
+    .add(Math.max(1, monthsCount) - 1, 'months')
+    .endOf('month')
+    .endOf('day');
+  if (rangeEnd.isAfter(maxEnd)) rangeEnd = maxEnd.clone().endOf('day');
+  return {
+    from: monthStart.format('YYYY-MM-DD'),
+    to: rangeEnd.format('YYYY-MM-DD'),
+  };
+}
+
 /** Plage visible 31 jours (affichage multi) — pour filtrer le cache côté UI si besoin. */
 export function computeMultiViewVisibleRange(pivot: moment.Moment): { from: string; to: string } {
   const { horizonEnd } = getCalendarWindowBounds();

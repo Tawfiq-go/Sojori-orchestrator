@@ -1,62 +1,107 @@
 // ════════════════════════════════════════════════════════════════════
-// SimpleView.jsx — vue 1 listing, grille mensuelle 7×N
-// Inspiration Airbnb Host · stat cards en haut · cellules riches
+// SimpleView.jsx — vue 1 listing façon Airbnb Host
+// · Rail vignettes à gauche (hover = nom, clic = changer de bien)
+// · Mois empilés en scroll vertical (lazy-load via sentinel)
+// · Réservations en barres qui s'étalent sur les jours (« Prénom + N »)
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
-  T, priceOf, toIso, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
+  T, toIso, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   resolveInventoryCellState, formatInventoryRateLabel, hasInventoryData, OUT_OF_WINDOW_CELL_BG,
-  resolvePriceMode,
+  resolvePriceMode, priceOf,
 } from './_shared';
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
-import PopoverReservations from './PopoverReservations';
 import AuditBlockedDaysModal from './AuditBlockedDaysModal';
 import TooltipBreakdown from './TooltipBreakdown';
 import { normalizeCalendarReservations } from './reservationCalendarUtils';
 import calendarService from '../../services/calendarService';
 
-const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const WEEKDAYS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
+const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
-export default function SimpleView({ listing, year, month, inventories = {}, onCellsSelected, onOpenReservation }) {
-  const first = useMemo(() => new Date(year, month, 1), [year, month]);
-  const offset = (first.getDay() + 6) % 7;     // Mon = 0
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  /** Grille 6×7 = taille visuelle stable quel que soit le mois */
-  const totalCells = 42;
+const RESA_BAR_COLORS = {
+  Confirmed: { bg: '#3d3a33', text: '#fff' },
+  Pending: { bg: 'rgba(196,101,6,0.88)', text: '#fff' },
+};
+
+function isoDate(v) {
+  if (!v) return null;
+  const s = String(v);
+  // '2026-07-16T…' → '2026-07-16' (dates résa stockées à minuit)
+  return s.length >= 10 ? s.slice(0, 10) : null;
+}
+
+export default function SimpleView({
+  listing,
+  listings = [],
+  selectedListingId = null,
+  onSelectListing,
+  year,
+  month,
+  monthsCount = 3,
+  onLoadMoreMonths,
+  inventoryLoading = false,
+  inventories = {},
+  onCellsSelected,
+  onOpenReservation,
+}) {
   const todayIso = toIso(new Date());
 
-  /* ─── Stats du mois ─── */
-  const stats = useMemo(() => {
-    let available = 0, booked = 0, stop = 0, revenue = 0, dynamicWin = 0;
-    for (let day = 1; day <= lastDay; day++) {
-      const iso = toIso(new Date(year, month, day));
-      const inv = inventories[iso];
-      if (!hasInventoryData(inv)) continue;
-      if (inv.stopSell) stop++;
-      else if (inv.reservations?.length > 0) { booked++; revenue += priceOf(inv); }
-      else available++;
-      if (resolvePriceMode(inv) === 'dynamic' && inv.calculatedPrice && inv.basePrice) {
-        dynamicWin += Math.max(0, inv.calculatedPrice - inv.basePrice);
+  /** Mois empilés : [pivot, pivot+1, …] (scroll vertical façon Airbnb). */
+  const months = useMemo(() => {
+    const out = [];
+    for (let i = 0; i < monthsCount; i++) {
+      const d = new Date(year, month + i, 1);
+      out.push({ year: d.getFullYear(), month: d.getMonth() });
+    }
+    return out;
+  }, [year, month, monthsCount]);
+
+  /** Liste ordonnée de tous les jours affichés — pour la sélection shift-range. */
+  const allIsos = useMemo(() => {
+    const out = [];
+    months.forEach(({ year: y, month: m }) => {
+      const last = new Date(y, m + 1, 0).getDate();
+      for (let d = 1; d <= last; d++) out.push(toIso(new Date(y, m, d)));
+    });
+    return out;
+  }, [months]);
+
+  /* ─── Sélection multi-jours (édition prix/dispo) ─── */
+  const [selected, setSelected] = useState([]);
+  useEffect(() => setSelected([]), [selectedListingId]);
+
+  const toggleDay = (iso, e) => {
+    const inv = inventories[iso];
+    const st = resolveInventoryCellState(iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
+    if (st !== 'data') return;
+    if (e.shiftKey && selected.length > 0) {
+      const a = allIsos.indexOf(selected[0]);
+      const b = allIsos.indexOf(iso);
+      if (a >= 0 && b >= 0) {
+        const [from, to] = a < b ? [a, b] : [b, a];
+        setSelected(allIsos.slice(from, to + 1));
+        return;
       }
     }
-    return { available, booked, stop, revenue, dynamicWin };
-  }, [inventories, year, month, lastDay]);
+    setSelected(prev => prev.includes(iso) ? prev.filter(x => x !== iso) : [...prev, iso]);
+  };
+  const commitSelection = () => {
+    if (selected.length === 0) return;
+    onCellsSelected?.(selected.map(iso => ({
+      listingId: listing._id, roomTypeId: listing.roomTypes?.[0]?._id, dateStr: iso, column: 'rate',
+    })));
+    setSelected([]);
+  };
 
-  /* ─── Sélection multi-jours ─── */
-  const [selected, setSelected] = useState([]);
-  const [popover, setPopover] = useState(null);
-
-  /* ─── Audit jours bloqués sans réservation — modal résultat en tableau ─── */
+  /* ─── Audit jours bloqués sans réservation ─── */
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditResult, setAuditResult] = useState({ loading: false, error: null, roomTypes: [] });
-
   const handleAuditClick = () => {
     setAuditOpen(true);
     setAuditResult({ loading: true, error: null, roomTypes: [] });
   };
-
-  React.useEffect(() => {
+  useEffect(() => {
     if (!auditOpen || !auditResult.loading) return;
     let cancelled = false;
     const roomTypeId = listing.roomTypeId || listing.roomTypes?.[0]?._id || undefined;
@@ -71,146 +116,106 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
     return () => { cancelled = true; };
   }, [auditOpen, auditResult.loading, listing._id, listing.roomTypeId]);
 
-  const toggleDay = (iso, e) => {
-    const inv = inventories[iso];
-    const st = resolveInventoryCellState(iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
-    if (st !== 'data') return;
-    if (e.shiftKey && selected.length > 0) {
-      const isos = [];
-      for (let d = 1; d <= lastDay; d++) isos.push(toIso(new Date(year, month, d)));
-      const a = isos.indexOf(selected[0]);
-      const b = isos.indexOf(iso);
-      if (a >= 0 && b >= 0) {
-        const [from, to] = a < b ? [a, b] : [b, a];
-        setSelected(isos.slice(from, to + 1));
-        return;
-      }
-    }
-    setSelected(prev => prev.includes(iso) ? prev.filter(x => x !== iso) : [...prev, iso]);
-  };
-  const commitSelection = () => {
-    if (selected.length === 0) return;
-    onCellsSelected?.(selected.map(iso => ({
-      listingId: listing._id, roomTypeId: listing.roomTypes?.[0]?._id, dateStr: iso, column: 'rate',
-    })));
-    setSelected([]);
-  };
+  /* ─── Sentinel scroll → charger plus de mois ─── */
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !onLoadMoreMonths || inventoryLoading) return undefined;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) onLoadMoreMonths();
+      },
+      { rootMargin: '600px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onLoadMoreMonths, monthsCount, inventoryLoading]);
 
-  const handleReservationClick = (rect, dateStr, rawReservations) => {
-    const reservations = normalizeCalendarReservations(rawReservations);
-    if (reservations.length === 0) return;
-    if (reservations.length === 1) {
-      onOpenReservation?.(reservations[0]);
-      return;
-    }
-    setPopover({ rect, dateStr, reservations });
-  };
-
-  /* ─── Render ─── */
-  const cells = [];
-  for (let i = 0; i < totalCells; i++) {
-    const dayNum = i - offset + 1;
-    const inMonth = dayNum >= 1 && dayNum <= lastDay;
-    if (!inMonth) { cells.push({ inMonth: false, key: `e${i}` }); continue; }
-    const d = new Date(year, month, dayNum);
-    const iso = toIso(d);
-    const inv = inventories[iso];
-    const cellState = resolveInventoryCellState(iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
-    const rate = formatInventoryRateLabel(cellState, inv);
-    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-    cells.push({
-      inMonth: true, key: iso, num: dayNum, iso,
-      isToday: iso === todayIso, isWeekend,
-      cellState,
-      isArchived: cellState === 'archive',
-      noInventory: cellState === 'out_of_window' || cellState === 'missing',
-      stopSell: hasInventoryData(inv) && !!inv.stopSell,
-      booked: (inv?.reservations?.length ?? 0) > 0,
-      reservations: inv?.reservations || [],
-      useDynamic: hasInventoryData(inv) && resolvePriceMode(inv) === 'dynamic',
-      hasManual: inv?.manualPrice != null,
-      priceLabel: rate.main,
-      showPriceCurrency: rate.showCurrency,
-      priceHint: rate.hint,
-      basePrice: inv?.basePrice,
-      available: inv?.availableRoom ?? 1,
-      currency: listing.currencyCode || listing.currency || 'MAD',
-      inv,
-    });
-  }
+  const currency = listing.currencyCode || listing.currency || 'MAD';
 
   return (
-    <div>
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 14 }}>
-        <StatCard icon="🟢" color={T.success} value={`${stats.available}j`} label="Disponibles" />
-        <StatCard icon="🔵" color={T.info}    value={`${stats.booked}j`}    label="Réservés" />
-        <StatCard icon="🚫" color={T.error}   value={`${stats.stop}j`}      label="Stop sell" />
-        <StatCard icon="€"  color={T.primary} value={`€${stats.revenue.toFixed(0)}`} label={`Revenu ${MONTHS[month].toLowerCase()}`} />
-        <StatCard icon="⚡" color={T.ai}      value={`+€${stats.dynamicWin.toFixed(0)}`} label="Manque-à-gagner AI" highlight />
-      </div>
+    <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
+      {/* ─── Rail vignettes listings (façon Airbnb) ─── */}
+      <ListingRail
+        listings={listings}
+        selectedId={selectedListingId}
+        onSelect={onSelectListing}
+      />
 
-      <div style={{
-        background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden',
-        boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
-      }}>
+      {/* ─── Calendrier vertical ─── */}
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          padding: '12px 18px', borderBottom: `1px solid ${T.border}`, background: T.bg2,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 16, overflow: 'hidden',
+          boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
         }}>
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 6 }}>
-            {listing.name} · {MONTHS[month]} {year}
-            <button
-              type="button"
-              title="Audit disponibilité — bloqué sans résa OU résa confirmée encore disponible (365 j.)"
-              onClick={handleAuditClick}
-              style={{
-                background: 'none', border: 0, padding: '0 2px',
-                color: T.text4, fontSize: 10, fontWeight: 600, cursor: 'pointer', lineHeight: 1,
-                opacity: 0.7, transition: 'opacity 0.15s, color 0.15s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = T.primary; }}
-              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.color = T.text4; }}
-            >
-              ▶ audit
-            </button>
-          </h3>
-          <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3 }}>
-            <Legend dot={T.success} label="Disponible" />
-            <Legend dot={T.info} label="Réservé" />
-            <Legend dot={T.error} label="Stop sell" />
-            <Legend dot={T.ai} label="Prix dynamique" />
-            <Legend dot={ARCHIVE_CELL_BG} label="Historique" />
+          {/* En-tête listing */}
+          <div style={{
+            padding: '14px 22px', borderBottom: `1px solid ${T.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {listing.name}
+              </span>
+              {listing.city ? (
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: T.text3, flexShrink: 0 }}>· {listing.city}</span>
+              ) : null}
+              <button
+                type="button"
+                title="Audit disponibilité — bloqué sans résa OU résa confirmée encore disponible (365 j.)"
+                onClick={handleAuditClick}
+                style={{
+                  background: 'none', border: 0, padding: '0 2px', flexShrink: 0,
+                  color: T.text4, fontSize: 10, fontWeight: 600, cursor: 'pointer', lineHeight: 1,
+                  opacity: 0.7, transition: 'opacity 0.15s, color 0.15s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = T.primary; }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.color = T.text4; }}
+              >
+                ▶ audit
+              </button>
+            </h3>
+            <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3, flexShrink: 0 }}>
+              <Legend dot="#3d3a33" label="Réservé" />
+              <Legend dot={T.error} label="Stop sell" />
+              <Legend dot={T.ai} label="Prix dynamique" />
+              {inventoryLoading && <span style={{ fontWeight: 700 }}>Chargement…</span>}
+            </div>
           </div>
-        </div>
 
-        {/* Weekdays */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: T.bg2, borderBottom: `1px solid ${T.border}` }}>
-          {WEEKDAYS.map((w, i) => (
-            <span key={w} style={{
-              textAlign: 'center', padding: '8px 0', fontSize: 10.5, fontWeight: 700,
-              fontFamily: '"Geist Mono", monospace', letterSpacing: '0.08em', textTransform: 'uppercase',
-              color: i >= 5 ? T.warning : T.text3,
-            }}>{w}</span>
+          {/* Jours de semaine — sticky pendant le scroll */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+            position: 'sticky', top: 0, zIndex: 5,
+            background: T.bg1, borderBottom: `1px solid ${T.border}`,
+          }}>
+            {WEEKDAYS.map((w) => (
+              <span key={w} style={{
+                textAlign: 'center', padding: '9px 0', fontSize: 10.5, fontWeight: 700,
+                letterSpacing: '0.04em', color: T.text3,
+              }}>{w}</span>
+            ))}
+          </div>
+
+          {/* Mois empilés */}
+          {months.map(({ year: y, month: m }) => (
+            <MonthGrid
+              key={`${y}-${m}`}
+              year={y}
+              month={m}
+              inventories={inventories}
+              todayIso={todayIso}
+              currency={currency}
+              selected={selected}
+              onToggleDay={toggleDay}
+              onOpenReservation={onOpenReservation}
+            />
           ))}
-        </div>
 
-        {/* Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: 110 }}>
-          {cells.map(c => {
-            if (!c.inMonth) {
-              return <div key={c.key} style={{ borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, background: T.bg2, opacity: 0.5 }} />;
-            }
-            return (
-              <SimpleDayCell
-                key={c.key}
-                c={c}
-                selected={selected.includes(c.iso)}
-                onToggle={(e) => toggleDay(c.iso, e)}
-                onReservationClick={handleReservationClick}
-              />
-            );
-          })}
+          {/* Sentinel : approche du bas → mois suivants */}
+          <div ref={sentinelRef} style={{ padding: '18px 0 26px', textAlign: 'center', fontSize: 11, color: T.text4, fontWeight: 600 }}>
+            {inventoryLoading ? 'Chargement des mois suivants…' : '⌄ faire défiler pour plus de mois'}
+          </div>
         </div>
       </div>
 
@@ -234,19 +239,7 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
             padding: '6px 12px', borderRadius: 7, background: 'transparent', color: '#fff',
             fontSize: 11.5, fontWeight: 700, border: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer',
           }}>Annuler</button>
-          <span style={{ fontSize: 10, color: '#9c958a', fontFamily: '"Geist Mono", monospace' }}>⎋ Esc</span>
         </div>
-      )}
-
-      {popover && (
-        <PopoverReservations
-          open={!!popover} anchorRect={popover.rect} dayStr={popover.dateStr}
-          reservations={popover.reservations} onClose={() => setPopover(null)}
-          onResaClick={(res) => {
-            onOpenReservation?.(normalizeCalendarReservations([res])[0]);
-            setPopover(null);
-          }}
-        />
       )}
 
       <AuditBlockedDaysModal
@@ -279,10 +272,259 @@ export default function SimpleView({ listing, year, month, inventories = {}, onC
   );
 }
 
-function SimpleDayCell({ c, selected, onToggle, onReservationClick }) {
+/* ════════════════ Rail vignettes ════════════════ */
+
+function ListingRail({ listings, selectedId, onSelect }) {
+  const [hoveredId, setHoveredId] = useState(null);
+  if (!listings || listings.length <= 0) return null;
+  return (
+    <div style={{
+      position: 'sticky', top: 12, flexShrink: 0,
+      display: 'flex', flexDirection: 'column', gap: 8,
+      maxHeight: 'calc(100vh - 40px)', overflowY: 'auto', overflowX: 'visible',
+      padding: '4px 2px', scrollbarWidth: 'thin',
+    }}>
+      {listings.map((l) => {
+        const id = String(l._id);
+        const active = String(selectedId) === id;
+        const hovered = hoveredId === id;
+        return (
+          <div key={id} style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => onSelect?.(id)}
+              onMouseEnter={() => setHoveredId(id)}
+              onMouseLeave={() => setHoveredId((h) => (h === id ? null : h))}
+              aria-label={l.name}
+              style={{
+                width: 48, height: 48, padding: 0, borderRadius: 12, overflow: 'hidden',
+                cursor: 'pointer', display: 'block',
+                border: active ? `2px solid ${T.text}` : `1px solid ${T.border}`,
+                boxShadow: active ? '0 0 0 2px rgba(20,17,10,0.10)' : 'none',
+                opacity: active ? 1 : 0.75,
+                transform: active ? 'scale(1.04)' : 'scale(1)',
+                transition: 'all 0.15s',
+                background: l.photoColor || T.bg3,
+              }}
+            >
+              {l.coverImageUrl ? (
+                <img
+                  src={l.coverImageUrl}
+                  alt={l.name}
+                  loading="lazy"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              ) : (
+                <span style={{
+                  width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, fontWeight: 800, color: l.photoColorDeep || T.text2,
+                }}>
+                  {(l.name || '?').charAt(0).toUpperCase()}
+                </span>
+              )}
+            </button>
+            {/* Tooltip nom au survol */}
+            {hovered && (
+              <div style={{
+                position: 'absolute', left: 56, top: '50%', transform: 'translateY(-50%)',
+                background: T.text, color: '#fff', padding: '6px 11px', borderRadius: 9,
+                fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', zIndex: 60,
+                boxShadow: '0 6px 20px rgba(20,17,10,0.25)', pointerEvents: 'none',
+              }}>
+                {l.name}
+                {l.city ? <span style={{ fontWeight: 500, opacity: 0.7 }}> · {l.city}</span> : null}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ════════════════ Grille d'un mois ════════════════ */
+
+function MonthGrid({ year, month, inventories, todayIso, currency, selected, onToggleDay, onOpenReservation }) {
+  const first = new Date(year, month, 1);
+  const offset = (first.getDay() + 6) % 7; // Lun = 0
+  const lastDay = new Date(year, month + 1, 0).getDate();
+
+  /* Cellules du mois (sans padding 6×7 : le mois occupe juste ses semaines) */
+  const { weeks, monthStats, monthReservations } = useMemo(() => {
+    const cells = [];
+    for (let i = 0; i < offset; i++) cells.push(null);
+    let available = 0, booked = 0, revenue = 0;
+    const resById = new Map();
+    for (let day = 1; day <= lastDay; day++) {
+      const d = new Date(year, month, day);
+      const iso = toIso(d);
+      const inv = inventories[iso];
+      const cellState = resolveInventoryCellState(iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
+      const rate = formatInventoryRateLabel(cellState, inv);
+      if (hasInventoryData(inv)) {
+        if (inv.reservations?.length > 0) { booked++; revenue += priceOf(inv); }
+        else if (!inv.stopSell) available++;
+        normalizeCalendarReservations(inv.reservations).forEach((r) => {
+          if (r && !resById.has(String(r._id))) resById.set(String(r._id), r);
+        });
+      }
+      cells.push({
+        iso, num: day,
+        isPast: iso < todayIso,
+        isToday: iso === todayIso,
+        cellState,
+        isArchived: cellState === 'archive',
+        noInventory: cellState === 'out_of_window' || cellState === 'missing',
+        stopSell: hasInventoryData(inv) && !!inv.stopSell,
+        booked: (inv?.reservations?.length ?? 0) > 0,
+        useDynamic: hasInventoryData(inv) && resolvePriceMode(inv) === 'dynamic',
+        hasManual: inv?.manualPrice != null,
+        priceLabel: rate.main,
+        showPriceCurrency: rate.showCurrency,
+        inv,
+      });
+    }
+    while (cells.length % 7 !== 0) cells.push(null);
+    const rows = [];
+    for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+    return {
+      weeks: rows,
+      monthStats: { available, booked, revenue },
+      monthReservations: Array.from(resById.values()),
+    };
+  }, [year, month, inventories, todayIso, offset, lastDay]);
+
+  return (
+    <div>
+      {/* Label mois façon Airbnb */}
+      <div style={{ padding: '26px 22px 10px', display: 'flex', alignItems: 'baseline', gap: 12 }}>
+        <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: T.text }}>
+          {MONTHS[month]}
+          <span style={{ fontWeight: 600, color: T.text3, fontSize: 17, marginLeft: 8 }}>{year}</span>
+        </span>
+        <span style={{ fontSize: 11, color: T.text3, fontWeight: 600 }}>
+          {monthStats.booked} nuit(s) réservée(s) · {monthStats.available} dispo
+          {monthStats.revenue > 0 ? ` · ${Math.round(monthStats.revenue).toLocaleString('fr-FR')} ${currency}` : ''}
+        </span>
+      </div>
+
+      {weeks.map((week, wi) => (
+        <WeekRow
+          key={wi}
+          week={week}
+          monthReservations={monthReservations}
+          selected={selected}
+          currency={currency}
+          onToggleDay={onToggleDay}
+          onOpenReservation={onOpenReservation}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ════════════════ Semaine (7 cellules + barres résa en overlay) ════════════════ */
+
+function WeekRow({ week, monthReservations, selected, currency, onToggleDay, onOpenReservation }) {
+  const dayIsos = week.map((c) => (c ? c.iso : null));
+  const firstIso = dayIsos.find(Boolean);
+  const lastIso = [...dayIsos].reverse().find(Boolean);
+
+  /* Segments de barres résa sur cette semaine */
+  const segments = useMemo(() => {
+    if (!firstIso || !lastIso) return [];
+    const out = [];
+    monthReservations.forEach((res) => {
+      const arr = isoDate(res.arrivalDate);
+      const dep = isoDate(res.departureDate);
+      if (!arr || !dep || arr > lastIso || dep < firstIso) return;
+      const startIso = arr >= firstIso ? arr : firstIso;
+      const endIso = dep <= lastIso ? dep : lastIso;
+      const startIdx = dayIsos.indexOf(startIso);
+      const endIdx = dayIsos.indexOf(endIso);
+      if (startIdx < 0 || endIdx < 0) return;
+      const startsHere = arr >= firstIso;   // le check-in tombe dans cette semaine
+      const endsHere = dep <= lastIso;      // le check-out tombe dans cette semaine
+      out.push({ res, startIdx, endIdx, startsHere, endsHere });
+    });
+    return out;
+  }, [monthReservations, dayIsos.join(','), firstIso, lastIso]);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: 104 }}>
+        {week.map((c, i) => (
+          c ? (
+            <DayCell
+              key={c.iso}
+              c={c}
+              currency={currency}
+              selected={selected.includes(c.iso)}
+              onToggle={(e) => onToggleDay(c.iso, e)}
+            />
+          ) : (
+            <div key={`pad-${i}`} style={{ borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, background: T.bg2, opacity: 0.4 }} />
+          )
+        ))}
+      </div>
+
+      {/* Barres réservation façon Airbnb : check-in mi-cellule → check-out mi-cellule */}
+      {segments.map(({ res, startIdx, endIdx, startsHere, endsHere }, si) => {
+        const left = ((startIdx + (startsHere ? 0.55 : 0)) / 7) * 100;
+        const right = ((endIdx + (endsHere ? 0.45 : 1)) / 7) * 100;
+        const colors = RESA_BAR_COLORS[res.status] || RESA_BAR_COLORS.Confirmed;
+        const guests = Number(res.numberOfGuests) || 0;
+        const name = res.guestName || res.guestFirstName || 'Réservation';
+        const label = guests > 1 ? `${name} + ${guests - 1}` : name;
+        const showLabel = startsHere || startIdx === 0;
+        return (
+          <button
+            key={`${res._id}-${si}`}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenReservation?.(res); }}
+            title={`${label} · ${isoDate(res.arrivalDate)} → ${isoDate(res.departureDate)}${res.status ? ` · ${res.status}` : ''}`}
+            style={{
+              position: 'absolute', top: 58, height: 34,
+              left: `${left}%`, width: `${Math.max(right - left, 4)}%`,
+              background: colors.bg, color: colors.text,
+              border: 0, cursor: 'pointer',
+              borderRadius: `${startsHere ? '17px' : '0'} ${endsHere ? '17px' : '0'} ${endsHere ? '17px' : '0'} ${startsHere ? '17px' : '0'}`,
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: showLabel ? '0 10px 0 5px' : 0,
+              overflow: 'hidden', whiteSpace: 'nowrap',
+              boxShadow: '0 1px 3px rgba(20,17,10,0.18)', zIndex: 3,
+              fontFamily: 'inherit',
+            }}
+          >
+            {showLabel && (
+              <>
+                <span style={{
+                  width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                  background: 'rgba(255,255,255,0.22)', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 800,
+                }}>
+                  {(name || '?').charAt(0).toUpperCase()}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {label}
+                </span>
+              </>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ════════════════ Cellule jour ════════════════ */
+
+function DayCell({ c, currency, selected, onToggle }) {
   const [showTip, setShowTip] = useState(false);
   const ref = useRef(null);
   const canHoverPrice = !c.noInventory && hasInventoryData(c.inv);
+  const muted = c.isPast || c.isArchived;
 
   return (
     <div
@@ -292,124 +534,66 @@ function SimpleDayCell({ c, selected, onToggle, onReservationClick }) {
       onMouseLeave={() => setShowTip(false)}
       style={{
         borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
-        padding: 8, display: 'flex', flexDirection: 'column', gap: 5,
-        cursor: c.noInventory || c.isArchived ? 'not-allowed' : (canHoverPrice ? 'help' : 'cell'),
-        transition: 'all 0.15s', position: 'relative',
+        padding: '8px 9px', display: 'flex', flexDirection: 'column', gap: 4,
+        cursor: c.noInventory || c.isArchived ? 'default' : 'pointer',
+        transition: 'background 0.15s', position: 'relative',
         background:
           c.cellState === 'out_of_window' ? OUT_OF_WINDOW_CELL_BG :
           c.isArchived ? ARCHIVE_CELL_BG :
           c.noInventory ? T.bg2 :
           selected ? T.primaryTint3 :
-          c.isToday ? T.primaryTint :
           c.stopSell ? 'rgba(200,30,30,0.05)' :
-          c.booked ? 'rgba(6,115,179,0.06)' :
-          c.isWeekend ? T.bg2 : 'transparent',
+          'transparent',
         boxShadow: selected ? `inset 0 0 0 2px ${T.primary}` : 'none',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <span style={{
-          fontFamily: '"Geist Mono", monospace',
-          fontSize: 13, fontWeight: c.isToday ? 800 : 700,
-          color: c.isArchived ? ARCHIVE_CELL_TEXT : c.isToday ? T.primaryDeep : T.text,
-        }}>{c.num}</span>
-        {c.isArchived && (
-          <span style={{ fontSize: 8, fontWeight: 700, color: ARCHIVE_CELL_TEXT }}>hist.</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* Numéro du jour — passé = barré gris (façon Airbnb), aujourd'hui = pastille rouge */}
+        {c.isToday ? (
+          <span style={{
+            width: 26, height: 26, borderRadius: '50%', background: '#e0243c', color: '#fff',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12.5, fontWeight: 800,
+          }}>{c.num}</span>
+        ) : (
+          <span style={{
+            fontSize: 13, fontWeight: 700,
+            color: muted ? (c.isArchived ? ARCHIVE_CELL_TEXT : T.text4) : T.text,
+            textDecoration: muted ? 'line-through' : 'none',
+          }}>{c.num}</span>
         )}
-        <span style={{ display: 'flex', gap: 3 }}>
+        <span style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+          {c.stopSell && !c.booked && (
+            <span style={{ fontSize: 8.5, background: T.errorTint, color: T.error, padding: '1px 5px', borderRadius: 99, fontWeight: 800 }}>🚫</span>
+          )}
           {c.useDynamic && <i style={{ width: 6, height: 6, borderRadius: '50%', background: T.ai }} />}
           {c.hasManual && <i style={{ width: 6, height: 6, borderRadius: '50%', background: T.warning }} />}
         </span>
       </div>
-      {c.noInventory || c.cellState === 'out_of_window' ? (
-        <div
-          title={c.priceHint}
-          style={{
-            fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
-            color: T.text4, marginTop: 2,
-          }}
-        >
-          {c.priceLabel}
-          <small style={{ fontSize: 9, color: T.text4, marginLeft: 3, display: 'block', fontWeight: 600 }}>
-            {c.cellState === 'out_of_window' ? 'hors fenêtre' : 'n/d'}
-          </small>
-        </div>
-      ) : (
-        <div style={{
-          fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
-          color: c.useDynamic ? T.ai : T.text, letterSpacing: '-0.01em', marginTop: 2,
-        }}>
-          {c.priceLabel}
-          {c.showPriceCurrency ? (
-            <small style={{ fontSize: 9.5, color: T.text3, marginLeft: 3, fontWeight: 600 }}>{c.currency}</small>
-          ) : null}
-        </div>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 'auto' }}>
-        {c.stopSell && (
-          <span style={{ fontSize: 9, background: T.errorTint, color: T.error, padding: '1px 5px', borderRadius: 99, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}>🚫 Stop</span>
-        )}
-        {!c.stopSell && c.booked && (
-          <span style={{ fontSize: 9.5, color: T.error, fontFamily: '"Geist Mono", monospace', fontWeight: 700 }}>0 / {c.available}</span>
-        )}
-        {!c.noInventory && !c.stopSell && !c.booked && (
-          <span style={{ fontSize: 9.5, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>{c.available} / {c.available}</span>
-        )}
-        {!c.stopSell && !c.booked && c.available != null && c.available <= 0 && (
-          <span style={{ fontSize: 9, background: 'rgba(217,119,6,0.12)', color: T.warning, padding: '1px 5px', borderRadius: 99, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}>0 dispo</span>
-        )}
-        {c.reservations.length >= 1 && (
-          <span onClick={(e) => {
-            e.stopPropagation();
-            onReservationClick?.(
-              e.currentTarget.getBoundingClientRect(),
-              c.iso,
-              c.reservations,
-            );
-          }} style={{
-            fontSize: 9, background: T.infoTint, color: T.info,
-            padding: '1px 5px', borderRadius: 99, fontWeight: 700,
-            fontFamily: '"Geist Mono", monospace', cursor: 'pointer',
-          }}>{c.reservations.length === 1 ? '1 résa' : `${c.reservations.length} résa`}</span>
-        )}
+
+      {/* Prix façon Airbnb : MAD1260 sous le numéro */}
+      <div
+        title={c.priceHint}
+        style={{
+          fontFamily: '"Geist Mono", monospace', fontSize: 12.5, fontWeight: 700,
+          color: c.noInventory ? T.text4 : muted ? T.text4 : c.useDynamic ? T.ai : T.text2,
+          textDecoration: muted && !c.noInventory ? 'line-through' : 'none',
+          letterSpacing: '-0.01em',
+        }}
+      >
+        {c.showPriceCurrency ? <small style={{ fontSize: 9, fontWeight: 600, marginRight: 2 }}>{currency}</small> : null}
+        {c.priceLabel}
       </div>
+
       {canHoverPrice && showTip && (
         <TooltipBreakdown
           open={showTip}
           anchorRef={ref}
           inv={c.inv}
           dateStr={c.iso}
-          currency={c.currency}
+          currency={currency}
         />
       )}
-    </div>
-  );
-}
-
-function StatCard({ icon, color, value, label, highlight }) {
-  return (
-    <div style={{
-      background: T.bg1, border: `1px solid ${highlight ? `${color}30` : T.border}`,
-      borderRadius: 12, padding: '12px 14px',
-      display: 'flex', alignItems: 'center', gap: 10,
-      boxShadow: highlight ? `0 0 0 1px ${color}10` : 'none',
-    }}>
-      <div style={{
-        width: 32, height: 32, borderRadius: 8,
-        background: `${color}15`, color, fontSize: 14,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      }}>{icon}</div>
-      <div>
-        <div style={{
-          fontFamily: '"Geist Mono", monospace', fontSize: 18, fontWeight: 700,
-          letterSpacing: '-0.02em', lineHeight: 1, color: highlight ? color : T.text,
-        }}>{value}</div>
-        <div style={{
-          fontSize: 10, color: T.text3, marginTop: 3,
-          fontFamily: '"Geist Mono", monospace', letterSpacing: '0.06em',
-          fontWeight: 700, textTransform: 'uppercase',
-        }}>{label}</div>
-      </div>
     </div>
   );
 }

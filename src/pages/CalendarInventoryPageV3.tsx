@@ -2,6 +2,7 @@
 // CalendarInventoryPageV3 — wrapper avec nouveau design Atelier 2026
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import moment from 'moment';
 import 'moment/locale/fr';
 import { Box, Button, Stack, Typography } from '@mui/material';
@@ -13,6 +14,7 @@ import type { Listing as ListingType } from '../types/listings.types';
 import CalendarInventoryPage from '../components/calendar-v3/CalendarInventoryPage.jsx';
 import {
   computeInventoryFetchRange,
+  computeSimpleMonthsFetchRange,
   clampPivotDate,
 } from '../components/calendar-v3/inventoryCalendarConstants';
 import { processInventoryResponse, type ProcessedInventoryData } from '../components/calendar-v3/processInventoryResponse';
@@ -29,9 +31,20 @@ function inventoryCacheKey(from: string, to: string, listingIds: string[]): stri
   return `${from}|${to}|${[...listingIds].sort().join(',')}`;
 }
 
+/** Nb de mois chargés initialement en vue simple (scroll vertical façon Airbnb). */
+const SIMPLE_INITIAL_MONTHS = 3;
+/** Mois ajoutés à chaque « load more » (sentinel de scroll). */
+const SIMPLE_MONTHS_INCREMENT = 2;
+/** Horizon max en mois (aligné INVENTORY_FUTURE_HORIZON_DAYS ≈ 36 mois). */
+const SIMPLE_MAX_MONTHS = 37;
+
 export function CalendarInventoryPageV3() {
   const staging = JSON.parse(localStorage.getItem('isStaging') || 'false');
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
+  const [searchParams] = useSearchParams();
+  const simpleMode = searchParams.get('view') === 'simple';
+  const simpleListingId = searchParams.get('listing') || null;
+  const [simpleMonths, setSimpleMonths] = useState(SIMPLE_INITIAL_MONTHS);
 
   const [listingsLoading, setListingsLoading] = useState(true);
   const [inventoryLoading, setInventoryLoading] = useState(false);
@@ -47,14 +60,28 @@ export function CalendarInventoryPageV3() {
   const [dpSyncLoading, setDpSyncLoading] = useState(false);
 
   const fetchRange = useMemo(
-    () => computeInventoryFetchRange(currentDate),
-    [currentDate.format('YYYY-MM')],
+    () =>
+      simpleMode
+        ? computeSimpleMonthsFetchRange(currentDate, simpleMonths)
+        : computeInventoryFetchRange(currentDate),
+    [currentDate.format('YYYY-MM'), simpleMode, simpleMonths],
   );
 
   const visibleListingIds = useMemo(
     () => listings.map((listing) => listing._id),
     [listings],
   );
+
+  /** Vue simple : on ne charge l'inventaire que du listing sélectionné (plage longue). */
+  const inventoryListingIds = useMemo(() => {
+    if (!simpleMode) return visibleListingIds;
+    if (!simpleListingId) return [];
+    return visibleListingIds.includes(simpleListingId) ? [simpleListingId] : [];
+  }, [simpleMode, simpleListingId, visibleListingIds]);
+
+  const handleLoadMoreMonths = useCallback(() => {
+    setSimpleMonths((m) => Math.min(m + SIMPLE_MONTHS_INCREMENT, SIMPLE_MAX_MONTHS));
+  }, []);
 
   /** Listings paginés — refetch quand scope / page change */
   useEffect(() => {
@@ -209,7 +236,7 @@ export function CalendarInventoryPageV3() {
     const seq = ++inventorySeqRef.current;
     let cancelled = false;
 
-    void loadInventory(visibleListingIds, fetchRange.from, fetchRange.to, seq);
+    void loadInventory(inventoryListingIds, fetchRange.from, fetchRange.to, seq);
 
     return () => {
       cancelled = true;
@@ -217,13 +244,15 @@ export function CalendarInventoryPageV3() {
         // noop — seq guard inside loadInventory
       }
     };
-  }, [fetchRange.from, fetchRange.to, visibleListingIds.join(','), listings.length, loadInventory]);
+  }, [fetchRange.from, fetchRange.to, inventoryListingIds.join(','), listings.length, loadInventory]);
 
   const listingCatalog = useMemo(
     () =>
       listings.map((listing) => ({
         _id: listing._id,
         name: listing.name,
+        city: (listing as { city?: string }).city || '',
+        coverImageUrl: (listing as { coverImageUrl?: string }).coverImageUrl || '',
         propertyUnit: listing.propertyUnit || 'Multi',
         currencyCode: listing.currencyCode || listing.currency || 'MAD',
         photoColor: listing.photoColor || '#fde68a',
@@ -250,7 +279,7 @@ export function CalendarInventoryPageV3() {
 
     inventoryCacheRef.current.clear();
     const seq = ++inventorySeqRef.current;
-    await loadInventory(visibleListingIds, fetchRange.from, fetchRange.to, seq);
+    await loadInventory(inventoryListingIds, fetchRange.from, fetchRange.to, seq);
   };
 
   const handleDateChange = (newDate: Date) => {
@@ -313,6 +342,8 @@ export function CalendarInventoryPageV3() {
         inventoryData={inventoryData}
         inventoryLoading={inventoryLoading || listingsLoading}
         defaultView="multi"
+        simpleMonthsCount={simpleMonths}
+        onLoadMoreMonths={handleLoadMoreMonths}
         onUpdateInventory={handleUpdateInventory}
         onDateChange={handleDateChange}
         dpSyncSummary={dpSyncSummary}

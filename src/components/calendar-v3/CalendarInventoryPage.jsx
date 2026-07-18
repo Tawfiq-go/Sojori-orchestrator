@@ -39,6 +39,8 @@ export default function CalendarInventoryPage({
   onUpdateInventory,
   onDateChange,
   defaultView = 'multi',
+  simpleMonthsCount = 3,
+  onLoadMoreMonths,
   dpSyncSummary = null,
   dpSyncLoading = false,
   listingNameById = {},
@@ -48,13 +50,26 @@ export default function CalendarInventoryPage({
   const viewFromUrl = searchParams.get('view') === 'simple' ? 'simple' : 'multi';
 
   const [view, setViewState] = useState(viewFromUrl || defaultView);
-  /** Vue simple : aucun listing auto — l'utilisateur doit choisir. */
-  const [selectedListingId, setSelectedListingId] = useState(null);
+  /** Vue simple : listing sélectionné porté par l'URL (?listing=) — deep-linkable. */
+  const selectedListingId = searchParams.get('listing') || null;
+  const setSelectedListingId = useCallback(
+    (id) => {
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev);
+          if (id) p.set('listing', String(id));
+          else p.delete('listing');
+          return p;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const setView = useCallback(
     (next) => {
       const v = next === 'simple' ? 'simple' : 'multi';
       setViewState(v);
-      if (v === 'simple') setSelectedListingId(null);
       setSearchParams(
         (prev) => {
           const p = new URLSearchParams(prev);
@@ -69,7 +84,6 @@ export default function CalendarInventoryPage({
 
   useEffect(() => {
     setViewState(viewFromUrl);
-    if (viewFromUrl === 'simple') setSelectedListingId(null);
   }, [viewFromUrl]);
 
   const [selectedColumns, setSelectedColumns] = useState(['availableRoom', 'rate']);
@@ -98,19 +112,17 @@ export default function CalendarInventoryPage({
   }, [limitHint]);
 
   useEffect(() => {
-    // Vue simple : pas de listing auto — l'utilisateur doit choisir.
-    // Si le listing sélectionné disparaît du catalogue, on reset.
-    if (
+    // Vue simple façon Airbnb : le 1er listing est auto-sélectionné,
+    // et on re-sélectionne si le listing de l'URL n'existe plus dans le catalogue.
+    if (view !== 'simple' || listings.length === 0) return;
+    const exists =
       selectedListingId &&
-      listings.length > 0 &&
-      !listings.some((l) => String(l._id) === String(selectedListingId))
-    ) {
-      setSelectedListingId(null);
-    }
-  }, [listings, selectedListingId]);
+      listings.some((l) => String(l._id) === String(selectedListingId));
+    if (!exists) setSelectedListingId(String(listings[0]._id));
+  }, [view, listings, selectedListingId, setSelectedListingId]);
 
   const selectedListing = useMemo(() => {
-    const cat = listings.find((l) => l._id === selectedListingId);
+    const cat = listings.find((l) => String(l._id) === String(selectedListingId));
     if (!cat) return null;
     return {
       ...cat,
@@ -368,32 +380,6 @@ export default function CalendarInventoryPage({
           </span>
         )}
 
-        {view === 'simple' && (
-          <select
-            value={selectedListingId || ''}
-            onChange={(e) => setSelectedListingId(e.target.value || null)}
-            style={{
-              padding: '7px 12px',
-              background: T.bg1,
-              border: `1px solid ${selectedListingId ? T.border : T.gold}`,
-              borderRadius: 9,
-              font: 'inherit',
-              fontSize: 12.5,
-              color: selectedListingId ? T.text : T.text3,
-              fontWeight: 600,
-              cursor: 'pointer',
-              minWidth: 220,
-            }}
-          >
-            <option value="">Choisir un listing…</option>
-            {listings.map((l) => (
-              <option key={l._id} value={l._id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        )}
-
         <span
           style={{
             fontSize: 10.5,
@@ -442,8 +428,14 @@ export default function CalendarInventoryPage({
       {view === 'simple' && selectedListing && (
         <SimpleView
           listing={selectedListing}
+          listings={listings}
+          selectedListingId={selectedListingId}
+          onSelectListing={setSelectedListingId}
           year={pivotDate.getFullYear()}
           month={pivotDate.getMonth()}
+          monthsCount={simpleMonthsCount}
+          onLoadMoreMonths={onLoadMoreMonths}
+          inventoryLoading={inventoryLoading}
           inventories={inventoriesByListing[selectedListingId] || {}}
           onCellsSelected={setModalCells}
           onOpenReservation={openReservationDrawer}
