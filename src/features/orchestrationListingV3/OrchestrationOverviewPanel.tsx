@@ -111,7 +111,15 @@ const FIN_CHIPS: TimingFin[] = ['J-3', 'J-2', 'J-1', 'J0', 'fin', 'J+1'];
 /** Suggestions métier par service — alignées moteur WA (from/to + requires). */
 const TIMING_PRESETS: Record<
   string,
-  { label: string; start: 'toujours' | 'resa' | number; fin: TimingFin; anchor: TimingAnchor; hint: string }
+  {
+    label: string;
+    start: 'toujours' | 'resa' | number;
+    fin: TimingFin;
+    anchor: TimingAnchor;
+    hint: string;
+    /** Conditions ET à appliquer avec le preset (ex. accès = E + D1). */
+    requires?: string[];
+  }
 > = {
   cleaning_free: {
     label: 'Séjour entier',
@@ -163,11 +171,26 @@ const TIMING_PRESETS: Record<
     hint: 'Enregistrement dès la résa jusqu’à l’arrivée',
   },
   access: {
-    label: 'Après E+D1',
+    label: 'J-1 + E + D1',
+    start: 1,
+    fin: 'fin',
+    anchor: 'checkin',
+    requires: ['E_completed', 'D1_completed'],
+    hint: 'Codes dès J-1 avant arrivée, jusqu’au départ — si enregistrement + créneau arrivée faits',
+  },
+  property_wifi: {
+    label: 'Séjour',
     start: 'resa',
     fin: 'fin',
     anchor: 'checkout',
-    hint: 'Codes : plutôt via conditions E + D1',
+    hint: 'Infos logement / WiFi tout le séjour',
+  },
+  house_rules: {
+    label: 'Séjour',
+    start: 'resa',
+    fin: 'fin',
+    anchor: 'checkout',
+    hint: 'Règles visibles tout le séjour',
   },
   transport: {
     label: 'Séjour',
@@ -195,14 +218,14 @@ const TIMING_PRESETS: Record<
     start: 'toujours',
     fin: 'fin',
     anchor: 'checkout',
-    hint: 'Toujours visible',
+    hint: 'Toujours visible dans le menu',
   },
   service_client: {
     label: 'Toujours',
     start: 'toujours',
     fin: 'fin',
     anchor: 'checkout',
-    hint: 'Toujours visible',
+    hint: 'Toujours visible — service client',
   },
 };
 
@@ -1186,8 +1209,7 @@ export default function OrchestrationOverviewPanel({
         writeAv(curStart, fin, curReqs, curAnchor);
       };
       const setAnchor = (anchor: TimingAnchor) => {
-        if (curStart === 'toujours') return;
-        writeAv(curStart, curFin, curReqs, anchor);
+        writeAv(curStart === 'toujours' ? 'resa' : curStart, curFin, curReqs, anchor);
       };
       const toggleReq = (id: string) => {
         const next = curReqs.includes(id) ? curReqs.filter((r) => r !== id) : [...curReqs, id];
@@ -1195,8 +1217,19 @@ export default function OrchestrationOverviewPanel({
       };
       const applyPreset = () => {
         if (!preset) return;
-        writeAv(preset.start, preset.fin, curReqs, preset.anchor);
+        writeAv(preset.start, preset.fin, preset.requires ?? [], preset.anchor);
       };
+
+      const presetReqsLabel = (preset?.requires ?? [])
+        .map((r) => REQUIRE_EVENTS.find((e) => e.id === r)?.short ?? r)
+        .join(' + ');
+      const presetMatches =
+        Boolean(preset) &&
+        curStart === preset!.start &&
+        curFin === preset!.fin &&
+        curAnchor === preset!.anchor &&
+        (preset!.requires ?? []).every((r) => curReqs.includes(r)) &&
+        curReqs.length === (preset!.requires ?? []).length;
 
       const finLabel = (fin: TimingFin) => {
         if (fin === 'fin') return 'Fin (départ)';
@@ -1208,11 +1241,37 @@ export default function OrchestrationOverviewPanel({
       body = (
         <Box sx={{ display: 'grid', gap: 1.25 }}>
           {preset && (
-            <Box>
-              <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3, mb: 0.5 }}>
-                SUGGESTION · {def.label}
+            <Box
+              sx={{
+                p: 1.25,
+                borderRadius: 1.5,
+                bgcolor: presetMatches ? V3.suT : V3.alt,
+                border: `1px solid ${presetMatches ? 'rgba(10,143,94,0.35)' : V3.b}`,
+              }}
+            >
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3, mb: 0.35 }}>
+                CONFIG RECOMMANDÉE · {def.emoji} {def.label}
               </Typography>
-              <SegChip on={false} label={`${preset.label} — ${preset.hint}`} onClick={applyPreset} />
+              <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: V3.t, mb: 0.35 }}>
+                {preset.label}
+                {presetReqsLabel ? ` · conditions ${presetReqsLabel}` : ''}
+              </Typography>
+              <Typography sx={{ fontSize: 11.5, color: V3.t3, mb: 1 }}>{preset.hint}</Typography>
+              <Button
+                size="small"
+                variant={presetMatches ? 'outlined' : 'contained'}
+                onClick={applyPreset}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  ...(presetMatches
+                    ? {}
+                    : { bgcolor: V3.p, '&:hover': { bgcolor: V3.pd } }),
+                }}
+              >
+                {presetMatches ? '✓ Config appliquée' : 'Appliquer cette config'}
+              </Button>
             </Box>
           )}
           <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>
@@ -1260,14 +1319,24 @@ export default function OrchestrationOverviewPanel({
           </Typography>
           <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>
             CONDITIONS REQUISES (toutes — ET)
+            {preset?.requires?.length ? (
+              <Box component="span" sx={{ fontWeight: 600, color: V3.t3, ml: 0.75 }}>
+                · reco : {presetReqsLabel}
+              </Box>
+            ) : null}
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
             {REQUIRE_EVENTS.map((ev) => (
-              <SegChip key={ev.id} on={curReqs.includes(ev.id)} label={ev.label} onClick={() => toggleReq(ev.id)} />
+              <SegChip
+                key={ev.id}
+                on={curReqs.includes(ev.id)}
+                label={ev.label}
+                onClick={() => toggleReq(ev.id)}
+              />
             ))}
           </Box>
           <Typography sx={{ fontSize: 11, color: V3.t4 }}>
-            Ex. accès : cocher E + D1. Aucune coche = pas de condition.
+            Ex. accès : J-1 + E + D1. Aucune coche = pas de condition.
           </Typography>
         </Box>
       );
