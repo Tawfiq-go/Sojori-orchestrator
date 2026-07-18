@@ -190,7 +190,7 @@ export default function CalendarInventoryPage({
   return (
     <div
       style={{
-        padding: '22px 40px 50px 40px',
+        padding: view === 'simple' ? '8px 24px 40px' : '22px 40px 50px 40px',
         maxWidth: '100%',
         margin: '0 auto',
         width: '100%',
@@ -206,8 +206,8 @@ export default function CalendarInventoryPage({
           background: T.bg1,
           border: `1px solid ${T.border}`,
           borderRadius: 14,
-          padding: '10px 14px',
-          marginBottom: 14,
+          padding: view === 'simple' ? '5px 10px' : '10px 14px',
+          marginBottom: view === 'simple' ? 8 : 14,
           boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
           flexWrap: 'wrap',
           overflow: 'visible',
@@ -350,18 +350,20 @@ export default function CalendarInventoryPage({
           }}
         />
 
-        <span
-          style={{
-            fontSize: 10.5,
-            color: T.text3,
-            fontWeight: 600,
-            maxWidth: 280,
-            lineHeight: 1.35,
-          }}
-          title={`Dernière date inventaire : ${formatHorizonEndLabel()}`}
-        >
-          Calendrier géré sur 3 ans · jusqu&apos;au {formatHorizonEndLabel()}
-        </span>
+        {view !== 'simple' && (
+          <span
+            style={{
+              fontSize: 10.5,
+              color: T.text3,
+              fontWeight: 600,
+              maxWidth: 280,
+              lineHeight: 1.35,
+            }}
+            title={`Dernière date inventaire : ${formatHorizonEndLabel()}`}
+          >
+            Calendrier géré sur 3 ans · jusqu&apos;au {formatHorizonEndLabel()}
+          </span>
+        )}
 
         {limitHint && (
           <span
@@ -380,17 +382,19 @@ export default function CalendarInventoryPage({
           </span>
         )}
 
-        <span
-          style={{
-            fontSize: 10.5,
-            color: T.text3,
-            fontWeight: 600,
-            whiteSpace: 'nowrap',
-          }}
-          title={`Jours avant J-${INVENTORY_PAST_RETENTION_DAYS} : InventoryArchive (srv-calendar)`}
-        >
-          Historique gris · hors fenêtre : — (pas de 0)
-        </span>
+        {view !== 'simple' && (
+          <span
+            style={{
+              fontSize: 10.5,
+              color: T.text3,
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+            }}
+            title={`Jours avant J-${INVENTORY_PAST_RETENTION_DAYS} : InventoryArchive (srv-calendar)`}
+          >
+            Historique gris · hors fenêtre : — (pas de 0)
+          </span>
+        )}
 
         <DpSyncAuditStrip
           summary={dpSyncSummary}

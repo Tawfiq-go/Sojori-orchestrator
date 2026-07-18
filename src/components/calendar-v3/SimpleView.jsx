@@ -150,10 +150,10 @@ export default function SimpleView({
         }}>
           {/* En-tête listing */}
           <div style={{
-            padding: '14px 22px', borderBottom: `1px solid ${T.border}`,
+            padding: '7px 14px', borderBottom: `1px solid ${T.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
           }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {listing.name}
               </span>
@@ -191,7 +191,7 @@ export default function SimpleView({
           }}>
             {WEEKDAYS.map((w) => (
               <span key={w} style={{
-                textAlign: 'center', padding: '9px 0', fontSize: 10.5, fontWeight: 700,
+                textAlign: 'center', padding: '4px 0', fontSize: 10, fontWeight: 700,
                 letterSpacing: '0.04em', color: T.text3,
               }}>{w}</span>
             ))}
@@ -397,10 +397,10 @@ function MonthGrid({ year, month, inventories, todayIso, currency, selected, onT
   return (
     <div>
       {/* Label mois façon Airbnb */}
-      <div style={{ padding: '26px 22px 10px', display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: T.text }}>
+      <div style={{ padding: '9px 14px 4px', display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: T.text }}>
           {MONTHS[month]}
-          <span style={{ fontWeight: 600, color: T.text3, fontSize: 17, marginLeft: 8 }}>{year}</span>
+          <span style={{ fontWeight: 600, color: T.text3, fontSize: 13, marginLeft: 6 }}>{year}</span>
         </span>
         <span style={{ fontSize: 11, color: T.text3, fontWeight: 600 }}>
           {monthStats.booked} nuit(s) réservée(s) · {monthStats.available} dispo
@@ -452,7 +452,7 @@ function WeekRow({ week, monthReservations, selected, currency, onToggleDay, onO
 
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: 104 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: 86 }}>
         {week.map((c, i) => (
           c ? (
             <DayCell
@@ -484,7 +484,7 @@ function WeekRow({ week, monthReservations, selected, currency, onToggleDay, onO
             onClick={(e) => { e.stopPropagation(); onOpenReservation?.(res); }}
             title={`${label} · ${isoDate(res.arrivalDate)} → ${isoDate(res.departureDate)}${res.status ? ` · ${res.status}` : ''}`}
             style={{
-              position: 'absolute', top: 58, height: 34,
+              position: 'absolute', top: 48, height: 30,
               left: `${left}%`, width: `${Math.max(right - left, 4)}%`,
               background: colors.bg, color: colors.text,
               border: 0, cursor: 'pointer',
@@ -534,7 +534,7 @@ function DayCell({ c, currency, selected, onToggle }) {
       onMouseLeave={() => setShowTip(false)}
       style={{
         borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`,
-        padding: '8px 9px', display: 'flex', flexDirection: 'column', gap: 4,
+        padding: '5px 8px', display: 'flex', flexDirection: 'column', gap: 2,
         cursor: c.noInventory || c.isArchived ? 'default' : 'pointer',
         transition: 'background 0.15s', position: 'relative',
         background:
@@ -551,13 +551,13 @@ function DayCell({ c, currency, selected, onToggle }) {
         {/* Numéro du jour — passé = barré gris (façon Airbnb), aujourd'hui = pastille rouge */}
         {c.isToday ? (
           <span style={{
-            width: 26, height: 26, borderRadius: '50%', background: '#e0243c', color: '#fff',
+            width: 22, height: 22, borderRadius: '50%', background: '#e0243c', color: '#fff',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12.5, fontWeight: 800,
+            fontSize: 11.5, fontWeight: 800,
           }}>{c.num}</span>
         ) : (
           <span style={{
-            fontSize: 13, fontWeight: 700,
+            fontSize: 12.5, fontWeight: 700,
             color: muted ? (c.isArchived ? ARCHIVE_CELL_TEXT : T.text4) : T.text,
             textDecoration: muted ? 'line-through' : 'none',
           }}>{c.num}</span>
