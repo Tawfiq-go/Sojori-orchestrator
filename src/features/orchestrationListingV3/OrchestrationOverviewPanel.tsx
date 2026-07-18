@@ -798,8 +798,9 @@ export default function OrchestrationOverviewPanel({
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
   const [activationStatus, setActivationStatus] = useState<ServiceActivationStatusEntry[]>([]);
 
-  const reload = useCallback(() => {
-    setLoading(true);
+  const reload = useCallback((opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) setLoading(true);
     setError(null);
 
     const loadValues = async () => {
@@ -868,7 +869,9 @@ export default function OrchestrationOverviewPanel({
         }
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Chargement impossible'))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, [ownerKey, listingId]);
 
   useEffect(() => {
@@ -997,7 +1000,27 @@ export default function OrchestrationOverviewPanel({
             }
           }
           toast.success(value ? 'Service activé pour cette annonce' : 'Service désactivé pour cette annonce');
-          reload();
+          // Mise à jour locale sans spinner plein écran.
+          if (value) {
+            setDoc((prev) => {
+              if (!prev) return prev;
+              const existing = (prev.capabilities?.[capKey] ?? cap) as CapDoc;
+              return {
+                ...prev,
+                capabilities: {
+                  ...prev.capabilities,
+                  [capKey]: {
+                    ...existing,
+                    decisions: {
+                      ...(existing.decisions ?? {}),
+                      managed: true,
+                      orchestrated: true,
+                    },
+                  } as never,
+                },
+              };
+            });
+          }
         } catch (e: unknown) {
           toast.error(e instanceof Error ? e.message : 'Activation impossible');
         } finally {
@@ -1832,7 +1855,7 @@ export default function OrchestrationOverviewPanel({
   })();
 
   return (
-    <Box sx={{ display: 'grid', gap: 2, opacity: saving ? 0.6 : 1 }}>
+    <Box sx={{ display: 'grid', gap: 2 }}>
       <Alert severity="info" sx={{ fontSize: 12.5 }}>
         <strong>ON</strong> active le service (et le plan auto). <strong>Décisions</strong> : WhatsApp /
         Créer tâche / Relances / Rappel staff / Escalade. Créer tâche OFF ⇒ pas de staff —
@@ -2301,7 +2324,6 @@ export default function OrchestrationOverviewPanel({
         open={Boolean(configModal && configDef)}
         onClose={() => {
           setConfigModal(null);
-          reload();
         }}
         maxWidth="lg"
         fullWidth
@@ -2327,7 +2349,6 @@ export default function OrchestrationOverviewPanel({
                 size="small"
                 onClick={() => {
                   setConfigModal(null);
-                  reload();
                 }}
                 sx={{ position: 'absolute', right: 12, top: 12 }}
                 aria-label="Fermer"
@@ -2384,9 +2405,9 @@ export default function OrchestrationOverviewPanel({
                     ownerOrchestrationDoc={
                       isListingScope ? undefined : (doc as OwnerOrchestrationDoc)
                     }
-                    onOrchestrationSaved={reload}
+                    onOrchestrationSaved={() => reload({ silent: true })}
                     onWhatsappPatch={() => {
-                      void reload();
+                      reload({ silent: true });
                     }}
                   />
                 </Box>
