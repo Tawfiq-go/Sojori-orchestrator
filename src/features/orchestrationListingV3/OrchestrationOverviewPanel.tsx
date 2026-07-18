@@ -6,8 +6,10 @@ import {
   Chip,
   CircularProgress,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   MenuItem,
   Popover,
@@ -267,6 +269,167 @@ function defaultRefForTask(taskType: string): string {
   return 'scheduledDate';
 }
 
+/** Flags décisions du popup apercu (master ops = taskEnabled). */
+type DecisionFlags = {
+  orchestrated: boolean;
+  clientEnabled: boolean;
+  taskEnabled: boolean;
+  clientReminders: boolean;
+  staffReminders: boolean;
+  pmEscalation: boolean;
+};
+
+function readDecisionFlags(cap: CapDoc): DecisionFlags {
+  const d = cap.decisions ?? {};
+  const exec = cap.execution ?? {};
+  const reminders = exec.reminders ?? [];
+  const staffRem = exec.staffReminders ?? [];
+  return {
+    orchestrated: d.orchestrated === true,
+    clientEnabled: d.clientEnabled === true,
+    taskEnabled: d.taskEnabled === true,
+    clientReminders: reminders.length > 0,
+    staffReminders: staffRem.length > 0,
+    pmEscalation: exec.escalationEnabled === true,
+  };
+}
+
+function applyDecisionFlagRules(
+  flags: DecisionFlags,
+  changed: keyof DecisionFlags,
+): DecisionFlags {
+  const next = { ...flags };
+  // orchestrated n’est plus géré en UI : toujours ON côté save (colonne ON = master).
+  next.orchestrated = true;
+  if (changed === 'taskEnabled' && !next.taskEnabled) {
+    next.staffReminders = false;
+  }
+  if (changed === 'staffReminders' && next.staffReminders && !next.taskEnabled) {
+    next.taskEnabled = true;
+  }
+  return next;
+}
+
+function buildExecutionFromFlags(
+  cap: CapDoc,
+  flags: DecisionFlags,
+  taskType: string,
+): NonNullable<CapDoc['execution']> {
+  const prev = cap.execution ?? { enabled: true };
+  const ref = defaultRefForTask(taskType);
+  let reminders = [...(prev.reminders ?? [])];
+  let staffReminders = [...(prev.staffReminders ?? [])];
+  let staffAssignment = prev.staffAssignment ?? null;
+  let deadline = prev.deadline ?? null;
+  let escalationEnabled = flags.pmEscalation;
+
+  if (!flags.clientReminders) {
+    reminders = [];
+  } else if (reminders.length === 0) {
+    reminders = [
+      {
+        ref,
+        day: -1,
+        time: '10:00',
+        label: 'Relance J-1',
+        messageId: CLIENT_MSG_ID[taskType] ?? '',
+      },
+    ];
+  }
+
+  if (!flags.taskEnabled) {
+    staffAssignment = null;
+    staffReminders = [];
+  } else if (!flags.staffReminders) {
+    staffReminders = [];
+  } else if (staffReminders.length === 0) {
+    staffReminders = [
+      {
+        label: 'Rappel J-1',
+        ref,
+        day: -1,
+        time: '11:00',
+        messageId: STAFF_MSG_ID[taskType] ?? '',
+      },
+    ];
+  }
+
+  if (!flags.pmEscalation) {
+    escalationEnabled = false;
+  } else if (!deadline) {
+    deadline =
+      taskType === 'support' || taskType === 'service_client'
+        ? { ref: 'task_created', hours: 4 }
+        : { ref, day: -1, time: '11:00' };
+    escalationEnabled = true;
+  }
+
+  return {
+    ...prev,
+    enabled: flags.orchestrated !== false,
+    reminders,
+    staffReminders,
+    staffAssignment,
+    deadline,
+    escalationEnabled,
+  };
+}
+
+function DecisionSwitch({
+  label,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 2,
+        py: 1,
+        borderBottom: `1px solid ${V3.b}`,
+        opacity: disabled ? 0.45 : 1,
+      }}
+    >
+      <Box>
+        <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: V3.t }}>{label}</Typography>
+        <Typography sx={{ fontSize: 11.5, color: V3.t3 }}>{hint}</Typography>
+      </Box>
+      <FormControlLabel
+        control={
+          <Switch
+            size="small"
+            checked={checked}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+        }
+        label={checked ? 'ON' : 'OFF'}
+        labelPlacement="start"
+        sx={{
+          m: 0,
+          gap: 0.5,
+          '& .MuiFormControlLabel-label': {
+            fontSize: 11,
+            fontWeight: 800,
+            color: checked ? V3.su : V3.t4,
+            minWidth: 28,
+          },
+        }}
+      />
+    </Box>
+  );
+}
+
 function isPostCreationEscalation(taskType: string): boolean {
   return taskType === 'support' || taskType === 'service_client';
 }
@@ -416,6 +579,7 @@ export default function OrchestrationOverviewPanel({
   const [editor, setEditor] = useState<{ kind: EditorKind; capKey: string; anchor: HTMLElement } | null>(null);
   const [msgEditor, setMsgEditor] = useState<{ id: string; anchor: HTMLElement } | null>(null);
   const [configModal, setConfigModal] = useState<{ capKey: string; tab: 'gestion' | 'wa' } | null>(null);
+  const [decisionsModal, setDecisionsModal] = useState<string | null>(null);
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
   const [activationStatus, setActivationStatus] = useState<ServiceActivationStatusEntry[]>([]);
 
@@ -593,6 +757,30 @@ export default function OrchestrationOverviewPanel({
           }
           const next = await saveListingServiceActivation(listingId, patch);
           setActivationStatus(next.services ?? []);
+          // Plus de toggle Orchestrer : ON ⇒ plan auto autorisé (orchestrated=true).
+          // Appel direct (pas saveCapPatch) : le gate activation verrait encore l’ancien OFF.
+          if (value) {
+            const def = getCapabilityDefinition(capKey);
+            if (def) {
+              await listingsService.putListingOrchestration(listingId, {
+                capabilities: {
+                  [capKey]: {
+                    key: capKey,
+                    taskType: def.taskType,
+                    decisions: {
+                      ...(cap.decisions ?? {}),
+                      managed: true,
+                      orchestrated: true,
+                    },
+                    taskBehavior: cap.taskBehavior,
+                    gestion: cap.gestion,
+                    whatsapp: cap.whatsapp,
+                    execution: cap.execution,
+                  },
+                },
+              });
+            }
+          }
           toast.success(value ? 'Service activé pour cette annonce' : 'Service désactivé pour cette annonce');
           reload();
         } catch (e: unknown) {
@@ -620,10 +808,36 @@ export default function OrchestrationOverviewPanel({
       ...(cap.decisions ?? {}),
       [field]: value,
     };
+    if (field === 'managed' && value) {
+      next.orchestrated = true;
+    }
     if (field === 'managed' && !value) {
       next.clientEnabled = false;
     }
     void saveCapPatch(capKey, { decisions: next });
+  };
+
+  const saveDecisionFlags = (capKey: string, flags: DecisionFlags) => {
+    const cap = resolveCap(capKey);
+    const def = getCapabilityDefinition(capKey);
+    if (!cap || !def) return;
+    if (listingId) {
+      const act = activationStatus.find((s) => s.serviceId === capKey);
+      if (act && act.effectiveEnabled !== true) {
+        toast.warning('Activez d’abord le service (colonne ON)');
+        return;
+      }
+    }
+    const taskType = def.taskType ?? capKey;
+    const decisions = {
+      managed: true,
+      clientEnabled: flags.clientEnabled,
+      // Colonne ON = master ; plus de bouton Orchestrer en UI.
+      orchestrated: true,
+      taskEnabled: def.columns.task === 'na' ? false : flags.taskEnabled,
+    };
+    const execution = buildExecutionFromFlags(cap, flags, taskType);
+    void saveCapPatch(capKey, { decisions, execution });
   };
 
   const onGestionPatch = useCallback(
@@ -1186,6 +1400,9 @@ export default function OrchestrationOverviewPanel({
         const dl = exec?.deadline as DeadlineDoc;
         const hints = configHints(cap, def.key);
         const hasClient = def.columns.client !== 'na';
+        const hasTaskCol = def.columns.task !== 'na' && Boolean(def.taskType);
+        const hasOrch = def.columns.orchestrated !== 'na';
+        const flags = readDecisionFlags(cap);
         return {
           key: def.key,
           group: def.group,
@@ -1196,6 +1413,9 @@ export default function OrchestrationOverviewPanel({
           waOn,
           hasClient,
           hasTask: Boolean(def.taskType),
+          hasTaskCol,
+          hasOrch,
+          flags,
           hints,
           availability: on
             ? hasClient
@@ -1297,8 +1517,8 @@ export default function OrchestrationOverviewPanel({
   return (
     <Box sx={{ display: 'grid', gap: 2, opacity: saving ? 0.6 : 1 }}>
       <Alert severity="info" sx={{ fontSize: 12.5 }}>
-        Liste unifiée <strong>Flow</strong> (services) et <strong>Msg</strong> (messages planifiés). Colonnes
-        prioritaires : ON → Configurer → Timing. Puis ops (relances / staff / escalade).
+        <strong>ON</strong> active le service (et le plan auto). <strong>Décisions</strong> : WhatsApp /
+        Créer tâche / Relances / Rappel staff / Escalade. Créer tâche OFF ⇒ pas de staff.
       </Alert>
 
       <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card, overflowX: 'auto' }}>
@@ -1309,18 +1529,18 @@ export default function OrchestrationOverviewPanel({
           sx={{
             display: 'grid',
             gridTemplateColumns:
-              '36px minmax(150px,1.35fr) 44px minmax(120px,1.15fr) minmax(110px,1.05fr) 40px 0.85fr 1.05fr 0.75fr 88px',
+              '36px minmax(140px,1.25fr) 44px minmax(150px,1.3fr) minmax(110px,1fr) minmax(100px,0.95fr) 0.8fr 0.95fr 0.7fr 88px',
             gap: 0.75,
             alignItems: 'center',
-            minWidth: 1100,
+            minWidth: 1120,
           }}
         >
           <Typography sx={head}> </Typography>
           <Typography sx={head}>Nom</Typography>
           <Typography sx={head}>ON</Typography>
+          <Typography sx={head}>Décisions</Typography>
           <Typography sx={head}>Configurer</Typography>
           <Typography sx={head}>Timing</Typography>
-          <Typography sx={head}>WA</Typography>
           <Typography sx={head}>Relances</Typography>
           <Typography sx={head}>Staff</Typography>
           <Typography sx={head}>Escalade</Typography>
@@ -1389,6 +1609,48 @@ export default function OrchestrationOverviewPanel({
                       alignItems: 'center',
                       py: 0.25,
                     }}
+                    onClick={() => (r.on ? setDecisionsModal(r.key) : toast.warning('Activez d’abord ON'))}
+                    title="WhatsApp · Créer tâche · Relances · Staff · Escalade"
+                  >
+                    {(
+                      [
+                        r.hasClient && { on: r.flags.clientEnabled, label: 'WA' },
+                        r.hasTaskCol && { on: r.flags.taskEnabled, label: 'Tâche' },
+                        r.hasOrch && { on: r.flags.clientReminders, label: 'Rel' },
+                        r.hasTaskCol && { on: r.flags.staffReminders, label: 'Staff' },
+                        r.hasTaskCol && { on: r.flags.pmEscalation, label: 'Esc' },
+                      ] as Array<{ on: boolean; label: string } | false>
+                    )
+                      .filter(Boolean)
+                      .map((chip) => {
+                        const c = chip as { on: boolean; label: string };
+                        return (
+                          <Chip
+                            key={c.label}
+                            label={c.label}
+                            size="small"
+                            sx={{
+                              height: 18,
+                              fontSize: 9.5,
+                              fontWeight: 800,
+                              bgcolor: c.on ? V3.suT : V3.alt,
+                              color: c.on ? V3.su : V3.t4,
+                              border: `1px solid ${c.on ? 'rgba(10,143,94,0.25)' : V3.b}`,
+                            }}
+                          />
+                        );
+                      })}
+                  </Box>
+                  <Box
+                    sx={{
+                      ...editCell,
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 0.35,
+                      minHeight: 28,
+                      alignItems: 'center',
+                      py: 0.25,
+                    }}
                     onClick={() => setConfigModal({ capKey: r.key, tab: 'gestion' })}
                     title="Configurer (prix, créneaux, catalogue…)"
                   >
@@ -1422,19 +1684,6 @@ export default function OrchestrationOverviewPanel({
                   >
                     {r.availability}
                   </Typography>
-                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                    {r.hasClient ? (
-                      <Switch
-                        size="small"
-                        checked={r.waOn}
-                        disabled={!r.on}
-                        onChange={(e) => patchDecision(r.key, 'clientEnabled', e.target.checked)}
-                        inputProps={{ 'aria-label': `${r.label} WhatsApp` }}
-                      />
-                    ) : (
-                      <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
-                    )}
-                  </Box>
                   <Typography
                     component="div"
                     sx={r.on && r.hasTask ? editCell : cell}
@@ -1544,6 +1793,7 @@ export default function OrchestrationOverviewPanel({
                       inputProps={{ 'aria-label': `${m.label} actif` }}
                     />
                   </Box>
+                  <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.35, alignItems: 'center' }}>
                     <Chip
                       label={catalogLabel}
@@ -1568,7 +1818,6 @@ export default function OrchestrationOverviewPanel({
                   >
                     {messageWhenHuman(m)}
                   </Typography>
-                  <Typography sx={{ ...cell, textAlign: 'center', color: V3.t4 }}>—</Typography>
                   <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
                   <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
                   <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
@@ -1591,6 +1840,122 @@ export default function OrchestrationOverviewPanel({
 
       {renderEditor()}
       {renderMsgEditor()}
+
+      {(() => {
+        const dKey = decisionsModal;
+        if (!dKey) return null;
+        const dDef = getCapabilityDefinition(dKey);
+        const dCap = resolveCap(dKey);
+        if (!dDef || !dCap) return null;
+        const flags = readDecisionFlags(dCap);
+        const serviceOn = (() => {
+          if (!isListingScope) return dCap.decisions?.managed === true || flags.orchestrated || flags.clientEnabled;
+          const act = activationStatus.find((s) => s.serviceId === dKey);
+          return act ? act.effectiveEnabled === true : true;
+        })();
+        const hasClient = dDef.columns.client !== 'na';
+        const hasTaskCol = dDef.columns.task !== 'na' && Boolean(dDef.taskType);
+        const hasOrch = dDef.columns.orchestrated !== 'na';
+        const locked = !serviceOn;
+
+        const toggle = (field: keyof DecisionFlags, value: boolean) => {
+          const next = applyDecisionFlagRules({ ...flags, [field]: value }, field);
+          saveDecisionFlags(dKey, next);
+        };
+
+        return (
+          <Dialog
+            open
+            onClose={() => setDecisionsModal(null)}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{ sx: { borderRadius: 2 } }}
+          >
+            <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
+              Décisions · {dDef.emoji} {dDef.label}
+              <IconButton
+                size="small"
+                onClick={() => setDecisionsModal(null)}
+                sx={{ position: 'absolute', right: 12, top: 12 }}
+                aria-label="Fermer"
+              >
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers>
+              {locked && (
+                <Alert severity="warning" sx={{ mb: 1.5, fontSize: 12.5 }}>
+                  Activez d&apos;abord le service (colonne ON) pour modifier ces décisions.
+                </Alert>
+              )}
+              <Typography sx={{ fontSize: 12, color: V3.t3, mb: 1.5 }}>
+                La colonne ON active le service et le plan auto. Créer tâche OFF ⇒ pas d&apos;assign
+                staff ni rappel staff.
+              </Typography>
+              {hasClient && (
+                <DecisionSwitch
+                  label="👤 Visible WhatsApp"
+                  hint="Option menu voyageur"
+                  checked={flags.clientEnabled}
+                  disabled={locked}
+                  onChange={(v) => toggle('clientEnabled', v)}
+                />
+              )}
+              {hasTaskCol && (
+                <DecisionSwitch
+                  label="📋 Créer tâche (ops)"
+                  hint="Visible owner · staff possible · master ops"
+                  checked={flags.taskEnabled}
+                  disabled={locked}
+                  onChange={(v) => toggle('taskEnabled', v)}
+                />
+              )}
+              {hasOrch && (
+                <DecisionSwitch
+                  label="💌 Relances client"
+                  hint="Rappels voyageur automatiques"
+                  checked={flags.clientReminders}
+                  disabled={locked}
+                  onChange={(v) => toggle('clientReminders', v)}
+                />
+              )}
+              {hasTaskCol && (
+                <DecisionSwitch
+                  label="👷 Rappel staff"
+                  hint="Notif équipe (nécessite Créer tâche)"
+                  checked={flags.staffReminders}
+                  disabled={locked || !flags.taskEnabled}
+                  onChange={(v) => toggle('staffReminders', v)}
+                />
+              )}
+              {hasTaskCol && (
+                <DecisionSwitch
+                  label="🚨 Escalade admin"
+                  hint="Alerte admin si deadline dépassée"
+                  checked={flags.pmEscalation}
+                  disabled={locked}
+                  onChange={(v) => toggle('pmEscalation', v)}
+                />
+              )}
+            </DialogContent>
+            <DialogActions sx={{ px: 2, py: 1.5 }}>
+              <Button onClick={() => setDecisionsModal(null)} sx={{ textTransform: 'none' }}>
+                Fermer
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  setDecisionsModal(null);
+                  setConfigModal({ capKey: dKey, tab: 'gestion' });
+                }}
+                sx={{ textTransform: 'none', bgcolor: V3.p, '&:hover': { bgcolor: V3.pd } }}
+              >
+                Configurer le contenu…
+              </Button>
+            </DialogActions>
+          </Dialog>
+        );
+      })()}
 
       <Dialog
         open={Boolean(configModal && configDef)}
