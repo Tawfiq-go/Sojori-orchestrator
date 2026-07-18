@@ -19,13 +19,14 @@ import { normalizeOwnerId } from '../../../utils/fulltaskMappers';
 import type { Staff } from './types';
 import './teamWeekView.css';
 
-const WINDOW_DAYS = 7;
+const WINDOW_DAYS = 15;
 const CANCELLED_STATUSES = new Set(['CANCELLED_ADMIN', 'CANCELLED_CUSTOMER', 'ARCHIVED']);
 const MAX_CHIPS_COLLAPSED = 3;
 
 type TeamTask = {
   taskId: string | null;
   reservationId: string;
+  listingId: string;
   day: string;
   time: string;
   label: string;
@@ -94,6 +95,7 @@ function pivotTasks(listings: PlanningListingRow[], dayMin: string, dayMax: stri
         out.push({
           taskId: data.taskId ? String(data.taskId) : null,
           reservationId: resa.reservationId,
+          listingId: String(listing.listingId || ''),
           day,
           time: dayLevel ? '' : format(dt, 'HH:mm'),
           label: taskLabel(String(it.category || it.type || '')),
@@ -111,25 +113,79 @@ function pivotTasks(listings: PlanningListingRow[], dayMin: string, dayMax: stri
   return out;
 }
 
+type ListingOpt = { id: string; name: string; cityId?: string; city?: string };
+type CityOpt = { id: string; name: string };
+
+/** Aligné srv-fulltask `staffMatchesListingAccess`. */
+function hasAllAccess(ids: string[] | undefined): boolean {
+  if (!ids?.length) return false;
+  return ids.some((id) => {
+    const s = String(id).trim();
+    return s === 'All' || s === 'ALL';
+  });
+}
+
+function staffMatchesListingAccess(
+  s: Staff,
+  listingId: string,
+  listingCityId?: string | null,
+): boolean {
+  const listingIds = s.allowedListingIds || [];
+  const cityIds = s.allowedCityIds || [];
+  if (!listingIds.length && !cityIds.length) return true;
+  if (hasAllAccess(listingIds)) return true;
+  const listingKey = String(listingId || '').trim();
+  if (listingKey && listingIds.some((id) => String(id) === listingKey)) return true;
+  if (hasAllAccess(cityIds)) return true;
+  const cityKey = String(listingCityId || '').trim();
+  if (cityKey && cityIds.some((id) => String(id) === cityKey)) return true;
+  return false;
+}
+
+function staffMatchesCityAccess(s: Staff, cityId: string, listingsInCity: ListingOpt[]): boolean {
+  const listingIds = s.allowedListingIds || [];
+  const cityIds = s.allowedCityIds || [];
+  if (!listingIds.length && !cityIds.length) return true;
+  if (hasAllAccess(listingIds) || hasAllAccess(cityIds)) return true;
+  if (cityIds.some((id) => String(id) === String(cityId))) return true;
+  return listingsInCity.some((l) => listingIds.some((id) => String(id) === String(l.id)));
+}
+
 type Props = {
   staff: Staff[];
+  listings?: ListingOpt[];
+  cities?: CityOpt[];
   filterOwnerId?: string;
   ownerOptions: Array<{ id: string; label: string }>;
   onOpenStaff?: (staffId: string) => void;
 };
 
-export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpenStaff }: Props) {
+export default function TeamWeekView({
+  staff,
+  listings = [],
+  cities = [],
+  filterOwnerId,
+  ownerOptions,
+  onOpenStaff,
+}: Props) {
   const navigate = useNavigate();
   const [startDate, setStartDate] = useState<Date>(() => startOfDay(new Date()));
   const [tasks, setTasks] = useState<TeamTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedCells, setExpandedCells] = useState<Set<string>>(new Set());
+  const [cityFilterId, setCityFilterId] = useState<string>('');
+  const [listingFilterId, setListingFilterId] = useState<string>('');
   const [assignMenu, setAssignMenu] = useState<{
     anchor: HTMLElement;
     task: TeamTask;
   } | null>(null);
   const [assigning, setAssigning] = useState(false);
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const [dropStaffId, setDropStaffId] = useState<string | null>(null);
+  const [dropDeniedStaffId, setDropDeniedStaffId] = useState<string | null>(null);
+  const dragMovedRef = useRef(false);
+  const dragTaskRef = useRef<TeamTask | null>(null);
   const requestIdRef = useRef(0);
 
   const days = useMemo(
@@ -169,8 +225,77 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
     void load();
   }, [load]);
 
+  const listingsById = useMemo(() => {
+    const m = new Map<string, ListingOpt>();
+    for (const l of listings) m.set(String(l.id), l);
+    return m;
+  }, [listings]);
+
+  const cityOptions = useMemo(
+    () => [...cities].sort((a, b) => a.name.localeCompare(b.name, 'fr')),
+    [cities],
+  );
+
+  const listingsInCity = useMemo(() => {
+    if (!cityFilterId) return listings;
+    const cityName = (cityOptions.find((c) => c.id === cityFilterId)?.name || '').trim().toLowerCase();
+    return listings.filter((l) => {
+      if (String(l.cityId || '') === cityFilterId) return true;
+      if (cityName && String(l.city || '').trim().toLowerCase() === cityName) return true;
+      return false;
+    });
+  }, [listings, cityFilterId, cityOptions]);
+
+  const listingOptions = useMemo(() => {
+    const src = cityFilterId ? listingsInCity : listings;
+    return [...src].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [listings, listingsInCity, cityFilterId]);
+
+  // Si l’annonce filtrée n’est plus dans la ville choisie → reset
+  useEffect(() => {
+    if (!listingFilterId || !cityFilterId) return;
+    const ok = listingsInCity.some((l) => String(l.id) === listingFilterId);
+    if (!ok) setListingFilterId('');
+  }, [listingFilterId, cityFilterId, listingsInCity]);
+
+  const selectedListing = useMemo(
+    () => (listingFilterId ? listingsById.get(listingFilterId) : undefined),
+    [listingsById, listingFilterId],
+  );
+
+  const filteredTasks = useMemo(() => {
+    let rows = tasks;
+    if (cityFilterId) {
+      const ids = new Set(listingsInCity.map((l) => String(l.id)));
+      rows = rows.filter((t) => ids.has(String(t.listingId)));
+    }
+    if (listingFilterId) {
+      rows = rows.filter((t) => String(t.listingId) === listingFilterId);
+    }
+    return rows;
+  }, [tasks, cityFilterId, listingFilterId, listingsInCity]);
+
+  const eligibleStaff = useMemo(() => {
+    const active = staff.filter((s) => s.status === 'active');
+    if (listingFilterId && selectedListing) {
+      return active.filter((s) =>
+        staffMatchesListingAccess(s, selectedListing.id, selectedListing.cityId),
+      );
+    }
+    if (cityFilterId) {
+      return active.filter((s) => staffMatchesCityAccess(s, cityFilterId, listingsInCity));
+    }
+    return active;
+  }, [staff, listingFilterId, selectedListing, cityFilterId, listingsInCity]);
+
+  const scopeLabel = useMemo(() => {
+    if (listingFilterId && selectedListing) return selectedListing.name;
+    if (cityFilterId) return cityOptions.find((c) => c.id === cityFilterId)?.name || 'Ville';
+    return null;
+  }, [listingFilterId, selectedListing, cityFilterId, cityOptions]);
+
   const sections = useMemo<SectionDef[]>(() => {
-    const staffById = new Map(staff.map((s) => [String(s._id), s]));
+    const staffById = new Map(eligibleStaff.map((s) => [String(s._id), s]));
     const ownerLabel = (oid: string) => {
       if (!oid) return 'Autres';
       return ownerOptions.find((o) => o.id === oid)?.label || 'PM';
@@ -189,7 +314,7 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
       return bucket;
     };
 
-    for (const s of staff) {
+    for (const s of eligibleStaff) {
       const oid = normalizeOwnerId(s.ownerId) || '';
       const bucket = ensureOwner(oid);
       bucket.staffRows.set(String(s._id), {
@@ -200,7 +325,7 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
       });
     }
 
-    for (const t of tasks) {
+    for (const t of filteredTasks) {
       if (t.staffId && staffById.has(t.staffId)) {
         const s = staffById.get(t.staffId) as Staff;
         const bucket = ensureOwner(normalizeOwnerId(s.ownerId) || '');
@@ -231,13 +356,13 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
     }
     result.sort((a, b) => b.taskCount - a.taskCount);
     return result;
-  }, [staff, tasks, ownerOptions]);
+  }, [eligibleStaff, filteredTasks, ownerOptions]);
 
   const showSectionHeaders = sections.length > 1;
-  const totalTasks = tasks.length;
+  const totalTasks = filteredTasks.length;
   const unassignedTotal = useMemo(
-    () => tasks.filter((t) => !t.staffId).length,
-    [tasks],
+    () => filteredTasks.filter((t) => !t.staffId).length,
+    [filteredTasks],
   );
 
   const toggleCell = (key: string) => {
@@ -249,26 +374,64 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
     });
   };
 
-  const assignCandidates = useMemo(() => {
-    if (!assignMenu) return [];
-    const t = assignMenu.task;
-    return staff.filter((s) => {
+  const staffCanReceiveTask = useCallback(
+    (s: Staff, t: TeamTask): boolean => {
       if (t.ownerId && normalizeOwnerId(s.ownerId) && normalizeOwnerId(s.ownerId) !== t.ownerId) {
         return false;
       }
-      return s.status === 'active';
-    });
-  }, [assignMenu, staff]);
+      const listing = listingsById.get(String(t.listingId));
+      const listingId = listing?.id || String(t.listingId || '');
+      const cityId = listing?.cityId;
+      if (!listingId) return false;
+      return staffMatchesListingAccess(s, listingId, cityId);
+    },
+    [listingsById],
+  );
 
-  const handleAssign = async (staffId: string) => {
-    if (!assignMenu?.task.taskId || assigning) return;
+  const assignCandidates = useMemo(() => {
+    if (!assignMenu) return [];
+    return eligibleStaff.filter((s) => staffCanReceiveTask(s, assignMenu.task));
+  }, [assignMenu, eligibleStaff, staffCanReceiveTask]);
+
+  const clearDragState = () => {
+    dragTaskRef.current = null;
+    setDragTaskId(null);
+    setDropStaffId(null);
+    setDropDeniedStaffId(null);
+  };
+
+  const handleAssign = async (staffId: string, task?: TeamTask) => {
+    const target = task || assignMenu?.task;
+    if (!target?.taskId || assigning) return;
+    if (target.staffId && String(target.staffId) === String(staffId)) {
+      setAssignMenu(null);
+      clearDragState();
+      return;
+    }
+    const receiver = staff.find((s) => String(s._id) === String(staffId));
+    if (!receiver || !staffCanReceiveTask(receiver, target)) {
+      toast.error(
+        `Pas de permission sur ${target.listingName || 'cette annonce'} pour ce staff`,
+      );
+      clearDragState();
+      return;
+    }
+    const taskId = target.taskId;
+    const prevStaffId = target.staffId;
+    // Optimistic : déplacer le chip sans refetch planning (évite reload ~1s+)
+    setTasks((prev) =>
+      prev.map((t) => (t.taskId === taskId ? { ...t, staffId } : t)),
+    );
+    setAssignMenu(null);
+    clearDragState();
     setAssigning(true);
     try {
-      await fulltaskApi.assignTask(assignMenu.task.taskId, staffId);
-      toast.success('Tâche assignée');
-      setAssignMenu(null);
-      await load();
+      await fulltaskApi.assignTask(taskId, staffId);
+      toast.success(prevStaffId ? 'Tâche réassignée' : 'Tâche assignée');
     } catch (e: unknown) {
+      setTasks((prev) =>
+        prev.map((t) => (t.taskId === taskId ? { ...t, staffId: prevStaffId } : t)),
+      );
       const err = e as { response?: { data?: { error?: string } }; message?: string };
       toast.error(err.response?.data?.error || err.message || 'Erreur assignation');
     } finally {
@@ -277,20 +440,92 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
   };
 
   const onChipClick = (t: TeamTask, e: React.MouseEvent<HTMLElement>) => {
-    if (!t.staffId && t.taskId) {
+    if (dragMovedRef.current) {
+      dragMovedRef.current = false;
+      return;
+    }
+    if (t.taskId) {
       setAssignMenu({ anchor: e.currentTarget as HTMLElement, task: t });
       return;
     }
-    if (t.reservationId) navigate(`/reservations/${encodeURIComponent(t.reservationId)}`);
+    if (t.reservationId && !t.reservationId.startsWith('orphan-')) {
+      navigate(`/reservations/${encodeURIComponent(t.reservationId)}`);
+    }
+  };
+
+  const onChipDragStart = (t: TeamTask, e: React.DragEvent) => {
+    if (!t.taskId || t.done) {
+      e.preventDefault();
+      return;
+    }
+    dragMovedRef.current = false;
+    dragTaskRef.current = t;
+    setDragTaskId(t.taskId);
+    setDropDeniedStaffId(null);
+    e.dataTransfer.setData('text/task-id', t.taskId);
+    e.dataTransfer.setData('application/json', JSON.stringify(t));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const onStaffDragOver = (staffId: string, e: React.DragEvent) => {
+    e.preventDefault();
+    const dragTask = dragTaskRef.current;
+    const receiver = staff.find((s) => String(s._id) === String(staffId));
+    const allowed = Boolean(dragTask && receiver && staffCanReceiveTask(receiver, dragTask));
+    if (!allowed) {
+      e.dataTransfer.dropEffect = 'none';
+      setDropStaffId(null);
+      setDropDeniedStaffId(staffId);
+      return;
+    }
+    e.dataTransfer.dropEffect = 'move';
+    setDropDeniedStaffId(null);
+    setDropStaffId(staffId);
+  };
+
+  const onStaffDrop = (staffId: string, e: React.DragEvent) => {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData('application/json');
+    let task: TeamTask | undefined;
+    try {
+      task = raw ? (JSON.parse(raw) as TeamTask) : undefined;
+    } catch {
+      task = undefined;
+    }
+    const tid = e.dataTransfer.getData('text/task-id') || dragTaskId;
+    if (!task && tid) {
+      task = dragTaskRef.current?.taskId === tid
+        ? dragTaskRef.current
+        : filteredTasks.find((x) => x.taskId === tid);
+    }
+    if (!task?.taskId) {
+      clearDragState();
+      return;
+    }
+    const receiver = staff.find((s) => String(s._id) === String(staffId));
+    if (!receiver || !staffCanReceiveTask(receiver, task)) {
+      toast.error(`Pas de permission sur ${task.listingName || 'cette annonce'} pour ce staff`);
+      clearDragState();
+      return;
+    }
+    void handleAssign(staffId, task);
   };
 
   const renderChip = (t: TeamTask, i: number) => (
     <button
       key={`${t.taskId || t.reservationId}-${i}`}
       type="button"
-      className={`twv-chip twv-chip--${t.kind}${t.done ? ' twv-chip--done' : ''}${!t.staffId ? ' twv-chip--unassigned' : ''}`}
-      title={`${t.label} · ${t.listingName}${t.guestName ? ` · ${t.guestName}` : ''}${t.done ? ' · terminée' : ''}${!t.staffId ? ' — cliquer pour assigner' : ''}`}
+      draggable={Boolean(t.taskId) && !t.done}
+      className={`twv-chip twv-chip--${t.kind}${t.done ? ' twv-chip--done' : ''}${!t.staffId ? ' twv-chip--unassigned' : ''}${dragTaskId && t.taskId === dragTaskId ? ' twv-chip--dragging' : ''}`}
+      title={`${t.label} · ${t.listingName}${t.guestName ? ` · ${t.guestName}` : ''}${t.done ? ' · terminée' : ''}${t.taskId ? ' — glisser vers un staff pour assigner' : ''}`}
       onClick={(e) => onChipClick(t, e)}
+      onDragStart={(e) => onChipDragStart(t, e)}
+      onDrag={(e) => {
+        if (e.clientX !== 0 || e.clientY !== 0) dragMovedRef.current = true;
+      }}
+      onDragEnd={() => {
+        clearDragState();
+      }}
     >
       {t.time && <span className="twv-chip-time">{t.time} </span>}
       {t.label}
@@ -322,53 +557,122 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
     );
   };
 
-  const renderRow = (row: RowDef) => (
-    <tr key={row.key} className={`twv-row${row.unassigned ? ' twv-row--unassigned' : ''}${!row.unassigned && row.total === 0 ? ' twv-row--idle' : ''}`}>
-      <td className="twv-staff-cell">
-        {row.unassigned ? (
-          <div className="twv-staff">
-            <span className="twv-avatar twv-avatar--warn">!</span>
-            <span>
-              <span className="twv-staff-name twv-staff-name--warn">À assigner</span>
-              <span className="twv-staff-sub">{row.total} tâche{row.total > 1 ? 's' : ''} sans staff</span>
-            </span>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="twv-staff twv-staff--btn"
-            onClick={() => row.staff && onOpenStaff?.(String(row.staff._id))}
-            title="Ouvrir la fiche dans l'annuaire"
-          >
-            <span className={`twv-avatar twv-av-${row.staff?.avatarColor || 1}`}>
-              {(row.staff?.fullName || '?')
-                .split(/\s+/)
-                .map((p) => p[0])
-                .slice(0, 2)
-                .join('')
-                .toUpperCase()}
-            </span>
-            <span>
-              <span className="twv-staff-name">{row.staff?.fullName}</span>
-              <span className="twv-staff-sub">
-                {row.total > 0 ? `${row.total} sur 15 j` : 'Libre'}
+  const dragTask = useMemo(() => {
+    if (!dragTaskId) return null;
+    return (
+      tasks.find((t) => t.taskId === dragTaskId) ||
+      dragTaskRef.current ||
+      null
+    );
+  }, [dragTaskId, tasks]);
+
+  const renderRow = (row: RowDef) => {
+    const sid = row.staff ? String(row.staff._id) : '';
+    const canReceive =
+      !dragTask || !row.staff ? true : staffCanReceiveTask(row.staff, dragTask);
+    const isDropTarget = Boolean(sid && dropStaffId === sid);
+    const isDropDenied = Boolean(sid && dropDeniedStaffId === sid);
+    const dimWhileDrag = Boolean(dragTask && row.staff && !canReceive);
+    return (
+      <tr
+        key={row.key}
+        className={`twv-row${row.unassigned ? ' twv-row--unassigned' : ''}${!row.unassigned && row.total === 0 ? ' twv-row--idle' : ''}${isDropTarget ? ' twv-row--drop' : ''}${isDropDenied ? ' twv-row--drop-denied' : ''}${dimWhileDrag ? ' twv-row--no-access' : ''}`}
+        onDragOver={sid ? (e) => onStaffDragOver(sid, e) : undefined}
+        onDragLeave={
+          sid
+            ? () => {
+                setDropStaffId((cur) => (cur === sid ? null : cur));
+                setDropDeniedStaffId((cur) => (cur === sid ? null : cur));
+              }
+            : undefined
+        }
+        onDrop={sid ? (e) => onStaffDrop(sid, e) : undefined}
+      >
+        <td className="twv-staff-cell">
+          {row.unassigned ? (
+            <div className="twv-staff">
+              <span className="twv-avatar twv-avatar--warn">!</span>
+              <span>
+                <span className="twv-staff-name twv-staff-name--warn">À assigner</span>
+                <span className="twv-staff-sub">{row.total} tâche{row.total > 1 ? 's' : ''} sans staff</span>
               </span>
-            </span>
-          </button>
-        )}
-      </td>
-      {dayKeys.map((dk) => (
-        <td key={dk} className={`twv-day-cell${dk === todayKey ? ' twv-today' : ''}`}>
-          {renderCell(row, dk)}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="twv-staff twv-staff--btn"
+              onClick={() => row.staff && onOpenStaff?.(String(row.staff._id))}
+              title={
+                dimWhileDrag
+                  ? 'Pas de permission sur cette annonce'
+                  : 'Glisser une tâche ici pour assigner · clic = annuaire'
+              }
+            >
+              <span className={`twv-avatar twv-av-${row.staff?.avatarColor || 1}`}>
+                {(row.staff?.fullName || '?')
+                  .split(/\s+/)
+                  .map((p) => p[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase()}
+              </span>
+              <span>
+                <span className="twv-staff-name">{row.staff?.fullName}</span>
+                <span className="twv-staff-sub">
+                  {dimWhileDrag
+                    ? 'Sans accès listing'
+                    : row.total > 0
+                      ? `${row.total} tâche${row.total > 1 ? 's' : ''}`
+                      : listingFilterId || cityFilterId
+                        ? 'Autorisé · libre'
+                        : 'Libre'}
+                </span>
+              </span>
+            </button>
+          )}
         </td>
-      ))}
-    </tr>
-  );
+        {dayKeys.map((dk) => (
+          <td key={dk} className={`twv-day-cell${dk === todayKey ? ' twv-today' : ''}`}>
+            {renderCell(row, dk)}
+          </td>
+        ))}
+      </tr>
+    );
+  };
 
   return (
     <div className="twv-root">
       <div className="twv-toolbar">
         <div className="twv-toolbar-left">
+          <label className="twv-listing-filter">
+            <span>Ville</span>
+            <select
+              value={cityFilterId}
+              onChange={(e) => {
+                setCityFilterId(e.target.value);
+                setListingFilterId('');
+              }}
+            >
+              <option value="">Toutes les villes</option>
+              {cityOptions.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="twv-listing-filter">
+            <span>Annonce</span>
+            <select
+              value={listingFilterId}
+              onChange={(e) => setListingFilterId(e.target.value)}
+            >
+              <option value="">
+                {cityFilterId ? 'Toutes les annonces de la ville' : 'Toutes les annonces'}
+              </option>
+              {listingOptions.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          </label>
           <span className="twv-range">
             {format(days[0], 'd MMM', { locale: fr })} → {format(days[WINDOW_DAYS - 1], 'd MMM', { locale: fr })}
           </span>
@@ -377,14 +681,66 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
             {unassignedTotal > 0 && (
               <span className="twv-summary-warn"> · {unassignedTotal} à assigner</span>
             )}
+            {(listingFilterId || cityFilterId) && (
+              <span> · {eligibleStaff.length} staff autorisé{eligibleStaff.length > 1 ? 's' : ''}</span>
+            )}
           </span>
         </div>
         <div className="twv-toolbar-nav">
-          <button type="button" onClick={() => setStartDate((d) => addDays(d, -7))} aria-label="Semaine précédente">‹</button>
+          <button type="button" onClick={() => setStartDate((d) => addDays(d, -7))} aria-label="7 jours précédents">‹</button>
           <button type="button" onClick={() => setStartDate(startOfDay(new Date()))}>Aujourd'hui</button>
-          <button type="button" onClick={() => setStartDate((d) => addDays(d, 7))} aria-label="Semaine suivante">›</button>
+          <button type="button" onClick={() => setStartDate((d) => addDays(d, 7))} aria-label="7 jours suivants">›</button>
         </div>
       </div>
+
+      {listingFilterId || cityFilterId ? (
+        <div className="twv-staff-strip">
+          <span className="twv-staff-strip-label">
+            Staff · {scopeLabel || 'filtre'}
+          </span>
+          {eligibleStaff.length === 0 ? (
+            <span className="twv-staff-strip-empty">
+              Aucun staff avec permission sur {listingFilterId ? 'cette annonce' : 'cette ville'}
+            </span>
+          ) : (
+            eligibleStaff.map((s) => {
+              const sid = String(s._id);
+              const canReceive = !dragTask || staffCanReceiveTask(s, dragTask);
+              const dim = Boolean(dragTask && !canReceive);
+              return (
+              <button
+                key={s._id}
+                type="button"
+                className={`twv-staff-pill${dropStaffId === sid ? ' twv-staff-pill--drop' : ''}${dropDeniedStaffId === sid ? ' twv-staff-pill--drop-denied' : ''}${dim ? ' twv-staff-pill--no-access' : ''}`}
+                title={dim ? 'Pas de permission sur cette annonce' : 'Déposer une tâche ici pour assigner'}
+                onClick={() => onOpenStaff?.(sid)}
+                onDragOver={(e) => onStaffDragOver(sid, e)}
+                onDragLeave={() => {
+                  setDropStaffId((cur) => (cur === sid ? null : cur));
+                  setDropDeniedStaffId((cur) => (cur === sid ? null : cur));
+                }}
+                onDrop={(e) => onStaffDrop(sid, e)}
+              >
+                <span className={`twv-avatar twv-av-${s.avatarColor || 1}`}>
+                  {(s.fullName || '?')
+                    .split(/\s+/)
+                    .map((p) => p[0])
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase()}
+                </span>
+                {s.fullName}
+              </button>
+              );
+            })
+          )}
+          <span className="twv-staff-strip-hint">Glisser une tâche → staff pour assigner / réassigner</span>
+        </div>
+      ) : (
+        <div className="twv-staff-strip twv-staff-strip--hint">
+          Filtrez par ville ou annonce (accès ville = toutes les annonces de la ville) · glissez une tâche sur un staff
+        </div>
+      )}
 
       {error && <div className="twv-error">{error}</div>}
       {loading && <div className="twv-loading">Chargement du planning équipe…</div>}
@@ -416,7 +772,9 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
               {sections.length === 0 && (
                 <tr>
                   <td colSpan={WINDOW_DAYS + 1} className="twv-empty">
-                    Aucun staff — créez votre équipe dans l'onglet Annuaire.
+                    {listingFilterId || cityFilterId
+                      ? 'Aucun staff autorisé ni tâche pour ce filtre sur la période.'
+                      : "Aucun staff — créez votre équipe dans l'onglet Annuaire."}
                   </td>
                 </tr>
               )}
@@ -442,7 +800,11 @@ export default function TeamWeekView({ staff, filterOwnerId, ownerOptions, onOpe
           </MenuItem>
         ))}
         {assignCandidates.length === 0 && (
-          <MenuItem disabled dense>Aucun staff disponible pour ce PM</MenuItem>
+          <MenuItem disabled dense>
+            {listingFilterId || cityFilterId || assignMenu?.task.listingId
+              ? 'Aucun staff autorisé pour ce filtre'
+              : 'Aucun staff disponible pour ce PM'}
+          </MenuItem>
         )}
       </Menu>
     </div>

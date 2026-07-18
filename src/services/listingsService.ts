@@ -383,6 +383,8 @@ function normalizeListingSummary(source: unknown): ListingSummary {
     occupancyStatus: pickFirstString(record, ['occupancyStatus']),
     cleanlinessStatus_v2: pickFirstString(record, ['cleanlinessStatus_v2']),
     cleanlinessEmergency: record.cleanlinessEmergency === true ? true : undefined,
+    // Présent aussi dans raw — exposé pour filtres planning / permissions ville
+    cityId: pickFirstString(record, ['cityId']) || undefined,
     raw: record,
   };
 }

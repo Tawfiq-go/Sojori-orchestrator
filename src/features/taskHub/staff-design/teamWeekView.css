@@ -17,8 +17,113 @@
 
 .twv-toolbar-left {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.twv-listing-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7a756c;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.twv-listing-filter select {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  font-size: 13px;
+  color: #1a1611;
+  border: 1px solid rgba(26, 22, 17, 0.14);
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: #fff;
+  max-width: 240px;
+  cursor: pointer;
+}
+
+.twv-staff-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f6f5f1;
+  border: 1px solid rgba(26, 22, 17, 0.08);
+}
+
+.twv-staff-strip--hint {
+  font-size: 12px;
+  color: #7a756c;
+}
+
+.twv-staff-strip-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9a948a;
+  margin-right: 4px;
+}
+
+.twv-staff-strip-empty {
+  font-size: 12px;
+  color: #ba7517;
+  font-weight: 600;
+}
+
+.twv-staff-strip-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: #9a948a;
+}
+
+.twv-staff-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(26, 22, 17, 0.12);
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 10px 4px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a1611;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.twv-staff-pill .twv-avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 9px;
+}
+
+.twv-staff-pill--drop,
+.twv-row--drop {
+  outline: 2px solid #b8851a;
+  outline-offset: -1px;
+  background: rgba(184, 133, 26, 0.08);
+}
+
+.twv-staff-pill--drop-denied,
+.twv-row--drop-denied {
+  outline: 2px solid #c44;
+  outline-offset: -1px;
+  background: rgba(204, 68, 68, 0.06);
+}
+
+.twv-staff-pill--no-access,
+.twv-row--no-access {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .twv-range {
@@ -71,12 +176,15 @@
 
 .twv-scroll {
   overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .twv-table {
   border-collapse: collapse;
-  width: 100%;
-  min-width: 960px;
+  width: max-content;
+  min-width: 100%;
   table-layout: fixed;
 }
 
@@ -90,7 +198,9 @@
 }
 
 .twv-day-head {
-  width: auto;
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
 }
 
 .twv-day-dow {
@@ -217,6 +327,15 @@ th.twv-today .twv-day-num {
 .twv-day-cell {
   vertical-align: top;
   padding: 4px 3px;
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+}
+
+.twv-row--drop .twv-staff-cell,
+.twv-row--drop-denied .twv-staff-cell,
+.twv-row--unassigned .twv-staff-cell {
+  z-index: 3;
 }
 
 .twv-chip {
@@ -232,8 +351,16 @@ th.twv-today .twv-day-num {
   font-size: 12px;
   line-height: 1.35;
   color: #1a1611;
-  cursor: pointer;
+  cursor: grab;
   font-family: inherit;
+}
+
+.twv-chip:active {
+  cursor: grabbing;
+}
+
+.twv-chip--dragging {
+  opacity: 0.45;
 }
 
 .twv-chip:hover {

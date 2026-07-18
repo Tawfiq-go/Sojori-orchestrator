@@ -34,8 +34,34 @@ function hubTabFromParam(tab: string | null): HubTab {
   return 'planning';
 }
 
-type ListingWithOwner = { id: string; name: string; ownerId?: string; ownerName?: string; cityId?: string };
+type ListingWithOwner = {
+  id: string;
+  name: string;
+  ownerId?: string;
+  ownerName?: string;
+  cityId?: string;
+  city?: string;
+};
 type CityOption = { id: string; name: string };
+
+function normalizeCityLabel(name: string): string {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function resolveListingCityId(
+  listing: { cityId?: string; city?: string },
+  cities: CityOption[],
+): string | undefined {
+  if (listing.cityId) return String(listing.cityId);
+  const name = normalizeCityLabel(listing.city || '');
+  if (!name) return undefined;
+  const hit = cities.find((c) => normalizeCityLabel(c.name) === name);
+  return hit?.id;
+}
 
 function resolveStaffOwnerIdForSave(
   sessionOwnerId: string | undefined,
@@ -114,13 +140,18 @@ function TasksStaffFulltaskPageInner() {
         filterOwnerId: filterOwnerId,
       });
       let mapped = (response.data?.items || [])
-        .map((l) => ({
-          id: String(l.id),
-          name: String(l.name || 'Sans nom'),
-          ownerId: normalizeOwnerId(l.ownerId),
-          ownerName: l.ownerName,
-          cityId: l.cityId ? String(l.cityId) : undefined,
-        }))
+        .map((l) => {
+          const raw = (l as { raw?: Record<string, unknown> }).raw || {};
+          const cityIdRaw = l.cityId || raw.cityId;
+          return {
+            id: String(l.id),
+            name: String(l.name || 'Sans nom'),
+            ownerId: normalizeOwnerId(l.ownerId),
+            ownerName: l.ownerName,
+            city: String(l.city || raw.city || '').trim() || undefined,
+            cityId: cityIdRaw ? String(cityIdRaw) : undefined,
+          };
+        })
         .filter((l) => l.id && l.id !== 'undefined');
       setListings(mapped);
     } catch (e: unknown) {
@@ -194,6 +225,15 @@ function TasksStaffFulltaskPageInner() {
     void loadListings();
     void loadCities();
   }, [loadListings, loadCities]);
+
+  const listingsForPlanning = useMemo(
+    () =>
+      listings.map((l) => ({
+        ...l,
+        cityId: resolveListingCityId(l, cities) || l.cityId,
+      })),
+    [listings, cities],
+  );
 
   useEffect(() => {
     void loadStaff();
@@ -272,6 +312,8 @@ function TasksStaffFulltaskPageInner() {
         {hubTab === 'planning' && (
           <TeamWeekView
             staff={staff}
+            listings={listingsForPlanning}
+            cities={cities}
             filterOwnerId={filterOwnerId}
             ownerOptions={ownerOptions}
             onOpenStaff={() => selectTab('equipe')}
