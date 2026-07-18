@@ -21,6 +21,10 @@ import {
   type ListingEstimateDiffDto,
   type PricingAuditRowDto,
 } from '../../../services/dynamicPricingApi';
+import {
+  nextMarketSnapshotRun,
+  nextNightlyPropagationRun,
+} from '../utils/nextCronRun';
 
 /**
  * Parcours Express :
@@ -146,16 +150,31 @@ function CompactToggle({
 
 function LastRunLine({
   when,
+  next,
   chips,
 }: {
   when: string | null;
+  next?: string | null;
   chips: ReactNode;
 }) {
   return (
     <Box sx={{ mt: 0.75 }}>
-      <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 0.5 }}>
-        Dernière : <Box component="span" sx={{ fontWeight: 700, color: T.text2 }}>{when ?? 'jamais'}</Box>
+      <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 0.25 }}>
+        Dernière :{' '}
+        <Box component="span" sx={{ fontWeight: 700, color: T.text2 }}>
+          {when ?? 'jamais'}
+        </Box>
       </Typography>
+      {next ? (
+        <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 0.5 }}>
+          Prochaine :{' '}
+          <Box component="span" sx={{ fontWeight: 700, color: T.goldDeep }}>
+            {next}
+          </Box>
+        </Typography>
+      ) : (
+        <Box sx={{ mb: 0.5 }} />
+      )}
       <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>{chips}</Stack>
     </Box>
   );
@@ -348,6 +367,18 @@ export default function BienExpressBar({
               ? `Dernière estimation · ${fmtDate(snapshotAt)}`
               : 'Pas d’estimation — actualisez sur cette fiche'}
           </Typography>
+          <Typography
+            sx={{
+              mt: 0.35,
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: T.goldDeep,
+              fontFamily: '"Geist Mono", monospace',
+            }}
+          >
+            Prochaine auto · {fmtDate(nextMarketSnapshotRun().toISOString())}
+            {' · lun. & jeu.'}
+          </Typography>
         </Box>
       </Stack>
 
@@ -375,6 +406,7 @@ export default function BienExpressBar({
           />
           <LastRunLine
             when={fmtDate(lastAutoSnapshotAt)}
+            next={autoSnapshot ? fmtDate(nextMarketSnapshotRun().toISOString()) : 'désactivée'}
             chips={estimateChips}
           />
 
@@ -389,6 +421,7 @@ export default function BienExpressBar({
           />
           <LastRunLine
             when={fmtDate(lastAutoAudit?.appliedAt)}
+            next={autoPropagation ? fmtDate(nextNightlyPropagationRun().toISOString()) : 'désactivée'}
             chips={calendarChips(autoImpact)}
           />
         </Box>
