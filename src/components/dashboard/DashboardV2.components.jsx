@@ -706,6 +706,7 @@ const OWNER_QUICK_ACTIONS = [
   { emoji: '🏨', label: 'Messages OTA', to: '/communications?section=guest&tab=ota' },
   { emoji: '🎛', label: 'Plans d’orchestration', to: '/orchestration/plans' },
   { emoji: '☀️', label: 'Plan de journée', to: '/orchestration/day-plan' },
+  { emoji: '🏠', label: 'Annonces', to: '/listings' },
   { emoji: '⭐', label: 'Avis voyageurs', to: '/communications?section=guest&tab=reviews' },
 ];
 
