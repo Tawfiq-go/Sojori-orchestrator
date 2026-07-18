@@ -337,6 +337,24 @@ export function defaultListingRailCapabilityKey(): string {
   return row?.key ?? 'cleaning_free';
 }
 
+/** Tâches créées à la demande client — pas de relances voyageur (hardcodé N/A). */
+export const ON_DEMAND_TASK_TYPES = [
+  'cleaning_paid',
+  'transport',
+  'groceries',
+  'concierge',
+  'support',
+  'service_client',
+] as const
+
+export function isOnDemandCapability(
+  def: Pick<CapabilityDefinition, 'taskType' | 'key'> | null | undefined,
+): boolean {
+  if (!def) return false
+  const t = def.taskType ?? def.key
+  return (ON_DEMAND_TASK_TYPES as readonly string[]).includes(String(t))
+}
+
 export function defaultExecutionState(): import('./types').CapabilityExecutionState {
   return {
     clientReminders: false,
