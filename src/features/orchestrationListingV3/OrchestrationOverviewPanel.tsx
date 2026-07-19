@@ -281,9 +281,19 @@ function parseTimingState(av: Availability, fallbackAnchor: TimingAnchor): {
   }
   const fromRef = String(av?.from?.reference ?? '');
   const toRef = String(av?.to?.reference ?? '');
+  /**
+   * Ancre des J-n de DÉBUT : prioriser `from`.
+   * `after_checkout` (Fin / J+1) = toujours « jusqu’au départ » et ne doit PAS basculer
+   * l’ancre vers départ — sinon Accès (J-3 avant arrivée → fin séjour) est relu comme départ.
+   */
   let anchor: TimingAnchor = fallbackAnchor;
-  if (fromRef.includes('checkout') || toRef.includes('checkout')) anchor = 'checkout';
-  else if (fromRef.includes('checkin') || toRef.includes('checkin')) anchor = 'checkin';
+  if (fromRef.includes('checkin')) anchor = 'checkin';
+  else if (fromRef.includes('checkout')) anchor = 'checkout';
+  else if (toRef === 'before_checkin' || toRef === 'on_checkin_day' || toRef === 'after_checkin') {
+    anchor = 'checkin';
+  } else if (toRef === 'before_checkout' || toRef === 'on_checkout_day') {
+    anchor = 'checkout';
+  }
 
   let start: 'toujours' | 'resa' | number = 'resa';
   if (av?.type === 'after_booking_confirmed' || (!av?.from && (av?.type === 'time_window' || av?.type === 'conditional_and_time'))) {
@@ -1396,8 +1406,9 @@ export default function OrchestrationOverviewPanel({
             </>
           )}
           <Typography sx={{ fontSize: 11, color: V3.t4 }}>
-            J-n = n jours avant {anchorLabel}. J0 = le jour. Fin = jusqu’au départ. J+1 = lendemain du
-            départ. WhatsApp utilise ces bornes pour afficher / masquer l’option menu.
+            J-n début = n jours avant {anchorLabel}. J0 = le jour d&apos;{anchorLabel}. « Fin (départ) »
+            = visible jusqu&apos;au départ (même si le début est relatif à l&apos;arrivée). J+1 = lendemain
+            du départ. WhatsApp utilise ces bornes pour afficher / masquer l&apos;option menu.
           </Typography>
           <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>
             CONDITIONS REQUISES (toutes — ET)
@@ -1729,6 +1740,11 @@ export default function OrchestrationOverviewPanel({
         <Box sx={{ p: 1.5, maxWidth: editor.kind === 'assign' ? 440 : 380 }}>
           <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t, mb: 1 }}>
             {def.emoji} {def.label}
+            {editor.kind === 'staffRem' ? (
+              <Box component="span" sx={{ ml: 0.75, fontWeight: 700, color: V3.t3, fontSize: 11 }}>
+                · Rappels staff
+              </Box>
+            ) : null}
           </Typography>
           {body}
         </Box>
@@ -2010,10 +2026,10 @@ export default function OrchestrationOverviewPanel({
           sx={{
             display: 'grid',
             gridTemplateColumns:
-              '36px minmax(140px,1.25fr) 44px minmax(150px,1.3fr) minmax(110px,1fr) minmax(100px,0.95fr) 0.8fr 0.95fr 0.7fr 88px',
+              '36px minmax(140px,1.25fr) 44px minmax(150px,1.3fr) minmax(110px,1fr) minmax(100px,0.95fr) 0.8fr 0.95fr 0.75fr 0.7fr 88px',
             gap: 0.75,
             alignItems: 'center',
-            minWidth: 1120,
+            minWidth: 1240,
           }}
         >
           <Typography sx={head}> </Typography>
@@ -2037,6 +2053,9 @@ export default function OrchestrationOverviewPanel({
           </Typography>
           <Typography sx={head} title="Fenêtre d’assignation équipe + auto-accept">
             Assignation
+          </Typography>
+          <Typography sx={head} title="Notification pour rappeler le staff à J / heure (pas l’assignation)">
+            Rappels staff
           </Typography>
           <Typography sx={head} title="Alerte admin si non traité à temps">
             Escalade
@@ -2215,6 +2234,14 @@ export default function OrchestrationOverviewPanel({
                   <Typography
                     component="div"
                     sx={r.on && r.hasTask ? editCell : cell}
+                    onClick={r.on && r.hasTask ? open('staffRem', r.key) : undefined}
+                    title="Rappels staff — notification équipe (jour + heure)"
+                  >
+                    {r.staffReminder}
+                  </Typography>
+                  <Typography
+                    component="div"
+                    sx={r.on && r.hasTask ? editCell : cell}
                     onClick={r.on && r.hasTask ? open('escalation', r.key) : undefined}
                     title="Escalade admin si non traité"
                   >
@@ -2276,6 +2303,7 @@ export default function OrchestrationOverviewPanel({
           <Typography sx={head} title="Référence + délai + heure d’envoi">
             Quand envoyer
           </Typography>
+          <Typography sx={{ ...head, color: V3.t4 }}>—</Typography>
           <Typography sx={{ ...head, color: V3.t4 }}>—</Typography>
           <Typography sx={{ ...head, color: V3.t4 }}>—</Typography>
           <Typography sx={{ ...head, color: V3.t4 }}>—</Typography>
@@ -2344,6 +2372,7 @@ export default function OrchestrationOverviewPanel({
                   >
                     {messageWhenHuman(m)}
                   </Typography>
+                  <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
                   <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
                   <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
                   <Typography sx={{ ...cell, color: V3.t4 }}>—</Typography>
