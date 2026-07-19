@@ -5,6 +5,7 @@ import * as Yup from 'yup';
 import { X, User } from 'lucide-react';
 import { createOwner, getCities } from '../services/serverApi.task';
 import { useTranslation } from 'react-i18next';
+import { seedOwnerFromAdminTemplate } from '../../listing/utils/syncAdminTemplateToOwner';
 const validationSchema = t => Yup.object().shape({
   elevatedAuthEmail: Yup.string().email(t('Invalid email')).required(t('ownerCreate_elevated_email_required')),
   elevatedAuthPassword: Yup.string().required(t('ownerCreate_elevated_password_required')),
@@ -67,6 +68,15 @@ const CreateOwnerDialog = ({
         password: values.elevatedAuthPassword
       });
       if (response.data) {
+        const payload = response.data?.data ?? response.data;
+        const ownerId = String(payload?.accountId ?? payload?._id ?? payload?.id ?? '');
+        if (ownerId) {
+          try {
+            await seedOwnerFromAdminTemplate(ownerId);
+          } catch (seedErr) {
+            console.warn('Template Admin seed after create failed', seedErr);
+          }
+        }
         onOwnerCreated(response.data);
         onClose();
       }

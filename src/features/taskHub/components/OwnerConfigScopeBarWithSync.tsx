@@ -9,7 +9,10 @@ import { useState, useEffect } from 'react';
 import { useAdminOwnerFilter } from '../../../context/AdminOwnerFilterContext';
 import { getOwnerListLabel } from '../../../utils/ownerDisplay.utils';
 import { autocompleteOptionLiProps } from '../../../utils/autocompleteOptionLiProps';
-import { ORCHESTRATION_ADMIN_OWNER_ID, ORCHESTRATION_ADMIN_EMAIL } from '../../../constants/orchestrationAdmin';
+import {
+  ORCHESTRATION_ADMIN_OWNER_ID,
+  isOrchestrationAdminOwnerRow,
+} from '../../../constants/orchestrationAdmin';
 import type { FulltaskConfigOwnerScope } from '../../../hooks/useFulltaskConfigOwner';
 import { getOwnersAllPages } from '../../staff/services/serverApi.task';
 
@@ -50,14 +53,8 @@ type Props = FulltaskConfigOwnerScope & {
 const ADMIN_SENTINEL = {
   __admin: true,
   _id: ORCHESTRATION_ADMIN_OWNER_ID,
-  label: 'Admin (template global)',
+  label: 'Template Admin',
 };
-
-function isAdminOwnerRow(owner: { _id?: string; id?: string; email?: string }): boolean {
-  const id = String(owner?._id ?? owner?.id ?? '');
-  if (id === ORCHESTRATION_ADMIN_OWNER_ID) return true;
-  return (owner.email || '').toLowerCase().trim() === ORCHESTRATION_ADMIN_EMAIL;
-}
 const checkboxIcon = <CheckBoxOutlineBlankIcon fontSize="small" />;
 const checkboxCheckedIcon = <CheckBoxIcon fontSize="small" />;
 
@@ -466,7 +463,7 @@ export default function OwnerConfigScopeBarWithSync({
     ...(owners || []).filter((o) => {
       const id = o?._id ?? o?.id;
       if (id == null) return false;
-      return !isAdminOwnerRow(o);
+      return !isOrchestrationAdminOwnerRow(o);
     }),
   ];
 

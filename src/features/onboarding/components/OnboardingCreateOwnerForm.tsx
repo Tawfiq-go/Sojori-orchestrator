@@ -16,10 +16,7 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAdminOwnerFilter } from '../../../context/AdminOwnerFilterContext';
 import { createOwnerAccount, getCities } from '../../../services/teamDashboardApi';
-import {
-  defaultActivationsAllOff,
-  initializeOwnerOrchestrationFromActivations,
-} from '../../orchestrationListingV3/ownerCapabilityActivation';
+import { seedOwnerFromAdminTemplate } from '../../listing/utils/syncAdminTemplateToOwner';
 import { WHATSAPP_AI_TIER_OPTIONS, tierOptionDropdownLabel } from '../../../constants/whatsappAiTier';
 import { applyOwnerIdToSearchParams } from '../onboardingOwnerUrl';
 
@@ -131,9 +128,14 @@ export function OnboardingCreateOwnerForm({ onCreated }: Props) {
       }
 
       try {
-        await initializeOwnerOrchestrationFromActivations(accountId, defaultActivationsAllOff());
+        const seed = await seedOwnerFromAdminTemplate(accountId);
+        if (!seed.ok) {
+          console.warn('[onboarding] seed Template Admin partiel', seed.lines);
+          toast.warning('PM créé — copie Template Admin partielle (voir console)');
+        }
       } catch (initErr) {
-        console.warn('[onboarding] orchestration init after owner create', initErr);
+        console.warn('[onboarding] orchestration seed after owner create', initErr);
+        toast.warning('PM créé — Template Admin non copié automatiquement');
       }
 
       const ruOwnerId = res.data?.ruOwnerId ?? null;
@@ -173,7 +175,8 @@ export function OnboardingCreateOwnerForm({ onCreated }: Props) {
         Même flux que{' '}
         <strong>Équipe & Rôles → Property managers → Créer</strong>. Si le channel manager est{' '}
         <strong>RU</strong>, srv-user génère un mot de passe RU et appelle srv-channels pour créer le
-        compte Rentals United (<code>ruOwnerId</code>).
+        compte Rentals United (<code>ruOwnerId</code>). À la création, le{' '}
+        <strong>Template Admin</strong> (modèle orchestration) est copié automatiquement sur le PM.
       </Alert>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>

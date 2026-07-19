@@ -1,10 +1,7 @@
 import { useMemo } from 'react';
 import AdminPanelSettingsOutlined from '@mui/icons-material/AdminPanelSettingsOutlined';
 import { useAdminOwnerFilter } from '../../../context/AdminOwnerFilterContext';
-import {
-  ORCHESTRATION_ADMIN_EMAIL,
-  ORCHESTRATION_ADMIN_OWNER_ID,
-} from '../../../constants/orchestrationAdmin';
+import { isOrchestrationAdminOwnerRow } from '../../../constants/orchestrationAdmin';
 import { getOwnerListLabel } from '../../../utils/ownerDisplay.utils';
 import './orchDesign.css';
 
@@ -15,12 +12,6 @@ type Props = {
   onChange: (scope: string) => void;
   ownerConfigStatus?: Record<string, OwnerConfigTabStatus>;
 };
-
-function isAdminOwnerRow(owner: { _id?: string; id?: string; email?: string }): boolean {
-  const id = String(owner?._id ?? owner?.id ?? '');
-  if (id === ORCHESTRATION_ADMIN_OWNER_ID) return true;
-  return (owner.email || '').toLowerCase().trim() === ORCHESTRATION_ADMIN_EMAIL;
-}
 
 function ownerInitial(label: string): string {
   const t = label.trim();
@@ -60,7 +51,7 @@ export default function OrchestrationOwnerScopeTabs({
       (owners || []).filter((o) => {
         const id = o?._id ?? o?.id;
         if (id == null) return false;
-        return !isAdminOwnerRow(o);
+        return !isOrchestrationAdminOwnerRow(o);
       }),
     [owners],
   );

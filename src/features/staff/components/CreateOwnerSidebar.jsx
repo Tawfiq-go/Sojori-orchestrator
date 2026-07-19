@@ -7,11 +7,7 @@ import { User, Users } from 'lucide-react';
 import { createOwner, getCities } from '../services/serverApi.task';
 import { useTranslation } from 'react-i18next';
 import { WHATSAPP_AI_TIER_OPTIONS, tierOptionDropdownLabel } from '../../../constants/whatsappAiTier';
-import OwnerCapabilitiesActivationPanel from '../../orchestrationListingV3/OwnerCapabilitiesActivationPanel';
-import {
-  defaultActivationsAllOff,
-  initializeOwnerOrchestrationFromActivations,
-} from '../../orchestrationListingV3/ownerCapabilityActivation';
+import { seedOwnerFromAdminTemplate } from '../../listing/utils/syncAdminTemplateToOwner';
 import SidePanel from './SidePanel';
 const SOJORI_COLORS = {
   primary: '#E6B022',
@@ -78,10 +74,6 @@ const CreateOwnerSidebar = ({
   } = useTranslation('common');
   const [cities, setCities] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
-  const [serviceActivations, setServiceActivations] = useState(() => defaultActivationsAllOff());
-  useEffect(() => {
-    if (open) setServiceActivations(defaultActivationsAllOff());
-  }, [open]);
   useEffect(() => {
     const fetchCities = async () => {
       if (open) {
@@ -124,9 +116,9 @@ const CreateOwnerSidebar = ({
         const ownerId = String(payload?.accountId ?? payload?._id ?? payload?.id ?? '');
         if (ownerId) {
           try {
-            await initializeOwnerOrchestrationFromActivations(ownerId, serviceActivations);
+            await seedOwnerFromAdminTemplate(ownerId);
           } catch (initError) {
-            console.warn('Owner orchestration init failed', initError);
+            console.warn('Owner orchestration seed from Template Admin failed', initError);
           }
         }
         onOwnerCreated(response.data);
@@ -186,15 +178,10 @@ const CreateOwnerSidebar = ({
                     <Box sx={{
         p: 3
       }}>
-                        <OwnerCapabilitiesActivationPanel
-                          ownerKey=""
-                          rows={[]}
-                          orchestrationDoc={null}
-                          compact
-                          value={serviceActivations}
-                          onChange={setServiceActivations}
-                          disabled={isSubmitting}
-                        />
+                        <Alert severity="info" sx={{ mb: 2, fontSize: 13 }}>
+                          À la création, le <strong>Template Admin</strong> (modèle orchestration) est
+                          copié automatiquement sur ce property manager.
+                        </Alert>
                         <Form id="owner-form" className="space-y-4">
                                     {errors.submit ? <Alert severity="error" sx={{ mb: 2 }}>{errors.submit}</Alert> : null}
                                     <div style={{
