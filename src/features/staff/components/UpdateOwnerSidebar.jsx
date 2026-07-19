@@ -38,7 +38,6 @@ import { WHATSAPP_AI_TIER_OPTIONS, tierOptionDropdownLabel } from '../../../cons
 import SearchableSelect from './SearchableSelect';
 import { useChannelsFillCompanyPickers } from '../hooks/useChannelsFillCompanyPickers';
 import { sortCurrenciesByOrderedCodes } from '../utils/currencySort';
-import OwnerCapabilitiesActivationPanel from '../../orchestrationListingV3/OwnerCapabilitiesActivationPanel';
 import FillCompanyFormFields from './FillCompanyFormFields';
 import { CompteFieldLabel, RuFieldBadgeLegendNative } from './RuFieldBadge';
 import {
@@ -83,10 +82,7 @@ import OwnerFormCollapsible from './OwnerFormCollapsible';
 import PmMissingFieldsBanner from './PmMissingFieldsBanner';
 import { parseOwnerPasswordLinkResponse } from '../utils/ownerPasswordLinkFeedback';
 import { logPmMail } from '../../../utils/ownerMailDebug';
-import {
-  defaultActivationsAllOff,
-  initializeOwnerOrchestrationFromActivations,
-} from '../../orchestrationListingV3/ownerCapabilityActivation';
+import { seedOwnerFromAdminTemplate } from '../../listing/utils/syncAdminTemplateToOwner';
 import '../../taskHub/staff-design/staffDesign.css';
 import './ownerFormDrawer.css';
 
@@ -404,7 +400,6 @@ const UpdateOwnerSidebar = ({
   const [activeTab, setActiveTab] = useState('compte');
   const drawerRef = useRef(null);
   const formikRef = useRef(null);
-  const [serviceActivations, setServiceActivations] = useState(() => defaultActivationsAllOff());
   const [cities, setCities] = useState([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [currencies, setCurrencies] = useState([]);
@@ -537,10 +532,6 @@ const UpdateOwnerSidebar = ({
     toast.error(mapped.message);
     return true;
   };
-
-  useEffect(() => {
-    if (open && isCreate) setServiceActivations(defaultActivationsAllOff());
-  }, [open, isCreate]);
 
   useEffect(() => {
     if (open && !isCreate && owner) {
@@ -1043,9 +1034,9 @@ const UpdateOwnerSidebar = ({
 
       if (isCreate) {
         try {
-          await initializeOwnerOrchestrationFromActivations(accountId, serviceActivations);
+          await seedOwnerFromAdminTemplate(accountId);
         } catch (initErr) {
-          console.warn('[activateOwner] orchestration init', initErr);
+          console.warn('[activateOwner] Template Admin seed', initErr);
         }
       }
 
@@ -2359,21 +2350,11 @@ const UpdateOwnerSidebar = ({
                   active={activeTab}
                   id="orchestration"
                   render={() => (
-                    <>
-                      <div className="owner-form-hint" style={{ marginBottom: 12 }}>
-                        Services visibles dans le menu du PM et orchestration initiale. Par défaut tout
-                        est désactivé — activez ce dont le property manager a besoin.
-                      </div>
-                      <OwnerCapabilitiesActivationPanel
-                        ownerKey=""
-                        rows={[]}
-                        orchestrationDoc={null}
-                        compact
-                        value={serviceActivations}
-                        onChange={setServiceActivations}
-                        disabled={footBusy}
-                      />
-                    </>
+                    <div className="owner-form-hint">
+                      À l&apos;activation, le <strong>Template Admin</strong> (modèle orchestration)
+                      est copié automatiquement sur ce property manager. Ajustez ensuite via{' '}
+                      <strong>Annonces → Modèle orchestration</strong>.
+                    </div>
                   )}
                 />
               ) : null}

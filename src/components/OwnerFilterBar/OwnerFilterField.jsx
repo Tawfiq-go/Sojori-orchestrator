@@ -10,11 +10,20 @@ import {
 import { getOwners } from 'services/teamDashboardApi';
 import { getOwnerListLabel } from 'utils/ownerDisplay.utils';
 import { autocompleteOptionLiProps } from 'utils/autocompleteOptionLiProps';
+import {
+  ORCHESTRATION_ADMIN_OWNER_ID,
+  isOrchestrationAdminOwnerRow,
+} from 'constants/orchestrationAdmin';
 
 const ALL_SENTINEL = { __all: true, _id: '' };
+const TEMPLATE_ADMIN_SENTINEL = {
+  __templateAdmin: true,
+  _id: ORCHESTRATION_ADMIN_OWNER_ID,
+  label: 'Template Admin',
+};
 
 function ownerRowId(o) {
-  if (!o || o.__all) return '';
+  if (!o || o.__all || o.__templateAdmin) return '';
   return String(o._id ?? o.id ?? '').trim();
 }
 
@@ -23,11 +32,13 @@ function ownerRowId(o) {
  * @param {number} [toolbarInputHeight] e.g. 40 to match reservation / listing toolbars
  * @param {boolean} [requireSelection] when true, hide "all owners" — legacy (analytics, etc.)
  * @param {boolean} [explicitScope] tri-state: vide → Tous (plateforme) | un PM (dashboard admin)
+ * @param {boolean} [templateAdminFirst] Template Admin en tête (modèle orchestration) — pas « Tous »
  */
 export default function OwnerFilterField({
   toolbarInputHeight,
   requireSelection = false,
   explicitScope = false,
+  templateAdminFirst = false,
   sx,
   ...rest
 }) {
@@ -35,7 +46,6 @@ export default function OwnerFilterField({
   const {
     showOwnerFilter,
     selectedOwnerId,
-    setSelectedOwnerId,
     setScopeAll,
     setScopeOwner,
     adminScopeMode,
@@ -80,10 +90,35 @@ export default function OwnerFilterField({
 
   const ownerSource = explicitScope ? remoteOwners : contextOwners || [];
   const ownerRows = ownerSource.filter((o) => ownerRowId(o));
-  const options = requireSelection ? ownerRows : [ALL_SENTINEL, ...ownerRows];
+  const pmRows = templateAdminFirst
+    ? ownerRows.filter((o) => !isOrchestrationAdminOwnerRow(o))
+    : ownerRows;
+  const options = templateAdminFirst
+    ? [TEMPLATE_ADMIN_SENTINEL, ...pmRows]
+    : requireSelection
+      ? ownerRows
+      : [ALL_SENTINEL, ...ownerRows];
   const ownersLoading = explicitScope ? remoteLoading : contextOwnersLoading;
+  const templateAdminLabel = 'Template Admin';
+  const allLabel = t('All (platform)', 'Tous (plateforme)');
 
   const resolveValue = () => {
+    if (templateAdminFirst) {
+      const sel = String(selectedOwnerId || '').trim();
+      if (
+        !sel ||
+        sel === ORCHESTRATION_ADMIN_OWNER_ID ||
+        adminScopeMode === ADMIN_SCOPE_ALL ||
+        adminScopeMode === ADMIN_SCOPE_UNSET
+      ) {
+        return TEMPLATE_ADMIN_SENTINEL;
+      }
+      const hit =
+        pmRows.find((o) => String(o?._id ?? o?.id) === sel) ||
+        contextOwners?.find((o) => String(o?._id ?? o?.id) === sel);
+      if (hit && isOrchestrationAdminOwnerRow(hit)) return TEMPLATE_ADMIN_SENTINEL;
+      return hit || TEMPLATE_ADMIN_SENTINEL;
+    }
     if (explicitScope) {
       if (adminScopeMode === ADMIN_SCOPE_UNSET) return null;
       if (adminScopeMode === ADMIN_SCOPE_ALL) return ALL_SENTINEL;
@@ -104,7 +139,6 @@ export default function OwnerFilterField({
 
   const value = resolveValue();
   const compactToolbar = Boolean(toolbarInputHeight);
-  const allLabel = t('All (platform)', 'Tous (plateforme)');
   const ownerAria = t('Owner', 'Propriétaire');
 
   const inputSx = toolbarInputHeight
@@ -117,6 +151,14 @@ export default function OwnerFilterField({
     : {};
 
   const handleChange = (_, o) => {
+    if (templateAdminFirst) {
+      if (!o || o.__templateAdmin) {
+        setScopeOwner(ORCHESTRATION_ADMIN_OWNER_ID);
+        return;
+      }
+      setScopeOwner(String(o._id ?? o.id));
+      return;
+    }
     if (explicitScope) {
       if (!o) return;
       if (o === ALL_SENTINEL || o?.__all) {
@@ -150,7 +192,7 @@ export default function OwnerFilterField({
         size="small"
         openOnFocus
         autoHighlight
-        disableClearable={explicitScope && value != null}
+        disableClearable={templateAdminFirst || (explicitScope && value != null)}
         loading={ownersLoading}
         options={options}
         value={value}
@@ -166,11 +208,11 @@ export default function OwnerFilterField({
           }
         }}
         filterOptions={(rows, state) => {
-          if (explicitScope) return rows;
+          if (explicitScope && !templateAdminFirst) return rows;
           const q = state.inputValue.trim().toLowerCase();
           if (!q) return rows;
           return rows.filter((o) => {
-            if (o?.__all) return true;
+            if (o?.__all || o?.__templateAdmin) return true;
             const label = getOwnerListLabel(o).toLowerCase();
             const email = String(o?.email ?? '').toLowerCase();
             const company = String(o?.fillCompany?.companyName ?? o?.companyName ?? '').toLowerCase();
@@ -178,16 +220,24 @@ export default function OwnerFilterField({
           });
         }}
         isOptionEqualToValue={(a, b) => {
+          if (a?.__templateAdmin && b?.__templateAdmin) return true;
           if (a?.__all && b?.__all) return true;
           return String(a?._id ?? a?.id) === String(b?._id ?? b?.id);
         }}
         getOptionLabel={(o) => {
+          if (o?.__templateAdmin) return templateAdminLabel;
           if (!o || o?.__all) {
             return explicitScope ? allLabel : t('All owners', 'Tous les propriétaires');
           }
           return getOwnerListLabel(o);
         }}
-        getOptionKey={(o) => (o?.__all ? '__all__' : String(o?._id ?? o?.id))}
+        getOptionKey={(o) =>
+          o?.__templateAdmin
+            ? '__templateAdmin__'
+            : o?.__all
+              ? '__all__'
+              : String(o?._id ?? o?.id)
+        }
         noOptionsText={
           ownersLoading
             ? t('Loading…', 'Chargement…')
@@ -203,6 +253,18 @@ export default function OwnerFilterField({
         }}
         renderOption={(props, option) => {
           const { key, liProps } = autocompleteOptionLiProps(props);
+          if (option?.__templateAdmin) {
+            return (
+              <Box component="li" key={key} {...liProps}>
+                <Typography variant="body2" fontWeight={700}>
+                  {templateAdminLabel}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Référence propagée vers les PM
+                </Typography>
+              </Box>
+            );
+          }
           if (option?.__all) {
             return (
               <Box component="li" key={key} {...liProps}>
@@ -233,13 +295,15 @@ export default function OwnerFilterField({
             {...params}
             label={compactToolbar || explicitScope ? undefined : 'Propriétaire'}
             placeholder={
-              explicitScope
-                ? t('Tous (plateforme) ou un PM…', 'Tous (plateforme) ou un PM…')
-                : compactToolbar
-                  ? ownerAria
-                  : requireSelection
-                    ? t('Select owner', 'Choisir un propriétaire…')
-                    : t('Search owner', 'Rechercher un propriétaire...')
+              templateAdminFirst
+                ? templateAdminLabel
+                : explicitScope
+                  ? t('Tous (plateforme) ou un PM…', 'Tous (plateforme) ou un PM…')
+                  : compactToolbar
+                    ? ownerAria
+                    : requireSelection
+                      ? t('Select owner', 'Choisir un propriétaire…')
+                      : t('Search owner', 'Rechercher un propriétaire...')
             }
           />
         )}

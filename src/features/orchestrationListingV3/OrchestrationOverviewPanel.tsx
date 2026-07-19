@@ -63,6 +63,7 @@ import {
 } from './ownerScheduledMessagesApi';
 import type { CatalogMessage, ScheduledOrchestrationMessage } from '../taskHub/staff-design/types';
 import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
+import OrchestrationGlobalSwitch from './OrchestrationGlobalSwitch';
 import { V3 } from './theme';
 
 const GROUP_ORDER: CapabilityGroupId[] = [
@@ -797,6 +798,7 @@ export default function OrchestrationOverviewPanel({
   const [decisionsModal, setDecisionsModal] = useState<string | null>(null);
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
   const [activationStatus, setActivationStatus] = useState<ServiceActivationStatusEntry[]>([]);
+  const [orchestrationEnabled, setOrchestrationEnabled] = useState(true);
 
   const reload = useCallback((_opts?: { silent?: boolean }) => {
     // Pas de setLoading(true) ici : évite de démonter la grille / les modals (effet « reload page »).
@@ -840,6 +842,7 @@ export default function OrchestrationOverviewPanel({
     return loadMatrix
       .then(async (d) => {
         setDoc(d);
+        setOrchestrationEnabled(d?.orchestrationEnabled !== false);
         await loadValues();
         if (listingId) {
           const fromDoc = activationStatusFromEffectiveDoc(d as ListingOrchestrationEffective, listingId);
@@ -896,6 +899,29 @@ export default function OrchestrationOverviewPanel({
       };
     },
     [caps],
+  );
+
+  const persistOrchestrationGlobal = useCallback(
+    async (next: boolean) => {
+      const prev = orchestrationEnabled;
+      setOrchestrationEnabled(next);
+      setSaving(true);
+      try {
+        if (listingId) {
+          await listingsService.putListingOrchestration(listingId, { orchestrationEnabled: next });
+        } else {
+          await listingsService.putOwnerOrchestration(ownerKey, { orchestrationEnabled: next });
+        }
+        setDoc((d) => (d ? { ...d, orchestrationEnabled: next } : d));
+        toast.success(next ? 'Orchestration globale activée' : 'Orchestration globale coupée');
+      } catch (e: unknown) {
+        setOrchestrationEnabled(prev);
+        toast.error(e instanceof Error ? e.message : 'Impossible de modifier l’orchestration globale');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [orchestrationEnabled, listingId, ownerKey],
   );
 
   const saveCapPatch = useCallback(
@@ -1955,10 +1981,25 @@ export default function OrchestrationOverviewPanel({
 
   return (
     <Box sx={{ display: 'grid', gap: 2 }}>
+      <OrchestrationGlobalSwitch
+        checked={orchestrationEnabled}
+        disabled={saving}
+        scope={isListingScope ? 'listing' : 'owner'}
+        onChange={(v) => void persistOrchestrationGlobal(v)}
+      />
+
       <Alert severity="info" sx={{ fontSize: 12.5 }}>
         <strong>ON</strong> active le service (et le plan). <strong>Décisions</strong> : WhatsApp /
         Créer tâche / Relances / Rappel staff / Escalade. <strong>Visibilité WA</strong> = quand le
         menu apparaît au voyageur. Créer tâche OFF ⇒ pas d&apos;équipe — relances &amp; escalade OK.
+        {!orchestrationEnabled ? (
+          <>
+            {' '}
+            <strong style={{ color: '#9b1c1c' }}>
+              Orchestration globale coupée — aucun plan / tâche / message auto.
+            </strong>
+          </>
+        ) : null}
       </Alert>
 
       <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card, overflowX: 'auto' }}>

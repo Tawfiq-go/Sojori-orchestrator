@@ -236,7 +236,7 @@ export default function V3ScheduledMessagesPanel({
       ) : (
         <Alert severity="info" sx={{ mb: 2, fontSize: 13 }}>
           <strong>QUAND</strong> envoyer chaque message — niveau{' '}
-          {isAdminTemplate ? 'Admin (template global)' : 'Property Manager'}. Textes dans{' '}
+          {isAdminTemplate ? 'Template Admin' : 'Property Manager'}. Textes dans{' '}
           <Link component={RouterLink} to="/orchestration/config?tab=messages">
             Orchestration · Messages
           </Link>

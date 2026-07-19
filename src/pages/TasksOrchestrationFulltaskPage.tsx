@@ -19,7 +19,7 @@ import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerCon
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
 import { useAuth } from '../hooks/useAuth';
-import { ORCHESTRATION_ADMIN_OWNER_ID, ORCHESTRATION_ADMIN_EMAIL } from '../constants/orchestrationAdmin';
+import { ORCHESTRATION_ADMIN_OWNER_ID, isOrchestrationAdminOwnerRow } from '../constants/orchestrationAdmin';
 import type { OrchestrationConfigLoadMeta } from '../services/fulltaskApi';
 import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
 import { isPlatformAdminRole, normalizeUserRole } from '../utils/taskScope.utils';
@@ -32,12 +32,6 @@ function parseOrchestrationSubTab(raw: string | null): OrchestrationSubTab {
   if (raw === 'config' || raw === 'whatsapp') return 'config';
   if (raw === 'workflows') return 'messages';
   return raw === 'messages' ? 'messages' : 'messages';
-}
-
-function isAdminOwnerRow(owner: { _id?: string; id?: string; email?: string }): boolean {
-  const id = String(owner?._id ?? owner?.id ?? '');
-  if (id === ORCHESTRATION_ADMIN_OWNER_ID) return true;
-  return (owner.email || '').toLowerCase().trim() === ORCHESTRATION_ADMIN_EMAIL;
 }
 
 function TasksOrchestrationFulltaskPageInner() {
@@ -67,7 +61,7 @@ function TasksOrchestrationFulltaskPageInner() {
       (owners || []).filter((o) => {
         const id = o?._id ?? o?.id;
         if (id == null) return false;
-        return !isAdminOwnerRow(o);
+        return !isOrchestrationAdminOwnerRow(o);
       }),
     [owners],
   );

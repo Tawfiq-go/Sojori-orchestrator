@@ -17,8 +17,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import { ORCHESTRATION_ADMIN_OWNER_ID } from '../constants/orchestrationAdmin';
 import listingsService from '../services/listingsService';
-import { syncAdminTemplateToOwnerSimple } from '../features/listing/utils/syncAdminTemplateToOwner';
-import { getOwnersAllPages } from '../features/staff/services/serverApi.task';
+import { syncAdminTemplateToOwnerSimple, syncAdminTemplateToAllOwners } from '../features/listing/utils/syncAdminTemplateToOwner';
 
 function isAdminRole(role?: string): boolean {
   const r = (role || '').toLowerCase().replace(/\s+/g, '');
@@ -128,26 +127,13 @@ function OwnerModelPageInner() {
   };
 
   const handleSyncToAllOwners = async () => {
-    try {
-      const res = await listingsService.syncOwnerOrchestrationFromAdminToAllOwners();
-      const body = res as { data?: { synced?: number; failed?: number; total?: number } };
-      const synced = body?.data?.synced ?? 0;
-      const failed = body?.data?.failed ?? 0;
-      toast.success(`Admin → ${synced} PM(s) OK${failed > 0 ? ` · ${failed} échec(s)` : ''}`);
-    } catch {
-      const rows = await getOwnersAllPages({ search_text: '' });
-      let ok = 0;
-      for (const o of rows) {
-        const id = String(o?._id ?? o?.id ?? '');
-        if (!id) continue;
-        try {
-          const result = await syncAdminTemplateToOwnerSimple(id);
-          if (result.ok) ok += 1;
-        } catch {
-          /* skip */
-        }
-      }
-      toast.success(`Admin → ${ok} PM(s) OK`);
+    const result = await syncAdminTemplateToAllOwners();
+    if (result.ok) {
+      toast.success(
+        `Admin → ${result.synced} PM(s) OK${result.failed > 0 ? ` · ${result.failed} échec(s)` : ''}`,
+      );
+    } else {
+      toast.error(result.lines.join(' · ') || 'Sync PMs échouée');
     }
   };
 
@@ -214,6 +200,17 @@ function OwnerModelPageInner() {
     <Box sx={{ px: { xs: 2, sm: 3 }, py: 1, width: '100%' }}>
       <CatalogueAnnoncesTabs />
       <OrchestrationModelSubTabs value={section} onChange={setSection} />
+
+      {section === 'apercu' && isAdmin && (
+        <OwnerConfigScopeBarWithSync
+          {...ownerScope}
+          compact
+          hideListingPicker
+          syncMode={syncMode}
+          onSyncToOwner={handleSyncToOwner}
+          onSyncToAllOwners={isAdminTemplate ? handleSyncToAllOwners : undefined}
+        />
+      )}
 
       {section === 'apercu' && <OrchestrationOverviewPanel ownerKey={ownerKey} />}
 
