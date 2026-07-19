@@ -1816,10 +1816,10 @@ export const listingsService = {
     }
   },
 
-  async applyListingOrchestrationFromOwner(listingId: string) {
+  async applyListingOrchestrationFromOwner(listingId: string, ownerKey?: string) {
     const { data } = await apiClient.post(
       `${LISTING_API_BASE_URL}/owner-orchestration/by-listing/${listingId}/apply-owner-template`,
-      {},
+      ownerKey && ownerKey !== 'global' ? { ownerKey } : {},
     );
     return data;
   },

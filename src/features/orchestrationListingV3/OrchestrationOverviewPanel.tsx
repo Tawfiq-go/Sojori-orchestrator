@@ -1996,30 +1996,55 @@ export default function OrchestrationOverviewPanel({
   })();
 
   return (
-    <Box sx={{ display: 'grid', gap: 2 }}>
-      <OrchestrationGlobalSwitch
-        checked={orchestrationEnabled}
-        disabled={saving}
-        scope={isListingScope ? 'listing' : 'owner'}
-        onChange={(v) => void persistOrchestrationGlobal(v)}
-      />
+    <Box sx={{ display: 'grid', gap: 1 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 1,
+        }}
+      >
+        <Box sx={{ flex: '1 1 220px', minWidth: 0 }}>
+          <OrchestrationGlobalSwitch
+            checked={orchestrationEnabled}
+            disabled={saving}
+            scope={isListingScope ? 'listing' : 'owner'}
+            onChange={(v) => void persistOrchestrationGlobal(v)}
+          />
+        </Box>
+        <Typography
+          sx={{
+            flex: '2 1 280px',
+            fontSize: 11,
+            color: V3.t3,
+            lineHeight: 1.35,
+            minWidth: 0,
+          }}
+          title="ON = service + plan. Décisions = WA / Tâche / Relances / Rappel staff / Escalade. Visibilité WA = fenêtre menu voyageur. Tâche OFF = pas d’équipe."
+        >
+          <Box component="span" sx={{ fontWeight: 700, color: V3.t2 }}>
+            ON
+          </Box>{' '}
+          = service ·{' '}
+          <Box component="span" sx={{ fontWeight: 700, color: V3.t2 }}>
+            Décisions
+          </Box>{' '}
+          = WA / Tâche / Rel / Staff / Esc ·{' '}
+          <Box component="span" sx={{ fontWeight: 700, color: V3.t2 }}>
+            Visibilité WA
+          </Box>{' '}
+          = menu voyageur
+          {!orchestrationEnabled ? (
+            <Box component="span" sx={{ fontWeight: 800, color: '#9b1c1c', ml: 0.75 }}>
+              · Globale OFF — pas d’auto
+            </Box>
+          ) : null}
+        </Typography>
+      </Box>
 
-      <Alert severity="info" sx={{ fontSize: 12.5 }}>
-        <strong>ON</strong> active le service (et le plan). <strong>Décisions</strong> : WhatsApp /
-        Créer tâche / Relances / Rappel staff / Escalade. <strong>Visibilité WA</strong> = quand le
-        menu apparaît au voyageur. Créer tâche OFF ⇒ pas d&apos;équipe — relances &amp; escalade OK.
-        {!orchestrationEnabled ? (
-          <>
-            {' '}
-            <strong style={{ color: '#9b1c1c' }}>
-              Orchestration globale coupée — aucun plan / tâche / message auto.
-            </strong>
-          </>
-        ) : null}
-      </Alert>
-
-      <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 2, bgcolor: V3.card, overflowX: 'auto' }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 800, color: V3.t, mb: 1.25 }}>
+      <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 1.5, bgcolor: V3.card, overflowX: 'auto' }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t, mb: 0.75 }}>
           Flows &amp; messages — config d&apos;ensemble
         </Typography>
         <Box
