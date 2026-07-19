@@ -13,24 +13,40 @@ import { useNotificationScope } from './NotificationProvider';
 import { useNotificationList, useUnreadCount, useMarkAllRead } from './useNotifications';
 import { NotificationFacetChips } from './NotificationFacetChips';
 import { NotificationRow } from './NotificationRow';
+import type { NotificationBellTier } from './types';
 
 interface NotificationPanelProps {
   anchorEl: HTMLElement | null;
+  tier: NotificationBellTier | null;
   onClose: () => void;
 }
 
-function PanelBody({ onClose }: { onClose: () => void }) {
+function PanelBody({
+  onClose,
+  tier,
+}: {
+  onClose: () => void;
+  tier: NotificationBellTier;
+}) {
   const navigate = useNavigate();
   const [facet, setFacet] = useState('');
   const [eventKey, setEventKey] = useState('');
   const { data: unread } = useUnreadCount();
-  const { data: listData, isLoading, isFetching } = useNotificationList(facet, eventKey, 'all');
+  const { data: listData, isLoading, isFetching } = useNotificationList(
+    facet,
+    eventKey,
+    'all',
+    tier,
+  );
   const markAllRead = useMarkAllRead();
 
   const items = listData?.items ?? [];
   const uc = unread ?? { total: 0, activeCount: 0, actionRequired: 0, byFacet: {}, byEventKey: {} };
-  const activeCount = uc.activeCount ?? uc.total ?? 0;
-  const actionRequired = uc.actionRequired ?? 0;
+  const important = tier === 'important';
+  const title = important ? 'Prioritaires' : 'Secondaires';
+  const badgeHint = important
+    ? 'Réservations, messages OTA/WhatsApp, deadlines…'
+    : 'Tâches, parcours guest, infos…';
 
   const handleMarkAll = () => {
     void markAllRead
@@ -78,7 +94,7 @@ function PanelBody({ onClose }: { onClose: () => void }) {
           }}
         >
           <Typography sx={{ fontSize: 14, fontWeight: 800, color: t.text, flex: 1 }}>
-            En cours
+            {title}
             {items.length > 0 ? (
               <Box
                 component="span"
@@ -89,8 +105,8 @@ function PanelBody({ onClose }: { onClose: () => void }) {
                   borderRadius: '999px',
                   px: 0.75,
                   py: 0.125,
-                  bgcolor: t.bg3,
-                  color: t.text3,
+                  bgcolor: important ? t.errorTint : t.bg3,
+                  color: important ? t.error : t.text3,
                   verticalAlign: 'middle',
                 }}
               >
@@ -129,25 +145,7 @@ function PanelBody({ onClose }: { onClose: () => void }) {
         </Box>
 
         <Typography sx={{ px: 1.25, pb: 0.75, fontSize: 10, color: t.text3, lineHeight: 1.4 }}>
-          Uniquement les alertes <b>actives</b>. Terminer ou Ignorer les retire d’ici — retrouvez-les
-          dans <b>Historique</b>.
-          {activeCount > 0 || items.length > 0 ? (
-            <>
-              {' '}
-              Le badge de la cloche affiche le total <b>en cours</b>
-              {actionRequired > 0 ? (
-                <>
-                  {' '}
-                  (<b style={{ color: t.error }}>rouge</b> = {actionRequired} urgente
-                  {actionRequired > 1 ? 's' : ''} / critique
-                  {actionRequired > 1 ? 's' : ''})
-                </>
-              ) : (
-                <> (doré = priorité normale)</>
-              )}
-              .
-            </>
-          ) : null}
+          {badgeHint} Configurez la priorité de chaque alerte dans <b>Préférences</b>.
         </Typography>
 
         <NotificationFacetChips
@@ -172,7 +170,7 @@ function PanelBody({ onClose }: { onClose: () => void }) {
         {isLoading || isFetching ? (
           <SkeletonList />
         ) : items.length === 0 ? (
-          <EmptyState />
+          <EmptyState important={important} />
         ) : (
           items.map((n) => <NotificationRow key={n._id} notification={n} />)
         )}
@@ -248,12 +246,12 @@ function SkeletonList() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ important }: { important: boolean }) {
   return (
     <Box sx={{ py: 5, px: 2, textAlign: 'center' }}>
-      <Typography sx={{ fontSize: 32, mb: 1 }}>✅</Typography>
+      <Typography sx={{ fontSize: 32, mb: 1 }}>{important ? '🔔' : '✅'}</Typography>
       <Typography sx={{ fontSize: 14, fontWeight: 700, color: t.text }}>
-        Aucune notification en cours
+        Aucune notification {important ? 'prioritaire' : 'secondaire'}
       </Typography>
       <Typography sx={{ fontSize: 12, color: t.text3, mt: 0.5 }}>
         Terminées ou ignorées → page Historique.
@@ -262,16 +260,18 @@ function EmptyState() {
   );
 }
 
-export function NotificationPanel({ anchorEl, onClose }: NotificationPanelProps) {
+export function NotificationPanel({ anchorEl, tier, onClose }: NotificationPanelProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { panelOpen, setPanelOpen } = useNotificationScope();
-  const open = panelOpen && Boolean(anchorEl);
+  const { setPanelTier } = useNotificationScope();
+  const open = tier != null && Boolean(anchorEl);
 
   const handleClose = () => {
-    setPanelOpen(false);
+    setPanelTier(null);
     onClose();
   };
+
+  if (!tier) return null;
 
   if (isMobile) {
     return (
@@ -291,7 +291,7 @@ export function NotificationPanel({ anchorEl, onClose }: NotificationPanelProps)
           },
         }}
       >
-        <PanelBody onClose={handleClose} />
+        <PanelBody onClose={handleClose} tier={tier} />
       </Drawer>
     );
   }
@@ -320,7 +320,7 @@ export function NotificationPanel({ anchorEl, onClose }: NotificationPanelProps)
         },
       }}
     >
-      <PanelBody onClose={handleClose} />
+      <PanelBody onClose={handleClose} tier={tier} />
     </Popover>
   );
 }

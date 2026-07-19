@@ -272,11 +272,10 @@ function RouteLoader() {
   return (
     <Box
       sx={{
-        minHeight: '100vh',
+        minHeight: '40vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        bgcolor: '#fbfaf6',
       }}
     >
       <CircularProgress />

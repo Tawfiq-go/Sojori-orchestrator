@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { DashboardLayout } from './dashboard/DashboardV2.components';
 import { isListingCataloguePath } from '../constants/listingLayout';
@@ -13,6 +13,13 @@ import { NotificationProvider } from '../features/notifications';
 
 /** Layout persistant : sidebar + topbar ne se remontent pas à chaque changement de route. */
 export const DashboardShellContext = createContext(false);
+
+/** Compteur module — résiste au HMR quand le Context React se dédouble. */
+let dashboardShellMountCount = 0;
+
+export function isDashboardShellMounted(): boolean {
+  return dashboardShellMountCount > 0;
+}
 
 export interface PageChromeContextValue {
   setBreadcrumb: (items: string[]) => void;
@@ -97,6 +104,13 @@ function DashboardShellInner({
 }
 
 export function DashboardShellLayout() {
+  useLayoutEffect(() => {
+    dashboardShellMountCount += 1;
+    return () => {
+      dashboardShellMountCount = Math.max(0, dashboardShellMountCount - 1);
+    };
+  }, []);
+
   return (
     <DashboardShellContext.Provider value={true}>
       <PmSimulationProvider>
@@ -111,7 +125,7 @@ export function DashboardShellLayout() {
 }
 
 export function usePageChromeUpdater(breadcrumb: string[], compactMain: boolean) {
-  const inShell = useContext(DashboardShellContext);
+  const inShell = useContext(DashboardShellContext) || isDashboardShellMounted();
   const pageChrome = useContext(PageChromeContext);
   const breadcrumbKey = breadcrumb.join('\u0000');
 
