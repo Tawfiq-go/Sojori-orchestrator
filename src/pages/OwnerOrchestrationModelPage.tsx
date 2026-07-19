@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Alert, Box, CircularProgress } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
@@ -8,6 +8,7 @@ import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs
 import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
 import OrchestrationListingV3View from '../features/orchestrationListingV3/OrchestrationListingV3View';
 import OrchestrationOverviewPanel from '../features/orchestrationListingV3/OrchestrationOverviewPanel';
+import ApplyOwnerModelToListingsDialog from '../features/orchestrationListingV3/ApplyOwnerModelToListingsDialog';
 import OrchestrationModelSubTabs, {
   normalizeOrchestrationSection,
   type OrchestrationModelSection,
@@ -34,7 +35,7 @@ function apiErrorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-type ListingPick = { id: string; name: string };
+type ListingPick = { id: string; name: string; active: boolean; ownerId: string };
 
 function parseExplicitSection(raw: string | null): OrchestrationModelSection | null {
   if (raw == null || raw === '') return null;
@@ -56,9 +57,12 @@ function OwnerModelPageInner() {
   const [ownerListings, setOwnerListings] = useState<ListingPick[]>([]);
   const [selectedListingIds, setSelectedListingIds] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
+  const [applyDialogOpen, setApplyDialogOpen] = useState(false);
 
   const syncMode = isAdminTemplate ? 'owners' : isAdmin ? 'admin-pm' : 'listings';
   const adminViewingPm = isAdmin && !isAdminTemplate;
+  /** Owner connecté (ou admin sur un PM) : peut pousser le modèle vers listings. */
+  const canApplyToListings = !isAdminTemplate;
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -69,7 +73,7 @@ function OwnerModelPageInner() {
   }, [isAdmin, selectedOwnerId, setSelectedOwnerId]);
 
   const loadOwnerListings = useCallback(async () => {
-    if (isAdminTemplate) {
+    if (isAdminTemplate || !ownerKey || ownerKey === 'global' || ownerKey === 'unknown') {
       setOwnerListings([]);
       setSelectedListingIds([]);
       setListingsLoading(false);
@@ -77,20 +81,22 @@ function OwnerModelPageInner() {
     }
     setListingsLoading(true);
     try {
+      // Toujours scoper au PM : filtre API (admin) + filtre client (défense en profondeur).
       const res = await listingsService.getListings({
         page: 0,
         limit: 500,
-        useActiveFilter: true,
-        active: true,
         forListingsOverview: true,
+        filterOwnerId: ownerKey,
+        ownerId: ownerKey,
       });
-      const items = (res.data?.items ?? []).filter(
-        l => l.ownerId && String(l.ownerId) === String(ownerKey),
-      );
+      const raw = res.data?.items ?? [];
+      const items = raw.filter((l) => l.ownerId && String(l.ownerId) === String(ownerKey));
       setOwnerListings(
-        items.map(l => ({
+        items.map((l) => ({
           id: l.id,
           name: l.name || l.id,
+          active: l.active !== false,
+          ownerId: String(l.ownerId),
         })),
       );
     } catch (e: unknown) {
@@ -138,62 +144,76 @@ function OwnerModelPageInner() {
   };
 
   const handleSyncAllListings = async () => {
-    if (ownerKey === 'global') return;
+    if (!ownerKey || ownerKey === 'global' || ownerKey === 'unknown') return;
     setApplying(true);
     try {
       const res = await listingsService.applyOwnerOrchestrationToAllListings(ownerKey);
       const body = res as { data?: { modified?: number; total?: number } };
       const n = body?.data?.modified ?? body?.data?.total ?? 0;
-      toast.success(`Modèle appliqué à ${n} annonce(s)`);
+      toast.success(`Modèle appliqué à ${n} annonce(s) de ce PM`);
     } catch (e: unknown) {
       toast.error(apiErrorMessage(e));
+      throw e;
     } finally {
       setApplying(false);
     }
   };
 
   const handleSyncSelectedListings = async (listingIds: string[]) => {
-    if (ownerKey === 'global' || listingIds.length === 0) return;
-    const allowed = new Set(ownerListings.map(l => l.id));
-    const targets = listingIds.filter(id => allowed.has(id));
-    if (targets.length === 0) {
-      toast.error('Aucune annonce valide sélectionnée pour ce PM');
+    if (!ownerKey || ownerKey === 'global' || ownerKey === 'unknown' || listingIds.length === 0) {
       return;
+    }
+    // ⚠️ Isolation PM : uniquement les listings de ce ownerKey.
+    const allowed = new Map(
+      ownerListings
+        .filter((l) => String(l.ownerId) === String(ownerKey))
+        .map((l) => [l.id, l] as const),
+    );
+    const targets = listingIds.filter((id) => allowed.has(id));
+    const rejected = listingIds.length - targets.length;
+    if (rejected > 0) {
+      console.error('[orchestration] blocked foreign listings', {
+        ownerKey,
+        rejected,
+        requested: listingIds.length,
+      });
+    }
+    if (targets.length === 0) {
+      toast.error('Aucune annonce de ce PM sélectionnée — aucune mise à jour');
+      throw new Error('Aucune annonce valide pour ce PM');
     }
     setApplying(true);
     let ok = 0;
     let fail = 0;
     let firstError = '';
-    for (const listingId of targets) {
-      try {
-        await listingsService.applyListingOrchestrationFromOwner(listingId);
-        ok += 1;
-      } catch (e: unknown) {
-        fail += 1;
-        if (!firstError) firstError = apiErrorMessage(e);
+    try {
+      for (const listingId of targets) {
+        try {
+          await listingsService.applyListingOrchestrationFromOwner(listingId, ownerKey);
+          ok += 1;
+        } catch (e: unknown) {
+          fail += 1;
+          if (!firstError) firstError = apiErrorMessage(e);
+        }
       }
-    }
-    if (ok > 0) {
-      toast.success(
-        `${ok} annonce(s) synchronisée(s)${fail > 0 ? ` · ${fail} échec(s)` : ''}`,
-      );
-      if (fail > 0 && firstError) {
-        toast.error(firstError, { autoClose: 12000 });
+      if (ok > 0) {
+        toast.success(
+          `${ok} annonce(s) de ce PM synchronisée(s)${fail > 0 ? ` · ${fail} échec(s)` : ''}`,
+        );
+        if (fail > 0 && firstError) {
+          toast.error(firstError, { autoClose: 12000 });
+        }
+      } else {
+        toast.error(firstError || `Échec sync annonces (${fail})`, { autoClose: 12000 });
+        throw new Error(firstError || 'Échec sync annonces');
       }
-    } else {
-      toast.error(firstError || `Échec sync annonces (${fail})`, { autoClose: 12000 });
+    } finally {
+      setApplying(false);
     }
-    setApplying(false);
   };
 
-  const handleSyncOneListing = async (listingId: string, listingName: string) => {
-    try {
-      await listingsService.applyListingOrchestrationFromOwner(listingId);
-      toast.success(`Modèle appliqué à ${listingName}`);
-    } catch (e: unknown) {
-      toast.error(apiErrorMessage(e));
-      throw e;
-    }
+  const handleApplyFromDialog = async (listingIds: string[]) => {
+    await handleSyncSelectedListings(listingIds);
   };
 
   return (
@@ -212,6 +232,32 @@ function OwnerModelPageInner() {
         />
       )}
 
+      {section === 'apercu' && canApplyToListings && (
+        <Box
+          sx={{
+            mb: 1,
+            display: 'flex',
+            flexWrap: 'nowrap',
+            alignItems: 'center',
+            gap: 1,
+            minHeight: 36,
+          }}
+        >
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', flex: 1, minWidth: 0 }}>
+            Appliquer le modèle → <strong>toutes</strong> ou <strong>sélection</strong> d’annonces
+          </Typography>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => setApplyDialogOpen(true)}
+            disabled={listingsLoading || applying || ownerListings.length === 0}
+            sx={{ textTransform: 'none', fontWeight: 700, flexShrink: 0, py: 0.5 }}
+          >
+            Appliquer aux listings…
+          </Button>
+        </Box>
+      )}
+
       {section === 'apercu' && <OrchestrationOverviewPanel ownerKey={ownerKey} />}
 
       {section === 'services' && isAdmin && isAdminTemplate && (
@@ -225,27 +271,60 @@ function OwnerModelPageInner() {
       {section === 'services' && isAdmin && adminViewingPm && (
         <Alert severity="info" sx={{ mb: 1.5, fontSize: 13 }}>
           <strong>Étape 2 — PM sélectionné.</strong> Vérifiez ou ajustez le modèle, puis cochez les
-          annonces et synchronisez — ou utilisez « Appliquer le modèle à toutes les annonces ».
+          annonces et synchronisez — ou utilisez « Appliquer aux listings… ».
+        </Alert>
+      )}
+
+      {section === 'services' && !isAdmin && (
+        <Alert severity="info" sx={{ mb: 1.5, fontSize: 13 }}>
+          Configurez votre modèle, puis cliquez <strong>Appliquer aux listings…</strong> pour
+          pousser vers toutes vos annonces ou une sélection.
         </Alert>
       )}
 
       {section === 'services' && (
         <>
-          <OwnerConfigScopeBarWithSync
-            {...ownerScope}
-            compact
-            hideListingPicker={syncMode === 'listings'}
-            syncMode={syncMode}
-            onSyncToOwner={isAdmin ? handleSyncToOwner : undefined}
-            onSyncToAllOwners={isAdmin && isAdminTemplate ? handleSyncToAllOwners : undefined}
-            onSyncAllListings={!isAdminTemplate ? handleSyncAllListings : undefined}
-            onSyncSelectedListings={adminViewingPm ? handleSyncSelectedListings : undefined}
-            onSyncOneListing={!isAdmin ? handleSyncOneListing : undefined}
-            listingOptions={!isAdminTemplate ? ownerListings : undefined}
-            selectedListingIds={adminViewingPm ? selectedListingIds : undefined}
-            onListingSelectionChange={adminViewingPm ? setSelectedListingIds : undefined}
-            listingsLoading={!isAdminTemplate ? listingsLoading : undefined}
-          />
+          {isAdmin ? (
+            <Box sx={{ mb: 1.5, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 1 }}>
+              <Box sx={{ flex: '1 1 280px', minWidth: 0 }}>
+                <OwnerConfigScopeBarWithSync
+                  {...ownerScope}
+                  compact
+                  hideListingPicker={false}
+                  syncMode={syncMode}
+                  onSyncToOwner={handleSyncToOwner}
+                  onSyncToAllOwners={isAdminTemplate ? handleSyncToAllOwners : undefined}
+                  onSyncAllListings={adminViewingPm ? handleSyncAllListings : undefined}
+                  onSyncSelectedListings={adminViewingPm ? handleSyncSelectedListings : undefined}
+                  listingOptions={adminViewingPm ? ownerListings : undefined}
+                  selectedListingIds={adminViewingPm ? selectedListingIds : undefined}
+                  onListingSelectionChange={adminViewingPm ? setSelectedListingIds : undefined}
+                  listingsLoading={adminViewingPm ? listingsLoading : undefined}
+                />
+              </Box>
+              {adminViewingPm && (
+                <Button
+                  variant="outlined"
+                  onClick={() => setApplyDialogOpen(true)}
+                  disabled={listingsLoading || applying || ownerListings.length === 0}
+                  sx={{ textTransform: 'none', fontWeight: 700, flexShrink: 0 }}
+                >
+                  Appliquer aux listings…
+                </Button>
+              )}
+            </Box>
+          ) : (
+            <Box sx={{ mb: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="contained"
+                onClick={() => setApplyDialogOpen(true)}
+                disabled={listingsLoading || applying || ownerListings.length === 0}
+                sx={{ textTransform: 'none', fontWeight: 700 }}
+              >
+                Appliquer aux listings…
+              </Button>
+            </Box>
+          )}
 
           {listingsLoading && !isAdminTemplate ? (
             <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
@@ -264,6 +343,17 @@ function OwnerModelPageInner() {
             />
           )}
         </>
+      )}
+
+      {canApplyToListings && (
+        <ApplyOwnerModelToListingsDialog
+          open={applyDialogOpen}
+          listings={ownerListings}
+          loading={listingsLoading}
+          applying={applying}
+          onClose={() => setApplyDialogOpen(false)}
+          onApply={handleApplyFromDialog}
+        />
       )}
     </Box>
   );
