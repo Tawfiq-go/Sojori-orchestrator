@@ -15,8 +15,8 @@ import {
   markAllNotificationsRead,
 } from './notificationApi';
 import { getTaskOperationalSummary } from '../../services/fulltaskApi';
-import type { NotificationPanelTab, NotificationItem } from './types';
-import { isActionRequired, isActiveInPanel } from './constants';
+import type { NotificationPanelTab, NotificationBellTier, NotificationItem } from './types';
+import { isActionRequired, isActiveInPanel, matchesBellTier } from './constants';
 
 import { isNotificationApiNotDeployed } from './notificationApiErrors';
 
@@ -71,10 +71,11 @@ export function useNotificationList(
   facet: string,
   eventKey: string,
   tab: NotificationPanelTab,
+  tier?: NotificationBellTier | null,
 ) {
   const { ownerId, enabled } = useNotificationScope();
   return useQuery({
-    queryKey: [...ROOT_KEY, 'list', ownerId, facet, eventKey, tab],
+    queryKey: [...ROOT_KEY, 'list', ownerId, facet, eventKey, tab, tier ?? 'all'],
     queryFn: async () => {
       const res = await fetchNotifications({
         ownerId,
@@ -84,6 +85,9 @@ export function useNotificationList(
         page: 1,
       });
       let items = (res.items ?? []).filter(isActiveInPanel);
+      if (tier) {
+        items = items.filter((n) => matchesBellTier(n, tier));
+      }
       if (tab === 'action') {
         items = items.filter(isActionRequired);
       }
@@ -174,7 +178,7 @@ export function useUpdatePreferences(targetUserId?: string | null) {
   const preferenceUserId = targetUserId ?? ownerId;
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (events: Record<string, { dashboard?: boolean }>) =>
+    mutationFn: (events: Record<string, { dashboard?: boolean; importance?: 1 | 2 }>) =>
       updateNotificationPreferences(events, ownerId, preferenceUserId),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ROOT_KEY });

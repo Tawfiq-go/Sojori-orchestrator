@@ -11,6 +11,9 @@ export type NotificationFacet =
 
 export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';
 
+/** 1 = cloche urgente · 2 = cloche secondaire */
+export type NotificationImportance = 1 | 2;
+
 export type NotificationStatus =
   | 'created'
   | 'pending'
@@ -53,6 +56,10 @@ export interface UnreadCountData {
   /** Aligné panneau cloche « En cours » (hors traitées / ignorées / expirées). */
   activeCount?: number;
   actionRequired: number;
+  /** Actives priorité 1 (critical|high). */
+  importantActiveCount?: number;
+  /** Actives priorité 2 (normal|low). */
+  secondaryActiveCount?: number;
   byFacet: Partial<Record<NotificationFacet, number>>;
   byEventKey?: Partial<Record<string, number>>;
   /** Compteurs « en cours » pour badges sidebar (même logique que activeCount). */
@@ -71,8 +78,11 @@ export interface NotificationListResponse {
 
 export type NotificationPanelTab = 'action' | 'all';
 
+export type NotificationBellTier = 'important' | 'secondary';
+
 export interface EventChannelPreference {
   dashboard?: boolean;
+  importance?: NotificationImportance;
 }
 
 export interface PreferenceCatalogEntry {
@@ -80,6 +90,7 @@ export interface PreferenceCatalogEntry {
   facet: NotificationFacet;
   labelFr: string;
   priority: NotificationPriority;
+  importance: NotificationImportance;
   ttlDays: number;
   critical: boolean;
   channels: {

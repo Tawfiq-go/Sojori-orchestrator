@@ -13,13 +13,15 @@ import { toLegacyAuthUser } from '../../utils/legacyAuthUser';
 import { getPropertyOwnerScopeId } from '../../utils/taskScope.utils';
 import { useSocketIO } from '../../hooks/useSocketIO';
 import { SOCKET_EVENTS } from '../../constants/socketEvents';
-import type { NotificationItem } from './types';
+import type { NotificationBellTier, NotificationItem } from './types';
 import { NotificationToastStack } from './NotificationToast';
 
 interface NotificationScopeValue {
   ownerId: string | null;
   userId: string | null;
   enabled: boolean;
+  panelTier: NotificationBellTier | null;
+  setPanelTier: (tier: NotificationBellTier | null) => void;
   panelOpen: boolean;
   setPanelOpen: (open: boolean) => void;
   livePulse: number;
@@ -55,9 +57,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const enabled = Boolean(ownerId) && !authLoading;
 
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelTier, setPanelTier] = useState<NotificationBellTier | null>(null);
   const [livePulse, setLivePulse] = useState(0);
   const [toasts, setToasts] = useState<NotificationItem[]>([]);
+
+  const setPanelOpen = useCallback((open: boolean) => {
+    setPanelTier(open ? 'important' : null);
+  }, []);
 
   const pushToast = useCallback((n: NotificationItem) => {
     setToasts((prev) => [n, ...prev].slice(0, 3));
@@ -107,12 +113,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       ownerId,
       userId,
       enabled,
-      panelOpen,
+      panelTier,
+      setPanelTier,
+      panelOpen: panelTier != null,
       setPanelOpen,
       livePulse,
       pushToast,
     }),
-    [ownerId, userId, enabled, panelOpen, livePulse, pushToast],
+    [ownerId, userId, enabled, panelTier, setPanelOpen, livePulse, pushToast],
   );
 
   return (

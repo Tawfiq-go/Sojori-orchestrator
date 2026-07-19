@@ -1,6 +1,5 @@
 import { useContext, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Box } from '@mui/material';
 import { resolvePageChrome } from '../config/pageChromeRegistry';
 import { isListingCataloguePath } from '../constants/listingLayout';
 import { isPmBusinessPath } from '../config/routeAccessPolicy';
@@ -11,7 +10,6 @@ import {
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import { PageHeader } from './dashboard/DashboardV2.components';
 import {
-  DashboardChrome,
   DashboardShellContext,
   PageChromeContext,
   usePageChromeUpdater,
@@ -40,8 +38,9 @@ interface DashboardWrapperProps {
 }
 
 /**
- * Coquille de page : dans le shell persistant, ne rend que le contenu (sidebar/topbar inchangés).
- * Hors shell (legacy), monte encore DashboardLayout complet.
+ * Contenu de page uniquement.
+ * Sidebar + topbar viennent exclusivement de `DashboardShellLayout` (route parent).
+ * Ne jamais remonter `DashboardChrome` ici — sinon double sidebar / double topbar.
  */
 export function DashboardWrapper({
   children,
@@ -77,6 +76,14 @@ export function DashboardWrapper({
 
   usePageChromeUpdater(effectiveBreadcrumb, listingCompact);
 
+  if (import.meta.env.DEV && !inShell) {
+    // Contexte shell perdu (souvent après HMR) — on n’empile plus un 2e chrome.
+    console.warn(
+      '[DashboardWrapper] hors DashboardShellLayout — contenu sans chrome (évite double sidebar). path=',
+      location.pathname,
+    );
+  }
+
   const scopeAlerts =
     showOwnerFilter && pmBusiness && !disableScopeGate && ownerScopeAll ? (
       <AdminBusinessScopeAllAlert />
@@ -88,30 +95,15 @@ export function DashboardWrapper({
     </PageHeader>
   ) : null;
 
-  if (inShell) {
-    if (scopeGate) {
-      return <AdminBusinessScopeUnsetAlert />;
-    }
-    return (
-      <>
-        {scopeAlerts}
-        {pageHeader}
-        {children}
-      </>
-    );
+  if (scopeGate) {
+    return <AdminBusinessScopeUnsetAlert />;
   }
 
   return (
-    <DashboardChrome breadcrumb={effectiveBreadcrumb} compactMain={listingCompact}>
-      {scopeGate ? (
-        <AdminBusinessScopeUnsetAlert />
-      ) : (
-        <Box>
-          {scopeAlerts}
-          {pageHeader}
-          {children}
-        </Box>
-      )}
-    </DashboardChrome>
+    <>
+      {scopeAlerts}
+      {pageHeader}
+      {children}
+    </>
   );
 }

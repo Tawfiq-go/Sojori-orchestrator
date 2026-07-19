@@ -91,6 +91,17 @@ export function isActionRequired(n: {
   );
 }
 
+export function isImportantTier(n: Pick<NotificationItem, 'priority'>): boolean {
+  return n.priority === 'critical' || n.priority === 'high';
+}
+
+export function matchesBellTier(
+  n: Pick<NotificationItem, 'priority'>,
+  tier: 'important' | 'secondary',
+): boolean {
+  return tier === 'important' ? isImportantTier(n) : !isImportantTier(n);
+}
+
 /** Visible dans le panneau cloche (exclut archivées / traitées). */
 export function isActiveInPanel(n: Pick<NotificationItem, 'status'>): boolean {
   return (

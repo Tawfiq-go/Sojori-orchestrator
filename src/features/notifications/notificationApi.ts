@@ -54,6 +54,8 @@ export async function fetchUnreadCount(ownerId?: string | null): Promise<UnreadC
     total: 0,
     activeCount: 0,
     actionRequired: 0,
+    importantActiveCount: 0,
+    secondaryActiveCount: 0,
     byFacet: {},
     byEventKey: {},
     byFacetActive: {},
