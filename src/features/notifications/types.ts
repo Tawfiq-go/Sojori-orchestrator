@@ -40,6 +40,7 @@ export interface NotificationItem {
   eventKey: string;
   facet: NotificationFacet;
   priority: NotificationPriority;
+  importance?: NotificationImportance;
   title: string;
   body: string;
   linkPath: string;

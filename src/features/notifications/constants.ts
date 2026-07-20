@@ -91,12 +91,13 @@ export function isActionRequired(n: {
   );
 }
 
-export function isImportantTier(n: Pick<NotificationItem, 'priority'>): boolean {
+export function isImportantTier(n: Pick<NotificationItem, 'priority' | 'importance'>): boolean {
+  if (n.importance === 1 || n.importance === 2) return n.importance === 1;
   return n.priority === 'critical' || n.priority === 'high';
 }
 
 export function matchesBellTier(
-  n: Pick<NotificationItem, 'priority'>,
+  n: Pick<NotificationItem, 'priority' | 'importance'>,
   tier: 'important' | 'secondary',
 ): boolean {
   return tier === 'important' ? isImportantTier(n) : !isImportantTier(n);

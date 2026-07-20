@@ -3,8 +3,9 @@ import Box from '@mui/material/Box';
 import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import { tokens as t } from '../../components/dashboard/dashboardTokens';
-import type { PreferenceCatalogEntry } from './types';
+import type { NotificationImportance, PreferenceCatalogEntry } from './types';
 import { GUEST_JOURNEY_NOTIFY_EVENTS } from './constants';
+import { ImportanceToggle } from './ImportanceToggle';
 import { useUpdatePreferences } from './useNotifications';
 
 export const WHATSAPP_MESSAGE_EVENT = 'message:whatsapp_received';
@@ -26,6 +27,10 @@ function catalogMap(catalog: PreferenceCatalogEntry[]) {
 function deriveMode(catalog: PreferenceCatalogEntry[]): WhatsappNotifyMode {
   const wa = catalog.find((e) => e.eventKey === WHATSAPP_MESSAGE_EVENT);
   return wa?.channels.dashboard ? 'all_messages' : 'milestones_only';
+}
+
+function resolveImportance(entry?: PreferenceCatalogEntry): NotificationImportance {
+  return entry?.importance === 1 || entry?.importance === 2 ? entry.importance : 1;
 }
 
 interface NotificationWhatsAppPrefsProps {
@@ -62,6 +67,10 @@ export function NotificationWhatsAppPrefs({ catalog, targetUserId = null }: Noti
     void updatePrefs.mutateAsync({ [eventKey]: { dashboard: next } }).catch(() => {});
   };
 
+  const setImportance = (eventKey: string, importance: NotificationImportance) => {
+    void updatePrefs.mutateAsync({ [eventKey]: { importance } }).catch(() => {});
+  };
+
   if (!waEntry) return null;
 
   return (
@@ -95,7 +104,7 @@ export function NotificationWhatsAppPrefs({ catalog, targetUserId = null }: Noti
             </Typography>
             <Typography sx={{ fontSize: 11, color: t.text3, lineHeight: 1.4 }}>
               Messages libres ou jalons parcours (enregistrement, heures). Transport, courses et
-              conciergerie → section <b>Tâches</b>.
+              conciergerie → section <b>Tâches</b>. Chaque ligne a aussi une priorité cloche (1 ou 2).
             </Typography>
           </Box>
         </Box>
@@ -120,11 +129,32 @@ export function NotificationWhatsAppPrefs({ catalog, targetUserId = null }: Noti
           />
         </Box>
 
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 72px 88px',
+            gap: 1,
+            py: 0.5,
+            borderBottom: `1px solid ${t.border}`,
+            mb: 0.25,
+          }}
+        >
+          <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text3 }}>Événement</Typography>
+          <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text3, textAlign: 'center' }}>
+            Cloche
+          </Typography>
+          <Typography sx={{ fontSize: 11, fontWeight: 700, color: t.text3, textAlign: 'center' }}>
+            Priorité
+          </Typography>
+        </Box>
+
         <PrefRow
           label={waEntry.labelFr}
           sub={WHATSAPP_MESSAGE_EVENT}
           checked={waEntry.channels.dashboard}
+          importance={resolveImportance(waEntry)}
           onChange={(v) => toggleEvent(WHATSAPP_MESSAGE_EVENT, v)}
+          onImportance={(v) => setImportance(WHATSAPP_MESSAGE_EVENT, v)}
         />
 
         {mode === 'milestones_only' ? (
@@ -160,7 +190,9 @@ export function NotificationWhatsAppPrefs({ catalog, targetUserId = null }: Noti
                     label={ev.labelFr}
                     sub={ev.eventKey}
                     checked={ev.channels.dashboard}
+                    importance={resolveImportance(ev)}
                     onChange={(v) => toggleEvent(ev.eventKey, v)}
+                    onImportance={(v) => setImportance(ev.eventKey, v)}
                   />
                 ))
               : null}
@@ -227,23 +259,28 @@ function PrefRow({
   label,
   sub,
   checked,
+  importance,
   onChange,
+  onImportance,
 }: {
   label: string;
   sub: string;
   checked: boolean;
+  importance: NotificationImportance;
   onChange: (v: boolean) => void;
+  onImportance: (v: NotificationImportance) => void;
 }) {
   return (
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: '1fr auto',
+        gridTemplateColumns: '1fr 72px 88px',
         gap: 1,
         alignItems: 'center',
         py: 0.65,
         borderBottom: `1px solid ${t.border}`,
         '&:last-child': { borderBottom: 'none' },
+        opacity: checked ? 1 : 0.55,
       }}
     >
       <Box>
@@ -252,7 +289,14 @@ function PrefRow({
           {sub}
         </Typography>
       </Box>
-      <Switch size="small" checked={checked} onChange={(_, v) => onChange(v)} />
+      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <Switch size="small" checked={checked} onChange={(_, v) => onChange(v)} />
+      </Box>
+      <ImportanceToggle
+        value={importance}
+        disabled={!checked}
+        onChange={onImportance}
+      />
     </Box>
   );
 }
