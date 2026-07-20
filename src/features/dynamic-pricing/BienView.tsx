@@ -24,13 +24,15 @@ import MarrakechMap from './bien/MarrakechMap';
 import type { CompMapPin } from './bien/MarrakechMap';
 import CompsTable from './bien/CompsTable';
 import type { CompRow } from './bien/CompsTable';
+import CompCompareModal from './bien/CompCompareModal';
 import MarketDataFetchExplain from './bien/MarketDataFetchExplain';
 import JustificationModalG7 from './JustificationModalG7';
 import EventEditorModal from './bien/EventEditorModal';
 import DynamicPriceScopeModal from './bien/DynamicPriceScopeModal';
 import CalendarUpdateModal from './bien/CalendarUpdateModal';
 import type { PilotApplyReportDto } from '../../services/dynamicPricingApi';
-import ApplyPreviewDiffPanel from './bien/ApplyPreviewDiffPanel';
+import PeriodRulesCard from './bien/PeriodRulesCard';
+import PricePreviewCard from './bien/PricePreviewCard';
 import { SectionSourceBar, type DataSourceItem } from './DataSourceBadges';
 import DataEmptyPlaceholder from './DataEmptyPlaceholder';
 import { normalizeCityKey } from './cityScope';
@@ -51,6 +53,12 @@ export interface BienViewProps {
   provenance: BienViewProvenance;
   hasTtm: boolean;
   hasL90d: boolean;
+  /** Performances réelles GET /listings (admin badge). */
+  hasTtmAirbnb?: boolean;
+  hasL90dAirbnb?: boolean;
+  /** Projection ADR × occ. ville (cache marché). */
+  hasTtmCityMarket?: boolean;
+  hasPacingCityMarket?: boolean;
   hasPotentialProd: boolean;
   hasMarketProd: boolean;
   hasCalendarProd: boolean;
@@ -64,6 +72,8 @@ export interface BienViewProps {
   calendarAirroiError?: string | null;
   airroiCalendarDaysCount?: number;
   potentialHint?: string;
+  ttmHint?: string;
+  pacingHint?: string;
   hasCompsProd: boolean;
   performance: BienDetailPerformance;
   market: MarketData;
@@ -121,6 +131,9 @@ export interface BienViewProps {
   bienMapPosition: { lat: number; lng: number } | null;
 
   compRows: CompRow[];
+  /** Profil enrichi pour comparaison 1:1 avec un comp. */
+  selfCompareProfile?: CompRow | null;
+  selfCompareHint?: string;
 
   estimatedRevenueMad?: number;
   estimatedRevenueLiftPct?: number;
@@ -161,6 +174,9 @@ export interface BienViewProps {
   onEventSave?: (event: PricingEvent) => void | Promise<void>;
   onEditEvent: (id: string) => void;
   onDeleteEvent: (id: string) => void;
+  onToggleEventEnabled?: (id: string, on: boolean) => void | Promise<void>;
+  onDuplicateEvent?: (id: string) => void | Promise<void>;
+  onCreateEvent?: (event: PricingEvent) => void | Promise<void>;
   onAcceptSuggestion: (id: string) => void;
   onYearChange?: (year: number) => void;
   onApplyToOps: () => void | Promise<void>;
@@ -195,10 +211,12 @@ export interface BienViewProps {
 export default function BienView(props: BienViewProps) {
   const {
     isPlatformAdmin = false,
-    listing, provenance, hasTtm, hasL90d, hasPotentialProd, hasMarketProd, hasCalendarProd,
+    listing, provenance, hasTtm, hasL90d, hasTtmAirbnb, hasL90dAirbnb,
+    hasTtmCityMarket, hasPacingCityMarket,
+    hasPotentialProd, hasMarketProd, hasCalendarProd,
     calendarFromAirroi, calendarFromCache, calendarUsesPilotPreview, calendarHasEventOverlay,
     calendarWindowMode, calendarPricingSource, eventsCount, calendarAirroiError, airroiCalendarDaysCount,
-    potentialHint, hasCompsProd,
+    potentialHint, ttmHint, pacingHint, hasCompsProd,
     performance, market, aiEnabled,
     floor, ceiling, mode, activeModeId, pricingModes, gapBlockEnabled, gapBlockMinNights, modeEnabled,
     lastMinuteEnabled, lastMinuteFromDays, lastMinuteToDays, lastMinuteDiscountPct,
@@ -211,6 +229,7 @@ export default function BienView(props: BienViewProps) {
     compsMarketStats, selfVsComps, hasCompsMarket,
     seasonality, pacing, supplyGrowth,
     compMapPins, bienMapPosition, compRows,
+    selfCompareProfile, selfCompareHint,
     estimatedRevenueMad, estimatedRevenueLiftPct, boundsContextHint, compsMedianAdr, estimateAdrMad,
     onToggleAi, onScopeModalClose, onScopeModalConfirm, onEditSyncScope,
     onFloorChange, onCeilingChange, onApplyRecoBounds,
@@ -223,12 +242,14 @@ export default function BienView(props: BienViewProps) {
     onOccupancyHighMinChange, onOccupancyHighAdjChange,
     onPricingBaseSourceChange, onManualBasePriceMadChange, onEventsEnabledChange,
     onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
+    onToggleEventEnabled, onDuplicateEvent, onCreateEvent,
     onEventModalClose, onEventSave,
     onYearChange, onApplyToOps, onRunCalendarUpdate, activeModeLabel, onExpandDay,
     pilotPreviewLoading, pilotApplyLoading, pilotApplySummary, pilotApplyError,
   } = props;
 
   const [calendarUpdateOpen, setCalendarUpdateOpen] = useState(false);
+  const [compareComp, setCompareComp] = useState<CompRow | null>(null);
   // Onglets de la vue avancée : potentiel+calendrier · réglages · marché
   const [advTab, setAdvTab] = useState<'reglages' | 'bien'>('reglages');
   const modeLabel =
@@ -426,12 +447,26 @@ export default function BienView(props: BienViewProps) {
         sub={`District · ${listing.district} · ${listing.city}`}
         sources={[
           { kind: hasPotentialProd ? 'prod' : 'empty', label: hasPotentialProd ? 'Estimation Sojori' : 'Potentiel VIDE' },
-          ...(isPlatformAdmin
-            ? [
-                { kind: hasTtm ? 'prod' : 'empty', label: hasTtm ? 'TTM PROD' : 'TTM VIDE' } as const,
-                { kind: hasL90d ? 'prod' : 'empty', label: hasL90d ? 'L90D PROD' : 'L90D VIDE' } as const,
-              ]
-            : []),
+          {
+            kind: hasTtmAirbnb ? 'prod' : hasTtmCityMarket ? 'partial' : hasTtm ? 'partial' : 'empty',
+            label: hasTtmAirbnb
+              ? 'TTM Airbnb'
+              : hasTtmCityMarket
+                ? 'TTM ville'
+                : hasTtm
+                  ? 'TTM estim.'
+                  : 'TTM VIDE',
+          },
+          {
+            kind: hasPacingCityMarket ? 'partial' : hasL90dAirbnb ? 'prod' : hasL90d ? 'partial' : 'empty',
+            label: hasPacingCityMarket
+              ? 'Occ. ville'
+              : hasL90dAirbnb
+                ? 'L90D Airbnb'
+                : hasL90d
+                  ? 'Occ. projetée'
+                  : 'Pacing VIDE',
+          },
         ]}
         snapshotAt={provenance.snapshotAt}
         snapshotLabel={
@@ -441,15 +476,17 @@ export default function BienView(props: BienViewProps) {
       >
         <StatsCards
           hasPotentialProd={hasPotentialProd}
-          hasTtm={isPlatformAdmin && hasTtm}
-          hasL90d={isPlatformAdmin && hasL90d}
+          hasTtm={hasTtm}
+          hasL90d={hasL90d}
           potentialAnnual={performance.potentialAnnual}
           potentialUsd={performance.potentialUsd}
           performance={performance.ttm}
           pacing={performance.pacing}
           potentialHint={potentialHint}
+          ttmHint={ttmHint}
+          pacingHint={pacingHint}
         />
-        {provenance.hasRevenueEstimate && !hasTtm ? (
+        {provenance.hasRevenueEstimate && !hasCompsProd ? (
           <Box
             sx={{
               mt: 2,
@@ -554,6 +591,54 @@ export default function BienView(props: BienViewProps) {
         />
       </Section>
 
+      {/* ── Règles par période (style Hostaway) ── */}
+      <Section
+        num="04"
+        title="Règles par période"
+        sub="Une période, un effet — ex. GITEX +25 % vs marché · prioritaire sur tous les autres réglages"
+      >
+        <PeriodRulesCard
+          events={events}
+          eventsEnabled={eventsEnabled}
+          onEventsEnabledChange={onEventsEnabledChange}
+          onCreateEvent={onCreateEvent}
+          onEditEvent={onEditEvent}
+          onDeleteEvent={onDeleteEvent}
+          onToggleEventEnabled={onToggleEventEnabled}
+          onDuplicateEvent={onDuplicateEvent}
+        />
+      </Section>
+
+      {/* ── Aperçu des prix (super vue) ── */}
+      <Section
+        num="05"
+        title="Aperçu des prix"
+        sub="Estimé (marché) → Sojori (après réglages) → calendrier actuel · résas et blocages en couleurs"
+      >
+        <PricePreviewCard
+          data={previewDiffData ?? null}
+          loading={previewDiffLoading}
+          error={previewDiffError}
+          onReload={onPreviewDiffReload}
+          events={events}
+          onApply={
+            applyPrice
+              ? () => {
+                  if (onRunCalendarUpdate) {
+                    setCalendarUpdateOpen(true);
+                  } else {
+                    void onApplyToOps();
+                  }
+                }
+              : undefined
+          }
+          canApply={
+            applyPrice && Boolean(provenance.hasRevenueEstimate || provenance.hasAirroiSnapshot)
+          }
+          applyLoading={pilotApplyLoading}
+        />
+      </Section>
+
       </>) : null}
 
       {/* ── Calendrier (onglet Bien & comps) ── */}
@@ -623,45 +708,7 @@ export default function BienView(props: BienViewProps) {
               : 'Snapshot marché'
           }
         >
-          {calendarUsesPilotPreview &&
-          (provenance.hasRevenueEstimate || provenance.hasAirroiSnapshot) ? (
-            <Box sx={{ mb: 2 }}>
-              <ApplyPreviewDiffPanel
-                data={previewDiffData ?? null}
-                loading={previewDiffLoading}
-                error={previewDiffError}
-                onlyChanged={previewDiffOnlyChanged}
-                onOnlyChangedChange={onPreviewDiffOnlyChanged ?? (() => undefined)}
-                onReload={onPreviewDiffReload ?? (() => undefined)}
-                onApply={
-                  applyPrice
-                    ? () => {
-                        if (onRunCalendarUpdate) {
-                          setCalendarUpdateOpen(true);
-                        } else {
-                          void onApplyToOps();
-                        }
-                      }
-                    : undefined
-                }
-                applyLoading={pilotApplyLoading}
-                canApply={
-                  applyPrice &&
-                  Boolean(provenance.hasRevenueEstimate || provenance.hasAirroiSnapshot)
-                }
-                marketSource={
-                  previewDiffData?.marketSource ??
-                  (provenance.hasRevenueEstimate ? 'estimate' : 'airroi')
-                }
-              />
-              {!applyPrice ? (
-                <Typography sx={{ fontSize: 11, color: T.text3, mt: 1, px: 0.5 }}>
-                  Tableau visible en lecture seule — activez « Prix » dans Sojori AI pour appliquer au
-                  calendrier.
-                </Typography>
-              ) : null}
-            </Box>
-          ) : null}
+          {/* L'aperçu des écarts a déménagé : onglet Réglages → bloc « Aperçu des prix » */}
           {pilotApplyError ? (
             <Typography sx={{ fontSize: 12, color: T.error, fontWeight: 600, mb: 1 }}>
               {pilotApplyError}
@@ -815,9 +862,21 @@ export default function BienView(props: BienViewProps) {
             : { kind: 'empty', label: 'VIDE' },
         ]}
       >
-        <CompsTable rows={compRows.filter((r) => isPlatformAdmin || !r.isSelf)} showFullDetail />
+        <CompsTable
+          rows={compRows.filter((r) => isPlatformAdmin || !r.isSelf)}
+          showFullDetail
+          onCompare={selfCompareProfile ? (row) => setCompareComp(row) : undefined}
+        />
       </Section>
       </>) : null}
+
+      <CompCompareModal
+        open={Boolean(compareComp && selfCompareProfile)}
+        self={selfCompareProfile ?? null}
+        comp={compareComp}
+        selfSourceHint={selfCompareHint}
+        onClose={() => setCompareComp(null)}
+      />
 
       {/* ── Modale G7 ── */}
       <EventEditorModal

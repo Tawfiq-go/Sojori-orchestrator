@@ -16,7 +16,8 @@ export function useApplyPreviewDiff(options: {
   const [data, setData] = useState<ApplyPreviewDiffDto | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [onlyChanged, setOnlyChanged] = useState(true);
+  // false : l'Aperçu des prix (super vue) affiche TOUS les jours (résas/bloqués compris)
+  const [onlyChanged, setOnlyChanged] = useState(false);
 
   const load = useCallback(async () => {
     const payload = configPayload?.() ?? null;
@@ -30,7 +31,7 @@ export function useApplyPreviewDiff(options: {
       const res = await fetchApplyPreviewDiff(listingId, {
         config: payload,
         onlyChanged,
-        limit: 120,
+        limit: 400,
       });
       if (res.data?.success) {
         setData(res.data);

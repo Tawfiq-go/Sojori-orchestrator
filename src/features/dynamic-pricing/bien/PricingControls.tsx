@@ -38,6 +38,8 @@ export interface PricingEvent {
   /** % du marché × occupation si kind=market_percent (ex. 115 = 115 %) */
   marketPercent: number;
   minNights: number;
+  /** false = règle conservée mais ignorée au calcul. */
+  enabled?: boolean;
 }
 
 export interface PricingSuggestion {
@@ -803,115 +805,7 @@ export default function PricingControls(props: PricingControlsProps) {
         </AutoItem>
         </Box>
 
-        <Box sx={{ ...cardSx, py: { xs: 0.5, md: 0.75 } }}>
-        <AutoItem
-          emoji="🎉"
-          title="Événements & dates spéciales"
-          résumé={
-            events.length > 0
-              ? <><b>{events.length}</b> période{events.length > 1 ? 's' : ''} à prix prioritaire — remplace tout le calcul sur ses dates</>
-              : <>aucune période — le prix event remplace tout le calcul sur ses dates</>
-          }
-          on={eventsEnabled}
-          onToggle={onEventsEnabledChange}
-          defaultOpen={events.length > 0 || suggestions.length > 0}
-          headerExtra={
-            <Button
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAddEvent();
-              }}
-              sx={{
-                textTransform: 'none',
-                fontSize: 11.5,
-                fontWeight: 700,
-                color: T.text2,
-                border: `1px solid ${T.borderStrong}`,
-                borderRadius: 1,
-                px: 1.25,
-                py: 0.375,
-                flexShrink: 0,
-                '&:hover': { borderColor: T.goldDeep, color: T.goldDeep, bgcolor: T.goldTint },
-              }}
-            >
-              + Ajouter
-            </Button>
-          }
-        >
-          {events.length === 0 ? (
-            <Typography sx={{ fontSize: 12, color: T.text3, fontStyle: 'italic' }}>
-              Ex. Nouvel An, GITEX… — prix fixe MAD ou % du marché sur des dates précises.
-            </Typography>
-          ) : null}
-          {events.map((ev) => (
-            <Stack
-              key={ev.id}
-              direction="row"
-              sx={{
-                alignItems: 'center', gap: 1.25, p: '9px 12px', mb: 0.75,
-                bgcolor: T.bg2, border: `1px solid ${T.border}`, borderRadius: 1.25,
-              }}
-            >
-              <Box sx={{ fontSize: 17 }}>{ev.emoji}</Box>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontSize: 12.5, fontWeight: 700 }} noWrap>{ev.name}</Typography>
-                <Typography sx={{ fontSize: 10.5, color: T.text3, fontFamily: MONO }} noWrap>
-                  {ev.dateRange} ·{' '}
-                  <b style={{ color: T.goldDeep }}>
-                    {ev.kind === 'market_percent'
-                      ? `${ev.marketPercent} % marché`
-                      : `${fmt(ev.fixedPrice)} MAD/nuit`}
-                  </b>{' '}
-                  · min {ev.minNights} nuits
-                </Typography>
-              </Box>
-              <IconButton size="small" aria-label="Modifier" onClick={() => onEditEvent(ev.id)} sx={{ fontSize: 12, color: T.text3 }}>
-                ✏
-              </IconButton>
-              <IconButton size="small" aria-label="Supprimer" onClick={() => onDeleteEvent(ev.id)} sx={{ fontSize: 12, color: T.text3 }}>
-                🗑
-              </IconButton>
-            </Stack>
-          ))}
-
-          {suggestions.length > 0 ? (
-            <Box
-              sx={{
-                mt: 1.25, p: 1.5, borderRadius: 1.375,
-                background: `linear-gradient(135deg, ${T.aiTint}, transparent)`,
-                border: '1px solid rgba(124,58,237,0.30)',
-              }}
-            >
-              <Typography sx={{ fontSize: 10.5, color: T.ai, fontFamily: MONO, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.875 }}>
-                ✨ Sojori suggère · détection IA
-              </Typography>
-              {suggestions.map((s) => (
-                <Stack
-                  key={s.id}
-                  direction="row"
-                  onClick={() => onAcceptSuggestion(s.id)}
-                  sx={{
-                    alignItems: 'center', gap: 1.125, p: '8px 11px', mb: 0.625,
-                    bgcolor: T.bg1, border: '1px solid rgba(124,58,237,0.20)', borderRadius: 1,
-                    cursor: 'pointer',
-                    '&:hover': { borderColor: T.ai, bgcolor: 'rgba(124,58,237,0.04)' },
-                  }}
-                >
-                  <Box sx={{ fontSize: 14 }}>📌</Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 11.5, fontWeight: 700 }}>{s.dateRange}</Typography>
-                    <Typography sx={{ fontSize: 10.5, color: T.text3, fontFamily: MONO }} noWrap>{s.reason}</Typography>
-                  </Box>
-                  <Box sx={{ fontFamily: MONO, fontSize: 11, fontWeight: 800, color: T.ai, bgcolor: T.aiTint, px: 0.875, py: 0.25, borderRadius: 999 }}>
-                    +{s.deltaPct}%
-                  </Box>
-                </Stack>
-              ))}
-            </Box>
-          ) : null}
-        </AutoItem>
-        </Box>
+        {/* Règles par période & événements → bloc dédié « 04 Règles par période » */}
       </Box>
 
       <Typography sx={{ fontSize: 10.5, color: T.text4, textAlign: 'center' }}>

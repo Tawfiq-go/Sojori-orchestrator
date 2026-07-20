@@ -31,8 +31,16 @@ import {
   compareSelfToCompsMedian,
   computeCompsMarketStats,
 } from '../utils/computeCompsMarketStats';
-import { normalizeCityKey } from '../cityScope';
+import { defaultOccupancyForCity, normalizeCityKey } from '../cityScope';
 import { overlayEventsOnCalendarDays } from '../utils/overlayEventsOnCalendar';
+import {
+  annualRevenueFromMarketDayPrices,
+  annualRevenueFromEstimateAdr,
+  medianAdrFromMarketDayPrices,
+  resolveMarketProjection,
+  bandFromP50,
+  potentialFromEstimateSummary,
+} from '../utils/computeMarketAnnualPotential';
 
 const USD_TO_MAD = 10;
 
@@ -50,6 +58,7 @@ function mapUiEventsToDto(events: PricingEvent[]): PilotPricingEventDto[] {
       eventFloorMad: isPercent ? 0 : e.fixedPrice,
       eventMarketPercent: isPercent ? e.marketPercent : undefined,
       minNightsOverride: e.minNights > 0 ? e.minNights : undefined,
+      enabled: e.enabled !== false,
     };
   });
 }
@@ -203,6 +212,64 @@ function buildSelfCompRow(row: PortfolioRow): CompRow | null {
   };
 }
 
+/** Profil « votre bien » pour comparaison 1:1 — enrichi estimation / occ. ville si perf. Airbnb absente. */
+function buildSelfCompareProfile(
+  row: PortfolioRow,
+  selfRow: CompRow | null,
+  est: PortfolioRow['estimateSummary'],
+  cityOcc: number,
+  cityOccUsable: boolean,
+  compsMedianOcc: number,
+): CompRow {
+  const l = row.listing;
+  const ar = row.airroiRaw;
+  const base: CompRow =
+    selfRow ?? {
+      id: l._id,
+      isSelf: true,
+      name: l.name,
+      photoGradient: row.thumbColor ?? 1,
+      distanceMeters: null,
+      rating: 0,
+      reviews: 0,
+      bedrooms: l.bedrooms ?? 0,
+      adrTtm: 0,
+      occupancyTtm: 0,
+      revenueTtm: 0,
+    };
+
+  let adr = base.adrTtm;
+  if (adr <= 0 && est?.adrP50Mad && est.adrP50Mad > 0) adr = est.adrP50Mad;
+
+  let occ = base.occupancyTtm;
+  if (occ <= 0) {
+    if (cityOccUsable) occ = cityOcc;
+    else if (est?.occupancyP50 && est.occupancyP50 > 0) occ = est.occupancyP50;
+    else if (compsMedianOcc > 0) occ = compsMedianOcc;
+  }
+
+  let rev = base.revenueTtm;
+  if (rev <= 0 && adr > 0 && occ > 0) rev = annualRevenueFromEstimateAdr(adr, occ);
+
+  const revpar =
+    adr > 0 && occ > 0 ? Math.round(adr * occ) : (base.revparTtm ?? null);
+
+  return {
+    ...base,
+    isSelf: true,
+    bedrooms: base.bedrooms || l.bedrooms || 0,
+    beds: base.beds ?? l.beds ?? null,
+    baths: base.baths ?? l.baths ?? null,
+    guests: base.guests ?? l.guests ?? l.personCapacityPricing ?? null,
+    rating: base.rating || ar?.rating_overall || 0,
+    reviews: base.reviews || ar?.num_reviews || 0,
+    adrTtm: adr,
+    occupancyTtm: occ,
+    revenueTtm: rev,
+    revparTtm: revpar,
+  };
+}
+
 export type BienDetailResult = {
   loading: boolean;
   error: string | null;
@@ -212,6 +279,8 @@ export type BienDetailResult = {
   marketFetchedAt: string | null;
   hasTtm: boolean;
   hasL90d: boolean;
+  hasTtmAirbnb?: boolean;
+  hasL90dAirbnb?: boolean;
   applyToOps: () => Promise<void>;
   runCalendarUpdate: () => Promise<import('../../../services/dynamicPricingApi').PilotApplyReportDto>;
   refetch: () => Promise<void>;
@@ -384,6 +453,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         fixedPrice: e.eventFloorMad,
         marketPercent: e.eventMarketPercent ?? 100,
         minNights: e.minNightsOverride ?? 0,
+        enabled: e.enabled !== false,
       };
     });
   }, []);
@@ -851,29 +921,93 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const est = portfolioRow.estimateSummary;
   const compRevenues = compRows.filter((r) => !r.isSelf).map((r) => r.revenueTtm);
   const p50Comps = medianPositive(compRevenues);
+  const marketDaysForPotential =
+    pilot.previewMarketDays.length > 0 ? pilot.previewMarketDays : [];
+  const compsOccValues = compRows
+    .filter((r) => !r.isSelf)
+    .map((r) => r.occupancyTtm)
+    .filter((n) => n > 0);
+  const compsMedianOcc = medianPositive(compsOccValues);
+
+  const cityOcc = cityKpisProd?.occupancyAvg24m ?? 0;
+  const cityOccUsable = hasMarketProd && cityOcc > 0;
+  const cityName = portfolioRow.listing.city ?? 'ville';
+  const citySnapLabel = marketFetchedAt
+    ? new Date(marketFetchedAt).toLocaleString('fr-FR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      })
+    : null;
+  const cityOccPct = Math.round(cityOcc * 100);
+
+  const occupancyForPotential =
+    cityOccUsable
+      ? cityOcc
+      : (est?.occupancyP50 && est.occupancyP50 > 0
+          ? est.occupancyP50
+          : portfolioRow.airroiRaw?.ttm_occupancy && portfolioRow.airroiRaw.ttm_occupancy > 0
+            ? portfolioRow.airroiRaw.ttm_occupancy
+            : compsMedianOcc) ?? 0;
+
   let hasPotentialProd = false;
   let potentialHint: string | undefined;
-  if (est && est.revenueP50Mad > 0) {
+  const snapLabel = portfolioRow.airroiSnapshotAt
+    ? new Date(portfolioRow.airroiSnapshotAt).toLocaleString('fr-FR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      })
+    : null;
+
+  const cityOccHint = cityOccUsable
+    ? `occ. marché ${cityName} ${cityOccPct}%${citySnapLabel ? ` · cache ${citySnapLabel}` : ''}`
+    : null;
+
+  if (marketDaysForPotential.length > 0 && occupancyForPotential > 0) {
+    const p50 = annualRevenueFromMarketDayPrices(
+      marketDaysForPotential,
+      occupancyForPotential,
+    );
+    if (p50 > 0) {
+      hasPotentialProd = true;
+      const band = bandFromP50(p50);
+      performance = {
+        ...performance,
+        potentialAnnual: band,
+        potentialUsd: Math.round(band.p50 / USD_TO_MAD),
+      };
+      potentialHint = cityOccHint
+        ? `Grille estimation × ${cityOccHint}`
+        : snapLabel
+          ? `Estimation prix de marché · grille §04 · ${snapLabel}`
+          : 'Estimation prix de marché · projection 12 mois (grille §04)';
+    }
+  } else if (est && est.adrP50Mad > 0 && occupancyForPotential > 0) {
+    const p50 = annualRevenueFromEstimateAdr(est.adrP50Mad, occupancyForPotential);
+    if (p50 > 0) {
+      hasPotentialProd = true;
+      const band = bandFromP50(p50);
+      performance = {
+        ...performance,
+        potentialAnnual: band,
+        potentialUsd: Math.round(band.p50 / USD_TO_MAD),
+      };
+      potentialHint = cityOccHint
+        ? `ADR estimation × ${cityOccHint}`
+        : snapLabel
+          ? `ADR estimation × occ. · ${snapLabel}`
+          : 'ADR estimation × occupation · projection 12 mois';
+    }
+  } else if (est && est.revenueP50Mad > 0) {
     hasPotentialProd = true;
+    const band = potentialFromEstimateSummary(est);
     performance = {
       ...performance,
-      potentialAnnual: {
-        p25: est.revenueP25Mad,
-        p50: est.revenueP50Mad,
-        p75: est.revenueP75Mad,
-        currency: 'MAD',
-      },
-      potentialUsd: Math.round(est.revenueP50Mad / USD_TO_MAD),
+      potentialAnnual: band,
+      potentialUsd: Math.round(band.p50 / USD_TO_MAD),
     };
-    const snap = portfolioRow.airroiSnapshotAt
-      ? new Date(portfolioRow.airroiSnapshotAt).toLocaleString('fr-FR', {
-          dateStyle: 'short',
-          timeStyle: 'short',
-        })
-      : null;
-    potentialHint = snap
-      ? `Estimation prix de marché · ${snap}`
-      : 'Estimation prix de marché';
+    potentialHint = snapLabel
+      ? `Revenu estimate API · ${snapLabel}`
+      : 'Estimation prix de marché · projection 12 mois';
   } else if (p50Comps > 0) {
     hasPotentialProd = true;
     performance = {
@@ -886,8 +1020,176 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       },
       potentialUsd: Math.round(p50Comps / USD_TO_MAD),
     };
-    potentialHint = `Médiane revenus TTM des ${compRevenues.length} comps marché`;
+    potentialHint = `Médiane revenus TTM des ${compRevenues.length} comps marché (fallback)`;
   }
+
+  const compsAdrForPacing = compRows
+    .filter((r) => !r.isSelf)
+    .map((r) => r.adrTtm)
+    .filter((n) => n > 0);
+  const compsMedianAdrForPacing = medianPositive(compsAdrForPacing);
+  const grilleAdrMad = medianAdrFromMarketDayPrices(marketDaysForPotential);
+  const projection = resolveMarketProjection({
+    potentialP50Mad: performance.potentialAnnual.p50,
+    hasPotential: hasPotentialProd,
+    hasRevenueEstimate: Boolean(portfolioRow.hasRevenueEstimate),
+    hasGrilleDays: marketDaysForPotential.length > 0,
+    estAdrMad: est?.adrP50Mad,
+    estOcc: est?.occupancyP50,
+    estRevenueP50Mad: est?.revenueP50Mad,
+    grilleAdrMad,
+    compsMedianAdr: compsMedianAdrForPacing,
+    compsMedianOcc,
+    cityOcc,
+    cityOccUsable,
+    cityKey: normalizeCityKey(cityName),
+  });
+
+  const hasTtmAirbnb = hasTtm;
+  const hasL90dAirbnb = hasL90d;
+  let ttmHint: string | undefined;
+  let pacingHint: string | undefined;
+  let hasTtmCityMarket = Boolean(cityOccUsable && projection.ready);
+  const hasPacingCityMarket = cityOccUsable && projection.ready;
+  const pacingFromComps =
+    projection.ready &&
+    compsMedianOcc > 0 &&
+    compRevenues.length > 0 &&
+    Math.abs(projection.occupancy - compsMedianOcc) < 0.0001;
+
+  if (hasTtmAirbnb) {
+    ttmHint = snapLabel
+      ? `Performances réelles Airbnb · ${snapLabel}`
+      : 'Performances réelles · GET /listings';
+  } else if (projection.ready) {
+    hasTtm = true;
+    performance = {
+      ...performance,
+      ttm: {
+        ttmRevenue: projection.revenueMad,
+        ttmUsd: Math.round(projection.revenueMad / USD_TO_MAD),
+        occupancy: projection.occupancy,
+        adr: projection.adrMad,
+        nights: Math.round(365 * projection.occupancy),
+        quartile: 'P50',
+      },
+    };
+    if (cityOccUsable) {
+      ttmHint = citySnapLabel
+        ? `ADR estimation × occ. ${cityName} ${cityOccPct}% · cache ${citySnapLabel}`
+        : `ADR estimation × occ. marché ${cityName} ${cityOccPct}%`;
+    } else if (grilleAdrMad > 0 && marketDaysForPotential.length > 0) {
+      ttmHint = cityOccHint
+        ? `Grille estimation × ${cityOccHint} · aligné §02`
+        : snapLabel
+          ? `Grille estimation × occ. projetée · ${snapLabel}`
+          : 'Grille estimation × occupation projetée · aligné §02';
+    } else {
+      ttmHint = snapLabel
+        ? `Projection auto · estimation · ${snapLabel} · ≠ perf. réelle Airbnb`
+        : 'Projection auto · estimation Sojori · ≠ perf. réelle Airbnb';
+    }
+  } else if (hasPotentialProd && performance.potentialAnnual.p50 > 0) {
+    const rev = performance.potentialAnnual.p50;
+    let occ = projection.occupancy || defaultOccupancyForCity(cityName);
+    let adr = projection.adrMad || (occ > 0 ? Math.round(rev / (365 * occ)) : 0);
+    if (occ > 0 && adr > 0) {
+      hasTtm = true;
+      performance = {
+        ...performance,
+        ttm: {
+          ttmRevenue: rev,
+          ttmUsd: Math.round(rev / USD_TO_MAD),
+          occupancy: occ,
+          adr,
+          nights: Math.round(365 * occ),
+          quartile: 'P50',
+        },
+      };
+      ttmHint = snapLabel
+        ? `Projection auto · potentiel §02 · ${snapLabel}`
+        : 'Projection auto · aligné potentiel §02 · ≠ perf. réelle Airbnb';
+      hasL90d = true;
+      performance = {
+        ...performance,
+        pacing: {
+          ...performance.pacing,
+          fillRate: occ,
+          monthLabel: `Estimation · ${cityName}`,
+          trendPct: (est?.occupancyP50 ?? 0) > 0 ? (est!.occupancyP50 - occ) : 0,
+          avgAdr: adr,
+          compsCount: compRevenues.length,
+        },
+      };
+      pacingHint = snapLabel
+        ? `Occupation projetée · ${cityName} · ${snapLabel}`
+        : `Occupation projetée · estimation · ${cityName}`;
+    }
+  } else if (!projection.hasEstimateSource) {
+    ttmHint = 'Estimation marché indisponible — activez « Estimation auto » (lun. & jeu.)';
+  } else {
+    ttmHint = 'Estimation partielle — prochain refresh automatique lun. & jeu.';
+  }
+
+  if (hasL90dAirbnb) {
+    pacingHint = snapLabel ? `L90D Airbnb · ${snapLabel}` : 'Occupation 90 j · listing Airbnb';
+  } else if (projection.ready) {
+    hasL90d = true;
+    const estOcc = est?.occupancyP50 ?? 0;
+    performance = {
+      ...performance,
+      pacing: {
+        ...performance.pacing,
+        fillRate: cityOccUsable ? cityOcc : projection.occupancy,
+        monthLabel: cityOccUsable
+          ? `Marché ${cityName}`
+          : pacingFromComps && compRevenues.length > 0
+            ? `${compRevenues.length} comps`
+            : `Estimation · ${cityName}`,
+        trendPct:
+          estOcc > 0
+            ? estOcc - (cityOccUsable ? cityOcc : projection.occupancy)
+            : 0,
+        avgAdr: projection.adrMad > 0 ? projection.adrMad : compsMedianAdrForPacing,
+        compsCount: compRevenues.length,
+      },
+    };
+    if (cityOccUsable) {
+      pacingHint = citySnapLabel
+        ? `Occupation marché ${cityName} · 24 mois · cache ${citySnapLabel}`
+        : `Occupation marché ${cityName} · 24 mois glissants`;
+    } else if (pacingFromComps) {
+      pacingHint = snapLabel
+        ? `Occ. médiane TTM comps · ${snapLabel} · référence marché`
+        : `Occ. médiane TTM comps · référence marché`;
+    } else {
+      pacingHint = snapLabel
+        ? `Occupation projetée · estimation · ${snapLabel} · ≠ L90D Airbnb`
+        : 'Occupation projetée · estimation marché · ≠ L90D Airbnb';
+    }
+  } else if (!projection.hasEstimateSource) {
+    pacingHint = 'Estimation marché indisponible — activez « Estimation auto » (lun. & jeu.)';
+  } else {
+    pacingHint = 'Estimation partielle — prochain refresh automatique lun. & jeu.';
+  }
+
+  const selfCompareProfile = buildSelfCompareProfile(
+    portfolioRow,
+    compRows.find((r) => r.isSelf) ?? buildSelfCompRow(portfolioRow),
+    est,
+    cityOcc,
+    cityOccUsable,
+    compsMedianOcc,
+  );
+  const selfCompareHint = hasTtmAirbnb
+    ? snapLabel
+      ? `Performances Airbnb · ${snapLabel}`
+      : 'Performances réelles Airbnb'
+    : hasTtmCityMarket && ttmHint
+      ? ttmHint
+      : est?.adrP50Mad
+        ? 'ADR estimation marché · occ. projetée'
+        : 'Données partielles · compléter snapshot ou estimation';
 
   const estimatedRevenueMad =
     est?.revenueP50Mad && est.revenueP50Mad > 0 ? est.revenueP50Mad : undefined;
@@ -990,6 +1292,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     marketFetchedAt,
     hasTtm,
     hasL90d,
+    hasTtmAirbnb,
+    hasL90dAirbnb,
     applyToOps,
     runCalendarUpdate,
     refetch: load,
@@ -1008,6 +1312,10 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       },
       hasTtm,
       hasL90d,
+      hasTtmAirbnb,
+      hasL90dAirbnb,
+      hasTtmCityMarket,
+      hasPacingCityMarket,
       hasPotentialProd,
       hasMarketProd,
       hasCalendarProd: displayHasCalendarProd,
@@ -1029,6 +1337,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       onPreviewDiffReload: previewDiff.reload,
       pilotApplyError: applyError,
       potentialHint,
+      ttmHint,
+      pacingHint,
       calendarPricingSource,
       hasCompsProd: compRows.length > 1 || airroiCompsCount > 0,
       performance,
@@ -1083,6 +1393,8 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       calendarAirroiError,
       airroiCalendarDaysCount: portfolioRow.airroiCalendarDaysCount ?? calendarDays.length,
       compRows,
+      selfCompareProfile,
+      selfCompareHint,
       estimatedRevenueMad,
       estimatedRevenueLiftPct: undefined,
       boundsContextHint,
@@ -1283,6 +1595,43 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
       },
       onDeleteEvent: async (id: string) => {
         const next = events.filter((e) => e.id !== id);
+        setEvents(next);
+        try {
+          await persistPilotConfig(next);
+          await pilot.runPreview().catch(() => undefined);
+        } catch {
+          /* configSaveStatus = error */
+        }
+      },
+      onToggleEventEnabled: async (id: string, on: boolean) => {
+        const next = events.map((e) => (e.id === id ? { ...e, enabled: on } : e));
+        setEvents(next);
+        try {
+          await persistPilotConfig(next);
+          await pilot.runPreview().catch(() => undefined);
+        } catch {
+          /* configSaveStatus = error */
+        }
+      },
+      onDuplicateEvent: async (id: string) => {
+        const src = events.find((e) => e.id === id);
+        if (!src) return;
+        const copy: PricingEvent = {
+          ...src,
+          id: `evt_${Date.now()}`,
+          name: `${src.name} (copie)`,
+          enabled: false,
+        };
+        const next = [...events, copy];
+        setEvents(next);
+        try {
+          await persistPilotConfig(next);
+        } catch {
+          /* configSaveStatus = error */
+        }
+      },
+      onCreateEvent: async (ev: PricingEvent) => {
+        const next = [...events, ev];
         setEvents(next);
         try {
           await persistPilotConfig(next);
