@@ -135,8 +135,8 @@ export default function PricePreviewCard({
     [rows],
   );
 
-  // Strip : au-delà de ~90 jours les barres deviennent illisibles → 90 premiers jours
-  const stripRows = rows.slice(0, 90);
+  // ≤ 31 jours : les barres remplissent la largeur · au-delà : largeur fixe + scroll horizontal
+  const compactBars = rows.length > 31;
 
   const chipSx = {
     display: 'flex', alignItems: 'baseline', gap: 0.75,
@@ -235,9 +235,16 @@ export default function PricePreviewCard({
           </Stack>
 
           {/* Graphe comparatif : barre = prix Sojori · trait sombre = prix calendrier actuel */}
-          <Box sx={{ mt: 2, pt: 0.75, borderRadius: 1.25, bgcolor: T.bg2, border: `1px solid ${T.border}`, px: 1, pb: 0 }}>
-            <Stack direction="row" sx={{ gap: '3px', height: 74, alignItems: 'flex-end' }}>
-              {stripRows.map((r) => {
+          <Box sx={{ mt: 2, pt: 0.75, pb: 0.5, borderRadius: 1.25, bgcolor: T.bg2, border: `1px solid ${T.border}`, px: 1, overflowX: 'auto' }}>
+            <Stack
+              direction="row"
+              sx={{
+                gap: '3px',
+                alignItems: 'stretch',
+                minWidth: compactBars ? `${rows.length * 17}px` : undefined,
+              }}
+            >
+              {rows.map((r, i) => {
                 const st = rowStatus(r);
                 const sojori = r.g7ProposedMad ?? 0;
                 const cal = r.calendarCurrentMad ?? 0;
@@ -252,8 +259,17 @@ export default function PricePreviewCard({
                       ? 'bloqué sans résa'
                       : `Sojori ${fmt(sojori)} MAD${cal ? ` · calendrier ${fmt(cal)} MAD` : ''}`) +
                   (rule ? ` · ${rule.emoji ?? '🗓'} ${rule.name}` : '');
+                const d = new Date(r.date);
+                const dayNum = d.getDate();
+                const isMonthStart = dayNum === 1 || i === 0;
+                // Jours sous les barres : tous si ≤ 31 j · sinon 1ᵉʳ du mois + lundis
+                const showLabel = !compactBars || isMonthStart || d.getDay() === 1;
+                const label = isMonthStart
+                  ? `${dayNum} ${d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}`
+                  : String(dayNum);
                 return (
-                  <Box key={r.date} title={title} sx={{ flex: 1, minWidth: 3, height: '100%', position: 'relative' }}>
+                  <Box key={r.date} title={title} sx={{ flex: compactBars ? '0 0 14px' : 1, minWidth: compactBars ? 14 : 8, display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={{ height: 74, position: 'relative', borderLeft: isMonthStart && i > 0 ? `1.5px solid ${T.borderStrong}` : 'none' }}>
                     {/* Barre prix Sojori */}
                     <Box
                       sx={{
@@ -285,6 +301,18 @@ export default function PricePreviewCard({
                       <Box sx={{ position: 'absolute', left: 0, right: 0, bottom: -1, height: 3, borderRadius: 2, bgcolor: T.warning, zIndex: 2 }} />
                     ) : null}
                   </Box>
+                  {/* Jour sous la barre */}
+                  <Typography
+                    sx={{
+                      fontFamily: MONO, fontSize: 8.5, textAlign: 'center', mt: '3px',
+                      color: isMonthStart ? T.text2 : T.text4,
+                      fontWeight: isMonthStart ? 800 : 400,
+                      whiteSpace: 'nowrap', lineHeight: 1, minHeight: 10, userSelect: 'none',
+                    }}
+                  >
+                    {showLabel ? label : ' '}
+                  </Typography>
+                  </Box>
                 );
               })}
             </Stack>
@@ -310,8 +338,8 @@ export default function PricePreviewCard({
               <Box component="span" sx={{ display: 'inline-block', width: 12, height: 3, borderRadius: 2, bgcolor: T.warning, mr: 0.625, verticalAlign: '1px' }} />
               règle de période
             </Typography>
-            {rows.length > stripRows.length ? (
-              <Typography sx={{ fontSize: 10.5, color: T.text4 }}>graphe limité aux 90 premiers jours — le tableau couvre tout</Typography>
+            {compactBars ? (
+              <Typography sx={{ fontSize: 10.5, color: T.text4 }}>faites défiler le graphe horizontalement →</Typography>
             ) : null}
           </Stack>
 
