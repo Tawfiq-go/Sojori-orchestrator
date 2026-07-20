@@ -30,7 +30,7 @@ export const FULLTASK_TASK_TYPE_LABELS: Record<FulltaskTaskTypeId, string> = {
   departure_declare: 'Déclarer départ',
   registration: 'Enregistrement',
   cleaning_paid: 'Ménage payant',
-  checkout_cleaning: 'Ménage checkout',
+  checkout_cleaning: 'Ménage Sojori',
   transport: 'Transport',
   groceries: 'Courses',
   concierge: 'Conciergerie',
