@@ -234,57 +234,84 @@ export default function PricePreviewCard({
             ) : null}
           </Stack>
 
-          {/* Strip visuel */}
-          <Stack direction="row" sx={{ gap: '2px', mt: 2, height: 54, alignItems: 'flex-end' }}>
-            {stripRows.map((r) => {
-              const st = rowStatus(r);
-              const price = r.g7ProposedMad ?? r.calendarCurrentMad ?? 0;
-              const h = Math.max(20, Math.round((price / maxPrice) * 100));
-              const rule = ruleForDate(r.date);
-              const title =
-                `${dayLabelFr(r.date)} · ` +
-                (st === 'reserved' ? 'réservé' : st === 'blocked' ? 'bloqué sans résa' : `${fmt(price)} MAD`) +
-                (rule ? ` · ${rule.emoji ?? '🗓'} ${rule.name}` : '');
-              return (
-                <Box
-                  key={r.date}
-                  title={title}
-                  sx={{
-                    flex: 1, minWidth: 3, height: `${st === 'blocked' ? 32 : h}%`,
-                    borderRadius: '3px 3px 0 0', position: 'relative',
-                    bgcolor: st === 'reserved' ? T.success : st === 'blocked' ? T.bg3 : T.goldTint2,
-                    opacity: st === 'reserved' ? 0.7 : 1,
-                    border: st === 'blocked' ? `1px dashed ${T.borderStrong}` : 'none',
-                    borderBottom: 'none',
-                    ...(rule
-                      ? {
-                          '&::after': {
-                            content: '""', position: 'absolute', left: 0, right: 0, bottom: -5,
-                            height: 3, borderRadius: 2, bgcolor: T.warning,
-                          },
-                        }
-                      : {}),
-                  }}
-                />
-              );
-            })}
-          </Stack>
-          <Stack direction="row" sx={{ gap: 2.25, mt: 1.375, flexWrap: 'wrap' }}>
-            {(
-              [
-                [T.goldTint2, 'libre (hauteur = prix Sojori)', undefined],
-                [T.success, 'réservé', 0.7],
-                [T.bg3, 'bloqué sans résa', undefined],
-                [T.warning, 'règle de période', undefined],
-              ] as const
-            ).map(([c, l, op]) => (
-              <Typography key={l} sx={{ fontSize: 10.5, color: T.text3 }}>
-                <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', bgcolor: c, opacity: op ?? 1, mr: 0.625, verticalAlign: '-1px' }} />
-                {l}
-              </Typography>
-            ))}
+          {/* Graphe comparatif : barre = prix Sojori · trait sombre = prix calendrier actuel */}
+          <Box sx={{ mt: 2, pt: 0.75, borderRadius: 1.25, bgcolor: T.bg2, border: `1px solid ${T.border}`, px: 1, pb: 0 }}>
+            <Stack direction="row" sx={{ gap: '3px', height: 74, alignItems: 'flex-end' }}>
+              {stripRows.map((r) => {
+                const st = rowStatus(r);
+                const sojori = r.g7ProposedMad ?? 0;
+                const cal = r.calendarCurrentMad ?? 0;
+                const hSojori = sojori > 0 ? Math.max(14, Math.round((sojori / maxPrice) * 100)) : 0;
+                const hCal = cal > 0 ? Math.max(4, Math.round((cal / maxPrice) * 100)) : 0;
+                const rule = ruleForDate(r.date);
+                const title =
+                  `${dayLabelFr(r.date)} · ` +
+                  (st === 'reserved'
+                    ? `réservé${cal ? ` · vendu ${fmt(cal)} MAD` : ''}`
+                    : st === 'blocked'
+                      ? 'bloqué sans résa'
+                      : `Sojori ${fmt(sojori)} MAD${cal ? ` · calendrier ${fmt(cal)} MAD` : ''}`) +
+                  (rule ? ` · ${rule.emoji ?? '🗓'} ${rule.name}` : '');
+                return (
+                  <Box key={r.date} title={title} sx={{ flex: 1, minWidth: 3, height: '100%', position: 'relative' }}>
+                    {/* Barre prix Sojori */}
+                    <Box
+                      sx={{
+                        position: 'absolute', left: 0, right: 0, bottom: 0,
+                        height: `${st === 'blocked' ? 26 : hSojori}%`,
+                        borderRadius: '3px 3px 0 0',
+                        background:
+                          st === 'reserved'
+                            ? T.success
+                            : st === 'blocked'
+                              ? 'transparent'
+                              : `linear-gradient(180deg, ${T.gold}, ${T.goldSoft})`,
+                        opacity: st === 'reserved' ? 0.65 : 1,
+                        border: st === 'blocked' ? `1.5px dashed ${T.borderStrong}` : 'none',
+                        borderBottom: 'none',
+                      }}
+                    />
+                    {/* Trait prix calendrier actuel */}
+                    {st === 'free' && hCal > 0 ? (
+                      <Box
+                        sx={{
+                          position: 'absolute', left: '8%', right: '8%', bottom: `${hCal}%`,
+                          height: 2, borderRadius: 1, bgcolor: T.text2, zIndex: 1,
+                        }}
+                      />
+                    ) : null}
+                    {/* Liseré règle de période */}
+                    {rule ? (
+                      <Box sx={{ position: 'absolute', left: 0, right: 0, bottom: -1, height: 3, borderRadius: 2, bgcolor: T.warning, zIndex: 2 }} />
+                    ) : null}
+                  </Box>
+                );
+              })}
+            </Stack>
+          </Box>
+          <Stack direction="row" sx={{ gap: 2.25, mt: 1.25, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', background: `linear-gradient(180deg, ${T.gold}, ${T.goldSoft})`, mr: 0.625, verticalAlign: '-1px' }} />
+              barre = prix Sojori
+            </Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+              <Box component="span" sx={{ display: 'inline-block', width: 12, height: 2, borderRadius: 1, bgcolor: T.text2, mr: 0.625, verticalAlign: '2px' }} />
+              trait = prix calendrier actuel
+            </Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', bgcolor: T.success, opacity: 0.65, mr: 0.625, verticalAlign: '-1px' }} />
+              réservé
+            </Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', border: `1.5px dashed ${T.borderStrong}`, mr: 0.625, verticalAlign: '-1px' }} />
+              bloqué sans résa
+            </Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+              <Box component="span" sx={{ display: 'inline-block', width: 12, height: 3, borderRadius: 2, bgcolor: T.warning, mr: 0.625, verticalAlign: '1px' }} />
+              règle de période
+            </Typography>
             {rows.length > stripRows.length ? (
-              <Typography sx={{ fontSize: 10.5, color: T.text4 }}>strip limité aux 90 premiers jours — le tableau couvre tout</Typography>
+              <Typography sx={{ fontSize: 10.5, color: T.text4 }}>graphe limité aux 90 premiers jours — le tableau couvre tout</Typography>
             ) : null}
           </Stack>
 
