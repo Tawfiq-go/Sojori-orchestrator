@@ -343,6 +343,8 @@ export interface PilotPricingEventDto {
   eventFloorMad: number;
   eventMarketPercent?: number;
   minNightsOverride?: number;
+  /** false = règle conservée mais ignorée au calcul. */
+  enabled?: boolean;
 }
 
 export interface PricingModeDefinitionDto {
