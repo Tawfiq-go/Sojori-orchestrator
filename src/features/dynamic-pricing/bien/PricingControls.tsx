@@ -441,7 +441,7 @@ export default function PricingControls(props: PricingControlsProps) {
   } as const;
 
   return (
-    <Stack spacing={1.75} sx={{ ...DP_LAYOUT_SX, maxWidth: 860 }}>
+    <Stack spacing={1.75} sx={DP_LAYOUT_SX}>
       {/* ═══ Résumé vivant ═══ */}
       <Box
         sx={{
@@ -492,10 +492,18 @@ export default function PricingControls(props: PricingControlsProps) {
         <Typography sx={{ fontSize: 11.5, color: T.text3 }}>— les 3 seuls réglages à décider</Typography>
       </Stack>
       <Box sx={cardSx}>
-        {/* Point de départ */}
+        {/* Point de départ + Fourchette côte à côte en large */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: 'auto 1fr' },
+            columnGap: 6,
+            borderBottom: `1px solid ${T.border}`,
+          }}
+        >
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          sx={{ gap: 1.5, py: 1.5, pt: 0.5, borderBottom: `1px solid ${T.border}`, alignItems: { sm: 'center' } }}
+          sx={{ gap: 1.5, py: 1.5, pt: 0.5, borderBottom: { xs: `1px solid ${T.border}`, lg: 'none' }, alignItems: { sm: 'center' } }}
         >
           <Box sx={{ width: { sm: 150 }, flexShrink: 0 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Point de départ</Typography>
@@ -559,7 +567,7 @@ export default function PricingControls(props: PricingControlsProps) {
         {/* Fourchette */}
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          sx={{ gap: 1.5, py: 1.5, borderBottom: `1px solid ${T.border}`, alignItems: { sm: 'center' } }}
+          sx={{ gap: 1.5, py: 1.5, pt: { lg: 0.5 }, alignItems: { sm: 'center' } }}
         >
           <Box sx={{ width: { sm: 150 }, flexShrink: 0 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Fourchette</Typography>
@@ -604,6 +612,8 @@ export default function PricingControls(props: PricingControlsProps) {
           </Box>
         </Stack>
 
+        </Box>
+
         {/* Positionnement */}
         <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ gap: 1.5, py: 1.5, pb: 0.5, alignItems: { sm: 'flex-start' } }}>
           <Box sx={{ width: { sm: 150 }, flexShrink: 0 }}>
@@ -617,7 +627,7 @@ export default function PricingControls(props: PricingControlsProps) {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, minmax(0, 1fr))', xl: 'repeat(5, minmax(0, 1fr))' },
                 gap: 1,
               }}
             >
@@ -723,7 +733,15 @@ export default function PricingControls(props: PricingControlsProps) {
         <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Ajustements automatiques</Typography>
         <Typography sx={{ fontSize: 11.5, color: T.text3 }}>— déjà réglés · déplier pour affiner</Typography>
       </Stack>
-      <Box sx={{ ...cardSx, py: { xs: 0.5, md: 0.75 } }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
+          gap: 1.5,
+          alignItems: 'start',
+        }}
+      >
+        <Box sx={{ ...cardSx, py: { xs: 0.5, md: 0.75 } }}>
         <AutoItem
           emoji="📉"
           title="Remplissage du mois"
@@ -743,7 +761,9 @@ export default function PricingControls(props: PricingControlsProps) {
             <FieldSlider label="Ajustement" display={`+${occupancyHighAdj} %`} value={occupancyHighAdj} min={0} max={40} step={1} onChange={onOccupancyHighAdjChange} />
           </Stack>
         </AutoItem>
+        </Box>
 
+        <Box sx={{ ...cardSx, py: { xs: 0.5, md: 0.75 } }}>
         <AutoItem
           emoji="⏰"
           title="Dernière minute"
@@ -762,7 +782,9 @@ export default function PricingControls(props: PricingControlsProps) {
             <FieldSlider label="Remise" display={`${lastMinuteDiscountPct} %`} value={lastMinuteDiscountPct} min={-50} max={0} step={1} onChange={onLastMinuteDiscountPctChange} />
           </Stack>
         </AutoItem>
+        </Box>
 
+        <Box sx={{ ...cardSx, py: { xs: 0.5, md: 0.75 } }}>
         <AutoItem
           emoji="🧩"
           title="Trous entre réservations"
@@ -779,7 +801,9 @@ export default function PricingControls(props: PricingControlsProps) {
             <FieldSlider label="Min stay référence" display={`${gapBlockMinNights} nuit(s)`} value={gapBlockMinNights} min={1} max={14} step={1} onChange={onGapBlockMinNightsChange} />
           </Box>
         </AutoItem>
+        </Box>
 
+        <Box sx={{ ...cardSx, py: { xs: 0.5, md: 0.75 } }}>
         <AutoItem
           emoji="🎉"
           title="Événements & dates spéciales"
@@ -887,6 +911,7 @@ export default function PricingControls(props: PricingControlsProps) {
             </Box>
           ) : null}
         </AutoItem>
+        </Box>
       </Box>
 
       <Typography sx={{ fontSize: 10.5, color: T.text4, textAlign: 'center' }}>
